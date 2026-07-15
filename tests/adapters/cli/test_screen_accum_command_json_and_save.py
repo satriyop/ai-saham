@@ -354,6 +354,57 @@ def test_screen_accum_multi_json_matches_table_rows_under_top_sort_squeeze(monke
     assert payload["counts_after_filter"] == 1
 
 
+def test_screen_accum_multi_json_includes_typed_freshness_per_window(monkeypatch):
+    """S3 follow-up: multi-window JSON must carry per-window typed freshness,
+    not null, for every projected {window}_sessions candidate."""
+    candidate = _candidate(
+        ticker="A",
+        latest_candle_date=date(2026, 7, 13),
+        latest_broker_date=date(2026, 7, 13),
+    )
+
+    def screen_execute(req):
+        return AccumulationScreenResponse(
+            candidates=[candidate],
+            screened_at=date(2026, 7, 14),
+            window_days=req.window_days,
+            total_tickers_checked=1,
+            tickers_skipped=0,
+            provider="fake",
+        )
+
+    workflow_uc = _real_workflow_uc(screen_execute)
+    monkeypatch.setattr(
+        accum_cli,
+        "create_run_accumulation_screen_workflow_use_case",
+        lambda **kwargs: workflow_uc,
+    )
+
+    result = runner.invoke(
+        app,
+        ["screen", "accum", "A", "--multi", "--windows", "7,30", "--format", "json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    entry = payload["tickers"]["A"]
+
+    checked_any = False
+    for key in ("7_sessions", "30_sessions"):
+        window_candidate = entry[key]
+        if window_candidate is None:
+            continue
+        checked_any = True
+        freshness = window_candidate["freshness"]
+        assert freshness is not None
+        assert freshness["candle_as_of"] == "2026-07-13"
+        assert freshness["broker_as_of"] == "2026-07-13"
+        assert isinstance(freshness["alignment_state"], str)
+        assert freshness["alignment_state"] == "ALIGNED"
+        assert freshness["alignment_state"] != "OK"
+    assert checked_any
+
+
 def test_screen_accum_multi_duplicate_windows_fails_clearly(monkeypatch):
     def screen_execute(req):
         return AccumulationScreenResponse(

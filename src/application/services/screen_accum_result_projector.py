@@ -274,6 +274,23 @@ def project_multi_screen_result(
 
     sorted_items = sorted(by_ticker.items(), key=sort_key, reverse=True)[:top]
 
+    screened_at_by_window = {
+        window: response.screened_at for window, response in multi_results.items()
+    }
+    for _, pw in sorted_items:
+        for window, c in pw.items():
+            if c is None:
+                continue
+            coverage = (
+                c.signal_assessment.assessment.coverage_score if c.signal_assessment else None
+            )
+            c.freshness = compute_data_freshness(
+                candle_as_of=c.latest_candle_date,
+                broker_as_of=c.latest_broker_date,
+                screen_date=screened_at_by_window[window],
+                signal_evidence_coverage=coverage,
+            )
+
     rows = [
         ScreenAccumMultiRow(
             ticker=ticker,

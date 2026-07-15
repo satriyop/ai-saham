@@ -360,3 +360,61 @@ def test_single_projection_does_not_attach_freshness_to_filtered_out_candidates(
     )
 
     assert dropped.freshness is None
+
+
+def test_multi_projection_attaches_freshness_to_projected_window_candidates():
+    c = _candidate(
+        ticker="A",
+        latest_candle_date=date(2026, 7, 13),
+        latest_broker_date=date(2026, 7, 13),
+    )
+    multi_results = {7: _response([c], window_days=7)}
+
+    projection = project_multi_screen_result(
+        multi_results,
+        broker_quality=None,
+        windows=[7],
+        top=10,
+        sort_by="avg",
+        squeeze_only=False,
+        coiled_spring_min_foreign_flow_score=50.0,
+        coiled_spring_bb_pctile=0.20,
+    )
+
+    (row,) = projection.rows
+    result_candidate = row.candidates_by_window[7]
+    assert result_candidate.freshness is not None
+    assert result_candidate.freshness.candle_as_of == date(2026, 7, 13)
+    assert result_candidate.freshness.broker_as_of == date(2026, 7, 13)
+    assert result_candidate.freshness.alignment_state.value == "ALIGNED"
+
+
+def test_multi_projection_does_not_attach_freshness_to_squeeze_filtered_out_candidates():
+    tight = _candidate(
+        ticker="A",
+        bb_width_pctile=0.10,
+        latest_candle_date=date(2026, 7, 13),
+        latest_broker_date=date(2026, 7, 13),
+    )
+    loose = _candidate(
+        ticker="B",
+        bb_width_pctile=0.50,
+        latest_candle_date=date(2026, 7, 13),
+        latest_broker_date=date(2026, 7, 13),
+    )
+    multi_results = {7: _response([tight, loose], window_days=7)}
+
+    projection = project_multi_screen_result(
+        multi_results,
+        broker_quality=None,
+        windows=[7],
+        top=10,
+        sort_by="avg",
+        squeeze_only=True,
+        coiled_spring_min_foreign_flow_score=50.0,
+        coiled_spring_bb_pctile=0.20,
+    )
+
+    assert [row.ticker for row in projection.rows] == ["A"]
+    assert tight.freshness is not None
+    assert loose.freshness is None
