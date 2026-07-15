@@ -25,7 +25,7 @@
 | Canonical accumulation funnel with Signal/Risk/TradeSetup | ❌ Open — `Score` is still `foreign_flow_score` |
 | Bounded setup-lens impact for accumulation candidates | ✅ Resolved |
 | Honest market context (`RISK_ON` not aliased to `BULLISH`) | ✅ RESOLVED — `_market_regime_text` renders canonical values directly |
-| Primary verdict header (DATA STATUS / POSTURE / ACTION) | ❌ Open |
+| Primary verdict header (DATA STATUS / POSTURE / ACTION) |  SKIP IT |
 | Session-aware next action | ✅ Resolved — stale static `saham analyze swing TICKER` footer removed. Concrete setup-lens next commands come from T8; fallback footer now uses existing response fields only. |
 | Warning severity (BLOCKER / WARNING / INFO) | ❌ Open — 5-row plain list |
 | Rich `[local_clock]` markup bug | ✅ `b3c6de1` — fixed; uses `rich.text.Text` instead of f-string markup |
