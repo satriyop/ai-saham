@@ -56,7 +56,7 @@
 | 3 | `T3` | P0 | Refactor | Separate three date clocks in briefing use case | ✅ RESOLVED |
 | 4 | `T4` | P0 | Feature | Fail-closed per-dataset readiness + ranking suppression | ✅ RESOLVED |
 | 5 | `T5` | P0 | Bugfix | Enforce universe scope in pre-open opening candidates | ✅ RESOLVED |
-| 6 | `T6` | P0 | Refactor | Rename to verdict-first pre-open presentation | ❌ Open |
+| 6 | `T6` | P0 | Refactor | Rename to verdict-first pre-open presentation | ✅ RESOLVED |
 | 7 | `T7` | P0 | Feature | Canonical accumulation funnel (Signal + Risk + TradeSetup) | ❌ Open |
 | 8 | `T8` | P0 | Feature | Bounded swing shortlist assessment | ❌ Open |
 | 9 | `T9` | P1 | Refactor | Expose honest market context (stop aliasing RISK_ON→BULLISH) | ❌ Open |
@@ -435,12 +435,12 @@ Layer plan:
 
 ### Acceptance Criteria
 
-- [ ] Section is titled `PRE-OPEN ASSESSMENT` not `Top Pre-Open Candidates`
-- [ ] If no PRIME/WATCH setups, `NO ACTIONABLE [UNIVERSE] SETUPS` is shown first
-- [ ] SKIP/AVOID names appear as labeled observations, not as "candidates"
-- [ ] `test_today_commands.py` updated to assert new title
-- [ ] Full test suite passes
-- [ ] `git diff --check` clean
+- [x] Section is titled `PRE-OPEN ASSESSMENT` not `Top Pre-Open Candidates`
+- [x] If no PRIME/WATCH setups, `NO ACTIONABLE [UNIVERSE] SETUPS` is shown first
+- [x] SKIP/AVOID names appear as labeled observations, not as "candidates"
+- [x] `test_today_commands.py` updated to assert new title
+- [x] Full test suite passes
+- [x] `git diff --check` clean
 
 ---
 

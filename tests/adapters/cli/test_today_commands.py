@@ -76,7 +76,7 @@ def test_today_renders_rich_dashboard_with_lifecycle_next_steps(tmp_path: Path):
     assert result.exit_code == 0
     assert "Daily Briefing - 2026-06-19" in result.stdout
     assert "Data & Regime" in result.stdout
-    assert "Top Pre-Open Candidates" in result.stdout
+    assert "PRE-OPEN ASSESSMENT" in result.stdout
     assert "Top Accumulation Candidates" in result.stdout
     assert "Run: saham learn snapshot --force" in result.stdout
     stdout_clean = result.stdout.replace("\n", "").replace(" ", "").replace("│", "")
@@ -400,8 +400,8 @@ def test_today_renders_market_wide_pre_open_observations_separately():
 
         result = runner.invoke(app, ["today", "--universe", "lq45", "--date", "2026-06-19"])
         assert result.exit_code == 0
-        assert "Top Pre-Open Candidates" in result.stdout
-        assert "Market-Wide Pre-Open Observations" in result.stdout
+        assert "PRE-OPEN ASSESSMENT" in result.stdout
+        assert "Market-wide observations" in result.stdout
         assert "A" in result.stdout
         assert "C" in result.stdout
 
@@ -457,10 +457,158 @@ def test_today_does_not_render_market_wide_ticker_in_universe_pre_open_table():
         assert result.exit_code == 0
 
         stdout = result.stdout
-        idx_universe_title = stdout.index("Top Pre-Open Candidates")
-        idx_market_wide_title = stdout.index("Market-Wide Pre-Open Observations")
+        idx_universe_title = stdout.index("PRE-OPEN ASSESSMENT")
+        idx_market_wide_title = stdout.index("Market-wide observations")
 
         # Ticker C should not be rendered between universe title and market-wide title
         assert "│ C " not in stdout[idx_universe_title:idx_market_wide_title]
         # Ticker C should be rendered after market-wide title
         assert "│ C " in stdout[idx_market_wide_title:]
+
+
+def test_today_pre_open_assessment_shows_no_actionable_when_only_skip():
+    from unittest.mock import MagicMock, patch
+
+    from src.application.use_case.daily_briefing_use_case import (
+        DailyBriefingResponse,
+        OpeningBriefingCandidate,
+    )
+
+    fake_response = DailyBriefingResponse(
+        live_session_date=date(2026, 6, 19),
+        latest_completed_eod_date=date(2026, 6, 19),
+        opening_snapshot_date=date(2026, 6, 19),
+        is_historical=True,
+        universe="lq45",
+        universe_count=45,
+        data_freshness=[],
+        stale_count=0,
+        readiness_items=[],
+        overall_authority="READY",
+        regime=None,
+        opening_candidates=[
+            OpeningBriefingCandidate(
+                ticker="BBCA",
+                opening_setup="SKIP",
+                iev=10000,
+                iep=10050,
+                trend="UP",
+            )
+        ],
+        market_wide_opening_observations=[],
+        accumulation_candidates=[],
+        warnings=[],
+    )
+
+    with patch("src.adapters.cli.today_commands.DailyBriefingUseCase") as mock_uc_class:
+        mock_uc = MagicMock()
+        mock_uc_class.return_value = mock_uc
+        mock_uc.execute.return_value = fake_response
+
+        result = runner.invoke(app, ["today", "--universe", "lq45", "--date", "2026-06-19"])
+        assert result.exit_code == 0
+        assert "PRE-OPEN ASSESSMENT" in result.stdout
+        assert "NO ACTIONABLE LQ45 SETUPS" in result.stdout
+        assert "Universe observations" in result.stdout
+        assert "BBCA" in result.stdout
+        assert "Top Pre-Open Candidates" not in result.stdout
+
+
+def test_today_pre_open_assessment_shows_actionable_rows_first():
+    from unittest.mock import MagicMock, patch
+
+    from src.application.use_case.daily_briefing_use_case import (
+        DailyBriefingResponse,
+        OpeningBriefingCandidate,
+    )
+
+    fake_response = DailyBriefingResponse(
+        live_session_date=date(2026, 6, 19),
+        latest_completed_eod_date=date(2026, 6, 19),
+        opening_snapshot_date=date(2026, 6, 19),
+        is_historical=True,
+        universe="lq45",
+        universe_count=45,
+        data_freshness=[],
+        stale_count=0,
+        readiness_items=[],
+        overall_authority="READY",
+        regime=None,
+        opening_candidates=[
+            OpeningBriefingCandidate(ticker="BBCA", opening_setup="PRIME"),
+            OpeningBriefingCandidate(ticker="BBRI", opening_setup="SKIP"),
+        ],
+        market_wide_opening_observations=[],
+        accumulation_candidates=[],
+        warnings=[],
+    )
+
+    with patch("src.adapters.cli.today_commands.DailyBriefingUseCase") as mock_uc_class:
+        mock_uc = MagicMock()
+        mock_uc_class.return_value = mock_uc
+        mock_uc.execute.return_value = fake_response
+
+        result = runner.invoke(app, ["today", "--universe", "lq45", "--date", "2026-06-19"])
+        assert result.exit_code == 0
+
+        stdout = result.stdout
+        idx_pre_open = stdout.index("PRE-OPEN ASSESSMENT")
+        idx_actionable = stdout.index("ACTIONABLE LQ45 SETUPS")
+        idx_bbca = stdout.index("BBCA")
+        idx_observations = stdout.index("Universe observations")
+        idx_bbri = stdout.index("BBRI")
+
+        assert idx_pre_open < idx_actionable
+        assert idx_actionable < idx_bbca
+        assert idx_bbca < idx_observations
+        assert idx_observations < idx_bbri
+
+
+def test_today_pre_open_assessment_keeps_market_wide_separate():
+    from unittest.mock import MagicMock, patch
+
+    from src.application.use_case.daily_briefing_use_case import (
+        DailyBriefingResponse,
+        OpeningBriefingCandidate,
+    )
+
+    fake_response = DailyBriefingResponse(
+        live_session_date=date(2026, 6, 19),
+        latest_completed_eod_date=date(2026, 6, 19),
+        opening_snapshot_date=date(2026, 6, 19),
+        is_historical=True,
+        universe="lq45",
+        universe_count=45,
+        data_freshness=[],
+        stale_count=0,
+        readiness_items=[],
+        overall_authority="READY",
+        regime=None,
+        opening_candidates=[
+            OpeningBriefingCandidate(ticker="A", opening_setup="PRIME"),
+        ],
+        market_wide_opening_observations=[
+            OpeningBriefingCandidate(ticker="C", opening_setup="WATCH"),
+        ],
+        accumulation_candidates=[],
+        warnings=[],
+    )
+
+    with patch("src.adapters.cli.today_commands.DailyBriefingUseCase") as mock_uc_class:
+        mock_uc = MagicMock()
+        mock_uc_class.return_value = mock_uc
+        mock_uc.execute.return_value = fake_response
+
+        result = runner.invoke(app, ["today", "--universe", "lq45", "--date", "2026-06-19"])
+        assert result.exit_code == 0
+
+        stdout = result.stdout
+        assert "Market-wide observations" in stdout
+        idx_market_wide = stdout.index("Market-wide observations")
+        idx_c = stdout.index("│ C ")
+
+        assert idx_market_wide < idx_c
+
+        idx_pre_open = stdout.index("PRE-OPEN ASSESSMENT")
+        # C does not appear between PRE-OPEN ASSESSMENT and Market-wide observations
+        assert "│ C " not in stdout[idx_pre_open:idx_market_wide]

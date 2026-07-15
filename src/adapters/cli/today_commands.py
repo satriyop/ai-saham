@@ -25,6 +25,7 @@ from src.application.use_case.accumulation_screen_use_case import AccumulationSc
 from src.application.use_case.daily_briefing_use_case import (
     DailyBriefingRequest,
     DailyBriefingUseCase,
+    OpeningBriefingCandidate,
 )
 from src.infrastructure.composition.indicator_registry_factory import (
     create_indicator_registry,
@@ -48,6 +49,34 @@ def _parse_date(value: str | None) -> date | None:
     except ValueError:
         typer.echo(f"Invalid date format: {value} (expected YYYY-MM-DD)", err=True)
         raise typer.Exit(1)
+
+
+_ACTIONABLE_OPENING_SETUPS = {"PRIME", "WATCH"}
+
+
+def _opening_table(candidates: list[OpeningBriefingCandidate]):
+    table = compact_table()
+    table.add_column("Ticker", style="bold")
+    table.add_column("Opening Setup")
+    table.add_column("IEV", justify="right")
+    table.add_column("IEP", justify="right")
+    table.add_column("Trend")
+    for candidate in candidates:
+        iev = f"{candidate.iev:,}" if candidate.iev is not None else "-"
+        iep = f"{candidate.iep:,}" if candidate.iep is not None else "-"
+
+        # Color the opening-session setup label.
+        setup_style = "green" if candidate.opening_setup == "PRIME" else (
+            "yellow" if candidate.opening_setup == "WATCH" else "red"
+        )
+        setup_text = f"[{setup_style}]{candidate.opening_setup}[/{setup_style}]"
+
+        trend_map = {"UP": "green", "DOWN": "red", "SIDE": "yellow"}
+        trend_style = trend_map.get(str(candidate.trend).upper(), "white")
+        trend_text = f"[{trend_style}]{candidate.trend or '-'}[/{trend_style}]"
+
+        table.add_row(candidate.ticker, setup_text, iev, iep, trend_text)
+    return table
 
 
 def today(
@@ -163,61 +192,50 @@ def today(
         if breadth is not None:
             summary.add_row("Breadth above SMA20", f"{breadth:.1f}%")
 
-    opening = compact_table()
-    opening.add_column("Ticker", style="bold")
-    opening.add_column("Opening Setup")
-    opening.add_column("IEV", justify="right")
-    opening.add_column("IEP", justify="right")
-    opening.add_column("Trend")
-    if response.opening_candidates:
-        for candidate in response.opening_candidates:
-            iev = f"{candidate.iev:,}" if candidate.iev is not None else "-"
-            iep = f"{candidate.iep:,}" if candidate.iep is not None else "-"
-
-            # Color the opening-session setup label.
-            setup_style = "green" if candidate.opening_setup == "PRIME" else (
-                "yellow" if candidate.opening_setup == "WATCH" else "red"
-            )
-            setup_text = f"[{setup_style}]{candidate.opening_setup}[/{setup_style}]"
-
-            trend_map = {"UP": "green", "DOWN": "red", "SIDE": "yellow"}
-            trend_style = trend_map.get(str(candidate.trend).upper(), "white")
-            trend_text = f"[{trend_style}]{candidate.trend or '-'}[/{trend_style}]"
-
-            opening.add_row(candidate.ticker, setup_text, iev, iep, trend_text)
-    else:
-        if response.opening_snapshot_date is None:
-            opening.add_row(
-                "-", "No saved opening snapshot", "-", "-", "Run: saham learn snapshot --force",
-            )
+    # Split universe-scoped rows into actionable vs observations
+    actionable_rows = []
+    observation_rows = []
+    for candidate in response.opening_candidates:
+        if str(candidate.opening_setup).upper() in _ACTIONABLE_OPENING_SETUPS:
+            actionable_rows.append(candidate)
         else:
-            opening.add_row(
-                "-", "No universe-scoped pre-open candidates", "-", "-", "-",
-            )
+            observation_rows.append(candidate)
 
-    market_wide = None
+    pre_open_elements = []
+    pre_open_elements.append(Text("PRE-OPEN ASSESSMENT", style="bold cyan"))
+
+    no_snapshot = response.opening_snapshot_date is None
+    no_opening = not response.opening_candidates
+    no_market = not response.market_wide_opening_observations
+    if no_snapshot and no_opening and no_market:
+        pre_open_elements.extend([
+            Text("No saved opening snapshot"),
+            Text("Run: saham learn snapshot --force"),
+        ])
+    else:
+        if not response.opening_candidates:
+            pre_open_elements.extend([
+                Text(f"NO ACTIONABLE {response.universe.upper()} SETUPS", style="bold red"),
+                Text("No universe-scoped pre-open observations"),
+            ])
+        else:
+            if actionable_rows:
+                verdict_str = f"ACTIONABLE {response.universe.upper()} SETUPS"
+                pre_open_elements.append(Text(verdict_str, style="bold green"))
+                pre_open_elements.append(_opening_table(actionable_rows))
+            else:
+                verdict_str = f"NO ACTIONABLE {response.universe.upper()} SETUPS"
+                pre_open_elements.append(Text(verdict_str, style="bold red"))
+
+            if observation_rows:
+                pre_open_elements.append(Text("Universe observations", style="bold cyan"))
+                pre_open_elements.append(_opening_table(observation_rows))
+
     if response.market_wide_opening_observations:
-        market_wide = compact_table()
-        market_wide.add_column("Ticker", style="bold")
-        market_wide.add_column("Opening Setup")
-        market_wide.add_column("IEV", justify="right")
-        market_wide.add_column("IEP", justify="right")
-        market_wide.add_column("Trend")
-        for candidate in response.market_wide_opening_observations:
-            iev = f"{candidate.iev:,}" if candidate.iev is not None else "-"
-            iep = f"{candidate.iep:,}" if candidate.iep is not None else "-"
-
-            # Color the opening-session setup label.
-            setup_style = "green" if candidate.opening_setup == "PRIME" else (
-                "yellow" if candidate.opening_setup == "WATCH" else "red"
-            )
-            setup_text = f"[{setup_style}]{candidate.opening_setup}[/{setup_style}]"
-
-            trend_map = {"UP": "green", "DOWN": "red", "SIDE": "yellow"}
-            trend_style = trend_map.get(str(candidate.trend).upper(), "white")
-            trend_text = f"[{trend_style}]{candidate.trend or '-'}[/{trend_style}]"
-
-            market_wide.add_row(candidate.ticker, setup_text, iev, iep, trend_text)
+        pre_open_elements.extend([
+            Text("Market-wide observations", style="bold cyan"),
+            _opening_table(response.market_wide_opening_observations),
+        ])
 
     accumulation = compact_table()
     accumulation.add_column("Ticker", style="bold")
@@ -279,15 +297,8 @@ def today(
         summary,
         Text("Data Readiness", style="bold cyan"),
         readiness_table,
-        Text("Top Pre-Open Candidates", style="bold cyan"),
-        opening,
     ]
-
-    if market_wide is not None:
-        sections.extend([
-            Text("Market-Wide Pre-Open Observations", style="bold cyan"),
-            market_wide,
-        ])
+    sections.extend(pre_open_elements)
 
     # Section title for accumulation candidates
     accum_title = Text("Top Accumulation Candidates", style="bold cyan")
