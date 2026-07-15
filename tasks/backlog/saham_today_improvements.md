@@ -1,7 +1,7 @@
 # Backlog: `saham today` Daily Briefing Improvements
 
 **Source thought doc:** `tasks/thought/saham_today_improvement.md` (initial code verification: 2026-07-14)
-**Current validation:** 2026-07-15 — rechecked against current code after the screen backlog introduced shared freshness primitives.
+**Current validation:** 2026-07-16 — rechecked after T11 cleanup (commit `5973749`).
 **Code-verified against:** `src/adapters/cli/today_commands.py`, `src/application/use_case/daily_briefing_use_case.py`, `src/adapters/cli/view_market_context_display.py`, `tests/adapters/cli/test_today_commands.py`
 
 ---
@@ -12,7 +12,7 @@
 
 ---
 
-## Status at Current Validation Date (2026-07-15)
+## Status at Current Validation Date (2026-07-16)
 
 | Finding | Status |
 |---------|--------|
@@ -33,7 +33,7 @@
 
 ---
 
-## Current Verification Notes (2026-07-15)
+## Current Verification Notes (2026-07-16)
 
 - T1 ✅ (`b3c6de1`): `src/adapters/cli/today_commands.py` now uses `rich.text.Text` to render the source tag as plain text.
 - T2 ✅ (`b3c6de1`): `tests/adapters/cli/test_today_commands.py` has `test_cli_help_exits_zero`, `test_today_help_exits_zero`, and `test_today_shows_market_source_tag`.
@@ -43,6 +43,7 @@
 - `src/application/use_case/daily_briefing_use_case.py` has three clocks (`live_session_date`, `latest_completed_eod_date`, `opening_snapshot_date`) and `is_historical` flag.
 - Screen backlog S3 already introduced `src/domain/value_objects/data_freshness_status.py` and `src/application/services/data_freshness_service.py`; today work reuses these.
 - `src/application/use_case/daily_briefing_use_case.py` still reads opening snapshot candidates without universe filtering, so T5 remains valid.
+- T11 ✅ (`5973749`): Stale `saham analyze swing TICKER` footer removed. `_setup_lens_impact_elements` returns `SetupLensImpactRender` dataclass; `_fallback_next_command` helper provides 3-tier fallback. Old stale footer logic deleted.
 - `src/adapters/cli/today_commands.py` still renders plain capped warnings, so T10/T12 remain valid. T6/T7/T8/T9/T11 are resolved (see their sections for as-built notes).
 
 ---
