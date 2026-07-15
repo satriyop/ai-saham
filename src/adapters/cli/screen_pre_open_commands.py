@@ -264,7 +264,7 @@ def pre_open(
             risk_strategy_name=response.risk_strategy_name,
             source_status=response.source_status,
             source_message=response.source_message,
-            source_snapshot_path=response.source_snapshot_path,
+            source_snapshot_ref=response.source_snapshot_ref,
         )
 
         if response.source_status in _SIDECAR_ELIGIBLE_STATUSES:

@@ -412,7 +412,9 @@ def test_pre_open_workflow_outside_window_with_snapshot_returns_snapshot_success
     assert snapshot_calls[0][1] == run_date
     assert response.source_status == PreOpenSourceStatus.SNAPSHOT_SUCCESS
     assert response.result.candidates[0].ticker == "BUMI"
-    assert response.source_snapshot_path == snapshot_date.isoformat()
+    assert response.source_snapshot_ref == snapshot_date.isoformat()
+    # source_snapshot_ref is a DB snapshot identifier (an ISO date here), not a filesystem path.
+    assert date.fromisoformat(response.source_snapshot_ref) == snapshot_date
     assert response.source_message is not None
     assert snapshot_date.isoformat() in response.source_message
 

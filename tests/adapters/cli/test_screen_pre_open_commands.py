@@ -185,7 +185,7 @@ def test_pre_open_snapshot_state_visibly_labeled(capsys):
         total_movers_seen=1,
         warnings=[],
         source_status=PreOpenSourceStatus.SNAPSHOT_SUCCESS,
-        source_snapshot_path="data/iev/20260714/iev.json",
+        source_snapshot_ref="data/iev/20260714/iev.json",
     )
 
     out = capsys.readouterr().out
@@ -571,7 +571,7 @@ def test_pre_open_suppresses_sidecar_for_snapshot_success(monkeypatch):
             analysis_date=date(2026, 6, 12), candle_end=None, broker_end=None
         ),
         source_status=PreOpenSourceStatus.SNAPSHOT_SUCCESS,
-        source_snapshot_path="data/iev/20260714/iev.json",
+        source_snapshot_ref="data/iev/20260714/iev.json",
     )
 
     result, calls = _invoke_with_response(monkeypatch, response)

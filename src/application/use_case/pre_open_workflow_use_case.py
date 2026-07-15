@@ -82,7 +82,7 @@ class PreOpenWorkflowResponse:
     risk_strategy_name: str | None = None
     source_status: PreOpenSourceStatus = PreOpenSourceStatus.LIVE_SUCCESS
     source_message: str | None = None
-    source_snapshot_path: str | None = None
+    source_snapshot_ref: str | None = None
 
 
 class PreOpenWorkflowUseCase:
@@ -119,7 +119,7 @@ class PreOpenWorkflowUseCase:
                         snapshot.response,
                         source_status=PreOpenSourceStatus.SNAPSHOT_SUCCESS,
                         source_message=message,
-                        source_snapshot_path=snapshot.snapshot_date.isoformat(),
+                        source_snapshot_ref=snapshot.snapshot_date.isoformat(),
                     )
             return self._outside_window_response(request)
 
@@ -156,7 +156,7 @@ class PreOpenWorkflowUseCase:
         *,
         source_status: PreOpenSourceStatus,
         source_message: str | None,
-        source_snapshot_path: str | None = None,
+        source_snapshot_ref: str | None = None,
     ) -> PreOpenWorkflowResponse:
         result = screen_response.result
 
@@ -197,7 +197,7 @@ class PreOpenWorkflowUseCase:
             risk_strategy_name=request.risk_strategy,
             source_status=source_status,
             source_message=source_message,
-            source_snapshot_path=source_snapshot_path,
+            source_snapshot_ref=source_snapshot_ref,
         )
 
     def _outside_window_response(

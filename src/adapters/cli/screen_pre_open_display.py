@@ -46,7 +46,7 @@ SOURCE_STATUS_STYLE: dict[PreOpenSourceStatus, str] = {
 def no_candidates_message(
     source_status: PreOpenSourceStatus,
     source_message: str | None,
-    source_snapshot_path: str | None,
+    source_snapshot_ref: str | None,
 ) -> str:
     if source_status == PreOpenSourceStatus.UNAVAILABLE:
         return (
@@ -58,7 +58,7 @@ def no_candidates_message(
     if source_status == PreOpenSourceStatus.EMPTY_CONFIRMED:
         return "Provider returned a valid empty mover list — no movers met the IEV threshold."
     if source_status == PreOpenSourceStatus.SNAPSHOT_SUCCESS:
-        suffix = f" ({source_snapshot_path})" if source_snapshot_path else ""
+        suffix = f" ({source_snapshot_ref})" if source_snapshot_ref else ""
         return f"Snapshot used{suffix} — no candidates passed the IEV filter."
     return "No candidates passed the IEV filter."
 
@@ -223,7 +223,7 @@ def display_pre_open_summary_panel(
     market_regime: MarketContext | None,
     source_status: PreOpenSourceStatus = PreOpenSourceStatus.LIVE_SUCCESS,
     source_message: str | None = None,
-    source_snapshot_path: str | None = None,
+    source_snapshot_ref: str | None = None,
 ) -> None:
     sorted_candidates = sorted(
         candidates,
@@ -239,8 +239,8 @@ def display_pre_open_summary_panel(
     status_label = SOURCE_STATUS_LABEL.get(source_status, source_status.value)
     status_style = SOURCE_STATUS_STYLE.get(source_status, "white")
     status_display = status_label
-    if source_status == PreOpenSourceStatus.SNAPSHOT_SUCCESS and source_snapshot_path:
-        status_display = f"{status_label} ({source_snapshot_path})"
+    if source_status == PreOpenSourceStatus.SNAPSHOT_SUCCESS and source_snapshot_ref:
+        status_display = f"{status_label} ({source_snapshot_ref})"
     summary.add_row("Source", f"[{status_style}]{status_display}[/]")
     summary.add_row("IEV threshold", f">= {iev_min:,}")
     summary.add_row("Movers evaluated", str(total_movers_seen))
@@ -318,7 +318,7 @@ def display_results(
     risk_strategy_name: str | None = None,
     source_status: PreOpenSourceStatus = PreOpenSourceStatus.LIVE_SUCCESS,
     source_message: str | None = None,
-    source_snapshot_path: str | None = None,
+    source_snapshot_ref: str | None = None,
 ) -> None:
     # 1. Summary Panel
     display_pre_open_summary_panel(
@@ -331,11 +331,11 @@ def display_results(
         market_regime=market_regime,
         source_status=source_status,
         source_message=source_message,
-        source_snapshot_path=source_snapshot_path,
+        source_snapshot_ref=source_snapshot_ref,
     )
 
     if not candidates:
-        message = no_candidates_message(source_status, source_message, source_snapshot_path)
+        message = no_candidates_message(source_status, source_message, source_snapshot_ref)
         style = SOURCE_STATUS_STYLE.get(source_status, "yellow")
         console().print("")
         console().print(
