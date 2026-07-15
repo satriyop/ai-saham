@@ -126,7 +126,7 @@ Guardrails and edge cases:
 
 ### 4. Medium: AI provider default resolution is duplicated across AI and sentiment infrastructure
 
-Status: RESOLVED (commit `bb2afb0`)
+Status: RESOLVED (commit `4af3f30`)
 
 Pointer:
 - `src/infrastructure/ai/factory.py:26` defines `_default_provider()`.
