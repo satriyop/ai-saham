@@ -109,13 +109,12 @@ def test_bb_not_shown_as_scored_flow_points_when_disabled(capsys):
         foreign_flow_score_breakdown=_breakdown_with_tight_bb(),
     )
 
+    response = _response(candidate)
     display_results(
-        response=_response(candidate),
+        response=response,
+        candidates=response.candidates,
         universe_label="lq45",
-        top_n=10,
         show_top_broker=False,
-        vwap_only=False,
-        squeeze_only=False,
         display_config=_bb_disabled_config(),
         include_explanation=False,
     )

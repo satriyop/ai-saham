@@ -90,26 +90,12 @@ def test_screen_accum_single_table_mode_sets_strategy_overlay(monkeypatch):
     assert req.save_enabled is False
 
 
-def test_screen_accum_strategy_overlay_suppressed_in_json(monkeypatch):
-    """--strategy --format json must NOT set include_strategy_overlay."""
-    captured = {}
+def test_screen_accum_strategy_with_json_fails_explicitly(monkeypatch):
+    """--strategy --format json is an unsupported combo — must fail clearly,
+    not silently drop the strategy overlay (S2)."""
 
     def fake_uc(**kwargs):
-        uc = SimpleNamespace()
-        uc.execute = lambda req: (
-            captured.update(request=req)
-            or _fake_workflow_result(
-                response=AccumulationScreenResponse(
-                    candidates=[_candidate()],
-                    screened_at=date(2026, 6, 28),
-                    window_days=getattr(req, "window", 7),
-                    total_tickers_checked=len(req.tickers),
-                    tickers_skipped=0,
-                    provider="fake",
-                )
-            )
-        )
-        return uc
+        raise AssertionError("workflow use case must not run for a rejected combo")
 
     monkeypatch.setattr(
         accum_cli,
@@ -122,33 +108,17 @@ def test_screen_accum_strategy_overlay_suppressed_in_json(monkeypatch):
         ["screen", "accum", "BBCA", "--strategy", "test-strat", "--format", "json"],
     )
 
-    assert result.exit_code == 0, result.output
-    req = captured["request"]
-    assert req.include_strategy_overlay is False
+    assert result.exit_code != 0
+    assert "--strategy" in result.output
+    assert "--format json" in result.output
 
 
-def test_screen_accum_strategy_overlay_suppressed_in_multi(monkeypatch):
-    """--strategy --multi must NOT set include_strategy_overlay."""
-    captured = {}
+def test_screen_accum_strategy_with_multi_fails_explicitly(monkeypatch):
+    """--strategy --multi is an unsupported combo — must fail clearly,
+    not silently drop the strategy overlay (S2)."""
 
     def fake_uc(**kwargs):
-        uc = SimpleNamespace()
-        uc.execute = lambda req: (
-            captured.update(request=req)
-            or _fake_workflow_result(
-                multi_results={
-                    7: AccumulationScreenResponse(
-                        candidates=[_candidate()],
-                        screened_at=date(2026, 6, 28),
-                        window_days=7,
-                        total_tickers_checked=1,
-                        tickers_skipped=0,
-                        provider="fake",
-                    ),
-                },
-            )
-        )
-        return uc
+        raise AssertionError("workflow use case must not run for a rejected combo")
 
     monkeypatch.setattr(
         accum_cli,
@@ -161,9 +131,9 @@ def test_screen_accum_strategy_overlay_suppressed_in_multi(monkeypatch):
         ["screen", "accum", "BBCA", "--multi", "--strategy", "test-strat"],
     )
 
-    assert result.exit_code == 0, result.output
-    req = captured["request"]
-    assert req.include_strategy_overlay is False
+    assert result.exit_code != 0
+    assert "--strategy" in result.output
+    assert "--multi" in result.output
 
 
 def test_screen_accum_single_table_mode_sets_save_enabled(monkeypatch):

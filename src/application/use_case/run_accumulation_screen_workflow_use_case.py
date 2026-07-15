@@ -17,6 +17,13 @@ from src.application.services.broker_quality import (
     BrokerQualitySnapshot,
     compute_broker_quality_batch,
 )
+from src.application.services.screen_accum_result_projector import (
+    ScreenAccumMultiProjection,
+    ScreenAccumSingleProjection,
+    project_multi_screen_result,
+    project_single_screen_result,
+    validate_multi_window_request,
+)
 from src.application.services.signal_observation_request_builder import (
     BuildSignalObservationScreenRequest,
 )
@@ -45,16 +52,30 @@ class RunAccumulationScreenWorkflowRequest:
     top: int
     save_name: str | None
     save_enabled: bool
+    vwap_only: bool = False
+    squeeze_only: bool = False
+    sort_by: str = "avg"
 
 
 @dataclass(frozen=True)
 class RunAccumulationScreenWorkflowResult:
     response: AccumulationScreenResponse | None = None
+    single_projection: ScreenAccumSingleProjection | None = None
     multi_results: dict[int, AccumulationScreenResponse] = field(default_factory=dict)
+    multi_projection: ScreenAccumMultiProjection | None = None
     broker_quality: dict[str, BrokerQualitySnapshot] = field(default_factory=dict)
     strategy_signals: dict[str, str] = field(default_factory=dict)
     save_result: SaveScreenWatchlistResult | None = None
     warnings: tuple[str, ...] = ()
+
+
+# Baseline broker-data-availability floor for the raw screen request. This is
+# deliberately independent of the CLI --min-streak filter: min_streak governs
+# consecutive_streak filtering, which is owned exclusively by
+# project_single_screen_result() (S2). Coupling this to min_streak would let
+# the raw screen silently drop candidates before the projector ever sees
+# them, defeating "filters applied exactly once, in the projector."
+_BASELINE_MIN_NET_BUY_DAYS = 1
 
 
 class RunAccumulationScreenWorkflowUseCase:
@@ -91,7 +112,7 @@ class RunAccumulationScreenWorkflowUseCase:
         request_builder = BuildSignalObservationScreenRequest.from_configs(
             swing_config=self._swing_config,
             accumulation_screener_config=self._accumulation_screener_config,
-            min_net_buy_days=max(1, request.min_streak),
+            min_net_buy_days=_BASELINE_MIN_NET_BUY_DAYS,
             min_foreign_flow_score=request.min_foreign_flow_score,
             min_signal_score=request.min_signal_score,
             min_piotroski=request.min_piotroski,
@@ -115,10 +136,15 @@ class RunAccumulationScreenWorkflowUseCase:
         )
         response = self._screen_use_case.execute(screen_request)
 
-        if request.min_streak > 0:
-            response.candidates = [
-                c for c in response.candidates if c.consecutive_streak >= request.min_streak
-            ]
+        display_cfg = self._accumulation_screener_config.display
+        projection = project_single_screen_result(
+            response,
+            vwap_only=request.vwap_only,
+            squeeze_only=request.squeeze_only,
+            top=request.top,
+            min_streak=request.min_streak,
+            coiled_spring_bb_pctile=display_cfg.coiled_spring_bb_pctile,
+        )
 
         strategy_signals: dict[str, str] = {}
         if request.include_strategy_overlay:
@@ -143,8 +169,7 @@ class RunAccumulationScreenWorkflowUseCase:
                     registry=registry,
                     rules_loader=self._rules_loader,
                 )
-                visible = response.candidates[:request.top]
-                for c in visible:
+                for c in projection.candidates:
                     try:
                         req = AssessRiskRequest(ticker=c.ticker, rules_file=rules_path)
                         res = risk_uc.execute(req)
@@ -161,7 +186,7 @@ class RunAccumulationScreenWorkflowUseCase:
             save_result = self._save_watchlist_use_case.execute(
                 SaveScreenWatchlistRequest(
                     name=request.save_name,
-                    candidates=response.candidates[:request.top],
+                    candidates=projection.candidates,
                     universe=str(request.universe_name or ""),
                     window_days=request.window,
                 )
@@ -169,6 +194,7 @@ class RunAccumulationScreenWorkflowUseCase:
 
         return RunAccumulationScreenWorkflowResult(
             response=response,
+            single_projection=projection,
             strategy_signals=strategy_signals,
             save_result=save_result,
             warnings=tuple(warnings),
@@ -180,6 +206,8 @@ class RunAccumulationScreenWorkflowUseCase:
         request_builder: BuildSignalObservationScreenRequest,
         warnings: list[str],
     ) -> RunAccumulationScreenWorkflowResult:
+        validate_multi_window_request(request.windows, request.sort_by)
+
         multi_builder = request_builder.with_score_filters_disabled()
         multi_results: dict[int, AccumulationScreenResponse] = {}
         for w in request.windows:
@@ -199,8 +227,21 @@ class RunAccumulationScreenWorkflowUseCase:
             as_of_date=screened_at,
         )
 
+        display_cfg = self._accumulation_screener_config.display
+        multi_projection = project_multi_screen_result(
+            multi_results,
+            broker_quality=broker_quality,
+            windows=request.windows,
+            top=request.top,
+            sort_by=request.sort_by,
+            squeeze_only=request.squeeze_only,
+            coiled_spring_min_foreign_flow_score=display_cfg.coiled_spring_min_foreign_flow_score,
+            coiled_spring_bb_pctile=display_cfg.coiled_spring_bb_pctile,
+        )
+
         return RunAccumulationScreenWorkflowResult(
             multi_results=multi_results,
+            multi_projection=multi_projection,
             broker_quality=broker_quality,
             warnings=tuple(warnings),
         )

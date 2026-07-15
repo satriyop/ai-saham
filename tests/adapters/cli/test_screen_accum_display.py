@@ -13,6 +13,9 @@ from src.adapters.cli.screen_accum_formatters import (
 from src.application.dto.accumulation_screen import (
     AccumulationScreenResponse,
 )
+from src.application.services.screen_accum_result_projector import (
+    project_multi_screen_result,
+)
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
 from src.domain.value_objects.signal_assessment import SignalStrength
@@ -35,11 +38,9 @@ def test_display_results_renders_rich_accumulation_panel(capsys):
 
     display_results(
         response=response,
+        candidates=response.candidates,
         universe_label="lq45",
-        top_n=10,
         show_top_broker=False,
-        vwap_only=False,
-        squeeze_only=False,
         display_config=_CFG,
         include_explanation=False,
     )
@@ -69,11 +70,9 @@ def test_display_results_renders_explanation_panels_when_requested(capsys):
 
     display_results(
         response=response,
+        candidates=response.candidates,
         universe_label="lq45",
-        top_n=10,
         show_top_broker=False,
-        vwap_only=False,
-        squeeze_only=False,
         display_config=_CFG,
         include_explanation=True,
     )
@@ -128,11 +127,9 @@ def test_display_results_renders_blocked_risk_diagnostics(capsys):
 
     display_results(
         response=response,
+        candidates=response.candidates,
         universe_label="lq45",
-        top_n=10,
         show_top_broker=False,
-        vwap_only=False,
-        squeeze_only=False,
         display_config=_CFG,
         include_explanation=False,
     )
@@ -164,12 +161,21 @@ def test_display_multi_renders_rich_accumulation_panel(capsys):
         ),
     }
 
-    display_multi(
-        results=results,
-        universe_label="lq45",
-        top_n=10,
+    projection = project_multi_screen_result(
+        results,
+        broker_quality=None,
+        windows=[7, 30],
+        top=10,
         sort_by="avg",
         squeeze_only=False,
+        coiled_spring_min_foreign_flow_score=_CFG.coiled_spring_min_foreign_flow_score,
+        coiled_spring_bb_pctile=_CFG.coiled_spring_bb_pctile,
+    )
+
+    display_multi(
+        rows=projection.rows,
+        universe_label="lq45",
+        windows=projection.resolved_windows,
         screened_at=date(2026, 6, 19),
         display_config=_CFG,
     )
@@ -206,11 +212,9 @@ def test_display_results_renders_phase_column_and_note(capsys):
 
     display_results(
         response=response,
+        candidates=response.candidates,
         universe_label="lq45",
-        top_n=10,
         show_top_broker=False,
-        vwap_only=False,
-        squeeze_only=False,
         display_config=_CFG,
         include_explanation=False,
     )
@@ -234,11 +238,9 @@ def test_display_results_shows_unknown_phase_when_detection_unavailable(capsys):
 
     display_results(
         response=response,
+        candidates=response.candidates,
         universe_label="lq45",
-        top_n=10,
         show_top_broker=False,
-        vwap_only=False,
-        squeeze_only=False,
         display_config=_CFG,
         include_explanation=False,
     )

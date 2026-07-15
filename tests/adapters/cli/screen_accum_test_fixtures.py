@@ -90,17 +90,51 @@ class FakeBrokerSummaryRepository:
 
 
 def _fake_workflow_result(**overrides):
-    """Build a RunAccumulationScreenWorkflowResult-like object for CLI mocks."""
+    """Build a RunAccumulationScreenWorkflowResult-like object for CLI mocks.
+
+    Auto-derives single_projection/multi_projection from response/multi_results
+    (with no filters applied) unless the caller passes them explicitly, so
+    existing fixtures that only set up a raw response still render.
+    """
+    from src.application.services.screen_accum_result_projector import (
+        project_multi_screen_result,
+        project_single_screen_result,
+    )
     from src.application.use_case.run_accumulation_screen_workflow_use_case import (
         RunAccumulationScreenWorkflowResult,
     )
     params = dict(
         response=None,
+        single_projection=None,
         multi_results={},
+        multi_projection=None,
         broker_quality={},
         strategy_signals={},
         save_result=None,
         warnings=(),
     )
     params.update(overrides)
+
+    if params["response"] is not None and params["single_projection"] is None:
+        params["single_projection"] = project_single_screen_result(
+            params["response"],
+            vwap_only=False,
+            squeeze_only=False,
+            top=len(params["response"].candidates),
+            min_streak=0,
+            coiled_spring_bb_pctile=0.20,
+        )
+
+    if params["multi_results"] and params["multi_projection"] is None:
+        params["multi_projection"] = project_multi_screen_result(
+            params["multi_results"],
+            broker_quality=params["broker_quality"],
+            windows=sorted(params["multi_results"].keys()),
+            top=len(next(iter(params["multi_results"].values())).candidates) or 1,
+            sort_by="avg",
+            squeeze_only=False,
+            coiled_spring_min_foreign_flow_score=50.0,
+            coiled_spring_bb_pctile=0.20,
+        )
+
     return RunAccumulationScreenWorkflowResult(**params)

@@ -51,6 +51,10 @@ _ASC_CFG = SimpleNamespace(
     min_signal_score=SimpleNamespace(enabled=False, value=0.0),
     foreign_flow_score_policy=None,
     derived_features=None,
+    display=SimpleNamespace(
+        coiled_spring_min_foreign_flow_score=50.0,
+        coiled_spring_bb_pctile=0.20,
+    ),
 )
 
 
@@ -175,7 +179,33 @@ def test_single_mode_applies_min_streak_filter():
     result = uc.execute(_single_request(min_streak=3))
 
     assert result.response is not None
-    assert [c.ticker for c in result.response.candidates] == ["A"]
+    assert result.single_projection is not None
+    assert [c.ticker for c in result.single_projection.candidates] == ["A"]
+    assert result.single_projection.raw_candidate_count == 3
+    assert result.single_projection.applied_filters.min_streak == 3
+
+
+def test_single_mode_min_streak_does_not_influence_raw_screen_request():
+    """S2 regression: CLI min_streak must not leak into
+    AccumulationScreenRequest.min_net_buy_days — that would let the raw
+    screen drop candidates before the projector ever applies min_streak,
+    violating the "filters applied exactly once, in the projector" contract.
+    """
+    c1 = _candidate(ticker="A", consecutive_streak=5)
+    c2 = _candidate(ticker="B", consecutive_streak=2)
+    c3 = _candidate(ticker="C", consecutive_streak=0)
+    screen_mock = MagicMock()
+    screen_mock.execute.return_value = _screen_response(candidates=[c1, c2, c3])
+    uc = _make_uc(screen_use_case=screen_mock)
+
+    result = uc.execute(_single_request(min_streak=5))
+
+    raw_screen_request = screen_mock.execute.call_args[0][0]
+    assert raw_screen_request.min_net_buy_days != 5
+
+    assert result.single_projection is not None
+    assert [c.ticker for c in result.single_projection.candidates] == ["A"]
+    assert result.single_projection.raw_candidate_count == 3
 
 
 def test_single_mode_zero_min_streak_keeps_all():
@@ -188,7 +218,8 @@ def test_single_mode_zero_min_streak_keeps_all():
     result = uc.execute(_single_request(min_streak=0))
 
     assert result.response is not None
-    assert len(result.response.candidates) == 2
+    assert result.single_projection is not None
+    assert len(result.single_projection.candidates) == 2
 
 
 # ---------------------------------------------------------------------------

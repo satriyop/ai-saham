@@ -11,63 +11,26 @@ from datetime import date
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, console, panel
-from src.adapters.cli.screen_accum_formatters import AccumulationDisplayConfig, classify_pattern
-from src.application.dto.accumulation_screen import (
-    AccumulationCandidate,
-    AccumulationScreenResponse,
-)
+from src.adapters.cli.screen_accum_formatters import AccumulationDisplayConfig
+from src.application.services.screen_accum_result_projector import ScreenAccumMultiRow
 
 
 def display_multi(
-    results: dict[int, AccumulationScreenResponse],
+    rows: list[ScreenAccumMultiRow],
     universe_label: str,
-    top_n: int,
-    sort_by: str,
-    squeeze_only: bool,
+    windows: list[int],
     screened_at: date,
     display_config: AccumulationDisplayConfig,
-    broker_quality = None,
+    total_tickers_checked: int = 0,
+    provider: str = "",
     include_explanation: bool = False,
 ) -> None:
-    """Render multi-window side-by-side table."""
-    windows = sorted(results.keys())
+    """Render multi-window side-by-side table.
 
-    # Build per-ticker dict: ticker -> {window -> candidate}
-    by_ticker: dict[str, dict[int, AccumulationCandidate]] = {}
-    for w, resp in results.items():
-        for c in resp.candidates:
-            by_ticker.setdefault(c.ticker, {})[w] = c
-
-    # Apply squeeze filter
-    if squeeze_only:
-        by_ticker = {
-            tk: pw
-            for tk, pw in by_ticker.items()
-            if any(
-                c.bb_width_pctile is not None
-                and c.bb_width_pctile <= display_config.coiled_spring_bb_pctile
-                for c in pw.values()
-            )
-        }
-
-    def sort_key(item: tuple) -> float:
-        pw = item[1]
-        scores = [c.foreign_flow_score for c in pw.values()]
-        if not scores:
-            return 0.0
-        if sort_by == "avg":
-            return sum(scores) / len(scores)
-        if sort_by == "max":
-            return max(scores)
-        try:
-            w = int(sort_by.rstrip("ds"))
-            c = pw.get(w)
-            return c.foreign_flow_score if c else 0.0
-        except (ValueError, AttributeError):
-            return sum(scores) / len(scores)
-
-    rows = sorted(by_ticker.items(), key=sort_key, reverse=True)[:top_n]
-
+    `rows` are the already-filtered/sorted/limited projection from
+    src.application.services.screen_accum_result_projector — this function
+    must not independently filter, sort, or slice.
+    """
     if not rows:
         empty = compact_table(show_header=False)
         empty.add_column("Message")
@@ -91,10 +54,10 @@ def display_multi(
     table.add_column("Trend")
     table.add_column("Broker Flow")
 
-    for i, (tk, pw) in enumerate(rows, 1):
+    for i, row in enumerate(rows, 1):
         score_cells = []
         for w in windows:
-            candidate = pw.get(w)
+            candidate = row.candidates_by_window.get(w)
             if candidate is None:
                 score_cells.append(Text("—", style="bright_black"))
                 continue
@@ -106,11 +69,8 @@ def display_multi(
                 ) else ""
             )
             score_cells.append(Text(f"{candidate.foreign_flow_score:.0f}", style=style))
-        pattern = classify_pattern(windows, pw, display_config)
-        trend = next((c.trend for w in sorted(windows) for c in [pw.get(w)] if c), "—")
-        quality = (broker_quality or {}).get(tk)
-        brk = quality.label if quality else "n/a"
-        table.add_row(str(i), tk, *score_cells, pattern, trend, brk)
+        brk = row.broker_quality.label if row.broker_quality else "n/a"
+        table.add_row(str(i), row.ticker, *score_cells, row.pattern, row.trend, brk)
 
     console().print(
         panel(
@@ -128,12 +88,11 @@ def display_multi(
     meta_table.add_column("Key", style="bold cyan")
     meta_table.add_column("Value")
 
-    sample_resp = next(iter(results.values()))
     meta_table.add_row(
         "Stats",
-        f"Checked: {sample_resp.total_tickers_checked} | "
+        f"Checked: {total_tickers_checked} | "
         f"Shown: {len(rows)} | "
-        f"Provider: {sample_resp.provider}"
+        f"Provider: {provider}"
     )
 
     enter_score = display_config.enter_min_foreign_flow_score

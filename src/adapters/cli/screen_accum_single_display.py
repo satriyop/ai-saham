@@ -127,28 +127,20 @@ def _scoring_definitions_panel(display_config: AccumulationDisplayConfig):
 
 def display_results(
     response: AccumulationScreenResponse,
+    candidates: list,
     universe_label: str,
-    top_n: int,
     show_top_broker: bool,
-    vwap_only: bool,
-    squeeze_only: bool,
     display_config: AccumulationDisplayConfig,
     include_explanation: bool = False,
     strategy_signals: dict[str, str] | None = None,
     strategy_name: str | None = None,
 ) -> None:
-    """Render accumulation screener results as terminal table."""
-    candidates = response.candidates
-    if vwap_only:
-        candidates = [c for c in candidates if c.vwap_discount_pct and c.vwap_discount_pct > 0]
-    if squeeze_only:
-        candidates = [
-            c for c in candidates
-            if c.bb_width_pctile is not None
-            and c.bb_width_pctile <= display_config.coiled_spring_bb_pctile
-        ]
+    """Render accumulation screener results as terminal table.
 
-    candidates = candidates[:top_n]
+    `candidates` is the already-filtered/limited projection from
+    src.application.services.screen_accum_result_projector — this function
+    must not independently filter, sort, or slice `response.candidates`.
+    """
     show_context_ticker = len(candidates) > 1
 
     if not candidates:
