@@ -97,6 +97,49 @@ Do Not Interpret This As:
 - Do not update only the producer; update downstream consumers that rely on the contract.
 ```
 
+## Delegated Task Implementation
+
+When implementing a task from another agent's instruction, treat the
+instruction as a contract, not a suggestion. Directionally correct is not done
+if the explicit contract is incomplete.
+
+Before coding, restate:
+
+1. Hard invariants.
+   - Behaviors that must be true after implementation.
+   - Example: if projection is required to own all filtering, old workflow or
+     adapter paths must not keep part of that filtering.
+2. Forbidden interpretations.
+   - Things that may seem acceptable but are not allowed.
+   - Example: "fail explicitly" means a non-zero failure, not warning and
+     continue.
+3. Exact file boundary.
+   - List files expected to change.
+   - Any unrelated file change must be reported before continuing.
+4. Exact output contract.
+   - Name required JSON keys, CLI exit behavior, error messages, DTO fields,
+     repository identity keys, or config paths.
+   - If an output field is required, add a test asserting it exists.
+5. Negative tests.
+   - Prove invalid or unsupported paths fail.
+   - Do not test only the happy path.
+6. Existing behavior preservation.
+   - When moving logic across layers, preserve the current predicate exactly
+     unless the task explicitly changes it.
+7. Stop condition.
+   - If the instruction is ambiguous or conflicts with current code, stop and
+     ask instead of implementing a weaker interpretation.
+
+Before marking done:
+
+- [ ] The exact requested behavior is implemented, not only the general shape.
+- [ ] No unrelated files were touched.
+- [ ] Required output fields and error paths are covered by tests.
+- [ ] Unsupported combinations fail if the task says they must fail.
+- [ ] No old code path still performs logic that was supposed to move layers.
+- [ ] Grep confirms the old forbidden behavior is gone.
+- [ ] Focused tests and `git diff --check` pass.
+
 ## Manual Dependency Injection
 
 This repository uses explicit manual DI, not a DI framework:
