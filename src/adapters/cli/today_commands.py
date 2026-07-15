@@ -219,14 +219,55 @@ def today(
     else:
         accumulation.add_row("-", "-", "-", "Run: saham screen accum --universe lq45")
 
+    # Build Data Readiness table
+    readiness_table = compact_table()
+    readiness_table.add_column("Dataset")
+    readiness_table.add_column("Status")
+    readiness_table.add_column("Coverage", justify="right")
+    readiness_table.add_column("Required As Of")
+    readiness_table.add_column("Reason")
+
+    status_styles = {
+        "READY": "green",
+        "PARTIAL": "yellow",
+        "NOT_READY": "red",
+        "UNAVAILABLE": "red",
+    }
+
+    if response.readiness_items:
+        for item in response.readiness_items:
+            style = status_styles.get(item.status, "white")
+            status_text = f"[{style}]{item.status}[/{style}]"
+            coverage_text = f"{item.coverage_count}/{item.total_count}"
+            req_as_of = item.required_as_of.isoformat() if item.required_as_of else "-"
+            reason_text = item.reason or "-"
+            readiness_table.add_row(
+                item.dataset, status_text, coverage_text, req_as_of, reason_text
+            )
+
     sections = [
         Text("Data & Regime", style="bold cyan"),
         summary,
+        Text("Data Readiness", style="bold cyan"),
+        readiness_table,
         Text("Top Pre-Open Candidates", style="bold cyan"),
         opening,
-        Text("Top Accumulation Candidates", style="bold cyan"),
-        accumulation,
     ]
+
+    # Section title for accumulation candidates
+    accum_title = Text("Top Accumulation Candidates", style="bold cyan")
+    if response.overall_authority == "PARTIAL":
+        accum_title = Text.assemble(
+            ("Top Accumulation Candidates", "bold cyan"),
+            ("   ⚠ PARTIAL DATA — verify readiness before acting", "bold yellow")
+        )
+
+    if response.overall_authority == "NOT_READY":
+        sections.append(accum_title)
+        sections.append(Text("Suppressed — data readiness is NOT_READY", style="red"))
+    else:
+        sections.append(accum_title)
+        sections.append(accumulation)
 
     if response.warnings:
         warnings = compact_table(show_header=False)

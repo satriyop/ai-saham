@@ -9,7 +9,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
@@ -20,6 +20,7 @@ from src.application.services.data_freshness_service import compute_data_freshne
 from src.application.services.universe_loader import load_universe
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from src.domain.ports.broker_data_repository import BrokerDataRepository
+from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.value_objects.data_freshness_status import (
     DataFreshnessStatus,
     SourceFreshnessState,
@@ -27,7 +28,20 @@ from src.domain.value_objects.data_freshness_status import (
 
 if TYPE_CHECKING:
     from src.domain.value_objects.market_context import MarketContext
-from src.domain.ports.market_data_repository import MarketDataRepository
+
+ReadinessStatus = Literal["READY", "PARTIAL", "NOT_READY", "UNAVAILABLE"]
+OverallAuthority = Literal["READY", "PARTIAL", "NOT_READY"]
+
+@dataclass(frozen=True)
+class DataReadiness:
+    dataset: str
+    required_as_of: date | None
+    coverage_count: int
+    total_count: int
+    status: ReadinessStatus
+    reason: str | None = None
+
+MIN_READY_COVERAGE_RATIO = 0.80
 
 
 @dataclass(frozen=True)
@@ -71,6 +85,8 @@ class DailyBriefingResponse:
     universe_count: int
     data_freshness: list[BriefingDataFreshnessItem]
     stale_count: int
+    readiness_items: list[DataReadiness]
+    overall_authority: OverallAuthority
     regime: "MarketContext | None" = None
     opening_candidates: list[OpeningBriefingCandidate] = field(default_factory=list)
     accumulation_candidates: list[AccumulationCandidate] = field(default_factory=list)
@@ -146,35 +162,51 @@ class DailyBriefingUseCase:
             latest_completed_eod_date = synthetic.expected_latest_eod
 
         regime = None
-        accumulation_candidates: list[AccumulationCandidate] = []
-
-        if latest_completed_eod_date is None:
-            warnings.append(
-                "Latest completed EOD date is unavailable. "
-                "Skipping market regime and accumulation screen."
-            )
-        else:
-            if universe_tickers:
-                try:
-                    regime = self._regime_uc.evaluate(as_of_date=latest_completed_eod_date)
-                except Exception as exc:
-                    warnings.append(f"Regime unavailable: {exc}")
-
-                try:
-                    response = self._accumulation_uc.execute(
-                        AccumulationScreenRequest(
-                            tickers=universe_tickers,
-                            window_days=7,
-                            as_of_date=latest_completed_eod_date,
-                        )
-                    )
-                    accumulation_candidates = response.candidates[: request.top]
-                except Exception as exc:
-                    warnings.append(f"Accumulation screen unavailable: {exc}")
+        if latest_completed_eod_date is not None and universe_tickers:
+            try:
+                regime = self._regime_uc.evaluate(as_of_date=latest_completed_eod_date)
+            except Exception as exc:
+                warnings.append(f"Regime unavailable: {exc}")
 
         snapshot = self._opening_snapshot(request, live_session_date, warnings)
         opening_candidates = snapshot.candidates
         opening_snapshot_date = snapshot.snapshot_date
+
+        regime_available = regime is not None
+        readiness_items = self._readiness_items(
+            freshness=freshness,
+            latest_completed_eod_date=latest_completed_eod_date,
+            regime_available=regime_available,
+            opening_snapshot_date=opening_snapshot_date,
+            live_session_date=live_session_date,
+        )
+        overall_authority = self._overall_authority(readiness_items)
+
+        accumulation_candidates: list[AccumulationCandidate] = []
+        if overall_authority == "NOT_READY":
+            warnings.append("Accumulation screen suppressed because data readiness is NOT_READY.")
+        else:
+            if overall_authority == "PARTIAL":
+                warnings.append("Accumulation screen is shown with PARTIAL data readiness.")
+
+            if latest_completed_eod_date is None:
+                warnings.append(
+                    "Latest completed EOD date is unavailable. "
+                    "Skipping market regime and accumulation screen."
+                )
+            else:
+                if universe_tickers:
+                    try:
+                        response = self._accumulation_uc.execute(
+                            AccumulationScreenRequest(
+                                tickers=universe_tickers,
+                                window_days=7,
+                                as_of_date=latest_completed_eod_date,
+                            )
+                        )
+                        accumulation_candidates = response.candidates[: request.top]
+                    except Exception as exc:
+                        warnings.append(f"Accumulation screen unavailable: {exc}")
 
         return DailyBriefingResponse(
             live_session_date=live_session_date,
@@ -185,11 +217,153 @@ class DailyBriefingUseCase:
             universe_count=len(universe_tickers),
             data_freshness=freshness,
             stale_count=stale_count,
+            readiness_items=readiness_items,
+            overall_authority=overall_authority,
             regime=regime,
             opening_candidates=opening_candidates,
             accumulation_candidates=accumulation_candidates,
             warnings=warnings,
         )
+
+    def _readiness_items(
+        self,
+        *,
+        freshness: list[BriefingDataFreshnessItem],
+        latest_completed_eod_date: date | None,
+        regime_available: bool,
+        opening_snapshot_date: date | None,
+        live_session_date: date,
+    ) -> list[DataReadiness]:
+        items: list[DataReadiness] = []
+
+        # A. candles
+        candle_total = len(freshness)
+        candle_coverage = sum(
+            1
+            for item in freshness
+            if item.freshness.candle_state in {
+                SourceFreshnessState.READY,
+                SourceFreshnessState.PENDING_EOD,
+            }
+        )
+        candle_status = self._derive_status(candle_coverage, candle_total)
+        candle_reason = None
+        if candle_status == "UNAVAILABLE":
+            candle_reason = "No universe tickers resolved"
+        elif candle_status in ("NOT_READY", "PARTIAL"):
+            candle_reason = (
+                f"Only {candle_coverage}/{candle_total} "
+                "tickers have current candle data"
+            )
+
+        items.append(
+            DataReadiness(
+                dataset="candles",
+                required_as_of=latest_completed_eod_date,
+                coverage_count=candle_coverage,
+                total_count=candle_total,
+                status=candle_status,
+                reason=candle_reason,
+            )
+        )
+
+        # B. broker_flow
+        broker_total = len(freshness)
+        broker_coverage = sum(
+            1
+            for item in freshness
+            if item.freshness.broker_state in {
+                SourceFreshnessState.READY,
+                SourceFreshnessState.PENDING_EOD,
+            }
+        )
+        broker_status = self._derive_status(broker_coverage, broker_total)
+        broker_reason = None
+        if broker_status == "UNAVAILABLE":
+            broker_reason = "No universe tickers resolved"
+        elif broker_status in ("NOT_READY", "PARTIAL"):
+            broker_reason = (
+                f"Only {broker_coverage}/{broker_total} "
+                "tickers have current broker data"
+            )
+
+        items.append(
+            DataReadiness(
+                dataset="broker_flow",
+                required_as_of=latest_completed_eod_date,
+                coverage_count=broker_coverage,
+                total_count=broker_total,
+                status=broker_status,
+                reason=broker_reason,
+            )
+        )
+
+        # C. market_context
+        market_coverage = 1 if regime_available else 0
+        market_total = 1
+        market_status = "READY" if regime_available else "UNAVAILABLE"
+        market_reason = None if regime_available else "Market context unavailable"
+        items.append(
+            DataReadiness(
+                dataset="market_context",
+                required_as_of=latest_completed_eod_date,
+                coverage_count=market_coverage,
+                total_count=market_total,
+                status=market_status,
+                reason=market_reason,
+            )
+        )
+
+        # D. opening_snapshot
+        opening_coverage = 1 if opening_snapshot_date is not None else 0
+        opening_total = 1
+        opening_status = "READY" if opening_snapshot_date is not None else "UNAVAILABLE"
+        opening_reason = (
+            None if opening_snapshot_date is not None
+            else "Opening snapshot unavailable"
+        )
+        items.append(
+            DataReadiness(
+                dataset="opening_snapshot",
+                required_as_of=live_session_date,
+                coverage_count=opening_coverage,
+                total_count=opening_total,
+                status=opening_status,
+                reason=opening_reason,
+            )
+        )
+
+        return items
+
+    def _derive_status(self, coverage: int, total: int) -> ReadinessStatus:
+        if total == 0:
+            return "UNAVAILABLE"
+        if coverage == total:
+            return "READY"
+        ratio = coverage / total
+        if ratio >= MIN_READY_COVERAGE_RATIO:
+            return "PARTIAL"
+        return "NOT_READY"
+
+    def _overall_authority(self, readiness_items: list[DataReadiness]) -> OverallAuthority:
+        candles_status = "UNAVAILABLE"
+        broker_status = "UNAVAILABLE"
+        for item in readiness_items:
+            if item.dataset == "candles":
+                candles_status = item.status
+            elif item.dataset == "broker_flow":
+                broker_status = item.status
+
+        critical_statuses = [candles_status, broker_status]
+        all_statuses = [item.status for item in readiness_items]
+
+        if "NOT_READY" in critical_statuses or "UNAVAILABLE" in critical_statuses:
+            return "NOT_READY"
+        elif "PARTIAL" in all_statuses or "UNAVAILABLE" in all_statuses:
+            return "PARTIAL"
+        else:
+            return "READY"
+
 
     def _data_freshness(
         self,

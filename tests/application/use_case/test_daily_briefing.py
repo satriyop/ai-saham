@@ -222,3 +222,190 @@ def test_daily_briefing_opening_snapshot(tmp_path, monkeypatch):
     assert response.opening_snapshot_date == date(2026, 6, 19)
     assert len(response.opening_candidates) == 1
     assert response.opening_candidates[0].ticker == "BBCA"
+
+
+def test_daily_briefing_not_ready_when_candle_coverage_below_policy(monkeypatch):
+    tickers = [f"T{i}" for i in range(45)]
+    monkeypatch.setattr(
+        "src.application.use_case.daily_briefing_use_case.load_universe",
+        lambda *a, **kw: tickers,
+    )
+
+    current_tickers = [f"T{i}" for i in range(4)]
+    market_repo = MagicMock()
+    def market_side_effect(ticker):
+        if ticker in current_tickers:
+            return (date(2026, 6, 1), date(2026, 6, 19))
+        return (date(2026, 6, 1), date(2026, 6, 18))
+    market_repo.get_date_range.side_effect = market_side_effect
+
+    broker_repo = MagicMock()
+    broker_repo.get_date_range.return_value = (date(2026, 6, 1), date(2026, 6, 19))
+
+    regime_uc = MagicMock()
+    accum_uc = MagicMock()
+    accum_uc.execute.return_value = MagicMock(candidates=[])
+
+    use_case = DailyBriefingUseCase(
+        market_repository=market_repo,
+        broker_repository=broker_repo,
+        regime_use_case=regime_uc,
+        accumulation_use_case=accum_uc,
+        universe_loader=MagicMock(),
+    )
+
+    response = use_case.execute(
+        DailyBriefingRequest(universe="lq45", as_of_date=date(2026, 6, 19))
+    )
+
+    candles_readiness = next(item for item in response.readiness_items if item.dataset == "candles")
+    assert candles_readiness.status == "NOT_READY"
+    assert response.overall_authority == "NOT_READY"
+    assert response.accumulation_candidates == []
+    accum_uc.execute.assert_not_called()
+
+
+def test_daily_briefing_suppresses_accumulation_when_broker_coverage_below_policy(monkeypatch):
+    tickers = [f"T{i}" for i in range(45)]
+    monkeypatch.setattr(
+        "src.application.use_case.daily_briefing_use_case.load_universe",
+        lambda *a, **kw: tickers,
+    )
+
+    market_repo = MagicMock()
+    market_repo.get_date_range.return_value = (date(2026, 6, 1), date(2026, 6, 19))
+
+    current_tickers = [f"T{i}" for i in range(4)]
+    broker_repo = MagicMock()
+    def broker_side_effect(ticker):
+        if ticker in current_tickers:
+            return (date(2026, 6, 1), date(2026, 6, 19))
+        return (date(2026, 6, 1), date(2026, 6, 18))
+    broker_repo.get_date_range.side_effect = broker_side_effect
+
+    regime_uc = MagicMock()
+    accum_uc = MagicMock()
+    accum_uc.execute.return_value = MagicMock(candidates=[])
+
+    use_case = DailyBriefingUseCase(
+        market_repository=market_repo,
+        broker_repository=broker_repo,
+        regime_use_case=regime_uc,
+        accumulation_use_case=accum_uc,
+        universe_loader=MagicMock(),
+    )
+
+    response = use_case.execute(
+        DailyBriefingRequest(universe="lq45", as_of_date=date(2026, 6, 19))
+    )
+
+    broker_readiness = next(
+        item for item in response.readiness_items if item.dataset == "broker_flow"
+    )
+    assert broker_readiness.status == "NOT_READY"
+    assert response.overall_authority == "NOT_READY"
+    assert response.accumulation_candidates == []
+    accum_uc.execute.assert_not_called()
+
+
+def test_daily_briefing_partial_allows_accumulation_with_warning(monkeypatch):
+    tickers = [f"T{i}" for i in range(10)]
+    monkeypatch.setattr(
+        "src.application.use_case.daily_briefing_use_case.load_universe",
+        lambda *a, **kw: tickers,
+    )
+
+    current_tickers = [f"T{i}" for i in range(8)]
+
+    market_repo = MagicMock()
+    def market_side_effect(ticker):
+        if ticker in current_tickers:
+            return (date(2026, 6, 1), date(2026, 6, 19))
+        return (date(2026, 6, 1), date(2026, 6, 18))
+    market_repo.get_date_range.side_effect = market_side_effect
+
+    broker_repo = MagicMock()
+    def broker_side_effect(ticker):
+        if ticker in current_tickers:
+            return (date(2026, 6, 1), date(2026, 6, 19))
+        return (date(2026, 6, 1), date(2026, 6, 18))
+    broker_repo.get_date_range.side_effect = broker_side_effect
+
+    regime_uc = MagicMock()
+    accum_uc = MagicMock()
+    fake_candidate = MagicMock()
+    accum_uc.execute.return_value = MagicMock(candidates=[fake_candidate])
+
+    use_case = DailyBriefingUseCase(
+        market_repository=market_repo,
+        broker_repository=broker_repo,
+        regime_use_case=regime_uc,
+        accumulation_use_case=accum_uc,
+        universe_loader=MagicMock(),
+    )
+
+    response = use_case.execute(
+        DailyBriefingRequest(universe="lq45", as_of_date=date(2026, 6, 19))
+    )
+
+    assert response.overall_authority == "PARTIAL"
+    accum_uc.execute.assert_called_once()
+    assert any("PARTIAL data readiness" in w for w in response.warnings)
+
+
+def test_daily_briefing_ready_when_all_critical_sources_ready(tmp_path, monkeypatch):
+    tickers = ["T1", "T2", "T3"]
+    monkeypatch.setattr(
+        "src.application.use_case.daily_briefing_use_case.load_universe",
+        lambda *a, **kw: tickers,
+    )
+
+    market_repo = MagicMock()
+    market_repo.get_date_range.return_value = (date(2026, 6, 1), date(2026, 6, 19))
+
+    broker_repo = MagicMock()
+    broker_repo.get_date_range.return_value = (date(2026, 6, 1), date(2026, 6, 19))
+
+    regime_uc = MagicMock()
+    regime_uc.evaluate.return_value = MagicMock()
+
+    import json
+    opening_dir = tmp_path / "opening"
+    date_dir = opening_dir / "20260619"
+    date_dir.mkdir(parents=True)
+    snapshot_file = date_dir / "snapshot.json"
+    snapshot_data = {
+        "captured_at": "2026-06-19T09:05:00+07:00",
+        "candidates": [{"ticker": "T1", "opening_setup": "PRIME"}]
+    }
+    snapshot_file.write_text(json.dumps(snapshot_data))
+
+    accum_uc = MagicMock()
+    accum_uc.execute.return_value = MagicMock(candidates=[])
+
+    use_case = DailyBriefingUseCase(
+        market_repository=market_repo,
+        broker_repository=broker_repo,
+        regime_use_case=regime_uc,
+        accumulation_use_case=accum_uc,
+        universe_loader=MagicMock(),
+    )
+
+    response = use_case.execute(
+        DailyBriefingRequest(
+            universe="lq45",
+            as_of_date=date(2026, 6, 19),
+            opening_data_dir=opening_dir,
+        )
+    )
+
+    candles_readiness = next(
+        item for item in response.readiness_items if item.dataset == "candles"
+    )
+    broker_readiness = next(
+        item for item in response.readiness_items if item.dataset == "broker_flow"
+    )
+
+    assert candles_readiness.status == "READY"
+    assert broker_readiness.status == "READY"
+    assert response.overall_authority == "READY"

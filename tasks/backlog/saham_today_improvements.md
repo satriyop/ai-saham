@@ -19,7 +19,7 @@
 | CLI startup broken (`src.application.domain` import) | ✅ RESOLVED |
 | CLI smoke tests (`saham --help`, `saham today --help`) | ✅ `b3c6de1` — `test_cli_help_exits_zero`, `test_today_help_exits_zero` added |
 | Three-clock date separation | ✅ RESOLVED |
-| Fail-closed per-dataset readiness | ❌ Open — must derive from shared freshness primitives, not a duplicate freshness model |
+| Fail-closed per-dataset readiness | ✅ RESOLVED — derived from shared freshness status and suppressed accumulation when NOT_READY |
 | Universe scope enforcement in pre-open | ❌ Open |
 | Verdict-first pre-open section title | ❌ Open — section is still "Top Pre-Open Candidates" |
 | Canonical accumulation funnel with Signal/Risk/TradeSetup | ❌ Open — `Score` is still `foreign_flow_score` |
@@ -38,6 +38,7 @@
 - T1 ✅ (`b3c6de1`): `src/adapters/cli/today_commands.py` now uses `rich.text.Text` to render the source tag as plain text.
 - T2 ✅ (`b3c6de1`): `tests/adapters/cli/test_today_commands.py` has `test_cli_help_exits_zero`, `test_today_help_exits_zero`, and `test_today_shows_market_source_tag`.
 - T3 ✅: Implemented clean-break date separation (live_session_date, latest_completed_eod_date, opening_snapshot_date, is_historical), decoupled from as_of_date, and suppressed market status in historical mode.
+- T4 ✅: Fail-closed per-dataset readiness derived from shared freshness status, suppressed accumulation candidates when NOT_READY, warning message on PARTIAL/NOT_READY, and rendered readiness table.
 - T13 ✅: Historical mode conditional rendering suppresses live market status and displays historical mode label.
 - `src/application/use_case/daily_briefing_use_case.py` has three clocks (`live_session_date`, `latest_completed_eod_date`, `opening_snapshot_date`) and `is_historical` flag.
 - Screen backlog S3 already introduced `src/domain/value_objects/data_freshness_status.py` and `src/application/services/data_freshness_service.py`; today work reuses these.
@@ -53,7 +54,7 @@
 | 1 | `T1` | P0 | Bugfix | Fix Rich `[source]` markup rendering bug | ✅ `b3c6de1` |
 | 2 | `T2` | P0 | Bugfix | Add remaining CLI smoke tests | ✅ `b3c6de1` |
 | 3 | `T3` | P0 | Refactor | Separate three date clocks in briefing use case | ✅ RESOLVED |
-| 4 | `T4` | P0 | Feature | Fail-closed per-dataset readiness + ranking suppression | ❌ Open |
+| 4 | `T4` | P0 | Feature | Fail-closed per-dataset readiness + ranking suppression | ✅ RESOLVED |
 | 5 | `T5` | P0 | Bugfix | Enforce universe scope in pre-open opening candidates | ❌ Open |
 | 6 | `T6` | P0 | Refactor | Rename to verdict-first pre-open presentation | ❌ Open |
 | 7 | `T7` | P0 | Feature | Canonical accumulation funnel (Signal + Risk + TradeSetup) | ❌ Open |
@@ -323,13 +324,13 @@ Layer plan:
 
 ### Acceptance Criteria
 
-- [ ] `DailyBriefingResponse.overall_authority` is `NOT_READY` when candle coverage < policy minimum
-- [ ] Readiness is derived from shared freshness status; no duplicate freshness calculation loop is introduced
-- [ ] Accumulation table is suppressed (not just warned) when `NOT_READY`
-- [ ] Readiness table is shown before accumulation/swing sections
-- [ ] Test: candle coverage 4/45 → `NOT_READY` → accumulation suppressed
-- [ ] Full test suite passes
-- [ ] `git diff --check` clean
+- [x] `DailyBriefingResponse.overall_authority` is `NOT_READY` when candle coverage < policy minimum
+- [x] Readiness is derived from shared freshness status; no duplicate freshness calculation loop is introduced
+- [x] Accumulation table is suppressed (not just warned) when `NOT_READY`
+- [x] Readiness table is shown before accumulation/swing sections
+- [x] Test: candle coverage 4/45 → `NOT_READY` → accumulation suppressed
+- [x] Full test suite passes
+- [x] `git diff --check` clean
 
 ---
 

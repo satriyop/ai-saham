@@ -108,6 +108,8 @@ def test_today_uses_loaded_config_and_not_global(tmp_path: Path):
         mock_response.latest_completed_eod_date = date(2026, 6, 19)
         mock_response.opening_snapshot_date = date(2026, 6, 19)
         mock_response.is_historical = True
+        mock_response.readiness_items = []
+        mock_response.overall_authority = "READY"
 
         today(universe="lq45", date_str="2026-06-19", db_path=tmp_path / "market.db")
 
@@ -146,3 +148,203 @@ def test_today_historical_mode_output_and_suppression(tmp_path: Path):
     # get_display_market_status was not called/rendered)
     assert "Regular" not in result.stdout
     assert "⚠ open" not in result.stdout
+
+
+def test_today_renders_data_readiness_table(tmp_path: Path):
+    result = runner.invoke(
+        app,
+        [
+            "today",
+            "--universe",
+            "lq45",
+            "--date",
+            "2026-06-19",
+            "--db",
+            str(tmp_path / "market.db"),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Data Readiness" in result.stdout
+    assert "candles" in result.stdout
+    assert "broker_flow" in result.stdout
+    assert "market_context" in result.stdout
+    assert "opening_snapshot" in result.stdout
+
+
+def test_today_suppresses_accumulation_table_when_not_ready():
+    from decimal import Decimal
+    from unittest.mock import MagicMock, patch
+
+    from src.application.dto.accumulation_screen import AccumulationCandidate
+    from src.application.use_case.daily_briefing_use_case import (
+        DailyBriefingResponse,
+        DataReadiness,
+    )
+
+    fake_candidate = AccumulationCandidate(
+        ticker="BBCA",
+        window_days=7,
+        net_buy_days=5,
+        total_days=7,
+        net_buy_ratio=0.71,
+        total_net_value=Decimal("1000000"),
+        consecutive_streak=3,
+        foreign_vwap=Decimal("10000"),
+        current_price=Decimal("10050"),
+        vwap_discount_pct=0.5,
+        rsi=50.0,
+        trend="UP",
+        foreign_flow_score=80.0,
+        top_brokers=None,
+        institutional_flag=True,
+    )
+
+    fake_response = DailyBriefingResponse(
+        live_session_date=date(2026, 6, 19),
+        latest_completed_eod_date=date(2026, 6, 19),
+        opening_snapshot_date=None,
+        is_historical=True,
+        universe="lq45",
+        universe_count=45,
+        data_freshness=[],
+        stale_count=41,
+        readiness_items=[
+            DataReadiness(
+                dataset="candles",
+                required_as_of=date(2026, 6, 19),
+                coverage_count=4,
+                total_count=45,
+                status="NOT_READY",
+                reason="Only 4/45 tickers have current candle data",
+            ),
+            DataReadiness(
+                dataset="broker_flow",
+                required_as_of=date(2026, 6, 19),
+                coverage_count=45,
+                total_count=45,
+                status="READY",
+                reason=None,
+            ),
+            DataReadiness(
+                dataset="market_context",
+                required_as_of=date(2026, 6, 19),
+                coverage_count=1,
+                total_count=1,
+                status="READY",
+                reason=None,
+            ),
+            DataReadiness(
+                dataset="opening_snapshot",
+                required_as_of=date(2026, 6, 19),
+                coverage_count=0,
+                total_count=1,
+                status="UNAVAILABLE",
+                reason="Opening snapshot unavailable",
+            )
+        ],
+        overall_authority="NOT_READY",
+        regime=None,
+        opening_candidates=[],
+        accumulation_candidates=[fake_candidate],
+        warnings=["Accumulation screen suppressed because data readiness is NOT_READY."],
+    )
+
+    with patch("src.adapters.cli.today_commands.DailyBriefingUseCase") as mock_uc_class:
+        mock_uc = MagicMock()
+        mock_uc_class.return_value = mock_uc
+        mock_uc.execute.return_value = fake_response
+
+        result = runner.invoke(app, ["today", "--universe", "lq45", "--date", "2026-06-19"])
+        assert result.exit_code == 0
+        assert "Suppressed" in result.stdout
+        assert "NOT_READY" in result.stdout
+        assert "BBCA" not in result.stdout
+
+
+def test_today_marks_partial_accumulation_output():
+    from decimal import Decimal
+    from unittest.mock import MagicMock, patch
+
+    from src.application.dto.accumulation_screen import AccumulationCandidate
+    from src.application.use_case.daily_briefing_use_case import (
+        DailyBriefingResponse,
+        DataReadiness,
+    )
+
+    fake_candidate = AccumulationCandidate(
+        ticker="BBCA",
+        window_days=7,
+        net_buy_days=5,
+        total_days=7,
+        net_buy_ratio=0.71,
+        total_net_value=Decimal("1000000"),
+        consecutive_streak=3,
+        foreign_vwap=Decimal("10000"),
+        current_price=Decimal("10050"),
+        vwap_discount_pct=0.5,
+        rsi=50.0,
+        trend="UP",
+        foreign_flow_score=80.0,
+        top_brokers=None,
+        institutional_flag=True,
+    )
+
+    fake_response = DailyBriefingResponse(
+        live_session_date=date(2026, 6, 19),
+        latest_completed_eod_date=date(2026, 6, 19),
+        opening_snapshot_date=None,
+        is_historical=True,
+        universe="lq45",
+        universe_count=10,
+        data_freshness=[],
+        stale_count=2,
+        readiness_items=[
+            DataReadiness(
+                dataset="candles",
+                required_as_of=date(2026, 6, 19),
+                coverage_count=8,
+                total_count=10,
+                status="PARTIAL",
+                reason="Only 8/10 tickers have current candle data",
+            ),
+            DataReadiness(
+                dataset="broker_flow",
+                required_as_of=date(2026, 6, 19),
+                coverage_count=10,
+                total_count=10,
+                status="READY",
+                reason=None,
+            ),
+            DataReadiness(
+                dataset="market_context",
+                required_as_of=date(2026, 6, 19),
+                coverage_count=1,
+                total_count=1,
+                status="READY",
+                reason=None,
+            ),
+            DataReadiness(
+                dataset="opening_snapshot",
+                required_as_of=date(2026, 6, 19),
+                coverage_count=0,
+                total_count=1,
+                status="UNAVAILABLE",
+                reason="Opening snapshot unavailable",
+            )
+        ],
+        overall_authority="PARTIAL",
+        regime=None,
+        opening_candidates=[],
+        accumulation_candidates=[fake_candidate],
+        warnings=["Accumulation screen is shown with PARTIAL data readiness."],
+    )
+
+    with patch("src.adapters.cli.today_commands.DailyBriefingUseCase") as mock_uc_class:
+        mock_uc = MagicMock()
+        mock_uc_class.return_value = mock_uc
+        mock_uc.execute.return_value = fake_response
+
+        result = runner.invoke(app, ["today", "--universe", "lq45", "--date", "2026-06-19"])
+        assert result.exit_code == 0
+        assert "PARTIAL DATA" in result.stdout
+        assert "BBCA" in result.stdout
