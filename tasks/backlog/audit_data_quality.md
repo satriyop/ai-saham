@@ -161,6 +161,56 @@ rebuild/quarantine requirement
 **Depends on:** none  
 **Outcome:** Audits are repeatable and cannot accidentally corrupt the working database.
 
+**State:** Implemented (2026-07-16). Shipped as a read-only audit baseline
+manifest generator only, per the decision to implement this option only —
+no repair/rebuild/quarantine/label/tuning behavior was added.
+
+- `saham fetch audit --manifest --format json|table` emits an
+  `audit_baseline_manifest` (schema_version 1) with database identity
+  (path/exists/sha256/size), config identity (hashes for the tracked
+  config set including the new validation panel), git code identity
+  (commit/dirty/status), SQLite schema identity (user_version, migration
+  count, table list), per-table summaries (row count, min/max date,
+  ticker count, duplicate-key count, null summary) for candles,
+  broker_summaries, broker_daily_flow, candidate_observations,
+  signal_forward_labels, stock_meta, analyst_cache, insider_cache,
+  company_fundamentals, shareholding_composition, seasonality_cache, and
+  corporate_action_events, a validation scope, and explicit warnings.
+- Existing `saham fetch audit` (non-manifest) output is unchanged.
+- Files added: `src/application/use_case/build_audit_baseline_manifest_use_case.py`,
+  `src/infrastructure/persistence/sqlite_audit_manifest_reader.py`,
+  `src/infrastructure/config/audit_config_identity_reader.py`,
+  `src/infrastructure/config/audit_validation_panel_reader.py`,
+  `src/infrastructure/config/git_code_identity_provider.py`,
+  `config/audit_validation_panel.yaml`, plus focused tests under
+  `tests/application/use_case/`, `tests/infrastructure/persistence/`, and
+  `tests/adapters/cli/`. `src/adapters/cli/fetch_audit_commands.py` modified
+  to add `--manifest`/`--format`, existing path preserved.
+- Read-only proven: SQLite opened via `file:...?mode=ro` (uri=True), a test
+  asserts a write against that same connection raises `OperationalError`,
+  and the manifest was run against the live 629 MB production DB with
+  file size/mtime confirmed byte-identical before and after.
+- Correction during review: the first pass used the task template's
+  guessed enrichment table names (`insider_activity_cache`,
+  `fundamentals_cache`, `shareholding_cache`, and a null date column for
+  `seasonality_cache`), which do not match the live schema
+  (`insider_cache`, `company_fundamentals`, `shareholding_composition`,
+  `seasonality_cache.fetched_month`) even though the correct names had
+  already been verified via source read. This was a real DQ-000-class
+  defect — a baseline manifest reporting real PIT tables as missing.
+  Fixed and covered by regression tests
+  (`test_real_enrichment_table_names_are_recognized`,
+  `test_seasonality_cache_reports_fetched_month_as_date`); re-verified
+  live with zero warnings and all 12 tables resolving.
+- Verification: focused suite (19 tests) passes; full suite passes
+  (4168 passed) aside from 7 pre-existing unrelated flaky tests in
+  `test_stock_analysis_workflow_dependencies_config_paths.py` confirmed
+  present on a clean `main` before this change; `py_compile` and
+  `git diff --check` pass.
+- Not done in this slice (by design, deferred to later DQ-00x): dry-run
+  repair-operation tooling (no repair commands exist yet — DQ-010 owns
+  quarantine/rebuild).
+
 **Implementation guideline:**
 
 - Work on a timestamped database copy or transactionally isolated fixture.
@@ -180,11 +230,14 @@ rebuild/quarantine requirement
 
 **Acceptance criteria:**
 
-- [ ] Audit commands default to read-only.
-- [ ] Baseline manifest includes database/config/code identity.
+- [x] Audit commands default to read-only.
+- [x] Baseline manifest includes database/config/code identity.
 - [ ] All repair operations require explicit target database and dry-run output.
-- [ ] The validation panel and dates are committed as deterministic fixtures or manifests.
-- [ ] A failed audit cannot partially mutate canonical tables.
+      (N/A for this slice — no repair operations were implemented; DQ-010
+      owns quarantine/rebuild/repair tooling.)
+- [x] The validation panel and dates are committed as deterministic fixtures or manifests.
+- [x] A failed audit cannot partially mutate canonical tables.
+      (No write statements are ever issued; the reader connects read-only.)
 
 ### DQ-001 — Establish authoritative source and field contracts
 

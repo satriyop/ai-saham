@@ -1,0 +1,16 @@
+tickers:
+  - BBCA
+  - BBRI
+  - ASII
+  - TLKM
+  - INDF
+  - JPFA
+  - PANI
+  - MAPI
+dates:
+  - "2026-01-02"
+  - "2026-03-31"
+  - "2026-06-30"
+  - "2026-07-06"
+notes:
+  purpose: "DQ-000 deterministic validation panel for audit harness smoke checks."
