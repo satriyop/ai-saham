@@ -31,7 +31,7 @@ Files verified:
 | 3 | `S3` | P0 | Freshness is source alignment, not actual calendar freshness | ✅ Resolved |
 | 4 | `S4` | P0 | Pre-open provider failure looks like valid empty result | ✅ Resolved |
 | 5 | `S5` | P1 | Unsupported 65–70% prediction claim in guide | ✅ Resolved |
-| 6 | `S6` | P1 | BCI grants full points despite negative aggregate flow | ❌ Open |
+| 6 | `S6` | P1 | BCI grants full points despite negative aggregate flow | 🟡 Spike complete — follow-up implementation task recommended (not yet implemented) |
 | 7 | `S7` | P1 | Multi-window output discards Signal/Risk/Phase already computed | ❌ Open |
 | 8 | `S8` | P1 | Watchlist `list` reports wrong ticker count | ❌ Open |
 | 9 | `S9` | P1 | `screen compare` missing weakening bucket; still persists observations | ❌ Open |
@@ -504,6 +504,14 @@ Layer plan:
 
 - **Type:** Spike / Scoring Refactor
 - **Priority:** P1 — requires OOS evidence before scoring change; do not tune blindly
+- **Spike status:** Complete. See `tasks/spikes/s6_bci_authority_spike.md`.
+  Conclusion: evidence supports authority reduction (CLUSTER+negative-flow
+  N=2780, CLUSTER+positive-flow N=2536, both well above the 30-sample floor;
+  CLUSTER+negative-flow is statistically indistinguishable from
+  non-CLUSTER+negative-flow). Recommended follow-up: implement Option A
+  (make BCI points conditional on positive aggregate flow direction) as a
+  separate implementation task with proper walk-forward validation — not yet
+  implemented; no scoring/config code has changed.
 
 ### Problem
 

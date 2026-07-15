@@ -1,6 +1,7 @@
 # Backlog: `saham today` Daily Briefing Improvements
 
-**Source thought doc:** `tasks/thought/saham_today_improvement.md` (code-verified 2026-07-14)
+**Source thought doc:** `tasks/thought/saham_today_improvement.md` (initial code verification: 2026-07-14)
+**Current validation:** 2026-07-15 — rechecked against current code after the screen backlog introduced shared freshness primitives.
 **Code-verified against:** `src/adapters/cli/today_commands.py`, `src/application/use_case/daily_briefing_use_case.py`, `src/adapters/cli/view_market_context_display.py`, `tests/adapters/cli/test_today_commands.py`
 
 ---
@@ -11,14 +12,14 @@
 
 ---
 
-## Status at Code-Verification Date (2026-07-14)
+## Status at Current Validation Date (2026-07-15)
 
 | Finding | Status |
 |---------|--------|
 | CLI startup broken (`src.application.domain` import) | ✅ RESOLVED |
-| CLI smoke tests (`saham --help`, `saham today --help`) | ⚠️ PARTIAL — `test_today_commands.py` exists but top-level help not tested |
-| Three-clock date separation | ❌ Open |
-| Fail-closed per-dataset readiness | ❌ Open |
+| CLI smoke tests (`saham --help`, `saham today --help`) | ❌ Open — `test_today_commands.py` exists but help smoke tests are still absent |
+| Three-clock date separation | ❌ Open — must reuse existing `DataFreshnessStatus` / `compute_data_freshness` where freshness is involved |
+| Fail-closed per-dataset readiness | ❌ Open — must derive from shared freshness primitives, not a duplicate freshness model |
 | Universe scope enforcement in pre-open | ❌ Open |
 | Verdict-first pre-open section title | ❌ Open — section is still "Top Pre-Open Candidates" |
 | Canonical accumulation funnel with Signal/Risk/TradeSetup | ❌ Open — `Score` is still `foreign_flow_score` |
@@ -29,6 +30,17 @@
 | Warning severity (BLOCKER / WARNING / INFO) | ❌ Open — 5-row plain list |
 | Rich `[local_clock]` markup bug | ❌ Open — disappears from output |
 | Historical mode date separation | ❌ Open |
+
+---
+
+## Current Verification Notes (2026-07-15)
+
+- `src/adapters/cli/today_commands.py` still interpolates `[local_clock]` / `[stockbit]` into Rich markup, so T1 remains valid.
+- `tests/adapters/cli/test_today_commands.py` does not cover `saham --help` or `saham today --help`, so T2 remains valid.
+- `src/application/use_case/daily_briefing_use_case.py` still has one `as_of_date`, one `stale_count`, no `is_historical`, no readiness authority, and no per-dataset suppression, so T3/T4/T13 remain valid.
+- Screen backlog S3 already introduced `src/domain/value_objects/data_freshness_status.py` and `src/application/services/data_freshness_service.py`; today work must reuse these instead of creating a second freshness/status concept.
+- `src/application/use_case/daily_briefing_use_case.py` still reads opening snapshot candidates without universe filtering, so T5 remains valid.
+- `src/adapters/cli/today_commands.py` still renders `Top Pre-Open Candidates`, `Top Accumulation Candidates`, `REGIME_DISPLAY_LABEL`, plain capped warnings, and static `saham analyze swing TICKER`, so T6/T7/T9/T10/T11/T12 remain valid.
 
 ---
 
@@ -185,26 +197,30 @@ Key files:
 - `src/application/use_case/daily_briefing_use_case.py:83-107` — date derivation and staleness check
 - `src/application/use_case/daily_briefing_use_case.py:54-63` — `DailyBriefingResponse` DTO
 
-### Decision Required (Human Must Decide)
+### Constraint From Screen Freshness Work
 
-**IDX calendar dependency:**
-- Option A: Introduce a minimal IDX calendar port/service (Friday rollback, known holidays). Correct and future-proof.
-- Option B: Keep weekend-only rollback for `live_session_date` and use a "latest available candle date across the universe" heuristic for `latest_completed_eod_date`. Simpler but less precise during holidays.
+Screen backlog S3 already created:
+- `src/domain/value_objects/data_freshness_status.py`
+- `src/application/services/data_freshness_service.py`
 
-> [!CAUTION]
-> Do not introduce a network dependency for calendar lookup. The calendar must be local (from `corp_action_calendar` or a static holiday list).
+Do not create a second freshness/status model for `today`. Reuse `compute_data_freshness()` / `DataFreshnessStatus` for source freshness and add only the minimum `today`-specific response fields needed for briefing clocks and authority.
+
+### Calendar Decision
+
+Use the existing local/weekend behavior unless a separate IDX calendar task is explicitly approved. Do not introduce network calendar lookup. If IDX holiday handling is added later, it must be local and injected; it must not be hidden inside the adapter.
 
 ### Desired Outcome
 
-`DailyBriefingResponse` carries three separate date fields:
+`DailyBriefingResponse` carries three separate date fields plus historical mode:
 
 ```python
 live_session_date: date          # today's date (or request date)
 latest_completed_eod_date: date  # last IDX session with complete candle data
 opening_snapshot_date: date | None  # from snapshot file captured_at, or None
+is_historical: bool
 ```
 
-The staleness check for EOD-dependent features (candle coverage, broker flow, MCE) uses `latest_completed_eod_date`, not `live_session_date`.
+The staleness check for EOD-dependent features (candle coverage, broker flow, MCE) uses `latest_completed_eod_date`, not `live_session_date`, and should call the shared freshness service rather than reimplementing freshness loops locally.
 
 Historical `--date` mode sets `live_session_date = request.as_of_date` and marks the briefing as `HISTORICAL` mode in the response so the adapter can suppress live market status display.
 
@@ -218,16 +234,18 @@ Historical `--date` mode sets `live_session_date = request.as_of_date` and marks
 
 ```md
 Layer plan:
-- Domain: not touched (unless a new IDX calendar value object is added)
-- Application: daily_briefing_use_case.py — DailyBriefingResponse DTO, execute() date derivation, staleness check
-- Infrastructure: possibly a read from existing corp_action_calendar table for IDX holiday awareness
+- Domain: reuse DataFreshnessStatus; do not add a duplicate freshness value object
+- Application: daily_briefing_use_case.py — DailyBriefingResponse DTO, execute() date derivation, staleness check via data_freshness_service
+- Infrastructure: not touched for this task unless an explicitly approved local calendar provider already exists
 - Adapter: today_commands.py — render three dates and HISTORICAL mode label
 ```
 
 ### Acceptance Criteria
 
 - [ ] `DailyBriefingResponse` has `live_session_date`, `latest_completed_eod_date`, `opening_snapshot_date`
+- [ ] `DailyBriefingResponse` has `is_historical: bool`
 - [ ] Staleness check for candles uses `latest_completed_eod_date`
+- [ ] Freshness calculation reuses `compute_data_freshness()` / `DataFreshnessStatus`; no duplicate freshness service/value object is introduced
 - [ ] Historical mode sets `is_historical: bool = True` in response
 - [ ] Adapter renders three dates and suppresses live market status in historical mode
 - [ ] Regression test: weekend today → correct `latest_completed_eod_date`
@@ -264,7 +282,7 @@ The design requires separate readiness per dataset:
 
 ### Desired Outcome
 
-A `DataReadiness` value object or dataclass in the application layer that carries:
+A `DataReadiness` value object or dataclass in the application layer that is derived from the shared freshness status and carries:
 ```python
 dataset: str
 required_as_of: date
@@ -283,6 +301,8 @@ If `PARTIAL`, sections are shown with explicit quarantine labeling.
 
 The adapter renders a readiness table before any ranking sections.
 
+`DataReadiness` is the briefing authority projection, not a replacement for `DataFreshnessStatus`. Keep the raw freshness semantics in the shared service and derive suppression/quarantine policy in the briefing use case.
+
 ### Non-Goals
 
 - No new data fetches.
@@ -293,8 +313,8 @@ The adapter renders a readiness table before any ranking sections.
 
 ```md
 Layer plan:
-- Domain: DataReadiness value object (or dataclass in application is fine)
-- Application: daily_briefing_use_case.py — readiness calculation, suppression policy, response DTO
+- Domain: reuse DataFreshnessStatus; do not add another source freshness enum
+- Application: daily_briefing_use_case.py — DataReadiness projection, readiness calculation, suppression policy, response DTO
 - Infrastructure: not touched
 - Adapter: today_commands.py — render readiness table; suppress/quarantine affected sections
 ```
@@ -302,6 +322,7 @@ Layer plan:
 ### Acceptance Criteria
 
 - [ ] `DailyBriefingResponse.overall_authority` is `NOT_READY` when candle coverage < policy minimum
+- [ ] Readiness is derived from shared freshness status; no duplicate freshness calculation loop is introduced
 - [ ] Accumulation table is suppressed (not just warned) when `NOT_READY`
 - [ ] Readiness table is shown before accumulation/swing sections
 - [ ] Test: candle coverage 4/45 → `NOT_READY` → accumulation suppressed
