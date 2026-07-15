@@ -123,12 +123,12 @@ def today(
 
     # Style market status value
     market_style = "green" if market_status.is_open else "yellow"
-    market_text = (
-        f"[{market_style}]{market_status.session_name}[/{market_style}]  "
-        f"[{market_status.source}]"
-    )
+    market_text = Text()
+    market_text.append(market_status.session_name, style=market_style)
+    market_text.append("  ")
+    market_text.append(f"[{market_status.source}]")
     if market_status.is_open:
-        market_text += "  ⚠ open"
+        market_text.append("  ⚠ open")
     summary.add_row("Market", market_text)
 
     summary.add_row("Universe", f"{response.universe.upper()} ({response.universe_count} tickers)")

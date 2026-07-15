@@ -9,6 +9,57 @@ from src.adapters.cli.main import app
 runner = CliRunner()
 
 
+def test_cli_help_exits_zero():
+    result = runner.invoke(app, ["--help"])
+    assert result.exit_code == 0
+    assert "today" in result.stdout
+
+
+def test_today_help_exits_zero():
+    result = runner.invoke(app, ["today", "--help"])
+    assert result.exit_code == 0
+    assert "--universe" in result.stdout
+    assert "--date" in result.stdout
+    assert "--db" in result.stdout
+
+
+def test_today_shows_market_source_tag(tmp_path: Path):
+    from datetime import datetime
+    from unittest.mock import patch
+
+    from src.domain.value_objects.market_status import MarketStatus
+
+    fake_status = MarketStatus(
+        status="STATUS_OPEN",
+        session_name="Regular",
+        is_open=True,
+        session_open="09:00",
+        session_close="15:00",
+        fetched_at=datetime.now(),
+        source="test_source",
+    )
+
+    with patch(
+        "src.infrastructure.browser.stockbit_market_time.get_display_market_status",
+        return_value=fake_status,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "today",
+                "--universe",
+                "lq45",
+                "--date",
+                "2026-06-19",
+                "--db",
+                str(tmp_path / "market.db"),
+            ],
+        )
+
+    assert result.exit_code == 0
+    assert "[test_source]" in result.stdout
+
+
 def test_today_renders_rich_dashboard_with_lifecycle_next_steps(tmp_path: Path):
     result = runner.invoke(
         app,
