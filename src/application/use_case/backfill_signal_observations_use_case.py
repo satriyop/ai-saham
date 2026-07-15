@@ -9,10 +9,12 @@ from typing import TYPE_CHECKING, Callable
 from src.application.services.signal_observation_request_builder import (
     BuildSignalObservationScreenRequest,
 )
-from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from src.application.use_case.generate_signal_forward_labels_use_case import (
     GenerateAllSignalForwardLabelsRequest,
     GenerateSignalForwardLabelsUseCase,
+)
+from src.application.use_case.record_accumulation_observations_use_case import (
+    RecordAccumulationObservationsUseCase,
 )
 from src.domain.ports.candidate_observations_repository import (
     CandidateObservationsRepository,
@@ -75,14 +77,14 @@ class BackfillSignalObservationsUseCase:
     def __init__(
         self,
         *,
-        accumulation_screen_use_case: AccumulationScreenUseCase,
+        record_observations_use_case: RecordAccumulationObservationsUseCase,
         screen_request_builder: BuildSignalObservationScreenRequest,
         market_data_repository: MarketDataRepository,
         candidate_observations_repository: CandidateObservationsRepository,
         label_generation_use_case: GenerateSignalForwardLabelsUseCase | None = None,
         evaluate_market_context: "Callable[..., MarketContext] | None" = None,
     ) -> None:
-        self._screen = accumulation_screen_use_case
+        self._record = record_observations_use_case
         self._request_builder = screen_request_builder
         self._market = market_data_repository
         self._observations = candidate_observations_repository
@@ -147,9 +149,8 @@ class BackfillSignalObservationsUseCase:
                         f"market_context_unavailable_for_{trading_date.isoformat()}"
                     )
 
-            before_count = len(self._observations.list_all_by_date(trading_date))
             for window in request.windows:
-                self._screen.execute(
+                record_result = self._record.execute(
                     self._request_builder.build(
                         tickers=list(tickers),
                         window_days=int(window),
@@ -157,8 +158,7 @@ class BackfillSignalObservationsUseCase:
                         market_context=market_context,
                     )
                 )
-            after_count = len(self._observations.list_all_by_date(trading_date))
-            saved_count += max(0, after_count - before_count)
+                saved_count += record_result.recorded_count
             processed.append(trading_date)
 
             if request.generate_labels:
@@ -170,7 +170,7 @@ class BackfillSignalObservationsUseCase:
                         )
                     )
                     continue
-                if not self._observations.list_by_date(trading_date):
+                if not self._observations.list_canonical_by_date(trading_date):
                     skipped.append(
                         BackfillSkippedDate(
                             date=trading_date,
@@ -211,9 +211,10 @@ class BackfillSignalObservationsUseCase:
             processed_dates=tuple(processed),
             skipped_dates=tuple(skipped),
             notes=(
-                "candidate_observations are timestamped; reruns may append raw "
-                "rows while readiness uses latest per ticker to avoid duplicate "
-                "ticker/day labels.",
+                "candidate_observations are upserted by canonical identity "
+                "(ticker, snapshot_date, workflow, window_sessions, "
+                "data_as_of_date, config_hash); reruns with the same identity "
+                "replace the existing row rather than appending a duplicate.",
                 *market_context_notes,
             ),
         )
@@ -237,7 +238,7 @@ class BackfillSignalObservationsUseCase:
         horizon: SignalLabelHorizon,
     ) -> bool:
         required = horizon.trading_days
-        observations = self._observations.list_by_date(signal_date)
+        observations = self._observations.list_canonical_by_date(signal_date)
         for observation in observations:
             candles = self._market.get_candles(
                 observation.ticker,

@@ -1,6 +1,6 @@
 """Tests for run_fresh_accumulation_screen_for_compare."""
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
@@ -11,6 +11,17 @@ from src.adapters.cli.screen_accum_compare_factory import (
 from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenResponse,
+)
+from src.application.services.indicator_registry import IndicatorRegistry
+from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
+from tests.application.use_case.accumulation_screen_fixtures import (
+    FakeRulesLoader,
+    MockBrokerRepository,
+    MockMarketRepository,
+    SpyCandidateObservationsRepository,
+    _candle,
+    _summary,
+    _weekdays,
 )
 
 
@@ -175,3 +186,42 @@ def test_builds_workflow_with_risk_false(monkeypatch):
     assert captured["with_risk"] is False
     assert captured["screener_config"] is _FAKE_ASC
     assert captured["swing_config"] is _FAKE_SC
+
+
+def test_compare_writes_zero_candidate_observations(monkeypatch):
+    """S1 regression: screen compare is read-only and must never persist
+    observations, even with a real screen use case wired to a live repo."""
+    session_dates = _weekdays(date(2026, 1, 1), 7)
+    candles = [
+        _candle("BBCA", date(2025, 12, 1) + timedelta(days=i), Decimal("100")) for i in range(45)
+    ]
+    summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates]
+    spy_repo = SpyCandidateObservationsRepository()
+
+    real_use_case = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
+        candidate_observations_repository=spy_repo,
+    )
+
+    monkeypatch.setattr(
+        "src.adapters.cli.screen_accum_compare_factory.resolve_tickers",
+        lambda **kwargs: ["BBCA"],
+    )
+    monkeypatch.setattr(
+        "src.adapters.cli.screen_accum_compare_factory.create_accumulation_screen_workflow",
+        lambda **kwargs: SimpleNamespace(use_case=real_use_case),
+    )
+
+    run_fresh_accumulation_screen_for_compare(
+        universe="lq45",
+        window=7,
+        top=10,
+        db_path=Path("/tmp/fake.db"),
+        screener_config=_FAKE_ASC,
+        swing_config=_FAKE_SC,
+    )
+
+    assert spy_repo.saved == []

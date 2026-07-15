@@ -219,8 +219,10 @@ def _patch_command_dependencies(monkeypatch, backfill_cls=None):
     )
     monkeypatch.setattr(
         analyze_signal_commands,
-        "create_accumulation_screen_workflow",
-        lambda **kwargs: SimpleNamespace(use_case=object()),
+        "create_accumulation_screen_workflow_bundle",
+        lambda **kwargs: SimpleNamespace(
+            screen_use_case=object(), record_observations_use_case=object()
+        ),
     )
     monkeypatch.setattr(
         analyze_signal_commands,

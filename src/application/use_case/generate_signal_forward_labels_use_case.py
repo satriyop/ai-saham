@@ -97,7 +97,10 @@ class GenerateSignalForwardLabelsUseCase:
     def execute_all(
         self, request: GenerateAllSignalForwardLabelsRequest
     ) -> GenerateAllSignalForwardLabelsResponse:
-        observations = self._observations.list_by_date(request.signal_date)
+        # Canonical rows, not list_by_date()'s latest-per-ticker collapse —
+        # a ticker recorded across several window_sessions must get a label
+        # for each one, not just the most recently captured window.
+        observations = self._observations.list_canonical_by_date(request.signal_date)
         labels = self._build_labels_for_observations(observations, request.horizons)
         self._labels.save_many(labels)
         unavailable_count = _unavailable_count(labels)
@@ -117,7 +120,7 @@ class GenerateSignalForwardLabelsUseCase:
         generated_dates: list[date] = []
         skipped_dates: list[date] = []
         for signal_date in self._observations.list_snapshot_dates():
-            observations = self._observations.list_by_date(signal_date)
+            observations = self._observations.list_canonical_by_date(signal_date)
             if not observations:
                 skipped_dates.append(signal_date)
                 continue

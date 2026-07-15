@@ -13,6 +13,10 @@ from src.application.use_case.backfill_signal_observations_use_case import (
 )
 from src.application.use_case.generate_signal_forward_labels_use_case import (
     GenerateAllSignalForwardLabelsResponse,
+    GenerateSignalForwardLabelsUseCase,
+)
+from src.application.use_case.record_accumulation_observations_use_case import (
+    RecordAccumulationObservationsResult,
 )
 from src.domain.entities.candle import Candle
 from src.domain.ports.candidate_observations_repository import CandidateObservation
@@ -50,7 +54,7 @@ class FakeCandidateObservationsRepository:
     def __init__(self):
         self.by_date: dict[date, list[CandidateObservation]] = {}
 
-    def append(self, ticker: str, snapshot_date: date) -> None:
+    def append(self, ticker: str, snapshot_date: date, window_sessions: int = 7) -> None:
         observations = self.by_date.setdefault(snapshot_date, [])
         observations.append(
             CandidateObservation(
@@ -58,6 +62,9 @@ class FakeCandidateObservationsRepository:
                 snapshot_date=snapshot_date,
                 captured_at=datetime(2026, 7, 7, 12, 0, len(observations)),
                 payload={"ticker": ticker.upper(), "snapshot_date": snapshot_date.isoformat()},
+                window_sessions=window_sessions,
+                data_as_of_date=snapshot_date,
+                config_hash="test-hash",
             )
         )
 
@@ -88,11 +95,21 @@ class FakeCandidateObservationsRepository:
     def list_all_by_date(self, snapshot_date):
         return list(self.by_date.get(snapshot_date, []))
 
+    def list_canonical_by_date(self, snapshot_date):
+        return [
+            observation
+            for observation in self.by_date.get(snapshot_date, [])
+            if observation.config_hash
+        ]
+
     def list_snapshot_dates(self):
         return sorted(self.by_date)
 
 
 class FakeAccumulationScreenUseCase:
+    """Fake RecordAccumulationObservationsUseCase — BackfillSignalObservationsUseCase
+    depends on the explicit recorder, not the read-only screen use case directly."""
+
     def __init__(self, observations: FakeCandidateObservationsRepository):
         self.observations = observations
         self.requests = []
@@ -100,15 +117,20 @@ class FakeAccumulationScreenUseCase:
     def execute(self, request):
         self.requests.append(request)
         assert request.as_of_date is not None
+        recorded_count = 0
         for ticker in request.tickers:
-            self.observations.append(ticker, request.as_of_date)
-        return AccumulationScreenResponse(
+            self.observations.append(ticker, request.as_of_date, request.window_days)
+            recorded_count += 1
+        response = AccumulationScreenResponse(
             candidates=[],
             screened_at=request.as_of_date,
             window_days=request.window_days,
             total_tickers_checked=len(request.tickers),
             tickers_skipped=0,
             provider="test",
+        )
+        return RecordAccumulationObservationsResult(
+            response=response, recorded_count=recorded_count
         )
 
 
@@ -141,6 +163,7 @@ class FakeAccumulationScreenUseCaseWithFingerprint:
                 market_context.days_in_regime if market_context is not None else None
             ),
         }
+        recorded_count = 0
         for ticker in request.tickers:
             observations = self.observations.by_date.setdefault(request.as_of_date, [])
             observations.append(
@@ -153,15 +176,22 @@ class FakeAccumulationScreenUseCaseWithFingerprint:
                         "snapshot_date": request.as_of_date.isoformat(),
                         "sub_signal_fingerprint": fingerprint,
                     },
+                    window_sessions=7,
+                    data_as_of_date=request.as_of_date,
+                    config_hash="test-hash",
                 )
             )
-        return AccumulationScreenResponse(
+            recorded_count += 1
+        response = AccumulationScreenResponse(
             candidates=[],
             screened_at=request.as_of_date,
             window_days=request.window_days,
             total_tickers_checked=len(request.tickers),
             tickers_skipped=0,
             provider="test",
+        )
+        return RecordAccumulationObservationsResult(
+            response=response, recorded_count=recorded_count
         )
 
 
@@ -179,13 +209,66 @@ class FakeLabelGenerationUseCase:
         )
 
 
+class SpySignalForwardLabelsRepository:
+    def __init__(self):
+        self.saved = []
+
+    def save_many(self, labels):
+        self.saved.extend(labels)
+
+    def get(self, ticker, signal_date, horizon):
+        return None
+
+
+def test_backfill_multi_window_generates_one_label_per_canonical_window():
+    """S1 regression: windows=(7,30,90) with generate_labels=True must
+    generate a label for every recorded canonical window observation — using
+    the REAL GenerateSignalForwardLabelsUseCase, not a fake — guarding
+    against silent collapse to latest-per-ticker via list_by_date()."""
+    signal_date = date(2026, 6, 1)
+    observations = FakeCandidateObservationsRepository()
+    candles = [_candle("IHSG", signal_date), _candle("BBCA", signal_date)]
+    candles.extend(_candle("BBCA", signal_date + timedelta(days=i)) for i in range(1, 11))
+    market = FakeMarketRepository(candles)
+    labels_repo = SpySignalForwardLabelsRepository()
+    real_label_use_case = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=observations,
+        market_data_repository=market,
+        signal_forward_labels_repository=labels_repo,
+    )
+
+    response = BackfillSignalObservationsUseCase(
+        record_observations_use_case=FakeAccumulationScreenUseCase(observations),
+        screen_request_builder=_request_builder(),
+        market_data_repository=market,
+        candidate_observations_repository=observations,
+        label_generation_use_case=real_label_use_case,
+    ).execute(
+        BackfillSignalObservationsRequest(
+            tickers=("BBCA",),
+            start_date=signal_date,
+            end_date=signal_date,
+            horizon=SignalLabelHorizon.SWING_10D,
+            generate_labels=True,
+            windows=(7, 30, 90),
+        )
+    )
+
+    canonical = observations.list_canonical_by_date(signal_date)
+    assert len(canonical) == 3
+    assert {obs.window_sessions for obs in canonical} == {7, 30, 90}
+    # One label attempted per canonical observation — not collapsed to 1.
+    assert response.generated_label_count == len(canonical) == 3
+    assert len(labels_repo.saved) == 3
+
+
 def test_backfill_processes_eligible_dates_and_passes_as_of_date():
     signal_date = date(2026, 6, 1)
     observations = FakeCandidateObservationsRepository()
     screen = FakeAccumulationScreenUseCase(observations)
 
     response = BackfillSignalObservationsUseCase(
-        accumulation_screen_use_case=screen,
+        record_observations_use_case=screen,
         screen_request_builder=_request_builder(),
         market_data_repository=FakeMarketRepository(
             [_candle("IHSG", signal_date), _candle("BBCA", signal_date)]
@@ -224,7 +307,7 @@ def test_backfill_skips_trading_date_without_target_source_candles():
     screen = FakeAccumulationScreenUseCase(observations)
 
     response = BackfillSignalObservationsUseCase(
-        accumulation_screen_use_case=screen,
+        record_observations_use_case=screen,
         screen_request_builder=_request_builder(),
         market_data_repository=FakeMarketRepository([_candle("IHSG", signal_date)]),
         candidate_observations_repository=observations,
@@ -249,7 +332,7 @@ def test_backfill_generates_labels_only_after_saved_observations_have_forward_wi
     candles.extend(_candle("BBCA", signal_date + timedelta(days=i)) for i in range(1, 11))
 
     response = BackfillSignalObservationsUseCase(
-        accumulation_screen_use_case=FakeAccumulationScreenUseCase(observations),
+        record_observations_use_case=FakeAccumulationScreenUseCase(observations),
         screen_request_builder=_request_builder(),
         market_data_repository=FakeMarketRepository(candles),
         candidate_observations_repository=observations,
@@ -279,7 +362,7 @@ def test_backfill_does_not_generate_labels_without_enough_future_candles():
     candles.extend(_candle("BBCA", signal_date + timedelta(days=i)) for i in range(1, 5))
 
     response = BackfillSignalObservationsUseCase(
-        accumulation_screen_use_case=FakeAccumulationScreenUseCase(observations),
+        record_observations_use_case=FakeAccumulationScreenUseCase(observations),
         screen_request_builder=_request_builder(),
         market_data_repository=FakeMarketRepository(candles),
         candidate_observations_repository=observations,
@@ -307,7 +390,7 @@ def test_backfill_as_of_date_changes_per_historical_date():
     screen = FakeAccumulationScreenUseCase(observations)
 
     response = BackfillSignalObservationsUseCase(
-        accumulation_screen_use_case=screen,
+        record_observations_use_case=screen,
         screen_request_builder=_request_builder(),
         market_data_repository=FakeMarketRepository(
             [
@@ -371,7 +454,7 @@ def test_backfill_evaluates_market_context_once_per_date_and_persists_regime_att
     evaluator = RecordingMarketContextEvaluator()
 
     response = BackfillSignalObservationsUseCase(
-        accumulation_screen_use_case=screen,
+        record_observations_use_case=screen,
         screen_request_builder=_request_builder(),
         market_data_repository=FakeMarketRepository(
             [_candle("IHSG", signal_date), _candle("BBCA", signal_date)]
@@ -408,7 +491,7 @@ def test_backfill_market_context_failure_does_not_block_observations_but_notes_i
     evaluator = RaisingMarketContextEvaluator()
 
     response = BackfillSignalObservationsUseCase(
-        accumulation_screen_use_case=screen,
+        record_observations_use_case=screen,
         screen_request_builder=_request_builder(),
         market_data_repository=FakeMarketRepository(
             [_candle("IHSG", signal_date), _candle("BBCA", signal_date)]

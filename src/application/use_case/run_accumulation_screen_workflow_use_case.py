@@ -78,6 +78,9 @@ class RunAccumulationScreenWorkflowUseCase:
         self._rules_loader = rules_loader
         self._indicator_registry_factory = indicator_registry_factory
         self._save_watchlist_use_case = save_watchlist_use_case
+        # Every mode here (single-window and --multi) is diagnostic/read-only.
+        # Canonical observation recording is a separate, explicit workflow
+        # (signal-backfill) — see RecordAccumulationObservationsUseCase.
 
     def execute(
         self,

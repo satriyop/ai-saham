@@ -27,6 +27,8 @@ from tests.application.use_case.accumulation_screen_fixtures import (
     _make_use_case_with_all_providers,
     _summary,
     _weekdays,
+    execute_and_record,
+    record_observations,
 )
 
 
@@ -50,13 +52,14 @@ def test_screen_persists_candidate_observations_when_repo_injected():
         ticker_profile_classifier_factory=create_ticker_profile_classifier,
     )
 
-    response = use_case.execute(
+    response = execute_and_record(
+        use_case,
         AccumulationScreenRequest(
             tickers=["BBCA"],
             window_days=7,
             min_net_buy_days=1,
             as_of_date=as_of,
-        )
+        ),
     )
 
     assert len(response.candidates) == 1
@@ -127,14 +130,15 @@ def test_screen_persists_regime_attribution_fingerprint_when_market_context_supp
         days_in_regime=6,
     )
 
-    response = use_case.execute(
+    response = execute_and_record(
+        use_case,
         AccumulationScreenRequest(
             tickers=["BBCA"],
             window_days=7,
             min_net_buy_days=1,
             as_of_date=as_of,
             market_context=market_context,
-        )
+        ),
     )
 
     assert len(response.candidates) == 1
@@ -179,14 +183,15 @@ def test_market_context_never_leaks_into_scoring_only_into_fingerprint_attributi
         rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo_a,
     )
-    response_a = use_case_a.execute(
+    response_a = execute_and_record(
+        use_case_a,
         AccumulationScreenRequest(
             tickers=["BBCA"],
             window_days=7,
             min_net_buy_days=1,
             as_of_date=as_of,
             market_context=None,
-        )
+        ),
     )
 
     # Run 2: fresh use-case instance, identical fixture data, but with a real
@@ -211,14 +216,15 @@ def test_market_context_never_leaks_into_scoring_only_into_fingerprint_attributi
         days_in_regime=2,
         transition_warning="regime shifted 2 days ago",
     )
-    response_b = use_case_b.execute(
+    response_b = execute_and_record(
+        use_case_b,
         AccumulationScreenRequest(
             tickers=["BBCA"],
             window_days=7,
             min_net_buy_days=1,
             as_of_date=as_of,
             market_context=market_context,
-        )
+        ),
     )
 
     assert len(response_a.candidates) == 1
@@ -336,13 +342,14 @@ def test_screen_persists_setup_family_fingerprint_when_swing_setup_catalog_match
         swing_setup_catalog=swing_setup_catalog,
     )
 
-    response = use_case.execute(
+    response = execute_and_record(
+        use_case,
         AccumulationScreenRequest(
             tickers=["BBCA"],
             window_days=7,
             min_net_buy_days=1,
             as_of_date=as_of,
-        )
+        ),
     )
 
     assert len(response.candidates) == 1
@@ -367,13 +374,14 @@ def test_screen_persists_market_cap_bucket_when_fundamentals_available():
         candidate_observations_repository=spy_repo,
     )
 
-    response = use_case.execute(
+    response = execute_and_record(
+        use_case,
         AccumulationScreenRequest(
             tickers=["BBCA"],
             window_days=7,
             min_net_buy_days=1,
             as_of_date=as_of,
-        )
+        ),
     )
 
     assert len(response.candidates) == 1
@@ -385,7 +393,8 @@ def test_screen_persists_market_cap_bucket_when_fundamentals_available():
 
 
 def test_screen_result_returned_even_when_persistence_fails():
-    """save_many failure must not block the screen response (best-effort persistence)."""
+    """save_many failure must not block the screen response (best-effort
+    persistence) or raise out of RecordAccumulationObservationsUseCase."""
     session_dates = _weekdays(date(2026, 1, 1), 7)
     as_of = session_dates[-1]
     candles = [
@@ -404,17 +413,19 @@ def test_screen_result_returned_even_when_persistence_fails():
         candidate_observations_repository=spy_repo,
     )
 
-    response = use_case.execute(
+    result = record_observations(
+        use_case,
         AccumulationScreenRequest(
             tickers=["BBCA"],
             window_days=7,
             min_net_buy_days=1,
             as_of_date=as_of,
-        )
+        ),
     )
 
-    assert len(response.candidates) == 1
-    assert response.candidates[0].ticker == "BBCA"
+    assert len(result.response.candidates) == 1
+    assert result.response.candidates[0].ticker == "BBCA"
+    assert result.recorded_count == 0
 
 
 def test_screen_populates_setup_phase_for_displayed_candidates():
@@ -524,14 +535,15 @@ def test_screen_recomputes_setup_phase_when_stage2_family_differs_from_prelimina
         rules_loader=RulesYamlLoader(),
     )
 
-    response = use_case.execute(
+    response = execute_and_record(
+        use_case,
         AccumulationScreenRequest(
             tickers=["BBCA"],
             window_days=7,
             min_net_buy_days=1,
             as_of_date=as_of,
             strategy_name="nonexistent-strategy-for-regression-test",
-        )
+        ),
     )
 
     assert len(response.candidates) == 1
@@ -586,14 +598,15 @@ def test_screen_uses_injected_rules_loader_for_strategy_evidence(tmp_path):
         rules_loader=fake_loader,
     )
 
-    use_case.execute(
+    execute_and_record(
+        use_case,
         AccumulationScreenRequest(
             tickers=["BBCA"],
             window_days=7,
             min_net_buy_days=1,
             as_of_date=as_of,
             strategy_name=str(strategy_path),
-        )
+        ),
     )
 
     assert fake_loader.load_called is True

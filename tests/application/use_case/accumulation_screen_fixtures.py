@@ -370,3 +370,45 @@ class SpyCandidateObservationsRepository:
     def list_recent(self, ticker, *, before_date=None, limit=20):
         return []
 
+
+def record_observations(use_case: AccumulationScreenUseCase, request):
+    """Run the screen and persist via the explicit canonical recorder.
+
+    AccumulationScreenUseCase.execute() is read-only (S1); tests that assert
+    on a SpyCandidateObservationsRepository must go through the recorder
+    instead of calling execute() directly. Returns the full
+    RecordAccumulationObservationsResult (response + recorded_count).
+
+    Production wiring goes through create_accumulation_screen_use_case_bundle()
+    in accumulation_screen_factory.py, which builds an equivalently-configured
+    AccumulationCandidateObservationPersister from the same constructor inputs
+    (AccumulationScreenUseCase never builds or exposes the recorder itself).
+    Here in tests we already hold the constructed use_case, so we reuse its
+    own private collaborators directly to build the persister — a test-only
+    shortcut, not a pattern for production code.
+    """
+    from src.application.services.accumulation_candidate_observation_persister import (
+        AccumulationCandidateObservationPersister,
+    )
+    from src.application.use_case.record_accumulation_observations_use_case import (
+        RecordAccumulationObservationsUseCase,
+    )
+
+    persister = AccumulationCandidateObservationPersister(
+        candidate_observations_repository=use_case._candidate_observations_repo,
+        candidate_evidence_builder=use_case._candidate_evidence_builder,
+        setup_family_resolver=use_case._setup_family_resolver,
+        swing_setup_catalog=use_case._swing_setup_catalog,
+    )
+    recorder = RecordAccumulationObservationsUseCase(
+        screen_use_case=use_case,
+        observation_persister=persister,
+    )
+    return recorder.execute(request)
+
+
+def execute_and_record(use_case: AccumulationScreenUseCase, request):
+    """Like record_observations(), but returns only the screen response —
+    for tests that don't need recorded_count."""
+    return record_observations(use_case, request).response
+

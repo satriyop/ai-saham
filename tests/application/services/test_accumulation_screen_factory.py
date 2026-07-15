@@ -1,12 +1,30 @@
+from datetime import date, timedelta
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+from src.application.dto.accumulation_screen import AccumulationScreenRequest
 from src.application.services.accumulation_screen_factory import (
+    AccumulationScreenUseCaseBundle,
     create_accumulation_screen_use_case,
+    create_accumulation_screen_use_case_bundle,
 )
 from src.application.services.indicator_registry import IndicatorRegistry
+from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
+from src.application.use_case.record_accumulation_observations_use_case import (
+    RecordAccumulationObservationsUseCase,
+)
 from src.application.use_case.score_foreign_flow_use_case import ForeignFlowScorePolicy
 from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
+from tests.application.use_case.accumulation_screen_fixtures import (
+    FakeRulesLoader,
+    MockBrokerRepository,
+    MockMarketRepository,
+    SpyCandidateObservationsRepository,
+    _candle,
+    _summary,
+    _weekdays,
+)
 
 
 def test_create_accumulation_screen_use_case_wires_stockbit_providers():
@@ -50,3 +68,51 @@ def test_create_accumulation_screen_use_case_wires_stockbit_providers():
     assert use_case._enricher._ticker_notation_provider is providers.notation_prov
     assert use_case._risk_use_case is risk_use_case
     assert use_case._signal_engine is signal_engine
+
+
+def test_accumulation_screen_use_case_does_not_build_its_own_recorder():
+    """S1 boundary cleanup: AccumulationScreenUseCase must not know how to
+    construct RecordAccumulationObservationsUseCase — that wiring belongs to
+    the factory (create_accumulation_screen_use_case_bundle), not the screen
+    use case itself."""
+    assert not hasattr(AccumulationScreenUseCase, "build_observation_recorder")
+
+
+def test_bundle_factory_supplies_screen_use_case_and_working_recorder():
+    session_dates = _weekdays(date(2026, 1, 1), 7)
+    as_of = session_dates[-1]
+    candles = [
+        _candle("BBCA", date(2025, 12, 1) + timedelta(days=i), Decimal("100")) for i in range(45)
+    ]
+    summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates]
+    spy_repo = SpyCandidateObservationsRepository()
+
+    bundle = create_accumulation_screen_use_case_bundle(
+        indicator_registry=IndicatorRegistry(),
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
+        candidate_observations_repository=spy_repo,
+    )
+
+    assert isinstance(bundle, AccumulationScreenUseCaseBundle)
+    assert isinstance(bundle.screen_use_case, AccumulationScreenUseCase)
+    assert isinstance(bundle.record_observations_use_case, RecordAccumulationObservationsUseCase)
+
+    request = AccumulationScreenRequest(
+        tickers=["BBCA"],
+        window_days=7,
+        min_net_buy_days=1,
+        as_of_date=as_of,
+    )
+
+    # screen_use_case.execute() is read-only — no persistence side effect.
+    response = bundle.screen_use_case.execute(request)
+    assert len(response.candidates) == 1
+    assert spy_repo.saved == []
+
+    # The bundle's recorder is the sole intentional persistence entrypoint.
+    result = bundle.record_observations_use_case.execute(request)
+    assert result.recorded_count == 1
+    assert len(spy_repo.saved) == 1
+    assert spy_repo.saved[0].ticker == "BBCA"

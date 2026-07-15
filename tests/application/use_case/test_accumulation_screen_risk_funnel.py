@@ -20,6 +20,7 @@ from tests.application.use_case.accumulation_screen_fixtures import (
     _make_use_case_with_fundamentals,
     _summary,
     _weekdays,
+    execute_and_record,
 )
 
 
@@ -214,7 +215,8 @@ def test_screen_persists_rejected_candidates_with_filter_outcome():
         candidate_observations_repository=spy_repo,
     )
 
-    response = use_case.execute(
+    response = execute_and_record(
+        use_case,
         AccumulationScreenRequest(
             tickers=["BBCA"],
             window_days=7,
@@ -222,7 +224,7 @@ def test_screen_persists_rejected_candidates_with_filter_outcome():
             as_of_date=as_of,
             min_foreign_flow_score=9999.0,  # impossible threshold — all rejected
             min_foreign_flow_score_enabled=True,
-        )
+        ),
     )
 
     # No survivors — rejected by flow score threshold

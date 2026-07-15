@@ -1,6 +1,6 @@
 """Tests for the accumulation screen workflow use case."""
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
@@ -10,9 +10,20 @@ from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenResponse,
 )
+from src.application.services.indicator_registry import IndicatorRegistry
+from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from src.application.use_case.run_accumulation_screen_workflow_use_case import (
     RunAccumulationScreenWorkflowRequest,
     RunAccumulationScreenWorkflowUseCase,
+)
+from tests.application.use_case.accumulation_screen_fixtures import (
+    FakeRulesLoader,
+    MockBrokerRepository,
+    MockMarketRepository,
+    SpyCandidateObservationsRepository,
+    _candle,
+    _summary,
+    _weekdays,
 )
 
 # ---------------------------------------------------------------------------
@@ -233,6 +244,32 @@ def test_multi_mode_broker_quality():
     result = uc.execute(_multi_request(windows=[7]))
 
     assert isinstance(result.broker_quality, dict)
+
+
+def test_multi_mode_writes_zero_candidate_observations():
+    """S1 regression: --multi is diagnostic and must never persist observations,
+    even with a real screen use case wired to a live observations repository."""
+    session_dates = _weekdays(date(2026, 1, 1), 7)
+    candles = [
+        _candle("BBCA", date(2025, 12, 1) + timedelta(days=i), Decimal("100")) for i in range(45)
+    ]
+    summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates]
+    spy_repo = SpyCandidateObservationsRepository()
+
+    real_screen_use_case = AccumulationScreenUseCase(
+        indicator_registry=IndicatorRegistry(),
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
+        candidate_observations_repository=spy_repo,
+    )
+    broker_repo = MagicMock()
+    broker_repo.get_broker_summaries.return_value = []
+    uc = _make_uc(screen_use_case=real_screen_use_case, broker_repo=broker_repo)
+
+    uc.execute(_multi_request(tickers=["BBCA"], windows=[7]))
+
+    assert spy_repo.saved == []
 
 
 # ---------------------------------------------------------------------------

@@ -46,7 +46,10 @@ from src.infrastructure.config.institutional_accumulation_config_loader import (
 from src.infrastructure.config.sector_context_config_loader import (
     create_sector_context_evidence_builder,
 )
-from tests.application.use_case.accumulation_screen_fixtures import FakeRulesLoader
+from tests.application.use_case.accumulation_screen_fixtures import (
+    FakeRulesLoader,
+    execute_and_record,
+)
 
 _EVIDENCE_BUILDER_FACTORY_KWARGS = dict(
     institutional_accumulation_config_factory=load_institutional_accumulation_config,
@@ -360,7 +363,8 @@ class TestIaCnfbDivergenceWithPlausibleFlowData:
             candidate_observations_repository=obs_repo,
             **_EVIDENCE_BUILDER_FACTORY_KWARGS,
         )
-        uc.execute(
+        execute_and_record(
+            uc,
             AccumulationScreenRequest(
                 tickers=["BBCA"],
                 as_of_date=snapshot_date,
@@ -444,7 +448,8 @@ class TestScFingerprintWithPeerCandles:
             ticker_notation_provider=_MockTickerNotationProvider("Finance"),
             **_EVIDENCE_BUILDER_FACTORY_KWARGS,
         )
-        uc.execute(
+        execute_and_record(
+            uc,
             AccumulationScreenRequest(
                 tickers=["BBCA"],
                 as_of_date=snapshot_date,
@@ -528,7 +533,8 @@ class TestFingerprintKeysExistWhenInputsUnavailable:
             **_EVIDENCE_BUILDER_FACTORY_KWARGS,
             # No ticker_notation_provider — sc_sector will be None.
         )
-        uc.execute(
+        execute_and_record(
+            uc,
             AccumulationScreenRequest(
                 tickers=["BBCA"],
                 as_of_date=snapshot_date,

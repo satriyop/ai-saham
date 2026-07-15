@@ -71,9 +71,6 @@ if TYPE_CHECKING:
     from src.domain.ports.candidate_observations_repository import (
         CandidateObservationsRepository,
     )
-    from src.domain.value_objects.flow_confirmation_evidence import (
-        FlowConfirmationEvidence,
-    )
 
 # Default setup targets (1:1 R:R, regime-unaware fallback)
 _DEFAULT_TAKE_PROFIT = Decimal("5")
@@ -248,9 +245,6 @@ class AccumulationScreenUseCase:
         from src.application.services.accumulation_candidate_evaluator import (
             AccumulationCandidateEvaluator,
         )
-        from src.application.services.accumulation_candidate_observation_persister import (
-            AccumulationCandidateObservationPersister,
-        )
         from src.application.services.accumulation_candidate_signal_assessor import (
             AccumulationCandidateSignalAssessor,
         )
@@ -265,12 +259,6 @@ class AccumulationScreenUseCase:
             broker_repository=self._broker_repo,
             market_repository=self._market_repo,
             derived_feature_policy=self._derived_features,
-        )
-        self._observation_persister = AccumulationCandidateObservationPersister(
-            candidate_observations_repository=self._candidate_observations_repo,
-            candidate_evidence_builder=self._candidate_evidence_builder,
-            setup_family_resolver=self._setup_family_resolver,
-            swing_setup_catalog=self._swing_setup_catalog,
         )
         self._sector_breadth_applier = AccumulationSectorBreadthApplier(
             ticker_to_group=self._ticker_to_group
@@ -302,12 +290,12 @@ class AccumulationScreenUseCase:
     ) -> accumulation_dto.AccumulationScreenResponse:
         today = request.as_of_date or date.today()
         candidates: list[accumulation_dto.AccumulationCandidate] = []
-        # Collects (candidate, screen_result, flow_ev) for ALL evaluated tickers —
-        # survivors and filtered-out alike. Rejected records are negative samples
-        # for future tuning (Phase 7: "rejected candidates become learnable").
-        all_results: list[
-            tuple[accumulation_dto.AccumulationCandidate, str, FlowConfirmationEvidence | None]
-        ] = []
+        # Collects an AccumulationScreenObservationCandidate for ALL evaluated
+        # tickers — survivors and filtered-out alike. Rejected records are
+        # negative samples for future tuning (Phase 7: "rejected candidates
+        # become learnable"). execute() itself never persists these — see
+        # RecordAccumulationObservationsUseCase.
+        observation_candidates: list[accumulation_dto.AccumulationScreenObservationCandidate] = []
         skipped = 0
         uses_stockbit = False
 
@@ -335,7 +323,13 @@ class AccumulationScreenUseCase:
             filter_result = self._structural_filter.apply(result, request)
 
             if filter_result.rejected:
-                all_results.append((filter_result.candidate, filter_result.screen_result, None))
+                observation_candidates.append(
+                    accumulation_dto.AccumulationScreenObservationCandidate(
+                        candidate=filter_result.candidate,
+                        screen_result=filter_result.screen_result,
+                        flow_evidence=None,
+                    )
+                )
                 skipped += 1
                 continue
 
@@ -355,7 +349,13 @@ class AccumulationScreenUseCase:
             )
             result = assessment.candidate
 
-            all_results.append((result, assessment.screen_result, assessment.flow_evidence))
+            observation_candidates.append(
+                accumulation_dto.AccumulationScreenObservationCandidate(
+                    candidate=result,
+                    screen_result=assessment.screen_result,
+                    flow_evidence=assessment.flow_evidence,
+                )
+            )
             if assessment.passes:
                 candidates.append(result)
 
@@ -370,7 +370,6 @@ class AccumulationScreenUseCase:
             self._risk_funnel.run(candidates, today)
 
         candidates.sort(key=_screen_sort_key, reverse=True)
-        self._observation_persister.persist(all_results, today, request)
 
         return accumulation_dto.AccumulationScreenResponse(
             candidates=candidates,
@@ -379,4 +378,5 @@ class AccumulationScreenUseCase:
             total_tickers_checked=len(request.tickers),
             tickers_skipped=skipped,
             provider="stockbit" if uses_stockbit else "idx",
+            observation_candidates=observation_candidates,
         )

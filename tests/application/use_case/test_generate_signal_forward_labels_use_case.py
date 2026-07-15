@@ -25,6 +25,7 @@ class FakeCandidateObservationsRepository:
         self.calls = []
         self.at_calls = []
         self.list_by_date_calls = []
+        self.list_canonical_by_date_calls = []
         self.list_snapshot_dates_calls = 0
 
     def get_latest(self, ticker, snapshot_date):
@@ -40,6 +41,15 @@ class FakeCandidateObservationsRepository:
         if self.observations_by_date:
             return list(self.observations_by_date.get(snapshot_date, ()))
         return list(self.observations)
+
+    def list_canonical_by_date(self, snapshot_date):
+        self.list_canonical_by_date_calls.append(snapshot_date)
+        source = (
+            self.observations_by_date.get(snapshot_date, ())
+            if self.observations_by_date
+            else self.observations
+        )
+        return [obs for obs in source if obs.config_hash]
 
     def list_snapshot_dates(self):
         self.list_snapshot_dates_calls += 1
@@ -300,7 +310,7 @@ def test_generate_all_labels_latest_observations_for_date():
         signal_forward_labels_repository=labels_repo,
     ).execute_all(GenerateAllSignalForwardLabelsRequest(signal_date=signal_date))
 
-    assert observations_repo.list_by_date_calls == [signal_date]
+    assert observations_repo.list_canonical_by_date_calls == [signal_date]
     assert response.observation_count == 2
     assert response.generated_count == 2
     assert response.unavailable_count == 0
@@ -333,6 +343,56 @@ def test_generate_all_marks_incomplete_windows_unavailable():
     assert response.labels[0].unavailable_reason == (
         "incomplete_forward_window: required 10 trading days, found 1"
     )
+
+
+def test_generate_all_labels_covers_every_canonical_window_not_just_latest():
+    """S1 regression: a ticker recorded across several window_sessions (e.g.
+    7/30/90 from --multi-window backfill) must get a label for each canonical
+    row, not just the most-recently-captured one. execute_all() must use
+    list_canonical_by_date(), not list_by_date()'s latest-per-ticker collapse."""
+    signal_date = date(2026, 7, 1)
+    observations = (
+        _observation(
+            signal_date,
+            {"candidate": {"current_price": "100"}, "sub_signal_fingerprint": _fingerprint()},
+            ticker="BBCA",
+            captured_at=datetime(2026, 7, 1, 19, 0, 0),
+            window_sessions=7,
+        ),
+        _observation(
+            signal_date,
+            {"candidate": {"current_price": "100"}, "sub_signal_fingerprint": _fingerprint()},
+            ticker="BBCA",
+            captured_at=datetime(2026, 7, 1, 19, 1, 0),
+            window_sessions=30,
+        ),
+        _observation(
+            signal_date,
+            {"candidate": {"current_price": "100"}, "sub_signal_fingerprint": _fingerprint()},
+            ticker="BBCA",
+            captured_at=datetime(2026, 7, 1, 19, 2, 0),
+            window_sessions=90,
+        ),
+    )
+    candles = [
+        _candle(signal_date + timedelta(days=i), str(100 + i), ticker="BBCA")
+        for i in range(1, 11)
+    ]
+    observations_repo = FakeCandidateObservationsRepository(observations=observations)
+    labels_repo = SpySignalForwardLabelsRepository()
+
+    response = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=observations_repo,
+        market_data_repository=FakeMarketDataRepository(candles),
+        signal_forward_labels_repository=labels_repo,
+    ).execute_all(GenerateAllSignalForwardLabelsRequest(signal_date=signal_date))
+
+    # list_by_date() would have collapsed these 3 rows to 1 (latest captured_at).
+    assert observations_repo.list_canonical_by_date_calls == [signal_date]
+    assert observations_repo.list_by_date_calls == []
+    assert response.observation_count == 3
+    assert response.generated_count == 3
+    assert len(labels_repo.saved) == 3
 
 
 def test_generate_eligible_dates_skips_dates_without_forward_window():
@@ -388,6 +448,8 @@ def _observation(
     *,
     ticker: str = "BBCA",
     captured_at: datetime = datetime(2026, 7, 1, 9, 0, 0),
+    window_sessions: int = 7,
+    config_hash: str = "test-hash",
 ) -> CandidateObservation:
     payload = {
         "schema_version": 1,
@@ -401,6 +463,9 @@ def _observation(
         snapshot_date=signal_date,
         captured_at=captured_at,
         payload=payload,
+        window_sessions=window_sessions,
+        data_as_of_date=signal_date,
+        config_hash=config_hash,
     )
 
 

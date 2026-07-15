@@ -30,6 +30,7 @@ from tests.application.use_case.accumulation_screen_fixtures import (
     _candle,
     _summary,
     _weekdays,
+    execute_and_record,
 )
 
 
@@ -74,13 +75,14 @@ def test_screen_persists_sector_context_fingerprint_when_builder_available():
         sector_context_builder_factory=lambda: FakeSectorContextBuilder(),
     )
 
-    use_case.execute(
+    execute_and_record(
+        use_case,
         AccumulationScreenRequest(
             tickers=["BBCA"],
             window_days=7,
             min_net_buy_days=1,
             as_of_date=as_of,
-        )
+        ),
     )
 
     fingerprint = spy_repo.saved[0].payload["sub_signal_fingerprint"]
@@ -161,13 +163,14 @@ def test_screen_persists_relative_strength_and_evaluates_rs_policy():
         swing_setup_catalog=swing_setup_catalog,
     )
 
-    response = use_case.execute(
+    response = execute_and_record(
+        use_case,
         AccumulationScreenRequest(
             tickers=["BBCA"],
             window_days=7,
             min_net_buy_days=1,
             as_of_date=as_of,
-        )
+        ),
     )
 
     assert len(response.candidates) == 1
@@ -208,13 +211,14 @@ def test_screen_rs_fields_stay_none_when_ihsg_candles_missing():
         candidate_observations_repository=spy_repo,
     )
 
-    response = use_case.execute(
+    response = execute_and_record(
+        use_case,
         AccumulationScreenRequest(
             tickers=["BBCA"],
             window_days=7,
             min_net_buy_days=1,
             as_of_date=as_of,
-        )
+        ),
     )
 
     assert len(response.candidates) == 1
@@ -249,13 +253,14 @@ def test_screen_persists_volatility_context_fingerprint_from_injected_registry()
         indicator_registry=FakeATRRegistry(),
     )
 
-    response = use_case.execute(
+    response = execute_and_record(
+        use_case,
         AccumulationScreenRequest(
             tickers=["BBCA"],
             window_days=7,
             min_net_buy_days=1,
             as_of_date=as_of,
-        )
+        ),
     )
 
     assert len(response.candidates) == 1
@@ -299,13 +304,14 @@ def test_screen_volatility_context_falls_back_to_unknown_when_atr_unavailable():
             indicator_registry=registry,
         )
 
-        response = use_case.execute(
+        response = execute_and_record(
+            use_case,
             AccumulationScreenRequest(
                 tickers=["BBCA"],
                 window_days=7,
                 min_net_buy_days=1,
                 as_of_date=as_of,
-            )
+            ),
         )
 
         assert len(response.candidates) == 1
@@ -351,13 +357,14 @@ def test_volatility_context_fingerprint_never_leaks_into_scoring():
         candidate_observations_repository=spy_repo_a,
         indicator_registry=FakeATRRegistry(),
     )
-    response_a = use_case_a.execute(
+    response_a = execute_and_record(
+        use_case_a,
         AccumulationScreenRequest(
             tickers=["BBCA"],
             window_days=7,
             min_net_buy_days=1,
             as_of_date=as_of,
-        )
+        ),
     )
 
     spy_repo_b = SpyCandidateObservationsRepository()
@@ -368,13 +375,14 @@ def test_volatility_context_fingerprint_never_leaks_into_scoring():
         candidate_observations_repository=spy_repo_b,
         indicator_registry=EmptyATRRegistry(),
     )
-    response_b = use_case_b.execute(
+    response_b = execute_and_record(
+        use_case_b,
         AccumulationScreenRequest(
             tickers=["BBCA"],
             window_days=7,
             min_net_buy_days=1,
             as_of_date=as_of,
-        )
+        ),
     )
 
     assert len(response_a.candidates) == 1

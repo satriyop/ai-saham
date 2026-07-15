@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 
@@ -45,6 +47,50 @@ if TYPE_CHECKING:
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
     from src.domain.value_objects.strategy_evidence import StrategyEvidence
     from src.domain.value_objects.ticker_profile_snapshot import TickerProfileSnapshot
+
+
+# Config-derived request fields that make a persisted observation belong to a
+# distinct scoring "version". Excludes tickers/window_days/as_of_date/regime/
+# market_context — those are run-context, not config, and already have their
+# own identity slots (or would make the hash churn daily without a real config
+# edit). If a config knob is added to AccumulationScreenRequest, add it here so
+# reruns after a config change get a distinct canonical observation.
+_CONFIG_HASH_FIELDS = (
+    "min_net_buy_days",
+    "min_foreign_flow_score",
+    "min_foreign_flow_score_enabled",
+    "min_signal_score",
+    "min_signal_score_enabled",
+    "rsi_period",
+    "sma_period",
+    "resistance_gate_enabled",
+    "resistance_headroom_min_pct",
+    "ex_date_warning_days",
+    "sector_breadth_enabled",
+    "sector_breadth_threshold",
+    "sector_breadth_bonus_pts",
+    "sector_breadth_min_tickers",
+    "bci_cluster_min_count",
+    "bci_stable_min_count",
+    "min_market_cap_idr",
+    "min_piotroski",
+    "strategy_name",
+)
+
+
+def compute_accumulation_config_hash(
+    request: "accumulation_dto.AccumulationScreenRequest",
+) -> str:
+    """Fingerprint the scoring-config knobs carried on the request.
+
+    Deterministic across runs with the same config; changes whenever a
+    config-driven threshold changes, independent of which tickers/dates were
+    screened.
+    """
+    values = {name: getattr(request, name) for name in _CONFIG_HASH_FIELDS}
+    values["tier1_broker_codes"] = sorted(request.tier1_broker_codes)
+    canonical = json.dumps(values, sort_keys=True, default=str, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
 
 
 def build_candidate_observation_payload(

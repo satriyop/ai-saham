@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from src.domain.value_objects.analyst_consensus import AnalystConsensus
     from src.domain.value_objects.bandar_detector_snapshot import BandarDetectorSnapshot
     from src.domain.value_objects.company_fundamentals import CompanyFundamentals
+    from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.forward_estimates import ForwardEstimates
     from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.risk_assessment import RiskAssessment
@@ -308,6 +309,21 @@ class AccumulationCandidate:
         }
 
 
+@dataclass(frozen=True)
+class AccumulationScreenObservationCandidate:
+    """One evaluated ticker paired with its screen outcome and flow evidence.
+
+    Covers survivors and rejected candidates alike — rejected records are
+    learnable negative samples. Internal application-layer detail: exists so
+    an explicit recording use case can persist observations from an
+    already-computed AccumulationScreenResponse without re-running the screen.
+    """
+
+    candidate: AccumulationCandidate
+    screen_result: str
+    flow_evidence: "FlowConfirmationEvidence | None"
+
+
 @dataclass
 class AccumulationScreenResponse:
     """Screener output."""
@@ -318,3 +334,10 @@ class AccumulationScreenResponse:
     total_tickers_checked: int
     tickers_skipped: int  # insufficient data
     provider: str  # "idx" or "stockbit"
+    # Every evaluated ticker — survivors and rejected alike. Empty unless the
+    # caller wants it; screen execution itself never reads or acts on this
+    # field (read-only contract) — it exists only for an explicit recording
+    # use case to consume.
+    observation_candidates: list[AccumulationScreenObservationCandidate] = field(
+        default_factory=list
+    )

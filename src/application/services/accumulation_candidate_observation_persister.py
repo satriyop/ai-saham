@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from src.application.services.accumulation_observation_fingerprint import (
     build_candidate_observation_payload,
+    compute_accumulation_config_hash,
 )
 from src.domain.ports.candidate_observations_repository import CandidateObservation
 
@@ -30,9 +31,6 @@ if TYPE_CHECKING:
     )
     from src.domain.ports.candidate_observations_repository import (
         CandidateObservationsRepository,
-    )
-    from src.domain.value_objects.flow_confirmation_evidence import (
-        FlowConfirmationEvidence,
     )
 
 logger = logging.getLogger(__name__)
@@ -53,18 +51,26 @@ class AccumulationCandidateObservationPersister:
 
     def persist(
         self,
-        all_results: list[
-            tuple[accumulation_dto.AccumulationCandidate, str, FlowConfirmationEvidence | None]
-        ],
+        observation_candidates: list[accumulation_dto.AccumulationScreenObservationCandidate],
         snapshot_date: date,
         request: accumulation_dto.AccumulationScreenRequest,
-    ) -> None:
-        if self._candidate_observations_repo is None or not all_results:
-            return
+        workflow: str = "screen_accum",
+    ) -> int:
+        """Persist observations for every evaluated candidate (pass + rejected).
+
+        Returns the number of observations recorded (0 if there is no
+        repository, nothing was evaluated, or persistence failed). This is the
+        only place candidate observations are written — call it intentionally,
+        not from read-only/diagnostic screen execution.
+        """
+        if self._candidate_observations_repo is None or not observation_candidates:
+            return 0
         try:
             captured_at = datetime.now()
+            config_hash = compute_accumulation_config_hash(request)
             observations = []
-            for c, screen_result, flow_ev in all_results:
+            for oc in observation_candidates:
+                c, screen_result, flow_ev = oc.candidate, oc.screen_result, oc.flow_evidence
                 # Reuse the phase already detected in execute() — same candidate,
                 # same flow evidence, same snapshot date. Avoids detecting twice.
                 setup_phase = c.setup_phase
@@ -128,11 +134,16 @@ class AccumulationCandidateObservationPersister:
                         snapshot_date,
                         setup_family=setup_family_result.primary_setup_family,
                     )
+                data_as_of_date = c.latest_broker_date or c.latest_candle_date or snapshot_date
                 observations.append(
                     CandidateObservation(
                         ticker=c.ticker,
                         snapshot_date=snapshot_date,
                         captured_at=captured_at,
+                        workflow=workflow,
+                        window_sessions=request.window_days,
+                        data_as_of_date=data_as_of_date,
+                        config_hash=config_hash,
                         payload=build_candidate_observation_payload(
                             c,
                             screen_result=screen_result,
@@ -152,5 +163,7 @@ class AccumulationCandidateObservationPersister:
                     )
                 )
             self._candidate_observations_repo.save_many(observations)
+            return len(observations)
         except Exception as exc:
             logger.warning("Candidate observation persistence unavailable: %s", exc)
+            return 0

@@ -12,7 +12,7 @@ from typing import Annotated, Optional
 import typer
 
 from src.adapters.cli.screen_accum_workflow_factory import (
-    create_accumulation_screen_workflow,
+    create_accumulation_screen_workflow_bundle,
 )
 from src.application.services.signal_observation_request_builder import (
     BuildSignalObservationScreenRequest,
@@ -100,7 +100,7 @@ def signal_backfill_observations(
     labels_repo = SQLiteSignalForwardLabelsRepository(resolved_db)
     accumulation_config = load_accumulation_screener_config()
     swing_config = load_swing_config()
-    workflow = create_accumulation_screen_workflow(
+    screen_bundle = create_accumulation_screen_workflow_bundle(
         db_path=resolved_db,
         screener_config=accumulation_config,
         swing_config=swing_config,
@@ -125,7 +125,7 @@ def signal_backfill_observations(
         )
 
     response = BackfillSignalObservationsUseCase(
-        accumulation_screen_use_case=workflow.use_case,
+        record_observations_use_case=screen_bundle.record_observations_use_case,
         screen_request_builder=screen_request_builder,
         market_data_repository=market_repo,
         candidate_observations_repository=observations_repo,
