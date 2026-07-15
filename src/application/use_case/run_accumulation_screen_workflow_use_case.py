@@ -1,7 +1,7 @@
 """
 Workflow orchestration for saham screen accum command.
 
-Owns multi-window orchestration, min-streak post-filter, broker-quality
+Owns multi-window orchestration, min-streak post-filter, tracked-broker-flow
 computation, strategy-signal overlay, and watchlist save.  The CLI adapter
 calls this single use case and renders the result.
 
@@ -13,9 +13,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from src.application.dto.accumulation_screen import AccumulationScreenResponse
-from src.application.services.broker_quality import (
-    BrokerQualitySnapshot,
-    compute_broker_quality_batch,
+from src.application.services.tracked_broker_flow import (
+    TrackedBrokerFlowSnapshot,
+    compute_tracked_broker_flow_batch,
 )
 from src.application.services.screen_accum_result_projector import (
     ScreenAccumMultiProjection,
@@ -63,7 +63,7 @@ class RunAccumulationScreenWorkflowResult:
     single_projection: ScreenAccumSingleProjection | None = None
     multi_results: dict[int, AccumulationScreenResponse] = field(default_factory=dict)
     multi_projection: ScreenAccumMultiProjection | None = None
-    broker_quality: dict[str, BrokerQualitySnapshot] = field(default_factory=dict)
+    tracked_broker_flow: dict[str, TrackedBrokerFlowSnapshot] = field(default_factory=dict)
     strategy_signals: dict[str, str] = field(default_factory=dict)
     save_result: SaveScreenWatchlistResult | None = None
     warnings: tuple[str, ...] = ()
@@ -76,6 +76,10 @@ class RunAccumulationScreenWorkflowResult:
 # the raw screen silently drop candidates before the projector ever sees
 # them, defeating "filters applied exactly once, in the projector."
 _BASELINE_MIN_NET_BUY_DAYS = 1
+
+# S7: canonical window whose Signal/Risk/Phase/Data/Next own the --multi
+# shortlist evidence. Other requested windows remain flow-only context.
+_DEFAULT_MULTI_CANONICAL_WINDOW = 7
 
 
 class RunAccumulationScreenWorkflowUseCase:
@@ -208,6 +212,15 @@ class RunAccumulationScreenWorkflowUseCase:
     ) -> RunAccumulationScreenWorkflowResult:
         validate_multi_window_request(request.windows, request.sort_by)
 
+        # TODO(S7 follow-up): this still runs the full screen pipeline (incl.
+        # SignalEngine/risk funnel/setup-phase) once per window instead of
+        # computing 7/30/90 from one shared in-memory series. A true one-pass
+        # implementation requires refactoring AccumulationScreenUseCase to
+        # expose a window-only recompute path, which is out of scope here —
+        # see tasks/backlog/saham_screen_improvements.md Task S7. The
+        # canonical window's Signal/Risk/Phase/Data/Next are the only ones
+        # surfaced to the user (project_multi_screen_result), so this
+        # redundant work is wasted CPU, not wrong output.
         multi_builder = request_builder.with_score_filters_disabled()
         multi_results: dict[int, AccumulationScreenResponse] = {}
         for w in request.windows:
@@ -219,7 +232,7 @@ class RunAccumulationScreenWorkflowUseCase:
             )
 
         screened_at = next(iter(multi_results.values())).screened_at
-        broker_quality = compute_broker_quality_batch(
+        tracked_broker_flow = compute_tracked_broker_flow_batch(
             tickers=request.tickers,
             broker_repo=self._broker_repository,
             smart_money_brokers=self._swing_config.smart_money_brokers,
@@ -227,21 +240,28 @@ class RunAccumulationScreenWorkflowUseCase:
             as_of_date=screened_at,
         )
 
+        canonical_window = (
+            _DEFAULT_MULTI_CANONICAL_WINDOW
+            if _DEFAULT_MULTI_CANONICAL_WINDOW in request.windows
+            else request.windows[0]
+        )
+
         display_cfg = self._accumulation_screener_config.display
         multi_projection = project_multi_screen_result(
             multi_results,
-            broker_quality=broker_quality,
+            tracked_broker_flow=tracked_broker_flow,
             windows=request.windows,
             top=request.top,
             sort_by=request.sort_by,
             squeeze_only=request.squeeze_only,
             coiled_spring_min_foreign_flow_score=display_cfg.coiled_spring_min_foreign_flow_score,
             coiled_spring_bb_pctile=display_cfg.coiled_spring_bb_pctile,
+            canonical_window=canonical_window,
         )
 
         return RunAccumulationScreenWorkflowResult(
             multi_results=multi_results,
             multi_projection=multi_projection,
-            broker_quality=broker_quality,
+            tracked_broker_flow=tracked_broker_flow,
             warnings=tuple(warnings),
         )

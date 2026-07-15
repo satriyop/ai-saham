@@ -1,30 +1,31 @@
-"""Pure broker-quality computation tests (application function, not CLI-specific)."""
+"""Pure tracked-broker-flow computation tests (application function, not CLI-specific).
+
+Sourced from `broker_daily_flow` (tracked broker subset), not
+`broker_summaries` (full-market top-broker rows) — these are different data
+products and must not be conflated.
+"""
 
 from datetime import date
 from decimal import Decimal
 
-from src.application.services.broker_quality import compute_broker_quality_batch
-from src.domain.entities.broker_flow import BrokerType
-from tests.adapters.cli.screen_accum_test_fixtures import (
-    FakeBrokerSummaryRepository,
-    _summary,
-    _tx,
+from src.application.services.tracked_broker_flow import compute_tracked_broker_flow_batch
+from tests.application.use_case.accumulation_screen_fixtures import (
+    MockBrokerRepositoryWithDaily,
+    _daily_flow,
 )
 
 
-def test_screen_broker_quality_counts_local_noise_brokers():
-    quality_batch = compute_broker_quality_batch(
+def test_screen_tracked_broker_flow_counts_local_noise_brokers():
+    quality_batch = compute_tracked_broker_flow_batch(
         tickers=["BBCA"],
-        broker_repo=FakeBrokerSummaryRepository([
-            _summary(
-                date(2026, 6, 12),
-                top_buyers=(
-                    _tx("YP", "100000000", "10000000", BrokerType.LOCAL),
-                    _tx("XC", "70000000", "5000000", BrokerType.LOCAL),
-                ),
-                top_sellers=(_tx("AK", "5000000", "25000000"),),
-            )
-        ]),
+        broker_repo=MockBrokerRepositoryWithDaily(
+            summaries=[],
+            daily_flows=[
+                _daily_flow("BBCA", date(2026, 6, 12), "YP", 1_000),
+                _daily_flow("BBCA", date(2026, 6, 12), "XC", 650),
+                _daily_flow("BBCA", date(2026, 6, 12), "AK", -200),
+            ],
+        ),
         smart_money_brokers=[],
         noise_brokers=["YP", "XC"],
         as_of_date=date(2026, 6, 12),
@@ -33,21 +34,22 @@ def test_screen_broker_quality_counts_local_noise_brokers():
     quality = quality_batch.get("BBCA")
     assert quality is not None
     assert quality.label == "noise+"
-    assert quality.noise_flow == Decimal("155000000")
-    assert quality.neutral_flow == Decimal("-20000000")
+    assert quality.noise_flow == Decimal(1_000 * 100 * 1000) + Decimal(650 * 100 * 1000)
+    assert quality.neutral_flow == Decimal(-200 * 100 * 1000)
     assert quality.to_dict()["source"] == "stockbit"
+    assert quality.to_dict()["scope"] == "tracked_brokers"
 
 
-def test_screen_broker_quality_marks_smart_selling_pressure():
-    quality_batch = compute_broker_quality_batch(
+def test_screen_tracked_broker_flow_marks_smart_selling_pressure():
+    quality_batch = compute_tracked_broker_flow_batch(
         tickers=["BBCA"],
-        broker_repo=FakeBrokerSummaryRepository([
-            _summary(
-                date(2026, 6, 12),
-                top_buyers=(_tx("CC", "40000000", "5000000"),),
-                top_sellers=(_tx("BK", "5000000", "90000000"),),
-            )
-        ]),
+        broker_repo=MockBrokerRepositoryWithDaily(
+            summaries=[],
+            daily_flows=[
+                _daily_flow("BBCA", date(2026, 6, 12), "CC", 350),
+                _daily_flow("BBCA", date(2026, 6, 12), "BK", -850),
+            ],
+        ),
         smart_money_brokers=["BK"],
         noise_brokers=[],
         as_of_date=date(2026, 6, 12),
@@ -56,4 +58,18 @@ def test_screen_broker_quality_marks_smart_selling_pressure():
     quality = quality_batch.get("BBCA")
     assert quality is not None
     assert quality.label == "smart-"
-    assert quality.smart_flow == Decimal("-85000000")
+    assert quality.smart_flow == Decimal(-850 * 100 * 1000)
+
+
+def test_screen_tracked_broker_flow_missing_rows_returns_none():
+    """Missing tracked-broker rows must yield None, not a fabricated
+    full-market label."""
+    quality_batch = compute_tracked_broker_flow_batch(
+        tickers=["BBCA"],
+        broker_repo=MockBrokerRepositoryWithDaily(summaries=[], daily_flows=[]),
+        smart_money_brokers=["BK"],
+        noise_brokers=["YP"],
+        as_of_date=date(2026, 6, 12),
+    )
+
+    assert quality_batch.get("BBCA") is None

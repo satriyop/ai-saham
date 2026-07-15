@@ -13,6 +13,16 @@ from rich.text import Text
 from src.adapters.cli.rich_display import compact_table, console, panel
 from src.adapters.cli.screen_accum_formatters import AccumulationDisplayConfig
 from src.application.services.screen_accum_result_projector import ScreenAccumMultiRow
+from src.application.services.tracked_broker_flow import TrackedBrokerFlowSnapshot
+
+
+def _tracked_broker_flow_cell(tracked_broker_flow: TrackedBrokerFlowSnapshot | None) -> str:
+    """Render only the tracked-broker-subset flow — never the real data
+    source (e.g. idx/stockbit), since this is not full-market broker
+    composition and must not read like it is."""
+    if tracked_broker_flow is None:
+        return "N/A"
+    return f"{tracked_broker_flow.label} tracked/{tracked_broker_flow.sessions}s"
 
 
 def display_multi(
@@ -24,6 +34,7 @@ def display_multi(
     total_tickers_checked: int = 0,
     provider: str = "",
     include_explanation: bool = False,
+    canonical_window: int = 7,
 ) -> None:
     """Render multi-window side-by-side table.
 
@@ -51,8 +62,12 @@ def display_multi(
     for w in windows:
         table.add_column(f"{w}s", justify="right")
     table.add_column("Pattern")
-    table.add_column("Trend")
-    table.add_column("Broker Flow")
+    table.add_column("Signal")
+    table.add_column("Risk")
+    table.add_column("Phase")
+    table.add_column("Data")
+    table.add_column("Next")
+    table.add_column("Tracked Broker Flow")
 
     for i, row in enumerate(rows, 1):
         score_cells = []
@@ -69,8 +84,32 @@ def display_multi(
                 ) else ""
             )
             score_cells.append(Text(f"{candidate.foreign_flow_score:.0f}", style=style))
-        brk = row.broker_quality.label if row.broker_quality else "n/a"
-        table.add_row(str(i), row.ticker, *score_cells, row.pattern, row.trend, brk)
+
+        if row.signal_score is not None and row.signal_coverage is not None:
+            signal_cell = f"{row.signal_score:.0f}/{row.signal_coverage:.2f}"
+        elif row.signal_score is not None:
+            signal_cell = f"{row.signal_score:.0f}"
+        else:
+            signal_cell = "N/A"
+
+        risk_cell = row.risk_status or "N/A"
+        phase_cell = row.setup_phase or "N/A"
+        data_cell = row.data_status or "N/A"
+        next_cell = row.next_action or "N/A"
+
+        brk = _tracked_broker_flow_cell(row.tracked_broker_flow)
+        table.add_row(
+            str(i),
+            row.ticker,
+            *score_cells,
+            row.pattern,
+            signal_cell,
+            risk_cell,
+            phase_cell,
+            data_cell,
+            next_cell,
+            brk,
+        )
 
     console().print(
         panel(
@@ -108,9 +147,16 @@ def display_multi(
     )
 
     meta_table.add_row(
-        "Broker Flow",
-            "5-session named top-broker bucket: "
-            "smart+/noise+ = net buying, smart-/noise- = net selling, n/a = no detail"
+        "Tracked Broker Flow",
+        "Tracked Broker Flow uses configured tracked brokers from broker_daily_flow. "
+        "It is not full-market broker composition. "
+        "smart+/noise+ = net buying, smart-/noise- = net selling, N/A = no detail"
+    )
+
+    meta_table.add_row(
+        "Canonical Window",
+        f"{canonical_window} sessions (default) — Signal/Risk/Phase/Data/Next come "
+        "from the canonical window only; other windows are flow context."
     )
 
     meta_table.add_row(

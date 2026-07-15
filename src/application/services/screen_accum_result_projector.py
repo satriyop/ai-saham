@@ -21,7 +21,7 @@ from src.application.dto.accumulation_screen import (
 from src.application.services.accumulation_multi_window_pattern import (
     classify_multi_window_pattern,
 )
-from src.application.services.broker_quality import BrokerQualitySnapshot
+from src.application.services.tracked_broker_flow import TrackedBrokerFlowSnapshot
 from src.application.services.data_freshness_service import compute_data_freshness
 
 
@@ -149,7 +149,15 @@ class ScreenAccumMultiRow:
     candidates_by_window: dict[int, AccumulationCandidate | None]
     pattern: str
     trend: str
-    broker_quality: BrokerQualitySnapshot | None
+    tracked_broker_flow: TrackedBrokerFlowSnapshot | None
+    canonical_window: int
+    canonical_candidate: AccumulationCandidate | None
+    signal_score: float | None
+    signal_coverage: float | None
+    risk_status: str | None
+    setup_phase: str | None
+    data_status: str | None
+    next_action: str | None
 
     def to_dict(self) -> dict:
         return {
@@ -160,8 +168,52 @@ class ScreenAccumMultiRow:
             },
             "pattern": self.pattern,
             "trend": self.trend,
-            "broker_quality": self.broker_quality.to_dict() if self.broker_quality else None,
+            "tracked_broker_flow": (
+                self.tracked_broker_flow.to_dict() if self.tracked_broker_flow else None
+            ),
+            "canonical_window": self.canonical_window,
+            "signal_score": self.signal_score,
+            "signal_coverage": self.signal_coverage,
+            "risk_status": self.risk_status,
+            "setup_phase": self.setup_phase,
+            "data_status": self.data_status,
+            "next_action": self.next_action,
         }
+
+
+def _canonical_evidence_fields(candidate: AccumulationCandidate | None) -> dict:
+    """Derive Signal/Risk/Phase/Data/Next fields from the canonical-window
+    candidate only. Never guessed from another window's candidate."""
+    if candidate is None:
+        return {
+            "signal_score": None,
+            "signal_coverage": None,
+            "risk_status": None,
+            "setup_phase": None,
+            "data_status": None,
+            "next_action": None,
+        }
+    signal_score = None
+    signal_coverage = None
+    if candidate.signal_assessment is not None:
+        signal_score = candidate.signal_assessment.assessment.score
+        signal_coverage = candidate.signal_assessment.assessment.coverage_score
+    return {
+        "signal_score": signal_score,
+        "signal_coverage": signal_coverage,
+        "risk_status": (
+            candidate.risk_assessment.risk_level_name if candidate.risk_assessment else None
+        ),
+        "setup_phase": (
+            candidate.setup_phase.current_phase.value if candidate.setup_phase else None
+        ),
+        "data_status": (
+            candidate.freshness.alignment_state.value if candidate.freshness else None
+        ),
+        "next_action": (
+            candidate.trade_setup.action.value if candidate.trade_setup else None
+        ),
+    }
 
 
 @dataclass(frozen=True)
@@ -173,6 +225,7 @@ class ScreenAccumMultiProjection:
     raw_ticker_count: int
     projected_row_count: int
     screened_at: date | None
+    canonical_window: int
     warnings: tuple[str, ...] = field(default_factory=tuple)
 
     def to_dict(self) -> dict:
@@ -186,6 +239,7 @@ class ScreenAccumMultiProjection:
             "resolved_windows": self.resolved_windows,
             "counts_before_filter": self.raw_ticker_count,
             "counts_after_filter": self.projected_row_count,
+            "canonical_window": self.canonical_window,
         }
 
 
@@ -229,18 +283,24 @@ def validate_multi_window_request(windows: list[int], sort_by: str) -> None:
 def project_multi_screen_result(
     multi_results: dict[int, AccumulationScreenResponse],
     *,
-    broker_quality: dict[str, BrokerQualitySnapshot] | None,
+    tracked_broker_flow: dict[str, TrackedBrokerFlowSnapshot] | None,
     windows: list[int],
     top: int,
     sort_by: str,
     squeeze_only: bool,
     coiled_spring_min_foreign_flow_score: float,
     coiled_spring_bb_pctile: float,
+    canonical_window: int,
 ) -> ScreenAccumMultiProjection:
     validate_multi_window_request(windows, sort_by)
+    if canonical_window not in windows:
+        raise ScreenAccumProjectionError(
+            f"canonical_window {canonical_window!r} is not in the requested windows "
+            f"({', '.join(str(w) for w in windows)})."
+        )
 
     resolved_windows = sorted(multi_results.keys())
-    broker_quality = broker_quality or {}
+    tracked_broker_flow = tracked_broker_flow or {}
 
     by_ticker: dict[str, dict[int, AccumulationCandidate | None]] = {}
     for w, resp in multi_results.items():
@@ -291,21 +351,28 @@ def project_multi_screen_result(
                 signal_evidence_coverage=coverage,
             )
 
-    rows = [
-        ScreenAccumMultiRow(
-            ticker=ticker,
-            candidates_by_window=pw,
-            pattern=classify_multi_window_pattern(
-                resolved_windows,
-                pw,
-                coiled_spring_min_foreign_flow_score,
-                coiled_spring_bb_pctile,
-            ),
-            trend=next((c.trend for w in resolved_windows for c in [pw.get(w)] if c), "—"),
-            broker_quality=broker_quality.get(ticker),
+    rows = []
+    for ticker, pw in sorted_items:
+        canonical_candidate = pw.get(canonical_window)
+        rows.append(
+            ScreenAccumMultiRow(
+                ticker=ticker,
+                candidates_by_window=pw,
+                pattern=classify_multi_window_pattern(
+                    resolved_windows,
+                    pw,
+                    coiled_spring_min_foreign_flow_score,
+                    coiled_spring_bb_pctile,
+                ),
+                trend=next(
+                    (c.trend for w in resolved_windows for c in [pw.get(w)] if c), "—"
+                ),
+                tracked_broker_flow=tracked_broker_flow.get(ticker),
+                canonical_window=canonical_window,
+                canonical_candidate=canonical_candidate,
+                **_canonical_evidence_fields(canonical_candidate),
+            )
         )
-        for ticker, pw in sorted_items
-    ]
 
     screened_at = next(iter(multi_results.values())).screened_at if multi_results else None
 
@@ -321,4 +388,5 @@ def project_multi_screen_result(
         raw_ticker_count=raw_ticker_count,
         projected_row_count=len(rows),
         screened_at=screened_at,
+        canonical_window=canonical_window,
     )

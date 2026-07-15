@@ -1,11 +1,19 @@
 """
-Broker quality signal computation.
+Tracked-broker flow signal computation.
 
-Classifies named brokers by tier (smart-money / noise / neutral) and computes
-a per-ticker flow composition signal from broker summary rows.
+Classifies configured tracked-broker codes by tier (smart-money / noise /
+neutral) and computes a per-ticker flow composition signal from
+`broker_daily_flow` rows.
+
+IMPORTANT SEMANTIC NOTE: `broker_daily_flow` only covers a configured subset
+of tracked broker codes (see BrokerDailyFlow's imbalance note) — it is NOT
+full-market broker composition. This module must never be described as
+"broker quality" in the full-market sense. If full top-broker composition is
+ever needed, it is a separate concept sourced from
+`broker_summaries.top_buyers/top_sellers`, not this module.
 
 This is Application-layer business logic: it makes decisions about what the
-broker flow data MEANS, not just how to fetch or display it.
+tracked-broker flow data MEANS, not just how to fetch or display it.
 
 Layer: Application
 Depends on: Domain ports only (BrokerDataRepository)
@@ -19,8 +27,13 @@ from decimal import Decimal
 
 
 @dataclass(frozen=True)
-class BrokerQualitySnapshot:
-    """Compact broker-flow composition signal for a ticker."""
+class TrackedBrokerFlowSnapshot:
+    """Compact tracked-broker flow composition signal for a ticker.
+
+    Sourced exclusively from `broker_daily_flow` (configured tracked broker
+    codes) — `scope` is always "tracked_brokers" to make this explicit to
+    every consumer, including JSON.
+    """
 
     label: str          # "smart+" | "noise+" | "noise-" | "smart-" | "mixed" | "dist" | "n/a"
     smart_flow: Decimal
@@ -29,6 +42,7 @@ class BrokerQualitySnapshot:
     sessions: int
     through_date: date
     source: str
+    scope: str = "tracked_brokers"
 
     def to_dict(self) -> dict:
         return {
@@ -39,6 +53,7 @@ class BrokerQualitySnapshot:
             "sessions": self.sessions,
             "through": self.through_date.isoformat(),
             "source": self.source,
+            "scope": self.scope,
         }
 
 
@@ -81,83 +96,83 @@ def compute_quality_label(
     return "n/a"
 
 
-def compute_broker_quality(
+def compute_tracked_broker_flow(
     ticker: str,
     broker_repo,
     smart_money_brokers: tuple[str, ...],
     noise_brokers: tuple[str, ...],
     as_of_date: date | None = None,
     window_sessions: int = 5,
-) -> BrokerQualitySnapshot | None:
+) -> TrackedBrokerFlowSnapshot | None:
     """
-    Compute a broker flow quality snapshot for one ticker.
+    Compute a tracked-broker flow snapshot for one ticker.
 
-    Reads the most recent `window_sessions` broker summary rows from the
-    repository and aggregates net flow by tier (smart / noise / neutral).
+    Reads `broker_daily_flow` rows (configured tracked broker codes only —
+    NOT full-market broker composition) up to `as_of_date`, restricts to the
+    most recent `window_sessions` distinct trading dates, and aggregates net
+    flow by tier (smart / noise / neutral).
 
-    Returns None if there are no named-broker rows in the window.
+    Returns None if there are no tracked-broker rows in range.
 
     Args:
-        broker_repo: Any repository with a `get_broker_summaries(ticker, end_date)` method.
+        broker_repo: Any repository with a
+            `get_broker_daily_flows(ticker, end_date)` method.
         smart_money_brokers: Broker codes classified as smart-money.
         noise_brokers: Broker codes classified as noise.
-        as_of_date: Restrict to summaries on or before this date (None = all).
-        window_sessions: How many sessions to look back.
+        as_of_date: Restrict to flows on or before this date (None = all).
+        window_sessions: How many distinct trading dates to look back.
     """
-    summaries = broker_repo.get_broker_summaries(ticker, end_date=as_of_date)
-    detail_summaries = [
-        s for s in summaries if s.top_buyers or s.top_sellers
-    ][-window_sessions:]
-    if not detail_summaries:
+    flows = broker_repo.get_broker_daily_flows(ticker, end_date=as_of_date)
+    if not flows:
+        return None
+
+    recent_dates = sorted({f.date for f in flows})[-window_sessions:]
+    if not recent_dates:
+        return None
+    recent_dates_set = set(recent_dates)
+    recent_flows = [f for f in flows if f.date in recent_dates_set]
+    if not recent_flows:
         return None
 
     smart_flow = Decimal("0")
     noise_flow = Decimal("0")
     neutral_flow = Decimal("0")
 
-    for summary in detail_summaries:
-        for tx in summary.top_buyers:
-            if tx.net_value > Decimal("0"):
-                tier = classify_broker_tier(tx.broker_code, smart_money_brokers, noise_brokers)
-                if tier == "smart":
-                    smart_flow += tx.net_value
-                elif tier == "noise":
-                    noise_flow += tx.net_value
-                else:
-                    neutral_flow += tx.net_value
-        for tx in summary.top_sellers:
-            if tx.net_value < Decimal("0"):
-                tier = classify_broker_tier(tx.broker_code, smart_money_brokers, noise_brokers)
-                if tier == "smart":
-                    smart_flow += tx.net_value
-                elif tier == "noise":
-                    noise_flow += tx.net_value
-                else:
-                    neutral_flow += tx.net_value
+    for flow in recent_flows:
+        tier = classify_broker_tier(flow.broker_code, smart_money_brokers, noise_brokers)
+        if tier == "smart":
+            smart_flow += flow.net_value
+        elif tier == "noise":
+            noise_flow += flow.net_value
+        else:
+            neutral_flow += flow.net_value
 
-    latest = detail_summaries[-1]
-    return BrokerQualitySnapshot(
+    latest = max(recent_flows, key=lambda f: f.date)
+    return TrackedBrokerFlowSnapshot(
         label=compute_quality_label(smart_flow, noise_flow, neutral_flow),
         smart_flow=smart_flow,
         noise_flow=noise_flow,
         neutral_flow=neutral_flow,
-        sessions=len(detail_summaries),
+        sessions=len(recent_dates),
         through_date=latest.date,
         source=latest.source,
     )
 
 
-def compute_broker_quality_batch(
+def compute_tracked_broker_flow_batch(
     tickers: list[str],
     broker_repo,
     smart_money_brokers: tuple[str, ...],
     noise_brokers: tuple[str, ...],
     as_of_date: date | None = None,
-) -> dict[str, BrokerQualitySnapshot]:
-    """Compute broker quality for multiple tickers. Returns {ticker.upper(): snapshot}."""
-    result: dict[str, BrokerQualitySnapshot] = {}
+) -> dict[str, TrackedBrokerFlowSnapshot]:
+    """Compute tracked-broker flow for multiple tickers.
+
+    Returns {ticker.upper(): snapshot}.
+    """
+    result: dict[str, TrackedBrokerFlowSnapshot] = {}
     for ticker in tickers:
-        snapshot = compute_broker_quality(
+        snapshot = compute_tracked_broker_flow(
             ticker=ticker,
             broker_repo=broker_repo,
             smart_money_brokers=smart_money_brokers,

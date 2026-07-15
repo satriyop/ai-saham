@@ -2,6 +2,7 @@
 
 import json
 from datetime import date
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -18,7 +19,7 @@ from tests.adapters.cli.screen_accum_test_fixtures import (
 )
 
 
-def _real_workflow_uc(screen_execute):
+def _real_workflow_uc(screen_execute, broker_repo=None):
     """Wire the real workflow use case (not a fake) so vwap_only/squeeze_only/
     top/sort_by filtering actually runs through the S2 projector, letting
     these tests verify JSON/table parity end-to-end."""
@@ -49,8 +50,9 @@ def _real_workflow_uc(screen_execute):
             coiled_spring_bb_pctile=0.20,
         ),
     )
-    broker_repo = MagicMock()
-    broker_repo.get_broker_summaries.return_value = []
+    if broker_repo is None:
+        broker_repo = MagicMock()
+        broker_repo.get_broker_daily_flows.return_value = []
     return RunAccumulationScreenWorkflowUseCase(
         screen_use_case=screen_mock,
         broker_repository=broker_repo,
@@ -352,6 +354,70 @@ def test_screen_accum_multi_json_matches_table_rows_under_top_sort_squeeze(monke
     assert payload["applied_filters"]["top"] == 1
     assert payload["counts_before_filter"] == 3
     assert payload["counts_after_filter"] == 1
+
+
+def test_screen_accum_multi_renders_tracked_broker_flow_not_broker_quality(monkeypatch):
+    """Tracked Broker Flow rename: table header says 'Tracked Broker Flow',
+    JSON key is 'tracked_broker_flow' (never 'broker_quality'), and scope is
+    explicit as 'tracked_brokers' — never implying full-market composition."""
+    from src.domain.entities.broker_flow import BrokerDailyFlow
+
+    candidate = _candidate(ticker="A")
+
+    def screen_execute(req):
+        return AccumulationScreenResponse(
+            candidates=[candidate],
+            screened_at=date(2026, 7, 14),
+            window_days=req.window_days,
+            total_tickers_checked=1,
+            tickers_skipped=0,
+            provider="fake",
+        )
+
+    broker_repo = MagicMock()
+    broker_repo.get_broker_daily_flows.return_value = [
+        BrokerDailyFlow(
+            ticker="A",
+            broker_code="AK",
+            broker_name="AK",
+            date=date(2026, 7, 14),
+            buy_lot=100,
+            sell_lot=0,
+            net_lot=100,
+            buy_value=Decimal("10000000"),
+            sell_value=Decimal("0"),
+            net_value=Decimal("10000000"),
+            avg_buy_price=Decimal("1000"),
+            avg_sell_price=Decimal("1000"),
+            avg_price=Decimal("1000"),
+            buy_pct=1.0,
+            sell_pct=0.0,
+        )
+    ]
+
+    workflow_uc = _real_workflow_uc(screen_execute, broker_repo=broker_repo)
+    monkeypatch.setattr(
+        accum_cli,
+        "create_run_accumulation_screen_workflow_use_case",
+        lambda **kwargs: workflow_uc,
+    )
+
+    table_result = runner.invoke(app, ["screen", "accum", "A", "--multi"])
+    assert table_result.exit_code == 0, table_result.output
+    assert "Tracked Broker Flow" in table_result.output
+    assert "Broker Flow" not in table_result.output.replace("Tracked Broker Flow", "")
+
+    json_result = runner.invoke(
+        app, ["screen", "accum", "A", "--multi", "--format", "json"]
+    )
+    assert json_result.exit_code == 0, json_result.output
+    payload = json.loads(json_result.output)
+    entry = payload["tickers"]["A"]
+
+    assert "tracked_broker_flow" in entry
+    assert "broker_quality" not in entry
+    assert entry["tracked_broker_flow"]["scope"] == "tracked_brokers"
+    assert entry["tracked_broker_flow"]["label"] == "smart+"
 
 
 def test_screen_accum_multi_json_includes_typed_freshness_per_window(monkeypatch):

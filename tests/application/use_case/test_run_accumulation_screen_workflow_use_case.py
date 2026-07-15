@@ -264,17 +264,41 @@ def test_multi_mode_passthrough_min_piotroski():
     assert req.min_piotroski == 5
 
 
-def test_multi_mode_broker_quality():
+def test_multi_mode_tracked_broker_flow():
     screen_mock = MagicMock()
     screen_mock.execute.side_effect = lambda req: _screen_response(window_days=req.window_days)
 
     broker_repo = MagicMock()
-    broker_repo.get_broker_summaries.return_value = []
+    broker_repo.get_broker_daily_flows.return_value = []
     uc = _make_uc(screen_use_case=screen_mock, broker_repo=broker_repo)
 
     result = uc.execute(_multi_request(windows=[7]))
 
-    assert isinstance(result.broker_quality, dict)
+    assert isinstance(result.tracked_broker_flow, dict)
+
+
+def test_multi_mode_canonical_window_defaults_to_7():
+    screen_mock = MagicMock()
+    screen_mock.execute.side_effect = lambda req: _screen_response(window_days=req.window_days)
+    uc = _make_uc(screen_use_case=screen_mock)
+
+    result = uc.execute(_multi_request(windows=[7, 30, 90]))
+
+    assert result.multi_projection is not None
+    assert result.multi_projection.canonical_window == 7
+
+
+def test_multi_mode_canonical_window_falls_back_to_first_requested_window():
+    """S7: when 7 is not among the requested windows, canonical window falls
+    back to the first requested window rather than failing."""
+    screen_mock = MagicMock()
+    screen_mock.execute.side_effect = lambda req: _screen_response(window_days=req.window_days)
+    uc = _make_uc(screen_use_case=screen_mock)
+
+    result = uc.execute(_multi_request(windows=[30, 90]))
+
+    assert result.multi_projection is not None
+    assert result.multi_projection.canonical_window == 30
 
 
 def test_multi_mode_writes_zero_candidate_observations():
@@ -295,7 +319,7 @@ def test_multi_mode_writes_zero_candidate_observations():
         candidate_observations_repository=spy_repo,
     )
     broker_repo = MagicMock()
-    broker_repo.get_broker_summaries.return_value = []
+    broker_repo.get_broker_daily_flows.return_value = []
     uc = _make_uc(screen_use_case=real_screen_use_case, broker_repo=broker_repo)
 
     uc.execute(_multi_request(tickers=["BBCA"], windows=[7]))

@@ -108,7 +108,7 @@ def _fake_workflow_result(**overrides):
         single_projection=None,
         multi_results={},
         multi_projection=None,
-        broker_quality={},
+        tracked_broker_flow={},
         strategy_signals={},
         save_result=None,
         warnings=(),
@@ -126,15 +126,17 @@ def _fake_workflow_result(**overrides):
         )
 
     if params["multi_results"] and params["multi_projection"] is None:
+        resolved_windows = sorted(params["multi_results"].keys())
         params["multi_projection"] = project_multi_screen_result(
             params["multi_results"],
-            broker_quality=params["broker_quality"],
-            windows=sorted(params["multi_results"].keys()),
+            tracked_broker_flow=params["tracked_broker_flow"],
+            windows=resolved_windows,
             top=len(next(iter(params["multi_results"].values())).candidates) or 1,
             sort_by="avg",
             squeeze_only=False,
             coiled_spring_min_foreign_flow_score=50.0,
             coiled_spring_bb_pctile=0.20,
+            canonical_window=7 if 7 in resolved_windows else resolved_windows[0],
         )
 
     return RunAccumulationScreenWorkflowResult(**params)

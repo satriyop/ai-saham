@@ -337,15 +337,9 @@ def _render_multi(
     if output_format == "json":
         tickers_payload: dict = {}
         for row in projection.rows:
-            entry = {
-                f"{w}_sessions": (c.to_dict() if c is not None else None)
-                for w, c in row.candidates_by_window.items()
-            }
-            entry["pattern"] = row.pattern
-            entry["trend"] = row.trend
-            entry["broker_quality"] = (
-                row.broker_quality.to_dict() if row.broker_quality else None
-            )
+            entry = row.to_dict()
+            entry.update(entry.pop("windows"))
+            entry.pop("ticker", None)
             tickers_payload[row.ticker] = entry
         partial_result = any(
             resp.tickers_skipped > 0 for resp in result.multi_results.values()
@@ -380,6 +374,7 @@ def _render_multi(
         total_tickers_checked=sample_resp.total_tickers_checked if sample_resp else 0,
         provider=sample_resp.provider if sample_resp else "",
         include_explanation=explain,
+        canonical_window=projection.canonical_window,
     )
 
 

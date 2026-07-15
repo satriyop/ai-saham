@@ -1,16 +1,22 @@
-"""Tests for BrokerQualitySnapshot, classify_broker_tier, and compute functions."""
+"""Tests for TrackedBrokerFlowSnapshot, classify_broker_tier, and compute functions.
+
+`compute_tracked_broker_flow` sources exclusively from `broker_daily_flow`
+(via `get_broker_daily_flows()`) — configured tracked broker codes only, NOT
+full-market broker composition. `get_broker_summaries()` must never be called
+by this module; that is a separate data product.
+"""
 
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock
 
-from src.application.services.broker_quality import (
-    BrokerQualitySnapshot,
+from src.application.services.tracked_broker_flow import (
+    TrackedBrokerFlowSnapshot,
     classify_broker_tier,
-    compute_broker_quality,
-    compute_broker_quality_batch,
     compute_quality_label,
+    compute_tracked_broker_flow,
+    compute_tracked_broker_flow_batch,
 )
 
 _SMART = ("AK", "BK", "ZP")
@@ -74,98 +80,104 @@ def test_label_na_when_all_zero():
     assert label == "n/a"
 
 
-# ── compute_broker_quality (unit with mock repo) ───────────────────────────────
+# ── compute_tracked_broker_flow (unit with mock repo) ──────────────────────────
 
 @dataclass
-class _FakeTx:
+class _FakeDailyFlow:
     broker_code: str
     net_value: Decimal
-
-
-@dataclass
-class _FakeSummary:
-    top_buyers: list
-    top_sellers: list
     date: date
     source: str = "stockbit"
 
 
-def _make_repo(summaries):
+def _make_repo(flows):
     repo = MagicMock()
-    repo.get_broker_summaries.return_value = summaries
+    repo.get_broker_daily_flows.return_value = flows
     return repo
 
 
-def test_compute_broker_quality_returns_none_when_no_named_rows():
-    repo = _make_repo([_FakeSummary(top_buyers=[], top_sellers=[], date=date(2026, 6, 20))])
-    result = compute_broker_quality("BBCA", repo, _SMART, _NOISE)
+def test_compute_tracked_broker_flow_returns_none_when_no_rows():
+    repo = _make_repo([])
+    result = compute_tracked_broker_flow("BBCA", repo, _SMART, _NOISE)
     assert result is None
 
 
-def test_compute_broker_quality_basic_smart_buying():
-    summaries = [
-        _FakeSummary(
-            top_buyers=[_FakeTx("AK", Decimal("100"))],
-            top_sellers=[],
-            date=date(2026, 6, 20),
-        )
-    ]
-    result = compute_broker_quality("BBCA", _make_repo(summaries), _SMART, _NOISE)
+def test_compute_tracked_broker_flow_basic_smart_buying():
+    flows = [_FakeDailyFlow("AK", Decimal("100"), date(2026, 6, 20))]
+    result = compute_tracked_broker_flow("BBCA", _make_repo(flows), _SMART, _NOISE)
     assert result is not None
     assert result.smart_flow == Decimal("100")
     assert result.noise_flow == Decimal("0")
     assert result.label == "smart+"
     assert result.sessions == 1
     assert result.through_date == date(2026, 6, 20)
+    assert result.scope == "tracked_brokers"
 
 
-def test_compute_broker_quality_mixed_smart_and_noise():
-    summaries = [
-        _FakeSummary(
-            top_buyers=[_FakeTx("AK", Decimal("50")), _FakeTx("YP", Decimal("60"))],
-            top_sellers=[],
-            date=date(2026, 6, 20),
-        )
+def test_compute_tracked_broker_flow_mixed_smart_and_noise():
+    flows = [
+        _FakeDailyFlow("AK", Decimal("50"), date(2026, 6, 20)),
+        _FakeDailyFlow("YP", Decimal("60"), date(2026, 6, 20)),
     ]
-    result = compute_broker_quality("BBCA", _make_repo(summaries), _SMART, _NOISE)
+    result = compute_tracked_broker_flow("BBCA", _make_repo(flows), _SMART, _NOISE)
     assert result is not None
     assert result.smart_flow == Decimal("50")
     assert result.noise_flow == Decimal("60")
     assert result.label == "noise+"
 
 
-def test_compute_broker_quality_respects_window_sessions():
-    summaries = [
-        _FakeSummary(top_buyers=[_FakeTx("AK", Decimal("10"))], top_sellers=[], date=date(2026, 6, i))
-        for i in range(1, 11)
+def test_compute_tracked_broker_flow_respects_window_sessions():
+    flows = [
+        _FakeDailyFlow("AK", Decimal("10"), date(2026, 6, i)) for i in range(1, 11)
     ]
-    result = compute_broker_quality("BBCA", _make_repo(summaries), _SMART, _NOISE, window_sessions=3)
+    result = compute_tracked_broker_flow(
+        "BBCA", _make_repo(flows), _SMART, _NOISE, window_sessions=3
+    )
     assert result is not None
     assert result.sessions == 3
 
 
-# ── compute_broker_quality_batch ───────────────────────────────────────────────
+def test_compute_tracked_broker_flow_counts_distinct_dates_not_rows():
+    """Sessions must count distinct trading dates, not per-broker rows —
+    broker_daily_flow has multiple broker rows per date."""
+    flows = [
+        _FakeDailyFlow("AK", Decimal("10"), date(2026, 6, 20)),
+        _FakeDailyFlow("YP", Decimal("5"), date(2026, 6, 20)),
+        _FakeDailyFlow("BK", Decimal("15"), date(2026, 6, 19)),
+    ]
+    result = compute_tracked_broker_flow("BBCA", _make_repo(flows), _SMART, _NOISE)
+    assert result is not None
+    assert result.sessions == 2
+
+
+def test_compute_tracked_broker_flow_calls_get_broker_daily_flows_not_summaries():
+    repo = _make_repo([_FakeDailyFlow("AK", Decimal("10"), date(2026, 6, 20))])
+    compute_tracked_broker_flow("BBCA", repo, _SMART, _NOISE)
+
+    repo.get_broker_daily_flows.assert_called_once()
+    repo.get_broker_summaries.assert_not_called()
+
+
+# ── compute_tracked_broker_flow_batch ──────────────────────────────────────────
 
 def test_batch_returns_dict_by_ticker():
-    summaries = [
-        _FakeSummary(top_buyers=[_FakeTx("AK", Decimal("100"))], top_sellers=[], date=date(2026, 6, 20))
-    ]
-    repo = _make_repo(summaries)
-    result = compute_broker_quality_batch(["bbca", "BBRI"], repo, _SMART, _NOISE)
+    flows = [_FakeDailyFlow("AK", Decimal("100"), date(2026, 6, 20))]
+    repo = _make_repo(flows)
+    result = compute_tracked_broker_flow_batch(["bbca", "BBRI"], repo, _SMART, _NOISE)
     assert "BBCA" in result
     assert "BBRI" in result
 
 
-def test_batch_excludes_tickers_with_no_named_rows():
-    repo = _make_repo([_FakeSummary(top_buyers=[], top_sellers=[], date=date(2026, 6, 20))])
-    result = compute_broker_quality_batch(["BBCA"], repo, _SMART, _NOISE)
+def test_batch_excludes_tickers_with_no_rows():
+    repo = _make_repo([])
+    result = compute_tracked_broker_flow_batch(["BBCA"], repo, _SMART, _NOISE)
     assert result == {}
 
 
-# ── BrokerQualitySnapshot.to_dict ─────────────────────────────────────────────
+# ── TrackedBrokerFlowSnapshot.to_dict ──────────────────────────────────────────
 
 def test_to_dict_serialization():
-    snap = BrokerQualitySnapshot(
+    snap = TrackedBrokerFlowSnapshot(
         label="smart+",
         smart_flow=Decimal("100"),
         noise_flow=Decimal("0"),
@@ -179,3 +191,4 @@ def test_to_dict_serialization():
     assert d["smart_flow"] == "100"
     assert d["through"] == "2026-06-20"
     assert d["sessions"] == 3
+    assert d["scope"] == "tracked_brokers"

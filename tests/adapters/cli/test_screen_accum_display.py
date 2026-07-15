@@ -19,6 +19,7 @@ from src.application.services.screen_accum_result_projector import (
 )
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
+from src.domain.value_objects.setup_phase import SetupPhaseSnapshot, SetupPhaseState
 from src.domain.value_objects.signal_assessment import SignalStrength
 from src.domain.value_objects.trade_setup import SetupAction, TradeSetup
 from src.infrastructure.config.accumulation_screener_config import load_accumulation_screener_config
@@ -207,13 +208,14 @@ def test_display_multi_renders_rich_accumulation_panel(capsys):
 
     projection = project_multi_screen_result(
         results,
-        broker_quality=None,
+        tracked_broker_flow=None,
         windows=[7, 30],
         top=10,
         sort_by="avg",
         squeeze_only=False,
         coiled_spring_min_foreign_flow_score=_CFG.coiled_spring_min_foreign_flow_score,
         coiled_spring_bb_pctile=_CFG.coiled_spring_bb_pctile,
+        canonical_window=7,
     )
 
     display_multi(
@@ -230,7 +232,95 @@ def test_display_multi_renders_rich_accumulation_panel(capsys):
     assert "BBCA" in out
     assert "Pattern" in out
     assert "Run Context" not in out
-    assert "Broker Flow" in out
+    assert "Tracked Broker Flow" in out
+
+
+def test_display_multi_renders_canonical_signal_risk_phase_data_next(capsys):
+    """S7: multi table must render the canonical window's Signal/Risk/Phase/
+    Data/Next evidence instead of discarding it."""
+    setup_phase = SetupPhaseSnapshot(
+        current_phase=SetupPhaseState.ACCUMULATION,
+        previous_phase=None,
+        phase_age_sessions=1,
+        phase_strength=0.6,
+        coverage_score=0.67,
+        conviction_score=0.4,
+        sequence_valid=True,
+    )
+    risk_assessment = RiskAssessment(
+        rationale=("ok",),
+        snapshot_date=date(2026, 6, 19),
+        indicators=IndicatorSnapshot(
+            date=date(2026, 6, 19),
+            sma=Decimal("1000"),
+            ema=Decimal("1010"),
+            rsi=Decimal("55"),
+        ),
+        gate_triggered=None,
+        gate_is_structural=None,
+        gate_confidence=None,
+    )
+    trade_setup = TradeSetup(
+        ticker="BBCA",
+        snapshot_date=date(2026, 6, 19),
+        action=SetupAction.WATCH,
+        signal_score=72,
+        signal_score_raw=72,
+        signal_strength=SignalStrength.MODERATE,
+        blocking_gates=(),
+        regime=None,
+        signal_multiplier=1.0,
+        gate_tightening=False,
+        rationale="watch",
+    )
+    candidate = _candidate(
+        setup_phase=setup_phase,
+        risk_assessment=risk_assessment,
+        trade_setup=trade_setup,
+        latest_candle_date=date(2026, 6, 19),
+        latest_broker_date=date(2026, 6, 19),
+    )
+    results = {
+        7: AccumulationScreenResponse(
+            candidates=[candidate],
+            screened_at=date(2026, 6, 19),
+            window_days=7,
+            total_tickers_checked=1,
+            tickers_skipped=0,
+            provider="stockbit",
+        ),
+    }
+
+    projection = project_multi_screen_result(
+        results,
+        tracked_broker_flow=None,
+        windows=[7],
+        top=10,
+        sort_by="avg",
+        squeeze_only=False,
+        coiled_spring_min_foreign_flow_score=_CFG.coiled_spring_min_foreign_flow_score,
+        coiled_spring_bb_pctile=_CFG.coiled_spring_bb_pctile,
+        canonical_window=7,
+    )
+
+    display_multi(
+        rows=projection.rows,
+        universe_label="lq45",
+        windows=projection.resolved_windows,
+        screened_at=date(2026, 6, 19),
+        display_config=_CFG,
+        canonical_window=projection.canonical_window,
+    )
+
+    out = capsys.readouterr().out
+    assert "Signal" in out
+    assert "Risk" in out
+    assert "Phase" in out
+    assert "Data" in out
+    assert "Next" in out
+    assert "ACCUMULATION" in out
+    assert "WATCH" in out
+    assert "N/A" in out  # broker quality missing
 
 
 def test_display_results_renders_phase_column_and_note(capsys):
