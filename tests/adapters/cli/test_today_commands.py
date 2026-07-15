@@ -102,6 +102,7 @@ def test_today_uses_loaded_config_and_not_global(tmp_path: Path):
         mock_response.stale_count = 0
         mock_response.regime = None
         mock_response.opening_candidates = []
+        mock_response.market_wide_opening_observations = []
         mock_response.accumulation_candidates = []
         mock_response.warnings = []
         mock_response.live_session_date = date(2026, 6, 19)
@@ -348,3 +349,118 @@ def test_today_marks_partial_accumulation_output():
         assert result.exit_code == 0
         assert "PARTIAL DATA" in result.stdout
         assert "BBCA" in result.stdout
+
+
+def test_today_renders_market_wide_pre_open_observations_separately():
+    from unittest.mock import MagicMock, patch
+
+    from src.application.use_case.daily_briefing_use_case import (
+        DailyBriefingResponse,
+        OpeningBriefingCandidate,
+    )
+
+    fake_response = DailyBriefingResponse(
+        live_session_date=date(2026, 6, 19),
+        latest_completed_eod_date=date(2026, 6, 19),
+        opening_snapshot_date=date(2026, 6, 19),
+        is_historical=True,
+        universe="lq45",
+        universe_count=45,
+        data_freshness=[],
+        stale_count=0,
+        readiness_items=[],
+        overall_authority="READY",
+        regime=None,
+        opening_candidates=[
+            OpeningBriefingCandidate(
+                ticker="A",
+                opening_setup="PRIME",
+                iev=1000,
+                iep=1050,
+                trend="UP",
+            )
+        ],
+        market_wide_opening_observations=[
+            OpeningBriefingCandidate(
+                ticker="C",
+                opening_setup="WATCH",
+                iev=2000,
+                iep=2050,
+                trend="DOWN",
+            )
+        ],
+        accumulation_candidates=[],
+        warnings=[],
+    )
+
+    with patch("src.adapters.cli.today_commands.DailyBriefingUseCase") as mock_uc_class:
+        mock_uc = MagicMock()
+        mock_uc_class.return_value = mock_uc
+        mock_uc.execute.return_value = fake_response
+
+        result = runner.invoke(app, ["today", "--universe", "lq45", "--date", "2026-06-19"])
+        assert result.exit_code == 0
+        assert "Top Pre-Open Candidates" in result.stdout
+        assert "Market-Wide Pre-Open Observations" in result.stdout
+        assert "A" in result.stdout
+        assert "C" in result.stdout
+
+
+def test_today_does_not_render_market_wide_ticker_in_universe_pre_open_table():
+    from unittest.mock import MagicMock, patch
+
+    from src.application.use_case.daily_briefing_use_case import (
+        DailyBriefingResponse,
+        OpeningBriefingCandidate,
+    )
+
+    fake_response = DailyBriefingResponse(
+        live_session_date=date(2026, 6, 19),
+        latest_completed_eod_date=date(2026, 6, 19),
+        opening_snapshot_date=date(2026, 6, 19),
+        is_historical=True,
+        universe="lq45",
+        universe_count=45,
+        data_freshness=[],
+        stale_count=0,
+        readiness_items=[],
+        overall_authority="READY",
+        regime=None,
+        opening_candidates=[
+            OpeningBriefingCandidate(
+                ticker="A",
+                opening_setup="PRIME",
+                iev=1000,
+                iep=1050,
+                trend="UP",
+            )
+        ],
+        market_wide_opening_observations=[
+            OpeningBriefingCandidate(
+                ticker="C",
+                opening_setup="WATCH",
+                iev=2000,
+                iep=2050,
+                trend="DOWN",
+            )
+        ],
+        accumulation_candidates=[],
+        warnings=[],
+    )
+
+    with patch("src.adapters.cli.today_commands.DailyBriefingUseCase") as mock_uc_class:
+        mock_uc = MagicMock()
+        mock_uc_class.return_value = mock_uc
+        mock_uc.execute.return_value = fake_response
+
+        result = runner.invoke(app, ["today", "--universe", "lq45", "--date", "2026-06-19"])
+        assert result.exit_code == 0
+
+        stdout = result.stdout
+        idx_universe_title = stdout.index("Top Pre-Open Candidates")
+        idx_market_wide_title = stdout.index("Market-Wide Pre-Open Observations")
+
+        # Ticker C should not be rendered between universe title and market-wide title
+        assert "│ C " not in stdout[idx_universe_title:idx_market_wide_title]
+        # Ticker C should be rendered after market-wide title
+        assert "│ C " in stdout[idx_market_wide_title:]

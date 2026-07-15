@@ -409,3 +409,109 @@ def test_daily_briefing_ready_when_all_critical_sources_ready(tmp_path, monkeypa
     assert candles_readiness.status == "READY"
     assert broker_readiness.status == "READY"
     assert response.overall_authority == "READY"
+
+
+def test_daily_briefing_splits_opening_snapshot_by_universe_scope(tmp_path, monkeypatch):
+    import json
+    opening_dir = tmp_path / "opening"
+    date_dir = opening_dir / "20260619"
+    date_dir.mkdir(parents=True)
+
+    snapshot_file = date_dir / "snapshot.json"
+    snapshot_data = {
+        "captured_at": "2026-06-19T09:05:00+07:00",
+        "candidates": [
+            {"ticker": "a", "opening_setup": "PRIME"},
+            {"ticker": "c", "opening_setup": "WATCH"}
+        ]
+    }
+    snapshot_file.write_text(json.dumps(snapshot_data))
+
+    market_repo = MagicMock()
+    market_repo.get_date_range.return_value = None
+    broker_repo = MagicMock()
+    broker_repo.get_date_range.return_value = None
+
+    regime_uc = MagicMock()
+    accum_uc = MagicMock()
+    accum_uc.execute.return_value = MagicMock(candidates=[])
+
+    monkeypatch.setattr(
+        "src.application.use_case.daily_briefing_use_case.load_universe",
+        lambda *a, **kw: ["A", "B"],
+    )
+
+    use_case = DailyBriefingUseCase(
+        market_repository=market_repo,
+        broker_repository=broker_repo,
+        regime_use_case=regime_uc,
+        accumulation_use_case=accum_uc,
+        universe_loader=MagicMock(),
+    )
+
+    response = use_case.execute(
+        DailyBriefingRequest(
+            universe="lq45",
+            as_of_date=date(2026, 6, 19),
+            opening_data_dir=opening_dir,
+        )
+    )
+
+    assert response.opening_snapshot_date == date(2026, 6, 19)
+    assert len(response.opening_candidates) == 1
+    assert response.opening_candidates[0].ticker == "A"
+    assert response.opening_candidates[0].opening_setup == "PRIME"
+
+    assert len(response.market_wide_opening_observations) == 1
+    assert response.market_wide_opening_observations[0].ticker == "C"
+    assert response.market_wide_opening_observations[0].opening_setup == "WATCH"
+
+
+def test_daily_briefing_empty_universe_treats_opening_rows_as_market_wide(tmp_path, monkeypatch):
+    import json
+    opening_dir = tmp_path / "opening"
+    date_dir = opening_dir / "20260619"
+    date_dir.mkdir(parents=True)
+
+    snapshot_file = date_dir / "snapshot.json"
+    snapshot_data = {
+        "captured_at": "2026-06-19T09:05:00+07:00",
+        "candidates": [
+            {"ticker": "A", "opening_setup": "PRIME"}
+        ]
+    }
+    snapshot_file.write_text(json.dumps(snapshot_data))
+
+    market_repo = MagicMock()
+    market_repo.get_date_range.return_value = None
+    broker_repo = MagicMock()
+    broker_repo.get_date_range.return_value = None
+
+    regime_uc = MagicMock()
+    accum_uc = MagicMock()
+    accum_uc.execute.return_value = MagicMock(candidates=[])
+
+    monkeypatch.setattr(
+        "src.application.use_case.daily_briefing_use_case.load_universe",
+        lambda *a, **kw: [],
+    )
+
+    use_case = DailyBriefingUseCase(
+        market_repository=market_repo,
+        broker_repository=broker_repo,
+        regime_use_case=regime_uc,
+        accumulation_use_case=accum_uc,
+        universe_loader=MagicMock(),
+    )
+
+    response = use_case.execute(
+        DailyBriefingRequest(
+            universe="lq45",
+            as_of_date=date(2026, 6, 19),
+            opening_data_dir=opening_dir,
+        )
+    )
+
+    assert response.opening_candidates == []
+    assert len(response.market_wide_opening_observations) == 1
+    assert response.market_wide_opening_observations[0].ticker == "A"

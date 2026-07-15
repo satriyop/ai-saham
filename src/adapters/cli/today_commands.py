@@ -186,9 +186,38 @@ def today(
 
             opening.add_row(candidate.ticker, setup_text, iev, iep, trend_text)
     else:
-        opening.add_row(
-            "-", "No saved opening snapshot", "-", "-", "Run: saham learn snapshot --force",
-        )
+        if response.opening_snapshot_date is None:
+            opening.add_row(
+                "-", "No saved opening snapshot", "-", "-", "Run: saham learn snapshot --force",
+            )
+        else:
+            opening.add_row(
+                "-", "No universe-scoped pre-open candidates", "-", "-", "-",
+            )
+
+    market_wide = None
+    if response.market_wide_opening_observations:
+        market_wide = compact_table()
+        market_wide.add_column("Ticker", style="bold")
+        market_wide.add_column("Opening Setup")
+        market_wide.add_column("IEV", justify="right")
+        market_wide.add_column("IEP", justify="right")
+        market_wide.add_column("Trend")
+        for candidate in response.market_wide_opening_observations:
+            iev = f"{candidate.iev:,}" if candidate.iev is not None else "-"
+            iep = f"{candidate.iep:,}" if candidate.iep is not None else "-"
+
+            # Color the opening-session setup label.
+            setup_style = "green" if candidate.opening_setup == "PRIME" else (
+                "yellow" if candidate.opening_setup == "WATCH" else "red"
+            )
+            setup_text = f"[{setup_style}]{candidate.opening_setup}[/{setup_style}]"
+
+            trend_map = {"UP": "green", "DOWN": "red", "SIDE": "yellow"}
+            trend_style = trend_map.get(str(candidate.trend).upper(), "white")
+            trend_text = f"[{trend_style}]{candidate.trend or '-'}[/{trend_style}]"
+
+            market_wide.add_row(candidate.ticker, setup_text, iev, iep, trend_text)
 
     accumulation = compact_table()
     accumulation.add_column("Ticker", style="bold")
@@ -253,6 +282,12 @@ def today(
         Text("Top Pre-Open Candidates", style="bold cyan"),
         opening,
     ]
+
+    if market_wide is not None:
+        sections.extend([
+            Text("Market-Wide Pre-Open Observations", style="bold cyan"),
+            market_wide,
+        ])
 
     # Section title for accumulation candidates
     accum_title = Text("Top Accumulation Candidates", style="bold cyan")

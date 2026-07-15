@@ -55,7 +55,7 @@
 | 2 | `T2` | P0 | Bugfix | Add remaining CLI smoke tests | ✅ `b3c6de1` |
 | 3 | `T3` | P0 | Refactor | Separate three date clocks in briefing use case | ✅ RESOLVED |
 | 4 | `T4` | P0 | Feature | Fail-closed per-dataset readiness + ranking suppression | ✅ RESOLVED |
-| 5 | `T5` | P0 | Bugfix | Enforce universe scope in pre-open opening candidates | ❌ Open |
+| 5 | `T5` | P0 | Bugfix | Enforce universe scope in pre-open opening candidates | ✅ RESOLVED |
 | 6 | `T6` | P0 | Refactor | Rename to verdict-first pre-open presentation | ❌ Open |
 | 7 | `T7` | P0 | Feature | Canonical accumulation funnel (Signal + Risk + TradeSetup) | ❌ Open |
 | 8 | `T8` | P0 | Feature | Bounded swing shortlist assessment | ❌ Open |
@@ -345,17 +345,18 @@ Layer plan:
 
 `daily_briefing_use_case.py:192-204` reads all candidates from `snapshot.json` without filtering against `universe_tickers`. RBMS and BNBR appeared in an LQ45 briefing because the opening snapshot is market-wide.
 
-### Decision Required (Human Must Decide)
+### Decision
 
-- **Option A:** Filter candidates in `_opening_candidates()` to only include tickers in `universe_tickers`. Pass `universe_tickers` into the method.
-- **Option B:** Show two scopes: "Universe-filtered" and "Market-wide observations" labeled separately. Return both from the use case in separate fields.
+Use **Option B**.
 
-> [!NOTE]
-> Option B preserves market-wide auction context, which has independent informational value. Option A is simpler but loses the market-wide signal.
+The opening snapshot is market-wide by nature. Do not discard outside-universe auction context, but never show it inside the universe-scoped pre-open list. Split the response into two explicitly labeled scopes:
+
+- `opening_candidates` — only tickers inside the requested universe
+- `market_wide_opening_observations` — outside-universe names from the same snapshot, clearly labeled as market-wide context
 
 ### Desired Outcome
 
-No non-universe ticker appears under the universe-scoped pre-open section without explicit scope labeling.
+No non-universe ticker appears under the universe-scoped pre-open section. Outside-universe names may still appear, but only under a separately labeled market-wide observations scope.
 
 ### Non-Goals
 
@@ -365,13 +366,7 @@ No non-universe ticker appears under the universe-scoped pre-open section withou
 ### Layer Plan (Agent Must State Before Coding)
 
 ```md
-Layer plan (Option A):
-- Domain: not touched
-- Application: daily_briefing_use_case.py — pass universe_tickers to _opening_candidates(), filter
-- Infrastructure: not touched
-- Adapter: not touched
-
-Layer plan (Option B):
+Layer plan:
 - Domain: not touched
 - Application: daily_briefing_use_case.py — split opening candidates into two lists in response DTO
 - Infrastructure: not touched
@@ -380,10 +375,11 @@ Layer plan (Option B):
 
 ### Acceptance Criteria
 
-- [ ] Non-universe tickers do not appear under the universe-scoped pre-open section without a label
-- [ ] Test: universe = [A, B], snapshot has [A, C] → only A in universe section (Option A) or C in market-wide section (Option B)
-- [ ] Full test suite passes
-- [ ] `git diff --check` clean
+- [x] Non-universe tickers do not appear under the universe-scoped pre-open section
+- [x] Outside-universe tickers appear only under a clearly labeled market-wide observations section
+- [x] Test: universe = [A, B], snapshot has [A, C] → A appears in universe section and C appears in market-wide section
+- [x] Full test suite passes
+- [x] `git diff --check` clean
 
 ---
 

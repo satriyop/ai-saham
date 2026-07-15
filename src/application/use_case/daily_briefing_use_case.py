@@ -63,6 +63,7 @@ class OpeningBriefingCandidate:
 @dataclass(frozen=True)
 class OpeningBriefingSnapshot:
     candidates: list[OpeningBriefingCandidate]
+    market_wide_observations: list[OpeningBriefingCandidate]
     snapshot_date: date | None
 
 
@@ -89,6 +90,7 @@ class DailyBriefingResponse:
     overall_authority: OverallAuthority
     regime: "MarketContext | None" = None
     opening_candidates: list[OpeningBriefingCandidate] = field(default_factory=list)
+    market_wide_opening_observations: list[OpeningBriefingCandidate] = field(default_factory=list)
     accumulation_candidates: list[AccumulationCandidate] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -168,8 +170,14 @@ class DailyBriefingUseCase:
             except Exception as exc:
                 warnings.append(f"Regime unavailable: {exc}")
 
-        snapshot = self._opening_snapshot(request, live_session_date, warnings)
+        snapshot = self._opening_snapshot(
+            request=request,
+            live_session_date=live_session_date,
+            universe_tickers=universe_tickers,
+            warnings=warnings,
+        )
         opening_candidates = snapshot.candidates
+        market_wide_opening_observations = snapshot.market_wide_observations
         opening_snapshot_date = snapshot.snapshot_date
 
         regime_available = regime is not None
@@ -221,6 +229,7 @@ class DailyBriefingUseCase:
             overall_authority=overall_authority,
             regime=regime,
             opening_candidates=opening_candidates,
+            market_wide_opening_observations=market_wide_opening_observations,
             accumulation_candidates=accumulation_candidates,
             warnings=warnings,
         )
@@ -401,18 +410,27 @@ class DailyBriefingUseCase:
         self,
         request: DailyBriefingRequest,
         live_session_date: date,
+        universe_tickers: list[str],
         warnings: list[str],
     ) -> OpeningBriefingSnapshot:
         path = request.opening_data_dir / live_session_date.strftime("%Y%m%d") / "snapshot.json"
         if not path.exists():
             warnings.append(f"No opening snapshot at {path}")
-            return OpeningBriefingSnapshot(candidates=[], snapshot_date=None)
+            return OpeningBriefingSnapshot(
+                candidates=[],
+                market_wide_observations=[],
+                snapshot_date=None,
+            )
 
         try:
             data = json.loads(path.read_text())
         except Exception as exc:
             warnings.append(f"Opening snapshot unreadable: {exc}")
-            return OpeningBriefingSnapshot(candidates=[], snapshot_date=None)
+            return OpeningBriefingSnapshot(
+                candidates=[],
+                market_wide_observations=[],
+                snapshot_date=None,
+            )
 
         snapshot_date = None
         if "captured_at" not in data:
@@ -433,19 +451,30 @@ class DailyBriefingUseCase:
                     warnings.append("Opening snapshot capture timestamp is invalid")
                     snapshot_date = None
 
-        candidates = [
-            OpeningBriefingCandidate(
-                ticker=str(row.get("ticker", "")).upper(),
+        universe_set = {ticker.upper() for ticker in universe_tickers}
+        candidates = []
+        market_wide_observations = []
+
+        for row in data.get("candidates", []):
+            ticker = row.get("ticker")
+            if not ticker:
+                continue
+            ticker_upper = str(ticker).upper()
+            candidate = OpeningBriefingCandidate(
+                ticker=ticker_upper,
                 opening_setup=str(row.get("opening_setup", "?")),
                 iev=row.get("iev"),
                 iep=row.get("iep"),
                 trend=row.get("trend"),
                 foreign_flow_score=row.get("foreign_flow_score", row.get("accum_score")),
             )
-            for row in data.get("candidates", [])
-            if row.get("ticker")
-        ]
+            if ticker_upper in universe_set:
+                candidates.append(candidate)
+            else:
+                market_wide_observations.append(candidate)
+
         return OpeningBriefingSnapshot(
             candidates=candidates[: request.top],
+            market_wide_observations=market_wide_observations[: request.top],
             snapshot_date=snapshot_date,
         )
