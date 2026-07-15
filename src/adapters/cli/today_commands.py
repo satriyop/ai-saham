@@ -27,8 +27,6 @@ from src.adapters.cli.stock_analysis_workflow_dependencies import (
     create_stock_analysis_workflow_dependencies,
 )
 from src.adapters.cli.view_market_context_display import (
-    REGIME_DISPLAY_LABEL,
-    context_conviction_score,
     context_factor_value,
     context_regime_style,
 )
@@ -135,6 +133,24 @@ def _accumulation_screen_table(candidates: list[DailyAccumulationCandidate]):
             action_text,
         )
     return table
+
+
+def _market_regime_text(ctx) -> str:
+    parts = [
+        ctx.regime.value,
+        f"conviction {float(ctx.conviction):.2f}",
+    ]
+
+    if ctx.regime_confidence is not None:
+        parts.append(f"confidence {float(ctx.regime_confidence):.2f}")
+
+    if ctx.regime_stability is not None:
+        parts.append(f"stability {ctx.regime_stability}")
+
+    if ctx.transition_warning:
+        parts.append(f"transition: {ctx.transition_warning}")
+
+    return " | ".join(parts)
 
 
 def _build_setup_lens_impact_use_case(
@@ -359,10 +375,8 @@ def today(
 
     if response.regime is not None:
         ctx = response.regime
-        label = REGIME_DISPLAY_LABEL.get(ctx.regime.value, ctx.regime.value)
-        score = context_conviction_score(ctx)
         style = context_regime_style(ctx)
-        regime_text = f"[{style}]{label} ({score}/7)[/{style}]"
+        regime_text = f"[{style}]{_market_regime_text(ctx)}[/{style}]"
         summary.add_row("Market regime", regime_text)
 
         breadth = context_factor_value(ctx, "idx_breadth")

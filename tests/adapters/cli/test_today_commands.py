@@ -759,6 +759,96 @@ def test_today_accumulation_not_ready_suppresses_projection_rows():
         assert "ZZZZ" not in result.stdout
 
 
+def test_market_regime_text_renders_all_fields():
+    from src.adapters.cli.today_commands import _market_regime_text
+
+    ctx = type("C", (), {
+        "regime": type("R", (), {"value": "RISK_ON"})(),
+        "conviction": 0.69,
+        "regime_confidence": 0.30,
+        "regime_stability": "TRANSITIONING",
+        "transition_warning": None,
+    })()
+
+    expected = "RISK_ON | conviction 0.69 | confidence 0.30 | stability TRANSITIONING"
+    assert _market_regime_text(ctx) == expected
+
+
+def test_market_regime_text_omits_optional_metadata():
+    from src.adapters.cli.today_commands import _market_regime_text
+
+    ctx = type("C", (), {
+        "regime": type("R", (), {"value": "RISK_ON"})(),
+        "conviction": 0.69,
+        "regime_confidence": None,
+        "regime_stability": None,
+        "transition_warning": None,
+    })()
+
+    assert _market_regime_text(ctx) == "RISK_ON | conviction 0.69"
+
+
+def test_market_regime_text_appends_transition_warning():
+    from src.adapters.cli.today_commands import _market_regime_text
+
+    ctx = type("C", (), {
+        "regime": type("R", (), {"value": "RISK_ON"})(),
+        "conviction": 0.69,
+        "regime_confidence": None,
+        "regime_stability": None,
+        "transition_warning": "some warning",
+    })()
+
+    assert _market_regime_text(ctx) == "RISK_ON | conviction 0.69 | transition: some warning"
+
+
+def test_today_market_regime_renders_plain_values():
+    from unittest.mock import MagicMock, patch
+
+    from src.application.use_case.daily_briefing_use_case import DailyBriefingResponse
+
+    fake_regime = type("MC", (), {
+        "regime": type("R", (), {"value": "RISK_ON"})(),
+        "conviction": 0.69,
+        "regime_confidence": 0.30,
+        "regime_stability": "TRANSITIONING",
+        "transition_warning": None,
+        "factors": (),
+    })()
+
+    fake_response = DailyBriefingResponse(
+        live_session_date=date(2026, 6, 19),
+        latest_completed_eod_date=date(2026, 6, 19),
+        opening_snapshot_date=None,
+        is_historical=True,
+        universe="lq45",
+        universe_count=45,
+        data_freshness=[],
+        stale_count=0,
+        readiness_items=[],
+        overall_authority="READY",
+        regime=fake_regime,
+        opening_candidates=[],
+        market_wide_opening_observations=[],
+        accumulation_candidates=[],
+        accumulation_summary=None,
+        warnings=[],
+    )
+
+    with patch("src.adapters.cli.today_commands.DailyBriefingUseCase") as mock_uc_class:
+        mock_uc = MagicMock()
+        mock_uc_class.return_value = mock_uc
+        mock_uc.execute.return_value = fake_response
+
+        result = runner.invoke(app, ["today", "--universe", "lq45", "--date", "2026-06-19"])
+        assert result.exit_code == 0
+        assert "RISK_ON" in result.stdout
+        assert "conviction 0.69" in result.stdout
+        assert "confidence 0.30" in result.stdout
+        assert "BULLISH" not in result.stdout
+        assert "(5/7)" not in result.stdout
+
+
 def _render_to_text(elements) -> str:
     from rich.console import Console, Group
 
