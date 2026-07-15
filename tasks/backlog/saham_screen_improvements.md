@@ -65,6 +65,7 @@ Execute in this order. S1 must come first — all later calibration accuracy dep
 - **Type:** Refactor / Bugfix
 - **Priority:** P0 — **highest impact** — corrupts forward-label calibration data
 - **Effort:** Large — touches use case, persister, repository schema, and compare factory
+- **Status:** RESOLVED (commit `bcbb3ac`)
 
 ### Problem
 
@@ -78,38 +79,51 @@ self._observation_persister.persist(all_results, today, request)
 
 This line runs unconditionally. Callers that are logically read-only (multi-window diagnostic passes, `screen compare`) trigger persistence anyway.
 
-**Multi-window corruption:**
+**Multi-window observation drift:**
 `run_accumulation_screen_workflow_use_case.py:182-188` calls `self._screen_use_case.execute()` once per window (7, 30, 90). Each call persists. The live audit produced `3.07 rows/ticker` for 2026-07-14. For BBCA the sequence was:
 
 ```
 7 sessions  -> score 42.5
 7 sessions  -> score 42.5 (repeat from earlier standalone run)
 30 sessions -> score 31.6
-90 sessions -> score 27.1  ← this becomes "latest" seen by forward labeling
+90 sessions -> score 27.1
 ```
+
+Current readiness/reporting code mitigates some damage by collapsing rows to
+the latest-per-ticker observation. That is not a real fix: raw duplicate rows
+still exist, read-only views still write learning data, and the repository
+identity is still timestamp-driven rather than canonical-observation-driven.
 
 `src/infrastructure/persistence/sqlite_candidate_observations_repository.py` schema has no UNIQUE constraint on `(ticker, snapshot_date, window_days, workflow)`. `save_many()` always INSERTs.
 
 **Compare corruption:**
 `src/adapters/cli/screen_accum_compare_factory.py:52` calls `use_case.execute()` directly, which persists a fresh screen run merely to produce a comparison view.
 
-### Decision Required (Human Must Decide First)
+### Decision
 
-**Option A — Screen is read-only by default; persistence is explicit:**
-- `AccumulationScreenUseCase.execute()` never persists.
-- A separate `RecordAccumulationObservationsUseCase` is called explicitly only by the canonical daily screen command, not by multi-window diagnostic or compare.
+Adopt **Option A: screen execution is read-only by default; persistence is explicit.**
 
-**Option B — One canonical window per multi run persists; others are diagnostic:**
-- `RunAccumulationScreenWorkflowUseCase._execute_multi()` marks exactly one window (e.g., 7-session) as the canonical observation.
-- Other windows are diagnostic children of the same run artifact.
-- The persister enforces one canonical row per `(ticker, snapshot_date)` via UPSERT.
+- `AccumulationScreenUseCase.execute()` must not write candidate observations.
+- Add an explicit canonical observation recording path, e.g.
+  `RecordAccumulationObservationsUseCase`.
+- Only the canonical learning/observation workflow should call the recording
+  path.
+- Diagnostic/read-only paths must never persist observations:
+  - `saham screen accum --multi`
+  - `saham screen compare`
+  - `DailyBriefingUseCase`
+  - replay/diagnostic compare views unless explicitly named as recording jobs
+- Multi-window output remains diagnostic. Do not write one row per window into
+  canonical `candidate_observations`.
 
 > [!CAUTION]
-> Do not implement Option B without also adding the observation identity fields below to the schema. Partial upsert without identity fields will still produce corrupt data.
+> Do not partially fix this by adding `UNIQUE(ticker, snapshot_date)` while
+> leaving diagnostic calls on the persistence path. That would merely make the
+> last diagnostic caller overwrite the canonical observation.
 
-### Required Observation Identity Fields
+### Required Canonical Observation Identity
 
-Minimum identity for idempotent persistence:
+Minimum identity for the explicit canonical writer:
 
 ```text
 ticker
@@ -120,32 +134,61 @@ data_as_of_date   (latest candle/broker date used)
 config_hash       (fingerprint of scoring config version)
 ```
 
+These fields may also remain in the JSON payload, but the canonical writer must
+enforce idempotency using database identity or explicit UPSERT logic. JSON-only
+identity is not enough.
+
 ### Non-Goals
 
 - No change to scoring formula or evidence.
 - No new data providers.
-- No change to what data is stored in the payload, only to how identity is defined.
+- No tuning patch or evidence promotion.
+- No behavior change to visible screen ranking except removal of accidental
+  observation writes from diagnostic/read-only paths.
 
 ### Layer Plan (Agent Must State Before Coding)
 
 ```md
-Layer plan (Option A):
-- Domain: CandidateObservationsRepository port (remove save from execute contract)
-- Application: accumulation_screen_use_case.py (remove persist call); new RecordAccumulationObservationsUseCase
-- Infrastructure: sqlite_candidate_observations_repository.py (add UNIQUE constraint migration)
-- Adapter: screen_accum_commands.py (call record use case only for canonical mode); screen_accum_compare_factory.py (no persistence)
+Layer plan:
+- Domain:
+  CandidateObservationsRepository contract distinguishes canonical upsert from
+  raw append, or documents a single canonical save contract if raw append is
+  retired.
+- Application:
+  accumulation_screen_use_case.py becomes read-only; extract recording into
+  RecordAccumulationObservationsUseCase or equivalent explicit writer. Preserve
+  rejected candidates as learnable negative samples in the canonical recording
+  path.
+- Infrastructure:
+  sqlite_candidate_observations_repository.py adds canonical identity columns
+  and UNIQUE/UPSERT for canonical observations. Raw diagnostic append, if still
+  needed, must use a separate table or explicit artifact type.
+- Adapter:
+  screen_accum_commands.py calls the recording path only for the canonical
+  observation workflow. screen_accum_compare_factory.py and multi-window display
+  paths stay read-only.
 ```
 
 ### Acceptance Criteria
 
-- [ ] Multi-window screen run produces exactly 1 row per ticker per date (not 3)
-- [ ] `screen compare` does not write any observation rows
-- [ ] `DailyBriefingUseCase` calling `AccumulationScreenUseCase` does not write observation rows
-- [ ] Duplicate identical runs are idempotent (second run does not add rows)
-- [ ] Schema has a unique constraint or explicit UPSERT for chosen identity key
-- [ ] Tests: multi-window run produces 1 row; compare run produces 0 rows
-- [ ] Full test suite passes
-- [ ] `git diff --check` clean
+- [x] `AccumulationScreenUseCase.execute()` does not call observation persistence directly
+- [x] Canonical observation recording is explicit and named
+- [x] `saham screen accum --multi` produces zero diagnostic-window observation rows
+- [x] `screen compare` does not write any observation rows
+- [x] `DailyBriefingUseCase` calling `AccumulationScreenUseCase` does not write observation rows
+- [x] Canonical recording produces one row per `(ticker, snapshot_date, workflow, window_sessions, data_as_of_date, config_hash)`
+- [x] Duplicate canonical recording runs are idempotent (second run updates/replaces; it does not append duplicates)
+- [x] Schema has a unique constraint or explicit UPSERT for the canonical identity key
+- [x] Tests: multi-window run writes 0 observations; compare writes 0 observations; canonical recording writes 1 idempotent observation per identity
+- [x] Full test suite passes
+- [x] `git diff --check` clean
+
+**Resolution notes:**
+- `AccumulationScreenUseCase.execute()` is read-only; evaluated candidates (pass + rejected) are exposed via `response.observation_candidates` (typed `AccumulationScreenObservationCandidate`, not a raw tuple).
+- `RecordAccumulationObservationsUseCase` is the sole persistence entrypoint, built via `create_accumulation_screen_use_case_bundle()` / `create_accumulation_screen_workflow_bundle()` and wired only into `signal-backfill-observations`. `AccumulationScreenUseCase` does not construct or expose the recorder or its persister.
+- `candidate_observations` gained `workflow`, `window_sessions`, `data_as_of_date`, `config_hash` columns with a partial UNIQUE index (`WHERE config_hash != ''`) so pre-migration legacy rows stay excluded/readable while new canonical writes UPSERT in place.
+- Follow-up fix during review: label generation (`GenerateSignalForwardLabelsUseCase`, `BackfillSignalObservationsUseCase`) was still collapsing to latest-per-ticker via `list_by_date()`, silently dropping all but one recorded window. Added `list_canonical_by_date()` and switched label generation to it — verified live: a 3-window backfill now saves 135 observations and generates 135 labels (previously would have generated 45).
+- Verified live against a copy of the production DB (45-ticker lq45 universe, 19k+ existing rows): ordinary `screen accum`, `--multi`, `screen compare`, and `saham today` all write zero rows; `signal-backfill-observations` writes/labels correctly and is idempotent on rerun; legacy rows remain readable throughout.
 
 ---
 
