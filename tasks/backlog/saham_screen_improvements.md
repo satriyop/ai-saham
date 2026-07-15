@@ -29,7 +29,7 @@ Files verified:
 | 1 | `S1` | P0 | Multi-window screening corrupts observation identity | ❌ Open |
 | 2 | `S2` | P0 | Table and JSON output apply different filters | ✅ Resolved |
 | 3 | `S3` | P0 | Freshness is source alignment, not actual calendar freshness | ✅ Resolved |
-| 4 | `S4` | P0 | Pre-open provider failure looks like valid empty result | ❌ Open |
+| 4 | `S4` | P0 | Pre-open provider failure looks like valid empty result | ✅ Resolved |
 | 5 | `S5` | P1 | Unsupported 65–70% prediction claim in guide | ❌ Open |
 | 6 | `S6` | P1 | BCI grants full points despite negative aggregate flow | ❌ Open |
 | 7 | `S7` | P1 | Multi-window output discards Signal/Risk/Phase already computed | ❌ Open |
@@ -346,6 +346,7 @@ Layer plan:
 
 - **Type:** Feature / Bugfix
 - **Priority:** P0 — provider failure currently looks identical to a valid zero-mover result
+- **Status:** RESOLVED (commits `e4de7a0`, `1ff1b3e`)
 
 ### Problem
 
@@ -402,14 +403,22 @@ Layer plan:
 
 ### Acceptance Criteria
 
-- [ ] `PreOpenSourceStatus` enum exists with at least 5 values above
-- [ ] "No candidates" is never shown without an explicit `source_status` field in the response
-- [ ] Zero-mover result requires `EMPTY_CONFIRMED` (provider returned valid empty payload)
-- [ ] Sidecar is only written for `LIVE_SUCCESS` or `EMPTY_CONFIRMED`
-- [ ] Outside the window: loads snapshot or returns `OUTSIDE_WINDOW`, does not silently attempt live fetch
-- [ ] Tests: unavailable provider → `UNAVAILABLE`; genuine zero → `EMPTY_CONFIRMED`; snapshot load → `SNAPSHOT_SUCCESS`
-- [ ] Full test suite passes
-- [ ] `git diff --check` clean
+- [x] `PreOpenSourceStatus` enum exists with at least 5 values above
+- [x] "No candidates" is never shown without an explicit `source_status` field in the response
+- [x] Zero-mover result requires `EMPTY_CONFIRMED` (provider returned valid empty payload)
+- [x] Sidecar is only written for `LIVE_SUCCESS` or `EMPTY_CONFIRMED`
+- [x] Outside the window: loads snapshot or returns `OUTSIDE_WINDOW`, does not silently attempt live fetch
+- [x] Tests: unavailable provider → `UNAVAILABLE`; genuine zero → `EMPTY_CONFIRMED`; snapshot load → `SNAPSHOT_SUCCESS`
+- [x] Full test suite passes
+- [x] `git diff --check` clean
+
+**Resolution notes:**
+- `src/domain/value_objects/pre_open_source_status.py` — `PreOpenSourceStatus` enum (`LIVE_SUCCESS`, `SNAPSHOT_SUCCESS`, `EMPTY_CONFIRMED`, `UNAVAILABLE`, `OUTSIDE_WINDOW`), matching the spec exactly.
+- `PreOpenWorkflowUseCase` (`pre_open_workflow_use_case.py`) derives `source_status`/`source_message`/`source_snapshot_ref` on every response. `EMPTY_CONFIRMED` is keyed off `total_movers_seen == 0` from the provider, not post-filter candidate count, so a live fetch that returns movers but filters them all out still reports `LIVE_SUCCESS`. `BrowserDataProviderError` maps to `UNAVAILABLE` (with `BrowserInteractionRequired` still re-raised untouched, preserving the existing browser-action-plan CLI flow).
+- Outside-window handling falls back to the latest saved IEV snapshot via the existing `SQLiteIEVRepository` (`get_snapshot_dates()` + `get_ncp_snapshot()`), run through the same `PreOpenScreenUseCase` pipeline via a narrow `run_snapshot_screen` callable injected from `screen_pre_open_workflow_factory.py` — no new persistence subsystem. Returns `SNAPSHOT_SUCCESS` with a snapshot date ref when found, `OUTSIDE_WINDOW` otherwise. This fallback is independent of live browser/session availability: a missing Stockbit session outside the window no longer forces an early browser-plan exit if a snapshot can answer the request instead (only prints the browser action plan when a live/manual run is actually needed).
+- `screen_pre_open_commands.py` gates the sidecar write to `source_status in (LIVE_SUCCESS, EMPTY_CONFIRMED)` only. `screen_pre_open_display.py` always renders the source status and gives status-specific "no candidates" text so `UNAVAILABLE`/`OUTSIDE_WINDOW` never look like a valid empty result.
+- `source_snapshot_ref` (renamed from an earlier `source_snapshot_path`) holds a DB snapshot date identifier, not a filesystem path — naming fixed post-review to avoid the misleading implication.
+- Verified: 64 pre-open-scoped tests pass (including a real end-to-end test using an actual `SQLiteIEVRepository`-backed tmp DB through the unmocked CLI factory, not just hand-built fake responses). Full suite: 4046 passed, only the same 7 pre-existing/unrelated test-order-dependent failures in `test_stock_analysis_workflow_dependencies_config_paths.py` (confirmed identical on `main` before this change, per the S2 precedent). `git diff --check` clean.
 
 ---
 
