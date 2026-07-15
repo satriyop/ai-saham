@@ -103,6 +103,7 @@ class SwingAnalysisInputCollector:
             accumulation_candidate = self._build_accumulation_candidate(
                 ticker=request.ticker,
                 window=request.window,
+                as_of_date=request.today,
             )
         except Exception as exc:
             warnings.append(f"Accumulation unavailable: {exc}")

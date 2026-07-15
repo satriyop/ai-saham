@@ -619,3 +619,119 @@ def test_daily_briefing_not_ready_skips_accumulation_projection_rows(monkeypatch
     assert response.accumulation_summary.flow_candidates == 0
     assert response.accumulation_summary.checked == 45
     accum_uc.execute.assert_not_called()
+
+
+def test_daily_briefing_passes_capped_candidates_to_setup_lens_impact(monkeypatch):
+    tickers = ["T1", "T2", "T3"]
+    monkeypatch.setattr(
+        "src.application.use_case.daily_briefing_use_case.load_universe",
+        lambda *a, **kw: tickers,
+    )
+
+    market_repo = MagicMock()
+    market_repo.get_date_range.return_value = (date(2026, 6, 1), date(2026, 6, 19))
+    broker_repo = MagicMock()
+    broker_repo.get_date_range.return_value = (date(2026, 6, 1), date(2026, 6, 19))
+
+    regime_uc = MagicMock()
+    accum_uc = MagicMock()
+    fake_candidate = _real_accumulation_candidate("BBCA")
+    accum_uc.execute.return_value = MagicMock(candidates=[fake_candidate])
+
+    impact_uc = MagicMock()
+    impact_uc.execute.return_value = MagicMock(rows=())
+
+    use_case = DailyBriefingUseCase(
+        market_repository=market_repo,
+        broker_repository=broker_repo,
+        regime_use_case=regime_uc,
+        accumulation_use_case=accum_uc,
+        universe_loader=MagicMock(),
+        setup_lens_impact_use_case=impact_uc,
+    )
+
+    response = use_case.execute(
+        DailyBriefingRequest(universe="lq45", top=1, as_of_date=date(2026, 6, 19))
+    )
+
+    impact_uc.execute.assert_called_once()
+    passed_request = impact_uc.execute.call_args.args[0]
+    # Only the already-selected daily accumulation candidates (capped by top) are passed.
+    assert len(passed_request.candidates) == len(response.daily_accumulation_candidates)
+    assert passed_request.candidates[0].ticker == "BBCA"
+    assert response.setup_lens_impact is impact_uc.execute.return_value
+
+
+def test_daily_briefing_not_ready_never_calls_setup_lens_impact(monkeypatch):
+    tickers = [f"T{i}" for i in range(45)]
+    monkeypatch.setattr(
+        "src.application.use_case.daily_briefing_use_case.load_universe",
+        lambda *a, **kw: tickers,
+    )
+
+    current_tickers = [f"T{i}" for i in range(4)]
+    market_repo = MagicMock()
+
+    def market_side_effect(ticker):
+        if ticker in current_tickers:
+            return (date(2026, 6, 1), date(2026, 6, 19))
+        return (date(2026, 6, 1), date(2026, 6, 18))
+
+    market_repo.get_date_range.side_effect = market_side_effect
+
+    broker_repo = MagicMock()
+    broker_repo.get_date_range.return_value = (date(2026, 6, 1), date(2026, 6, 19))
+
+    regime_uc = MagicMock()
+    accum_uc = MagicMock()
+    accum_uc.execute.return_value = MagicMock(candidates=[])
+
+    impact_uc = MagicMock()
+
+    use_case = DailyBriefingUseCase(
+        market_repository=market_repo,
+        broker_repository=broker_repo,
+        regime_use_case=regime_uc,
+        accumulation_use_case=accum_uc,
+        universe_loader=MagicMock(),
+        setup_lens_impact_use_case=impact_uc,
+    )
+
+    response = use_case.execute(
+        DailyBriefingRequest(universe="lq45", as_of_date=date(2026, 6, 19))
+    )
+
+    assert response.overall_authority == "NOT_READY"
+    impact_uc.execute.assert_not_called()
+    assert response.setup_lens_impact is None
+
+
+def test_daily_briefing_without_setup_lens_impact_use_case_leaves_none(monkeypatch):
+    tickers = ["T1", "T2", "T3"]
+    monkeypatch.setattr(
+        "src.application.use_case.daily_briefing_use_case.load_universe",
+        lambda *a, **kw: tickers,
+    )
+
+    market_repo = MagicMock()
+    market_repo.get_date_range.return_value = (date(2026, 6, 1), date(2026, 6, 19))
+    broker_repo = MagicMock()
+    broker_repo.get_date_range.return_value = (date(2026, 6, 1), date(2026, 6, 19))
+
+    regime_uc = MagicMock()
+    accum_uc = MagicMock()
+    accum_uc.execute.return_value = MagicMock(candidates=[_real_accumulation_candidate("BBCA")])
+
+    use_case = DailyBriefingUseCase(
+        market_repository=market_repo,
+        broker_repository=broker_repo,
+        regime_use_case=regime_uc,
+        accumulation_use_case=accum_uc,
+        universe_loader=MagicMock(),
+    )
+
+    response = use_case.execute(
+        DailyBriefingRequest(universe="lq45", as_of_date=date(2026, 6, 19))
+    )
+
+    assert response.setup_lens_impact is None

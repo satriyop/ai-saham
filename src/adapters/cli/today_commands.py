@@ -5,6 +5,7 @@ Layer: Adapter
 """
 
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -15,7 +16,16 @@ from rich.text import Text
 from src.adapters.cli.accumulation_risk_workflow_factory import (
     create_accumulation_assess_risk_use_case,
 )
+from src.adapters.cli.analyze_swing_command_config import (
+    load_analyze_swing_command_config,
+)
+from src.adapters.cli.analyze_swing_workflow_factory import (
+    create_swing_analysis_workflow,
+)
 from src.adapters.cli.rich_display import compact_table, panel
+from src.adapters.cli.stock_analysis_workflow_dependencies import (
+    create_stock_analysis_workflow_dependencies,
+)
 from src.adapters.cli.view_market_context_display import (
     REGIME_DISPLAY_LABEL,
     context_conviction_score,
@@ -32,6 +42,13 @@ from src.application.use_case.daily_briefing_use_case import (
     DailyBriefingRequest,
     DailyBriefingUseCase,
     OpeningBriefingCandidate,
+)
+from src.application.use_case.daily_setup_lens_impact_use_case import (
+    DailySetupLensImpactUseCase,
+    SwingLensRequestDefaults,
+)
+from src.application.use_case.evaluate_swing_setup_use_case import (
+    AVAILABLE_SWING_SETUPS,
 )
 from src.infrastructure.composition.indicator_registry_factory import (
     create_indicator_registry,
@@ -120,6 +137,117 @@ def _accumulation_screen_table(candidates: list[DailyAccumulationCandidate]):
     return table
 
 
+def _build_setup_lens_impact_use_case(
+    *,
+    db_path: Path,
+    cfg,
+) -> DailySetupLensImpactUseCase:
+    """Adapter wiring: build the 4 canonical setup-bound swing workflows and
+    inject them (plus typed request defaults) into the read-only impact use case.
+
+    This mirrors analyze_swing_commands.py construction exactly; it introduces no
+    fetch/cache/scoring policy of its own.
+    """
+    swing_cmd_cfg = load_analyze_swing_command_config()
+    swing_config = swing_cmd_cfg.swing_config
+    analyze_config = swing_cmd_cfg.analyze_swing_config
+
+    smart_money_brokers = set(swing_config.smart_money_brokers)
+    noise_brokers = set(swing_config.noise_brokers)
+    broker_weights: dict[str, Decimal] = {
+        **{code: swing_config.smart_weight for code in smart_money_brokers},
+        **{code: swing_config.noise_weight for code in noise_brokers},
+    }
+
+    deps = create_stock_analysis_workflow_dependencies(db_path)
+    setup_workflows = {
+        setup_name: create_swing_analysis_workflow(
+            db_path=db_path,
+            setup_name=setup_name,
+            swing_config=swing_config,
+            analyze_config=analyze_config,
+            smart_money_brokers=smart_money_brokers,
+            noise_brokers=noise_brokers,
+            broker_weights=broker_weights,
+            dependencies=deps,
+        )
+        for setup_name in AVAILABLE_SWING_SETUPS
+    }
+
+    request_defaults = SwingLensRequestDefaults(
+        window=cfg.swing.window,
+        flow_window=analyze_config.flow_detail_window_sessions,
+        risk_pct=cfg.swing.risk_pct,
+        atr_mult=cfg.swing.atr_mult,
+        rr=cfg.swing.rr,
+        regime_universe=cfg.analysis.regime_universe,
+        benchmark=cfg.analysis.benchmark,
+        db_path=db_path,
+    )
+
+    return DailySetupLensImpactUseCase(
+        setup_workflows=setup_workflows,
+        request_defaults=request_defaults,
+    )
+
+
+def _setup_lens_impact_elements(setup_lens_impact) -> list:
+    """Render the SETUP LENS IMPACT section from the pre-computed result DTO.
+
+    Rendering only: reads fields already on the result/row/cell; computes no
+    action, match, entry-authority, or capping.
+    """
+    elements: list = [Text("SETUP LENS IMPACT", style="bold cyan")]
+
+    if setup_lens_impact is None or not setup_lens_impact.rows:
+        elements.append(Text("No accumulation candidates to evaluate."))
+        return elements
+
+    table = compact_table()
+    table.add_column("Ticker", style="bold")
+    table.add_column("Base")
+    for setup_name in AVAILABLE_SWING_SETUPS:
+        table.add_column(setup_name)
+
+    for row in setup_lens_impact.rows:
+        cells_by_setup = {cell.setup_name: cell for cell in row.cells}
+        row_values = [row.ticker, row.base_action or "-"]
+        for setup_name in AVAILABLE_SWING_SETUPS:
+            cell = cells_by_setup.get(setup_name)
+            if cell is None:
+                row_values.append("-")
+                continue
+            if cell.warning is not None:
+                # Plain Text so the literal "[warning: ...]" is not parsed as
+                # rich markup and stripped.
+                row_values.append(Text(f"[warning: {cell.warning}]"))
+                continue
+            score_text = (
+                str(cell.signal_score) if cell.signal_score is not None else "-"
+            )
+            text = f"{cell.action or '-'} {score_text} {cell.setup_match}"
+            if cell.capped_reason:
+                text += "(no-entry)"
+            row_values.append(text)
+        table.add_row(*row_values)
+
+    elements.append(table)
+
+    next_lines: list[str] = []
+    for row in setup_lens_impact.rows:
+        for cell in row.cells:
+            if cell.warning is None and cell.action in ("ENTER", "WATCH"):
+                next_lines.append(
+                    f"  saham analyze swing {row.ticker} --setup {cell.setup_name}"
+                )
+    if next_lines:
+        elements.append(Text("Next:", style="bold"))
+        for line in next_lines:
+            elements.append(Text(line))
+
+    return elements
+
+
 def today(
     universe: Annotated[
         Optional[str], typer.Option("--universe", "-u", help="Universe to brief"),
@@ -176,6 +304,10 @@ def today(
             risk_use_case=risk_use_case,
         ),
         universe_loader=YamlUniverseConfigLoader(),
+        setup_lens_impact_use_case=_build_setup_lens_impact_use_case(
+            db_path=db_path,
+            cfg=cfg,
+        ),
     )
 
     response = use_case.execute(
@@ -346,6 +478,8 @@ def today(
             sections.append(accumulation)
         else:
             sections.append(Text("No accumulation candidates after canonical projection"))
+
+    sections.extend(_setup_lens_impact_elements(response.setup_lens_impact))
 
     if response.warnings:
         warnings = compact_table(show_header=False)

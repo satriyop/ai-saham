@@ -9,6 +9,8 @@ the top-level workflow factory does not own use-case construction directly.
 
 from __future__ import annotations
 
+from datetime import date
+
 from src.adapters.cli.stock_analysis_workflow_dependencies import (
     StockAnalysisWorkflowDependencies,
 )
@@ -30,7 +32,9 @@ def create_accumulation_candidate_builder(
     analyze_config: AnalyzeSwingConfig,
     accumulation_config: AccumulationScreenerConfig,
 ):
-    def _build_accumulation_candidate(ticker: str, window: int) -> AccumulationCandidate | None:
+    def _build_accumulation_candidate(
+        ticker: str, window: int, as_of_date: date
+    ) -> AccumulationCandidate | None:
         accum_uc = create_accumulation_screen_use_case(
             broker_repository=deps.broker_repository,
             market_repository=deps.market_repository,
@@ -51,6 +55,7 @@ def create_accumulation_candidate_builder(
         accum_resp = accum_uc.execute(
             AccumulationScreenRequest(
                 tickers=[ticker],
+                as_of_date=as_of_date,
                 window_days=window,
                 min_net_buy_days=analyze_config.candidate_min_net_buy_days,
                 min_foreign_flow_score=analyze_config.candidate_min_foreign_flow_score,

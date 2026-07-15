@@ -24,6 +24,12 @@ from src.application.use_case.daily_accumulation_projection import (
     DailyAccumulationProjector,
     DailyAccumulationSummary,
 )
+from src.application.use_case.daily_setup_lens_impact_use_case import (
+    DailySetupLensImpactCandidate,
+    DailySetupLensImpactRequest,
+    DailySetupLensImpactResult,
+    DailySetupLensImpactUseCase,
+)
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.value_objects.data_freshness_status import (
@@ -101,6 +107,7 @@ class DailyBriefingResponse:
     daily_accumulation_candidates: list[DailyAccumulationCandidate] = field(
         default_factory=list
     )
+    setup_lens_impact: DailySetupLensImpactResult | None = None
     warnings: list[str] = field(default_factory=list)
 
 
@@ -114,12 +121,14 @@ class DailyBriefingUseCase:
         regime_use_case,
         accumulation_use_case: AccumulationScreenUseCase,
         universe_loader: UniverseConfigLoader,
+        setup_lens_impact_use_case: DailySetupLensImpactUseCase | None = None,
     ) -> None:
         self._market_repo = market_repository
         self._broker_repo = broker_repository
         self._regime_uc = regime_use_case
         self._accumulation_uc = accumulation_use_case
         self._universe_loader = universe_loader
+        self._setup_lens_impact_uc = setup_lens_impact_use_case
 
     def execute(self, request: DailyBriefingRequest) -> DailyBriefingResponse:
         from datetime import timedelta
@@ -254,6 +263,31 @@ class DailyBriefingUseCase:
             daily_accumulation_candidates = projection.candidates
             warnings.extend(projection.warnings)
 
+        setup_lens_impact: DailySetupLensImpactResult | None = None
+        if (
+            self._setup_lens_impact_uc is not None
+            and overall_authority != "NOT_READY"
+            and daily_accumulation_candidates
+        ):
+            impact_candidates = tuple(
+                DailySetupLensImpactCandidate(ticker=c.ticker, base_action=c.action)
+                for c in daily_accumulation_candidates[: request.top]
+            )
+            try:
+                setup_lens_impact = self._setup_lens_impact_uc.execute(
+                    DailySetupLensImpactRequest(
+                        candidates=impact_candidates,
+                        as_of_date=(
+                            latest_completed_eod_date
+                            if latest_completed_eod_date is not None
+                            else live_session_date
+                        ),
+                    )
+                )
+            except Exception as exc:
+                warnings.append(f"Setup lens impact unavailable: {exc}")
+                setup_lens_impact = None
+
         return DailyBriefingResponse(
             live_session_date=live_session_date,
             latest_completed_eod_date=latest_completed_eod_date,
@@ -271,6 +305,7 @@ class DailyBriefingUseCase:
             accumulation_candidates=accumulation_candidates,
             accumulation_summary=accumulation_summary,
             daily_accumulation_candidates=daily_accumulation_candidates,
+            setup_lens_impact=setup_lens_impact,
             warnings=warnings,
         )
 

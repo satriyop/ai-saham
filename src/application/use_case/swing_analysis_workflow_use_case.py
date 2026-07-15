@@ -80,6 +80,8 @@ class SwingAnalysisWorkflowUseCase:
         build_data_freshness: Callable[..., Any],
         build_flow_detail: Callable[..., Any],
         build_broker_detail: Callable[..., Any],
+        # Expected signature: (ticker: str, window: int, as_of_date: date) -> candidate | None.
+        # Kept as a flexible ``Callable[..., ...]`` so test fakes may accept **kwargs.
         build_accumulation_candidate: Callable[..., Any | None],
         evaluate_setup: Callable[[Any | None, Any | None], Any | None],
         build_broker_quality_note: Callable[..., Any | None],

@@ -23,7 +23,7 @@
 | Universe scope enforcement in pre-open | ❌ Open |
 | Verdict-first pre-open section title | ❌ Open — section is still "Top Pre-Open Candidates" |
 | Canonical accumulation funnel with Signal/Risk/TradeSetup | ❌ Open — `Score` is still `foreign_flow_score` |
-| Bounded swing shortlist assessment | ❌ Open — not implemented |
+| Bounded setup-lens impact for accumulation candidates | ✅ Resolved |
 | Honest market context (`RISK_ON` not aliased to `BULLISH`) | ❌ Open — `REGIME_DISPLAY_LABEL` maps `RISK_ON` → `BULLISH` |
 | Primary verdict header (DATA STATUS / POSTURE / ACTION) | ❌ Open |
 | Session-aware next action | ❌ Open — static template with `TICKER` placeholder |
@@ -58,14 +58,16 @@
 | 5 | `T5` | P0 | Bugfix | Enforce universe scope in pre-open opening candidates | ✅ RESOLVED |
 | 6 | `T6` | P0 | Refactor | Rename to verdict-first pre-open presentation | ✅ RESOLVED |
 | 7 | `T7` | P0 | Feature | Canonical accumulation funnel (Signal + Risk + TradeSetup) | ✅ Done |
-| 8 | `T8` | P0 | Feature | Bounded swing shortlist assessment | ❌ Open |
+| 8 | `T8` | P0 | Feature | Bounded setup-lens impact for accumulation candidates | ✅ Done |
 | 9 | `T9` | P1 | Refactor | Expose honest market context (stop aliasing RISK_ON→BULLISH) | ❌ Open |
 | 10 | `T10` | P1 | Feature | Primary verdict header before tables | ❌ Open |
 | 11 | `T11` | P1 | Feature | Session-aware IDX lifecycle next action | ❌ Open |
 | 12 | `T12` | P1 | Refactor | Warning severity (BLOCKER / WARNING / INFO) | ❌ Open |
 | 13 | `T13` | P2 | Bugfix | Historical mode: separate or omit live market status | ✅ RESOLVED |
 
-> **Note:** T7 and T8 are large and may require ADR discussion before implementation begins.
+> **Note:** T8 must not introduce a local ranking/scoring policy. It must reuse
+> canonical swing/setup/trade-setup logic and remain bounded to the existing
+> accumulation candidates shown by `saham today`.
 
 ---
 
@@ -484,34 +486,30 @@ GOTO    77.3  EXHAUSTION    61      64%       BLOCK  AVOID
 ```
 
 Section renamed to `ACCUMULATION SCREEN`. `Score` column renamed to `Flow`.
-
-A `DailySwingShortlistUseCase` (or inline enrichment in `DailyBriefingUseCase`) runs signal + risk assessment for flow candidates only (not all 45 tickers).
+No setup-impact matrix is created by T7; that responsibility belongs to T8.
 
 ### Non-Goals
 
 - No network fetches.
 - Raw foreign-flow score must not be labeled or colored as canonical score.
-- Do not select the final shortlist by raw flow score — ranking must follow the canonical policy (readiness → TradeSetup → setup → coverage → score → flow).
+- Do not select or rank setup-lens candidates in T7.
 
 ### Architecture Notes
 
-`DailySwingShortlistUseCase` should:
-- accept already-built `AccumulationCandidate` list
-- run `AssessSignalEvidenceUseCase` for each survivor (reuse evidence where already available)
-- run `RiskEngine` for each survivor
-- compose `TradeSetup` action
-- return a ranked `DailySwingCandidate` DTO per the canonical ranking policy
+T7 should only project canonical fields already produced by
+`AccumulationScreenUseCase`. Any setup-lens impact belongs to T8 and must use
+canonical setup/swing/trade-setup logic.
 
-The adapter only renders the response. All ranking policy lives in the use case.
+The adapter only renders the response. T7 must not add ranking policy.
 
 ### Layer Plan (Agent Must State Before Coding)
 
 ```md
 Layer plan:
-- Domain: not touched (unless a new DailySwingCandidate value object is added)
-- Application: DailyBriefingUseCase (compose new shortlist use case); new DailySwingShortlistUseCase; DailyBriefingResponse (add funnel_summary, swing_candidates fields)
+- Domain: not touched
+- Application: DailyBriefingUseCase projection only; no setup-impact use case
 - Infrastructure: not touched (reuses existing signal/risk engine)
-- Adapter: today_commands.py — render funnel summary table, rename columns, render swing candidates
+- Adapter: today_commands.py — render funnel summary table and rename columns
 ```
 
 ### Acceptance Criteria
@@ -534,7 +532,7 @@ decision policy — it must project canonical `AccumulationScreenUseCase`
 output as-is.
 
 Deviations from the original design above:
-- No `DailySwingShortlistUseCase` was created. A new
+- No setup-impact use case was created. A new
   `DailyAccumulationProjector` (`src/application/use_case/daily_accumulation_projection.py`)
   maps each `AccumulationCandidate` already returned by
   `AccumulationScreenUseCase` into a `DailyAccumulationCandidate` DTO
@@ -557,71 +555,182 @@ Tests: `tests/application/use_case/test_daily_accumulation_projection.py`
 (new), `tests/application/use_case/test_daily_briefing.py`,
 `tests/adapters/cli/test_today_commands.py`.
 
-T8 (`SWING SHORTLIST`) was explicitly **not** implemented in this change. Its
-stated precondition ("T7 must be completed (requires
-`DailySwingShortlistUseCase`)") no longer holds as written, since T7 shipped
-without that use case — T8 scoping should be revisited before starting it.
+T8 was explicitly **not** implemented in the T7 change. The old "SWING
+SHORTLIST" framing was rejected because `AccumulationScreenUseCase` output is
+not semantically equivalent to `saham analyze swing TICKER --setup SETUP`.
+T8 is now scoped as a bounded canonical setup-lens impact matrix for the
+already-rendered accumulation candidates.
 
 ---
 
-## Task T8 — Bounded Swing Shortlist Assessment
+## Task T8 — Bounded Setup-Lens Impact For Accumulation Candidates
 
 ### Metadata
 
 - **Type:** Feature
-- **Priority:** P0 — no bounded canonical swing assessment exists; users must guess which ticker to analyze
-- **Pre-condition:** T7 must be completed (requires `DailySwingShortlistUseCase`)
-- **Effort:** Medium (uses T7 infrastructure)
+- **Priority:** P0 — users can see accumulation candidates, but cannot see which canonical swing setup lens would matter before running multiple manual commands
+- **Pre-condition:** T7 must be completed and `DailyBriefingResponse.daily_accumulation_candidates` must be populated from canonical `TradeSetup`
+- **Effort:** Medium/high — runs canonical setup-aware swing assessment in bounded local mode
 
 ### Problem
 
-Users must manually decide which accumulation candidate deserves `saham analyze swing TICKER`.
-The daily briefing should surface a final bounded set (3 by default) with compact assessment.
+`saham today` already lists accumulation candidates with canonical signal/risk
+projection, but it does not answer the next practical question:
+
+> For the accumulation names already shown, what would the canonical swing path
+> say under each available setup lens?
+
+The answer must not be invented locally in `today`. A setup impact cell must be
+derived from the same canonical application logic used by `saham analyze swing
+TICKER --setup SETUP`, with local cached data only.
 
 ### Desired Outcome
 
-A `SWING SHORTLIST` section showing only the top-N eligible names (those with WATCH or ENTER verdicts and sufficient evidence coverage):
+A `SETUP LENS IMPACT` section appears after `ACCUMULATION SCREEN`.
+
+Scope:
+- Source tickers only from the accumulation candidates already selected for the
+  daily briefing.
+- Bound evaluation by the existing `--top` value.
+- Evaluate every setup in `AVAILABLE_SWING_SETUPS`:
+  - `foreign-bounce`
+  - `coiled-spring`
+  - `smart-money-confirmed`
+  - `pullback-continuation`
+- Use canonical application workflow/services, not CLI helper parsing or a
+  `today`-specific scoring formula.
+- Run in local cached/read-only mode: no fetch, no browser/API provider calls,
+  no writes, no tuning, no journal append.
+
+Each ticker/setup cell should show the compact canonical impact:
+- resulting `TradeSetup.action`
+- resulting signal score
+- setup match status (`MATCH`, `PARTIAL`, `NO_MATCH`)
+- entry-authority or phase cap when it changes/limits the action
+
+Example shape:
 
 ```text
-SWING SHORTLIST
-1. INDF — WATCH — wait for breakout confirmation
-   Setup: foreign-bounce, partial match | Signal: 72, coverage 82% | Risk: OPEN
-   Next: saham analyze swing INDF
+SETUP LENS IMPACT
+Ticker  Base   foreign-bounce       coiled-spring        smart-money-confirmed  pullback-continuation
+INDF    WATCH  WATCH 72 MATCH       WATCH 68 PARTIAL     WATCH 70 MATCH(no-entry)  AVOID 54 NO_MATCH
+BBTN    WATCH  WATCH 69 PARTIAL     AVOID 58 NO_MATCH    WATCH 66 PARTIAL          WATCH 64 PARTIAL
 
-2. BBTN — WATCH — resistance headroom limited
-   Setup: coiled-spring, partial match | Signal: 68, coverage 76% | Risk: OPEN
-   Next: saham analyze swing BBTN
-
-NO ENTER CANDIDATES TODAY
+Next:
+  saham analyze swing INDF --setup foreign-bounce
+  saham analyze swing BBTN --setup pullback-continuation
 ```
 
-If nothing qualifies: `NO ACTIONABLE SWING SETUPS` — not weak filler.
+If no accumulation candidates are available, show:
+
+```text
+SETUP LENS IMPACT
+No accumulation candidates to evaluate.
+```
 
 ### Non-Goals
 
-- No additional data fetches beyond T7's evidence reuse.
+- No local setup bonus/penalty formula.
+- No arbitrary ranking policy inside `today`.
+- No new action vocabulary; final action must remain `TradeSetup.action`.
+- No setup match inferred from setup name, strategy name, or display text.
+- No additional data fetches, browser calls, provider refreshes, writes, tuning,
+  or journal persistence.
 - No change to `saham analyze swing` command.
-- Default shortlist is 3; controlled by existing `--top` flag.
+- No replacement of the existing `ACCUMULATION SCREEN` section.
+- No claim that accumulation score equals swing setup score.
 
 ### Layer Plan (Agent Must State Before Coding)
 
 ```md
 Layer plan:
 - Domain: not touched
-- Application: DailySwingShortlistUseCase (from T7) — already produces ranked candidates; adapter renders them
-- Infrastructure: not touched
-- Adapter: today_commands.py — new SWING SHORTLIST section; session-aware next command
+- Application: new bounded setup-impact use case/service composed by DailyBriefingUseCase; reuse canonical swing/setup/trade-setup services
+- Infrastructure: not touched except existing adapter-side wiring of repositories/config loaders, if required
+- Adapter: today_commands.py renders the returned DTO only; no setup scoring, no workflow branching
 ```
+
+### Canonical Sources And Guardrails
+
+- Available setup names come from
+  `src.application.use_case.evaluate_swing_setup_use_case.AVAILABLE_SWING_SETUPS`.
+- Setup fit/match comes from `EvaluateSwingSetupUseCase` or an existing
+  canonical swing workflow component that delegates to it.
+- Final action comes from `AssessTradeSetupUseCase` / canonical swing workflow
+  response, not from setup match alone.
+- `PrimarySetupFamilyResolver` remains diagnostic; it must not grant entry
+  authority.
+- Confirmation-only and phase-gated setups must obey existing decision-policy
+  rules. Do not infer `entry_authority` from setup name.
+- If the full swing workflow cannot be reused without fetch/write side effects,
+  extract a local read-only application collaborator first. Do not call the CLI.
 
 ### Acceptance Criteria
 
-- [ ] `SWING SHORTLIST` section appears after `ACCUMULATION SCREEN`
-- [ ] Only WATCH/ENTER candidates appear (not SKIP/AVOID/BLOCK fillers)
-- [ ] Each entry shows: action, setup family/match, signal score, coverage, risk status, next command
-- [ ] `NO ACTIONABLE SWING SETUPS` shown if nothing qualifies
-- [ ] Next command contains resolved ticker name (not placeholder `TICKER`)
-- [ ] Full test suite passes
-- [ ] `git diff --check` clean
+- [x] `SETUP LENS IMPACT` section appears after `ACCUMULATION SCREEN`
+- [x] The section evaluates only the accumulation candidates already included in the briefing, capped by `--top`
+- [x] Every setup in `AVAILABLE_SWING_SETUPS` is represented for each evaluated ticker
+- [x] Each setup cell is backed by canonical setup/swing/trade-setup logic and includes action, signal score, setup match, and any entry-authority/phase cap
+- [x] No local rank/score/bonus/penalty policy is introduced in `today`
+- [x] No fetch/write/tune/journal side effects occur while rendering `saham today`
+- [x] Next commands contain resolved ticker and setup name, e.g. `saham analyze swing INDF --setup foreign-bounce`
+- [x] If no accumulation candidates exist, the section says `No accumulation candidates to evaluate.`
+- [x] Application use-case tests cover match/partial/no-match, confirmation-only no-entry, phase-gated cap, no-candidate behavior, and read-only/no-fetch behavior
+- [x] Adapter tests cover rendering and resolved next-command text
+- [x] Full test suite passes (pre-existing unrelated failure isolated below)
+- [x] `git diff --check` clean
+
+### As-Built Note (2026-07-15)
+
+Implemented per the design above, with the full canonical
+`SwingAnalysisWorkflowUseCase` reused directly (not a narrower collaborator):
+`today_commands.py` wires four setup-bound workflow instances (one per
+`AVAILABLE_SWING_SETUPS` entry, sharing one `StockAnalysisWorkflowDependencies`
+bundle) via the existing `create_swing_analysis_workflow` factory, each run
+with `auto_refresh=False`, `force_refresh=False`, `strategy_name=None`,
+`include_sentiment=False` so no fetch/write/journal/AI side effects occur.
+
+New application use case:
+`src/application/use_case/daily_setup_lens_impact_use_case.py`
+(`DailySetupLensImpactUseCase`). `DailyBriefingUseCase` composes it — invoked
+only when injected, `overall_authority != "NOT_READY"`, and
+`daily_accumulation_candidates` is non-empty; a per-call exception is
+downgraded to a warning rather than failing the briefing.
+
+Per-cell fields are read verbatim from canonical sources, never invented:
+`action`/`signal_score` from `TradeSetup`, `setup_match`/`entry_authority`
+from `SetupEvaluation`, and `capped_reason` from
+`SignalAssessment.decision_constraints.constraint_reasons` (the same
+`DecisionPolicyService` output that caps confirmation-only and phase-gated
+setups to WATCH). A per-cell exception (e.g. missing broker detail for
+`smart-money-confirmed`) is caught and surfaced as `warning` on that cell only
+— it does not abort the row or the command.
+
+Tests: `tests/application/use_case/test_daily_setup_lens_impact_use_case.py`
+(new), `tests/application/use_case/test_daily_briefing.py`,
+`tests/adapters/cli/test_today_commands.py`.
+
+Full suite: 4114 passed. Seven pre-existing failures in
+`tests/adapters/cli/test_stock_analysis_workflow_dependencies_config_paths.py`
+are unrelated test-order pollution — reproduced identically on a clean `main`
+checkout with `pytest tests/adapters/cli -q` (verified before and after this
+change), not a regression introduced by T8.
+
+#### Addendum (2026-07-15) — two residual fixes
+
+Two follow-up bugs were fixed on top of the original T8 landing. First, the
+historical `--date` path now threads `request.today` all the way into the
+accumulation-candidate build: `SwingAnalysisInputCollector` passes
+`as_of_date=request.today` and `create_accumulation_candidate_builder`'s
+`_build_accumulation_candidate(ticker, window, as_of_date)` forwards it into
+`AccumulationScreenRequest`, so setup-lens cells no longer mix historical
+broker-detail context with current-day accumulation gates. Second,
+`capped_reason` is now filtered to only setup entry-authority/phase-gate reasons
+(markers `has no standalone entry authority`, `requires setup phase for ENTER`,
+`requires phase`) via `_entry_authority_constraint_reasons`, so a generic
+score/coverage/regime floor no longer mislabels a cell `(no-entry)`. New tests:
+`tests/application/services/test_swing_analysis_input_collector.py` (proves the
+date threads through) plus two filter tests in the T8 use-case test file.
 
 ---
 
@@ -715,8 +824,8 @@ A top-of-output verdict block before any tables:
 ```text
 DATA STATUS:    PARTIAL (41/45 candles current)
 MARKET POSTURE: RISK_ON, low confidence
-ACTION NOW:     Review swing shortlist
-NEXT COMMAND:   saham analyze swing INDF
+ACTION NOW:     Review setup lens impact
+NEXT COMMAND:   saham analyze swing INDF --setup foreign-bounce
 ```
 
 Depends on T3 (three clocks) and T4 (readiness) for correct data.
@@ -902,7 +1011,7 @@ DailyBriefingUseCase
   ├── MarketContextEngine           (existing)
   ├── OpeningSnapshotReader         (existing)
   ├── AccumulationScreenUseCase     (existing)
-  └── DailySwingShortlistUseCase    (T7/T8 — new)
+  └── SetupLensImpactUseCase        (T8 — bounded, read-only, canonical)
 ```
 
 The adapter (`today_commands.py`) only:

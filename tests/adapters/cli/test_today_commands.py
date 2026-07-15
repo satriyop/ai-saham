@@ -757,3 +757,119 @@ def test_today_accumulation_not_ready_suppresses_projection_rows():
         assert result.exit_code == 0
         assert "Suppressed" in result.stdout
         assert "ZZZZ" not in result.stdout
+
+
+def _render_to_text(elements) -> str:
+    from rich.console import Console, Group
+
+    console = Console(width=200, record=True)
+    console.print(Group(*elements))
+    return console.export_text()
+
+
+def test_setup_lens_impact_no_candidates_renders_exact_string():
+    from src.adapters.cli.today_commands import _setup_lens_impact_elements
+
+    text = _render_to_text(_setup_lens_impact_elements(None))
+    assert "SETUP LENS IMPACT" in text
+    assert "No accumulation candidates to evaluate." in text
+
+
+def test_setup_lens_impact_empty_rows_renders_exact_string():
+    from src.adapters.cli.today_commands import _setup_lens_impact_elements
+
+    result = type("R", (), {"rows": ()})()
+    text = _render_to_text(_setup_lens_impact_elements(result))
+    assert "No accumulation candidates to evaluate." in text
+
+
+def _cell(setup_name, action="WATCH", score=70, match="MATCH", capped=None, warning=None):
+    return type(
+        "Cell",
+        (),
+        {
+            "setup_name": setup_name,
+            "action": action,
+            "signal_score": score,
+            "setup_match": match,
+            "entry_authority": True,
+            "capped_reason": capped,
+            "warning": warning,
+        },
+    )()
+
+
+def test_setup_lens_impact_renders_all_four_columns_and_next_block():
+    from src.adapters.cli.today_commands import _setup_lens_impact_elements
+    from src.application.use_case.evaluate_swing_setup_use_case import (
+        AVAILABLE_SWING_SETUPS,
+    )
+
+    cells = tuple(_cell(name, action="WATCH") for name in AVAILABLE_SWING_SETUPS)
+    row = type("Row", (), {"ticker": "BBRI", "base_action": "WATCH", "cells": cells})()
+    result = type("R", (), {"rows": (row,)})()
+
+    text = _render_to_text(_setup_lens_impact_elements(result))
+
+    for setup_name in AVAILABLE_SWING_SETUPS:
+        assert setup_name in text
+    # Next block includes actual ticker and setup name; never a literal placeholder.
+    assert "Next:" in text
+    assert f"saham analyze swing BBRI --setup {AVAILABLE_SWING_SETUPS[0]}" in text
+    assert "TICKER" not in text
+
+
+def test_setup_lens_impact_capped_cell_shows_no_entry_suffix():
+    from src.adapters.cli.today_commands import _setup_lens_impact_elements
+    from src.application.use_case.evaluate_swing_setup_use_case import (
+        AVAILABLE_SWING_SETUPS,
+    )
+
+    first = AVAILABLE_SWING_SETUPS[0]
+    cells = (
+        _cell(first, action="WATCH", capped="no standalone entry authority"),
+    ) + tuple(_cell(name) for name in AVAILABLE_SWING_SETUPS[1:])
+    row = type("Row", (), {"ticker": "INDF", "base_action": "WATCH", "cells": cells})()
+    result = type("R", (), {"rows": (row,)})()
+
+    text = _render_to_text(_setup_lens_impact_elements(result))
+    assert "(no-entry)" in text
+    # Full reason text is not printed in the compact table.
+    assert "no standalone entry authority" not in text
+
+
+def test_setup_lens_impact_warning_cell_renders_warning_not_action():
+    from src.adapters.cli.today_commands import _setup_lens_impact_elements
+    from src.application.use_case.evaluate_swing_setup_use_case import (
+        AVAILABLE_SWING_SETUPS,
+    )
+
+    first = AVAILABLE_SWING_SETUPS[0]
+    cells = (
+        _cell(first, action=None, score=None, match="NO_MATCH", warning="no broker_detail"),
+    ) + tuple(_cell(name) for name in AVAILABLE_SWING_SETUPS[1:])
+    row = type("Row", (), {"ticker": "BBRI", "base_action": "WATCH", "cells": cells})()
+    result = type("R", (), {"rows": (row,)})()
+
+    text = _render_to_text(_setup_lens_impact_elements(result))
+    assert "warning: no broker_detail" in text
+    # Warning cell must not appear as a Next follow-up.
+    assert f"saham analyze swing BBRI --setup {first}" not in text
+
+
+def test_today_no_candidates_shows_setup_lens_empty_message(tmp_path: Path):
+    result = runner.invoke(
+        app,
+        [
+            "today",
+            "--universe",
+            "lq45",
+            "--date",
+            "2026-06-19",
+            "--db",
+            str(tmp_path / "market.db"),
+        ],
+    )
+    assert result.exit_code == 0
+    assert "SETUP LENS IMPACT" in result.stdout
+    assert "No accumulation candidates to evaluate." in result.stdout
