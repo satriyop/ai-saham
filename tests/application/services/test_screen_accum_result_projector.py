@@ -254,7 +254,6 @@ def test_multi_projection_includes_tracked_broker_flow():
             neutral_flow=Decimal("0"),
             sessions=5,
             through_date=date(2026, 7, 14),
-            source="stockbit",
         )
     }
 

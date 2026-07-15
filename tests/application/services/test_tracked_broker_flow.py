@@ -11,6 +11,8 @@ from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock
 
+import pytest
+
 from src.application.services.tracked_broker_flow import (
     TrackedBrokerFlowSnapshot,
     classify_broker_tier,
@@ -184,11 +186,37 @@ def test_to_dict_serialization():
         neutral_flow=Decimal("50"),
         sessions=3,
         through_date=date(2026, 6, 20),
-        source="stockbit",
     )
     d = snap.to_dict()
     assert d["label"] == "smart+"
     assert d["smart_flow"] == "100"
     assert d["through"] == "2026-06-20"
     assert d["sessions"] == 3
+    assert d["source"] == "broker_daily_flow"
     assert d["scope"] == "tracked_brokers"
+
+
+def test_source_rejects_non_broker_daily_flow_value():
+    with pytest.raises(ValueError, match="broker_daily_flow"):
+        TrackedBrokerFlowSnapshot(
+            label="smart+",
+            smart_flow=Decimal("100"),
+            noise_flow=Decimal("0"),
+            neutral_flow=Decimal("0"),
+            sessions=1,
+            through_date=date(2026, 6, 20),
+            source="stockbit",
+        )
+
+
+def test_scope_rejects_non_tracked_brokers_value():
+    with pytest.raises(ValueError, match="tracked_brokers"):
+        TrackedBrokerFlowSnapshot(
+            label="smart+",
+            smart_flow=Decimal("100"),
+            noise_flow=Decimal("0"),
+            neutral_flow=Decimal("0"),
+            sessions=1,
+            through_date=date(2026, 6, 20),
+            scope="full_market",
+        )

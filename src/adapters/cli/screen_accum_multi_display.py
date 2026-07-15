@@ -155,7 +155,7 @@ def display_multi(
 
     meta_table.add_row(
         "Canonical Window",
-        f"{canonical_window} sessions (default) — Signal/Risk/Phase/Data/Next come "
+        f"{canonical_window} sessions — Signal/Risk/Phase/Data/Next come "
         "from the canonical window only; other windows are flow context."
     )
 

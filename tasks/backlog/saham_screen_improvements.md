@@ -32,7 +32,7 @@ Files verified:
 | 4 | `S4` | P0 | Pre-open provider failure looks like valid empty result | ✅ Resolved |
 | 5 | `S5` | P1 | Unsupported 65–70% prediction claim in guide | ✅ Resolved |
 | 6 | `S6` | P1 | BCI grants full points despite negative aggregate flow | 🟡 Spike complete — hypothesis supported; validation-first follow-up needed before any scoring change |
-| 7 | `S7` | P1 | Multi-window output discards Signal/Risk/Phase already computed | 🟡 Partially resolved — canonical Signal/Risk/Phase/Data/Next displayed; one-pass 90-session optimization remains follow-up |
+| 7 | `S7` | P1 | Multi-window output discards Signal/Risk/Phase already computed | 🟡 Partially resolved — S7 display/semantic contract (Signal/Risk/Phase/Data/Next + Tracked Broker Flow) resolved; S7 performance/one-pass 90-session optimization remains open as follow-up |
 | 8 | `S8` | P1 | Watchlist `list` reports wrong ticker count | ❌ Open |
 | 9 | `S9` | P1 | `screen compare` missing weakening bucket; still persists observations | ❌ Open |
 | 10 | `S10` | P2 | `saham fetch status` uses wrong default DB path | ❌ Open |
@@ -576,10 +576,10 @@ Documentation: record findings in a new thought doc or spike report
 
 ### Problem
 
-`run_accumulation_screen_workflow_use_case.py:_execute_multi()` (lines 174–203) calls the full screen pipeline for each window, which includes SignalEngine assessment, setup-phase detection, risk funnel, and observation fingerprint construction. These results are discarded — only `multi_results` (foreign-flow scores) and `broker_quality` are returned.
+`run_accumulation_screen_workflow_use_case.py:_execute_multi()` (lines 174–203) calls the full screen pipeline for each window, which includes SignalEngine assessment, setup-phase detection, risk funnel, and observation fingerprint construction. These results are discarded — only `multi_results` (foreign-flow scores) and `tracked_broker_flow` are returned.
 
-The multi table only shows: 7s score, 30s score, 90s score, pattern, trend, broker flow label.
-During the live audit `Broker Flow: n/a` appeared for every row despite BCI data being available for the same tickers via the single-window path.
+The multi table only shows: 7s score, 30s score, 90s score, pattern, trend, tracked broker flow label.
+During the live audit `Tracked Broker Flow: n/a` appeared for every row despite BCI data being available for the same tickers via the single-window path.
 
 ### Desired Outcome
 
@@ -592,7 +592,7 @@ Ticker | 7s | 30s | 90s | Pattern | Signal/Coverage | Risk | Phase | Data | Next
 Only one explicitly selected canonical window (configurable, default: 7) owns Signal/Risk/Action.
 Other windows provide supporting flow context.
 
-Broker composition reuses the `broker_daily_flow` source (already used by BCI in the single-window path) rather than the named-broker summary path that returns `n/a`.
+Tracked-broker flow reuses the `broker_daily_flow` source (already used by BCI in the single-window path) — a configured tracked-broker subset, not full-market broker composition — rather than the named-broker summary path that returns `n/a`.
 
 The expensive enrichment/Signal/Risk work runs only once per ticker, not per window. Compute 7/30/90 metrics from one shared 90-session in-memory series.
 
