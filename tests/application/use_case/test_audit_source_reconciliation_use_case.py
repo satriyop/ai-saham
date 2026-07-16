@@ -1,12 +1,17 @@
-"""Tests for AuditSourceReconciliationUseCase (DQ-001B core + DQ-001D enrichment)."""
+"""Tests for AuditSourceReconciliationUseCase (DQ-001B core, DQ-001D enrichment,
+DQ-001E signal-artifact/market-context)."""
 
 from __future__ import annotations
 
 from src.application.dto.source_reconciliation_dto import (
+    RawCandidateObservationIdentityObservation,
     RawCorporateActionLinkageObservation,
     RawInsiderCacheObservation,
+    RawMarketContextSnapshotObservation,
     RawPitCacheObservation,
+    RawRegimeObservationsObservation,
     RawSeasonalityObservation,
+    RawSignalForwardLabelsLinkageObservation,
     RawStockMetaObservation,
     RawTickerNotationObservation,
 )
@@ -18,6 +23,32 @@ from src.application.use_case.audit_source_reconciliation_use_case import (
     RawCandlesOhlcObservation,
     RawForeignFlowReconciliationObservation,
 )
+
+
+class _EmptyArtifactReader:
+    """DQ-001B/D-only tests don't exercise signal-artifact tables; this fake
+    reports every artifact table as existing-but-empty so it contributes no
+    findings and never changes overall PASS/FAIL/WARN status."""
+
+    def observe_candidate_observations_identity(
+        self,
+    ) -> RawCandidateObservationIdentityObservation:
+        return RawCandidateObservationIdentityObservation(exists=True, row_count=0)
+
+    def observe_signal_forward_labels_linkage(
+        self,
+    ) -> RawSignalForwardLabelsLinkageObservation:
+        return RawSignalForwardLabelsLinkageObservation(
+            exists=True, row_count=0, linkage_provable=True
+        )
+
+    def observe_market_context_snapshot_identity(
+        self,
+    ) -> RawMarketContextSnapshotObservation:
+        return RawMarketContextSnapshotObservation(exists=True, row_count=0)
+
+    def observe_regime_observations_identity(self) -> RawRegimeObservationsObservation:
+        return RawRegimeObservationsObservation(exists=True, row_count=0)
 
 
 class _EmptyEnrichmentReader:
@@ -100,7 +131,8 @@ class _FakeReader:
 def test_happy_path_aggregates_to_pass_with_expected_info_findings():
     reader = _FakeReader()
     use_case = AuditSourceReconciliationUseCase(
-        reader, enrichment_reader=_EmptyEnrichmentReader(), clock=_fixed_clock
+        reader, enrichment_reader=_EmptyEnrichmentReader(), artifact_reader=_EmptyArtifactReader(),
+        clock=_fixed_clock
     )
 
     response = use_case.execute()
@@ -110,7 +142,7 @@ def test_happy_path_aggregates_to_pass_with_expected_info_findings():
     assert response.schema_version == 1
     assert response.generated_at == "2026-07-16T00:00:00+00:00"
     assert response.status == "PASS"
-    assert len(response.checks) == 12  # 4 DQ-001B core + 8 DQ-001D enrichment
+    assert len(response.checks) == 16  # 4 DQ-001B core + 8 DQ-001D enrichment + 4 DQ-001E artifact
     info_codes = {f.code for f in response.findings if f.severity == "INFO"}
     assert "TRACKED_BROKER_SUBSET_NOT_FULL_MARKET" in info_codes
     fail_or_warn = [f for f in response.findings if f.severity in ("FAIL", "WARN")]
@@ -127,7 +159,8 @@ def test_candles_ohlc_violation_produces_fail_status():
         )
     )
     use_case = AuditSourceReconciliationUseCase(
-        reader, enrichment_reader=_EmptyEnrichmentReader(), clock=_fixed_clock
+        reader, enrichment_reader=_EmptyEnrichmentReader(), artifact_reader=_EmptyArtifactReader(),
+        clock=_fixed_clock
     )
 
     response = use_case.execute()
@@ -150,7 +183,8 @@ def test_finding_sample_rows_are_preserved():
         )
     )
     use_case = AuditSourceReconciliationUseCase(
-        reader, enrichment_reader=_EmptyEnrichmentReader(), clock=_fixed_clock
+        reader, enrichment_reader=_EmptyEnrichmentReader(), artifact_reader=_EmptyArtifactReader(),
+        clock=_fixed_clock
     )
 
     response = use_case.execute()
@@ -162,7 +196,8 @@ def test_finding_sample_rows_are_preserved():
 def test_missing_table_causes_fail_without_crash():
     reader = _FakeReader(candles=RawCandlesOhlcObservation(exists=False))
     use_case = AuditSourceReconciliationUseCase(
-        reader, enrichment_reader=_EmptyEnrichmentReader(), clock=_fixed_clock
+        reader, enrichment_reader=_EmptyEnrichmentReader(), artifact_reader=_EmptyArtifactReader(),
+        clock=_fixed_clock
     )
 
     response = use_case.execute()
@@ -176,7 +211,8 @@ def test_missing_table_causes_fail_without_crash():
 def test_database_missing_returns_fail_without_crashing():
     reader = _FakeReader(database_exists=False)
     use_case = AuditSourceReconciliationUseCase(
-        reader, enrichment_reader=_EmptyEnrichmentReader(), clock=_fixed_clock
+        reader, enrichment_reader=_EmptyEnrichmentReader(), artifact_reader=_EmptyArtifactReader(),
+        clock=_fixed_clock
     )
 
     response = use_case.execute()
@@ -193,7 +229,8 @@ def test_broker_summary_duplicate_identity_fails():
         )
     )
     use_case = AuditSourceReconciliationUseCase(
-        reader, enrichment_reader=_EmptyEnrichmentReader(), clock=_fixed_clock
+        reader, enrichment_reader=_EmptyEnrichmentReader(), artifact_reader=_EmptyArtifactReader(),
+        clock=_fixed_clock
     )
 
     response = use_case.execute()
@@ -209,7 +246,8 @@ def test_tracked_broker_net_mismatch_fails():
         )
     )
     use_case = AuditSourceReconciliationUseCase(
-        reader, enrichment_reader=_EmptyEnrichmentReader(), clock=_fixed_clock
+        reader, enrichment_reader=_EmptyEnrichmentReader(), artifact_reader=_EmptyArtifactReader(),
+        clock=_fixed_clock
     )
 
     response = use_case.execute()
@@ -226,7 +264,8 @@ def test_foreign_flow_unreconcilable_schema_warns_not_fails():
         )
     )
     use_case = AuditSourceReconciliationUseCase(
-        reader, enrichment_reader=_EmptyEnrichmentReader(), clock=_fixed_clock
+        reader, enrichment_reader=_EmptyEnrichmentReader(), artifact_reader=_EmptyArtifactReader(),
+        clock=_fixed_clock
     )
 
     response = use_case.execute()
@@ -248,7 +287,8 @@ def test_foreign_flow_mismatch_fails():
         )
     )
     use_case = AuditSourceReconciliationUseCase(
-        reader, enrichment_reader=_EmptyEnrichmentReader(), clock=_fixed_clock
+        reader, enrichment_reader=_EmptyEnrichmentReader(), artifact_reader=_EmptyArtifactReader(),
+        clock=_fixed_clock
     )
 
     response = use_case.execute()
@@ -260,7 +300,8 @@ def test_foreign_flow_mismatch_fails():
 def test_response_to_dict_includes_required_root_keys():
     reader = _FakeReader()
     use_case = AuditSourceReconciliationUseCase(
-        reader, enrichment_reader=_EmptyEnrichmentReader(), clock=_fixed_clock
+        reader, enrichment_reader=_EmptyEnrichmentReader(), artifact_reader=_EmptyArtifactReader(),
+        clock=_fixed_clock
     )
 
     payload = use_case.execute().to_dict()
@@ -339,7 +380,8 @@ def test_enrichment_findings_are_included_in_response():
         )
     )
     use_case = AuditSourceReconciliationUseCase(
-        reader, enrichment_reader=enrichment_reader, clock=_fixed_clock
+        reader, enrichment_reader=enrichment_reader, artifact_reader=_EmptyArtifactReader(),
+        clock=_fixed_clock
     )
 
     response = use_case.execute()
@@ -359,7 +401,8 @@ def test_overall_status_fails_when_any_enrichment_check_fails():
         )
     )
     use_case = AuditSourceReconciliationUseCase(
-        reader, enrichment_reader=enrichment_reader, clock=_fixed_clock
+        reader, enrichment_reader=enrichment_reader, artifact_reader=_EmptyArtifactReader(),
+        clock=_fixed_clock
     )
 
     response = use_case.execute()
@@ -375,7 +418,8 @@ def test_warn_only_enrichment_findings_produce_warn_not_fail():
         )
     )
     use_case = AuditSourceReconciliationUseCase(
-        reader, enrichment_reader=enrichment_reader, clock=_fixed_clock
+        reader, enrichment_reader=enrichment_reader, artifact_reader=_EmptyArtifactReader(),
+        clock=_fixed_clock
     )
 
     response = use_case.execute()
@@ -393,7 +437,8 @@ def test_insider_missing_identity_fails():
         )
     )
     use_case = AuditSourceReconciliationUseCase(
-        reader, enrichment_reader=enrichment_reader, clock=_fixed_clock
+        reader, enrichment_reader=enrichment_reader, artifact_reader=_EmptyArtifactReader(),
+        clock=_fixed_clock
     )
 
     response = use_case.execute()
@@ -413,7 +458,8 @@ def test_seasonality_schema_insufficient_produces_fail_not_crash():
         )
     )
     use_case = AuditSourceReconciliationUseCase(
-        reader, enrichment_reader=enrichment_reader, clock=_fixed_clock
+        reader, enrichment_reader=enrichment_reader, artifact_reader=_EmptyArtifactReader(),
+        clock=_fixed_clock
     )
 
     response = use_case.execute()
@@ -434,7 +480,8 @@ def test_corporate_action_date_orphan_fails():
         )
     )
     use_case = AuditSourceReconciliationUseCase(
-        reader, enrichment_reader=enrichment_reader, clock=_fixed_clock
+        reader, enrichment_reader=enrichment_reader, artifact_reader=_EmptyArtifactReader(),
+        clock=_fixed_clock
     )
 
     response = use_case.execute()
@@ -447,7 +494,8 @@ def test_ticker_notation_always_emits_current_cache_info():
     reader = _FakeReader()
     enrichment_reader = _FakeEnrichmentReader()
     use_case = AuditSourceReconciliationUseCase(
-        reader, enrichment_reader=enrichment_reader, clock=_fixed_clock
+        reader, enrichment_reader=enrichment_reader, artifact_reader=_EmptyArtifactReader(),
+        clock=_fixed_clock
     )
 
     response = use_case.execute()
@@ -456,3 +504,179 @@ def test_ticker_notation_always_emits_current_cache_info():
         f.code == "TICKER_NOTATION_CURRENT_CACHE_LIMITATION" and f.severity == "INFO"
         for f in response.findings
     )
+
+
+# ── DQ-001E: signal-artifact / market-context reconciliation findings ────
+
+
+class _FakeArtifactReader:
+    def __init__(
+        self,
+        candidate_observations: RawCandidateObservationIdentityObservation | None = None,
+        signal_forward_labels: RawSignalForwardLabelsLinkageObservation | None = None,
+        market_context_snapshot: RawMarketContextSnapshotObservation | None = None,
+        regime_observations: RawRegimeObservationsObservation | None = None,
+    ):
+        self._candidate_observations = candidate_observations or (
+            RawCandidateObservationIdentityObservation(exists=True, row_count=0)
+        )
+        self._signal_forward_labels = signal_forward_labels or (
+            RawSignalForwardLabelsLinkageObservation(
+                exists=True, row_count=0, linkage_provable=True
+            )
+        )
+        self._market_context_snapshot = market_context_snapshot or (
+            RawMarketContextSnapshotObservation(exists=True, row_count=0)
+        )
+        self._regime_observations = regime_observations or (
+            RawRegimeObservationsObservation(exists=True, row_count=0)
+        )
+
+    def observe_candidate_observations_identity(
+        self,
+    ) -> RawCandidateObservationIdentityObservation:
+        return self._candidate_observations
+
+    def observe_signal_forward_labels_linkage(
+        self,
+    ) -> RawSignalForwardLabelsLinkageObservation:
+        return self._signal_forward_labels
+
+    def observe_market_context_snapshot_identity(
+        self,
+    ) -> RawMarketContextSnapshotObservation:
+        return self._market_context_snapshot
+
+    def observe_regime_observations_identity(self) -> RawRegimeObservationsObservation:
+        return self._regime_observations
+
+
+def test_artifact_findings_are_included_in_response():
+    reader = _FakeReader()
+    artifact_reader = _FakeArtifactReader(
+        candidate_observations=RawCandidateObservationIdentityObservation(
+            exists=True, row_count=5, invalid_payload_json_count=2,
+        )
+    )
+    use_case = AuditSourceReconciliationUseCase(
+        reader,
+        enrichment_reader=_EmptyEnrichmentReader(),
+        artifact_reader=artifact_reader,
+        clock=_fixed_clock,
+    )
+
+    response = use_case.execute()
+
+    assert any(f.code == "CANDIDATE_OBSERVATIONS_INVALID_PAYLOAD_JSON" for f in response.findings)
+    check = next(c for c in response.checks if c.name == "candidate_observations_identity")
+    assert check.status == "FAIL"
+
+
+def test_any_artifact_fail_produces_overall_fail():
+    reader = _FakeReader()
+    artifact_reader = _FakeArtifactReader(
+        signal_forward_labels=RawSignalForwardLabelsLinkageObservation(
+            exists=True, row_count=5, linkage_provable=True, orphan_linkage_count=1,
+        )
+    )
+    use_case = AuditSourceReconciliationUseCase(
+        reader,
+        enrichment_reader=_EmptyEnrichmentReader(),
+        artifact_reader=artifact_reader,
+        clock=_fixed_clock,
+    )
+
+    response = use_case.execute()
+
+    assert response.status == "FAIL"
+
+
+def test_artifact_warn_only_findings_produce_warn_not_fail():
+    reader = _FakeReader()
+    artifact_reader = _FakeArtifactReader(
+        candidate_observations=RawCandidateObservationIdentityObservation(
+            exists=True, row_count=5, legacy_row_count=5,
+        )
+    )
+    use_case = AuditSourceReconciliationUseCase(
+        reader,
+        enrichment_reader=_EmptyEnrichmentReader(),
+        artifact_reader=artifact_reader,
+        clock=_fixed_clock,
+    )
+
+    response = use_case.execute()
+
+    assert response.status == "WARN"
+    fail_findings = [f for f in response.findings if f.severity == "FAIL"]
+    assert fail_findings == []
+
+
+def test_existing_core_and_enrichment_checks_still_included_with_artifact_reader():
+    reader = _FakeReader()
+    artifact_reader = _FakeArtifactReader()
+    use_case = AuditSourceReconciliationUseCase(
+        reader,
+        enrichment_reader=_EmptyEnrichmentReader(),
+        artifact_reader=artifact_reader,
+        clock=_fixed_clock,
+    )
+
+    response = use_case.execute()
+
+    check_names = {c.name for c in response.checks}
+    for expected in (
+        "candles_ohlc_invariants",
+        "broker_summaries_arithmetic_identity",
+        "broker_daily_flow_arithmetic_scope",
+        "foreign_flow_reconciliation",
+        "seasonality_provenance_consistency",
+        "candidate_observations_identity",
+        "signal_forward_labels_identity_linkage",
+        "market_context_snapshot_identity",
+        "regime_observations_identity",
+    ):
+        assert expected in check_names
+
+
+def test_signal_forward_labels_linkage_unprovable_warns():
+    reader = _FakeReader()
+    artifact_reader = _FakeArtifactReader(
+        signal_forward_labels=RawSignalForwardLabelsLinkageObservation(
+            exists=True, row_count=3, linkage_provable=False,
+        )
+    )
+    use_case = AuditSourceReconciliationUseCase(
+        reader,
+        enrichment_reader=_EmptyEnrichmentReader(),
+        artifact_reader=artifact_reader,
+        clock=_fixed_clock,
+    )
+
+    response = use_case.execute()
+
+    assert any(
+        f.code == "SIGNAL_FORWARD_LABELS_LINKAGE_UNPROVABLE" and f.severity == "WARN"
+        for f in response.findings
+    )
+    assert response.status == "WARN"
+
+
+def test_regime_observations_invalid_regime_fails():
+    reader = _FakeReader()
+    artifact_reader = _FakeArtifactReader(
+        regime_observations=RawRegimeObservationsObservation(
+            exists=True, row_count=2, invalid_regime_count=1,
+        )
+    )
+    use_case = AuditSourceReconciliationUseCase(
+        reader,
+        enrichment_reader=_EmptyEnrichmentReader(),
+        artifact_reader=artifact_reader,
+        clock=_fixed_clock,
+    )
+
+    response = use_case.execute()
+
+    assert response.status == "FAIL"
+    assert any(f.code == "REGIME_OBSERVATIONS_INVALID_REGIME" for f in response.findings)

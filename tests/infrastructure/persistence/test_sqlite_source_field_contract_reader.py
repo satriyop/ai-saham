@@ -578,3 +578,123 @@ def test_dq_001a_tables_still_present_and_unaffected(catalog: StaticSourceFieldC
     ):
         assert table in catalog.tables()
         assert catalog.contracts_for_table(table)
+
+
+# ── DQ-001E: signal-artifact and market-context tables ───────────────────
+
+
+def test_catalog_includes_dq_001e_tables(catalog: StaticSourceFieldContractCatalog):
+    tables = catalog.tables()
+    assert "market_context_snapshots" in tables
+    assert "regime_observations" in tables
+
+
+def test_candidate_observations_config_hash_documents_legacy_semantics(
+    catalog: StaticSourceFieldContractCatalog,
+):
+    contracts = catalog.contracts_for_table("candidate_observations")
+    config_hash = next(c for c in contracts if c.field == "config_hash")
+
+    assert config_hash.null_policy == "fail"
+    assert "legacy" in config_hash.null_semantics.lower()
+    assert "non-canonical" in config_hash.null_semantics.lower()
+
+
+def test_candidate_observations_payload_json_delegates_content_validation(
+    catalog: StaticSourceFieldContractCatalog,
+):
+    contracts = catalog.contracts_for_table("candidate_observations")
+    payload_json = next(c for c in contracts if c.field == "payload_json")
+
+    assert payload_json.null_policy == "fail"
+    assert "reconciliation" in payload_json.null_semantics.lower()
+
+
+def test_market_context_snapshots_payload_json_delegates_content_validation(
+    catalog: StaticSourceFieldContractCatalog,
+):
+    contracts = catalog.contracts_for_table("market_context_snapshots")
+    factors_json = next(c for c in contracts if c.field == "factors_json")
+
+    assert factors_json.null_policy == "fail"
+    assert "reconciliation" in factors_json.null_semantics.lower()
+
+
+def test_regime_observations_detection_inputs_json_delegates_content_validation(
+    catalog: StaticSourceFieldContractCatalog,
+):
+    contracts = catalog.contracts_for_table("regime_observations")
+    detection_inputs_json = next(c for c in contracts if c.field == "detection_inputs_json")
+
+    assert detection_inputs_json.null_policy == "fail"
+    assert "reconciliation" in detection_inputs_json.null_semantics.lower()
+
+
+def test_market_context_snapshots_and_regime_observations_identity_fields_fail(
+    catalog: StaticSourceFieldContractCatalog,
+):
+    mcs_fields = {c.field: c for c in catalog.contracts_for_table("market_context_snapshots")}
+    assert mcs_fields["as_of_date"].null_policy == "fail"
+    assert mcs_fields["regime"].null_policy == "fail"
+
+    ro_fields = {c.field: c for c in catalog.contracts_for_table("regime_observations")}
+    assert ro_fields["observation_date"].null_policy == "fail"
+    assert ro_fields["regime"].null_policy == "fail"
+
+
+def test_signal_forward_labels_now_covers_all_live_schema_columns(
+    catalog: StaticSourceFieldContractCatalog,
+):
+    contracts = catalog.contracts_for_table("signal_forward_labels")
+    fields = {c.field for c in contracts}
+    for expected in (
+        "days_to_peak",
+        "days_to_trough",
+        "stop_would_trigger",
+        "target_would_trigger",
+        "created_at",
+        "updated_at",
+    ):
+        assert expected in fields
+
+
+_DQ_001E_TABLES = ("market_context_snapshots", "regime_observations")
+
+
+def _minimal_dq_001e_schema(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        "CREATE TABLE market_context_snapshots (as_of_date TEXT, regime TEXT, "
+        "conviction REAL, signal_multiplier REAL, gate_tightening INTEGER, "
+        "factors_json TEXT, staleness_warning TEXT, coverage_warning TEXT, "
+        "created_at TEXT, regime_confidence REAL, regime_stability TEXT, "
+        "days_in_regime INTEGER, transition_warning TEXT)"
+    )
+    conn.execute(
+        "CREATE TABLE regime_observations (observation_date TEXT, schema_version INTEGER, "
+        "regime TEXT, regime_score REAL, regime_confidence REAL, regime_stability TEXT, "
+        "days_in_regime INTEGER, transition_warning TEXT, detection_inputs_json TEXT, "
+        "forward_ihsg_return_5d REAL, forward_ihsg_return_10d REAL, "
+        "forward_ihsg_return_20d REAL, created_at TEXT, updated_at TEXT)"
+    )
+
+
+def test_dq_001e_live_schema_fixture_reports_no_missing_table_or_field(
+    tmp_path: Path, catalog: StaticSourceFieldContractCatalog
+):
+    db_path = tmp_path / "dq_001e.db"
+    conn = sqlite3.connect(str(db_path))
+    _minimal_dq_001e_schema(conn)
+    conn.commit()
+    conn.close()
+
+    reader = SQLiteSourceFieldContractReader(db_path, catalog=catalog)
+
+    for table in _DQ_001E_TABLES:
+        raw = reader.observe_table(table)
+        assert raw.exists is True, f"{table} unexpectedly missing"
+        observed_fields = {f.field: f for f in raw.fields}
+        for contract in catalog.contracts_for_table(table):
+            assert contract.field in observed_fields, (
+                f"{table}.{contract.field} unexpectedly missing"
+            )
+            assert observed_fields[contract.field].exists is True

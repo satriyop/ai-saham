@@ -1,15 +1,18 @@
 """
 Read-only executable source reconciliation audit (DQ-001B core tables,
-DQ-001D enrichment/source-context tables).
+DQ-001D enrichment/source-context tables, DQ-001E signal-artifact and
+market-context tables).
 
-Proves OHLC/arithmetic invariants, identity uniqueness, and cross-table
-overlaps for core market/broker tables and enrichment/source-context
-tables. Never repairs, quarantines, or mutates data — read-only findings
-only.
+Proves OHLC/arithmetic invariants, identity uniqueness, payload
+parseability, and cross-table overlaps/linkage for core market/broker
+tables, enrichment/source-context tables, and canonical signal-artifact/
+market-context tables. Never repairs, quarantines, or mutates data —
+read-only findings only.
 
 This module is an orchestrator only: it calls injected readers, delegates
-per-table evaluation policy to source_reconciliation_core_evaluator and
-source_reconciliation_enrichment_evaluator, and assembles the response.
+per-table evaluation policy to source_reconciliation_core_evaluator,
+source_reconciliation_enrichment_evaluator, and
+source_reconciliation_artifact_evaluator, and assembles the response.
 DTOs live in src/application/dto/source_reconciliation_dto.py and are
 re-exported here for backward compatibility with existing import sites.
 
@@ -25,33 +28,43 @@ from src.application.dto.source_reconciliation_dto import (
     AuditSourceReconciliationResponse,
     RawBrokerDailyFlowObservation,
     RawBrokerSummariesObservation,
+    RawCandidateObservationIdentityObservation,
     RawCandlesOhlcObservation,
     RawCorporateActionLinkageObservation,
     RawForeignFlowReconciliationObservation,
     RawInsiderCacheObservation,
+    RawMarketContextSnapshotObservation,
     RawPitCacheObservation,
+    RawRegimeObservationsObservation,
     RawSeasonalityObservation,
+    RawSignalForwardLabelsLinkageObservation,
     RawStockMetaObservation,
     RawTickerNotationObservation,
     SourceReconciliationCheckResult,
     SourceReconciliationFinding,
     aggregate_status,
 )
+from src.application.services import source_reconciliation_artifact_evaluator as artifact_eval
 from src.application.services import source_reconciliation_core_evaluator as core_eval
 from src.application.services import source_reconciliation_enrichment_evaluator as enrichment_eval
 
 __all__ = [
+    "ArtifactReconciliationReader",
     "AuditSourceReconciliationResponse",
     "AuditSourceReconciliationUseCase",
     "EnrichmentReconciliationReader",
     "RawBrokerDailyFlowObservation",
     "RawBrokerSummariesObservation",
+    "RawCandidateObservationIdentityObservation",
     "RawCandlesOhlcObservation",
     "RawCorporateActionLinkageObservation",
     "RawForeignFlowReconciliationObservation",
     "RawInsiderCacheObservation",
+    "RawMarketContextSnapshotObservation",
     "RawPitCacheObservation",
+    "RawRegimeObservationsObservation",
     "RawSeasonalityObservation",
+    "RawSignalForwardLabelsLinkageObservation",
     "RawStockMetaObservation",
     "RawTickerNotationObservation",
     "SourceReconciliationCheckResult",
@@ -94,8 +107,27 @@ class EnrichmentReconciliationReader(Protocol):
     def observe_stock_meta(self) -> RawStockMetaObservation: ...
 
 
+class ArtifactReconciliationReader(Protocol):
+    """Read-only observer of signal-artifact/market-context reconciliation facts (DQ-001E)."""
+
+    def observe_candidate_observations_identity(
+        self,
+    ) -> RawCandidateObservationIdentityObservation: ...
+
+    def observe_signal_forward_labels_linkage(
+        self,
+    ) -> RawSignalForwardLabelsLinkageObservation: ...
+
+    def observe_market_context_snapshot_identity(
+        self,
+    ) -> RawMarketContextSnapshotObservation: ...
+
+    def observe_regime_observations_identity(self) -> RawRegimeObservationsObservation: ...
+
+
 class AuditSourceReconciliationUseCase:
-    """Evaluate executable source reconciliation checks (DQ-001B core + DQ-001D enrichment)."""
+    """Evaluate executable source reconciliation checks (DQ-001B core, DQ-001D
+    enrichment, DQ-001E signal-artifact/market-context)."""
 
     _ARTIFACT_TYPE = "source_reconciliation_audit"
     _SCHEMA_VERSION = 1
@@ -104,10 +136,12 @@ class AuditSourceReconciliationUseCase:
         self,
         reader: SourceReconciliationReader,
         enrichment_reader: EnrichmentReconciliationReader,
+        artifact_reader: ArtifactReconciliationReader,
         clock: Callable[[], str] | None = None,
     ) -> None:
         self._reader = reader
         self._enrichment_reader = enrichment_reader
+        self._artifact_reader = artifact_reader
         self._clock = clock or _default_clock
 
     def execute(self) -> AuditSourceReconciliationResponse:
@@ -159,6 +193,18 @@ class AuditSourceReconciliationUseCase:
                 self._enrichment_reader.observe_ticker_notation()
             ),
             enrichment_eval.evaluate_stock_meta(self._enrichment_reader.observe_stock_meta()),
+            artifact_eval.evaluate_candidate_observations_identity(
+                self._artifact_reader.observe_candidate_observations_identity()
+            ),
+            artifact_eval.evaluate_signal_forward_labels_linkage(
+                self._artifact_reader.observe_signal_forward_labels_linkage()
+            ),
+            artifact_eval.evaluate_market_context_snapshot_identity(
+                self._artifact_reader.observe_market_context_snapshot_identity()
+            ),
+            artifact_eval.evaluate_regime_observations_identity(
+                self._artifact_reader.observe_regime_observations_identity()
+            ),
         ):
             checks.append(check)
             findings.extend(check_findings)

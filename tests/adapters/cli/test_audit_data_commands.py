@@ -152,6 +152,28 @@ def test_source_contracts_json_output_includes_dq_001c_enrichment_tables(tmp_pat
         assert expected in table_names
 
 
+def test_source_contracts_json_output_includes_dq_001e_signal_artifact_tables(tmp_path: Path):
+    db_path = tmp_path / "source_contracts.db"
+    _build_temp_db(db_path)
+
+    result = runner.invoke(
+        app,
+        ["audit", "data", "source-contracts", "--format", "json", "--db", str(db_path)],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+
+    table_names = {t["table"] for t in payload["tables"]}
+    for expected in (
+        "candidate_observations",
+        "signal_forward_labels",
+        "market_context_snapshots",
+        "regime_observations",
+    ):
+        assert expected in table_names
+
+
 def test_source_contracts_table_format_prints_summary_without_error(tmp_path: Path):
     db_path = tmp_path / "source_contracts.db"
     _build_temp_db(db_path)
@@ -243,6 +265,37 @@ def test_reconcile_sources_json_output_includes_dq_001d_enrichment_findings(tmp_
         f for f in payload["findings"] if f["table"] == "ticker_notation_cache"
     ]
     assert any(f["code"] == "MISSING_ENRICHMENT_TABLE" for f in ticker_notation_findings)
+
+
+def test_reconcile_sources_json_output_includes_dq_001e_artifact_checks(tmp_path: Path):
+    db_path = tmp_path / "reconcile.db"
+    _build_temp_db(db_path)
+
+    result = runner.invoke(
+        app,
+        ["audit", "data", "reconcile-sources", "--format", "json", "--db", str(db_path)],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+
+    check_names = {c["name"] for c in payload["checks"]}
+    for expected in (
+        "candidate_observations_identity",
+        "signal_forward_labels_identity_linkage",
+        "market_context_snapshot_identity",
+        "regime_observations_identity",
+    ):
+        assert expected in check_names
+
+    # _build_temp_db only creates `candles`; market_context_snapshots and
+    # regime_observations are absent so they surface as explicit WARN
+    # findings rather than crashing. These are context/artifact tables, not
+    # enrichment tables, so they use a distinct finding code.
+    market_context_findings = [
+        f for f in payload["findings"] if f["table"] == "market_context_snapshots"
+    ]
+    assert any(f["code"] == "MISSING_OPTIONAL_ARTIFACT_TABLE" for f in market_context_findings)
 
 
 def test_reconcile_sources_table_format_prints_summary_without_error(tmp_path: Path):

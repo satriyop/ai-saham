@@ -402,14 +402,66 @@ is not complete.
     the real DQ-001B files (`audit_source_reconciliation_use_case.py` /
     `sqlite_source_reconciliation_reader.py`) instead of guessing new
     file names to match the stale instructions.
-- DQ-001 acceptance criteria below are **not** marked complete — DQ-001A/C
-  now give field contracts for 18 tables (5 core + 13 enrichment) and
-  DQ-001B/D give executable reconciliation for those same 18 tables
-  (`candles`, `broker_summaries`, `broker_daily_flow`,
-  `foreign_flow_points`/`foreign_flow_snapshots`, plus all 8 enrichment
-  tables from DQ-001D). `candidate_observations`/`signal_forward_labels`
-  reconciliation and market context/sentiment source families remain
-  unaudited.
+- **DQ-001E** (2026-07-16): extends both existing commands (no new command)
+  for `candidate_observations`, `signal_forward_labels`,
+  `market_context_snapshots`, `regime_observations`:
+  - `source-contracts`: `candidate_observations`'s existing DQ-001A
+    contract already covered all required identity fields — only extended
+    `payload_json`'s `null_semantics` to note JSON-content validation is
+    reconciliation's job. `signal_forward_labels`'s DQ-001A contract was
+    missing 6 live columns (`days_to_peak`, `days_to_trough`,
+    `stop_would_trigger`, `target_would_trigger`, `created_at`,
+    `updated_at`) — added, not duplicated. Two brand-new table contracts
+    added for `market_context_snapshots` (13 fields) and
+    `regime_observations` (14 fields), field counts verified 1:1 against
+    live `PRAGMA table_info`.
+  - `reconcile-sources`: 4 new checks in a new sibling reader
+    (`sqlite_signal_artifact_reconciliation_reader.py`) and sibling
+    evaluator (`source_reconciliation_artifact_evaluator.py`):
+    `candidate_observations_identity` (canonical-row `config_hash != ''`
+    identity validity, legacy-row WARN, duplicate canonical identity WARN,
+    `payload_json` parseability via SQLite `json_valid()`, missing
+    top-level `schema_version` marker WARN — verified live payloads do
+    carry that key before enabling the check);
+    `signal_forward_labels_identity_linkage` (identity nulls FAIL,
+    duplicate identity FAIL since it directly inflates readiness counts,
+    `fingerprint_json` parseability FAIL, and observation linkage proven
+    via `(ticker, signal_date, observation_captured_at)` →
+    `(ticker, snapshot_date, captured_at)` — confirmed by reading
+    `generate_signal_forward_labels_use_case.py`, not guessed; WARN
+    "not canonical-grade for replay/readiness linkage" only when
+    `candidate_observations` lacks the columns to prove it);
+    `market_context_snapshot_identity` and `regime_observations_identity`
+    (both WARN-if-missing since neither is a hard requirement for core
+    scoring; invalid/unknown `regime` FAILs; `factors_json`/
+    `detection_inputs_json` parseability FAILs; duplicate-PK checks kept
+    for defensiveness even though the DB enforces uniqueness).
+  - Every new observer checks required columns via `PRAGMA table_info`
+    before querying (same pattern as DQ-001D, applied correctly this
+    time — including a JOIN-ambiguous-column bug caught and fixed during
+    self-testing: the `signal_forward_labels`↔`candidate_observations`
+    orphan-linkage query originally reused an unqualified WHERE clause
+    that collided between both tables' `ticker` columns).
+  - `AuditSourceReconciliationUseCase.__init__` now requires an
+    `artifact_reader` parameter; existing DQ-001B/D tests updated with a
+    fake "empty but healthy" artifact reader.
+  - Live run: `candidate_observations_identity` WARNs (all 19,317 rows are
+    legacy, 0 canonical — consistent with DQ-000/DQ-001B's existing
+    findings for this table); `signal_forward_labels_identity_linkage`,
+    `market_context_snapshot_identity`, `regime_observations_identity` all
+    PASS (0 invalid regimes, 0 invalid JSON, full observation linkage
+    proven for all 5,760 labels).
+  - Note: this task's instructions also referenced the same nonexistent
+    `reconcile_data_sources_use_case.py` file name as DQ-001D's
+    instructions; implemented against the real files again.
+- DQ-001 acceptance criteria below are **not** marked complete — DQ-001A/C/E
+  now give field contracts for 20 tables (5 core + 13 enrichment + 2
+  market-context) and DQ-001B/D/E give executable reconciliation for
+  candles, broker_summaries, broker_daily_flow,
+  foreign_flow_points/foreign_flow_snapshots, all 8 DQ-001D enrichment
+  tables, plus candidate_observations, signal_forward_labels,
+  market_context_snapshots, and regime_observations. Sentiment source
+  families remain unaudited.
 
 **Audit each source family:**
 

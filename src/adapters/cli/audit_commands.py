@@ -47,6 +47,9 @@ from src.infrastructure.persistence.sqlite_audit_manifest_reader import (
 from src.infrastructure.persistence.sqlite_enrichment_reconciliation_reader import (
     SQLiteEnrichmentReconciliationReader,
 )
+from src.infrastructure.persistence.sqlite_signal_artifact_reconciliation_reader import (
+    SQLiteSignalArtifactReconciliationReader,
+)
 from src.infrastructure.persistence.sqlite_source_field_contract_reader import (
     SQLiteSourceFieldContractReader,
 )
@@ -309,6 +312,7 @@ def _run_reconcile_sources(db_path: Path | None, output_format: str) -> None:
     use_case = AuditSourceReconciliationUseCase(
         reader=SQLiteSourceReconciliationReader(resolved_db),
         enrichment_reader=SQLiteEnrichmentReconciliationReader(resolved_db),
+        artifact_reader=SQLiteSignalArtifactReconciliationReader(resolved_db),
     )
     response = use_case.execute()
 
@@ -330,7 +334,7 @@ def _print_reconcile_sources_table(response: AuditSourceReconciliationResponse) 
     status_text.append(f" | Findings: {len(response.findings)}")
     panel = Panel(
         status_text,
-        title="[bold]Source Reconciliation Audit (DQ-001B/DQ-001D)[/bold]",
+        title="[bold]Source Reconciliation Audit (DQ-001B/DQ-001D/DQ-001E)[/bold]",
         border_style=color,
         expand=False,
     )

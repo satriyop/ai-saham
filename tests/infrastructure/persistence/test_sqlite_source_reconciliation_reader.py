@@ -8,16 +8,46 @@ from pathlib import Path
 import pytest
 
 from src.application.dto.source_reconciliation_dto import (
+    RawCandidateObservationIdentityObservation,
     RawCorporateActionLinkageObservation,
     RawInsiderCacheObservation,
+    RawMarketContextSnapshotObservation,
     RawPitCacheObservation,
+    RawRegimeObservationsObservation,
     RawSeasonalityObservation,
+    RawSignalForwardLabelsLinkageObservation,
     RawStockMetaObservation,
     RawTickerNotationObservation,
 )
 from src.infrastructure.persistence.sqlite_source_reconciliation_reader import (
     SQLiteSourceReconciliationReader,
 )
+
+
+class _EmptyArtifactReader:
+    """DQ-001B-only tests don't exercise signal-artifact tables; this fake
+    reports every artifact table as existing-but-empty so it contributes no
+    findings and never changes overall PASS/FAIL/WARN status."""
+
+    def observe_candidate_observations_identity(
+        self,
+    ) -> RawCandidateObservationIdentityObservation:
+        return RawCandidateObservationIdentityObservation(exists=True, row_count=0)
+
+    def observe_signal_forward_labels_linkage(
+        self,
+    ) -> RawSignalForwardLabelsLinkageObservation:
+        return RawSignalForwardLabelsLinkageObservation(
+            exists=True, row_count=0, linkage_provable=True
+        )
+
+    def observe_market_context_snapshot_identity(
+        self,
+    ) -> RawMarketContextSnapshotObservation:
+        return RawMarketContextSnapshotObservation(exists=True, row_count=0)
+
+    def observe_regime_observations_identity(self) -> RawRegimeObservationsObservation:
+        return RawRegimeObservationsObservation(exists=True, row_count=0)
 
 
 class _EmptyEnrichmentReader:
@@ -245,7 +275,8 @@ def test_use_case_reports_candles_schema_insufficient_finding_not_crash(tmp_path
 
     reader = SQLiteSourceReconciliationReader(db_path)
     use_case = AuditSourceReconciliationUseCase(
-        reader, enrichment_reader=_EmptyEnrichmentReader(), clock=lambda: "2026-07-16T00:00:00+00:00"
+        reader, enrichment_reader=_EmptyEnrichmentReader(), artifact_reader=_EmptyArtifactReader(),
+        clock=lambda: "2026-07-16T00:00:00+00:00"
     )
     response = use_case.execute()
 
@@ -363,7 +394,8 @@ def test_use_case_reports_schema_insufficient_finding_not_crash(tmp_path: Path):
 
     reader = SQLiteSourceReconciliationReader(db_path)
     use_case = AuditSourceReconciliationUseCase(
-        reader, enrichment_reader=_EmptyEnrichmentReader(), clock=lambda: "2026-07-16T00:00:00+00:00"
+        reader, enrichment_reader=_EmptyEnrichmentReader(), artifact_reader=_EmptyArtifactReader(),
+        clock=lambda: "2026-07-16T00:00:00+00:00"
     )
     response = use_case.execute()
 
@@ -414,7 +446,8 @@ def test_tracked_broker_subset_info_always_present_via_use_case(full_schema_db: 
 
     reader = SQLiteSourceReconciliationReader(full_schema_db)
     use_case = AuditSourceReconciliationUseCase(
-        reader, enrichment_reader=_EmptyEnrichmentReader(), clock=lambda: "2026-07-16T00:00:00+00:00"
+        reader, enrichment_reader=_EmptyEnrichmentReader(), artifact_reader=_EmptyArtifactReader(),
+        clock=lambda: "2026-07-16T00:00:00+00:00"
     )
     response = use_case.execute()
 
@@ -467,7 +500,8 @@ def test_foreign_flow_partial_coverage_is_reported(full_schema_db: Path):
     )
 
     use_case = AuditSourceReconciliationUseCase(
-        reader, enrichment_reader=_EmptyEnrichmentReader(), clock=lambda: "2026-07-16T00:00:00+00:00"
+        reader, enrichment_reader=_EmptyEnrichmentReader(), artifact_reader=_EmptyArtifactReader(),
+        clock=lambda: "2026-07-16T00:00:00+00:00"
     )
     response = use_case.execute()
 
@@ -506,7 +540,8 @@ def test_happy_path_produces_pass_except_tracked_broker_info(full_schema_db: Pat
 
     reader = SQLiteSourceReconciliationReader(full_schema_db)
     use_case = AuditSourceReconciliationUseCase(
-        reader, enrichment_reader=_EmptyEnrichmentReader(), clock=lambda: "2026-07-16T00:00:00+00:00"
+        reader, enrichment_reader=_EmptyEnrichmentReader(), artifact_reader=_EmptyArtifactReader(),
+        clock=lambda: "2026-07-16T00:00:00+00:00"
     )
     response = use_case.execute()
 

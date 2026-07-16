@@ -255,3 +255,74 @@ class RawStockMetaObservation:
     duplicate_identity_samples: tuple[dict, ...] = ()
     both_sector_industry_null_count: int = 0
     both_sector_industry_null_samples: tuple[dict, ...] = ()
+
+
+# ---------------------------------------------------------------------------
+# DQ-001E: signal-artifact and market-context raw observations.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class RawCandidateObservationIdentityObservation:
+    exists: bool
+    row_count: int = 0
+    schema_sufficient: bool = True
+    missing_columns: tuple[str, ...] = ()
+    canonical_row_count: int = 0
+    legacy_row_count: int = 0
+    canonical_missing_identity_count: int = 0
+    canonical_missing_identity_samples: tuple[dict, ...] = ()
+    duplicate_canonical_identity_count: int = 0
+    duplicate_canonical_identity_samples: tuple[dict, ...] = ()
+    invalid_payload_json_count: int = 0
+    invalid_payload_json_samples: tuple[dict, ...] = ()
+    payload_missing_schema_marker_count: int = 0
+    payload_missing_schema_marker_samples: tuple[dict, ...] = ()
+
+
+@dataclass(frozen=True)
+class RawSignalForwardLabelsLinkageObservation:
+    exists: bool
+    row_count: int = 0
+    schema_sufficient: bool = True
+    missing_columns: tuple[str, ...] = ()
+    missing_identity_count: int = 0
+    missing_identity_samples: tuple[dict, ...] = ()
+    duplicate_identity_count: int = 0
+    duplicate_identity_samples: tuple[dict, ...] = ()
+    invalid_fingerprint_json_count: int = 0
+    invalid_fingerprint_json_samples: tuple[dict, ...] = ()
+    linkage_provable: bool = False
+    orphan_linkage_count: int = 0
+    orphan_linkage_samples: tuple[dict, ...] = ()
+
+
+@dataclass(frozen=True)
+class RawMarketContextSnapshotObservation:
+    exists: bool
+    row_count: int = 0
+    schema_sufficient: bool = True
+    missing_columns: tuple[str, ...] = ()
+    invalid_regime_count: int = 0
+    invalid_regime_samples: tuple[dict, ...] = ()
+    duplicate_identity_count: int = 0
+    duplicate_identity_samples: tuple[dict, ...] = ()
+    missing_provenance_count: int = 0
+    missing_provenance_samples: tuple[dict, ...] = ()
+    invalid_factors_json_count: int = 0
+    invalid_factors_json_samples: tuple[dict, ...] = ()
+
+
+@dataclass(frozen=True)
+class RawRegimeObservationsObservation:
+    exists: bool
+    row_count: int = 0
+    schema_sufficient: bool = True
+    missing_columns: tuple[str, ...] = ()
+    invalid_regime_count: int = 0
+    invalid_regime_samples: tuple[dict, ...] = ()
+    duplicate_identity_count: int = 0
+    duplicate_identity_samples: tuple[dict, ...] = ()
+    null_confidence_or_stability_count: int = 0
+    invalid_detection_inputs_json_count: int = 0
+    invalid_detection_inputs_json_samples: tuple[dict, ...] = ()
