@@ -535,12 +535,119 @@ freshness_status           # CURRENT | STALE | PARTIAL | UNKNOWN | INVALID
 
 Artifacts without a defensible effective timestamp or data cutoff are invalid for learning and historical evaluation. Do not infer missing temporal provenance from `captured_at` alone.
 
+**State:** DQ-002A implemented (2026-07-16). One canonical application-layer
+session resolver exists; DQ-002 as a whole is not complete.
+
+- **DQ-002A** (2026-07-16, revised same day after review): `EffectiveMarketSessionResolver`
+  added at `src/application/services/effective_market_session_resolver.py`.
+  Public method `resolve(*, run_at: datetime, decision_at: datetime | None =
+  None) -> EffectiveMarketSession` with fields `run_at`, `decision_at`,
+  `latest_completed_session`, `analysis_as_of`, `market_session_name`
+  (`WEEKEND` | `BEFORE_OPEN` | `PRE_OPEN` | `REGULAR` | `PRE_CLOSING` |
+  `AFTER_CLOSE`), `is_eod_pending`, `resolution_source`, `notes`.
+  Pre-open/intraday/post-close IS modeled — the first pass had collapsed all
+  weekday times before `MARKET_CLOSE` into one `LIVE_SESSION` label, which a
+  review correctly flagged as violating this task's own pre-open/intraday
+  requirement; fixed by classifying against `PRE_OPEN_START`,
+  `REGULAR_OPEN`, and `PRE_CLOSE_START` from `idx_market.py`.
+  `latest_completed_session`/`is_eod_pending` are identical across all four
+  pre-close bands (prior cached session, pending) — only the label
+  distinguishes them, since none of the audited call sites need band-level
+  behavioral differences yet.
+  - Preferred source: cached IHSG benchmark candle series via
+    `MarketDataRepository.get_candles(..., end_date=...)`, always bounded by
+    the decision date so a cache that already contains sessions after
+    `decision_at` can never leak into a past-dated resolution (regression
+    test: `test_bounded_ihsg_lookup_does_not_leak_future_cached_sessions`).
+    Falls back to `last_weekday` weekday arithmetic only when no cached
+    IHSG session bounds the decision date, with an explicit
+    `resolution_source` (`weekday_fallback_*`) and a human-readable note.
+  - Holidays are handled implicitly and correctly by the same bounded-cache
+    lookup used for stale-cache detection: a weekday with no IHSG session
+    that day (because it was a holiday) naturally resolves to the last
+    cached prior session instead of being forced as "completed" — no
+    separate holiday calendar was added (`resolution_source =
+    "ihsg_cache_stale_or_holiday"` covers both cases identically, which is
+    correct since both mean "no proven session on the decision date").
+  - Naive datetimes are rejected (`ValueError`) for both `run_at` and
+    `decision_at` — normalization was not chosen; tested explicitly.
+  - Tests: `tests/application/services/test_effective_market_session_resolver.py`
+    (14 tests) cover weekday before/after close, stale-cache-after-close,
+    weekend-with-cache, holiday-like weekday, missing-cache fallback,
+    `decision_at` overriding `run_at`, naive-datetime rejection (both
+    params), future-cache-leakage exclusion, and the four weekday pre-close
+    bands (`BEFORE_OPEN`, `PRE_OPEN`, `REGULAR`, `PRE_CLOSING`) each
+    resolving to a distinct label.
+  - Integration: `DailyBriefingUseCase` (`src/application/use_case/daily_briefing_use_case.py`)
+    now takes an optional `session_resolver: EffectiveMarketSessionResolver
+    | None` constructor param (defaults to building one from the injected
+    `market_repository`, preserving existing call sites/DI wiring with zero
+    changes). Its ad-hoc `while live_session_date.weekday() >= 5: -= 1 day`
+    weekend-rollback loop was replaced by a resolver call; only the
+    `WEEKEND` branch's result overrides `live_session_date` — normal weekday
+    `live_session_date` (`date.today()` when not historical) is untouched.
+    This is a real, intended behavior change versus the old code: on a
+    weekend, `live_session_date` now reflects the cache-proven last IDX
+    session (e.g. a Friday holiday correctly rolls back to Thursday)
+    instead of blindly assuming Friday. Compatibility test
+    `test_daily_briefing_normal_trading_day_date_unaffected_by_resolver_integration`
+    proves live-weekday resolution is unchanged; a new test
+    `test_daily_briefing_weekend_prefers_cached_ihsg_session_over_blind_friday`
+    proves the corrected weekend behavior; the pre-existing
+    `test_daily_briefing_rolls_back_weekends` (blind-Friday-on-empty-cache)
+    still passes unchanged in outcome, with its mock updated to explicitly
+    configure `get_candles` (empty) since the resolver now calls it.
+  - Not touched, deferred to DQ-002B/C: `swing_data_freshness.py`,
+    `data_freshness_service.py`, and `market_freshness_service.py` still
+    have their own independent weekday/cache logic and were **not**
+    replaced or wired to the new resolver — this slice only adds the
+    canonical resolver and integrates one call site
+    (`DailyBriefingUseCase`) as the required behavior-preserving proof
+    point, per the task scope ("implement only the first safe slice").
+  - No persistence schema change, no migration, no scoring/SignalEngine
+    change, no observation identity change — none were needed or made.
+  - Verification: `python -m py_compile` on all changed files; focused
+    resolver tests (14) and daily-briefing tests (18, up from 16) pass;
+    `git diff --check` clean; full suite run 4327 passed / 7 failed, all 7
+    pre-existing/unrelated failures in
+    `tests/adapters/cli/test_stock_analysis_workflow_dependencies_config_paths.py`
+    (mock-not-used/FileNotFoundError assertions, present on a clean `main`
+    before this change, consistent with the same pre-existing flake noted
+    under DQ-000).
+
+**Deferred to DQ-002B/C (not started):**
+
+- Wiring the resolver into `swing_data_freshness.py`,
+  `data_freshness_service.py`, and `market_freshness_service.py` (or
+  retiring their independent logic in favor of the resolver).
+- Provider-settlement cutoffs and any band-specific behavioral difference
+  between `BEFORE_OPEN`/`PRE_OPEN`/`REGULAR`/`PRE_CLOSING` beyond the label
+  (all four currently resolve `latest_completed_session`/`is_eod_pending`
+  identically — no call site needs finer behavior yet).
+- `observed_through` / `available_at` / `freshness_status` fields from the
+  full DQ-002 required contract — `EffectiveMarketSession` only implements
+  `run_at`, `decision_at`, `latest_completed_session`, `analysis_as_of`,
+  plus resolver-specific provenance fields (`market_session_name`,
+  `is_eod_pending`, `resolution_source`, `notes`).
+- Temporal-leakage proof across candles/broker/enrichment/labels/market
+  context beyond the resolver's own bounded-cache-lookup guarantee.
+- Persisted-artifact execution-time-vs-effective-session distinction.
+
 **Acceptance criteria:**
 
 - [ ] One application-layer session service is used by all audited workflows.
+      (Resolver exists and is used by `DailyBriefingUseCase`; not yet used by
+      `swing_data_freshness.py`, `data_freshness_service.py`, or
+      `market_freshness_service.py` — DQ-002B/C.)
 - [ ] Weekend, holiday, pre-open, intraday, post-close, and late-provider tests pass.
+      (Weekend/holiday/pre-open/intraday/post-close covered by the resolver
+      and its tests; provider-settlement/late-provider cutoffs not yet
+      modeled.)
 - [ ] Every persisted artifact distinguishes execution time from effective market session.
+      (Not started — no persistence changes in this slice.)
 - [ ] Temporal leakage tests intentionally plant future rows and prove they are excluded.
+      (Proven for the resolver's own IHSG lookup only; not yet proven across
+      candles/broker/enrichment/labels/market-context consumers.)
 
 ### DQ-003 — Audit and repair historical candidate-observation backfill
 

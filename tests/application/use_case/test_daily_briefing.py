@@ -25,6 +25,9 @@ from tests.application.use_case.accumulation_screen_fixtures import (
 def test_daily_briefing_rolls_back_weekends():
     market_repo = MagicMock()
     market_repo.get_date_range.return_value = None
+    # No cached IHSG benchmark data: the effective-session resolver falls
+    # back to weekday-only logic, matching the pre-resolver behavior.
+    market_repo.get_candles.return_value = []
 
     broker_repo = MagicMock()
     broker_repo.get_date_range.return_value = None
@@ -61,6 +64,76 @@ def test_daily_briefing_rolls_back_weekends():
         # Should roll back Sunday to Friday, June 19, 2026
         assert response.live_session_date == date(2026, 6, 19)
         assert response.is_historical is False
+
+
+def test_daily_briefing_weekend_prefers_cached_ihsg_session_over_blind_friday():
+    """DQ-002A: the effective-session resolver uses the cached IHSG benchmark
+    session for weekend rollback instead of blindly assuming Friday — this
+    also correctly reflects a Friday holiday when the cache proves it."""
+    market_repo = MagicMock()
+    market_repo.get_date_range.return_value = None
+    # IHSG cache stops at Thursday 2026-06-18: Friday 2026-06-19 was a holiday.
+    market_repo.get_candles.return_value = [
+        MagicMock(date=date(2026, 6, 17)),
+        MagicMock(date=date(2026, 6, 18)),
+    ]
+
+    broker_repo = MagicMock()
+    broker_repo.get_date_range.return_value = None
+
+    regime_uc = MagicMock()
+    accum_uc = MagicMock()
+    accum_uc.execute.return_value = MagicMock(candidates=[])
+
+    use_case = DailyBriefingUseCase(
+        market_repository=market_repo,
+        broker_repository=broker_repo,
+        regime_use_case=regime_uc,
+        accumulation_use_case=accum_uc,
+        universe_loader=MagicMock(),
+    )
+
+    with patch("src.application.use_case.daily_briefing_use_case.date") as mock_date:
+        mock_date.today.return_value = date(2026, 6, 20)  # Saturday
+        mock_date.side_effect = lambda *args, **kwargs: date(*args, **kwargs)
+
+        response = use_case.execute(DailyBriefingRequest(as_of_date=None))
+
+    # Not blindly Friday (2026-06-19) — the holiday-aware cache says Thursday.
+    assert response.live_session_date == date(2026, 6, 18)
+
+
+def test_daily_briefing_normal_trading_day_date_unaffected_by_resolver_integration():
+    """Compatibility: on a normal (non-weekend) live trading day, the
+    live_session_date is still `date.today()`, unaffected by the new
+    effective-session resolver call (only the weekend branch overrides it)."""
+    market_repo = MagicMock()
+    market_repo.get_date_range.return_value = None
+    market_repo.get_candles.return_value = [MagicMock(date=date(2026, 6, 18))]
+
+    broker_repo = MagicMock()
+    broker_repo.get_date_range.return_value = None
+
+    regime_uc = MagicMock()
+    accum_uc = MagicMock()
+    accum_uc.execute.return_value = MagicMock(candidates=[])
+
+    use_case = DailyBriefingUseCase(
+        market_repository=market_repo,
+        broker_repository=broker_repo,
+        regime_use_case=regime_uc,
+        accumulation_use_case=accum_uc,
+        universe_loader=MagicMock(),
+    )
+
+    with patch("src.application.use_case.daily_briefing_use_case.date") as mock_date:
+        mock_date.today.return_value = date(2026, 6, 19)  # Friday, a live trading day
+        mock_date.side_effect = lambda *args, **kwargs: date(*args, **kwargs)
+
+        response = use_case.execute(DailyBriefingRequest(as_of_date=None))
+
+    assert response.live_session_date == date(2026, 6, 19)
+    assert response.is_historical is False
 
 
 def test_daily_briefing_writes_zero_candidate_observations(monkeypatch):

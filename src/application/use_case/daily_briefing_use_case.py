@@ -7,7 +7,7 @@ AI usage: None
 
 import json
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, time
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -17,6 +17,9 @@ from src.application.dto.accumulation_screen import (
 )
 from src.application.ports.universe_config_loader import UniverseConfigLoader
 from src.application.services.data_freshness_service import compute_data_freshness
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSessionResolver,
+)
 from src.application.services.universe_loader import load_universe
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from src.application.use_case.daily_accumulation_projection import (
@@ -36,6 +39,7 @@ from src.domain.value_objects.data_freshness_status import (
     DataFreshnessStatus,
     SourceFreshnessState,
 )
+from src.domain.value_objects.idx_market import IDX_TIMEZONE
 
 if TYPE_CHECKING:
     from src.domain.value_objects.market_context import MarketContext
@@ -122,6 +126,7 @@ class DailyBriefingUseCase:
         accumulation_use_case: AccumulationScreenUseCase,
         universe_loader: UniverseConfigLoader,
         setup_lens_impact_use_case: DailySetupLensImpactUseCase | None = None,
+        session_resolver: EffectiveMarketSessionResolver | None = None,
     ) -> None:
         self._market_repo = market_repository
         self._broker_repo = broker_repository
@@ -129,16 +134,29 @@ class DailyBriefingUseCase:
         self._accumulation_uc = accumulation_use_case
         self._universe_loader = universe_loader
         self._setup_lens_impact_uc = setup_lens_impact_use_case
+        self._session_resolver = session_resolver or EffectiveMarketSessionResolver(
+            market_repository
+        )
 
     def execute(self, request: DailyBriefingRequest) -> DailyBriefingResponse:
-        from datetime import timedelta
         is_historical = request.as_of_date is not None
         live_session_date = request.as_of_date or date.today()
 
-        # Roll back to the most recent trading session if it's a weekend and date was defaulted
+        # On a weekend and no explicit date was given, roll back to the latest
+        # IDX session the effective-session resolver can prove (cached IHSG
+        # session when available, weekday fallback otherwise) rather than
+        # blindly assuming the prior Friday.
         if not is_historical:
-            while live_session_date.weekday() >= 5:
-                live_session_date -= timedelta(days=1)
+            # Time-of-day is irrelevant to the weekend/live-day distinction, so
+            # midnight keeps this consistent with `date.today()` (the same
+            # mockable time source the rest of this method already uses) while
+            # still driving the resolver's date-only weekend branch.
+            run_at = datetime.combine(live_session_date, time.min, tzinfo=IDX_TIMEZONE)
+            effective_session = self._session_resolver.resolve(run_at=run_at)
+            if effective_session.market_session_name == "WEEKEND":
+                live_session_date = (
+                    effective_session.latest_completed_session or live_session_date
+                )
 
         warnings: list[str] = []
 
