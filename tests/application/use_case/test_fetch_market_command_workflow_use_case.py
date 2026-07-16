@@ -4,6 +4,10 @@ from unittest.mock import Mock
 
 import pytest
 
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSession,
+    EffectiveMarketSessionResolver,
+)
 from src.application.services.fetch_market_provider_precondition import (
     FetchMarketProviderPrecondition,
 )
@@ -44,10 +48,18 @@ def mock_market_freshness():
     return freshness
 
 
+@pytest.fixture
+def mock_session_resolver():
+    resolver = Mock(spec=EffectiveMarketSessionResolver)
+    resolver.resolve.return_value = Mock(spec=EffectiveMarketSession)
+    return resolver
+
+
 def test_no_tickers_raises_value_error(
     mock_refresh_use_case,
     mock_provider_precondition,
     mock_market_freshness,
+    mock_session_resolver,
 ):
     mock_resolver = Mock(return_value=[])
 
@@ -61,6 +73,7 @@ def test_no_tickers_raises_value_error(
         context_refresh=lambda *_: RefreshMarketContextInputsResponse(statuses=()),
         market_freshness=mock_market_freshness,
         ticker_resolver=mock_resolver,
+        session_resolver=mock_session_resolver,
     )
 
     req = FetchMarketCommandWorkflowRequest(
@@ -88,6 +101,7 @@ def test_provider_precondition_runs_before_refresh_and_fails(
     mock_refresh_use_case,
     mock_provider_precondition,
     mock_market_freshness,
+    mock_session_resolver,
 ):
     mock_resolver = Mock(return_value=["BBCA"])
     mock_provider_precondition.validate.return_value = "Precondition error details"
@@ -101,6 +115,7 @@ def test_provider_precondition_runs_before_refresh_and_fails(
         context_refresh=lambda *_: RefreshMarketContextInputsResponse(statuses=()),
         market_freshness=mock_market_freshness,
         ticker_resolver=mock_resolver,
+        session_resolver=mock_session_resolver,
     )
 
     req = FetchMarketCommandWorkflowRequest(
@@ -130,6 +145,7 @@ def test_broker_only_skips_precondition_and_context_refresh(
     mock_refresh_use_case,
     mock_provider_precondition,
     mock_market_freshness,
+    mock_session_resolver,
 ):
     mock_resolver = Mock(return_value=["BBCA"])
     mock_refresh_use_case.execute.return_value = FetchMarketRefreshResponse(
@@ -151,6 +167,7 @@ def test_broker_only_skips_precondition_and_context_refresh(
         context_refresh=context_refresh,
         market_freshness=mock_market_freshness,
         ticker_resolver=mock_resolver,
+        session_resolver=mock_session_resolver,
     )
 
     req = FetchMarketCommandWorkflowRequest(
@@ -184,6 +201,7 @@ def test_calendar_skip_priority_and_call_count(
     mock_refresh_use_case,
     mock_provider_precondition,
     mock_market_freshness,
+    mock_session_resolver,
 ):
     mock_resolver = Mock(return_value=["BBCA"])
     mock_refresh_use_case.execute.return_value = FetchMarketRefreshResponse(
@@ -205,6 +223,7 @@ def test_calendar_skip_priority_and_call_count(
         context_refresh=lambda *_: RefreshMarketContextInputsResponse(statuses=()),
         market_freshness=mock_market_freshness,
         ticker_resolver=mock_resolver,
+        session_resolver=mock_session_resolver,
     )
 
     # Case A: no_calendar=True wins over no_enrichment=True
@@ -294,6 +313,7 @@ def test_context_refresh_runs_only_when_not_broker_only(
     mock_refresh_use_case,
     mock_provider_precondition,
     mock_market_freshness,
+    mock_session_resolver,
 ):
     mock_resolver = Mock(return_value=["BBCA"])
     mock_refresh_use_case.execute.return_value = FetchMarketRefreshResponse(
@@ -317,6 +337,7 @@ def test_context_refresh_runs_only_when_not_broker_only(
         context_refresh=context_refresh,
         market_freshness=mock_market_freshness,
         ticker_resolver=mock_resolver,
+        session_resolver=mock_session_resolver,
     )
 
     req = FetchMarketCommandWorkflowRequest(
@@ -345,6 +366,7 @@ def test_expected_trading_day_comes_from_freshness_service(
     mock_refresh_use_case,
     mock_provider_precondition,
     mock_market_freshness,
+    mock_session_resolver,
 ):
     mock_resolver = Mock(return_value=["BBCA"])
     mock_refresh_use_case.execute.return_value = FetchMarketRefreshResponse(
@@ -364,6 +386,7 @@ def test_expected_trading_day_comes_from_freshness_service(
         context_refresh=lambda *_: RefreshMarketContextInputsResponse(statuses=()),
         market_freshness=mock_market_freshness,
         ticker_resolver=mock_resolver,
+        session_resolver=mock_session_resolver,
     )
 
     req = FetchMarketCommandWorkflowRequest(
@@ -388,10 +411,74 @@ def test_expected_trading_day_comes_from_freshness_service(
     assert res.expected_trading_day == date(2026, 7, 13)
 
 
+def test_same_resolved_session_is_reused_for_refresh_and_expected_trading_day(
+    mock_refresh_use_case,
+    mock_provider_precondition,
+    mock_market_freshness,
+    mock_session_resolver,
+):
+    """The command workflow must resolve one EffectiveMarketSession per
+    execute() and reuse it for both the per-ticker refresh request and the
+    expected-trading-day computation — never resolve twice or let per-ticker
+    adapter code resolve its own session for a shared command run."""
+    mock_resolver = Mock(return_value=["BBCA"])
+    mock_refresh_use_case.execute.return_value = FetchMarketRefreshResponse(
+        ticker_list=["IHSG", "BBCA"],
+        stock_tickers_only=["BBCA"],
+        ticker_results=[],
+        ok_count=1,
+        fail_count=0,
+    )
+    resolved_session = Mock(spec=EffectiveMarketSession)
+    mock_session_resolver.resolve.return_value = resolved_session
+
+    use_case = FetchMarketCommandWorkflowUseCase(
+        refresh_use_case=mock_refresh_use_case,
+        provider_precondition=mock_provider_precondition,
+        non_idx_tickers_loader=lambda: frozenset(),
+        market_status_loader=lambda: FetchMarketStatusHeader("Open", True),
+        calendar_refresh=lambda *_: "cached",
+        context_refresh=lambda *_: RefreshMarketContextInputsResponse(statuses=()),
+        market_freshness=mock_market_freshness,
+        ticker_resolver=mock_resolver,
+        session_resolver=mock_session_resolver,
+    )
+
+    req = FetchMarketCommandWorkflowRequest(
+        tickers=["BBCA"],
+        universe=None,
+        days=30,
+        db_path=Path("dummy.db"),
+        candles_provider="yahoo",
+        broker_provider=Mock(),
+        broker_provider_name="stockbit",
+        refresh=False,
+        candles_only=False,
+        broker_only=False,
+        no_meta=False,
+        no_enrichment=False,
+        no_calendar=False,
+    )
+    use_case.execute(req)
+
+    # Session resolved exactly once for the whole command run.
+    mock_session_resolver.resolve.assert_called_once()
+
+    # The same resolved session object is threaded into the refresh request...
+    refresh_req = mock_refresh_use_case.execute.call_args[0][0]
+    assert refresh_req.effective_session is resolved_session
+
+    # ...and into the expected-trading-day computation, with no second resolve.
+    mock_market_freshness.resolve_reference_trading_day.assert_called_once_with(
+        resolved_session, date.today()
+    )
+
+
 def test_market_status_loader_called_once(
     mock_refresh_use_case,
     mock_provider_precondition,
     mock_market_freshness,
+    mock_session_resolver,
 ):
     mock_resolver = Mock(return_value=["BBCA"])
     mock_refresh_use_case.execute.return_value = FetchMarketRefreshResponse(
@@ -413,6 +500,7 @@ def test_market_status_loader_called_once(
         context_refresh=lambda *_: RefreshMarketContextInputsResponse(statuses=()),
         market_freshness=mock_market_freshness,
         ticker_resolver=mock_resolver,
+        session_resolver=mock_session_resolver,
     )
 
     req = FetchMarketCommandWorkflowRequest(
@@ -443,6 +531,7 @@ def test_per_ticker_callback_and_on_start_received(
     mock_refresh_use_case,
     mock_provider_precondition,
     mock_market_freshness,
+    mock_session_resolver,
 ):
     mock_resolver = Mock(return_value=["BBCA"])
     ticker_res = FetchMarketTickerResult(
@@ -478,6 +567,7 @@ def test_per_ticker_callback_and_on_start_received(
         context_refresh=lambda *_: RefreshMarketContextInputsResponse(statuses=()),
         market_freshness=mock_market_freshness,
         ticker_resolver=mock_resolver,
+        session_resolver=mock_session_resolver,
     )
 
     on_start = Mock()
@@ -514,6 +604,7 @@ def test_inner_refresh_receives_universe_none(
     mock_refresh_use_case,
     mock_provider_precondition,
     mock_market_freshness,
+    mock_session_resolver,
 ):
     mock_resolver = Mock(return_value=["BBCA"])
     mock_refresh_use_case.execute.return_value = FetchMarketRefreshResponse(
@@ -533,6 +624,7 @@ def test_inner_refresh_receives_universe_none(
         context_refresh=lambda *_: RefreshMarketContextInputsResponse(statuses=()),
         market_freshness=mock_market_freshness,
         ticker_resolver=mock_resolver,
+        session_resolver=mock_session_resolver,
     )
 
     req = FetchMarketCommandWorkflowRequest(

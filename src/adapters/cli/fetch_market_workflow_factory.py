@@ -17,6 +17,9 @@ from src.adapters.cli.fetch_market_enrichment_refresh import (
     read_enrichment_pit_coverage,
 )
 from src.adapters.cli.fetch_market_meta_refresh import fetch_meta
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSessionResolver,
+)
 from src.application.services.fetch_market_provider_precondition import (
     FetchMarketProviderPrecondition,
 )
@@ -89,8 +92,9 @@ def create_workflow_use_case(
     def context_refresh_wrapper(resolved_db: Path, days: int):
         return _context_mod.refresh_market_context_inputs(resolved_db, days=days)
 
-    market_freshness = MarketFreshnessService(
-        repository=SQLiteMarketRepository(db_path=db_path)
+    market_freshness = MarketFreshnessService()
+    session_resolver = EffectiveMarketSessionResolver(
+        SQLiteMarketRepository(db_path=db_path)
     )
 
     def ticker_resolver(universe: str | None, explicit: list[str], db_path: Path) -> list[str]:
@@ -111,4 +115,5 @@ def create_workflow_use_case(
         context_refresh=context_refresh_wrapper,
         market_freshness=market_freshness,
         ticker_resolver=ticker_resolver,
+        session_resolver=session_resolver,
     )

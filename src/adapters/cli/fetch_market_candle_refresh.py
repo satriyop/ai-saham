@@ -11,17 +11,18 @@ implementations to those decisions.
 Layer: Adapter
 """
 
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.infrastructure.browser.stockbit_broker_provider import StockbitBrokerProvider
 
-from src.application.services.market_freshness_service import (
-    BenchmarkTickerAliases,
-    MarketFreshnessService,
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSession,
+    EffectiveMarketSessionResolver,
 )
+from src.application.services.market_freshness_service import MarketFreshnessService
 from src.application.use_case.fetch_market_refresh_use_case import BENCHMARK_TICKER
 from src.application.use_case.refresh_market_data_use_case import (
     RefreshMarketDataRequest,
@@ -33,10 +34,10 @@ from src.application.use_case.resolve_candle_provider_policy_use_case import (
     ResolveCandleProviderPolicyUseCase,
 )
 from src.domain.value_objects.benchmark_symbol import (
-    YAHOO_IHSG_TICKER,
     canonicalize_ticker,
     is_benchmark_ticker,
 )
+from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.data_providers.stockbit_historical import StockbitHistoricalProvider
 from src.infrastructure.data_providers.yahoo import YahooFinanceProvider
@@ -47,7 +48,6 @@ from src.infrastructure.persistence.sqlite_market_repository import (
 # Benchmark ticker always included in every market refresh run (first in list).
 # Required by: saham analyze regime, saham analyze swing (market context).
 _BENCHMARK_TICKER = BENCHMARK_TICKER
-_BENCHMARK_ALIASES = BenchmarkTickerAliases(canonical=_BENCHMARK_TICKER, legacy=YAHOO_IHSG_TICKER)
 
 
 def _construct_provider(
@@ -78,6 +78,7 @@ def fetch_candles(
     refresh: bool,
     short_history: list[str] | None = None,
     broker_provider: "StockbitBrokerProvider | None" = None,
+    effective_session: EffectiveMarketSession | None = None,
 ) -> str:
     """Fetch candles for one ticker. Returns status string."""
     from src.infrastructure.config.market_context_config import get_global_context_tickers
@@ -103,13 +104,20 @@ def fetch_candles(
 
     repo = SQLiteMarketRepository(db_path=db_path)
     use_case = RefreshMarketDataUseCase(provider=provider, repository=repo)
-    freshness = MarketFreshnessService(repository=repo)
+    freshness = MarketFreshnessService()
 
     try:
         today = date.today()
+        if effective_session is None:
+            # No shared command-level session was injected (e.g. this helper
+            # was called directly, not through FetchMarketRefreshUseCase) —
+            # resolve one locally so end_tolerance_days still has a session.
+            now_wib = datetime.now(IDX_TIMEZONE)
+            run_at = datetime.combine(today, now_wib.time(), tzinfo=IDX_TIMEZONE)
+            effective_session = EffectiveMarketSessionResolver(repo).resolve(run_at=run_at)
         end_tolerance = freshness.end_tolerance_days(
             is_benchmark=is_benchmark_ticker(ticker),
-            benchmark=_BENCHMARK_ALIASES,
+            effective_session=effective_session,
             today=today,
         )
 

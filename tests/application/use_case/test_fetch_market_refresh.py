@@ -1,14 +1,19 @@
 """Tests for fetch market refresh orchestration."""
 
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock
 
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSession,
+)
 from src.application.use_case.fetch_market_refresh_use_case import (
     BENCHMARK_TICKER,
     BrokerFetchResult,
     FetchMarketRefreshRequest,
     FetchMarketRefreshUseCase,
 )
+from src.domain.value_objects.idx_market import IDX_TIMEZONE
 
 
 def _request(**overrides) -> FetchMarketRefreshRequest:
@@ -137,6 +142,44 @@ def test_fetch_market_refresh_counts_failures_and_meta_changes():
     assert response.fail_count == 1
     assert response.failures == ["BBCA"]
     assert response.meta_changed == ["  BBRI: changed->Finance"]
+
+
+def test_fetch_market_refresh_passes_same_effective_session_to_every_ticker():
+    """One resolved session must flow to every ticker's candle/broker fetch,
+    so a long run that straddles market close never mixes sessions."""
+    now = datetime(2026, 7, 16, 16, 0, tzinfo=IDX_TIMEZONE)
+    shared_session = EffectiveMarketSession(
+        run_at=now,
+        decision_at=now,
+        latest_completed_session=None,
+        analysis_as_of=None,
+        market_session_name="AFTER_CLOSE",
+        is_eod_pending=False,
+        resolution_source="ihsg_cache_same_day",
+    )
+    candle_sessions = []
+    broker_sessions = []
+
+    def fetch_candles(**kwargs):
+        candle_sessions.append(kwargs["effective_session"])
+        return "✓(2026-07-16)"
+
+    def fetch_broker(**kwargs):
+        broker_sessions.append(kwargs["effective_session"])
+        return BrokerFetchResult(summaries="✓(2026-07-16)", flow="✓(2026-07-16)")
+
+    use_case = FetchMarketRefreshUseCase(
+        fetch_candles=fetch_candles,
+        fetch_broker=fetch_broker,
+        fetch_meta=lambda ticker, db_path: "cached(1d)",
+        fetch_enrichment=lambda ticker, db_path, broker_provider, force_refresh=False: "skip",
+        universe_loader=MagicMock(),
+    )
+
+    use_case.execute(_request(tickers=["BBCA", "BBRI"], effective_session=shared_session))
+
+    assert candle_sessions == [shared_session, shared_session, shared_session]
+    assert broker_sessions == [shared_session, shared_session, shared_session]
 
 
 def test_fetch_market_refresh_passes_refresh_to_enrichment():

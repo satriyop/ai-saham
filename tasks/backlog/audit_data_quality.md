@@ -535,8 +535,11 @@ freshness_status           # CURRENT | STALE | PARTIAL | UNKNOWN | INVALID
 
 Artifacts without a defensible effective timestamp or data cutoff are invalid for learning and historical evaluation. Do not infer missing temporal provenance from `captured_at` alone.
 
-**State:** DQ-002A implemented (2026-07-16). One canonical application-layer
-session resolver exists; DQ-002 as a whole is not complete.
+**State:** DQ-002A/B/C/D implemented (2026-07-16). One canonical application-layer
+session resolver exists and now backs every audited freshness-adjacent
+service (`data_freshness_service.py`, `swing_data_freshness.py`,
+`market_freshness_service.py`); DQ-002 as a whole is not complete (see
+Deferred items below).
 
 - **DQ-002A** (2026-07-16, revised same day after review): `EffectiveMarketSessionResolver`
   added at `src/application/services/effective_market_session_resolver.py`.
@@ -778,12 +781,91 @@ session resolver exists; DQ-002 as a whole is not complete.
     6 files + 5 CLI tests); broader sweep `pytest -k swing` — 488 passed;
     `git diff --check` clean.
 
-**Deferred to DQ-002D (not started):**
+- **DQ-002D** (2026-07-16): `market_freshness_service.py` no longer owns
+  benchmark cache lookup. `MarketFreshnessService` lost its
+  `MarketDataRepository` constructor dependency, `last_known_trading_day()`,
+  and its own `get_date_range()` call — it is now a pure policy service:
+  `resolve_reference_trading_day(effective_session, today)` reads
+  `effective_session.latest_completed_session` (falling back to
+  `last_weekday(today)` only when unresolved), and `end_tolerance_days(...)`
+  takes `effective_session` instead of `benchmark`/repository access.
+  `BenchmarkTickerAliases` moved from `market_freshness_service.py` to
+  `src/domain/value_objects/benchmark_symbol.py` (pure domain value object)
+  to remove the circular-import risk now that `EffectiveMarketSessionResolver`
+  no longer needs to import from the freshness service.
+  `FetchMarketCommandWorkflowUseCase` gained a required `session_resolver:
+  EffectiveMarketSessionResolver` constructor param and resolves one
+  `EffectiveMarketSession` per `execute()` call (same real-WIB-wall-clock
+  `datetime.combine(today, now_wib.time(), tzinfo=IDX_TIMEZONE)` convention as
+  DQ-002B/C) before computing `expected_trading_day`.
+  `fetch_market_workflow_factory.create_workflow_use_case()` now constructs
+  `MarketFreshnessService()` (no repository) and injects
+  `EffectiveMarketSessionResolver(SQLiteMarketRepository(db_path=db_path))` —
+  factory wiring only, no freshness policy in the adapter.
+  `fetch_market_candle_refresh.fetch_candles()` and
+  `fetch_market_broker_refresh.fetch_broker()` each gained an
+  `effective_session: EffectiveMarketSession | None = None` parameter and
+  pass it straight to `end_tolerance_days`/`resolve_reference_trading_day`
+  when the caller supplies one — see the "Review follow-up" entry below for
+  who supplies it and why per-call local resolution was removed from the
+  command-workflow path.
+  **Explicit remaining exception, preserved exactly as before:** the
+  benchmark ticker's own `end_tolerance_days(is_benchmark=True, ...)` still
+  uses `last_weekday(today)` directly and ignores the resolved
+  `effective_session` entirely — this breaks the circular dependency where
+  benchmark candles would otherwise need their own (possibly stale) cache to
+  decide whether the benchmark cache itself needs refreshing.
+  - Tests: `test_market_freshness_service.py` fully rewritten (5 tests, a
+    fake-repository fixture replaced by an `EffectiveMarketSession` builder)
+    proving non-benchmark tolerance/reference-day both read
+    `effective_session.latest_completed_session`, an unresolved session
+    falls back to `last_weekday(today)`, the benchmark path ignores a stale/
+    older session and always uses the weekday fallback, and tolerance is
+    never negative. `test_fetch_market_command_workflow_use_case.py` gained
+    a `mock_session_resolver` fixture and every `FetchMarketCommandWorkflowUseCase`
+    construction now passes `session_resolver=mock_session_resolver`.
+    `test_effective_market_session_resolver.py`'s `BenchmarkTickerAliases`
+    import updated to the new domain location.
+  - Verification: `python -m py_compile` on all changed files;
+    `rg -n "MarketFreshnessService\(repository|last_known_trading_day|get_date_range\("
+    src tests` shows no stale service usage outside unrelated repository
+    implementations/callers; `rg -n "BenchmarkTickerAliases" src tests` shows
+    every reference importing from `src.domain.value_objects.benchmark_symbol`;
+    full required focused-test list (7 files) passes; `pytest -k "fetch_market
+    or market_freshness or effective_market_session"` — 81 passed; full suite
+    — 4346 passed; `git diff --check` clean.
+  - **Review follow-up (2026-07-16):** initial DQ-002D cut still let each
+    ticker's `fetch_candles()`/`fetch_broker()` resolve its own
+    `EffectiveMarketSession` independently inside the per-ticker loop, so a
+    long `saham fetch market -u lq45` run crossing market close could use a
+    different `latest_completed_session` for early vs. late tickers, and
+    repeated the IHSG cache lookup once per ticker. Fixed:
+    `FetchMarketCommandWorkflowUseCase.execute()` now resolves one
+    `EffectiveMarketSession` before building `FetchMarketRefreshRequest` (not
+    after, as before) and reuses it for both the refresh request and the
+    `expected_trading_day` computation — one resolve per command run, not two.
+    `FetchMarketRefreshRequest` gained an `effective_session:
+    EffectiveMarketSession | None = None` field;
+    `FetchMarketRefreshUseCase.execute()` forwards it into every
+    `fetch_candles`/`fetch_broker` call for every ticker. `fetch_candles()`
+    and `fetch_broker()` both gained an `effective_session=None` parameter:
+    when provided (the command-workflow path) they use it directly with no
+    further resolution; when `None` (the only other direct caller,
+    `swing_data_refresh.refresh_swing_data()`, which fetches a single ticker
+    with no shared command-level session) they resolve one locally exactly
+    as before, preserving prior behavior for that caller. The benchmark
+    circular-dependency exception (`is_benchmark=True` still forces
+    `last_weekday(today)`) is unchanged. New test
+    `test_fetch_market_refresh_passes_same_effective_session_to_every_ticker`
+    proves the identical session object reaches every ticker's candle/broker
+    fetch; new test
+    `test_same_resolved_session_is_reused_for_refresh_and_expected_trading_day`
+    proves the command workflow resolves exactly once and reuses the same
+    object for `expected_trading_day`. Full suite — 4348 passed;
+    `git diff --check` clean.
 
-- Wiring the resolver into `market_freshness_service.py` (or retiring its
-  independent cache-tolerance logic in favor of the resolver) — the one
-  remaining freshness-adjacent service not yet routed through
-  `EffectiveMarketSession`.
+**Deferred (not started):**
+
 - Provider-settlement cutoffs and any band-specific behavioral difference
   between `BEFORE_OPEN`/`PRE_OPEN`/`REGULAR`/`PRE_CLOSING` beyond the label
   (all four currently resolve `latest_completed_session`/`is_eod_pending`
@@ -801,11 +883,14 @@ session resolver exists; DQ-002 as a whole is not complete.
 
 - [ ] One application-layer session service is used by all audited workflows.
       (Resolver is used by `DailyBriefingUseCase`,
-      `RunAccumulationScreenWorkflowUseCase`/screen-accum projectors, and
-      `SwingAnalysisWorkflowUseCase`/`swing_data_freshness.py`; not yet used
-      by `market_freshness_service.py` — DQ-002D. `data_freshness_service.py`
-      and `swing_data_freshness.py` both now own no time arithmetic and are
-      pure functions of an injected `EffectiveMarketSession`.)
+      `RunAccumulationScreenWorkflowUseCase`/screen-accum projectors,
+      `SwingAnalysisWorkflowUseCase`/`swing_data_freshness.py`, and now
+      `FetchMarketCommandWorkflowUseCase`/`market_freshness_service.py`
+      (DQ-002D). `data_freshness_service.py`, `swing_data_freshness.py`, and
+      `market_freshness_service.py` all now own no independent time
+      arithmetic beyond the documented benchmark-circular-dependency
+      exception, and are pure functions of an injected
+      `EffectiveMarketSession`.)
 - [ ] Weekend, holiday, pre-open, intraday, post-close, and late-provider tests pass.
       (Weekend/holiday/pre-open/intraday/post-close covered by the resolver
       and its tests, and now by swing freshness's own tests reusing the

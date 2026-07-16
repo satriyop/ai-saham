@@ -22,8 +22,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 
-from src.application.services.market_freshness_service import BenchmarkTickerAliases
 from src.domain.ports.market_data_repository import MarketDataRepository
+from src.domain.value_objects.benchmark_symbol import BenchmarkTickerAliases
 from src.domain.value_objects.idx_market import (
     IDX_TIMEZONE,
     MARKET_CLOSE,

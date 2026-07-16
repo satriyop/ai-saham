@@ -7,9 +7,9 @@ import pytest
 from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSessionResolver,
 )
-from src.application.services.market_freshness_service import BenchmarkTickerAliases
 from src.domain.entities.candle import Candle
 from src.domain.ports.market_data_repository import MarketDataRepository
+from src.domain.value_objects.benchmark_symbol import BenchmarkTickerAliases
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
 
 ALIASES = BenchmarkTickerAliases(canonical="IHSG", legacy="^JKSE")

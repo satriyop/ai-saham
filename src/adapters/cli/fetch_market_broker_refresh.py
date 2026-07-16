@@ -11,17 +11,15 @@ infrastructure implementations to those decisions.
 Layer: Adapter
 """
 
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
-from src.application.services.market_freshness_service import (
-    BenchmarkTickerAliases,
-    MarketFreshnessService,
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSession,
+    EffectiveMarketSessionResolver,
 )
-from src.application.use_case.fetch_market_refresh_use_case import (
-    BENCHMARK_TICKER,
-    BrokerFetchResult,
-)
+from src.application.services.market_freshness_service import MarketFreshnessService
+from src.application.use_case.fetch_market_refresh_use_case import BrokerFetchResult
 from src.application.use_case.refresh_broker_data_use_case import (
     RefreshBrokerDataRequest,
     RefreshBrokerDataUseCase,
@@ -32,10 +30,10 @@ from src.application.use_case.resolve_broker_summary_provider_policy_use_case im
     ResolveBrokerSummaryProviderPolicyUseCase,
 )
 from src.domain.value_objects.benchmark_symbol import (
-    YAHOO_IHSG_TICKER,
     canonicalize_ticker,
     is_benchmark_ticker,
 )
+from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.data_sources_config import (
     broker_summary_source as _broker_summary_source,
@@ -47,8 +45,6 @@ from src.infrastructure.persistence.sqlite_broker_repository import (
 from src.infrastructure.persistence.sqlite_market_repository import (
     SQLiteMarketRepository,
 )
-
-_BENCHMARK_ALIASES = BenchmarkTickerAliases(canonical=BENCHMARK_TICKER, legacy=YAHOO_IHSG_TICKER)
 
 
 def _resolve_idx_summary_provider(broker_provider, _idx_summary_provider):
@@ -74,6 +70,7 @@ def fetch_broker(
     short_history: list[str] | None = None,
     # injectable for testing; production code uses IdxBrokerDataProvider
     _idx_summary_provider=None,
+    effective_session: EffectiveMarketSession | None = None,
 ) -> BrokerFetchResult:
     """Fetch broker flow for one ticker. Returns split status for summaries and flow tables."""
     cfg = load_app_config()
@@ -94,8 +91,16 @@ def fetch_broker(
         api_client=None, db_path=db_path, stockbit_config=load_stockbit_provider_config()
     )
 
-    freshness = MarketFreshnessService(repository=SQLiteMarketRepository(db_path=db_path))
-    last_trading_day = freshness.resolve_reference_trading_day(_BENCHMARK_ALIASES, end_date)
+    freshness = MarketFreshnessService()
+    if effective_session is None:
+        # No shared command-level session was injected (e.g. this helper was
+        # called directly, not through FetchMarketRefreshUseCase) — resolve
+        # one locally so resolve_reference_trading_day still has a session.
+        market_repo = SQLiteMarketRepository(db_path=db_path)
+        now_wib = datetime.now(IDX_TIMEZONE)
+        run_at = datetime.combine(end_date, now_wib.time(), tzinfo=IDX_TIMEZONE)
+        effective_session = EffectiveMarketSessionResolver(market_repo).resolve(run_at=run_at)
+    last_trading_day = freshness.resolve_reference_trading_day(effective_session, end_date)
 
     response = RefreshBrokerDataUseCase(
         broker_provider=broker_provider,

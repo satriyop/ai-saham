@@ -11,6 +11,9 @@ from pathlib import Path
 from typing import Any
 
 from src.application.ports.universe_config_loader import UniverseConfigLoader
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSession,
+)
 from src.application.services.fetch_market_status_policy import is_cached_status
 from src.application.services.universe_loader import resolve_tickers
 from src.application.use_case.fetch_enrichment_history_use_case import (
@@ -59,6 +62,7 @@ class FetchMarketRefreshRequest:
     broker_only: bool
     no_meta: bool
     no_enrichment: bool
+    effective_session: EffectiveMarketSession | None = None
 
 
 @dataclass(frozen=True)
@@ -146,6 +150,7 @@ class FetchMarketRefreshUseCase:
                     provider_name=request.candles_provider,
                     refresh=request.refresh,
                     short_history=candle_short_history,
+                    effective_session=request.effective_session,
                 )
 
             if not request.candles_only:
@@ -156,6 +161,7 @@ class FetchMarketRefreshUseCase:
                     broker_provider=request.broker_provider,
                     refresh=request.refresh,
                     short_history=broker_backfills,
+                    effective_session=request.effective_session,
                 )
 
             if not request.no_meta:

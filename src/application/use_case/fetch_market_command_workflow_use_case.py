@@ -6,18 +6,18 @@ Layer: Application
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSessionResolver,
+)
 from src.application.services.fetch_market_provider_precondition import (
     FetchMarketProviderPrecondition,
     FetchMarketProviderPreconditionRequest,
 )
-from src.application.services.market_freshness_service import (
-    BenchmarkTickerAliases,
-    MarketFreshnessService,
-)
+from src.application.services.market_freshness_service import MarketFreshnessService
 from src.application.use_case.fetch_market_refresh_use_case import (
     BENCHMARK_TICKER,
     FetchMarketRefreshRequest,
@@ -28,7 +28,8 @@ from src.application.use_case.fetch_market_refresh_use_case import (
 from src.application.use_case.refresh_market_context_inputs_use_case import (
     RefreshMarketContextInputsResponse,
 )
-from src.domain.value_objects.benchmark_symbol import YAHOO_IHSG_TICKER, canonicalize_ticker
+from src.domain.value_objects.benchmark_symbol import canonicalize_ticker
+from src.domain.value_objects.idx_market import IDX_TIMEZONE
 
 
 @dataclass(frozen=True)
@@ -93,6 +94,7 @@ class FetchMarketCommandWorkflowUseCase:
         context_refresh: Callable[[Path, int], RefreshMarketContextInputsResponse],
         market_freshness: MarketFreshnessService,
         ticker_resolver: Callable[[str | None, list[str], Path], list[str]],
+        session_resolver: EffectiveMarketSessionResolver,
     ) -> None:
         self._refresh_use_case = refresh_use_case
         self._provider_precondition = provider_precondition
@@ -102,6 +104,7 @@ class FetchMarketCommandWorkflowUseCase:
         self._context_refresh = context_refresh
         self._market_freshness = market_freshness
         self._ticker_resolver = ticker_resolver
+        self._session_resolver = session_resolver
 
     def execute(
         self,
@@ -165,7 +168,16 @@ class FetchMarketCommandWorkflowUseCase:
                 )
             )
 
-        # 5. Execute per-ticker refresh
+        # 5. Resolve one effective market session for this whole command run,
+        # so every ticker's candle/broker cache-tolerance decision (and the
+        # expected-trading-day computation below) uses the same session even
+        # if the run straddles market close.
+        today = date.today()
+        now_wib = datetime.now(IDX_TIMEZONE)
+        run_at = datetime.combine(today, now_wib.time(), tzinfo=IDX_TIMEZONE)
+        effective_session = self._session_resolver.resolve(run_at=run_at)
+
+        # 6. Execute per-ticker refresh
         refresh_req = FetchMarketRefreshRequest(
             tickers=full_ticker_list,
             universe=None,  # pass None to avoid resolving the same universe twice
@@ -179,13 +191,14 @@ class FetchMarketCommandWorkflowUseCase:
             broker_only=request.broker_only,
             no_meta=request.no_meta,
             no_enrichment=request.no_enrichment,
+            effective_session=effective_session,
         )
         response = self._refresh_use_case.execute(
             refresh_req,
             on_ticker_complete=on_ticker_complete,
         )
 
-        # 6. Run calendar refresh
+        # 7. Run calendar refresh
         if request.no_calendar:
             calendar_status = "skip:--no-calendar"
         elif request.no_enrichment:
@@ -199,19 +212,18 @@ class FetchMarketCommandWorkflowUseCase:
                 request.refresh,
             )
 
-        # 7. Run context refresh
+        # 8. Run context refresh
         context_statuses: tuple[str, ...] = ()
         if not request.broker_only:
             context_response = self._context_refresh(request.db_path, request.days)
             context_statuses = context_response.statuses
 
-        # 8. Expected trading day computation
-        aliases = BenchmarkTickerAliases(canonical=BENCHMARK_TICKER, legacy=YAHOO_IHSG_TICKER)
+        # 9. Expected trading day computation, from the same session resolved in step 5
         expected_trading_day = self._market_freshness.resolve_reference_trading_day(
-            aliases, date.today()
+            effective_session, today
         )
 
-        # 9. Return final result
+        # 10. Return final result
         return FetchMarketCommandWorkflowResult(
             response=response,
             header=header,

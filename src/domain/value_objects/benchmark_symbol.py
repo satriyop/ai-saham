@@ -3,8 +3,18 @@
 Layer: Domain
 """
 
+from dataclasses import dataclass
+
 CANONICAL_BENCHMARK_TICKER = "IHSG"
 YAHOO_IHSG_TICKER = "^JKSE"
+
+
+@dataclass(frozen=True)
+class BenchmarkTickerAliases:
+    """Canonical benchmark ticker plus a legacy alias to check as fallback."""
+
+    canonical: str
+    legacy: str | None = None
 
 _BENCHMARK_ALIASES = {
     CANONICAL_BENCHMARK_TICKER,
