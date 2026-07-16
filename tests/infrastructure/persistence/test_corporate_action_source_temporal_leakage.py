@@ -31,6 +31,7 @@ from src.application.services.effective_market_session_resolver import (
 from src.application.use_case.assess_source_availability_use_case import (
     AssessSourceAvailabilityUseCase,
 )
+from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
 from src.domain.value_objects.corporate_action_calendar import (
     CorporateActionCalendarDate,
     CorporateActionCalendarEvent,
@@ -46,6 +47,15 @@ from src.infrastructure.persistence.sqlite_corporate_action_calendar_repository 
 DECISION_DATE = date(2026, 7, 16)
 DECISION_FETCHED_AT = "2026-07-16T16:00:00"
 FUTURE_FETCHED_AT = "2026-07-17T09:00:00"
+
+
+def _calendar() -> KnownTradingSessionCalendar:
+    """DQ-002I: corporate_action_events/corporate_action_event_dates are
+    FETCH_TIMESTAMP sources, so the calendar is structurally required but
+    never actually queried here."""
+    return KnownTradingSessionCalendar(
+        sessions=(), coverage_start=date(2026, 1, 1), coverage_end=date(2026, 12, 31)
+    )
 
 
 @pytest.fixture
@@ -136,7 +146,7 @@ class TestCorporateActionEventsTemporalLeakage:
         unbounded = repo.get_events_for_ticker("BBCA", date(2026, 7, 1), date(2026, 7, 31))
         assert len(unbounded) == 1
 
-        use_case = AssessSourceAvailabilityUseCase()
+        use_case = AssessSourceAvailabilityUseCase(calendar=_calendar())
         result = use_case.execute(
             source_family="corporate_action_events",
             effective_session=_decision_session(),
@@ -155,7 +165,7 @@ class TestCorporateActionEventsTemporalLeakage:
         )
         assert len(bounded) == 1
 
-        use_case = AssessSourceAvailabilityUseCase()
+        use_case = AssessSourceAvailabilityUseCase(calendar=_calendar())
         result = use_case.execute(
             source_family="corporate_action_events",
             effective_session=_decision_session(),
@@ -176,7 +186,7 @@ class TestCorporateActionEventDatesTemporalLeakage:
         )
         assert len(rows) == 1
 
-        use_case = AssessSourceAvailabilityUseCase()
+        use_case = AssessSourceAvailabilityUseCase(calendar=_calendar())
         result = use_case.execute(
             source_family="corporate_action_event_dates",
             effective_session=_decision_session(),

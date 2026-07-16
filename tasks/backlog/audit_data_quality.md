@@ -1091,7 +1091,7 @@ freshness_status           # CURRENT | STALE | PARTIAL | UNKNOWN | INVALID
 
 Artifacts without a defensible effective timestamp or data cutoff are invalid for learning and historical evaluation. Do not infer missing temporal provenance from `captured_at` alone.
 
-**State:** DQ-002A/B/C/D/E/F/G/H implemented (2026-07-16). One canonical application-layer
+**State:** DQ-002A/B/C/D/E/F/G/H/I implemented (2026-07-16). One canonical application-layer
 session resolver exists and now backs every audited freshness-adjacent
 service (`data_freshness_service.py`, `swing_data_freshness.py`,
 `market_freshness_service.py`), `candidate_observations`/
@@ -1102,8 +1102,12 @@ DIAGNOSTIC_ONLY per source family with an explicit (policy-owned, not
 provider-verified) provider settlement cutoff for broker/flow sources, and
 planted-future-row leakage tests now exist against real repository/reader
 code for all 13 Phase 2 source families (one real leakage gap found and
-fixed — corporate action calendar `fetched_at` filtering); DQ-002 as a whole
-is not complete (see Deferred items below).
+fixed — corporate action calendar `fetched_at` filtering). DQ-002I replaced
+the session-aligned lag calculation's calendar-day subtraction with proven
+IDX trading-session distance via a new pure `TradingSessionCalendar`
+abstraction, fixing a real correctness bug (Friday->Monday was reported as
+3 days/STALE instead of 1 session/LATE for lag-tolerant sources). DQ-002 as
+a whole is not complete (see Deferred items below).
 
 - **DQ-002A** (2026-07-16, revised same day after review): `EffectiveMarketSessionResolver`
   added at `src/application/services/effective_market_session_resolver.py`.
@@ -1827,6 +1831,205 @@ is not complete (see Deferred items below).
     `PRE_CLOSING` remains unmodeled (unrelated to this slice, still listed
     below).
 
+- **DQ-002I** (2026-07-16): replaced calendar-day subtraction with proven
+  IDX trading-session distance for `SESSION_ALIGNED` source lag. **Real
+  correctness bug fixed, not just metadata**: `_assess_session_aligned`
+  previously computed `gap_days = (latest_completed_session -
+  observed_through).days`, so a broker source observed Friday with
+  `latest_completed_session` the following Monday was reported as 3 days
+  behind — `STALE` for any source with `settlement_lag_days=1` — when it is
+  actually 1 trading session behind (`LATE`). The pre-existing weekday-only
+  `trading_sessions_apart()` helper (`src/domain/services/
+  trading_calendar.py`) was judged insufficient too, since it has no IDX
+  holiday awareness and would still overcount across a holiday.
+  - New pure domain abstraction
+    (`src/domain/services/trading_session_calendar.py`):
+    `TradingSessionCalendar` Protocol (`sessions_apart(earlier, later) ->
+    int | None`) and `KnownTradingSessionCalendar` (frozen dataclass:
+    `sessions: tuple[date, ...]`, `coverage_start`, `coverage_end`).
+    `sessions_apart()` returns the count of proven sessions in
+    `(earlier, later]`, or `None` when the interval isn't fully covered by
+    `[coverage_start, coverage_end]` — `None` is never treated as `0` by
+    any caller. `__post_init__` rejects (raises `ValueError`) duplicate
+    session dates, unsorted session dates, sessions outside the declared
+    coverage window, sessions on a weekend, and `coverage_start >
+    coverage_end` — a calendar that has to guess at its own session set
+    cannot be trusted as "proven".
+  - `AssessSourceAvailabilityUseCase.__init__` now requires a `calendar:
+    TradingSessionCalendar` argument (no default, no weekday fallback — a
+    silent fallback would reintroduce the exact bug this task fixes).
+    `_assess_session_aligned` (now an instance method, using
+    `self._calendar`) rewrote its classification order to match the
+    task's exact contract: unresolved `latest_completed_session` ->
+    `UNKNOWN`; missing `observed_through` -> `UNKNOWN`; `observed_through >
+    latest_completed_session` -> `INVALID` (checked directly on dates,
+    before any calendar call); calendar returns `None` -> `UNKNOWN` /
+    `TRADING_CALENDAR_COVERAGE_UNPROVEN` (new reason code); `session_gap ==
+    0` -> `CURRENT`; `0 < session_gap <= settlement_lag_days` -> `LATE`;
+    `session_gap > settlement_lag_days` -> `STALE`. Only `CURRENT` can be
+    `is_authoritative=True`, unchanged from before. Provider-cutoff
+    semantics (DQ-002H, `expected_available_at`, the `20:00 WIB`
+    placeholder, LATE-vs-STALE never decided by the cutoff) are completely
+    unchanged — only the `session_gap` input feeding that logic changed
+    from calendar-day subtraction to `calendar.sessions_apart()`. Note
+    wording changed from `"N day(s) behind"` to `"N trading session(s)
+    behind"` only now that the count is actually session-based.
+  - New infrastructure provider
+    (`src/infrastructure/persistence/ihsg_trading_session_calendar_provider.py`):
+    `IHSGTradingSessionCalendarProvider.load(coverage_start, coverage_end) ->
+    KnownTradingSessionCalendar | None`, built from cached IHSG candles via
+    the existing `MarketDataRepository` port (same benchmark-alias
+    fallback pattern as `EffectiveMarketSessionResolver`: try canonical
+    `IHSG`, fall back to legacy `^JKSE` only if canonical returns nothing —
+    never merges both). Coverage-completeness is proven via
+    `get_date_range(ticker)`: if the ticker has no cached data at all, or
+    its cached range doesn't fully span `[coverage_start, coverage_end]`,
+    the provider returns `None` rather than treating an absent candle
+    inside an unproven range as a holiday (this exact ambiguity — "empty
+    interval" vs. "cache never fetched that stretch" — was flagged before
+    implementation and resolved this way, since `MarketDataRepository` has
+    no other way to distinguish them). `get_candles(ticker,
+    start_date=coverage_start, end_date=coverage_end)` bounds every query;
+    no candle after `coverage_end` is ever loaded. This provider is not
+    wired into any production composition root in this task — no
+    production workflow constructs `AssessSourceAvailabilityUseCase` yet
+    (confirmed via grep before implementing), so there was nothing to wire
+    it into without inventing broader integration than this task called
+    for.
+  - **Mechanical fallout (reported before editing, per this task's own
+    instruction):** making `calendar` a required constructor argument broke
+    17 existing call sites across 4 test files outside this task's stated
+    file boundary — none of them exercise session-aligned lag scenarios
+    that need real coverage (they use fixed FETCH_TIMESTAMP/DIAGNOSTIC_ONLY
+    families or, in one file, session-aligned families with only
+    consecutive-weekday gaps). Each file gained a small local `_calendar()`
+    helper (a plain Mon-Fri or trivial empty `KnownTradingSessionCalendar`,
+    test-only fixture code, not production weekday-fallback logic) and had
+    every `AssessSourceAvailabilityUseCase()` call updated to
+    `AssessSourceAvailabilityUseCase(calendar=_calendar())`. No assertions
+    changed in any of these 4 files — all pass with their original
+    expectations intact:
+    `tests/application/services/test_context_regime_sentiment_temporal_leakage.py`,
+    `tests/infrastructure/persistence/test_market_broker_source_temporal_leakage.py`,
+    `tests/infrastructure/persistence/test_enrichment_source_temporal_leakage.py`,
+    `tests/infrastructure/persistence/test_corporate_action_source_temporal_leakage.py`.
+  - Tests: `tests/domain/services/test_trading_session_calendar.py` (14
+    new, new directory) covering same-session ->0, Friday->Monday ->1,
+    Friday->Tuesday-with-Monday-absent ->1, a multi-day holiday closure
+    counting only real supplied sessions, weekend/duplicate/unsorted
+    session rejection, out-of-coverage intervals ->`None`, a session dated
+    after `coverage_end` rejected at construction, and `earlier > later`
+    handled defensively. `tests/infrastructure/persistence/
+    test_ihsg_trading_session_calendar_provider.py` (9 new) covering
+    bounded queries, future-candle exclusion, a real holiday gap preserved
+    (not invented as a session), duplicate-date dedup (via a fake
+    repository, since real SQLite's PK prevents constructing that case),
+    missing-data and partial-coverage unavailability, legacy-alias fallback
+    not merging a partial canonical set with the legacy set, and no writes
+    (`mtime` unchanged). `tests/application/use_case/
+    test_assess_source_availability_use_case.py` gained a `use_case`
+    fixture calendar (`_default_calendar()`, all Mon-Fri days for all of
+    2026 — covers every date the file's 28 pre-existing tests already
+    used, none of which cross a real holiday, so every pre-existing
+    assertion is unchanged) and a new `TestTradingSessionDistance` class (7
+    tests): Friday->Monday 1-session `LATE` (not the old 3-day `STALE`),
+    Friday->Tuesday 2-session `STALE`, a multi-calendar-day holiday gap
+    with only 1 real session staying `LATE` (proving the fix, not just the
+    weekend case), candles' zero-lag Friday->Monday staying `STALE` (broker
+    cutoff/lag behavior does not leak onto candles), a future
+    `observed_through` staying `INVALID` regardless of calendar, and two
+    tests proving an unrelated/unproven calendar resolves to `UNKNOWN` /
+    `TRADING_CALENDAR_COVERAGE_UNPROVEN` with `expected_available_at=None`
+    — never a silent `0`. Total in that file: 35 tests (28 pre-existing +
+    7 new).
+  - Negative-grep requirement satisfied:
+    `rg -n "latest_completed_session - observed_through|gap_days = .*observed_through"
+    src/application/use_case/assess_source_availability_use_case.py`
+    returns no matches (exit code 1).
+  - No signal scoring, RiskEngine, TradeSetup, tuning, live DB, observation,
+    or label change. **DQ-002 is still not integrated into any production
+    Phase 2 consumer** — this and DQ-002F/G/H remain a standalone,
+    fully-tested contract with no production caller yet; do not declare
+    `DQ-CONTRACT-GATE` passed on the strength of these tests alone.
+  - Verification: `pytest tests/domain/services/test_trading_session_calendar.py
+    tests/application/use_case/test_assess_source_availability_use_case.py
+    tests/infrastructure/persistence/test_ihsg_trading_session_calendar_provider.py
+    tests/application/services/test_effective_market_session_resolver.py
+    tests/infrastructure/persistence/test_market_broker_source_temporal_leakage.py`
+    — 83 passed; `pytest -k "source_availability or trading_session or
+    temporal_leakage"` — 91 passed; `pytest tests/architecture/
+    test_layer_boundaries.py` — 4 passed (new domain/infra files clean
+    against the executable layer-boundary guard); full suite — 4667
+    passed; `python -m py_compile` on the 3 changed/added production files;
+    `git diff --check` clean; `git status --short` shows only the files
+    listed above.
+  - **Review follow-up (2026-07-16, same day, both P0 and P1 fixed before
+    this was committed):**
+    - **P0 (the serious one):** the first cut treated `get_date_range()`
+      spanning `[coverage_start, coverage_end]` as *sufficient* proof that
+      every weekday inside the window was accounted for, and the
+      `test_real_gap_is_preserved_as_a_non_session_holiday` test asserted
+      this by labeling an intentionally-missing Monday a "real IDX
+      holiday" with **no independent evidence it actually was one** — the
+      test was encoding the unsafe assumption, not proving correctness. A
+      missing candle is equally consistent with a holiday, a partial
+      ingestion failure, a quarantined/deleted row, or a provider
+      omission; `MarketDataRepository` cannot distinguish these. Per this
+      task's own instruction ("if current MarketDataRepository cannot
+      distinguish 'complete empty interval' from 'cache missing,' stop and
+      report that ambiguity"), this was a real violation, not a style
+      nitpick — it could have understated lag and classified stale broker
+      evidence as `LATE` instead of `STALE`. **Fixed:**
+      `IHSGTradingSessionCalendarProvider._load_for_ticker` now
+      additionally requires every Mon-Fri date in
+      `[coverage_start, coverage_end]` to have a candle
+      (`_weekdays_in_range()` minus the observed session set must be
+      empty); any unexplained weekday gap makes the provider return `None`
+      (unavailable) rather than silently treat the gap as a proven
+      holiday. This intentionally limits the provider to gap-free windows
+      until a real, independently authoritative session source (a
+      versioned IDX calendar table, or an ingestion-completeness
+      manifest) exists — documented as a known limitation in the module
+      docstring, not silently left implicit. The flagged test was rewritten
+      to `test_unexplained_weekday_gap_makes_the_calendar_unavailable`
+      (asserts `calendar is None` for that exact scenario) plus a
+      regression guard (`test_gap_free_window_still_succeeds`) proving the
+      fix doesn't make the provider always fail. `TestBoundedQuery`'s two
+      tests were also rewritten to use gap-free Mon-Fri weeks instead of a
+      sparse 2-candles-across-a-month fixture, since that fixture would now
+      correctly return `None` under the stricter contract.
+    - **P1:** `KnownTradingSessionCalendar.sessions_apart()` only checked
+      that both dates fell inside `[coverage_start, coverage_end]`, not
+      that either date was itself a proven session — so
+      `sessions_apart(unproven_monday, unproven_monday)` returned `0`
+      (→ `CURRENT`/`is_authoritative=True` at the application layer) purely
+      because a *different* date range happened to be proven, even though
+      Monday itself was never established as a real trading day. **Fixed:**
+      `sessions_apart()` now requires both `earlier` and `later` to be
+      members of `self.sessions`; if either is not, it returns `None`
+      (same as an out-of-coverage interval). 4 new domain tests
+      (`TestUnprovenEndpointsCannotProduceACount`: same-date non-session
+      → `None`; non-session earlier endpoint → `None`; non-session later
+      endpoint → `None`; both-proven-endpoints regression guard still `1`)
+      and 3 new application tests (non-session
+      `latest_completed_session`/`observed_through`/same-date endpoint all
+      resolve to `UNKNOWN`/`TRADING_CALENDAR_COVERAGE_UNPROVEN`/
+      `is_authoritative=False`, never `CURRENT`).
+    - No production behavior outside `IHSGTradingSessionCalendarProvider`
+      and `KnownTradingSessionCalendar.sessions_apart()` changed;
+      `AssessSourceAvailabilityUseCase`'s classification contract itself
+      (the `UNKNOWN`/`INVALID`/`CURRENT`/`LATE`/`STALE` decision tree) is
+      unchanged — it already correctly mapped a calendar `None` to
+      `UNKNOWN`, it just wasn't previously receiving `None` for these two
+      classes of unsafe cases.
+    - Verification after the fix: `test_trading_session_calendar.py` — 18
+      passed (was 14); `test_assess_source_availability_use_case.py` — 38
+      passed (was 35); `test_ihsg_trading_session_calendar_provider.py` —
+      10 passed (was 9); `pytest -k "source_availability or trading_session
+      or temporal_leakage"` — 99 passed; `pytest tests/architecture/
+      test_layer_boundaries.py` — 4 passed; full suite — 4675 passed;
+      negative grep still returns no matches; `git diff --check` clean.
+
 **Deferred (not started):**
 
 - Band-specific behavioral difference between `BEFORE_OPEN`/`PRE_OPEN`/
@@ -1851,6 +2054,11 @@ is not complete (see Deferred items below).
   Other repository methods with the same historical-decision shape
   (`get_events_for_universe`, or any other enrichment consumer not audited
   in this task) have not been checked for the same wiring gap.
+- `AssessSourceAvailabilityUseCase` (DQ-002F/G/H/I) is still not
+  constructed anywhere in production — no composition root, factory, or
+  workflow wires it or `IHSGTradingSessionCalendarProvider` yet. It exists
+  today only as a standalone, fully-tested contract. Wiring it into a real
+  Phase 2 consumer (screener, backfill, readiness, or CLI) is unstarted.
 
 **Acceptance criteria:**
 

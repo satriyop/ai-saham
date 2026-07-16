@@ -31,6 +31,7 @@ from src.application.use_case.assess_source_availability_use_case import (
     AssessSourceAvailabilityUseCase,
 )
 from src.domain.ports.sentiment_repository import SentimentLog
+from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.domain.value_objects.market_context import MarketContext, MarketRegime
 from src.domain.value_objects.regime_detection_evidence import (
@@ -49,6 +50,15 @@ from src.infrastructure.persistence.sqlite_regime_observation_repository import 
 
 DECISION_DATE = date(2026, 7, 16)
 FUTURE_DATE = date(2026, 7, 17)
+
+
+def _calendar() -> KnownTradingSessionCalendar:
+    """DQ-002I: market_context_snapshots, regime_observations, and sentiment
+    are all FETCH_TIMESTAMP/DIAGNOSTIC_ONLY, so the calendar is structurally
+    required but never actually queried here."""
+    return KnownTradingSessionCalendar(
+        sessions=(), coverage_start=date(2026, 1, 1), coverage_end=date(2026, 12, 31)
+    )
 
 
 def _decision_session() -> EffectiveMarketSession:
@@ -114,7 +124,7 @@ class TestMarketContextSnapshotsTemporalLeakage:
         assert result.as_of_date == DECISION_DATE
 
     def test_market_context_snapshots_future_available_at_is_invalid(self):
-        use_case = AssessSourceAvailabilityUseCase()
+        use_case = AssessSourceAvailabilityUseCase(calendar=_calendar())
         result = use_case.execute(
             source_family="market_context_snapshots",
             effective_session=_decision_session(),
@@ -125,7 +135,7 @@ class TestMarketContextSnapshotsTemporalLeakage:
         assert result.is_authoritative is False
 
     def test_market_context_snapshots_current_when_available_at_decision(self):
-        use_case = AssessSourceAvailabilityUseCase()
+        use_case = AssessSourceAvailabilityUseCase(calendar=_calendar())
         result = use_case.execute(
             source_family="market_context_snapshots",
             effective_session=_decision_session(),
@@ -174,7 +184,7 @@ class TestRegimeObservationsTemporalLeakage:
         assert stability == RegimeStability.TRANSITIONING.value
 
     def test_regime_observations_future_available_at_is_invalid(self):
-        use_case = AssessSourceAvailabilityUseCase()
+        use_case = AssessSourceAvailabilityUseCase(calendar=_calendar())
         result = use_case.execute(
             source_family="regime_observations",
             effective_session=_decision_session(),
@@ -204,7 +214,7 @@ class TestSentimentIsDiagnosticOnlyEvenWhenCurrent:
         assert len(logs) == 1
         assert logs[0].date == DECISION_DATE  # perfectly current row, real repo read
 
-        use_case = AssessSourceAvailabilityUseCase()
+        use_case = AssessSourceAvailabilityUseCase(calendar=_calendar())
         result = use_case.execute(
             source_family="sentiment",
             effective_session=_decision_session(),

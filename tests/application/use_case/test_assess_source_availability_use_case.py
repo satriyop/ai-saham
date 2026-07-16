@@ -1,6 +1,6 @@
-"""Tests for AssessSourceAvailabilityUseCase — DQ-002F per-source availability contract."""
+"""Tests for AssessSourceAvailabilityUseCase — DQ-002F/DQ-002I per-source availability contract."""
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import pytest
 
@@ -16,6 +16,7 @@ from src.application.services.effective_market_session_resolver import (
 from src.application.use_case.assess_source_availability_use_case import (
     AssessSourceAvailabilityUseCase,
 )
+from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.domain.value_objects.source_availability import SourceAvailabilityStatus
 
@@ -40,9 +41,32 @@ def _wib(y, m, d, hh=16, mm=0) -> datetime:
     return datetime(y, m, d, hh, mm, tzinfo=IDX_TIMEZONE)
 
 
+def _all_weekdays(start: date, end: date) -> tuple[date, ...]:
+    """Every Mon-Fri date in [start, end] — a test-only fixture calendar,
+    not production weekday-fallback logic. None of the dates this file's
+    pre-existing tests use (2026-07-10..2026-07-17) cross an IDX holiday,
+    so this preserves their exact previous gap counts under real
+    trading-session-distance calculation."""
+    days = []
+    current = start
+    while current <= end:
+        if current.weekday() < 5:
+            days.append(current)
+        current += timedelta(days=1)
+    return tuple(days)
+
+
+def _default_calendar() -> KnownTradingSessionCalendar:
+    start = date(2026, 1, 1)
+    end = date(2026, 12, 31)
+    return KnownTradingSessionCalendar(
+        sessions=_all_weekdays(start, end), coverage_start=start, coverage_end=end
+    )
+
+
 @pytest.fixture
 def use_case() -> AssessSourceAvailabilityUseCase:
-    return AssessSourceAvailabilityUseCase()
+    return AssessSourceAvailabilityUseCase(calendar=_default_calendar())
 
 
 class TestSessionAlignedSources:
@@ -148,6 +172,222 @@ class TestSessionAlignedSources:
 
         assert result.status is SourceAvailabilityStatus.PARTIAL
         assert result.is_authoritative is False
+
+
+class TestTradingSessionDistance:
+    """DQ-002I: session-aligned lag must use proven IDX trading-session
+    distance (via the injected calendar), never calendar-day subtraction
+    or weekday arithmetic."""
+
+    FRIDAY = date(2026, 7, 17)
+    MONDAY = date(2026, 7, 20)
+    TUESDAY = date(2026, 7, 21)
+
+    def test_friday_to_monday_is_one_session_behind_and_late_not_stale(self):
+        """Old bug: (Monday - Friday).days == 3, which would have been
+        STALE for a lag=1 broker source. Correct: 1 trading session."""
+        calendar = KnownTradingSessionCalendar(
+            sessions=(self.FRIDAY, self.MONDAY),
+            coverage_start=self.FRIDAY,
+            coverage_end=self.MONDAY,
+        )
+        use_case = AssessSourceAvailabilityUseCase(calendar=calendar)
+        session = _session(self.MONDAY, _wib(2026, 7, 20))
+
+        result = use_case.execute(
+            source_family="broker_summaries",
+            effective_session=session,
+            observed_through=self.FRIDAY,
+        )
+
+        assert result.status is SourceAvailabilityStatus.LATE
+        assert result.is_authoritative is False
+        assert any("1 trading session" in note for note in result.notes)
+
+    def test_friday_to_tuesday_is_two_sessions_behind_and_stale(self):
+        calendar = KnownTradingSessionCalendar(
+            sessions=(self.FRIDAY, self.MONDAY, self.TUESDAY),
+            coverage_start=self.FRIDAY,
+            coverage_end=self.TUESDAY,
+        )
+        use_case = AssessSourceAvailabilityUseCase(calendar=calendar)
+        session = _session(self.TUESDAY, _wib(2026, 7, 21))
+
+        result = use_case.execute(
+            source_family="broker_summaries",
+            effective_session=session,
+            observed_through=self.FRIDAY,
+        )
+
+        assert result.status is SourceAvailabilityStatus.STALE
+        assert result.is_authoritative is False
+        assert any("2 trading session" in note for note in result.notes)
+
+    def test_multi_calendar_day_holiday_gap_with_one_real_session_is_late_not_stale(self):
+        """Friday -> Tuesday spans 4 calendar days, but Monday is an IDX
+        holiday (deliberately absent from the session set) — only Tuesday
+        is a real elapsed session, so this is 1 session behind, not 2 and
+        not the old (wrong) 4-calendar-day count."""
+        calendar = KnownTradingSessionCalendar(
+            sessions=(self.FRIDAY, self.TUESDAY),  # Monday deliberately absent
+            coverage_start=self.FRIDAY,
+            coverage_end=self.TUESDAY,
+        )
+        use_case = AssessSourceAvailabilityUseCase(calendar=calendar)
+        session = _session(self.TUESDAY, _wib(2026, 7, 21))
+
+        result = use_case.execute(
+            source_family="broker_summaries",
+            effective_session=session,
+            observed_through=self.FRIDAY,
+        )
+
+        assert result.status is SourceAvailabilityStatus.LATE
+        assert result.is_authoritative is False
+
+    def test_candles_friday_to_monday_one_session_behind_is_still_stale(self):
+        """Candles have zero allowed lag: even a correct 1-trading-session
+        gap (not the old buggy 3-calendar-day count) is STALE, because
+        candles must be exactly current."""
+        calendar = KnownTradingSessionCalendar(
+            sessions=(self.FRIDAY, self.MONDAY),
+            coverage_start=self.FRIDAY,
+            coverage_end=self.MONDAY,
+        )
+        use_case = AssessSourceAvailabilityUseCase(calendar=calendar)
+        session = _session(self.MONDAY, _wib(2026, 7, 20))
+
+        result = use_case.execute(
+            source_family="candles",
+            effective_session=session,
+            observed_through=self.FRIDAY,
+        )
+
+        assert result.status is SourceAvailabilityStatus.STALE
+        assert result.is_authoritative is False
+
+    def test_future_observed_through_remains_invalid_regardless_of_calendar(self):
+        calendar = KnownTradingSessionCalendar(
+            sessions=(self.FRIDAY, self.MONDAY),
+            coverage_start=self.FRIDAY,
+            coverage_end=self.MONDAY,
+        )
+        use_case = AssessSourceAvailabilityUseCase(calendar=calendar)
+        session = _session(self.FRIDAY, _wib(2026, 7, 17))
+
+        result = use_case.execute(
+            source_family="broker_summaries",
+            effective_session=session,
+            observed_through=self.MONDAY,  # after latest_completed_session
+        )
+
+        assert result.status is SourceAvailabilityStatus.INVALID
+        assert result.is_authoritative is False
+
+    def test_missing_calendar_coverage_is_unknown_not_zero_sessions(self):
+        """The calendar cannot prove coverage for this interval (it only
+        knows about a different date range entirely) — this must resolve
+        to UNKNOWN, never silently to CURRENT (0 sessions) or any other
+        status that would grant authority."""
+        unrelated_calendar = KnownTradingSessionCalendar(
+            sessions=(date(2026, 1, 5), date(2026, 1, 6)),
+            coverage_start=date(2026, 1, 1),
+            coverage_end=date(2026, 1, 31),
+        )
+        use_case = AssessSourceAvailabilityUseCase(calendar=unrelated_calendar)
+        session = _session(self.MONDAY, _wib(2026, 7, 20))
+
+        result = use_case.execute(
+            source_family="broker_summaries",
+            effective_session=session,
+            observed_through=self.FRIDAY,
+        )
+
+        assert result.status is SourceAvailabilityStatus.UNKNOWN
+        assert result.is_authoritative is False
+        assert result.reason == "TRADING_CALENDAR_COVERAGE_UNPROVEN"
+
+    def test_missing_calendar_coverage_produces_no_expected_available_at(self):
+        unrelated_calendar = KnownTradingSessionCalendar(
+            sessions=(), coverage_start=date(2026, 1, 1), coverage_end=date(2026, 1, 31)
+        )
+        use_case = AssessSourceAvailabilityUseCase(calendar=unrelated_calendar)
+        session = _session(self.MONDAY, _wib(2026, 7, 20))
+
+        result = use_case.execute(
+            source_family="broker_summaries",
+            effective_session=session,
+            observed_through=self.FRIDAY,
+        )
+
+        assert result.status is SourceAvailabilityStatus.UNKNOWN
+        assert result.expected_available_at is None
+
+    def test_non_session_latest_completed_session_endpoint_is_unknown(self):
+        """`latest_completed_session` (MONDAY) is inside coverage but was
+        never proven as a session (only Friday/Tuesday are) — this must
+        resolve to UNKNOWN/non-authoritative, never CURRENT/LATE/STALE."""
+        calendar = KnownTradingSessionCalendar(
+            sessions=(self.FRIDAY, self.TUESDAY),
+            coverage_start=self.FRIDAY,
+            coverage_end=self.TUESDAY,
+        )
+        use_case = AssessSourceAvailabilityUseCase(calendar=calendar)
+        session = _session(self.MONDAY, _wib(2026, 7, 20))
+
+        result = use_case.execute(
+            source_family="broker_summaries",
+            effective_session=session,
+            observed_through=self.FRIDAY,
+        )
+
+        assert result.status is SourceAvailabilityStatus.UNKNOWN
+        assert result.is_authoritative is False
+        assert result.reason == "TRADING_CALENDAR_COVERAGE_UNPROVEN"
+
+    def test_non_session_observed_through_endpoint_is_unknown(self):
+        """`observed_through` (MONDAY) is inside coverage but was never
+        proven as a session — must resolve to UNKNOWN, never silently
+        treated as 0/1 sessions apart."""
+        calendar = KnownTradingSessionCalendar(
+            sessions=(self.FRIDAY, self.TUESDAY),
+            coverage_start=self.FRIDAY,
+            coverage_end=self.TUESDAY,
+        )
+        use_case = AssessSourceAvailabilityUseCase(calendar=calendar)
+        session = _session(self.TUESDAY, _wib(2026, 7, 21))
+
+        result = use_case.execute(
+            source_family="broker_summaries",
+            effective_session=session,
+            observed_through=self.MONDAY,
+        )
+
+        assert result.status is SourceAvailabilityStatus.UNKNOWN
+        assert result.is_authoritative is False
+        assert result.reason == "TRADING_CALENDAR_COVERAGE_UNPROVEN"
+
+    def test_non_session_same_date_endpoint_is_unknown_not_current(self):
+        """observed_through == latest_completed_session == MONDAY, but
+        MONDAY was never proven as a session — must not silently resolve
+        to CURRENT/is_authoritative=True."""
+        calendar = KnownTradingSessionCalendar(
+            sessions=(self.FRIDAY, self.TUESDAY),
+            coverage_start=self.FRIDAY,
+            coverage_end=self.TUESDAY,
+        )
+        use_case = AssessSourceAvailabilityUseCase(calendar=calendar)
+        session = _session(self.MONDAY, _wib(2026, 7, 20))
+
+        result = use_case.execute(
+            source_family="broker_summaries",
+            effective_session=session,
+            observed_through=self.MONDAY,
+        )
+
+        assert result.status is SourceAvailabilityStatus.UNKNOWN
+        assert result.is_authoritative is False
+        assert result.reason == "TRADING_CALENDAR_COVERAGE_UNPROVEN"
 
 
 class TestProviderSettlementCutoff:

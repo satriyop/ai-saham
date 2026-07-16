@@ -1,5 +1,5 @@
 """
-AssessSourceAvailabilityUseCase — DQ-002F.
+AssessSourceAvailabilityUseCase — DQ-002F/DQ-002I.
 
 Deterministic per-source availability contract for Phase 2 authoritative
 inputs. Given a decision timestamp (via an already-resolved
@@ -10,9 +10,19 @@ is allowed to be authoritative at all.
 
 This use case does not read the database itself: callers already know (or
 have already queried) `observed_through` / `available_at` for the source
-they are asking about. It owns only the settlement *policy*, so the same
-decision logic cannot drift between callers (screener, backtest, readiness,
-CLI).
+they are asking about, and supply an already-built `TradingSessionCalendar`
+(see `src/domain/services/trading_session_calendar.py`). It owns only the
+settlement *policy*, so the same decision logic cannot drift between
+callers (screener, backtest, readiness, CLI).
+
+DQ-002I: session-aligned lag is computed from proven IDX trading sessions
+via the injected calendar's `sessions_apart()`, never from
+`(later - earlier).days` calendar-day subtraction and never from weekday
+arithmetic. `calendar` is a required constructor argument — there is no
+weekday-fallback default, because a silent fallback would reintroduce
+exactly the bug this task fixes. If the calendar cannot prove coverage for
+the requested interval, the source is `UNKNOWN`/non-authoritative; it is
+never assumed to be 0 sessions apart.
 
 Does not change signal scoring, tuning, or persisted observations/labels.
 Sentiment is hard-wired to DIAGNOSTIC_ONLY / is_authoritative=False via the
@@ -37,6 +47,7 @@ from src.application.services.source_settlement_registry import (
     SourceSettlementRule,
     default_source_settlement_registry,
 )
+from src.domain.services.trading_session_calendar import TradingSessionCalendar
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.domain.value_objects.source_availability import (
     SourceAvailabilityAssessment,
@@ -47,7 +58,12 @@ from src.domain.value_objects.source_availability import (
 class AssessSourceAvailabilityUseCase:
     """Assess one source family's availability at one decision timestamp."""
 
-    def __init__(self, registry: SourceSettlementRegistry | None = None) -> None:
+    def __init__(
+        self,
+        calendar: TradingSessionCalendar,
+        registry: SourceSettlementRegistry | None = None,
+    ) -> None:
+        self._calendar = calendar
         self._registry = registry or default_source_settlement_registry()
 
     def execute(
@@ -154,8 +170,8 @@ class AssessSourceAvailabilityUseCase:
             expected_available_at=expected_available_at,
         )
 
-    @staticmethod
     def _assess_session_aligned(
+        self,
         rule: SourceSettlementRule,
         effective_session: EffectiveMarketSession,
         observed_through: date | None,
@@ -180,9 +196,7 @@ class AssessSourceAvailabilityUseCase:
                 None,
             )
 
-        gap_days = (latest_completed_session - observed_through).days
-
-        if gap_days < 0:
+        if observed_through > latest_completed_session:
             return (
                 SourceAvailabilityStatus.INVALID,
                 "SESSION_LEAKAGE_FUTURE_OBSERVATION",
@@ -193,14 +207,33 @@ class AssessSourceAvailabilityUseCase:
                 None,
             )
 
-        if gap_days == 0:
+        # DQ-002I: proven IDX trading-session distance, never calendar-day
+        # subtraction and never weekday arithmetic. `None` means the
+        # calendar cannot prove coverage for this interval — that must
+        # never be treated as "0 sessions apart" (which would silently
+        # grant CURRENT to an unproven gap).
+        session_gap = self._calendar.sessions_apart(observed_through, latest_completed_session)
+
+        if session_gap is None:
+            return (
+                SourceAvailabilityStatus.UNKNOWN,
+                "TRADING_CALENDAR_COVERAGE_UNPROVEN",
+                (
+                    f"The trading-session calendar cannot prove coverage for "
+                    f"({observed_through.isoformat()}, {latest_completed_session.isoformat()}]; "
+                    "the session gap for this source is unknown, not zero.",
+                ),
+                None,
+            )
+
+        if session_gap == 0:
             return (SourceAvailabilityStatus.CURRENT, "SESSION_ALIGNED_CURRENT", (), None)
 
         # DQ-002H: `expected_available_at` is the policy-owned provider
         # settlement cutoff for the *latest completed session* (the session
         # this source is currently lagging behind), when the rule declares
         # one. It is purely explanatory: whether the source is `LATE` or
-        # `STALE` is decided exclusively by `gap_days` vs.
+        # `STALE` is decided exclusively by `session_gap` vs.
         # `settlement_lag_days` below, never by whether this cutoff has
         # passed. A source that is one session behind stays `LATE` even
         # after its cutoff time has passed for that session — the cutoff
@@ -213,10 +246,10 @@ class AssessSourceAvailabilityUseCase:
             else None
         )
 
-        if gap_days <= settlement_lag_days:
+        if session_gap <= settlement_lag_days:
             notes = (
-                f"observed_through is {gap_days} session(s) behind the latest "
-                f"completed session ({latest_completed_session.isoformat()}), "
+                f"observed_through is {session_gap} trading session(s) behind the "
+                f"latest completed session ({latest_completed_session.isoformat()}), "
                 f"within the expected {settlement_lag_days}-session settlement lag.",
             )
             if expected_available_at is not None:
@@ -236,8 +269,8 @@ class AssessSourceAvailabilityUseCase:
             return (SourceAvailabilityStatus.LATE, "SESSION_ALIGNED_LATE_WITHIN_LAG", notes, expected_available_at)
 
         notes = (
-            f"observed_through is {gap_days} session(s) behind the latest "
-            f"completed session ({latest_completed_session.isoformat()}), beyond "
+            f"observed_through is {session_gap} trading session(s) behind the "
+            f"latest completed session ({latest_completed_session.isoformat()}), beyond "
             f"the expected {settlement_lag_days}-session settlement lag.",
         )
         if expected_available_at is not None:

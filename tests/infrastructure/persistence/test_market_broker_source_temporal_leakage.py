@@ -11,7 +11,7 @@ Layer: Infrastructure (tests only) / Application (AssessSourceAvailabilityUseCas
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from src.application.services.effective_market_session_resolver import (
@@ -27,6 +27,7 @@ from src.domain.entities.broker_flow import (
     ForeignFlowSnapshot,
 )
 from src.domain.entities.candle import Candle
+from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.domain.value_objects.source_availability import SourceAvailabilityStatus
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
@@ -34,6 +35,22 @@ from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarket
 
 DECISION_DATE = date(2026, 7, 16)
 FUTURE_DATE = date(2026, 7, 17)
+
+
+def _calendar() -> KnownTradingSessionCalendar:
+    """DQ-002I: none of this file's fixed dates (2026-07-01..2026-07-31)
+    cross an IDX holiday, so a plain Mon-Fri calendar for the whole month
+    preserves each test's pre-DQ-002I gap expectations exactly."""
+    start, end = date(2026, 7, 1), date(2026, 7, 31)
+    sessions = []
+    current = start
+    while current <= end:
+        if current.weekday() < 5:
+            sessions.append(current)
+        current += timedelta(days=1)
+    return KnownTradingSessionCalendar(
+        sessions=tuple(sessions), coverage_start=start, coverage_end=end
+    )
 
 
 def _decision_session(latest_completed_session: date = DECISION_DATE) -> EffectiveMarketSession:
@@ -74,7 +91,7 @@ class TestCandleTemporalLeakage:
         repo.save_candles([_candle("BBCA", DECISION_DATE)])
         bounded = repo.get_candles("BBCA", end_date=DECISION_DATE)
 
-        use_case = AssessSourceAvailabilityUseCase()
+        use_case = AssessSourceAvailabilityUseCase(calendar=_calendar())
         result = use_case.execute(
             source_family="candles",
             effective_session=_decision_session(),
@@ -85,7 +102,7 @@ class TestCandleTemporalLeakage:
         assert result.is_authoritative is True
 
     def test_future_candle_date_fed_directly_is_invalid_never_current(self):
-        use_case = AssessSourceAvailabilityUseCase()
+        use_case = AssessSourceAvailabilityUseCase(calendar=_calendar())
         result = use_case.execute(
             source_family="candles",
             effective_session=_decision_session(),
@@ -130,7 +147,7 @@ class TestBrokerSummariesTemporalLeakage:
 
         # ...but feeding that observed date into the availability contract
         # must never classify it as CURRENT/authoritative.
-        use_case = AssessSourceAvailabilityUseCase()
+        use_case = AssessSourceAvailabilityUseCase(calendar=_calendar())
         result = use_case.execute(
             source_family="broker_summaries",
             effective_session=_decision_session(),
@@ -176,7 +193,7 @@ class TestBrokerDailyFlowTemporalLeakage:
 
         rows = repo.get_broker_daily_flows("BBCA", end_date=DECISION_DATE, source="stockbit")
 
-        use_case = AssessSourceAvailabilityUseCase()
+        use_case = AssessSourceAvailabilityUseCase(calendar=_calendar())
         result = use_case.execute(
             source_family="broker_daily_flow",
             effective_session=_decision_session(),
@@ -211,7 +228,7 @@ class TestForeignFlowPointsTemporalLeakage:
         repo.save_foreign_flow_points([self._point(FUTURE_DATE)])
         unbounded = repo.get_foreign_flow_points("BBCA", source="idx")
 
-        use_case = AssessSourceAvailabilityUseCase()
+        use_case = AssessSourceAvailabilityUseCase(calendar=_calendar())
         result = use_case.execute(
             source_family="foreign_flow_points",
             effective_session=_decision_session(),
@@ -244,7 +261,7 @@ class TestForeignFlowSnapshotsTemporalLeakage:
         repo.save_foreign_flow_snapshots([self._snapshot()], snapshot_date=FUTURE_DATE, period_days=7)
         rows = repo.get_foreign_flow_snapshots(FUTURE_DATE, period_days=7)
 
-        use_case = AssessSourceAvailabilityUseCase()
+        use_case = AssessSourceAvailabilityUseCase(calendar=_calendar())
         result = use_case.execute(
             source_family="foreign_flow_snapshots",
             effective_session=_decision_session(),

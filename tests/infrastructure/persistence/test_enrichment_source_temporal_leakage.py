@@ -25,6 +25,7 @@ from src.application.services.effective_market_session_resolver import (
 from src.application.use_case.assess_source_availability_use_case import (
     AssessSourceAvailabilityUseCase,
 )
+from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.domain.value_objects.source_availability import SourceAvailabilityStatus
 from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
@@ -33,6 +34,15 @@ from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityP
 
 DECISION_DATE = date(2026, 7, 16)
 FUTURE_DATE = date(2026, 7, 17)
+
+
+def _calendar() -> KnownTradingSessionCalendar:
+    """DQ-002I: every source family exercised in this file is FETCH_TIMESTAMP,
+    so the calendar is structurally required but never actually queried —
+    an empty/trivial calendar is sufficient here."""
+    return KnownTradingSessionCalendar(
+        sessions=(), coverage_start=date(2026, 1, 1), coverage_end=date(2026, 12, 31)
+    )
 
 
 def _decision_session() -> EffectiveMarketSession:
@@ -104,7 +114,7 @@ class TestAnalystCacheTemporalLeakage:
 
         # ...but the availability contract must classify that timestamp as
         # INVALID/non-authoritative when compared against decision_at.
-        use_case = AssessSourceAvailabilityUseCase()
+        use_case = AssessSourceAvailabilityUseCase(calendar=_calendar())
         result = use_case.execute(
             source_family="analyst_cache",
             effective_session=_decision_session(),
@@ -124,7 +134,7 @@ class TestAnalystCacheTemporalLeakage:
         result = provider.get_consensus("BBCA", as_of_date=DECISION_DATE)
         assert result is not None
 
-        use_case = AssessSourceAvailabilityUseCase()
+        use_case = AssessSourceAvailabilityUseCase(calendar=_calendar())
         assessment = use_case.execute(
             source_family="analyst_cache",
             effective_session=_decision_session(),
@@ -160,7 +170,7 @@ class TestCompanyFundamentalsTemporalLeakage:
         assert result_without_bound.fetched_at is not None
         assert result_without_bound.fetched_at.date() == FUTURE_DATE
 
-        use_case = AssessSourceAvailabilityUseCase()
+        use_case = AssessSourceAvailabilityUseCase(calendar=_calendar())
         assessment = use_case.execute(
             source_family="company_fundamentals",
             effective_session=_decision_session(),
@@ -206,7 +216,7 @@ class TestSeasonalityCacheTemporalLeakage:
         unbounded = provider.get_seasonal_edge("BBCA", year=2026, month=7)
         assert unbounded is not None
 
-        use_case = AssessSourceAvailabilityUseCase()
+        use_case = AssessSourceAvailabilityUseCase(calendar=_calendar())
         assessment = use_case.execute(
             source_family="seasonality_cache",
             effective_session=_decision_session(),
