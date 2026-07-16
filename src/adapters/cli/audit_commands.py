@@ -4,6 +4,7 @@ Public command registration lives in lifecycle routers:
   saham audit data manifest
   saham audit data source-contracts
   saham audit data reconcile-sources
+  saham audit data contract-gate
 Layer: Adapter
 """
 
@@ -29,6 +30,10 @@ from src.application.use_case.build_audit_baseline_manifest_use_case import (
     AuditBaselineManifest,
     BuildAuditBaselineManifestRequest,
     BuildAuditBaselineManifestUseCase,
+)
+from src.application.use_case.build_dq_contract_gate_use_case import (
+    BuildDQContractGateUseCase,
+    DQContractGateResponse,
 )
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.audit_config_identity_reader import (
@@ -142,9 +147,32 @@ def reconcile_sources(
     _run_reconcile_sources(db_path=db_path, output_format=output_format)
 
 
+def contract_gate(
+    db_path: Annotated[
+        Optional[Path],
+        typer.Option("--db", help="SQLite database path"),
+    ] = None,
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format: table or json."),
+    ] = "table",
+) -> None:
+    """
+    Evaluate the DQ-CONTRACT-GATE: combine the source-contracts and
+    reconcile-sources audits into one PASS/FAIL gate and exit non-zero on
+    FAIL. WARN on either audit is treated as a gate failure (fail closed).
+    """
+    if output_format not in _VALID_FORMATS:
+        raise typer.BadParameter(
+            f"--format must be one of {_VALID_FORMATS}, got '{output_format}'."
+        )
+    _run_contract_gate(db_path=db_path, output_format=output_format)
+
+
 data_app.command("manifest")(manifest)
 data_app.command("source-contracts")(source_contracts)
 data_app.command("reconcile-sources")(reconcile_sources)
+data_app.command("contract-gate")(contract_gate)
 audit_app.add_typer(data_app, name="data")
 
 
@@ -369,4 +397,86 @@ def _print_reconcile_sources_table(response: AuditSourceReconciliationResponse) 
     else:
         console.print("")
         console.print("[green]✓ No reconciliation findings.[/green]")
+    console.print("")
+
+
+def _run_contract_gate(db_path: Path | None, output_format: str) -> None:
+    cfg = load_app_config()
+    resolved_db = db_path or Path(cfg.storage.db_path)
+
+    catalog = StaticSourceFieldContractCatalog()
+    source_contracts_use_case = AuditSourceFieldContractsUseCase(
+        reader=SQLiteSourceFieldContractReader(resolved_db, catalog=catalog),
+        catalog=catalog,
+    )
+    source_reconciliation_use_case = AuditSourceReconciliationUseCase(
+        reader=SQLiteSourceReconciliationReader(resolved_db),
+        enrichment_reader=SQLiteEnrichmentReconciliationReader(resolved_db),
+        artifact_reader=SQLiteSignalArtifactReconciliationReader(resolved_db),
+    )
+    use_case = BuildDQContractGateUseCase(
+        source_contracts_use_case=source_contracts_use_case,
+        source_reconciliation_use_case=source_reconciliation_use_case,
+    )
+    response = use_case.execute()
+
+    if output_format == "json":
+        typer.echo(json.dumps(response.to_dict(), indent=2, ensure_ascii=False))
+    else:
+        _print_contract_gate_table(response)
+
+    if response.status != "PASS":
+        raise typer.Exit(code=1)
+
+
+def _print_contract_gate_table(response: DQContractGateResponse) -> None:
+    console = Console()
+    color = {"PASS": "green", "FAIL": "red"}.get(response.status, "white")
+    sub_color = {"PASS": "green", "WARN": "yellow", "FAIL": "red"}
+
+    console.print("")
+    status_text = Text()
+    status_text.append("Gate Status: ", style="bold")
+    status_text.append(response.status, style=f"bold {color}")
+    status_text.append(f" | Blockers: {len(response.blockers)}")
+    panel = Panel(
+        status_text,
+        title="[bold]DQ Contract Gate[/bold]",
+        border_style=color,
+        expand=False,
+    )
+    console.print(panel)
+
+    summary = Table(show_header=True, header_style="bold magenta")
+    summary.add_column("Audit")
+    summary.add_column("Status", justify="center")
+    contract_color = sub_color.get(response.source_contract_status, "white")
+    reconciliation_color = sub_color.get(response.source_reconciliation_status, "white")
+    summary.add_row(
+        "source-contracts",
+        f"[{contract_color}]{response.source_contract_status}[/{contract_color}]",
+    )
+    summary.add_row(
+        "reconcile-sources",
+        f"[{reconciliation_color}]{response.source_reconciliation_status}"
+        f"[/{reconciliation_color}]",
+    )
+    console.print(summary)
+
+    if response.blockers:
+        console.print("")
+        console.print("[bold red]Blockers[/bold red]")
+        for blocker in response.blockers:
+            blocker_color = {"FAIL": "red", "WARN": "yellow"}.get(blocker.severity, "white")
+            location = blocker.table or "-"
+            if blocker.field:
+                location += f".{blocker.field}"
+            console.print(
+                f"  [bold {blocker_color}][{blocker.severity}][/bold {blocker_color}] "
+                f"[dim]({blocker.source})[/dim] [bold]{blocker.code}[/bold] ({location})"
+            )
+            console.print(f"    [dim]Message:[/dim] {blocker.message}")
+    else:
+        console.print("")
+        console.print("[green]✓ DQ-CONTRACT-GATE passed — no blockers.[/green]")
     console.print("")

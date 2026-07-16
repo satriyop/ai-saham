@@ -1,5 +1,5 @@
-"""Tests for `saham audit data manifest` / `source-contracts` / `reconcile-sources`
-(DQ-000, DQ-001A, DQ-001B, DQ-001C, DQ-001D)."""
+"""Tests for `saham audit data manifest` / `source-contracts` / `reconcile-sources` /
+`contract-gate` (DQ-000, DQ-001A, DQ-001B, DQ-001C, DQ-001D, DQ-CONTRACT-GATE)."""
 
 from __future__ import annotations
 
@@ -11,6 +11,12 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from src.adapters.cli.main import app
+from src.application.use_case.audit_source_field_contracts_use_case import (
+    AuditSourceFieldContractsResponse,
+)
+from src.application.use_case.audit_source_reconciliation_use_case import (
+    AuditSourceReconciliationResponse,
+)
 
 runner = CliRunner()
 
@@ -334,6 +340,137 @@ def test_reconcile_sources_does_not_mutate_database(tmp_path: Path):
     assert db_path.stat().st_mtime_ns == mtime_before
 
 
+# ── audit data contract-gate ──────────────────────────────────────────────
+
+
+def _patch_both_audits_to(monkeypatch, status: str) -> None:
+    """Force both underlying audits to report `status`, regardless of what
+    the (possibly minimal) temp database actually contains — makes the gate's
+    PASS/FAIL branch deterministic for CLI-level exit-code assertions."""
+    import src.adapters.cli.audit_commands as audit_commands_module
+
+    def fake_contracts_execute(self):
+        return AuditSourceFieldContractsResponse(
+            artifact_type="source_field_contract_audit",
+            schema_version=1,
+            generated_at="2026-07-16T00:00:00+00:00",
+            tables=(),
+            findings=(),
+            status=status,
+        )
+
+    def fake_reconciliation_execute(self):
+        return AuditSourceReconciliationResponse(
+            artifact_type="source_reconciliation_audit",
+            schema_version=1,
+            generated_at="2026-07-16T00:00:00+00:00",
+            status=status,
+            checks=(),
+            findings=(),
+        )
+
+    monkeypatch.setattr(
+        audit_commands_module.AuditSourceFieldContractsUseCase,
+        "execute",
+        fake_contracts_execute,
+    )
+    monkeypatch.setattr(
+        audit_commands_module.AuditSourceReconciliationUseCase,
+        "execute",
+        fake_reconciliation_execute,
+    )
+
+
+def test_contract_gate_json_exits_zero_on_pass(tmp_path: Path, monkeypatch):
+    db_path = tmp_path / "gate_pass.db"
+    _build_temp_db(db_path)
+    _patch_both_audits_to(monkeypatch, "PASS")
+
+    result = runner.invoke(
+        app,
+        ["audit", "data", "contract-gate", "--format", "json", "--db", str(db_path)],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["status"] == "PASS"
+    assert payload["blockers"] == []
+
+
+def test_contract_gate_json_output_has_required_top_level_fields(tmp_path: Path):
+    db_path = tmp_path / "gate.db"
+    _build_temp_db(db_path)
+
+    result = runner.invoke(
+        app,
+        ["audit", "data", "contract-gate", "--format", "json", "--db", str(db_path)],
+    )
+
+    payload = json.loads(result.output)
+    assert payload["artifact_type"] == "dq_contract_gate"
+    assert payload["schema_version"] == 1
+    assert payload["status"] in ("PASS", "FAIL")
+    assert payload["source_contract_status"] in ("PASS", "WARN", "FAIL")
+    assert payload["source_reconciliation_status"] in ("PASS", "WARN", "FAIL")
+    assert isinstance(payload["blockers"], list)
+    assert "generated_at" in payload
+
+
+def test_contract_gate_json_exits_one_on_fail(tmp_path: Path, monkeypatch):
+    """Force a FAIL by pointing --db at a nonexistent database — both
+    underlying audits report FAIL (DATABASE_MISSING / MISSING_TABLE-style),
+    so the gate must exit 1."""
+    missing_db = tmp_path / "does_not_exist.db"
+
+    result = runner.invoke(
+        app,
+        ["audit", "data", "contract-gate", "--format", "json", "--db", str(missing_db)],
+    )
+
+    assert result.exit_code == 1, result.output
+    payload = json.loads(result.output)
+    assert payload["status"] == "FAIL"
+    assert len(payload["blockers"]) > 0
+
+
+def test_contract_gate_table_format_exits_one_on_fail_and_shows_blockers(tmp_path: Path):
+    missing_db = tmp_path / "does_not_exist.db"
+
+    result = runner.invoke(
+        app,
+        ["audit", "data", "contract-gate", "--db", str(missing_db)],
+    )
+
+    assert result.exit_code == 1, result.output
+    assert "DQ Contract Gate" in result.output
+    assert "Blockers" in result.output
+
+
+def test_contract_gate_rejects_invalid_format(tmp_path: Path):
+    db_path = tmp_path / "gate.db"
+    _build_temp_db(db_path)
+
+    result = runner.invoke(
+        app,
+        ["audit", "data", "contract-gate", "--format", "xml", "--db", str(db_path)],
+    )
+
+    assert result.exit_code != 0
+
+
+def test_contract_gate_does_not_mutate_database(tmp_path: Path):
+    db_path = tmp_path / "gate.db"
+    _build_temp_db(db_path)
+    mtime_before = db_path.stat().st_mtime_ns
+
+    runner.invoke(
+        app,
+        ["audit", "data", "contract-gate", "--format", "json", "--db", str(db_path)],
+    )
+
+    assert db_path.stat().st_mtime_ns == mtime_before
+
+
 # ── registration ──────────────────────────────────────────────────────────
 
 
@@ -352,7 +489,7 @@ def test_audit_data_exposes_manifest_and_source_contracts():
     assert "source-contracts" in result.output
 
 
-def test_dq_001d_did_not_add_a_new_command():
+def test_dq_contract_gate_added_exactly_one_new_command():
     result = runner.invoke(app, ["audit", "data", "--help"])
 
     assert result.exit_code == 0
@@ -369,5 +506,10 @@ def test_dq_001d_did_not_add_a_new_command():
         match = re.match(r"^│\s+([a-z][\w-]*)\s{2,}", line)
         if match:
             listed_commands.append(match.group(1))
-    assert set(listed_commands) == {"manifest", "source-contracts", "reconcile-sources"}
+    assert set(listed_commands) == {
+        "manifest",
+        "source-contracts",
+        "reconcile-sources",
+        "contract-gate",
+    }
     assert "reconcile-sources" in result.output
