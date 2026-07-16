@@ -120,6 +120,37 @@ def test_source_contracts_json_output_has_required_top_level_fields(tmp_path: Pa
     assert candles["row_count"] == 1
 
 
+def test_source_contracts_json_output_includes_dq_001c_enrichment_tables(tmp_path: Path):
+    db_path = tmp_path / "source_contracts.db"
+    _build_temp_db(db_path)
+
+    result = runner.invoke(
+        app,
+        ["audit", "data", "source-contracts", "--format", "json", "--db", str(db_path)],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+
+    table_names = {t["table"] for t in payload["tables"]}
+    for expected in (
+        "analyst_cache",
+        "insider_cache",
+        "company_fundamentals",
+        "shareholding_composition",
+        "seasonality_cache",
+        "ticker_notation_cache",
+        "bandar_detector",
+        "corporate_action_events",
+        "corporate_action_event_dates",
+        "forward_estimates_cache",
+        "company_profile_cache",
+        "earnings_cache",
+        "stock_meta",
+    ):
+        assert expected in table_names
+
+
 def test_source_contracts_table_format_prints_summary_without_error(tmp_path: Path):
     db_path = tmp_path / "source_contracts.db"
     _build_temp_db(db_path)

@@ -1,15 +1,22 @@
 """
-Static, deterministic source-field contract catalog for DQ-001A.
+Static, deterministic source-field contract catalog for DQ-001A/DQ-001C.
 
 Names concrete SQLite columns for the core market/broker/observation/label
-tables, so this lives in infrastructure. Application receives the resulting
+tables (DQ-001A) and enrichment/source-context tables (DQ-001C), so this
+lives in infrastructure. Application receives the resulting
 SourceFieldContract objects through injection and never sees column names
 directly.
+
+DQ-001C covers field-level contracts only (semantics/units/null policy).
+Executable enrichment reconciliation/invariant checks are out of scope here
+and remain future DQ-001D work.
 
 Layer: Infrastructure
 """
 
 from __future__ import annotations
+
+from typing import NamedTuple
 
 from src.application.use_case.audit_source_field_contracts_use_case import (
     SourceFieldContract,
@@ -22,7 +29,66 @@ _AUDITED_TABLES: tuple[str, ...] = (
     "broker_daily_flow",
     "candidate_observations",
     "signal_forward_labels",
+    "analyst_cache",
+    "insider_cache",
+    "company_fundamentals",
+    "shareholding_composition",
+    "seasonality_cache",
+    "ticker_notation_cache",
+    "bandar_detector",
+    "corporate_action_events",
+    "corporate_action_event_dates",
+    "forward_estimates_cache",
+    "company_profile_cache",
+    "earnings_cache",
+    "stock_meta",
 )
+
+
+class _FieldSpec(NamedTuple):
+    """Compact per-field spec consumed by `_table_fields` (DQ-001C only)."""
+
+    field: str
+    semantic_name: str
+    unit: str
+    null_policy: str  # "fail" | "warn"
+    sign_convention: str | None
+    temporal_meaning: str
+    null_semantics: str
+    invalid_values: frozenset[str] = frozenset()
+
+
+def _table_fields(
+    source_owner: str,
+    grain: str,
+    point_in_time_support: str,
+    specs: tuple[_FieldSpec, ...],
+) -> tuple[SourceFieldContract, ...]:
+    """Build SourceFieldContract objects for one table from compact specs.
+
+    Every DQ-001C field is `required=True` (the column must exist); the
+    per-field `null_policy` decides whether a NULL value is FAIL or WARN,
+    per the "identity/date/source fields fail, optional metrics warn" rule.
+    """
+    return tuple(
+        SourceFieldContract(
+            field=spec.field,
+            required=True,
+            semantic_name=spec.semantic_name,
+            source_owner=source_owner,
+            unit=spec.unit,
+            sign_convention=spec.sign_convention,
+            aggregation="none",
+            grain=grain,
+            temporal_meaning=spec.temporal_meaning,
+            null_semantics=spec.null_semantics,
+            point_in_time_support=point_in_time_support,
+            null_policy=spec.null_policy,
+            invalid_values=spec.invalid_values,
+            invalid_value_policy="fail",
+        )
+        for spec in specs
+    )
 
 _CANDLES_FIELDS: tuple[SourceFieldContract, ...] = (
     SourceFieldContract(
@@ -680,12 +746,803 @@ _SIGNAL_FORWARD_LABELS_FIELDS: tuple[SourceFieldContract, ...] = (
     ),
 )
 
+# ---------------------------------------------------------------------------
+# DQ-001C: enrichment/source-context tables.
+#
+# PIT support wording (per DQ-001C contract semantics rules):
+# - POINT_IN_TIME: the table carries a fetched/available date/timestamp that
+#   makes historical accumulation possible (distinct rows over time), but the
+#   cache-fetch date is not proof of exact source publication timing.
+# - HISTORICAL: true historical market/session data (bandar_detector only).
+# - CURRENT_CACHE: snapshot/TTL-style state with no enforced historical
+#   accumulation (ticker_notation_cache only — rebuilt on refresh).
+# ---------------------------------------------------------------------------
+
+_ANALYST_CACHE_FIELDS = _table_fields(
+    source_owner="Stockbit analyst consensus provider",
+    grain="one row per ticker/fetched_date",
+    point_in_time_support="POINT_IN_TIME",
+    specs=(
+        _FieldSpec(
+            "ticker", "IDX ticker symbol", "text", "fail", None,
+            "identity of the subject ticker", "unavailable if null",
+        ),
+        _FieldSpec(
+            "buy_count", "Analyst buy rating count", "count", "warn", None,
+            "as of fetched_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "hold_count", "Analyst hold rating count", "count", "warn", None,
+            "as of fetched_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "sell_count", "Analyst sell rating count", "count", "warn", None,
+            "as of fetched_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "avg_price_target", "Average analyst price target", "IDR price", "warn",
+            "positive price", "as of fetched_date",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "current_price", "Price at time of fetch", "IDR price", "warn",
+            "positive price", "as of fetched_date",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "last_updated", "Source-reported last-updated marker", "text", "warn", None,
+            "source-reported, not necessarily fetched_date", "unavailable if null",
+        ),
+        _FieldSpec(
+            "fetched_date", "Local cache fetch date", "YYYY-MM-DD", "fail", None,
+            "local cache availability/provenance time, not source business event date",
+            "unavailable if null",
+        ),
+        _FieldSpec(
+            "price_target_low", "Lowest analyst price target", "IDR price", "warn",
+            "positive price", "as of fetched_date",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "price_target_high", "Highest analyst price target", "IDR price", "warn",
+            "positive price", "as of fetched_date",
+            "unavailable if null (source absence is valid)",
+        ),
+    ),
+)
+
+_INSIDER_CACHE_FIELDS = _table_fields(
+    source_owner="Stockbit insider activity provider",
+    grain="one row per ticker/name/transaction_date/action_type/fetched_date",
+    point_in_time_support="POINT_IN_TIME",
+    specs=(
+        _FieldSpec(
+            "ticker", "IDX ticker symbol", "text", "fail", None,
+            "identity of the subject ticker", "unavailable if null",
+        ),
+        _FieldSpec(
+            "name", "Insider name (identity component)", "text", "fail", None,
+            "identity of the reporting insider", "unavailable if null",
+        ),
+        _FieldSpec(
+            "role", "Insider role/position", "text", "warn", None,
+            "as reported with the transaction", "unavailable if null",
+        ),
+        _FieldSpec(
+            "action_type", "Transaction action type (identity component)", "text",
+            "fail", None, "identity of the transaction kind (e.g. buy/sell)",
+            "unavailable if null",
+        ),
+        _FieldSpec(
+            "shares", "Shares transacted", "count", "warn", "non-negative",
+            "as of transaction_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "price", "Transaction price", "IDR price", "warn", "positive price",
+            "as of transaction_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "transaction_date", "Insider transaction date (identity component)",
+            "YYYY-MM-DD", "fail", None,
+            "insider transaction date; distinct from fetched_date, which is "
+            "when the cache learned it",
+            "unavailable if null",
+        ),
+        _FieldSpec(
+            "ownership_before_pct", "Ownership percent before transaction", "percent",
+            "warn", None, "as of transaction_date",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "ownership_after_pct", "Ownership percent after transaction", "percent",
+            "warn", None, "as of transaction_date",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "fetched_date", "Local cache fetch date (identity component)",
+            "YYYY-MM-DD", "fail", None,
+            "local cache availability/provenance time, not source business event date",
+            "unavailable if null",
+        ),
+    ),
+)
+
+_COMPANY_FUNDAMENTALS_FIELDS = _table_fields(
+    source_owner="Stockbit fundamentals provider",
+    grain="one row per ticker/fetched_date",
+    point_in_time_support="POINT_IN_TIME",
+    specs=(
+        _FieldSpec(
+            "ticker", "IDX ticker symbol", "text", "fail", None,
+            "identity of the subject ticker", "unavailable if null",
+        ),
+        _FieldSpec(
+            "fetched_date", "Local cache fetch date", "YYYY-MM-DD", "fail", None,
+            "local cache availability/provenance time, not source business event date",
+            "unavailable if null",
+        ),
+        _FieldSpec(
+            "pe_ratio_ttm", "Trailing twelve-month P/E ratio", "ratio", "warn", None,
+            "as of fetched_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "roe_ttm", "Trailing twelve-month return on equity", "percent", "warn",
+            "non-negative percent usually expected; not enforced here",
+            "as of fetched_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "net_profit_margin", "Net profit margin", "percent", "warn", None,
+            "as of fetched_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "revenue_yoy_growth", "Revenue year-over-year growth", "percent", "warn",
+            "positive means increase", "as of fetched_date",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "piotroski_f_score", "Piotroski F-Score", "score (0-9)", "warn", None,
+            "as of fetched_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "dividend_yield", "Dividend yield", "percent", "warn",
+            "non-negative percent usually expected; not enforced here",
+            "as of fetched_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "week52_high", "52-week high price", "IDR price", "warn", "positive price",
+            "as of fetched_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "week52_low", "52-week low price", "IDR price", "warn", "positive price",
+            "as of fetched_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "near_52w_high_rank", "Proximity rank to 52-week high", "percent", "warn",
+            None, "as of fetched_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "market_cap_idr", "Market capitalization", "IDR", "warn", "non-negative",
+            "as of fetched_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "pbv", "Price-to-book value ratio", "ratio", "warn", None,
+            "as of fetched_date", "unavailable if null (source absence is valid)",
+        ),
+    ),
+)
+
+_SHAREHOLDING_COMPOSITION_FIELDS = _table_fields(
+    source_owner="Stockbit shareholding composition provider",
+    grain="one row per ticker/fetched_date",
+    point_in_time_support="POINT_IN_TIME",
+    specs=(
+        _FieldSpec(
+            "ticker", "IDX ticker symbol", "text", "fail", None,
+            "identity of the subject ticker", "unavailable if null",
+        ),
+        _FieldSpec(
+            "fetched_date", "Local cache fetch date", "YYYY-MM-DD", "fail", None,
+            "local cache availability/provenance time, not source business event date",
+            "unavailable if null",
+        ),
+        _FieldSpec(
+            "report_date", "Source report period date", "YYYY-MM-DD", "warn", None,
+            "source report period; distinct from fetched_date, which is cache "
+            "availability",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "institution_pct", "Institutional ownership percent", "percent", "warn",
+            None, "as of report_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "individual_pct", "Individual ownership percent", "percent", "warn", None,
+            "as of report_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "top_holder_name", "Top shareholder name", "text", "warn", None,
+            "as of report_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "top_holder_pct", "Top shareholder ownership percent", "percent", "warn",
+            None, "as of report_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "total_shares", "Total shares outstanding", "count", "warn", "non-negative",
+            "as of report_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "total_shares_formatted", "Human-formatted total shares", "text", "warn",
+            None, "as of report_date", "unavailable if null (source absence is valid)",
+        ),
+    ),
+)
+
+_SEASONALITY_CACHE_FIELDS = _table_fields(
+    source_owner="Stockbit seasonality provider",
+    grain="one row per ticker/year/month/fetched_month/fetched_at",
+    point_in_time_support="POINT_IN_TIME",
+    specs=(
+        _FieldSpec(
+            "ticker", "IDX ticker symbol", "text", "fail", None,
+            "identity of the subject ticker", "unavailable if null",
+        ),
+        _FieldSpec(
+            "year", "Seasonality target year (identity component)", "integer",
+            "fail", None,
+            "seasonality target year, not a fetch date",
+            "unavailable if null",
+        ),
+        _FieldSpec(
+            "month", "Seasonality target month (identity component)", "integer",
+            "fail", None,
+            "seasonality target month, not a fetch date",
+            "unavailable if null",
+        ),
+        _FieldSpec(
+            "avg_return_pct", "Average historical return for this month", "percent",
+            "warn", "positive means historically favorable",
+            "aggregated over back_years", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "win_rate_pct", "Historical win rate for this month", "percent", "warn",
+            None, "aggregated over back_years",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "positive_years", "Count of historically positive years", "count", "warn",
+            "non-negative", "aggregated over back_years",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "total_years", "Count of years included in aggregation", "count", "warn",
+            "non-negative", "aggregated over back_years",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "back_years", "Lookback window size", "count (years)", "warn",
+            "non-negative", "none", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "source", "Seasonality data provider id", "provider id", "fail", None,
+            "none", "unknown source is invalid for canonical audit",
+            invalid_values=frozenset({"unknown"}),
+        ),
+        _FieldSpec(
+            "fetched_month", "Local cache fetch month (identity component)",
+            "YYYY-MM", "fail", None,
+            "provenance period, not a normal session date",
+            "unavailable if null",
+        ),
+        _FieldSpec(
+            "fetched_at", "Local cache fetch timestamp (identity component)",
+            "ISO timestamp", "fail", None,
+            "provenance timestamp, not a normal session date",
+            "unavailable if null",
+        ),
+    ),
+)
+
+_TICKER_NOTATION_CACHE_FIELDS = _table_fields(
+    source_owner="Stockbit ticker notation/status provider",
+    grain="one row per ticker (rebuilt on refresh; no DB-enforced historical uniqueness)",
+    point_in_time_support="CURRENT_CACHE",
+    specs=(
+        _FieldSpec(
+            "ticker", "IDX ticker symbol", "text", "fail", None,
+            "identity of the subject ticker", "unavailable if null",
+        ),
+        _FieldSpec(
+            "status", "Notation/listing status", "text", "warn", None,
+            "as of fetched_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "tradeable", "Tradeable flag", "integer flag 0/1", "warn", None,
+            "as of fetched_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "listing_board", "Listing board", "text", "warn", None,
+            "as of fetched_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "sector", "Sector classification", "text", "warn", None,
+            "as of fetched_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "sub_sector", "Sub-sector classification", "text", "warn", None,
+            "as of fetched_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "haircut_percentage", "Haircut percentage (source-formatted)", "percent",
+            "warn", None, "as of fetched_date",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "notations_json", "Serialized notation list", "json", "warn", None,
+            "as of fetched_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "market_status", "Market/trading status", "text", "warn", None,
+            "as of fetched_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "suspend_info", "Suspension detail", "text", "warn", None,
+            "as of fetched_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "corp_action_active", "Corporate action active flag", "integer flag 0/1",
+            "warn", None, "as of fetched_date",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "has_uma", "Unusual Market Activity flag", "integer flag 0/1", "warn",
+            None, "as of fetched_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "catalogs_json", "Serialized catalog list", "json", "warn", None,
+            "as of fetched_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "source", "Notation data provider id", "provider id", "fail", None,
+            "none", "unknown source is invalid for canonical audit",
+            invalid_values=frozenset({"unknown"}),
+        ),
+        _FieldSpec(
+            "fetched_date", "Local cache fetch date", "YYYY-MM-DD", "fail", None,
+            "local cache availability/provenance time, not source business event date",
+            "unavailable if null",
+        ),
+        _FieldSpec(
+            "fetched_at", "Local cache fetch timestamp", "ISO timestamp", "warn", None,
+            "finer-grained cache provenance than fetched_date",
+            "unavailable if null (source absence is valid)",
+        ),
+    ),
+)
+
+_BANDAR_DETECTOR_FIELDS = _table_fields(
+    source_owner="Stockbit bandar/accumulation-distribution detector",
+    grain="one row per ticker/session_date",
+    point_in_time_support="HISTORICAL",
+    specs=(
+        _FieldSpec(
+            "ticker", "IDX ticker symbol", "text", "fail", None,
+            "identity of the subject ticker", "unavailable if null",
+        ),
+        _FieldSpec(
+            "session_date", "Market session date (identity component)", "YYYY-MM-DD",
+            "fail", None, "IDX trading session date", "unavailable if null",
+        ),
+        _FieldSpec(
+            "broker_accdist", "Broker accumulation/distribution label", "source label",
+            "warn", None, "as of session_date",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "today_accdist", "Today accumulation/distribution label", "source label",
+            "warn", None, "as of session_date",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "five_day_accdist", "5-day accumulation/distribution label", "source label",
+            "warn", None, "as of session_date",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "top1_accdist", "Top-1 broker accumulation/distribution label",
+            "source label", "warn", None, "as of session_date",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "top1_percent", "Top-1 broker participation percent", "percent", "warn",
+            None, "as of session_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "today_percent", "Today participation percent", "percent", "warn", None,
+            "as of session_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "total_buyer", "Distinct buyer broker count", "count", "warn",
+            "non-negative", "as of session_date",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "total_seller", "Distinct seller broker count", "count", "warn",
+            "non-negative", "as of session_date",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "top3_accdist", "Top-3 broker accumulation/distribution label",
+            "source label", "warn", None, "as of session_date",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "top5_accdist", "Top-5 broker accumulation/distribution label",
+            "source label", "warn", None, "as of session_date",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "top10_accdist", "Top-10 broker accumulation/distribution label",
+            "source label", "warn", None, "as of session_date",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "number_broker_buysell", "Number of brokers active buy/sell", "count",
+            "warn", "non-negative", "as of session_date",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "vwap", "Volume-weighted average price", "IDR price", "warn",
+            "positive price", "as of session_date",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "total_value", "Total traded value", "IDR", "warn", "non-negative",
+            "as of session_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "total_volume", "Total traded volume", "count", "warn", "non-negative",
+            "as of session_date", "unavailable if null (source absence is valid)",
+        ),
+    ),
+)
+
+_CORPORATE_ACTION_EVENTS_FIELDS = _table_fields(
+    source_owner="Stockbit corporate action calendar provider",
+    grain="one row per source/event_type/source_event_id/ticker",
+    point_in_time_support="POINT_IN_TIME",
+    specs=(
+        _FieldSpec(
+            "source", "Corporate action data provider id (identity component)",
+            "provider id", "fail", None, "none",
+            "unknown source is invalid for canonical audit",
+            invalid_values=frozenset({"unknown"}),
+        ),
+        _FieldSpec(
+            "event_type", "Corporate action event type (identity component)", "text",
+            "fail", None, "none", "unavailable if null",
+        ),
+        _FieldSpec(
+            "source_event_id", "Source-assigned event id (identity component)", "text",
+            "fail", None, "none", "unavailable if null",
+        ),
+        _FieldSpec(
+            "ticker", "IDX ticker symbol (identity component)", "text", "fail", None,
+            "identity of the subject ticker", "unavailable if null",
+        ),
+        _FieldSpec(
+            "company_id", "Source-assigned company id", "text", "warn", None,
+            "none", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "company_name", "Company display name", "text", "warn", None,
+            "none", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "active", "Event active flag", "integer flag 0/1", "warn", None,
+            "as of fetched_at", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "event_note", "Free-text event note", "text", "warn", None,
+            "none", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "amount_value", "Corporate action amount (source-formatted)", "text",
+            "warn", None, "none", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "amount_currency", "Corporate action amount currency", "text", "warn",
+            None, "none", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "ratio_old", "Corporate action ratio, old side (e.g. split/rights)", "text",
+            "warn", None, "none", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "ratio_new", "Corporate action ratio, new side (e.g. split/rights)", "text",
+            "warn", None, "none", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "price", "Corporate action price (source-formatted)", "text", "warn", None,
+            "none", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "raw_payload_json", "Serialized raw source payload", "json", "warn", None,
+            "none", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "fetched_at", "Local cache fetch timestamp", "ISO timestamp", "fail", None,
+            "local cache availability/provenance time, not source business event date",
+            "unavailable if null",
+        ),
+        _FieldSpec(
+            "created_at", "Local row creation timestamp", "ISO timestamp", "warn", None,
+            "local write bookkeeping, not source provenance", "unavailable if null",
+        ),
+        _FieldSpec(
+            "updated_at", "Local row last-updated timestamp", "ISO timestamp", "warn",
+            None, "local write bookkeeping, not source provenance",
+            "unavailable if null",
+        ),
+    ),
+)
+
+_CORPORATE_ACTION_EVENT_DATES_FIELDS = _table_fields(
+    source_owner="Stockbit corporate action calendar provider",
+    grain="one row per source/event_type/source_event_id/ticker/date_role",
+    point_in_time_support="POINT_IN_TIME",
+    specs=(
+        _FieldSpec(
+            "source", "Corporate action data provider id (identity component)",
+            "provider id", "fail", None, "none",
+            "unknown source is invalid for canonical audit",
+            invalid_values=frozenset({"unknown"}),
+        ),
+        _FieldSpec(
+            "event_type", "Corporate action event type (identity component)", "text",
+            "fail", None, "none", "unavailable if null",
+        ),
+        _FieldSpec(
+            "source_event_id", "Source-assigned event id (identity component)", "text",
+            "fail", None, "none", "unavailable if null",
+        ),
+        _FieldSpec(
+            "ticker", "IDX ticker symbol (identity component)", "text", "fail", None,
+            "identity of the subject ticker", "unavailable if null",
+        ),
+        _FieldSpec(
+            "date_role", "Role this date plays for the event (identity component)",
+            "text", "fail", None,
+            "identity of which date role this row represents (e.g. cum/ex/payment)",
+            "unavailable if null",
+        ),
+        _FieldSpec(
+            "event_date", "Event-role date", "YYYY-MM-DD", "fail", None,
+            "event-role business date; distinct from fetched_at, which is cache "
+            "availability",
+            "unavailable if null",
+        ),
+        _FieldSpec(
+            "event_time", "Event-role time", "text", "warn", None,
+            "as reported alongside event_date",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "timezone", "Event-role timezone", "text", "warn", None,
+            "as reported alongside event_date",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "fetched_at", "Local cache fetch timestamp", "ISO timestamp", "fail", None,
+            "local cache availability/provenance time, not source business event date",
+            "unavailable if null",
+        ),
+    ),
+)
+
+_FORWARD_ESTIMATES_CACHE_FIELDS = _table_fields(
+    source_owner="Stockbit forward estimates provider",
+    grain="one row per ticker/fetched_date (no DB-enforced uniqueness)",
+    point_in_time_support="POINT_IN_TIME",
+    specs=(
+        _FieldSpec(
+            "ticker", "IDX ticker symbol", "text", "fail", None,
+            "identity of the subject ticker", "unavailable if null",
+        ),
+        _FieldSpec(
+            "fetched_date", "Local cache fetch date", "YYYY-MM-DD", "fail", None,
+            "local cache availability/provenance time, not source business event date",
+            "unavailable if null",
+        ),
+        _FieldSpec(
+            "forward_eps_1y", "1-year forward EPS estimate", "IDR price", "warn", None,
+            "as of fetched_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "revenue_forward_1y", "1-year forward revenue estimate", "IDR", "warn",
+            None, "as of fetched_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "current_price", "Price at time of fetch", "IDR price", "warn",
+            "positive price", "as of fetched_date",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "forward_pe", "Forward price-to-earnings ratio", "ratio", "warn", None,
+            "as of fetched_date", "unavailable if null (source absence is valid)",
+        ),
+    ),
+)
+
+_COMPANY_PROFILE_CACHE_FIELDS = _table_fields(
+    source_owner="Stockbit company profile provider",
+    grain="one row per ticker/fetched_date",
+    point_in_time_support="POINT_IN_TIME",
+    specs=(
+        _FieldSpec(
+            "ticker", "IDX ticker symbol", "text", "fail", None,
+            "identity of the subject ticker", "unavailable if null",
+        ),
+        _FieldSpec(
+            "fetched_date", "Local cache fetch date", "YYYY-MM-DD", "fail", None,
+            "local cache availability/provenance time, not source business event date",
+            "unavailable if null",
+        ),
+        _FieldSpec(
+            "background", "Company background description", "text", "warn", None,
+            "none", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "listing_board", "Listing board", "text", "warn", None,
+            "as of fetched_date", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "ipo_date", "IPO date", "YYYY-MM-DD", "warn", None,
+            "static company fact, not fetch-time-dependent",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "ipo_price", "IPO price", "IDR price", "warn", "positive price",
+            "static company fact, not fetch-time-dependent",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "ipo_amount", "IPO raised amount (source-formatted)", "text", "warn", None,
+            "static company fact, not fetch-time-dependent",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "website", "Company website", "text", "warn", None,
+            "none", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "email", "Company contact email", "text", "warn", None,
+            "none", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "office_address", "Company office address", "text", "warn", None,
+            "none", "unavailable if null (source absence is valid)",
+        ),
+    ),
+)
+
+_EARNINGS_CACHE_FIELDS = _table_fields(
+    source_owner="Stockbit earnings provider",
+    grain="one row per ticker/year/quarter/fetched_date",
+    point_in_time_support="POINT_IN_TIME",
+    specs=(
+        _FieldSpec(
+            "ticker", "IDX ticker symbol", "text", "fail", None,
+            "identity of the subject ticker", "unavailable if null",
+        ),
+        _FieldSpec(
+            "year", "Financial period year (identity component)", "integer", "fail",
+            None, "financial period identity, not a fetch date", "unavailable if null",
+        ),
+        _FieldSpec(
+            "quarter", "Financial period quarter (identity component)", "integer",
+            "fail", None, "financial period identity, not a fetch date",
+            "unavailable if null",
+        ),
+        _FieldSpec(
+            "eps_actual", "Actual reported EPS", "IDR price", "warn", None,
+            "for the identified year/quarter",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "eps_estimate", "Consensus estimated EPS", "IDR price", "warn", None,
+            "for the identified year/quarter",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "eps_surprise_pct", "EPS surprise vs. estimate", "percent", "warn",
+            "positive means beat", "for the identified year/quarter",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "eps_yoy_change", "EPS year-over-year change", "percent", "warn",
+            "positive means increase", "for the identified year/quarter",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "eps_prev_year", "Prior-year EPS for the same period", "IDR price", "warn",
+            None, "for the identified year/quarter",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "fetched_date", "Local cache fetch date", "YYYY-MM-DD", "fail", None,
+            "local cache availability/provenance time, not source business event date",
+            "unavailable if null",
+        ),
+    ),
+)
+
+_STOCK_META_FIELDS = _table_fields(
+    source_owner="stock metadata provider (source-tagged, e.g. yahoo)",
+    grain="one row per ticker/fetched_at",
+    point_in_time_support="POINT_IN_TIME",
+    specs=(
+        _FieldSpec(
+            "ticker", "IDX ticker symbol", "text", "fail", None,
+            "identity of the subject ticker", "unavailable if null",
+        ),
+        _FieldSpec(
+            "name", "Company display name", "text", "warn", None,
+            "as of fetched_at", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "sector", "Sector classification (display name)", "text", "warn", None,
+            "as of fetched_at", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "sector_key", "Sector classification (normalized key)", "text", "warn",
+            None, "as of fetched_at", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "industry", "Industry classification (display name)", "text", "warn",
+            None, "as of fetched_at", "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "industry_key", "Industry classification (normalized key)", "text",
+            "warn", None, "as of fetched_at",
+            "unavailable if null (source absence is valid)",
+        ),
+        _FieldSpec(
+            "source", "Stock metadata provider id", "provider id", "fail", None,
+            "none", "unknown source is invalid for canonical audit",
+            invalid_values=frozenset({"unknown"}),
+        ),
+        _FieldSpec(
+            "fetched_at", "Local cache fetch timestamp", "ISO timestamp", "fail", None,
+            "local cache availability/provenance time, not source business event date",
+            "unavailable if null",
+        ),
+        _FieldSpec(
+            "checksum", "Row content checksum", "text", "warn", None,
+            "none", "unavailable if null (source absence is valid)",
+        ),
+    ),
+)
+
 _CATALOG: dict[str, tuple[SourceFieldContract, ...]] = {
     "candles": _CANDLES_FIELDS,
     "broker_summaries": _BROKER_SUMMARIES_FIELDS,
     "broker_daily_flow": _BROKER_DAILY_FLOW_FIELDS,
     "candidate_observations": _CANDIDATE_OBSERVATIONS_FIELDS,
     "signal_forward_labels": _SIGNAL_FORWARD_LABELS_FIELDS,
+    "analyst_cache": _ANALYST_CACHE_FIELDS,
+    "insider_cache": _INSIDER_CACHE_FIELDS,
+    "company_fundamentals": _COMPANY_FUNDAMENTALS_FIELDS,
+    "shareholding_composition": _SHAREHOLDING_COMPOSITION_FIELDS,
+    "seasonality_cache": _SEASONALITY_CACHE_FIELDS,
+    "ticker_notation_cache": _TICKER_NOTATION_CACHE_FIELDS,
+    "bandar_detector": _BANDAR_DETECTOR_FIELDS,
+    "corporate_action_events": _CORPORATE_ACTION_EVENTS_FIELDS,
+    "corporate_action_event_dates": _CORPORATE_ACTION_EVENT_DATES_FIELDS,
+    "forward_estimates_cache": _FORWARD_ESTIMATES_CACHE_FIELDS,
+    "company_profile_cache": _COMPANY_PROFILE_CACHE_FIELDS,
+    "earnings_cache": _EARNINGS_CACHE_FIELDS,
+    "stock_meta": _STOCK_META_FIELDS,
 }
 
 # Reader-only hints: not part of the application-visible SourceFieldContract.
@@ -745,6 +1602,111 @@ FIELD_STATS_MODE: dict[tuple[str, str], str] = {
     ("signal_forward_labels", "unavailable_reason"): "enum_text",
     ("signal_forward_labels", "fingerprint_json"): "none",
     ("signal_forward_labels", "schema_version"): "numeric",
+    ("analyst_cache", "ticker"): "identity_text",
+    ("analyst_cache", "fetched_date"): "date",
+    ("analyst_cache", "buy_count"): "numeric",
+    ("analyst_cache", "hold_count"): "numeric",
+    ("analyst_cache", "sell_count"): "numeric",
+    ("analyst_cache", "avg_price_target"): "numeric",
+    ("analyst_cache", "current_price"): "numeric",
+    ("analyst_cache", "price_target_low"): "numeric",
+    ("analyst_cache", "price_target_high"): "numeric",
+    ("insider_cache", "ticker"): "identity_text",
+    ("insider_cache", "name"): "enum_text",
+    ("insider_cache", "action_type"): "enum_text",
+    ("insider_cache", "transaction_date"): "date",
+    ("insider_cache", "fetched_date"): "date",
+    ("insider_cache", "shares"): "numeric",
+    ("insider_cache", "price"): "numeric",
+    ("insider_cache", "ownership_before_pct"): "numeric",
+    ("insider_cache", "ownership_after_pct"): "numeric",
+    ("company_fundamentals", "ticker"): "identity_text",
+    ("company_fundamentals", "fetched_date"): "date",
+    ("company_fundamentals", "pe_ratio_ttm"): "numeric",
+    ("company_fundamentals", "roe_ttm"): "numeric",
+    ("company_fundamentals", "net_profit_margin"): "numeric",
+    ("company_fundamentals", "revenue_yoy_growth"): "numeric",
+    ("company_fundamentals", "piotroski_f_score"): "numeric",
+    ("company_fundamentals", "dividend_yield"): "numeric",
+    ("company_fundamentals", "week52_high"): "numeric",
+    ("company_fundamentals", "week52_low"): "numeric",
+    ("company_fundamentals", "near_52w_high_rank"): "numeric",
+    ("company_fundamentals", "market_cap_idr"): "numeric",
+    ("company_fundamentals", "pbv"): "numeric",
+    ("shareholding_composition", "ticker"): "identity_text",
+    ("shareholding_composition", "fetched_date"): "date",
+    ("shareholding_composition", "report_date"): "date",
+    ("shareholding_composition", "institution_pct"): "numeric",
+    ("shareholding_composition", "individual_pct"): "numeric",
+    ("shareholding_composition", "top_holder_pct"): "numeric",
+    ("shareholding_composition", "total_shares"): "numeric",
+    ("seasonality_cache", "ticker"): "identity_text",
+    ("seasonality_cache", "year"): "numeric",
+    ("seasonality_cache", "month"): "numeric",
+    ("seasonality_cache", "avg_return_pct"): "numeric",
+    ("seasonality_cache", "win_rate_pct"): "numeric",
+    ("seasonality_cache", "positive_years"): "numeric",
+    ("seasonality_cache", "total_years"): "numeric",
+    ("seasonality_cache", "back_years"): "numeric",
+    ("seasonality_cache", "source"): "enum_text",
+    ("seasonality_cache", "fetched_month"): "date",
+    ("seasonality_cache", "fetched_at"): "date",
+    ("ticker_notation_cache", "ticker"): "identity_text",
+    ("ticker_notation_cache", "status"): "enum_text",
+    ("ticker_notation_cache", "sector"): "enum_text",
+    ("ticker_notation_cache", "source"): "enum_text",
+    ("ticker_notation_cache", "fetched_date"): "date",
+    ("ticker_notation_cache", "fetched_at"): "date",
+    ("ticker_notation_cache", "tradeable"): "numeric",
+    ("ticker_notation_cache", "corp_action_active"): "numeric",
+    ("ticker_notation_cache", "has_uma"): "numeric",
+    ("bandar_detector", "ticker"): "identity_text",
+    ("bandar_detector", "session_date"): "date",
+    ("bandar_detector", "top1_percent"): "numeric",
+    ("bandar_detector", "today_percent"): "numeric",
+    ("bandar_detector", "total_buyer"): "numeric",
+    ("bandar_detector", "total_seller"): "numeric",
+    ("bandar_detector", "number_broker_buysell"): "numeric",
+    ("bandar_detector", "vwap"): "numeric",
+    ("bandar_detector", "total_value"): "numeric",
+    ("bandar_detector", "total_volume"): "numeric",
+    ("corporate_action_events", "source"): "enum_text",
+    ("corporate_action_events", "event_type"): "enum_text",
+    ("corporate_action_events", "ticker"): "identity_text",
+    ("corporate_action_events", "active"): "numeric",
+    ("corporate_action_events", "fetched_at"): "date",
+    ("corporate_action_events", "created_at"): "date",
+    ("corporate_action_events", "updated_at"): "date",
+    ("corporate_action_event_dates", "source"): "enum_text",
+    ("corporate_action_event_dates", "event_type"): "enum_text",
+    ("corporate_action_event_dates", "ticker"): "identity_text",
+    ("corporate_action_event_dates", "date_role"): "enum_text",
+    ("corporate_action_event_dates", "event_date"): "date",
+    ("corporate_action_event_dates", "fetched_at"): "date",
+    ("forward_estimates_cache", "ticker"): "identity_text",
+    ("forward_estimates_cache", "fetched_date"): "date",
+    ("forward_estimates_cache", "forward_eps_1y"): "numeric",
+    ("forward_estimates_cache", "revenue_forward_1y"): "numeric",
+    ("forward_estimates_cache", "current_price"): "numeric",
+    ("forward_estimates_cache", "forward_pe"): "numeric",
+    ("company_profile_cache", "ticker"): "identity_text",
+    ("company_profile_cache", "fetched_date"): "date",
+    ("company_profile_cache", "ipo_date"): "date",
+    ("company_profile_cache", "ipo_price"): "numeric",
+    ("earnings_cache", "ticker"): "identity_text",
+    ("earnings_cache", "year"): "numeric",
+    ("earnings_cache", "quarter"): "numeric",
+    ("earnings_cache", "eps_actual"): "numeric",
+    ("earnings_cache", "eps_estimate"): "numeric",
+    ("earnings_cache", "eps_surprise_pct"): "numeric",
+    ("earnings_cache", "eps_yoy_change"): "numeric",
+    ("earnings_cache", "eps_prev_year"): "numeric",
+    ("earnings_cache", "fetched_date"): "date",
+    ("stock_meta", "ticker"): "identity_text",
+    ("stock_meta", "sector"): "enum_text",
+    ("stock_meta", "industry"): "enum_text",
+    ("stock_meta", "source"): "enum_text",
+    ("stock_meta", "fetched_at"): "date",
 }
 
 # Fields that are not stored columns but computed from other stored columns.

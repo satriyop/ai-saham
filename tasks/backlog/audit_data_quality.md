@@ -311,12 +311,55 @@ is not complete.
     fundamentals, shareholding, seasonality, corporate actions, notation,
     bandar detector); market context and sentiment source families. These
     remain open for later DQ-001 slices.
-- DQ-001 acceptance criteria below are **not** marked complete — only the
-  five core tables listed above have field contracts, and only four of
-  those (`candles`, `broker_summaries`, `broker_daily_flow`, plus the
-  `foreign_flow_points`/`foreign_flow_snapshots` cross-table check) have
-  executable reconciliation queries. Enrichment, market context, and
-  sentiment source families are entirely unaudited.
+- **DQ-001C** (2026-07-16): extends `saham audit data source-contracts`
+  (same command, no new command added) with field-level contracts for 13
+  enrichment/source-context tables: `analyst_cache`, `insider_cache`,
+  `company_fundamentals`, `shareholding_composition`, `seasonality_cache`,
+  `ticker_notation_cache`, `bandar_detector`, `corporate_action_events`,
+  `corporate_action_event_dates`, `forward_estimates_cache`,
+  `company_profile_cache`, `earnings_cache`, `stock_meta`. Column lists
+  verified 1:1 against the live schema before encoding (all 13 tables and
+  every listed column confirmed present via `PRAGMA table_info` against
+  `data/db/data.db`; no guessed names).
+  - Contract policy: identity fields (`ticker`, and per-table natural-key
+    components such as `insider_cache.name`/`action_type`,
+    `seasonality_cache.year`/`month`/`fetched_month`/`fetched_at`,
+    `earnings_cache.year`/`quarter`,
+    `corporate_action_event_dates.date_role`) and provenance/date fields
+    (`fetched_date`/`fetched_at`/`fetched_month`, `session_date`,
+    `event_date`, `transaction_date`) fail closed on null/missing;
+    optional enrichment metrics (price targets, fundamentals ratios,
+    ownership percentages, EPS figures, accdist labels, etc.) warn on
+    null rather than fail, per the "don't fail on legitimate source
+    absence" rule. `source` fields fail on null/empty/`'unknown'`.
+  - PIT wording extended beyond the original `HISTORICAL` used for
+    DQ-001A's core tables: `POINT_IN_TIME` for cache tables with a usable
+    fetched date (accumulate historical snapshots), `CURRENT_CACHE` for
+    `ticker_notation_cache` (no DB-enforced historical uniqueness —
+    rebuilt on refresh, describes current tradeable/notation state), and
+    `HISTORICAL` retained for `bandar_detector` (true `PRIMARY KEY
+    (ticker, session_date)` market/session data).
+  - `SQLiteSourceFieldContractReader` and `AuditSourceFieldContractsUseCase`
+    were **not** modified — the existing generic catalog-driven reader
+    already supported the new tables without code changes, only catalog
+    data was added (`StaticSourceFieldContractCatalog` in
+    `source_field_contract_catalog.py`).
+  - No reconciliation/invariant checks were added here — this is field
+    contracts only. Executable enrichment reconciliation (cross-checking
+    enrichment values, e.g. against `company_fundamentals` vs. computed
+    ratios, or notation/suspension consistency) remains future **DQ-001D**.
+  - Live run surfaced a real pre-existing finding (not a bug): 413/825
+    `seasonality_cache` rows have null `source` and 47/825 have null
+    `fetched_at`, correctly producing FAIL — consistent with DQ-000's
+    manifest `null_summary` for the same table.
+- DQ-001 acceptance criteria below are **not** marked complete — DQ-001A/C
+  now give field contracts for 18 tables (5 core + 13 enrichment) and
+  DQ-001B gives executable reconciliation for 4 of the core tables
+  (`candles`, `broker_summaries`, `broker_daily_flow`, plus the
+  `foreign_flow_points`/`foreign_flow_snapshots` cross-table check).
+  `candidate_observations`/`signal_forward_labels` reconciliation, all
+  enrichment reconciliation (DQ-001D), and market context/sentiment
+  source families remain unaudited.
 
 **Audit each source family:**
 
