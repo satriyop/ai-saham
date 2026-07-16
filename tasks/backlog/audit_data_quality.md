@@ -701,6 +701,155 @@ is not complete.
     session-provenance migration), one finding `LATEST_READINESS_DEPENDS_ON_LEGACY_IDENTITY`.
   - Verification: `pytest -k "candidate or seasonality or repair_seasonality or
     contract_gate or audit_data or command_contract"` passes.
+- **DQ-001J** (2026-07-16): deterministic candidate_observations quarantine
+  repair command `saham audit data repair-candidate-observations --db PATH
+  [--dry-run|--apply] [--format json|table]` that transactionally quarantines
+  + deletes legacy `candidate_observations` rows (`config_hash IS NULL or
+  empty after trim`; all rows legacy if `config_hash` column itself is
+  missing). Default mode is dry-run; `--apply` mutates the database.
+  `--dry-run` and `--apply` together fail CLI validation. Never deletes
+  without quarantining first. Re-running `--apply` is idempotent (second
+  run reports 0 legacy rows and does not duplicate quarantine entries).
+  - `RepairCandidateObservationsUseCase`
+    (`src/application/use_case/repair_candidate_observations_use_case.py`)
+    owns the workflow: source-unavailable early-return (preserves the
+    caller's requested `mode`/`dry_run`, does not fall back silently); no
+    legacy rows → `PASS`; dry-run with legacy rows → `FAIL`/
+    `LEGACY_ROWS_PRESENT` (issue remains unresolved); apply → calls
+    `repairer.ensure_quarantine_table()` then
+    `repairer.quarantine_and_delete_legacy(repair_run_id)`, and sets
+    `status: PASS` only if `quarantined_row_count == deleted_row_count ==
+    legacy_row_count` (else `FAIL`/`QUARANTINE_COUNT_MISMATCH`, defensive —
+    the repairer itself raises and rolls back on any count mismatch before
+    returning). Defines `CandidateObservationsRepairReader(Protocol)`,
+    `CandidateObservationsRepairer(Protocol)`, and
+    `RepairCandidateObservationsResponse` DTO with `to_dict()` matching the
+    full spec contract (`date_range`, `latest_snapshot` nested objects,
+    `missing_columns`, `findings`).
+  - `SQLiteCandidateObservationsRepairReader`
+    (`src/infrastructure/persistence/sqlite_candidate_observations_repair_reader.py`)
+    is a pure read-only observer using `file:{path}?mode=ro`. Detects
+    missing source columns via `PRAGMA table_info` against the full
+    `SOURCE_COLUMNS` list (shared with the repairer); if `config_hash` is
+    missing, every row is legacy.
+  - `SQLiteCandidateObservationsRepairer`
+    (`src/infrastructure/persistence/sqlite_candidate_observations_repairer.py`)
+    creates `candidate_observations_quarantine` (`CREATE TABLE IF NOT
+    EXISTS`, idempotent DDL) keyed by the **original row's `id`** as
+    `PRIMARY KEY` (stable original identity — a second `--apply` after the
+    source rows are already deleted simply selects 0 legacy rows, so no
+    duplicate-quarantine path is reachable in practice; `INSERT OR IGNORE`
+    is an extra safety net). `quarantine_and_delete_legacy()` opens one
+    connection, `BEGIN`s a transaction, `SELECT`s legacy rows (all rows if
+    `config_hash` missing), and for each row: inserts into quarantine using
+    only the columns that exist in the live schema (columns missing from
+    an older DB are simply omitted from the INSERT list and read back as
+    SQL `NULL`), then deletes the source row by `id`. Checks
+    `cursor.rowcount == 1` after each insert and delete; any mismatch (or a
+    final `deleted_count != quarantined_count` check) raises `RuntimeError`
+    and triggers `rollback()`. Returns `(quarantined_row_count,
+    deleted_row_count)`.
+  - `repair_run_id`: `str(uuid.uuid4())` — unique per invocation, recorded
+    on every quarantine row for traceability.
+  - CLI: `src/adapters/cli/audit_commands.py` registers
+    `repair-candidate-observations` under `saham audit data`. Default
+    `--format json`. `--dry-run`/`--apply` mutual exclusion enforced via
+    `typer.BadParameter`. Table format prints mode, status, total/legacy/
+    canonical/quarantined/deleted counts, latest snapshot, findings, and a
+    "no mutation performed" note on dry-run.
+  - Quarantine table `candidate_observations_quarantine` columns:
+    `quarantine_id` (own `PRIMARY KEY AUTOINCREMENT`), `source_row_id`
+    (SQLite `rowid` of the original row, `NOT NULL UNIQUE` — the stable
+    repair identity used for delete and dedup, **not** the optional `id`
+    column), `id` (original row's `id` column value, nullable data — a
+    schema predating the `id` column stores `NULL` here), `ticker`,
+    `snapshot_date`, `captured_at`, `schema_version`, `payload_json`,
+    `workflow`, `window_sessions`, `data_as_of_date`, `config_hash`,
+    `decision_at`, `latest_completed_session`, `analysis_as_of`,
+    `market_session_name`, `is_eod_pending`, `resolution_source`,
+    `resolution_notes_json` (all current `candidate_observations` columns,
+    including the DQ-002E session-provenance columns not in the original
+    task spec list), `quarantine_reason`, `quarantined_at`, `repair_run_id`,
+    `original_table` (DEFAULT `'candidate_observations'`),
+    `quarantine_schema_version` (DEFAULT 1).
+  - **Fix (2026-07-16, post-review):** initial implementation deleted
+    source rows by `id`, which crashes with `IndexError` on any schema
+    predating the `id` column (SELECT never fetched it, so `row["id"]`
+    raised). Repair identity now uses SQLite `rowid` — always present on
+    every rowid table regardless of declared columns — for both the
+    `SELECT ... WHERE` scope and the `DELETE FROM candidate_observations
+    WHERE rowid = ?` statement. `id` became a plain nullable data column
+    in quarantine; `source_row_id` (the rowid) is the dedup/identity key.
+    Added `test_apply_works_when_source_table_has_no_id_column` covering a
+    schema with no `id` column and no `config_hash` column: apply still
+    quarantines 1 row and deletes 1 row, quarantine's `id` reads back as
+    `NULL`, `source_row_id` is populated.
+  - **Fix 2 (2026-07-16, post-review):** the read-only reader
+    (`observe_repair_state()` in
+    `src/infrastructure/persistence/sqlite_candidate_observations_repair_reader.py`)
+    already detected `snapshot_date` as a possibly-missing column via
+    `PRAGMA table_info` (it's in `SOURCE_COLUMNS`), but still unconditionally
+    ran `MIN(snapshot_date)`/`MAX(snapshot_date)`/`GROUP BY snapshot_date`
+    queries, crashing with `sqlite3.OperationalError: no such column:
+    snapshot_date` on a schema missing that column — even in **dry-run**,
+    where no mutation guardrail applies. Fixed by branching on
+    `"snapshot_date" in missing_columns`: when missing, `snapshot_date_min`/
+    `snapshot_date_max`/`latest_snapshot_date` all stay `None` and the whole
+    table is treated as the "latest" group for the legacy/canonical latest-
+    snapshot counts (no `GROUP BY` needed since there is nothing to group
+    by). Added `test_missing_snapshot_date_column_does_not_crash` — a
+    2-column schema (`ticker`, `payload_json`, no `snapshot_date`, no
+    `config_hash`): reader returns `exists=True`, `missing_columns` includes
+    `snapshot_date`, no crash, `latest_legacy_row_count` reflects the whole
+    table.
+  - Tests: application-layer use case tests (11) covering dry-run (reports
+    legacy rows, does not call repairer, default mode is dry-run), apply
+    (calls repairer, reuses repair_run_id, success → PASS, count mismatch →
+    FAIL), missing source (DB missing, table missing → no mutation, mode
+    preserved), no legacy rows (PASS for both dry-run and apply), missing
+    `config_hash` column (all rows legacy + `IDENTITY_COLUMN_MISSING`
+    finding), and full response DTO shape. Infrastructure tests: reader (9)
+    covering missing DB/table (no file creation), legacy/canonical counts,
+    empty/whitespace config_hash, missing `config_hash` column (all rows
+    legacy), read-only mode guarantee (write raises), latest snapshot
+    dependency, date range. Repairer (11) covering quarantine table
+    creation/idempotent DDL, moves only legacy rows into quarantine,
+    preserves canonical rows, deletes legacy rows from source, matching
+    quarantined/deleted counts, second apply is idempotent (0 rows, no
+    duplicate quarantine entries), DDL-only call does not mutate source
+    rows, rollback on simulated mid-transaction failure (source and
+    quarantine both unchanged), rollback on a forced delete-count mismatch,
+    and missing optional columns stored as `NULL` in quarantine. CLI tests
+    (11) covering command registration, default is dry-run, `--dry-run`
+    JSON exits 0/no mutation, `--apply` JSON mutates/exits 0, second apply
+    idempotent, `--dry-run` + `--apply` together fails, invalid `--format`
+    fails, missing DB/table exits 0 with FAIL, table format shows counts.
+    `test_command_contract.py` and `test_audit_data_commands.py`'s
+    command-listing test (`test_dq_contract_gate_added_exactly_one_new_command`
+    — pre-existing exact-set assertion, now stale in name since this is the
+    second addition after it) updated for the new command.
+  - Does **not** close `DQ-CONTRACT-GATE` and does **not** mark DQ-001
+    complete: this command quarantines legacy rows when explicitly applied,
+    it does not rebuild observations, regenerate data, or touch
+    SignalEngine/scoring.
+  - Live dry-run `saham audit data repair-candidate-observations --dry-run
+    --format json` (no mutation performed — `--apply` was **not** run
+    against the local DB): `status: FAIL`, `mode: DRY_RUN`,
+    `total_row_count: 19317`, `legacy_row_count: 19317`,
+    `canonical_row_count: 0`, `quarantined_row_count: 0`,
+    `deleted_row_count: 0`, `missing_columns: []`,
+    `date_range: {snapshot_date_min: "2026-01-02", snapshot_date_max:
+    "2026-07-15"}`, `latest_snapshot: {snapshot_date: "2026-07-15",
+    legacy_rows: 361, canonical_rows: 0}`, one finding
+    `LEGACY_ROWS_PRESENT` — consistent with the DQ-001I baseline. Applying
+    this repair (not yet run) would leave `candidate_observations` at 0
+    rows, which would need a rebuild/backfill (out of scope for this task)
+    before `DQ-CONTRACT-GATE` or any readiness/replay/tuning claim can pass
+    again.
+  - Verification: `pytest -k "candidate or repair_candidate or seasonality or
+    repair_seasonality or contract_gate or audit_data or command_contract"`
+    passes (21 new/updated tests); full `pytest` suite passes (4523 passed);
+    `git diff --check` clean.
 - DQ-001 acceptance criteria below are **not** marked complete — DQ-001A/C/E
   now give field contracts for 20 tables (5 core + 13 enrichment + 2
   market-context) and DQ-001B/D/E give executable reconciliation for

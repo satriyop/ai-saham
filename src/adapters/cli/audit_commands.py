@@ -7,6 +7,7 @@ Public command registration lives in lifecycle routers:
   saham audit data contract-gate
   saham audit data seasonality-cleanup-plan
   saham audit data candidate-observation-identity
+  saham audit data repair-candidate-observations
 Layer: Adapter
 """
 
@@ -49,8 +50,18 @@ from src.application.use_case.repair_seasonality_cache_use_case import (
     RepairSeasonalityCacheResponse,
     RepairSeasonalityCacheUseCase,
 )
+from src.application.use_case.repair_candidate_observations_use_case import (
+    RepairCandidateObservationsResponse,
+    RepairCandidateObservationsUseCase,
+)
 from src.infrastructure.persistence.sqlite_seasonality_cache_repairer import (
     SQLiteSeasonalityCacheRepairer,
+)
+from src.infrastructure.persistence.sqlite_candidate_observations_repair_reader import (
+    SQLiteCandidateObservationsRepairReader,
+)
+from src.infrastructure.persistence.sqlite_candidate_observations_repairer import (
+    SQLiteCandidateObservationsRepairer,
 )
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.audit_config_identity_reader import (
@@ -280,6 +291,51 @@ def candidate_observation_identity(
     _run_candidate_observation_identity(db_path=db_path, output_format=output_format)
 
 
+def repair_candidate_observations(
+    db_path: Annotated[
+        Optional[Path],
+        typer.Option("--db", help="SQLite database path"),
+    ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Dry-run mode: report only, no mutation."),
+    ] = False,
+    apply: Annotated[
+        bool,
+        typer.Option("--apply", help="Apply mode: quarantine and delete legacy rows."),
+    ] = False,
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format: table or json."),
+    ] = "json",
+) -> None:
+    """
+    Repair legacy candidate_observations rows by quarantining them (DQ-001J).
+
+    Legacy = config_hash IS NULL or empty after trim (or the config_hash
+    column is missing entirely, in which case every row is legacy).
+
+    Default is dry-run: reports legacy rows without mutating the database.
+    Use --apply to quarantine and delete them in one transaction.
+
+    Never deletes rows without quarantining them first. The quarantine
+    table preserves the full original row plus reason, repair_run_id, and
+    a timestamp.
+    """
+    if dry_run and apply:
+        raise typer.BadParameter(
+            "Cannot use both --dry-run and --apply. "
+            "Default (no flag) is dry-run."
+        )
+    if output_format not in _VALID_FORMATS:
+        raise typer.BadParameter(
+            f"--format must be one of {_VALID_FORMATS}, got '{output_format}'."
+        )
+    _run_repair_candidate_observations(
+        db_path=db_path, apply=apply, output_format=output_format
+    )
+
+
 data_app.command("manifest")(manifest)
 data_app.command("source-contracts")(source_contracts)
 data_app.command("reconcile-sources")(reconcile_sources)
@@ -287,6 +343,7 @@ data_app.command("contract-gate")(contract_gate)
 data_app.command("seasonality-cleanup-plan")(seasonality_cleanup_plan)
 data_app.command("repair-seasonality-cache")(repair_seasonality_cache)
 data_app.command("candidate-observation-identity")(candidate_observation_identity)
+data_app.command("repair-candidate-observations")(repair_candidate_observations)
 audit_app.add_typer(data_app, name="data")
 
 
@@ -885,4 +942,103 @@ def _print_candidate_observation_identity_table(
             )
             if finding.get("message"):
                 console.print(f"    {finding['message']}")
+    console.print("")
+
+
+def _run_repair_candidate_observations(
+    db_path: Path | None,
+    apply: bool,
+    output_format: str,
+) -> None:
+    cfg = load_app_config()
+    resolved_db = db_path or Path(cfg.storage.db_path)
+
+    use_case = RepairCandidateObservationsUseCase(
+        reader=SQLiteCandidateObservationsRepairReader(resolved_db),
+        repairer=SQLiteCandidateObservationsRepairer(resolved_db),
+    )
+    response = use_case.execute(apply=apply)
+
+    if output_format == "json":
+        typer.echo(json.dumps(response.to_dict(), indent=2, ensure_ascii=False))
+        return
+
+    _print_repair_candidate_observations_table(response)
+
+
+def _print_repair_candidate_observations_table(
+    response: RepairCandidateObservationsResponse,
+) -> None:
+    console = Console()
+    mode_color = {"DRY_RUN": "yellow", "APPLY": "red" if response.status == "FAIL" else "green"}
+    color = {"PASS": "green", "FAIL": "red"}.get(response.status, "white")
+
+    console.print("")
+    status_text = Text()
+    status_text.append("Mode: ", style="bold")
+    status_text.append(response.mode, style=f"bold {mode_color.get(response.mode, 'white')}")
+    status_text.append("  |  Status: ", style="bold")
+    status_text.append(response.status, style=f"bold {color}")
+    status_text.append(f"  |  Legacy rows: {response.legacy_row_count}")
+    if response.dry_run:
+        status_text.append("  |  Dry run — no mutation performed", style="dim")
+    panel = Panel(
+        status_text,
+        title="[bold]Candidate Observations Repair (DQ-001J)[/bold]",
+        border_style=color,
+        expand=False,
+    )
+    console.print(panel)
+
+    if not response.source_available:
+        console.print("")
+        reason_message = {
+            "DATABASE_MISSING": "the SQLite database file could not be found",
+            "CANDIDATE_OBSERVATIONS_TABLE_MISSING": (
+                "the database exists but has no candidate_observations table"
+            ),
+        }.get(response.source_unavailable_reason or "", "the source is unavailable")
+        console.print(
+            f"[bold red]⚠ candidate_observations is unavailable[/bold red] "
+            f"([{response.source_unavailable_reason}]) — {reason_message}. "
+            "Check --db before trusting this report."
+        )
+        console.print("")
+        return
+
+    console.print("")
+    summary = Table(show_header=True, header_style="bold magenta")
+    summary.add_column("Measure", style="cyan")
+    summary.add_column("Value", justify="right")
+    summary.add_row("Total rows", f"{response.total_row_count:,}")
+    summary.add_row("Legacy rows", f"{response.legacy_row_count:,}")
+    summary.add_row("Canonical rows", f"{response.canonical_row_count:,}")
+    summary.add_row("Quarantined rows", f"{response.quarantined_row_count:,}")
+    summary.add_row("Deleted rows", f"{response.deleted_row_count:,}")
+    if response.latest_snapshot_date:
+        summary.add_row(
+            "Latest snapshot",
+            f"{response.latest_snapshot_date} "
+            f"({response.latest_snapshot_legacy_rows} legacy, "
+            f"{response.latest_snapshot_canonical_rows} canonical)",
+        )
+    console.print(summary)
+
+    if response.findings:
+        console.print("")
+        console.print("[bold]Findings[/bold]")
+        for finding in response.findings:
+            fcolor = {"FAIL": "red", "WARN": "yellow", "INFO": "cyan"}.get(
+                finding.get("severity", ""), "white"
+            )
+            console.print(
+                f"  [bold {fcolor}][{finding['severity']}][/bold {fcolor}] "
+                f"[bold]{finding['code']}[/bold]"
+            )
+            if finding.get("message"):
+                console.print(f"    {finding['message']}")
+
+    if response.dry_run and response.source_available:
+        console.print("")
+        console.print("[yellow]⚠ Dry-run: no mutation performed.[/yellow]")
     console.print("")
