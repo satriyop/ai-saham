@@ -7,9 +7,50 @@ from pathlib import Path
 
 import pytest
 
+from src.application.dto.source_reconciliation_dto import (
+    RawCorporateActionLinkageObservation,
+    RawInsiderCacheObservation,
+    RawPitCacheObservation,
+    RawSeasonalityObservation,
+    RawStockMetaObservation,
+    RawTickerNotationObservation,
+)
 from src.infrastructure.persistence.sqlite_source_reconciliation_reader import (
     SQLiteSourceReconciliationReader,
 )
+
+
+class _EmptyEnrichmentReader:
+    """DQ-001B-only tests don't exercise enrichment tables; this fake reports
+    every enrichment table as existing-but-empty so it contributes only
+    harmless INFO findings and never changes overall PASS/FAIL/WARN status."""
+
+    def observe_seasonality(self) -> RawSeasonalityObservation:
+        return RawSeasonalityObservation(exists=True, row_count=0)
+
+    def observe_company_fundamentals(self) -> RawPitCacheObservation:
+        return RawPitCacheObservation(exists=True, row_count=0)
+
+    def observe_analyst_cache(self) -> RawPitCacheObservation:
+        return RawPitCacheObservation(exists=True, row_count=0)
+
+    def observe_insider_cache(self) -> RawInsiderCacheObservation:
+        return RawInsiderCacheObservation(exists=True, row_count=0)
+
+    def observe_corporate_action_linkage(self) -> RawCorporateActionLinkageObservation:
+        return RawCorporateActionLinkageObservation(
+            events_exists=True, event_dates_exists=True, events_row_count=0,
+            event_dates_row_count=0,
+        )
+
+    def observe_forward_estimates(self) -> RawPitCacheObservation:
+        return RawPitCacheObservation(exists=True, row_count=0)
+
+    def observe_ticker_notation(self) -> RawTickerNotationObservation:
+        return RawTickerNotationObservation(exists=True, row_count=0)
+
+    def observe_stock_meta(self) -> RawStockMetaObservation:
+        return RawStockMetaObservation(exists=True, row_count=0)
 
 
 def _create_candles(conn: sqlite3.Connection) -> None:
@@ -203,7 +244,9 @@ def test_use_case_reports_candles_schema_insufficient_finding_not_crash(tmp_path
     conn.close()
 
     reader = SQLiteSourceReconciliationReader(db_path)
-    use_case = AuditSourceReconciliationUseCase(reader, clock=lambda: "2026-07-16T00:00:00+00:00")
+    use_case = AuditSourceReconciliationUseCase(
+        reader, enrichment_reader=_EmptyEnrichmentReader(), clock=lambda: "2026-07-16T00:00:00+00:00"
+    )
     response = use_case.execute()
 
     assert any(
@@ -319,7 +362,9 @@ def test_use_case_reports_schema_insufficient_finding_not_crash(tmp_path: Path):
     conn.close()
 
     reader = SQLiteSourceReconciliationReader(db_path)
-    use_case = AuditSourceReconciliationUseCase(reader, clock=lambda: "2026-07-16T00:00:00+00:00")
+    use_case = AuditSourceReconciliationUseCase(
+        reader, enrichment_reader=_EmptyEnrichmentReader(), clock=lambda: "2026-07-16T00:00:00+00:00"
+    )
     response = use_case.execute()
 
     assert any(
@@ -368,7 +413,9 @@ def test_tracked_broker_subset_info_always_present_via_use_case(full_schema_db: 
     )
 
     reader = SQLiteSourceReconciliationReader(full_schema_db)
-    use_case = AuditSourceReconciliationUseCase(reader, clock=lambda: "2026-07-16T00:00:00+00:00")
+    use_case = AuditSourceReconciliationUseCase(
+        reader, enrichment_reader=_EmptyEnrichmentReader(), clock=lambda: "2026-07-16T00:00:00+00:00"
+    )
     response = use_case.execute()
 
     assert any(
@@ -419,7 +466,9 @@ def test_foreign_flow_partial_coverage_is_reported(full_schema_db: Path):
         AuditSourceReconciliationUseCase,
     )
 
-    use_case = AuditSourceReconciliationUseCase(reader, clock=lambda: "2026-07-16T00:00:00+00:00")
+    use_case = AuditSourceReconciliationUseCase(
+        reader, enrichment_reader=_EmptyEnrichmentReader(), clock=lambda: "2026-07-16T00:00:00+00:00"
+    )
     response = use_case.execute()
 
     partial_coverage_findings = [
@@ -456,7 +505,9 @@ def test_happy_path_produces_pass_except_tracked_broker_info(full_schema_db: Pat
     conn.close()
 
     reader = SQLiteSourceReconciliationReader(full_schema_db)
-    use_case = AuditSourceReconciliationUseCase(reader, clock=lambda: "2026-07-16T00:00:00+00:00")
+    use_case = AuditSourceReconciliationUseCase(
+        reader, enrichment_reader=_EmptyEnrichmentReader(), clock=lambda: "2026-07-16T00:00:00+00:00"
+    )
     response = use_case.execute()
 
     assert response.status == "PASS"

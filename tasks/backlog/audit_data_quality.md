@@ -352,14 +352,64 @@ is not complete.
     `seasonality_cache` rows have null `source` and 47/825 have null
     `fetched_at`, correctly producing FAIL — consistent with DQ-000's
     manifest `null_summary` for the same table.
+- **DQ-001D** (2026-07-16): extends `saham audit data reconcile-sources`
+  (same command, no new command added) with 8 enrichment/source-context
+  reconciliation checks: `seasonality_cache` (provenance consistency:
+  invalid/null `source`, null `fetched_at`, `fetched_month` vs `fetched_at`
+  YYYY-MM mismatch, all-metrics-null); `company_fundamentals`,
+  `analyst_cache`, `forward_estimates_cache` (shared PIT-coverage shape:
+  missing `(ticker, fetched_date)` identity fails, duplicate identity
+  warns, all-metrics-null warns); `insider_cache` (missing 5-column
+  natural-key identity fails, duplicate natural key warns);
+  `corporate_action_events`/`corporate_action_event_dates` linkage
+  (orphan date rows and null `event_date` fail, events without dates and
+  null `date_role` warn); `ticker_notation_cache` (always-present INFO
+  stating it is `CURRENT_CACHE` not historical PIT, missing
+  `source`/`fetched_date` warns); `stock_meta` (missing
+  `ticker`/`source`/`fetched_at` fails, duplicate `(ticker, fetched_at)`
+  warns, both `sector`/`industry` null warns). Deliberately does not
+  duplicate DQ-001C's per-field null reporting — these are table-level
+  reconciliation/invariant findings only.
+  - Extraction required first: `audit_source_reconciliation_use_case.py`
+    was already at 708 LOC (AI_AGENT_CHECKLIST.md requires an extraction
+    plan past 700 LOC before adding behavior). DTOs moved to
+    `src/application/dto/source_reconciliation_dto.py`; DQ-001B's four
+    core evaluators moved unchanged to
+    `src/application/services/source_reconciliation_core_evaluator.py`;
+    the new 8 enrichment evaluators live in
+    `src/application/services/source_reconciliation_enrichment_evaluator.py`.
+    The use case is now a ~180-line orchestrator. The use case module
+    re-exports all DTOs so no external import site needed to change.
+  - New sibling infra reader
+    `src/infrastructure/persistence/sqlite_enrichment_reconciliation_reader.py`
+    (existing `sqlite_source_reconciliation_reader.py` for core tables is
+    untouched) — same read-only `mode=ro` pattern, verified via a
+    write-rejection test and a live run against the production DB with
+    file size unchanged before/after.
+  - `AuditSourceReconciliationUseCase.__init__` now requires an
+    `enrichment_reader` parameter; existing DQ-001B tests updated with a
+    fake "empty but healthy" enrichment reader so their PASS/FAIL/WARN
+    assertions for core tables are unaffected.
+  - Live run: `seasonality_provenance_consistency` FAILs (460 mismatches
+    across 825 rows — same null `source`/`fetched_at` rows DQ-000/DQ-001C
+    already found), `foreign_flow_reconciliation`/`forward_estimates_pit_coverage`/
+    `stock_meta_provenance` WARN, overall command status is FAIL — this is
+    an accurate reflection of real local data, not a defect in the checks.
+  - Note: the task instructions for this slice referenced files named
+    `reconcile_data_sources_use_case.py` /
+    `sqlite_data_source_reconciliation_reader.py`, which do not exist in
+    this repo. Verified against actual repo state and implemented against
+    the real DQ-001B files (`audit_source_reconciliation_use_case.py` /
+    `sqlite_source_reconciliation_reader.py`) instead of guessing new
+    file names to match the stale instructions.
 - DQ-001 acceptance criteria below are **not** marked complete — DQ-001A/C
   now give field contracts for 18 tables (5 core + 13 enrichment) and
-  DQ-001B gives executable reconciliation for 4 of the core tables
-  (`candles`, `broker_summaries`, `broker_daily_flow`, plus the
-  `foreign_flow_points`/`foreign_flow_snapshots` cross-table check).
-  `candidate_observations`/`signal_forward_labels` reconciliation, all
-  enrichment reconciliation (DQ-001D), and market context/sentiment
-  source families remain unaudited.
+  DQ-001B/D give executable reconciliation for those same 18 tables
+  (`candles`, `broker_summaries`, `broker_daily_flow`,
+  `foreign_flow_points`/`foreign_flow_snapshots`, plus all 8 enrichment
+  tables from DQ-001D). `candidate_observations`/`signal_forward_labels`
+  reconciliation and market context/sentiment source families remain
+  unaudited.
 
 **Audit each source family:**
 

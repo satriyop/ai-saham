@@ -1,9 +1,10 @@
 """Tests for `saham audit data manifest` / `source-contracts` / `reconcile-sources`
-(DQ-000, DQ-001A, DQ-001B)."""
+(DQ-000, DQ-001A, DQ-001B, DQ-001C, DQ-001D)."""
 
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from pathlib import Path
 
@@ -211,6 +212,39 @@ def test_reconcile_sources_json_output_has_required_top_level_fields(tmp_path: P
     assert candles_check["checked_row_count"] == 1
 
 
+def test_reconcile_sources_json_output_includes_dq_001d_enrichment_findings(tmp_path: Path):
+    db_path = tmp_path / "reconcile.db"
+    _build_temp_db(db_path)
+
+    result = runner.invoke(
+        app,
+        ["audit", "data", "reconcile-sources", "--format", "json", "--db", str(db_path)],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+
+    check_names = {c["name"] for c in payload["checks"]}
+    for expected in (
+        "seasonality_provenance_consistency",
+        "company_fundamentals_pit_coverage",
+        "analyst_cache_pit_coverage",
+        "insider_cache_pit_coverage",
+        "corporate_action_event_linkage",
+        "forward_estimates_pit_coverage",
+        "ticker_notation_cache_limitation",
+        "stock_meta_provenance",
+    ):
+        assert expected in check_names
+
+    # _build_temp_db only creates `candles`; enrichment tables are absent so
+    # they surface as explicit WARN findings rather than crashing.
+    ticker_notation_findings = [
+        f for f in payload["findings"] if f["table"] == "ticker_notation_cache"
+    ]
+    assert any(f["code"] == "MISSING_ENRICHMENT_TABLE" for f in ticker_notation_findings)
+
+
 def test_reconcile_sources_table_format_prints_summary_without_error(tmp_path: Path):
     db_path = tmp_path / "reconcile.db"
     _build_temp_db(db_path)
@@ -263,4 +297,24 @@ def test_audit_data_exposes_manifest_and_source_contracts():
     assert result.exit_code == 0
     assert "manifest" in result.output
     assert "source-contracts" in result.output
+
+
+def test_dq_001d_did_not_add_a_new_command():
+    result = runner.invoke(app, ["audit", "data", "--help"])
+
+    assert result.exit_code == 0
+    listed_commands: list[str] = []
+    in_commands = False
+    for line in result.output.splitlines():
+        if " Commands " in line:
+            in_commands = True
+            continue
+        if in_commands and line.startswith("╰"):
+            break
+        if not in_commands:
+            continue
+        match = re.match(r"^│\s+([a-z][\w-]*)\s{2,}", line)
+        if match:
+            listed_commands.append(match.group(1))
+    assert set(listed_commands) == {"manifest", "source-contracts", "reconcile-sources"}
     assert "reconcile-sources" in result.output
