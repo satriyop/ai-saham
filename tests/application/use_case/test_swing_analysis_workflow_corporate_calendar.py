@@ -13,7 +13,7 @@ _request helper) rather than inventing a new one.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -35,6 +35,7 @@ from src.domain.value_objects.corporate_action_event_risk import (
     CorporateActionEventRiskFlag,
     CorporateActionEventRiskSeverity,
 )
+from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
 from src.infrastructure.config.corporate_action_policy_config import (
     load_corporate_action_policy_config,
 )
@@ -92,6 +93,29 @@ class FakeCalendarRepositoryWithDividend:
 class FakeCalendarRepositoryRaising:
     def get_events_for_ticker(self, ticker, from_date, to_date, event_types=None, as_of_fetched_at=None):
         raise RuntimeError("calendar backend unavailable")
+
+
+class FakeCalendarRepositoryRecordingAsOfFetchedAt:
+    """DQ-002G workflow-level regression: records every argument
+    `get_events_for_ticker` was actually called with, so the exact resolved
+    decision timestamp propagated from `SwingAnalysisInputCollector` ->
+    `SwingAnalysisOptionalEvidenceRunner` -> `SwingAnalysisEvidenceBuilder` ->
+    `AssessCorporateActionEventRiskUseCase` can be asserted end-to-end,
+    rather than only at the use-case or repository unit-test boundary."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    def get_events_for_ticker(self, ticker, from_date, to_date, event_types=None, as_of_fetched_at=None):
+        self.calls.append(
+            {
+                "ticker": ticker,
+                "from_date": from_date,
+                "to_date": to_date,
+                "as_of_fetched_at": as_of_fetched_at,
+            }
+        )
+        return []
 
 
 def _candle(day: date) -> Candle:
@@ -219,3 +243,55 @@ def test_corporate_action_risk_failure_is_caught_and_recorded_as_warning():
         "corporate action" in w.lower() or "calendar" in w.lower()
         for w in response.warnings
     ), f"expected a corporate action/calendar warning, got: {response.warnings}"
+
+
+def test_workflow_passes_resolved_decision_timestamp_to_corporate_action_repository():
+    """DQ-002G follow-up: proves the exact `effective_session.decision_at`
+    timestamp resolved by `SwingAnalysisInputCollector` for a historical
+    `request.today` reaches `get_events_for_ticker`'s `as_of_fetched_at`
+    argument, through every intermediate hop (state storage ->
+    optional-evidence runner -> evidence builder -> use case -> repository).
+
+    Fails if: `SwingAnalysisInputCollector` stops storing `effective_session`
+    on state; `SwingAnalysisOptionalEvidenceRunner` stops deriving
+    `as_of_fetched_at` from `state.effective_session.decision_at`; or
+    `SwingAnalysisEvidenceBuilder`/`AssessCorporateActionEventRiskUseCase`
+    stop forwarding it to the repository call.
+    """
+    recording_repo = FakeCalendarRepositoryRecordingAsOfFetchedAt()
+    wired_use_case = AssessCorporateActionEventRiskUseCase(
+        repository=recording_repo,
+        policy=load_corporate_action_policy_config(),
+    )
+    baseline_workflow = _build_workflow(corporate_action_risk_use_case=None)
+    wired_workflow = _build_workflow(corporate_action_risk_use_case=wired_use_case)
+
+    historical_today = date(2026, 7, 13)
+    request = _request(today=historical_today)
+
+    baseline_response = baseline_workflow.execute(request)
+    wired_response = wired_workflow.execute(request)
+
+    # `SwingAnalysisInputCollector` builds a deterministic after-close WIB
+    # decision timestamp for any `request.today` that isn't the real current
+    # date — computed here from the same constants the production code uses,
+    # not hardcoded, so this test tracks MARKET_CLOSE/IDX_TIMEZONE if they
+    # ever change.
+    expected_as_of_fetched_at = datetime.combine(
+        historical_today, MARKET_CLOSE, tzinfo=IDX_TIMEZONE
+    ).isoformat()
+
+    assert len(recording_repo.calls) == 1
+    call = recording_repo.calls[0]
+    assert call["ticker"] == "BBCA"
+    assert call["as_of_fetched_at"] == expected_as_of_fetched_at
+
+    # Corporate-action diagnostics surface only on evidence, and never touch
+    # TradeSetup/verdict — same invariant proven in
+    # test_corporate_calendar_context_never_changes_trade_setup_verdict,
+    # re-asserted here for this specific wiring path.
+    assert baseline_response.evidence.corporate_action_risk is None
+    assert wired_response.evidence.corporate_action_risk is not None
+    assert baseline_response.trade_setup == wired_response.trade_setup
+    assert baseline_response.verdict.trade_setup == wired_response.verdict.trade_setup
+    assert wired_response.verdict.trade_setup is None
