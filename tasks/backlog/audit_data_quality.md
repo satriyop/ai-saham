@@ -165,7 +165,7 @@ rebuild/quarantine requirement
 manifest generator only, per the decision to implement this option only —
 no repair/rebuild/quarantine/label/tuning behavior was added.
 
-- `saham fetch audit --manifest --format json|table` emits an
+- `saham audit data manifest --format json|table` emits an
   `audit_baseline_manifest` (schema_version 1) with database identity
   (path/exists/sha256/size), config identity (hashes for the tracked
   config set including the new validation panel), git code identity
@@ -176,7 +176,7 @@ no repair/rebuild/quarantine/label/tuning behavior was added.
   signal_forward_labels, stock_meta, analyst_cache, insider_cache,
   company_fundamentals, shareholding_composition, seasonality_cache, and
   corporate_action_events, a validation scope, and explicit warnings.
-- Existing `saham fetch audit` (non-manifest) output is unchanged.
+- Existing `saham fetch audit` (default quality-audit) output is unchanged.
 - Files added: `src/application/use_case/build_audit_baseline_manifest_use_case.py`,
   `src/infrastructure/persistence/sqlite_audit_manifest_reader.py`,
   `src/infrastructure/config/audit_config_identity_reader.py`,
@@ -184,8 +184,14 @@ no repair/rebuild/quarantine/label/tuning behavior was added.
   `src/infrastructure/config/git_code_identity_provider.py`,
   `config/audit_validation_panel.yaml`, plus focused tests under
   `tests/application/use_case/`, `tests/infrastructure/persistence/`, and
-  `tests/adapters/cli/`. `src/adapters/cli/fetch_audit_commands.py` modified
-  to add `--manifest`/`--format`, existing path preserved.
+  `tests/adapters/cli/`.
+- CLI surface clean-break (2026-07-16): the manifest and DQ-001A
+  source-contract audits were relocated from `fetch audit --manifest` /
+  `fetch audit --source-contracts` to top-level `saham audit data manifest`
+  / `saham audit data source-contracts` in
+  `src/adapters/cli/audit_commands.py`. `fetch_audit_commands.py` now only
+  contains the original quality-audit command — no aliases or
+  backward-compatible flags were kept under `fetch audit`.
 - Read-only proven: SQLite opened via `file:...?mode=ro` (uri=True), a test
   asserts a write against that same connection raises `OperationalError`,
   and the manifest was run against the live 629 MB production DB with

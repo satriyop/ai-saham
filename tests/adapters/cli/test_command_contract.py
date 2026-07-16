@@ -23,6 +23,7 @@ EXPECTED_COMMANDS: dict[tuple[str, ...], tuple[str, ...]] = {
     (): (
         "today",
         "fetch",
+        "audit",
         "screen",
         "learn",
         "view",
@@ -31,6 +32,8 @@ EXPECTED_COMMANDS: dict[tuple[str, ...], tuple[str, ...]] = {
         "strategy",
         "trade",
     ),
+    ("audit",): ("data",),
+    ("audit", "data"): ("manifest", "source-contracts"),
     ("fetch",): (
         "market",
         "broker",
@@ -121,6 +124,8 @@ REMOVED_PATHS: tuple[tuple[str, ...], ...] = (
 
 HELP_PATHS: tuple[tuple[str, ...], ...] = (
     (),
+    ("audit",),
+    ("audit", "data"),
     ("fetch",),
     ("fetch", "market"),
     ("fetch", "broker"),

@@ -6,6 +6,7 @@ Entry point for the command-line interface.
 Command groups:
   saham today      — read-only daily briefing
   saham fetch      — data ingestion lifecycle commands
+  saham audit      — read-only audits (data-quality baseline manifest, source-field contracts)
   saham screen     — candidate discovery
   saham learn      — opening learning loop
   saham view       — read-only local data browsing
@@ -22,6 +23,7 @@ import typer
 
 from src import __version__
 from src.adapters.cli.analyze_commands import analyze_app
+from src.adapters.cli.audit_commands import audit_app
 from src.adapters.cli.fetch_commands import fetch_app
 from src.adapters.cli.indicator_commands import indicator_app
 from src.adapters.cli.learn_commands import learn_app
@@ -42,6 +44,7 @@ app = typer.Typer(
 
 app.command("today")(today)
 app.add_typer(fetch_app, name="fetch")
+app.add_typer(audit_app, name="audit")
 app.add_typer(screen_app, name="screen")
 app.add_typer(learn_app, name="learn")
 app.add_typer(view_app, name="view")
