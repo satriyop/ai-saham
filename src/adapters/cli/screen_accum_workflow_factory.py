@@ -22,6 +22,9 @@ from src.application.services.accumulation_screen_factory import (
     create_accumulation_screen_use_case,
     create_accumulation_screen_use_case_bundle,
 )
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSessionResolver,
+)
 from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from src.application.use_case.run_accumulation_screen_workflow_use_case import (
@@ -177,4 +180,5 @@ def create_run_accumulation_screen_workflow_use_case(
         save_watchlist_use_case=SaveScreenWatchlistUseCase(
             SQLiteWatchlistRepository(db_path)
         ),
+        session_resolver=EffectiveMarketSessionResolver(deps.market_repository),
     )

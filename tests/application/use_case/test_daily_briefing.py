@@ -1,6 +1,6 @@
 """Tests for DailyBriefingUseCase."""
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -136,6 +136,84 @@ def test_daily_briefing_normal_trading_day_date_unaffected_by_resolver_integrati
     assert response.is_historical is False
 
 
+def test_daily_briefing_explicit_as_of_date_uses_deterministic_after_close_decision():
+    """DQ-002B: historical mode must resolve a deterministic after-market-close
+    WIB decision timestamp for the requested date, not midnight/live wall-clock."""
+    from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
+
+    market_repo = MagicMock()
+    broker_repo = MagicMock()
+    broker_repo.get_date_range.return_value = None
+    regime_uc = MagicMock()
+    accum_uc = MagicMock()
+    accum_uc.execute.return_value = MagicMock(candidates=[])
+
+    fake_resolver = MagicMock()
+    fake_resolver.resolve.return_value = MagicMock(
+        latest_completed_session=date(2026, 6, 19),
+        is_eod_pending=False,
+        market_session_name="AFTER_CLOSE",
+    )
+
+    use_case = DailyBriefingUseCase(
+        market_repository=market_repo,
+        broker_repository=broker_repo,
+        regime_use_case=regime_uc,
+        accumulation_use_case=accum_uc,
+        universe_loader=MagicMock(),
+        session_resolver=fake_resolver,
+    )
+
+    use_case.execute(DailyBriefingRequest(as_of_date=date(2026, 6, 19)))
+
+    fake_resolver.resolve.assert_called_once()
+    called_run_at = fake_resolver.resolve.call_args.kwargs["run_at"]
+    assert called_run_at == datetime.combine(
+        date(2026, 6, 19), MARKET_CLOSE, tzinfo=IDX_TIMEZONE
+    )
+
+
+def test_daily_briefing_resolves_session_once_per_execute_not_per_ticker(monkeypatch):
+    """DQ-002B: the effective session must be resolved once per execute(),
+    shared across every ticker's freshness computation — never once per
+    ticker or once per window."""
+    tickers = [f"T{i}" for i in range(10)]
+    monkeypatch.setattr(
+        "src.application.use_case.daily_briefing_use_case.load_universe",
+        lambda *a, **kw: tickers,
+    )
+
+    market_repo = MagicMock()
+    market_repo.get_date_range.return_value = (date(2026, 6, 1), date(2026, 6, 19))
+    broker_repo = MagicMock()
+    broker_repo.get_date_range.return_value = (date(2026, 6, 1), date(2026, 6, 19))
+    regime_uc = MagicMock()
+    accum_uc = MagicMock()
+    accum_uc.execute.return_value = MagicMock(candidates=[])
+
+    fake_resolver = MagicMock()
+    fake_resolver.resolve.return_value = MagicMock(
+        latest_completed_session=date(2026, 6, 19),
+        is_eod_pending=False,
+        market_session_name="AFTER_CLOSE",
+    )
+
+    use_case = DailyBriefingUseCase(
+        market_repository=market_repo,
+        broker_repository=broker_repo,
+        regime_use_case=regime_uc,
+        accumulation_use_case=accum_uc,
+        universe_loader=MagicMock(),
+        session_resolver=fake_resolver,
+    )
+
+    use_case.execute(
+        DailyBriefingRequest(universe="lq45", as_of_date=date(2026, 6, 19))
+    )
+
+    fake_resolver.resolve.assert_called_once()
+
+
 def test_daily_briefing_writes_zero_candidate_observations(monkeypatch):
     """S1 regression: DailyBriefingUseCase calls AccumulationScreenUseCase.execute()
     directly, which is read-only — it must never persist observations even with
@@ -161,6 +239,7 @@ def test_daily_briefing_writes_zero_candidate_observations(monkeypatch):
     monkeypatch.setattr(module, "load_universe", lambda *a, **kw: ["BBCA"])
 
     market_repo = MagicMock()
+    market_repo.get_candles.return_value = []
     market_repo.get_date_range.return_value = (as_of, as_of)
     broker_repo = MagicMock()
     broker_repo.get_date_range.return_value = (as_of, as_of)
@@ -182,6 +261,7 @@ def test_daily_briefing_writes_zero_candidate_observations(monkeypatch):
 
 def test_daily_briefing_historical_mode(monkeypatch):
     market_repo = MagicMock()
+    market_repo.get_candles.return_value = []
     market_repo.get_date_range.return_value = (date(2026, 6, 1), date(2026, 6, 19))
 
     broker_repo = MagicMock()
@@ -217,6 +297,7 @@ def test_daily_briefing_shared_freshness(monkeypatch):
     # June 19, 2026 is Friday. If expected latest EOD is 2026-06-19,
     # but candle_as_of is 2026-06-18 (older/stale).
     market_repo = MagicMock()
+    market_repo.get_candles.return_value = []
     market_repo.get_date_range.return_value = (date(2026, 6, 1), date(2026, 6, 18))
 
     broker_repo = MagicMock()
@@ -264,6 +345,7 @@ def test_daily_briefing_opening_snapshot(tmp_path, monkeypatch):
     snapshot_file.write_text(json.dumps(snapshot_data))
 
     market_repo = MagicMock()
+    market_repo.get_candles.return_value = []
     market_repo.get_date_range.return_value = None
     broker_repo = MagicMock()
     broker_repo.get_date_range.return_value = None
@@ -307,6 +389,7 @@ def test_daily_briefing_not_ready_when_candle_coverage_below_policy(monkeypatch)
 
     current_tickers = [f"T{i}" for i in range(4)]
     market_repo = MagicMock()
+    market_repo.get_candles.return_value = []
     def market_side_effect(ticker):
         if ticker in current_tickers:
             return (date(2026, 6, 1), date(2026, 6, 19))
@@ -347,6 +430,7 @@ def test_daily_briefing_suppresses_accumulation_when_broker_coverage_below_polic
     )
 
     market_repo = MagicMock()
+    market_repo.get_candles.return_value = []
     market_repo.get_date_range.return_value = (date(2026, 6, 1), date(2026, 6, 19))
 
     current_tickers = [f"T{i}" for i in range(4)]
@@ -392,6 +476,7 @@ def test_daily_briefing_partial_allows_accumulation_with_warning(monkeypatch):
     current_tickers = [f"T{i}" for i in range(8)]
 
     market_repo = MagicMock()
+    market_repo.get_candles.return_value = []
     def market_side_effect(ticker):
         if ticker in current_tickers:
             return (date(2026, 6, 1), date(2026, 6, 19))
@@ -435,6 +520,7 @@ def test_daily_briefing_ready_when_all_critical_sources_ready(tmp_path, monkeypa
     )
 
     market_repo = MagicMock()
+    market_repo.get_candles.return_value = []
     market_repo.get_date_range.return_value = (date(2026, 6, 1), date(2026, 6, 19))
 
     broker_repo = MagicMock()
@@ -502,6 +588,7 @@ def test_daily_briefing_splits_opening_snapshot_by_universe_scope(tmp_path, monk
     snapshot_file.write_text(json.dumps(snapshot_data))
 
     market_repo = MagicMock()
+    market_repo.get_candles.return_value = []
     market_repo.get_date_range.return_value = None
     broker_repo = MagicMock()
     broker_repo.get_date_range.return_value = None
@@ -557,6 +644,7 @@ def test_daily_briefing_empty_universe_treats_opening_rows_as_market_wide(tmp_pa
     snapshot_file.write_text(json.dumps(snapshot_data))
 
     market_repo = MagicMock()
+    market_repo.get_candles.return_value = []
     market_repo.get_date_range.return_value = None
     broker_repo = MagicMock()
     broker_repo.get_date_range.return_value = None
@@ -619,6 +707,7 @@ def test_daily_briefing_projects_accumulation_candidates(monkeypatch):
     )
 
     market_repo = MagicMock()
+    market_repo.get_candles.return_value = []
     market_repo.get_date_range.return_value = (date(2026, 6, 1), date(2026, 6, 19))
     broker_repo = MagicMock()
     broker_repo.get_date_range.return_value = (date(2026, 6, 1), date(2026, 6, 19))
@@ -659,6 +748,7 @@ def test_daily_briefing_not_ready_skips_accumulation_projection_rows(monkeypatch
 
     current_tickers = [f"T{i}" for i in range(4)]
     market_repo = MagicMock()
+    market_repo.get_candles.return_value = []
 
     def market_side_effect(ticker):
         if ticker in current_tickers:
@@ -702,6 +792,7 @@ def test_daily_briefing_passes_capped_candidates_to_setup_lens_impact(monkeypatc
     )
 
     market_repo = MagicMock()
+    market_repo.get_candles.return_value = []
     market_repo.get_date_range.return_value = (date(2026, 6, 1), date(2026, 6, 19))
     broker_repo = MagicMock()
     broker_repo.get_date_range.return_value = (date(2026, 6, 1), date(2026, 6, 19))
@@ -744,6 +835,7 @@ def test_daily_briefing_not_ready_never_calls_setup_lens_impact(monkeypatch):
 
     current_tickers = [f"T{i}" for i in range(4)]
     market_repo = MagicMock()
+    market_repo.get_candles.return_value = []
 
     def market_side_effect(ticker):
         if ticker in current_tickers:
@@ -787,6 +879,7 @@ def test_daily_briefing_without_setup_lens_impact_use_case_leaves_none(monkeypat
     )
 
     market_repo = MagicMock()
+    market_repo.get_candles.return_value = []
     market_repo.get_date_range.return_value = (date(2026, 6, 1), date(2026, 6, 19))
     broker_repo = MagicMock()
     broker_repo.get_date_range.return_value = (date(2026, 6, 1), date(2026, 6, 19))

@@ -1,16 +1,37 @@
 """Shared fixtures and helpers for accumulation screen CLI tests."""
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from typer.testing import CliRunner
 
 from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
 )
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSession,
+)
 from src.domain.entities.broker_flow import BrokerSummary, BrokerTransaction, BrokerType
 
 runner = CliRunner()
+
+_WIB = ZoneInfo("Asia/Jakarta")
+_FAKE_NOW = datetime(2026, 6, 28, 16, 30, tzinfo=_WIB)
+
+# Standin for what a real caller (RunAccumulationScreenWorkflowUseCase)
+# already resolved once — CLI-layer test fakes must not resolve sessions
+# themselves.
+_FAKE_EFFECTIVE_SESSION = EffectiveMarketSession(
+    run_at=_FAKE_NOW,
+    decision_at=_FAKE_NOW,
+    latest_completed_session=date(2026, 6, 28),
+    analysis_as_of=date(2026, 6, 28),
+    market_session_name="AFTER_CLOSE",
+    is_eod_pending=False,
+    resolution_source="test_fixture",
+    notes=(),
+)
 
 
 def _tx(
@@ -123,6 +144,7 @@ def _fake_workflow_result(**overrides):
             top=len(params["response"].candidates),
             min_streak=0,
             coiled_spring_bb_pctile=0.20,
+            effective_session=_FAKE_EFFECTIVE_SESSION,
         )
 
     if params["multi_results"] and params["multi_projection"] is None:
@@ -137,6 +159,7 @@ def _fake_workflow_result(**overrides):
             coiled_spring_min_foreign_flow_score=50.0,
             coiled_spring_bb_pctile=0.20,
             canonical_window=7 if 7 in resolved_windows else resolved_windows[0],
+            effective_session=_FAKE_EFFECTIVE_SESSION,
         )
 
     return RunAccumulationScreenWorkflowResult(**params)

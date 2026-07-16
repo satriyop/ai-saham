@@ -53,10 +53,15 @@ def _real_workflow_uc(screen_execute, broker_repo=None):
     if broker_repo is None:
         broker_repo = MagicMock()
         broker_repo.get_broker_daily_flows.return_value = []
+    market_repo = MagicMock()
+    # No cached IHSG data: the default EffectiveMarketSessionResolver built
+    # by the use case falls back to weekday logic instead of misreading an
+    # unconfigured MagicMock as a candle list.
+    market_repo.get_candles.return_value = []
     return RunAccumulationScreenWorkflowUseCase(
         screen_use_case=screen_mock,
         broker_repository=broker_repo,
-        market_repository=MagicMock(),
+        market_repository=market_repo,
         swing_config=swing_config,
         accumulation_screener_config=accum_config,
         rules_loader=MagicMock(),

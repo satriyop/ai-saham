@@ -23,7 +23,10 @@ from src.domain.value_objects.setup_phase import SetupPhaseSnapshot, SetupPhaseS
 from src.domain.value_objects.signal_assessment import SignalStrength
 from src.domain.value_objects.trade_setup import SetupAction, TradeSetup
 from src.infrastructure.config.accumulation_screener_config import load_accumulation_screener_config
-from tests.adapters.cli.screen_accum_test_fixtures import _candidate
+from tests.adapters.cli.screen_accum_test_fixtures import (
+    _FAKE_EFFECTIVE_SESSION,
+    _candidate,
+)
 
 _CFG = accumulation_display_config_from_screener(load_accumulation_screener_config())
 
@@ -83,6 +86,7 @@ def test_display_results_never_shows_fresh_ok_and_splits_align_from_ready(capsys
         top=10,
         min_streak=0,
         coiled_spring_bb_pctile=0.20,
+        effective_session=_FAKE_EFFECTIVE_SESSION
     )
 
     display_results(
@@ -216,6 +220,7 @@ def test_display_multi_renders_rich_accumulation_panel(capsys):
         coiled_spring_min_foreign_flow_score=_CFG.coiled_spring_min_foreign_flow_score,
         coiled_spring_bb_pctile=_CFG.coiled_spring_bb_pctile,
         canonical_window=7,
+        effective_session=_FAKE_EFFECTIVE_SESSION
     )
 
     display_multi(
@@ -301,6 +306,7 @@ def test_display_multi_renders_canonical_signal_risk_phase_data_next(capsys):
         coiled_spring_min_foreign_flow_score=_CFG.coiled_spring_min_foreign_flow_score,
         coiled_spring_bb_pctile=_CFG.coiled_spring_bb_pctile,
         canonical_window=7,
+        effective_session=_FAKE_EFFECTIVE_SESSION
     )
 
     display_multi(

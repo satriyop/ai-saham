@@ -12,7 +12,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from datetime import datetime
+
 from src.application.dto.accumulation_screen import AccumulationScreenResponse
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSessionResolver,
+)
 from src.application.services.tracked_broker_flow import (
     TrackedBrokerFlowSnapshot,
     compute_tracked_broker_flow_batch,
@@ -24,6 +29,7 @@ from src.application.services.screen_accum_result_projector import (
     project_single_screen_result,
     validate_multi_window_request,
 )
+from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.application.services.signal_observation_request_builder import (
     BuildSignalObservationScreenRequest,
 )
@@ -94,6 +100,7 @@ class RunAccumulationScreenWorkflowUseCase:
         rules_loader,
         indicator_registry_factory,
         save_watchlist_use_case=None,
+        session_resolver: EffectiveMarketSessionResolver | None = None,
     ) -> None:
         self._screen_use_case = screen_use_case
         self._broker_repository = broker_repository
@@ -103,6 +110,9 @@ class RunAccumulationScreenWorkflowUseCase:
         self._rules_loader = rules_loader
         self._indicator_registry_factory = indicator_registry_factory
         self._save_watchlist_use_case = save_watchlist_use_case
+        self._session_resolver = session_resolver or EffectiveMarketSessionResolver(
+            market_repository
+        )
         # Every mode here (single-window and --multi) is diagnostic/read-only.
         # Canonical observation recording is a separate, explicit workflow
         # (signal-backfill) — see RecordAccumulationObservationsUseCase.
@@ -123,16 +133,23 @@ class RunAccumulationScreenWorkflowUseCase:
             strategy_name=request.strategy_name,
         )
 
-        if request.multi:
-            return self._execute_multi(request, request_builder, warnings)
+        # Resolved once per workflow execute() and shared by every candidate's
+        # freshness computation below — never once per ticker or per window.
+        effective_session = self._session_resolver.resolve(
+            run_at=datetime.now(IDX_TIMEZONE)
+        )
 
-        return self._execute_single(request, request_builder, warnings)
+        if request.multi:
+            return self._execute_multi(request, request_builder, warnings, effective_session)
+
+        return self._execute_single(request, request_builder, warnings, effective_session)
 
     def _execute_single(
         self,
         request: RunAccumulationScreenWorkflowRequest,
         request_builder: BuildSignalObservationScreenRequest,
         warnings: list[str],
+        effective_session,
     ) -> RunAccumulationScreenWorkflowResult:
         screen_request = request_builder.build(
             tickers=request.tickers,
@@ -148,6 +165,7 @@ class RunAccumulationScreenWorkflowUseCase:
             top=request.top,
             min_streak=request.min_streak,
             coiled_spring_bb_pctile=display_cfg.coiled_spring_bb_pctile,
+            effective_session=effective_session,
         )
 
         strategy_signals: dict[str, str] = {}
@@ -209,6 +227,7 @@ class RunAccumulationScreenWorkflowUseCase:
         request: RunAccumulationScreenWorkflowRequest,
         request_builder: BuildSignalObservationScreenRequest,
         warnings: list[str],
+        effective_session,
     ) -> RunAccumulationScreenWorkflowResult:
         validate_multi_window_request(request.windows, request.sort_by)
 
@@ -257,6 +276,7 @@ class RunAccumulationScreenWorkflowUseCase:
             coiled_spring_min_foreign_flow_score=display_cfg.coiled_spring_min_foreign_flow_score,
             coiled_spring_bb_pctile=display_cfg.coiled_spring_bb_pctile,
             canonical_window=canonical_window,
+            effective_session=effective_session,
         )
 
         return RunAccumulationScreenWorkflowResult(

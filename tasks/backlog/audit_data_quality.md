@@ -615,11 +615,99 @@ session resolver exists; DQ-002 as a whole is not complete.
     before this change, consistent with the same pre-existing flake noted
     under DQ-000).
 
-**Deferred to DQ-002B/C (not started):**
+- **DQ-002B** (2026-07-16): screen/today data freshness now consumes
+  `EffectiveMarketSession` instead of computing its own expected-EOD via
+  weekday/wall-clock arithmetic.
+  - `data_freshness_service.py`'s `compute_data_freshness()` signature
+    changed from `screen_date`/`now` to a required `effective_session:
+    EffectiveMarketSession` keyword. `_expected_latest_eod()` (the internal
+    weekday/wall-clock derivation) was deleted — the module now owns no
+    time arithmetic itself; `expected_latest_eod = effective_session.
+    latest_completed_session` and `eod_pending = effective_session.
+    is_eod_pending` directly. Source-state (`MISSING`/`UNKNOWN`/
+    `PENDING_EOD`/`READY`/`STALE`) and alignment semantics are unchanged.
+  - `DailyBriefingUseCase.execute()` resolves one `EffectiveMarketSession`
+    per call and reuses it for every ticker's freshness plus
+    `latest_completed_eod_date` (`= effective_session.
+    latest_completed_session` directly — the old "first freshness item, or
+    a synthetic `compute_data_freshness()` call with no real inputs just to
+    get `expected_latest_eod`" fallback is gone). Non-historical runs
+    resolve `run_at` from real WIB wall-clock time-of-day combined with
+    `date.today()` (so pre-open/regular/pre-closing/after-close classify
+    correctly, while the date itself stays consistent with this method's
+    existing mockable time source). Historical runs (`as_of_date` given)
+    build a deterministic decision timestamp: `MARKET_CLOSE` WIB on that
+    date, documented as treating that date as a completed EOD decision, not
+    an intraday one — `MARKET_CLOSE` itself already resolves to
+    `AFTER_CLOSE` since the resolver's before-close check is strict `<`.
+  - `screen_accum_result_projector.py`'s `project_single_screen_result()`
+    and `project_multi_screen_result()` both gained a required
+    `effective_session: EffectiveMarketSession` keyword and no longer
+    accept/derive per-candidate `screen_date`. The projectors still do not
+    construct or call the resolver themselves — callers pass an
+    already-resolved session in, preserving "projectors stay pure." In
+    `project_multi_screen_result()`, every window's candidates now share
+    the one passed-in `effective_session` (the old per-window
+    `screened_at_by_window` lookup was removed) — an intentional,
+    instructed behavior change: freshness across 7/30/90-day windows now
+    reflects one shared decision point instead of each window's own
+    `screened_at`.
+  - `RunAccumulationScreenWorkflowUseCase` resolves the effective session
+    exactly once per `execute()` (`self._session_resolver.resolve(run_at=
+    datetime.now(IDX_TIMEZONE))`, proven by
+    `test_single_mode_resolves_effective_session_once` and
+    `test_multi_mode_resolves_effective_session_once_not_per_window`) and
+    passes the same instance into both `_execute_single`/`_execute_multi`
+    and their projector calls — never resolved per ticker or per window.
+    Gained an optional `session_resolver: EffectiveMarketSessionResolver |
+    None` constructor param (defaults to building one from the injected
+    `market_repository`, same pattern as `DailyBriefingUseCase`).
+  - `screen_accum_workflow_factory.create_run_accumulation_screen_workflow_
+    use_case()` now explicitly builds and injects
+    `EffectiveMarketSessionResolver(deps.market_repository)` rather than
+    relying on the use case's implicit default, per the instruction that
+    resolver construction belongs in factory/wiring code.
+  - Tests updated (no test asserts weekday arithmetic inside
+    `compute_data_freshness` anymore — that behavior is owned and tested by
+    `EffectiveMarketSessionResolver` alone):
+    `test_data_freshness_service.py` (10, rewritten around a fixture
+    `EffectiveMarketSession` builder — added
+    `test_no_expected_latest_eod_produces_unknown_for_present_source_dates`);
+    `test_daily_briefing.py` (20, up from 18 — added
+    `test_daily_briefing_explicit_as_of_date_uses_deterministic_after_close_decision`
+    and `test_daily_briefing_resolves_session_once_per_execute_not_per_ticker`;
+    every `MagicMock()` market repository across the file now explicitly
+    configures `get_candles.return_value` since the resolver is now always
+    invoked, non-historical or historical);
+    `test_screen_accum_result_projector.py` (24, all 19 existing
+    `project_*_screen_result` calls updated with a shared
+    `_EFFECTIVE_SESSION` fixture); `test_run_accumulation_screen_workflow_
+    use_case.py` (22, up from 20 — added the two once-per-execute tests, plus
+    a shared `_fake_session_resolver()` helper injected via `_make_uc`);
+    `test_screen_accum_display.py` (8) and
+    `test_screen_accum_command_json_and_save.py` (15) updated via the
+    shared `screen_accum_test_fixtures.py` `_FAKE_EFFECTIVE_SESSION`/
+    `_fake_workflow_result()` helper, which itself now passes
+    `effective_session` into its internal projector calls.
+  - `swing_data_freshness.py` and `market_freshness_service.py` are
+    **not** touched — explicitly deferred to DQ-002C, per this task's hard
+    boundary ("Do NOT wire swing analyze freshness yet").
+  - No scoring/SignalEngine/persistence-schema/migration/label-generation
+    change — none were needed or made.
+  - Verification: `python -m py_compile` on all changed files; the full
+    required focused-test list (113 tests across
+    `test_data_freshness_service.py`, `test_effective_market_session_
+    resolver.py`, `test_daily_briefing.py`, `test_screen_accum_result_
+    projector.py`, `test_run_accumulation_screen_workflow_use_case.py`,
+    `test_screen_accum_display.py`, `test_screen_accum_command_json_and_
+    save.py`) passes; `git diff --check` clean.
 
-- Wiring the resolver into `swing_data_freshness.py`,
-  `data_freshness_service.py`, and `market_freshness_service.py` (or
-  retiring their independent logic in favor of the resolver).
+**Deferred to DQ-002C (not started):**
+
+- Wiring the resolver into `swing_data_freshness.py` and
+  `market_freshness_service.py` (or retiring their independent logic in
+  favor of the resolver) — explicitly out of scope for DQ-002B per its hard
+  boundary.
 - Provider-settlement cutoffs and any band-specific behavioral difference
   between `BEFORE_OPEN`/`PRE_OPEN`/`REGULAR`/`PRE_CLOSING` beyond the label
   (all four currently resolve `latest_completed_session`/`is_eod_pending`
@@ -636,9 +724,12 @@ session resolver exists; DQ-002 as a whole is not complete.
 **Acceptance criteria:**
 
 - [ ] One application-layer session service is used by all audited workflows.
-      (Resolver exists and is used by `DailyBriefingUseCase`; not yet used by
-      `swing_data_freshness.py`, `data_freshness_service.py`, or
-      `market_freshness_service.py` — DQ-002B/C.)
+      (Resolver is used by `DailyBriefingUseCase` and
+      `RunAccumulationScreenWorkflowUseCase`/screen-accum projectors; not
+      yet used by `swing_data_freshness.py` or `market_freshness_service.py`
+      — DQ-002C. `data_freshness_service.py` itself now owns no time
+      arithmetic and is a pure function of an injected
+      `EffectiveMarketSession`.)
 - [ ] Weekend, holiday, pre-open, intraday, post-close, and late-provider tests pass.
       (Weekend/holiday/pre-open/intraday/post-close covered by the resolver
       and its tests; provider-settlement/late-provider cutoffs not yet

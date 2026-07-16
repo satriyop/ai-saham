@@ -7,7 +7,7 @@ AI usage: None
 
 import json
 from dataclasses import dataclass, field
-from datetime import date, datetime, time
+from datetime import date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -18,6 +18,7 @@ from src.application.dto.accumulation_screen import (
 from src.application.ports.universe_config_loader import UniverseConfigLoader
 from src.application.services.data_freshness_service import compute_data_freshness
 from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSession,
     EffectiveMarketSessionResolver,
 )
 from src.application.services.universe_loader import load_universe
@@ -39,7 +40,7 @@ from src.domain.value_objects.data_freshness_status import (
     DataFreshnessStatus,
     SourceFreshnessState,
 )
-from src.domain.value_objects.idx_market import IDX_TIMEZONE
+from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
 
 if TYPE_CHECKING:
     from src.domain.value_objects.market_context import MarketContext
@@ -140,19 +141,29 @@ class DailyBriefingUseCase:
 
     def execute(self, request: DailyBriefingRequest) -> DailyBriefingResponse:
         is_historical = request.as_of_date is not None
-        live_session_date = request.as_of_date or date.today()
 
-        # On a weekend and no explicit date was given, roll back to the latest
-        # IDX session the effective-session resolver can prove (cached IHSG
-        # session when available, weekday fallback otherwise) rather than
-        # blindly assuming the prior Friday.
-        if not is_historical:
-            # Time-of-day is irrelevant to the weekend/live-day distinction, so
-            # midnight keeps this consistent with `date.today()` (the same
-            # mockable time source the rest of this method already uses) while
-            # still driving the resolver's date-only weekend branch.
-            run_at = datetime.combine(live_session_date, time.min, tzinfo=IDX_TIMEZONE)
+        if is_historical:
+            # Deterministic historical decision timestamp: after-market-close
+            # WIB on the requested date, so a historical daily briefing always
+            # treats that date as a completed end-of-day decision rather than
+            # an intraday/pre-close one.
+            as_of_date = request.as_of_date
+            decision_at = datetime.combine(as_of_date, MARKET_CLOSE, tzinfo=IDX_TIMEZONE)
+            effective_session = self._session_resolver.resolve(run_at=decision_at)
+            live_session_date = as_of_date
+        else:
+            # Real WIB current time-of-day (not midnight) so the resolver can
+            # classify pre-open/regular/pre-closing/after-close correctly;
+            # the date itself is taken from `date.today()` so this stays
+            # consistent with the rest of this method's mockable time source.
+            today = date.today()
+            now_wib = datetime.now(IDX_TIMEZONE)
+            run_at = datetime.combine(today, now_wib.time(), tzinfo=IDX_TIMEZONE)
             effective_session = self._session_resolver.resolve(run_at=run_at)
+            live_session_date = today
+            # On a weekend, roll back to the latest IDX session the resolver
+            # can prove (cached IHSG session when available, weekday fallback
+            # otherwise) rather than blindly assuming the prior Friday.
             if effective_session.market_session_name == "WEEKEND":
                 live_session_date = (
                     effective_session.latest_completed_session or live_session_date
@@ -170,7 +181,7 @@ class DailyBriefingUseCase:
             universe_tickers = []
             warnings.append(f"Universe unavailable: {exc}")
 
-        freshness = self._data_freshness(universe_tickers, live_session_date)
+        freshness = self._data_freshness(universe_tickers, effective_session)
 
         stale_count = sum(
             1
@@ -189,15 +200,7 @@ class DailyBriefingUseCase:
                 f"Run 'saham fetch market --universe {request.universe}' to fetch latest data."
             )
 
-        if freshness:
-            latest_completed_eod_date = freshness[0].freshness.expected_latest_eod
-        else:
-            synthetic = compute_data_freshness(
-                candle_as_of=None,
-                broker_as_of=None,
-                screen_date=live_session_date,
-            )
-            latest_completed_eod_date = synthetic.expected_latest_eod
+        latest_completed_eod_date = effective_session.latest_completed_session
 
         regime = None
         if latest_completed_eod_date is not None and universe_tickers:
@@ -470,7 +473,7 @@ class DailyBriefingUseCase:
     def _data_freshness(
         self,
         tickers: list[str],
-        live_session_date: date,
+        effective_session: EffectiveMarketSession,
     ) -> list[BriefingDataFreshnessItem]:
         items: list[BriefingDataFreshnessItem] = []
         for ticker in tickers:
@@ -489,7 +492,7 @@ class DailyBriefingUseCase:
             freshness_status = compute_data_freshness(
                 candle_as_of=candle_as_of,
                 broker_as_of=broker_as_of,
-                screen_date=live_session_date,
+                effective_session=effective_session,
             )
             items.append(
                 BriefingDataFreshnessItem(

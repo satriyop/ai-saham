@@ -21,6 +21,9 @@ from src.application.dto.accumulation_screen import (
 from src.application.services.accumulation_multi_window_pattern import (
     classify_multi_window_pattern,
 )
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSession,
+)
 from src.application.services.tracked_broker_flow import TrackedBrokerFlowSnapshot
 from src.application.services.data_freshness_service import compute_data_freshness
 
@@ -74,6 +77,7 @@ def project_single_screen_result(
     top: int,
     min_streak: int,
     coiled_spring_bb_pctile: float,
+    effective_session: EffectiveMarketSession,
 ) -> ScreenAccumSingleProjection:
     """Apply min_streak/vwap_only/squeeze_only/top exactly once, in the order
     the table has always applied them. `raw_candidate_count` reflects the
@@ -101,7 +105,7 @@ def project_single_screen_result(
         c.freshness = compute_data_freshness(
             candle_as_of=c.latest_candle_date,
             broker_as_of=c.latest_broker_date,
-            screen_date=response.screened_at,
+            effective_session=effective_session,
             signal_evidence_coverage=coverage,
         )
 
@@ -291,6 +295,7 @@ def project_multi_screen_result(
     coiled_spring_min_foreign_flow_score: float,
     coiled_spring_bb_pctile: float,
     canonical_window: int,
+    effective_session: EffectiveMarketSession,
 ) -> ScreenAccumMultiProjection:
     validate_multi_window_request(windows, sort_by)
     if canonical_window not in windows:
@@ -334,11 +339,8 @@ def project_multi_screen_result(
 
     sorted_items = sorted(by_ticker.items(), key=sort_key, reverse=True)[:top]
 
-    screened_at_by_window = {
-        window: response.screened_at for window, response in multi_results.items()
-    }
     for _, pw in sorted_items:
-        for window, c in pw.items():
+        for c in pw.values():
             if c is None:
                 continue
             coverage = (
@@ -347,7 +349,7 @@ def project_multi_screen_result(
             c.freshness = compute_data_freshness(
                 candle_as_of=c.latest_candle_date,
                 broker_as_of=c.latest_broker_date,
-                screen_date=screened_at_by_window[window],
+                effective_session=effective_session,
                 signal_evidence_coverage=coverage,
             )
 

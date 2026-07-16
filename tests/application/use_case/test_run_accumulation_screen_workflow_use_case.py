@@ -92,8 +92,23 @@ def _screen_response(candidates=None, window_days=7) -> AccumulationScreenRespon
     )
 
 
+def _fake_session_resolver() -> MagicMock:
+    """A fake EffectiveMarketSessionResolver — the workflow use case must
+    never construct/call the real resolver's IHSG-cache lookups itself in
+    these tests; it only needs *a* resolved session to hand to the
+    projector."""
+    resolver = MagicMock()
+    resolver.resolve.return_value = MagicMock(
+        latest_completed_session=date(2026, 7, 13),
+        analysis_as_of=date(2026, 7, 13),
+        is_eod_pending=False,
+        market_session_name="AFTER_CLOSE",
+    )
+    return resolver
+
+
 def _make_uc(*, screen_use_case=None, broker_repo=None, market_repo=None,
-             save_uc=None) -> RunAccumulationScreenWorkflowUseCase:
+             save_uc=None, session_resolver=None) -> RunAccumulationScreenWorkflowUseCase:
     return RunAccumulationScreenWorkflowUseCase(
         screen_use_case=screen_use_case or MagicMock(),
         broker_repository=broker_repo or MagicMock(),
@@ -103,6 +118,7 @@ def _make_uc(*, screen_use_case=None, broker_repo=None, market_repo=None,
         rules_loader=MagicMock(),
         indicator_registry_factory=MagicMock(),
         save_watchlist_use_case=save_uc,
+        session_resolver=session_resolver or _fake_session_resolver(),
     )
 
 
@@ -168,6 +184,21 @@ def test_single_mode_executes_screen():
     assert result.strategy_signals == {}
 
 
+def test_single_mode_resolves_effective_session_once():
+    """DQ-002B: resolved once per execute(), not once per candidate."""
+    c1 = _candidate(ticker="A")
+    c2 = _candidate(ticker="B")
+    c3 = _candidate(ticker="C")
+    screen_mock = MagicMock()
+    screen_mock.execute.return_value = _screen_response(candidates=[c1, c2, c3])
+    resolver = _fake_session_resolver()
+    uc = _make_uc(screen_use_case=screen_mock, session_resolver=resolver)
+
+    uc.execute(_single_request())
+
+    resolver.resolve.assert_called_once()
+
+
 def test_single_mode_applies_min_streak_filter():
     c1 = _candidate(ticker="A", consecutive_streak=5)
     c2 = _candidate(ticker="B", consecutive_streak=2)
@@ -225,6 +256,19 @@ def test_single_mode_zero_min_streak_keeps_all():
 # ---------------------------------------------------------------------------
 # Multi mode
 # ---------------------------------------------------------------------------
+
+
+def test_multi_mode_resolves_effective_session_once_not_per_window():
+    """DQ-002B: resolved once per execute(), shared across all windows —
+    never once per window."""
+    screen_mock = MagicMock()
+    screen_mock.execute.side_effect = lambda req: _screen_response(window_days=req.window_days)
+    resolver = _fake_session_resolver()
+    uc = _make_uc(screen_use_case=screen_mock, session_resolver=resolver)
+
+    uc.execute(_multi_request(windows=[7, 30, 90]))
+
+    resolver.resolve.assert_called_once()
 
 
 def test_multi_mode_executes_all_windows():
