@@ -454,6 +454,40 @@ is not complete.
   - Note: this task's instructions also referenced the same nonexistent
     `reconcile_data_sources_use_case.py` file name as DQ-001D's
     instructions; implemented against the real files again.
+- **DQ-001F** (2026-07-16): read-path authority guard for invalid
+  `seasonality_cache` provenance (413 rows with null/invalid `source`, 47
+  rows with null `fetched_at`, 413 rows with all metrics null — first
+  surfaced by DQ-CONTRACT-GATE failing on the live DB). This is a guard, not
+  a repair: `StockbitSeasonalityProvider._read_cache()`
+  (`src/infrastructure/browser/stockbit_seasonality.py`) now returns `None`
+  instead of a `SeasonalEdge` whenever the newest PIT-eligible row has null/
+  empty/case-insensitive-`"unknown"` `source` (the old silent
+  `source or "stockbit"` fallback is removed) or a null/empty/unparseable
+  `fetched_at`; required-metric null checks already existed and are
+  unchanged. Because the row is selected by `ORDER BY ... DESC LIMIT 1`
+  before this check runs, an invalid newest row fails closed rather than
+  silently falling back to an older valid row for the same ticker/year/month.
+  No database mutation, no repair/quarantine command, no scoring/threshold/
+  tuning change — only the provider's read path and its tests changed.
+  **The live `saham audit data contract-gate` still fails**: the 413/47
+  invalid rows still exist in the database and are still reported by
+  `source-contracts`/`reconcile-sources` exactly as before; this task only
+  stops those rows from being usable as evidence going forward; the gate
+  will keep failing until the rows are actually repaired or quarantined (no
+  such command exists yet) or the contract is deliberately relaxed.
+  - Tests: 9 new cases in `test_stockbit_seasonality.py` (valid row still
+    returns `SeasonalEdge`; null/empty/`"Unknown"` source → `None`; null/
+    malformed `fetched_at` → `None`; null required metric → `None`; a newer
+    invalid row does not fall back to an older valid row) — 14 total pass.
+    `test_pit_schema_contracts.py`'s seasonality PIT fixture needed an
+    explicit valid `source` value, since its rows previously depended on the
+    now-removed null-source fallback.
+  - Verification: focused seasonality tests (14) plus signal/company-quality/
+    candidate-observation/PIT focused tests (40) pass; `pytest -k
+    seasonality` — 36 passed; full suite — 4379 passed; `python -m
+    py_compile` on changed files; `git diff --check` clean; live `saham
+    audit data contract-gate --format json` confirmed exit code 1 and still
+    lists the seasonality_cache WARN findings unsuppressed.
 - DQ-001 acceptance criteria below are **not** marked complete — DQ-001A/C/E
   now give field contracts for 20 tables (5 core + 13 enrichment + 2
   market-context) and DQ-001B/D/E give executable reconciliation for
