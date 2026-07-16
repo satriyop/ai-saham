@@ -164,7 +164,14 @@ class SwingAnalysisEvidenceBuilder:
         setup_name: str | None,
         strategy_name: str | None,
         swing_config: Any,
+        as_of_fetched_at: str | None = None,
     ) -> SwingAnalysisEvidenceBuildResult:
+        """`as_of_fetched_at` (ISO timestamp, DQ-002G): the workflow's
+        resolved decision timestamp (`EffectiveMarketSession.decision_at`),
+        forwarded to `AssessCorporateActionEventRiskUseCase` so a historical
+        `analyze swing` run cannot see a corporate-action calendar row that
+        was synced after that historical decision point. `None` (default)
+        preserves prior unfiltered behavior."""
         warnings: list[str] = []
 
         setup_evidence = None
@@ -363,6 +370,7 @@ class SwingAnalysisEvidenceBuilder:
                     AssessCorporateActionEventRiskRequest(
                         ticker=ticker,
                         as_of_date=snapshot_date,
+                        as_of_fetched_at=as_of_fetched_at,
                     )
                 ).assessment
             except Exception as exc:

@@ -1091,15 +1091,18 @@ freshness_status           # CURRENT | STALE | PARTIAL | UNKNOWN | INVALID
 
 Artifacts without a defensible effective timestamp or data cutoff are invalid for learning and historical evaluation. Do not infer missing temporal provenance from `captured_at` alone.
 
-**State:** DQ-002A/B/C/D/E/F implemented (2026-07-16). One canonical application-layer
+**State:** DQ-002A/B/C/D/E/F/G implemented (2026-07-16). One canonical application-layer
 session resolver exists and now backs every audited freshness-adjacent
 service (`data_freshness_service.py`, `swing_data_freshness.py`,
 `market_freshness_service.py`), `candidate_observations`/
-`signal_forward_labels` persist its provenance, and a new per-source
-availability contract (`AssessSourceAvailabilityUseCase`) exists for Phase 2
+`signal_forward_labels` persist its provenance, a per-source availability
+contract (`AssessSourceAvailabilityUseCase`) exists for Phase 2
 workflows/tests to assess CURRENT/STALE/PARTIAL/LATE/UNKNOWN/INVALID/
-DIAGNOSTIC_ONLY per source family; DQ-002 as a whole is not complete (see
-Deferred items below).
+DIAGNOSTIC_ONLY per source family, and planted-future-row leakage tests now
+exist against real repository/reader code for all 13 Phase 2 source
+families (one real leakage gap found and fixed — corporate action calendar
+`fetched_at` filtering); DQ-002 as a whole is not complete (see Deferred
+items below).
 
 - **DQ-002A** (2026-07-16, revised same day after review): `EffectiveMarketSessionResolver`
   added at `src/application/services/effective_market_session_resolver.py`.
@@ -1575,6 +1578,172 @@ Deferred items below).
     Focused suite is now 20 tests (up from 19); `python -m py_compile` and
     `git diff --check` re-verified clean.
 
+- **DQ-002G** (2026-07-16): planted-future-row temporal-leakage tests added
+  against real repository/reader code (not mocks, tmp_path SQLite DBs) for
+  all 13 Phase 2 source families from DQ-002F's registry. This does **not**
+  close DQ-002: it proves the specific consumers/readers exercised below do
+  not leak future rows; it is not a full sweep of every call site in the
+  codebase, and it does not add `observed_through`/`available_at`/
+  `freshness_status` to `EffectiveMarketSession` itself.
+  - **Covered, all passing against real production reader code:**
+    - `candles` — `SQLiteMarketRepository.get_candles(end_date=...)`
+      (pre-existing DQ-002A-proven bound) excludes a planted future-dated
+      row; fed into `AssessSourceAvailabilityUseCase` as `CURRENT`, and a
+      future date fed directly is `INVALID`.
+    - `broker_summaries`, `broker_daily_flow`, `foreign_flow_points` —
+      `SQLiteBrokerRepository.get_broker_summaries`/`get_broker_daily_flows`/
+      `get_foreign_flow_points` (all pre-existing `end_date`-bounded)
+      exclude planted future rows; an unbounded read is shown to leak the
+      future row directly (proving the bound matters), and that leaked
+      timestamp is proven `INVALID`/non-authoritative once run through the
+      availability contract.
+    - `foreign_flow_snapshots` — `SQLiteBrokerRepository.
+      get_foreign_flow_snapshots(snapshot_date, period_days)` has no
+      `end_date` bound (confirmed, this is an exact-match snapshot-key
+      query, not a range query); proven that querying the correct
+      `snapshot_date` key does not return a planted future-dated snapshot,
+      and that snapshot's own date resolves to `INVALID` via the
+      availability contract.
+    - `analyst_cache`, `company_fundamentals`, `seasonality_cache` — real
+      `StockbitAnalystConsensusProvider`/`StockbitFundamentalsProvider`/
+      `StockbitSeasonalityProvider` classes (constructed with
+      `api_client=None`, cache-only) already implement an `as_of_date` PIT
+      guard (pre-existing code, not added by this task); tests lock in that
+      an unbounded read leaks a future-fetched row while an `as_of_date`-
+      bounded read excludes it (or returns `None` if only a future row
+      exists, for fundamentals/seasonality's backtest-mode guarantee), and
+      that the leaked future timestamp resolves to `INVALID` via the
+      availability contract.
+    - `corporate_action_events`, `corporate_action_event_dates` — **real
+      leakage gap found** (see below); fixed with a minimal additive
+      parameter, then covered.
+    - `market_context_snapshots`, `regime_observations` — `SQLiteMarketContextRepository.get`/
+      `SQLiteRegimeObservationRepository.get` are exact-match queries keyed
+      by date, so a planted future-dated row cannot leak into a query for
+      the correct decision date by construction (proven directly). The one
+      real production consumer of the *unbounded* `get_recent()` —
+      `MarketContextEngine._compute_stability`'s pre-existing
+      `if obs.observation_date >= as_of: continue` guard — is exercised
+      directly with a real `SQLiteRegimeObservationRepository` and a
+      planted future-dated observation, proving the guard excludes it from
+      the prior-streak computation (this guard already existed; DQ-002G
+      only adds the regression test).
+    - `sentiment` — real `SQLiteSentimentRepository.save_log`/
+      `get_ticker_logs` round-trip with a row dated exactly at
+      `decision_at` (perfectly current, not a hand-built input), proven
+      `DIAGNOSTIC_ONLY`/`is_authoritative=False` via the availability
+      contract regardless.
+  - **Real leakage bug found and fixed:**
+    `SQLiteCorporateActionCalendarRepository.get_events_for_ticker`/
+    `get_events_for_universe`/`get_events_by_date_role`
+    (`src/infrastructure/persistence/sqlite_corporate_action_calendar_repository.py`)
+    windowed only on `event_date` (the calendar date of the corporate
+    action itself — legitimately knowable ahead of time) and had **no**
+    parameter to exclude events/date-rows synced (`fetched_at`) after a
+    decision timestamp. `AssessCorporateActionEventRiskUseCase.execute`
+    (`src/application/use_case/assess_corporate_action_event_risk_use_case.py`)
+    calls `get_events_for_ticker` with a `[decision_date - lookback,
+    decision_date + lookahead]` window and never filtered by `fetched_at`
+    either — in a historical replay, this would let a corporate-action row
+    synced after that historical decision point leak in as if it had been
+    known at the time. `test_unbounded_read_leaks_events_synced_after_decision_time`
+    demonstrates the gap directly (a future-synced event is returned by an
+    unbounded call). **Fix:** added an optional `as_of_fetched_at: str |
+    None = None` parameter to all three port methods
+    (`src/application/ports/corporate_action_calendar_repository.py`) and
+    their SQLite implementation, filtering `e.fetched_at <= ? AND
+    d.fetched_at <= ?` (both the event-row and joined date-row aliases;
+    `save_events()` always writes them equal today, but both are asserted
+    explicitly rather than relying on that invariant) when supplied.
+    Default `None` preserves every existing caller's behavior unchanged —
+    confirmed by the full pre-existing focused/full test suite passing
+    unmodified.
+  - **Review follow-up (2026-07-16, same day):** the first cut left
+    `AssessCorporateActionEventRiskUseCase` unwired, reasoning it was
+    "always called live (today)". That was wrong: `saham analyze swing`
+    treats `request.today` as an explicit historical as-of date whenever it
+    differs from the real current date — `SwingAnalysisInputCollector.collect()`
+    (`src/application/services/swing_analysis_input_collector.py`) builds a
+    deterministic after-close WIB decision timestamp for that case, and
+    `SwingAnalysisEvidenceBuilder.build()`
+    (`src/application/services/swing_analysis_evidence_builder.py:369`) was
+    still calling the corporate-action use case with no `as_of_fetched_at`
+    at all — so a historical `analyze swing` run could see a calendar row
+    synced after that historical decision point. Fixed end to end:
+    - `AssessCorporateActionEventRiskRequest` gained `as_of_fetched_at: str
+      | None = None`, threaded into the `get_events_for_ticker(...,
+      as_of_fetched_at=request.as_of_fetched_at)` call in
+      `AssessCorporateActionEventRiskUseCase.execute`.
+    - `SwingAnalysisWorkflowState` gained `effective_session:
+      EffectiveMarketSession | None = None`.
+    - `SwingAnalysisInputCollector.collect()` now sets
+      `effective_session=effective_session` on the returned state (it
+      already resolved one per execution; it just wasn't threaded further
+      before).
+    - `SwingAnalysisEvidenceBuilder.build()` gained an `as_of_fetched_at:
+      str | None = None` parameter, forwarded into
+      `AssessCorporateActionEventRiskRequest`.
+    - `SwingAnalysisOptionalEvidenceRunner.build_evidence()` computes
+      `as_of_fetched_at = state.effective_session.decision_at.isoformat()`
+      (or `None` if unresolved) and passes it to `evidence_builder.build(...)`.
+    - Two test fakes (`FakeCorporateActionCalendarRepository` in
+      `test_assess_corporate_action_event_risk_use_case.py`,
+      `FakeCalendarRepositoryWithDividend`/its sibling in
+      `test_swing_analysis_workflow_corporate_calendar.py`) needed an
+      `as_of_fetched_at=None` parameter added to stay callable; three
+      `repo.calls` tuple-unpacking assertions updated for the new 4th tuple
+      element.
+    - New application-layer regression tests in
+      `test_assess_corporate_action_event_risk_use_case.py`
+      (`TestAsOfFetchedAtTemporalLeakageGuard`, 3 tests): an event with
+      `event_date` inside the lookahead window but `fetched_at` after
+      `as_of_fetched_at` is excluded from the use case's own output (not
+      just the repository call); a row fetched before decision time is
+      included; omitting `as_of_fetched_at` preserves the prior unfiltered
+      behavior for live callers.
+    - No signal scoring/tuning/observation/label change — corporate action
+      risk remains context/diagnostics-only, never consumed by SignalEngine/
+      RiskEngine/TradeSetup (unchanged, still enforced by this file's
+      existing AST-based source-inspection test).
+    - Verification: `test_assess_corporate_action_event_risk_use_case.py` —
+      17 passed (13 pre-existing + 3 new + 1 unchanged AST guard); `pytest -k
+      swing` — 488 passed (was 486 before this fix surfaced 2 failures from
+      the two fakes, now fixed); full suite — 4625 passed; `python -m
+      py_compile` on all changed files; `git diff --check` clean.
+  - **Not covered / explicitly out of scope for this slice:**
+    - No sweep of every call site across the codebase for every source
+      family — only the consumer(s)/reader(s) named above were exercised.
+    - `get_recent_snapshots()` on `MarketContextEngine` (the
+      `market_context_snapshots` analog of `_compute_stability`'s
+      `get_recent()` use) has no caller anywhere in `src/` (confirmed via
+      grep) and is not exercised here — there is no live leakage path to
+      prove or disprove for it today.
+    - No planted-row test against the live `data/db/data.db` production
+      database — all tests use `tmp_path` SQLite databases only, per this
+      task's explicit "do not mutate `data/db/data.db`" instruction.
+  - Files changed: `src/application/ports/corporate_action_calendar_repository.py`,
+    `src/infrastructure/persistence/sqlite_corporate_action_calendar_repository.py`
+    (both additive/optional-parameter only — no behavior change for
+    existing callers). New test files:
+    `tests/infrastructure/persistence/test_market_broker_source_temporal_leakage.py` (11),
+    `tests/infrastructure/persistence/test_enrichment_source_temporal_leakage.py` (9),
+    `tests/infrastructure/persistence/test_corporate_action_source_temporal_leakage.py` (6),
+    `tests/application/services/test_context_regime_sentiment_temporal_leakage.py` (7).
+  - No signal scoring change, no tuning, no observation/label regeneration,
+    no live DB mutation.
+  - Verification: new focused suite (33 tests across the 4 new files) plus
+    DQ-002F's `test_assess_source_availability_use_case.py` (20) and
+    `test_effective_market_session_resolver.py` (14) — 67 passed; focused
+    corporate-action-calendar tests (`test_sqlite_corporate_action_calendar_repository.py`,
+    `test_sqlite_corporate_action_calendar_repository_queries.py`,
+    `test_assess_corporate_action_event_risk_use_case.py`,
+    `test_sync_corporate_action_calendar_use_case.py`,
+    `test_fetch_calendar_commands.py`,
+    `tests/adapters/cli/test_analyze_swing_workflow_factory_split.py`) — 73 passed, confirming
+    the additive port/repository change is fully backward compatible; full
+    suite — 4625 passed; `python -m py_compile` on all changed/added files;
+    `git diff --check` clean.
+
 **Deferred (not started):**
 
 - Provider-settlement cutoffs and any band-specific behavioral difference
@@ -1588,9 +1757,15 @@ Deferred items below).
   `is_eod_pending`, `resolution_source`, `notes`). `freshness_status` is not
   derivable without new policy and remains deferred (DQ-002E did not add it).
 - Temporal-leakage proof across candles/broker/enrichment/labels/market
-  context beyond the resolver's own bounded-cache-lookup guarantee.
+  context beyond the specific consumers/readers DQ-002G exercised (no
+  full call-site sweep across the codebase).
 - Extending persisted provenance (DQ-002E's pattern) to any artifact tables
   beyond `candidate_observations`/`signal_forward_labels`.
+- `as_of_fetched_at` is now wired end-to-end for `saham analyze swing`'s
+  corporate-action event-risk diagnostics (DQ-002G review follow-up above).
+  Other repository methods with the same historical-decision shape
+  (`get_events_for_universe`, or any other enrichment consumer not audited
+  in this task) have not been checked for the same wiring gap.
 
 **Acceptance criteria:**
 
@@ -1616,8 +1791,16 @@ Deferred items below).
       tables — market_context_snapshots, regime_observations, etc. — are not
       yet covered.)
 - [ ] Temporal leakage tests intentionally plant future rows and prove they are excluded.
-      (Proven for the resolver's own IHSG lookup only; not yet proven across
-      candles/broker/enrichment/labels/market-context consumers.)
+      (DQ-002G: proven for the resolver's own IHSG lookup, plus real
+      repository/reader planted-future-row tests for all 13 Phase 2 source
+      families — candles, broker_summaries, broker_daily_flow,
+      foreign_flow_points, foreign_flow_snapshots, analyst_cache,
+      company_fundamentals, seasonality_cache, corporate_action_events,
+      corporate_action_event_dates, market_context_snapshots,
+      regime_observations, sentiment. Still not a full sweep of every call
+      site across the codebase, and not proven against `signal_forward_labels`
+      or the historical backfill/observation pipeline itself (DQ-003/DQ-004
+      territory) — left unchecked for that reason.)
 
 ### DQ-003 — Audit and repair historical candidate-observation backfill
 

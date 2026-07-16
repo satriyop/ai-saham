@@ -288,10 +288,11 @@ class SQLiteCorporateActionCalendarRepository(CorporateActionCalendarRepository)
         from_date: date,
         to_date: date,
         event_types: tuple[CorporateActionType, ...] | None = None,
+        as_of_fetched_at: str | None = None,
     ) -> list[CorporateActionCalendarEvent]:
         query = self._SELECT_JOINED + " AND m.ticker = ? AND m.event_date BETWEEN ? AND ?"
         params: list = [ticker.upper(), from_date.isoformat(), to_date.isoformat()]
-        return self._finish_and_run(query, params, event_types)
+        return self._finish_and_run(query, params, event_types, as_of_fetched_at)
 
     def get_events_for_universe(
         self,
@@ -299,6 +300,7 @@ class SQLiteCorporateActionCalendarRepository(CorporateActionCalendarRepository)
         from_date: date,
         to_date: date,
         event_types: tuple[CorporateActionType, ...] | None = None,
+        as_of_fetched_at: str | None = None,
     ) -> list[CorporateActionCalendarEvent]:
         if not tickers:
             return []
@@ -309,7 +311,7 @@ class SQLiteCorporateActionCalendarRepository(CorporateActionCalendarRepository)
         )
         params: list = [t.upper() for t in tickers]
         params += [from_date.isoformat(), to_date.isoformat()]
-        return self._finish_and_run(query, params, event_types)
+        return self._finish_and_run(query, params, event_types, as_of_fetched_at)
 
     def get_events_by_date_role(
         self,
@@ -317,6 +319,7 @@ class SQLiteCorporateActionCalendarRepository(CorporateActionCalendarRepository)
         to_date: date,
         date_roles: tuple[CorporateActionDateRole, ...],
         event_types: tuple[CorporateActionType, ...] | None = None,
+        as_of_fetched_at: str | None = None,
     ) -> list[CorporateActionCalendarEvent]:
         if not date_roles:
             return []
@@ -327,7 +330,7 @@ class SQLiteCorporateActionCalendarRepository(CorporateActionCalendarRepository)
         )
         params: list = [r.value for r in date_roles]
         params += [from_date.isoformat(), to_date.isoformat()]
-        return self._finish_and_run(query, params, event_types)
+        return self._finish_and_run(query, params, event_types, as_of_fetched_at)
 
     # ── Reconstruction helpers ──────────────────────────────────────────────
 
@@ -336,6 +339,7 @@ class SQLiteCorporateActionCalendarRepository(CorporateActionCalendarRepository)
         query: str,
         params: list,
         event_types: tuple[CorporateActionType, ...] | None,
+        as_of_fetched_at: str | None = None,
     ) -> list[CorporateActionCalendarEvent]:
         # Close the EXISTS subquery, apply the optional event-type filter on the
         # outer event row, then run.
@@ -344,6 +348,16 @@ class SQLiteCorporateActionCalendarRepository(CorporateActionCalendarRepository)
             placeholders = ",".join("?" * len(event_types))
             query += f" AND e.event_type IN ({placeholders})"
             params += [et.value for et in event_types]
+        if as_of_fetched_at is not None:
+            # DQ-002G: exclude events/date-rows synced after the decision
+            # timestamp. `e`/`d` are the outer event/date-row aliases (in
+            # scope here, unlike `m`, which only exists inside the EXISTS
+            # subquery closed above). `save_events()` always writes
+            # `d.fetched_at == e.fetched_at` for a given event, so the two
+            # checks are currently redundant, but both are asserted
+            # explicitly rather than relying on that invariant silently.
+            query += " AND e.fetched_at <= ? AND d.fetched_at <= ?"
+            params += [as_of_fetched_at, as_of_fetched_at]
         with self._get_connection() as conn:
             rows = conn.execute(query, params).fetchall()
         return self._rows_to_events(rows)

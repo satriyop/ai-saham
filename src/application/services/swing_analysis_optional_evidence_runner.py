@@ -116,6 +116,11 @@ class SwingAnalysisOptionalEvidenceRunner:
         request: swing_analysis_dto.SwingAnalysisWorkflowRequest,
         state: SwingAnalysisWorkflowState,
     ) -> SwingAnalysisWorkflowState:
+        as_of_fetched_at = (
+            state.effective_session.decision_at.isoformat()
+            if state.effective_session is not None
+            else None
+        )
         evidence_build = self._evidence_builder.build(
             ticker=request.ticker,
             snapshot_date=request.today,
@@ -126,6 +131,7 @@ class SwingAnalysisOptionalEvidenceRunner:
             setup_name=request.setup_name,
             strategy_name=request.strategy_name,
             swing_config=state.swing_config,
+            as_of_fetched_at=as_of_fetched_at,
         )
         state.warnings.extend(evidence_build.warnings)
 

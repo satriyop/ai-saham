@@ -15,6 +15,9 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from src.application.dto.assess_signal import AssessSignalResponse
     from src.application.dto.swing_analysis import SwingDiagnostics, SwingEvidence, SwingVerdict
+    from src.application.services.effective_market_session_resolver import (
+        EffectiveMarketSession,
+    )
     from src.application.services.position_sizer import PercentSizingResult, SizingResult
     from src.domain.rules.risk_gate import GateContext
     from src.domain.value_objects.market_context import MarketContext
@@ -33,6 +36,7 @@ class SwingAnalysisWorkflowState:
     candles: list[Any] = field(default_factory=list)
     latest_close: Decimal | None = None
     accumulation_candidate: Any | None = None
+    effective_session: "EffectiveMarketSession | None" = None
     market_regime: "MarketContext | None" = None
     gate_ctx: "GateContext | None" = None
     risk_response: Any | None = None

@@ -48,10 +48,12 @@ class FakeCorporateActionCalendarRepository:
 
     def __init__(self, events: list[CorporateActionCalendarEvent]) -> None:
         self._events = events
-        self.calls: list[tuple[str, date, date]] = []
+        self.calls: list[tuple[str, date, date, str | None]] = []
 
-    def get_events_for_ticker(self, ticker, from_date, to_date, event_types=None):
-        self.calls.append((ticker, from_date, to_date))
+    def get_events_for_ticker(self, ticker, from_date, to_date, event_types=None, as_of_fetched_at=None):
+        self.calls.append((ticker, from_date, to_date, as_of_fetched_at))
+        if as_of_fetched_at is not None:
+            return [e for e in self._events if e.fetched_at <= as_of_fetched_at]
         return self._events
 
 
@@ -379,8 +381,9 @@ def test_repository_queried_with_max_configured_window_from_real_policy():
     use_case.execute(AssessCorporateActionEventRiskRequest(ticker="bbca", as_of_date=as_of))
 
     assert len(repo.calls) == 1
-    called_ticker, called_from, called_to = repo.calls[0]
+    called_ticker, called_from, called_to, called_as_of_fetched_at = repo.calls[0]
     assert called_ticker == "BBCA"  # uppercased
+    assert called_as_of_fetched_at is None
     expected_from = as_of - timedelta(days=cfg.max_lookback_days())
     expected_to = as_of + timedelta(days=cfg.max_lookahead_days())
     assert called_from == expected_from
@@ -403,7 +406,7 @@ def test_lookback_and_lookahead_overrides_change_queried_window():
     )
 
     assert len(repo.calls) == 1
-    _, called_from, called_to = repo.calls[0]
+    _, called_from, called_to, _ = repo.calls[0]
     assert called_from == as_of - timedelta(days=1)
     assert called_to == as_of + timedelta(days=2)
 
@@ -449,3 +452,86 @@ def test_no_signal_engine_risk_engine_or_trade_setup_reference_in_source():
         f"assess_corporate_action_event_risk_use_case.py must not reference "
         f"{found} in executable code (context/diagnostics only, ADR-026/032/033)"
     )
+
+
+class TestAsOfFetchedAtTemporalLeakageGuard:
+    """DQ-002G application-layer regression: the use case itself — not just
+    the repository — must exclude a calendar event synced after the
+    decision timestamp, for a historical `as_of_date`."""
+
+    def test_event_fetched_after_decision_timestamp_is_excluded(self):
+        decision_at = "2026-07-16T16:00:00"
+        # Built directly (not via `_dividend_event`) to control fetched_at precisely.
+        future_sync = CorporateActionCalendarEvent(
+            event_type=CorporateActionType.DIVIDEND,
+            source_event_id="future-sync",
+            ticker="BBCA",
+            dates=(
+                CorporateActionCalendarDate(
+                    date_role=CorporateActionDateRole.EX_DATE, event_date=date(2026, 7, 20)
+                ),
+            ),
+            fetched_at="2026-07-17T09:00:00",  # synced AFTER decision_at
+        )
+        repo = FakeCorporateActionCalendarRepository([future_sync])
+        use_case = AssessCorporateActionEventRiskUseCase(repository=repo, policy=_default_policy())
+
+        response = use_case.execute(
+            AssessCorporateActionEventRiskRequest(
+                ticker="BBCA",
+                as_of_date=date(2026, 7, 16),
+                as_of_fetched_at=decision_at,
+            )
+        )
+
+        assert response.assessment.events == ()
+        assert response.assessment.severity == CorporateActionEventRiskSeverity.NONE
+
+    def test_event_fetched_before_decision_timestamp_is_included(self):
+        decision_at = "2026-07-16T16:00:00"
+        known = CorporateActionCalendarEvent(
+            event_type=CorporateActionType.DIVIDEND,
+            source_event_id="known",
+            ticker="BBCA",
+            dates=(
+                CorporateActionCalendarDate(
+                    date_role=CorporateActionDateRole.EX_DATE, event_date=date(2026, 7, 20)
+                ),
+            ),
+            fetched_at="2026-07-16T10:00:00",  # synced before decision_at
+        )
+        repo = FakeCorporateActionCalendarRepository([known])
+        use_case = AssessCorporateActionEventRiskUseCase(repository=repo, policy=_default_policy())
+
+        response = use_case.execute(
+            AssessCorporateActionEventRiskRequest(
+                ticker="BBCA",
+                as_of_date=date(2026, 7, 16),
+                as_of_fetched_at=decision_at,
+            )
+        )
+
+        assert len(response.assessment.events) == 1
+
+    def test_as_of_fetched_at_none_preserves_prior_unfiltered_behavior(self):
+        """Default (live callers, no historical decision timestamp): the
+        future-synced row is still returned, matching pre-DQ-002G behavior."""
+        future_sync = CorporateActionCalendarEvent(
+            event_type=CorporateActionType.DIVIDEND,
+            source_event_id="future-sync",
+            ticker="BBCA",
+            dates=(
+                CorporateActionCalendarDate(
+                    date_role=CorporateActionDateRole.EX_DATE, event_date=date(2026, 7, 20)
+                ),
+            ),
+            fetched_at="2026-07-17T09:00:00",
+        )
+        repo = FakeCorporateActionCalendarRepository([future_sync])
+        use_case = AssessCorporateActionEventRiskUseCase(repository=repo, policy=_default_policy())
+
+        response = use_case.execute(
+            AssessCorporateActionEventRiskRequest(ticker="BBCA", as_of_date=date(2026, 7, 16))
+        )
+
+        assert len(response.assessment.events) == 1

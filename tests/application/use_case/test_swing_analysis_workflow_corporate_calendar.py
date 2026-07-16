@@ -71,7 +71,7 @@ class FakeCalendarRepositoryWithDividend:
     fake (from_date/to_date span the full max_lookahead_days=30, but the
     use case's per-role window check still applies afterwards)."""
 
-    def get_events_for_ticker(self, ticker, from_date, to_date, event_types=None):
+    def get_events_for_ticker(self, ticker, from_date, to_date, event_types=None, as_of_fetched_at=None):
         # request.today is 2026-07-13 in this test file's _request() default.
         ex_date = date(2026, 7, 15)
         return [
@@ -90,7 +90,7 @@ class FakeCalendarRepositoryWithDividend:
 
 
 class FakeCalendarRepositoryRaising:
-    def get_events_for_ticker(self, ticker, from_date, to_date, event_types=None):
+    def get_events_for_ticker(self, ticker, from_date, to_date, event_types=None, as_of_fetched_at=None):
         raise RuntimeError("calendar backend unavailable")
 
 

@@ -33,6 +33,17 @@ class AssessCorporateActionEventRiskRequest:
     as_of_date: date
     lookback_days_override: int | None = None
     lookahead_days_override: int | None = None
+    as_of_fetched_at: str | None = None
+    """DQ-002G point-in-time guard: ISO timestamp of the decision moment.
+
+    When given, excludes calendar events/date-rows synced (`fetched_at`)
+    after this timestamp — without it, a historical `as_of_date` can still
+    see a corporate-action row that was not yet known/synced at that
+    decision point, since `event_date` alone (which this event-risk window
+    is built from) can legitimately be in the future. `None` (default)
+    preserves prior unfiltered behavior for live callers, where
+    `fetched_at` is naturally always <= "now" already.
+    """
 
 
 @dataclass(frozen=True)
@@ -67,7 +78,9 @@ class AssessCorporateActionEventRiskUseCase:
         query_from = as_of - timedelta(days=lookback)
         query_to = as_of + timedelta(days=lookahead)
 
-        calendar_events = self._repository.get_events_for_ticker(ticker, query_from, query_to)
+        calendar_events = self._repository.get_events_for_ticker(
+            ticker, query_from, query_to, as_of_fetched_at=request.as_of_fetched_at
+        )
 
         matched: list[CorporateActionRiskEvent] = []
         for event in calendar_events:

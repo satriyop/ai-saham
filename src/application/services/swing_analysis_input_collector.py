@@ -156,5 +156,6 @@ class SwingAnalysisInputCollector:
             candles=candles,
             latest_close=latest_close,
             accumulation_candidate=accumulation_candidate,
+            effective_session=effective_session,
             market_regime=market_regime,
         )

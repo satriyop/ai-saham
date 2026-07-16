@@ -61,8 +61,16 @@ class CorporateActionCalendarRepository(ABC):
         from_date: date,
         to_date: date,
         event_types: tuple[CorporateActionType, ...] | None = None,
+        as_of_fetched_at: str | None = None,
     ) -> list[CorporateActionCalendarEvent]:
-        """Return events for a single ticker with any date in [from_date, to_date]."""
+        """Return events for a single ticker with any date in [from_date, to_date].
+
+        `as_of_fetched_at` (ISO timestamp), when given, excludes events whose
+        `fetched_at` is after it — DQ-002G point-in-time guard so a historical
+        decision cannot see a calendar event that was not yet known/synced at
+        that decision time. `None` (default) preserves prior unfiltered
+        behavior for existing live/diagnostic callers.
+        """
         ...
 
     @abstractmethod
@@ -72,8 +80,12 @@ class CorporateActionCalendarRepository(ABC):
         from_date: date,
         to_date: date,
         event_types: tuple[CorporateActionType, ...] | None = None,
+        as_of_fetched_at: str | None = None,
     ) -> list[CorporateActionCalendarEvent]:
-        """Return events for a set of tickers with any date in [from_date, to_date]."""
+        """Return events for a set of tickers with any date in [from_date, to_date].
+
+        See `get_events_for_ticker` for `as_of_fetched_at` semantics.
+        """
         ...
 
     @abstractmethod
@@ -83,7 +95,11 @@ class CorporateActionCalendarRepository(ABC):
         to_date: date,
         date_roles: tuple[CorporateActionDateRole, ...],
         event_types: tuple[CorporateActionType, ...] | None = None,
+        as_of_fetched_at: str | None = None,
     ) -> list[CorporateActionCalendarEvent]:
         """Return market-wide events having a date row whose role is in
-        `date_roles` and whose date is in [from_date, to_date]."""
+        `date_roles` and whose date is in [from_date, to_date].
+
+        See `get_events_for_ticker` for `as_of_fetched_at` semantics.
+        """
         ...
