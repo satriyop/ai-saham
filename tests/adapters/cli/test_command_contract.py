@@ -42,6 +42,7 @@ EXPECTED_COMMANDS: dict[tuple[str, ...], tuple[str, ...]] = {
         "repair-seasonality-cache",
         "candidate-observation-identity",
         "repair-candidate-observations",
+        "repair-signal-forward-labels",
     ),
     ("fetch",): (
         "market",

@@ -716,6 +716,7 @@ def test_dq_contract_gate_added_exactly_one_new_command():
         "repair-seasonality-cache",
         "candidate-observation-identity",
         "repair-candidate-observations",
+        "repair-signal-forward-labels",
     }
     assert "reconcile-sources" in result.output
 

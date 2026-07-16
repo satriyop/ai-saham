@@ -850,6 +850,166 @@ is not complete.
     repair_seasonality or contract_gate or audit_data or command_contract"`
     passes (21 new/updated tests); full `pytest` suite passes (4523 passed);
     `git diff --check` clean.
+- **DQ-001K** (2026-07-16): applied DQ-001J (`repair-candidate-observations --apply`)
+  and DQ-001H (`repair-seasonality-cache --apply`) against the live DB
+  (`data/db/data.db`). Full audit commands, before/after counts, and gate state
+  below.
+  - **Commands run:**
+    1. `saham audit data contract-gate --format json` (baseline FAIL)
+    2. `saham audit data repair-candidate-observations --dry-run --format json`
+    3. `saham audit data seasonality-cleanup-plan --format json`
+    4. `saham audit data repair-candidate-observations --apply --format json`
+    5. `saham audit data repair-seasonality-cache --apply --format json`
+    6. `saham audit data source-contracts --format json`
+    7. `saham audit data reconcile-sources --format json`
+    8. `saham audit data contract-gate --format json` (final verification)
+  - **DB repaired:** `data/db/data.db` (630 MB SQLite)
+  - **Backup:** `data/db/backups/data-before-dq-001k-20260716-202055.db`
+    (timestamped copy created before any mutation, verified same sha256 as
+    pre-repair source)
+  - **Candidate observations:**
+    - Before: 19,317 legacy rows (100%, 0 canonical)
+    - After: 0 legacy rows (all quarantined and deleted)
+    - Quarantined: 19,317 / Deleted: 19,317
+    - Repair status: PASS
+  - **Seasonality cache:**
+    - Before: 14 invalid-source rows (null source)
+    - After: 0 invalid-source rows (all quarantined and deleted)
+    - Quarantined: 14 / Deleted: 14
+    - Repair status: PASS
+    - `seasonality-cleanup-plan` post-repair: PASS, invalid_row_count: 0
+  - **Final `contract-gate` status:** FAIL
+    - `source_contract_status`: WARN (no FAIL-level blockers — legacy rows gone,
+      seasonality null-source/required-field FAILs resolved)
+    - `source_reconciliation_status`: FAIL (one remaining FAIL blocker:
+      `SIGNAL_FORWARD_LABELS_ORPHAN_LINKAGE` — 5,760 label rows reference
+      observations that were quarantined with the legacy rows)
+  - **Remaining non-blocking WARN findings** (all `NULLS_IN_OPTIONAL_FIELD` in
+    enrichment/cache tables — analyst_cache, company_fundamentals, bandar_detector,
+    etc.): intentionally untouched per the task scope. These are diagnostic
+    coverage gaps, not gate-blocking.
+  - **`SIGNAL_FORWARD_LABELS_ORPHAN_LINKAGE` note:** this FAIL was introduced by
+    the candidate_observations quarantine (5,760 labels previously linked to the
+    19,317 legacy rows). It is an expected consequence of DQ-001J, not a
+    regression: before the repair, all legacy rows satisfied the linkage check.
+    Fixing the orphan labels requires either (a) regenerating labels against
+    rebuilt canonical observations, or (b) quarantining the orphan labels — both
+    are out of scope for this live-repair task (DQ-001K) per the hard rules "Do
+    not change signal scoring" and "Do not regenerate labels." The DQ-CONTRACT-GATE
+    therefore has **one remaining FAIL blocker** that must be addressed by a later
+    DQ-00x task before DQ-BASELINE-GATE can pass.
+  - **Code changed:** No. This was a deterministic live data repair only.
+    `pytest tests/adapters/cli/test_audit_data_commands.py tests/adapters/cli/test_command_contract.py -q`
+    — 60 passed. `git diff --check` — clean. `git status --short` — clean.
+- **DQ-001L** (2026-07-16): deterministic signal_forward_labels orphan quarantine
+  command `saham audit data repair-signal-forward-labels --db PATH
+  [--dry-run|--apply] [--format json|table]` that transactionally quarantines +
+  deletes orphan `signal_forward_labels` rows that have no matching
+  `candidate_observations` row by `(ticker, snapshot_date=signal_date,
+  captured_at=observation_captured_at)`. Default mode is dry-run; `--apply`
+  mutates the database. `--dry-run` and `--apply` together fail CLI validation.
+  Never deletes without quarantining first. Re-running `--apply` is idempotent.
+  - Orphan identity (the anti-join) matches
+    `source_reconciliation_artifact_evaluator.py`'s
+    `SIGNAL_FORWARD_LABELS_ORPHAN_LINKAGE` check exactly — this command
+    quarantines the rows that the gate reports as FAIL.
+  - Missing `candidate_observations` table → `source_unavailable` FAIL, no
+    mutation (must not fall back to "all labels are orphans"). Missing required
+    join columns (ticker, snapshot_date, captured_at on CO side; ticker,
+    signal_date, observation_captured_at on SFL side) → same
+    `source_unavailable` FAIL. This is not "all labels are orphans."
+  - `RepairSignalForwardLabelsUseCase`
+    (`src/application/use_case/repair_signal_forward_labels_use_case.py`)
+    defines `SignalForwardLabelsRepairReader(Protocol)`,
+    `SignalForwardLabelsRepairer(Protocol)`, and
+    `RepairSignalForwardLabelsResponse` DTO with `to_dict()` matching the full
+    spec contract. Orchestrates: reader → source-unavailable early-return (mode
+    preserved) → no orphans → PASS → dry-run with orphans → FAIL → apply →
+    `repairer.ensure_quarantine_table()` then
+    `repairer.quarantine_and_delete_orphans(repair_run_id)`.
+  - `SQLiteSignalForwardLabelsRepairReader`
+    (`src/infrastructure/persistence/sqlite_signal_forward_labels_repair_reader.py`)
+    is a pure read-only observer using `file:{path}?mode=ro`. Detects missing
+    DB, missing `signal_forward_labels` or `candidate_observations` table,
+    missing join columns via `PRAGMA table_info`. Executes a `LEFT JOIN ...
+    WHERE o.ticker IS NULL` anti-join — zero classification logic.
+  - `SQLiteSignalForwardLabelsRepairer`
+    (`src/infrastructure/persistence/sqlite_signal_forward_labels_repairer.py`)
+    creates `signal_forward_labels_quarantine` (`CREATE TABLE IF NOT EXISTS`,
+    idempotent DDL). `quarantine_and_delete_orphans()` opens one connection,
+    `BEGIN`s a transaction, identifies orphan rows by the same anti-join used
+    by the reader, selects orphan `rowid`s, inserts each into quarantine with
+    full original columns plus `quarantine_reason`, `quarantined_at`,
+    `repair_run_id`, `original_table`, `schema_version`, then deletes each by
+    `rowid`. Checks `cursor.rowcount == 1` after each delete; any mismatch
+    raises `RuntimeError` and triggers `rollback()`. Returns
+    `(quarantined_row_count, deleted_row_count)`.
+  - `repair_run_id`: `str(uuid.uuid4())` — unique per `--apply` invocation,
+    recorded on every quarantine row for traceability.
+  - Quarantine table `signal_forward_labels_quarantine` columns: `quarantine_id`
+    (own `PRIMARY KEY AUTOINCREMENT`), `source_row_id` (SQLite `rowid` of the
+    original row, `NOT NULL UNIQUE`), all columns from `signal_forward_labels`
+    (id, ticker, signal_date, horizon, observation_captured_at,
+    entry_reference_price, label_window_start, label_window_end, close_return,
+    max_forward_return, max_adverse_excursion, days_to_peak, days_to_trough,
+    stop_would_trigger, target_would_trigger, outcome_label, unavailable_reason,
+    fingerprint_json, schema_version, decision_at, latest_completed_session,
+    analysis_as_of, market_session_name, is_eod_pending, resolution_source,
+    resolution_notes_json, created_at, updated_at),
+    `quarantine_reason` (TEXT DEFAULT `'ORPHAN_CANDIDATE_OBSERVATION'`),
+    `quarantined_at` (TEXT), `repair_run_id` (TEXT), `original_table` (TEXT
+    DEFAULT `'signal_forward_labels'`), `quarantine_schema_version` (INTEGER
+    DEFAULT 1).
+  - CLI: `src/adapters/cli/audit_commands.py` registers
+    `repair-signal-forward-labels` under `saham audit data`. Default
+    `--format json`. `--dry-run`/`--apply` mutual exclusion enforced via
+    `typer.BadParameter`. Table format prints mode, status, total/orphan/
+    canonical/quarantined/deleted counts, date range, and findings.
+  - Tests: application-layer use case tests (11) covering dry-run (reports
+    orphans, does not call repairer, default mode is dry-run), apply (calls
+    repairer, success → PASS), idempotent second apply, missing source (DB
+    missing, table missing → \`source_unavailable\`, no mutation, mode
+    preserved), no orphans (PASS), missing join columns → source_unavailable,
+    and full response DTO shape.     Infrastructure tests (11) covering quarantine
+    table creation/idempotent, orphan-only move (preserves non-orphan rows),
+    idempotent second apply, rollback on mid-transaction failure, applies to
+    schema without `id` column (uses `rowid` instead — same pattern as
+    DQ-001J). Infrastructure reader tests (11) covering missing DB, missing
+    table, missing candidate_observations, missing join columns, orphan/canonical
+    counts, date range, no orphans, read-only mode, and no mutation. CLI tests
+    (12) covering command registration, default is dry-run,
+    `--dry-run` JSON exits 0/no mutation, `--apply` JSON mutates/exits 0,
+    second apply idempotent, `--dry-run` + `--apply` together fails, invalid
+    `--format` fails, missing DB exits 0 with FAIL, missing CO table exits 0
+    with FAIL, table format shows counts. `test_command_contract.py` and
+    `test_audit_data_commands.py`'s command-listing test updated for the new
+    command.
+  - Does **not** close `DQ-CONTRACT-GATE` and does **not** mark DQ-001
+    complete: this command quarantines orphan labels when explicitly applied, it
+    does not regenerate labels or observations.
+  - **Applied live** (2026-07-16) after DQ-001K quarantine of legacy
+    `candidate_observations` left all 5,760 `signal_forward_labels` rows
+    orphaned (CO table empty):
+    1. **Backup:** `data/db/backups/data-before-dq-001l-20260716-204057.db`
+       (602 MB, timestamped copy before any mutation)
+    2. **Dry-run:** `status: FAIL`, `orphan_row_count: 5760`,
+       `canonical_row_count: 0` (all rows orphaned — confirmed by manual SQL
+       that `candidate_observations` had 0 rows post-DQ-001K)
+    3. **Apply:** `status: PASS`, `orphan_row_count: 5760`,
+       `quarantined_row_count: 5760`, `deleted_row_count: 5760`
+    4. **Verify idempotent:** re-run dry-run → `orphan_row_count: 0`,
+       `status: PASS`, `total_row_count: 0`;
+       `SELECT COUNT(*) FROM signal_forward_labels` = 0;
+       `signal_forward_labels_quarantine` = 5,760
+    5. **Contract-gate:** `source_reconciliation_status` improved from
+       ``FAIL`` (before DQ-001L) to `WARN` (after DQ-001L). The only remaining
+       FAIL blocker `SIGNAL_FORWARD_LABELS_ORPHAN_LINKAGE` is resolved. All
+       remaining blockers are `NULLS_IN_OPTIONAL_FIELD` WARNs (enrichment cache
+       coverage gaps). Overall gate status remains `FAIL` because the gate is
+       fail-closed — both `source_contract_status` and
+       `source_reconciliation_status` are `WARN`, and `PASS` requires both.
+    6. **code changed:** Yes (DQ-001L source and tests). `pytest` focused suite
+       — 94 passed. `python -m py_compile` — clean.
 - DQ-001 acceptance criteria below are **not** marked complete — DQ-001A/C/E
   now give field contracts for 20 tables (5 core + 13 enrichment + 2
   market-context) and DQ-001B/D/E give executable reconciliation for

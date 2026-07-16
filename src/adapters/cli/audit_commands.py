@@ -7,7 +7,8 @@ Public command registration lives in lifecycle routers:
   saham audit data contract-gate
   saham audit data seasonality-cleanup-plan
   saham audit data candidate-observation-identity
-  saham audit data repair-candidate-observations
+   saham audit data repair-candidate-observations
+   saham audit data repair-signal-forward-labels
 Layer: Adapter
 """
 
@@ -54,6 +55,10 @@ from src.application.use_case.repair_candidate_observations_use_case import (
     RepairCandidateObservationsResponse,
     RepairCandidateObservationsUseCase,
 )
+from src.application.use_case.repair_signal_forward_labels_use_case import (
+    RepairSignalForwardLabelsResponse,
+    RepairSignalForwardLabelsUseCase,
+)
 from src.infrastructure.persistence.sqlite_seasonality_cache_repairer import (
     SQLiteSeasonalityCacheRepairer,
 )
@@ -62,6 +67,12 @@ from src.infrastructure.persistence.sqlite_candidate_observations_repair_reader 
 )
 from src.infrastructure.persistence.sqlite_candidate_observations_repairer import (
     SQLiteCandidateObservationsRepairer,
+)
+from src.infrastructure.persistence.sqlite_signal_forward_labels_repair_reader import (
+    SQLiteSignalForwardLabelsRepairReader,
+)
+from src.infrastructure.persistence.sqlite_signal_forward_labels_repairer import (
+    SQLiteSignalForwardLabelsRepairer,
 )
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.audit_config_identity_reader import (
@@ -336,6 +347,57 @@ def repair_candidate_observations(
     )
 
 
+def repair_signal_forward_labels(
+    db_path: Annotated[
+        Optional[Path],
+        typer.Option("--db", help="SQLite database path"),
+    ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Dry-run mode: report only, no mutation."),
+    ] = False,
+    apply: Annotated[
+        bool,
+        typer.Option("--apply", help="Apply mode: quarantine and delete orphan rows."),
+    ] = False,
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format: table or json."),
+    ] = "json",
+) -> None:
+    """
+    Repair orphan signal_forward_labels rows by quarantining them (DQ-001L).
+
+    Orphan = a signal_forward_labels row whose (ticker, signal_date,
+    observation_captured_at) has no matching (ticker, snapshot_date,
+    captured_at) row in candidate_observations.
+
+    If candidate_observations is missing or lacks the required join
+    columns, no mutation is performed — a missing other side is not
+    proof of orphanhood.
+
+    Default is dry-run: reports orphan rows without mutating the
+    database.  Use --apply to quarantine and delete them in one
+    transaction.
+
+    Never deletes rows without quarantining them first.  The quarantine
+    table preserves the full original row plus reason, repair_run_id,
+    and a timestamp.
+    """
+    if dry_run and apply:
+        raise typer.BadParameter(
+            "Cannot use both --dry-run and --apply. "
+            "Default (no flag) is dry-run."
+        )
+    if output_format not in _VALID_FORMATS:
+        raise typer.BadParameter(
+            f"--format must be one of {_VALID_FORMATS}, got '{output_format}'."
+        )
+    _run_repair_signal_forward_labels(
+        db_path=db_path, apply=apply, output_format=output_format
+    )
+
+
 data_app.command("manifest")(manifest)
 data_app.command("source-contracts")(source_contracts)
 data_app.command("reconcile-sources")(reconcile_sources)
@@ -344,6 +406,7 @@ data_app.command("seasonality-cleanup-plan")(seasonality_cleanup_plan)
 data_app.command("repair-seasonality-cache")(repair_seasonality_cache)
 data_app.command("candidate-observation-identity")(candidate_observation_identity)
 data_app.command("repair-candidate-observations")(repair_candidate_observations)
+data_app.command("repair-signal-forward-labels")(repair_signal_forward_labels)
 audit_app.add_typer(data_app, name="data")
 
 
@@ -1021,6 +1084,109 @@ def _print_repair_candidate_observations_table(
             f"{response.latest_snapshot_date} "
             f"({response.latest_snapshot_legacy_rows} legacy, "
             f"{response.latest_snapshot_canonical_rows} canonical)",
+        )
+    console.print(summary)
+
+    if response.findings:
+        console.print("")
+        console.print("[bold]Findings[/bold]")
+        for finding in response.findings:
+            fcolor = {"FAIL": "red", "WARN": "yellow", "INFO": "cyan"}.get(
+                finding.get("severity", ""), "white"
+            )
+            console.print(
+                f"  [bold {fcolor}][{finding['severity']}][/bold {fcolor}] "
+                f"[bold]{finding['code']}[/bold]"
+            )
+            if finding.get("message"):
+                console.print(f"    {finding['message']}")
+
+    if response.dry_run and response.source_available:
+        console.print("")
+        console.print("[yellow]⚠ Dry-run: no mutation performed.[/yellow]")
+    console.print("")
+
+
+def _run_repair_signal_forward_labels(
+    db_path: Path | None,
+    apply: bool,
+    output_format: str,
+) -> None:
+    cfg = load_app_config()
+    resolved_db = db_path or Path(cfg.storage.db_path)
+
+    use_case = RepairSignalForwardLabelsUseCase(
+        reader=SQLiteSignalForwardLabelsRepairReader(resolved_db),
+        repairer=SQLiteSignalForwardLabelsRepairer(resolved_db),
+    )
+    response = use_case.execute(apply=apply)
+
+    if output_format == "json":
+        typer.echo(json.dumps(response.to_dict(), indent=2, ensure_ascii=False))
+        return
+
+    _print_repair_signal_forward_labels_table(response)
+
+
+def _print_repair_signal_forward_labels_table(
+    response: RepairSignalForwardLabelsResponse,
+) -> None:
+    console = Console()
+    mode_color = {"DRY_RUN": "yellow", "APPLY": "red" if response.status == "FAIL" else "green"}
+    color = {"PASS": "green", "FAIL": "red"}.get(response.status, "white")
+
+    console.print("")
+    status_text = Text()
+    status_text.append("Mode: ", style="bold")
+    status_text.append(response.mode, style=f"bold {mode_color.get(response.mode, 'white')}")
+    status_text.append("  |  Status: ", style="bold")
+    status_text.append(response.status, style=f"bold {color}")
+    status_text.append(f"  |  Orphan rows: {response.orphan_row_count}")
+    if response.dry_run:
+        status_text.append("  |  Dry run — no mutation performed", style="dim")
+    panel = Panel(
+        status_text,
+        title="[bold]Signal Forward Labels Repair (DQ-001L)[/bold]",
+        border_style=color,
+        expand=False,
+    )
+    console.print(panel)
+
+    if not response.source_available:
+        console.print("")
+        reason_message = {
+            "DATABASE_MISSING": "the SQLite database file could not be found",
+            "SIGNAL_FORWARD_LABELS_TABLE_MISSING": (
+                "the database exists but has no signal_forward_labels table"
+            ),
+            "CANDIDATE_OBSERVATIONS_TABLE_MISSING": (
+                "the database exists but has no candidate_observations table"
+            ),
+            "REQUIRED_LINKAGE_COLUMNS_MISSING": (
+                "one or both tables lack required join columns"
+            ),
+        }.get(response.source_unavailable_reason or "", "the source is unavailable")
+        console.print(
+            f"[bold red]⚠ signal_forward_labels repair is unavailable[/bold red] "
+            f"([{response.source_unavailable_reason}]) — {reason_message}. "
+            "Check --db before trusting this report."
+        )
+        console.print("")
+        return
+
+    console.print("")
+    summary = Table(show_header=True, header_style="bold magenta")
+    summary.add_column("Measure", style="cyan")
+    summary.add_column("Value", justify="right")
+    summary.add_row("Total rows", f"{response.total_row_count:,}")
+    summary.add_row("Orphan rows", f"{response.orphan_row_count:,}")
+    summary.add_row("Canonical rows", f"{response.canonical_row_count:,}")
+    summary.add_row("Quarantined rows", f"{response.quarantined_row_count:,}")
+    summary.add_row("Deleted rows", f"{response.deleted_row_count:,}")
+    if response.signal_date_min:
+        summary.add_row(
+            "Signal date range",
+            f"{response.signal_date_min} to {response.signal_date_max}",
         )
     console.print(summary)
 
