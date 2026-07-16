@@ -36,6 +36,9 @@ from src.adapters.cli.stock_analysis_workflow_dependencies import (
     create_stock_analysis_workflow_dependencies,
 )
 from src.application.dto.swing_config import SwingConfig
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSessionResolver,
+)
 from src.application.services.swing_broker_detail_builder import (
     build_broker_quality_note,
     build_flow_detail,
@@ -123,4 +126,5 @@ def create_swing_analysis_workflow(
         company_quality_context_builder_factory=(
             deps.company_quality_context_builder_factory
         ),
+        session_resolver=EffectiveMarketSessionResolver(deps.market_repository),
     )

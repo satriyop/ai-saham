@@ -702,12 +702,88 @@ session resolver exists; DQ-002 as a whole is not complete.
     `test_screen_accum_display.py`, `test_screen_accum_command_json_and_
     save.py`) passes; `git diff --check` clean.
 
-**Deferred to DQ-002C (not started):**
+- **DQ-002C** (2026-07-16): `saham analyze swing` freshness now consumes
+  `EffectiveMarketSession` instead of the weekday-only helpers it owned
+  before.
+  - `swing_data_freshness.py`: `expected_weekday_data_date()` and
+    `weekday_session_lag()` are **deleted** (no remaining callers anywhere
+    in `src/` or `tests/` after this slice — verified by grep before and
+    after). `build_swing_data_freshness()`'s signature changed from
+    `as_of_date: date` to a required `effective_session:
+    EffectiveMarketSession`; `expected_date =
+    effective_session.latest_completed_session` drives the
+    stale/not-stale decision directly (stale only when a source date is
+    strictly earlier than `expected_date`; equal, newer, or
+    `expected_date is None` never warn stale). The old
+    "N trading session(s) before expected data date" wording (which
+    depended on `weekday_session_lag()`'s count) is replaced by
+    `"Latest {candle|broker flow} ({date}) is stale versus expected data
+    date ({expected})."` — the session count is no longer computable
+    without a full IDX calendar, so it was dropped rather than
+    reintroduced via a new weekday approximation. A missing
+    `latest_completed_session` produces one explicit "Expected data date
+    is unknown because the effective market session could not resolve a
+    latest completed session" warning (not a per-source duplicate, not a
+    weekday fallback). `SwingDataFreshness.as_of_date` is now
+    `effective_session.analysis_as_of or
+    effective_session.latest_completed_session or
+    effective_session.decision_at.date()` — the dataclass shape and
+    `to_dict()` output keys are unchanged.
+  - `SwingAnalysisInputCollector.collect()` (called once per workflow
+    `execute()`, and `saham analyze swing` only ever analyzes one ticker
+    per request, so this is inherently once-per-execution, not
+    per-ticker) resolves one `EffectiveMarketSession` and passes it to
+    `build_data_freshness`. `request.today` doubles as the analog of an
+    explicit as-of date (tests/backtests pass a fixed historical date; the
+    live CLI path always passes real `date.today()` since `analyze swing`
+    has no separate `--date` flag). The collector distinguishes the two by
+    comparing `request.today` against `date.today()`: equal → real WIB
+    wall-clock time-of-day (so pre-open/regular/pre-closing/after-close
+    classify correctly); different → deterministic `MARKET_CLOSE` WIB
+    decision timestamp on `request.today`, same historical-decision
+    convention as DQ-002B's `DailyBriefingUseCase`.
+  - `SwingAnalysisWorkflowUseCase` and `SwingAnalysisInputCollector` both
+    gained an optional `session_resolver: EffectiveMarketSessionResolver |
+    None` constructor param (default: build one from the injected
+    `market_repository`, same pattern as DQ-002B).
+    `analyze_swing_workflow_factory.create_swing_analysis_workflow()` now
+    explicitly injects `EffectiveMarketSessionResolver(deps.
+    market_repository)` rather than relying on the implicit default, per
+    the instruction that resolver construction belongs in factory/wiring
+    code.
+  - Only the swing-analysis freshness path changed — `screen accum` and
+    `today` (handled in DQ-002B) were not touched again; no CLI flags were
+    renamed; no scoring/SignalEngine/risk/setup-verdict/persistence-schema/
+    migration/label-generation change.
+  - Tests: `test_swing_data_freshness.py` fully rewritten (11 tests, all
+    built around a fixture `EffectiveMarketSession` builder, no weekday
+    arithmetic asserted anywhere) covering weekend/holiday-like
+    (pre-resolved Thursday), before-close/`is_eod_pending`, after-close
+    stale, unknown-session (no fallback), mismatch, refresh-ERR,
+    missing-candle, newer-than-expected, and `as_of_date` derivation
+    (both the `analysis_as_of` path and the `decision_at.date()`
+    fallback). `test_swing_analysis_input_collector.py`'s existing
+    `request.today`-threading test was updated to inject a fake
+    `session_resolver` (its `market_repo` fake predates `get_candles`
+    accepting `end_date`, so it can't serve the real resolver's IHSG
+    lookup — this is exactly the "use a fake resolver where practical"
+    case). All pre-existing swing-workflow test files (`test_swing_
+    analysis_workflow_core.py`, `_refresh.py`, `_optional_evidence.py`,
+    `_market_context.py`, `_corporate_calendar.py`, `_refactor.py`) needed
+    no changes — their shared `FakeMarketRepository` fixture already
+    implements `get_candles(ticker, start_date=None, end_date=None)`,
+    which the default resolver's bounded IHSG lookup can call safely.
+  - Verification: `python -m py_compile` on all changed files; full
+    required focused-test list passes (11 + 14 + 23 workflow tests across
+    6 files + 5 CLI tests); broader sweep `pytest -k swing` — 488 passed;
+    `git diff --check` clean.
 
-- Wiring the resolver into `swing_data_freshness.py` and
-  `market_freshness_service.py` (or retiring their independent logic in
-  favor of the resolver) — explicitly out of scope for DQ-002B per its hard
-  boundary.
+**Deferred to DQ-002D (not started):**
+
+- Wiring the resolver into `market_freshness_service.py` (or retiring its
+  independent cache-tolerance logic in favor of the resolver) — the one
+  remaining freshness-adjacent service not yet routed through
+  `EffectiveMarketSession`.
 - Provider-settlement cutoffs and any band-specific behavioral difference
   between `BEFORE_OPEN`/`PRE_OPEN`/`REGULAR`/`PRE_CLOSING` beyond the label
   (all four currently resolve `latest_completed_session`/`is_eod_pending`
@@ -724,16 +800,17 @@ session resolver exists; DQ-002 as a whole is not complete.
 **Acceptance criteria:**
 
 - [ ] One application-layer session service is used by all audited workflows.
-      (Resolver is used by `DailyBriefingUseCase` and
-      `RunAccumulationScreenWorkflowUseCase`/screen-accum projectors; not
-      yet used by `swing_data_freshness.py` or `market_freshness_service.py`
-      — DQ-002C. `data_freshness_service.py` itself now owns no time
-      arithmetic and is a pure function of an injected
-      `EffectiveMarketSession`.)
+      (Resolver is used by `DailyBriefingUseCase`,
+      `RunAccumulationScreenWorkflowUseCase`/screen-accum projectors, and
+      `SwingAnalysisWorkflowUseCase`/`swing_data_freshness.py`; not yet used
+      by `market_freshness_service.py` — DQ-002D. `data_freshness_service.py`
+      and `swing_data_freshness.py` both now own no time arithmetic and are
+      pure functions of an injected `EffectiveMarketSession`.)
 - [ ] Weekend, holiday, pre-open, intraday, post-close, and late-provider tests pass.
       (Weekend/holiday/pre-open/intraday/post-close covered by the resolver
-      and its tests; provider-settlement/late-provider cutoffs not yet
-      modeled.)
+      and its tests, and now by swing freshness's own tests reusing the
+      same fixture pattern; provider-settlement/late-provider cutoffs not
+      yet modeled.)
 - [ ] Every persisted artifact distinguishes execution time from effective market session.
       (Not started — no persistence changes in this slice.)
 - [ ] Temporal leakage tests intentionally plant future rows and prove they are excluded.

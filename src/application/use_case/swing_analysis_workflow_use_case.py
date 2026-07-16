@@ -33,6 +33,9 @@ if TYPE_CHECKING:
     )
     from src.domain.value_objects.market_context import MarketContext
 
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSessionResolver,
+)
 from src.application.services.flow_confirmation_evidence_builder import (
     FlowConfirmationEvidenceBuilder,
 )
@@ -105,6 +108,7 @@ class SwingAnalysisWorkflowUseCase:
         company_quality_context_builder_factory: (
             Callable[[], CompanyQualityContextEvidenceBuilder] | None
         ) = None,
+        session_resolver: EffectiveMarketSessionResolver | None = None,
     ) -> None:
         self._market_repo = market_repository
         self._broker_repo = broker_repository
@@ -163,6 +167,8 @@ class SwingAnalysisWorkflowUseCase:
             build_broker_detail=build_broker_detail,
             build_accumulation_candidate=build_accumulation_candidate,
             evaluate_market_context=evaluate_market_context,
+            session_resolver=session_resolver
+            or EffectiveMarketSessionResolver(market_repository),
         )
         self._decision_composer = SwingAnalysisDecisionComposer(
             risk_trade_setup_composer=self._risk_trade_setup_composer,

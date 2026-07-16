@@ -10,12 +10,17 @@ orchestration only.
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import date, datetime
 from typing import TYPE_CHECKING, Any
 
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSessionResolver,
+)
 from src.application.services.swing_analysis_workflow_state import (
     SwingAnalysisWorkflowState,
 )
 from src.domain.value_objects.benchmark_symbol import canonicalize_ticker
+from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
 
 if TYPE_CHECKING:
     from src.application.dto import swing_analysis as swing_analysis_dto
@@ -45,6 +50,7 @@ class SwingAnalysisInputCollector:
         build_broker_detail: Callable[..., Any],
         build_accumulation_candidate: Callable[..., Any | None],
         evaluate_market_context: Callable[..., "MarketContext"] | None,
+        session_resolver: EffectiveMarketSessionResolver | None = None,
     ) -> None:
         self._market_repo = market_repository
         self._broker_repo = broker_repository
@@ -54,6 +60,9 @@ class SwingAnalysisInputCollector:
         self._build_broker_detail = build_broker_detail
         self._build_accumulation_candidate = build_accumulation_candidate
         self._evaluate_market_context = evaluate_market_context
+        self._session_resolver = session_resolver or EffectiveMarketSessionResolver(
+            market_repository
+        )
 
     def collect(
         self, request: "swing_analysis_dto.SwingAnalysisWorkflowRequest"
@@ -68,9 +77,25 @@ class SwingAnalysisInputCollector:
                 force_refresh=request.force_refresh,
             )
 
+        # Resolved once per workflow execution (single ticker per request),
+        # never per-ticker or per-provider. `request.today` doubling as an
+        # explicit as-of date (tests/backtests) vs. the live default is
+        # distinguished by comparing it against the real current date: a
+        # live run gets real WIB wall-clock time-of-day so the resolver can
+        # classify pre-open/regular/pre-closing/after-close; an explicit
+        # historical date gets a deterministic after-close WIB decision
+        # timestamp, treating that date as a completed EOD decision.
+        real_today = date.today()
+        if request.today == real_today:
+            now_wib = datetime.now(IDX_TIMEZONE)
+            run_at = datetime.combine(real_today, now_wib.time(), tzinfo=IDX_TIMEZONE)
+        else:
+            run_at = datetime.combine(request.today, MARKET_CLOSE, tzinfo=IDX_TIMEZONE)
+        effective_session = self._session_resolver.resolve(run_at=run_at)
+
         data_freshness = self._build_data_freshness(
             ticker=request.ticker,
-            as_of_date=request.today,
+            effective_session=effective_session,
             market_repo=self._market_repo,
             broker_repo=self._broker_repo,
             refresh_actions=refresh_actions,

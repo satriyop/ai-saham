@@ -58,6 +58,10 @@ def test_accumulation_builder_receives_request_today():
     market_repo = SimpleNamespace(
         get_candles=lambda ticker: [SimpleNamespace(close=100.0)]
     )
+    # This test proves request.today threading into the accumulation
+    # builder, not effective-session resolution — inject a fake resolver so
+    # the real resolver's IHSG get_candles(end_date=...) lookup (which this
+    # market_repo fake does not implement) is never invoked.
     collector = SwingAnalysisInputCollector(
         market_repository=market_repo,
         broker_repository=SimpleNamespace(),
@@ -67,6 +71,7 @@ def test_accumulation_builder_receives_request_today():
         build_broker_detail=lambda **kwargs: None,
         build_accumulation_candidate=build_accumulation_candidate,
         evaluate_market_context=None,
+        session_resolver=SimpleNamespace(resolve=lambda **kwargs: None),
     )
 
     collector.collect(_request(historical))

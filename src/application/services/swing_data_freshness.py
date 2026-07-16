@@ -1,14 +1,23 @@
 """
 Swing analysis data freshness helpers.
 
+Consumes a canonically resolved `EffectiveMarketSession` (see
+`effective_market_session_resolver.py`) for the expected latest data date
+instead of computing it independently with weekday arithmetic — the
+weekday-only `expected_weekday_data_date`/`weekday_session_lag` helpers this
+module previously owned have been removed.
+
 Layer: Application
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSession,
+)
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
 
@@ -37,34 +46,13 @@ class SwingDataFreshness:
         }
 
 
-def expected_weekday_data_date(as_of_date: date) -> date:
-    """Latest regular weekday session expected for a given analysis date."""
-    if as_of_date.weekday() == 5:
-        return as_of_date - timedelta(days=1)
-    if as_of_date.weekday() == 6:
-        return as_of_date - timedelta(days=2)
-    return as_of_date
-
-
-def weekday_session_lag(latest: date | None, as_of_date: date) -> int | None:
-    """Count regular weekday sessions from latest data through expected date."""
-    if latest is None:
-        return None
-    expected = expected_weekday_data_date(as_of_date)
-    if latest >= expected:
-        return 0
-    current = latest + timedelta(days=1)
-    lag = 0
-    while current <= expected:
-        if current.weekday() < 5:
-            lag += 1
-        current += timedelta(days=1)
-    return lag
+def _stale_warning(label: str, source_date: date, expected_date: date) -> str:
+    return f"Latest {label} ({source_date}) is stale versus expected data date ({expected_date})."
 
 
 def build_swing_data_freshness(
     ticker: str,
-    as_of_date: date,
+    effective_session: EffectiveMarketSession,
     market_repo: MarketDataRepository,
     broker_repo: BrokerDataRepository,
     refresh_actions: tuple[str, ...] = (),
@@ -74,26 +62,24 @@ def build_swing_data_freshness(
     candle_start, candle_end = candle_range if candle_range else (None, None)
     broker_start, broker_end = broker_range if broker_range else (None, None)
 
+    expected_date = effective_session.latest_completed_session
+
     warnings: list[str] = []
     if candle_end is None:
         warnings.append(f"No cached candle data for {ticker}.")
-    else:
-        lag = weekday_session_lag(candle_end, as_of_date)
-        if lag and lag > 0:
-            warnings.append(
-                f"Latest candle is {lag} trading session(s) before expected data date "
-                f"({expected_weekday_data_date(as_of_date)})."
-            )
+    elif expected_date is not None and candle_end < expected_date:
+        warnings.append(_stale_warning("candle", candle_end, expected_date))
 
     if broker_end is None:
         warnings.append(f"No cached broker flow data for {ticker}.")
-    else:
-        lag = weekday_session_lag(broker_end, as_of_date)
-        if lag and lag > 0:
-            warnings.append(
-                f"Latest broker flow is {lag} trading session(s) before expected data date "
-                f"({expected_weekday_data_date(as_of_date)})."
-            )
+    elif expected_date is not None and broker_end < expected_date:
+        warnings.append(_stale_warning("broker flow", broker_end, expected_date))
+
+    if expected_date is None and (candle_end is not None or broker_end is not None):
+        warnings.append(
+            "Expected data date is unknown because the effective market "
+            "session could not resolve a latest completed session."
+        )
 
     if candle_end and broker_end and candle_end != broker_end:
         warnings.append(
@@ -102,6 +88,12 @@ def build_swing_data_freshness(
     for action in refresh_actions:
         if "ERR:" in action:
             warnings.append(f"Refresh issue: {action}")
+
+    as_of_date = (
+        effective_session.analysis_as_of
+        or effective_session.latest_completed_session
+        or effective_session.decision_at.date()
+    )
 
     return SwingDataFreshness(
         as_of_date=as_of_date,
