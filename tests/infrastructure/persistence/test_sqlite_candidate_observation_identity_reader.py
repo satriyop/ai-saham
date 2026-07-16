@@ -372,6 +372,9 @@ class TestMissingColumnHandling:
         assert data.legacy_row_count == 2
         assert "config_hash" in data.missing_columns
         assert data.missing_identity_counts["config_hash"] == 2
+        dep = data.latest_readiness_dependency
+        assert dep["depends_on_legacy"] is True
+        assert dep["latest_legacy_rows"] == dep["latest_total_rows"]
 
     def test_partial_missing_column(self, tmp_path: Path):
         db_path = tmp_path / "partial_missing.db"
