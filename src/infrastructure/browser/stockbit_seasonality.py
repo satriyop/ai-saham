@@ -224,13 +224,22 @@ class StockbitSeasonalityProvider(SeasonalityProvider, StockbitCachingProvider):
         if row["positive_years"] is None or row["total_years"] is None or row["back_years"] is None:
             return None
 
-        fetched_at: datetime | None = None
+        # DQ-001F: this is the newest PIT-eligible row (ORDER BY ... DESC LIMIT 1
+        # above). If its provenance is invalid, fail closed and return None —
+        # never silently fall back to an older, valid row. A stockbit_seasonality
+        # cache row with unusable provenance must not be usable evidence anywhere
+        # downstream (signal evidence, company-quality context, observations).
+        raw_source = row["source"]
+        if not raw_source or raw_source.strip().lower() == "unknown":
+            return None
+
         raw_fa = row["fetched_at"]
-        if raw_fa:
-            try:
-                fetched_at = datetime.fromisoformat(raw_fa)
-            except (ValueError, TypeError):
-                pass
+        if not raw_fa:
+            return None
+        try:
+            fetched_at = datetime.fromisoformat(raw_fa)
+        except (ValueError, TypeError):
+            return None
 
         return SeasonalEdge(
             ticker=ticker.upper(),
@@ -240,7 +249,7 @@ class StockbitSeasonalityProvider(SeasonalityProvider, StockbitCachingProvider):
             positive_years=row["positive_years"],
             total_years=row["total_years"],
             back_years=row["back_years"],
-            source=row["source"] or "stockbit",
+            source=raw_source,
             fetched_at=fetched_at,
         )
 

@@ -57,6 +57,122 @@ def test_parse_seasonality_returns_none_when_win_rate_is_unparseable():
     assert edge is None
 
 
+def _insert_row(
+    provider: StockbitSeasonalityProvider,
+    *,
+    ticker: str = "BBCA",
+    year: int = 2026,
+    month: int = 7,
+    avg_return_pct: float | None = 1.23,
+    win_rate_pct: float | None = 60.0,
+    positive_years: int | None = 3,
+    total_years: int | None = 5,
+    back_years: int | None = 5,
+    source: str | None = "stockbit",
+    fetched_month: str = "2026-07",
+    fetched_at: str | None = datetime(2026, 7, 1).isoformat(),
+) -> None:
+    with provider._get_conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO seasonality_cache
+                (ticker, year, month, avg_return_pct, win_rate_pct,
+                 positive_years, total_years, back_years, source, fetched_month, fetched_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                ticker,
+                year,
+                month,
+                avg_return_pct,
+                win_rate_pct,
+                positive_years,
+                total_years,
+                back_years,
+                source,
+                fetched_month,
+                fetched_at,
+            ),
+        )
+
+
+def test_read_cache_returns_edge_for_valid_row(tmp_path):
+    provider = StockbitSeasonalityProvider(api_client=None, db_path=tmp_path / "data.db")
+    _insert_row(provider)
+
+    edge = provider._read_cache("BBCA", 2026, 7)
+
+    assert edge is not None
+    assert edge.avg_monthly_return_pct == 1.23
+    assert edge.source == "stockbit"
+    assert edge.fetched_at == datetime(2026, 7, 1)
+
+
+def test_read_cache_returns_none_for_null_source(tmp_path):
+    provider = StockbitSeasonalityProvider(api_client=None, db_path=tmp_path / "data.db")
+    _insert_row(provider, source=None)
+
+    assert provider._read_cache("BBCA", 2026, 7) is None
+
+
+def test_read_cache_returns_none_for_empty_source(tmp_path):
+    provider = StockbitSeasonalityProvider(api_client=None, db_path=tmp_path / "data.db")
+    _insert_row(provider, source="")
+
+    assert provider._read_cache("BBCA", 2026, 7) is None
+
+
+def test_read_cache_returns_none_for_unknown_source_case_insensitive(tmp_path):
+    provider = StockbitSeasonalityProvider(api_client=None, db_path=tmp_path / "data.db")
+    _insert_row(provider, source="Unknown")
+
+    assert provider._read_cache("BBCA", 2026, 7) is None
+
+
+def test_read_cache_returns_none_for_null_fetched_at(tmp_path):
+    provider = StockbitSeasonalityProvider(api_client=None, db_path=tmp_path / "data.db")
+    _insert_row(provider, fetched_at=None)
+
+    assert provider._read_cache("BBCA", 2026, 7) is None
+
+
+def test_read_cache_returns_none_for_malformed_fetched_at(tmp_path):
+    provider = StockbitSeasonalityProvider(api_client=None, db_path=tmp_path / "data.db")
+    _insert_row(provider, fetched_at="not-a-date")
+
+    assert provider._read_cache("BBCA", 2026, 7) is None
+
+
+def test_read_cache_returns_none_for_null_required_metric(tmp_path):
+    provider = StockbitSeasonalityProvider(api_client=None, db_path=tmp_path / "data.db")
+    _insert_row(provider, positive_years=None)
+
+    assert provider._read_cache("BBCA", 2026, 7) is None
+
+
+def test_read_cache_does_not_fall_back_to_older_valid_row_when_newest_is_invalid(tmp_path):
+    """If the newest PIT-eligible row has invalid provenance, the read must
+    fail closed (None) rather than silently returning an older valid row —
+    a bad latest snapshot must not be hidden by falling back."""
+    provider = StockbitSeasonalityProvider(api_client=None, db_path=tmp_path / "data.db")
+    _insert_row(
+        provider,
+        avg_return_pct=1.0,
+        source="stockbit",
+        fetched_month="2026-06",
+        fetched_at=datetime(2026, 6, 1).isoformat(),
+    )
+    _insert_row(
+        provider,
+        avg_return_pct=2.0,
+        source="unknown",
+        fetched_month="2026-07",
+        fetched_at=datetime(2026, 7, 1).isoformat(),
+    )
+
+    assert provider._read_cache("BBCA", 2026, 7) is None
+
+
 def test_read_cache_returns_none_for_incomplete_cached_seasonality(tmp_path):
     provider = StockbitSeasonalityProvider(api_client=None, db_path=tmp_path / "data.db")
 

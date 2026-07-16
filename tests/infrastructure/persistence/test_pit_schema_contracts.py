@@ -200,14 +200,14 @@ def test_seasonality_cache_pit(db_path):
 
     with sqlite3.connect(db_path) as conn:
         conn.execute(
-            "INSERT INTO seasonality_cache (ticker, year, month, avg_return_pct, win_rate_pct, positive_years, total_years, back_years, fetched_month, fetched_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (_TICKER, 2025, 1, 2.5, 60.0, 6, 10, 10, "2025-01", "2025-01-01T00:00:00")
+            "INSERT INTO seasonality_cache (ticker, year, month, avg_return_pct, win_rate_pct, positive_years, total_years, back_years, source, fetched_month, fetched_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (_TICKER, 2025, 1, 2.5, 60.0, 6, 10, 10, "stockbit", "2025-01", "2025-01-01T00:00:00")
         )
         conn.execute(
-            "INSERT INTO seasonality_cache (ticker, year, month, avg_return_pct, win_rate_pct, positive_years, total_years, back_years, fetched_month, fetched_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (_TICKER, 2025, 1, 3.2, 70.0, 7, 10, 10, "2025-06", "2025-06-01T00:00:00")
+            "INSERT INTO seasonality_cache (ticker, year, month, avg_return_pct, win_rate_pct, positive_years, total_years, back_years, source, fetched_month, fetched_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (_TICKER, 2025, 1, 3.2, 70.0, 7, 10, 10, "stockbit", "2025-06", "2025-06-01T00:00:00")
         )
 
     res = provider._read_cache(_TICKER, 2025, 1, as_of_date=date(2025, 3, 1))
