@@ -515,29 +515,46 @@ is not complete.
     `seasonality_cache` row uninterpreted — no classification, no DDL/write
     statements.
   - Output contract: `artifact_type: "seasonality_cleanup_plan"`,
-    `schema_version: 1`, `status: "PASS"|"FAIL"` (`FAIL` iff
-    `invalid_row_count > 0`), `invalid_row_count`, `invalid_reason_counts`,
-    `dry_run: true`, `proposed_action: "DELETE_INVALID_SEASONALITY_ROW"`
-    (documented, never executed), and `rows: [{ticker, year, month,
-    fetched_month, fetched_at, source, reasons}]`.
+    `schema_version: 1`, `status: "PASS"|"FAIL"`, `source_available`,
+    `invalid_row_count`, `invalid_reason_counts`, `dry_run: true`,
+    `proposed_action: "DELETE_INVALID_SEASONALITY_ROW"` (documented, never
+    executed), and `rows: [{ticker, year, month, fetched_month, fetched_at,
+    source, reasons}]`.
   - Tests: reader tests (4) proving raw pass-through and no mutation; use
-    case tests (14) covering all 4 reason codes individually, multi-reason
-    rows, reason-count tallying, the "one null metric ≠ invalid" rule, and
-    one end-to-end test against the real SQLite reader/schema; CLI tests (7)
-    covering the JSON/table contract, exit-code-0-on-FAIL, invalid `--format`
-    rejection, and no-mutation. `test_command_contract.py` and the
-    `audit data --help` command-listing test updated for the new command
-    (intentional addition, not scope creep).
+    case tests (17) covering all 4 row-level reason codes individually,
+    multi-reason rows, reason-count tallying, the "one null metric ≠
+    invalid" rule, source-unavailability (missing DB and missing table),
+    and one end-to-end test against the real SQLite reader/schema; CLI
+    tests (9) covering the JSON/table contract, exit-code-0-on-FAIL,
+    exit-code-0-on-missing-DB, invalid `--format` rejection, and
+    no-mutation. `test_command_contract.py` and the `audit data --help`
+    command-listing test updated for the new command (intentional
+    addition, not scope creep).
+  - **Follow-up fix (2026-07-16, same day):** the initial cut returned
+    `status: "PASS"` with `invalid_row_count: 0` when the database or the
+    `seasonality_cache` table itself could not be found — indistinguishable
+    from "checked and found nothing wrong," which would silently mask a
+    wrong `--db` path. Fixed: the response gained a `source_available: bool`
+    field; `status` is now `"PASS"` only when `source_available` is true
+    **and** `invalid_row_count == 0`; a missing database/table sets
+    `source_available: false`, `status: "FAIL"`, and
+    `invalid_reason_counts["SEASONALITY_CACHE_UNAVAILABLE"] = 1` (a
+    table-level reason with no row identity, distinct from the four
+    per-row reason codes). The table-format output prints an explicit
+    "seasonality_cache is unavailable" warning in this case. Still a report
+    command — exit code stays 0 either way.
   - Verification: `pytest -k "seasonality or contract_gate or audit_data or
-    command_contract"` — 102 passed; full suite — 4403 passed; `python -m
+    command_contract"` — 105 passed; full suite — 4406 passed; `python -m
     py_compile` on changed files; `git diff --check` clean; live `saham
     audit data seasonality-cleanup-plan --format json` reports 433 invalid
     rows (413 `INVALID_SOURCE` + 413 `ALL_METRICS_NULL` overlapping, 47
-    `MISSING_FETCHED_AT`, 0 `MALFORMED_FETCHED_AT`) and **exits 0**; live
-    `saham audit data contract-gate --format json` still **exits 1** —
-    confirming this task does not close the live gate. Closing the gate
-    requires an actual repair/quarantine task (not yet implemented) or a
-    deliberate contract relaxation.
+    `MISSING_FETCHED_AT`, 0 `MALFORMED_FETCHED_AT`), `source_available:
+    true`, and **exits 0**; pointing `--db` at a nonexistent path now
+    correctly reports `status: "FAIL"`, `source_available: false`, and
+    **still exits 0**; live `saham audit data contract-gate --format json`
+    still **exits 1** — confirming this task does not close the live gate.
+    Closing the gate requires an actual repair/quarantine task (not yet
+    implemented) or a deliberate contract relaxation.
 - DQ-001 acceptance criteria below are **not** marked complete — DQ-001A/C/E
   now give field contracts for 20 tables (5 core + 13 enrichment + 2
   market-context) and DQ-001B/D/E give executable reconciliation for

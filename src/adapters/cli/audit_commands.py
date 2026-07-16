@@ -548,6 +548,15 @@ def _print_seasonality_cleanup_plan_table(response: SeasonalityCleanupPlanRespon
     )
     console.print(panel)
 
+    if not response.source_available:
+        console.print("")
+        console.print(
+            "[bold red]⚠ seasonality_cache is unavailable[/bold red] — the "
+            "database or table could not be found. Check --db before trusting "
+            "this report; PASS is impossible to reach until the table is "
+            "readable."
+        )
+
     console.print("")
     reason_table = Table(show_header=True, header_style="bold magenta")
     reason_table.add_column("Reason", style="cyan")
@@ -577,7 +586,7 @@ def _print_seasonality_cleanup_plan_table(response: SeasonalityCleanupPlanRespon
                 ", ".join(row.reasons),
             )
         console.print(rows_table)
-    else:
+    elif response.source_available:
         console.print("")
         console.print("[green]✓ No invalid seasonality_cache rows found.[/green]")
     console.print("")

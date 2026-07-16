@@ -30,12 +30,17 @@ REASON_INVALID_SOURCE = "INVALID_SOURCE"
 REASON_MISSING_FETCHED_AT = "MISSING_FETCHED_AT"
 REASON_MALFORMED_FETCHED_AT = "MALFORMED_FETCHED_AT"
 REASON_ALL_METRICS_NULL = "ALL_METRICS_NULL"
+# Not a per-row reason (no ticker/year/month identity) — set when the
+# database or seasonality_cache table itself cannot be found, so a wrong
+# --db path or a genuinely missing table is never silently reported as PASS.
+REASON_SEASONALITY_CACHE_UNAVAILABLE = "SEASONALITY_CACHE_UNAVAILABLE"
 
 _ALL_REASON_CODES = (
     REASON_INVALID_SOURCE,
     REASON_MISSING_FETCHED_AT,
     REASON_MALFORMED_FETCHED_AT,
     REASON_ALL_METRICS_NULL,
+    REASON_SEASONALITY_CACHE_UNAVAILABLE,
 )
 
 
@@ -103,6 +108,7 @@ class SeasonalityCleanupPlanResponse:
     generated_at: str
     table: str
     status: str  # "PASS" | "FAIL"
+    source_available: bool
     invalid_row_count: int
     invalid_reason_counts: dict[str, int]
     dry_run: bool
@@ -116,6 +122,7 @@ class SeasonalityCleanupPlanResponse:
             "generated_at": self.generated_at,
             "table": self.table,
             "status": self.status,
+            "source_available": self.source_available,
             "invalid_row_count": self.invalid_row_count,
             "invalid_reason_counts": dict(self.invalid_reason_counts),
             "dry_run": self.dry_run,
@@ -144,8 +151,10 @@ class BuildSeasonalityCleanupPlanUseCase:
         invalid_rows: list[SeasonalityCleanupPlanRow] = []
         reason_counts: dict[str, int] = {code: 0 for code in _ALL_REASON_CODES}
 
-        if self._reader.database_exists():
+        source_available = self._reader.database_exists()
+        if source_available:
             observation = self._reader.observe_seasonality_cache()
+            source_available = observation.exists
             if observation.exists:
                 for raw in observation.rows:
                     reasons = _classify(raw)
@@ -165,7 +174,13 @@ class BuildSeasonalityCleanupPlanUseCase:
                         )
                     )
 
-        status = "PASS" if not invalid_rows else "FAIL"
+        # A missing database or missing table means provenance cannot be
+        # verified at all — that must never be reported the same as "checked
+        # and found nothing wrong" (e.g. a wrong --db path silently PASSing).
+        if not source_available:
+            reason_counts[REASON_SEASONALITY_CACHE_UNAVAILABLE] = 1
+
+        status = "PASS" if source_available and not invalid_rows else "FAIL"
 
         return SeasonalityCleanupPlanResponse(
             artifact_type=self._ARTIFACT_TYPE,
@@ -173,6 +188,7 @@ class BuildSeasonalityCleanupPlanUseCase:
             generated_at=self._clock(),
             table=self._TABLE,
             status=status,
+            source_available=source_available,
             invalid_row_count=len(invalid_rows),
             invalid_reason_counts=reason_counts,
             dry_run=True,

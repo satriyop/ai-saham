@@ -519,6 +519,7 @@ def test_seasonality_cleanup_plan_json_output_follows_contract_when_clean(tmp_pa
     assert payload["schema_version"] == 1
     assert payload["table"] == "seasonality_cache"
     assert payload["status"] == "PASS"
+    assert payload["source_available"] is True
     assert payload["invalid_row_count"] == 0
     assert payload["dry_run"] is True
     assert payload["proposed_action"] == "DELETE_INVALID_SEASONALITY_ROW"
@@ -609,6 +610,38 @@ def test_seasonality_cleanup_plan_does_not_mutate_database(tmp_path: Path):
     )
 
     assert db_path.stat().st_mtime_ns == mtime_before
+
+
+def test_seasonality_cleanup_plan_reports_fail_not_pass_for_missing_database(tmp_path: Path):
+    """A wrong/missing --db must never report status PASS — that would look
+    identical to "checked and found no invalid rows"."""
+    missing_db = tmp_path / "does_not_exist.db"
+
+    result = runner.invoke(
+        app,
+        [
+            "audit", "data", "seasonality-cleanup-plan",
+            "--format", "json", "--db", str(missing_db),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output  # still a report, not a gate
+    payload = json.loads(result.output)
+    assert payload["status"] == "FAIL"
+    assert payload["source_available"] is False
+    assert payload["invalid_reason_counts"]["SEASONALITY_CACHE_UNAVAILABLE"] == 1
+
+
+def test_seasonality_cleanup_plan_table_format_warns_when_source_unavailable(tmp_path: Path):
+    missing_db = tmp_path / "does_not_exist.db"
+
+    result = runner.invoke(
+        app,
+        ["audit", "data", "seasonality-cleanup-plan", "--db", str(missing_db)],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "unavailable" in result.output.lower()
 
 
 # ── registration ──────────────────────────────────────────────────────────
