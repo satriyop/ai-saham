@@ -48,6 +48,32 @@ CREATE INDEX IF NOT EXISTS idx_signal_forward_labels_ticker_date
 ON signal_forward_labels(ticker, signal_date, horizon)
 """
 
+# Effective-session provenance columns (DQ-002E). Metadata only — the unique
+# identity constraint above (ticker, signal_date, horizon,
+# observation_captured_at) is unchanged. Legacy rows predate this migration
+# and default to '' (text) / NULL (is_eod_pending), reading back as None.
+_ADD_DECISION_AT_COLUMN = """
+ALTER TABLE signal_forward_labels ADD COLUMN decision_at TEXT NOT NULL DEFAULT ''
+"""
+_ADD_LATEST_COMPLETED_SESSION_COLUMN = """
+ALTER TABLE signal_forward_labels ADD COLUMN latest_completed_session TEXT NOT NULL DEFAULT ''
+"""
+_ADD_ANALYSIS_AS_OF_COLUMN = """
+ALTER TABLE signal_forward_labels ADD COLUMN analysis_as_of TEXT NOT NULL DEFAULT ''
+"""
+_ADD_MARKET_SESSION_NAME_COLUMN = """
+ALTER TABLE signal_forward_labels ADD COLUMN market_session_name TEXT NOT NULL DEFAULT ''
+"""
+_ADD_IS_EOD_PENDING_COLUMN = """
+ALTER TABLE signal_forward_labels ADD COLUMN is_eod_pending INTEGER
+"""
+_ADD_RESOLUTION_SOURCE_COLUMN = """
+ALTER TABLE signal_forward_labels ADD COLUMN resolution_source TEXT NOT NULL DEFAULT ''
+"""
+_ADD_RESOLUTION_NOTES_JSON_COLUMN = """
+ALTER TABLE signal_forward_labels ADD COLUMN resolution_notes_json TEXT NOT NULL DEFAULT '[]'
+"""
+
 
 class SQLiteSignalForwardLabelsRepository:
     """Persists schema-versioned signal_forward_labels records."""
@@ -63,6 +89,13 @@ class SQLiteSignalForwardLabelsRepository:
             [
                 (0, _CREATE_TABLE),
                 (1, _CREATE_INDEX),
+                (2, _ADD_DECISION_AT_COLUMN),
+                (3, _ADD_LATEST_COMPLETED_SESSION_COLUMN),
+                (4, _ADD_ANALYSIS_AS_OF_COLUMN),
+                (5, _ADD_MARKET_SESSION_NAME_COLUMN),
+                (6, _ADD_IS_EOD_PENDING_COLUMN),
+                (7, _ADD_RESOLUTION_SOURCE_COLUMN),
+                (8, _ADD_RESOLUTION_NOTES_JSON_COLUMN),
             ],
         )
 
@@ -112,6 +145,17 @@ class SQLiteSignalForwardLabelsRepository:
                     label.schema_version,
                     now,
                     now,
+                    label.decision_at.isoformat() if label.decision_at else "",
+                    (
+                        label.latest_completed_session.isoformat()
+                        if label.latest_completed_session
+                        else ""
+                    ),
+                    label.analysis_as_of.isoformat() if label.analysis_as_of else "",
+                    label.market_session_name or "",
+                    _bool_to_db(label.is_eod_pending),
+                    label.resolution_source or "",
+                    json.dumps(list(label.resolution_notes), separators=(",", ":")),
                 )
             )
         with self._connect() as conn:
@@ -123,8 +167,12 @@ class SQLiteSignalForwardLabelsRepository:
                      close_return, max_forward_return, max_adverse_excursion,
                      days_to_peak, days_to_trough, stop_would_trigger,
                      target_would_trigger, outcome_label, unavailable_reason,
-                     fingerprint_json, schema_version, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     fingerprint_json, schema_version, created_at, updated_at,
+                     decision_at, latest_completed_session, analysis_as_of,
+                     market_session_name, is_eod_pending, resolution_source,
+                     resolution_notes_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                        ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(ticker, signal_date, horizon, observation_captured_at)
                 DO UPDATE SET
                     entry_reference_price = excluded.entry_reference_price,
@@ -141,7 +189,14 @@ class SQLiteSignalForwardLabelsRepository:
                     unavailable_reason = excluded.unavailable_reason,
                     fingerprint_json = excluded.fingerprint_json,
                     schema_version = excluded.schema_version,
-                    updated_at = excluded.updated_at
+                    updated_at = excluded.updated_at,
+                    decision_at = excluded.decision_at,
+                    latest_completed_session = excluded.latest_completed_session,
+                    analysis_as_of = excluded.analysis_as_of,
+                    market_session_name = excluded.market_session_name,
+                    is_eod_pending = excluded.is_eod_pending,
+                    resolution_source = excluded.resolution_source,
+                    resolution_notes_json = excluded.resolution_notes_json
                 """,
                 rows,
             )
@@ -254,6 +309,15 @@ def _row_to_label(row: sqlite3.Row) -> SignalForwardLabel:
             if row["observation_captured_at"]
             else None
         ),
+        decision_at=(
+            datetime.fromisoformat(row["decision_at"]) if row["decision_at"] else None
+        ),
+        latest_completed_session=_date_or_none(row["latest_completed_session"]),
+        analysis_as_of=_date_or_none(row["analysis_as_of"]),
+        market_session_name=row["market_session_name"] or None,
+        is_eod_pending=_bool_from_db(row["is_eod_pending"]),
+        resolution_source=row["resolution_source"] or None,
+        resolution_notes=_resolution_notes_from_db(row["resolution_notes_json"]),
         schema_version=schema_version,
     )
 
@@ -272,3 +336,15 @@ def _bool_from_db(value: int | None) -> bool | None:
     if value is None:
         return None
     return bool(value)
+
+
+def _resolution_notes_from_db(raw: str | None) -> tuple[str, ...]:
+    if not raw:
+        return ()
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, ValueError):
+        return ()
+    if not isinstance(parsed, list):
+        return ()
+    return tuple(str(item) for item in parsed)

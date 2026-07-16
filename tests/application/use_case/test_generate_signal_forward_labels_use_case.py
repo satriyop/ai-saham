@@ -442,6 +442,102 @@ def test_generate_eligible_dates_skips_dates_without_forward_window():
     assert labels_repo.saved == list(response.labels)
 
 
+def test_available_label_copies_provenance_from_source_observation():
+    signal_date = date(2026, 7, 1)
+    observation = _observation(
+        signal_date,
+        {
+            "candidate": {"current_price": "100"},
+            "sub_signal_fingerprint": _fingerprint(),
+        },
+        decision_at=datetime(2026, 7, 1, 16, 0, 0),
+        latest_completed_session=signal_date,
+        analysis_as_of=signal_date,
+        market_session_name="AFTER_CLOSE",
+        is_eod_pending=False,
+        resolution_source="ihsg_cache_same_day",
+        resolution_notes=("a note",),
+    )
+    candles = [_candle(signal_date + timedelta(days=i), str(100 + i)) for i in range(1, 11)]
+
+    response = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(observation),
+        market_data_repository=FakeMarketDataRepository(candles),
+        signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+    ).execute(GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=signal_date))
+
+    label = response.labels[0]
+    assert label.outcome_label != SignalForwardOutcome.UNAVAILABLE
+    assert label.decision_at == observation.decision_at
+    assert label.latest_completed_session == observation.latest_completed_session
+    assert label.analysis_as_of == observation.analysis_as_of
+    assert label.market_session_name == observation.market_session_name
+    assert label.is_eod_pending == observation.is_eod_pending
+    assert label.resolution_source == observation.resolution_source
+    assert label.resolution_notes == observation.resolution_notes
+
+
+def test_unavailable_label_copies_provenance_from_source_observation():
+    signal_date = date(2026, 7, 1)
+    observation = _observation(
+        signal_date,
+        {"candidate": {}},
+        decision_at=datetime(2026, 7, 1, 16, 0, 0),
+        latest_completed_session=signal_date,
+        analysis_as_of=signal_date,
+        market_session_name="AFTER_CLOSE",
+        is_eod_pending=False,
+        resolution_source="ihsg_cache_same_day",
+        resolution_notes=("a note",),
+    )
+
+    response = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(observation),
+        market_data_repository=FakeMarketDataRepository([]),
+        signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+    ).execute(GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=signal_date))
+
+    label = response.labels[0]
+    assert label.outcome_label == SignalForwardOutcome.UNAVAILABLE
+    assert label.decision_at == observation.decision_at
+    assert label.latest_completed_session == observation.latest_completed_session
+    assert label.analysis_as_of == observation.analysis_as_of
+    assert label.market_session_name == observation.market_session_name
+    assert label.is_eod_pending == observation.is_eod_pending
+    assert label.resolution_source == observation.resolution_source
+    assert label.resolution_notes == observation.resolution_notes
+
+
+def test_label_generation_does_not_resolve_a_new_session():
+    """Provenance must be copied from the observation, never derived from
+    signal_date or produced by a fresh resolver lookup during labeling."""
+    signal_date = date(2026, 7, 1)
+    observation = _observation(
+        signal_date,
+        {"candidate": {"current_price": "100"}, "sub_signal_fingerprint": _fingerprint()},
+        # No provenance on the source observation (legacy/unresolved case).
+    )
+    candles = [_candle(signal_date + timedelta(days=i), str(100 + i)) for i in range(1, 11)]
+
+    response = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(observation),
+        market_data_repository=FakeMarketDataRepository(candles),
+        signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+    ).execute(GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=signal_date))
+
+    label = response.labels[0]
+    # No resolver was injected into GenerateSignalForwardLabelsUseCase at all
+    # (its constructor has no such dependency) — an absent observation
+    # provenance must simply propagate as None, not get backfilled.
+    assert label.decision_at is None
+    assert label.latest_completed_session is None
+    assert label.analysis_as_of is None
+    assert label.market_session_name is None
+    assert label.is_eod_pending is None
+    assert label.resolution_source is None
+    assert label.resolution_notes == ()
+
+
 def _observation(
     signal_date: date,
     payload: dict,
@@ -450,6 +546,13 @@ def _observation(
     captured_at: datetime = datetime(2026, 7, 1, 9, 0, 0),
     window_sessions: int = 7,
     config_hash: str = "test-hash",
+    decision_at: datetime | None = None,
+    latest_completed_session: date | None = None,
+    analysis_as_of: date | None = None,
+    market_session_name: str | None = None,
+    is_eod_pending: bool | None = None,
+    resolution_source: str | None = None,
+    resolution_notes: tuple[str, ...] = (),
 ) -> CandidateObservation:
     payload = {
         "schema_version": 1,
@@ -466,6 +569,13 @@ def _observation(
         window_sessions=window_sessions,
         data_as_of_date=signal_date,
         config_hash=config_hash,
+        decision_at=decision_at,
+        latest_completed_session=latest_completed_session,
+        analysis_as_of=analysis_as_of,
+        market_session_name=market_session_name,
+        is_eod_pending=is_eod_pending,
+        resolution_source=resolution_source,
+        resolution_notes=resolution_notes,
     )
 
 

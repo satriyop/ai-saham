@@ -535,10 +535,11 @@ freshness_status           # CURRENT | STALE | PARTIAL | UNKNOWN | INVALID
 
 Artifacts without a defensible effective timestamp or data cutoff are invalid for learning and historical evaluation. Do not infer missing temporal provenance from `captured_at` alone.
 
-**State:** DQ-002A/B/C/D implemented (2026-07-16). One canonical application-layer
+**State:** DQ-002A/B/C/D/E implemented (2026-07-16). One canonical application-layer
 session resolver exists and now backs every audited freshness-adjacent
 service (`data_freshness_service.py`, `swing_data_freshness.py`,
-`market_freshness_service.py`); DQ-002 as a whole is not complete (see
+`market_freshness_service.py`), and `candidate_observations`/
+`signal_forward_labels` persist its provenance; DQ-002 as a whole is not complete (see
 Deferred items below).
 
 - **DQ-002A** (2026-07-16, revised same day after review): `EffectiveMarketSessionResolver`
@@ -864,6 +865,61 @@ Deferred items below).
     object for `expected_trading_day`. Full suite — 4348 passed;
     `git diff --check` clean.
 
+- **DQ-002E** (2026-07-16): `candidate_observations` and `signal_forward_labels`
+  now persist execution/effective-session provenance instead of forcing
+  future readers to infer session state from `captured_at`/`snapshot_date`.
+  `CandidateObservation` (`src/domain/ports/candidate_observations_repository.py`)
+  and `SignalForwardLabel` (`src/domain/value_objects/signal_forward_label.py`)
+  each gained 7 optional metadata fields —
+  `decision_at`, `latest_completed_session`, `analysis_as_of`,
+  `market_session_name`, `is_eod_pending`, `resolution_source`,
+  `resolution_notes` — copied verbatim from an already-resolved
+  `EffectiveMarketSession`, never recomputed by any repository or by label
+  generation. **Identity is unchanged**: `candidate_observations` canonical
+  identity remains `(ticker, snapshot_date, workflow, window_sessions,
+  data_as_of_date, config_hash)`; `signal_forward_labels`' unique constraint
+  remains `(ticker, signal_date, horizon, observation_captured_at)` — a
+  provenance-only re-save updates the existing row in place, proven by test.
+  SQLite schema: both tables gained the same 7 columns via additive
+  migrations (`decision_at TEXT NOT NULL DEFAULT ''`,
+  `latest_completed_session TEXT NOT NULL DEFAULT ''`,
+  `analysis_as_of TEXT NOT NULL DEFAULT ''`,
+  `market_session_name TEXT NOT NULL DEFAULT ''`, `is_eod_pending INTEGER`
+  (nullable), `resolution_source TEXT NOT NULL DEFAULT ''`,
+  `resolution_notes_json TEXT NOT NULL DEFAULT '[]'`) —
+  `candidate_observations` migrations 7–13, `signal_forward_labels`
+  migrations 2–8. Legacy rows read every new field back as `None`/`()`.
+  `AccumulationScreenResponse` did **not** need a new `effective_session`
+  field: `RecordAccumulationObservationsUseCase.execute()` gained an optional
+  `effective_session: EffectiveMarketSession | None = None` parameter instead,
+  threaded straight into `AccumulationCandidateObservationPersister.persist()`
+  — lower blast radius than adding a field to a response DTO shared by the
+  read-only diagnostic screen path (`RunAccumulationScreenWorkflowUseCase`),
+  which never persists and was left untouched. `BackfillSignalObservationsUseCase`
+  gained an optional `session_resolver: EffectiveMarketSessionResolver | None`
+  constructor dependency (defaulting to one built from its existing
+  `market_data_repository`, explicitly injected in
+  `analyze_signal_backfill_commands.py` per the factory-wiring convention) and
+  resolves exactly one deterministic after-close-WIB session per
+  `trading_date` (`datetime.combine(trading_date, MARKET_CLOSE,
+  tzinfo=IDX_TIMEZONE)`), reused across every `window` for that date — proven
+  by a test asserting object identity across all window-loop iterations for
+  one date. `GenerateSignalForwardLabelsUseCase` copies all 7 fields from the
+  source `CandidateObservation` onto both available and UNAVAILABLE labels;
+  it has no resolver dependency at all, so there is no fresh-session-lookup
+  path to guard against.
+  Source-field contract catalog: both tables' contracts gained the same 7
+  fields (via a shared `_effective_session_provenance_fields()` helper),
+  `required=False`, `null_policy="ignore"` — legacy/unresolved rows are
+  expected to have empty provenance, not a contract violation.
+  Tests: candidate-observations repo round-trip + legacy-read + identity-
+  unaffected-by-provenance-only-change (3 new tests); label repo round-trip +
+  legacy-read (2 new tests); persister/recorder provenance-passed-through +
+  no-session-leaves-fields-empty (2 new tests); backfill one-session-per-
+  date/shared-across-windows (1 new test); label generation available/
+  unavailable-copies-provenance + no-fresh-resolve (3 new tests). Full suite
+  — 4359 passed; `git diff --check` clean.
+
 **Deferred (not started):**
 
 - Provider-settlement cutoffs and any band-specific behavioral difference
@@ -874,10 +930,12 @@ Deferred items below).
   full DQ-002 required contract — `EffectiveMarketSession` only implements
   `run_at`, `decision_at`, `latest_completed_session`, `analysis_as_of`,
   plus resolver-specific provenance fields (`market_session_name`,
-  `is_eod_pending`, `resolution_source`, `notes`).
+  `is_eod_pending`, `resolution_source`, `notes`). `freshness_status` is not
+  derivable without new policy and remains deferred (DQ-002E did not add it).
 - Temporal-leakage proof across candles/broker/enrichment/labels/market
   context beyond the resolver's own bounded-cache-lookup guarantee.
-- Persisted-artifact execution-time-vs-effective-session distinction.
+- Extending persisted provenance (DQ-002E's pattern) to any artifact tables
+  beyond `candidate_observations`/`signal_forward_labels`.
 
 **Acceptance criteria:**
 
@@ -896,8 +954,12 @@ Deferred items below).
       and its tests, and now by swing freshness's own tests reusing the
       same fixture pattern; provider-settlement/late-provider cutoffs not
       yet modeled.)
-- [ ] Every persisted artifact distinguishes execution time from effective market session.
-      (Not started — no persistence changes in this slice.)
+- [x] Every persisted artifact distinguishes execution time from effective market session.
+      (DQ-002E: `candidate_observations` and `signal_forward_labels` now
+      persist `decision_at`/`latest_completed_session`/`analysis_as_of`
+      distinct from `captured_at`/write-timestamp columns. Other artifact
+      tables — market_context_snapshots, regime_observations, etc. — are not
+      yet covered.)
 - [ ] Temporal leakage tests intentionally plant future rows and prove they are excluded.
       (Proven for the resolver's own IHSG lookup only; not yet proven across
       candles/broker/enrichment/labels/market-context consumers.)

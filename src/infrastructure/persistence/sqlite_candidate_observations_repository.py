@@ -63,9 +63,37 @@ _IDENTITY_CONFLICT_TARGET = (
     "(ticker, snapshot_date, workflow, window_sessions, data_as_of_date, config_hash)"
 )
 
+# Effective-session provenance columns (DQ-002E). Metadata only — not part of
+# canonical identity above. Legacy rows predate this migration and default to
+# '' (text) / NULL (is_eod_pending), which read back as None, matching every
+# other legacy-default column in this table.
+_ADD_DECISION_AT_COLUMN = """
+ALTER TABLE candidate_observations ADD COLUMN decision_at TEXT NOT NULL DEFAULT ''
+"""
+_ADD_LATEST_COMPLETED_SESSION_COLUMN = """
+ALTER TABLE candidate_observations ADD COLUMN latest_completed_session TEXT NOT NULL DEFAULT ''
+"""
+_ADD_ANALYSIS_AS_OF_COLUMN = """
+ALTER TABLE candidate_observations ADD COLUMN analysis_as_of TEXT NOT NULL DEFAULT ''
+"""
+_ADD_MARKET_SESSION_NAME_COLUMN = """
+ALTER TABLE candidate_observations ADD COLUMN market_session_name TEXT NOT NULL DEFAULT ''
+"""
+_ADD_IS_EOD_PENDING_COLUMN = """
+ALTER TABLE candidate_observations ADD COLUMN is_eod_pending INTEGER
+"""
+_ADD_RESOLUTION_SOURCE_COLUMN = """
+ALTER TABLE candidate_observations ADD COLUMN resolution_source TEXT NOT NULL DEFAULT ''
+"""
+_ADD_RESOLUTION_NOTES_JSON_COLUMN = """
+ALTER TABLE candidate_observations ADD COLUMN resolution_notes_json TEXT NOT NULL DEFAULT '[]'
+"""
+
 _SELECT_COLUMNS = (
     "ticker, snapshot_date, captured_at, schema_version, payload_json, "
-    "workflow, window_sessions, data_as_of_date, config_hash"
+    "workflow, window_sessions, data_as_of_date, config_hash, "
+    "decision_at, latest_completed_session, analysis_as_of, market_session_name, "
+    "is_eod_pending, resolution_source, resolution_notes_json"
 )
 
 
@@ -86,6 +114,13 @@ class SQLiteCandidateObservationsRepository:
                 (4, _ADD_DATA_AS_OF_DATE_COLUMN),
                 (5, _ADD_CONFIG_HASH_COLUMN),
                 (6, _CREATE_IDENTITY_UNIQUE_INDEX),
+                (7, _ADD_DECISION_AT_COLUMN),
+                (8, _ADD_LATEST_COMPLETED_SESSION_COLUMN),
+                (9, _ADD_ANALYSIS_AS_OF_COLUMN),
+                (10, _ADD_MARKET_SESSION_NAME_COLUMN),
+                (11, _ADD_IS_EOD_PENDING_COLUMN),
+                (12, _ADD_RESOLUTION_SOURCE_COLUMN),
+                (13, _ADD_RESOLUTION_NOTES_JSON_COLUMN),
             ],
         )
 
@@ -122,6 +157,17 @@ class SQLiteCandidateObservationsRepository:
                     obs.window_sessions,
                     obs.data_as_of_date.isoformat() if obs.data_as_of_date else "",
                     obs.config_hash,
+                    obs.decision_at.isoformat() if obs.decision_at else "",
+                    (
+                        obs.latest_completed_session.isoformat()
+                        if obs.latest_completed_session
+                        else ""
+                    ),
+                    obs.analysis_as_of.isoformat() if obs.analysis_as_of else "",
+                    obs.market_session_name or "",
+                    _bool_to_db(obs.is_eod_pending),
+                    obs.resolution_source or "",
+                    json.dumps(list(obs.resolution_notes), separators=(",", ":")),
                 )
             )
         with self._connect() as conn:
@@ -129,13 +175,23 @@ class SQLiteCandidateObservationsRepository:
                 f"""
                 INSERT INTO candidate_observations
                     (ticker, snapshot_date, captured_at, schema_version, payload_json,
-                     workflow, window_sessions, data_as_of_date, config_hash)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     workflow, window_sessions, data_as_of_date, config_hash,
+                     decision_at, latest_completed_session, analysis_as_of,
+                     market_session_name, is_eod_pending, resolution_source,
+                     resolution_notes_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT {_IDENTITY_CONFLICT_TARGET} WHERE config_hash != ''
                 DO UPDATE SET
                     captured_at = excluded.captured_at,
                     schema_version = excluded.schema_version,
-                    payload_json = excluded.payload_json
+                    payload_json = excluded.payload_json,
+                    decision_at = excluded.decision_at,
+                    latest_completed_session = excluded.latest_completed_session,
+                    analysis_as_of = excluded.analysis_as_of,
+                    market_session_name = excluded.market_session_name,
+                    is_eod_pending = excluded.is_eod_pending,
+                    resolution_source = excluded.resolution_source,
+                    resolution_notes_json = excluded.resolution_notes_json
                 """,
                 rows,
             )
@@ -284,4 +340,43 @@ class SQLiteCandidateObservationsRepository:
                 date.fromisoformat(data_as_of_date_raw) if data_as_of_date_raw else None
             ),
             config_hash=row["config_hash"],
+            decision_at=(
+                datetime.fromisoformat(row["decision_at"]) if row["decision_at"] else None
+            ),
+            latest_completed_session=(
+                date.fromisoformat(row["latest_completed_session"])
+                if row["latest_completed_session"]
+                else None
+            ),
+            analysis_as_of=(
+                date.fromisoformat(row["analysis_as_of"]) if row["analysis_as_of"] else None
+            ),
+            market_session_name=row["market_session_name"] or None,
+            is_eod_pending=_bool_from_db(row["is_eod_pending"]),
+            resolution_source=row["resolution_source"] or None,
+            resolution_notes=_resolution_notes_from_db(row["resolution_notes_json"]),
         )
+
+
+def _bool_to_db(value: bool | None) -> int | None:
+    if value is None:
+        return None
+    return 1 if value else 0
+
+
+def _bool_from_db(value: int | None) -> bool | None:
+    if value is None:
+        return None
+    return bool(value)
+
+
+def _resolution_notes_from_db(raw: str | None) -> tuple[str, ...]:
+    if not raw:
+        return ()
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, ValueError):
+        return ()
+    if not isinstance(parsed, list):
+        return ()
+    return tuple(str(item) for item in parsed)

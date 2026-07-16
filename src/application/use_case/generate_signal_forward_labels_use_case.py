@@ -194,6 +194,7 @@ class GenerateSignalForwardLabelsUseCase:
                 fingerprint=fingerprint,
                 reason="missing_entry_reference_price",
                 entry_reference_price=None,
+                observation=observation,
             )
 
         candles = self._market.get_candles(ticker, start_date=signal_date)
@@ -213,6 +214,7 @@ class GenerateSignalForwardLabelsUseCase:
                 entry_reference_price=entry,
                 label_window_start=forward_candles[0].date if forward_candles else None,
                 label_window_end=forward_candles[-1].date if forward_candles else None,
+                observation=observation,
             )
 
         window = forward_candles[:required]
@@ -256,6 +258,13 @@ class GenerateSignalForwardLabelsUseCase:
             unavailable_reason=None,
             fingerprint=fingerprint,
             observation_captured_at=observation.captured_at,
+            decision_at=observation.decision_at,
+            latest_completed_session=observation.latest_completed_session,
+            analysis_as_of=observation.analysis_as_of,
+            market_session_name=observation.market_session_name,
+            is_eod_pending=observation.is_eod_pending,
+            resolution_source=observation.resolution_source,
+            resolution_notes=observation.resolution_notes,
         )
 
 
@@ -270,6 +279,7 @@ def _unavailable_label(
     entry_reference_price: Decimal | None,
     label_window_start: date | None = None,
     label_window_end: date | None = None,
+    observation: CandidateObservation | None = None,
 ) -> SignalForwardLabel:
     return SignalForwardLabel(
         ticker=ticker,
@@ -289,6 +299,13 @@ def _unavailable_label(
         unavailable_reason=reason,
         fingerprint=fingerprint,
         observation_captured_at=observation_captured_at,
+        decision_at=observation.decision_at if observation else None,
+        latest_completed_session=observation.latest_completed_session if observation else None,
+        analysis_as_of=observation.analysis_as_of if observation else None,
+        market_session_name=observation.market_session_name if observation else None,
+        is_eod_pending=observation.is_eod_pending if observation else None,
+        resolution_source=observation.resolution_source if observation else None,
+        resolution_notes=observation.resolution_notes if observation else (),
     )
 
 

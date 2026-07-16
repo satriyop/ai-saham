@@ -14,6 +14,9 @@ import typer
 from src.adapters.cli.screen_accum_workflow_factory import (
     create_accumulation_screen_workflow_bundle,
 )
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSessionResolver,
+)
 from src.application.services.signal_observation_request_builder import (
     BuildSignalObservationScreenRequest,
 )
@@ -131,6 +134,7 @@ def signal_backfill_observations(
         candidate_observations_repository=observations_repo,
         label_generation_use_case=label_use_case,
         evaluate_market_context=_evaluate_market_context_for_backfill,
+        session_resolver=EffectiveMarketSessionResolver(market_repo),
     ).execute(
         BackfillSignalObservationsRequest(
             tickers=tuple(tickers),

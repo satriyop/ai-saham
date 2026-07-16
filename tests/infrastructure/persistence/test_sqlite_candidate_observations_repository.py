@@ -202,7 +202,7 @@ def test_schema_created_via_migration_runner(tmp_path: Path):
         ).fetchall()
         tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
 
-    assert {row[0] for row in versions} == {0, 1, 2, 3, 4, 5, 6}
+    assert {row[0] for row in versions} == set(range(14))
     assert "candidate_observations" in {row[0] for row in tables}
 
 
@@ -401,3 +401,110 @@ def test_unsupported_schema_version_rejected(tmp_path: Path):
 
     with pytest.raises(ValueError, match="Unsupported candidate observation"):
         repo.get_latest("BBCA", day)
+
+
+def test_effective_session_provenance_round_trips(tmp_path: Path):
+    """DQ-002E: saving an observation with provenance must round-trip every
+    new field exactly, including a resolver with no notes vs. one with notes."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+
+    repo.save_many(
+        [
+            CandidateObservation(
+                ticker="BBCA",
+                snapshot_date=day,
+                captured_at=datetime(2026, 7, 3, 9, 0, 0),
+                payload={"schema_version": 1, "ticker": "BBCA", "value": "v1"},
+                decision_at=datetime(2026, 7, 3, 16, 0, 0),
+                latest_completed_session=date(2026, 7, 3),
+                analysis_as_of=date(2026, 7, 3),
+                market_session_name="AFTER_CLOSE",
+                is_eod_pending=False,
+                resolution_source="ihsg_cache_same_day",
+                resolution_notes=("note one", "note two"),
+            )
+        ]
+    )
+
+    obs = repo.get_latest("BBCA", day)
+
+    assert obs is not None
+    assert obs.decision_at == datetime(2026, 7, 3, 16, 0, 0)
+    assert obs.latest_completed_session == date(2026, 7, 3)
+    assert obs.analysis_as_of == date(2026, 7, 3)
+    assert obs.market_session_name == "AFTER_CLOSE"
+    assert obs.is_eod_pending is False
+    assert obs.resolution_source == "ihsg_cache_same_day"
+    assert obs.resolution_notes == ("note one", "note two")
+
+
+def test_legacy_rows_with_no_provenance_read_as_none(tmp_path: Path):
+    """Rows saved before DQ-002E (or with no effective_session available)
+    must remain readable with every new field defaulting to None/empty."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+
+    repo.save_many(
+        [
+            CandidateObservation(
+                ticker="BBCA",
+                snapshot_date=day,
+                captured_at=datetime(2026, 7, 3, 9, 0, 0),
+                payload={"schema_version": 1, "ticker": "BBCA", "value": "legacy"},
+            )
+        ]
+    )
+
+    obs = repo.get_latest("BBCA", day)
+
+    assert obs is not None
+    assert obs.decision_at is None
+    assert obs.latest_completed_session is None
+    assert obs.analysis_as_of is None
+    assert obs.market_session_name is None
+    assert obs.is_eod_pending is None
+    assert obs.resolution_source is None
+    assert obs.resolution_notes == ()
+
+
+def test_provenance_only_change_does_not_create_new_canonical_row(tmp_path: Path):
+    """Identity is (ticker, snapshot_date, workflow, window_sessions,
+    data_as_of_date, config_hash) — provenance fields must never affect it."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+
+    repo.save_many(
+        [
+            _canonical_observation(value="first"),
+        ]
+    )
+    repo.save_many(
+        [
+            CandidateObservation(
+                ticker="BBCA",
+                snapshot_date=day,
+                captured_at=datetime(2026, 7, 3, 10, 0, 0),
+                payload={"schema_version": 1, "ticker": "BBCA", "value": "second"},
+                workflow="screen_accum",
+                window_sessions=7,
+                data_as_of_date=day,
+                config_hash="abc123",
+                decision_at=datetime(2026, 7, 3, 16, 0, 0),
+                latest_completed_session=day,
+                analysis_as_of=day,
+                market_session_name="AFTER_CLOSE",
+                is_eod_pending=False,
+                resolution_source="ihsg_cache_same_day",
+                resolution_notes=("note",),
+            )
+        ]
+    )
+
+    rows = repo.list_all_by_date(day)
+    assert len(rows) == 1
+    assert rows[0].payload["value"] == "second"
+    assert rows[0].resolution_source == "ihsg_cache_same_day"

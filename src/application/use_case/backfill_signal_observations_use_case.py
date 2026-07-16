@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from typing import TYPE_CHECKING, Callable
 
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSessionResolver,
+)
 from src.application.services.signal_observation_request_builder import (
     BuildSignalObservationScreenRequest,
 )
@@ -20,6 +23,7 @@ from src.domain.ports.candidate_observations_repository import (
     CandidateObservationsRepository,
 )
 from src.domain.ports.market_data_repository import MarketDataRepository
+from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
 from src.domain.value_objects.signal_forward_label import SignalLabelHorizon
 
 if TYPE_CHECKING:
@@ -83,6 +87,7 @@ class BackfillSignalObservationsUseCase:
         candidate_observations_repository: CandidateObservationsRepository,
         label_generation_use_case: GenerateSignalForwardLabelsUseCase | None = None,
         evaluate_market_context: "Callable[..., MarketContext] | None" = None,
+        session_resolver: EffectiveMarketSessionResolver | None = None,
     ) -> None:
         self._record = record_observations_use_case
         self._request_builder = screen_request_builder
@@ -90,6 +95,9 @@ class BackfillSignalObservationsUseCase:
         self._observations = candidate_observations_repository
         self._labels = label_generation_use_case
         self._evaluate_market_context = evaluate_market_context
+        self._session_resolver = session_resolver or EffectiveMarketSessionResolver(
+            market_data_repository
+        )
 
     def execute(
         self,
@@ -149,6 +157,14 @@ class BackfillSignalObservationsUseCase:
                         f"market_context_unavailable_for_{trading_date.isoformat()}"
                     )
 
+            # One deterministic after-close session per trading_date, shared
+            # across every window for that date — never resolved per
+            # ticker/window. Deterministic so reruns of the same historical
+            # date always produce the same provenance.
+            effective_session = self._session_resolver.resolve(
+                run_at=datetime.combine(trading_date, MARKET_CLOSE, tzinfo=IDX_TIMEZONE)
+            )
+
             for window in request.windows:
                 record_result = self._record.execute(
                     self._request_builder.build(
@@ -156,7 +172,8 @@ class BackfillSignalObservationsUseCase:
                         window_days=int(window),
                         as_of_date=trading_date,
                         market_context=market_context,
-                    )
+                    ),
+                    effective_session=effective_session,
                 )
                 saved_count += record_result.recorded_count
             processed.append(trading_date)

@@ -411,6 +411,118 @@ _BROKER_DAILY_FLOW_FIELDS: tuple[SourceFieldContract, ...] = (
     ),
 )
 
+def _effective_session_provenance_fields(
+    source_owner: str,
+) -> tuple[SourceFieldContract, ...]:
+    """Shared DQ-002E provenance field contracts for candidate_observations and
+    signal_forward_labels — both copy these verbatim from an already-resolved
+    EffectiveMarketSession, never recompute them. Optional/metadata-only, so
+    null_policy is "ignore": legacy rows predate this migration and are
+    expected to have empty/unresolved provenance, not a contract violation.
+    """
+    grain = "one row per canonical identity (see table-level identity fields)"
+    return (
+        SourceFieldContract(
+            field="decision_at",
+            required=False,
+            semantic_name="Effective-session decision timestamp",
+            source_owner=source_owner,
+            unit="ISO timestamp",
+            sign_convention=None,
+            aggregation="none",
+            grain=grain,
+            temporal_meaning="EffectiveMarketSession.decision_at at record time",
+            null_semantics="empty/legacy rows predate this provenance and are None",
+            point_in_time_support="UNVERIFIED",
+            null_policy="ignore",
+        ),
+        SourceFieldContract(
+            field="latest_completed_session",
+            required=False,
+            semantic_name="Latest completed IDX session as resolved at record time",
+            source_owner=source_owner,
+            unit="YYYY-MM-DD",
+            sign_convention=None,
+            aggregation="none",
+            grain=grain,
+            temporal_meaning="EffectiveMarketSession.latest_completed_session at record time",
+            null_semantics="null when the resolver could not resolve a session (or legacy row)",
+            point_in_time_support="UNVERIFIED",
+            null_policy="ignore",
+        ),
+        SourceFieldContract(
+            field="analysis_as_of",
+            required=False,
+            semantic_name="Analysis-as-of date as resolved at record time",
+            source_owner=source_owner,
+            unit="YYYY-MM-DD",
+            sign_convention=None,
+            aggregation="none",
+            grain=grain,
+            temporal_meaning="EffectiveMarketSession.analysis_as_of at record time",
+            null_semantics="null when unresolved (or legacy row)",
+            point_in_time_support="UNVERIFIED",
+            null_policy="ignore",
+        ),
+        SourceFieldContract(
+            field="market_session_name",
+            required=False,
+            semantic_name="Resolved market-session label at record time",
+            source_owner=source_owner,
+            unit="text enum",
+            sign_convention=None,
+            aggregation="none",
+            grain=grain,
+            temporal_meaning="none",
+            null_semantics="empty/legacy rows predate this provenance and are None",
+            point_in_time_support="UNVERIFIED",
+            null_policy="ignore",
+        ),
+        SourceFieldContract(
+            field="is_eod_pending",
+            required=False,
+            semantic_name="Whether end-of-day data was still pending at record time",
+            source_owner=source_owner,
+            unit="integer flag 0/1",
+            sign_convention=None,
+            aggregation="none",
+            grain=grain,
+            temporal_meaning="none",
+            null_semantics="null for legacy rows predating this provenance",
+            point_in_time_support="UNVERIFIED",
+            null_policy="ignore",
+        ),
+        SourceFieldContract(
+            field="resolution_source",
+            required=False,
+            semantic_name="Which resolver path produced the session",
+            source_owner=source_owner,
+            unit="text enum",
+            sign_convention=None,
+            aggregation="none",
+            grain=grain,
+            temporal_meaning="none",
+            null_semantics="empty/legacy rows predate this provenance and are None",
+            point_in_time_support="UNVERIFIED",
+            null_policy="ignore",
+        ),
+        SourceFieldContract(
+            field="resolution_notes_json",
+            required=False,
+            semantic_name="Serialized resolver notes",
+            source_owner=source_owner,
+            unit="json array of strings",
+            sign_convention=None,
+            aggregation="none",
+            grain=grain,
+            temporal_meaning="none",
+            null_semantics="empty array ('[]') when the resolver had no notes",
+            point_in_time_support="UNVERIFIED",
+            null_policy="ignore",
+        ),
+    )
+
+
 _CANDIDATE_OBSERVATIONS_FIELDS: tuple[SourceFieldContract, ...] = (
     SourceFieldContract(
         field="ticker",
@@ -545,6 +657,7 @@ _CANDIDATE_OBSERVATIONS_FIELDS: tuple[SourceFieldContract, ...] = (
         point_in_time_support="HISTORICAL",
         null_policy="fail",
     ),
+    *_effective_session_provenance_fields("local observation recorder"),
 )
 
 _SIGNAL_FORWARD_LABELS_FIELDS: tuple[SourceFieldContract, ...] = (
@@ -834,6 +947,7 @@ _SIGNAL_FORWARD_LABELS_FIELDS: tuple[SourceFieldContract, ...] = (
         point_in_time_support="HISTORICAL",
         null_policy="warn",
     ),
+    *_effective_session_provenance_fields("local forward-label generator"),
 )
 
 # ---------------------------------------------------------------------------
@@ -2081,6 +2195,13 @@ FIELD_STATS_MODE: dict[tuple[str, str], str] = {
     ("candidate_observations", "window_sessions"): "numeric",
     ("candidate_observations", "data_as_of_date"): "date",
     ("candidate_observations", "config_hash"): "enum_text",
+    ("candidate_observations", "decision_at"): "date",
+    ("candidate_observations", "latest_completed_session"): "date",
+    ("candidate_observations", "analysis_as_of"): "date",
+    ("candidate_observations", "market_session_name"): "enum_text",
+    ("candidate_observations", "is_eod_pending"): "numeric",
+    ("candidate_observations", "resolution_source"): "enum_text",
+    ("candidate_observations", "resolution_notes_json"): "none",
     ("signal_forward_labels", "ticker"): "identity_text",
     ("signal_forward_labels", "signal_date"): "date",
     ("signal_forward_labels", "horizon"): "enum_text",
@@ -2206,6 +2327,13 @@ FIELD_STATS_MODE: dict[tuple[str, str], str] = {
     ("signal_forward_labels", "target_would_trigger"): "numeric",
     ("signal_forward_labels", "created_at"): "date",
     ("signal_forward_labels", "updated_at"): "date",
+    ("signal_forward_labels", "decision_at"): "date",
+    ("signal_forward_labels", "latest_completed_session"): "date",
+    ("signal_forward_labels", "analysis_as_of"): "date",
+    ("signal_forward_labels", "market_session_name"): "enum_text",
+    ("signal_forward_labels", "is_eod_pending"): "numeric",
+    ("signal_forward_labels", "resolution_source"): "enum_text",
+    ("signal_forward_labels", "resolution_notes_json"): "none",
     ("market_context_snapshots", "as_of_date"): "date",
     ("market_context_snapshots", "regime"): "enum_text",
     ("market_context_snapshots", "conviction"): "numeric",

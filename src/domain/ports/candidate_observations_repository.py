@@ -22,6 +22,18 @@ class CandidateObservation:
     window_sessions: int = 0
     data_as_of_date: date | None = None
     config_hash: str = ""
+    # Effective-session provenance (DQ-002E). Metadata only — copied verbatim
+    # from an already-resolved EffectiveMarketSession by the recording use
+    # case/persister, never recomputed here or by any repository. Not part of
+    # canonical identity: two observations differing only in these fields are
+    # still the same canonical observation.
+    decision_at: datetime | None = None
+    latest_completed_session: date | None = None
+    analysis_as_of: date | None = None
+    market_session_name: str | None = None
+    is_eod_pending: bool | None = None
+    resolution_source: str | None = None
+    resolution_notes: tuple[str, ...] = ()
 
 
 class CandidateObservationsRepository(Protocol):

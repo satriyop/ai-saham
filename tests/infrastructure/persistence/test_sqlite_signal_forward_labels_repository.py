@@ -101,11 +101,70 @@ def test_schema_created_via_migration_runner(tmp_path: Path):
         ).fetchall()
         tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
 
-    assert {row[0] for row in versions} == {0, 1}
+    assert {row[0] for row in versions} == set(range(9))
     assert "signal_forward_labels" in {row[0] for row in tables}
 
 
-def _label(*, captured_at: datetime, close_return: float) -> SignalForwardLabel:
+def test_effective_session_provenance_round_trips(tmp_path: Path):
+    """DQ-002E: saving a label with provenance must round-trip every new
+    field through SQLite exactly."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteSignalForwardLabelsRepository(db_path)
+    label = _label(
+        captured_at=datetime(2026, 7, 1, 9, 0, 0),
+        close_return=4.0,
+        decision_at=datetime(2026, 7, 1, 16, 0, 0),
+        latest_completed_session=date(2026, 7, 1),
+        analysis_as_of=date(2026, 7, 1),
+        market_session_name="AFTER_CLOSE",
+        is_eod_pending=False,
+        resolution_source="ihsg_cache_same_day",
+        resolution_notes=("note one", "note two"),
+    )
+
+    repo.save_many([label])
+    restored = repo.get("BBCA", date(2026, 7, 1), SignalLabelHorizon.SWING_10D)
+
+    assert restored is not None
+    assert restored.decision_at == datetime(2026, 7, 1, 16, 0, 0)
+    assert restored.latest_completed_session == date(2026, 7, 1)
+    assert restored.analysis_as_of == date(2026, 7, 1)
+    assert restored.market_session_name == "AFTER_CLOSE"
+    assert restored.is_eod_pending is False
+    assert restored.resolution_source == "ihsg_cache_same_day"
+    assert restored.resolution_notes == ("note one", "note two")
+
+
+def test_legacy_label_rows_with_no_provenance_read_as_none(tmp_path: Path):
+    db_path = tmp_path / "data.db"
+    repo = SQLiteSignalForwardLabelsRepository(db_path)
+    label = _label(captured_at=datetime(2026, 7, 1, 9, 0, 0), close_return=4.0)
+
+    repo.save_many([label])
+    restored = repo.get("BBCA", date(2026, 7, 1), SignalLabelHorizon.SWING_10D)
+
+    assert restored is not None
+    assert restored.decision_at is None
+    assert restored.latest_completed_session is None
+    assert restored.analysis_as_of is None
+    assert restored.market_session_name is None
+    assert restored.is_eod_pending is None
+    assert restored.resolution_source is None
+    assert restored.resolution_notes == ()
+
+
+def _label(
+    *,
+    captured_at: datetime,
+    close_return: float,
+    decision_at: datetime | None = None,
+    latest_completed_session: date | None = None,
+    analysis_as_of: date | None = None,
+    market_session_name: str | None = None,
+    is_eod_pending: bool | None = None,
+    resolution_source: str | None = None,
+    resolution_notes: tuple[str, ...] = (),
+) -> SignalForwardLabel:
     return SignalForwardLabel(
         ticker="BBCA",
         signal_date=date(2026, 7, 1),
@@ -129,4 +188,11 @@ def _label(*, captured_at: datetime, close_return: float) -> SignalForwardLabel:
             market_regime={"regime": "RISK_ON"},
         ),
         observation_captured_at=captured_at,
+        decision_at=decision_at,
+        latest_completed_session=latest_completed_session,
+        analysis_as_of=analysis_as_of,
+        market_session_name=market_session_name,
+        is_eod_pending=is_eod_pending,
+        resolution_source=resolution_source,
+        resolution_notes=resolution_notes,
     )

@@ -24,6 +24,9 @@ if TYPE_CHECKING:
     from src.application.services.accumulation_candidate_observation_persister import (
         AccumulationCandidateObservationPersister,
     )
+    from src.application.services.effective_market_session_resolver import (
+        EffectiveMarketSession,
+    )
     from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 
 
@@ -45,11 +48,16 @@ class RecordAccumulationObservationsUseCase:
         self._observation_persister = observation_persister
 
     def execute(
-        self, request: "AccumulationScreenRequest"
+        self,
+        request: "AccumulationScreenRequest",
+        effective_session: "EffectiveMarketSession | None" = None,
     ) -> RecordAccumulationObservationsResult:
         response = self._screen_use_case.execute(request)
         recorded_count = self._observation_persister.persist(
-            response.observation_candidates, response.screened_at, request
+            response.observation_candidates,
+            response.screened_at,
+            request,
+            effective_session=effective_session,
         )
         return RecordAccumulationObservationsResult(
             response=response, recorded_count=recorded_count

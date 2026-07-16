@@ -23,6 +23,9 @@ if TYPE_CHECKING:
     from src.application.services.accumulation_candidate_evidence_builder import (
         AccumulationCandidateEvidenceBuilder,
     )
+    from src.application.services.effective_market_session_resolver import (
+        EffectiveMarketSession,
+    )
     from src.application.services.primary_setup_family_resolver import (
         PrimarySetupFamilyResolver,
     )
@@ -55,6 +58,7 @@ class AccumulationCandidateObservationPersister:
         snapshot_date: date,
         request: accumulation_dto.AccumulationScreenRequest,
         workflow: str = "screen_accum",
+        effective_session: "EffectiveMarketSession | None" = None,
     ) -> int:
         """Persist observations for every evaluated candidate (pass + rejected).
 
@@ -62,6 +66,11 @@ class AccumulationCandidateObservationPersister:
         repository, nothing was evaluated, or persistence failed). This is the
         only place candidate observations are written — call it intentionally,
         not from read-only/diagnostic screen execution.
+
+        effective_session, when provided, is copied verbatim onto every
+        persisted CandidateObservation as provenance metadata (DQ-002E). This
+        method never resolves a session itself — callers that need one must
+        resolve it upstream and pass it in.
         """
         if self._candidate_observations_repo is None or not observation_candidates:
             return 0
@@ -144,6 +153,29 @@ class AccumulationCandidateObservationPersister:
                         window_sessions=request.window_days,
                         data_as_of_date=data_as_of_date,
                         config_hash=config_hash,
+                        decision_at=(
+                            effective_session.decision_at if effective_session else None
+                        ),
+                        latest_completed_session=(
+                            effective_session.latest_completed_session
+                            if effective_session
+                            else None
+                        ),
+                        analysis_as_of=(
+                            effective_session.analysis_as_of if effective_session else None
+                        ),
+                        market_session_name=(
+                            effective_session.market_session_name if effective_session else None
+                        ),
+                        is_eod_pending=(
+                            effective_session.is_eod_pending if effective_session else None
+                        ),
+                        resolution_source=(
+                            effective_session.resolution_source if effective_session else None
+                        ),
+                        resolution_notes=(
+                            effective_session.notes if effective_session else ()
+                        ),
                         payload=build_candidate_observation_payload(
                             c,
                             screen_result=screen_result,

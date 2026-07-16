@@ -67,6 +67,16 @@ class SignalForwardLabel:
     unavailable_reason: str | None
     fingerprint: SignalObservationFingerprint
     observation_captured_at: datetime | None = None
+    # Effective-session provenance (DQ-002E). Copied verbatim from the source
+    # CandidateObservation at label-generation time — never derived from
+    # signal_date and never resolved fresh here.
+    decision_at: datetime | None = None
+    latest_completed_session: date | None = None
+    analysis_as_of: date | None = None
+    market_session_name: str | None = None
+    is_eod_pending: bool | None = None
+    resolution_source: str | None = None
+    resolution_notes: tuple[str, ...] = ()
     schema_version: int = 1
 
     def __post_init__(self) -> None:
@@ -111,6 +121,17 @@ class SignalForwardLabel:
             "observation_captured_at": (
                 self.observation_captured_at.isoformat() if self.observation_captured_at else None
             ),
+            "decision_at": self.decision_at.isoformat() if self.decision_at else None,
+            "latest_completed_session": (
+                self.latest_completed_session.isoformat()
+                if self.latest_completed_session
+                else None
+            ),
+            "analysis_as_of": self.analysis_as_of.isoformat() if self.analysis_as_of else None,
+            "market_session_name": self.market_session_name,
+            "is_eod_pending": self.is_eod_pending,
+            "resolution_source": self.resolution_source,
+            "resolution_notes": list(self.resolution_notes),
         }
 
     @classmethod
@@ -137,5 +158,12 @@ class SignalForwardLabel:
             unavailable_reason=data.get("unavailable_reason"),
             fingerprint=SignalObservationFingerprint.from_dict(data.get("fingerprint") or {}),
             observation_captured_at=_parse_optional_datetime(data.get("observation_captured_at")),
+            decision_at=_parse_optional_datetime(data.get("decision_at")),
+            latest_completed_session=_parse_optional_date(data.get("latest_completed_session")),
+            analysis_as_of=_parse_optional_date(data.get("analysis_as_of")),
+            market_session_name=data.get("market_session_name"),
+            is_eod_pending=_optional_bool(data.get("is_eod_pending")),
+            resolution_source=data.get("resolution_source"),
+            resolution_notes=tuple(data.get("resolution_notes") or ()),
             schema_version=int(data.get("schema_version", 1)),
         )

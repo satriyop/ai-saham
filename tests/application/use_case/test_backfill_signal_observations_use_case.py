@@ -113,9 +113,11 @@ class FakeAccumulationScreenUseCase:
     def __init__(self, observations: FakeCandidateObservationsRepository):
         self.observations = observations
         self.requests = []
+        self.effective_sessions = []
 
-    def execute(self, request):
+    def execute(self, request, effective_session=None):
         self.requests.append(request)
+        self.effective_sessions.append(effective_session)
         assert request.as_of_date is not None
         recorded_count = 0
         for ticker in request.tickers:
@@ -145,7 +147,7 @@ class FakeAccumulationScreenUseCaseWithFingerprint:
         self.observations = observations
         self.requests = []
 
-    def execute(self, request):
+    def execute(self, request, effective_session=None):
         self.requests.append(request)
         assert request.as_of_date is not None
         market_context = request.market_context
@@ -520,6 +522,50 @@ def test_backfill_market_context_failure_does_not_block_observations_but_notes_i
         assert fingerprint["regime_confidence_at_signal"] is None
         assert fingerprint["regime_stability_at_signal"] is None
         assert fingerprint["days_in_regime_at_signal"] is None
+
+
+def test_backfill_resolves_one_deterministic_session_per_trading_date():
+    """DQ-002E: exactly one EffectiveMarketSession per trading_date, shared
+    across every window for that date — never resolved per ticker/window —
+    and built from the deterministic after-close WIB decision timestamp."""
+    first_date = date(2026, 6, 1)
+    second_date = date(2026, 6, 2)
+    observations = FakeCandidateObservationsRepository()
+    screen = FakeAccumulationScreenUseCase(observations)
+    candles = [
+        _candle("IHSG", first_date),
+        _candle("IHSG", second_date),
+        _candle("BBCA", first_date),
+        _candle("BBCA", second_date),
+    ]
+
+    BackfillSignalObservationsUseCase(
+        record_observations_use_case=screen,
+        screen_request_builder=_request_builder(),
+        market_data_repository=FakeMarketRepository(candles),
+        candidate_observations_repository=observations,
+    ).execute(
+        BackfillSignalObservationsRequest(
+            tickers=("BBCA",),
+            start_date=first_date,
+            end_date=second_date,
+            windows=(7, 30, 90),
+        )
+    )
+
+    # 2 dates x 3 windows = 6 record() calls, but only 2 distinct sessions —
+    # one resolve per date, reused across all windows for that date.
+    assert len(screen.effective_sessions) == 6
+    assert all(session is not None for session in screen.effective_sessions)
+    first_date_sessions = screen.effective_sessions[0:3]
+    second_date_sessions = screen.effective_sessions[3:6]
+    assert len(set(id(s) for s in first_date_sessions)) == 1
+    assert len(set(id(s) for s in second_date_sessions)) == 1
+    assert first_date_sessions[0] is not second_date_sessions[0]
+
+    decision_at = first_date_sessions[0].decision_at
+    assert decision_at.date() == first_date
+    assert decision_at.hour == 16 and decision_at.minute == 0
 
 
 def _request_builder() -> BuildSignalObservationScreenRequest:
