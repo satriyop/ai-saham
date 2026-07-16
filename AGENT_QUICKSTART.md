@@ -192,5 +192,9 @@ For documentation-only edits:
 - Small localized code change: run focused tests for touched behavior and `git diff --check`.
 - Shared scoring/risk/signal/tuning/persistence/config change: run focused tests, architecture boundary tests, and the full test suite unless explicitly deferred.
 - CLI/output change: run command contract or display tests, and manually inspect representative output when practical.
+- Data ingestion, persistence, source mapping, observations, labels, replay,
+  readiness, tuning, market-context evidence, or data-safety claims: apply the
+  Data Contract Audit Gate in `AI_AGENT_CHECKLIST.md` and report relevant
+  `saham audit data ...` findings.
 
 If verification is skipped or impossible, say exactly why.

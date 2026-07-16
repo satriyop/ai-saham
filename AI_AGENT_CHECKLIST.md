@@ -141,6 +141,44 @@ If an adapter needs any forbidden logic, create or reuse an application use case
 * Local-first persistence is preserved
 * Schema changes, if any, are explicit and justified
 
+### Data Contract Audit Gate
+
+Run the data audit commands when a task touches or depends on persisted source
+semantics. This gate applies to:
+
+* fetch/provider changes
+* SQLite schema, migration, or repository changes
+* source field mapping or provider field remapping
+* artifact identity, observations, backfill, labels, replay, readiness, tuning,
+  or market-context evidence
+* any claim that data is point-in-time safe, replay safe, readiness safe,
+  tuning safe, or baseline ready
+
+When this gate applies, run these commands or explicitly justify why they are
+not applicable:
+
+```bash
+saham audit data manifest --format json --db data/db/data.db
+saham audit data source-contracts --format json --db data/db/data.db
+saham audit data reconcile-sources --format json --db data/db/data.db
+```
+
+Report:
+
+* command exit status
+* overall audit status
+* new or task-relevant `FAIL`/`WARN` findings
+* whether findings are pre-existing live-data issues or caused by the current
+  change
+
+A `FAIL` does not automatically block unrelated code, but it blocks any claim
+that the affected data path is canonical, point-in-time safe, replay safe,
+readiness safe, tuning safe, or baseline ready. Do not weaken audit contracts
+to make the command pass.
+
+This gate is not required for docs-only edits, pure display wording, isolated
+unit refactors, or CLI help changes that do not alter persisted data semantics.
+
 ### Data Source Swap Guardrail
 
 Before recommending or implementing any data-source swap, repository-method swap,
