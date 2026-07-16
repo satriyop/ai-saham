@@ -471,6 +471,146 @@ def test_contract_gate_does_not_mutate_database(tmp_path: Path):
     assert db_path.stat().st_mtime_ns == mtime_before
 
 
+# ── audit data seasonality-cleanup-plan ──────────────────────────────────
+
+
+def _build_seasonality_db(db_path: Path, *, with_invalid_row: bool) -> None:
+    from src.infrastructure.browser.stockbit_seasonality import StockbitSeasonalityProvider
+
+    StockbitSeasonalityProvider(api_client=None, db_path=db_path)  # builds schema
+
+    with sqlite3.connect(str(db_path)) as conn:
+        conn.execute(
+            """
+            INSERT INTO seasonality_cache
+                (ticker, year, month, avg_return_pct, win_rate_pct,
+                 positive_years, total_years, back_years, source, fetched_month, fetched_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("BBCA", 2026, 1, 1.0, 60.0, 3, 5, 5, "stockbit", "2026-01", "2026-01-01T00:00:00"),
+        )
+        if with_invalid_row:
+            conn.execute(
+                """
+                INSERT INTO seasonality_cache
+                    (ticker, year, month, avg_return_pct, win_rate_pct,
+                     positive_years, total_years, back_years, source, fetched_month, fetched_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                ("BBRI", 2026, 2, None, None, None, None, None, None, "2026-02", None),
+            )
+
+
+def test_seasonality_cleanup_plan_json_output_follows_contract_when_clean(tmp_path: Path):
+    db_path = tmp_path / "seasonality_clean.db"
+    _build_seasonality_db(db_path, with_invalid_row=False)
+
+    result = runner.invoke(
+        app,
+        [
+            "audit", "data", "seasonality-cleanup-plan",
+            "--format", "json", "--db", str(db_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["artifact_type"] == "seasonality_cleanup_plan"
+    assert payload["schema_version"] == 1
+    assert payload["table"] == "seasonality_cache"
+    assert payload["status"] == "PASS"
+    assert payload["invalid_row_count"] == 0
+    assert payload["dry_run"] is True
+    assert payload["proposed_action"] == "DELETE_INVALID_SEASONALITY_ROW"
+    assert payload["rows"] == []
+
+
+def test_seasonality_cleanup_plan_json_output_lists_invalid_rows(tmp_path: Path):
+    db_path = tmp_path / "seasonality_invalid.db"
+    _build_seasonality_db(db_path, with_invalid_row=True)
+
+    result = runner.invoke(
+        app,
+        [
+            "audit", "data", "seasonality-cleanup-plan",
+            "--format", "json", "--db", str(db_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["status"] == "FAIL"
+    assert payload["invalid_row_count"] == 1
+    row = payload["rows"][0]
+    assert row["ticker"] == "BBRI"
+    assert set(row["reasons"]) == {"INVALID_SOURCE", "MISSING_FETCHED_AT", "ALL_METRICS_NULL"}
+    assert "invalid_reason_counts" in payload
+    assert payload["invalid_reason_counts"]["INVALID_SOURCE"] == 1
+
+
+def test_seasonality_cleanup_plan_exits_zero_even_when_status_fail(tmp_path: Path):
+    """Report command, not a gate: exit code must stay 0 regardless of status."""
+    db_path = tmp_path / "seasonality_invalid.db"
+    _build_seasonality_db(db_path, with_invalid_row=True)
+
+    result = runner.invoke(
+        app,
+        [
+            "audit", "data", "seasonality-cleanup-plan",
+            "--format", "json", "--db", str(db_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["status"] == "FAIL"
+
+
+def test_seasonality_cleanup_plan_table_format_shows_counts_and_exits_zero(tmp_path: Path):
+    db_path = tmp_path / "seasonality_invalid.db"
+    _build_seasonality_db(db_path, with_invalid_row=True)
+
+    result = runner.invoke(
+        app,
+        ["audit", "data", "seasonality-cleanup-plan", "--db", str(db_path)],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Seasonality Cleanup Plan" in result.output
+    assert "Invalid rows: 1" in result.output
+    assert "INVALID_SOURCE" in result.output
+
+
+def test_seasonality_cleanup_plan_rejects_invalid_format(tmp_path: Path):
+    db_path = tmp_path / "seasonality.db"
+    _build_seasonality_db(db_path, with_invalid_row=False)
+
+    result = runner.invoke(
+        app,
+        [
+            "audit", "data", "seasonality-cleanup-plan",
+            "--format", "xml", "--db", str(db_path),
+        ],
+    )
+
+    assert result.exit_code != 0
+
+
+def test_seasonality_cleanup_plan_does_not_mutate_database(tmp_path: Path):
+    db_path = tmp_path / "seasonality_invalid.db"
+    _build_seasonality_db(db_path, with_invalid_row=True)
+    mtime_before = db_path.stat().st_mtime_ns
+
+    runner.invoke(
+        app,
+        [
+            "audit", "data", "seasonality-cleanup-plan",
+            "--format", "json", "--db", str(db_path),
+        ],
+    )
+
+    assert db_path.stat().st_mtime_ns == mtime_before
+
+
 # ── registration ──────────────────────────────────────────────────────────
 
 
@@ -511,5 +651,6 @@ def test_dq_contract_gate_added_exactly_one_new_command():
         "source-contracts",
         "reconcile-sources",
         "contract-gate",
+        "seasonality-cleanup-plan",
     }
     assert "reconcile-sources" in result.output

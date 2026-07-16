@@ -488,6 +488,56 @@ is not complete.
     py_compile` on changed files; `git diff --check` clean; live `saham
     audit data contract-gate --format json` confirmed exit code 1 and still
     lists the seasonality_cache WARN findings unsuppressed.
+- **DQ-001G** (2026-07-16, implemented — dry-run only): new read-only report
+  command `saham audit data seasonality-cleanup-plan --format json|table
+  [--db PATH]` that scans `seasonality_cache` and lists exactly which rows
+  are invalid and why, for a future repair task to act on. This is a
+  **dry-run planning tool, not a repair/gate command**: it never mutates the
+  database, has no delete/quarantine implementation, and does not change
+  `DQ-CONTRACT-GATE` or the existing `source-contracts`/`reconcile-sources`
+  commands. It always exits 0, even when `status` is `FAIL` — it is a report,
+  not a gate.
+  - `BuildSeasonalityCleanupPlanUseCase`
+    (`src/application/use_case/build_seasonality_cleanup_plan_use_case.py`)
+    owns the row-invalidity policy (kept out of the infrastructure reader,
+    matching the DQ-001A/AuditSourceFieldContractsUseCase convention): a row
+    is invalid if `source` is null/empty/case-insensitive `"unknown"`
+    (`INVALID_SOURCE`), `fetched_at` is null/empty (`MISSING_FETCHED_AT`),
+    `fetched_at` is set but not ISO-parseable (`MALFORMED_FETCHED_AT`), or
+    every one of `avg_return_pct`/`win_rate_pct`/`positive_years`/
+    `total_years`/`back_years` is null (`ALL_METRICS_NULL`) — a row with only
+    *some* metrics null is deliberately left out of the plan (DQ-001F's
+    runtime guard already handles that case independently). A row can carry
+    multiple reason codes at once.
+  - `SQLiteSeasonalityCleanupPlanReader`
+    (`src/infrastructure/persistence/sqlite_seasonality_cleanup_plan_reader.py`)
+    is a read-only URI (`mode=ro`) observer that returns every raw
+    `seasonality_cache` row uninterpreted — no classification, no DDL/write
+    statements.
+  - Output contract: `artifact_type: "seasonality_cleanup_plan"`,
+    `schema_version: 1`, `status: "PASS"|"FAIL"` (`FAIL` iff
+    `invalid_row_count > 0`), `invalid_row_count`, `invalid_reason_counts`,
+    `dry_run: true`, `proposed_action: "DELETE_INVALID_SEASONALITY_ROW"`
+    (documented, never executed), and `rows: [{ticker, year, month,
+    fetched_month, fetched_at, source, reasons}]`.
+  - Tests: reader tests (4) proving raw pass-through and no mutation; use
+    case tests (14) covering all 4 reason codes individually, multi-reason
+    rows, reason-count tallying, the "one null metric ≠ invalid" rule, and
+    one end-to-end test against the real SQLite reader/schema; CLI tests (7)
+    covering the JSON/table contract, exit-code-0-on-FAIL, invalid `--format`
+    rejection, and no-mutation. `test_command_contract.py` and the
+    `audit data --help` command-listing test updated for the new command
+    (intentional addition, not scope creep).
+  - Verification: `pytest -k "seasonality or contract_gate or audit_data or
+    command_contract"` — 102 passed; full suite — 4403 passed; `python -m
+    py_compile` on changed files; `git diff --check` clean; live `saham
+    audit data seasonality-cleanup-plan --format json` reports 433 invalid
+    rows (413 `INVALID_SOURCE` + 413 `ALL_METRICS_NULL` overlapping, 47
+    `MISSING_FETCHED_AT`, 0 `MALFORMED_FETCHED_AT`) and **exits 0**; live
+    `saham audit data contract-gate --format json` still **exits 1** —
+    confirming this task does not close the live gate. Closing the gate
+    requires an actual repair/quarantine task (not yet implemented) or a
+    deliberate contract relaxation.
 - DQ-001 acceptance criteria below are **not** marked complete — DQ-001A/C/E
   now give field contracts for 20 tables (5 core + 13 enrichment + 2
   market-context) and DQ-001B/D/E give executable reconciliation for

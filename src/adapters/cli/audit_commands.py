@@ -5,6 +5,7 @@ Public command registration lives in lifecycle routers:
   saham audit data source-contracts
   saham audit data reconcile-sources
   saham audit data contract-gate
+  saham audit data seasonality-cleanup-plan
 Layer: Adapter
 """
 
@@ -35,6 +36,10 @@ from src.application.use_case.build_dq_contract_gate_use_case import (
     BuildDQContractGateUseCase,
     DQContractGateResponse,
 )
+from src.application.use_case.build_seasonality_cleanup_plan_use_case import (
+    BuildSeasonalityCleanupPlanUseCase,
+    SeasonalityCleanupPlanResponse,
+)
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.audit_config_identity_reader import (
     FileAuditConfigIdentityReader,
@@ -57,6 +62,9 @@ from src.infrastructure.persistence.sqlite_signal_artifact_reconciliation_reader
 )
 from src.infrastructure.persistence.sqlite_source_field_contract_reader import (
     SQLiteSourceFieldContractReader,
+)
+from src.infrastructure.persistence.sqlite_seasonality_cleanup_plan_reader import (
+    SQLiteSeasonalityCleanupPlanReader,
 )
 from src.infrastructure.persistence.sqlite_source_reconciliation_reader import (
     SQLiteSourceReconciliationReader,
@@ -169,10 +177,32 @@ def contract_gate(
     _run_contract_gate(db_path=db_path, output_format=output_format)
 
 
+def seasonality_cleanup_plan(
+    db_path: Annotated[
+        Optional[Path],
+        typer.Option("--db", help="SQLite database path"),
+    ] = None,
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format: table or json."),
+    ] = "table",
+) -> None:
+    """
+    Emit a read-only DQ-001G dry-run cleanup plan for invalid seasonality_cache
+    rows. Report command only: never mutates the database, always exits 0.
+    """
+    if output_format not in _VALID_FORMATS:
+        raise typer.BadParameter(
+            f"--format must be one of {_VALID_FORMATS}, got '{output_format}'."
+        )
+    _run_seasonality_cleanup_plan(db_path=db_path, output_format=output_format)
+
+
 data_app.command("manifest")(manifest)
 data_app.command("source-contracts")(source_contracts)
 data_app.command("reconcile-sources")(reconcile_sources)
 data_app.command("contract-gate")(contract_gate)
+data_app.command("seasonality-cleanup-plan")(seasonality_cleanup_plan)
 audit_app.add_typer(data_app, name="data")
 
 
@@ -479,4 +509,75 @@ def _print_contract_gate_table(response: DQContractGateResponse) -> None:
     else:
         console.print("")
         console.print("[green]✓ DQ-CONTRACT-GATE passed — no blockers.[/green]")
+    console.print("")
+
+
+def _run_seasonality_cleanup_plan(db_path: Path | None, output_format: str) -> None:
+    cfg = load_app_config()
+    resolved_db = db_path or Path(cfg.storage.db_path)
+
+    use_case = BuildSeasonalityCleanupPlanUseCase(
+        reader=SQLiteSeasonalityCleanupPlanReader(resolved_db),
+    )
+    response = use_case.execute()
+
+    if output_format == "json":
+        typer.echo(json.dumps(response.to_dict(), indent=2, ensure_ascii=False))
+        return
+
+    _print_seasonality_cleanup_plan_table(response)
+
+    # Report command, not a gate: always exits 0, even when status is FAIL.
+
+
+def _print_seasonality_cleanup_plan_table(response: SeasonalityCleanupPlanResponse) -> None:
+    console = Console()
+    color = {"PASS": "green", "FAIL": "red"}.get(response.status, "white")
+
+    console.print("")
+    status_text = Text()
+    status_text.append("Status: ", style="bold")
+    status_text.append(response.status, style=f"bold {color}")
+    status_text.append(f" | Invalid rows: {response.invalid_row_count}")
+    status_text.append(" | Dry run — no mutation performed", style="dim")
+    panel = Panel(
+        status_text,
+        title="[bold]Seasonality Cleanup Plan (DQ-001G, dry-run)[/bold]",
+        border_style=color,
+        expand=False,
+    )
+    console.print(panel)
+
+    console.print("")
+    reason_table = Table(show_header=True, header_style="bold magenta")
+    reason_table.add_column("Reason", style="cyan")
+    reason_table.add_column("Count", justify="right")
+    for reason, count in response.invalid_reason_counts.items():
+        reason_table.add_row(reason, str(count))
+    console.print(reason_table)
+
+    if response.rows:
+        console.print("")
+        console.print(f"[bold]Proposed action:[/bold] {response.proposed_action} (not executed)")
+        console.print("")
+        rows_table = Table(show_header=True, header_style="bold magenta")
+        rows_table.add_column("Ticker", style="cyan")
+        rows_table.add_column("Year", justify="right")
+        rows_table.add_column("Month", justify="right")
+        rows_table.add_column("Fetched At")
+        rows_table.add_column("Source")
+        rows_table.add_column("Reasons")
+        for row in response.rows:
+            rows_table.add_row(
+                row.ticker,
+                str(row.year),
+                str(row.month),
+                row.fetched_at or "-",
+                row.source or "-",
+                ", ".join(row.reasons),
+            )
+        console.print(rows_table)
+    else:
+        console.print("")
+        console.print("[green]✓ No invalid seasonality_cache rows found.[/green]")
     console.print("")
