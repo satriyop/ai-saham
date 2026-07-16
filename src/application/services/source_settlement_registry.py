@@ -18,6 +18,7 @@ Layer: Application
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import time
 from enum import Enum
 
 
@@ -50,6 +51,16 @@ class SourceSettlementRule:
     maximum age (in days, relative to `decision_at`) before a fetched
     snapshot is judged `STALE` rather than `CURRENT`. `None` means no cap is
     enforced (age alone never makes it `STALE`).
+
+    `provider_cutoff_time` (DQ-002H) only applies to `SESSION_ALIGNED`
+    sources: a policy-owned (not provider-published) WIB wall-clock time by
+    which a lagged source's data is expected to have settled for its
+    lagged session. It is purely informational/explanatory — it does
+    **not** change whether a source is `LATE` vs `STALE`; that remains
+    governed exclusively by `settlement_lag_days` (see
+    `AssessSourceAvailabilityUseCase._assess_session_aligned`). Combined
+    with the lagged session's date and `IDX_TIMEZONE` to produce
+    `SourceAvailabilityAssessment.expected_available_at`.
     """
 
     source_family: str
@@ -57,6 +68,7 @@ class SourceSettlementRule:
     is_authoritative_capable: bool
     settlement_lag_days: int = 0
     max_staleness_days: int | None = None
+    provider_cutoff_time: time | None = None
 
     def __post_init__(self) -> None:
         if self.settlement_basis is SettlementBasis.DIAGNOSTIC_ONLY and (
@@ -66,6 +78,15 @@ class SourceSettlementRule:
                 f"source family '{self.source_family}' is DIAGNOSTIC_ONLY and must not "
                 "be is_authoritative_capable=True; sentiment-class sources can never "
                 "become authoritative."
+            )
+        if (
+            self.provider_cutoff_time is not None
+            and self.settlement_basis is not SettlementBasis.SESSION_ALIGNED
+        ):
+            raise ValueError(
+                f"source family '{self.source_family}' sets provider_cutoff_time but is "
+                f"not SESSION_ALIGNED ({self.settlement_basis.value}); provider cutoffs "
+                "are only meaningful for session-aligned sources."
             )
 
 
@@ -82,36 +103,52 @@ class SourceSettlementRegistry:
         return tuple(self._rules.keys())
 
 
+# DQ-002H: policy-owned placeholder provider settlement cutoff for broker/flow
+# sources, expressed in WIB (IDX_TIMEZONE). This is NOT a documented Stockbit/
+# IDX provider SLA — no such published cutoff was found in `docs/` or
+# `config/` at the time this was added. It is a conservative, explicit
+# placeholder (end-of-day, well after the 16:00 WIB market close) so cutoff
+# visibility exists and is reviewable, rather than an undocumented implicit
+# assumption. Revise this constant (and this comment) if a real provider SLA
+# is ever documented.
+BROKER_PROVIDER_CUTOFF_WIB = time(20, 0)
+
 _DEFAULT_RULES: dict[str, SourceSettlementRule] = {
     "candles": SourceSettlementRule(
         source_family="candles",
         settlement_basis=SettlementBasis.SESSION_ALIGNED,
         is_authoritative_capable=True,
         settlement_lag_days=0,
+        # No provider cutoff: candles have zero allowed lag (any gap is
+        # immediately STALE), so a settlement cutoff concept does not apply.
     ),
     "broker_summaries": SourceSettlementRule(
         source_family="broker_summaries",
         settlement_basis=SettlementBasis.SESSION_ALIGNED,
         is_authoritative_capable=True,
         settlement_lag_days=1,
+        provider_cutoff_time=BROKER_PROVIDER_CUTOFF_WIB,
     ),
     "broker_daily_flow": SourceSettlementRule(
         source_family="broker_daily_flow",
         settlement_basis=SettlementBasis.SESSION_ALIGNED,
         is_authoritative_capable=True,
         settlement_lag_days=1,
+        provider_cutoff_time=BROKER_PROVIDER_CUTOFF_WIB,
     ),
     "foreign_flow_points": SourceSettlementRule(
         source_family="foreign_flow_points",
         settlement_basis=SettlementBasis.SESSION_ALIGNED,
         is_authoritative_capable=True,
         settlement_lag_days=1,
+        provider_cutoff_time=BROKER_PROVIDER_CUTOFF_WIB,
     ),
     "foreign_flow_snapshots": SourceSettlementRule(
         source_family="foreign_flow_snapshots",
         settlement_basis=SettlementBasis.SESSION_ALIGNED,
         is_authoritative_capable=True,
         settlement_lag_days=1,
+        provider_cutoff_time=BROKER_PROVIDER_CUTOFF_WIB,
     ),
     "analyst_cache": SourceSettlementRule(
         source_family="analyst_cache",

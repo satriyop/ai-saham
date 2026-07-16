@@ -34,8 +34,10 @@ from src.application.services.effective_market_session_resolver import (
 from src.application.services.source_settlement_registry import (
     SettlementBasis,
     SourceSettlementRegistry,
+    SourceSettlementRule,
     default_source_settlement_registry,
 )
+from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.domain.value_objects.source_availability import (
     SourceAvailabilityAssessment,
     SourceAvailabilityStatus,
@@ -118,9 +120,10 @@ class AssessSourceAvailabilityUseCase:
                 ),
             )
 
+        expected_available_at: datetime | None = None
         if rule.settlement_basis is SettlementBasis.SESSION_ALIGNED:
-            status, reason, notes = self._assess_session_aligned(
-                rule.settlement_lag_days, effective_session, observed_through
+            status, reason, notes, expected_available_at = self._assess_session_aligned(
+                rule, effective_session, observed_through, decision_at
             )
         else:
             status, reason, notes = self._assess_fetch_timestamp(
@@ -148,14 +151,17 @@ class AssessSourceAvailabilityUseCase:
             is_authoritative=is_authoritative,
             reason=reason,
             notes=notes,
+            expected_available_at=expected_available_at,
         )
 
     @staticmethod
     def _assess_session_aligned(
-        settlement_lag_days: int,
+        rule: SourceSettlementRule,
         effective_session: EffectiveMarketSession,
         observed_through: date | None,
-    ) -> tuple[SourceAvailabilityStatus, str, tuple[str, ...]]:
+        decision_at: datetime,
+    ) -> tuple[SourceAvailabilityStatus, str, tuple[str, ...], datetime | None]:
+        settlement_lag_days = rule.settlement_lag_days
         latest_completed_session = effective_session.latest_completed_session
 
         if latest_completed_session is None:
@@ -163,6 +169,7 @@ class AssessSourceAvailabilityUseCase:
                 SourceAvailabilityStatus.UNKNOWN,
                 "LATEST_COMPLETED_SESSION_UNRESOLVED",
                 ("The effective market session could not resolve a completed session.",),
+                None,
             )
 
         if observed_through is None:
@@ -170,6 +177,7 @@ class AssessSourceAvailabilityUseCase:
                 SourceAvailabilityStatus.UNKNOWN,
                 "SOURCE_MISSING",
                 ("No session-aligned observation known for this source.",),
+                None,
             )
 
         gap_days = (latest_completed_session - observed_through).days
@@ -182,31 +190,63 @@ class AssessSourceAvailabilityUseCase:
                     f"observed_through ({observed_through.isoformat()}) is after the "
                     f"latest completed session ({latest_completed_session.isoformat()}).",
                 ),
+                None,
             )
 
         if gap_days == 0:
-            return (SourceAvailabilityStatus.CURRENT, "SESSION_ALIGNED_CURRENT", ())
+            return (SourceAvailabilityStatus.CURRENT, "SESSION_ALIGNED_CURRENT", (), None)
+
+        # DQ-002H: `expected_available_at` is the policy-owned provider
+        # settlement cutoff for the *latest completed session* (the session
+        # this source is currently lagging behind), when the rule declares
+        # one. It is purely explanatory: whether the source is `LATE` or
+        # `STALE` is decided exclusively by `gap_days` vs.
+        # `settlement_lag_days` below, never by whether this cutoff has
+        # passed. A source that is one session behind stays `LATE` even
+        # after its cutoff time has passed for that session — the cutoff
+        # only adds a note making that explicit for reporting.
+        expected_available_at = (
+            datetime.combine(
+                latest_completed_session, rule.provider_cutoff_time, tzinfo=IDX_TIMEZONE
+            )
+            if rule.provider_cutoff_time is not None
+            else None
+        )
 
         if gap_days <= settlement_lag_days:
-            return (
-                SourceAvailabilityStatus.LATE,
-                "SESSION_ALIGNED_LATE_WITHIN_LAG",
-                (
-                    f"observed_through is {gap_days} session(s) behind the latest "
-                    f"completed session ({latest_completed_session.isoformat()}), "
-                    f"within the expected {settlement_lag_days}-session settlement lag.",
-                ),
-            )
-
-        return (
-            SourceAvailabilityStatus.STALE,
-            "SESSION_ALIGNED_STALE",
-            (
+            notes = (
                 f"observed_through is {gap_days} session(s) behind the latest "
-                f"completed session ({latest_completed_session.isoformat()}), beyond "
-                f"the expected {settlement_lag_days}-session settlement lag.",
-            ),
+                f"completed session ({latest_completed_session.isoformat()}), "
+                f"within the expected {settlement_lag_days}-session settlement lag.",
+            )
+            if expected_available_at is not None:
+                if decision_at >= expected_available_at:
+                    notes = notes + (
+                        f"Provider cutoff ({expected_available_at.isoformat()}) has "
+                        "passed for the latest completed session, but this source "
+                        "remains within its configured settlement lag, so it stays "
+                        "LATE rather than STALE.",
+                    )
+                else:
+                    notes = notes + (
+                        f"Provider cutoff ({expected_available_at.isoformat()}) has not "
+                        "yet passed for the latest completed session; settlement is "
+                        "still pending.",
+                    )
+            return (SourceAvailabilityStatus.LATE, "SESSION_ALIGNED_LATE_WITHIN_LAG", notes, expected_available_at)
+
+        notes = (
+            f"observed_through is {gap_days} session(s) behind the latest "
+            f"completed session ({latest_completed_session.isoformat()}), beyond "
+            f"the expected {settlement_lag_days}-session settlement lag.",
         )
+        if expected_available_at is not None:
+            notes = notes + (
+                f"Provider cutoff ({expected_available_at.isoformat()}) for the latest "
+                "completed session has long passed; this source is beyond its "
+                "configured settlement lag.",
+            )
+        return (SourceAvailabilityStatus.STALE, "SESSION_ALIGNED_STALE", notes, expected_available_at)
 
     @staticmethod
     def _assess_fetch_timestamp(
@@ -246,6 +286,7 @@ class AssessSourceAvailabilityUseCase:
         is_authoritative: bool,
         reason: str,
         notes: tuple[str, ...],
+        expected_available_at: datetime | None = None,
     ) -> SourceAvailabilityAssessment:
         return SourceAvailabilityAssessment(
             source_family=source_family,
@@ -256,4 +297,5 @@ class AssessSourceAvailabilityUseCase:
             is_authoritative=is_authoritative,
             reason=reason,
             notes=notes,
+            expected_available_at=expected_available_at,
         )

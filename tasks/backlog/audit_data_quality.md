@@ -1091,18 +1091,19 @@ freshness_status           # CURRENT | STALE | PARTIAL | UNKNOWN | INVALID
 
 Artifacts without a defensible effective timestamp or data cutoff are invalid for learning and historical evaluation. Do not infer missing temporal provenance from `captured_at` alone.
 
-**State:** DQ-002A/B/C/D/E/F/G implemented (2026-07-16). One canonical application-layer
+**State:** DQ-002A/B/C/D/E/F/G/H implemented (2026-07-16). One canonical application-layer
 session resolver exists and now backs every audited freshness-adjacent
 service (`data_freshness_service.py`, `swing_data_freshness.py`,
 `market_freshness_service.py`), `candidate_observations`/
 `signal_forward_labels` persist its provenance, a per-source availability
 contract (`AssessSourceAvailabilityUseCase`) exists for Phase 2
 workflows/tests to assess CURRENT/STALE/PARTIAL/LATE/UNKNOWN/INVALID/
-DIAGNOSTIC_ONLY per source family, and planted-future-row leakage tests now
-exist against real repository/reader code for all 13 Phase 2 source
-families (one real leakage gap found and fixed — corporate action calendar
-`fetched_at` filtering); DQ-002 as a whole is not complete (see Deferred
-items below).
+DIAGNOSTIC_ONLY per source family with an explicit (policy-owned, not
+provider-verified) provider settlement cutoff for broker/flow sources, and
+planted-future-row leakage tests now exist against real repository/reader
+code for all 13 Phase 2 source families (one real leakage gap found and
+fixed — corporate action calendar `fetched_at` filtering); DQ-002 as a whole
+is not complete (see Deferred items below).
 
 - **DQ-002A** (2026-07-16, revised same day after review): `EffectiveMarketSessionResolver`
   added at `src/application/services/effective_market_session_resolver.py`.
@@ -1744,12 +1745,96 @@ items below).
     suite — 4625 passed; `python -m py_compile` on all changed/added files;
     `git diff --check` clean.
 
+- **DQ-002H** (2026-07-16): explicit provider settlement cutoff policy added
+  to `SourceSettlementRegistry`/`AssessSourceAvailabilityUseCase` for
+  `SESSION_ALIGNED` broker/flow sources. **Metadata/notes only — no runtime
+  status/reason-code behavior changed** for any existing case (all 28
+  pre-DQ-002H tests in `test_assess_source_availability_use_case.py` still
+  pass unmodified, proving this).
+  - **Exact cutoff chosen:** `BROKER_PROVIDER_CUTOFF_WIB = time(20, 0)`
+    (20:00 WIB) in `src/application/services/source_settlement_registry.py`,
+    applied to `broker_summaries`, `broker_daily_flow`,
+    `foreign_flow_points`, `foreign_flow_snapshots`. Explicitly documented in
+    code as a **policy-owned placeholder, not a published Stockbit/IDX
+    provider SLA** — no such documented cutoff was found in `docs/` or
+    `config/` at the time this was added; revise the constant (and its
+    comment) if a real provider SLA is ever documented. `candles` gets no
+    cutoff (`provider_cutoff_time=None`) — zero settlement lag makes a
+    cutoff concept meaningless for it.
+  - `SourceSettlementRule` gained `provider_cutoff_time: time | None = None`.
+    `__post_init__` gained a second guard (alongside the existing
+    sentiment-authority guard): constructing a rule with
+    `provider_cutoff_time` set on a non-`SESSION_ALIGNED` basis raises
+    `ValueError` at construction time — mirrors the existing
+    fail-fast-on-misconfiguration convention.
+  - **Chosen LATE-vs-STALE semantics (documented in code, per the task's own
+    recommendation):** `LATE` means "within the configured
+    `settlement_lag_days`, even after the provider cutoff has passed."
+    Whether a session-aligned source is `LATE` or `STALE` remains governed
+    **exclusively** by `gap_days` vs. `settlement_lag_days`, exactly as
+    before DQ-002H. The cutoff never promotes/demotes a status; it only:
+    - adds `SourceAvailabilityAssessment.expected_available_at` (new domain
+      field, `datetime | None`, included in `to_dict()`) —
+      `datetime.combine(latest_completed_session, provider_cutoff_time,
+      tzinfo=IDX_TIMEZONE)` for the lagged session, when the rule declares a
+      cutoff and the source is behind (`gap_days > 0`); `None` for
+      `CURRENT`/`UNKNOWN`/`INVALID`/`DIAGNOSTIC_ONLY`/`FETCH_TIMESTAMP`
+      sources or sources with no configured cutoff (candles).
+    - adds one explanatory note distinguishing "cutoff not yet passed,
+      settlement still pending" from "cutoff has passed, but this source
+      remains within its configured settlement lag, so it stays LATE rather
+      than STALE" (for the `LATE` case), or "cutoff has long passed; this
+      source is beyond its configured settlement lag" (for the `STALE`
+      case, informational only since `STALE` was already reached via
+      `gap_days`).
+  - Files changed: `src/domain/value_objects/source_availability.py`
+    (`expected_available_at` field + `to_dict()`),
+    `src/application/services/source_settlement_registry.py`
+    (`provider_cutoff_time` field, guard, `BROKER_PROVIDER_CUTOFF_WIB`
+    constant, 4 rule updates), `src/application/use_case/
+    assess_source_availability_use_case.py` (`_assess_session_aligned` now
+    takes the full `SourceSettlementRule` instead of just
+    `settlement_lag_days`, computes `expected_available_at` and the
+    cutoff-aware notes, returns a 4-tuple; `_assessment()` gained the new
+    field).
+  - Tests: 8 new tests in a new `TestProviderSettlementCutoff` class in
+    `tests/application/use_case/test_assess_source_availability_use_case.py`
+    covering all 7 required cases from this task's spec (broker one session
+    behind before cutoff → `LATE` + cutoff metadata; broker one session
+    behind after cutoff → stays `LATE` (chosen behavior), not `STALE`, with
+    a distinct note; broker beyond configured lag → `STALE` regardless of
+    cutoff; candles one session behind → `STALE` with **no** cutoff
+    metadata/notes leaking onto it; future broker row → `INVALID` with no
+    cutoff metadata (future-row guard unweakened); current broker source →
+    no cutoff metadata; registry construction rejects a misconfigured
+    `provider_cutoff_time` on a `FETCH_TIMESTAMP` rule), plus one test in
+    `TestFetchTimestampSources`
+    (`test_fetch_timestamp_sources_are_unaffected_by_provider_cutoff_fields`)
+    and one added assertion in `TestSentimentIsDiagnosticOnlyGuard` proving
+    `expected_available_at is None` for `sentiment`. Total: 28 tests in the
+    file (20 pre-existing, unmodified, still passing + 8 new).
+  - No signal scoring, RiskEngine, TradeSetup, tuning, live DB, observation,
+    or label change.
+  - Verification: `test_assess_source_availability_use_case.py` — 28
+    passed; `test_market_broker_source_temporal_leakage.py` — 11 passed
+    (unaffected, confirming the repository-level DQ-002G leakage tests
+    still hold under the new registry field); `python -m py_compile` on the
+    3 changed files; `git diff --check` clean; full suite — 4637 passed.
+  - **Not done in this slice:** provider cutoff is not wired into any CLI
+    output or `saham audit data ...` report (not requested); no real
+    documented provider SLA was found to replace the 20:00 WIB placeholder
+    with; band-specific behavior for `BEFORE_OPEN`/`PRE_OPEN`/`REGULAR`/
+    `PRE_CLOSING` remains unmodeled (unrelated to this slice, still listed
+    below).
+
 **Deferred (not started):**
 
-- Provider-settlement cutoffs and any band-specific behavioral difference
-  between `BEFORE_OPEN`/`PRE_OPEN`/`REGULAR`/`PRE_CLOSING` beyond the label
-  (all four currently resolve `latest_completed_session`/`is_eod_pending`
-  identically — no call site needs finer behavior yet).
+- Band-specific behavioral difference between `BEFORE_OPEN`/`PRE_OPEN`/
+  `REGULAR`/`PRE_CLOSING` beyond the label (all four currently resolve
+  `latest_completed_session`/`is_eod_pending` identically — no call site
+  needs finer behavior yet). Provider-settlement cutoffs themselves are
+  now modeled (DQ-002H) for broker/flow `SESSION_ALIGNED` sources, using a
+  policy-owned placeholder cutoff time, not a documented provider SLA.
 - `observed_through` / `available_at` / `freshness_status` fields from the
   full DQ-002 required contract — `EffectiveMarketSession` only implements
   `run_at`, `decision_at`, `latest_completed_session`, `analysis_as_of`,
@@ -1782,8 +1867,12 @@ items below).
 - [ ] Weekend, holiday, pre-open, intraday, post-close, and late-provider tests pass.
       (Weekend/holiday/pre-open/intraday/post-close covered by the resolver
       and its tests, and now by swing freshness's own tests reusing the
-      same fixture pattern; provider-settlement/late-provider cutoffs not
-      yet modeled.)
+      same fixture pattern. DQ-002H added a late-provider settlement-cutoff
+      policy (`provider_cutoff_time`) and tests for `SESSION_ALIGNED`
+      broker/flow sources, using a policy-owned placeholder cutoff (20:00
+      WIB), not a documented provider SLA. Left unchecked because the
+      cutoff value itself is not provider-verified and band-specific
+      pre-open/regular/pre-closing behavior is still unmodeled.)
 - [x] Every persisted artifact distinguishes execution time from effective market session.
       (DQ-002E: `candidate_observations` and `signal_forward_labels` now
       persist `decision_at`/`latest_completed_session`/`analysis_as_of`

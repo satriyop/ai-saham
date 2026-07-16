@@ -54,6 +54,16 @@ class SourceAvailabilityAssessment:
     is_authoritative: bool
     reason: str
     notes: tuple[str, ...] = ()
+    expected_available_at: datetime | None = None
+    """DQ-002H: the provider settlement cutoff timestamp for the source's
+    lagged session, when the settlement rule declares one
+    (`SourceSettlementRule.provider_cutoff_time`, `SESSION_ALIGNED` sources
+    only). `None` when the source has no configured cutoff (e.g. candles),
+    is not currently behind (`CURRENT`), or its status doesn't depend on
+    session alignment (`UNKNOWN`/`INVALID`/`DIAGNOSTIC_ONLY`/fetch-timestamp
+    sources). Purely informational — it does not change `status` or
+    `is_authoritative`; it exists so downstream reporting can explain *why*
+    a `LATE`/`STALE` source is classified that way relative to policy."""
 
     def to_dict(self) -> dict:
         return {
@@ -67,4 +77,7 @@ class SourceAvailabilityAssessment:
             "is_authoritative": self.is_authoritative,
             "reason": self.reason,
             "notes": list(self.notes),
+            "expected_available_at": (
+                self.expected_available_at.isoformat() if self.expected_available_at else None
+            ),
         }

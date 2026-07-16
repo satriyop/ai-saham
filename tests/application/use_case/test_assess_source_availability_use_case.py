@@ -150,6 +150,124 @@ class TestSessionAlignedSources:
         assert result.is_authoritative is False
 
 
+class TestProviderSettlementCutoff:
+    """DQ-002H: provider settlement cutoff metadata/notes for SESSION_ALIGNED
+    broker/flow sources. Chosen behavior (documented in
+    AssessSourceAvailabilityUseCase._assess_session_aligned): LATE means
+    "within allowed settlement lag, even after cutoff" — the cutoff only
+    adds explanatory notes/`expected_available_at`, it never changes
+    LATE-vs-STALE, which remains governed solely by settlement_lag_days.
+    This preserves DQ-002F/G runtime behavior exactly; no status/reason
+    codes changed for any existing case."""
+
+    def test_broker_source_one_session_behind_before_cutoff_is_late_with_cutoff_metadata(
+        self, use_case
+    ):
+        decision_at = _wib(2026, 7, 16, 16, 0)  # before the 20:00 WIB cutoff
+        session = _session(date(2026, 7, 16), decision_at)
+
+        result = use_case.execute(
+            source_family="broker_summaries",
+            effective_session=session,
+            observed_through=date(2026, 7, 15),
+        )
+
+        assert result.status is SourceAvailabilityStatus.LATE
+        assert result.is_authoritative is False
+        assert result.expected_available_at == datetime(2026, 7, 16, 20, 0, tzinfo=IDX_TIMEZONE)
+        assert any("has not yet passed" in note for note in result.notes)
+
+    def test_broker_source_one_session_behind_after_cutoff_stays_late_not_stale(
+        self, use_case
+    ):
+        """Chosen DQ-002H rule: the cutoff having passed does NOT demote a
+        source that is still within its configured settlement lag to STALE
+        — it stays LATE, with an explicit note that the cutoff has passed."""
+        decision_at = _wib(2026, 7, 16, 21, 0)  # after the 20:00 WIB cutoff
+        session = _session(date(2026, 7, 16), decision_at)
+
+        result = use_case.execute(
+            source_family="broker_summaries",
+            effective_session=session,
+            observed_through=date(2026, 7, 15),
+        )
+
+        assert result.status is SourceAvailabilityStatus.LATE
+        assert result.is_authoritative is False
+        assert result.expected_available_at == datetime(2026, 7, 16, 20, 0, tzinfo=IDX_TIMEZONE)
+        assert any("has passed" in note and "remains within" in note for note in result.notes)
+
+    def test_broker_source_beyond_configured_lag_is_stale_regardless_of_cutoff(
+        self, use_case
+    ):
+        decision_at = _wib(2026, 7, 16, 21, 0)
+        session = _session(date(2026, 7, 16), decision_at)
+
+        result = use_case.execute(
+            source_family="broker_daily_flow",
+            effective_session=session,
+            observed_through=date(2026, 7, 14),  # 2 sessions behind, lag is 1
+        )
+
+        assert result.status is SourceAvailabilityStatus.STALE
+        assert result.is_authoritative is False
+        assert result.expected_available_at == datetime(2026, 7, 16, 20, 0, tzinfo=IDX_TIMEZONE)
+
+    def test_candles_one_session_behind_has_no_cutoff_metadata(self, use_case):
+        """Candles have no provider_cutoff_time configured — broker cutoff
+        behavior/metadata must never leak onto candles."""
+        decision_at = _wib(2026, 7, 16)
+        session = _session(date(2026, 7, 16), decision_at)
+
+        result = use_case.execute(
+            source_family="candles",
+            effective_session=session,
+            observed_through=date(2026, 7, 15),
+        )
+
+        assert result.status is SourceAvailabilityStatus.STALE
+        assert result.expected_available_at is None
+        assert not any("cutoff" in note.lower() for note in result.notes)
+
+    def test_future_broker_row_has_no_cutoff_metadata(self, use_case):
+        """A future/invalid observation must never carry cutoff metadata —
+        the future-row guard is not weakened by adding cutoff policy."""
+        decision_at = _wib(2026, 7, 16)
+        session = _session(date(2026, 7, 16), decision_at)
+
+        result = use_case.execute(
+            source_family="broker_summaries",
+            effective_session=session,
+            observed_through=date(2026, 7, 17),
+        )
+
+        assert result.status is SourceAvailabilityStatus.INVALID
+        assert result.is_authoritative is False
+        assert result.expected_available_at is None
+
+    def test_current_broker_source_has_no_cutoff_metadata(self, use_case):
+        decision_at = _wib(2026, 7, 16)
+        session = _session(date(2026, 7, 16), decision_at)
+
+        result = use_case.execute(
+            source_family="broker_summaries",
+            effective_session=session,
+            observed_through=date(2026, 7, 16),
+        )
+
+        assert result.status is SourceAvailabilityStatus.CURRENT
+        assert result.expected_available_at is None
+
+    def test_registry_rejects_provider_cutoff_on_non_session_aligned_rule(self):
+        with pytest.raises(ValueError):
+            SourceSettlementRule(
+                source_family="analyst_cache",
+                settlement_basis=SettlementBasis.FETCH_TIMESTAMP,
+                is_authoritative_capable=True,
+                provider_cutoff_time=datetime(2026, 1, 1, 20, 0).time(),
+            )
+
+
 class TestFetchTimestampSources:
     def test_current_when_fetched_before_decision_at(self, use_case):
         decision_at = _wib(2026, 7, 16)
@@ -215,6 +333,30 @@ class TestFetchTimestampSources:
         assert result.status is SourceAvailabilityStatus.UNKNOWN
         assert result.is_authoritative is False
 
+    def test_fetch_timestamp_sources_are_unaffected_by_provider_cutoff_fields(self, use_case):
+        """DQ-002H: `expected_available_at`/cutoff notes are SESSION_ALIGNED-
+        only concepts; FETCH_TIMESTAMP sources must never carry them, whether
+        CURRENT or STALE."""
+        decision_at = _wib(2026, 7, 16)
+        session = _session(date(2026, 7, 16), decision_at)
+
+        current = use_case.execute(
+            source_family="analyst_cache",
+            effective_session=session,
+            available_at=_wib(2026, 7, 10),
+        )
+        stale = use_case.execute(
+            source_family="seasonality_cache",
+            effective_session=session,
+            available_at=_wib(2026, 1, 1),
+        )
+
+        assert current.status is SourceAvailabilityStatus.CURRENT
+        assert current.expected_available_at is None
+        assert stale.status is SourceAvailabilityStatus.STALE
+        assert stale.expected_available_at is None
+        assert not any("cutoff" in note.lower() for note in stale.notes)
+
 
 class TestDefaultRegistryCoverage:
     """Locks the exact set of Phase 2 authoritative source families so a
@@ -267,6 +409,7 @@ class TestSentimentIsDiagnosticOnlyGuard:
 
         assert result.status is SourceAvailabilityStatus.DIAGNOSTIC_ONLY
         assert result.is_authoritative is False
+        assert result.expected_available_at is None  # DQ-002H: no cutoff concept for sentiment
 
     def test_sentiment_is_diagnostic_only_even_when_perfectly_current(self, use_case):
         """Adversarial case: feed sentiment the most favorable possible timing
