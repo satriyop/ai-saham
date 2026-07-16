@@ -536,25 +536,38 @@ is not complete.
     from "checked and found nothing wrong," which would silently mask a
     wrong `--db` path. Fixed: the response gained a `source_available: bool`
     field; `status` is now `"PASS"` only when `source_available` is true
-    **and** `invalid_row_count == 0`; a missing database/table sets
-    `source_available: false`, `status: "FAIL"`, and
-    `invalid_reason_counts["SEASONALITY_CACHE_UNAVAILABLE"] = 1` (a
-    table-level reason with no row identity, distinct from the four
-    per-row reason codes). The table-format output prints an explicit
-    "seasonality_cache is unavailable" warning in this case. Still a report
-    command — exit code stays 0 either way.
+    **and** `invalid_row_count == 0`. A missing database/table sets
+    `source_available: false`, `status: "FAIL"`, and one of two entries in
+    `invalid_reason_counts` is set to 1 (both table-level reasons with no
+    row identity, distinct from the four per-row reason codes). The
+    table-format output prints an explicit "seasonality_cache is unavailable"
+    warning naming the specific reason in this case. Still a report command —
+    exit code stays 0 either way.
+  - **Second follow-up (2026-07-16, same day):** the first follow-up
+    collapsed "database missing" and "table missing" into one
+    `SEASONALITY_CACHE_UNAVAILABLE` reason. Split into two distinct, stable
+    reason codes so automation can tell them apart: `DATABASE_MISSING` (the
+    SQLite file itself does not exist) and `SEASONALITY_CACHE_TABLE_MISSING`
+    (the database exists but has no `seasonality_cache` table). The response
+    also gained `source_unavailable_reason: str | None` — `None` when
+    `source_available` is true, otherwise one of the two codes above — so
+    callers don't need to scan `invalid_reason_counts` to find out which case
+    occurred.
   - Verification: `pytest -k "seasonality or contract_gate or audit_data or
-    command_contract"` — 105 passed; full suite — 4406 passed; `python -m
+    command_contract"` — 106 passed; full suite — 4407 passed; `python -m
     py_compile` on changed files; `git diff --check` clean; live `saham
     audit data seasonality-cleanup-plan --format json` reports 433 invalid
     rows (413 `INVALID_SOURCE` + 413 `ALL_METRICS_NULL` overlapping, 47
     `MISSING_FETCHED_AT`, 0 `MALFORMED_FETCHED_AT`), `source_available:
-    true`, and **exits 0**; pointing `--db` at a nonexistent path now
-    correctly reports `status: "FAIL"`, `source_available: false`, and
-    **still exits 0**; live `saham audit data contract-gate --format json`
-    still **exits 1** — confirming this task does not close the live gate.
-    Closing the gate requires an actual repair/quarantine task (not yet
-    implemented) or a deliberate contract relaxation.
+    true`, `source_unavailable_reason: null`, and **exits 0**; pointing
+    `--db` at a nonexistent path reports `source_unavailable_reason:
+    "DATABASE_MISSING"`; pointing `--db` at an existing file with no
+    `seasonality_cache` table reports `source_unavailable_reason:
+    "SEASONALITY_CACHE_TABLE_MISSING"` — both still exit 0; live `saham
+    audit data contract-gate --format json` still **exits 1** — confirming
+    this task does not close the live gate. Closing the gate requires an
+    actual repair/quarantine task (not yet implemented) or a deliberate
+    contract relaxation.
 - DQ-001 acceptance criteria below are **not** marked complete — DQ-001A/C/E
   now give field contracts for 20 tables (5 core + 13 enrichment + 2
   market-context) and DQ-001B/D/E give executable reconciliation for

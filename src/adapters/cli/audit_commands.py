@@ -550,11 +550,17 @@ def _print_seasonality_cleanup_plan_table(response: SeasonalityCleanupPlanRespon
 
     if not response.source_available:
         console.print("")
+        reason_message = {
+            "DATABASE_MISSING": "the SQLite database file could not be found",
+            "SEASONALITY_CACHE_TABLE_MISSING": (
+                "the database exists but has no seasonality_cache table"
+            ),
+        }.get(response.source_unavailable_reason or "", "the source is unavailable")
         console.print(
-            "[bold red]⚠ seasonality_cache is unavailable[/bold red] — the "
-            "database or table could not be found. Check --db before trusting "
-            "this report; PASS is impossible to reach until the table is "
-            "readable."
+            f"[bold red]⚠ seasonality_cache is unavailable[/bold red] "
+            f"([{response.source_unavailable_reason}]) — {reason_message}. "
+            "Check --db before trusting this report; PASS is impossible to "
+            "reach until the table is readable."
         )
 
     console.print("")

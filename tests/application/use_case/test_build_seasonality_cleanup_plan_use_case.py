@@ -7,10 +7,11 @@ from pathlib import Path
 
 from src.application.use_case.build_seasonality_cleanup_plan_use_case import (
     REASON_ALL_METRICS_NULL,
+    REASON_DATABASE_MISSING,
     REASON_INVALID_SOURCE,
     REASON_MALFORMED_FETCHED_AT,
     REASON_MISSING_FETCHED_AT,
-    REASON_SEASONALITY_CACHE_UNAVAILABLE,
+    REASON_SEASONALITY_CACHE_TABLE_MISSING,
     BuildSeasonalityCleanupPlanUseCase,
     RawSeasonalityCacheObservation,
     RawSeasonalityCacheRow,
@@ -62,6 +63,7 @@ def test_use_case_returns_pass_when_no_invalid_rows():
 
     assert response.status == "PASS"
     assert response.source_available is True
+    assert response.source_unavailable_reason is None
     assert response.invalid_row_count == 0
     assert response.rows == ()
     assert response.artifact_type == "seasonality_cleanup_plan"
@@ -81,6 +83,7 @@ def test_use_case_returns_fail_when_invalid_rows_exist():
 
     assert response.status == "FAIL"
     assert response.source_available is True
+    assert response.source_unavailable_reason is None
     assert response.invalid_row_count == 1
 
 
@@ -227,23 +230,27 @@ def test_invalid_reason_counts_tally_across_rows():
     assert response.invalid_reason_counts[REASON_ALL_METRICS_NULL] == 0
 
 
-def test_missing_database_returns_fail_with_source_unavailable(tmp_path: Path):
+def test_missing_database_returns_fail_with_database_missing_reason(tmp_path: Path):
     """A wrong --db path (or genuinely missing database) must never report
-    PASS — that would look identical to "checked and found nothing wrong"."""
+    PASS — that would look identical to "checked and found nothing wrong" —
+    and must be distinguishable from a missing table."""
     reader = SQLiteSeasonalityCleanupPlanReader(tmp_path / "does_not_exist.db")
 
     response = BuildSeasonalityCleanupPlanUseCase(reader=reader, clock=_clock).execute()
 
     assert response.status == "FAIL"
     assert response.source_available is False
+    assert response.source_unavailable_reason == REASON_DATABASE_MISSING
     assert response.invalid_row_count == 0
     assert response.rows == ()
-    assert response.invalid_reason_counts[REASON_SEASONALITY_CACHE_UNAVAILABLE] == 1
+    assert response.invalid_reason_counts[REASON_DATABASE_MISSING] == 1
+    assert response.invalid_reason_counts[REASON_SEASONALITY_CACHE_TABLE_MISSING] == 0
 
 
-def test_missing_table_returns_fail_with_source_unavailable(tmp_path: Path):
+def test_missing_table_returns_fail_with_table_missing_reason(tmp_path: Path):
     """Database file exists but seasonality_cache table itself is missing —
-    same fail-closed treatment as a missing database file."""
+    same fail-closed treatment as a missing database file, but a distinct
+    reason code so automation can tell the two apart."""
     db_path = tmp_path / "data.db"
     sqlite3.connect(str(db_path)).close()  # file exists, no tables at all
     reader = SQLiteSeasonalityCleanupPlanReader(db_path)
@@ -252,8 +259,10 @@ def test_missing_table_returns_fail_with_source_unavailable(tmp_path: Path):
 
     assert response.status == "FAIL"
     assert response.source_available is False
+    assert response.source_unavailable_reason == REASON_SEASONALITY_CACHE_TABLE_MISSING
     assert response.invalid_row_count == 0
-    assert response.invalid_reason_counts[REASON_SEASONALITY_CACHE_UNAVAILABLE] == 1
+    assert response.invalid_reason_counts[REASON_SEASONALITY_CACHE_TABLE_MISSING] == 1
+    assert response.invalid_reason_counts[REASON_DATABASE_MISSING] == 0
 
 
 # ── Integration: real SQLite reader against the real production schema ──────
