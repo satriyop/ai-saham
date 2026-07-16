@@ -899,3 +899,223 @@ def test_repair_seasonality_cache_rejects_invalid_format(tmp_path: Path):
     )
 
     assert result.exit_code != 0
+    assert "BadParameter" in str(result.exception) or "must be one of" in result.output
+
+
+# ── DQ-001I candidate_observation_identity tests ────────────────────────────
+
+
+def _build_candidate_observation_db(db_path: Path) -> None:
+    """Create candidate_observations table with mixed legacy/canonical rows."""
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("""
+        CREATE TABLE candidate_observations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            snapshot_date TEXT NOT NULL,
+            captured_at TEXT NOT NULL,
+            schema_version INTEGER NOT NULL,
+            payload_json TEXT NOT NULL,
+            workflow TEXT NOT NULL DEFAULT '',
+            window_sessions INTEGER NOT NULL DEFAULT 0,
+            data_as_of_date TEXT NOT NULL DEFAULT '',
+            config_hash TEXT NOT NULL DEFAULT ''
+        )
+    """)
+    conn.execute(
+        "INSERT INTO candidate_observations "
+        "(ticker, snapshot_date, captured_at, schema_version, payload_json, "
+        "workflow, window_sessions, data_as_of_date, config_hash) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("BBCA", "2026-07-15", "2026-07-15T00:00:00+00:00", 1,
+         '{"schema_version":1}', "accumulation_screen", 30, "2026-07-15", "abc123"),
+    )
+    conn.execute(
+        "INSERT INTO candidate_observations "
+        "(ticker, snapshot_date, captured_at, schema_version, payload_json, "
+        "workflow, window_sessions, data_as_of_date, config_hash) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("BBRI", "2026-07-15", "2026-07-15T01:00:00+00:00", 1,
+         '{"schema_version":1}', "accumulation_screen", 30, "2026-07-15", "def456"),
+    )
+    conn.execute(
+        "INSERT INTO candidate_observations "
+        "(ticker, snapshot_date, captured_at, schema_version, payload_json, "
+        "workflow, window_sessions, data_as_of_date, config_hash) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("TLKM", "2026-07-14", "2026-07-14T00:00:00+00:00", 1,
+         '{"schema_version":1}', "accumulation_screen", 7, "2026-07-14", ""),
+    )
+    conn.commit()
+    conn.close()
+
+
+def test_candidate_observation_identity_command_registered():
+    result = runner.invoke(app, ["audit", "data", "--help"])
+    assert result.exit_code == 0, result.output
+    assert "candidate-observation-identity" in result.output
+
+
+def test_candidate_observation_identity_json_output_follows_contract(tmp_path: Path):
+    db_path = tmp_path / "co_identity.db"
+    _build_candidate_observation_db(db_path)
+
+    result = runner.invoke(
+        app,
+        [
+            "audit", "data", "candidate-observation-identity",
+            "--format", "json", "--db", str(db_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["artifact_type"] == "candidate_observation_identity_audit"
+    assert payload["schema_version"] == 1
+    assert payload["table"] == "candidate_observations"
+    assert payload["status"] == "WARN"
+    assert payload["source_available"] is True
+    assert payload["source_unavailable_reason"] is None
+    assert payload["total_row_count"] == 3
+    assert payload["canonical_row_count"] == 2
+    assert payload["legacy_row_count"] == 1
+    assert isinstance(payload["legacy_ratio"], float)
+    assert payload["snapshot_date_min"] == "2026-07-14"
+    assert payload["snapshot_date_max"] == "2026-07-15"
+    assert payload["captured_at_min"] is not None
+    assert payload["captured_at_max"] is not None
+    assert isinstance(payload["missing_identity_counts"], dict)
+    assert isinstance(payload["workflow_counts"], list)
+    assert isinstance(payload["window_session_counts"], list)
+    assert isinstance(payload["legacy_by_snapshot_date"], list)
+    assert isinstance(payload["duplicate_identity_group_count"], int)
+    assert isinstance(payload["duplicate_identity_row_count"], int)
+    assert isinstance(payload["latest_readiness_dependency"], dict)
+    assert payload["recommendation"] == "QUARANTINE_SAFE"
+    assert isinstance(payload["findings"], list)
+
+
+def test_candidate_observation_identity_missing_db_returns_fail(tmp_path: Path):
+    missing_db = tmp_path / "does_not_exist.db"
+
+    result = runner.invoke(
+        app,
+        [
+            "audit", "data", "candidate-observation-identity",
+            "--format", "json", "--db", str(missing_db),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["status"] == "FAIL"
+    assert payload["source_available"] is False
+    assert payload["source_unavailable_reason"] == "DATABASE_MISSING"
+
+
+def test_candidate_observation_identity_missing_table_returns_fail(tmp_path: Path):
+    db_path = tmp_path / "empty.db"
+    sqlite3.connect(str(db_path)).close()
+
+    result = runner.invoke(
+        app,
+        [
+            "audit", "data", "candidate-observation-identity",
+            "--format", "json", "--db", str(db_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["status"] == "FAIL"
+    assert payload["source_available"] is False
+    assert payload["source_unavailable_reason"] == "CANDIDATE_OBSERVATIONS_TABLE_MISSING"
+
+
+def test_candidate_observation_identity_table_format_shows_counts(tmp_path: Path):
+    db_path = tmp_path / "co_table.db"
+    _build_candidate_observation_db(db_path)
+
+    result = runner.invoke(
+        app,
+        [
+            "audit", "data", "candidate-observation-identity",
+            "--format", "table", "--db", str(db_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Candidate Observation Identity Audit" in result.output
+    assert "Total rows" in result.output
+    assert "Canonical rows" in result.output
+    assert "Legacy rows" in result.output
+    assert "QUARANTINE_SAFE" in result.output
+
+
+def test_candidate_observation_identity_rejects_invalid_format(tmp_path: Path):
+    db_path = tmp_path / "co_format.db"
+    _build_candidate_observation_db(db_path)
+
+    result = runner.invoke(
+        app,
+        [
+            "audit", "data", "candidate-observation-identity",
+            "--format", "xml", "--db", str(db_path),
+        ],
+    )
+
+    assert result.exit_code != 0
+
+
+def test_candidate_observation_identity_legacy_latest_returns_fail(tmp_path: Path):
+    db_path = tmp_path / "co_legacy_latest.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("""
+        CREATE TABLE candidate_observations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            snapshot_date TEXT NOT NULL,
+            captured_at TEXT NOT NULL,
+            schema_version INTEGER NOT NULL,
+            payload_json TEXT NOT NULL,
+            workflow TEXT NOT NULL DEFAULT '',
+            window_sessions INTEGER NOT NULL DEFAULT 0,
+            data_as_of_date TEXT NOT NULL DEFAULT '',
+            config_hash TEXT NOT NULL DEFAULT ''
+        )
+    """)
+    conn.execute(
+        "INSERT INTO candidate_observations "
+        "(ticker, snapshot_date, captured_at, schema_version, payload_json, "
+        "workflow, window_sessions, data_as_of_date, config_hash) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("BBCA", "2026-07-15", "2026-07-15T00:00:00+00:00", 1,
+         '{}', "accumulation_screen", 30, "2026-07-15", ""),
+    )
+    conn.execute(
+        "INSERT INTO candidate_observations "
+        "(ticker, snapshot_date, captured_at, schema_version, payload_json, "
+        "workflow, window_sessions, data_as_of_date, config_hash) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("BBRI", "2026-07-14", "2026-07-14T00:00:00+00:00", 1,
+         '{}', "swing_analysis", 7, "2026-07-14", "canonical123"),
+    )
+    conn.commit()
+    conn.close()
+
+    result = runner.invoke(
+        app,
+        [
+            "audit", "data", "candidate-observation-identity",
+            "--format", "json", "--db", str(db_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["status"] == "FAIL"
+    assert payload["recommendation"] == "REBUILD_REQUIRED"
+    assert any(
+        f["code"] == "LATEST_READINESS_DEPENDS_ON_LEGACY_IDENTITY"
+        for f in payload["findings"]
+    )

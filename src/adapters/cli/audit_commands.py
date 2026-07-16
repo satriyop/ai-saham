@@ -6,6 +6,7 @@ Public command registration lives in lifecycle routers:
   saham audit data reconcile-sources
   saham audit data contract-gate
   saham audit data seasonality-cleanup-plan
+  saham audit data candidate-observation-identity
 Layer: Adapter
 """
 
@@ -40,6 +41,10 @@ from src.application.use_case.build_seasonality_cleanup_plan_use_case import (
     BuildSeasonalityCleanupPlanUseCase,
     SeasonalityCleanupPlanResponse,
 )
+from src.application.use_case.audit_candidate_observation_identity_use_case import (
+    AuditCandidateObservationIdentityUseCase,
+    CandidateObservationIdentityAuditResponse,
+)
 from src.application.use_case.repair_seasonality_cache_use_case import (
     RepairSeasonalityCacheResponse,
     RepairSeasonalityCacheUseCase,
@@ -72,6 +77,9 @@ from src.infrastructure.persistence.sqlite_source_field_contract_reader import (
 )
 from src.infrastructure.persistence.sqlite_seasonality_cleanup_plan_reader import (
     SQLiteSeasonalityCleanupPlanReader,
+)
+from src.infrastructure.persistence.sqlite_candidate_observation_identity_reader import (
+    SQLiteCandidateObservationIdentityReader,
 )
 from src.infrastructure.persistence.sqlite_source_reconciliation_reader import (
     SQLiteSourceReconciliationReader,
@@ -247,12 +255,38 @@ def repair_seasonality_cache(
     )
 
 
+def candidate_observation_identity(
+    db_path: Annotated[
+        Optional[Path],
+        typer.Option("--db", help="SQLite database path"),
+    ] = None,
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format: table or json."),
+    ] = "json",
+) -> None:
+    """
+    Read-only DQ-001I identity audit for candidate_observations.
+
+    Reports how many rows are legacy (empty config_hash), how many are
+    canonical, whether the latest snapshot depends on legacy rows, and
+    whether duplicate identity groups exist among canonical rows.
+    Report command only — always exits 0, never mutates the database.
+    """
+    if output_format not in _VALID_FORMATS:
+        raise typer.BadParameter(
+            f"--format must be one of {_VALID_FORMATS}, got '{output_format}'."
+        )
+    _run_candidate_observation_identity(db_path=db_path, output_format=output_format)
+
+
 data_app.command("manifest")(manifest)
 data_app.command("source-contracts")(source_contracts)
 data_app.command("reconcile-sources")(reconcile_sources)
 data_app.command("contract-gate")(contract_gate)
 data_app.command("seasonality-cleanup-plan")(seasonality_cleanup_plan)
 data_app.command("repair-seasonality-cache")(repair_seasonality_cache)
+data_app.command("candidate-observation-identity")(candidate_observation_identity)
 audit_app.add_typer(data_app, name="data")
 
 
@@ -758,4 +792,97 @@ def _print_seasonality_cache_repair_table(response: RepairSeasonalityCacheRespon
     elif response.source_available and response.invalid_row_count == 0:
         console.print("")
         console.print("[green]✓ No invalid seasonality_cache rows found.[/green]")
+    console.print("")
+
+
+def _run_candidate_observation_identity(
+    db_path: Path | None,
+    output_format: str,
+) -> None:
+    cfg = load_app_config()
+    resolved_db = db_path or Path(cfg.storage.db_path)
+
+    use_case = AuditCandidateObservationIdentityUseCase(
+        reader=SQLiteCandidateObservationIdentityReader(resolved_db),
+    )
+    response = use_case.execute()
+
+    if output_format == "json":
+        typer.echo(json.dumps(response.to_dict(), indent=2, ensure_ascii=False))
+        return
+
+    _print_candidate_observation_identity_table(response)
+
+
+def _print_candidate_observation_identity_table(
+    response: CandidateObservationIdentityAuditResponse,
+) -> None:
+    console = Console()
+    color = {"PASS": "green", "WARN": "yellow", "FAIL": "red"}.get(response.status, "white")
+    rec_color = {"NO_ACTION": "green", "QUARANTINE_SAFE": "yellow", "REBUILD_REQUIRED": "red"}.get(
+        response.recommendation, "white"
+    )
+
+    console.print("")
+    status_text = Text()
+    status_text.append("Status: ", style="bold")
+    status_text.append(response.status, style=f"bold {color}")
+    status_text.append(f" | Recommendation: ", style="bold")
+    status_text.append(response.recommendation, style=f"bold {rec_color}")
+    panel = Panel(
+        status_text,
+        title="[bold]Candidate Observation Identity Audit (DQ-001I)[/bold]",
+        border_style=color,
+        expand=False,
+    )
+    console.print(panel)
+
+    if not response.source_available:
+        reason_message = {
+            "DATABASE_MISSING": "the SQLite database file could not be found",
+            "CANDIDATE_OBSERVATIONS_TABLE_MISSING": (
+                "the database exists but has no candidate_observations table"
+            ),
+        }.get(response.source_unavailable_reason or "", "the source is unavailable")
+        console.print("")
+        console.print(
+            f"[bold red]⚠ candidate_observations is unavailable[/bold red] "
+            f"([{response.source_unavailable_reason}]) — {reason_message}. "
+            "Check --db before trusting this report."
+        )
+        console.print("")
+        return
+
+    console.print("")
+    summary = Table(show_header=True, header_style="bold magenta")
+    summary.add_column("Measure", style="cyan")
+    summary.add_column("Value", justify="right")
+    summary.add_row("Total rows", f"{response.total_row_count:,}")
+    summary.add_row("Canonical rows", f"{response.canonical_row_count:,}")
+    summary.add_row("Legacy rows", f"{response.legacy_row_count:,}")
+    summary.add_row("Legacy ratio", f"{response.legacy_ratio:.2%}")
+    summary.add_row("Duplicate identity groups", str(response.duplicate_identity_group_count))
+    if response.latest_readiness_dependency.get("latest_snapshot_date"):
+        dep = response.latest_readiness_dependency
+        summary.add_row(
+            "Latest snapshot",
+            f"{dep['latest_snapshot_date']} "
+            f"({dep['latest_total_rows']} rows, "
+            f"{dep['latest_legacy_rows']} legacy)",
+        )
+    console.print(summary)
+
+    if response.findings:
+        console.print("")
+        console.print("[bold]Findings[/bold]")
+        for finding in response.findings:
+            fcolor = {"FAIL": "red", "WARN": "yellow", "INFO": "cyan"}.get(
+                finding.get("severity", ""), "white"
+            )
+            console.print(
+                f"  [bold {fcolor}][{finding['severity']}][/bold {fcolor}] "
+                f"[bold]{finding['code']}[/bold]"
+            )
+            if finding.get("message"):
+                console.print(f"    {finding['message']}")
     console.print("")

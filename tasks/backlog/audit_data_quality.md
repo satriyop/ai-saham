@@ -634,8 +634,73 @@ is not complete.
   - Does **not** close `DQ-CONTRACT-GATE`: the 413/47 invalid rows are now
     repair-able but the gate still fails because invalid rows still exist in
     the canonical table until `--apply` is explicitly run against that database.
-  - Verification: `pytest -k "repair_seasonality or seasonality or contract_gate
-    or audit_data or command_contract"` passes.
+   - Verification: `pytest -k "repair_seasonality or seasonality or contract_gate
+     or audit_data or command_contract"` passes.
+- **DQ-001I** (2026-07-16): read-only candidate_observations identity audit
+  command `saham audit data candidate-observation-identity --format json|table
+  [--db PATH]` that reports exactly how many rows are legacy (empty config_hash),
+  canonical (non-empty config_hash), whether the latest snapshot depends on legacy
+  rows, and whether duplicate identity groups exist among canonical rows.
+  Report command only — always exits 0, never mutates the database.
+  - `AuditCandidateObservationIdentityUseCase`
+    (`src/application/use_case/audit_candidate_observation_identity_use_case.py`)
+    owns all classification logic: status (`PASS`/`WARN`/`FAIL`), recommendation
+    (`NO_ACTION`/`QUARANTINE_SAFE`/`REBUILD_REQUIRED`/`SOURCE_UNAVAILABLE`), and
+    findings list. Classification rules: source unavailable → FAIL; empty table
+    → PASS/NO_ACTION; legacy+latest depends on legacy → FAIL/REBUILD_REQUIRED;
+    historical legacy but latest canonical → WARN/QUARANTINE_SAFE; all canonical
+    + no duplicates → PASS/NO_ACTION; duplicate canonical identity groups exist
+    → at least WARN. Missing columns produce WARN/IDENTITY_COLUMN_MISSING
+    findings without crashing. Defines `CandidateObservationIdentityReader(Protocol)`,
+    `RawCandidateObservationIdentityData` (reader-side raw DTO), and
+    `CandidateObservationIdentityAuditResponse` (frozen dataclass with `to_dict()`
+    matching the full spec contract — 18 top-level keys).
+  - `SQLiteCandidateObservationIdentityReader`
+    (`src/infrastructure/persistence/sqlite_candidate_observation_identity_reader.py`)
+    is a pure read-only observer using `file:{path}?mode=ro`. Checks DB path
+    existence, table existence via `sqlite_master`, detects missing identity
+    columns via `PRAGMA table_info`. Issues ~10 aggregate SQL queries: total/
+    canonical/legacy counts, snapshot_date/captured_at ranges, per-field missing
+    identity counts for 4 columns, workflow distribution, window_sessions
+    distribution, legacy_by_snapshot_date, duplicate canonical identity groups,
+    and latest snapshot dependency. When a column is missing, its corresponding
+    missing_identity_count = total_row_count and the column name is included in
+    `missing_columns`. When `config_hash` column itself is missing, all rows are
+    classified as legacy.
+  - CLI: `src/adapters/cli/audit_commands.py` registers `candidate-observation-identity`
+    under `saham audit data`. Default format is `--format json`. Table format
+    prints status, recommendation, total/canonical/legacy counts, duplicate
+    identity groups, latest snapshot dependency, and top findings.
+  - Tests: application-layer use case tests (11) covering missing source (DB
+    missing, table missing), empty table (PASS/NO_ACTION), all legacy + latest
+    legacy (FAIL/REBUILD_REQUIRED), mixed legacy + latest legacy (FAIL), historical
+    legacy + latest canonical (WARN/QUARANTINE_SAFE), all canonical no duplicates
+    (PASS/NO_ACTION), canonical duplicates (WARN/DUPLICATE_CANONICAL_IDENTITY_GROUPS),
+    duplicates with legacy FAIL (both findings present), missing column (WARN finding),
+    and full response DTO shape (to_dict keys). Infrastructure tests (20) covering
+    missing DB (returns not exists, does not create file), missing table, read-only
+    mode guarantee, no mutation (mtime check), aggregate counts, canonical vs legacy
+    detection, snapshot/captured_at ranges, per-field missing identity counts,
+    workflow/window_sessions distributions, legacy_by_snapshot_date, duplicate
+    identity group/row counting, whitespace config_hash is legacy, latest
+    readiness dependency (mixed and all-canonical), missing column handling
+    (config_hash absent, partial missing column). CLI tests (8) covering command
+    registration, JSON output contract (all 18 keys), missing DB (FAIL/SOURCE_UNAVAILABLE),
+    missing table (FAIL/SOURCE_UNAVAILABLE), table format output, invalid format
+    rejection, legacy-latest scenario (FAIL/REBUILD_REQUIRED). `test_command_contract.py`
+    updated with expected command and help path.
+  - Does **not** close `DQ-CONTRACT-GATE`: 19,317 legacy rows (100% of the table)
+    still exist in the canonical table. `saham audit data contract-gate --format json`
+    still exits 1.
+  - Live run `saham audit data candidate-observation-identity --format json`:
+    `status: FAIL`, `recommendation: REBUILD_REQUIRED`,
+    `total_row_count: 19317`, `canonical_row_count: 0`, `legacy_row_count: 19317`,
+    `legacy_ratio: 1.0`, `duplicate_identity_group_count: 0`,
+    `latest_snapshot_date: 2026-07-15` (361 rows, all legacy, depends_on_legacy=true),
+    `missing_identity_counts` (all 4 at 19317 — all rows pre-date the DQ-002
+    session-provenance migration), one finding `LATEST_READINESS_DEPENDS_ON_LEGACY_IDENTITY`.
+  - Verification: `pytest -k "candidate or seasonality or repair_seasonality or
+    contract_gate or audit_data or command_contract"` passes.
 - DQ-001 acceptance criteria below are **not** marked complete — DQ-001A/C/E
   now give field contracts for 20 tables (5 core + 13 enrichment + 2
   market-context) and DQ-001B/D/E give executable reconciliation for
