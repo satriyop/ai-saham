@@ -70,7 +70,8 @@ class SQLiteCandidateObservationIdentityReader:
             total = self._scalar(conn, "SELECT COUNT(*) FROM candidate_observations")
 
             if missing_columns:
-                legacy = total if "config_hash" in missing_columns else self._scalar(
+                config_hash_missing = "config_hash" in missing_columns
+                legacy = total if config_hash_missing else self._scalar(
                     conn,
                     "SELECT COUNT(*) FROM candidate_observations "
                     "WHERE config_hash IS NULL OR TRIM(config_hash) = ''",
@@ -92,6 +93,24 @@ class SQLiteCandidateObservationIdentityReader:
                             f"SELECT COUNT(*) FROM candidate_observations "
                             f"WHERE {col} IS NULL OR TRIM({col}) = ''",
                         )
+
+                latest_dep = self._compute_latest_dep_missing_columns(
+                    conn, config_hash_missing, total
+                )
+
+                legacy_date_sql = (
+                    "SELECT snapshot_date, COUNT(*) as row_count "
+                    "FROM candidate_observations GROUP BY snapshot_date "
+                    "ORDER BY row_count DESC"
+                    if config_hash_missing
+                    else (
+                        "SELECT snapshot_date, COUNT(*) as row_count "
+                        "FROM candidate_observations "
+                        "WHERE config_hash IS NULL OR TRIM(config_hash) = '' "
+                        "GROUP BY snapshot_date ORDER BY row_count DESC"
+                    )
+                )
+
                 return RawCandidateObservationIdentityData(
                     exists=True,
                     total_row_count=total,
@@ -104,16 +123,10 @@ class SQLiteCandidateObservationIdentityReader:
                     missing_identity_counts=missing_counts,
                     workflow_counts=[],
                     window_session_counts=[],
-                    legacy_by_snapshot_date=[],
+                    legacy_by_snapshot_date=self._rows_as_list(conn, legacy_date_sql),
                     duplicate_identity_group_count=0,
                     duplicate_identity_row_count=0,
-                    latest_readiness_dependency={
-                        "latest_snapshot_date": None,
-                        "latest_total_rows": 0,
-                        "latest_legacy_rows": 0,
-                        "latest_canonical_rows": 0,
-                        "depends_on_legacy": False,
-                    },
+                    latest_readiness_dependency=latest_dep,
                     missing_columns=missing_columns,
                 )
 
@@ -227,6 +240,68 @@ class SQLiteCandidateObservationIdentityReader:
         group_count = len(groups)
         row_count = sum(g["cnt"] for g in groups)
         return group_count, row_count
+
+    def _compute_latest_dep_missing_columns(
+        self,
+        conn: sqlite3.Connection,
+        config_hash_missing: bool,
+        total: int,
+    ) -> dict:
+        """Compute latest_readiness_dependency when some identity columns are missing.
+
+        When config_hash is missing, every row is legacy so the latest snapshot
+        rows must be treated as legacy (depends_on_legacy = True if total > 0).
+        """
+        if total == 0:
+            return {
+                "latest_snapshot_date": None,
+                "latest_total_rows": 0,
+                "latest_legacy_rows": 0,
+                "latest_canonical_rows": 0,
+                "depends_on_legacy": False,
+            }
+
+        row = conn.execute(
+            "SELECT snapshot_date, COUNT(*) as total "
+            "FROM candidate_observations "
+            "GROUP BY snapshot_date ORDER BY snapshot_date DESC LIMIT 1"
+        ).fetchone()
+
+        if row is None:
+            return {
+                "latest_snapshot_date": None,
+                "latest_total_rows": 0,
+                "latest_legacy_rows": 0,
+                "latest_canonical_rows": 0,
+                "depends_on_legacy": False,
+            }
+
+        latest_total = row["total"]
+        if config_hash_missing:
+            return {
+                "latest_snapshot_date": row["snapshot_date"],
+                "latest_total_rows": latest_total,
+                "latest_legacy_rows": latest_total,
+                "latest_canonical_rows": 0,
+                "depends_on_legacy": True,
+            }
+
+        canonical_row = conn.execute(
+            "SELECT COUNT(*) as cnt FROM candidate_observations "
+            "WHERE snapshot_date = ? "
+            "AND config_hash IS NOT NULL AND TRIM(config_hash) != ''",
+            (row["snapshot_date"],),
+        ).fetchone()
+        latest_canonical = canonical_row["cnt"] if canonical_row else 0
+        latest_legacy = latest_total - latest_canonical
+
+        return {
+            "latest_snapshot_date": row["snapshot_date"],
+            "latest_total_rows": latest_total,
+            "latest_legacy_rows": latest_legacy,
+            "latest_canonical_rows": latest_canonical,
+            "depends_on_legacy": latest_legacy > 0,
+        }
 
     def _latest_readiness_dependency(self, conn: sqlite3.Connection) -> dict:
         row = conn.execute(

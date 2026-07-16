@@ -374,7 +374,7 @@ class TestMissingColumn:
         use_case = _make(data=data)
         response = use_case.execute()
 
-        assert response.status == "PASS"
+        assert response.status == "WARN"
         assert any(f["code"] == "IDENTITY_COLUMN_MISSING" for f in response.findings)
         assert response.missing_identity_counts["workflow"] == 200
 

@@ -256,6 +256,9 @@ class AuditCandidateObservationIdentityUseCase:
         if duplicate_group_count > 0 and status == "PASS":
             status = "WARN"
 
+        if data.missing_columns and status == "PASS":
+            status = "WARN"
+
         return CandidateObservationIdentityAuditResponse(
             artifact_type=self._ARTIFACT_TYPE,
             schema_version=self._SCHEMA_VERSION,

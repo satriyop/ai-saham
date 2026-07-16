@@ -714,6 +714,7 @@ def test_dq_contract_gate_added_exactly_one_new_command():
         "contract-gate",
         "seasonality-cleanup-plan",
         "repair-seasonality-cache",
+        "candidate-observation-identity",
     }
     assert "reconcile-sources" in result.output
 
