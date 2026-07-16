@@ -92,21 +92,30 @@ class TestCreateDependencies:
         import importlib
         import sys
 
-        # Unload if already loaded
         mod_name = "src.adapters.cli.stock_analysis_workflow_dependencies"
-        if mod_name in sys.modules:
-            del sys.modules[mod_name]
+        original = sys.modules.get(mod_name)
 
-        # The module imports function references but does not CALL them.
-        # If any config loading happened at import, a side-effect would fire.
-        # Our factory functions are the only things that invoke loaders.
-        mod = importlib.import_module(mod_name)
-        # Confirm the module exports the expected public API (no loaded config objects).
-        public_names = {
-            name for name in dir(mod) if not name.startswith("_")
-        }
-        assert "StockAnalysisWorkflowDependencies" in public_names
-        assert "create_stock_analysis_workflow_dependencies" in public_names
+        try:
+            # Unload if already loaded
+            if mod_name in sys.modules:
+                del sys.modules[mod_name]
+
+            # The module imports function references but does not CALL them.
+            # If any config loading happened at import, a side-effect would fire.
+            # Our factory functions are the only things that invoke loaders.
+            mod = importlib.import_module(mod_name)
+            # Confirm the module exports the expected public API (no loaded config objects).
+            public_names = {
+                name for name in dir(mod) if not name.startswith("_")
+            }
+            assert "StockAnalysisWorkflowDependencies" in public_names
+            assert "create_stock_analysis_workflow_dependencies" in public_names
+        finally:
+            # Restore original module to avoid breaking other tests that
+            # imported this module at module level and whose function
+            # __globals__ still references the original module object.
+            if original is not None:
+                sys.modules[mod_name] = original
 
     def test_indicator_registry_factory_preserves_both_call_patterns(self, tmp_path):
         """indicator_registry_factory should work with and without repos."""
