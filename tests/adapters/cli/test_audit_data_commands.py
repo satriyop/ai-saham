@@ -1,4 +1,5 @@
-"""Tests for `saham audit data manifest` / `saham audit data source-contracts` (DQ-000, DQ-001A)."""
+"""Tests for `saham audit data manifest` / `source-contracts` / `reconcile-sources`
+(DQ-000, DQ-001A, DQ-001B)."""
 
 from __future__ import annotations
 
@@ -155,6 +156,66 @@ def test_source_contracts_does_not_mutate_database(tmp_path: Path):
     assert db_path.stat().st_mtime_ns == mtime_before
 
 
+# ── audit data reconcile-sources ─────────────────────────────────────────
+
+
+def test_reconcile_sources_json_output_has_required_top_level_fields(tmp_path: Path):
+    db_path = tmp_path / "reconcile.db"
+    _build_temp_db(db_path)
+
+    result = runner.invoke(
+        app,
+        ["audit", "data", "reconcile-sources", "--format", "json", "--db", str(db_path)],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+
+    assert payload["artifact_type"] == "source_reconciliation_audit"
+    assert payload["schema_version"] == 1
+    assert payload["status"] in ("PASS", "WARN", "FAIL")
+    assert isinstance(payload["checks"], list)
+    assert isinstance(payload["findings"], list)
+    candles_check = next(c for c in payload["checks"] if c["name"] == "candles_ohlc_invariants")
+    assert candles_check["checked_row_count"] == 1
+
+
+def test_reconcile_sources_table_format_prints_summary_without_error(tmp_path: Path):
+    db_path = tmp_path / "reconcile.db"
+    _build_temp_db(db_path)
+
+    result = runner.invoke(app, ["audit", "data", "reconcile-sources", "--db", str(db_path)])
+
+    assert result.exit_code == 0, result.output
+    assert "Source Reconciliation Audit" in result.output
+
+
+def test_reconcile_sources_rejects_invalid_format(tmp_path: Path):
+    db_path = tmp_path / "reconcile.db"
+    _build_temp_db(db_path)
+
+    result = runner.invoke(
+        app,
+        ["audit", "data", "reconcile-sources", "--format", "xml", "--db", str(db_path)],
+    )
+
+    assert result.exit_code != 0
+
+
+def test_reconcile_sources_does_not_mutate_database(tmp_path: Path):
+    db_path = tmp_path / "reconcile.db"
+    _build_temp_db(db_path)
+    mtime_before = db_path.stat().st_mtime_ns
+
+    result = runner.invoke(
+        app,
+        ["audit", "data", "reconcile-sources", "--format", "json", "--db", str(db_path)],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert db_path.stat().st_mtime_ns == mtime_before
+
+
 # ── registration ──────────────────────────────────────────────────────────
 
 
@@ -171,3 +232,4 @@ def test_audit_data_exposes_manifest_and_source_contracts():
     assert result.exit_code == 0
     assert "manifest" in result.output
     assert "source-contracts" in result.output
+    assert "reconcile-sources" in result.output

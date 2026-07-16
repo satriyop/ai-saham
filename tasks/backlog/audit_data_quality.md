@@ -251,6 +251,73 @@ no repair/rebuild/quarantine/label/tuning behavior was added.
 **Depends on:** DQ-000  
 **Outcome:** Every consumed field has a proven source meaning and availability contract.
 
+**State:** Partially implemented via two read-only slices; DQ-001 as a whole
+is not complete.
+
+- **DQ-001A** (2026-07-16): `saham audit data source-contracts` — executable
+  field-level contracts (semantics, unit, sign convention, aggregation,
+  grain, temporal meaning, null semantics, PIT support) for `candles`,
+  `broker_summaries`, `broker_daily_flow`, `candidate_observations`,
+  `signal_forward_labels`. Fails closed on missing/null/unknown-value
+  fields. `broker_summaries.foreign_net_value` modeled as derived
+  (`foreign_buy_value - foreign_sell_value`), not a stored column.
+- **DQ-001B** (2026-07-16): `saham audit data reconcile-sources` —
+  executable reconciliation, read-only, no repair/quarantine:
+  - `candles`: OHLC invariants (`high`/`low` bounds), non-negative volume,
+    unknown/null provenance (`source`, `volume_unit`,
+    `price_adjustment_policy`), plus distribution summaries.
+  - `broker_summaries`: non-negative value/lot fields, `(ticker, date,
+    source)` duplicate identity.
+  - `broker_daily_flow`: non-negative buy/sell values, `net_value ==
+    buy_value - sell_value` arithmetic, `(ticker, date, broker_code,
+    source)` duplicate identity, always-present INFO finding that this is
+    a tracked-broker subset, not full market composition. Deliberately
+    does **not** compare `broker_daily_flow` totals to `broker_summaries`
+    totals — different source semantics, not a defect.
+  - Cross-table: `foreign_flow_points` (`source='idx'` rows only) reconciled
+    against derived `broker_summaries.foreign_buy_value -
+    foreign_sell_value` for matching `(ticker, date, source)`, tolerance
+    1.0 IDR. `foreign_flow_points(source='stockbit')` rows are a distinct
+    provider and are intentionally **not** compared against `broker_summaries`
+    — verified live that `source='idx'` rows match broker_summaries exactly
+    for the matched rows (0 mismatches) while stockbit rows use a different
+    pipeline. `foreign_flow_snapshots` (7-day windowed) is reported INFO as
+    aggregated/not-direct-daily, never force-reconciled.
+  - Unmatched `foreign_flow_points` rows (different-source rows with no
+    same-source `broker_summaries` counterpart) are counted explicitly and
+    surfaced as `FOREIGN_FLOW_POINTS_PARTIAL_COVERAGE` (WARN) rather than
+    silently excluded from the denominator — live run: 85,988 total rows,
+    51,379 matched/reconciled (0 mismatches), 34,609 unmatched (mostly
+    `stockbit`-source rows with no `idx`-source counterpart), so overall
+    status is `WARN`, not a falsely optimistic `PASS`.
+  - A table existing with missing required identity/value columns (partial
+    schema/migration) produces a `BROKER_SUMMARY_SCHEMA_INSUFFICIENT` /
+    `TRACKED_BROKER_SCHEMA_INSUFFICIENT` / `CANDLES_SCHEMA_INSUFFICIENT`
+    FAIL finding instead of an `sqlite3.OperationalError` crash — covers
+    `candles` missing identity (`ticker`, `date`), OHLC (`open`, `high`,
+    `low`, `close`), or `volume` columns, in addition to the existing
+    tolerance for `candles` provenance columns (`volume_unit`,
+    `price_adjustment_policy`) added later via `ALTER TABLE`, and the
+    equivalent identity/value column checks for `broker_summaries` and
+    `broker_daily_flow`.
+  - Files: `src/application/use_case/audit_source_reconciliation_use_case.py`,
+    `src/infrastructure/persistence/sqlite_source_reconciliation_reader.py`,
+    wired into `src/adapters/cli/audit_commands.py`.
+  - Read-only proven the same way as DQ-000/DQ-001A: `mode=ro` connection,
+    write-rejection test, and a live run against the 629 MB production DB
+    with file size unchanged before/after.
+  - Not covered by DQ-001B: `candidate_observations`, `signal_forward_labels`
+    reconciliation queries; all enrichment tables (analyst, insider,
+    fundamentals, shareholding, seasonality, corporate actions, notation,
+    bandar detector); market context and sentiment source families. These
+    remain open for later DQ-001 slices.
+- DQ-001 acceptance criteria below are **not** marked complete — only the
+  five core tables listed above have field contracts, and only four of
+  those (`candles`, `broker_summaries`, `broker_daily_flow`, plus the
+  `foreign_flow_points`/`foreign_flow_snapshots` cross-table check) have
+  executable reconciliation queries. Enrichment, market context, and
+  sentiment source families are entirely unaudited.
+
 **Audit each source family:**
 
 - candles: OHLCV, adjusted/unadjusted status, session date, duplicate bars, zero volume, impossible ranges;

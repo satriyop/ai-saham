@@ -3,6 +3,7 @@ CLI implementation for saham audit data commands.
 Public command registration lives in lifecycle routers:
   saham audit data manifest
   saham audit data source-contracts
+  saham audit data reconcile-sources
 Layer: Adapter
 """
 
@@ -19,6 +20,10 @@ from rich.text import Text
 from src.application.use_case.audit_source_field_contracts_use_case import (
     AuditSourceFieldContractsResponse,
     AuditSourceFieldContractsUseCase,
+)
+from src.application.use_case.audit_source_reconciliation_use_case import (
+    AuditSourceReconciliationResponse,
+    AuditSourceReconciliationUseCase,
 )
 from src.application.use_case.build_audit_baseline_manifest_use_case import (
     AuditBaselineManifest,
@@ -42,12 +47,18 @@ from src.infrastructure.persistence.sqlite_audit_manifest_reader import (
 from src.infrastructure.persistence.sqlite_source_field_contract_reader import (
     SQLiteSourceFieldContractReader,
 )
+from src.infrastructure.persistence.sqlite_source_reconciliation_reader import (
+    SQLiteSourceReconciliationReader,
+)
 
 _VALID_FORMATS = ("table", "json")
 
 data_app = typer.Typer(
     name="data",
-    help="Read-only data-quality audit artifacts (baseline manifest, source-field contracts).",
+    help=(
+        "Read-only data-quality audit artifacts (baseline manifest, source-field "
+        "contracts, source reconciliation)."
+    ),
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},
 )
@@ -104,8 +115,30 @@ def source_contracts(
     _run_source_contracts(db_path=db_path, output_format=output_format)
 
 
+def reconcile_sources(
+    db_path: Annotated[
+        Optional[Path],
+        typer.Option("--db", help="SQLite database path"),
+    ] = None,
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format: table or json."),
+    ] = "table",
+) -> None:
+    """
+    Emit a read-only DQ-001B source reconciliation audit (OHLC invariants,
+    arithmetic identities, and cross-table foreign-flow overlaps).
+    """
+    if output_format not in _VALID_FORMATS:
+        raise typer.BadParameter(
+            f"--format must be one of {_VALID_FORMATS}, got '{output_format}'."
+        )
+    _run_reconcile_sources(db_path=db_path, output_format=output_format)
+
+
 data_app.command("manifest")(manifest)
 data_app.command("source-contracts")(source_contracts)
+data_app.command("reconcile-sources")(reconcile_sources)
 audit_app.add_typer(data_app, name="data")
 
 
@@ -264,3 +297,68 @@ def _print_source_contract_finding(console: Console, finding) -> None:
     )
     console.print(f"    [dim]Message:[/dim] {finding.message}")
     console.print(f"    [dim]Impact:[/dim]  {finding.impact}")
+
+
+def _run_reconcile_sources(db_path: Path | None, output_format: str) -> None:
+    cfg = load_app_config()
+    resolved_db = db_path or Path(cfg.storage.db_path)
+
+    use_case = AuditSourceReconciliationUseCase(
+        reader=SQLiteSourceReconciliationReader(resolved_db),
+    )
+    response = use_case.execute()
+
+    if output_format == "json":
+        typer.echo(json.dumps(response.to_dict(), indent=2, ensure_ascii=False))
+        return
+
+    _print_reconcile_sources_table(response)
+
+
+def _print_reconcile_sources_table(response: AuditSourceReconciliationResponse) -> None:
+    console = Console()
+    color = {"PASS": "green", "WARN": "yellow", "FAIL": "red"}.get(response.status, "white")
+
+    console.print("")
+    status_text = Text()
+    status_text.append("Status: ", style="bold")
+    status_text.append(response.status, style=f"bold {color}")
+    status_text.append(f" | Findings: {len(response.findings)}")
+    panel = Panel(
+        status_text,
+        title="[bold]Source Reconciliation Audit (DQ-001B)[/bold]",
+        border_style=color,
+        expand=False,
+    )
+    console.print(panel)
+
+    if response.checks:
+        console.print("")
+        table = Table(show_header=True, header_style="bold magenta")
+        table.add_column("Check", style="cyan")
+        table.add_column("Tables")
+        table.add_column("Checked Rows", justify="right")
+        table.add_column("Mismatches", justify="right")
+        table.add_column("Status", justify="center")
+        for c in response.checks:
+            status_color = {"PASS": "green", "WARN": "yellow", "FAIL": "red"}.get(
+                c.status, "white"
+            )
+            table.add_row(
+                c.name,
+                ", ".join(c.tables),
+                f"{c.checked_row_count:,}" if c.checked_row_count is not None else "-",
+                str(c.mismatch_count) if c.mismatch_count is not None else "-",
+                f"[{status_color}]{c.status}[/{status_color}]",
+            )
+        console.print(table)
+
+    if response.findings:
+        console.print("")
+        console.print("[bold red]Findings[/bold red]")
+        for finding in response.findings:
+            _print_source_contract_finding(console, finding)
+    else:
+        console.print("")
+        console.print("[green]✓ No reconciliation findings.[/green]")
+    console.print("")
