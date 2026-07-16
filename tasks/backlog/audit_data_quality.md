@@ -1091,11 +1091,14 @@ freshness_status           # CURRENT | STALE | PARTIAL | UNKNOWN | INVALID
 
 Artifacts without a defensible effective timestamp or data cutoff are invalid for learning and historical evaluation. Do not infer missing temporal provenance from `captured_at` alone.
 
-**State:** DQ-002A/B/C/D/E implemented (2026-07-16). One canonical application-layer
+**State:** DQ-002A/B/C/D/E/F implemented (2026-07-16). One canonical application-layer
 session resolver exists and now backs every audited freshness-adjacent
 service (`data_freshness_service.py`, `swing_data_freshness.py`,
-`market_freshness_service.py`), and `candidate_observations`/
-`signal_forward_labels` persist its provenance; DQ-002 as a whole is not complete (see
+`market_freshness_service.py`), `candidate_observations`/
+`signal_forward_labels` persist its provenance, and a new per-source
+availability contract (`AssessSourceAvailabilityUseCase`) exists for Phase 2
+workflows/tests to assess CURRENT/STALE/PARTIAL/LATE/UNKNOWN/INVALID/
+DIAGNOSTIC_ONLY per source family; DQ-002 as a whole is not complete (see
 Deferred items below).
 
 - **DQ-002A** (2026-07-16, revised same day after review): `EffectiveMarketSessionResolver`
@@ -1475,6 +1478,102 @@ Deferred items below).
   date/shared-across-windows (1 new test); label generation available/
   unavailable-copies-provenance + no-fresh-resolve (3 new tests). Full suite
   — 4359 passed; `git diff --check` clean.
+
+- **DQ-002F** (2026-07-16): new application-layer per-source availability
+  contract — `AssessSourceAvailabilityUseCase`
+  (`src/application/use_case/assess_source_availability_use_case.py`) takes
+  an already-resolved `EffectiveMarketSession` plus what a caller already
+  knows about one source family's latest observation
+  (`observed_through`/`available_at`/`is_partial`) and returns a
+  `SourceAvailabilityAssessment`
+  (`src/domain/value_objects/source_availability.py`): `source_family`,
+  `decision_at`, `observed_through`, `available_at`, `status`
+  (`CURRENT | STALE | PARTIAL | LATE | UNKNOWN | INVALID |
+  DIAGNOSTIC_ONLY`), `is_authoritative`, `reason`, `notes`. This does **not**
+  close DQ-002: it defines a policy contract Phase 2 workflows/tests can
+  assess against; it does not yet wire into every consumer, does not add
+  temporal-leakage planted-row tests across the full candles/broker/
+  enrichment/label/market-context chain, and does not add
+  `observed_through`/`available_at`/`freshness_status` to
+  `EffectiveMarketSession` itself (those remain the pre-existing DQ-002
+  deferred items below).
+  - Settlement policy lives in a new explicit registry
+    (`src/application/services/source_settlement_registry.py`,
+    config-as-code deliberately, same convention as DQ-001's
+    `StaticSourceFieldContractCatalog`): `SourceSettlementRule` per source
+    family with a `SettlementBasis` of `SESSION_ALIGNED` (candles,
+    `broker_summaries`, `broker_daily_flow`, `foreign_flow_points`,
+    `foreign_flow_snapshots` — judged against
+    `effective_session.latest_completed_session` via `snapshot_date`, same
+    lag policy as `foreign_flow_points` despite being a windowed/aggregated
+    table per DQ-001B/D — with an explicit
+    per-family `settlement_lag_days` distinguishing `LATE` (within expected
+    lag) from `STALE` (beyond it); candles have zero lag so any gap is
+    immediately `STALE`), `FETCH_TIMESTAMP` (`analyst_cache`,
+    `company_fundamentals`, `seasonality_cache`, `corporate_action_events`,
+    `corporate_action_event_dates`, `market_context_snapshots`,
+    `regime_observations` — judged directly against `available_at` vs.
+    `decision_at`, each with its own `max_staleness_days`), or
+    `DIAGNOSTIC_ONLY` (`sentiment` only).
+  - Sentiment guardrail: `SourceSettlementRule.__post_init__` raises
+    `ValueError` if a `DIAGNOSTIC_ONLY` rule is ever constructed with
+    `is_authoritative_capable=True` — this fires at registry-construction
+    time, before the use case runs, so a future accidental edit cannot
+    silently make sentiment authoritative. The use case additionally hard-
+    routes any `DIAGNOSTIC_ONLY` source family straight to
+    `status=DIAGNOSTIC_ONLY, is_authoritative=False` before any timing logic
+    runs, so no combination of `observed_through`/`available_at` inputs can
+    push it through the `CURRENT` path.
+  - A source row observed/fetched after `decision_at` always resolves to
+    `INVALID`, never `CURRENT`: `available_at > decision_at` is checked once
+    up front, before basis-specific logic runs; `observed_through` ahead of
+    `effective_session.latest_completed_session` is checked inside the
+    `SESSION_ALIGNED` branch itself (`_assess_session_aligned`), since the
+    session bound it is compared against is only known there. A missing
+    source (`observed_through` and `available_at` both `None`, or an
+    unregistered source family) resolves to `UNKNOWN`, never a silently
+    optimistic status.
+  - Tests: `tests/application/use_case/test_assess_source_availability_use_case.py`
+    (19 tests) covering: source available exactly at/before decision_at →
+    `CURRENT` (both bases); source dated after `decision_at`/session →
+    `INVALID`, never `CURRENT` (both bases); broker data one session behind
+    candle close → `LATE` (within lag), and further behind → `STALE`;
+    unresolved `latest_completed_session` → `UNKNOWN`; missing source →
+    `UNKNOWN` (both bases); `is_partial=True` downgrades an otherwise-fresh
+    result to `PARTIAL`; unregistered source family → `UNKNOWN`,
+    non-authoritative; and a dedicated `TestSentimentIsDiagnosticOnlyGuard`
+    class proving sentiment is `DIAGNOSTIC_ONLY`/non-authoritative with no
+    input, with the most favorable possible timing input (adversarial case),
+    via the default registry's own rule, and that constructing an
+    authoritative-diagnostic rule (directly, or inside a custom registry)
+    raises `ValueError`.
+  - No signal scoring change, no tuning, no observation/label regeneration,
+    no DB mutation, no CLI surface added — Phase 2 workflows/tests call the
+    use case directly; this task did not wire any specific consumer to it.
+  - **Next task after this:** planted-future-row temporal-leakage tests
+    using this availability contract across the real candles/broker/
+    enrichment/label/market-context tables (the current tests exercise the
+    policy in isolation with hand-built inputs, not live database rows).
+  - Verification: focused suite (19 new tests) passes; existing
+    `test_effective_market_session_resolver.py` (14 tests) unaffected and
+    still passes; `python -m py_compile` on all 4 changed/added files;
+    `git diff --check` clean. No `audit data` CLI command was touched, so
+    no CLI command tests were run for this slice.
+  - **Review follow-up (2026-07-16, same day):** the initial cut omitted
+    `foreign_flow_snapshots` from the registry — a real persisted table
+    (`src/infrastructure/persistence/sqlite_broker_schema.py`) that the
+    backlog scopes alongside `foreign_flow_points` for source coverage, and
+    that DQ-001B/D already treat as a source (windowed/aggregated, reported
+    INFO). Asking availability for it silently returned `UNKNOWN`/
+    `UNREGISTERED_SOURCE_FAMILY` instead of failing a test. Fixed: added a
+    `foreign_flow_snapshots` rule (`SESSION_ALIGNED`, `settlement_lag_days=1`
+    — same lag policy as `foreign_flow_points`, judged via `snapshot_date`)
+    to the default registry. Also added
+    `TestDefaultRegistryCoverage.test_default_registry_covers_every_phase_2_source_family`,
+    which asserts the exact expected set of 13 source families, so a future
+    omission fails a test instead of resolving silently at call time.
+    Focused suite is now 20 tests (up from 19); `python -m py_compile` and
+    `git diff --check` re-verified clean.
 
 **Deferred (not started):**
 
