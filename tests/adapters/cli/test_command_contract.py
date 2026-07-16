@@ -39,6 +39,7 @@ EXPECTED_COMMANDS: dict[tuple[str, ...], tuple[str, ...]] = {
         "reconcile-sources",
         "contract-gate",
         "seasonality-cleanup-plan",
+        "repair-seasonality-cache",
     ),
     ("fetch",): (
         "market",
@@ -137,6 +138,7 @@ HELP_PATHS: tuple[tuple[str, ...], ...] = (
     ("audit", "data", "reconcile-sources"),
     ("audit", "data", "contract-gate"),
     ("audit", "data", "seasonality-cleanup-plan"),
+    ("audit", "data", "repair-seasonality-cache"),
     ("fetch",),
     ("fetch", "market"),
     ("fetch", "broker"),

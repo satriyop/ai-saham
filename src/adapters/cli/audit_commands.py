@@ -40,6 +40,13 @@ from src.application.use_case.build_seasonality_cleanup_plan_use_case import (
     BuildSeasonalityCleanupPlanUseCase,
     SeasonalityCleanupPlanResponse,
 )
+from src.application.use_case.repair_seasonality_cache_use_case import (
+    RepairSeasonalityCacheResponse,
+    RepairSeasonalityCacheUseCase,
+)
+from src.infrastructure.persistence.sqlite_seasonality_cache_repairer import (
+    SQLiteSeasonalityCacheRepairer,
+)
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.audit_config_identity_reader import (
     FileAuditConfigIdentityReader,
@@ -75,8 +82,8 @@ _VALID_FORMATS = ("table", "json")
 data_app = typer.Typer(
     name="data",
     help=(
-        "Read-only data-quality audit artifacts (baseline manifest, source-field "
-        "contracts, source reconciliation)."
+        "Data-quality audit artifacts (baseline manifest, source-field "
+        "contracts, source reconciliation, repair commands)."
     ),
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},
@@ -198,11 +205,54 @@ def seasonality_cleanup_plan(
     _run_seasonality_cleanup_plan(db_path=db_path, output_format=output_format)
 
 
+def repair_seasonality_cache(
+    db_path: Annotated[
+        Optional[Path],
+        typer.Option("--db", help="SQLite database path"),
+    ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Dry-run mode: report only, no mutation."),
+    ] = False,
+    apply: Annotated[
+        bool,
+        typer.Option("--apply", help="Apply mode: quarantine and delete invalid rows."),
+    ] = False,
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format: table or json."),
+    ] = "json",
+) -> None:
+    """
+    Repair invalid seasonality_cache rows by quarantining them (DQ-001H).
+
+    Default is dry-run: reports which rows would be quarantined without
+    mutating the database.  Use --apply to perform the quarantine.
+
+    Never deletes rows without quarantining them first.  The quarantine
+    table preserves the full original row plus reasons, repair_run_id, and
+    a timestamp.
+    """
+    if dry_run and apply:
+        raise typer.BadParameter(
+            "Cannot use both --dry-run and --apply. "
+            "Default (no flag) is dry-run."
+        )
+    if output_format not in _VALID_FORMATS:
+        raise typer.BadParameter(
+            f"--format must be one of {_VALID_FORMATS}, got '{output_format}'."
+        )
+    _run_repair_seasonality_cache(
+        db_path=db_path, apply=apply, output_format=output_format
+    )
+
+
 data_app.command("manifest")(manifest)
 data_app.command("source-contracts")(source_contracts)
 data_app.command("reconcile-sources")(reconcile_sources)
 data_app.command("contract-gate")(contract_gate)
 data_app.command("seasonality-cleanup-plan")(seasonality_cleanup_plan)
+data_app.command("repair-seasonality-cache")(repair_seasonality_cache)
 audit_app.add_typer(data_app, name="data")
 
 
@@ -593,6 +643,119 @@ def _print_seasonality_cleanup_plan_table(response: SeasonalityCleanupPlanRespon
             )
         console.print(rows_table)
     elif response.source_available:
+        console.print("")
+        console.print("[green]✓ No invalid seasonality_cache rows found.[/green]")
+    console.print("")
+
+
+def _run_repair_seasonality_cache(
+    db_path: Path | None,
+    apply: bool,
+    output_format: str,
+) -> None:
+    cfg = load_app_config()
+    resolved_db = db_path or Path(cfg.storage.db_path)
+
+    use_case = RepairSeasonalityCacheUseCase(
+        reader=SQLiteSeasonalityCleanupPlanReader(resolved_db),
+        repairer=SQLiteSeasonalityCacheRepairer(resolved_db),
+    )
+    response = use_case.execute(dry_run=not apply)
+
+    if output_format == "json":
+        typer.echo(json.dumps(response.to_dict(), indent=2, ensure_ascii=False))
+        return
+
+    _print_seasonality_cache_repair_table(response)
+
+
+def _print_seasonality_cache_repair_table(response: RepairSeasonalityCacheResponse) -> None:
+    console = Console()
+    mode_color = {"DRY_RUN": "yellow", "APPLY": "red" if response.status == "FAIL" else "green"}
+    color = {"PASS": "green", "FAIL": "red"}.get(response.status, "white")
+
+    console.print("")
+    status_text = Text()
+    status_text.append("Mode: ", style="bold")
+    status_text.append(response.mode, style=f"bold {mode_color.get(response.mode, 'white')}")
+    status_text.append("  |  Status: ", style="bold")
+    status_text.append(response.status, style=f"bold {color}")
+    status_text.append(f"  |  Invalid rows: {response.invalid_row_count}")
+    if response.dry_run:
+        status_text.append("  |  Dry run — no mutation performed", style="dim")
+    panel = Panel(
+        status_text,
+        title="[bold]Seasonality Cache Repair (DQ-001H)[/bold]",
+        border_style=color,
+        expand=False,
+    )
+    console.print(panel)
+
+    if not response.source_available:
+        console.print("")
+        reason_message = {
+            "DATABASE_MISSING": "the SQLite database file could not be found",
+            "SEASONALITY_CACHE_TABLE_MISSING": (
+                "the database exists but has no seasonality_cache table"
+            ),
+        }.get(response.source_unavailable_reason or "", "the source is unavailable")
+        console.print(
+            f"[bold red]⚠ seasonality_cache is unavailable[/bold red] "
+            f"([{response.source_unavailable_reason}]) — {reason_message}. "
+            "Check --db before trusting this report."
+        )
+
+    console.print("")
+    info_table = Table(show_header=True, header_style="bold magenta")
+    info_table.add_column("Measure", style="cyan")
+    info_table.add_column("Value", justify="right")
+    info_table.add_row("Repair run ID", response.repair_run_id)
+    info_table.add_row("Invalid rows", str(response.invalid_row_count))
+    info_table.add_row("Quarantined rows", str(response.quarantined_row_count))
+    info_table.add_row("Deleted rows", str(response.deleted_row_count))
+    console.print(info_table)
+
+    console.print("")
+    reason_table = Table(show_header=True, header_style="bold magenta")
+    reason_table.add_column("Reason", style="cyan")
+    reason_table.add_column("Count", justify="right")
+    for reason, count in response.reason_counts.items():
+        if count > 0:
+            reason_table.add_row(reason, str(count))
+    console.print(reason_table)
+
+    if response.rows:
+        console.print("")
+        console.print("[bold]Invalid rows:[/bold]")
+        console.print("")
+        rows_table = Table(show_header=True, header_style="bold magenta")
+        rows_table.add_column("Ticker", style="cyan")
+        rows_table.add_column("Year", justify="right")
+        rows_table.add_column("Month", justify="right")
+        rows_table.add_column("Fetched At")
+        rows_table.add_column("Source")
+        rows_table.add_column("Reasons")
+        for row in response.rows:
+            rows_table.add_row(
+                row.ticker,
+                str(row.year),
+                str(row.month),
+                row.fetched_at or "-",
+                row.source or "-",
+                ", ".join(row.reasons),
+            )
+        console.print(rows_table)
+
+    if response.dry_run and response.source_available:
+        console.print("")
+        console.print("[yellow]⚠ Dry-run: no mutation performed.[/yellow]")
+    elif response.source_available and response.invalid_row_count > 0 and not response.dry_run:
+        console.print("")
+        console.print(
+            f"[green]✓ Quarantined and deleted {response.quarantined_row_count} "
+            f"invalid row(s).[/green]"
+        )
+    elif response.source_available and response.invalid_row_count == 0:
         console.print("")
         console.print("[green]✓ No invalid seasonality_cache rows found.[/green]")
     console.print("")

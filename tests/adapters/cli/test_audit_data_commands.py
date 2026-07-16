@@ -713,5 +713,189 @@ def test_dq_contract_gate_added_exactly_one_new_command():
         "reconcile-sources",
         "contract-gate",
         "seasonality-cleanup-plan",
+        "repair-seasonality-cache",
     }
     assert "reconcile-sources" in result.output
+
+
+# ── audit data repair-seasonality-cache ──────────────────────────────────────
+
+
+def test_repair_seasonality_cache_dry_run_json_exits_zero(tmp_path: Path):
+    db_path = tmp_path / "repair_seasonality.db"
+    _build_seasonality_db(db_path, with_invalid_row=True)
+    mtime_before = db_path.stat().st_mtime_ns
+
+    result = runner.invoke(
+        app,
+        [
+            "audit", "data", "repair-seasonality-cache",
+            "--dry-run", "--format", "json", "--db", str(db_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["artifact_type"] == "seasonality_cache_repair"
+    assert payload["mode"] == "DRY_RUN"
+    assert payload["dry_run"] is True
+    assert payload["status"] == "FAIL"
+    assert payload["invalid_row_count"] == 1
+    assert payload["quarantined_row_count"] == 0
+    assert payload["deleted_row_count"] == 0
+    # Ensure no mutation
+    assert db_path.stat().st_mtime_ns == mtime_before
+
+
+def test_repair_seasonality_cache_default_is_dry_run(tmp_path: Path):
+    db_path = tmp_path / "repair_seasonality_default.db"
+    _build_seasonality_db(db_path, with_invalid_row=True)
+
+    result = runner.invoke(
+        app,
+        [
+            "audit", "data", "repair-seasonality-cache",
+            "--format", "json", "--db", str(db_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["mode"] == "DRY_RUN"
+    assert payload["dry_run"] is True
+
+
+def test_repair_seasonality_cache_dry_run_and_apply_together_fails(tmp_path: Path):
+    db_path = tmp_path / "repair_seasonality_fail.db"
+    _build_seasonality_db(db_path, with_invalid_row=False)
+
+    result = runner.invoke(
+        app,
+        [
+            "audit", "data", "repair-seasonality-cache",
+            "--dry-run", "--apply", "--db", str(db_path),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Cannot use both" in result.output
+
+
+def test_repair_seasonality_cache_apply_json_mutates(tmp_path: Path):
+    """Apply should quarantine invalid rows and delete them from source."""
+    db_path = tmp_path / "repair_apply.db"
+    _build_seasonality_db(db_path, with_invalid_row=True)
+
+    # Verify invalid row exists before
+    with sqlite3.connect(str(db_path)) as conn:
+        before = conn.execute(
+            "SELECT COUNT(*) FROM seasonality_cache WHERE source IS NULL"
+        ).fetchone()[0]
+    assert before == 1
+
+    result = runner.invoke(
+        app,
+        [
+            "audit", "data", "repair-seasonality-cache",
+            "--apply", "--format", "json", "--db", str(db_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["mode"] == "APPLY"
+    assert payload["dry_run"] is False
+    assert payload["invalid_row_count"] == 1
+    assert payload["quarantined_row_count"] == 1
+    assert payload["deleted_row_count"] == 1
+
+    # Verify invalid row deleted from seasonality_cache
+    with sqlite3.connect(str(db_path)) as conn:
+        after_invalid = conn.execute(
+            "SELECT COUNT(*) FROM seasonality_cache WHERE source IS NULL"
+        ).fetchone()[0]
+    assert after_invalid == 0
+
+    # Verify valid row still present
+    with sqlite3.connect(str(db_path)) as conn:
+        after_valid = conn.execute(
+            "SELECT COUNT(*) FROM seasonality_cache WHERE ticker='BBCA'"
+        ).fetchone()[0]
+    assert after_valid == 1
+
+    # Verify quarantine table has the row
+    with sqlite3.connect(str(db_path)) as conn:
+        quarantine_count = conn.execute(
+            "SELECT COUNT(*) FROM seasonality_cache_quarantine"
+        ).fetchone()[0]
+    assert quarantine_count == 1
+
+
+def test_repair_seasonality_cache_missing_db_exits_zero_with_fail(tmp_path: Path):
+    missing_db = tmp_path / "does_not_exist.db"
+
+    result = runner.invoke(
+        app,
+        [
+            "audit", "data", "repair-seasonality-cache",
+            "--format", "json", "--db", str(missing_db),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["status"] == "FAIL"
+    assert payload["source_available"] is False
+    assert payload["source_unavailable_reason"] == "DATABASE_MISSING"
+
+
+def test_repair_seasonality_cache_table_format_shows_counts(tmp_path: Path):
+    db_path = tmp_path / "repair_table.db"
+    _build_seasonality_db(db_path, with_invalid_row=True)
+
+    result = runner.invoke(
+        app,
+        [
+            "audit", "data", "repair-seasonality-cache",
+            "--dry-run", "--format", "table", "--db", str(db_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Repair" in result.output
+    assert "Invalid rows: 1" in result.output
+    assert "INVALID_SOURCE" in result.output
+
+
+def test_repair_seasonality_cache_clean_db_returns_pass(tmp_path: Path):
+    """No invalid rows should produce PASS status."""
+    db_path = tmp_path / "repair_clean.db"
+    _build_seasonality_db(db_path, with_invalid_row=False)
+
+    result = runner.invoke(
+        app,
+        [
+            "audit", "data", "repair-seasonality-cache",
+            "--format", "json", "--db", str(db_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["status"] == "PASS"
+    assert payload["invalid_row_count"] == 0
+
+
+def test_repair_seasonality_cache_rejects_invalid_format(tmp_path: Path):
+    db_path = tmp_path / "repair_format.db"
+    _build_seasonality_db(db_path, with_invalid_row=False)
+
+    result = runner.invoke(
+        app,
+        [
+            "audit", "data", "repair-seasonality-cache",
+            "--format", "xml", "--db", str(db_path),
+        ],
+    )
+
+    assert result.exit_code != 0

@@ -565,9 +565,77 @@ is not complete.
     `seasonality_cache` table reports `source_unavailable_reason:
     "SEASONALITY_CACHE_TABLE_MISSING"` — both still exit 0; live `saham
     audit data contract-gate --format json` still **exits 1** — confirming
-    this task does not close the live gate. Closing the gate requires an
-    actual repair/quarantine task (not yet implemented) or a deliberate
-    contract relaxation.
+    this task does not close the live gate.
+- **DQ-001H** (2026-07-16): deterministic seasonality_cache quarantine repair
+  command `saham audit data repair-seasonality-cache --db PATH [--dry-run|--apply]
+  [--format json|table]` that transactionally quarantines + deletes invalid
+  `seasonality_cache` rows identified by the same classification logic as
+  DQ-001G (`INVALID_SOURCE`, `MISSING_FETCHED_AT`, `MALFORMED_FETCHED_AT`,
+  `ALL_METRICS_NULL`). Default mode is dry-run (`--dry-run`); `--apply` mutates
+  the database. `--dry-run` and `--apply` together fail CLI validation. Never
+  deletes without quarantining first. Re-running `--apply` is idempotent
+  (second run reports 0 invalid rows and does not duplicate quarantine entries).
+  - `RepairSeasonalityCacheUseCase`
+    (`src/application/use_case/repair_seasonality_cache_use_case.py`) reuses
+    `_classify()` from DQ-001G's use case for identical row-invalidity policy.
+    Defines `SeasonalityCacheRepairer(Protocol)` port and
+    `RepairSeasonalityCacheResponse` DTO with the required output contract keys.
+    Orchestrates: reader → classify → if source unavailable or no invalid rows →
+     return early; if dry-run → report only; if apply → `repairer.ensure_quarantine_table()`
+     then `repairer.quarantine_and_delete(rows, repair_run_id)` inside one
+     transactionally-safe call. Successful apply sets `status: "PASS"` (not
+     `"FAIL"`) to signal the operation completed; `invalid_row_count`
+     /`quarantined_row_count`/`deleted_row_count` document what was repaired.
+     Source-unavailable early-return preserves the caller's `dry_run` value
+     rather than silently setting `dry_run: true`.
+  - `SQLiteSeasonalityCacheRepairer`
+    (`src/infrastructure/persistence/sqlite_seasonality_cache_repairer.py`)
+    creates `seasonality_cache_quarantine` table via `CREATE TABLE IF NOT EXISTS`
+    (idempotent DDL). `quarantine_and_delete()` opens a connection, begins a
+    transaction (`BEGIN`), inserts each row into the quarantine table with full
+    original columns plus `quarantine_reasons_json`, `quarantined_at`,
+    `repair_run_id`, `original_table`, `schema_version`, then deletes the
+     matching row from `seasonality_cache`. NULL-safe deletion uses dynamic
+     WHERE-clause construction: each NULL column gets `col IS NULL` (no bound
+     param), each non-NULL column gets `col = ?` with the value bound. After
+     each DELETE, checks `cursor.rowcount == 1` — if 0 or >1, raises
+     `RuntimeError` which triggers a full rollback (prevents quarantine+delete
+     atomicity violation). On success: `commit()`. On any exception:
+     `rollback()` and re-raise. Returns affected row count.
+  - `repair_run_id`: `str(uuid.uuid4())` — unique per `--apply` invocation.
+    Quarantine rows record this for traceability.
+  - CLI: `src/adapters/cli/audit_commands.py` registers
+    `repair-seasonality-cache` under `saham audit data`. Default `--format json`.
+    Dry-run and apply are flags; mutual exclusion enforced via
+    `typer.BadParameter`. Table format prints mode, status, invalid/quarantined/
+    deleted counts, reason counts, per-row details, and a clear "no mutation
+    performed" note on dry-run or "quarantined N row(s)" on apply.
+  - Quarantine table `seasonality_cache_quarantine` columns:
+    `ticker`, `year`, `month`, `fetched_month`, `fetched_at`, `source`,
+    `avg_return_pct`, `win_rate_pct`, `positive_years`, `total_years`,
+    `back_years`, `quarantine_reasons_json` (TEXT), `quarantined_at` (TEXT),
+    `repair_run_id` (TEXT), `original_table` (TEXT DEFAULT 'seasonality_cache'),
+    `schema_version` (INTEGER DEFAULT 1).
+  - Tests: application-layer use case tests (13) covering dry-run (reports
+    invalid rows, does not call repairer, default mode is dry-run, rows listed
+    with reasons), apply (calls quarantine_and_delete, returns counts, reuses
+    repair_run_id), missing source (DB missing, table missing → no mutation),
+    no invalid rows (PASS, 0 affected), reason counts tally, and full response
+    DTO shape. Infrastructure tests (14) covering dry-run does not change mtime,
+    ensure_quarantine_table creates table/idempotent, apply creates table,
+    moves rows into quarantine, deletes from source, preserves valid rows,
+    returns count, rerun idempotency, NULL-safe deletion (null source, mixed
+    nulls), transaction rollback, and quarantine table column schema. CLI tests
+    (9) covering dry-run exits 0/no mutation, default is dry-run, `--dry-run`
+    + `--apply` together fails, apply mutates/quarantines/removes rows, missing
+    DB exits 0 with FAIL, table format shows counts, clean DB returns PASS,
+    invalid format rejected. `test_command_contract.py` updated for the new
+    command. `test_audit_data_commands.py`'s command-listing test updated.
+  - Does **not** close `DQ-CONTRACT-GATE`: the 413/47 invalid rows are now
+    repair-able but the gate still fails because invalid rows still exist in
+    the canonical table until `--apply` is explicitly run against that database.
+  - Verification: `pytest -k "repair_seasonality or seasonality or contract_gate
+    or audit_data or command_contract"` passes.
 - DQ-001 acceptance criteria below are **not** marked complete — DQ-001A/C/E
   now give field contracts for 20 tables (5 core + 13 enrichment + 2
   market-context) and DQ-001B/D/E give executable reconciliation for
