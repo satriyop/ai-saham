@@ -1511,8 +1511,8 @@ ordinary analysis commands. Expose the future target through thin explicit CLI
 entry points with distinct observation contracts:
 
 ```text
-saham evidence capture --contract accumulation-discovery --session YYYY-MM-DD
-saham evidence capture --contract swing-setup --setup NAME --session YYYY-MM-DD
+saham learn signal capture --contract accumulation-discovery --session YYYY-MM-DD
+saham learn signal capture --contract swing-setup --setup NAME --session YYYY-MM-DD
 ```
 
 The use case resolves one completed IDX session, freezes one eligible-universe
@@ -1540,7 +1540,7 @@ selection bias. If single-ticker reconstruction is needed, expose a separate
 read-only diagnostic interface equivalent to:
 
 ```text
-saham evidence inspect --contract swing-setup --setup NAME --ticker TICKER --session YYYY-MM-DD
+saham analyze signal inspect TICKER --contract swing-setup --setup NAME --session YYYY-MM-DD
 ```
 
 Inspection must not write canonical observations or enter readiness, tuning, or

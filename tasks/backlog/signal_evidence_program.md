@@ -98,8 +98,8 @@ dedicated application use case with thin explicit CLI entry points for two
 different observation contracts:
 
 ```text
-saham evidence capture --contract accumulation-discovery --session YYYY-MM-DD
-saham evidence capture --contract swing-setup --setup NAME --session YYYY-MM-DD
+saham learn signal capture --contract accumulation-discovery --session YYYY-MM-DD
+saham learn signal capture --contract swing-setup --setup NAME --session YYYY-MM-DD
 ```
 
 `accumulation-discovery` captures the contemporaneous eligible universe with
@@ -113,7 +113,7 @@ invoked by a scheduler or agent.
 Interactive `screen` and `analyze` commands remain assessment consumers and do
 not become implicit capture triggers. A manually selected single ticker is
 diagnostic inspection, not a canonical learning population; if exposed, use a
-separate read-only interface equivalent to `saham evidence inspect`.
+separate read-only interface equivalent to `saham analyze signal inspect`.
 
 **Exit gate: `CANONICAL-EVIDENCE-GATE`**
 

@@ -53,6 +53,8 @@ saham analyze signal replay TICKER SNAPSHOT_DATE
 saham analyze signal readiness --target TARGET
 
 saham learn signal backfill-observations --universe ... --start ... --end ...
+saham learn signal capture --contract accumulation-discovery --session ...
+saham learn signal capture --contract swing-setup --setup ... --session ...
 saham learn signal labels [SNAPSHOT_DATE] [options]
 
 saham learn sentiment audit
@@ -77,6 +79,7 @@ Flags modify one operation. They must not select workflows with different argume
 | `saham analyze signal-replay TICKER DATE` | `saham analyze signal replay TICKER DATE` | Analysis | Read-only |
 | `saham analyze signal-readiness --target TARGET` | `saham analyze signal readiness --target TARGET` | Analysis | Read-only |
 | `saham analyze signal-backfill-observations ...` | `saham learn signal backfill-observations ...` | Learning | Writes observations; may generate labels when requested |
+| New explicit canonical capture workflow | `saham learn signal capture --contract ...` | Learning | Idempotently writes universe-driven canonical observations |
 | `saham analyze signal-labels ...` | `saham learn signal labels ...` | Learning | Read-only summary unless a generation flag is used; generation persists labels |
 | `saham analyze audit` | `saham learn sentiment audit` | Learning | Persists sentiment audit outcomes |
 | `saham analyze accum-audit ...` | `saham analyze accumulation evaluate ...` | Analysis | Offline evaluation; CSV write remains explicit through `--output` |
@@ -179,6 +182,14 @@ saham analyze signal readiness --target TARGET [--format table|json] [--db PATH]
 **Canonical contract:**
 
 ```text
+saham learn signal capture \
+  --contract accumulation-discovery --session DATE \
+  [--format table|json] [--db PATH]
+
+saham learn signal capture \
+  --contract swing-setup --setup NAME --session DATE \
+  [--format table|json] [--db PATH]
+
 saham learn signal backfill-observations \
   --universe UNIVERSE --start DATE --end DATE \
   [--horizon HORIZON] [--generate-labels] [--format table|json] [--db PATH]
@@ -194,6 +205,9 @@ saham learn signal labels [SNAPSHOT_DATE] \
 - Create a focused router, suggested file: `src/adapters/cli/learn_signal_router.py`.
 - Register it under the existing `learn_app`.
 - Reuse current application use cases and persistence repositories.
+- Route both capture contracts through the one application capture use case
+  defined by `CONTROL-POPULATION`; the CLI must not implement universe,
+  selection, setup-readiness, identity, or idempotency policy.
 - State side effects in the first help paragraph.
 - Keep label summary behavior available, but clearly distinguish `SUMMARY ONLY` from `GENERATE AND PERSIST` in output.
 - Preserve local-only/deterministic backfill behavior.
@@ -201,13 +215,19 @@ saham learn signal labels [SNAPSHOT_DATE] \
 **Do not interpret this as:**
 
 - Do not merge observation backfill and label generation into one flag-driven command.
+- Do not put capture under a top-level `evidence` namespace; `evidence` is an
+  artifact, while `learn` is the persistence-producing lifecycle.
 - Do not make ordinary `analyze signal` commands persist observations or labels.
+- Do not allow single-ticker capture into the canonical learning population;
+  per-ticker reconstruction belongs to read-only `analyze signal inspect`.
 - Do not alter observation identity, deduplication, eligibility, horizons, or label definitions.
 - Do not automatically generate labels unless the existing explicit option requests it.
 
 **Acceptance criteria:**
 
-- [ ] `saham learn signal --help` lists `backfill-observations` and `labels`.
+- [ ] `saham learn signal --help` lists `capture`, `backfill-observations`, and `labels`.
+- [ ] `capture` requires an explicit supported observation contract; swing setup capture also requires `--setup`.
+- [ ] Discovery and swing-setup capture are universe-driven and idempotent.
 - [ ] Help explicitly identifies written tables/artifacts at a user-meaningful level.
 - [ ] Identical requests produce the same DTOs and persistence effects as old paths.
 - [ ] Summary-only label invocation remains read-only.

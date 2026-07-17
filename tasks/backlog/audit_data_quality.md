@@ -2468,17 +2468,18 @@ assessment-only and are not observation-capture triggers.
   stage/reasons, pre-filter measurements, missing-data state, and rank.
 - Implement canonical observation creation through one dedicated application
   capture use case, exposed manually through thin target commands equivalent to
-  `saham evidence capture --contract accumulation-discovery --session
-  YYYY-MM-DD` and `saham evidence capture --contract swing-setup --setup NAME
-  --session YYYY-MM-DD`. A later scheduler/agent must call the same use case
-  rather than duplicate policy.
+  `saham learn signal capture --contract accumulation-discovery --session
+  YYYY-MM-DD` and `saham learn signal capture --contract swing-setup --setup
+  NAME --session YYYY-MM-DD`. A later scheduler/agent must call the same use
+  case rather than duplicate policy.
 - Treat `accumulation-discovery` as the selected/rejected/ranked eligible-universe
   observation and `swing-setup` as a named-setup evaluation across its eligible
   population. Persist `observation_contract` and `setup_family` where applicable
   so the two datasets cannot overwrite or masquerade as one another.
 - Do not admit manually selected single-ticker inspection into the canonical
-  population. A future `saham evidence inspect ... --ticker TICKER` path is
-  read-only diagnostic reconstruction and creates no observation/readiness row.
+  population. A future `saham analyze signal inspect TICKER --contract ...`
+  path is read-only diagnostic reconstruction and creates no
+  observation/readiness row.
 - Keep interactive screen/analyze assessment, explicit current-session capture,
   historical backfill, and forward-label generation as separate operations.
   Neither user attention nor invocation frequency may select or weight the
