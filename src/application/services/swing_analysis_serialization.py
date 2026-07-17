@@ -34,6 +34,20 @@ def signal_response_to_dict(
             response.assessment.decision_constraints.to_dict()
             if getattr(response.assessment, "decision_constraints", None) else None
         ),
+        # DQ-002 Blocker 2: shadow-mode source-availability diagnostics.
+        # Purely observational — never consumed to derive score/entry_quality.
+        "setup_source_availability": (
+            response.setup_source_availability.to_dict()
+            if response.setup_source_availability else None
+        ),
+        "flow_source_availability": (
+            response.flow_source_availability.to_dict()
+            if response.flow_source_availability else None
+        ),
+        "availability_enforcement": (
+            response.availability_enforcement.value
+            if response.availability_enforcement else None
+        ),
     }
 
 

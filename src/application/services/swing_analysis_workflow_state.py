@@ -20,6 +20,9 @@ if TYPE_CHECKING:
     )
     from src.application.services.position_sizer import PercentSizingResult, SizingResult
     from src.domain.rules.risk_gate import GateContext
+    from src.domain.value_objects.evidence_source_availability import (
+        EvidenceSourceAvailability,
+    )
     from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.trade_setup import TradeSetup
 
@@ -38,6 +41,8 @@ class SwingAnalysisWorkflowState:
     accumulation_candidate: Any | None = None
     effective_session: "EffectiveMarketSession | None" = None
     market_regime: "MarketContext | None" = None
+    setup_source_availability: "EvidenceSourceAvailability | None" = None
+    flow_source_availability: "EvidenceSourceAvailability | None" = None
     gate_ctx: "GateContext | None" = None
     risk_response: Any | None = None
     signal_assessment: "AssessSignalResponse | None" = None

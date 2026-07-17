@@ -16,9 +16,16 @@ from typing import TYPE_CHECKING, Any
 from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSessionResolver,
 )
+from src.application.services.evidence_source_availability_assembler import (
+    EvidenceSourceAvailabilityAssembler,
+)
 from src.application.services.swing_analysis_workflow_state import (
     SwingAnalysisWorkflowState,
 )
+from src.application.use_case.assess_source_availability_use_case import (
+    AssessSourceAvailabilityUseCase,
+)
+from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
 from src.domain.value_objects.benchmark_symbol import canonicalize_ticker
 from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
 
@@ -51,6 +58,9 @@ class SwingAnalysisInputCollector:
         build_accumulation_candidate: Callable[..., Any | None],
         evaluate_market_context: Callable[..., "MarketContext"] | None,
         session_resolver: EffectiveMarketSessionResolver | None = None,
+        trading_session_calendar_loader: (
+            Callable[[date, date], "KnownTradingSessionCalendar | None"] | None
+        ) = None,
     ) -> None:
         self._market_repo = market_repository
         self._broker_repo = broker_repository
@@ -59,6 +69,7 @@ class SwingAnalysisInputCollector:
         self._build_flow_detail = build_flow_detail
         self._build_broker_detail = build_broker_detail
         self._build_accumulation_candidate = build_accumulation_candidate
+        self._trading_session_calendar_loader = trading_session_calendar_loader
         self._evaluate_market_context = evaluate_market_context
         self._session_resolver = session_resolver or EffectiveMarketSessionResolver(
             market_repository
@@ -118,7 +129,14 @@ class SwingAnalysisInputCollector:
                 as_of_date=request.today,
             )
 
-        candles = self._market_repo.get_candles(request.ticker)
+        # Bounded by request.today: this is the same candle series later
+        # passed as-is into the setup-evidence/phase-detector builders (see
+        # SwingAnalysisOptionalEvidenceRunner.build_evidence), so an
+        # unbounded read here would let a historical `--date` replay
+        # consume (and score) candles dated after the decision date it
+        # claims to represent — the exact leakage DQ-002G's temporal-leakage
+        # tests guard against elsewhere in this codebase.
+        candles = self._market_repo.get_candles(request.ticker, end_date=request.today)
         if not candles:
             raise SwingAnalysisDataUnavailable(request.ticker)
         latest_close = candles[-1].close
@@ -132,6 +150,67 @@ class SwingAnalysisInputCollector:
             )
         except Exception as exc:
             warnings.append(f"Accumulation unavailable: {exc}")
+
+        # DQ-002 Blocker 2 (shadow mode, partial — analyze swing only): one
+        # bounded trading-session calendar and one
+        # AssessSourceAvailabilityUseCase, resolved once per workflow
+        # execution and reused across both evidence-group assessments below —
+        # never constructed per-ticker or per-source. The calendar window is
+        # the minimal range that can prove every session gap this decision
+        # actually needs — min(observed source date)..latest_completed_session
+        # — not an arbitrary fixed lookback, since a wider window is both
+        # unnecessary and more likely to hit an unrelated gap elsewhere in
+        # the range and fail closed for no reason. A calendar the loader
+        # cannot prove (missing loader, or a real gap in the underlying
+        # candle data — a known limitation until blocker 1's holiday
+        # handling improves) falls back to an empty calendar rather than a
+        # weekday fallback, so every session-aligned assessment fails closed
+        # to UNKNOWN instead of silently assuming 0 sessions apart.
+        setup_source_availability = None
+        flow_source_availability = None
+        if accumulation_candidate is not None:
+            try:
+                latest_broker_date = getattr(
+                    accumulation_candidate, "latest_broker_date", None
+                )
+                latest_broker_daily_flow_date = getattr(
+                    accumulation_candidate, "latest_broker_daily_flow_date", None
+                )
+                observed_dates = [
+                    d
+                    for d in (
+                        max((c.date for c in candles), default=None),
+                        latest_broker_date,
+                        latest_broker_daily_flow_date,
+                    )
+                    if d is not None
+                ]
+                coverage_end = effective_session.latest_completed_session or request.today
+                coverage_start = min(observed_dates) if observed_dates else coverage_end
+                calendar = None
+                if self._trading_session_calendar_loader is not None:
+                    calendar = self._trading_session_calendar_loader(
+                        coverage_start, coverage_end
+                    )
+                if calendar is None:
+                    calendar = KnownTradingSessionCalendar(
+                        sessions=(),
+                        coverage_start=coverage_start,
+                        coverage_end=coverage_end,
+                    )
+                availability_assembler = EvidenceSourceAvailabilityAssembler(
+                    AssessSourceAvailabilityUseCase(calendar=calendar)
+                )
+                (
+                    setup_source_availability,
+                    flow_source_availability,
+                ) = availability_assembler.assess_setup_and_flow(
+                    effective_session=effective_session,
+                    candidate=accumulation_candidate,
+                    candles=candles,
+                )
+            except Exception as exc:
+                warnings.append(f"Source availability assessment unavailable: {exc}")
 
         market_regime = None
         if request.with_market_context:
@@ -158,4 +237,6 @@ class SwingAnalysisInputCollector:
             accumulation_candidate=accumulation_candidate,
             effective_session=effective_session,
             market_regime=market_regime,
+            setup_source_availability=setup_source_availability,
+            flow_source_availability=flow_source_availability,
         )

@@ -22,6 +22,10 @@ if TYPE_CHECKING:
     from src.domain.value_objects.company_quality_context_evidence import (
         CompanyQualityContextEvidence,
     )
+    from src.domain.value_objects.evidence_source_availability import (
+        AvailabilityEnforcementMode,
+        EvidenceSourceAvailability,
+    )
     from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
@@ -68,6 +72,14 @@ class AssessSignalResponse:
     raw_group_score: int | None = None
     raw_exact_score: float | None = None
     alpha_trigger_score: AlphaTriggerScore | None = None
+    # DQ-002 Blocker 2 (shadow mode): observational source-availability facts
+    # for the setup/flow evidence groups. Never read by scoring, coverage, or
+    # classification logic — populated only for later HIGH-2 authority-
+    # coverage enforcement to consume. None when not yet assessed (e.g. no
+    # accumulation candidate for this ticker/decision).
+    setup_source_availability: "EvidenceSourceAvailability | None" = None
+    flow_source_availability: "EvidenceSourceAvailability | None" = None
+    availability_enforcement: "AvailabilityEnforcementMode | None" = None
 
     @property
     def coverage_score(self) -> float | None:

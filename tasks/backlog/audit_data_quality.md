@@ -2030,6 +2030,227 @@ a whole is not complete (see Deferred items below).
       test_layer_boundaries.py` — 4 passed; full suite — 4675 passed;
       negative grep still returns no matches; `git diff --check` clean.
 
+- **DQ-002J — partial shadow integration for `saham analyze swing` only**
+  (2026-07-17, revised 2026-07-17 after review; Blocker 2 status: **still
+  open**, not resolved). `AssessSourceAvailabilityUseCase` (DQ-002F/G/H/I) is
+  now integrated into `saham analyze swing`'s evidence-enriched re-score
+  path, in **shadow mode only** (`AvailabilityEnforcementMode.SHADOW`). This
+  is a partial step toward closing Blocker 2, not a close of it: Blocker 2
+  requires the canonical **candidate-producing** signal path
+  (`AccumulationScreenUseCase`/`AccumulationCandidateSignalAssessor`, the
+  other real call site of `AssessSignalEvidenceUseCase`) to be covered too,
+  and that path remains entirely unintegrated. Do not treat this entry as
+  grounds for closing Blocker 2 or for claiming DQ-002/DQ-CONTRACT-GATE
+  progress beyond what is listed here. Does **not** activate HIGH-2
+  authority-coverage enforcement — availability facts are observational,
+  not yet consumed by any scoring, coverage, or classification logic.
+  - **Review correction (2026-07-17, same day, before this was considered
+    done):** the first cut of this integration had three defects a review
+    caught, all fixed below:
+    1. **P0 — availability described a different read than the one evidence
+       consumed.** `SwingAnalysisInputCollector.collect()` fetched
+       `state.candles` via `get_candles(ticker)` with **no** `end_date`
+       bound, and that exact (unbounded) list is what
+       `SwingAnalysisEvidenceBuilder`/the setup-phase detector actually
+       consume. The first cut computed candle availability from
+       `AccumulationCandidate.latest_candle_date` instead — a *separate*,
+       correctly-bounded (`end_date=today`) repository call inside
+       `AccumulationCandidateEvaluator`. A historical `--date` replay could
+       therefore report candle availability as `CURRENT` from the bounded
+       candidate while the unbounded evidence path silently consumed
+       candles dated after the decision date — the exact class of leakage
+       DQ-002G's temporal-leakage tests guard against elsewhere. **Fixed:**
+       `state.candles` is now fetched with `end_date=request.today` (a
+       correctness fix to the evidence path itself, not only to
+       availability — ATR and `latest_close` are now also decision-date-
+       bounded for historical replays); `EvidenceSourceAvailabilityAssembler.
+       assess_setup_and_flow` now takes `candles` explicitly and derives
+       `observed_through` for `candles` as `max(c.date for c in candles)` —
+       the literal list passed to the evidence builder — never
+       `AccumulationCandidate.latest_candle_date`.
+    2. **P1 — the flow-source mapping was inaccurate and permanently
+       non-authoritative.** The first cut always passed
+       `observed_through=None` for `broker_daily_flow` (permanently
+       `UNKNOWN`, making `flow.all_authoritative` permanently `False` — "not
+       a useful shadow baseline"), and did not account for
+       `FlowConfirmationEvidenceBuilder`'s Bandar sub-signal
+       (`candidate.bandar_detector`) at all. Traced precisely this time:
+       `candidate.foreign_flow_evidence` (feeding the `cons`/`streak`/
+       `vwap`/`flow` sub-signals) is computed by `ScoreForeignFlowUseCase`
+       purely from `AccumulationCandidateEvaluator`-computed fields
+       (`net_buy_ratio`, `consecutive_streak`, `vwap_discount_pct`,
+       `avg_flow_ratio`), all of which derive from `window_summaries` —
+       exactly `broker_summaries`, exactly `latest_broker_date` — confirming
+       that mapping was already correct. The `inst`/BCI sub-signal
+       (`bci_label`/`bci_tier1_count`) derives from `daily_flows` filtered
+       to `window_summaries`' own dates — a real, distinct source
+       (`broker_daily_flow`) whose own max consumed date just wasn't
+       tracked anywhere. **Fixed:** added
+       `AccumulationCandidate.latest_broker_daily_flow_date` (new field,
+       additive, defaults to `None`), populated in
+       `AccumulationCandidateEvaluator.evaluate` as
+       `max(f.date for f in window_flows)` — the exact dates actually
+       filtered into the BCI computation — so `broker_daily_flow` now
+       resolves to a real status instead of forced `UNKNOWN`.
+       `candidate.bandar_detector`, however, is sourced from
+       `StockbitBandarDetectorProvider` (`src/infrastructure/browser/
+       stockbit_bandar.py`) — a live Stockbit browser/API scrape, **not**
+       one of `SourceSettlementRegistry`'s 13 persisted SQLite source
+       families, with no settlement rule and no ability to get one without
+       a separate registry/ADR decision. Per this task's explicit
+       instruction not to add sources merely because they were queried
+       upstream, Bandar is **not** added to the flow group; it is
+       explicitly documented (in
+       `evidence_source_availability_assembler.py`'s module docstring and
+       here) as a known, currently-uncovered contributor to
+       `FlowConfirmationEvidence` — `flow_availability` describes
+       `broker_summaries`/`broker_daily_flow` only.
+    3. **P1 — the calendar window was too wide to be usable against live
+       data.** The first cut requested a fixed 60-calendar-day window
+       ending at `request.today`; against the current database this
+       interval was rejected by the calendar provider (legitimate missing
+       weekdays/holidays and today's date not yet proven in cached IHSG
+       data), so the empty-calendar fallback fired for every real run,
+       making every session-aligned source `UNKNOWN` in practice — fail-
+       closed correctly, but not "Blocker 2 resolved" in substance either.
+       **Fixed:** the window is now the minimal range that can prove the
+       session gaps this decision actually needs —
+       `min(observed source date, across candles/broker_summaries/
+       broker_daily_flow)..latest_completed_session` — instead of an
+       arbitrary fixed lookback. This narrows the chance of hitting an
+       unrelated gap elsewhere in a wider range, but does not repair
+       blocker 1's holiday-detection limitation itself: shadow results will
+       still be limited to `UNKNOWN` around any real gap inside even this
+       narrower window until blocker 1 is corrected.
+    4. **P2 — the shadow-invariance test was too isolated.** The original
+       composer test set `signal_engine=None`, which skips the entire
+       rescore branch — proving `dataclasses.replace()` preserves fields,
+       but not that a *real* rescore (signal assessment, trade-setup
+       recomposition, serialization) coexists correctly with the attach
+       step. **Fixed:** added
+       `test_real_rescore_path_with_availability_matches_real_rescore_without_it`
+       (`tests/application/services/test_swing_analysis_decision_composer.py`)
+       — a deterministic fake `signal_engine`/`risk_trade_setup_composer`
+       that actually executes the rescore + trade-setup-recomposition
+       branches, comparing the full result with vs. without availability
+       wiring present, asserting every field is identical except the three
+       new diagnostic keys (including a `signal_response_to_dict()`
+       comparison, not just attribute equality).
+  - **Covered evidence groups and source families** (traced from the real
+    call graph, not assumed): `SwingAnalysisWorkflowUseCase` →
+    `SwingAnalysisDecisionComposer.recompose_after_evidence` →
+    `SignalEngine.evaluate_with_context` → `AssessSignalEvidenceUseCase`
+    only ever receives two production-authority evidence groups —
+    `setup_evidence` and `flow_confirmation_evidence`
+    (`sector_context_evidence`/`company_quality_context_evidence` are also
+    passed but are diagnostic/zero-weight per ADR-024's "Setup Quality 60% +
+    Flow Confirmation 40%" contract, confirmed by
+    `swing_analysis_evidence_builder.py`'s own comments; regime/market
+    context affects only post-score `entry_quality`/`decision_constraints`
+    via gate tightening, never evidence-group scoring — traced in
+    `SignalEvidenceGroupScorer._apply_gate_tightening`). Covered:
+    - **setup** evidence group → `candles` (`SESSION_ALIGNED`), using the
+      max date of the literal (now `end_date`-bounded) `candles` list passed
+      to the evidence builder — not a separately fetched candidate field.
+    - **flow** evidence group → `broker_summaries` (`SESSION_ALIGNED`), using
+      `AccumulationCandidate.latest_broker_date`; and `broker_daily_flow`
+      (`SESSION_ALIGNED`), using the new
+      `AccumulationCandidate.latest_broker_daily_flow_date`. Both fail
+      closed to `UNKNOWN` when the candidate never populated them.
+  - **Not integrated in this task** (out of scope, not merely deferred):
+    Bandar (`candidate.bandar_detector`, a live Stockbit scrape, not a
+    registry source family — see P1 correction above); `foreign_flow_points`,
+    `foreign_flow_snapshots` — not consumed by this workflow's setup/flow
+    evidence path (they feed `institutional_accumulation_evidence`, a
+    separate diagnostic evidence group never passed to
+    `AssessSignalEvidenceRequest`); all remaining registry sources
+    (`analyst_cache`, `company_fundamentals`, `seasonality_cache`,
+    `corporate_action_events`, `corporate_action_event_dates`,
+    `market_context_snapshots`, `regime_observations`, `sentiment`) — none
+    feed production-authority setup/flow evidence, per the same trace. The
+    screener path (`AccumulationScreenUseCase`/
+    `AccumulationCandidateSignalAssessor`) — **the main candidate-producing
+    live workflow, and the reason Blocker 2 stays open** — is a second,
+    separate call site of `AssessSignalEvidenceUseCase` and remains entirely
+    unintegrated; this task covers only `saham analyze swing`'s
+    evidence-enriched re-score, the single-ticker deep-dive path.
+  - **New code** (all additive, no existing production class modified in
+    its scoring/decision logic):
+    - `src/domain/value_objects/evidence_source_availability.py` —
+      `EvidenceSourceAvailability` (frozen VO grouping
+      `SourceAvailabilityAssessment`s per evidence group, `all_authoritative`
+      property that is `False` whenever any one assessment is
+      non-authoritative — never averaged) and
+      `AvailabilityEnforcementMode` (`SHADOW` today; a typed enum so a
+      future HIGH-2 value can't be a bare string operators toggle casually).
+    - `src/application/services/evidence_source_availability_assembler.py`
+      — `EvidenceSourceAvailabilityAssembler`, the only place that maps the
+      literal consumed `candles` list and
+      `AccumulationCandidate.latest_broker_date`/
+      `latest_broker_daily_flow_date` onto the three source-family
+      assessments above via one already-constructed
+      `AssessSourceAvailabilityUseCase`.
+    - `AccumulationCandidate.latest_broker_daily_flow_date` (new field on
+      the existing DTO, additive, default `None`) and its population in
+      `AccumulationCandidateEvaluator.evaluate`.
+  - **Wiring** (one session + one calendar reused across a whole workflow
+    execution, never per-ticker/per-source, per this task's requirement):
+    `SwingAnalysisInputCollector.collect()` resolves `EffectiveMarketSession`
+    once (pre-existing), then — only when an `accumulation_candidate` exists
+    — builds one minimally-bounded `KnownTradingSessionCalendar` via an
+    injected `trading_session_calendar_loader` callable (a narrow callable,
+    not a constructed infrastructure object, so the application layer never
+    constructs `IHSGTradingSessionCalendarProvider` itself — that
+    construction lives in the CLI composition root,
+    `analyze_swing_workflow_factory.py`, matching the existing
+    `evaluate_market_context` callable-injection pattern in the same file),
+    constructs one `AssessSourceAvailabilityUseCase`, and computes both
+    groups via `EvidenceSourceAvailabilityAssembler`. A missing loader or an
+    unprovable calendar (gap in the underlying candle data) falls back to an
+    empty `KnownTradingSessionCalendar` — every session-aligned assessment
+    then fails closed to `UNKNOWN` (`TRADING_CALENDAR_COVERAGE_UNPROVEN`),
+    never a weekday-fallback guess. Results are attached to the canonical
+    `AssessSignalResponse` only in
+    `SwingAnalysisDecisionComposer.recompose_after_evidence`, unconditionally
+    after any evidence rescore (whether or not the rescore branch itself
+    ran), via `dataclasses.replace()` — this touches no scoring code path,
+    so it is structurally impossible for this attach step to change
+    `score`/`strength`/`entry_quality`/`coverage_score`. Exposed in JSON
+    output via `swing_analysis_serialization.py`'s
+    `signal_response_to_dict()` (`setup_source_availability`,
+    `flow_source_availability`, `availability_enforcement` keys) — no CLI
+    text-rendering change.
+  - **Known UNKNOWN cases:** Bandar's contribution to flow evidence is never
+    assessed (see above, by design); any ticker with no
+    `accumulation_candidate` (screener-rejected or data-unavailable tickers)
+    gets no availability assessment at all (`None` on both groups, not a
+    forced `UNKNOWN`); any decision whose minimal observed-date window has a
+    candle gap (real holiday, partial ingestion, or quarantined row —
+    `MarketDataRepository` still cannot distinguish these, per DQ-002I's
+    known limitation) falls back to the empty calendar and reports every
+    session-aligned source as `UNKNOWN` — this remains a real operational
+    limitation until blocker 1's holiday handling improves, not something
+    this task fixes.
+  - **No production decision authority changed:** `AssessSignalEvidenceUseCase`,
+    `SignalEvidenceGroupScorer`, `SignalEngine`, `DecisionPolicyService`,
+    `RiskEngine`, and `TradeSetup` are all untouched by this task. HIGH-2
+    (using these facts to gate/cap authority coverage) remains unstarted.
+  - Verification: `pytest tests/domain/value_objects/test_evidence_source_availability.py
+    tests/application/services/test_evidence_source_availability_assembler.py
+    tests/application/services/test_swing_analysis_input_collector.py
+    tests/application/services/test_swing_analysis_decision_composer.py` —
+    28 tests, all passing; `pytest tests/architecture/
+    test_layer_boundaries.py` — 4 passed; full suite — 4700 passed
+    (4675 pre-existing + 25 net new after the review-driven fixes; zero
+    regressions, including from bounding the previously-unbounded
+    `state.candles` fetch); `git diff --check` clean; `git status --short`
+    shows only the files touched by this task. The Data Contract Audit Gate
+    (`saham audit data ...`) was not run: this task adds no schema,
+    provider, repository-method, or field-mapping change to persisted
+    tables — the one new field (`latest_broker_daily_flow_date`) is a
+    derived DTO field computed from already-consumed rows, not a new
+    persisted column or read path.
+
 **Deferred (not started):**
 
 - Band-specific behavioral difference between `BEFORE_OPEN`/`PRE_OPEN`/
@@ -2054,11 +2275,16 @@ a whole is not complete (see Deferred items below).
   Other repository methods with the same historical-decision shape
   (`get_events_for_universe`, or any other enrichment consumer not audited
   in this task) have not been checked for the same wiring gap.
-- `AssessSourceAvailabilityUseCase` (DQ-002F/G/H/I) is still not
-  constructed anywhere in production — no composition root, factory, or
-  workflow wires it or `IHSGTradingSessionCalendarProvider` yet. It exists
-  today only as a standalone, fully-tested contract. Wiring it into a real
-  Phase 2 consumer (screener, backfill, readiness, or CLI) is unstarted.
+- `AssessSourceAvailabilityUseCase` (DQ-002F/G/H/I) is now constructed and
+  wired in production for one consumer — `saham analyze swing`'s
+  evidence-enriched re-score path, shadow mode only (DQ-002J, **partial**;
+  see that entry for exact scope and review corrections). Blocker 2 is
+  **not** resolved: the screener (`AccumulationScreenUseCase`/
+  `AccumulationCandidateSignalAssessor`) is the other real call site of
+  `AssessSignalEvidenceUseCase` and the main candidate-producing live
+  workflow, and it remains entirely unwired, as do backfill/readiness
+  consumers and HIGH-2 authority-coverage enforcement on top of these
+  now-available facts.
 
 **Acceptance criteria:**
 

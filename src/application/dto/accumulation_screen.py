@@ -210,6 +210,11 @@ class AccumulationCandidate:
     # Data currency — dates of the most recent loaded records; None if no data
     latest_candle_date: date | None = None
     latest_broker_date: date | None = None
+    # Max date among broker_daily_flow rows actually consumed for BCI/
+    # top_brokers (a subset of the broker_summaries window; see
+    # AccumulationCandidateEvaluator.evaluate). None if no daily-flow row
+    # fell inside that window.
+    latest_broker_daily_flow_date: date | None = None
     # Forward EPS/Revenue estimates (Stockbit analyst consensus endpoint)
     forward_estimates: "ForwardEstimates | None" = None
     # Composite signal — all enrichment dimensions combined into 0–100 score
@@ -286,6 +291,9 @@ class AccumulationCandidate:
             else None,
             "latest_broker_date": self.latest_broker_date.isoformat()
             if self.latest_broker_date
+            else None,
+            "latest_broker_daily_flow_date": self.latest_broker_daily_flow_date.isoformat()
+            if self.latest_broker_daily_flow_date
             else None,
             "forward_estimates": self.forward_estimates.to_dict()
             if self.forward_estimates

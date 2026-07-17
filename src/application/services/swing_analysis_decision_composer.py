@@ -19,6 +19,7 @@ from src.application.services.signal_context_builder import (
 from src.application.services.swing_analysis_workflow_state import (
     SwingAnalysisWorkflowState,
 )
+from src.domain.value_objects.evidence_source_availability import AvailabilityEnforcementMode
 
 if TYPE_CHECKING:
     from src.application.services.signal_engine import SignalEngine
@@ -214,4 +215,27 @@ class SwingAnalysisDecisionComposer:
                     market_context_signal_preview=_new_mce_signal,
                     market_context_trade_setup_preview=_new_mce_trade_preview,
                 )
+
+        # DQ-002 Blocker 2 (shadow mode): attach observational source-
+        # availability diagnostics to the canonical signal assessment
+        # response. Purely additive — never changes score, coverage,
+        # entry_quality, or trade_setup, since it is copied onto whichever
+        # signal_assessment already resulted from the logic above (rescored
+        # or not).
+        if (
+            state.signal_assessment is not None
+            and (
+                state.setup_source_availability is not None
+                or state.flow_source_availability is not None
+            )
+        ):
+            state.signal_assessment = replace(
+                state.signal_assessment,
+                setup_source_availability=state.setup_source_availability,
+                flow_source_availability=state.flow_source_availability,
+                availability_enforcement=AvailabilityEnforcementMode.SHADOW,
+            )
+            state.verdict = replace(
+                state.verdict, signal_assessment=state.signal_assessment
+            )
         return state

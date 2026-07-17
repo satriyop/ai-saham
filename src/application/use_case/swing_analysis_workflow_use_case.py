@@ -7,6 +7,7 @@ AI usage: Optional sentiment provider, controlled by injected fetcher.
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
@@ -31,6 +32,7 @@ if TYPE_CHECKING:
     from src.application.use_case.assess_corporate_action_event_risk_use_case import (
         AssessCorporateActionEventRiskUseCase,
     )
+    from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
     from src.domain.value_objects.market_context import MarketContext
 
 from src.application.services.effective_market_session_resolver import (
@@ -109,6 +111,9 @@ class SwingAnalysisWorkflowUseCase:
             Callable[[], CompanyQualityContextEvidenceBuilder] | None
         ) = None,
         session_resolver: EffectiveMarketSessionResolver | None = None,
+        trading_session_calendar_loader: (
+            Callable[[date, date], "KnownTradingSessionCalendar | None"] | None
+        ) = None,
     ) -> None:
         self._market_repo = market_repository
         self._broker_repo = broker_repository
@@ -169,6 +174,7 @@ class SwingAnalysisWorkflowUseCase:
             evaluate_market_context=evaluate_market_context,
             session_resolver=session_resolver
             or EffectiveMarketSessionResolver(market_repository),
+            trading_session_calendar_loader=trading_session_calendar_loader,
         )
         self._decision_composer = SwingAnalysisDecisionComposer(
             risk_trade_setup_composer=self._risk_trade_setup_composer,

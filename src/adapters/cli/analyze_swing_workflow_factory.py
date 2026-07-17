@@ -51,6 +51,9 @@ from src.infrastructure.config.accumulation_screener_config import (
 )
 from src.infrastructure.config.analyze_swing_config import AnalyzeSwingConfig
 from src.infrastructure.config.market_context_factory import evaluate_market_context
+from src.infrastructure.persistence.ihsg_trading_session_calendar_provider import (
+    IHSGTradingSessionCalendarProvider,
+)
 
 
 def create_swing_analysis_workflow(
@@ -127,4 +130,9 @@ def create_swing_analysis_workflow(
             deps.company_quality_context_builder_factory
         ),
         session_resolver=EffectiveMarketSessionResolver(deps.market_repository),
+        trading_session_calendar_loader=(
+            lambda coverage_start, coverage_end: IHSGTradingSessionCalendarProvider(
+                deps.market_repository
+            ).load(coverage_start=coverage_start, coverage_end=coverage_end)
+        ),
     )

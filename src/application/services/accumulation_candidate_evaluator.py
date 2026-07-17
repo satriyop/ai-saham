@@ -179,12 +179,14 @@ class AccumulationCandidateEvaluator:
             ticker=ticker,
             end_date=today,
         )
+        latest_broker_daily_flow_date: date | None = None
         if daily_flows:
             # Collect the window dates from broker summaries to align the window
             window_dates = {s.date for s in window_summaries}
             window_flows = [f for f in daily_flows if f.date in window_dates]
 
             if window_flows:
+                latest_broker_daily_flow_date = max(f.date for f in window_flows)
                 # Aggregate net_lot per broker across the window
                 from collections import defaultdict
 
@@ -237,4 +239,5 @@ class AccumulationCandidateEvaluator:
             nearest_resistance_pct=nearest_resistance_pct,
             latest_candle_date=latest_candle_date,
             latest_broker_date=latest_broker_date,
+            latest_broker_daily_flow_date=latest_broker_daily_flow_date,
         )
