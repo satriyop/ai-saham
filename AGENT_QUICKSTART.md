@@ -115,6 +115,26 @@ Required structure:
    - State whether absence is represented by `None`, an empty collection, a
      typed `UNKNOWN` result, an exception, or omission. Do not leave this choice
      to the implementer, especially when it can alter scoring or authority.
+13. Enforce one source of truth for transported data.
+   - Do not permit both a derived object and a second independently mutable copy
+     of its source/result to travel through workflow state. Name the one owning
+     DTO or result type and require downstream access through it.
+   - If exact consumed rows, provenance, identity, or cutoff state matters,
+     explicitly forbid re-querying, reconstructing, or substituting
+     value-equivalent rows. State the complete producer-to-consumer chain.
+14. Define the exception boundary, not only the missing-data behavior.
+   - Distinguish expected provider/data absence from contract, invariant, and
+     programmer errors. State exactly which exception types become typed
+     unavailable results or warnings and which must propagate and fail closed.
+   - Broad best-effort handling must not convert malformed canonical objects,
+     mismatched provenance, or impossible state into ordinary missing evidence.
+15. Test lineage and call behavior independently from computed values.
+   - When a task requires exact inputs, tests must assert repository read count,
+     transported row identity/keys, and absence of forbidden second reads. Two
+     queries returning equal values do not prove shared provenance.
+   - When a typed wrapper binds values together, tests must prove downstream
+     code preserves the wrapper until the named boundary instead of extracting
+     one field early and silently discarding the rest.
 
 Use a `Do Not Interpret This As` section for high-risk work. Example:
 
