@@ -239,9 +239,14 @@ def _state(
     )
     state = SwingAnalysisWorkflowState()
     state.accumulation_evaluation = SimpleNamespace(candidate=candidate)
-    state.effective_session = _effective_session()
+    from src.application.dto.signal_evidence_execution_context import (
+        SignalEvidenceExecutionContext,
+    )
+    state.signal_evidence_execution_context = SignalEvidenceExecutionContext(
+        effective_session=_effective_session(),
+        source_availability_use_case=source_availability_use_case,
+    )
     state.candles = [SimpleNamespace(date=SNAP)]
-    state.source_availability_use_case = source_availability_use_case
     state.built_setup_evidence = built_setup_evidence
     state.built_flow_evidence = built_flow_evidence
     state.evidence = swing_analysis_dto.SwingEvidence(

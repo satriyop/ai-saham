@@ -12,6 +12,9 @@ from src.application.dto.accumulation_screen import AccumulationScreenResponse
 from src.application.use_case.run_accumulation_screen_workflow_use_case import (
     RunAccumulationScreenWorkflowUseCase,
 )
+from src.application.services.signal_evidence_execution_context_builder import (
+    SignalEvidenceExecutionContextBuilder,
+)
 from tests.adapters.cli.screen_accum_test_fixtures import (
     _candidate,
     _fake_workflow_result,
@@ -66,6 +69,9 @@ def _real_workflow_uc(screen_execute, broker_repo=None):
         accumulation_screener_config=accum_config,
         rules_loader=MagicMock(),
         indicator_registry_factory=MagicMock(),
+        signal_evidence_context_builder=SignalEvidenceExecutionContextBuilder(
+            trading_session_calendar_loader=None
+        ),
         save_watchlist_use_case=None,
     )
 
@@ -254,7 +260,7 @@ def test_screen_accum_single_json_matches_table_candidates_under_vwap_only(monke
     underwater = _candidate(ticker="A", vwap_discount_pct=5.0)
     not_underwater = _candidate(ticker="B", vwap_discount_pct=-2.0)
 
-    def screen_execute(req):
+    def screen_execute(req, *args, **kwargs):
         return AccumulationScreenResponse(
             candidates=[underwater, not_underwater],
             screened_at=date(2026, 7, 14),
@@ -307,7 +313,7 @@ def test_screen_accum_multi_json_matches_table_rows_under_top_sort_squeeze(monke
     loose_hot = _candidate(ticker="B", foreign_flow_score=95.0, bb_width_pctile=0.80)
     tight_cold = _candidate(ticker="C", foreign_flow_score=20.0, bb_width_pctile=0.10)
 
-    def screen_execute(req):
+    def screen_execute(req, *args, **kwargs):
         return AccumulationScreenResponse(
             candidates=[tight_hot, loose_hot, tight_cold],
             screened_at=date(2026, 7, 14),
@@ -369,7 +375,7 @@ def test_screen_accum_multi_renders_tracked_broker_flow_not_broker_quality(monke
 
     candidate = _candidate(ticker="A")
 
-    def screen_execute(req):
+    def screen_execute(req, *args, **kwargs):
         return AccumulationScreenResponse(
             candidates=[candidate],
             screened_at=date(2026, 7, 14),
@@ -434,7 +440,7 @@ def test_screen_accum_multi_json_includes_typed_freshness_per_window(monkeypatch
         latest_broker_date=date(2026, 7, 13),
     )
 
-    def screen_execute(req):
+    def screen_execute(req, *args, **kwargs):
         return AccumulationScreenResponse(
             candidates=[candidate],
             screened_at=date(2026, 7, 14),
@@ -477,7 +483,7 @@ def test_screen_accum_multi_json_includes_typed_freshness_per_window(monkeypatch
 
 
 def test_screen_accum_multi_duplicate_windows_fails_clearly(monkeypatch):
-    def screen_execute(req):
+    def screen_execute(req, *args, **kwargs):
         return AccumulationScreenResponse(
             candidates=[],
             screened_at=date(2026, 7, 14),
@@ -503,7 +509,7 @@ def test_screen_accum_multi_duplicate_windows_fails_clearly(monkeypatch):
 
 
 def test_screen_accum_invalid_sort_by_fails_clearly(monkeypatch):
-    def screen_execute(req):
+    def screen_execute(req, *args, **kwargs):
         return AccumulationScreenResponse(
             candidates=[],
             screened_at=date(2026, 7, 14),

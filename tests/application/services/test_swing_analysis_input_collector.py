@@ -13,6 +13,9 @@ from src.application.dto.swing_analysis import SwingAnalysisWorkflowRequest
 from src.application.services.swing_analysis_input_collector import (
     SwingAnalysisInputCollector,
 )
+from src.application.services.signal_evidence_execution_context_builder import (
+    SignalEvidenceExecutionContextBuilder,
+)
 from src.domain.value_objects.canonical_signal_evidence_input import CandleRowIdentity, SetupProvenance
 
 
@@ -94,6 +97,9 @@ def _collector_for_availability_tests(
             SimpleNamespace(close=100.0, date=candle_date)
         ]
     )
+    builder = SignalEvidenceExecutionContextBuilder(
+        trading_session_calendar_loader=trading_session_calendar_loader
+    )
     return SwingAnalysisInputCollector(
         market_repository=market_repo,
         broker_repository=SimpleNamespace(),
@@ -106,7 +112,7 @@ def _collector_for_availability_tests(
         session_resolver=SimpleNamespace(
             resolve=lambda **kwargs: _fake_effective_session(today, latest_completed_session)
         ),
-        trading_session_calendar_loader=trading_session_calendar_loader,
+        signal_evidence_context_builder=builder,
     )
 
 
@@ -189,7 +195,7 @@ def test_calendar_window_is_minimal_not_a_fixed_lookback():
 
         calls.append((coverage_start, coverage_end))
         return KnownTradingSessionCalendar(
-            sessions=(today, lagged_broker_date),
+            sessions=(lagged_broker_date, today),
             coverage_start=coverage_start,
             coverage_end=coverage_end,
         )
@@ -198,6 +204,7 @@ def test_calendar_window_is_minimal_not_a_fixed_lookback():
         accumulation_evaluation=eval_result,
         trading_session_calendar_loader=calendar_loader,
         today=today,
+        candle_date=lagged_broker_date,
     )
     collector.collect(_request(today))
 
@@ -224,7 +231,7 @@ def test_missing_calendar_loader_falls_back_to_empty_calendar_not_a_crash():
 
     state = collector.collect(_request(today))
 
-    assert state.source_availability_use_case is not None
+    assert state.source_availability_use_case is None
     # The empty-calendar fallback can't prove any session gap, so an
     # otherwise-current source still fails closed to UNKNOWN once assessed.
     provenance = SetupProvenance(
@@ -314,7 +321,7 @@ def test_accumulation_builder_receives_request_today():
         return None
 
     market_repo = SimpleNamespace(
-        get_candles=lambda ticker, end_date=None: [SimpleNamespace(close=100.0)]
+        get_candles=lambda ticker, end_date=None: [SimpleNamespace(close=100.0, date=historical)]
     )
     # This test proves request.today threading into the accumulation
     # builder, not effective-session resolution — inject a fake resolver so

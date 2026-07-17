@@ -11,6 +11,9 @@ from src.application.dto.accumulation_screen import (
     AccumulationScreenResponse,
 )
 from src.application.services.indicator_registry import IndicatorRegistry
+from src.application.services.signal_evidence_execution_context_builder import (
+    SignalEvidenceExecutionContextBuilder,
+)
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from src.application.use_case.run_accumulation_screen_workflow_use_case import (
     RunAccumulationScreenWorkflowRequest,
@@ -117,6 +120,9 @@ def _make_uc(*, screen_use_case=None, broker_repo=None, market_repo=None,
         accumulation_screener_config=_ASC_CFG,
         rules_loader=MagicMock(),
         indicator_registry_factory=MagicMock(),
+        signal_evidence_context_builder=SignalEvidenceExecutionContextBuilder(
+            trading_session_calendar_loader=None
+        ),
         save_watchlist_use_case=save_uc,
         session_resolver=session_resolver or _fake_session_resolver(),
     )
@@ -262,7 +268,7 @@ def test_multi_mode_resolves_effective_session_once_not_per_window():
     """DQ-002B: resolved once per execute(), shared across all windows —
     never once per window."""
     screen_mock = MagicMock()
-    screen_mock.execute.side_effect = lambda req: _screen_response(window_days=req.window_days)
+    screen_mock.execute.side_effect = lambda req, *a, **kw: _screen_response(window_days=req.window_days)
     resolver = _fake_session_resolver()
     uc = _make_uc(screen_use_case=screen_mock, session_resolver=resolver)
 
@@ -273,7 +279,7 @@ def test_multi_mode_resolves_effective_session_once_not_per_window():
 
 def test_multi_mode_executes_all_windows():
     screen_mock = MagicMock()
-    screen_mock.execute.side_effect = lambda req: _screen_response(window_days=req.window_days)
+    screen_mock.execute.side_effect = lambda req, *a, **kw: _screen_response(window_days=req.window_days)
     uc = _make_uc(screen_use_case=screen_mock)
 
     result = uc.execute(_multi_request(windows=[7, 30]))
@@ -285,7 +291,7 @@ def test_multi_mode_executes_all_windows():
 
 def test_multi_mode_score_filters_disabled():
     screen_mock = MagicMock()
-    screen_mock.execute.side_effect = lambda req: _screen_response(window_days=req.window_days)
+    screen_mock.execute.side_effect = lambda req, *a, **kw: _screen_response(window_days=req.window_days)
     uc = _make_uc(screen_use_case=screen_mock)
 
     uc.execute(_multi_request(windows=[7]))
@@ -299,7 +305,7 @@ def test_multi_mode_score_filters_disabled():
 
 def test_multi_mode_passthrough_min_piotroski():
     screen_mock = MagicMock()
-    screen_mock.execute.side_effect = lambda req: _screen_response(window_days=req.window_days)
+    screen_mock.execute.side_effect = lambda req, *a, **kw: _screen_response(window_days=req.window_days)
     uc = _make_uc(screen_use_case=screen_mock)
 
     uc.execute(_multi_request(windows=[7], min_piotroski=5))
@@ -310,7 +316,7 @@ def test_multi_mode_passthrough_min_piotroski():
 
 def test_multi_mode_tracked_broker_flow():
     screen_mock = MagicMock()
-    screen_mock.execute.side_effect = lambda req: _screen_response(window_days=req.window_days)
+    screen_mock.execute.side_effect = lambda req, *a, **kw: _screen_response(window_days=req.window_days)
 
     broker_repo = MagicMock()
     broker_repo.get_broker_daily_flows.return_value = []
@@ -323,7 +329,7 @@ def test_multi_mode_tracked_broker_flow():
 
 def test_multi_mode_canonical_window_defaults_to_7():
     screen_mock = MagicMock()
-    screen_mock.execute.side_effect = lambda req: _screen_response(window_days=req.window_days)
+    screen_mock.execute.side_effect = lambda req, *a, **kw: _screen_response(window_days=req.window_days)
     uc = _make_uc(screen_use_case=screen_mock)
 
     result = uc.execute(_multi_request(windows=[7, 30, 90]))
@@ -336,7 +342,7 @@ def test_multi_mode_canonical_window_falls_back_to_first_requested_window():
     """S7: when 7 is not among the requested windows, canonical window falls
     back to the first requested window rather than failing."""
     screen_mock = MagicMock()
-    screen_mock.execute.side_effect = lambda req: _screen_response(window_days=req.window_days)
+    screen_mock.execute.side_effect = lambda req, *a, **kw: _screen_response(window_days=req.window_days)
     uc = _make_uc(screen_use_case=screen_mock)
 
     result = uc.execute(_multi_request(windows=[30, 90]))

@@ -25,6 +25,12 @@ from src.application.services.accumulation_screen_factory import (
 from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSessionResolver,
 )
+from src.application.services.signal_evidence_execution_context_builder import (
+    SignalEvidenceExecutionContextBuilder,
+)
+from src.infrastructure.persistence.ihsg_trading_session_calendar_provider import (
+    IHSGTradingSessionCalendarProvider,
+)
 from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from src.application.use_case.run_accumulation_screen_workflow_use_case import (
@@ -177,6 +183,15 @@ def create_run_accumulation_screen_workflow_use_case(
         accumulation_screener_config=screener_config,
         rules_loader=deps.rules_loader_factory(),
         indicator_registry_factory=deps.indicator_registry_factory,
+        signal_evidence_context_builder=SignalEvidenceExecutionContextBuilder(
+            trading_session_calendar_loader=lambda start, end:
+                IHSGTradingSessionCalendarProvider(
+                    deps.market_repository
+                ).load(
+                    coverage_start=start,
+                    coverage_end=end,
+                )
+        ),
         save_watchlist_use_case=SaveScreenWatchlistUseCase(
             SQLiteWatchlistRepository(db_path)
         ),

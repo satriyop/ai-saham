@@ -11,11 +11,18 @@ Layer: Application
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from src.application.dto.accumulation_screen import AccumulationScreenRequest
+from src.application.dto.signal_evidence_execution_context import (
+    SignalEvidenceExecutionContext,
+)
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSessionResolver,
+)
+from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
 from src.application.services.accumulation_multi_window_pattern import (
     classify_multi_window_pattern,
 )
@@ -97,6 +104,7 @@ class LogSwingCandidateUseCase:
         self._market = market_repository
         self._trade_store = trade_journal_store
         self._regime = regime_use_case
+        self._session_resolver = EffectiveMarketSessionResolver(market_repository)
 
     def execute(self, request: LogSwingCandidateRequest) -> LogSwingCandidateResponse:
         ticker = request.ticker.upper()
@@ -117,7 +125,15 @@ class LogSwingCandidateUseCase:
             resistance_headroom_min_pct=request.resistance_headroom_min_pct,
             ex_date_warning_days=request.ex_date_warning_days,
         )
-        response = self._screen.execute(screen_req)
+        effective_session = self._session_resolver.resolve(
+            run_at=datetime.combine(request.logged_at, MARKET_CLOSE, tzinfo=IDX_TIMEZONE)
+        )
+        execution_context = SignalEvidenceExecutionContext(
+            effective_session=effective_session,
+            source_availability_use_case=None,
+        )
+
+        response = self._screen.execute(screen_req, execution_context=execution_context)
         candidate: AccumulationCandidate | None = next(
             (c for c in response.candidates if c.ticker == ticker), None
         )
@@ -142,7 +158,8 @@ class LogSwingCandidateUseCase:
                         resistance_gate_enabled=request.resistance_gate_enabled,
                         resistance_headroom_min_pct=request.resistance_headroom_min_pct,
                         ex_date_warning_days=request.ex_date_warning_days,
-                    )
+                    ),
+                    execution_context=execution_context,
                 )
                 for w in windows
             }

@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from datetime import date
 
+from typing import TYPE_CHECKING
+
 from src.adapters.cli.stock_analysis_workflow_dependencies import (
     StockAnalysisWorkflowDependencies,
 )
@@ -27,6 +29,11 @@ from src.infrastructure.config.accumulation_screener_config import (
 )
 from src.infrastructure.config.analyze_swing_config import AnalyzeSwingConfig
 
+if TYPE_CHECKING:
+    from src.application.dto.signal_evidence_execution_context import (
+        SignalEvidenceExecutionContext,
+    )
+
 
 def create_accumulation_candidate_builder(
     *,
@@ -36,7 +43,11 @@ def create_accumulation_candidate_builder(
     accumulation_config: AccumulationScreenerConfig,
 ):
     def _build_accumulation_candidate_evaluation(
-        ticker: str, window: int, as_of_date: date
+        ticker: str,
+        window: int,
+        as_of_date: date,
+        *,
+        execution_context: SignalEvidenceExecutionContext,
     ) -> AccumulationCandidateEvaluationResult | None:
         accum_uc = create_accumulation_screen_use_case(
             broker_repository=deps.broker_repository,
@@ -69,7 +80,8 @@ def create_accumulation_candidate_builder(
                 resistance_gate_enabled=swing_config.resistance_gate_enabled,
                 resistance_headroom_min_pct=swing_config.resistance_headroom_min_pct,
                 ex_date_warning_days=swing_config.ex_date_warning_days,
-            )
+            ),
+            execution_context=execution_context,
         )
         # Run the screen exactly once (above) and select the surviving
         # observation candidate corresponding to accum_resp.candidates[0] —

@@ -15,6 +15,9 @@ from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenRequest,
 )
+from src.application.dto.signal_evidence_execution_context import (
+    SignalEvidenceExecutionContext,
+)
 from src.application.ports.universe_config_loader import UniverseConfigLoader
 from src.application.services.data_freshness_service import compute_data_freshness
 from src.application.services.effective_market_session_resolver import (
@@ -264,12 +267,30 @@ class DailyBriefingUseCase:
             else:
                 if universe_tickers:
                     try:
+                        if (
+                            effective_session is not None
+                            and latest_completed_eod_date == effective_session.latest_completed_session
+                        ):
+                            resolved_session = effective_session
+                        else:
+                            resolved_session = self._session_resolver.resolve(
+                                run_at=datetime.combine(
+                                    latest_completed_eod_date,
+                                    MARKET_CLOSE,
+                                    tzinfo=IDX_TIMEZONE,
+                                )
+                            )
+                        execution_context = SignalEvidenceExecutionContext(
+                            effective_session=resolved_session,
+                            source_availability_use_case=None,
+                        )
                         response = self._accumulation_uc.execute(
                             AccumulationScreenRequest(
                                 tickers=universe_tickers,
                                 window_days=7,
                                 as_of_date=latest_completed_eod_date,
-                            )
+                            ),
+                            execution_context=execution_context,
                         )
                         accumulation_candidates = response.candidates[: request.top]
                     except Exception as exc:

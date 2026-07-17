@@ -245,6 +245,11 @@ class SwingAnalysisDecisionComposer:
         if built_setup is None and built_flow is None:
             return None
 
+        if state.signal_evidence_execution_context is None:
+            raise ValueError(
+                "Canonical swing evidence requires SignalEvidenceExecutionContext"
+            )
+
         assembler = EvidenceSourceAvailabilityAssembler(state.source_availability_use_case)
 
         setup_group: "SetupEvidenceGroupInput | None" = None

@@ -39,6 +39,12 @@ from src.application.dto.swing_config import SwingConfig
 from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSessionResolver,
 )
+from src.application.services.signal_evidence_execution_context_builder import (
+    SignalEvidenceExecutionContextBuilder,
+)
+from src.infrastructure.persistence.ihsg_trading_session_calendar_provider import (
+    IHSGTradingSessionCalendarProvider,
+)
 from src.application.services.swing_broker_detail_builder import (
     build_broker_quality_note,
     build_flow_detail,
@@ -130,9 +136,13 @@ def create_swing_analysis_workflow(
             deps.company_quality_context_builder_factory
         ),
         session_resolver=EffectiveMarketSessionResolver(deps.market_repository),
-        trading_session_calendar_loader=(
-            lambda coverage_start, coverage_end: IHSGTradingSessionCalendarProvider(
-                deps.market_repository
-            ).load(coverage_start=coverage_start, coverage_end=coverage_end)
+        signal_evidence_context_builder=SignalEvidenceExecutionContextBuilder(
+            trading_session_calendar_loader=lambda start, end:
+                IHSGTradingSessionCalendarProvider(
+                    deps.market_repository
+                ).load(
+                    coverage_start=start,
+                    coverage_end=end,
+                )
         ),
     )

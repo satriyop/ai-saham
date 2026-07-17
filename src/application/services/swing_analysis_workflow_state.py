@@ -19,6 +19,9 @@ if TYPE_CHECKING:
     )
     from src.application.dto.assess_signal import AssessSignalResponse
     from src.application.dto.built_evidence import BuiltFlowEvidence, BuiltSetupEvidence
+    from src.application.dto.signal_evidence_execution_context import (
+        SignalEvidenceExecutionContext,
+    )
     from src.application.dto.swing_analysis import SwingDiagnostics, SwingEvidence, SwingVerdict
     from src.application.services.effective_market_session_resolver import (
         EffectiveMarketSession,
@@ -48,16 +51,8 @@ class SwingAnalysisWorkflowState:
     # could disagree with this. Access the candidate via the
     # `accumulation_candidate` property below.
     accumulation_evaluation: "AccumulationCandidateEvaluationResult | None" = None
-    effective_session: "EffectiveMarketSession | None" = None
+    signal_evidence_execution_context: "SignalEvidenceExecutionContext | None" = None
     market_regime: "MarketContext | None" = None
-    # One AssessSourceAvailabilityUseCase per workflow execution (ADR-041
-    # CANONICAL-EVIDENCE-BOUNDARY), reused for both evidence-group
-    # assessments. Availability is resolved once, pre-score, inside
-    # SwingAnalysisDecisionComposer.recompose_after_evidence, gated on the
-    # corresponding built evidence actually existing, and bound immediately
-    # into SetupEvidenceGroupInput/FlowEvidenceGroupInput — never assembled
-    # separately after scoring.
-    source_availability_use_case: "AssessSourceAvailabilityUseCase | None" = None
     gate_ctx: "GateContext | None" = None
     risk_response: Any | None = None
     signal_assessment: "AssessSignalResponse | None" = None
@@ -96,3 +91,13 @@ class SwingAnalysisWorkflowState:
             if self.accumulation_evaluation is not None
             else None
         )
+
+    @property
+    def effective_session(self) -> "EffectiveMarketSession | None":
+        context = self.signal_evidence_execution_context
+        return context.effective_session if context is not None else None
+
+    @property
+    def source_availability_use_case(self) -> "AssessSourceAvailabilityUseCase | None":
+        context = self.signal_evidence_execution_context
+        return context.source_availability_use_case if context is not None else None

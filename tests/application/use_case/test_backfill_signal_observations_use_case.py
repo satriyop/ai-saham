@@ -115,10 +115,10 @@ class FakeAccumulationScreenUseCase:
         self.requests = []
         self.effective_sessions = []
 
-    def execute(self, request, effective_session=None):
+    def execute(self, request, execution_context=None):
         self.requests.append(request)
+        effective_session = execution_context.effective_session if execution_context else None
         self.effective_sessions.append(effective_session)
-        assert request.as_of_date is not None
         recorded_count = 0
         for ticker in request.tickers:
             self.observations.append(ticker, request.as_of_date, request.window_days)
@@ -147,7 +147,7 @@ class FakeAccumulationScreenUseCaseWithFingerprint:
         self.observations = observations
         self.requests = []
 
-    def execute(self, request, effective_session=None):
+    def execute(self, request, execution_context=None):
         self.requests.append(request)
         assert request.as_of_date is not None
         market_context = request.market_context

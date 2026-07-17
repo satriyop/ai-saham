@@ -15,6 +15,9 @@ from src.application.services.effective_market_session_resolver import (
 )
 from src.application.services.indicator_registry import IndicatorRegistry
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
+from src.application.dto.signal_evidence_execution_context import (
+    SignalEvidenceExecutionContext,
+)
 from tests.application.use_case.accumulation_screen_fixtures import (
     FakeRulesLoader,
     MockBrokerRepository,
@@ -24,6 +27,25 @@ from tests.application.use_case.accumulation_screen_fixtures import (
     _summary,
     _weekdays,
 )
+
+
+def _context(as_of: date, session: EffectiveMarketSession | None = None) -> SignalEvidenceExecutionContext:
+    if session is None:
+        now = datetime(2026, 7, 16, 16, 0, tzinfo=IDX_TIMEZONE)
+        session = EffectiveMarketSession(
+            run_at=now,
+            decision_at=now,
+            latest_completed_session=as_of,
+            analysis_as_of=as_of,
+            market_session_name="AFTER_CLOSE",
+            is_eod_pending=False,
+            resolution_source="ihsg_cache_same_day",
+            notes=("a note",),
+        )
+    return SignalEvidenceExecutionContext(
+        effective_session=session,
+        source_availability_use_case=None,
+    )
 
 
 def _build_bundle(repo):
@@ -53,7 +75,8 @@ def test_record_use_case_persists_and_returns_recorded_count():
             window_days=7,
             min_net_buy_days=1,
             as_of_date=as_of,
-        )
+        ),
+        execution_context=_context(as_of),
     )
 
     assert result.recorded_count == 1
@@ -70,7 +93,8 @@ def test_record_use_case_is_noop_when_no_repository():
             window_days=7,
             min_net_buy_days=1,
             as_of_date=as_of,
-        )
+        ),
+        execution_context=_context(as_of),
     )
 
     assert result.recorded_count == 0
@@ -86,7 +110,8 @@ def test_record_use_case_zero_tickers_records_zero_rows():
             tickers=[],
             window_days=7,
             as_of_date=as_of,
-        )
+        ),
+        execution_context=_context(as_of),
     )
 
     assert result.recorded_count == 0
@@ -105,7 +130,8 @@ def test_screen_use_case_execute_is_read_only_but_recorder_persists():
             window_days=7,
             min_net_buy_days=1,
             as_of_date=as_of,
-        )
+        ),
+        execution_context=_context(as_of),
     )
 
     assert len(response.candidates) == 1
@@ -136,7 +162,7 @@ def test_effective_session_passed_into_execute_is_persisted_on_every_observation
             min_net_buy_days=1,
             as_of_date=as_of,
         ),
-        effective_session=session,
+        execution_context=_context(as_of, session),
     )
 
     assert result.recorded_count == 1
@@ -157,13 +183,28 @@ def test_no_effective_session_leaves_provenance_fields_empty():
     spy_repo = SpyCandidateObservationsRepository()
     bundle, as_of = _build_bundle(spy_repo)
 
+    empty_session = EffectiveMarketSession(
+        run_at=datetime.min,
+        decision_at=None,
+        latest_completed_session=None,
+        analysis_as_of=None,
+        market_session_name=None,
+        is_eod_pending=None,
+        resolution_source=None,
+    )
+    context = SignalEvidenceExecutionContext(
+        effective_session=empty_session,
+        source_availability_use_case=None,
+    )
+
     result = bundle.record_observations_use_case.execute(
         AccumulationScreenRequest(
             tickers=["BBCA"],
             window_days=7,
             min_net_buy_days=1,
             as_of_date=as_of,
-        )
+        ),
+        execution_context=context,
     )
 
     assert result.recorded_count == 1

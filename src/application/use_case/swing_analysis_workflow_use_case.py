@@ -29,10 +29,12 @@ if TYPE_CHECKING:
     from src.application.services.ticker_profile_classifier import (
         TickerProfileClassifier,
     )
+    from src.application.services.signal_evidence_execution_context_builder import (
+        SignalEvidenceExecutionContextBuilder,
+    )
     from src.application.use_case.assess_corporate_action_event_risk_use_case import (
         AssessCorporateActionEventRiskUseCase,
     )
-    from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
     from src.domain.value_objects.market_context import MarketContext
 
 from src.application.services.effective_market_session_resolver import (
@@ -111,10 +113,8 @@ class SwingAnalysisWorkflowUseCase:
         company_quality_context_builder_factory: (
             Callable[[], CompanyQualityContextEvidenceBuilder] | None
         ) = None,
+        signal_evidence_context_builder: "SignalEvidenceExecutionContextBuilder" = None,
         session_resolver: EffectiveMarketSessionResolver | None = None,
-        trading_session_calendar_loader: (
-            Callable[[date, date], "KnownTradingSessionCalendar | None"] | None
-        ) = None,
     ) -> None:
         self._market_repo = market_repository
         self._broker_repo = broker_repository
@@ -173,9 +173,9 @@ class SwingAnalysisWorkflowUseCase:
             build_broker_detail=build_broker_detail,
             build_accumulation_candidate_evaluation=build_accumulation_candidate_evaluation,
             evaluate_market_context=evaluate_market_context,
+            signal_evidence_context_builder=signal_evidence_context_builder,
             session_resolver=session_resolver
             or EffectiveMarketSessionResolver(market_repository),
-            trading_session_calendar_loader=trading_session_calendar_loader,
         )
         self._decision_composer = SwingAnalysisDecisionComposer(
             risk_trade_setup_composer=self._risk_trade_setup_composer,

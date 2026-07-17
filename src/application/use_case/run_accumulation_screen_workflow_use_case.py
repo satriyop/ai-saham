@@ -12,12 +12,21 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from datetime import datetime
+from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
 
 from src.application.dto.accumulation_screen import AccumulationScreenResponse
 from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSessionResolver,
 )
+
+if TYPE_CHECKING:
+    from src.application.dto.signal_evidence_execution_context import (
+        SignalEvidenceExecutionContext,
+    )
+    from src.application.services.signal_evidence_execution_context_builder import (
+        SignalEvidenceExecutionContextBuilder,
+    )
 from src.application.services.tracked_broker_flow import (
     TrackedBrokerFlowSnapshot,
     compute_tracked_broker_flow_batch,
@@ -99,6 +108,7 @@ class RunAccumulationScreenWorkflowUseCase:
         accumulation_screener_config,
         rules_loader,
         indicator_registry_factory,
+        signal_evidence_context_builder: SignalEvidenceExecutionContextBuilder,
         save_watchlist_use_case=None,
         session_resolver: EffectiveMarketSessionResolver | None = None,
     ) -> None:
@@ -109,6 +119,7 @@ class RunAccumulationScreenWorkflowUseCase:
         self._accumulation_screener_config = accumulation_screener_config
         self._rules_loader = rules_loader
         self._indicator_registry_factory = indicator_registry_factory
+        self._signal_evidence_context_builder = signal_evidence_context_builder
         self._save_watchlist_use_case = save_watchlist_use_case
         self._session_resolver = session_resolver or EffectiveMarketSessionResolver(
             market_repository
@@ -133,29 +144,42 @@ class RunAccumulationScreenWorkflowUseCase:
             strategy_name=request.strategy_name,
         )
 
-        # Resolved once per workflow execute() and shared by every candidate's
-        # freshness computation below — never once per ticker or per window.
         effective_session = self._session_resolver.resolve(
             run_at=datetime.now(IDX_TIMEZONE)
         )
+        coverage_end = (
+            effective_session.latest_completed_session
+            or effective_session.analysis_as_of
+            or effective_session.decision_at.date()
+        )
+        coverage_start = coverage_end - timedelta(days=14)
+
+        execution_context = self._signal_evidence_context_builder.build(
+            effective_session=effective_session,
+            coverage_start=coverage_start,
+            coverage_end=coverage_end,
+        )
 
         if request.multi:
-            return self._execute_multi(request, request_builder, warnings, effective_session)
+            return self._execute_multi(request, request_builder, warnings, execution_context)
 
-        return self._execute_single(request, request_builder, warnings, effective_session)
+        return self._execute_single(request, request_builder, warnings, execution_context)
 
     def _execute_single(
         self,
         request: RunAccumulationScreenWorkflowRequest,
         request_builder: BuildSignalObservationScreenRequest,
         warnings: list[str],
-        effective_session,
+        execution_context: SignalEvidenceExecutionContext,
     ) -> RunAccumulationScreenWorkflowResult:
         screen_request = request_builder.build(
             tickers=request.tickers,
             window_days=request.window,
         )
-        response = self._screen_use_case.execute(screen_request)
+        response = self._screen_use_case.execute(
+            screen_request,
+            execution_context=execution_context,
+        )
 
         display_cfg = self._accumulation_screener_config.display
         projection = project_single_screen_result(
@@ -165,7 +189,7 @@ class RunAccumulationScreenWorkflowUseCase:
             top=request.top,
             min_streak=request.min_streak,
             coiled_spring_bb_pctile=display_cfg.coiled_spring_bb_pctile,
-            effective_session=effective_session,
+            effective_session=execution_context.effective_session,
         )
 
         strategy_signals: dict[str, str] = {}
@@ -227,7 +251,7 @@ class RunAccumulationScreenWorkflowUseCase:
         request: RunAccumulationScreenWorkflowRequest,
         request_builder: BuildSignalObservationScreenRequest,
         warnings: list[str],
-        effective_session,
+        execution_context: SignalEvidenceExecutionContext,
     ) -> RunAccumulationScreenWorkflowResult:
         validate_multi_window_request(request.windows, request.sort_by)
 
@@ -247,7 +271,8 @@ class RunAccumulationScreenWorkflowUseCase:
                 multi_builder.build(
                     tickers=request.tickers,
                     window_days=w,
-                )
+                ),
+                execution_context=execution_context,
             )
 
         screened_at = next(iter(multi_results.values())).screened_at
@@ -276,7 +301,7 @@ class RunAccumulationScreenWorkflowUseCase:
             coiled_spring_min_foreign_flow_score=display_cfg.coiled_spring_min_foreign_flow_score,
             coiled_spring_bb_pctile=display_cfg.coiled_spring_bb_pctile,
             canonical_window=canonical_window,
-            effective_session=effective_session,
+            effective_session=execution_context.effective_session,
         )
 
         return RunAccumulationScreenWorkflowResult(

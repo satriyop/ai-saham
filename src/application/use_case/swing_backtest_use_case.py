@@ -6,9 +6,17 @@ AI usage: None
 """
 
 import logging
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
+
+from src.application.dto.signal_evidence_execution_context import (
+    SignalEvidenceExecutionContext,
+)
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSessionResolver,
+)
+from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
 
 from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
@@ -94,6 +102,7 @@ class SwingBacktestUseCase:
         self._broker_repo = broker_repository
         self._market_repo = market_repository
         self._derived_features = derived_feature_policy or AccumulationDerivedFeaturePolicy()
+        self._session_resolver = EffectiveMarketSessionResolver(market_repository)
         self._screen = AccumulationScreenUseCase(
             broker_repository=broker_repository,
             market_repository=market_repository,
@@ -220,19 +229,29 @@ class SwingBacktestUseCase:
         request: SwingBacktestRequest,
         market_context: MarketContext | None = None,
     ) -> list[SwingBacktestEntrySignal]:
-        response = self._screen.execute(AccumulationScreenRequest(
-            tickers=tickers,
-            window_days=request.window_days,
-            min_net_buy_days=request.min_net_buy_days,
-            min_foreign_flow_score=0.0,
-            min_foreign_flow_score_enabled=True,
-            rsi_period=self._derived_features.rsi_period,
-            sma_period=self._derived_features.trend_sma_period,
-            as_of_date=signal_date,
-            resistance_gate_enabled=request.resistance_gate_enabled,
-            resistance_headroom_min_pct=request.resistance_headroom_min_pct,
-            ex_date_warning_days=request.ex_date_warning_days,
-        ))
+        effective_session = self._session_resolver.resolve(
+            run_at=datetime.combine(signal_date, MARKET_CLOSE, tzinfo=IDX_TIMEZONE)
+        )
+        execution_context = SignalEvidenceExecutionContext(
+            effective_session=effective_session,
+            source_availability_use_case=None,
+        )
+        response = self._screen.execute(
+            AccumulationScreenRequest(
+                tickers=tickers,
+                window_days=request.window_days,
+                min_net_buy_days=request.min_net_buy_days,
+                min_foreign_flow_score=0.0,
+                min_foreign_flow_score_enabled=True,
+                rsi_period=self._derived_features.rsi_period,
+                sma_period=self._derived_features.trend_sma_period,
+                as_of_date=signal_date,
+                resistance_gate_enabled=request.resistance_gate_enabled,
+                resistance_headroom_min_pct=request.resistance_headroom_min_pct,
+                ex_date_warning_days=request.ex_date_warning_days,
+            ),
+            execution_context=execution_context,
+        )
         candidates = []
         for candidate in response.candidates:
             setup_evaluation = self._evaluate_setup(candidate, request)

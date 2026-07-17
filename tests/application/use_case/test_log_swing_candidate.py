@@ -32,7 +32,7 @@ class FakeScreenUseCase:
     def __init__(self, candidates: dict[tuple[str, int], AccumulationCandidate | None]):
         self._candidates = candidates
 
-    def execute(self, request: AccumulationScreenRequest) -> AccumulationScreenResponse:
+    def execute(self, request: AccumulationScreenRequest, *args, **kwargs) -> AccumulationScreenResponse:
         ticker = request.tickers[0]
         candidate = self._candidates.get((ticker, request.window_days))
         return AccumulationScreenResponse(
@@ -71,7 +71,8 @@ class FakeMarketRepository:
     def get_candles(self, ticker: str, start_date=None, end_date=None):
         if self._close is None:
             return []
-        return [SimpleNamespace(ticker=ticker, close=self._close)]
+        c_date = end_date or date(2025, 1, 15)
+        return [SimpleNamespace(ticker=ticker, close=self._close, date=c_date)]
 
     def save_candles(self, candles):
         pass

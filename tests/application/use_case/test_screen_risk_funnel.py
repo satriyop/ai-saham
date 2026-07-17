@@ -10,7 +10,13 @@ Verifies:
 - to_dict() includes risk_status, risk_confidence, risk_gate fields
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from src.application.dto.signal_evidence_execution_context import (
+    SignalEvidenceExecutionContext,
+)
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSession,
+)
 from decimal import Decimal
 from unittest.mock import MagicMock
 
@@ -100,7 +106,19 @@ def test_risk_assessment_none_when_no_risk_use_case():
         rules_loader=FakeRulesLoader(),
         risk_use_case=None,
     )
-    resp = uc.execute(AccumulationScreenRequest(tickers=["BBCA"]))
+    context = SignalEvidenceExecutionContext(
+        effective_session=EffectiveMarketSession(
+            run_at=datetime.min,
+            decision_at=datetime(2026, 6, 23, 16, 0),
+            latest_completed_session=_TODAY,
+            analysis_as_of=_TODAY,
+            market_session_name="AFTER_CLOSE",
+            is_eod_pending=False,
+            resolution_source="test",
+        ),
+        source_availability_use_case=None,
+    )
+    resp = uc.execute(AccumulationScreenRequest(tickers=["BBCA"]), execution_context=context)
     for candidate in resp.candidates:
         assert candidate.risk_assessment is None
 

@@ -9,8 +9,16 @@ Depends on: Domain ports and accumulation screen use case
 AI usage: None
 """
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any
+
+from src.application.dto.signal_evidence_execution_context import (
+    SignalEvidenceExecutionContext,
+)
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSessionResolver,
+)
+from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
 
 from src.application.dto.accumulation_audit import (
     AccumulationAuditPolicy,
@@ -79,6 +87,7 @@ class AccumulationAuditUseCase:
         self._broker_repo = broker_repository
         self._market_repo = market_repository
         self._derived_features = derived_feature_policy or AccumulationDerivedFeaturePolicy()
+        self._session_resolver = EffectiveMarketSessionResolver(market_repository)
         self._screen = AccumulationScreenUseCase(
             broker_repository=broker_repository,
             market_repository=market_repository,
@@ -112,6 +121,13 @@ class AccumulationAuditUseCase:
         skipped_no_forward_data = 0
 
         for signal_date in replay_dates:
+            effective_session = self._session_resolver.resolve(
+                run_at=datetime.combine(signal_date, MARKET_CLOSE, tzinfo=IDX_TIMEZONE)
+            )
+            execution_context = SignalEvidenceExecutionContext(
+                effective_session=effective_session,
+                source_availability_use_case=None,
+            )
             screen_response = self._screen.execute(
                 AccumulationScreenRequest(
                     tickers=tickers,
@@ -122,7 +138,8 @@ class AccumulationAuditUseCase:
                     rsi_period=self._derived_features.rsi_period,
                     sma_period=self._derived_features.trend_sma_period,
                     as_of_date=signal_date,
-                )
+                ),
+                execution_context=execution_context,
             )
 
             for candidate in screen_response.candidates:

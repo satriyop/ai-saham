@@ -6,6 +6,9 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Callable
 
+from src.application.dto.signal_evidence_execution_context import (
+    SignalEvidenceExecutionContext,
+)
 from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSessionResolver,
 )
@@ -164,6 +167,10 @@ class BackfillSignalObservationsUseCase:
             effective_session = self._session_resolver.resolve(
                 run_at=datetime.combine(trading_date, MARKET_CLOSE, tzinfo=IDX_TIMEZONE)
             )
+            context = SignalEvidenceExecutionContext(
+                effective_session=effective_session,
+                source_availability_use_case=None,
+            )
 
             for window in request.windows:
                 record_result = self._record.execute(
@@ -173,7 +180,7 @@ class BackfillSignalObservationsUseCase:
                         as_of_date=trading_date,
                         market_context=market_context,
                     ),
-                    effective_session=effective_session,
+                    execution_context=context,
                 )
                 saved_count += record_result.recorded_count
             processed.append(trading_date)
