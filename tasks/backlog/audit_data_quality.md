@@ -2436,6 +2436,10 @@ a whole is not complete (see Deferred items below).
 **Depends on:** DQ-001, DQ-002  
 **Outcome:** Backfilled observations are point-in-time reproductions of what the live workflow could have known.
 
+**Program prerequisite:** `LIVE-CONTRACT-GATE`, including
+`ARTIFACT-IDENTITY`. Ordinary `screen` and `analyze` invocations remain
+assessment-only and are not observation-capture triggers.
+
 **Accurate pointers:**
 
 - CLI: `src/adapters/cli/analyze_signal_backfill_commands.py`
@@ -2462,6 +2466,16 @@ a whole is not complete (see Deferred items below).
 - Persist the contemporaneous eligible-universe control population as well as
   selected candidates, including inclusion/exclusion state, rejection
   stage/reasons, pre-filter measurements, missing-data state, and rank.
+- Implement canonical observation creation through one dedicated application
+  capture use case, exposed manually through a thin command equivalent to
+  `saham evidence capture --type signal --session YYYY-MM-DD`. A later
+  scheduler/agent must call the same use case rather than duplicate policy.
+- Keep interactive screen/analyze assessment, explicit current-session capture,
+  historical backfill, and forward-label generation as separate operations.
+  Neither user attention nor invocation frequency may select or weight the
+  learning population.
+- Report inserted, already-existing, unavailable, rejected, and failed capture
+  counts. Rerunning the same semantic capture must not increase sample size.
 - Preserve suspended, delisted, stale, and unavailable names as explicit states;
   do not erase them from evaluation denominators.
 
@@ -2473,6 +2487,9 @@ If canonical identity omits a meaning-changing dimension, replace it and rebuild
 
 - [ ] Golden truncated-database fixtures match backfill output exactly.
 - [ ] Repeating the same run creates no duplicates or drift.
+- [ ] Repeating interactive screen/analyze commands creates no canonical observations.
+- [ ] Explicit capture is idempotent and separate from forward-label generation.
+- [ ] CLI, scheduler, and agent capture paths share one application use case.
 - [ ] Changing a semantic identity dimension creates a distinct artifact or explicit version replacement.
 - [ ] Candidate and control rows share one PIT cutoff but cannot overwrite one another.
 - [ ] Candidate-only datasets are ineligible for screener recall/filter-value claims.

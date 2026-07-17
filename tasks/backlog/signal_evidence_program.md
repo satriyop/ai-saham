@@ -23,6 +23,13 @@ still critical but cannot execute safely before its prerequisites exist.
 - No tuning or evidence promotion while relevant DQ-P0/P1 findings remain open.
 - No historical artifact is canonical without point-in-time provenance and a
   compatible semantic identity.
+- Interactive command frequency must not determine the learning population.
+  `screen` and `analyze` may construct the same canonical evidence input in
+  memory, but ordinary invocations must not create additional canonical
+  observations merely because a user ran them.
+- Canonical observation capture is a separate, explicit, point-in-time,
+  idempotent, universe-driven workflow. Selected candidates and rejected
+  controls originate from the same contemporaneous universe snapshot.
 - DQ-011 unblocks CLI restructuring and empirical evaluation, not promotion.
 - Readiness counts do not prove edge.
 - Promotion proof is executable, net-of-cost, incremental, scoped, immutable,
@@ -50,7 +57,8 @@ semantics before this gate passes.
 
 1. HIGH-1 — correct benchmark excess-return semantics and demote unvalidated authority;
 2. CANONICAL-EVIDENCE-BOUNDARY — bind evidence, exact consumed-row provenance,
-   and source availability in one shared screen/swing input contract, shadow-only;
+   and source availability in one shared screen/swing in-memory input contract,
+   shadow-only and without canonical observation writes;
 3. HIGH-2 — replace ambiguous coverage/conviction with authority coverage and typed readiness;
 4. ARTIFACT-IDENTITY — define reproducible semantic identity;
 5. HIGH-3 — remove flags-only pseudo-assessments;
@@ -63,6 +71,8 @@ semantics before this gate passes.
 - one canonical evidence-backed assessment path exists;
 - screen and swing bind evidence to the same consumed-row provenance and
   shadow availability contract before HIGH-2 enforcement;
+- repeated interactive assessment against the same semantic inputs is
+  side-effect-free and cannot multiply the learning sample;
 - diagnostic evidence cannot gain authority through naming/config shortcuts;
 - new observation/label schemas can bind corrected semantics;
 - valid partial evidence is distinct from no evidence and unavailable data.
@@ -82,6 +92,13 @@ semantics before this gate passes.
 The data-quality backlog owns implementation verification for artifact identity,
 control populations, and executable labels. The signal backlog owns their
 semantic contracts and promotion consequences.
+
+Canonical observation capture begins here, not in Phase 2. Implement it as a
+dedicated application use case with a thin explicit CLI entry point equivalent
+to `saham evidence capture --type signal --session YYYY-MM-DD`. The same use
+case may later be invoked by a scheduler or agent. Interactive `screen` and
+`analyze` commands remain assessment consumers and do not become implicit
+capture triggers.
 
 **Exit gate: `CANONICAL-EVIDENCE-GATE`**
 

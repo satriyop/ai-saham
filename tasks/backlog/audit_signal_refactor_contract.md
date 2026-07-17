@@ -320,6 +320,12 @@ The migration must remain `SHADOW`: availability is returned for diagnostics
 but cannot affect scoring, coverage, classification, candidate selection,
 TradeSetup, persistence eligibility, or tuning.
 
+Here, "construct evidence" means build a typed in-memory assessment input. It
+does not mean persist a canonical learning observation. `screen accum` and
+`analyze swing` are consumers of the shared builder, not observation event
+generators. Canonical capture belongs to `CONTROL-POPULATION` after
+`ARTIFACT-IDENTITY`.
+
 ### End-To-End Invariants
 
 - Evidence and its provenance/availability cannot be supplied independently.
@@ -330,6 +336,12 @@ TradeSetup, persistence eligibility, or tuning.
 - Both workflows use one effective session and one compatible calendar snapshot
   per execution, not per source or field.
 - Diagnostic sources cannot raise production authority.
+- Repeating either interactive command with the same effective session, source
+  snapshot/cutoff, config, code, and evidence-contract identity cannot create a
+  second learning sample or materially different canonical input.
+- Invocation timestamp and command name are not canonical evidence inputs.
+- Auto-refresh may change an assessment only through an explainable change in
+  consumed source rows/snapshot identity.
 - `AssessSignalEvidenceUseCase` remains repository-free.
 - Adapters perform dependency wiring/rendering only.
 - DQ-002J response diagnostics may be preserved for compatibility, but their
@@ -347,6 +359,10 @@ TradeSetup, persistence eligibility, or tuning.
 - Do not infer missing provenance or silently neutral-fill unavailable inputs.
 - Do not persist a new canonical observation schema here; that belongs to
   `ARTIFACT-IDENTITY`.
+- Do not make `screen accum` or `analyze swing` implicitly capture learning
+  observations, even behind an idempotent upsert.
+- Do not use CLI invocation frequency, invocation timestamp, or user-selected
+  tickers to define the future learning population.
 - Do not change weights, thresholds, recommendations, or tuning eligibility.
 
 ### Negative Tests
@@ -358,6 +374,12 @@ TradeSetup, persistence eligibility, or tuning.
 - Diagnostic evidence cannot increase authority.
 - Screen and swing produce equivalent canonical evidence inputs for identical
   ticker/session/source fixtures.
+- Repeated `screen accum` and `analyze swing` assessment does not add canonical
+  observation rows.
+- Identical semantic inputs produce equivalent canonical input regardless of
+  command or invocation time; changed consumed source rows produce different,
+  explainable provenance. Formal persisted identity belongs to
+  `ARTIFACT-IDENTITY`.
 - With shadow metadata removed from comparison, pre/post-migration signal,
   candidate inclusion/rank, TradeSetup, and serialized decision fields are
   unchanged.
@@ -369,6 +391,8 @@ TradeSetup, persistence eligibility, or tuning.
 - Provenance identifies the exact rows/dates/timestamps consumed by each scored
   evidence group.
 - Source availability is resolved once and remains shadow-only.
+- The shared builder is side-effect-free with respect to canonical learning
+  persistence.
 - DQ-002J no longer owns a separate post-score source-of-truth assessment.
 - Focused screen/swing/signal/temporal-leakage tests and architecture tests
   pass; full suite passes when feasible; `git diff --check` is clean.
@@ -1482,12 +1506,35 @@ suspended, stale, and unavailable names remain represented truthfully. Candidate
 and control rows share source cutoff/config identity but cannot overwrite one
 another. Backfill must reconstruct the historical universe or mark it invalid.
 
+Observation creation is owned by a dedicated application capture use case, not
+ordinary analysis commands. Expose it through a thin explicit CLI entry point:
+
+```text
+saham evidence capture --type signal --session YYYY-MM-DD
+```
+
+The use case resolves one completed IDX session, freezes one eligible-universe
+snapshot, builds selected and rejected/control observations from the same
+cutoff, and persists them idempotently. It reports inserted, already-existing,
+unavailable, rejected, and failed counts. Re-running the same semantic capture
+must not increase sample size. Capture does not generate forward labels, tune
+policy, or promote evidence. A scheduler or agent must call the same application
+use case rather than reimplementing capture policy.
+
+`screen accum` and `analyze swing` remain read/assessment workflows with respect
+to canonical learning persistence. User attention and command frequency must
+not select or weight the training population.
+
 ### Close criteria
 
 - [ ] Evaluation reports precision, recall/opportunity cost, and missed winners
 - [ ] Tightening a filter cannot hide rejected outcomes
 - [ ] Universe membership is point-in-time and survivorship-safe
 - [ ] Candidate-only datasets cannot authorize screening-policy promotion
+- [ ] Explicit capture is idempotent for the same semantic observation identity
+- [ ] Repeated interactive screen/analyze calls create no canonical samples
+- [ ] Capture and later label generation are separate operations
+- [ ] CLI, scheduler, and agent entry points share one application capture use case
 
 ---
 
@@ -1507,11 +1554,31 @@ calendar/session rules, and source-data cutoff. Hash deterministic canonical
 serialization, not paths or timestamps. Readers reject unsupported identity
 combinations; learning never silently mixes versions.
 
+The canonical observation identity is derived from semantic inputs equivalent
+to:
+
+```text
+effective_session
++ ticker
++ universe_snapshot_id
++ evidence_contract_version
++ source snapshot/cutoff identity
++ resolved config identity
++ code identity
+```
+
+CLI command name, invocation timestamp, user identity, display flags, and the
+number of times an assessment was requested are excluded. Identical semantic
+inputs resolve to one idempotency identity; a changed identity must be
+attributable to a changed semantic input.
+
 ### Close criteria
 
 - [ ] Semantically different engines cannot share one artifact identity
 - [ ] Exact reruns reproduce hashes and material outputs
 - [ ] Readiness reports counts by compatible identity and quarantines mixtures
+- [ ] Invocation time/command cannot create a distinct canonical observation
+- [ ] Same semantic capture is a no-op/already-existing result, not a new sample
 
 ---
 
