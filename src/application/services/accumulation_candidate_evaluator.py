@@ -12,6 +12,7 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 
 from src.application.dto import accumulation_screen as accumulation_dto
+from src.application.dto.accumulation_screen import AccumulationCandidateEvaluationResult
 from src.application.services.accumulation_technical_features import (
     compute_accumulation_rsi,
     compute_accumulation_trend,
@@ -39,6 +40,45 @@ def _is_usable_broker_summary(summary) -> bool:
     )
 
 
+def _filter_own_rows(rows: list, *, ticker: str, today: date) -> list:
+    """Defense in depth: never trust a repository's ticker/end_date scoping
+    alone. A faulty reader leaking a future or foreign-ticker row must not
+    reach calculations or provenance — this filter is the last line before
+    either. Applied identically to candles, broker summaries, and broker
+    daily flows."""
+    return [row for row in rows if row.ticker == ticker and row.date <= today]
+
+
+def select_broker_window(
+    broker_repository: BrokerDataRepository,
+    *,
+    ticker: str,
+    today: date,
+    window_days: int,
+) -> tuple[list, list]:
+    """Fetch and window-select the exact broker summary/daily-flow rows for
+    one ticker, identically to `AccumulationCandidateEvaluator.evaluate()`.
+
+    Shared by the evaluator and `SwingAnalysisEvidenceBuilder` so both
+    independently-computed flow evidence groups window the same way and
+    never drift apart. Returns `(window_summaries, window_flows)`, both
+    already future/ticker-filtered.
+    """
+    summaries = broker_repository.get_broker_summaries(
+        ticker=ticker, start_date=None, end_date=today
+    )
+    summaries = _filter_own_rows(summaries, ticker=ticker, today=today)
+    summaries = [s for s in summaries if _is_usable_broker_summary(s)]
+    window_summaries = sorted(summaries, key=lambda s: s.date)[-window_days:]
+
+    daily_flows = broker_repository.get_broker_daily_flows(ticker=ticker, end_date=today)
+    daily_flows = _filter_own_rows(daily_flows, ticker=ticker, today=today)
+    window_dates = {s.date for s in window_summaries}
+    window_flows = [f for f in daily_flows if f.date in window_dates]
+
+    return window_summaries, window_flows
+
+
 class AccumulationCandidateEvaluator:
     def __init__(
         self,
@@ -61,27 +101,16 @@ class AccumulationCandidateEvaluator:
         tier1_broker_codes: frozenset[str] = accumulation_dto.TIER1_FOREIGN_BROKERS,
         bci_cluster_min_count: int = 3,
         bci_stable_min_count: int = 1,
-    ) -> accumulation_dto.AccumulationCandidate | None:
+    ) -> AccumulationCandidateEvaluationResult | None:
         """Compute accumulation metrics for one ticker."""
         # Load all broker rows up to as_of_date, then select the latest N
         # broker sessions. Calendar-day cutoffs distort IDX windows around
         # weekends, holidays, and data-lag days.
-        summaries = self._broker_repo.get_broker_summaries(
-            ticker=ticker,
-            start_date=None,
-            end_date=today,
+        window_summaries, window_flows = select_broker_window(
+            self._broker_repo, ticker=ticker, today=today, window_days=window_days
         )
 
-        if not summaries:
-            return None
-
-        summaries = [s for s in summaries if _is_usable_broker_summary(s)]
-        if not summaries:
-            return None
-
-        window_summaries = sorted(summaries, key=lambda s: s.date)[-window_days:]
-
-        if len(window_summaries) < min_net_buy_days:
+        if not window_summaries or len(window_summaries) < min_net_buy_days:
             return None
 
         # Core accumulation metrics
@@ -118,6 +147,7 @@ class AccumulationCandidateEvaluator:
 
         # Load candles for price + RSI + trend + BB squeeze
         candles = self._market_repo.get_candles(ticker, end_date=today)
+        candles = _filter_own_rows(candles, ticker=ticker, today=today)
         if not candles:
             current_price = Decimal("0")
             rsi = None
@@ -175,44 +205,35 @@ class AccumulationCandidateEvaluator:
         bci_label: str | None = None
         bci_tier1_count: int = 0
 
-        daily_flows = self._broker_repo.get_broker_daily_flows(
-            ticker=ticker,
-            end_date=today,
-        )
         latest_broker_daily_flow_date: date | None = None
-        if daily_flows:
-            # Collect the window dates from broker summaries to align the window
-            window_dates = {s.date for s in window_summaries}
-            window_flows = [f for f in daily_flows if f.date in window_dates]
+        if window_flows:
+            latest_broker_daily_flow_date = max(f.date for f in window_flows)
+            # Aggregate net_lot per broker across the window
+            from collections import defaultdict
 
-            if window_flows:
-                latest_broker_daily_flow_date = max(f.date for f in window_flows)
-                # Aggregate net_lot per broker across the window
-                from collections import defaultdict
+            broker_net: dict[str, int] = defaultdict(int)
+            for f in window_flows:
+                broker_net[f.broker_code] += f.net_lot
 
-                broker_net: dict[str, int] = defaultdict(int)
-                for f in window_flows:
-                    broker_net[f.broker_code] += f.net_lot
+            net_buyers = sorted(
+                [(code, net) for code, net in broker_net.items() if net > 0],
+                key=lambda x: x[1],
+                reverse=True,
+            )
+            if net_buyers:
+                top_brokers = [code for code, _ in net_buyers[:5]]
+                # BCI: count all Tier 1 codes among any net-buyers (not just top 5)
+                all_net_buyer_codes = {code for code, _ in net_buyers}
+                bci_tier1_count = len(all_net_buyer_codes & tier1_broker_codes)
+                if bci_tier1_count >= bci_cluster_min_count:
+                    bci_label = BCI_CLUSTER
+                elif bci_tier1_count >= bci_stable_min_count:
+                    bci_label = BCI_STABLE
+                else:
+                    bci_label = BCI_RETAIL
+                institutional_flag = bci_tier1_count > 0
 
-                net_buyers = sorted(
-                    [(code, net) for code, net in broker_net.items() if net > 0],
-                    key=lambda x: x[1],
-                    reverse=True,
-                )
-                if net_buyers:
-                    top_brokers = [code for code, _ in net_buyers[:5]]
-                    # BCI: count all Tier 1 codes among any net-buyers (not just top 5)
-                    all_net_buyer_codes = {code for code, _ in net_buyers}
-                    bci_tier1_count = len(all_net_buyer_codes & tier1_broker_codes)
-                    if bci_tier1_count >= bci_cluster_min_count:
-                        bci_label = BCI_CLUSTER
-                    elif bci_tier1_count >= bci_stable_min_count:
-                        bci_label = BCI_STABLE
-                    else:
-                        bci_label = BCI_RETAIL
-                    institutional_flag = bci_tier1_count > 0
-
-        return accumulation_dto.AccumulationCandidate(
+        candidate = accumulation_dto.AccumulationCandidate(
             ticker=ticker,
             window_days=window_days,
             net_buy_days=net_buy_days,
@@ -240,4 +261,11 @@ class AccumulationCandidateEvaluator:
             latest_candle_date=latest_candle_date,
             latest_broker_date=latest_broker_date,
             latest_broker_daily_flow_date=latest_broker_daily_flow_date,
+        )
+        return AccumulationCandidateEvaluationResult(
+            candidate=candidate,
+            consumed_candles=tuple(candles),
+            consumed_broker_summaries=tuple(window_summaries),
+            consumed_broker_daily_flows=tuple(window_flows),
+            analysis_date=today,
         )

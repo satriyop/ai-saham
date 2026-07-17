@@ -323,6 +323,90 @@ class AccumulationCandidate:
 
 
 @dataclass(frozen=True)
+class AccumulationCandidateEvaluationResult:
+    """`AccumulationCandidateEvaluator.evaluate()`'s candidate plus the exact
+    rows consumed to compute it (ADR-041 CANONICAL-EVIDENCE-BOUNDARY).
+
+    Every tuple here is the same bounded, future/ticker-filtered data
+    `evaluate()` itself used for the candidate's fields — never a superset
+    of fetched-but-unused rows, and never re-fetched by a caller.
+    """
+
+    candidate: AccumulationCandidate
+    consumed_candles: tuple  # tuple[Candle, ...]
+    consumed_broker_summaries: tuple  # tuple[BrokerSummary, ...]
+    consumed_broker_daily_flows: tuple  # tuple[BrokerDailyFlow, ...]
+    analysis_date: date
+
+    def __post_init__(self) -> None:
+        for row in self.consumed_candles:
+            if row.ticker != self.candidate.ticker:
+                raise ValueError(
+                    f"AccumulationCandidateEvaluationResult consumed_candles ticker "
+                    f"mismatch: candidate.ticker={self.candidate.ticker!r}, "
+                    f"row.ticker={row.ticker!r}"
+                )
+            if row.date > self.analysis_date:
+                raise ValueError(
+                    f"AccumulationCandidateEvaluationResult consumed_candles has a "
+                    f"row dated {row.date!r} after analysis_date={self.analysis_date!r}"
+                )
+        for row in self.consumed_broker_summaries:
+            if row.ticker != self.candidate.ticker:
+                raise ValueError(
+                    f"AccumulationCandidateEvaluationResult consumed_broker_summaries "
+                    f"ticker mismatch: candidate.ticker={self.candidate.ticker!r}, "
+                    f"row.ticker={row.ticker!r}"
+                )
+            if row.date > self.analysis_date:
+                raise ValueError(
+                    f"AccumulationCandidateEvaluationResult consumed_broker_summaries "
+                    f"has a row dated {row.date!r} after analysis_date="
+                    f"{self.analysis_date!r}"
+                )
+        for row in self.consumed_broker_daily_flows:
+            if row.ticker != self.candidate.ticker:
+                raise ValueError(
+                    f"AccumulationCandidateEvaluationResult consumed_broker_daily_flows "
+                    f"ticker mismatch: candidate.ticker={self.candidate.ticker!r}, "
+                    f"row.ticker={row.ticker!r}"
+                )
+            if row.date > self.analysis_date:
+                raise ValueError(
+                    f"AccumulationCandidateEvaluationResult consumed_broker_daily_flows "
+                    f"has a row dated {row.date!r} after analysis_date="
+                    f"{self.analysis_date!r}"
+                )
+
+        max_candle_date = max((row.date for row in self.consumed_candles), default=None)
+        if self.candidate.latest_candle_date != max_candle_date:
+            raise ValueError(
+                f"AccumulationCandidateEvaluationResult candidate.latest_candle_date="
+                f"{self.candidate.latest_candle_date!r} disagrees with max consumed "
+                f"candle date={max_candle_date!r}"
+            )
+        max_broker_date = max(
+            (row.date for row in self.consumed_broker_summaries), default=None
+        )
+        if self.candidate.latest_broker_date != max_broker_date:
+            raise ValueError(
+                f"AccumulationCandidateEvaluationResult candidate.latest_broker_date="
+                f"{self.candidate.latest_broker_date!r} disagrees with max consumed "
+                f"broker-summary date={max_broker_date!r}"
+            )
+        max_daily_flow_date = max(
+            (row.date for row in self.consumed_broker_daily_flows), default=None
+        )
+        if self.candidate.latest_broker_daily_flow_date != max_daily_flow_date:
+            raise ValueError(
+                f"AccumulationCandidateEvaluationResult "
+                f"candidate.latest_broker_daily_flow_date="
+                f"{self.candidate.latest_broker_daily_flow_date!r} disagrees with max "
+                f"consumed broker-daily-flow date={max_daily_flow_date!r}"
+            )
+
+
+@dataclass(frozen=True)
 class AccumulationScreenObservationCandidate:
     """One evaluated ticker paired with its screen outcome and flow evidence.
 
@@ -330,11 +414,26 @@ class AccumulationScreenObservationCandidate:
     learnable negative samples. Internal application-layer detail: exists so
     an explicit recording use case can persist observations from an
     already-computed AccumulationScreenResponse without re-running the screen.
+
+    Owns `evaluation_result` — the exact `AccumulationCandidateEvaluationResult`
+    the evaluator returned for this ticker (ADR-041 CANONICAL-EVIDENCE-BOUNDARY)
+    — as the single source of truth for the candidate. There is deliberately no
+    independent `candidate` field: one could disagree with
+    `evaluation_result.candidate` (e.g. after later enrichment mutates the
+    candidate but not a separately-held reference). `candidate` mutates in
+    place through the screen pipeline (structural filter, enrichment, signal
+    assessment all mutate and return the same object the evaluator produced),
+    so `evaluation_result.candidate` always reflects the final, fully-enriched
+    candidate without needing to be reconstructed.
     """
 
-    candidate: AccumulationCandidate
+    evaluation_result: AccumulationCandidateEvaluationResult
     screen_result: str
     flow_evidence: "FlowConfirmationEvidence | None"
+
+    @property
+    def candidate(self) -> AccumulationCandidate:
+        return self.evaluation_result.candidate
 
 
 @dataclass

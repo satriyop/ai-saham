@@ -21,7 +21,14 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
+from src.application.dto.built_evidence import BuiltFlowEvidence
 from src.application.use_case.score_foreign_flow_use_case import ForeignFlowScorePolicy
+from src.domain.entities.broker_flow import BrokerDailyFlow, BrokerSummary
+from src.domain.value_objects.canonical_signal_evidence_input import (
+    BrokerDailyFlowRowIdentity,
+    BrokerSummaryRowIdentity,
+    FlowProvenance,
+)
 from src.domain.value_objects.factor_evidence import Direction, Freshness
 from src.domain.value_objects.flow_confirmation_evidence import (
     FlowConfirmationEvidence,
@@ -72,9 +79,11 @@ class FlowConfirmationEvidenceBuilder:
         self,
         candidate: Any,  # AccumulationCandidate; Any avoids domain coupling
         *,
+        consumed_broker_summaries: "tuple[BrokerSummary, ...]",
+        consumed_broker_daily_flows: "tuple[BrokerDailyFlow, ...]",
         group_cap: float = _DEFAULT_GROUP_CAP,
         analysis_date: date | None = None,
-    ) -> FlowConfirmationEvidence:
+    ) -> BuiltFlowEvidence:
         ticker = getattr(candidate, "ticker", None) or ""
         snapshot_date = analysis_date or self._resolve_snapshot_date(candidate)
 
@@ -140,7 +149,7 @@ class FlowConfirmationEvidenceBuilder:
         capped_strength = min(uncapped_strength, group_cap)
         group_freshness = flow_freshness  # group is fresh iff flow evidence is fresh
 
-        return FlowConfirmationEvidence(
+        evidence = FlowConfirmationEvidence(
             ticker=ticker,
             snapshot_date=snapshot_date,
             flow_signals=flow_signals,
@@ -157,6 +166,23 @@ class FlowConfirmationEvidenceBuilder:
             group_cap=group_cap,
             group_freshness=group_freshness,
         )
+        provenance = FlowProvenance(
+            ticker=ticker,
+            broker_summary_rows=tuple(
+                BrokerSummaryRowIdentity(ticker=s.ticker, date=s.date, source=s.source)
+                for s in consumed_broker_summaries
+            ),
+            broker_daily_flow_rows=tuple(
+                BrokerDailyFlowRowIdentity(
+                    ticker=f.ticker, date=f.date, broker_code=f.broker_code, source=f.source
+                )
+                for f in consumed_broker_daily_flows
+            ),
+            # Determined here from whether Bandar actually contributed to the
+            # evidence just built — never mutated by a downstream caller.
+            has_bandar_contributor=bandar_broad_score is not None,
+        )
+        return BuiltFlowEvidence(evidence=evidence, provenance=provenance)
 
     @staticmethod
     def _extract_breakdown(flow_evidence: Any) -> dict[str, float]:

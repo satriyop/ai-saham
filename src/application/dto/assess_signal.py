@@ -19,6 +19,9 @@ from src.domain.value_objects.alpha_trigger_score import AlphaTriggerScore
 from src.domain.value_objects.signal_assessment import SignalAssessment
 
 if TYPE_CHECKING:
+    from src.domain.value_objects.canonical_signal_evidence_input import (
+        CanonicalSignalEvidenceInput,
+    )
     from src.domain.value_objects.company_quality_context_evidence import (
         CompanyQualityContextEvidence,
     )
@@ -38,8 +41,14 @@ if TYPE_CHECKING:
 class AssessSignalEvidenceRequest:
     ticker: str
     snapshot_date: date
-    setup_evidence: SetupEvidence | None = None
-    flow_confirmation_evidence: FlowConfirmationEvidence | None = None
+    # ADR-041 CANONICAL-EVIDENCE-BOUNDARY: the sole setup/flow evidence input.
+    # There is deliberately no independent setup_evidence/
+    # flow_confirmation_evidence field — those are read-only, derived below —
+    # so evidence can never be supplied loose, disconnected from its
+    # provenance/availability. Flags-only callers (no candidate-producing
+    # evidence this run) pass canonical_evidence=None; do not fabricate
+    # provenance to populate it.
+    canonical_evidence: "CanonicalSignalEvidenceInput | None" = None
     signal_context: SignalContext | None = None  # for flag evaluation
     market_context: MarketContext | None = None  # for regime conditioning
     setup_family: str | None = None
@@ -47,6 +56,22 @@ class AssessSignalEvidenceRequest:
     horizon: str | None = None
     sector_context_evidence: SectorContextEvidence | None = None
     company_quality_context_evidence: CompanyQualityContextEvidence | None = None
+
+    @property
+    def setup_evidence(self) -> "SetupEvidence | None":
+        return (
+            self.canonical_evidence.setup.evidence
+            if self.canonical_evidence is not None and self.canonical_evidence.setup is not None
+            else None
+        )
+
+    @property
+    def flow_confirmation_evidence(self) -> "FlowConfirmationEvidence | None":
+        return (
+            self.canonical_evidence.flow.evidence
+            if self.canonical_evidence is not None and self.canonical_evidence.flow is not None
+            else None
+        )
 
 
 @dataclass

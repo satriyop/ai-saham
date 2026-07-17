@@ -107,7 +107,7 @@ def test_create_swing_analysis_workflow_accepts_fake_dependencies(tmp_path):
     mock_uc_class.assert_called_once()
 
 
-def test_workflow_receives_callable_build_accumulation_candidate(tmp_path):
+def test_workflow_receives_callable_build_accumulation_candidate_evaluation(tmp_path):
     fake_deps = _fake_dependencies(tmp_path)
 
     with patch(
@@ -125,7 +125,7 @@ def test_workflow_receives_callable_build_accumulation_candidate(tmp_path):
         )
 
     _args, kwargs = mock_uc_class.call_args
-    assert callable(kwargs["build_accumulation_candidate"])
+    assert callable(kwargs["build_accumulation_candidate_evaluation"])
 
 
 def test_workflow_receives_callable_refresh_data(tmp_path):

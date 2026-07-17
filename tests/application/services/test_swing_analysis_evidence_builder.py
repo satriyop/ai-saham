@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 
 from src.application.dto.accumulation_screen import AccumulationCandidate
 from src.application.services.swing_analysis_evidence_builder import (
@@ -54,7 +55,9 @@ class _BrokerRepository:
 
 
 class _NullFlowConfirmationBuilder:
-    def build(self, candidate, *, analysis_date):
+    def build(
+        self, candidate, *, analysis_date, consumed_broker_summaries, consumed_broker_daily_flows
+    ):
         return None
 
 
@@ -142,6 +145,16 @@ def _candidate(**overrides) -> AccumulationCandidate:
     return AccumulationCandidate(**values)
 
 
+def _eval_result(candidate) -> SimpleNamespace:
+    """Minimal stand-in for AccumulationCandidateEvaluationResult."""
+    return SimpleNamespace(
+        candidate=candidate,
+        consumed_candles=(),
+        consumed_broker_summaries=(),
+        consumed_broker_daily_flows=(),
+    )
+
+
 class _RaisingCandidateObservationsRepository:
     def list_recent(self, ticker, *, before_date=None, limit=20):
         raise RuntimeError("history unavailable")
@@ -186,7 +199,7 @@ class TestInstitutionalAccumulationDelegation:
             snapshot_date=snapshot_date,
             benchmark="IHSG",
             candles=candles,
-            accumulation_candidate=None,
+            accumulation_evaluation=None,
             setup_eval=None,
             setup_name=None,
             strategy_name=None,
@@ -232,7 +245,7 @@ class TestTickerProfileDelegation:
             snapshot_date=snapshot_date,
             benchmark="IHSG",
             candles=candles,
-            accumulation_candidate=candidate,
+            accumulation_evaluation=_eval_result(candidate),
             setup_eval=None,
             setup_name=None,
             strategy_name=None,
@@ -267,7 +280,7 @@ class TestSectorContextDelegation:
             snapshot_date=snapshot_date,
             benchmark="IHSG",
             candles=candles,
-            accumulation_candidate=None,
+            accumulation_evaluation=None,
             setup_eval=None,
             setup_name=None,
             strategy_name=None,
@@ -300,7 +313,7 @@ class TestCompanyQualityDelegation:
             snapshot_date=snapshot_date,
             benchmark="IHSG",
             candles=candles,
-            accumulation_candidate=candidate,
+            accumulation_evaluation=_eval_result(candidate),
             setup_eval=None,
             setup_name=None,
             strategy_name=None,
@@ -336,7 +349,7 @@ class TestWarningStringsExact:
             snapshot_date=snapshot_date,
             benchmark="IHSG",
             candles=candles,
-            accumulation_candidate=None,
+            accumulation_evaluation=None,
             setup_eval=None,
             setup_name=None,
             strategy_name=None,
@@ -370,7 +383,7 @@ class TestWarningStringsExact:
             snapshot_date=snapshot_date,
             benchmark="IHSG",
             candles=candles,
-            accumulation_candidate=candidate,
+            accumulation_evaluation=_eval_result(candidate),
             setup_eval=setup_eval,
             setup_name="foreign-bounce",
             strategy_name=None,

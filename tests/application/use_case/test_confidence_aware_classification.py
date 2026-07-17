@@ -26,6 +26,11 @@ from src.domain.value_objects.flow_confirmation_evidence import (
 )
 from src.domain.value_objects.setup_evidence import SetupEvidence
 from src.domain.value_objects.signal_assessment import EntryQuality, SignalStrength
+from tests.application.use_case.signal_evidence_fixtures import (
+    _wrap_flow_evidence,
+    _wrap_setup_evidence,
+)
+from src.domain.value_objects.canonical_signal_evidence_input import CanonicalSignalEvidenceInput
 
 SNAP = date(2026, 7, 3)
 
@@ -95,6 +100,13 @@ def _flow(capped_strength: float) -> FlowConfirmationEvidence:
 
 
 def _execute(**kwargs):
+    setup_evidence = kwargs.pop("setup_evidence", None)
+    flow_confirmation_evidence = kwargs.pop("flow_confirmation_evidence", None)
+    if setup_evidence is not None or flow_confirmation_evidence is not None:
+        kwargs["canonical_evidence"] = CanonicalSignalEvidenceInput(
+            setup=_wrap_setup_evidence(setup_evidence),
+            flow=_wrap_flow_evidence(flow_confirmation_evidence),
+        )
     req = AssessSignalEvidenceRequest(ticker="TEST", snapshot_date=SNAP, **kwargs)
     return AssessSignalEvidenceUseCase().execute(req)
 

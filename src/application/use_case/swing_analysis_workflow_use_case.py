@@ -85,9 +85,10 @@ class SwingAnalysisWorkflowUseCase:
         build_data_freshness: Callable[..., Any],
         build_flow_detail: Callable[..., Any],
         build_broker_detail: Callable[..., Any],
-        # Expected signature: (ticker: str, window: int, as_of_date: date) -> candidate | None.
-        # Kept as a flexible ``Callable[..., ...]`` so test fakes may accept **kwargs.
-        build_accumulation_candidate: Callable[..., Any | None],
+        # Expected signature: (ticker: str, window: int, as_of_date: date) ->
+        # AccumulationCandidateEvaluationResult | None. Kept as a flexible
+        # ``Callable[..., ...]`` so test fakes may accept **kwargs.
+        build_accumulation_candidate_evaluation: Callable[..., Any | None],
         evaluate_setup: Callable[[Any | None, Any | None], Any | None],
         build_broker_quality_note: Callable[..., Any | None],
         fetch_sentiment: Callable[..., tuple[Any | None, str | None]],
@@ -122,7 +123,7 @@ class SwingAnalysisWorkflowUseCase:
         self._build_data_freshness = build_data_freshness
         self._build_flow_detail = build_flow_detail
         self._build_broker_detail = build_broker_detail
-        self._build_accumulation_candidate = build_accumulation_candidate
+        self._build_accumulation_candidate_evaluation = build_accumulation_candidate_evaluation
         self._evaluate_setup = evaluate_setup
         self._build_broker_quality_note = build_broker_quality_note
         self._fetch_sentiment = fetch_sentiment
@@ -170,7 +171,7 @@ class SwingAnalysisWorkflowUseCase:
             build_data_freshness=build_data_freshness,
             build_flow_detail=build_flow_detail,
             build_broker_detail=build_broker_detail,
-            build_accumulation_candidate=build_accumulation_candidate,
+            build_accumulation_candidate_evaluation=build_accumulation_candidate_evaluation,
             evaluate_market_context=evaluate_market_context,
             session_resolver=session_resolver
             or EffectiveMarketSessionResolver(market_repository),

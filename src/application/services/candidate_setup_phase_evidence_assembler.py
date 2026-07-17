@@ -16,6 +16,7 @@ from __future__ import annotations
 from datetime import date
 from typing import TYPE_CHECKING, Any
 
+from src.application.dto.built_evidence import BuiltSetupEvidence
 from src.application.services.candle_provenance import resolve_candle_source
 from src.application.services.setup_evidence_builder import SetupEvidenceBuilder
 from src.application.services.setup_phase_detector import (
@@ -24,6 +25,10 @@ from src.application.services.setup_phase_detector import (
 )
 from src.application.services.setup_phase_history import load_previous_setup_phases
 from src.domain.value_objects.benchmark_symbol import CANONICAL_BENCHMARK_TICKER
+from src.domain.value_objects.canonical_signal_evidence_input import (
+    CandleRowIdentity,
+    SetupProvenance,
+)
 
 if TYPE_CHECKING:
     from src.application.services.benchmark_excess_return_calculator import (
@@ -36,6 +41,18 @@ if TYPE_CHECKING:
     from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.setup_evidence import SetupEvidence
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
+
+
+def _normalize_candles(
+    candles: "list[Any] | tuple[Any, ...]", *, ticker: str, snapshot_date: date
+) -> tuple:
+    """Bound a candle sequence to exactly the rows a scored evidence group may
+    consume: the correct ticker, no row after `snapshot_date`, deterministic
+    ascending date order. The SAME normalized tuple this returns must be used
+    for both calculation and provenance — never a wider list for one and a
+    narrower one for the other (ADR-041 CANONICAL-EVIDENCE-BOUNDARY)."""
+    filtered = [c for c in candles if c.ticker == ticker and c.date <= snapshot_date]
+    return tuple(sorted(filtered, key=lambda c: c.date))
 
 
 class CandidateSetupPhaseEvidenceAssembler:
@@ -60,13 +77,21 @@ class CandidateSetupPhaseEvidenceAssembler:
         benchmark_excess_return_5_session: Any | None = None,
         benchmark_excess_return_20_session: Any | None = None,
         volume_trend_ratio: float | None = None,
-    ) -> "SetupEvidence":
+        benchmark_candles: "list[Any] | tuple[Any, ...]" = (),
+    ) -> BuiltSetupEvidence:
+        # Bound once, reused for both calculation and provenance below — a
+        # divergent list for one vs. the other is exactly what ADR-041
+        # forbids.
+        candles = _normalize_candles(candles, ticker=ticker, snapshot_date=snapshot_date)
+        benchmark_candles = _normalize_candles(
+            benchmark_candles, ticker=CANONICAL_BENCHMARK_TICKER, snapshot_date=snapshot_date
+        )
         candle_source = resolve_candle_source(
             self._market_repo,
             ticker=ticker,
             as_of_date=candles[-1].date if candles else snapshot_date,
         )
-        return SetupEvidenceBuilder().build(
+        evidence = SetupEvidenceBuilder().build(
             candidate,
             setup_eval,
             benchmark_excess_return_5_session=benchmark_excess_return_5_session,
@@ -75,6 +100,27 @@ class CandidateSetupPhaseEvidenceAssembler:
             candle_source=candle_source,
             analysis_date=snapshot_date,
         )
+        benchmark_candle_source = (
+            resolve_candle_source(
+                self._market_repo,
+                ticker=CANONICAL_BENCHMARK_TICKER,
+                as_of_date=benchmark_candles[-1].date if benchmark_candles else snapshot_date,
+            )
+            if benchmark_candles
+            else None
+        )
+        provenance = SetupProvenance(
+            ticker=ticker,
+            candle_rows=tuple(
+                CandleRowIdentity(ticker=c.ticker, date=c.date, source=candle_source)
+                for c in candles
+            ),
+            benchmark_candle_rows=tuple(
+                CandleRowIdentity(ticker=c.ticker, date=c.date, source=benchmark_candle_source)
+                for c in benchmark_candles
+            ),
+        )
+        return BuiltSetupEvidence(evidence=evidence, provenance=provenance)
 
     def detect_setup_phase(
         self,
@@ -150,7 +196,8 @@ class CandidateSetupPhaseEvidenceAssembler:
             benchmark_excess_return_20_session=(
                 excess_return_result.excess_return_vs_ihsg_20_session
             ),
-        )
+            benchmark_candles=benchmark_candles,
+        ).evidence
         return self.detect_setup_phase(
             ticker=ticker,
             snapshot_date=snapshot_date,

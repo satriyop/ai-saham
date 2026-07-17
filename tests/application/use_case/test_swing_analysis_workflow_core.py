@@ -66,7 +66,7 @@ def test_swing_workflow_raises_when_candles_are_missing():
 
 
 def test_swing_workflow_records_accumulation_failure_warning():
-    def build_accumulation_candidate(**kwargs):
+    def build_accumulation_candidate_evaluation(**kwargs):
         raise RuntimeError("no broker rows")
 
     workflow = SwingAnalysisWorkflowUseCase(
@@ -77,7 +77,7 @@ def test_swing_workflow_records_accumulation_failure_warning():
         build_data_freshness=lambda **kwargs: None,
         build_flow_detail=lambda **kwargs: None,
         build_broker_detail=lambda **kwargs: None,
-        build_accumulation_candidate=build_accumulation_candidate,
+        build_accumulation_candidate_evaluation=build_accumulation_candidate_evaluation,
         evaluate_setup=lambda candidate, broker_detail: None,
         build_broker_quality_note=lambda **kwargs: None,
         fetch_sentiment=lambda **kwargs: (None, None),

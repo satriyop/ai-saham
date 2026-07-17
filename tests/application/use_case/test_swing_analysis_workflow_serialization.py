@@ -28,7 +28,12 @@ def test_swing_evidence_to_dict_includes_flow_confirmation_evidence():
         bci_tier1_count=3,
         latest_candle_date=date(2026, 6, 25),
     )
-    flow_ev = FlowConfirmationEvidenceBuilder().build(candidate, analysis_date=date(2026, 6, 25))
+    flow_ev = FlowConfirmationEvidenceBuilder().build(
+        candidate,
+        analysis_date=date(2026, 6, 25),
+        consumed_broker_summaries=(),
+        consumed_broker_daily_flows=(),
+    ).evidence
     evidence = SwingEvidence(
         accumulation_candidate=None,
         setup_eval=None,

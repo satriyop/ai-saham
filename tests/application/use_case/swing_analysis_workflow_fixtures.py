@@ -1,6 +1,7 @@
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 
 from src.application.dto.swing_analysis import SwingAnalysisWorkflowRequest
 from src.application.use_case.swing_analysis_workflow_use_case import SwingAnalysisWorkflowUseCase
@@ -22,7 +23,11 @@ class FakeMarketRepository:
 
 
 class FakeBrokerRepository:
-    pass
+    def get_broker_summaries(self, ticker, start_date=None, end_date=None):
+        return []
+
+    def get_broker_daily_flows(self, ticker, start_date=None, end_date=None):
+        return []
 
 
 class FakeCandidateObservationsRepository:
@@ -154,6 +159,18 @@ def _request(**overrides) -> SwingAnalysisWorkflowRequest:
     return SwingAnalysisWorkflowRequest(**values)
 
 
+def _fake_evaluation_result(ticker: str) -> SimpleNamespace:
+    """Minimal stand-in for AccumulationCandidateEvaluationResult — a
+    `.candidate` plus the empty consumed-row tuples these tests' fake
+    repositories always return."""
+    return SimpleNamespace(
+        candidate={"ticker": ticker},
+        consumed_candles=(),
+        consumed_broker_summaries=(),
+        consumed_broker_daily_flows=(),
+    )
+
+
 def _workflow(market_repo, calls: list[str]) -> SwingAnalysisWorkflowUseCase:
     return SwingAnalysisWorkflowUseCase(
         market_repository=market_repo,
@@ -163,7 +180,9 @@ def _workflow(market_repo, calls: list[str]) -> SwingAnalysisWorkflowUseCase:
         build_data_freshness=lambda **kwargs: {"freshness": kwargs["refresh_actions"]},
         build_flow_detail=lambda **kwargs: {"flow_window": kwargs["window_sessions"]},
         build_broker_detail=lambda **kwargs: {"broker_window": kwargs["window_sessions"]},
-        build_accumulation_candidate=lambda **kwargs: {"ticker": kwargs["ticker"]},
+        build_accumulation_candidate_evaluation=lambda **kwargs: _fake_evaluation_result(
+            kwargs["ticker"]
+        ),
         evaluate_setup=lambda candidate, broker_detail: None,
         build_broker_quality_note=lambda **kwargs: None,
         fetch_sentiment=lambda **kwargs: (None, None),

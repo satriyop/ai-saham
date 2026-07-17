@@ -16,6 +16,9 @@ from datetime import date
 from typing import TYPE_CHECKING
 
 from src.application.dto import accumulation_screen as accumulation_dto
+from src.application.services.evidence_source_availability_assembler import (
+    EvidenceSourceAvailabilityAssembler,
+)
 from src.application.services.signal_context_builder import (
     build_signal_context_from_candidate,
 )
@@ -23,16 +26,26 @@ from src.application.use_case.score_foreign_flow_use_case import (
     ScoreForeignFlowRequest,
     ScoreForeignFlowUseCase,
 )
+from src.domain.value_objects.canonical_signal_evidence_input import (
+    CanonicalSignalEvidenceInput,
+    FlowEvidenceGroupInput,
+)
 from src.domain.value_objects.foreign_flow_evidence import ForeignFlowEvidence
 
 if TYPE_CHECKING:
     from src.application.services.accumulation_candidate_evidence_builder import (
         AccumulationCandidateEvidenceBuilder,
     )
+    from src.application.services.effective_market_session_resolver import (
+        EffectiveMarketSession,
+    )
     from src.application.services.flow_confirmation_evidence_builder import (
         FlowConfirmationEvidenceBuilder,
     )
     from src.application.services.signal_engine import SignalEngine
+    from src.application.use_case.assess_source_availability_use_case import (
+        AssessSourceAvailabilityUseCase,
+    )
     from src.domain.value_objects.flow_confirmation_evidence import (
         FlowConfirmationEvidence,
     )
@@ -78,6 +91,10 @@ class AccumulationCandidateSignalAssessor:
         *,
         request: accumulation_dto.AccumulationScreenRequest,
         as_of_date: date,
+        consumed_broker_summaries: tuple,
+        consumed_broker_daily_flows: tuple,
+        effective_session: "EffectiveMarketSession",
+        source_availability_use_case: "AssessSourceAvailabilityUseCase",
     ) -> CandidateSignalAssessmentResult:
         """Run signal assessment on the candidate and return the outcome."""
         # Phase 2.1: foreign-flow score assignment
@@ -121,15 +138,45 @@ class AccumulationCandidateSignalAssessor:
         # happens only in the per-ticker swing workflow. Confidence will be
         # 0.40 (flow group only) until the full workflow enriches it further.
         flow_ev: FlowConfirmationEvidence | None = None
+        canonical_evidence: CanonicalSignalEvidenceInput | None = None
         try:
-            flow_ev = self._flow_confirmation_builder.build(
-                candidate, analysis_date=as_of_date
+            built_flow = self._flow_confirmation_builder.build(
+                candidate,
+                analysis_date=as_of_date,
+                consumed_broker_summaries=consumed_broker_summaries,
+                consumed_broker_daily_flows=consumed_broker_daily_flows,
             )
+            flow_ev = built_flow.evidence
+            # ADR-041 CANONICAL-EVIDENCE-BOUNDARY: availability is resolved
+            # once, pre-score, from this exact provenance and bound
+            # immediately into the canonical group — never a separate
+            # post-score assembly, and never supplied to SignalEngine as a
+            # loose evidence value disconnected from its provenance.
+            flow_availability = EvidenceSourceAvailabilityAssembler(
+                source_availability_use_case
+            ).assess_flow(
+                effective_session=effective_session,
+                provenance=built_flow.provenance,
+            )
+            canonical_evidence = CanonicalSignalEvidenceInput(
+                setup=None,
+                flow=FlowEvidenceGroupInput(
+                    evidence=built_flow.evidence,
+                    provenance=built_flow.provenance,
+                    availability=flow_availability,
+                ),
+            )
+        except ValueError:
+            # A ValueError here is a provenance/domain contract violation
+            # (e.g. a cross-ticker or duplicate consumed row) — an invariant
+            # break, not an operational failure. It must fail explicitly,
+            # never be silently downgraded to "no flow evidence this run".
+            raise
         except Exception:
             pass
 
         candidate.signal_assessment = self._signal_engine.evaluate_with_context(
-            candidate.ticker, signal_ctx, flow_confirmation_evidence=flow_ev
+            candidate.ticker, signal_ctx, canonical_evidence=canonical_evidence
         )
 
         # Accumulation-lifecycle diagnostic — computed once here so observation

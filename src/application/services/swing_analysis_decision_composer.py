@@ -13,16 +13,20 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from src.application.dto import swing_analysis as swing_analysis_dto
-from src.application.services.signal_context_builder import (
-    build_signal_context_from_candidate,
-)
 from src.application.services.evidence_source_availability_assembler import (
     EvidenceSourceAvailabilityAssembler,
+)
+from src.application.services.signal_context_builder import (
+    build_signal_context_from_candidate,
 )
 from src.application.services.swing_analysis_workflow_state import (
     SwingAnalysisWorkflowState,
 )
-from src.domain.value_objects.evidence_source_availability import AvailabilityEnforcementMode
+from src.domain.value_objects.canonical_signal_evidence_input import (
+    CanonicalSignalEvidenceInput,
+    FlowEvidenceGroupInput,
+    SetupEvidenceGroupInput,
+)
 
 if TYPE_CHECKING:
     from src.application.services.signal_engine import SignalEngine
@@ -147,19 +151,21 @@ class SwingAnalysisDecisionComposer:
         state: SwingAnalysisWorkflowState,
     ) -> SwingAnalysisWorkflowState:
         evidence = state.evidence
-        setup_evidence = evidence.setup_evidence if evidence is not None else None
-        flow_confirmation_evidence = (
-            evidence.flow_confirmation_evidence if evidence is not None else None
-        )
+        canonical_evidence = self._build_canonical_evidence(state)
 
-        # Re-score with evidence now that both groups are available. Signal was
-        # computed earlier (before setup_eval existed), so that score had no
-        # evidence groups and confidence=0. Recompose all downstream outputs
-        # (TradeSetup, MCE preview) so verdict is internally consistent.
+        # Re-score with evidence now that the canonical evidence groups are
+        # available. Signal was computed earlier (before setup_eval existed),
+        # so that score had no evidence groups and confidence=0. Recompose
+        # all downstream outputs (TradeSetup, MCE preview) so verdict is
+        # internally consistent. Availability is bound inside
+        # canonical_evidence (ADR-041 CANONICAL-EVIDENCE-BOUNDARY) — there is
+        # no separate post-score availability step; response diagnostics are
+        # attached by AssessSignalEvidenceUseCase itself, from this same
+        # canonical_evidence.
         if (
             self._signal_engine is not None
             and state.accumulation_candidate is not None
-            and (setup_evidence is not None or flow_confirmation_evidence is not None)
+            and canonical_evidence is not None
         ):
             signal_assessment = state.signal_assessment
             try:
@@ -173,8 +179,7 @@ class SwingAnalysisDecisionComposer:
                     request.ticker,
                     _evidence_ctx,
                     market_context=state.market_regime,
-                    setup_evidence=setup_evidence,
-                    flow_confirmation_evidence=flow_confirmation_evidence,
+                    canonical_evidence=canonical_evidence,
                     setup_family=request.setup_name,
                     setup_phase=evidence.setup_phase if evidence is not None else None,
                     sector_context_evidence=(
@@ -185,6 +190,12 @@ class SwingAnalysisDecisionComposer:
                         if evidence is not None else None
                     ),
                 )
+            except (ValueError, TypeError):
+                # A malformed evidence/provenance/availability contract is a
+                # programming or data-integrity defect, not an operational
+                # "evidence unavailable" condition — it must fail closed,
+                # never be silently downgraded to a warning.
+                raise
             except Exception as exc:
                 state.warnings.append(f"Evidence-enriched signal re-score unavailable: {exc}")
             else:
@@ -218,51 +229,60 @@ class SwingAnalysisDecisionComposer:
                     market_context_signal_preview=_new_mce_signal,
                     market_context_trade_setup_preview=_new_mce_trade_preview,
                 )
-
-        # DQ-002 Blocker 2 (shadow mode): assemble availability only for
-        # evidence groups that were actually produced this run — availability
-        # must describe evidence that exists, not evidence a candidate could
-        # theoretically have produced. `setup_evidence`/
-        # `flow_confirmation_evidence` above already carry that presence
-        # check; reuse it here rather than gating on `accumulation_candidate`
-        # alone (which exists even when, say, no setup was requested).
-        if state.source_availability_use_case is not None:
-            assembler = EvidenceSourceAvailabilityAssembler(state.source_availability_use_case)
-            if setup_evidence is not None:
-                try:
-                    state.setup_source_availability = assembler.assess_setup(
-                        effective_session=state.effective_session, candles=state.candles
-                    )
-                except Exception as exc:
-                    state.warnings.append(f"Setup source availability unavailable: {exc}")
-            if flow_confirmation_evidence is not None:
-                try:
-                    state.flow_source_availability = assembler.assess_flow(
-                        effective_session=state.effective_session,
-                        candidate=state.accumulation_candidate,
-                    )
-                except Exception as exc:
-                    state.warnings.append(f"Flow source availability unavailable: {exc}")
-
-        # Attach observational source-availability diagnostics to the
-        # canonical signal assessment response. Purely additive — never
-        # changes score, coverage, entry_quality, or trade_setup, since it is
-        # copied onto whichever signal_assessment already resulted from the
-        # logic above (rescored or not).
-        if (
-            state.signal_assessment is not None
-            and (
-                state.setup_source_availability is not None
-                or state.flow_source_availability is not None
-            )
-        ):
-            state.signal_assessment = replace(
-                state.signal_assessment,
-                setup_source_availability=state.setup_source_availability,
-                flow_source_availability=state.flow_source_availability,
-                availability_enforcement=AvailabilityEnforcementMode.SHADOW,
-            )
-            state.verdict = replace(
-                state.verdict, signal_assessment=state.signal_assessment
-            )
         return state
+
+    def _build_canonical_evidence(
+        self, state: SwingAnalysisWorkflowState
+    ) -> "CanonicalSignalEvidenceInput | None":
+        """Resolve availability once, pre-score, from exact provenance only,
+        and bind it into the canonical evidence groups (ADR-041
+        CANONICAL-EVIDENCE-BOUNDARY) — never a separate post-score step.
+        Only includes a group whose evidence was actually built this run;
+        never describes evidence that could theoretically have been produced
+        from the same candidate."""
+        built_setup = state.built_setup_evidence
+        built_flow = state.built_flow_evidence
+        if built_setup is None and built_flow is None:
+            return None
+        if state.source_availability_use_case is None:
+            return None
+
+        assembler = EvidenceSourceAvailabilityAssembler(state.source_availability_use_case)
+
+        setup_group: "SetupEvidenceGroupInput | None" = None
+        if built_setup is not None:
+            try:
+                setup_availability = assembler.assess_setup(
+                    effective_session=state.effective_session,
+                    provenance=built_setup.provenance,
+                )
+                setup_group = SetupEvidenceGroupInput(
+                    evidence=built_setup.evidence,
+                    provenance=built_setup.provenance,
+                    availability=setup_availability,
+                )
+            except (ValueError, TypeError):
+                raise
+            except Exception as exc:
+                state.warnings.append(f"Setup source availability unavailable: {exc}")
+
+        flow_group: "FlowEvidenceGroupInput | None" = None
+        if built_flow is not None:
+            try:
+                flow_availability = assembler.assess_flow(
+                    effective_session=state.effective_session,
+                    provenance=built_flow.provenance,
+                )
+                flow_group = FlowEvidenceGroupInput(
+                    evidence=built_flow.evidence,
+                    provenance=built_flow.provenance,
+                    availability=flow_availability,
+                )
+            except (ValueError, TypeError):
+                raise
+            except Exception as exc:
+                state.warnings.append(f"Flow source availability unavailable: {exc}")
+
+        if setup_group is None and flow_group is None:
+            return None
+        return CanonicalSignalEvidenceInput(setup=setup_group, flow=flow_group)

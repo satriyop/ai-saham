@@ -17,11 +17,27 @@ from src.domain.value_objects.flow_confirmation_evidence import (
     FlowConfirmationEvidence,
     FlowSubSignal,
 )
+from src.domain.value_objects.canonical_signal_evidence_input import CanonicalSignalEvidenceInput
 from src.domain.value_objects.market_context import MarketContext, MarketRegime
 from src.domain.value_objects.setup_evidence import SetupEvidence
 from src.domain.value_objects.signal_assessment import EntryQuality
+from tests.application.use_case.signal_evidence_fixtures import (
+    _wrap_flow_evidence,
+    _wrap_setup_evidence,
+)
 
 SNAP = date(2026, 7, 5)
+
+
+def _req(**kwargs) -> AssessSignalEvidenceRequest:
+    setup_evidence = kwargs.pop("setup_evidence", None)
+    flow_confirmation_evidence = kwargs.pop("flow_confirmation_evidence", None)
+    if setup_evidence is not None or flow_confirmation_evidence is not None:
+        kwargs["canonical_evidence"] = CanonicalSignalEvidenceInput(
+            setup=_wrap_setup_evidence(setup_evidence),
+            flow=_wrap_flow_evidence(flow_confirmation_evidence),
+        )
+    return AssessSignalEvidenceRequest(**kwargs)
 
 
 def _excess_return(window_sessions: int, excess_return_pct: float) -> BenchmarkExcessReturn:
@@ -100,7 +116,7 @@ def _flow() -> FlowConfirmationEvidence:
 
 def test_risk_off_enter_allowed_false_caps_enter_without_mutating_score():
     response = AssessSignalEvidenceUseCase().execute(
-        AssessSignalEvidenceRequest(
+        _req(
             ticker="TEST",
             snapshot_date=SNAP,
             setup_evidence=_setup(),
@@ -149,7 +165,7 @@ def test_decision_policy_receives_coverage_score_and_conviction_score_from_setup
 
     # Use RISK_OFF where code-default min_coverage=0.80 (coverage 0.20 < 0.80)
     response = AssessSignalEvidenceUseCase().execute(
-        AssessSignalEvidenceRequest(
+        _req(
             ticker="TEST",
             snapshot_date=SNAP,
             setup_evidence=_setup(),
@@ -174,7 +190,7 @@ def test_decision_policy_receives_coverage_score_and_conviction_score_from_setup
 def test_assess_signal_response_coverage_score_is_alias_for_evidence_confidence():
     """AssessSignalResponse.coverage_score must equal evidence_confidence."""
     response = AssessSignalEvidenceUseCase().execute(
-        AssessSignalEvidenceRequest(
+        _req(
             ticker="TEST",
             snapshot_date=SNAP,
             setup_evidence=_setup(),
@@ -211,7 +227,7 @@ def test_poor_benchmark_excess_return_cannot_cap_enter():
     an otherwise identical ENTER result — the diagnostic evidence carries no
     decision authority."""
     strong_response = AssessSignalEvidenceUseCase().execute(
-        AssessSignalEvidenceRequest(
+        _req(
             ticker="TEST",
             snapshot_date=SNAP,
             setup_evidence=_setup_with_excess_return(1.05),
@@ -222,7 +238,7 @@ def test_poor_benchmark_excess_return_cannot_cap_enter():
     assert strong_response.assessment.entry_quality == EntryQuality.ENTER
 
     poor_response = AssessSignalEvidenceUseCase().execute(
-        AssessSignalEvidenceRequest(
+        _req(
             ticker="TEST",
             snapshot_date=SNAP,
             setup_evidence=_setup_with_excess_return(-50.0),

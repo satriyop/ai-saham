@@ -45,13 +45,14 @@ if TYPE_CHECKING:
     from src.domain.ports.fundamentals_provider import FundamentalsProvider
     from src.domain.ports.insider_activity_provider import InsiderActivityProvider
     from src.domain.ports.seasonality_provider import SeasonalityProvider
+    from src.domain.value_objects.canonical_signal_evidence_input import (
+        CanonicalSignalEvidenceInput,
+    )
     from src.domain.value_objects.company_quality_context_evidence import (
         CompanyQualityContextEvidence,
     )
-    from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
-    from src.domain.value_objects.setup_evidence import SetupEvidence
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
 
 logger = logging.getLogger(__name__)
@@ -136,8 +137,7 @@ class SignalEngine:
         ticker: str,
         signal_context: SignalContext,
         market_context: "MarketContext | None" = None,
-        setup_evidence: "SetupEvidence | None" = None,
-        flow_confirmation_evidence: "FlowConfirmationEvidence | None" = None,
+        canonical_evidence: "CanonicalSignalEvidenceInput | None" = None,
         setup_family: str | None = None,
         setup_phase: "SetupPhaseSnapshot | None" = None,
         horizon: str | None = None,
@@ -150,15 +150,18 @@ class SignalEngine:
         Intended for screener loops (800+ tickers) where enrichment data is
         already fetched per candidate — avoids N+1 provider calls.
 
-        setup_evidence / flow_confirmation_evidence: when provided, group scores
-        are computed from evidence objects. When absent, those groups are MISSING.
+        canonical_evidence (ADR-041 CANONICAL-EVIDENCE-BOUNDARY): the sole
+        setup/flow evidence input, binding evidence to its exact consumed-row
+        provenance and resolved availability. When a group is absent
+        (`canonical_evidence is None`, or `.setup`/`.flow` is None), that
+        group is MISSING (excluded from the scoring denominator) — never a
+        loose evidence value supplied independently of its provenance.
         """
         return self._evidence_use_case.execute(
             AssessSignalEvidenceRequest(
                 ticker=ticker,
                 snapshot_date=signal_context.snapshot_date,
-                setup_evidence=setup_evidence,
-                flow_confirmation_evidence=flow_confirmation_evidence,
+                canonical_evidence=canonical_evidence,
                 signal_context=signal_context,
                 market_context=market_context,
                 setup_family=setup_family,

@@ -1,6 +1,6 @@
 """Shared fixtures and helpers for signal evidence use case tests."""
 
-from datetime import date
+from datetime import date, datetime
 
 from src.application.dto.assess_signal import AssessSignalEvidenceRequest
 from src.application.use_case.assess_signal_evidence_use_case import (
@@ -11,9 +11,20 @@ from src.domain.value_objects.benchmark_excess_return import (
     BenchmarkExcessReturn,
     BenchmarkExcessReturnStatus,
 )
+from src.domain.value_objects.benchmark_symbol import CANONICAL_BENCHMARK_TICKER
+from src.domain.value_objects.canonical_signal_evidence_input import (
+    BrokerSummaryRowIdentity,
+    CandleRowIdentity,
+    CanonicalSignalEvidenceInput,
+    FlowEvidenceGroupInput,
+    FlowProvenance,
+    SetupEvidenceGroupInput,
+    SetupProvenance,
+)
 from src.domain.value_objects.company_quality_context_evidence import (
     CompanyQualityContextEvidence,
 )
+from src.domain.value_objects.evidence_source_availability import EvidenceSourceAvailability
 from src.domain.value_objects.factor_evidence import Direction, Freshness
 from src.domain.value_objects.flow_confirmation_evidence import (
     FlowConfirmationEvidence,
@@ -25,8 +36,88 @@ from src.domain.value_objects.sector_context_evidence import SectorContextEviden
 from src.domain.value_objects.setup_evidence import SetupEvidence
 from src.domain.value_objects.setup_phase import SetupPhaseSnapshot, SetupPhaseState
 from src.domain.value_objects.signal_assessment import SignalContext
+from src.domain.value_objects.source_availability import (
+    SourceAvailabilityAssessment,
+    SourceAvailabilityStatus,
+)
 
 SNAP = date(2026, 7, 3)
+_DECISION_AT = datetime(2026, 7, 3, 20, 0)
+
+
+def _current_assessment(source_family: str, observed_through: date) -> SourceAvailabilityAssessment:
+    """A trivially CURRENT/authoritative assessment — these scoring-logic
+    tests exercise AssessSignalEvidenceUseCase's group-scoring math, not
+    availability policy, so availability just needs to be internally
+    consistent with the wrapped provenance, not realistic."""
+    return SourceAvailabilityAssessment(
+        source_family=source_family,
+        decision_at=_DECISION_AT,
+        observed_through=observed_through,
+        available_at=None,
+        status=SourceAvailabilityStatus.CURRENT,
+        is_authoritative=True,
+        reason="TEST_FIXTURE",
+    )
+
+
+def _wrap_setup_evidence(evidence: SetupEvidence | None) -> "SetupEvidenceGroupInput | None":
+    """Wrap a bare SetupEvidence into the canonical group these tests need
+    (ADR-041) — trivial-but-valid provenance/availability, since these tests
+    care about scoring behavior, not provenance semantics."""
+    if evidence is None:
+        return None
+    provenance = SetupProvenance(
+        ticker=evidence.ticker,
+        candle_rows=(
+            CandleRowIdentity(ticker=evidence.ticker, date=evidence.snapshot_date, source="test"),
+        ),
+        # Always populated: some fixtures set an AVAILABLE benchmark
+        # excess-return by default, which BuiltSetupEvidence/
+        # SetupEvidenceGroupInput require benchmark provenance for.
+        benchmark_candle_rows=(
+            CandleRowIdentity(
+                ticker=CANONICAL_BENCHMARK_TICKER, date=evidence.snapshot_date, source="test"
+            ),
+        ),
+    )
+    availability = EvidenceSourceAvailability(
+        evidence_group="setup",
+        assessments=(_current_assessment("candles", evidence.snapshot_date),),
+    )
+    return SetupEvidenceGroupInput(evidence=evidence, provenance=provenance, availability=availability)
+
+
+def _wrap_flow_evidence(
+    evidence: FlowConfirmationEvidence | None,
+) -> "FlowEvidenceGroupInput | None":
+    if evidence is None:
+        return None
+    provenance = FlowProvenance(
+        ticker=evidence.ticker,
+        broker_summary_rows=(
+            BrokerSummaryRowIdentity(
+                ticker=evidence.ticker, date=evidence.snapshot_date, source="test"
+            ),
+        ),
+        broker_daily_flow_rows=(),
+    )
+    availability = EvidenceSourceAvailability(
+        evidence_group="flow",
+        assessments=(
+            _current_assessment("broker_summaries", evidence.snapshot_date),
+            SourceAvailabilityAssessment(
+                source_family="broker_daily_flow",
+                decision_at=_DECISION_AT,
+                observed_through=None,
+                available_at=None,
+                status=SourceAvailabilityStatus.UNKNOWN,
+                is_authoritative=False,
+                reason="TEST_FIXTURE_NO_DAILY_FLOW_ROWS",
+            ),
+        ),
+    )
+    return FlowEvidenceGroupInput(evidence=evidence, provenance=provenance, availability=availability)
 
 
 def _available_excess_return(window_sessions: int, excess_return_pct: float) -> BenchmarkExcessReturn:
@@ -49,6 +140,20 @@ def _use_case(config: SignalEngineConfig | None = None) -> AssessSignalEvidenceU
 
 
 def _req(**kwargs) -> AssessSignalEvidenceRequest:
+    # ADR-041: AssessSignalEvidenceRequest no longer accepts loose
+    # setup_evidence/flow_confirmation_evidence — only canonical_evidence.
+    # Translate the old call shape these tests use (setup_evidence=...,
+    # flow_confirmation_evidence=...) into a wrapped CanonicalSignalEvidenceInput
+    # so the ~90 existing scoring-logic call sites don't need individual edits.
+    setup_evidence = kwargs.pop("setup_evidence", None)
+    flow_confirmation_evidence = kwargs.pop("flow_confirmation_evidence", None)
+    if "canonical_evidence" not in kwargs and (
+        setup_evidence is not None or flow_confirmation_evidence is not None
+    ):
+        kwargs["canonical_evidence"] = CanonicalSignalEvidenceInput(
+            setup=_wrap_setup_evidence(setup_evidence),
+            flow=_wrap_flow_evidence(flow_confirmation_evidence),
+        )
     defaults = {"ticker": "TEST", "snapshot_date": SNAP}
     defaults.update(kwargs)
     return AssessSignalEvidenceRequest(**defaults)

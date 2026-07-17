@@ -28,6 +28,9 @@ from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
 
 if TYPE_CHECKING:
     from src.application.dto import swing_analysis as swing_analysis_dto
+    from src.application.dto.accumulation_screen import (
+        AccumulationCandidateEvaluationResult,
+    )
     from src.domain.ports.broker_data_repository import BrokerDataRepository
     from src.domain.ports.market_data_repository import MarketDataRepository
     from src.domain.value_objects.market_context import MarketContext
@@ -52,7 +55,9 @@ class SwingAnalysisInputCollector:
         build_data_freshness: Callable[..., Any],
         build_flow_detail: Callable[..., Any],
         build_broker_detail: Callable[..., Any],
-        build_accumulation_candidate: Callable[..., Any | None],
+        build_accumulation_candidate_evaluation: (
+            Callable[..., "AccumulationCandidateEvaluationResult | None"]
+        ),
         evaluate_market_context: Callable[..., "MarketContext"] | None,
         session_resolver: EffectiveMarketSessionResolver | None = None,
         trading_session_calendar_loader: (
@@ -65,7 +70,7 @@ class SwingAnalysisInputCollector:
         self._build_data_freshness = build_data_freshness
         self._build_flow_detail = build_flow_detail
         self._build_broker_detail = build_broker_detail
-        self._build_accumulation_candidate = build_accumulation_candidate
+        self._build_accumulation_candidate_evaluation = build_accumulation_candidate_evaluation
         self._trading_session_calendar_loader = trading_session_calendar_loader
         self._evaluate_market_context = evaluate_market_context
         self._session_resolver = session_resolver or EffectiveMarketSessionResolver(
@@ -138,9 +143,9 @@ class SwingAnalysisInputCollector:
             raise SwingAnalysisDataUnavailable(request.ticker)
         latest_close = candles[-1].close
 
-        accumulation_candidate = None
+        accumulation_evaluation = None
         try:
-            accumulation_candidate = self._build_accumulation_candidate(
+            accumulation_evaluation = self._build_accumulation_candidate_evaluation(
                 ticker=request.ticker,
                 window=request.window,
                 as_of_date=request.today,
@@ -178,13 +183,15 @@ class SwingAnalysisInputCollector:
         # assessment fails closed to UNKNOWN instead of silently assuming 0
         # sessions apart.
         source_availability_use_case = None
-        if accumulation_candidate is not None:
+        if accumulation_evaluation is not None:
             try:
-                latest_broker_date = getattr(
-                    accumulation_candidate, "latest_broker_date", None
+                latest_broker_date = max(
+                    (row.date for row in accumulation_evaluation.consumed_broker_summaries),
+                    default=None,
                 )
-                latest_broker_daily_flow_date = getattr(
-                    accumulation_candidate, "latest_broker_daily_flow_date", None
+                latest_broker_daily_flow_date = max(
+                    (row.date for row in accumulation_evaluation.consumed_broker_daily_flows),
+                    default=None,
                 )
                 observed_dates = [
                     d
@@ -237,7 +244,7 @@ class SwingAnalysisInputCollector:
             broker_detail=broker_detail,
             candles=candles,
             latest_close=latest_close,
-            accumulation_candidate=accumulation_candidate,
+            accumulation_evaluation=accumulation_evaluation,
             effective_session=effective_session,
             market_regime=market_regime,
             source_availability_use_case=source_availability_use_case,

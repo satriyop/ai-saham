@@ -13,7 +13,12 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from src.application.dto.accumulation_screen import (
+        AccumulationCandidate,
+        AccumulationCandidateEvaluationResult,
+    )
     from src.application.dto.assess_signal import AssessSignalResponse
+    from src.application.dto.built_evidence import BuiltFlowEvidence, BuiltSetupEvidence
     from src.application.dto.swing_analysis import SwingDiagnostics, SwingEvidence, SwingVerdict
     from src.application.services.effective_market_session_resolver import (
         EffectiveMarketSession,
@@ -23,9 +28,6 @@ if TYPE_CHECKING:
         AssessSourceAvailabilityUseCase,
     )
     from src.domain.rules.risk_gate import GateContext
-    from src.domain.value_objects.evidence_source_availability import (
-        EvidenceSourceAvailability,
-    )
     from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.trade_setup import TradeSetup
 
@@ -41,16 +43,21 @@ class SwingAnalysisWorkflowState:
     broker_detail: Any = None
     candles: list[Any] = field(default_factory=list)
     latest_close: Decimal | None = None
-    accumulation_candidate: Any | None = None
+    # Sole source of truth for the accumulation candidate (ADR-041
+    # CANONICAL-EVIDENCE-BOUNDARY) — never a separate mutable field, which
+    # could disagree with this. Access the candidate via the
+    # `accumulation_candidate` property below.
+    accumulation_evaluation: "AccumulationCandidateEvaluationResult | None" = None
     effective_session: "EffectiveMarketSession | None" = None
     market_regime: "MarketContext | None" = None
-    # One AssessSourceAvailabilityUseCase per workflow execution (DQ-002
-    # Blocker 2), reused for both evidence-group assessments below. Actual
-    # assessment happens in SwingAnalysisDecisionComposer.recompose_after_
-    # evidence, gated on the corresponding evidence actually existing.
+    # One AssessSourceAvailabilityUseCase per workflow execution (ADR-041
+    # CANONICAL-EVIDENCE-BOUNDARY), reused for both evidence-group
+    # assessments. Availability is resolved once, pre-score, inside
+    # SwingAnalysisDecisionComposer.recompose_after_evidence, gated on the
+    # corresponding built evidence actually existing, and bound immediately
+    # into SetupEvidenceGroupInput/FlowEvidenceGroupInput — never assembled
+    # separately after scoring.
     source_availability_use_case: "AssessSourceAvailabilityUseCase | None" = None
-    setup_source_availability: "EvidenceSourceAvailability | None" = None
-    flow_source_availability: "EvidenceSourceAvailability | None" = None
     gate_ctx: "GateContext | None" = None
     risk_response: Any | None = None
     signal_assessment: "AssessSignalResponse | None" = None
@@ -74,3 +81,18 @@ class SwingAnalysisWorkflowState:
     verdict: "SwingVerdict | None" = None
     evidence: "SwingEvidence | None" = None
     diagnostics: "SwingDiagnostics | None" = None
+    # Complete built evidence (evidence + exact consumed-row provenance,
+    # ADR-041 CANONICAL-EVIDENCE-BOUNDARY) — the canonical pre-score input
+    # source. `evidence` above carries only the unwrapped presentation
+    # values for diagnostic rendering; these are never unwrapped until
+    # SetupEvidenceGroupInput/FlowEvidenceGroupInput are constructed.
+    built_setup_evidence: "BuiltSetupEvidence | None" = None
+    built_flow_evidence: "BuiltFlowEvidence | None" = None
+
+    @property
+    def accumulation_candidate(self) -> "AccumulationCandidate | None":
+        return (
+            self.accumulation_evaluation.candidate
+            if self.accumulation_evaluation is not None
+            else None
+        )

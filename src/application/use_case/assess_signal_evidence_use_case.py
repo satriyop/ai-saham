@@ -21,6 +21,7 @@ Depends on: domain only + services + stdlib. No IO, no providers, no repositorie
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from src.application.dto.assess_signal import AssessSignalEvidenceRequest
@@ -34,6 +35,7 @@ from src.application.services.signal_evidence_response_builder import SignalEvid
 from src.application.services.signal_legacy_regime_conditioning import (
     SignalLegacyRegimeConditioning,
 )
+from src.domain.value_objects.evidence_source_availability import AvailabilityEnforcementMode
 
 if TYPE_CHECKING:
     from src.application.dto.assess_signal import AssessSignalResponse
@@ -105,7 +107,7 @@ class AssessSignalEvidenceUseCase:
         )
 
         # 5. Build response
-        return SignalEvidenceResponseBuilder.build(
+        response = SignalEvidenceResponseBuilder.build(
             request=request,
             group_scores=group_scores,
             legacy_conditioning=legacy_conditioning,
@@ -113,3 +115,25 @@ class AssessSignalEvidenceUseCase:
             decision_constraints=decision_constraints,
             alpha_trigger_score=alpha_trigger_score,
         )
+
+        # 6. Attach SHADOW availability diagnostics — sourced exclusively from
+        # the canonical pre-score input (ADR-041 CANONICAL-EVIDENCE-BOUNDARY),
+        # never from a second, independently-assembled availability check
+        # after scoring. Purely additive: nothing above this point read
+        # `.availability`, so this cannot influence score, coverage,
+        # classification, or decision_constraints.
+        if request.canonical_evidence is not None:
+            setup_group = request.canonical_evidence.setup
+            flow_group = request.canonical_evidence.flow
+            if setup_group is not None or flow_group is not None:
+                response = replace(
+                    response,
+                    setup_source_availability=(
+                        setup_group.availability if setup_group is not None else None
+                    ),
+                    flow_source_availability=(
+                        flow_group.availability if flow_group is not None else None
+                    ),
+                    availability_enforcement=AvailabilityEnforcementMode.SHADOW,
+                )
+        return response

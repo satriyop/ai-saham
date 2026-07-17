@@ -1,47 +1,67 @@
-"""Tests for SwingAnalysisDecisionComposer's shadow-mode availability attach —
-DQ-002 Blocker 2.
+"""Tests for SwingAnalysisDecisionComposer's canonical evidence construction
+(ADR-041 CANONICAL-EVIDENCE-BOUNDARY).
 
-Proves availability diagnostics reach the canonical signal-assessment
-response without altering score/strength/entry_quality — the mandatory
-"byte-for-byte unchanged" guarantee for this integration.
+Proves the composer resolves availability once, pre-score, from exact
+provenance, binds it into CanonicalSignalEvidenceInput, gates each group on
+its evidence actually having been built this run, and never performs a
+separate post-score availability assembly/attachment.
 """
 
 from __future__ import annotations
 
-from dataclasses import replace
 from datetime import date, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 
 from src.application.dto import swing_analysis as swing_analysis_dto
 from src.application.dto.assess_signal import AssessSignalResponse
+from src.application.dto.built_evidence import BuiltFlowEvidence, BuiltSetupEvidence
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSession,
+)
 from src.application.services.swing_analysis_decision_composer import (
     SwingAnalysisDecisionComposer,
 )
 from src.application.services.swing_analysis_workflow_state import (
     SwingAnalysisWorkflowState,
 )
-from src.domain.value_objects.evidence_source_availability import (
-    AvailabilityEnforcementMode,
-    EvidenceSourceAvailability,
+from src.application.use_case.assess_source_availability_use_case import (
+    AssessSourceAvailabilityUseCase,
 )
+from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
+from src.domain.value_objects.benchmark_excess_return import (
+    BenchmarkExcessReturn,
+    BenchmarkExcessReturnStatus,
+)
+from src.domain.value_objects.canonical_signal_evidence_input import (
+    BrokerSummaryRowIdentity,
+    CandleRowIdentity,
+    FlowProvenance,
+    SetupProvenance,
+)
+from src.domain.value_objects.factor_evidence import Direction, Freshness
+from src.domain.value_objects.flow_confirmation_evidence import (
+    FlowConfirmationEvidence,
+    FlowSubSignal,
+)
+from src.domain.value_objects.idx_market import IDX_TIMEZONE
+from src.domain.value_objects.setup_evidence import SetupEvidence
 from src.domain.value_objects.signal_assessment import (
     EntryQuality,
     SignalAssessment,
     SignalStrength,
 )
-from src.domain.value_objects.source_availability import (
-    SourceAvailabilityAssessment,
-    SourceAvailabilityStatus,
-)
+
+TICKER = "BBCA"
+SNAP = date(2026, 7, 17)
 
 
 def _request():
     from pathlib import Path
 
     return swing_analysis_dto.SwingAnalysisWorkflowRequest(
-        ticker="BBCA",
-        today=date(2026, 7, 17),
+        ticker=TICKER,
+        today=SNAP,
         strategy_name=None,
         setup_name=None,
         window=200,
@@ -66,120 +86,117 @@ def _request():
     )
 
 
-def _signal_assessment(score: int = 72) -> AssessSignalResponse:
+def _no_excess_return() -> BenchmarkExcessReturn:
+    return BenchmarkExcessReturn(
+        benchmark="IHSG",
+        window_sessions=5,
+        ticker_return_pct=None,
+        benchmark_return_pct=None,
+        excess_return_pct=None,
+        window_start=None,
+        window_end=None,
+        common_session_count=0,
+        status=BenchmarkExcessReturnStatus.UNAVAILABLE,
+        unavailable_reason="test fixture",
+    )
+
+
+def _built_setup_evidence() -> BuiltSetupEvidence:
+    evidence = SetupEvidence(
+        ticker=TICKER,
+        snapshot_date=SNAP,
+        setup_name="foreign-bounce",
+        setup_match="MATCH",
+        match_strength=100.0,
+        failed_gates=(),
+        trend="UP",
+        rsi=45.0,
+        bb_width_pctile=0.20,
+        vwap_discount_pct=1.5,
+        vwap_pct=1.02,
+        benchmark_excess_return_5_session=_no_excess_return(),
+        benchmark_excess_return_20_session=_no_excess_return(),
+        volume_trend_ratio=1.2,
+        volume_freshness=Freshness.FRESH,
+        candle_source="test",
+    )
+    provenance = SetupProvenance(
+        ticker=TICKER,
+        candle_rows=(CandleRowIdentity(ticker=TICKER, date=SNAP, source="test"),),
+    )
+    return BuiltSetupEvidence(evidence=evidence, provenance=provenance)
+
+
+def _built_flow_evidence(has_bandar_contributor: bool = False) -> BuiltFlowEvidence:
+    signal = FlowSubSignal(
+        key="cons", score=40.0, weight=40.0, direction=Direction.BULLISH, freshness=Freshness.FRESH
+    )
+    evidence = FlowConfirmationEvidence(
+        ticker=TICKER,
+        snapshot_date=SNAP,
+        flow_signals=(signal,),
+        flow_score_ex_bb=40.0,
+        confirmation_status="CONFIRMED",
+        flow_direction="POSITIVE",
+        bandar_broad_score=None,
+        bandar_direction=Direction.NEUTRAL,
+        bandar_freshness=Freshness.MISSING,
+        bci_label=None,
+        bci_tier1_count=0,
+        uncapped_strength=0.5,
+        capped_strength=0.5,
+        group_cap=0.80,
+        group_freshness=Freshness.FRESH,
+    )
+    provenance = FlowProvenance(
+        ticker=TICKER,
+        broker_summary_rows=(BrokerSummaryRowIdentity(ticker=TICKER, date=SNAP, source="test"),),
+        broker_daily_flow_rows=(),
+        has_bandar_contributor=has_bandar_contributor,
+    )
+    return BuiltFlowEvidence(evidence=evidence, provenance=provenance)
+
+
+def _source_availability_use_case() -> AssessSourceAvailabilityUseCase:
+    calendar = KnownTradingSessionCalendar(
+        sessions=(SNAP,), coverage_start=SNAP, coverage_end=SNAP
+    )
+    return AssessSourceAvailabilityUseCase(calendar=calendar)
+
+
+def _effective_session() -> EffectiveMarketSession:
+    decision_at = datetime(SNAP.year, SNAP.month, SNAP.day, 20, 0, tzinfo=IDX_TIMEZONE)
+    return EffectiveMarketSession(
+        run_at=decision_at,
+        decision_at=decision_at,
+        latest_completed_session=SNAP,
+        analysis_as_of=SNAP,
+        market_session_name="AFTER_CLOSE",
+        is_eod_pending=False,
+        resolution_source="test_fixture",
+        notes=(),
+    )
+
+
+def _signal_response(score: int = 72) -> AssessSignalResponse:
     assessment = SignalAssessment(
-        ticker="BBCA",
+        ticker=TICKER,
         score=score,
         strength=SignalStrength.MODERATE,
         entry_quality=EntryQuality.ENTER,
         breakdown=(("setup", 60.0), ("flow", 40.0)),
         rationale=("test rationale",),
-        snapshot_date=date(2026, 7, 17),
+        snapshot_date=SNAP,
     )
-    return AssessSignalResponse(ticker="BBCA", assessment=assessment)
+    return AssessSignalResponse(ticker=TICKER, assessment=assessment)
 
 
-def _availability(status: SourceAvailabilityStatus) -> EvidenceSourceAvailability:
-    return EvidenceSourceAvailability(
-        evidence_group="setup",
-        assessments=(
-            SourceAvailabilityAssessment(
-                source_family="candles",
-                decision_at=datetime(2026, 7, 17, 20, 0),
-                observed_through=date(2026, 7, 17),
-                available_at=None,
-                status=status,
-                is_authoritative=status == SourceAvailabilityStatus.CURRENT,
-                reason="TEST",
-            ),
-        ),
-    )
+class _RecordingSignalEngine:
+    """Captures the canonical_evidence passed to evaluate_with_context."""
 
-
-def _composer_with_no_rescore() -> SwingAnalysisDecisionComposer:
-    # signal_engine=None disables the rescore branch entirely — isolates the
-    # attach logic at the end of recompose_after_evidence from any scoring
-    # side effect.
-    return SwingAnalysisDecisionComposer(risk_trade_setup_composer=None, signal_engine=None)
-
-
-def _state_with_signal(signal_assessment: AssessSignalResponse) -> SwingAnalysisWorkflowState:
-    state = SwingAnalysisWorkflowState()
-    state.signal_assessment = signal_assessment
-    state.verdict = swing_analysis_dto.SwingVerdict(
-        trade_setup=None,
-        signal_assessment=signal_assessment,
-        risk_response=None,
-        market_regime=None,
-    )
-    return state
-
-
-def test_availability_attached_to_canonical_response():
-    original = _signal_assessment()
-    state = _state_with_signal(original)
-    state.setup_source_availability = _availability(SourceAvailabilityStatus.CURRENT)
-
-    result = _composer_with_no_rescore().recompose_after_evidence(_request(), state)
-
-    assert result.signal_assessment.setup_source_availability is not None
-    assert (
-        result.signal_assessment.setup_source_availability.assessments[0].status
-        == SourceAvailabilityStatus.CURRENT
-    )
-    assert result.signal_assessment.availability_enforcement == AvailabilityEnforcementMode.SHADOW
-    # And it must also reach the canonical verdict, not just loose state.
-    assert result.verdict.signal_assessment.setup_source_availability is not None
-
-
-def test_availability_attach_does_not_change_score_or_entry_quality():
-    original = _signal_assessment(score=72)
-    state = _state_with_signal(original)
-    state.setup_source_availability = _availability(SourceAvailabilityStatus.STALE)
-
-    result = _composer_with_no_rescore().recompose_after_evidence(_request(), state)
-
-    # Byte-for-byte unchanged on every scoring-relevant field.
-    assert result.signal_assessment.score == original.score == 72
-    assert result.signal_assessment.strength == original.strength
-    assert result.signal_assessment.entry_quality == original.entry_quality
-    assert result.signal_assessment.assessment.breakdown == original.assessment.breakdown
-    assert result.signal_assessment.coverage_score == original.coverage_score
-
-
-def test_no_availability_leaves_response_untouched():
-    original = _signal_assessment()
-    state = _state_with_signal(original)
-    # setup_source_availability / flow_source_availability both remain None.
-
-    result = _composer_with_no_rescore().recompose_after_evidence(_request(), state)
-
-    assert result.signal_assessment is original
-    assert result.signal_assessment.availability_enforcement is None
-
-
-def test_identical_state_produces_identical_attached_response():
-    availability = _availability(SourceAvailabilityStatus.CURRENT)
-    composer = _composer_with_no_rescore()
-
-    state_a = _state_with_signal(_signal_assessment())
-    state_a.setup_source_availability = availability
-    result_a = composer.recompose_after_evidence(_request(), state_a)
-
-    state_b = _state_with_signal(_signal_assessment())
-    state_b.setup_source_availability = availability
-    result_b = composer.recompose_after_evidence(_request(), state_b)
-
-    assert result_a.signal_assessment.setup_source_availability == (
-        result_b.signal_assessment.setup_source_availability
-    )
-    assert result_a.signal_assessment.score == result_b.signal_assessment.score
-
-
-class _FakeSignalEngine:
-    """Deterministic stand-in for the real rescore path — score depends only
-    on whether evidence groups are present, mirroring the real contract that
-    availability attach must never influence."""
+    def __init__(self, response_score: int = 91) -> None:
+        self.calls: list[dict] = []
+        self._response_score = response_score
 
     def foreign_flow_quality_from_foreign_flow_score(self, score):
         return None
@@ -188,27 +205,21 @@ class _FakeSignalEngine:
         return 6
 
     def evaluate_with_context(self, ticker, signal_ctx, **kwargs):
-        has_evidence = (
-            kwargs.get("setup_evidence") is not None
-            or kwargs.get("flow_confirmation_evidence") is not None
-        )
-        return _signal_assessment(score=91 if has_evidence else 50)
-
-
-class _FakeRiskTradeSetupComposer:
-    """Deterministic stand-in proving trade_setup/mce recomposition runs
-    alongside availability attach without either interfering with the
-    other."""
-
-    def __init__(self):
-        self.calls: list[dict] = []
-
-    def recompose_after_signal_rescore(self, **kwargs):
         self.calls.append(kwargs)
+        return _signal_response(score=self._response_score)
+
+
+class _RecordingRiskTradeSetupComposer:
+    def recompose_after_signal_rescore(self, **kwargs):
         return ("SENTINEL_TRADE_SETUP", kwargs["signal_assessment"], None, [])
 
 
-def _real_rescore_state() -> SwingAnalysisWorkflowState:
+def _state(
+    *,
+    built_setup_evidence: BuiltSetupEvidence | None,
+    built_flow_evidence: BuiltFlowEvidence | None,
+    source_availability_use_case: AssessSourceAvailabilityUseCase | None,
+) -> SwingAnalysisWorkflowState:
     candidate = SimpleNamespace(
         bandar_detector=None,
         seasonal_edge=None,
@@ -219,7 +230,12 @@ def _real_rescore_state() -> SwingAnalysisWorkflowState:
         insider_net_buy_ratio=None,
     )
     state = SwingAnalysisWorkflowState()
-    state.accumulation_candidate = candidate
+    state.accumulation_evaluation = SimpleNamespace(candidate=candidate)
+    state.effective_session = _effective_session()
+    state.candles = [SimpleNamespace(date=SNAP)]
+    state.source_availability_use_case = source_availability_use_case
+    state.built_setup_evidence = built_setup_evidence
+    state.built_flow_evidence = built_flow_evidence
     state.evidence = swing_analysis_dto.SwingEvidence(
         accumulation_candidate=candidate,
         setup_eval=None,
@@ -229,10 +245,10 @@ def _real_rescore_state() -> SwingAnalysisWorkflowState:
         take_profit_pct=Decimal("5"),
         stop_loss_pct=Decimal("5"),
         regime_label=None,
-        setup_evidence="SENTINEL_SETUP_EVIDENCE",
-        flow_confirmation_evidence="SENTINEL_FLOW_EVIDENCE",
+        setup_evidence=built_setup_evidence.evidence if built_setup_evidence else None,
+        flow_confirmation_evidence=built_flow_evidence.evidence if built_flow_evidence else None,
     )
-    state.signal_assessment = _signal_assessment(score=50)  # pre-evidence score
+    state.signal_assessment = _signal_response(score=50)
     state.trade_setup = None
     state.market_context_signal_preview = None
     state.market_context_trade_setup_preview = None
@@ -246,161 +262,116 @@ def _real_rescore_state() -> SwingAnalysisWorkflowState:
     return state
 
 
-def test_real_rescore_path_with_availability_matches_real_rescore_without_it():
-    # The reviewer's required scenario: exercise the ACTUAL rescore branch
-    # (signal_engine present, real evidence groups, real trade-setup
-    # recomposition), not the isolated signal_engine=None path, and prove
-    # the rescored signal assessment / trade setup / serialization are
-    # identical whether availability diagnostics are present or absent —
-    # differing only in the new diagnostic fields themselves.
+def test_canonical_evidence_includes_both_groups_when_both_built():
+    engine = _RecordingSignalEngine()
     composer = SwingAnalysisDecisionComposer(
-        risk_trade_setup_composer=_FakeRiskTradeSetupComposer(),
-        signal_engine=_FakeSignalEngine(),
+        risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
+    )
+    state = _state(
+        built_setup_evidence=_built_setup_evidence(),
+        built_flow_evidence=_built_flow_evidence(),
+        source_availability_use_case=_source_availability_use_case(),
     )
 
-    state_without_availability = _real_rescore_state()
-    result_without = composer.recompose_after_evidence(_request(), state_without_availability)
-
-    state_with_availability = _real_rescore_state()
-    state_with_availability.setup_source_availability = _availability(
-        SourceAvailabilityStatus.CURRENT
-    )
-    result_with = composer.recompose_after_evidence(_request(), state_with_availability)
-
-    # Real rescore actually ran in both cases (score moved from 50 -> 91).
-    assert result_without.signal_assessment.score == 91
-    assert result_with.signal_assessment.score == 91
-
-    # Signal assessment, trade setup, and verdict are identical apart from
-    # the new diagnostic fields.
-    assert result_with.signal_assessment.score == result_without.signal_assessment.score
-    assert result_with.signal_assessment.strength == result_without.signal_assessment.strength
-    assert (
-        result_with.signal_assessment.entry_quality
-        == result_without.signal_assessment.entry_quality
-    )
-    assert (
-        result_with.verdict.trade_setup
-        == result_without.verdict.trade_setup
-        == "SENTINEL_TRADE_SETUP"
-    )
-
-    # Serialization: identical except the new diagnostic keys.
-    from src.application.services.swing_analysis_serialization import (
-        signal_response_to_dict,
-    )
-
-    dict_without = signal_response_to_dict(result_without.signal_assessment)
-    dict_with = signal_response_to_dict(result_with.signal_assessment)
-    diagnostic_keys = {
-        "setup_source_availability",
-        "flow_source_availability",
-        "availability_enforcement",
-    }
-    non_diagnostic_without = {
-        k: v for k, v in dict_without.items() if k not in diagnostic_keys
-    }
-    non_diagnostic_with = {k: v for k, v in dict_with.items() if k not in diagnostic_keys}
-    assert non_diagnostic_without == non_diagnostic_with
-    assert dict_without["setup_source_availability"] is None
-    assert dict_with["setup_source_availability"] is not None
-
-
-def _real_source_availability_use_case():
-    from src.application.services.effective_market_session_resolver import (
-        EffectiveMarketSession,
-    )
-    from src.application.use_case.assess_source_availability_use_case import (
-        AssessSourceAvailabilityUseCase,
-    )
-    from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
-    from src.domain.value_objects.idx_market import IDX_TIMEZONE
-
-    decision_at = datetime(2026, 7, 17, 20, 0, tzinfo=IDX_TIMEZONE)
-    effective_session = EffectiveMarketSession(
-        run_at=decision_at,
-        decision_at=decision_at,
-        latest_completed_session=date(2026, 7, 17),
-        analysis_as_of=date(2026, 7, 17),
-        market_session_name="AFTER_CLOSE",
-        is_eod_pending=False,
-        resolution_source="test_fixture",
-        notes=(),
-    )
-    calendar = KnownTradingSessionCalendar(
-        sessions=(date(2026, 7, 17),),
-        coverage_start=date(2026, 7, 17),
-        coverage_end=date(2026, 7, 17),
-    )
-    return AssessSourceAvailabilityUseCase(calendar=calendar), effective_session
-
-
-def test_setup_availability_stays_none_when_setup_evidence_was_not_produced():
-    # P2: availability must describe evidence that was actually produced,
-    # not evidence a candidate could theoretically have produced. Only
-    # flow_confirmation_evidence exists here (e.g. no setup was requested) —
-    # setup_source_availability must remain None even though
-    # accumulation_candidate and source_availability_use_case both exist.
-    use_case, effective_session = _real_source_availability_use_case()
-    state = _real_rescore_state()
-    state.source_availability_use_case = use_case
-    state.effective_session = effective_session
-    state.candles = [SimpleNamespace(date=date(2026, 7, 17))]
-    state.evidence = replace(state.evidence, setup_evidence=None)
-
-    composer = SwingAnalysisDecisionComposer(
-        risk_trade_setup_composer=_FakeRiskTradeSetupComposer(),
-        signal_engine=_FakeSignalEngine(),
-    )
     result = composer.recompose_after_evidence(_request(), state)
 
-    assert result.setup_source_availability is None
-    assert result.flow_source_availability is not None
-    assert result.signal_assessment.setup_source_availability is None
-    assert result.signal_assessment.flow_source_availability is not None
+    assert len(engine.calls) == 1
+    canonical_evidence = engine.calls[0]["canonical_evidence"]
+    assert canonical_evidence is not None
+    assert canonical_evidence.setup is not None
+    assert canonical_evidence.flow is not None
+    assert canonical_evidence.setup.availability.assessments[0].source_family == "candles"
+    assert result.signal_assessment.score == 91
 
 
-def test_setup_availability_computed_when_setup_evidence_was_produced():
-    use_case, effective_session = _real_source_availability_use_case()
-    state = _real_rescore_state()
-    state.source_availability_use_case = use_case
-    state.effective_session = effective_session
-    state.candles = [SimpleNamespace(date=date(2026, 7, 17))]
-    # state.evidence.setup_evidence is already "SENTINEL_SETUP_EVIDENCE".
-
+def test_canonical_evidence_setup_stays_none_when_setup_evidence_not_built():
+    engine = _RecordingSignalEngine()
     composer = SwingAnalysisDecisionComposer(
-        risk_trade_setup_composer=_FakeRiskTradeSetupComposer(),
-        signal_engine=_FakeSignalEngine(),
+        risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
     )
+    state = _state(
+        built_setup_evidence=None,
+        built_flow_evidence=_built_flow_evidence(),
+        source_availability_use_case=_source_availability_use_case(),
+    )
+
+    composer.recompose_after_evidence(_request(), state)
+
+    canonical_evidence = engine.calls[0]["canonical_evidence"]
+    assert canonical_evidence.setup is None
+    assert canonical_evidence.flow is not None
+
+
+def test_no_rescore_when_no_evidence_built():
+    # No built evidence at all -> canonical_evidence is None -> the rescore
+    # branch must not run (fast-path score stays untouched).
+    engine = _RecordingSignalEngine()
+    composer = SwingAnalysisDecisionComposer(
+        risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
+    )
+    state = _state(
+        built_setup_evidence=None,
+        built_flow_evidence=None,
+        source_availability_use_case=_source_availability_use_case(),
+    )
+
     result = composer.recompose_after_evidence(_request(), state)
 
-    assert result.setup_source_availability is not None
-    assert result.setup_source_availability.assessments[0].source_family == "candles"
-    assert result.setup_source_availability.assessments[0].status == SourceAvailabilityStatus.CURRENT
+    assert engine.calls == []
+    assert result.signal_assessment.score == 50
 
 
-def test_bandar_present_prevents_flow_all_authoritative_true_end_to_end():
-    # P1: a real, currently-consumed contributor to flow evidence
-    # (bandar_detector) that has no settlement rule must prevent
-    # flow_source_availability.all_authoritative from ever reporting True,
-    # even when broker_summaries/broker_daily_flow are both CURRENT.
-    use_case, effective_session = _real_source_availability_use_case()
-    state = _real_rescore_state()
-    state.source_availability_use_case = use_case
-    state.effective_session = effective_session
-    state.candles = [SimpleNamespace(date=date(2026, 7, 17))]
-    state.accumulation_candidate.latest_broker_date = date(2026, 7, 17)
-    state.accumulation_candidate.latest_broker_daily_flow_date = date(2026, 7, 17)
-    state.accumulation_candidate.bandar_detector = SimpleNamespace(broad_score=5)
-
+def test_no_rescore_when_source_availability_use_case_missing():
+    # Built evidence exists, but availability infrastructure is unavailable
+    # (e.g. calendar construction failed upstream) — SHADOW must never make
+    # scoring depend on availability being resolvable, so canonical_evidence
+    # construction is skipped entirely rather than scoring without it.
+    engine = _RecordingSignalEngine()
     composer = SwingAnalysisDecisionComposer(
-        risk_trade_setup_composer=_FakeRiskTradeSetupComposer(),
-        signal_engine=_FakeSignalEngine(),
+        risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
     )
+    state = _state(
+        built_setup_evidence=_built_setup_evidence(),
+        built_flow_evidence=_built_flow_evidence(),
+        source_availability_use_case=None,
+    )
+
     result = composer.recompose_after_evidence(_request(), state)
 
-    flow_availability = result.signal_assessment.flow_source_availability
-    assert flow_availability is not None
-    assert all(a.is_authoritative for a in flow_availability.assessments)
-    assert flow_availability.unassessed_contributors == ("bandar_detector",)
-    assert flow_availability.all_authoritative is False
+    assert engine.calls == []
+    assert result.signal_assessment.score == 50
+
+
+def test_bandar_contributor_flows_into_flow_group_availability():
+    engine = _RecordingSignalEngine()
+    composer = SwingAnalysisDecisionComposer(
+        risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
+    )
+    state = _state(
+        built_setup_evidence=None,
+        built_flow_evidence=_built_flow_evidence(has_bandar_contributor=True),
+        source_availability_use_case=_source_availability_use_case(),
+    )
+
+    composer.recompose_after_evidence(_request(), state)
+
+    flow_group = engine.calls[0]["canonical_evidence"].flow
+    assert flow_group.availability.unassessed_contributors == ("bandar_detector",)
+    assert flow_group.availability.all_authoritative is False
+
+
+def test_trade_setup_recomposition_runs_alongside_canonical_evidence():
+    engine = _RecordingSignalEngine(response_score=91)
+    composer = SwingAnalysisDecisionComposer(
+        risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
+    )
+    state = _state(
+        built_setup_evidence=_built_setup_evidence(),
+        built_flow_evidence=_built_flow_evidence(),
+        source_availability_use_case=_source_availability_use_case(),
+    )
+
+    result = composer.recompose_after_evidence(_request(), state)
+
+    assert result.verdict.trade_setup == "SENTINEL_TRADE_SETUP"
+    assert result.signal_assessment.score == 91

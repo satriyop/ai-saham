@@ -1,6 +1,6 @@
 """Tests for AccumulationCandidateSignalAssessor."""
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock
 
@@ -8,6 +8,80 @@ from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenRequest,
 )
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSession,
+)
+from src.application.use_case.assess_source_availability_use_case import (
+    AssessSourceAvailabilityUseCase,
+)
+from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
+from src.domain.value_objects.canonical_signal_evidence_input import (
+    BrokerSummaryRowIdentity,
+    FlowProvenance,
+)
+from src.domain.value_objects.factor_evidence import Direction, Freshness
+from src.domain.value_objects.flow_confirmation_evidence import (
+    FlowConfirmationEvidence,
+    FlowSubSignal,
+)
+from src.domain.value_objects.idx_market import IDX_TIMEZONE
+
+
+def _effective_session() -> EffectiveMarketSession:
+    today = date.today()
+    decision_at = datetime(today.year, today.month, today.day, 20, 0, tzinfo=IDX_TIMEZONE)
+    return EffectiveMarketSession(
+        run_at=decision_at,
+        decision_at=decision_at,
+        latest_completed_session=today,
+        analysis_as_of=today,
+        market_session_name="AFTER_CLOSE",
+        is_eod_pending=False,
+        resolution_source="test_fixture",
+        notes=(),
+    )
+
+
+def _source_availability_use_case() -> AssessSourceAvailabilityUseCase:
+    today = date.today()
+    calendar = KnownTradingSessionCalendar(
+        sessions=(today,), coverage_start=today, coverage_end=today
+    )
+    return AssessSourceAvailabilityUseCase(calendar=calendar)
+
+
+def _built_flow_evidence():
+    from src.application.dto.built_evidence import BuiltFlowEvidence
+
+    today = date.today()
+    signal = FlowSubSignal(
+        key="cons", score=40.0, weight=40.0, direction=Direction.BULLISH, freshness=Freshness.FRESH
+    )
+    evidence = FlowConfirmationEvidence(
+        ticker="BBCA",
+        snapshot_date=today,
+        flow_signals=(signal,),
+        flow_score_ex_bb=40.0,
+        confirmation_status="CONFIRMED",
+        flow_direction="POSITIVE",
+        bandar_broad_score=None,
+        bandar_direction=Direction.NEUTRAL,
+        bandar_freshness=Freshness.MISSING,
+        bci_label=None,
+        bci_tier1_count=0,
+        uncapped_strength=0.5,
+        capped_strength=0.5,
+        group_cap=0.80,
+        group_freshness=Freshness.FRESH,
+    )
+    provenance = FlowProvenance(
+        ticker="BBCA",
+        broker_summary_rows=(
+            BrokerSummaryRowIdentity(ticker="BBCA", date=today, source="test"),
+        ),
+        broker_daily_flow_rows=(),
+    )
+    return BuiltFlowEvidence(evidence=evidence, provenance=provenance)
 
 
 def _make_assessor(
@@ -31,7 +105,7 @@ def _make_assessor(
     if flow_builder_raises:
         flow_builder.build.side_effect = RuntimeError("flow builder failed")
     else:
-        flow_builder.build.return_value = MagicMock()
+        flow_builder.build.return_value = _built_flow_evidence()
 
     evidence_builder = MagicMock()
     evidence_builder.detect_candidate_setup_phase.return_value = setup_phase
@@ -107,6 +181,10 @@ def test_foreign_flow_score_fields_set_by_assessor():
         _candidate(),
         request=_request(),
         as_of_date=date.today(),
+        consumed_broker_summaries=(),
+        consumed_broker_daily_flows=(),
+        effective_session=_effective_session(),
+        source_availability_use_case=_source_availability_use_case(),
     )
 
     assert result.candidate.foreign_flow_score_breakdown is not None
@@ -122,6 +200,10 @@ def test_flow_evidence_builder_exception_returns_none():
         _candidate(),
         request=_request(),
         as_of_date=date.today(),
+        consumed_broker_summaries=(),
+        consumed_broker_daily_flows=(),
+        effective_session=_effective_session(),
+        source_availability_use_case=_source_availability_use_case(),
     )
 
     assert result.flow_evidence is None
@@ -140,6 +222,10 @@ def test_foreign_flow_threshold_rejected_before_signal():
             min_signal_score=40.0,
         ),
         as_of_date=date.today(),
+        consumed_broker_summaries=(),
+        consumed_broker_daily_flows=(),
+        effective_session=_effective_session(),
+        source_availability_use_case=_source_availability_use_case(),
     )
 
     assert result.screen_result == "rejected_flow"
@@ -157,6 +243,10 @@ def test_signal_threshold_rejected_when_flow_passes():
             min_signal_score=50.0,
         ),
         as_of_date=date.today(),
+        consumed_broker_summaries=(),
+        consumed_broker_daily_flows=(),
+        effective_session=_effective_session(),
+        source_availability_use_case=_source_availability_use_case(),
     )
 
     assert result.screen_result == "rejected_signal"
@@ -174,6 +264,10 @@ def test_passing_candidate_returns_pass():
             min_signal_score=40.0,
         ),
         as_of_date=date.today(),
+        consumed_broker_summaries=(),
+        consumed_broker_daily_flows=(),
+        effective_session=_effective_session(),
+        source_availability_use_case=_source_availability_use_case(),
     )
 
     assert result.screen_result == "pass"
@@ -190,6 +284,10 @@ def test_setup_phase_assigned_once():
         _candidate(),
         request=_request(),
         as_of_date=date.today(),
+        consumed_broker_summaries=(),
+        consumed_broker_daily_flows=(),
+        effective_session=_effective_session(),
+        source_availability_use_case=_source_availability_use_case(),
     )
 
     assert result.candidate.setup_phase is not None

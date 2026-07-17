@@ -40,6 +40,10 @@ from src.application.services.candidate_ticker_profile_evidence_assembler import
 from src.application.services.strategy_loader import StrategyLoader
 
 if TYPE_CHECKING:
+    from src.application.dto.accumulation_screen import (
+        AccumulationCandidateEvaluationResult,
+    )
+    from src.application.dto.built_evidence import BuiltFlowEvidence, BuiltSetupEvidence
     from src.application.services.company_quality_context_evidence_builder import (
         CompanyQualityContextEvidenceBuilder,
     )
@@ -86,8 +90,13 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class SwingAnalysisEvidenceBuildResult:
-    setup_evidence: "SetupEvidence | None"
-    flow_confirmation_evidence: "FlowConfirmationEvidence | None"
+    # Complete built evidence (evidence + exact consumed-row provenance,
+    # ADR-041 CANONICAL-EVIDENCE-BOUNDARY) — never unwrapped to a loose
+    # evidence value here. Presentation/diagnostic DTOs may read
+    # `.evidence` off these; canonical scoring must receive the whole
+    # object until availability has been attached.
+    built_setup_evidence: "BuiltSetupEvidence | None"
+    built_flow_evidence: "BuiltFlowEvidence | None"
     setup_phase: "SetupPhaseSnapshot | None"
     strategy_rule_evidence: "StrategyEvidence | None"
     institutional_accumulation_evidence: "InstitutionalAccumulationEvidence | None"
@@ -159,7 +168,7 @@ class SwingAnalysisEvidenceBuilder:
         snapshot_date: date,
         benchmark: str,
         candles: list[Any],
-        accumulation_candidate: Any | None,
+        accumulation_evaluation: "AccumulationCandidateEvaluationResult | None",
         setup_eval: Any | None,
         setup_name: str | None,
         strategy_name: str | None,
@@ -173,27 +182,50 @@ class SwingAnalysisEvidenceBuilder:
         was synced after that historical decision point. `None` (default)
         preserves prior unfiltered behavior."""
         warnings: list[str] = []
+        accumulation_candidate = (
+            accumulation_evaluation.candidate if accumulation_evaluation is not None else None
+        )
 
+        built_setup_evidence: "BuiltSetupEvidence | None" = None
         setup_evidence = None
         if accumulation_candidate is not None and setup_eval is not None:
             try:
-                setup_evidence = self._setup_phase_assembler.build_setup_evidence(
+                built_setup_evidence = self._setup_phase_assembler.build_setup_evidence(
                     ticker=ticker,
                     snapshot_date=snapshot_date,
                     candles=candles,
                     candidate=accumulation_candidate,
                     setup_eval=setup_eval,
                 )
+                setup_evidence = built_setup_evidence.evidence
+            except (ValueError, TypeError):
+                raise
             except Exception as exc:
                 warnings.append(f"Setup evidence unavailable: {exc}")
 
+        built_flow_evidence: "BuiltFlowEvidence | None" = None
         flow_confirmation_evidence = None
-        if accumulation_candidate is not None:
+        if accumulation_evaluation is not None:
             try:
-                flow_confirmation_evidence = self._flow_confirmation_builder.build(
+                # The exact rows AccumulationCandidateEvaluator already
+                # consumed for this candidate — never a second, independent
+                # repository read (ADR-041 CANONICAL-EVIDENCE-BOUNDARY): a
+                # second read could return different rows than the ones the
+                # candidate's own foreign-flow fields were actually computed
+                # from.
+                built_flow_evidence = self._flow_confirmation_builder.build(
                     accumulation_candidate,
                     analysis_date=snapshot_date,
+                    consumed_broker_summaries=(
+                        accumulation_evaluation.consumed_broker_summaries
+                    ),
+                    consumed_broker_daily_flows=(
+                        accumulation_evaluation.consumed_broker_daily_flows
+                    ),
                 )
+                flow_confirmation_evidence = built_flow_evidence.evidence
+            except (ValueError, TypeError):
+                raise
             except Exception as exc:
                 warnings.append(f"Flow confirmation evidence unavailable: {exc}")
 
@@ -377,8 +409,8 @@ class SwingAnalysisEvidenceBuilder:
                 warnings.append(f"Corporate action event-risk unavailable: {exc}")
 
         return SwingAnalysisEvidenceBuildResult(
-            setup_evidence=setup_evidence,
-            flow_confirmation_evidence=flow_confirmation_evidence,
+            built_setup_evidence=built_setup_evidence,
+            built_flow_evidence=built_flow_evidence,
             setup_phase=setup_phase,
             strategy_rule_evidence=strategy_rule_evidence,
             institutional_accumulation_evidence=institutional_accumulation_evidence,

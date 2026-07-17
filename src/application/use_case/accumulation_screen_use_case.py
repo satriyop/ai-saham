@@ -16,7 +16,7 @@ Depends on: Domain ports only — no infrastructure imports
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -27,6 +27,12 @@ from src.application.services.accumulation_candidate_evidence_builder import (
     AccumulationCandidateEvidenceBuilder,
 )
 from src.application.services.accumulation_risk_funnel import AccumulationRiskFunnel
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSessionResolver,
+)
+from src.application.use_case.assess_source_availability_use_case import (
+    AssessSourceAvailabilityUseCase,
+)
 from src.application.use_case.score_foreign_flow_use_case import (
     ScoreForeignFlowUseCase,
 )
@@ -40,6 +46,8 @@ from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.ports.seasonality_provider import SeasonalityProvider
 from src.domain.ports.shareholding_provider import ShareholdingProvider
 from src.domain.ports.ticker_notation_provider import TickerNotationProvider
+from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
+from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
 
 logger = logging.getLogger(__name__)
 
@@ -183,7 +191,11 @@ class AccumulationScreenUseCase:
         company_quality_context_builder_factory: (
             Callable[[], CompanyQualityContextEvidenceBuilder] | None
         ) = None,
+        trading_session_calendar_loader: (
+            Callable[[date, date], "KnownTradingSessionCalendar | None"] | None
+        ) = None,
     ) -> None:
+        self._trading_session_calendar_loader = trading_session_calendar_loader
         from src.application.services.flow_confirmation_evidence_builder import (
             FlowConfirmationEvidenceBuilder,
         )
@@ -299,8 +311,38 @@ class AccumulationScreenUseCase:
         skipped = 0
         uses_stockbit = False
 
+        # ADR-041 CANONICAL-EVIDENCE-BOUNDARY: one resolved effective market
+        # session and one AssessSourceAvailabilityUseCase for this whole
+        # screen execution — never per ticker. Batch screening always treats
+        # `today` as a completed EOD decision (unlike swing's live/historical
+        # distinction), so a fixed after-close WIB timestamp is used
+        # directly. A missing calendar loader (or an unprovable calendar)
+        # falls back to an empty calendar — every session-aligned assessment
+        # then fails closed to UNKNOWN rather than assuming 0 sessions apart.
+        effective_session = EffectiveMarketSessionResolver(self._market_repo).resolve(
+            run_at=datetime.combine(today, MARKET_CLOSE, tzinfo=IDX_TIMEZONE)
+        )
+        # Window is a fixed lookback, not per-ticker min(observed date): unlike
+        # swing (one ticker per execution), a screen run evaluates many
+        # tickers whose actual lag isn't known until each is evaluated, so
+        # there is no single per-ticker minimum to compute before the loop.
+        # 14 calendar days comfortably covers the 1-session settlement lag
+        # this policy actually checks for broker/flow sources.
+        coverage_start = today - timedelta(days=14)
+        calendar = None
+        if self._trading_session_calendar_loader is not None:
+            try:
+                calendar = self._trading_session_calendar_loader(coverage_start, today)
+            except Exception:
+                calendar = None
+        if calendar is None:
+            calendar = KnownTradingSessionCalendar(
+                sessions=(), coverage_start=coverage_start, coverage_end=today
+            )
+        source_availability_use_case = AssessSourceAvailabilityUseCase(calendar=calendar)
+
         for ticker in request.tickers:
-            result = self._candidate_evaluator.evaluate(
+            eval_result = self._candidate_evaluator.evaluate(
                 ticker=ticker,
                 window_days=request.window_days,
                 today=today,
@@ -312,9 +354,13 @@ class AccumulationScreenUseCase:
                 bci_stable_min_count=request.bci_stable_min_count,
             )
 
-            if result is None:
+            if eval_result is None:
                 skipped += 1
                 continue
+
+            result = eval_result.candidate
+            consumed_broker_summaries = eval_result.consumed_broker_summaries
+            consumed_broker_daily_flows = eval_result.consumed_broker_daily_flows
 
             if result.top_brokers is not None:
                 uses_stockbit = True
@@ -325,7 +371,7 @@ class AccumulationScreenUseCase:
             if filter_result.rejected:
                 observation_candidates.append(
                     accumulation_dto.AccumulationScreenObservationCandidate(
-                        candidate=filter_result.candidate,
+                        evaluation_result=eval_result,
                         screen_result=filter_result.screen_result,
                         flow_evidence=None,
                     )
@@ -345,13 +391,19 @@ class AccumulationScreenUseCase:
 
             # Step 3: Signal assessment, flow evidence, setup phase, classification
             assessment = self._signal_assessor.assess(
-                result, request=request, as_of_date=today
+                result,
+                request=request,
+                as_of_date=today,
+                consumed_broker_summaries=consumed_broker_summaries,
+                consumed_broker_daily_flows=consumed_broker_daily_flows,
+                effective_session=effective_session,
+                source_availability_use_case=source_availability_use_case,
             )
             result = assessment.candidate
 
             observation_candidates.append(
                 accumulation_dto.AccumulationScreenObservationCandidate(
-                    candidate=result,
+                    evaluation_result=eval_result,
                     screen_result=assessment.screen_result,
                     flow_evidence=assessment.flow_evidence,
                 )

@@ -14,7 +14,10 @@ from datetime import date
 from src.adapters.cli.stock_analysis_workflow_dependencies import (
     StockAnalysisWorkflowDependencies,
 )
-from src.application.dto.accumulation_screen import AccumulationCandidate, AccumulationScreenRequest
+from src.application.dto.accumulation_screen import (
+    AccumulationCandidateEvaluationResult,
+    AccumulationScreenRequest,
+)
 from src.application.dto.swing_config import SwingConfig
 from src.application.services.accumulation_screen_factory import (
     create_accumulation_screen_use_case,
@@ -32,9 +35,9 @@ def create_accumulation_candidate_builder(
     analyze_config: AnalyzeSwingConfig,
     accumulation_config: AccumulationScreenerConfig,
 ):
-    def _build_accumulation_candidate(
+    def _build_accumulation_candidate_evaluation(
         ticker: str, window: int, as_of_date: date
-    ) -> AccumulationCandidate | None:
+    ) -> AccumulationCandidateEvaluationResult | None:
         accum_uc = create_accumulation_screen_use_case(
             broker_repository=deps.broker_repository,
             market_repository=deps.market_repository,
@@ -68,6 +71,21 @@ def create_accumulation_candidate_builder(
                 ex_date_warning_days=swing_config.ex_date_warning_days,
             )
         )
-        return accum_resp.candidates[0] if accum_resp.candidates else None
+        # Run the screen exactly once (above) and select the surviving
+        # observation candidate corresponding to accum_resp.candidates[0] —
+        # never re-query or re-run the evaluator (ADR-041
+        # CANONICAL-EVIDENCE-BOUNDARY). A single-ticker request always
+        # produces at most one observation candidate for that ticker.
+        if not accum_resp.candidates:
+            return None
+        selected = accum_resp.candidates[0]
+        for observation in accum_resp.observation_candidates:
+            if observation.candidate is selected:
+                return observation.evaluation_result
+        raise ValueError(
+            f"Accumulation screen selected {selected.ticker!r} but no matching "
+            "observation_candidates entry carries its evaluation_result — this "
+            "is a screen use-case invariant violation, not a missing-data case."
+        )
 
-    return _build_accumulation_candidate
+    return _build_accumulation_candidate_evaluation

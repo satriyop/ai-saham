@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
+import pytest
+
 from src.domain.value_objects.evidence_source_availability import (
     AvailabilityEnforcementMode,
     EvidenceSourceAvailability,
@@ -120,6 +122,38 @@ def test_all_authoritative_true_when_no_unassessed_contributors():
     )
     assert group.unassessed_contributors == ()
     assert group.all_authoritative is True
+
+
+def test_duplicate_source_family_assessments_raise():
+    with pytest.raises(ValueError, match="duplicate"):
+        EvidenceSourceAvailability(
+            evidence_group="flow",
+            assessments=(
+                _assessment("broker_summaries", SourceAvailabilityStatus.CURRENT, True),
+                _assessment("broker_summaries", SourceAvailabilityStatus.STALE, False),
+            ),
+        )
+
+
+def test_mixed_decision_at_across_assessments_raises():
+    other_decision_at = datetime(2026, 7, 18, 9, 0, 0)
+    mismatched = SourceAvailabilityAssessment(
+        source_family="broker_daily_flow",
+        decision_at=other_decision_at,
+        observed_through=date(2026, 7, 17),
+        available_at=None,
+        status=SourceAvailabilityStatus.CURRENT,
+        is_authoritative=True,
+        reason="TEST",
+    )
+    with pytest.raises(ValueError, match="decision_at"):
+        EvidenceSourceAvailability(
+            evidence_group="flow",
+            assessments=(
+                _assessment("broker_summaries", SourceAvailabilityStatus.CURRENT, True),
+                mismatched,
+            ),
+        )
 
 
 def test_to_dict_includes_unassessed_contributors():

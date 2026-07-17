@@ -126,7 +126,7 @@ class SwingAnalysisOptionalEvidenceRunner:
             snapshot_date=request.today,
             benchmark=request.benchmark,
             candles=state.candles,
-            accumulation_candidate=state.accumulation_candidate,
+            accumulation_evaluation=state.accumulation_evaluation,
             setup_eval=state.setup_eval,
             setup_name=request.setup_name,
             strategy_name=request.strategy_name,
@@ -134,6 +134,8 @@ class SwingAnalysisOptionalEvidenceRunner:
             as_of_fetched_at=as_of_fetched_at,
         )
         state.warnings.extend(evidence_build.warnings)
+        state.built_setup_evidence = evidence_build.built_setup_evidence
+        state.built_flow_evidence = evidence_build.built_flow_evidence
 
         state.evidence = swing_analysis_dto.SwingEvidence(
             accumulation_candidate=state.accumulation_candidate,
@@ -144,8 +146,16 @@ class SwingAnalysisOptionalEvidenceRunner:
             take_profit_pct=state.take_profit_pct,
             stop_loss_pct=state.stop_loss_pct,
             regime_label=state.regime_label,
-            setup_evidence=evidence_build.setup_evidence,
-            flow_confirmation_evidence=evidence_build.flow_confirmation_evidence,
+            setup_evidence=(
+                evidence_build.built_setup_evidence.evidence
+                if evidence_build.built_setup_evidence is not None
+                else None
+            ),
+            flow_confirmation_evidence=(
+                evidence_build.built_flow_evidence.evidence
+                if evidence_build.built_flow_evidence is not None
+                else None
+            ),
             setup_phase=evidence_build.setup_phase,
             strategy_rule_evidence=evidence_build.strategy_rule_evidence,
             institutional_accumulation_evidence=(

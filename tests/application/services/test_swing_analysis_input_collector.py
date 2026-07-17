@@ -1,7 +1,6 @@
-"""Tests for SwingAnalysisInputCollector date threading.
-
-Focused proof that ``request.today`` reaches the accumulation-candidate builder
-so historical ``--date`` mode stays internally consistent.
+"""Tests for SwingAnalysisInputCollector date threading and the reused
+AssessSourceAvailabilityUseCase construction (ADR-041 CANONICAL-EVIDENCE-
+BOUNDARY).
 """
 
 from __future__ import annotations
@@ -14,6 +13,7 @@ from src.application.dto.swing_analysis import SwingAnalysisWorkflowRequest
 from src.application.services.swing_analysis_input_collector import (
     SwingAnalysisInputCollector,
 )
+from src.domain.value_objects.canonical_signal_evidence_input import CandleRowIdentity, SetupProvenance
 
 
 def _request(today: date) -> SwingAnalysisWorkflowRequest:
@@ -62,9 +62,27 @@ def _fake_effective_session(today: date, latest_completed_session: date | None =
     )
 
 
+def _eval_result(
+    *, broker_summary_date: date | None = None, broker_daily_flow_date: date | None = None
+) -> SimpleNamespace:
+    """Minimal stand-in for AccumulationCandidateEvaluationResult."""
+    return SimpleNamespace(
+        candidate=SimpleNamespace(ticker="BBRI"),
+        consumed_candles=(),
+        consumed_broker_summaries=(
+            (SimpleNamespace(date=broker_summary_date),) if broker_summary_date is not None else ()
+        ),
+        consumed_broker_daily_flows=(
+            (SimpleNamespace(date=broker_daily_flow_date),)
+            if broker_daily_flow_date is not None
+            else ()
+        ),
+    )
+
+
 def _collector_for_availability_tests(
     *,
-    accumulation_candidate,
+    accumulation_evaluation,
     trading_session_calendar_loader=None,
     today: date,
     candle_date: date | None = None,
@@ -83,7 +101,7 @@ def _collector_for_availability_tests(
         build_data_freshness=lambda **kwargs: None,
         build_flow_detail=lambda **kwargs: None,
         build_broker_detail=lambda **kwargs: None,
-        build_accumulation_candidate=lambda **kwargs: accumulation_candidate,
+        build_accumulation_candidate_evaluation=lambda **kwargs: accumulation_evaluation,
         evaluate_market_context=None,
         session_resolver=SimpleNamespace(
             resolve=lambda **kwargs: _fake_effective_session(today, latest_completed_session)
@@ -98,7 +116,7 @@ def test_source_availability_use_case_built_when_candidate_present():
     # evidence actually existing — collect() only needs to build the reused
     # AssessSourceAvailabilityUseCase.
     today = date(2026, 7, 17)
-    candidate = SimpleNamespace(latest_broker_date=today, latest_broker_daily_flow_date=today)
+    eval_result = _eval_result(broker_summary_date=today, broker_daily_flow_date=today)
 
     def calendar_loader(coverage_start, coverage_end):
         from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
@@ -108,22 +126,22 @@ def test_source_availability_use_case_built_when_candidate_present():
         )
 
     collector = _collector_for_availability_tests(
-        accumulation_candidate=candidate,
+        accumulation_evaluation=eval_result,
         trading_session_calendar_loader=calendar_loader,
         today=today,
     )
     state = collector.collect(_request(today))
 
     assert state.source_availability_use_case is not None
-    # Availability itself is not assembled here.
-    assert state.setup_source_availability is None
-    assert state.flow_source_availability is None
+    # Canonical evidence groups are not assembled here.
+    assert state.built_setup_evidence is None
+    assert state.built_flow_evidence is None
 
 
 def test_source_availability_use_case_none_when_no_candidate():
     today = date(2026, 7, 17)
     collector = _collector_for_availability_tests(
-        accumulation_candidate=None, trading_session_calendar_loader=None, today=today
+        accumulation_evaluation=None, trading_session_calendar_loader=None, today=today
     )
     state = collector.collect(_request(today))
 
@@ -132,7 +150,7 @@ def test_source_availability_use_case_none_when_no_candidate():
 
 def test_calendar_loader_invoked_exactly_once_per_workflow_execution():
     today = date(2026, 7, 17)
-    candidate = SimpleNamespace(latest_broker_date=today, latest_broker_daily_flow_date=today)
+    eval_result = _eval_result(broker_summary_date=today, broker_daily_flow_date=today)
     calls: list[tuple] = []
 
     def calendar_loader(coverage_start, coverage_end):
@@ -144,7 +162,7 @@ def test_calendar_loader_invoked_exactly_once_per_workflow_execution():
         )
 
     collector = _collector_for_availability_tests(
-        accumulation_candidate=candidate,
+        accumulation_evaluation=eval_result,
         trading_session_calendar_loader=calendar_loader,
         today=today,
     )
@@ -161,9 +179,8 @@ def test_calendar_window_is_minimal_not_a_fixed_lookback():
     # in a wider range and failing closed for no reason.
     today = date(2026, 7, 17)
     lagged_broker_date = date(2026, 7, 10)  # the oldest observed source date
-    candidate = SimpleNamespace(
-        latest_broker_date=lagged_broker_date,
-        latest_broker_daily_flow_date=lagged_broker_date,
+    eval_result = _eval_result(
+        broker_summary_date=lagged_broker_date, broker_daily_flow_date=lagged_broker_date
     )
     calls: list[tuple] = []
 
@@ -178,7 +195,7 @@ def test_calendar_window_is_minimal_not_a_fixed_lookback():
         )
 
     collector = _collector_for_availability_tests(
-        accumulation_candidate=candidate,
+        accumulation_evaluation=eval_result,
         trading_session_calendar_loader=calendar_loader,
         today=today,
     )
@@ -200,9 +217,9 @@ def test_missing_calendar_loader_falls_back_to_empty_calendar_not_a_crash():
     from src.domain.value_objects.source_availability import SourceAvailabilityStatus
 
     today = date(2026, 7, 17)
-    candidate = SimpleNamespace(latest_broker_date=today, latest_broker_daily_flow_date=today)
+    eval_result = _eval_result(broker_summary_date=today, broker_daily_flow_date=today)
     collector = _collector_for_availability_tests(
-        accumulation_candidate=candidate, trading_session_calendar_loader=None, today=today
+        accumulation_evaluation=eval_result, trading_session_calendar_loader=None, today=today
     )
 
     state = collector.collect(_request(today))
@@ -210,8 +227,12 @@ def test_missing_calendar_loader_falls_back_to_empty_calendar_not_a_crash():
     assert state.source_availability_use_case is not None
     # The empty-calendar fallback can't prove any session gap, so an
     # otherwise-current source still fails closed to UNKNOWN once assessed.
+    provenance = SetupProvenance(
+        ticker="BBRI",
+        candle_rows=tuple(CandleRowIdentity(ticker="BBRI", date=c.date, source=None) for c in state.candles),
+    )
     setup = EvidenceSourceAvailabilityAssembler(state.source_availability_use_case).assess_setup(
-        effective_session=state.effective_session, candles=state.candles
+        effective_session=state.effective_session, provenance=provenance
     )
     assert setup.assessments[0].status == SourceAvailabilityStatus.UNKNOWN
 
@@ -226,9 +247,7 @@ def test_intraday_future_dated_observation_does_not_break_calendar_construction(
     # use case, which classifies it INVALID rather than dropping it.
     thursday = date(2026, 7, 16)
     friday = date(2026, 7, 17)  # today; also the "intraday" candle date
-    candidate = SimpleNamespace(
-        latest_broker_date=thursday, latest_broker_daily_flow_date=thursday
-    )
+    eval_result = _eval_result(broker_summary_date=thursday, broker_daily_flow_date=thursday)
     calls: list[tuple] = []
 
     def calendar_loader(coverage_start, coverage_end):
@@ -247,7 +266,7 @@ def test_intraday_future_dated_observation_does_not_break_calendar_construction(
         )
 
     collector = _collector_for_availability_tests(
-        accumulation_candidate=candidate,
+        accumulation_evaluation=eval_result,
         trading_session_calendar_loader=calendar_loader,
         today=friday,
         candle_date=friday,
@@ -272,8 +291,12 @@ def test_intraday_future_dated_observation_does_not_break_calendar_construction(
     )
     from src.domain.value_objects.source_availability import SourceAvailabilityStatus
 
+    provenance = SetupProvenance(
+        ticker="BBRI",
+        candle_rows=tuple(CandleRowIdentity(ticker="BBRI", date=c.date, source=None) for c in state.candles),
+    )
     setup = EvidenceSourceAvailabilityAssembler(state.source_availability_use_case).assess_setup(
-        effective_session=state.effective_session, candles=state.candles
+        effective_session=state.effective_session, provenance=provenance
     )
     assert setup.assessments[0].status == SourceAvailabilityStatus.INVALID
     assert setup.assessments[0].is_authoritative is False
@@ -286,7 +309,7 @@ def test_accumulation_builder_receives_request_today():
 
     received: dict = {}
 
-    def build_accumulation_candidate(**kwargs):
+    def build_accumulation_candidate_evaluation(**kwargs):
         received.update(kwargs)
         return None
 
@@ -304,7 +327,7 @@ def test_accumulation_builder_receives_request_today():
         build_data_freshness=lambda **kwargs: None,
         build_flow_detail=lambda **kwargs: None,
         build_broker_detail=lambda **kwargs: None,
-        build_accumulation_candidate=build_accumulation_candidate,
+        build_accumulation_candidate_evaluation=build_accumulation_candidate_evaluation,
         evaluate_market_context=None,
         session_resolver=SimpleNamespace(resolve=lambda **kwargs: None),
     )

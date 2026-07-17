@@ -9,6 +9,7 @@ module flags.
 """
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 
@@ -44,6 +45,16 @@ class _FakeRulesLoader(RulesLoader):
         raise NotImplementedError("not exercised by these tests")
 
 
+def _eval_result(candidate) -> SimpleNamespace:
+    """Minimal stand-in for AccumulationCandidateEvaluationResult."""
+    return SimpleNamespace(
+        candidate=candidate,
+        consumed_candles=(),
+        consumed_broker_summaries=(),
+        consumed_broker_daily_flows=(),
+    )
+
+
 def _base_kwargs(market_repo, **overrides):
     kwargs = dict(
         market_repository=market_repo,
@@ -53,7 +64,7 @@ def _base_kwargs(market_repo, **overrides):
         build_data_freshness=lambda **kwargs: {},
         build_flow_detail=lambda **kwargs: None,
         build_broker_detail=lambda **kwargs: None,
-        build_accumulation_candidate=lambda **kwargs: None,
+        build_accumulation_candidate_evaluation=lambda **kwargs: None,
         evaluate_setup=lambda candidate, broker_detail: None,
         build_broker_quality_note=lambda **kwargs: None,
         fetch_sentiment=lambda **kwargs: (None, None),
@@ -73,13 +84,13 @@ def test_no_candles_raises_data_unavailable():
 
 
 def test_accumulation_build_failure_returns_exact_warning():
-    def build_accumulation_candidate(**kwargs):
+    def build_accumulation_candidate_evaluation(**kwargs):
         raise RuntimeError("no broker rows")
 
     workflow = SwingAnalysisWorkflowUseCase(
         **_base_kwargs(
             FakeMarketRepository([_candle(date(2026, 6, 18))]),
-            build_accumulation_candidate=build_accumulation_candidate,
+            build_accumulation_candidate_evaluation=build_accumulation_candidate_evaluation,
         )
     )
 
@@ -152,7 +163,9 @@ def test_signal_assessment_failure_returns_exact_warning():
     workflow = SwingAnalysisWorkflowUseCase(
         **_base_kwargs(
             FakeMarketRepository([_candle(date(2026, 6, 18))]),
-            build_accumulation_candidate=lambda **kwargs: _MinimalCandidate(),
+            build_accumulation_candidate_evaluation=lambda **kwargs: _eval_result(
+                _MinimalCandidate()
+            ),
             signal_engine=FailingSignalEngine(),
         )
     )
@@ -248,7 +261,7 @@ def test_evidence_enriched_rescore_failure_returns_exact_warning():
     workflow = SwingAnalysisWorkflowUseCase(
         **_base_kwargs(
             FakeMarketRepository([_candle(date(2026, 6, 18))]),
-            build_accumulation_candidate=lambda **kwargs: candidate,
+            build_accumulation_candidate_evaluation=lambda **kwargs: _eval_result(candidate),
             signal_engine=signal_engine,
             risk_engine=_FakeRiskEngine(),
         )
@@ -271,7 +284,7 @@ def test_evidence_enriched_rescore_success_updates_response():
     workflow = SwingAnalysisWorkflowUseCase(
         **_base_kwargs(
             FakeMarketRepository([_candle(date(2026, 6, 18))]),
-            build_accumulation_candidate=lambda **kwargs: candidate,
+            build_accumulation_candidate_evaluation=lambda **kwargs: _eval_result(candidate),
             signal_engine=signal_engine,
             risk_engine=_FakeRiskEngine(),
             evaluate_market_context=lambda **kwargs: _MARKET_CONTEXT,

@@ -49,6 +49,20 @@ class EvidenceSourceAvailability:
     assessments: tuple[SourceAvailabilityAssessment, ...]
     unassessed_contributors: tuple[str, ...] = ()
 
+    def __post_init__(self) -> None:
+        source_families = [a.source_family for a in self.assessments]
+        if len(set(source_families)) != len(source_families):
+            raise ValueError(
+                f"EvidenceSourceAvailability for group {self.evidence_group!r} has "
+                f"duplicate source_family assessments: {source_families!r}"
+            )
+        decision_ats = {a.decision_at for a in self.assessments}
+        if len(decision_ats) > 1:
+            raise ValueError(
+                f"EvidenceSourceAvailability for group {self.evidence_group!r} mixes "
+                f"assessments from different decision_at values: {decision_ats!r}"
+            )
+
     @property
     def all_authoritative(self) -> bool:
         return (

@@ -218,7 +218,7 @@ class TestPublicBuildFlowWithoutInjectedFactories:
             snapshot_date=snapshot_date,
             benchmark="IHSG",
             candles=candles,
-            accumulation_candidate=None,
+            accumulation_evaluation=None,
             setup_eval=None,
             setup_name=None,
             strategy_name=None,

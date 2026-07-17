@@ -71,7 +71,7 @@ def create_swing_analysis_workflow(
     deps = dependencies or create_stock_analysis_workflow_dependencies(db_path)
     accumulation_config = load_accumulation_screener_config()
 
-    build_accumulation_candidate = create_accumulation_candidate_builder(
+    build_accumulation_candidate_evaluation = create_accumulation_candidate_builder(
         deps=deps,
         swing_config=swing_config,
         analyze_config=analyze_config,
@@ -98,7 +98,7 @@ def create_swing_analysis_workflow(
         build_data_freshness=build_swing_data_freshness,
         build_flow_detail=build_flow_detail,
         build_broker_detail=build_broker_detail,
-        build_accumulation_candidate=build_accumulation_candidate,
+        build_accumulation_candidate_evaluation=build_accumulation_candidate_evaluation,
         evaluate_setup=evaluate_setup,
         build_broker_quality_note=lambda broker_detail, setup_eval: build_broker_quality_note(
             broker_detail,
