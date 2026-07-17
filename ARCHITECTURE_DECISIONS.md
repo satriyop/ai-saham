@@ -42,6 +42,7 @@ canonical observations
 | Concern | Current implementation |
 |---|---|
 | Core posture | Deterministic-first, local-first, rule-first; AI is optional and non-authoritative |
+| Model use | The deterministic engine remains independently executable; validated narrow local-ML outputs may become governed evidence, while full ML/API decisions remain parallel non-authoritative challengers |
 | Layers | Pure domain; application-owned workflow/policy; infrastructure-owned I/O; thin adapters; executable boundary tests |
 | Dependency injection | Explicit manual DI; concrete composition belongs in infrastructure composition roots or thin CLI factories |
 | Signal | `SignalEngine` delegates canonical scoring to `AssessSignalEvidenceUseCase`; current signal semantics are being repaired through the signal-evidence program |
@@ -66,8 +67,8 @@ row.
 | Data providers, persistence, PIT/replay | [005](docs/adr/ADR-005-local-first-persistence.md), [006](docs/adr/ADR-006-market-data-provider-abstraction.md), [008](docs/adr/ADR-008-decoupled-fetch-vs-analyze-data.md), [019](docs/adr/ADR-019-unified-fetch-timestamp-fetched-at-datetime-on-cached-domain-value-objects.md), [034](docs/adr/ADR-034-date-field-semantics.md), [036](docs/adr/ADR-036-persisted-jwt-token-store-replaces-playwright-per-invocation-for-stockbit-data-fetching.md), [038](docs/adr/ADR-038-point-in-time-enrichment-and-conservative-derived-fundamentals.md) |
 | Indicators, strategies, plugins | [007](docs/adr/ADR-007-indicator-initialization-warm-up-policy.md), [009](docs/adr/ADR-009-config-driven-behavior.md), [012](docs/adr/ADR-012-oss-encapsulation-rule.md), [016](docs/adr/ADR-016-formula-dsl-domain-specific-language-for-indicators.md), [017](docs/adr/ADR-017-plugin-based-indicator-registration.md) |
 | CLI and file organization | [011](docs/adr/ADR-011-offline-capable-cli-as-primary-interface.md), [018](docs/adr/ADR-018-cli-command-depth-saham-view-broker-exception.md), [020](docs/adr/ADR-020-cli-adapter-file-naming-convention.md), [023](docs/adr/ADR-023-codebase-directory-and-use-case-file-naming-standards.md) |
-| AI and sentiment | [002](docs/adr/ADR-002-rule-first-ai-optional-design.md), [013](docs/adr/ADR-013-ai-agent-governance.md), [014](docs/adr/ADR-014-full-ai-mode-explicit-bypass-mode-rejected.md), [015](docs/adr/ADR-015-sentiment-analysis-classification.md) |
-| Learning, tuning, evaluation, ML preparation | [027](docs/adr/ADR-027-risk-signal-learning-loop.md), [033](docs/adr/ADR-033-workflow-composition-artifact-boundaries.md), [038](docs/adr/ADR-038-point-in-time-enrichment-and-conservative-derived-fundamentals.md), [041](docs/adr/ADR-041-canonical-signal-evidence-input-boundary.md) |
+| AI and sentiment | [002](docs/adr/ADR-002-rule-first-ai-optional-design.md), [013](docs/adr/ADR-013-ai-agent-governance.md), [014](docs/adr/ADR-014-full-ai-mode-explicit-bypass-mode-rejected.md), [015](docs/adr/ADR-015-sentiment-analysis-classification.md), [042](docs/adr/ADR-042-deterministic-champion-and-optional-model-challengers.md) |
+| Learning, tuning, evaluation, ML preparation | [027](docs/adr/ADR-027-risk-signal-learning-loop.md), [033](docs/adr/ADR-033-workflow-composition-artifact-boundaries.md), [038](docs/adr/ADR-038-point-in-time-enrichment-and-conservative-derived-fundamentals.md), [041](docs/adr/ADR-041-canonical-signal-evidence-input-boundary.md), [042](docs/adr/ADR-042-deterministic-champion-and-optional-model-challengers.md) |
 
 ## Amendment and migration map
 
@@ -80,6 +81,7 @@ row.
 | ADR-030 0–120 foreign-flow scale | ADR-039 | Foreign-flow score and matching thresholds use 0–100 |
 | ADR-032 MCE preview-only signal | ADR-037 | MCE can condition canonical signal; risk adjustment remains preview |
 | DQ-002J post-score availability attachment | ADR-041 | Temporary shadow prototype; the target is a shared pre-score evidence/provenance/availability boundary |
+| ADR-002/014 optional AI and rejected bypass | ADR-042 | Narrow validated local-ML evidence may enter the governed evidence lifecycle; full ML/API decision challengers remain separate shadow outputs |
 
 ## High-value implementation entry points
 
@@ -140,6 +142,7 @@ row.
 | [039](docs/adr/ADR-039-foreign-flow-score-rescale-to-0-100-amends-adr-030.md) | Foreign-flow 0–100 scale | Accepted; amends ADR-030 |
 | [040](docs/adr/ADR-040-manual-dependency-injection-and-composition-roots.md) | Manual dependency injection | Accepted |
 | [041](docs/adr/ADR-041-canonical-signal-evidence-input-boundary.md) | Canonical signal-evidence input | Accepted; implementation pending |
+| [042](docs/adr/ADR-042-deterministic-champion-and-optional-model-challengers.md) | Deterministic champion, governed ML evidence, and optional decision challengers | Accepted |
 
 ## Adding or changing a decision
 

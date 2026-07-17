@@ -5,6 +5,7 @@
 **Status:** Accepted
 **Date:** Not recorded (legacy decision)
 **Current implementation:** Rule-first is binding. AI may explain deterministic results or propose artifacts, but it cannot produce authoritative risk, signal, tuning, or application decisions.
+**Amended by:** ADR-042, which defines the deterministic champion, permits validated narrow local-ML evidence under evidence governance, and isolates full ML/API decisions as parallel non-authoritative challengers.
 
 ## Decision
 
@@ -13,6 +14,9 @@
 - AI-authored strategy, formula, configuration, or tuning artifacts remain untrusted until deterministic validation succeeds.
 - Applying a validated change requires the repository's explicit human-controlled workflow.
 - AI output must never bypass risk, evidence-promotion, configuration, or tuning guardrails.
+- A validated narrow local-ML output may become typed evidence under ADR-042.
+  Full ML/API decision assessments remain separate challenger outputs and are
+  not evidence inputs.
 
 ## Current boundaries
 

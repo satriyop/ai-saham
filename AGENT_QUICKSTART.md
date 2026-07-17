@@ -11,7 +11,22 @@ Read this before every task. This is the mandatory entry point for agents. The l
 - Infrastructure implements ports for databases, providers, browser/API clients, filesystem, and AI integrations.
 - Adapters stay thin: parse input, wire dependencies, call use cases, format output, and map errors.
 - Use manual dependency injection. Application services/use cases receive ports, typed config objects, pure services, or narrow callables; they do not construct concrete SQLite, Stockbit, browser, filesystem, or YAML loader implementations.
+- The deterministic rule/config engine is the canonical champion and must run
+  independently of ML libraries, model artifacts, AI credentials, and network
+  access.
+- A narrowly scoped local ML model may become a typed evidence producer only
+  after point-in-time, incremental out-of-sample validation and explicit
+  evidence-authority promotion. Its immutable model and feature identities,
+  missing-data behavior, drift monitoring, and rollback must remain governed.
+- Full-decision ML models and remote AI/API agents may only produce separate,
+  optional, non-authoritative challenger assessments. They must never become
+  fallbacks, overrides, or hidden inputs to canonical scoring, risk,
+  `TradeSetup`, sizing, execution, or observation selection.
 - AI may assist authoring and explanations, but must not become the source of truth for scoring, risk, strategy, or persistence decisions.
+- Do not confuse evidence-producer promotion with decision-challenger
+  authority. Deterministic evidence and eligible narrow local-ML evidence may
+  pass the validator-gated evidence lifecycle. Full ML/API decision outputs
+  remain parallel shadow results unless a newer explicit ADR changes that rule.
 - Do not bypass risk, signal, tuning, evidence-promotion, or architecture guardrails unless the user explicitly asks for an ADR/design change first.
 - Do not promote diagnostic evidence or tune patch-eligible config without out-of-sample proof and validator support.
 - Trust current code during audits. Treat docs as intent, then verify against implementation.

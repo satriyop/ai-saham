@@ -8,9 +8,12 @@
 **Status:** Backlog — approved direction, not implemented  
 **Decision:** Implement the hierarchy in this document only.
 
-**Hard prerequisite:** Complete `tasks/backlog/audit_data_quality.md` through
-DQ-011 with zero open DQ-P0/DQ-P1 findings. Freeze only the corrected behavioral
-baseline; do not preserve known data-quality defects during CLI migration.
+**Hard prerequisite:** DQ-011 must pass for canonical signal and accumulation
+CLI work, with no unresolved authoritative DQ-P0/P1 finding unless the affected
+data is explicitly enforced as non-authoritative. The sentiment-specific
+CLI-004 task additionally requires DQ-009 and any resulting sentiment cleanup.
+Freeze only corrected behavioral baselines; do not preserve known data-quality
+defects during CLI migration.
 
 ## 2. Problem statement
 
@@ -118,23 +121,27 @@ Old paths become hidden transitional aliases. They must call the same command ha
   - `src/adapters/cli/analyze_signal_readiness_commands.py`
   - `src/adapters/cli/analyze_signal_backfill_commands.py`
   - `src/adapters/cli/analyze_signal_label_commands.py`
-- Sentiment handler: `src/adapters/cli/analyze_sentiment_commands.py`
+- Sentiment handler is scoped to CLI-004 after DQ-009:
+  `src/adapters/cli/analyze_sentiment_commands.py`
 - Accumulation evaluation: `src/adapters/cli/analyze_accum_commands.py`
 
 **Implementation guideline:**
 
-- Import the corrected contracts and golden fixtures produced by DQ-011.
+- Import the corrected canonical signal and accumulation contracts and golden
+  fixtures produced by DQ-011. Sentiment fixtures are owned by DQ-009/CLI-004.
 - Add command-contract tests for arguments, defaults, exit codes, stdout/stderr, JSON roots, and database writes.
-- Record which paths are read-only and which write observations, labels, sentiment audits, or explicit CSV output.
+- Record which in-scope paths are read-only and which write observations,
+  labels, or explicit CSV output. CLI-004 separately records sentiment-audit
+  persistence.
 - Snapshot representative `--help` output semantically; avoid brittle full-terminal snapshots.
 - Test invalid dates, missing required arguments, unsupported formats, absent data, and persistence failures.
 
 **Acceptance criteria:**
 
-- [ ] Every command in the mapping table has a focused contract test.
+- [ ] Every DQ-011-scoped command in the mapping table has a focused contract test; sentiment is verified by DQ-009/CLI-004.
 - [ ] Tests distinguish stdout from stderr.
 - [ ] Tests assert read-only commands do not change relevant row counts.
-- [ ] Tests assert generation/audit commands write only their documented artifacts.
+- [ ] Tests assert in-scope generation/evaluation commands write only their documented artifacts.
 - [ ] Existing JSON `schema_version`, `artifact_type`, and canonical fields are captured where supported.
 
 ### CLI-002 — Introduce the read-only `analyze signal` group
@@ -256,7 +263,8 @@ saham learn signal labels [SNAPSHOT_DATE] \
 ### CLI-004 — Replace ambiguous sentiment `analyze audit`
 
 **Priority:** P1  
-**Depends on:** CLI-001  
+**Depends on:** CLI-001 and `tasks/backlog/audit_data_quality.md` DQ-009 plus any resulting sentiment cleanup
+
 **Outcome:** The command path identifies both its subject and its persistence lifecycle.
 
 **Canonical contract:**
