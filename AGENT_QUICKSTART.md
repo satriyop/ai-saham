@@ -86,6 +86,35 @@ Required structure:
 7. Require pre-edit design confirmation for structural changes.
    - The agent must state how it will implement the contract before editing.
    - If the design violates any forbidden interpretation, stop before coding.
+8. Resolve transport and ownership decisions before delegation.
+   - State which type owns intermediate data, which function creates it, and
+     how it reaches each consumer. Do not leave the implementer to choose
+     between public DTO fields, wrapper results, workflow state, or side
+     channels.
+   - Constrain both the required result and the permitted path used to produce
+     it. A correct-looking result produced through a forbidden second read,
+     reconstructed provenance, adapter policy, or compatibility fallback is
+     not acceptable.
+9. Split foundational contracts from broad integration.
+   - For cross-workflow changes, require a checkpoint after domain contracts,
+     typed intermediate results, and negative contract tests pass. Do not let
+     screen, swing, persistence, and CLI wiring proceed on an unreviewed
+     foundation.
+10. Name every production composition root.
+   - List all factories, commands, cron paths, backfills, and alternate modes
+     that must receive the new dependency or contract. Component tests do not
+     prove production wiring.
+11. Require independent tests, not implementation mirrors.
+   - Tests must assert the intended invariant with real application boundaries
+     or strict recording fakes. A component invoked twice is not cross-workflow
+     parity, and a test must not be named "unchanged" while asserting changed
+     behavior.
+   - Include adversarial counterexamples for identity, provenance, cutoff,
+     missing-data, and forbidden fallback behavior where relevant.
+12. Define missing and failure states exactly.
+   - State whether absence is represented by `None`, an empty collection, a
+     typed `UNKNOWN` result, an exception, or omission. Do not leave this choice
+     to the implementer, especially when it can alter scoring or authority.
 
 Use a `Do Not Interpret This As` section for high-risk work. Example:
 
