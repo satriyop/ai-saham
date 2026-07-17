@@ -2467,9 +2467,18 @@ assessment-only and are not observation-capture triggers.
   selected candidates, including inclusion/exclusion state, rejection
   stage/reasons, pre-filter measurements, missing-data state, and rank.
 - Implement canonical observation creation through one dedicated application
-  capture use case, exposed manually through a thin command equivalent to
-  `saham evidence capture --type signal --session YYYY-MM-DD`. A later
-  scheduler/agent must call the same use case rather than duplicate policy.
+  capture use case, exposed manually through thin target commands equivalent to
+  `saham evidence capture --contract accumulation-discovery --session
+  YYYY-MM-DD` and `saham evidence capture --contract swing-setup --setup NAME
+  --session YYYY-MM-DD`. A later scheduler/agent must call the same use case
+  rather than duplicate policy.
+- Treat `accumulation-discovery` as the selected/rejected/ranked eligible-universe
+  observation and `swing-setup` as a named-setup evaluation across its eligible
+  population. Persist `observation_contract` and `setup_family` where applicable
+  so the two datasets cannot overwrite or masquerade as one another.
+- Do not admit manually selected single-ticker inspection into the canonical
+  population. A future `saham evidence inspect ... --ticker TICKER` path is
+  read-only diagnostic reconstruction and creates no observation/readiness row.
 - Keep interactive screen/analyze assessment, explicit current-session capture,
   historical backfill, and forward-label generation as separate operations.
   Neither user attention nor invocation frequency may select or weight the
@@ -2490,6 +2499,8 @@ If canonical identity omits a meaning-changing dimension, replace it and rebuild
 - [ ] Repeating interactive screen/analyze commands creates no canonical observations.
 - [ ] Explicit capture is idempotent and separate from forward-label generation.
 - [ ] CLI, scheduler, and agent capture paths share one application use case.
+- [ ] Discovery and named swing-setup populations are separately identified and reconciled.
+- [ ] Single-ticker inspection cannot write or count as canonical learning evidence.
 - [ ] Changing a semantic identity dimension creates a distinct artifact or explicit version replacement.
 - [ ] Candidate and control rows share one PIT cutoff but cannot overwrite one another.
 - [ ] Candidate-only datasets are ineligible for screener recall/filter-value claims.

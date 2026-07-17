@@ -1507,10 +1507,12 @@ and control rows share source cutoff/config identity but cannot overwrite one
 another. Backfill must reconstruct the historical universe or mark it invalid.
 
 Observation creation is owned by a dedicated application capture use case, not
-ordinary analysis commands. Expose it through a thin explicit CLI entry point:
+ordinary analysis commands. Expose the future target through thin explicit CLI
+entry points with distinct observation contracts:
 
 ```text
-saham evidence capture --type signal --session YYYY-MM-DD
+saham evidence capture --contract accumulation-discovery --session YYYY-MM-DD
+saham evidence capture --contract swing-setup --setup NAME --session YYYY-MM-DD
 ```
 
 The use case resolves one completed IDX session, freezes one eligible-universe
@@ -1520,6 +1522,29 @@ unavailable, rejected, and failed counts. Re-running the same semantic capture
 must not increase sample size. Capture does not generate forward labels, tune
 policy, or promote evidence. A scheduler or agent must call the same application
 use case rather than reimplementing capture policy.
+
+The contracts answer different evaluation questions:
+
+- `accumulation-discovery` captures every contemporaneously eligible ticker's
+  selected/rejected state, rejection stage/reasons, rank, pre-filter values, and
+  screen evidence. It measures discovery quality and missed opportunities.
+- `swing-setup` requires `--setup NAME`, evaluates that named setup across its
+  contemporaneously eligible population, and captures READY, INCOMPLETE,
+  INELIGIBLE, and UNAVAILABLE states plus required deep setup evidence. It
+  measures setup-specific executable edge.
+
+Both consume the shared `CanonicalSignalEvidenceInput`; neither may reuse the
+other observation type merely because ticker/session match. A single manually
+selected ticker cannot become canonical capture because that reintroduces user
+selection bias. If single-ticker reconstruction is needed, expose a separate
+read-only diagnostic interface equivalent to:
+
+```text
+saham evidence inspect --contract swing-setup --setup NAME --ticker TICKER --session YYYY-MM-DD
+```
+
+Inspection must not write canonical observations or enter readiness, tuning, or
+promotion populations.
 
 `screen accum` and `analyze swing` remain read/assessment workflows with respect
 to canonical learning persistence. User attention and command frequency must
@@ -1535,6 +1560,9 @@ not select or weight the training population.
 - [ ] Repeated interactive screen/analyze calls create no canonical samples
 - [ ] Capture and later label generation are separate operations
 - [ ] CLI, scheduler, and agent entry points share one application capture use case
+- [ ] Discovery and swing-setup observations cannot overwrite or substitute for one another
+- [ ] Swing-setup capture requires a named setup and evaluates a population, not a user-picked ticker
+- [ ] Single-ticker inspection is read-only and excluded from canonical learning/readiness
 
 ---
 
@@ -1561,6 +1589,8 @@ to:
 effective_session
 + ticker
 + universe_snapshot_id
++ observation_contract
++ setup_family when applicable
 + evidence_contract_version
 + source snapshot/cutoff identity
 + resolved config identity
@@ -1579,6 +1609,7 @@ attributable to a changed semantic input.
 - [ ] Readiness reports counts by compatible identity and quarantines mixtures
 - [ ] Invocation time/command cannot create a distinct canonical observation
 - [ ] Same semantic capture is a no-op/already-existing result, not a new sample
+- [ ] Different observation contracts or setup families cannot share an identity
 
 ---
 

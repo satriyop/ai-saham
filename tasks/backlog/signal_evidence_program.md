@@ -94,11 +94,26 @@ control populations, and executable labels. The signal backlog owns their
 semantic contracts and promotion consequences.
 
 Canonical observation capture begins here, not in Phase 2. Implement it as a
-dedicated application use case with a thin explicit CLI entry point equivalent
-to `saham evidence capture --type signal --session YYYY-MM-DD`. The same use
-case may later be invoked by a scheduler or agent. Interactive `screen` and
-`analyze` commands remain assessment consumers and do not become implicit
-capture triggers.
+dedicated application use case with thin explicit CLI entry points for two
+different observation contracts:
+
+```text
+saham evidence capture --contract accumulation-discovery --session YYYY-MM-DD
+saham evidence capture --contract swing-setup --setup NAME --session YYYY-MM-DD
+```
+
+`accumulation-discovery` captures the contemporaneous eligible universe with
+selected/rejected state, rejection stage, ranking, and screen evidence.
+`swing-setup` evaluates one named setup over its contemporaneous eligible
+population and captures typed readiness plus the deeper setup evidence. Both
+reuse the canonical signal-evidence input, but their observations and identities
+are not interchangeable. The same application capture use case may later be
+invoked by a scheduler or agent.
+
+Interactive `screen` and `analyze` commands remain assessment consumers and do
+not become implicit capture triggers. A manually selected single ticker is
+diagnostic inspection, not a canonical learning population; if exposed, use a
+separate read-only interface equivalent to `saham evidence inspect`.
 
 **Exit gate: `CANONICAL-EVIDENCE-GATE`**
 
