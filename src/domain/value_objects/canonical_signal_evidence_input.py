@@ -160,6 +160,23 @@ def _validate_observed_through(assessment, expected: date | None, source_family:
         )
 
 
+def _validate_no_rows_after_snapshot(
+    rows: tuple,
+    *,
+    snapshot_date: date,
+    provenance_field: str,
+) -> None:
+    future_dates = tuple(row.date for row in rows if row.date > snapshot_date)
+    if not future_dates:
+        return
+
+    latest_future_date = max(future_dates)
+    raise ValueError(
+        f"{provenance_field} contains row dated {latest_future_date} "
+        f"after evidence.snapshot_date={snapshot_date}"
+    )
+
+
 def _validate_empty_row_group_is_unknown(assessment, has_rows: bool, source_family: str) -> None:
     if has_rows:
         return
@@ -191,6 +208,16 @@ class SetupEvidenceGroupInput:
                 f"evidence.ticker={self.evidence.ticker!r}, "
                 f"provenance.ticker={self.provenance.ticker!r}"
             )
+        _validate_no_rows_after_snapshot(
+            self.provenance.candle_rows,
+            snapshot_date=self.evidence.snapshot_date,
+            provenance_field="SetupEvidenceGroupInput.provenance.candle_rows",
+        )
+        _validate_no_rows_after_snapshot(
+            self.provenance.benchmark_candle_rows,
+            snapshot_date=self.evidence.snapshot_date,
+            provenance_field="SetupEvidenceGroupInput.provenance.benchmark_candle_rows",
+        )
         if self.availability.evidence_group != "setup":
             raise ValueError(
                 f"SetupEvidenceGroupInput availability.evidence_group must be "
@@ -235,6 +262,16 @@ class FlowEvidenceGroupInput:
                 f"evidence.ticker={self.evidence.ticker!r}, "
                 f"provenance.ticker={self.provenance.ticker!r}"
             )
+        _validate_no_rows_after_snapshot(
+            self.provenance.broker_summary_rows,
+            snapshot_date=self.evidence.snapshot_date,
+            provenance_field="FlowEvidenceGroupInput.provenance.broker_summary_rows",
+        )
+        _validate_no_rows_after_snapshot(
+            self.provenance.broker_daily_flow_rows,
+            snapshot_date=self.evidence.snapshot_date,
+            provenance_field="FlowEvidenceGroupInput.provenance.broker_daily_flow_rows",
+        )
         if self.availability.evidence_group != "flow":
             raise ValueError(
                 f"FlowEvidenceGroupInput availability.evidence_group must be "

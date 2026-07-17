@@ -1,6 +1,6 @@
 """Negative-validation tests for the ADR-041 canonical evidence boundary."""
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -475,3 +475,137 @@ class TestValidCanonicalSignalEvidenceInput:
         canonical = CanonicalSignalEvidenceInput(setup=None, flow=flow_group)
         assert canonical.setup is None
         assert canonical.flow is flow_group
+
+
+class TestCanonicalGroupRejectsFutureProvenance:
+    """Finding 4: the final canonical group constructors must independently
+    reject future-dated provenance rows even if an upstream builder was
+    bypassed and a caller constructs the group directly with matching
+    (also-future) observed_through values."""
+
+    FUTURE = SNAP + timedelta(days=1)
+
+    def test_future_setup_ticker_candle_raises(self) -> None:
+        provenance = SetupProvenance(
+            ticker="BBCA",
+            candle_rows=(
+                CandleRowIdentity(ticker="BBCA", date=self.FUTURE, source="stockbit"),
+            ),
+            benchmark_candle_rows=(
+                CandleRowIdentity(ticker="IHSG", date=SNAP, source="idx"),
+            ),
+        )
+        availability = _setup_availability(observed_through=self.FUTURE)
+
+        with pytest.raises(
+            ValueError,
+            match=r"provenance\.candle_rows.*after evidence\.snapshot_date",
+        ):
+            SetupEvidenceGroupInput(
+                evidence=_setup_evidence(),
+                provenance=provenance,
+                availability=availability,
+            )
+
+    def test_future_setup_benchmark_candle_raises(self) -> None:
+        provenance = SetupProvenance(
+            ticker="BBCA",
+            candle_rows=(CandleRowIdentity(ticker="BBCA", date=SNAP, source="stockbit"),),
+            benchmark_candle_rows=(
+                CandleRowIdentity(ticker="IHSG", date=self.FUTURE, source="idx"),
+            ),
+        )
+        availability = _setup_availability(observed_through=SNAP)
+
+        with pytest.raises(
+            ValueError,
+            match=r"provenance\.benchmark_candle_rows.*after evidence\.snapshot_date",
+        ):
+            SetupEvidenceGroupInput(
+                evidence=_setup_evidence(),
+                provenance=provenance,
+                availability=availability,
+            )
+
+    def test_future_broker_summary_row_raises(self) -> None:
+        provenance = FlowProvenance(
+            ticker="BBCA",
+            broker_summary_rows=(
+                BrokerSummaryRowIdentity(ticker="BBCA", date=self.FUTURE, source="idx"),
+            ),
+            broker_daily_flow_rows=(
+                BrokerDailyFlowRowIdentity(
+                    ticker="BBCA", date=SNAP, broker_code="YP", source="stockbit"
+                ),
+            ),
+        )
+        availability = EvidenceSourceAvailability(
+            evidence_group="flow",
+            assessments=(
+                _assessment("broker_summaries", observed_through=self.FUTURE),
+                _assessment("broker_daily_flow", observed_through=SNAP),
+            ),
+        )
+
+        with pytest.raises(
+            ValueError,
+            match=r"provenance\.broker_summary_rows.*after evidence\.snapshot_date",
+        ):
+            FlowEvidenceGroupInput(
+                evidence=_flow_evidence(),
+                provenance=provenance,
+                availability=availability,
+            )
+
+    def test_future_broker_daily_flow_row_raises(self) -> None:
+        provenance = FlowProvenance(
+            ticker="BBCA",
+            broker_summary_rows=(
+                BrokerSummaryRowIdentity(ticker="BBCA", date=SNAP, source="idx"),
+            ),
+            broker_daily_flow_rows=(
+                BrokerDailyFlowRowIdentity(
+                    ticker="BBCA", date=self.FUTURE, broker_code="YP", source="stockbit"
+                ),
+            ),
+        )
+        availability = EvidenceSourceAvailability(
+            evidence_group="flow",
+            assessments=(
+                _assessment("broker_summaries", observed_through=SNAP),
+                _assessment("broker_daily_flow", observed_through=self.FUTURE),
+            ),
+        )
+
+        with pytest.raises(
+            ValueError,
+            match=r"provenance\.broker_daily_flow_rows.*after evidence\.snapshot_date",
+        ):
+            FlowEvidenceGroupInput(
+                evidence=_flow_evidence(),
+                provenance=provenance,
+                availability=availability,
+            )
+
+    def test_rows_on_snapshot_date_are_accepted(self) -> None:
+        setup_evidence = _setup_evidence()
+        setup_provenance = _setup_provenance()
+        setup_availability = _setup_availability()
+        setup_group = SetupEvidenceGroupInput(
+            evidence=setup_evidence,
+            provenance=setup_provenance,
+            availability=setup_availability,
+        )
+        assert setup_group.evidence is setup_evidence
+        assert setup_group.provenance is setup_provenance
+
+        flow_evidence = _flow_evidence()
+        flow_provenance = _flow_provenance()
+        flow_availability = _flow_availability()
+        flow_group = FlowEvidenceGroupInput(
+            evidence=flow_evidence,
+            provenance=flow_provenance,
+            availability=flow_availability,
+        )
+        assert flow_group.evidence is flow_evidence
+        assert flow_group.provenance is flow_provenance
