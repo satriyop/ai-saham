@@ -34,6 +34,7 @@ from src.domain.value_objects.benchmark_excess_return import (
     BenchmarkExcessReturnStatus,
 )
 from src.domain.value_objects.canonical_signal_evidence_input import (
+    BrokerDailyFlowRowIdentity,
     BrokerSummaryRowIdentity,
     CandleRowIdentity,
     FlowProvenance,
@@ -51,6 +52,7 @@ from src.domain.value_objects.signal_assessment import (
     SignalAssessment,
     SignalStrength,
 )
+from src.domain.value_objects.source_availability import SourceAvailabilityStatus
 
 TICKER = "BBCA"
 SNAP = date(2026, 7, 17)
@@ -151,7 +153,9 @@ def _built_flow_evidence(has_bandar_contributor: bool = False) -> BuiltFlowEvide
     provenance = FlowProvenance(
         ticker=TICKER,
         broker_summary_rows=(BrokerSummaryRowIdentity(ticker=TICKER, date=SNAP, source="test"),),
-        broker_daily_flow_rows=(),
+        broker_daily_flow_rows=(
+            BrokerDailyFlowRowIdentity(ticker=TICKER, date=SNAP, broker_code="AK", source="test"),
+        ),
         has_bandar_contributor=has_bandar_contributor,
     )
     return BuiltFlowEvidence(evidence=evidence, provenance=provenance)
@@ -206,7 +210,11 @@ class _RecordingSignalEngine:
 
     def evaluate_with_context(self, ticker, signal_ctx, **kwargs):
         self.calls.append(kwargs)
-        return _signal_response(score=self._response_score)
+        resp = _signal_response(score=self._response_score)
+        if kwargs.get("canonical_evidence") is not None:
+            from src.domain.value_objects.evidence_source_availability import AvailabilityEnforcementMode
+            resp.availability_enforcement = AvailabilityEnforcementMode.SHADOW
+        return resp
 
 
 class _RecordingRiskTradeSetupComposer:
@@ -321,11 +329,7 @@ def test_no_rescore_when_no_evidence_built():
     assert result.signal_assessment.score == 50
 
 
-def test_no_rescore_when_source_availability_use_case_missing():
-    # Built evidence exists, but availability infrastructure is unavailable
-    # (e.g. calendar construction failed upstream) — SHADOW must never make
-    # scoring depend on availability being resolvable, so canonical_evidence
-    # construction is skipped entirely rather than scoring without it.
+def test_missing_source_availability_use_case_rescores_with_unknown_shadow_availability():
     engine = _RecordingSignalEngine()
     composer = SwingAnalysisDecisionComposer(
         risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
@@ -338,8 +342,37 @@ def test_no_rescore_when_source_availability_use_case_missing():
 
     result = composer.recompose_after_evidence(_request(), state)
 
-    assert engine.calls == []
-    assert result.signal_assessment.score == 50
+    # SignalEngine is called exactly once
+    assert len(engine.calls) == 1
+
+    # canonical setup/flow evidence is supplied
+    canonical_evidence = engine.calls[0]["canonical_evidence"]
+    assert canonical_evidence is not None
+    assert canonical_evidence.setup is not None
+    assert canonical_evidence.flow is not None
+
+    # each required source assessment is UNKNOWN
+    setup_assessments = canonical_evidence.setup.availability.assessments
+    assert len(setup_assessments) == 1
+    assert setup_assessments[0].status == SourceAvailabilityStatus.UNKNOWN
+
+    flow_assessments = canonical_evidence.flow.availability.assessments
+    assert len(flow_assessments) == 2
+    assert flow_assessments[0].status == SourceAvailabilityStatus.UNKNOWN
+    assert flow_assessments[1].status == SourceAvailabilityStatus.UNKNOWN
+
+    # every UNKNOWN assessment has is_authoritative is False
+    assert setup_assessments[0].is_authoritative is False
+    assert flow_assessments[0].is_authoritative is False
+    assert flow_assessments[1].is_authoritative is False
+
+    # availability_enforcement == SHADOW
+    from src.domain.value_objects.evidence_source_availability import AvailabilityEnforcementMode
+    assert result.signal_assessment.availability_enforcement == AvailabilityEnforcementMode.SHADOW
+
+    # built evidence is not removed
+    assert result.built_setup_evidence is not None
+    assert result.built_flow_evidence is not None
 
 
 def test_bandar_contributor_flows_into_flow_group_availability():
@@ -375,3 +408,101 @@ def test_trade_setup_recomposition_runs_alongside_canonical_evidence():
 
     assert result.verdict.trade_setup == "SENTINEL_TRADE_SETUP"
     assert result.signal_assessment.score == 91
+
+
+# --- Swing composer fallback/error tests (Step 4 tests) ---------------------------
+
+def test_rescores_when_availability_use_case_is_none():
+    # 9. Built setup and flow evidence are rescored when the availability use case is None.
+    from src.application.services.signal_engine import SignalEngine
+    engine = SignalEngine()
+    composer = SwingAnalysisDecisionComposer(
+        risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
+    )
+    state = _state(
+        built_setup_evidence=_built_setup_evidence(),
+        built_flow_evidence=_built_flow_evidence(),
+        source_availability_use_case=None,
+    )
+    assert state.signal_assessment.score == 50
+
+    result = composer.recompose_after_evidence(_request(), state)
+    assert result.signal_assessment.score != 50
+
+
+def test_operational_availability_failure_still_rescored():
+    # 10. Operational availability failure still rescored with canonical evidence.
+    from src.application.services.signal_engine import SignalEngine
+    engine = SignalEngine()
+    composer = SwingAnalysisDecisionComposer(
+        risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
+    )
+
+    class _FailingUseCase:
+        def execute(self, **kwargs):
+            raise RuntimeError("Database timeout")
+
+    state = _state(
+        built_setup_evidence=_built_setup_evidence(),
+        built_flow_evidence=_built_flow_evidence(),
+        source_availability_use_case=_FailingUseCase(),
+    )
+
+    result = composer.recompose_after_evidence(_request(), state)
+    assert result.signal_assessment.score != 50
+    assert result.signal_assessment.setup_source_availability.assessments[0].status == SourceAvailabilityStatus.UNKNOWN
+    assert result.signal_assessment.flow_source_availability.assessments[0].status == SourceAvailabilityStatus.UNKNOWN
+    assert result.signal_assessment.flow_source_availability.assessments[1].status == SourceAvailabilityStatus.UNKNOWN
+
+
+def test_contract_value_error_escapes_in_swing():
+    # 11. Contract ValueError still escapes.
+    import pytest
+    from src.application.services.signal_engine import SignalEngine
+    engine = SignalEngine()
+    composer = SwingAnalysisDecisionComposer(
+        risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
+    )
+
+    class _ContractErrorUseCase:
+        def execute(self, **kwargs):
+            raise ValueError("Invalid format")
+
+    state = _state(
+        built_setup_evidence=_built_setup_evidence(),
+        built_flow_evidence=_built_flow_evidence(),
+        source_availability_use_case=_ContractErrorUseCase(),
+    )
+
+    with pytest.raises(ValueError, match="Invalid format"):
+        composer.recompose_after_evidence(_request(), state)
+
+
+def test_current_and_unknown_shadow_availability_produce_identical_results_in_swing():
+    # 12. CURRENT and UNKNOWN SHADOW availability produce identical score, coverage, entry quality, and decision constraints.
+    from src.application.services.signal_engine import SignalEngine
+    engine = SignalEngine()
+    composer = SwingAnalysisDecisionComposer(
+        risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
+    )
+
+    state_current = _state(
+        built_setup_evidence=_built_setup_evidence(),
+        built_flow_evidence=_built_flow_evidence(),
+        source_availability_use_case=_source_availability_use_case(),
+    )
+    result_current = composer.recompose_after_evidence(_request(), state_current)
+
+    state_unknown = _state(
+        built_setup_evidence=_built_setup_evidence(),
+        built_flow_evidence=_built_flow_evidence(),
+        source_availability_use_case=None,
+    )
+    result_unknown = composer.recompose_after_evidence(_request(), state_unknown)
+
+    a1 = result_current.signal_assessment
+    a2 = result_unknown.signal_assessment
+    assert a1.score == a2.score
+    assert a1.coverage_score == a2.coverage_score
+    assert a1.assessment.entry_quality == a2.assessment.entry_quality
+    assert a1.assessment.decision_constraints == a2.assessment.decision_constraints

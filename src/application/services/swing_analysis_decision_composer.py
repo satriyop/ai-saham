@@ -244,44 +244,32 @@ class SwingAnalysisDecisionComposer:
         built_flow = state.built_flow_evidence
         if built_setup is None and built_flow is None:
             return None
-        if state.source_availability_use_case is None:
-            return None
 
         assembler = EvidenceSourceAvailabilityAssembler(state.source_availability_use_case)
 
         setup_group: "SetupEvidenceGroupInput | None" = None
         if built_setup is not None:
-            try:
-                setup_availability = assembler.assess_setup(
-                    effective_session=state.effective_session,
-                    provenance=built_setup.provenance,
-                )
-                setup_group = SetupEvidenceGroupInput(
-                    evidence=built_setup.evidence,
-                    provenance=built_setup.provenance,
-                    availability=setup_availability,
-                )
-            except (ValueError, TypeError):
-                raise
-            except Exception as exc:
-                state.warnings.append(f"Setup source availability unavailable: {exc}")
+            setup_availability = assembler.assess_setup(
+                effective_session=state.effective_session,
+                provenance=built_setup.provenance,
+            )
+            setup_group = SetupEvidenceGroupInput(
+                evidence=built_setup.evidence,
+                provenance=built_setup.provenance,
+                availability=setup_availability,
+            )
 
         flow_group: "FlowEvidenceGroupInput | None" = None
         if built_flow is not None:
-            try:
-                flow_availability = assembler.assess_flow(
-                    effective_session=state.effective_session,
-                    provenance=built_flow.provenance,
-                )
-                flow_group = FlowEvidenceGroupInput(
-                    evidence=built_flow.evidence,
-                    provenance=built_flow.provenance,
-                    availability=flow_availability,
-                )
-            except (ValueError, TypeError):
-                raise
-            except Exception as exc:
-                state.warnings.append(f"Flow source availability unavailable: {exc}")
+            flow_availability = assembler.assess_flow(
+                effective_session=state.effective_session,
+                provenance=built_flow.provenance,
+            )
+            flow_group = FlowEvidenceGroupInput(
+                evidence=built_flow.evidence,
+                provenance=built_flow.provenance,
+                availability=flow_availability,
+            )
 
         if setup_group is None and flow_group is None:
             return None

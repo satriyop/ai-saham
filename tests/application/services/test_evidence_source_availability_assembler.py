@@ -284,3 +284,137 @@ def test_identical_inputs_produce_identical_availability_output():
     first_flow = assembler.assess_flow(effective_session=session, provenance=flow_provenance)
     second_flow = assembler.assess_flow(effective_session=session, provenance=flow_provenance)
     assert first_flow == second_flow
+
+
+# --- Assembler fallback/error tests (Step 2/Step 3 tests) -------------------------
+
+class _FakeAssessSourceAvailabilityUseCase:
+    def __init__(self, fails: dict[str, Exception] | None = None) -> None:
+        self.fails = fails or {}
+        self.calls: list[dict] = []
+
+    def execute(self, *, source_family: str, effective_session, observed_through):
+        self.calls.append({
+            "source_family": source_family,
+            "effective_session": effective_session,
+            "observed_through": observed_through,
+        })
+        if source_family in self.fails:
+            raise self.fails[source_family]
+
+        from src.domain.value_objects.source_availability import SourceAvailabilityAssessment, SourceAvailabilityStatus
+        return SourceAvailabilityAssessment(
+            source_family=source_family,
+            decision_at=effective_session.decision_at,
+            observed_through=observed_through,
+            available_at=effective_session.decision_at,
+            status=SourceAvailabilityStatus.CURRENT,
+            is_authoritative=True,
+            reason="MOCK_CURRENT",
+        )
+
+def test_assembler_none_use_case_setup_produces_unknown():
+    # 1. use_case=None produces UNKNOWN setup availability.
+    session = _session(date(2026, 7, 17), _wib(2026, 7, 17))
+    provenance = _setup_provenance(date(2026, 7, 17))
+    assembler = EvidenceSourceAvailabilityAssembler(None)
+
+    setup = assembler.assess_setup(effective_session=session, provenance=provenance)
+    assert len(setup.assessments) == 1
+    assert setup.assessments[0].status == SourceAvailabilityStatus.UNKNOWN
+    assert setup.assessments[0].is_authoritative is False
+    assert setup.assessments[0].reason == "AVAILABILITY_ASSESSOR_UNAVAILABLE"
+
+def test_assembler_none_use_case_flow_produces_both_unknown():
+    # 2. use_case=None produces both UNKNOWN flow assessments.
+    session = _session(date(2026, 7, 17), _wib(2026, 7, 17))
+    provenance = _flow_provenance(summary_dates=(date(2026, 7, 17),), daily_flow_dates=(date(2026, 7, 17),))
+    assembler = EvidenceSourceAvailabilityAssembler(None)
+
+    flow = assembler.assess_flow(effective_session=session, provenance=provenance)
+    assert len(flow.assessments) == 2
+    assert flow.assessments[0].status == SourceAvailabilityStatus.UNKNOWN
+    assert flow.assessments[0].is_authoritative is False
+    assert flow.assessments[1].status == SourceAvailabilityStatus.UNKNOWN
+    assert flow.assessments[1].is_authoritative is False
+
+def test_assembler_runtime_error_candles_produces_unknown():
+    # 3. RuntimeError from candles assessment produces UNKNOWN.
+    session = _session(date(2026, 7, 17), _wib(2026, 7, 17))
+    provenance = _setup_provenance(date(2026, 7, 17))
+    fake_uc = _FakeAssessSourceAvailabilityUseCase(fails={"candles": RuntimeError("Database down")})
+    assembler = EvidenceSourceAvailabilityAssembler(fake_uc)
+
+    setup = assembler.assess_setup(effective_session=session, provenance=provenance)
+    assert len(setup.assessments) == 1
+    assert setup.assessments[0].status == SourceAvailabilityStatus.UNKNOWN
+    assert setup.assessments[0].is_authoritative is False
+    assert setup.assessments[0].reason == "AVAILABILITY_ASSESSMENT_FAILED"
+    assert "RuntimeError" in setup.assessments[0].notes[0]
+
+def test_assembler_runtime_error_summaries_produces_unknown_only_for_summaries():
+    # 4. RuntimeError from broker summaries produces UNKNOWN only for summaries.
+    session = _session(date(2026, 7, 17), _wib(2026, 7, 17))
+    provenance = _flow_provenance(summary_dates=(date(2026, 7, 17),), daily_flow_dates=(date(2026, 7, 17),))
+    fake_uc = _FakeAssessSourceAvailabilityUseCase(fails={"broker_summaries": RuntimeError("Timeout")})
+    assembler = EvidenceSourceAvailabilityAssembler(fake_uc)
+
+    flow = assembler.assess_flow(effective_session=session, provenance=provenance)
+
+    summaries = next(a for a in flow.assessments if a.source_family == "broker_summaries")
+    daily_flow = next(a for a in flow.assessments if a.source_family == "broker_daily_flow")
+
+    assert summaries.status == SourceAvailabilityStatus.UNKNOWN
+    assert summaries.is_authoritative is False
+    assert daily_flow.status == SourceAvailabilityStatus.CURRENT
+    assert daily_flow.is_authoritative is True
+
+def test_assembler_runtime_error_daily_flow_produces_unknown_only_for_daily_flow():
+    # 5. RuntimeError from broker daily flow produces UNKNOWN only for daily flow.
+    session = _session(date(2026, 7, 17), _wib(2026, 7, 17))
+    provenance = _flow_provenance(summary_dates=(date(2026, 7, 17),), daily_flow_dates=(date(2026, 7, 17),))
+    fake_uc = _FakeAssessSourceAvailabilityUseCase(fails={"broker_daily_flow": RuntimeError("Crash")})
+    assembler = EvidenceSourceAvailabilityAssembler(fake_uc)
+
+    flow = assembler.assess_flow(effective_session=session, provenance=provenance)
+
+    summaries = next(a for a in flow.assessments if a.source_family == "broker_summaries")
+    daily_flow = next(a for a in flow.assessments if a.source_family == "broker_daily_flow")
+
+    assert summaries.status == SourceAvailabilityStatus.CURRENT
+    assert summaries.is_authoritative is True
+    assert daily_flow.status == SourceAvailabilityStatus.UNKNOWN
+    assert daily_flow.is_authoritative is False
+
+def test_assembler_value_error_propagates():
+    # 6. ValueError propagates.
+    import pytest
+    session = _session(date(2026, 7, 17), _wib(2026, 7, 17))
+    provenance = _setup_provenance(date(2026, 7, 17))
+    fake_uc = _FakeAssessSourceAvailabilityUseCase(fails={"candles": ValueError("Bad parameters")})
+    assembler = EvidenceSourceAvailabilityAssembler(fake_uc)
+
+    with pytest.raises(ValueError, match="Bad parameters"):
+        assembler.assess_setup(effective_session=session, provenance=provenance)
+
+def test_assembler_type_error_propagates():
+    # 7. TypeError propagates.
+    import pytest
+    session = _session(date(2026, 7, 17), _wib(2026, 7, 17))
+    provenance = _setup_provenance(date(2026, 7, 17))
+    fake_uc = _FakeAssessSourceAvailabilityUseCase(fails={"candles": TypeError("Mismatched type")})
+    assembler = EvidenceSourceAvailabilityAssembler(fake_uc)
+
+    with pytest.raises(TypeError, match="Mismatched type"):
+        assembler.assess_setup(effective_session=session, provenance=provenance)
+
+def test_assembler_bandar_remains_in_unassessed_contributors():
+    # 8. Bandar remains in unassessed_contributors.
+    session = _session(date(2026, 7, 17), _wib(2026, 7, 17))
+    provenance = _flow_provenance(summary_dates=(date(2026, 7, 17),), daily_flow_dates=(date(2026, 7, 17),), has_bandar_contributor=True)
+    fake_uc = _FakeAssessSourceAvailabilityUseCase(fails={"broker_daily_flow": RuntimeError("Crash")})
+    assembler = EvidenceSourceAvailabilityAssembler(fake_uc)
+
+    flow = assembler.assess_flow(effective_session=session, provenance=provenance)
+    assert flow.unassessed_contributors == ("bandar_detector",)
+    assert flow.all_authoritative is False

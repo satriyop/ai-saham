@@ -94,7 +94,7 @@ class AccumulationCandidateSignalAssessor:
         consumed_broker_summaries: tuple,
         consumed_broker_daily_flows: tuple,
         effective_session: "EffectiveMarketSession",
-        source_availability_use_case: "AssessSourceAvailabilityUseCase",
+        source_availability_use_case: "AssessSourceAvailabilityUseCase | None",
     ) -> CandidateSignalAssessmentResult:
         """Run signal assessment on the candidate and return the outcome."""
         # Phase 2.1: foreign-flow score assignment
@@ -139,6 +139,8 @@ class AccumulationCandidateSignalAssessor:
         # 0.40 (flow group only) until the full workflow enriches it further.
         flow_ev: FlowConfirmationEvidence | None = None
         canonical_evidence: CanonicalSignalEvidenceInput | None = None
+
+        built_flow = None
         try:
             built_flow = self._flow_confirmation_builder.build(
                 candidate,
@@ -146,6 +148,12 @@ class AccumulationCandidateSignalAssessor:
                 consumed_broker_summaries=consumed_broker_summaries,
                 consumed_broker_daily_flows=consumed_broker_daily_flows,
             )
+        except (ValueError, TypeError):
+            raise
+        except Exception:
+            built_flow = None
+
+        if built_flow is not None:
             flow_ev = built_flow.evidence
             # ADR-041 CANONICAL-EVIDENCE-BOUNDARY: availability is resolved
             # once, pre-score, from this exact provenance and bound
@@ -166,14 +174,6 @@ class AccumulationCandidateSignalAssessor:
                     availability=flow_availability,
                 ),
             )
-        except ValueError:
-            # A ValueError here is a provenance/domain contract violation
-            # (e.g. a cross-ticker or duplicate consumed row) — an invariant
-            # break, not an operational failure. It must fail explicitly,
-            # never be silently downgraded to "no flow evidence this run".
-            raise
-        except Exception:
-            pass
 
         candidate.signal_assessment = self._signal_engine.evaluate_with_context(
             candidate.ticker, signal_ctx, canonical_evidence=canonical_evidence

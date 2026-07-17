@@ -44,9 +44,14 @@ canonical evidence-group inputs (`SetupEvidenceGroupInput`/
 
 from __future__ import annotations
 
+from datetime import date
 from typing import TYPE_CHECKING
 
 from src.domain.value_objects.evidence_source_availability import EvidenceSourceAvailability
+from src.domain.value_objects.source_availability import (
+    SourceAvailabilityAssessment,
+    SourceAvailabilityStatus,
+)
 
 if TYPE_CHECKING:
     from src.application.services.effective_market_session_resolver import (
@@ -64,8 +69,56 @@ if TYPE_CHECKING:
 class EvidenceSourceAvailabilityAssembler:
     """Assembles setup/flow `EvidenceSourceAvailability` from exact provenance."""
 
-    def __init__(self, use_case: "AssessSourceAvailabilityUseCase") -> None:
+    def __init__(
+        self,
+        use_case: AssessSourceAvailabilityUseCase | None,
+    ) -> None:
         self._use_case = use_case
+
+    def _assess_or_unknown(
+        self,
+        *,
+        source_family: str,
+        effective_session: EffectiveMarketSession,
+        observed_through: date | None,
+    ) -> SourceAvailabilityAssessment:
+        if self._use_case is None:
+            return SourceAvailabilityAssessment(
+                source_family=source_family,
+                decision_at=effective_session.decision_at,
+                observed_through=observed_through,
+                available_at=None,
+                status=SourceAvailabilityStatus.UNKNOWN,
+                is_authoritative=False,
+                reason="AVAILABILITY_ASSESSOR_UNAVAILABLE",
+                notes=(
+                    "Source availability could not be assessed; SHADOW evidence remains "
+                    "scored but cannot claim authority.",
+                ),
+            )
+
+        try:
+            return self._use_case.execute(
+                source_family=source_family,
+                effective_session=effective_session,
+                observed_through=observed_through,
+            )
+        except (ValueError, TypeError):
+            raise
+        except Exception as exc:
+            return SourceAvailabilityAssessment(
+                source_family=source_family,
+                decision_at=effective_session.decision_at,
+                observed_through=observed_through,
+                available_at=None,
+                status=SourceAvailabilityStatus.UNKNOWN,
+                is_authoritative=False,
+                reason="AVAILABILITY_ASSESSMENT_FAILED",
+                notes=(
+                    f"Availability assessment failed with {type(exc).__name__}; "
+                    "SHADOW evidence remains scored but cannot claim authority.",
+                ),
+            )
 
     def assess_setup(
         self,
@@ -79,7 +132,7 @@ class EvidenceSourceAvailabilityAssembler:
         return EvidenceSourceAvailability(
             evidence_group="setup",
             assessments=(
-                self._use_case.execute(
+                self._assess_or_unknown(
                     source_family="candles",
                     effective_session=effective_session,
                     observed_through=latest_candle_date,
@@ -106,12 +159,12 @@ class EvidenceSourceAvailabilityAssembler:
         return EvidenceSourceAvailability(
             evidence_group="flow",
             assessments=(
-                self._use_case.execute(
+                self._assess_or_unknown(
                     source_family="broker_summaries",
                     effective_session=effective_session,
                     observed_through=max_summary_row_date,
                 ),
-                self._use_case.execute(
+                self._assess_or_unknown(
                     source_family="broker_daily_flow",
                     effective_session=effective_session,
                     observed_through=max_daily_flow_row_date,
