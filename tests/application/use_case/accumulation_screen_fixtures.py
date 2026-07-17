@@ -404,11 +404,41 @@ def record_observations(use_case: AccumulationScreenUseCase, request):
         screen_use_case=use_case,
         observation_persister=persister,
     )
-    return recorder.execute(request)
+    context = make_signal_evidence_execution_context(request.as_of_date or date.today())
+    return recorder.execute(request, execution_context=context)
 
 
 def execute_and_record(use_case: AccumulationScreenUseCase, request):
     """Like record_observations(), but returns only the screen response —
     for tests that don't need recorded_count."""
     return record_observations(use_case, request).response
+
+
+def make_signal_evidence_execution_context(
+    as_of: date,
+    *,
+    source_availability_use_case=None,
+) -> "SignalEvidenceExecutionContext":
+    from datetime import datetime
+    from src.application.dto.signal_evidence_execution_context import (
+        SignalEvidenceExecutionContext,
+    )
+    from src.application.services.effective_market_session_resolver import (
+        EffectiveMarketSession,
+    )
+    from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
+
+    session = EffectiveMarketSession(
+        run_at=datetime.combine(as_of, MARKET_CLOSE, tzinfo=IDX_TIMEZONE),
+        decision_at=datetime.combine(as_of, MARKET_CLOSE, tzinfo=IDX_TIMEZONE),
+        latest_completed_session=as_of,
+        analysis_as_of=as_of,
+        market_session_name="AFTER_CLOSE",
+        is_eod_pending=False,
+        resolution_source="test_fixture",
+    )
+    return SignalEvidenceExecutionContext(
+        effective_session=session,
+        source_availability_use_case=source_availability_use_case,
+    )
 

@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
-from typing import Any
 
 from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
@@ -31,8 +30,16 @@ class FakeScreenUseCase:
 
     def __init__(self, candidates: dict[tuple[str, int], AccumulationCandidate | None]):
         self._candidates = candidates
+        self.recorded_contexts = []
 
-    def execute(self, request: AccumulationScreenRequest, *args, **kwargs) -> AccumulationScreenResponse:
+    def execute(
+        self,
+        request: AccumulationScreenRequest,
+        *,
+        execution_context,
+    ) -> AccumulationScreenResponse:
+        assert execution_context is not None
+        self.recorded_contexts.append(execution_context)
         ticker = request.tickers[0]
         candidate = self._candidates.get((ticker, request.window_days))
         return AccumulationScreenResponse(
@@ -50,8 +57,42 @@ class FakeJournalService:
         self.calls: list[dict] = []
         self._count = return_count
 
-    def log_candidate(self, **kwargs: Any) -> int:
-        self.calls.append(kwargs)
+    def log_candidate(
+        self,
+        *,
+        ticker: str,
+        entry_price: Decimal,
+        window_days: int,
+        candidate: AccumulationCandidate | None,
+        logged_at: date,
+        pattern: str | None = None,
+        setup: str | None = None,
+        setup_match: str | None = None,
+        failed_gates: tuple[str, ...] = (),
+        regime: str | None = None,
+        planned_entry: Decimal | None = None,
+        planned_stop: Decimal | None = None,
+        planned_target: Decimal | None = None,
+        max_hold_days: int | None = None,
+    ) -> int:
+        self.calls.append(
+            {
+                "ticker": ticker,
+                "entry_price": entry_price,
+                "window_days": window_days,
+                "candidate": candidate,
+                "logged_at": logged_at,
+                "pattern": pattern,
+                "setup": setup,
+                "setup_match": setup_match,
+                "failed_gates": failed_gates,
+                "regime": regime,
+                "planned_entry": planned_entry,
+                "planned_stop": planned_stop,
+                "planned_target": planned_target,
+                "max_hold_days": max_hold_days,
+            }
+        )
         return self._count
 
 

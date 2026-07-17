@@ -29,6 +29,7 @@ from tests.application.use_case.accumulation_screen_fixtures import (
     _weekdays,
     execute_and_record,
     record_observations,
+    make_signal_evidence_execution_context,
 )
 
 
@@ -451,7 +452,8 @@ def test_screen_populates_setup_phase_for_displayed_candidates():
             window_days=7,
             min_net_buy_days=1,
             as_of_date=as_of,
-        )
+        ),
+        execution_context=make_signal_evidence_execution_context(as_of),
     )
 
     candidate = response.candidates[0]
@@ -490,7 +492,8 @@ def test_screen_setup_phase_is_none_when_detection_fails(monkeypatch):
             window_days=7,
             min_net_buy_days=1,
             as_of_date=as_of,
-        )
+        ),
+        execution_context=make_signal_evidence_execution_context(as_of),
     )
 
     assert len(response.candidates) == 1

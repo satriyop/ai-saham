@@ -9,11 +9,17 @@ from unittest.mock import MagicMock
 from src.adapters.cli import screen_accum_commands as accum_cli
 from src.adapters.cli.main import app
 from src.application.dto.accumulation_screen import AccumulationScreenResponse
-from src.application.use_case.run_accumulation_screen_workflow_use_case import (
-    RunAccumulationScreenWorkflowUseCase,
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSessionResolver,
 )
 from src.application.services.signal_evidence_execution_context_builder import (
     SignalEvidenceExecutionContextBuilder,
+)
+from src.application.use_case.build_live_signal_evidence_execution_context_use_case import (
+    BuildLiveSignalEvidenceExecutionContextUseCase,
+)
+from src.application.use_case.run_accumulation_screen_workflow_use_case import (
+    RunAccumulationScreenWorkflowUseCase,
 )
 from tests.adapters.cli.screen_accum_test_fixtures import (
     _candidate,
@@ -69,8 +75,13 @@ def _real_workflow_uc(screen_execute, broker_repo=None):
         accumulation_screener_config=accum_config,
         rules_loader=MagicMock(),
         indicator_registry_factory=MagicMock(),
-        signal_evidence_context_builder=SignalEvidenceExecutionContextBuilder(
-            trading_session_calendar_loader=None
+        live_signal_evidence_context_use_case=(
+            BuildLiveSignalEvidenceExecutionContextUseCase(
+                session_resolver=EffectiveMarketSessionResolver(market_repo),
+                context_builder=SignalEvidenceExecutionContextBuilder(
+                    trading_session_calendar_loader=None
+                ),
+            )
         ),
         save_watchlist_use_case=None,
     )
@@ -89,7 +100,7 @@ def test_screen_accum_json_includes_setup_phase(monkeypatch):
         sequence_valid=True,
     )
 
-    def fake_uc(**kwargs):
+    def fake_uc(*, db_path, screener_config, swing_config):
         uc = SimpleNamespace()
         uc.execute = lambda req: _fake_workflow_result(
             response=AccumulationScreenResponse(
@@ -123,7 +134,7 @@ def test_screen_accum_json_includes_typed_freshness(monkeypatch):
     """S3: JSON must carry typed freshness fields, no bare "OK" state, and
     it must come from the same DataFreshnessStatus the table renders."""
 
-    def fake_uc(**kwargs):
+    def fake_uc(*, db_path, screener_config, swing_config):
         uc = SimpleNamespace()
         uc.execute = lambda req: _fake_workflow_result(
             response=AccumulationScreenResponse(
@@ -171,7 +182,7 @@ def test_screen_accum_save_calls_use_case(monkeypatch):
         SaveScreenWatchlistResult,
     )
 
-    def fake_uc(**kwargs):
+    def fake_uc(*, db_path, screener_config, swing_config):
         uc = SimpleNamespace()
         uc.execute = lambda req: _fake_workflow_result(
             response=AccumulationScreenResponse(
@@ -212,7 +223,7 @@ def test_screen_accum_json_save_fails_explicitly(monkeypatch):
     """S2: --save with --format json is an unsupported combo — must fail
     clearly, not silently drop the save (not just warn-and-skip either)."""
 
-    def fake_uc(**kwargs):
+    def fake_uc(*, db_path, screener_config, swing_config):
         raise AssertionError("workflow use case must not run for a rejected combo")
 
     monkeypatch.setattr(
@@ -235,7 +246,7 @@ def test_screen_accum_multi_save_fails_explicitly(monkeypatch):
     """S2: --save with --multi is an unsupported combo — must fail clearly,
     not silently drop the save (not just warn-and-skip either)."""
 
-    def fake_uc(**kwargs):
+    def fake_uc(*, db_path, screener_config, swing_config):
         raise AssertionError("workflow use case must not run for a rejected combo")
 
     monkeypatch.setattr(
@@ -260,7 +271,8 @@ def test_screen_accum_single_json_matches_table_candidates_under_vwap_only(monke
     underwater = _candidate(ticker="A", vwap_discount_pct=5.0)
     not_underwater = _candidate(ticker="B", vwap_discount_pct=-2.0)
 
-    def screen_execute(req, *args, **kwargs):
+    def screen_execute(req, *, execution_context):
+        assert execution_context is not None
         return AccumulationScreenResponse(
             candidates=[underwater, not_underwater],
             screened_at=date(2026, 7, 14),
@@ -274,7 +286,7 @@ def test_screen_accum_single_json_matches_table_candidates_under_vwap_only(monke
     monkeypatch.setattr(
         accum_cli,
         "create_run_accumulation_screen_workflow_use_case",
-        lambda **kwargs: workflow_uc,
+        lambda *, db_path, screener_config, swing_config: workflow_uc,
     )
 
     captured_table_candidates = {}
@@ -282,9 +294,28 @@ def test_screen_accum_single_json_matches_table_candidates_under_vwap_only(monke
 
     original_display_results = single_display_mod.display_results
 
-    def spy_display_results(*, candidates, **kwargs):
+    def spy_display_results(
+        *,
+        response,
+        candidates,
+        universe_label,
+        show_top_broker,
+        display_config,
+        include_explanation=False,
+        strategy_signals=None,
+        strategy_name=None,
+    ):
         captured_table_candidates["tickers"] = [c.ticker for c in candidates]
-        return original_display_results(candidates=candidates, **kwargs)
+        return original_display_results(
+            response=response,
+            candidates=candidates,
+            universe_label=universe_label,
+            show_top_broker=show_top_broker,
+            display_config=display_config,
+            include_explanation=include_explanation,
+            strategy_signals=strategy_signals,
+            strategy_name=strategy_name,
+        )
 
     monkeypatch.setattr(accum_cli, "display_results", spy_display_results)
 
@@ -313,7 +344,8 @@ def test_screen_accum_multi_json_matches_table_rows_under_top_sort_squeeze(monke
     loose_hot = _candidate(ticker="B", foreign_flow_score=95.0, bb_width_pctile=0.80)
     tight_cold = _candidate(ticker="C", foreign_flow_score=20.0, bb_width_pctile=0.10)
 
-    def screen_execute(req, *args, **kwargs):
+    def screen_execute(req, *, execution_context):
+        assert execution_context is not None
         return AccumulationScreenResponse(
             candidates=[tight_hot, loose_hot, tight_cold],
             screened_at=date(2026, 7, 14),
@@ -327,7 +359,7 @@ def test_screen_accum_multi_json_matches_table_rows_under_top_sort_squeeze(monke
     monkeypatch.setattr(
         accum_cli,
         "create_run_accumulation_screen_workflow_use_case",
-        lambda **kwargs: workflow_uc,
+        lambda *, db_path, screener_config, swing_config: workflow_uc,
     )
 
     captured_table_rows = {}
@@ -335,9 +367,30 @@ def test_screen_accum_multi_json_matches_table_rows_under_top_sort_squeeze(monke
 
     original_display_multi = multi_display_mod.display_multi
 
-    def spy_display_multi(*, rows, **kwargs):
+    def spy_display_multi(
+        *,
+        rows,
+        universe_label,
+        windows,
+        screened_at,
+        display_config,
+        total_tickers_checked=0,
+        provider="",
+        include_explanation=False,
+        canonical_window=7,
+    ):
         captured_table_rows["tickers"] = [r.ticker for r in rows]
-        return original_display_multi(rows=rows, **kwargs)
+        return original_display_multi(
+            rows=rows,
+            universe_label=universe_label,
+            windows=windows,
+            screened_at=screened_at,
+            display_config=display_config,
+            total_tickers_checked=total_tickers_checked,
+            provider=provider,
+            include_explanation=include_explanation,
+            canonical_window=canonical_window,
+        )
 
     monkeypatch.setattr(accum_cli, "display_multi", spy_display_multi)
 
@@ -375,7 +428,8 @@ def test_screen_accum_multi_renders_tracked_broker_flow_not_broker_quality(monke
 
     candidate = _candidate(ticker="A")
 
-    def screen_execute(req, *args, **kwargs):
+    def screen_execute(req, *, execution_context):
+        assert execution_context is not None
         return AccumulationScreenResponse(
             candidates=[candidate],
             screened_at=date(2026, 7, 14),
@@ -410,7 +464,7 @@ def test_screen_accum_multi_renders_tracked_broker_flow_not_broker_quality(monke
     monkeypatch.setattr(
         accum_cli,
         "create_run_accumulation_screen_workflow_use_case",
-        lambda **kwargs: workflow_uc,
+        lambda *, db_path, screener_config, swing_config: workflow_uc,
     )
 
     table_result = runner.invoke(app, ["screen", "accum", "A", "--multi"])
@@ -440,7 +494,8 @@ def test_screen_accum_multi_json_includes_typed_freshness_per_window(monkeypatch
         latest_broker_date=date(2026, 7, 13),
     )
 
-    def screen_execute(req, *args, **kwargs):
+    def screen_execute(req, *, execution_context):
+        assert execution_context is not None
         return AccumulationScreenResponse(
             candidates=[candidate],
             screened_at=date(2026, 7, 14),
@@ -454,7 +509,7 @@ def test_screen_accum_multi_json_includes_typed_freshness_per_window(monkeypatch
     monkeypatch.setattr(
         accum_cli,
         "create_run_accumulation_screen_workflow_use_case",
-        lambda **kwargs: workflow_uc,
+        lambda *, db_path, screener_config, swing_config: workflow_uc,
     )
 
     result = runner.invoke(
@@ -483,7 +538,8 @@ def test_screen_accum_multi_json_includes_typed_freshness_per_window(monkeypatch
 
 
 def test_screen_accum_multi_duplicate_windows_fails_clearly(monkeypatch):
-    def screen_execute(req, *args, **kwargs):
+    def screen_execute(req, *, execution_context):
+        assert execution_context is not None
         return AccumulationScreenResponse(
             candidates=[],
             screened_at=date(2026, 7, 14),
@@ -497,7 +553,7 @@ def test_screen_accum_multi_duplicate_windows_fails_clearly(monkeypatch):
     monkeypatch.setattr(
         accum_cli,
         "create_run_accumulation_screen_workflow_use_case",
-        lambda **kwargs: workflow_uc,
+        lambda *, db_path, screener_config, swing_config: workflow_uc,
     )
 
     result = runner.invoke(
@@ -509,7 +565,8 @@ def test_screen_accum_multi_duplicate_windows_fails_clearly(monkeypatch):
 
 
 def test_screen_accum_invalid_sort_by_fails_clearly(monkeypatch):
-    def screen_execute(req, *args, **kwargs):
+    def screen_execute(req, *, execution_context):
+        assert execution_context is not None
         return AccumulationScreenResponse(
             candidates=[],
             screened_at=date(2026, 7, 14),
@@ -523,7 +580,7 @@ def test_screen_accum_invalid_sort_by_fails_clearly(monkeypatch):
     monkeypatch.setattr(
         accum_cli,
         "create_run_accumulation_screen_workflow_use_case",
-        lambda **kwargs: workflow_uc,
+        lambda *, db_path, screener_config, swing_config: workflow_uc,
     )
 
     result = runner.invoke(
@@ -535,7 +592,7 @@ def test_screen_accum_invalid_sort_by_fails_clearly(monkeypatch):
 
 
 def test_screen_accum_single_json_includes_universe_warnings_partial_result(monkeypatch):
-    def fake_uc(**kwargs):
+    def fake_uc(*, db_path, screener_config, swing_config):
         uc = SimpleNamespace()
         uc.execute = lambda req: _fake_workflow_result(
             response=AccumulationScreenResponse(
@@ -568,7 +625,7 @@ def test_screen_accum_single_json_includes_universe_warnings_partial_result(monk
 
 
 def test_screen_accum_single_json_partial_result_false_when_nothing_skipped(monkeypatch):
-    def fake_uc(**kwargs):
+    def fake_uc(*, db_path, screener_config, swing_config):
         uc = SimpleNamespace()
         uc.execute = lambda req: _fake_workflow_result(
             response=AccumulationScreenResponse(
@@ -597,7 +654,7 @@ def test_screen_accum_single_json_partial_result_false_when_nothing_skipped(monk
 
 
 def test_screen_accum_multi_json_includes_universe_warnings_partial_result(monkeypatch):
-    def fake_uc(**kwargs):
+    def fake_uc(*, db_path, screener_config, swing_config):
         uc = SimpleNamespace()
         uc.execute = lambda req: _fake_workflow_result(
             multi_results={
@@ -633,7 +690,7 @@ def test_screen_accum_multi_json_includes_universe_warnings_partial_result(monke
 
 
 def test_screen_accum_multi_json_partial_result_false_when_nothing_skipped(monkeypatch):
-    def fake_uc(**kwargs):
+    def fake_uc(*, db_path, screener_config, swing_config):
         uc = SimpleNamespace()
         uc.execute = lambda req: _fake_workflow_result(
             multi_results={

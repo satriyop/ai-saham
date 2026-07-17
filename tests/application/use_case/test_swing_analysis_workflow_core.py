@@ -15,6 +15,7 @@ from tests.application.use_case.swing_analysis_workflow_fixtures import (
     FakeRegistry,
     _candle,
     _candle_with_close,
+    _fake_signal_evidence_context_builder,
     _request,
     _workflow,
 )
@@ -84,6 +85,7 @@ def test_swing_workflow_records_accumulation_failure_warning():
         load_swing_config=lambda: {},
         resolve_setup_targets=lambda regime, config: (Decimal("5"), Decimal("5")),
         rules_loader=RulesYamlLoader(),
+        signal_evidence_context_builder=_fake_signal_evidence_context_builder(),
     )
 
     response = workflow.execute(_request())

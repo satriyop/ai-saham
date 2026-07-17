@@ -116,7 +116,7 @@ def _collector_for_availability_tests(
     )
 
 
-def test_source_availability_use_case_built_when_candidate_present():
+def test_source_availability_use_case_built_when_collecting_input():
     # Actual per-source assessment now happens later, in
     # SwingAnalysisDecisionComposer.recompose_after_evidence, gated on
     # evidence actually existing — collect() only needs to build the reused
@@ -138,20 +138,27 @@ def test_source_availability_use_case_built_when_candidate_present():
     )
     state = collector.collect(_request(today))
 
-    assert state.source_availability_use_case is not None
+    # Assert that execution context is built and contains the availability assessor
+    assert state.signal_evidence_execution_context is not None
+    assert state.signal_evidence_execution_context.source_availability_use_case is not None
     # Canonical evidence groups are not assembled here.
     assert state.built_setup_evidence is None
     assert state.built_flow_evidence is None
 
 
-def test_source_availability_use_case_none_when_no_candidate():
+def test_context_has_no_availability_assessor_when_calendar_loader_is_missing():
+    # The context is still built when there is no accumulation candidate, but
+    # source_availability_use_case is None here because
+    # trading_session_calendar_loader is None — not because the candidate is
+    # absent. Candidate presence/absence does not affect this outcome.
     today = date(2026, 7, 17)
     collector = _collector_for_availability_tests(
         accumulation_evaluation=None, trading_session_calendar_loader=None, today=today
     )
     state = collector.collect(_request(today))
 
-    assert state.source_availability_use_case is None
+    assert state.signal_evidence_execution_context is not None
+    assert state.signal_evidence_execution_context.source_availability_use_case is None
 
 
 def test_calendar_loader_invoked_exactly_once_per_workflow_execution():
@@ -177,16 +184,17 @@ def test_calendar_loader_invoked_exactly_once_per_workflow_execution():
     assert len(calls) == 1
 
 
-def test_calendar_window_is_minimal_not_a_fixed_lookback():
-    # The calendar window must be the smallest range that can prove the
-    # session gaps this decision actually needs — min(observed source
-    # date)..latest_completed_session — not an arbitrary fixed lookback
-    # (e.g. 60 calendar days) that risks hitting an unrelated gap elsewhere
-    # in a wider range and failing closed for no reason.
+def test_context_calendar_coverage_uses_eligible_candle_bounds():
+    # coverage_start/coverage_end are derived from the collected candle
+    # series (candles with date <= coverage_end), not from broker rows —
+    # the current implementation never reads broker_summary_date or
+    # broker_daily_flow_date to compute this window. This test sets
+    # broker_summary_date/broker_daily_flow_date to an unrelated value to
+    # prove they have no effect on the calculated bounds.
     today = date(2026, 7, 17)
-    lagged_broker_date = date(2026, 7, 10)  # the oldest observed source date
+    earliest_eligible_candle_date = date(2026, 7, 10)
     eval_result = _eval_result(
-        broker_summary_date=lagged_broker_date, broker_daily_flow_date=lagged_broker_date
+        broker_summary_date=date(2026, 1, 1), broker_daily_flow_date=date(2026, 1, 1)
     )
     calls: list[tuple] = []
 
@@ -195,7 +203,7 @@ def test_calendar_window_is_minimal_not_a_fixed_lookback():
 
         calls.append((coverage_start, coverage_end))
         return KnownTradingSessionCalendar(
-            sessions=(lagged_broker_date, today),
+            sessions=(earliest_eligible_candle_date, today),
             coverage_start=coverage_start,
             coverage_end=coverage_end,
         )
@@ -204,20 +212,21 @@ def test_calendar_window_is_minimal_not_a_fixed_lookback():
         accumulation_evaluation=eval_result,
         trading_session_calendar_loader=calendar_loader,
         today=today,
-        candle_date=lagged_broker_date,
+        candle_date=earliest_eligible_candle_date,
     )
     collector.collect(_request(today))
 
     assert len(calls) == 1
     coverage_start, coverage_end = calls[0]
-    # candles observed_through is `today` (the fake market_repo fixture), the
-    # oldest observed source date is lagged_broker_date — the window must
-    # start there, not 60 days back from `today`.
-    assert coverage_start == lagged_broker_date
-    assert coverage_end == today  # latest_completed_session from the fake session
+    # coverage_start is the earliest eligible candle date selected by the
+    # current implementation (the fake market_repo returns a single candle
+    # dated earliest_eligible_candle_date).
+    assert coverage_start == earliest_eligible_candle_date
+    # coverage_end is the effective session's latest completed session.
+    assert coverage_end == today
 
 
-def test_missing_calendar_loader_falls_back_to_empty_calendar_not_a_crash():
+def test_missing_calendar_loader_yields_typed_unknown_without_empty_calendar():
     from src.application.services.evidence_source_availability_assembler import (
         EvidenceSourceAvailabilityAssembler,
     )
@@ -231,14 +240,17 @@ def test_missing_calendar_loader_falls_back_to_empty_calendar_not_a_crash():
 
     state = collector.collect(_request(today))
 
-    assert state.source_availability_use_case is None
-    # The empty-calendar fallback can't prove any session gap, so an
-    # otherwise-current source still fails closed to UNKNOWN once assessed.
+    # Context contains no availability use case — no empty calendar is
+    # fabricated to stand in for the missing loader.
+    assert state.signal_evidence_execution_context is not None
+    assert state.signal_evidence_execution_context.source_availability_use_case is None
+
+    # EvidenceSourceAvailabilityAssembler(None) produces typed UNKNOWN.
     provenance = SetupProvenance(
         ticker="BBRI",
         candle_rows=tuple(CandleRowIdentity(ticker="BBRI", date=c.date, source=None) for c in state.candles),
     )
-    setup = EvidenceSourceAvailabilityAssembler(state.source_availability_use_case).assess_setup(
+    setup = EvidenceSourceAvailabilityAssembler(state.signal_evidence_execution_context.source_availability_use_case).assess_setup(
         effective_session=state.effective_session, provenance=provenance
     )
     assert setup.assessments[0].status == SourceAvailabilityStatus.UNKNOWN
@@ -337,6 +349,9 @@ def test_accumulation_builder_receives_request_today():
         build_accumulation_candidate_evaluation=build_accumulation_candidate_evaluation,
         evaluate_market_context=None,
         session_resolver=SimpleNamespace(resolve=lambda **kwargs: None),
+        signal_evidence_context_builder=SignalEvidenceExecutionContextBuilder(
+            trading_session_calendar_loader=None
+        ),
     )
 
     collector.collect(_request(historical))
@@ -344,3 +359,50 @@ def test_accumulation_builder_receives_request_today():
     assert received["as_of_date"] == historical
     assert received["ticker"] == "BBRI"
     assert received["window"] == 200
+
+
+def test_collector_stores_exact_context_object_from_builder():
+    from unittest.mock import MagicMock
+    historical = date(2025, 1, 15)
+    sentinel_context = MagicMock()
+    builder_spy = MagicMock()
+    builder_spy.build.return_value = sentinel_context
+
+    market_repo = SimpleNamespace(
+        get_candles=lambda ticker, end_date=None: [SimpleNamespace(close=100.0, date=historical)]
+    )
+    fake_session = _fake_effective_session(historical)
+
+    candidate_builder_calls: list = []
+
+    def recording_accumulation_candidate_builder(**kwargs):
+        candidate_builder_calls.append(kwargs)
+        return _eval_result(broker_summary_date=historical)
+
+    collector = SwingAnalysisInputCollector(
+        market_repository=market_repo,
+        broker_repository=SimpleNamespace(),
+        refresh_data=lambda **kwargs: ("disabled",),
+        build_data_freshness=lambda **kwargs: None,
+        build_flow_detail=lambda **kwargs: None,
+        build_broker_detail=lambda **kwargs: None,
+        build_accumulation_candidate_evaluation=recording_accumulation_candidate_builder,
+        evaluate_market_context=None,
+        session_resolver=SimpleNamespace(resolve=lambda **kwargs: fake_session),
+        signal_evidence_context_builder=builder_spy,
+    )
+
+    state = collector.collect(_request(historical))
+
+    # Assert build was called with the exact resolved session
+    builder_spy.build.assert_called_once()
+    assert builder_spy.build.call_args[1]["effective_session"] is fake_session
+
+    # Assert the nested accumulation candidate builder received the exact
+    # context object produced by the context builder.
+    assert len(candidate_builder_calls) == 1
+    candidate_builder_context = candidate_builder_calls[0]["execution_context"]
+    assert candidate_builder_context is sentinel_context
+
+    # Assert that the final state stores the exact context object from the builder
+    assert state.signal_evidence_execution_context is sentinel_context

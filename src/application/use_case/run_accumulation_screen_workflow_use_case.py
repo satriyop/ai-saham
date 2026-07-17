@@ -12,20 +12,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from src.application.dto.accumulation_screen import AccumulationScreenResponse
-from src.application.services.effective_market_session_resolver import (
-    EffectiveMarketSessionResolver,
-)
 
 if TYPE_CHECKING:
     from src.application.dto.signal_evidence_execution_context import (
         SignalEvidenceExecutionContext,
     )
-    from src.application.services.signal_evidence_execution_context_builder import (
-        SignalEvidenceExecutionContextBuilder,
+    from src.application.use_case.build_live_signal_evidence_execution_context_use_case import (
+        BuildLiveSignalEvidenceExecutionContextUseCase,
     )
 from src.application.services.tracked_broker_flow import (
     TrackedBrokerFlowSnapshot,
@@ -108,9 +105,8 @@ class RunAccumulationScreenWorkflowUseCase:
         accumulation_screener_config,
         rules_loader,
         indicator_registry_factory,
-        signal_evidence_context_builder: SignalEvidenceExecutionContextBuilder,
+        live_signal_evidence_context_use_case: BuildLiveSignalEvidenceExecutionContextUseCase,
         save_watchlist_use_case=None,
-        session_resolver: EffectiveMarketSessionResolver | None = None,
     ) -> None:
         self._screen_use_case = screen_use_case
         self._broker_repository = broker_repository
@@ -119,11 +115,8 @@ class RunAccumulationScreenWorkflowUseCase:
         self._accumulation_screener_config = accumulation_screener_config
         self._rules_loader = rules_loader
         self._indicator_registry_factory = indicator_registry_factory
-        self._signal_evidence_context_builder = signal_evidence_context_builder
+        self._live_signal_evidence_context_uc = live_signal_evidence_context_use_case
         self._save_watchlist_use_case = save_watchlist_use_case
-        self._session_resolver = session_resolver or EffectiveMarketSessionResolver(
-            market_repository
-        )
         # Every mode here (single-window and --multi) is diagnostic/read-only.
         # Canonical observation recording is a separate, explicit workflow
         # (signal-backfill) — see RecordAccumulationObservationsUseCase.
@@ -144,20 +137,8 @@ class RunAccumulationScreenWorkflowUseCase:
             strategy_name=request.strategy_name,
         )
 
-        effective_session = self._session_resolver.resolve(
-            run_at=datetime.now(IDX_TIMEZONE)
-        )
-        coverage_end = (
-            effective_session.latest_completed_session
-            or effective_session.analysis_as_of
-            or effective_session.decision_at.date()
-        )
-        coverage_start = coverage_end - timedelta(days=14)
-
-        execution_context = self._signal_evidence_context_builder.build(
-            effective_session=effective_session,
-            coverage_start=coverage_start,
-            coverage_end=coverage_end,
+        execution_context = self._live_signal_evidence_context_uc.execute(
+            run_at=datetime.now(IDX_TIMEZONE),
         )
 
         if request.multi:

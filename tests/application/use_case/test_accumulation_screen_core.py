@@ -24,6 +24,7 @@ from tests.application.use_case.accumulation_screen_fixtures import (
     _candle,
     _summary,
     _weekdays,
+    make_signal_evidence_execution_context,
 )
 
 
@@ -74,7 +75,8 @@ def test_screen_window_uses_latest_broker_sessions_not_calendar_days():
             window_days=7,
             min_net_buy_days=1,
             as_of_date=as_of,
-        )
+        ),
+        execution_context=make_signal_evidence_execution_context(as_of),
     )
 
     candidate = response.candidates[0]
@@ -108,7 +110,8 @@ def test_screen_passes_as_of_date_to_insider_provider():
             window_days=7,
             min_net_buy_days=1,
             as_of_date=as_of,
-        )
+        ),
+        execution_context=make_signal_evidence_execution_context(as_of),
     )
 
     assert insider_provider.calls
@@ -150,7 +153,8 @@ def test_screen_ignores_unsafe_broker_summary_rows():
             window_days=7,
             min_net_buy_days=1,
             as_of_date=as_of,
-        )
+        ),
+        execution_context=make_signal_evidence_execution_context(as_of),
     )
 
     candidate = response.candidates[0]
@@ -199,8 +203,9 @@ def test_screen_uses_derived_feature_policy_for_trend_threshold():
         as_of_date=as_of,
     )
 
-    assert loose_threshold.execute(request).candidates[0].trend == "SIDE"
-    assert strict_threshold.execute(request).candidates[0].trend == "UP"
+    context = make_signal_evidence_execution_context(as_of)
+    assert loose_threshold.execute(request, execution_context=context).candidates[0].trend == "SIDE"
+    assert strict_threshold.execute(request, execution_context=context).candidates[0].trend == "UP"
 
 
 def test_classify_all_windows_hot_is_sustained():

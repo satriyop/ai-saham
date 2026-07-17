@@ -292,31 +292,8 @@ class AccumulationScreenUseCase:
         self,
         request: accumulation_dto.AccumulationScreenRequest,
         *,
-        execution_context: SignalEvidenceExecutionContext | None = None,
+        execution_context: SignalEvidenceExecutionContext,
     ) -> accumulation_dto.AccumulationScreenResponse:
-        if execution_context is None:
-            from src.application.dto.signal_evidence_execution_context import (
-                SignalEvidenceExecutionContext,
-            )
-            from src.application.services.effective_market_session_resolver import (
-                EffectiveMarketSession,
-            )
-            from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
-            from datetime import datetime
-            as_of = request.as_of_date or date.today()
-            dummy_session = EffectiveMarketSession(
-                run_at=datetime.combine(as_of, MARKET_CLOSE, tzinfo=IDX_TIMEZONE),
-                decision_at=datetime.combine(as_of, MARKET_CLOSE, tzinfo=IDX_TIMEZONE),
-                latest_completed_session=as_of,
-                analysis_as_of=as_of,
-                market_session_name="AFTER_CLOSE",
-                is_eod_pending=False,
-                resolution_source="test",
-            )
-            execution_context = SignalEvidenceExecutionContext(
-                effective_session=dummy_session,
-                source_availability_use_case=None,
-            )
         today = request.as_of_date or date.today()
         candidates: list[accumulation_dto.AccumulationCandidate] = []
         # Collects an AccumulationScreenObservationCandidate for ALL evaluated

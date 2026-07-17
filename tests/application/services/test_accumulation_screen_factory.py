@@ -24,6 +24,7 @@ from tests.application.use_case.accumulation_screen_fixtures import (
     _candle,
     _summary,
     _weekdays,
+    make_signal_evidence_execution_context,
 )
 
 
@@ -107,12 +108,18 @@ def test_bundle_factory_supplies_screen_use_case_and_working_recorder():
     )
 
     # screen_use_case.execute() is read-only — no persistence side effect.
-    response = bundle.screen_use_case.execute(request)
+    response = bundle.screen_use_case.execute(
+        request,
+        execution_context=make_signal_evidence_execution_context(as_of),
+    )
     assert len(response.candidates) == 1
     assert spy_repo.saved == []
 
     # The bundle's recorder is the sole intentional persistence entrypoint.
-    result = bundle.record_observations_use_case.execute(request)
+    result = bundle.record_observations_use_case.execute(
+        request,
+        execution_context=make_signal_evidence_execution_context(as_of),
+    )
     assert result.recorded_count == 1
     assert len(spy_repo.saved) == 1
     assert spy_repo.saved[0].ticker == "BBCA"

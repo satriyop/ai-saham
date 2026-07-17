@@ -9,6 +9,7 @@ from tests.application.use_case.swing_analysis_workflow_fixtures import (
     FakeMarketRepository,
     FakeRegistry,
     _candle,
+    _fake_signal_evidence_context_builder,
     _request,
     _workflow,
 )
@@ -30,6 +31,7 @@ def test_swing_workflow_diagnostics_volatility_context_matches_shared_helper():
         load_swing_config=lambda: {},
         resolve_setup_targets=lambda regime, config: (Decimal("5"), Decimal("5")),
         rules_loader=RulesYamlLoader(),
+        signal_evidence_context_builder=_fake_signal_evidence_context_builder(),
     )
 
     response = workflow.execute(_request(auto_refresh=False))
@@ -187,6 +189,7 @@ def test_swing_workflow_mce_regime_forwarded_to_signal_engine():
         load_swing_config=lambda: {},
         resolve_setup_targets=lambda regime, config: (Decimal("5"), Decimal("5")),
         rules_loader=RulesYamlLoader(),
+        signal_evidence_context_builder=_fake_signal_evidence_context_builder(),
         evaluate_market_context=lambda **kwargs: _RISK_OFF_CONTEXT,
         signal_engine=fake_signal,
         risk_engine=FakeRiskEngine(),

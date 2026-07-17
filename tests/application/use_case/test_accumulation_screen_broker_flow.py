@@ -17,6 +17,7 @@ from tests.application.use_case.accumulation_screen_fixtures import (
     _make_use_case,
     _summary,
     _weekdays,
+    make_signal_evidence_execution_context,
 )
 
 
@@ -36,7 +37,8 @@ def test_bci_cluster_when_three_or_more_tier1_codes_are_net_buyers():
     response = use_case.execute(
         AccumulationScreenRequest(
             tickers=["BBCA"], window_days=7, min_net_buy_days=1, as_of_date=as_of
-        )
+        ),
+        execution_context=make_signal_evidence_execution_context(as_of),
     )
     c = response.candidates[0]
 
@@ -59,7 +61,8 @@ def test_bci_stable_when_one_or_two_tier1_codes_are_net_buyers():
     response = use_case.execute(
         AccumulationScreenRequest(
             tickers=["BBCA"], window_days=7, min_net_buy_days=1, as_of_date=as_of
-        )
+        ),
+        execution_context=make_signal_evidence_execution_context(as_of),
     )
     c = response.candidates[0]
 
@@ -81,7 +84,8 @@ def test_bci_retail_when_no_tier1_codes_are_net_buyers():
     response = use_case.execute(
         AccumulationScreenRequest(
             tickers=["BBCA"], window_days=7, min_net_buy_days=1, as_of_date=as_of
-        )
+        ),
+        execution_context=make_signal_evidence_execution_context(as_of),
     )
     c = response.candidates[0]
 
@@ -99,7 +103,8 @@ def test_bci_none_when_no_daily_flow_data():
     response = use_case.execute(
         AccumulationScreenRequest(
             tickers=["BBCA"], window_days=7, min_net_buy_days=1, as_of_date=as_of
-        )
+        ),
+        execution_context=make_signal_evidence_execution_context(as_of),
     )
     c = response.candidates[0]
 
@@ -127,7 +132,8 @@ def test_bci_counts_all_net_buyers_not_just_top5():
     response = use_case.execute(
         AccumulationScreenRequest(
             tickers=["BBCA"], window_days=7, min_net_buy_days=1, as_of_date=as_of
-        )
+        ),
+        execution_context=make_signal_evidence_execution_context(as_of),
     )
     c = response.candidates[0]
 
@@ -154,7 +160,8 @@ def test_tier1_codes_override_changes_bci():
     resp_default = use_case.execute(
         AccumulationScreenRequest(
             tickers=["BBCA"], window_days=7, min_net_buy_days=1, as_of_date=as_of
-        )
+        ),
+        execution_context=make_signal_evidence_execution_context(as_of),
     )
     assert resp_default.candidates[0].bci_label == BCI_RETAIL
 
@@ -166,6 +173,7 @@ def test_tier1_codes_override_changes_bci():
             min_net_buy_days=1,
             as_of_date=as_of,
             tier1_broker_codes=frozenset({"YP"}),
-        )
+        ),
+        execution_context=make_signal_evidence_execution_context(as_of),
     )
     assert resp_custom.candidates[0].bci_label == BCI_STABLE

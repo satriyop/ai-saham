@@ -33,6 +33,7 @@ from tests.application.use_case.accumulation_screen_fixtures import (
     _candle,
     _summary,
     _weekdays,
+    make_signal_evidence_execution_context,
 )
 
 
@@ -123,7 +124,8 @@ def test_screen_attaches_ticker_notation_without_changing_score():
             window_days=7,
             min_net_buy_days=1,
             as_of_date=as_of,
-        )
+        ),
+        execution_context=make_signal_evidence_execution_context(as_of),
     )
 
     enriched = AccumulationScreenUseCase(
@@ -138,7 +140,8 @@ def test_screen_attaches_ticker_notation_without_changing_score():
             window_days=7,
             min_net_buy_days=1,
             as_of_date=as_of,
-        )
+        ),
+        execution_context=make_signal_evidence_execution_context(as_of),
     )
 
     assert enriched.candidates[0].ticker_notation is not None
@@ -182,7 +185,8 @@ def test_historical_screen_uses_as_of_date_for_point_in_time_enrichment():
             window_days=7,
             min_net_buy_days=1,
             as_of_date=as_of,
-        )
+        ),
+        execution_context=make_signal_evidence_execution_context(as_of),
     )
 
     candidate = response.candidates[0]
@@ -219,7 +223,8 @@ def test_live_screen_passes_none_as_of_date_to_fetch_capable_enrichment():
             window_days=7,
             min_net_buy_days=1,
             as_of_date=None,
-        )
+        ),
+        execution_context=make_signal_evidence_execution_context(date.today()),
     )
 
     assert response.candidates
@@ -303,7 +308,8 @@ def test_screen_derives_forward_pe_from_latest_price_when_cache_has_eps_only():
             window_days=7,
             min_net_buy_days=1,
             as_of_date=as_of,
-        )
+        ),
+        execution_context=make_signal_evidence_execution_context(as_of),
     )
 
     candidate = response.candidates[0]
@@ -384,7 +390,8 @@ def test_screener_populates_signal_assessment():
             min_foreign_flow_score=0.0,
             min_foreign_flow_score_enabled=True,
             as_of_date=as_of,
-        )
+        ),
+        execution_context=make_signal_evidence_execution_context(as_of),
     )
     assert resp.candidates, "expected at least one candidate"
     c = resp.candidates[0]
@@ -415,7 +422,8 @@ def test_candidate_to_dict_emits_canonical_coverage_score():
             min_foreign_flow_score=0.0,
             min_foreign_flow_score_enabled=True,
             as_of_date=as_of,
-        )
+        ),
+        execution_context=make_signal_evidence_execution_context(as_of),
     )
     c = resp.candidates[0]
     assert c.signal_assessment is not None

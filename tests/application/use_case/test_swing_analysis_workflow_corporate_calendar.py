@@ -40,6 +40,9 @@ from src.infrastructure.config.corporate_action_policy_config import (
     load_corporate_action_policy_config,
 )
 from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
+from tests.application.use_case.swing_analysis_workflow_fixtures import (
+    _fake_signal_evidence_context_builder,
+)
 
 
 class FakeMarketRepository:
@@ -177,6 +180,7 @@ def _build_workflow(*, corporate_action_risk_use_case=None) -> SwingAnalysisWork
         load_swing_config=lambda: {},
         resolve_setup_targets=lambda regime, config: (Decimal("5"), Decimal("5")),
         rules_loader=RulesYamlLoader(),
+        signal_evidence_context_builder=_fake_signal_evidence_context_builder(),
         corporate_action_risk_use_case=corporate_action_risk_use_case,
     )
 

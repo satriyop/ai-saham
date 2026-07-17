@@ -7,13 +7,16 @@ Layer: Adapter
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from src.adapters.cli.screen_accum_workflow_factory import (
     create_accumulation_screen_workflow,
+    create_live_signal_evidence_execution_context_use_case,
 )
 from src.application.dto.accumulation_screen import AccumulationScreenRequest
 from src.application.services.universe_loader import resolve_tickers
+from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 
@@ -66,6 +69,14 @@ def run_fresh_accumulation_screen_for_compare(
             swing_config=swing_config,
         )
         use_case = workflow.use_case
+
+        context_use_case = create_live_signal_evidence_execution_context_use_case(
+            workflow.market_repository
+        )
+        execution_context = context_use_case.execute(
+            run_at=datetime.now(IDX_TIMEZONE),
+        )
+
         response = use_case.execute(
             AccumulationScreenRequest(
                 tickers=ticker_list,
@@ -79,7 +90,8 @@ def run_fresh_accumulation_screen_for_compare(
                 resistance_gate_enabled=swing_config.resistance_gate_enabled,
                 resistance_headroom_min_pct=swing_config.resistance_headroom_min_pct,
                 ex_date_warning_days=swing_config.ex_date_warning_days,
-            )
+            ),
+            execution_context=execution_context,
         )
         return FreshAccumulationScreenForCompareResult(candidates=response.candidates[:top])
     except Exception as exc:

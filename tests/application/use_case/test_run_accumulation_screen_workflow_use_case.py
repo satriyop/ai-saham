@@ -1,6 +1,6 @@
 """Tests for the accumulation screen workflow use case."""
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
@@ -10,15 +10,19 @@ from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenResponse,
 )
-from src.application.services.indicator_registry import IndicatorRegistry
-from src.application.services.signal_evidence_execution_context_builder import (
-    SignalEvidenceExecutionContextBuilder,
+from src.application.dto.signal_evidence_execution_context import (
+    SignalEvidenceExecutionContext,
 )
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSession,
+)
+from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from src.application.use_case.run_accumulation_screen_workflow_use_case import (
     RunAccumulationScreenWorkflowRequest,
     RunAccumulationScreenWorkflowUseCase,
 )
+from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from tests.application.use_case.accumulation_screen_fixtures import (
     FakeRulesLoader,
     MockBrokerRepository,
@@ -95,23 +99,38 @@ def _screen_response(candidates=None, window_days=7) -> AccumulationScreenRespon
     )
 
 
-def _fake_session_resolver() -> MagicMock:
-    """A fake EffectiveMarketSessionResolver — the workflow use case must
-    never construct/call the real resolver's IHSG-cache lookups itself in
-    these tests; it only needs *a* resolved session to hand to the
-    projector."""
-    resolver = MagicMock()
-    resolver.resolve.return_value = MagicMock(
+def _fake_effective_session() -> EffectiveMarketSession:
+    decision_at = datetime(2026, 7, 13, 16, 0, tzinfo=IDX_TIMEZONE)
+    return EffectiveMarketSession(
+        run_at=decision_at,
+        decision_at=decision_at,
         latest_completed_session=date(2026, 7, 13),
         analysis_as_of=date(2026, 7, 13),
-        is_eod_pending=False,
         market_session_name="AFTER_CLOSE",
+        is_eod_pending=False,
+        resolution_source="test_fixture",
     )
-    return resolver
+
+
+def _fake_execution_context(effective_session=None) -> SignalEvidenceExecutionContext:
+    return SignalEvidenceExecutionContext(
+        effective_session=effective_session or _fake_effective_session(),
+        source_availability_use_case=None,
+    )
+
+
+class RecordingLiveContextUseCase:
+    def __init__(self, context):
+        self.context = context
+        self.run_at_values = []
+
+    def execute(self, *, run_at):
+        self.run_at_values.append(run_at)
+        return self.context
 
 
 def _make_uc(*, screen_use_case=None, broker_repo=None, market_repo=None,
-             save_uc=None, session_resolver=None) -> RunAccumulationScreenWorkflowUseCase:
+             save_uc=None, live_context_use_case=None) -> RunAccumulationScreenWorkflowUseCase:
     return RunAccumulationScreenWorkflowUseCase(
         screen_use_case=screen_use_case or MagicMock(),
         broker_repository=broker_repo or MagicMock(),
@@ -120,11 +139,11 @@ def _make_uc(*, screen_use_case=None, broker_repo=None, market_repo=None,
         accumulation_screener_config=_ASC_CFG,
         rules_loader=MagicMock(),
         indicator_registry_factory=MagicMock(),
-        signal_evidence_context_builder=SignalEvidenceExecutionContextBuilder(
-            trading_session_calendar_loader=None
+        live_signal_evidence_context_use_case=(
+            live_context_use_case
+            or RecordingLiveContextUseCase(_fake_execution_context())
         ),
         save_watchlist_use_case=save_uc,
-        session_resolver=session_resolver or _fake_session_resolver(),
     )
 
 
@@ -191,18 +210,19 @@ def test_single_mode_executes_screen():
 
 
 def test_single_mode_resolves_effective_session_once():
-    """DQ-002B: resolved once per execute(), not once per candidate."""
+    """DQ-002B: the shared live execution-context use case is called once
+    per execute(), not once per candidate."""
     c1 = _candidate(ticker="A")
     c2 = _candidate(ticker="B")
     c3 = _candidate(ticker="C")
     screen_mock = MagicMock()
     screen_mock.execute.return_value = _screen_response(candidates=[c1, c2, c3])
-    resolver = _fake_session_resolver()
-    uc = _make_uc(screen_use_case=screen_mock, session_resolver=resolver)
+    live_context_uc = RecordingLiveContextUseCase(_fake_execution_context())
+    uc = _make_uc(screen_use_case=screen_mock, live_context_use_case=live_context_uc)
 
     uc.execute(_single_request())
 
-    resolver.resolve.assert_called_once()
+    assert len(live_context_uc.run_at_values) == 1
 
 
 def test_single_mode_applies_min_streak_filter():
@@ -265,21 +285,25 @@ def test_single_mode_zero_min_streak_keeps_all():
 
 
 def test_multi_mode_resolves_effective_session_once_not_per_window():
-    """DQ-002B: resolved once per execute(), shared across all windows —
-    never once per window."""
+    """DQ-002B: the shared live execution-context use case is called once
+    per execute(), shared across all windows — never once per window."""
     screen_mock = MagicMock()
-    screen_mock.execute.side_effect = lambda req, *a, **kw: _screen_response(window_days=req.window_days)
-    resolver = _fake_session_resolver()
-    uc = _make_uc(screen_use_case=screen_mock, session_resolver=resolver)
+    screen_mock.execute.side_effect = (
+        lambda req, *, execution_context: _screen_response(window_days=req.window_days)
+    )
+    live_context_uc = RecordingLiveContextUseCase(_fake_execution_context())
+    uc = _make_uc(screen_use_case=screen_mock, live_context_use_case=live_context_uc)
 
     uc.execute(_multi_request(windows=[7, 30, 90]))
 
-    resolver.resolve.assert_called_once()
+    assert len(live_context_uc.run_at_values) == 1
 
 
 def test_multi_mode_executes_all_windows():
     screen_mock = MagicMock()
-    screen_mock.execute.side_effect = lambda req, *a, **kw: _screen_response(window_days=req.window_days)
+    screen_mock.execute.side_effect = (
+        lambda req, *, execution_context: _screen_response(window_days=req.window_days)
+    )
     uc = _make_uc(screen_use_case=screen_mock)
 
     result = uc.execute(_multi_request(windows=[7, 30]))
@@ -291,7 +315,9 @@ def test_multi_mode_executes_all_windows():
 
 def test_multi_mode_score_filters_disabled():
     screen_mock = MagicMock()
-    screen_mock.execute.side_effect = lambda req, *a, **kw: _screen_response(window_days=req.window_days)
+    screen_mock.execute.side_effect = (
+        lambda req, *, execution_context: _screen_response(window_days=req.window_days)
+    )
     uc = _make_uc(screen_use_case=screen_mock)
 
     uc.execute(_multi_request(windows=[7]))
@@ -305,7 +331,9 @@ def test_multi_mode_score_filters_disabled():
 
 def test_multi_mode_passthrough_min_piotroski():
     screen_mock = MagicMock()
-    screen_mock.execute.side_effect = lambda req, *a, **kw: _screen_response(window_days=req.window_days)
+    screen_mock.execute.side_effect = (
+        lambda req, *, execution_context: _screen_response(window_days=req.window_days)
+    )
     uc = _make_uc(screen_use_case=screen_mock)
 
     uc.execute(_multi_request(windows=[7], min_piotroski=5))
@@ -316,7 +344,9 @@ def test_multi_mode_passthrough_min_piotroski():
 
 def test_multi_mode_tracked_broker_flow():
     screen_mock = MagicMock()
-    screen_mock.execute.side_effect = lambda req, *a, **kw: _screen_response(window_days=req.window_days)
+    screen_mock.execute.side_effect = (
+        lambda req, *, execution_context: _screen_response(window_days=req.window_days)
+    )
 
     broker_repo = MagicMock()
     broker_repo.get_broker_daily_flows.return_value = []
@@ -329,7 +359,9 @@ def test_multi_mode_tracked_broker_flow():
 
 def test_multi_mode_canonical_window_defaults_to_7():
     screen_mock = MagicMock()
-    screen_mock.execute.side_effect = lambda req, *a, **kw: _screen_response(window_days=req.window_days)
+    screen_mock.execute.side_effect = (
+        lambda req, *, execution_context: _screen_response(window_days=req.window_days)
+    )
     uc = _make_uc(screen_use_case=screen_mock)
 
     result = uc.execute(_multi_request(windows=[7, 30, 90]))
@@ -342,7 +374,9 @@ def test_multi_mode_canonical_window_falls_back_to_first_requested_window():
     """S7: when 7 is not among the requested windows, canonical window falls
     back to the first requested window rather than failing."""
     screen_mock = MagicMock()
-    screen_mock.execute.side_effect = lambda req, *a, **kw: _screen_response(window_days=req.window_days)
+    screen_mock.execute.side_effect = (
+        lambda req, *, execution_context: _screen_response(window_days=req.window_days)
+    )
     uc = _make_uc(screen_use_case=screen_mock)
 
     result = uc.execute(_multi_request(windows=[30, 90]))
@@ -393,11 +427,17 @@ def test_strategy_overlay_only_when_flag_true(monkeypatch):
 
     strat_mock = MagicMock()
     strat_mock.resolve.return_value = Path("/tmp/fake.yaml")
-    monkeypatch.setattr(uc_mod, "StrategyLoader", lambda **kw: strat_mock)
+    monkeypatch.setattr(
+        uc_mod, "StrategyLoader", lambda *, rules_loader, registry: strat_mock
+    )
 
     risk_mock = MagicMock()
     risk_mock.execute.return_value.assessment.risk_level_name = "OPEN"
-    monkeypatch.setattr(uc_mod, "AssessRiskUseCase", lambda **kw: risk_mock)
+    monkeypatch.setattr(
+        uc_mod,
+        "AssessRiskUseCase",
+        lambda *, repository, registry, rules_loader: risk_mock,
+    )
 
     result = uc.execute(_single_request(
         strategy_name="test-strat",
@@ -418,10 +458,16 @@ def test_strategy_overlay_skipped_when_flag_false(monkeypatch):
     uc = _make_uc(screen_use_case=screen_mock)
 
     strat_mock = MagicMock()
-    monkeypatch.setattr(uc_mod, "StrategyLoader", lambda **kw: strat_mock)
+    monkeypatch.setattr(
+        uc_mod, "StrategyLoader", lambda *, rules_loader, registry: strat_mock
+    )
 
     risk_mock = MagicMock()
-    monkeypatch.setattr(uc_mod, "AssessRiskUseCase", lambda **kw: risk_mock)
+    monkeypatch.setattr(
+        uc_mod,
+        "AssessRiskUseCase",
+        lambda *, repository, registry, rules_loader: risk_mock,
+    )
 
     result = uc.execute(_single_request(
         strategy_name="test-strat",
@@ -444,11 +490,17 @@ def test_strategy_overlay_top_visible_only(monkeypatch):
 
     strat_mock = MagicMock()
     strat_mock.resolve.return_value = Path("/tmp/fake.yaml")
-    monkeypatch.setattr(uc_mod, "StrategyLoader", lambda **kw: strat_mock)
+    monkeypatch.setattr(
+        uc_mod, "StrategyLoader", lambda *, rules_loader, registry: strat_mock
+    )
 
     risk_mock = MagicMock()
     risk_mock.execute.return_value.assessment.risk_level_name = "OPEN"
-    monkeypatch.setattr(uc_mod, "AssessRiskUseCase", lambda **kw: risk_mock)
+    monkeypatch.setattr(
+        uc_mod,
+        "AssessRiskUseCase",
+        lambda *, repository, registry, rules_loader: risk_mock,
+    )
 
     result = uc.execute(_single_request(
         strategy_name="test-strat",
@@ -472,14 +524,20 @@ def test_strategy_overlay_maps_failures_to_question_mark(monkeypatch):
 
     strat_mock = MagicMock()
     strat_mock.resolve.return_value = Path("/tmp/fake.yaml")
-    monkeypatch.setattr(uc_mod, "StrategyLoader", lambda **kw: strat_mock)
+    monkeypatch.setattr(
+        uc_mod, "StrategyLoader", lambda *, rules_loader, registry: strat_mock
+    )
 
     risk_mock = MagicMock()
     risk_mock.execute.side_effect = [
         MagicMock(assessment=MagicMock(risk_level_name="OPEN")),
         ValueError("boom"),
     ]
-    monkeypatch.setattr(uc_mod, "AssessRiskUseCase", lambda **kw: risk_mock)
+    monkeypatch.setattr(
+        uc_mod,
+        "AssessRiskUseCase",
+        lambda *, repository, registry, rules_loader: risk_mock,
+    )
 
     result = uc.execute(_single_request(
         strategy_name="test-strat",
@@ -505,7 +563,9 @@ def test_missing_strategy_returns_warning(monkeypatch):
     strat_mock.resolve.side_effect = StrategyNotFoundError(
         "missing", searched_paths=["/tmp/missing"]
     )
-    monkeypatch.setattr(uc_mod, "StrategyLoader", lambda **kw: strat_mock)
+    monkeypatch.setattr(
+        uc_mod, "StrategyLoader", lambda *, rules_loader, registry: strat_mock
+    )
 
     result = uc.execute(_single_request(
         strategy_name="missing",
@@ -540,7 +600,9 @@ def test_missing_strategy_still_saves(monkeypatch):
     strat_mock.resolve.side_effect = StrategyNotFoundError(
         "missing", searched_paths=["/tmp/missing"]
     )
-    monkeypatch.setattr(uc_mod, "StrategyLoader", lambda **kw: strat_mock)
+    monkeypatch.setattr(
+        uc_mod, "StrategyLoader", lambda *, rules_loader, registry: strat_mock
+    )
 
     result = uc.execute(_single_request(
         strategy_name="missing",
@@ -628,3 +690,155 @@ def test_save_uses_top_candidates():
     call_args = save_mock.execute.call_args[0][0]
     assert len(call_args.candidates) == 3
     assert result.save_result is not None
+
+
+class RecordingScreenFake:
+    def __init__(self, responses: dict[int, AccumulationScreenResponse] | None = None) -> None:
+        self.recorded_contexts = []
+        self.recorded_requests = []
+        self.responses = responses or {}
+
+    def execute(
+        self,
+        request: "AccumulationScreenRequest",
+        *,
+        execution_context: "SignalEvidenceExecutionContext",
+    ) -> "AccumulationScreenResponse":
+        self.recorded_contexts.append(execution_context)
+        self.recorded_requests.append(request)
+        return self.responses.get(
+            request.window_days,
+            _screen_response(window_days=request.window_days),
+        )
+
+
+def test_multi_mode_context_lineage_preserves_object_identity(monkeypatch):
+    from src.application.use_case import (
+        run_accumulation_screen_workflow_use_case as uc_mod,
+    )
+
+    sentinel_context = _fake_execution_context()
+    live_context_uc = RecordingLiveContextUseCase(sentinel_context)
+    screen_fake = RecordingScreenFake()
+
+    captured_projection_sessions = []
+    real_project_multi = uc_mod.project_multi_screen_result
+
+    def spy_project_multi_screen_result(
+        multi_results,
+        *,
+        tracked_broker_flow,
+        windows,
+        top,
+        sort_by,
+        squeeze_only,
+        coiled_spring_min_foreign_flow_score,
+        coiled_spring_bb_pctile,
+        canonical_window,
+        effective_session,
+    ):
+        captured_projection_sessions.append(effective_session)
+        return real_project_multi(
+            multi_results,
+            tracked_broker_flow=tracked_broker_flow,
+            windows=windows,
+            top=top,
+            sort_by=sort_by,
+            squeeze_only=squeeze_only,
+            coiled_spring_min_foreign_flow_score=coiled_spring_min_foreign_flow_score,
+            coiled_spring_bb_pctile=coiled_spring_bb_pctile,
+            canonical_window=canonical_window,
+            effective_session=effective_session,
+        )
+
+    monkeypatch.setattr(
+        uc_mod, "project_multi_screen_result", spy_project_multi_screen_result
+    )
+
+    uc = RunAccumulationScreenWorkflowUseCase(
+        screen_use_case=screen_fake,
+        broker_repository=MagicMock(),
+        market_repository=MagicMock(),
+        swing_config=_SWING_CFG,
+        accumulation_screener_config=_ASC_CFG,
+        rules_loader=MagicMock(),
+        indicator_registry_factory=MagicMock(),
+        live_signal_evidence_context_use_case=live_context_uc,
+        save_watchlist_use_case=None,
+    )
+
+    uc.execute(_multi_request(windows=[7, 30, 90]))
+
+    # Live context use case must be called exactly once per workflow execution.
+    assert len(live_context_uc.run_at_values) == 1
+
+    # Screen receives the exact same context object across all 3 windows.
+    assert len(screen_fake.recorded_contexts) == 3
+    assert screen_fake.recorded_contexts[0] is sentinel_context
+    assert screen_fake.recorded_contexts[1] is sentinel_context
+    assert screen_fake.recorded_contexts[2] is sentinel_context
+
+    # Projection receives context.effective_session.
+    assert captured_projection_sessions == [sentinel_context.effective_session]
+
+
+def test_single_mode_context_lineage_preserves_object_identity(monkeypatch):
+    from src.application.use_case import (
+        run_accumulation_screen_workflow_use_case as uc_mod,
+    )
+
+    sentinel_context = _fake_execution_context()
+    live_context_uc = RecordingLiveContextUseCase(sentinel_context)
+    screen_fake = RecordingScreenFake()
+
+    captured_projection_sessions = []
+    real_project_single = uc_mod.project_single_screen_result
+
+    def spy_project_single_screen_result(
+        response,
+        *,
+        vwap_only,
+        squeeze_only,
+        top,
+        min_streak,
+        coiled_spring_bb_pctile,
+        effective_session,
+    ):
+        captured_projection_sessions.append(effective_session)
+        return real_project_single(
+            response,
+            vwap_only=vwap_only,
+            squeeze_only=squeeze_only,
+            top=top,
+            min_streak=min_streak,
+            coiled_spring_bb_pctile=coiled_spring_bb_pctile,
+            effective_session=effective_session,
+        )
+
+    monkeypatch.setattr(
+        uc_mod, "project_single_screen_result", spy_project_single_screen_result
+    )
+
+    uc = RunAccumulationScreenWorkflowUseCase(
+        screen_use_case=screen_fake,
+        broker_repository=MagicMock(),
+        market_repository=MagicMock(),
+        swing_config=_SWING_CFG,
+        accumulation_screener_config=_ASC_CFG,
+        rules_loader=MagicMock(),
+        indicator_registry_factory=MagicMock(),
+        live_signal_evidence_context_use_case=live_context_uc,
+        save_watchlist_use_case=None,
+    )
+
+    uc.execute(_single_request())
+
+    # Live context use case must be called exactly once per workflow execution.
+    assert len(live_context_uc.run_at_values) == 1
+
+    # Single-window screen receives its exact returned context.
+    assert len(screen_fake.recorded_contexts) == 1
+    assert screen_fake.recorded_contexts[0] is sentinel_context
+
+    # Projection receives context.effective_session.
+    assert captured_projection_sessions == [sentinel_context.effective_session]

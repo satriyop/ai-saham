@@ -114,10 +114,12 @@ class FakeAccumulationScreenUseCase:
         self.observations = observations
         self.requests = []
         self.effective_sessions = []
+        self.recorded_contexts = []
 
-    def execute(self, request, execution_context=None):
+    def execute(self, request, *, execution_context):
         self.requests.append(request)
-        effective_session = execution_context.effective_session if execution_context else None
+        self.recorded_contexts.append(execution_context)
+        effective_session = execution_context.effective_session
         self.effective_sessions.append(effective_session)
         recorded_count = 0
         for ticker in request.tickers:
@@ -147,7 +149,7 @@ class FakeAccumulationScreenUseCaseWithFingerprint:
         self.observations = observations
         self.requests = []
 
-    def execute(self, request, execution_context=None):
+    def execute(self, request, *, execution_context):
         self.requests.append(request)
         assert request.as_of_date is not None
         market_context = request.market_context
@@ -553,19 +555,31 @@ def test_backfill_resolves_one_deterministic_session_per_trading_date():
         )
     )
 
-    # 2 dates x 3 windows = 6 record() calls, but only 2 distinct sessions —
-    # one resolve per date, reused across all windows for that date.
-    assert len(screen.effective_sessions) == 6
-    assert all(session is not None for session in screen.effective_sessions)
-    first_date_sessions = screen.effective_sessions[0:3]
-    second_date_sessions = screen.effective_sessions[3:6]
-    assert len(set(id(s) for s in first_date_sessions)) == 1
-    assert len(set(id(s) for s in second_date_sessions)) == 1
-    assert first_date_sessions[0] is not second_date_sessions[0]
+    # 2 dates x 3 windows = 6 record() calls, but only 2 distinct contexts —
+    # one resolve/builder call per date, reused across all windows for that date.
+    assert len(screen.recorded_contexts) == 6
+    assert all(ctx is not None for ctx in screen.recorded_contexts)
+    first_date_contexts = screen.recorded_contexts[0:3]
+    second_date_contexts = screen.recorded_contexts[3:6]
 
-    decision_at = first_date_sessions[0].decision_at
-    assert decision_at.date() == first_date
-    assert decision_at.hour == 16 and decision_at.minute == 0
+    # All windows receive the same context object by identity:
+    assert first_date_contexts[0] is first_date_contexts[1]
+    assert first_date_contexts[1] is first_date_contexts[2]
+
+    assert second_date_contexts[0] is second_date_contexts[1]
+    assert second_date_contexts[1] is second_date_contexts[2]
+
+    # Different dates receive different context objects:
+    assert first_date_contexts[0] is not second_date_contexts[0]
+
+    # Their effective sessions have the corresponding deterministic dates:
+    first_decision_at = first_date_contexts[0].effective_session.decision_at
+    assert first_decision_at.date() == first_date
+    assert first_decision_at.hour == 16 and first_decision_at.minute == 0
+
+    second_decision_at = second_date_contexts[0].effective_session.decision_at
+    assert second_decision_at.date() == second_date
+    assert second_decision_at.hour == 16 and second_decision_at.minute == 0
 
 
 def _request_builder() -> BuildSignalObservationScreenRequest:

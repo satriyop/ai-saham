@@ -30,6 +30,7 @@ from tests.application.use_case.swing_analysis_workflow_fixtures import (
     FakeMarketRepository,
     FakeRegistry,
     _candle,
+    _fake_signal_evidence_context_builder,
     _request,
     _workflow,
 )
@@ -71,6 +72,7 @@ def _base_kwargs(market_repo, **overrides):
         load_swing_config=lambda: {},
         resolve_setup_targets=lambda regime, config: (Decimal("5"), Decimal("5")),
         rules_loader=_FakeRulesLoader(),
+        signal_evidence_context_builder=_fake_signal_evidence_context_builder(),
     )
     kwargs.update(overrides)
     return kwargs

@@ -97,6 +97,7 @@ class SwingAnalysisWorkflowUseCase:
         load_swing_config: Callable[[], Any],
         resolve_setup_targets: Callable[[str | None, Any], tuple[Decimal, Decimal]],
         rules_loader: RulesLoader,
+        signal_evidence_context_builder: "SignalEvidenceExecutionContextBuilder",
         evaluate_market_context: Callable[..., "MarketContext"] | None = None,
         structural_gates: list[RiskGate] | None = None,
         execution_gates: list[RiskGate] | None = None,
@@ -113,7 +114,6 @@ class SwingAnalysisWorkflowUseCase:
         company_quality_context_builder_factory: (
             Callable[[], CompanyQualityContextEvidenceBuilder] | None
         ) = None,
-        signal_evidence_context_builder: "SignalEvidenceExecutionContextBuilder" = None,
         session_resolver: EffectiveMarketSessionResolver | None = None,
     ) -> None:
         self._market_repo = market_repository

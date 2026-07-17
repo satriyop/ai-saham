@@ -60,8 +60,8 @@ class SwingAnalysisInputCollector:
         build_accumulation_candidate_evaluation: (
             Callable[..., "AccumulationCandidateEvaluationResult | None"]
         ),
+        signal_evidence_context_builder: "SignalEvidenceExecutionContextBuilder",
         evaluate_market_context: Callable[..., "MarketContext"] | None,
-        signal_evidence_context_builder: "SignalEvidenceExecutionContextBuilder | None" = None,
         session_resolver: EffectiveMarketSessionResolver | None = None,
     ) -> None:
         self._market_repo = market_repository
@@ -71,13 +71,6 @@ class SwingAnalysisInputCollector:
         self._build_flow_detail = build_flow_detail
         self._build_broker_detail = build_broker_detail
         self._build_accumulation_candidate_evaluation = build_accumulation_candidate_evaluation
-        if signal_evidence_context_builder is None:
-            from src.application.services.signal_evidence_execution_context_builder import (
-                SignalEvidenceExecutionContextBuilder,
-            )
-            signal_evidence_context_builder = SignalEvidenceExecutionContextBuilder(
-                trading_session_calendar_loader=None
-            )
         self._signal_evidence_context_builder = signal_evidence_context_builder
         self._evaluate_market_context = evaluate_market_context
         self._session_resolver = session_resolver or EffectiveMarketSessionResolver(

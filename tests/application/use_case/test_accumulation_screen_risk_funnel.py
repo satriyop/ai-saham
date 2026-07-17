@@ -21,6 +21,7 @@ from tests.application.use_case.accumulation_screen_fixtures import (
     _summary,
     _weekdays,
     execute_and_record,
+    make_signal_evidence_execution_context,
 )
 
 
@@ -33,7 +34,8 @@ def test_min_piotroski_zero_does_not_filter():
             min_net_buy_days=1,
             as_of_date=as_of,
             min_piotroski=0,
-        )
+        ),
+        execution_context=make_signal_evidence_execution_context(as_of),
     )
     assert len(response.candidates) == 1
 
@@ -47,7 +49,8 @@ def test_min_piotroski_excludes_below_threshold():
             min_net_buy_days=1,
             as_of_date=as_of,
             min_piotroski=5,
-        )
+        ),
+        execution_context=make_signal_evidence_execution_context(as_of),
     )
     assert len(response.candidates) == 0
 
@@ -61,7 +64,8 @@ def test_min_piotroski_includes_at_threshold():
             min_net_buy_days=1,
             as_of_date=as_of,
             min_piotroski=5,
-        )
+        ),
+        execution_context=make_signal_evidence_execution_context(as_of),
     )
     assert len(response.candidates) == 1
 
@@ -75,7 +79,8 @@ def test_min_piotroski_excludes_when_no_fundamentals():
             min_net_buy_days=1,
             as_of_date=as_of,
             min_piotroski=4,
-        )
+        ),
+        execution_context=make_signal_evidence_execution_context(as_of),
     )
     assert len(response.candidates) == 0
 
@@ -89,7 +94,8 @@ def test_min_piotroski_passes_when_no_fundamentals_and_gate_disabled():
             min_net_buy_days=1,
             as_of_date=as_of,
             min_piotroski=0,
-        )
+        ),
+        execution_context=make_signal_evidence_execution_context(as_of),
     )
     assert len(response.candidates) == 1
 
@@ -106,7 +112,8 @@ def test_market_cap_floor_excludes_below_threshold():
             min_net_buy_days=1,
             as_of_date=as_of,
             min_market_cap_idr=1_000_000_000_000,
-        )
+        ),
+        execution_context=make_signal_evidence_execution_context(as_of),
     )
     assert len(response.candidates) == 0
     assert response.tickers_skipped == 1
@@ -124,7 +131,8 @@ def test_market_cap_floor_includes_at_or_above_threshold():
             min_net_buy_days=1,
             as_of_date=as_of,
             min_market_cap_idr=1_000_000_000_000,
-        )
+        ),
+        execution_context=make_signal_evidence_execution_context(as_of),
     )
     assert len(response.candidates) == 1
 
@@ -144,7 +152,8 @@ def test_market_cap_floor_skips_enrichment_for_rejected_ticker():
             min_net_buy_days=1,
             as_of_date=as_of,
             min_market_cap_idr=1_000_000_000_000,
-        )
+        ),
+        execution_context=make_signal_evidence_execution_context(as_of),
     )
     # Fundamentals fetched once for the gate check
     fund_prov.get_fundamentals.assert_called_once()
@@ -169,7 +178,8 @@ def test_piotroski_gate_skips_enrichment_for_rejected_ticker():
             min_net_buy_days=1,
             as_of_date=as_of,
             min_piotroski=5,
-        )
+        ),
+        execution_context=make_signal_evidence_execution_context(as_of),
     )
     fund_prov.get_fundamentals.assert_called_once()
     seasonality_prov.get_seasonal_edge.assert_not_called()
@@ -189,7 +199,8 @@ def test_no_gate_active_fundamentals_fetched_in_enrichment_pass():
             min_net_buy_days=1,
             as_of_date=as_of,
             # No gate — min_market_cap_idr=0 and min_piotroski=0 (defaults)
-        )
+        ),
+        execution_context=make_signal_evidence_execution_context(as_of),
     )
     assert len(response.candidates) == 1
     # Fundamentals still fetched exactly once (in enrichment pass, not gate pass)

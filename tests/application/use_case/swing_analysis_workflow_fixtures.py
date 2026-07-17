@@ -4,10 +4,17 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from src.application.dto.swing_analysis import SwingAnalysisWorkflowRequest
+from src.application.services.signal_evidence_execution_context_builder import (
+    SignalEvidenceExecutionContextBuilder,
+)
 from src.application.use_case.swing_analysis_workflow_use_case import SwingAnalysisWorkflowUseCase
 from src.domain.entities.candle import Candle
 from src.domain.ports.candidate_observations_repository import CandidateObservation
 from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
+
+
+def _fake_signal_evidence_context_builder() -> SignalEvidenceExecutionContextBuilder:
+    return SignalEvidenceExecutionContextBuilder(trading_session_calendar_loader=None)
 
 
 class FakeMarketRepository:
@@ -189,4 +196,5 @@ def _workflow(market_repo, calls: list[str]) -> SwingAnalysisWorkflowUseCase:
         load_swing_config=lambda: {},
         resolve_setup_targets=lambda regime, config: (Decimal("5"), Decimal("5")),
         rules_loader=RulesYamlLoader(),
+        signal_evidence_context_builder=_fake_signal_evidence_context_builder(),
     )

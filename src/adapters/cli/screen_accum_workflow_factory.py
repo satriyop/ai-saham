@@ -33,6 +33,9 @@ from src.infrastructure.persistence.ihsg_trading_session_calendar_provider impor
 )
 from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
+from src.application.use_case.build_live_signal_evidence_execution_context_use_case import (
+    BuildLiveSignalEvidenceExecutionContextUseCase,
+)
 from src.application.use_case.run_accumulation_screen_workflow_use_case import (
     RunAccumulationScreenWorkflowUseCase,
 )
@@ -159,6 +162,30 @@ def create_accumulation_screen_workflow_bundle(
     )
 
 
+def create_live_signal_evidence_execution_context_use_case(
+    market_repository: MarketDataRepository,
+) -> BuildLiveSignalEvidenceExecutionContextUseCase:
+    """Wire the shared live-screen execution-context use case.
+
+    Wiring only — no coverage dates or availability policy are computed
+    here. Both `saham screen accum` and `saham screen compare` must build
+    this through this one helper so they resolve the effective session and
+    the 14-day IHSG-backed coverage window identically.
+    """
+    return BuildLiveSignalEvidenceExecutionContextUseCase(
+        session_resolver=EffectiveMarketSessionResolver(market_repository),
+        context_builder=SignalEvidenceExecutionContextBuilder(
+            trading_session_calendar_loader=lambda start, end:
+                IHSGTradingSessionCalendarProvider(
+                    market_repository
+                ).load(
+                    coverage_start=start,
+                    coverage_end=end,
+                )
+        ),
+    )
+
+
 def create_run_accumulation_screen_workflow_use_case(
     *,
     db_path: Path,
@@ -183,17 +210,12 @@ def create_run_accumulation_screen_workflow_use_case(
         accumulation_screener_config=screener_config,
         rules_loader=deps.rules_loader_factory(),
         indicator_registry_factory=deps.indicator_registry_factory,
-        signal_evidence_context_builder=SignalEvidenceExecutionContextBuilder(
-            trading_session_calendar_loader=lambda start, end:
-                IHSGTradingSessionCalendarProvider(
-                    deps.market_repository
-                ).load(
-                    coverage_start=start,
-                    coverage_end=end,
-                )
+        live_signal_evidence_context_use_case=(
+            create_live_signal_evidence_execution_context_use_case(
+                deps.market_repository
+            )
         ),
         save_watchlist_use_case=SaveScreenWatchlistUseCase(
             SQLiteWatchlistRepository(db_path)
         ),
-        session_resolver=EffectiveMarketSessionResolver(deps.market_repository),
     )

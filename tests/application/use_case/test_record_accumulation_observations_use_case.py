@@ -6,7 +6,10 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
-from src.application.dto.accumulation_screen import AccumulationScreenRequest
+from src.application.dto.accumulation_screen import (
+    AccumulationScreenRequest,
+    AccumulationScreenResponse,
+)
 from src.application.services.accumulation_screen_factory import (
     create_accumulation_screen_use_case_bundle,
 )
@@ -14,6 +17,9 @@ from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSession,
 )
 from src.application.services.indicator_registry import IndicatorRegistry
+from src.application.use_case.record_accumulation_observations_use_case import (
+    RecordAccumulationObservationsUseCase,
+)
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.application.dto.signal_evidence_execution_context import (
     SignalEvidenceExecutionContext,
@@ -216,3 +222,94 @@ def test_no_effective_session_leaves_provenance_fields_empty():
     assert saved.is_eod_pending is None
     assert saved.resolution_source is None
     assert saved.resolution_notes == ()
+
+
+def test_record_use_case_omitting_context_raises_type_error():
+    import pytest
+    bundle, as_of = _build_bundle(None)
+    with pytest.raises(TypeError):
+        # execute() requires execution_context as a mandatory keyword-only argument
+        bundle.record_observations_use_case.execute(
+            AccumulationScreenRequest(
+                tickers=["BBCA"],
+                window_days=7,
+                min_net_buy_days=1,
+                as_of_date=as_of,
+            ),
+        )
+
+
+def test_screen_use_case_omitting_context_raises_type_error():
+    import pytest
+    bundle, as_of = _build_bundle(None)
+    with pytest.raises(TypeError):
+        # execute() requires execution_context as a mandatory keyword-only argument
+        bundle.screen_use_case.execute(
+            AccumulationScreenRequest(
+                tickers=["BBCA"],
+                window_days=7,
+                min_net_buy_days=1,
+                as_of_date=as_of,
+            ),
+        )
+
+
+class _RecordingScreenFake:
+    def __init__(self, response: AccumulationScreenResponse) -> None:
+        self._response = response
+        self.recorded_contexts: list[SignalEvidenceExecutionContext] = []
+
+    def execute(
+        self,
+        request: AccumulationScreenRequest,
+        *,
+        execution_context: SignalEvidenceExecutionContext,
+    ) -> AccumulationScreenResponse:
+        self.recorded_contexts.append(execution_context)
+        return self._response
+
+
+class _RecordingPersister:
+    def __init__(self) -> None:
+        self.recorded_effective_sessions: list[EffectiveMarketSession] = []
+
+    def persist(self, observation_candidates, screened_at, request, *, effective_session):
+        self.recorded_effective_sessions.append(effective_session)
+        return len(observation_candidates)
+
+
+def test_recorder_passes_exact_context_to_screen_and_exact_session_to_persister():
+    as_of = date(2026, 7, 16)
+    context = _context(as_of)
+    response = AccumulationScreenResponse(
+        candidates=[],
+        screened_at=as_of,
+        window_days=7,
+        total_tickers_checked=0,
+        tickers_skipped=0,
+        provider="idx",
+        observation_candidates=[],
+    )
+    screen_fake = _RecordingScreenFake(response)
+    persister = _RecordingPersister()
+    recorder = RecordAccumulationObservationsUseCase(
+        screen_use_case=screen_fake,
+        observation_persister=persister,
+    )
+
+    result = recorder.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"],
+            window_days=7,
+            min_net_buy_days=1,
+            as_of_date=as_of,
+        ),
+        execution_context=context,
+    )
+
+    assert result.recorded_count == 0
+    assert len(screen_fake.recorded_contexts) == 1
+    assert screen_fake.recorded_contexts[0] is context
+
+    assert len(persister.recorded_effective_sessions) == 1
+    assert persister.recorded_effective_sessions[0] is context.effective_session
