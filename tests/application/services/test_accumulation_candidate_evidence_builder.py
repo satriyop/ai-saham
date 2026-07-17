@@ -20,6 +20,9 @@ from src.application.services.accumulation_candidate_evidence_builder import (
 from src.application.services.benchmark_excess_return_calculator import (
     BenchmarkExcessReturnResult,
 )
+from src.application.services.candidate_setup_phase_evidence_assembler import (
+    CandidateSetupPhaseEvidenceAssembler,
+)
 from src.application.services.primary_setup_family_resolver import (
     PrimarySetupFamilyResolver,
 )
@@ -103,6 +106,18 @@ class _FakeBenchmarkExcessReturnCalculator:
         if self._raise_error:
             raise RuntimeError("benchmark excess return calc failed")
         return self._result
+
+
+def _candle(ticker: str, on_date: date) -> Candle:
+    return Candle(
+        ticker=ticker,
+        date=on_date,
+        open=Decimal("100"),
+        high=Decimal("101"),
+        low=Decimal("99"),
+        close=Decimal("100"),
+        volume=1_000_000,
+    )
 
 
 def _candles(ticker: str, start: date, count: int) -> list[Candle]:
@@ -313,3 +328,221 @@ class TestSetupPhaseAttachesBenchmarkExcessReturnOnSuccess:
         assert result is not None
         assert candidate.benchmark_excess_return_5_session.excess_return_pct == 3.3
         assert candidate.benchmark_excess_return_20_session.excess_return_pct == 7.7
+
+
+class _RecordingMarketRepository:
+    """Records every get_candles() call for repository-query-count assertions."""
+
+    def __init__(self, candles_by_ticker: dict[str, list[Candle]]) -> None:
+        self._candles_by_ticker = candles_by_ticker
+        self.calls: list[tuple[str, date | None]] = []
+
+    def get_candles(self, ticker, start_date=None, end_date=None):
+        self.calls.append((ticker, end_date))
+        return list(self._candles_by_ticker.get(ticker, []))
+
+    def get_candle_source(self, ticker, on_date):
+        return None
+
+
+class _RecordingBenchmarkExcessReturnCalculator:
+    """Captures the exact candle tuples/date passed to calculate()."""
+
+    def __init__(self, result: BenchmarkExcessReturnResult) -> None:
+        self._result = result
+        self.calls: list[dict] = []
+
+    def calculate(self, *, ticker_candles, benchmark_candles, as_of_date, benchmark="IHSG"):
+        self.calls.append(
+            {
+                "ticker_candles": ticker_candles,
+                "benchmark_candles": benchmark_candles,
+                "as_of_date": as_of_date,
+            }
+        )
+        return self._result
+
+
+class _RecordingAssembler(CandidateSetupPhaseEvidenceAssembler):
+    """Records the exact candle arguments build_setup_evidence()/detect_setup_phase()
+    receive, without duplicating normalization logic — it only delegates and
+    records what the real assembler passed along.
+    """
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.build_setup_evidence_calls: list[dict] = []
+        self.detect_setup_phase_calls: list[dict] = []
+        self.built_setup_evidence = None
+
+    def build_setup_evidence(self, **kwargs):
+        self.build_setup_evidence_calls.append(kwargs)
+        result = super().build_setup_evidence(**kwargs)
+        self.built_setup_evidence = result
+        return result
+
+    def detect_setup_phase(self, **kwargs):
+        self.detect_setup_phase_calls.append(kwargs)
+        return "SENTINEL_PHASE"
+
+
+class TestBenchmarkExcessReturnUsesCanonicalCandleRows:
+    """Finding 3 regression: calculator, setup builder, and phase detector must
+    consume the same normalized rows the provenance records — a wrong-ticker
+    or future row must never influence calculation while being absent from
+    provenance.
+    """
+
+    def test_wrong_ticker_and_future_rows_excluded_and_identity_shared(self):
+        ticker = "BBCA"
+        snapshot_date = date(2026, 6, 15)
+
+        ticker_candles = [
+            _candle("BBCA", date(2026, 6, 15)),
+            _candle("ASII", date(2026, 6, 14)),
+            _candle("BBCA", date(2026, 6, 16)),
+            _candle("BBCA", date(2026, 6, 13)),
+        ]
+        benchmark_candles = [
+            _candle("IHSG", date(2026, 6, 16)),
+            _candle("BBCA", date(2026, 6, 14)),
+            _candle("IHSG", date(2026, 6, 13)),
+            _candle("IHSG", date(2026, 6, 15)),
+        ]
+        market_repo = _RecordingMarketRepository(
+            {
+                ticker: ticker_candles,
+                CANONICAL_BENCHMARK_TICKER: benchmark_candles,
+            }
+        )
+        excess_return_result = BenchmarkExcessReturnResult(
+            excess_return_vs_ihsg_5_session=_excess_return(5, 3.3),
+            excess_return_vs_ihsg_20_session=_excess_return(20, 7.7),
+        )
+        calculator = _RecordingBenchmarkExcessReturnCalculator(excess_return_result)
+        assembler = _RecordingAssembler(market_repo, None)
+        candidate = _candidate(ticker=ticker)
+
+        result = assembler.detect_setup_phase_with_benchmark_excess_return(
+            ticker=ticker,
+            snapshot_date=snapshot_date,
+            candidate=candidate,
+            flow_evidence=None,
+            setup_family=None,
+            benchmark_excess_return_calculator=calculator,
+        )
+
+        assert result == "SENTINEL_PHASE"
+
+        # 1. Repository queries are exactly one ticker read + one benchmark read.
+        assert market_repo.calls == [
+            (ticker, snapshot_date),
+            (CANONICAL_BENCHMARK_TICKER, snapshot_date),
+        ]
+
+        # 2-6. Calculator receives only the canonical ticker/benchmark rows.
+        assert len(calculator.calls) == 1
+        calc_call = calculator.calls[0]
+        recorded_calculator_ticker_candles = calc_call["ticker_candles"]
+        recorded_calculator_benchmark_candles = calc_call["benchmark_candles"]
+        assert tuple(c.date for c in recorded_calculator_ticker_candles) == (
+            date(2026, 6, 13),
+            date(2026, 6, 15),
+        )
+        assert all(c.ticker == "BBCA" for c in recorded_calculator_ticker_candles)
+        assert tuple(c.date for c in recorded_calculator_benchmark_candles) == (
+            date(2026, 6, 13),
+            date(2026, 6, 15),
+        )
+        assert all(c.ticker == "IHSG" for c in recorded_calculator_benchmark_candles)
+        assert calc_call["as_of_date"] == snapshot_date
+
+        # 7-8. build_setup_evidence() receives the exact same normalized
+        # tuple objects the calculator received.
+        assert len(assembler.build_setup_evidence_calls) == 1
+        build_call = assembler.build_setup_evidence_calls[0]
+        recorded_build_ticker_candles = build_call["candles"]
+        recorded_build_benchmark_candles = build_call["benchmark_candles"]
+        assert recorded_build_ticker_candles is recorded_calculator_ticker_candles
+        assert recorded_build_benchmark_candles is recorded_calculator_benchmark_candles
+
+        # 9. detect_setup_phase() receives the exact same normalized ticker
+        # tuple object as the calculator.
+        assert len(assembler.detect_setup_phase_calls) == 1
+        detect_call = assembler.detect_setup_phase_calls[0]
+        assert detect_call["candles"] is recorded_calculator_ticker_candles
+
+        # 10-11. Provenance contains only the canonical rows.
+        built = assembler.built_setup_evidence
+        assert tuple(
+            (row.ticker, row.date) for row in built.provenance.candle_rows
+        ) == (("BBCA", date(2026, 6, 13)), ("BBCA", date(2026, 6, 15)))
+        assert tuple(
+            (row.ticker, row.date) for row in built.provenance.benchmark_candle_rows
+        ) == (("IHSG", date(2026, 6, 13)), ("IHSG", date(2026, 6, 15)))
+
+        # 12. The ASII row, wrong benchmark row, and both future rows are
+        # absent from calculator inputs, setup-builder inputs, provenance,
+        # and the phase-detector input.
+        forbidden_ticker_rows = {("ASII", date(2026, 6, 14)), ("BBCA", date(2026, 6, 16))}
+        forbidden_benchmark_rows = {
+            ("BBCA", date(2026, 6, 14)),
+            ("IHSG", date(2026, 6, 16)),
+        }
+        observed_ticker_rows = {
+            (c.ticker, c.date) for c in recorded_calculator_ticker_candles
+        } | {(row.ticker, row.date) for row in built.provenance.candle_rows}
+        observed_benchmark_rows = {
+            (c.ticker, c.date) for c in recorded_calculator_benchmark_candles
+        } | {(row.ticker, row.date) for row in built.provenance.benchmark_candle_rows}
+        assert not (forbidden_ticker_rows & observed_ticker_rows)
+        assert not (forbidden_benchmark_rows & observed_benchmark_rows)
+        assert not any(
+            (c.ticker, c.date) in forbidden_ticker_rows for c in detect_call["candles"]
+        )
+
+        # Existing behavior preserved: diagnostic attributes still attached.
+        assert candidate.benchmark_excess_return_5_session.excess_return_pct == 3.3
+        assert candidate.benchmark_excess_return_20_session.excess_return_pct == 7.7
+
+
+class TestBuildSetupEvidenceDefensiveNormalization:
+    """Direct coverage for build_setup_evidence() alone: it must independently
+    exclude wrong-ticker and future rows for callers other than the setup-
+    phase method (e.g. swing analysis, which already has a resolved
+    setup_eval).
+    """
+
+    def test_excludes_wrong_ticker_and_future_stock_and_benchmark_rows(self):
+        ticker = "BBCA"
+        snapshot_date = date(2026, 6, 15)
+        candles = [
+            _candle("BBCA", date(2026, 6, 13)),
+            _candle("BBCA", date(2026, 6, 15)),
+            _candle("ASII", date(2026, 6, 14)),
+            _candle("BBCA", date(2026, 6, 16)),
+        ]
+        benchmark_candles = [
+            _candle("IHSG", date(2026, 6, 13)),
+            _candle("IHSG", date(2026, 6, 15)),
+            _candle("BBCA", date(2026, 6, 14)),
+            _candle("IHSG", date(2026, 6, 16)),
+        ]
+        assembler = CandidateSetupPhaseEvidenceAssembler(_MarketRepository({}), None)
+        candidate = _candidate(ticker=ticker)
+
+        built = assembler.build_setup_evidence(
+            ticker=ticker,
+            snapshot_date=snapshot_date,
+            candles=candles,
+            candidate=candidate,
+            setup_eval=None,
+            benchmark_candles=benchmark_candles,
+        )
+
+        assert tuple(
+            (row.ticker, row.date) for row in built.provenance.candle_rows
+        ) == (("BBCA", date(2026, 6, 13)), ("BBCA", date(2026, 6, 15)))
+        assert tuple(
+            (row.ticker, row.date) for row in built.provenance.benchmark_candle_rows
+        ) == (("IHSG", date(2026, 6, 13)), ("IHSG", date(2026, 6, 15)))

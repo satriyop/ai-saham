@@ -166,13 +166,27 @@ class CandidateSetupPhaseEvidenceAssembler:
         `SetupEvidence.benchmark_excess_return_5_session` /
         `benchmark_excess_return_20_session`.
         """
-        candles = self._market_repo.get_candles(ticker, end_date=snapshot_date)
-        benchmark_candles = self._market_repo.get_candles(
-            CANONICAL_BENCHMARK_TICKER, end_date=snapshot_date
+        raw_ticker_candles = self._market_repo.get_candles(
+            ticker,
+            end_date=snapshot_date,
+        )
+        raw_benchmark_candles = self._market_repo.get_candles(
+            CANONICAL_BENCHMARK_TICKER,
+            end_date=snapshot_date,
+        )
+        normalized_ticker_candles = _normalize_candles(
+            raw_ticker_candles,
+            ticker=ticker,
+            snapshot_date=snapshot_date,
+        )
+        normalized_benchmark_candles = _normalize_candles(
+            raw_benchmark_candles,
+            ticker=CANONICAL_BENCHMARK_TICKER,
+            snapshot_date=snapshot_date,
         )
         excess_return_result = benchmark_excess_return_calculator.calculate(
-            ticker_candles=candles,
-            benchmark_candles=benchmark_candles,
+            ticker_candles=normalized_ticker_candles,
+            benchmark_candles=normalized_benchmark_candles,
             as_of_date=snapshot_date,
         )
         # Attached as diagnostic instance attributes (not formal dataclass
@@ -184,10 +198,10 @@ class CandidateSetupPhaseEvidenceAssembler:
         candidate.benchmark_excess_return_20_session = (
             excess_return_result.excess_return_vs_ihsg_20_session
         )
-        setup_evidence = self.build_setup_evidence(
+        built_setup_evidence = self.build_setup_evidence(
             ticker=ticker,
             snapshot_date=snapshot_date,
-            candles=candles,
+            candles=normalized_ticker_candles,
             candidate=candidate,
             setup_eval=None,
             benchmark_excess_return_5_session=(
@@ -196,14 +210,14 @@ class CandidateSetupPhaseEvidenceAssembler:
             benchmark_excess_return_20_session=(
                 excess_return_result.excess_return_vs_ihsg_20_session
             ),
-            benchmark_candles=benchmark_candles,
-        ).evidence
+            benchmark_candles=normalized_benchmark_candles,
+        )
         return self.detect_setup_phase(
             ticker=ticker,
             snapshot_date=snapshot_date,
-            candles=candles,
+            candles=normalized_ticker_candles,
             setup_eval=None,
-            setup_evidence=setup_evidence,
+            setup_evidence=built_setup_evidence.evidence,
             flow_evidence=flow_evidence,
             setup_family=setup_family,
         )
