@@ -19,7 +19,7 @@ from src.application.use_case.repair_candidate_observations_use_case import (
     RawCandidateObservationsRepairState,
 )
 
-_LEGACY_WHERE = "config_hash IS NULL OR TRIM(config_hash) = ''"
+_LEGACY_WHERE = "config_hash IS NULL OR TRIM(config_hash) = '' OR schema_version != 2"
 
 
 class SQLiteCandidateObservationsRepairReader:

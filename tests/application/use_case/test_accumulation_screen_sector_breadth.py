@@ -91,25 +91,24 @@ def test_screen_persists_sector_context_fingerprint_when_builder_available():
     assert fingerprint["sc_sector_vs_ihsg_20d"] == pytest.approx(0.01)
 
 
-def test_screen_persists_relative_strength_and_evaluates_rs_policy():
-    """RS vs IHSG flows end-to-end: RelativeStrengthCalculator computes real
-    values from BBCA + IHSG candles seeded in the same MockMarketRepository,
-    the raw values are persisted in sub_signal_fingerprint
-    (rs_vs_ihsg_20d_at_signal / rs_vs_ihsg_5d_at_signal), and the 5d value
-    flows through SetupEvidenceBuilder/SetupPhaseDetector far enough that the
-    RS policy (keyed by setup family) is genuinely evaluated rather than
-    short-circuiting on "no policy for this family" / "no RS available".
+def test_screen_persists_benchmark_excess_return_as_diagnostic_evidence():
+    """Benchmark excess return flows end-to-end: BenchmarkExcessReturnCalculator
+    computes real values from BBCA + IHSG candles seeded in the same
+    MockMarketRepository, and the typed evidence is persisted in
+    sub_signal_fingerprint (benchmark_excess_return_5_session /
+    benchmark_excess_return_20_session) with an explicit
+    DIAGNOSTIC_UNVALIDATED authority status. Task HIGH-1 removed the
+    production rs_policy authority path entirely, so no rs_policy_* reason
+    string may appear in phase_reasons regardless of the measured value.
 
     Uses a 2026 as_of_date so SetupEvidenceBuilder's own freshness gate
-    (_IHSG_AVAILABLE_FROM = 2025-07-01) does not force rs_vs_ihsg_5d back to
-    None before SetupPhaseDetector sees it.
+    (_IHSG_AVAILABLE_FROM = 2025-07-01) does not force the evidence back to
+    UNAVAILABLE before SetupPhaseDetector sees it.
 
     A loosened coiled-spring swing_setup_catalog (family="breakout") is
     injected -- same technique as
     test_screen_persists_setup_family_fingerprint_when_swing_setup_catalog_matches
-    -- so the candidate resolves to setup_family="breakout", for which
-    SetupPhaseConfig's default rs_policy_by_setup_family has a real entry,
-    making cfg.rs_policy_for("breakout") non-None.
+    -- so the candidate resolves to setup_family="breakout".
     """
     from src.application.use_case.evaluate_swing_setup_use_case import (
         CoiledSpringSetupConfig,
@@ -180,21 +179,23 @@ def test_screen_persists_relative_strength_and_evaluates_rs_policy():
     assert isinstance(obs, CandidateObservation)
     fingerprint = obs.payload["sub_signal_fingerprint"]
 
-    assert fingerprint["rs_vs_ihsg_20d_at_signal"] is not None
-    assert fingerprint["rs_vs_ihsg_5d_at_signal"] is not None
-    assert "rs_policy_unavailable" not in fingerprint["phase_reasons"]
-    assert any(
-        reason == "rs_policy_passed" or reason.startswith("rs_policy_warning")
-        or reason.startswith("rs_policy_hard_exclude")
-        for reason in fingerprint["phase_reasons"]
+    assert fingerprint["benchmark_excess_return_5_session"] is not None
+    assert fingerprint["benchmark_excess_return_20_session"] is not None
+    assert fingerprint["benchmark_excess_return_5_session"]["status"] == "AVAILABLE"
+    assert fingerprint["benchmark_excess_return_20_session"]["status"] == "AVAILABLE"
+    assert fingerprint["benchmark_excess_return_authority_status"] == "DIAGNOSTIC_UNVALIDATED"
+    # The removed production authority path must never surface a reason.
+    assert not any(
+        reason.startswith("rs_policy") for reason in fingerprint["phase_reasons"]
     )
 
 
-def test_screen_rs_fields_stay_none_when_ihsg_candles_missing():
+def test_screen_benchmark_excess_return_unavailable_when_ihsg_candles_missing():
     """Regression: when no IHSG candles exist at all in the market repository,
-    RelativeStrengthCalculator resolves both windows to None (insufficient
-    benchmark candles) rather than raising, and the screen still completes
-    normally with the RS fingerprint fields set to None."""
+    BenchmarkExcessReturnCalculator resolves both windows to UNAVAILABLE
+    (insufficient aligned closes) rather than raising, and the screen still
+    completes normally with the typed evidence explicitly UNAVAILABLE — never
+    neutral, zero, or omitted."""
     session_dates = _weekdays(date(2026, 1, 1), 7)
     as_of = session_dates[-1]
     candles = [
@@ -227,8 +228,10 @@ def test_screen_rs_fields_stay_none_when_ihsg_candles_missing():
     obs = spy_repo.saved[0]
     assert isinstance(obs, CandidateObservation)
     fingerprint = obs.payload["sub_signal_fingerprint"]
-    assert fingerprint["rs_vs_ihsg_20d_at_signal"] is None
-    assert fingerprint["rs_vs_ihsg_5d_at_signal"] is None
+    assert fingerprint["benchmark_excess_return_5_session"]["status"] == "UNAVAILABLE"
+    assert fingerprint["benchmark_excess_return_20_session"]["status"] == "UNAVAILABLE"
+    assert fingerprint["benchmark_excess_return_5_session"]["excess_return_pct"] is None
+    assert fingerprint["benchmark_excess_return_20_session"]["excess_return_pct"] is None
 
 
 def test_screen_persists_volatility_context_fingerprint_from_injected_registry():

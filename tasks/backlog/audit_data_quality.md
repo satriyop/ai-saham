@@ -2035,7 +2035,13 @@ a whole is not complete (see Deferred items below).
   open**, not resolved). `AssessSourceAvailabilityUseCase` (DQ-002F/G/H/I) is
   now integrated into `saham analyze swing`'s evidence-enriched re-score
   path, in **shadow mode only** (`AvailabilityEnforcementMode.SHADOW`). This
-  is a partial step toward closing Blocker 2, not a close of it: Blocker 2
+  is a workflow-specific observability prototype, not the target signal-input
+  architecture. ADR-041 and the signal-refactor backlog's
+  `CANONICAL-EVIDENCE-BOUNDARY` task own the replacement: evidence, exact
+  consumed-row provenance, and availability must become one typed input shared
+  by screen and swing before HIGH-2 can enforce authority. Do not copy DQ-002J's
+  post-score attachment pattern into another workflow. This is a partial step
+  toward closing Blocker 2, not a close of it: Blocker 2
   requires the canonical **candidate-producing** signal path
   (`AccumulationScreenUseCase`/`AccumulationCandidateSignalAssessor`, the
   other real call site of `AssessSignalEvidenceUseCase`) to be covered too,

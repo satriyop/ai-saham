@@ -47,11 +47,11 @@ if TYPE_CHECKING:
     from src.application.services.institutional_flow_config import (
         InstitutionalAccumulationConfig,
     )
+    from src.application.services.benchmark_excess_return_calculator import (
+        BenchmarkExcessReturnCalculator,
+    )
     from src.application.services.primary_setup_family_resolver import (
         PrimarySetupFamilyResolver,
-    )
-    from src.application.services.relative_strength_calculator import (
-        RelativeStrengthCalculator,
     )
     from src.application.services.sector_context_evidence_builder import (
         SectorContextEvidenceBuilder,
@@ -98,7 +98,7 @@ class AccumulationCandidateEvidenceBuilder:
         candidate_observations_repository: "CandidateObservationsRepository | None",
         swing_setup_catalog: "SwingSetupCatalogConfig | None",
         primary_setup_family_resolver: "PrimarySetupFamilyResolver",
-        relative_strength_calculator: "RelativeStrengthCalculator",
+        benchmark_excess_return_calculator: "BenchmarkExcessReturnCalculator",
         indicator_registry: "IndicatorRegistry",
         rules_loader: RulesLoader,
         ticker_profile_classifier_factory: Callable[[], TickerProfileClassifier] | None = None,
@@ -116,7 +116,7 @@ class AccumulationCandidateEvidenceBuilder:
         self._candidate_observations_repo = candidate_observations_repository
         self._swing_setup_catalog = swing_setup_catalog
         self._setup_family_resolver = primary_setup_family_resolver
-        self._relative_strength_calculator = relative_strength_calculator
+        self._benchmark_excess_return_calculator = benchmark_excess_return_calculator
         self._indicator_registry = indicator_registry
         self._rules_loader = rules_loader
         self._ticker_profile_classifier_factory = ticker_profile_classifier_factory
@@ -339,13 +339,13 @@ class AccumulationCandidateEvidenceBuilder:
             # supplies the final, strategy-evidence-aware family explicitly —
             # used verbatim, including an explicit None for "genuinely unknown".
 
-            return self._setup_phase_assembler.detect_setup_phase_with_relative_strength(
+            return self._setup_phase_assembler.detect_setup_phase_with_benchmark_excess_return(
                 ticker=candidate.ticker,
                 snapshot_date=snapshot_date,
                 candidate=candidate,
                 flow_evidence=flow_ev,
                 setup_family=setup_family,
-                relative_strength_calculator=self._relative_strength_calculator,
+                benchmark_excess_return_calculator=self._benchmark_excess_return_calculator,
             )
         except Exception:
             return None

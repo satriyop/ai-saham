@@ -253,8 +253,6 @@ def _setup_evidence():
         bb_width_pctile=0.15,
         vwap_pct=1.0,
         match_strength=100.0,
-        rs_freshness=None,
-        rs_vs_ihsg_5d=None,
         candle_source="stockbit",
     )
 

@@ -28,6 +28,7 @@ def _insert_row(
     window_sessions: int = 0,
     data_as_of_date: str = "",
 ) -> None:
+    schema_version = 2 if config_hash != "" else 1
     conn = sqlite3.connect(str(db_path))
     conn.execute(
         """
@@ -40,7 +41,7 @@ def _insert_row(
             ticker,
             snapshot_date,
             f"{snapshot_date}T00:00:00",
-            1,
+            schema_version,
             "{}",
             workflow,
             window_sessions,

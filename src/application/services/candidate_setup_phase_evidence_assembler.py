@@ -7,8 +7,9 @@ build a `SetupEvidence` snapshot and feed it into `SetupPhaseDetector`, using
 the same candle-provenance lookup and persisted-phase history. Swing analysis
 already has a `setup_eval` (from `evaluate_swing_setup`) and a resolved
 `setup_family`, so it only needs the plain build+detect path. Accumulation
-screening runs before a strategy is evaluated, so it also needs relative
-strength computed against the benchmark to feed `SetupEvidence.rs_vs_ihsg_5d`.
+screening runs before a strategy is evaluated, so it also needs benchmark
+excess return computed to feed `SetupEvidence.benchmark_excess_return_5_session`
+/ `benchmark_excess_return_20_session`.
 """
 from __future__ import annotations
 
@@ -25,8 +26,8 @@ from src.application.services.setup_phase_history import load_previous_setup_pha
 from src.domain.value_objects.benchmark_symbol import CANONICAL_BENCHMARK_TICKER
 
 if TYPE_CHECKING:
-    from src.application.services.relative_strength_calculator import (
-        RelativeStrengthCalculator,
+    from src.application.services.benchmark_excess_return_calculator import (
+        BenchmarkExcessReturnCalculator,
     )
     from src.domain.ports.candidate_observations_repository import (
         CandidateObservationsRepository,
@@ -56,7 +57,8 @@ class CandidateSetupPhaseEvidenceAssembler:
         candles: list[Any] | tuple[Any, ...],
         candidate: Any,
         setup_eval: Any | None,
-        rs_vs_ihsg_5d: float | None = None,
+        benchmark_excess_return_5_session: Any | None = None,
+        benchmark_excess_return_20_session: Any | None = None,
         volume_trend_ratio: float | None = None,
     ) -> "SetupEvidence":
         candle_source = resolve_candle_source(
@@ -67,7 +69,8 @@ class CandidateSetupPhaseEvidenceAssembler:
         return SetupEvidenceBuilder().build(
             candidate,
             setup_eval,
-            rs_vs_ihsg_5d=rs_vs_ihsg_5d,
+            benchmark_excess_return_5_session=benchmark_excess_return_5_session,
+            benchmark_excess_return_20_session=benchmark_excess_return_20_session,
             volume_trend_ratio=volume_trend_ratio,
             candle_source=candle_source,
             analysis_date=snapshot_date,
@@ -101,7 +104,7 @@ class CandidateSetupPhaseEvidenceAssembler:
             config=config,
         )
 
-    def detect_setup_phase_with_relative_strength(
+    def detect_setup_phase_with_benchmark_excess_return(
         self,
         *,
         ticker: str,
@@ -109,17 +112,19 @@ class CandidateSetupPhaseEvidenceAssembler:
         candidate: Any,
         flow_evidence: "FlowConfirmationEvidence | None",
         setup_family: str | None,
-        relative_strength_calculator: "RelativeStrengthCalculator",
+        benchmark_excess_return_calculator: "BenchmarkExcessReturnCalculator",
     ) -> "SetupPhaseSnapshot":
         """Stage-1 accumulation screening path: no `setup_eval` exists yet, so
-        relative strength is computed here (instead of reused from a prior
-        strategy evaluation) to populate `SetupEvidence.rs_vs_ihsg_5d`.
+        benchmark excess return is computed here (instead of reused from a
+        prior strategy evaluation) to populate
+        `SetupEvidence.benchmark_excess_return_5_session` /
+        `benchmark_excess_return_20_session`.
         """
         candles = self._market_repo.get_candles(ticker, end_date=snapshot_date)
         benchmark_candles = self._market_repo.get_candles(
             CANONICAL_BENCHMARK_TICKER, end_date=snapshot_date
         )
-        rs_result = relative_strength_calculator.calculate(
+        excess_return_result = benchmark_excess_return_calculator.calculate(
             ticker_candles=candles,
             benchmark_candles=benchmark_candles,
             as_of_date=snapshot_date,
@@ -127,15 +132,24 @@ class CandidateSetupPhaseEvidenceAssembler:
         # Attached as diagnostic instance attributes (not formal dataclass
         # fields) so _sub_signal_fingerprint() can read them without
         # threading a new return value through this method's signature.
-        candidate.rs_vs_ihsg_5d = rs_result.rs_vs_ihsg_5d
-        candidate.rs_vs_ihsg_20d = rs_result.rs_vs_ihsg_20d
+        candidate.benchmark_excess_return_5_session = (
+            excess_return_result.excess_return_vs_ihsg_5_session
+        )
+        candidate.benchmark_excess_return_20_session = (
+            excess_return_result.excess_return_vs_ihsg_20_session
+        )
         setup_evidence = self.build_setup_evidence(
             ticker=ticker,
             snapshot_date=snapshot_date,
             candles=candles,
             candidate=candidate,
             setup_eval=None,
-            rs_vs_ihsg_5d=rs_result.rs_vs_ihsg_5d,
+            benchmark_excess_return_5_session=(
+                excess_return_result.excess_return_vs_ihsg_5_session
+            ),
+            benchmark_excess_return_20_session=(
+                excess_return_result.excess_return_vs_ihsg_20_session
+            ),
         )
         return self.detect_setup_phase(
             ticker=ticker,

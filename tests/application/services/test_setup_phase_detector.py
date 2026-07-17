@@ -9,6 +9,10 @@ from src.application.services.setup_phase_detector import (
     _volume_trigger_evidence,
 )
 from src.domain.entities.candle import Candle
+from src.domain.value_objects.benchmark_excess_return import (
+    BenchmarkExcessReturn,
+    BenchmarkExcessReturnStatus,
+)
 from src.domain.value_objects.factor_evidence import Direction, Freshness
 from src.domain.value_objects.flow_confirmation_evidence import (
     FlowConfirmationEvidence,
@@ -83,6 +87,21 @@ def _setup_eval(*, flow=True, bb=True) -> SetupEvaluation:
     )
 
 
+def _excess_return(window_sessions: int, excess_return_pct: float) -> BenchmarkExcessReturn:
+    return BenchmarkExcessReturn(
+        benchmark="IHSG",
+        window_sessions=window_sessions,
+        ticker_return_pct=excess_return_pct,
+        benchmark_return_pct=0.0,
+        excess_return_pct=excess_return_pct,
+        window_start=date(2026, 6, 1),
+        window_end=date(2026, 6, 20),
+        common_session_count=window_sessions + 1,
+        status=BenchmarkExcessReturnStatus.AVAILABLE,
+        unavailable_reason=None,
+    )
+
+
 def _setup_evidence(**overrides) -> SetupEvidence:
     values = {
         "ticker": "BBCA",
@@ -96,8 +115,8 @@ def _setup_evidence(**overrides) -> SetupEvidence:
         "bb_width_pctile": 0.15,
         "vwap_discount_pct": 3.0,
         "vwap_pct": 1.0,
-        "rs_vs_ihsg_5d": 2.0,
-        "rs_freshness": Freshness.FRESH,
+        "benchmark_excess_return_5_session": _excess_return(5, 2.0),
+        "benchmark_excess_return_20_session": _excess_return(20, 2.0),
         "volume_trend_ratio": 1.5,
         "volume_freshness": Freshness.FRESH,
         "candle_source": "stockbit",
@@ -296,16 +315,23 @@ def test_volume_trigger_unavailable_for_synthetic_source_or_zero_volume_window()
     )
 
 
-def test_negative_rs_emits_decision_constraint_reason():
+def test_negative_benchmark_excess_return_emits_no_reasons():
+    """A deeply negative benchmark excess return is DIAGNOSTIC_UNVALIDATED and
+    must not surface any rs_policy-shaped constraint reason — the production
+    authority path was removed in Task HIGH-1."""
     snapshot = SetupPhaseDetector().detect(
         candles=_candles(),
         setup_eval=_setup_eval(),
-        setup_evidence=_setup_evidence(rs_vs_ihsg_5d=-5.0),
+        setup_evidence=_setup_evidence(
+            benchmark_excess_return_5_session=_excess_return(5, -50.0),
+            benchmark_excess_return_20_session=_excess_return(20, -50.0),
+        ),
         flow_evidence=None,
         setup_family="foreign-bounce",
     )
 
-    assert any("rs_policy_hard_exclude" in reason for reason in snapshot.reasons)
+    assert not any("rs_policy" in reason for reason in snapshot.reasons)
+    assert not any("rs_vs_ihsg" in reason for reason in snapshot.reasons)
 
 
 def test_injected_config_drives_sequence_validity_for_custom_family():

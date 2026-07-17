@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from src.domain.value_objects.benchmark_excess_return import BenchmarkExcessReturn
 from src.domain.value_objects.signal_observation_fingerprint_serialization import (
     signal_observation_fingerprint_from_dict,
     signal_observation_fingerprint_to_dict,
@@ -42,7 +43,6 @@ class SignalObservationFingerprint:
     rsi: float | None = None
     bb_width_pctile: float | None = None
     vwap_position: float | None = None
-    rs_vs_ihsg: float | None = None
     volume_ratio: float | None = None
     # Explicit dry-up/expansion evidence (Point 3, docs/signal_refactor.md)
     volume_dry_up_ratio: float | None = None
@@ -136,6 +136,10 @@ class SignalObservationFingerprint:
     atr_pct_at_signal: float | None = None
     volatility_bucket_at_signal: str | None = None
     volatility_size_multiplier_at_signal: float | None = None
+    # Benchmark excess returns
+    benchmark_excess_return_5_session: BenchmarkExcessReturn | None = None
+    benchmark_excess_return_20_session: BenchmarkExcessReturn | None = None
+    benchmark_excess_return_authority_status: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize fingerprint to a flat dictionary."""

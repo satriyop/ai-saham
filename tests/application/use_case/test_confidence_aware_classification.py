@@ -15,6 +15,10 @@ from src.application.dto.assess_signal import AssessSignalEvidenceRequest
 from src.application.use_case.assess_signal_evidence_use_case import (
     AssessSignalEvidenceUseCase,
 )
+from src.domain.value_objects.benchmark_excess_return import (
+    BenchmarkExcessReturn,
+    BenchmarkExcessReturnStatus,
+)
 from src.domain.value_objects.factor_evidence import Direction, Freshness
 from src.domain.value_objects.flow_confirmation_evidence import (
     FlowConfirmationEvidence,
@@ -24,6 +28,21 @@ from src.domain.value_objects.setup_evidence import SetupEvidence
 from src.domain.value_objects.signal_assessment import EntryQuality, SignalStrength
 
 SNAP = date(2026, 7, 3)
+
+
+def _excess_return(window_sessions: int, excess_return_pct: float) -> BenchmarkExcessReturn:
+    return BenchmarkExcessReturn(
+        benchmark="IHSG",
+        window_sessions=window_sessions,
+        ticker_return_pct=excess_return_pct,
+        benchmark_return_pct=0.0,
+        excess_return_pct=excess_return_pct,
+        window_start=date(2026, 6, 1),
+        window_end=SNAP,
+        common_session_count=window_sessions + 1,
+        status=BenchmarkExcessReturnStatus.AVAILABLE,
+        unavailable_reason=None,
+    )
 
 
 def _setup(match: str) -> SetupEvidence:
@@ -40,8 +59,8 @@ def _setup(match: str) -> SetupEvidence:
         bb_width_pctile=0.20,
         vwap_discount_pct=1.5,
         vwap_pct=1.02,
-        rs_vs_ihsg_5d=1.05,
-        rs_freshness=Freshness.FRESH,
+        benchmark_excess_return_5_session=_excess_return(5, 1.05),
+        benchmark_excess_return_20_session=_excess_return(20, 1.05),
         volume_trend_ratio=1.2,
         volume_freshness=Freshness.FRESH,
         candle_source="stockbit",

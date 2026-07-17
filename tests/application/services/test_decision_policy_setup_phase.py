@@ -29,7 +29,10 @@ def _terminal_phase(phase: SetupPhaseState) -> SetupPhaseSnapshot:
     )
 
 
-def test_setup_phase_rs_warning_caps_enter_to_watch():
+def test_legacy_rs_policy_warning_reason_ignored():
+    """Task HIGH-1 removed the RS authority path: a legacy rs_policy_warning
+    reason string surviving in a phase snapshot (e.g. from an old replay) must
+    not be parsed as an authority constraint by DecisionPolicyService."""
     result = DecisionPolicyService().resolve(
         entry_quality=EntryQuality.ENTER,
         score=90,
@@ -40,12 +43,15 @@ def test_setup_phase_rs_warning_caps_enter_to_watch():
         setup_phase=_phase("rs_policy_warning: RS -2.00 <= -1.00; max_decision=WATCH"),
     )
 
-    assert result.entry_quality == EntryQuality.WATCH
-    assert result.constraints.max_decision == "WATCH"
-    assert any("rs_policy_warning" in r for r in result.constraints.constraint_reasons)
+    assert result.entry_quality == EntryQuality.ENTER
+    assert result.constraints.max_decision == "ENTER"
+    assert not any(
+        "rs_policy_warning" in r for r in result.constraints.constraint_reasons
+    )
 
 
-def test_setup_phase_rs_hard_exclude_caps_enter_to_avoid():
+def test_legacy_rs_policy_hard_exclude_reason_ignored():
+    """Same guarantee for the legacy hard-exclude reason string."""
     result = DecisionPolicyService().resolve(
         entry_quality=EntryQuality.ENTER,
         score=90,
@@ -56,8 +62,11 @@ def test_setup_phase_rs_hard_exclude_caps_enter_to_avoid():
         setup_phase=_phase("rs_policy_hard_exclude: RS -5.00 <= -4.00; max_decision=AVOID"),
     )
 
-    assert result.entry_quality == EntryQuality.AVOID
-    assert result.constraints.max_decision == "AVOID"
+    assert result.entry_quality == EntryQuality.ENTER
+    assert result.constraints.max_decision == "ENTER"
+    assert not any(
+        "rs_policy_hard_exclude" in r for r in result.constraints.constraint_reasons
+    )
 
 
 def test_invalid_phase_sequence_caps_enter_to_watch():

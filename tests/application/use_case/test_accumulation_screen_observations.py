@@ -71,7 +71,7 @@ def test_screen_persists_candidate_observations_when_repo_injected():
     assert obs.snapshot_date == as_of
 
     payload = obs.payload
-    assert payload["schema_version"] == 1
+    assert payload["schema_version"] == 2
     assert payload["artifact_type"] == "candidate_observation"
     assert payload["ticker"] == "BBCA"
     assert payload["screen_result"] == "pass"

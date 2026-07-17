@@ -89,8 +89,6 @@ _PARAMETER_BOUNDS: tuple[tuple[str, float, float, float | None, float], ...] = (
     ("setup_phase.thresholds.distribution_min_bandar_score", -9.0, 0.0, 1.0, 2.0),
     ("setup_phase.thresholds.failed_max_drawdown_from_recent_high_pct", -20.0, -2.0, 0.5, 2.0),
     ("setup_phase.thresholds.failed_breakdown_below_support_pct", -10.0, -0.5, 0.5, 2.0),
-    ("setup_phase.rs_policy_by_setup_family.*.lag_warning_below", -10.0, 5.0, 0.5, 1.5),
-    ("setup_phase.rs_policy_by_setup_family.*.hard_exclude_below", -20.0, 0.0, 0.5, 2.0),
     # --- setup phase volume trigger paths (Point 3, explicit dry-up/expansion) ---
     ("setup_phase.volume_trigger.dry_up_max_ratio", 0.20, 0.80, 0.05, 0.10),
     ("setup_phase.volume_trigger.expansion_min_ratio", 1.10, 3.0, 0.1, 0.3),
@@ -145,18 +143,6 @@ _NON_TUNABLE_DOCUMENT_PATHS: tuple[tuple[str, str], ...] = (
     ("swing_backtest.attribution.score_buckets", "container_path_not_patchable"),
     ("setups.*.gates.required_trend", "categorical_setup_gate_not_numeric_tunable"),
     ("setups.*.gates.reject_smart_net_selling", "boolean_setup_gate_not_numeric_tunable"),
-    (
-        "setup_phase.rs_policy_by_setup_family.*.warning_max_decision",
-        "categorical_rs_policy_not_numeric_tunable",
-    ),
-    (
-        "setup_phase.rs_policy_by_setup_family.*.hard_exclude_max_decision",
-        "categorical_rs_policy_not_numeric_tunable",
-    ),
-    (
-        "setup_phase.rs_policy_by_setup_family.*.mean_reversion_exception_requires_support_reclaim",
-        "boolean_rs_policy_not_numeric_tunable",
-    ),
     (
         "setup_phase.volume_trigger.require_trusted_volume",
         "boolean_volume_policy_not_numeric_tunable",

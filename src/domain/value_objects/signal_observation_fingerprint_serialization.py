@@ -2,6 +2,8 @@
 
 from typing import TYPE_CHECKING, Any
 
+from src.domain.value_objects.benchmark_excess_return import BenchmarkExcessReturn
+
 from src.domain.value_objects.signal_fingerprint_alpha_trigger_serialization import (
     _parse_alpha_trigger_fields,
     _serialize_alpha_trigger_fields,
@@ -58,6 +60,20 @@ def signal_observation_fingerprint_to_dict(
     data.update(_serialize_company_quality_fields(fingerprint))
     data.update(_serialize_alpha_trigger_fields(fingerprint))
     data.update(_serialize_volatility_fields(fingerprint))
+    # Benchmark excess returns serialization
+    data.update({
+        "benchmark_excess_return_5_session": (
+            fingerprint.benchmark_excess_return_5_session.to_dict()
+            if fingerprint.benchmark_excess_return_5_session is not None
+            else None
+        ),
+        "benchmark_excess_return_20_session": (
+            fingerprint.benchmark_excess_return_20_session.to_dict()
+            if fingerprint.benchmark_excess_return_20_session is not None
+            else None
+        ),
+        "benchmark_excess_return_authority_status": fingerprint.benchmark_excess_return_authority_status,
+    })
     return data
 
 
@@ -76,4 +92,20 @@ def signal_observation_fingerprint_from_dict(
     kwargs.update(_parse_company_quality_fields(data))
     kwargs.update(_parse_alpha_trigger_fields(data))
     kwargs.update(_parse_volatility_fields(data))
+    # Benchmark excess returns parsing
+    r5_data = data.get("benchmark_excess_return_5_session")
+    r20_data = data.get("benchmark_excess_return_20_session")
+    kwargs.update({
+        "benchmark_excess_return_5_session": (
+            BenchmarkExcessReturn.from_dict(r5_data)
+            if r5_data is not None
+            else None
+        ),
+        "benchmark_excess_return_20_session": (
+            BenchmarkExcessReturn.from_dict(r20_data)
+            if r20_data is not None
+            else None
+        ),
+        "benchmark_excess_return_authority_status": data.get("benchmark_excess_return_authority_status"),
+    })
     return cls(**kwargs)

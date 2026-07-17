@@ -4,8 +4,8 @@ Focuses on the finding-3 refactor: each public build_candidate_* /
 detect_candidate_setup_phase method must delegate to
 CandidateEvidenceDataLoader + the candidate_*_evidence_assembler modules,
 preserve best-effort None-on-failure behavior, and keep attaching
-rs_vs_ihsg_5d/20d as diagnostic instance attributes on successful setup
-phase detection.
+benchmark_excess_return_5_session/20_session as diagnostic instance
+attributes on successful setup phase detection.
 """
 
 from __future__ import annotations
@@ -17,13 +17,36 @@ from src.application.dto.accumulation_screen import AccumulationCandidate
 from src.application.services.accumulation_candidate_evidence_builder import (
     AccumulationCandidateEvidenceBuilder,
 )
+from src.application.services.benchmark_excess_return_calculator import (
+    BenchmarkExcessReturnResult,
+)
 from src.application.services.primary_setup_family_resolver import (
     PrimarySetupFamilyResolver,
 )
-from src.application.services.relative_strength_calculator import RelativeStrengthResult
 from src.domain.entities.candle import Candle
+from src.domain.value_objects.benchmark_excess_return import (
+    BenchmarkExcessReturn,
+    BenchmarkExcessReturnStatus,
+)
 from src.domain.value_objects.benchmark_symbol import CANONICAL_BENCHMARK_TICKER
 from tests.application.use_case.accumulation_screen_fixtures import FakeRulesLoader
+
+
+def _excess_return(
+    window_sessions: int, excess_return_pct: float
+) -> BenchmarkExcessReturn:
+    return BenchmarkExcessReturn(
+        benchmark="IHSG",
+        window_sessions=window_sessions,
+        ticker_return_pct=excess_return_pct,
+        benchmark_return_pct=0.0,
+        excess_return_pct=excess_return_pct,
+        window_start=date(2026, 6, 1),
+        window_end=date(2026, 6, 15),
+        common_session_count=window_sessions + 1,
+        status=BenchmarkExcessReturnStatus.AVAILABLE,
+        unavailable_reason=None,
+    )
 
 
 class _MarketRepository:
@@ -64,16 +87,21 @@ class _FakeSignalEngine:
         return 100.0
 
 
-class _FakeRelativeStrengthCalculator:
-    def __init__(self, result: RelativeStrengthResult | None = None, raise_error: bool = False):
-        self._result = result or RelativeStrengthResult(
-            rs_vs_ihsg_5d=1.5, rs_vs_ihsg_20d=2.5, unavailable_reasons=()
+class _FakeBenchmarkExcessReturnCalculator:
+    def __init__(
+        self,
+        result: BenchmarkExcessReturnResult | None = None,
+        raise_error: bool = False,
+    ):
+        self._result = result or BenchmarkExcessReturnResult(
+            excess_return_vs_ihsg_5_session=_excess_return(5, 1.5),
+            excess_return_vs_ihsg_20_session=_excess_return(20, 2.5),
         )
         self._raise_error = raise_error
 
-    def calculate(self, *, ticker_candles, benchmark_candles, as_of_date, windows=None):
+    def calculate(self, *, ticker_candles, benchmark_candles, as_of_date, benchmark="IHSG"):
         if self._raise_error:
-            raise RuntimeError("rs calc failed")
+            raise RuntimeError("benchmark excess return calc failed")
         return self._result
 
 
@@ -122,7 +150,7 @@ def _builder(
     ticker_profile_classifier_factory=None,
     sector_context_builder_factory=None,
     company_quality_context_builder_factory=None,
-    relative_strength_calculator=None,
+    benchmark_excess_return_calculator=None,
     candidate_observations_repository=None,
 ) -> AccumulationCandidateEvidenceBuilder:
     return AccumulationCandidateEvidenceBuilder(
@@ -132,8 +160,8 @@ def _builder(
         candidate_observations_repository=candidate_observations_repository,
         swing_setup_catalog=None,
         primary_setup_family_resolver=PrimarySetupFamilyResolver(),
-        relative_strength_calculator=relative_strength_calculator
-        or _FakeRelativeStrengthCalculator(),
+        benchmark_excess_return_calculator=benchmark_excess_return_calculator
+        or _FakeBenchmarkExcessReturnCalculator(),
         indicator_registry=None,
         rules_loader=FakeRulesLoader(),
         ticker_profile_classifier_factory=ticker_profile_classifier_factory,
@@ -222,9 +250,11 @@ class TestCompanyQualityFailureReturnsNone:
 
 
 class TestSetupPhaseFailureReturnsNone:
-    def test_returns_none_when_relative_strength_calculator_raises(self):
+    def test_returns_none_when_benchmark_excess_return_calculator_raises(self):
         builder = _builder(
-            relative_strength_calculator=_FakeRelativeStrengthCalculator(raise_error=True)
+            benchmark_excess_return_calculator=_FakeBenchmarkExcessReturnCalculator(
+                raise_error=True
+            )
         )
         candidate = _candidate()
 
@@ -254,8 +284,8 @@ class TestEmptyCandlesDoNotCrash:
         assert result.atr_at_signal is None
 
 
-class TestSetupPhaseAttachesRelativeStrengthOnSuccess:
-    def test_rs_vs_ihsg_attached_when_setup_phase_detection_succeeds(self):
+class TestSetupPhaseAttachesBenchmarkExcessReturnOnSuccess:
+    def test_benchmark_excess_return_attached_when_setup_phase_detection_succeeds(self):
         ticker = "BBCA"
         snapshot_date = date(2026, 6, 15)
         market_repo = _MarketRepository(
@@ -266,14 +296,20 @@ class TestSetupPhaseAttachesRelativeStrengthOnSuccess:
                 ),
             }
         )
-        rs_calculator = _FakeRelativeStrengthCalculator(
-            RelativeStrengthResult(rs_vs_ihsg_5d=3.3, rs_vs_ihsg_20d=7.7, unavailable_reasons=())
+        excess_return_calculator = _FakeBenchmarkExcessReturnCalculator(
+            BenchmarkExcessReturnResult(
+                excess_return_vs_ihsg_5_session=_excess_return(5, 3.3),
+                excess_return_vs_ihsg_20_session=_excess_return(20, 7.7),
+            )
         )
-        builder = _builder(market_repo=market_repo, relative_strength_calculator=rs_calculator)
+        builder = _builder(
+            market_repo=market_repo,
+            benchmark_excess_return_calculator=excess_return_calculator,
+        )
         candidate = _candidate(ticker=ticker)
 
         result = builder.detect_candidate_setup_phase(candidate, None, snapshot_date)
 
         assert result is not None
-        assert candidate.rs_vs_ihsg_5d == 3.3
-        assert candidate.rs_vs_ihsg_20d == 7.7
+        assert candidate.benchmark_excess_return_5_session.excess_return_pct == 3.3
+        assert candidate.benchmark_excess_return_20_session.excess_return_pct == 7.7

@@ -1,5 +1,5 @@
 """
-Parser for setup phase configurations including requirements, RS policies, and volume triggers.
+Parser for setup phase configurations including requirements and volume triggers.
 
 Layer: Infrastructure
 """
@@ -10,7 +10,6 @@ from src.application.dto.swing_config import SwingConfig
 from src.application.services.setup_phase_config import (
     SetupPhaseConfig,
     SetupPhaseRequirementConfig,
-    SetupPhaseRSPolicyConfig,
     SetupPhaseThresholdsConfig,
     VolumeTriggerValidityConfig,
 )
@@ -19,7 +18,6 @@ from src.infrastructure.config.swing_config_primitives import (
     bool_or_default,
     float_or_default,
     int_or_default,
-    str_or_default,
 )
 
 
@@ -32,7 +30,6 @@ def parse_setup_phase_config(
         return defaults.setup_phase_config
     th = raw.get("thresholds") or {}
     vol = raw.get("volume_trigger") or {}
-    rs_by_family = raw.get("rs_policy_by_setup_family") or {}
     requirements_raw = raw.get("requirements") or {}
 
     def _phase_state(name: Any) -> SetupPhaseState:
@@ -83,23 +80,6 @@ def parse_setup_phase_config(
         parsed_requirements.setdefault(name_key, requirement)
         parsed_requirements.setdefault(
             name_key.replace("-", "_"), requirement
-        )
-
-    def _rs_policy(value: Any) -> SetupPhaseRSPolicyConfig:
-        if not isinstance(value, dict):
-            return SetupPhaseRSPolicyConfig()
-        return SetupPhaseRSPolicyConfig(
-            lag_warning_below=float_or_default(value, "lag_warning_below", -1.0),
-            hard_exclude_below=float_or_default(value, "hard_exclude_below", -4.0),
-            warning_max_decision=str_or_default(value, "warning_max_decision", "WATCH"),
-            hard_exclude_max_decision=str_or_default(
-                value, "hard_exclude_max_decision", "AVOID"
-            ),
-            mean_reversion_exception_requires_support_reclaim=bool_or_default(
-                value,
-                "mean_reversion_exception_requires_support_reclaim",
-                True,
-            ),
         )
 
     benchmark_sources = vol.get("trusted_benchmark_volume_sources")
@@ -174,10 +154,6 @@ def parse_setup_phase_config(
                 defaults.setup_phase_config.thresholds.failed_breakdown_below_support_pct,
             ),
         ),
-        rs_policy_by_setup_family={
-            str(key): _rs_policy(value)
-            for key, value in rs_by_family.items()
-        } or defaults.setup_phase_config.rs_policy_by_setup_family,
         requirements_by_family=parsed_requirements
         or defaults.setup_phase_config.requirements_by_family,
         volume_trigger=VolumeTriggerValidityConfig(

@@ -103,7 +103,7 @@ class TestTopLevelKeysPreserved:
             captured_at=datetime(2026, 7, 1, 10, 30, 0),
             request=request,
         )
-        assert payload["schema_version"] == 1
+        assert payload["schema_version"] == 2
         assert payload["artifact_type"] == "candidate_observation"
         assert payload["ticker"] == "BBCA"
         assert payload["snapshot_date"] == "2026-07-01"
@@ -287,12 +287,13 @@ class TestSubSignalFingerprintSections:
         fp = self._build_fingerprint()
         assert fp["domestic_broker_accumulation_at_signal"] is None
 
-    def test_rs_vs_ihsg_keys_present(self):
+    def test_benchmark_excess_return_keys_present(self):
         fp = self._build_fingerprint()
-        assert "rs_vs_ihsg_20d_at_signal" in fp
-        assert "rs_vs_ihsg_5d_at_signal" in fp
-        assert fp["rs_vs_ihsg_20d_at_signal"] is None
-        assert fp["rs_vs_ihsg_5d_at_signal"] is None
+        assert "benchmark_excess_return_5_session" in fp
+        assert "benchmark_excess_return_20_session" in fp
+        assert fp["benchmark_excess_return_5_session"] is None
+        assert fp["benchmark_excess_return_20_session"] is None
+        assert fp["benchmark_excess_return_authority_status"] == "DIAGNOSTIC_UNVALIDATED"
 
     # -- helpers --
 

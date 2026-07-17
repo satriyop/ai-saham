@@ -16,11 +16,11 @@ from src.application.services.accumulation_candidate_evidence_builder import (
 from src.application.services.accumulation_candidate_observation_persister import (
     AccumulationCandidateObservationPersister,
 )
+from src.application.services.benchmark_excess_return_calculator import (
+    BenchmarkExcessReturnCalculator,
+)
 from src.application.services.primary_setup_family_resolver import (
     PrimarySetupFamilyResolver,
-)
-from src.application.services.relative_strength_calculator import (
-    RelativeStrengthCalculator,
 )
 from src.application.services.signal_engine import SignalEngine
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
@@ -169,7 +169,7 @@ def create_accumulation_screen_use_case_bundle(
         candidate_observations_repository=candidate_observations_repository,
         swing_setup_catalog=swing_setup_catalog,
         primary_setup_family_resolver=setup_family_resolver,
-        relative_strength_calculator=RelativeStrengthCalculator(),
+        benchmark_excess_return_calculator=BenchmarkExcessReturnCalculator(),
         indicator_registry=indicator_registry,
         rules_loader=rules_loader,
         ticker_profile_classifier_factory=ticker_profile_classifier_factory,

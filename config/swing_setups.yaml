@@ -89,31 +89,10 @@ setup_phase:
     distribution_min_bandar_score: -4
     failed_max_drawdown_from_recent_high_pct: -7.0
     failed_breakdown_below_support_pct: -3.0
-  rs_policy_by_setup_family:
-    foreign-bounce:
-      lag_warning_below: -1.0
-      hard_exclude_below: -4.0
-      warning_max_decision: WATCH
-      hard_exclude_max_decision: AVOID
-      mean_reversion_exception_requires_support_reclaim: true
-    accumulation:
-      lag_warning_below: -1.0
-      hard_exclude_below: -4.0
-      warning_max_decision: WATCH
-      hard_exclude_max_decision: AVOID
-      mean_reversion_exception_requires_support_reclaim: true
-    coiled-spring:
-      lag_warning_below: -1.0
-      hard_exclude_below: -4.0
-      warning_max_decision: WATCH
-      hard_exclude_max_decision: AVOID
-      mean_reversion_exception_requires_support_reclaim: true
-    breakout:
-      lag_warning_below: -1.0
-      hard_exclude_below: -4.0
-      warning_max_decision: WATCH
-      hard_exclude_max_decision: AVOID
-      mean_reversion_exception_requires_support_reclaim: true
+  # rs_policy_by_setup_family removed (Task HIGH-1, 2026-07-17): the 5/20-
+  # session benchmark excess-return measurement is DIAGNOSTIC_UNVALIDATED and
+  # no longer constrains ENTER/WATCH/AVOID. See
+  # tasks/backlog/audit_signal_refactor_contract.md Task HIGH-1.
   requirements:
     accumulation:
       required_sequence: [ACCUMULATION, COMPRESSION, BREAKOUT_CONFIRMATION]

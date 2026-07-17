@@ -75,8 +75,8 @@ CREATE TABLE IF NOT EXISTS {_QUARANTINE_TABLE} (
 )
 """
 
-_LEGACY_WHERE = "config_hash IS NULL OR TRIM(config_hash) = ''"
-_LEGACY_REASON = "LEGACY_MISSING_CONFIG_HASH"
+_LEGACY_WHERE = "config_hash IS NULL OR TRIM(config_hash) = '' OR schema_version != 2"
+_LEGACY_REASON = "LEGACY_MISSING_CONFIG_HASH_OR_OLD_SCHEMA"
 
 
 class SQLiteCandidateObservationsRepairer:

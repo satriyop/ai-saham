@@ -11,7 +11,26 @@ from types import SimpleNamespace
 import pytest
 
 from src.application.services.setup_evidence_builder import SetupEvidenceBuilder
+from src.domain.value_objects.benchmark_excess_return import (
+    BenchmarkExcessReturn,
+    BenchmarkExcessReturnStatus,
+)
 from src.domain.value_objects.factor_evidence import Freshness
+
+
+def _available(window_sessions: int, excess_return_pct: float) -> BenchmarkExcessReturn:
+    return BenchmarkExcessReturn(
+        benchmark="IHSG",
+        window_sessions=window_sessions,
+        ticker_return_pct=excess_return_pct,
+        benchmark_return_pct=0.0,
+        excess_return_pct=excess_return_pct,
+        window_start=date(2025, 12, 1),
+        window_end=date(2026, 1, 1),
+        common_session_count=window_sessions + 1,
+        status=BenchmarkExcessReturnStatus.AVAILABLE,
+        unavailable_reason=None,
+    )
 
 
 def _candidate(
@@ -69,37 +88,63 @@ def test_failed_gates_threaded():
     assert evidence.failed_gates == reasons
 
 
-def test_rs_missing_when_date_before_ihsg_available():
+def test_benchmark_excess_return_unavailable_when_date_before_ihsg_available():
     evidence = SetupEvidenceBuilder().build(
         _candidate(),
         _setup_eval(),
-        rs_vs_ihsg_5d=0.5,
+        benchmark_excess_return_5_session=_available(5, 0.5),
         analysis_date=date(2025, 6, 30),
     )
-    assert evidence.rs_freshness is Freshness.MISSING
-    assert evidence.rs_vs_ihsg_5d is None
+    assert evidence.benchmark_excess_return_5_session.status == (
+        BenchmarkExcessReturnStatus.UNAVAILABLE
+    )
+    assert evidence.benchmark_excess_return_5_session.excess_return_pct is None
+    assert evidence.benchmark_excess_return_5_session.unavailable_reason == (
+        "ihsg_history_unreliable_before_cutoff"
+    )
 
 
-def test_rs_fresh_when_date_after_ihsg_available():
+def test_benchmark_excess_return_available_when_date_after_ihsg_available():
     evidence = SetupEvidenceBuilder().build(
         _candidate(),
         _setup_eval(),
-        rs_vs_ihsg_5d=0.5,
+        benchmark_excess_return_5_session=_available(5, 0.5),
         analysis_date=date(2025, 7, 1),
     )
-    assert evidence.rs_freshness is Freshness.FRESH
-    assert evidence.rs_vs_ihsg_5d == 0.5
+    assert evidence.benchmark_excess_return_5_session.status == (
+        BenchmarkExcessReturnStatus.AVAILABLE
+    )
+    assert evidence.benchmark_excess_return_5_session.excess_return_pct == 0.5
 
 
-def test_rs_missing_when_no_value():
+def test_benchmark_excess_return_unavailable_when_no_value():
     evidence = SetupEvidenceBuilder().build(
         _candidate(),
         _setup_eval(),
-        rs_vs_ihsg_5d=None,
+        benchmark_excess_return_5_session=None,
         analysis_date=date(2026, 1, 1),
     )
-    assert evidence.rs_freshness is Freshness.MISSING
-    assert evidence.rs_vs_ihsg_5d is None
+    assert evidence.benchmark_excess_return_5_session.status == (
+        BenchmarkExcessReturnStatus.UNAVAILABLE
+    )
+    assert evidence.benchmark_excess_return_5_session.unavailable_reason == "not_computed"
+    assert evidence.benchmark_excess_return_5_session.excess_return_pct is None
+
+
+def test_benchmark_excess_return_horizons_are_independent():
+    evidence = SetupEvidenceBuilder().build(
+        _candidate(),
+        _setup_eval(),
+        benchmark_excess_return_5_session=_available(5, 0.5),
+        benchmark_excess_return_20_session=None,
+        analysis_date=date(2026, 1, 1),
+    )
+    assert evidence.benchmark_excess_return_5_session.status == (
+        BenchmarkExcessReturnStatus.AVAILABLE
+    )
+    assert evidence.benchmark_excess_return_20_session.status == (
+        BenchmarkExcessReturnStatus.UNAVAILABLE
+    )
 
 
 def test_volume_fresh_for_local_idx_stock_source():
@@ -210,25 +255,29 @@ def test_phase_gated_entry_authority_metadata_threaded_from_setup_eval():
 
 def test_freshness_fields_are_enum_instances():
     evidence = SetupEvidenceBuilder().build(_candidate(), _setup_eval())
-    assert isinstance(evidence.rs_freshness, Freshness)
+    assert isinstance(
+        evidence.benchmark_excess_return_5_session.status, BenchmarkExcessReturnStatus
+    )
     assert isinstance(evidence.volume_freshness, Freshness)
 
 
-def test_to_dict_serializes_freshness_as_string():
+def test_to_dict_serializes_benchmark_excess_return_and_authority_status():
     evidence = SetupEvidenceBuilder().build(
         _candidate(),
         _setup_eval(match="PARTIAL"),
-        rs_vs_ihsg_5d=0.3,
+        benchmark_excess_return_5_session=_available(5, 0.3),
         analysis_date=date(2026, 1, 1),
         volume_trend_ratio=1.5,
         candle_source="stockbit",
     )
     d = evidence.to_dict()
-    assert d["rs_freshness"] == "FRESH"
+    assert d["benchmark_excess_return_5_session"]["status"] == "AVAILABLE"
+    assert d["benchmark_excess_return_5_session"]["excess_return_pct"] == 0.3
+    assert d["benchmark_excess_return_20_session"]["status"] == "UNAVAILABLE"
+    assert d["benchmark_excess_return_authority_status"] == "DIAGNOSTIC_UNVALIDATED"
     assert d["volume_freshness"] == "FRESH"
     assert d["setup_match"] == "PARTIAL"
     assert d["match_strength"] == 60.0
-    assert d["rs_vs_ihsg_5d"] == 0.3
     assert d["volume_trend_ratio"] == 1.5
     assert isinstance(d["snapshot_date"], str)
     assert isinstance(d["failed_gates"], list)

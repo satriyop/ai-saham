@@ -196,3 +196,59 @@ def _label(
         resolution_source=resolution_source,
         resolution_notes=resolution_notes,
     )
+
+
+def test_signal_forward_label_benchmark_excess_return_round_trips(tmp_path: Path):
+    from src.domain.value_objects.benchmark_excess_return import BenchmarkExcessReturn, BenchmarkExcessReturnStatus
+    db_path = tmp_path / "data.db"
+    repo = SQLiteSignalForwardLabelsRepository(db_path)
+
+    r5 = BenchmarkExcessReturn(
+        benchmark="IHSG",
+        window_sessions=5,
+        ticker_return_pct=10.0,
+        benchmark_return_pct=2.0,
+        excess_return_pct=8.0,
+        window_start=date(2026, 7, 10),
+        window_end=date(2026, 7, 17),
+        common_session_count=6,
+        status=BenchmarkExcessReturnStatus.AVAILABLE,
+    )
+    r20 = BenchmarkExcessReturn.unavailable(
+        benchmark="IHSG",
+        window_sessions=20,
+        reason="insufficient_aligned_closes",
+        common_session_count=15,
+    )
+
+    label = SignalForwardLabel(
+        ticker="bbca",
+        signal_date=date(2026, 7, 1),
+        horizon=SignalLabelHorizon.SWING_10D,
+        entry_reference_price=Decimal("100"),
+        label_window_start=date(2026, 7, 2),
+        label_window_end=date(2026, 7, 15),
+        close_return=10.0,
+        max_forward_return=12.0,
+        max_adverse_excursion=-2.0,
+        days_to_peak=8,
+        days_to_trough=2,
+        stop_would_trigger=False,
+        target_would_trigger=True,
+        outcome_label=SignalForwardOutcome.SUCCESS,
+        unavailable_reason=None,
+        fingerprint=SignalObservationFingerprint(
+            benchmark_excess_return_5_session=r5,
+            benchmark_excess_return_20_session=r20,
+            benchmark_excess_return_authority_status="DIAGNOSTIC_UNVALIDATED",
+        ),
+        observation_captured_at=datetime(2026, 7, 1, 9, 0, 0),
+    )
+
+    repo.save_many([label])
+    restored = repo.get("BBCA", date(2026, 7, 1), SignalLabelHorizon.SWING_10D)
+
+    assert restored is not None
+    assert restored.fingerprint.benchmark_excess_return_5_session == r5
+    assert restored.fingerprint.benchmark_excess_return_20_session == r20
+    assert restored.fingerprint.benchmark_excess_return_authority_status == "DIAGNOSTIC_UNVALIDATED"

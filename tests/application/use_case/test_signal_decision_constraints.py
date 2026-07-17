@@ -2,9 +2,15 @@ from __future__ import annotations
 
 from datetime import date
 
+import pytest
+
 from src.application.dto.assess_signal import AssessSignalEvidenceRequest
 from src.application.use_case.assess_signal_evidence_use_case import (
     AssessSignalEvidenceUseCase,
+)
+from src.domain.value_objects.benchmark_excess_return import (
+    BenchmarkExcessReturn,
+    BenchmarkExcessReturnStatus,
 )
 from src.domain.value_objects.factor_evidence import Direction, Freshness
 from src.domain.value_objects.flow_confirmation_evidence import (
@@ -16,6 +22,21 @@ from src.domain.value_objects.setup_evidence import SetupEvidence
 from src.domain.value_objects.signal_assessment import EntryQuality
 
 SNAP = date(2026, 7, 5)
+
+
+def _excess_return(window_sessions: int, excess_return_pct: float) -> BenchmarkExcessReturn:
+    return BenchmarkExcessReturn(
+        benchmark="IHSG",
+        window_sessions=window_sessions,
+        ticker_return_pct=excess_return_pct,
+        benchmark_return_pct=0.0,
+        excess_return_pct=excess_return_pct,
+        window_start=date(2026, 6, 1),
+        window_end=SNAP,
+        common_session_count=window_sessions + 1,
+        status=BenchmarkExcessReturnStatus.AVAILABLE,
+        unavailable_reason=None,
+    )
 
 
 def _mctx(regime: str) -> MarketContext:
@@ -42,8 +63,8 @@ def _setup() -> SetupEvidence:
         bb_width_pctile=0.20,
         vwap_discount_pct=1.5,
         vwap_pct=1.02,
-        rs_vs_ihsg_5d=1.05,
-        rs_freshness=Freshness.FRESH,
+        benchmark_excess_return_5_session=_excess_return(5, 1.05),
+        benchmark_excess_return_20_session=_excess_return(20, 1.05),
         volume_trend_ratio=1.2,
         volume_freshness=Freshness.FRESH,
         candle_source="stockbit",
@@ -162,3 +183,75 @@ def test_assess_signal_response_coverage_score_is_alias_for_evidence_confidence(
     )
     assert response.coverage_score == response.evidence_confidence
     assert response.coverage_score is not None
+
+
+def _setup_with_excess_return(excess_return_pct: float) -> SetupEvidence:
+    return SetupEvidence(
+        ticker="TEST",
+        snapshot_date=SNAP,
+        setup_name="foreign-bounce",
+        setup_match="MATCH",
+        match_strength=100.0,
+        failed_gates=(),
+        trend="UP",
+        rsi=45.0,
+        bb_width_pctile=0.20,
+        vwap_discount_pct=1.5,
+        vwap_pct=1.02,
+        benchmark_excess_return_5_session=_excess_return(5, excess_return_pct),
+        benchmark_excess_return_20_session=_excess_return(20, excess_return_pct),
+        volume_trend_ratio=1.2,
+        volume_freshness=Freshness.FRESH,
+        candle_source="stockbit",
+    )
+
+
+def test_poor_benchmark_excess_return_cannot_cap_enter():
+    """Task HIGH-1: a deliberately poor benchmark excess return must not cap
+    an otherwise identical ENTER result — the diagnostic evidence carries no
+    decision authority."""
+    strong_response = AssessSignalEvidenceUseCase().execute(
+        AssessSignalEvidenceRequest(
+            ticker="TEST",
+            snapshot_date=SNAP,
+            setup_evidence=_setup_with_excess_return(1.05),
+            flow_confirmation_evidence=_flow(),
+            setup_family="foreign-bounce",
+        )
+    )
+    assert strong_response.assessment.entry_quality == EntryQuality.ENTER
+
+    poor_response = AssessSignalEvidenceUseCase().execute(
+        AssessSignalEvidenceRequest(
+            ticker="TEST",
+            snapshot_date=SNAP,
+            setup_evidence=_setup_with_excess_return(-50.0),
+            flow_confirmation_evidence=_flow(),
+            setup_family="foreign-bounce",
+        )
+    )
+
+    assert poor_response.assessment.entry_quality == EntryQuality.ENTER
+    assert poor_response.assessment.score == strong_response.assessment.score
+    constraints = poor_response.assessment.decision_constraints
+    if constraints is not None:
+        assert not any(
+            "rs_policy" in r or "benchmark_excess_return" in r.lower()
+            for r in constraints.constraint_reasons
+        )
+
+
+def test_support_reclaim_exception_no_longer_exists():
+    """Task HIGH-1 removed the broken support-reclaim exception entirely —
+    the config dataclass and its production authority module must be gone,
+    not merely disabled."""
+    import importlib
+
+    from src.application.services import setup_phase_config
+
+    assert not hasattr(setup_phase_config, "SetupPhaseRSPolicyConfig")
+    assert not hasattr(setup_phase_config.SetupPhaseConfig(), "rs_policy_by_setup_family")
+    assert not hasattr(setup_phase_config.SetupPhaseConfig(), "rs_policy_for")
+
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("src.application.services.setup_phase_rs_policy")

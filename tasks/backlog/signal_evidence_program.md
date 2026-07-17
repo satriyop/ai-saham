@@ -49,16 +49,20 @@ semantics before this gate passes.
 **Run in order:**
 
 1. HIGH-1 — correct benchmark excess-return semantics and demote unvalidated authority;
-2. HIGH-2 — replace ambiguous coverage/conviction with authority coverage and typed readiness;
-3. ARTIFACT-IDENTITY — define reproducible semantic identity;
-4. HIGH-3 — remove flags-only pseudo-assessments;
-5. MEDIUM-1 — remove producer-local institutional authority;
-6. MEDIUM-2 — repair the sector-context identity;
-7. MEDIUM-3 — remove dead/misleading output and fingerprint semantics.
+2. CANONICAL-EVIDENCE-BOUNDARY — bind evidence, exact consumed-row provenance,
+   and source availability in one shared screen/swing input contract, shadow-only;
+3. HIGH-2 — replace ambiguous coverage/conviction with authority coverage and typed readiness;
+4. ARTIFACT-IDENTITY — define reproducible semantic identity;
+5. HIGH-3 — remove flags-only pseudo-assessments;
+6. MEDIUM-1 — remove producer-local institutional authority;
+7. MEDIUM-2 — repair the sector-context identity;
+8. MEDIUM-3 — remove dead/misleading output and fingerprint semantics.
 
 **Exit gate: `LIVE-CONTRACT-GATE`**
 
 - one canonical evidence-backed assessment path exists;
+- screen and swing bind evidence to the same consumed-row provenance and
+  shadow availability contract before HIGH-2 enforcement;
 - diagnostic evidence cannot gain authority through naming/config shortcuts;
 - new observation/label schemas can bind corrected semantics;
 - valid partial evidence is distinct from no evidence and unavailable data.
@@ -170,4 +174,3 @@ Stop and report instead of weakening the contract when:
 - an evaluation needs an already-inspected final holdout;
 - a promotion artifact cannot be independently recomputed;
 - a requested compatibility path would restore ambiguous or unsafe authority.
-

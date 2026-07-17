@@ -46,7 +46,6 @@ def test_to_dict_contains_all_section_keys():
         "rsi",
         "bb_width_pctile",
         "vwap_position",
-        "rs_vs_ihsg",
         "volume_ratio",
         "volume_dry_up_ratio",
         "volume_expansion_ratio",
@@ -94,6 +93,10 @@ def test_to_dict_contains_all_section_keys():
         "atr_pct_at_signal",
         "volatility_bucket_at_signal",
         "volatility_size_multiplier_at_signal",
+        # benchmark excess return
+        "benchmark_excess_return_5_session",
+        "benchmark_excess_return_20_session",
+        "benchmark_excess_return_authority_status",
     }
 
     missing = expected_keys - data.keys()
@@ -106,6 +109,9 @@ def test_from_dict_accepts_legacy_flow_aliases():
             "rsi_at_signal": 45.0,
             "bb_width_pctile_at_signal": 0.25,
             "vwap_position_at_signal": 1.02,
+            # Legacy Task HIGH-1 field: must NOT be deserialized into the
+            # corrected contract — SignalObservationFingerprint carries no
+            # rs_vs_ihsg-shaped attribute to fall back into.
             "rs_vs_ihsg_20d_at_signal": -0.05,
             "volume_ratio_at_signal": 1.5,
             "volume_dry_up_ratio_at_signal": 0.4,
@@ -120,7 +126,8 @@ def test_from_dict_accepts_legacy_flow_aliases():
     assert fp.rsi == 45.0
     assert fp.bb_width_pctile == 0.25
     assert fp.vwap_position == 1.02
-    assert fp.rs_vs_ihsg == -0.05
+    assert not hasattr(fp, "rs_vs_ihsg")
+    assert "rs_vs_ihsg" not in fp.to_dict()
     assert fp.volume_ratio == 1.5
     assert fp.volume_dry_up_ratio == 0.4
     assert fp.volume_expansion_ratio == 2.0
@@ -232,3 +239,63 @@ def test_volatility_aliases_round_trip():
     assert round_tripped.atr_pct_at_signal == 4.5
     assert round_tripped.volatility_bucket_at_signal == "NORMAL"
     assert round_tripped.volatility_size_multiplier_at_signal == 1.0
+
+
+def test_benchmark_excess_return_serialization_round_trips():
+    from src.domain.value_objects.benchmark_excess_return import BenchmarkExcessReturn, BenchmarkExcessReturnStatus
+    from datetime import date
+    r5 = BenchmarkExcessReturn(
+        benchmark="IHSG",
+        window_sessions=5,
+        ticker_return_pct=10.0,
+        benchmark_return_pct=2.0,
+        excess_return_pct=8.0,
+        window_start=date(2026, 7, 10),
+        window_end=date(2026, 7, 17),
+        common_session_count=6,
+        status=BenchmarkExcessReturnStatus.AVAILABLE,
+    )
+    r20 = BenchmarkExcessReturn.unavailable(
+        benchmark="IHSG",
+        window_sessions=20,
+        reason="insufficient_aligned_closes",
+        common_session_count=15,
+    )
+
+    fp = SignalObservationFingerprint(
+        benchmark_excess_return_5_session=r5,
+        benchmark_excess_return_20_session=r20,
+        benchmark_excess_return_authority_status="DIAGNOSTIC_UNVALIDATED",
+    )
+
+    serialized = fp.to_dict()
+    assert serialized["benchmark_excess_return_5_session"] == {
+        "benchmark": "IHSG",
+        "window_sessions": 5,
+        "ticker_return_pct": 10.0,
+        "benchmark_return_pct": 2.0,
+        "excess_return_pct": 8.0,
+        "window_start": "2026-07-10",
+        "window_end": "2026-07-17",
+        "common_session_count": 6,
+        "status": "AVAILABLE",
+        "unavailable_reason": None,
+    }
+    assert serialized["benchmark_excess_return_20_session"] == {
+        "benchmark": "IHSG",
+        "window_sessions": 20,
+        "ticker_return_pct": None,
+        "benchmark_return_pct": None,
+        "excess_return_pct": None,
+        "window_start": None,
+        "window_end": None,
+        "common_session_count": 15,
+        "status": "UNAVAILABLE",
+        "unavailable_reason": "insufficient_aligned_closes",
+    }
+    assert serialized["benchmark_excess_return_authority_status"] == "DIAGNOSTIC_UNVALIDATED"
+
+    round_tripped = SignalObservationFingerprint.from_dict(serialized)
+    assert round_tripped.benchmark_excess_return_5_session == r5
+    assert round_tripped.benchmark_excess_return_20_session == r20
+    assert round_tripped.benchmark_excess_return_authority_status == "DIAGNOSTIC_UNVALIDATED"

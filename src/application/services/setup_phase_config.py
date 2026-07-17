@@ -34,15 +34,6 @@ class SetupPhaseThresholdsConfig:
 
 
 @dataclass(frozen=True)
-class SetupPhaseRSPolicyConfig:
-    lag_warning_below: float = -1.0
-    hard_exclude_below: float = -4.0
-    warning_max_decision: str = "WATCH"
-    hard_exclude_max_decision: str = "AVOID"
-    mean_reversion_exception_requires_support_reclaim: bool = True
-
-
-@dataclass(frozen=True)
 class VolumeTriggerValidityConfig:
     require_trusted_volume: bool = True
     trusted_benchmark_volume_sources: tuple[str, ...] = ("stockbit", "idx")
@@ -116,16 +107,6 @@ class SetupPhaseConfig:
     thresholds: SetupPhaseThresholdsConfig = field(
         default_factory=SetupPhaseThresholdsConfig
     )
-    rs_policy_by_setup_family: dict[str, SetupPhaseRSPolicyConfig] = field(
-        default_factory=lambda: {
-            "foreign-bounce": SetupPhaseRSPolicyConfig(),
-            "foreign_bounce": SetupPhaseRSPolicyConfig(),
-            "accumulation": SetupPhaseRSPolicyConfig(),
-            "breakout": SetupPhaseRSPolicyConfig(),
-            "coiled-spring": SetupPhaseRSPolicyConfig(),
-            "coiled_spring": SetupPhaseRSPolicyConfig(),
-        }
-    )
     requirements_by_family: dict[str, SetupPhaseRequirementConfig] = field(
         default_factory=lambda: {
             "accumulation": _ACCUMULATION_SEQUENCE_REQUIREMENT,
@@ -145,14 +126,6 @@ class SetupPhaseConfig:
     volume_trigger: VolumeTriggerValidityConfig = field(
         default_factory=VolumeTriggerValidityConfig
     )
-
-    def rs_policy_for(self, setup_family: str | None) -> SetupPhaseRSPolicyConfig | None:
-        if not setup_family:
-            return None
-        key = setup_family.strip().lower()
-        return self.rs_policy_by_setup_family.get(key) or self.rs_policy_by_setup_family.get(
-            key.replace("-", "_")
-        )
 
     def requirement_for(
         self, setup_family: str | None

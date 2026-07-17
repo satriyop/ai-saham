@@ -48,6 +48,7 @@ def _insert(
 ) -> None:
     if config_hash is None:
         config_hash = ""
+    schema_version = 2 if config_hash != "" else 1
     conn.execute(
         "INSERT INTO candidate_observations "
         "(ticker, snapshot_date, captured_at, schema_version, payload_json, "
@@ -57,8 +58,8 @@ def _insert(
             ticker,
             snapshot_date,
             captured_at,
-            1,
-            '{"schema_version": 1}',
+            schema_version,
+            f'{{"schema_version": {schema_version}}}',
             workflow,
             window_sessions,
             data_as_of_date,

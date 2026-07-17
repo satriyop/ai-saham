@@ -51,11 +51,11 @@ if TYPE_CHECKING:
     from src.application.services.institutional_flow_config import (
         InstitutionalAccumulationConfig,
     )
+    from src.application.services.benchmark_excess_return_calculator import (
+        BenchmarkExcessReturnCalculator,
+    )
     from src.application.services.primary_setup_family_resolver import (
         PrimarySetupFamilyResolver,
-    )
-    from src.application.services.relative_strength_calculator import (
-        RelativeStrengthCalculator,
     )
     from src.application.services.sector_context_evidence_builder import (
         SectorContextEvidenceBuilder,
@@ -171,7 +171,7 @@ class AccumulationScreenUseCase:
         derived_feature_policy: accumulation_dto.AccumulationDerivedFeaturePolicy | None = None,
         swing_setup_catalog: "SwingSetupCatalogConfig | None" = None,
         primary_setup_family_resolver: "PrimarySetupFamilyResolver | None" = None,
-        relative_strength_calculator: "RelativeStrengthCalculator | None" = None,
+        benchmark_excess_return_calculator: "BenchmarkExcessReturnCalculator | None" = None,
         *,
         indicator_registry: "IndicatorRegistry",
         rules_loader: RulesLoader,
@@ -190,8 +190,8 @@ class AccumulationScreenUseCase:
         from src.application.services.primary_setup_family_resolver import (
             PrimarySetupFamilyResolver as _PrimarySetupFamilyResolver,
         )
-        from src.application.services.relative_strength_calculator import (
-            RelativeStrengthCalculator as _RelativeStrengthCalculator,
+        from src.application.services.benchmark_excess_return_calculator import (
+            BenchmarkExcessReturnCalculator as _BenchmarkExcessReturnCalculator,
         )
         from src.application.services.signal_engine import SignalEngine as _SignalEngine
 
@@ -206,8 +206,8 @@ class AccumulationScreenUseCase:
         )
         self._swing_setup_catalog = swing_setup_catalog
         self._setup_family_resolver = primary_setup_family_resolver or _PrimarySetupFamilyResolver()
-        self._relative_strength_calculator = (
-            relative_strength_calculator or _RelativeStrengthCalculator()
+        self._benchmark_excess_return_calculator = (
+            benchmark_excess_return_calculator or _BenchmarkExcessReturnCalculator()
         )
         self._indicator_registry = indicator_registry
         # Derive weights from the same policy ScoreForeignFlowUseCase uses, so
@@ -222,7 +222,7 @@ class AccumulationScreenUseCase:
             candidate_observations_repository=self._candidate_observations_repo,
             swing_setup_catalog=self._swing_setup_catalog,
             primary_setup_family_resolver=self._setup_family_resolver,
-            relative_strength_calculator=self._relative_strength_calculator,
+            benchmark_excess_return_calculator=self._benchmark_excess_return_calculator,
             indicator_registry=self._indicator_registry,
             rules_loader=rules_loader,
             ticker_profile_classifier_factory=ticker_profile_classifier_factory,

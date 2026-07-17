@@ -12,7 +12,7 @@ from typing import Any
 
 # Compatibility surface:
 # - Canonical import(s):
-#   - SetupPhaseConfig, SetupPhaseRequirementConfig, SetupPhaseRSPolicyConfig,
+#   - SetupPhaseConfig, SetupPhaseRequirementConfig,
 #     SetupPhaseThresholdsConfig, VolumeTriggerEvidence,
 #     VolumeTriggerValidityConfig -> src.application.services.setup_phase_config
 # - Allowed contents:
@@ -25,13 +25,9 @@ from typing import Any
 from src.application.services.setup_phase_config import (
     SetupPhaseConfig,
     SetupPhaseRequirementConfig,  # noqa: F401 — re-exported for backward compat
-    SetupPhaseRSPolicyConfig,  # noqa: F401 — re-exported for backward compat
     SetupPhaseThresholdsConfig,
     VolumeTriggerEvidence,
     VolumeTriggerValidityConfig,  # noqa: F401 — re-exported for backward compat
-)
-from src.application.services.setup_phase_rs_policy import (
-    setup_phase_rs_policy_reasons,
 )
 from src.application.services.setup_phase_sequence_policy import (
     validate_setup_phase_sequence,
@@ -49,7 +45,6 @@ __all__ = [
     "SetupPhaseDetector",
     "SetupPhaseConfig",
     "SetupPhaseRequirementConfig",
-    "SetupPhaseRSPolicyConfig",
     "SetupPhaseThresholdsConfig",
     "VolumeTriggerEvidence",
     "VolumeTriggerValidityConfig",
@@ -88,14 +83,6 @@ class SetupPhaseDetector:
             cfg=cfg.volume_trigger,
         )
         unavailable.extend(volume_evidence.unavailable_reasons)
-
-        rs_constraint_reasons = setup_phase_rs_policy_reasons(
-            setup_evidence=setup_evidence,
-            setup_family=setup_family,
-            cfg=cfg,
-            passed_gates=passed,
-        )
-        reasons.extend(rs_constraint_reasons)
 
         terminal = self._terminal_phase(
             latest=latest,

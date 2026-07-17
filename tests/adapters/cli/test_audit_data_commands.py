@@ -930,16 +930,16 @@ def _build_candidate_observation_db(db_path: Path) -> None:
         "(ticker, snapshot_date, captured_at, schema_version, payload_json, "
         "workflow, window_sessions, data_as_of_date, config_hash) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        ("BBCA", "2026-07-15", "2026-07-15T00:00:00+00:00", 1,
-         '{"schema_version":1}', "accumulation_screen", 30, "2026-07-15", "abc123"),
+        ("BBCA", "2026-07-15", "2026-07-15T00:00:00+00:00", 2,
+         '{"schema_version":2}', "accumulation_screen", 30, "2026-07-15", "abc123"),
     )
     conn.execute(
         "INSERT INTO candidate_observations "
         "(ticker, snapshot_date, captured_at, schema_version, payload_json, "
         "workflow, window_sessions, data_as_of_date, config_hash) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        ("BBRI", "2026-07-15", "2026-07-15T01:00:00+00:00", 1,
-         '{"schema_version":1}', "accumulation_screen", 30, "2026-07-15", "def456"),
+        ("BBRI", "2026-07-15", "2026-07-15T01:00:00+00:00", 2,
+         '{"schema_version":2}', "accumulation_screen", 30, "2026-07-15", "def456"),
     )
     conn.execute(
         "INSERT INTO candidate_observations "

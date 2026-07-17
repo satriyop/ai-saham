@@ -94,8 +94,8 @@ def test_signal_observation_fingerprint_preserves_volume_trigger_evidence_fields
     volume_expansion_confirmed / volume_trigger_confirmed (Point 3 explicit
     dry-up/expansion volume trigger evidence) must survive a to_dict/from_dict
     round trip. The two float fields support the dual-key `_at_signal`
-    fallback (matching rs_vs_ihsg/rs_vs_ihsg_20d_at_signal); the three boolean
-    fields use a plain key with no `_at_signal` fallback."""
+    fallback (matching rsi/rsi_at_signal); the three boolean fields use a
+    plain key with no `_at_signal` fallback."""
     fp = SignalObservationFingerprint.from_dict(
         {
             "volume_dry_up_ratio_at_signal": 0.4,
@@ -306,6 +306,8 @@ def test_signal_observation_fingerprint_legacy_aliases_and_conversions():
         "rsi_at_signal": 45.0,
         "bb_width_pctile_at_signal": 0.25,
         "vwap_position_at_signal": 1.02,
+        # Legacy Task HIGH-1 field: no rs_vs_ihsg-shaped slot exists to
+        # deserialize this into under the corrected contract.
         "rs_vs_ihsg_20d_at_signal": -0.05,
         "volume_ratio_at_signal": 1.5,
         "cnfb_20d_at_signal": 0.002,
@@ -318,7 +320,7 @@ def test_signal_observation_fingerprint_legacy_aliases_and_conversions():
     assert fp.rsi == 45.0
     assert fp.bb_width_pctile == 0.25
     assert fp.vwap_position == 1.02
-    assert fp.rs_vs_ihsg == -0.05
+    assert not hasattr(fp, "rs_vs_ihsg")
     assert fp.volume_ratio == 1.5
     assert fp.cnfb == 0.002
     assert fp.foreign_participation == 0.45

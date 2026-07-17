@@ -168,13 +168,11 @@ class DecisionPolicyService:
             elif setup_phase.current_phase == SetupPhaseState.EXHAUSTION:
                 max_decision = _stricter(max_decision, EntryQuality.WATCH.value)
                 reasons.append("Setup phase EXHAUSTION caps ENTER to WATCH")
-            for reason in setup_phase.reasons:
-                if "rs_policy_hard_exclude" in reason:
-                    max_decision = _stricter(max_decision, EntryQuality.AVOID.value)
-                    reasons.append(reason)
-                elif "rs_policy_warning" in reason:
-                    max_decision = _stricter(max_decision, EntryQuality.WATCH.value)
-                    reasons.append(reason)
+            # Benchmark excess-return evidence (SetupEvidence.
+            # benchmark_excess_return_5_session/20_session) is
+            # DIAGNOSTIC_UNVALIDATED and intentionally NOT parsed here — see
+            # tasks/backlog/audit_signal_refactor_contract.md Task HIGH-1.
+            # setup_phase.reasons is never scanned for authority strings.
             if setup_phase.sequence_valid is False:
                 max_decision = _stricter(max_decision, EntryQuality.WATCH.value)
                 reasons.append("Setup phase sequence invalid — ENTER capped to WATCH")

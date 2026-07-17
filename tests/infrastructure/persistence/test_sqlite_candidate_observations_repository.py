@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import date, datetime
 from pathlib import Path
@@ -220,7 +221,7 @@ def _canonical_observation(
         ticker=ticker,
         snapshot_date=snapshot_date,
         captured_at=captured_at,
-        payload={"schema_version": 1, "ticker": ticker, "value": value},
+        payload={"schema_version": 2, "ticker": ticker, "value": value},
         workflow="screen_accum",
         window_sessions=window_sessions,
         data_as_of_date=data_as_of_date,
@@ -394,13 +395,69 @@ def test_unsupported_schema_version_rejected(tmp_path: Path):
                 ticker="BBCA",
                 snapshot_date=day,
                 captured_at=datetime(2026, 7, 3, 9, 0, 0),
-                payload={"schema_version": 2, "ticker": "BBCA"},
+                payload={"schema_version": 3, "ticker": "BBCA"},
             )
         ]
     )
 
     with pytest.raises(ValueError, match="Unsupported candidate observation"):
         repo.get_latest("BBCA", day)
+
+
+def test_current_schema_version_2_round_trips(tmp_path: Path):
+    """Task HIGH-1 bumped the canonical schema to v2 (typed benchmark
+    excess-return fields replace the old rs_vs_ihsg_*_at_signal keys) — v2
+    payloads must read back without raising."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+    repo.save_many(
+        [
+            CandidateObservation(
+                ticker="BBCA",
+                snapshot_date=day,
+                captured_at=datetime(2026, 7, 3, 9, 0, 0),
+                payload={"schema_version": 2, "ticker": "BBCA"},
+            )
+        ]
+    )
+
+    observation = repo.get_latest("BBCA", day)
+    assert observation is not None
+    assert observation.payload["schema_version"] == 2
+
+
+def test_legacy_schema_version_1_is_readable_but_not_canonical(tmp_path: Path):
+    """v1 rows (pre-HIGH-1) must remain readable for history/audit purposes,
+    but their payload never contains the corrected typed benchmark
+    excess-return keys — no migration fabricates them."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+    repo.save_many(
+        [
+            CandidateObservation(
+                ticker="BBCA",
+                snapshot_date=day,
+                captured_at=datetime(2026, 7, 3, 9, 0, 0),
+                payload={
+                    "schema_version": 1,
+                    "ticker": "BBCA",
+                    "sub_signal_fingerprint": {
+                        "rs_vs_ihsg_5d_at_signal": -1.2,
+                        "rs_vs_ihsg_20d_at_signal": -3.4,
+                    },
+                },
+            )
+        ]
+    )
+
+    observation = repo.get_latest("BBCA", day)
+    assert observation is not None
+    assert observation.payload["schema_version"] == 1
+    fingerprint = observation.payload["sub_signal_fingerprint"]
+    assert "benchmark_excess_return_5_session" not in fingerprint
+    assert "benchmark_excess_return_20_session" not in fingerprint
 
 
 def test_effective_session_provenance_round_trips(tmp_path: Path):
@@ -488,7 +545,7 @@ def test_provenance_only_change_does_not_create_new_canonical_row(tmp_path: Path
                 ticker="BBCA",
                 snapshot_date=day,
                 captured_at=datetime(2026, 7, 3, 10, 0, 0),
-                payload={"schema_version": 1, "ticker": "BBCA", "value": "second"},
+                payload={"schema_version": 2, "ticker": "BBCA", "value": "second"},
                 workflow="screen_accum",
                 window_sessions=7,
                 data_as_of_date=day,
@@ -508,3 +565,58 @@ def test_provenance_only_change_does_not_create_new_canonical_row(tmp_path: Path
     assert len(rows) == 1
     assert rows[0].payload["value"] == "second"
     assert rows[0].resolution_source == "ihsg_cache_same_day"
+
+
+def test_non_empty_config_hash_requires_schema_version_2_on_write(tmp_path: Path):
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+
+    # Attempts to write a non-empty config_hash with schema_version 1 must raise ValueError
+    v1_obs = CandidateObservation(
+        ticker="BBCA",
+        snapshot_date=day,
+        captured_at=datetime(2026, 7, 3, 9, 0, 0),
+        payload={"schema_version": 1, "ticker": "BBCA"},
+        config_hash="abc123",
+    )
+    with pytest.raises(ValueError, match="requires schema_version == 2"):
+        repo.save_many([v1_obs])
+
+
+def test_list_canonical_by_date_excludes_v1_payloads_with_non_empty_config_hash(tmp_path: Path):
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+
+    # Bypass the validation of save_many to insert a row with schema_version = 1 and non-empty config_hash
+    with repo._connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO candidate_observations (
+                ticker, snapshot_date, captured_at, schema_version, payload_json,
+                workflow, window_sessions, data_as_of_date, config_hash
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "BBCA",
+                day.isoformat(),
+                datetime(2026, 7, 3, 9, 0, 0).isoformat(),
+                1,
+                json.dumps({"schema_version": 1, "ticker": "BBCA"}),
+                "screen_accum",
+                7,
+                day.isoformat(),
+                "abc123",
+            ),
+        )
+        conn.commit()
+
+    # Now verify that it is readable but excluded from canonical results
+    obs = repo.get_latest("BBCA", day)
+    assert obs is not None
+    assert obs.payload["schema_version"] == 1
+    assert obs.config_hash == "abc123"
+
+    canonical = repo.list_canonical_by_date(day)
+    assert len(canonical) == 0

@@ -74,7 +74,7 @@ class SQLiteCandidateObservationIdentityReader:
                 legacy = total if config_hash_missing else self._scalar(
                     conn,
                     "SELECT COUNT(*) FROM candidate_observations "
-                    "WHERE config_hash IS NULL OR TRIM(config_hash) = ''",
+                    "WHERE config_hash IS NULL OR TRIM(config_hash) = '' OR schema_version != 2",
                 )
                 canonical = total - legacy
                 missing_counts = {}
@@ -106,7 +106,7 @@ class SQLiteCandidateObservationIdentityReader:
                     else (
                         "SELECT snapshot_date, COUNT(*) as row_count "
                         "FROM candidate_observations "
-                        "WHERE config_hash IS NULL OR TRIM(config_hash) = '' "
+                        "WHERE config_hash IS NULL OR TRIM(config_hash) = '' OR schema_version != 2 "
                         "GROUP BY snapshot_date ORDER BY row_count DESC"
                     )
                 )
@@ -133,7 +133,7 @@ class SQLiteCandidateObservationIdentityReader:
             legacy = self._scalar(
                 conn,
                 "SELECT COUNT(*) FROM candidate_observations "
-                "WHERE config_hash IS NULL OR TRIM(config_hash) = ''",
+                "WHERE config_hash IS NULL OR TRIM(config_hash) = '' OR schema_version != 2",
             )
             canonical = total - legacy
 
@@ -170,7 +170,7 @@ class SQLiteCandidateObservationIdentityReader:
                 conn,
                 "SELECT snapshot_date, COUNT(*) as row_count "
                 "FROM candidate_observations "
-                "WHERE config_hash IS NULL OR TRIM(config_hash) = '' "
+                "WHERE config_hash IS NULL OR TRIM(config_hash) = '' OR schema_version != 2 "
                 "GROUP BY snapshot_date ORDER BY row_count DESC",
             )
 
@@ -232,7 +232,7 @@ class SQLiteCandidateObservationIdentityReader:
             "SELECT ticker, snapshot_date, workflow, window_sessions, "
             "data_as_of_date, config_hash, COUNT(*) as cnt "
             "FROM candidate_observations "
-            "WHERE config_hash IS NOT NULL AND TRIM(config_hash) != '' "
+            "WHERE config_hash IS NOT NULL AND TRIM(config_hash) != '' AND schema_version = 2 "
             "GROUP BY ticker, snapshot_date, workflow, window_sessions, "
             "data_as_of_date, config_hash "
             "HAVING COUNT(*) > 1"
@@ -289,7 +289,7 @@ class SQLiteCandidateObservationIdentityReader:
         canonical_row = conn.execute(
             "SELECT COUNT(*) as cnt FROM candidate_observations "
             "WHERE snapshot_date = ? "
-            "AND config_hash IS NOT NULL AND TRIM(config_hash) != ''",
+            "AND config_hash IS NOT NULL AND TRIM(config_hash) != '' AND schema_version = 2",
             (row["snapshot_date"],),
         ).fetchone()
         latest_canonical = canonical_row["cnt"] if canonical_row else 0
@@ -306,9 +306,9 @@ class SQLiteCandidateObservationIdentityReader:
     def _latest_readiness_dependency(self, conn: sqlite3.Connection) -> dict:
         row = conn.execute(
             "SELECT snapshot_date, COUNT(*) as total, "
-            "SUM(CASE WHEN config_hash IS NOT NULL AND TRIM(config_hash) != '' "
+            "SUM(CASE WHEN config_hash IS NOT NULL AND TRIM(config_hash) != '' AND schema_version = 2 "
             "THEN 1 ELSE 0 END) as canonical, "
-            "SUM(CASE WHEN config_hash IS NULL OR TRIM(config_hash) = '' "
+            "SUM(CASE WHEN config_hash IS NULL OR TRIM(config_hash) = '' OR schema_version != 2 "
             "THEN 1 ELSE 0 END) as legacy "
             "FROM candidate_observations "
             "GROUP BY snapshot_date ORDER BY snapshot_date DESC LIMIT 1"

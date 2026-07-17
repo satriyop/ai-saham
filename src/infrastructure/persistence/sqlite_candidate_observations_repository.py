@@ -12,6 +12,12 @@ from src.domain.ports.candidate_observations_repository import (
 )
 from src.infrastructure.persistence.sqlite_migration_runner import SqliteMigrationRunner
 
+# v1 -> v2 (Task HIGH-1, 2026-07-17): sub_signal_fingerprint replaced the
+# ambiguous rs_vs_ihsg_5d_at_signal/rs_vs_ihsg_20d_at_signal fields with typed
+# benchmark_excess_return_5_session/20_session evidence. No migration
+# fabricates v2 fields from v1 payloads — v1 rows simply lack them.
+_CURRENT_SCHEMA_VERSION = 2
+
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS candidate_observations (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -146,6 +152,13 @@ class SQLiteCandidateObservationsRepository:
         for obs in observations:
             payload = dict(obs.payload)
             schema_version = int(payload.get("schema_version", 1))
+            if obs.config_hash != "" and schema_version != 2:
+                raise ValueError(
+                    f"A non-empty config_hash write requires schema_version == 2 (got {schema_version})"
+                )
+            payload_schema_version = payload.get("schema_version")
+            if payload_schema_version is not None and int(payload_schema_version) != schema_version:
+                raise ValueError("DB-column and payload schema versions disagree")
             rows.append(
                 (
                     obs.ticker.upper(),
@@ -294,20 +307,20 @@ class SQLiteCandidateObservationsRepository:
     def list_canonical_by_date(self, snapshot_date: date) -> list[CandidateObservation]:
         """Return every canonical observation for the date — no collapsing.
 
-        Canonical = config_hash != ''. A ticker with observations across
-        several window_sessions returns one row per window, not just the
-        latest.
+        Canonical = config_hash != '' and schema_version = _CURRENT_SCHEMA_VERSION.
+        A ticker with observations across several window_sessions returns one row
+        per window, not just the latest.
         """
         with self._connect() as conn:
             rows = conn.execute(
                 f"""
                 SELECT {_SELECT_COLUMNS}
                 FROM candidate_observations
-                WHERE snapshot_date = ? AND config_hash != ''
+                WHERE snapshot_date = ? AND config_hash != '' AND schema_version = ?
                 ORDER BY ticker ASC, window_sessions ASC, data_as_of_date DESC,
                          captured_at DESC, id DESC
                 """,
-                (snapshot_date.isoformat(),),
+                (snapshot_date.isoformat(), _CURRENT_SCHEMA_VERSION),
             ).fetchall()
         return [self._row_to_observation(row) for row in rows]
 
@@ -324,8 +337,14 @@ class SQLiteCandidateObservationsRepository:
 
     def _row_to_observation(self, row: sqlite3.Row) -> CandidateObservation:
         payload = json.loads(row["payload_json"])
-        schema_version = int(payload.get("schema_version", row["schema_version"]))
-        if schema_version > 1:
+        db_schema_version = row["schema_version"]
+        payload_schema_version = payload.get("schema_version")
+        if payload_schema_version is not None and int(payload_schema_version) != db_schema_version:
+            raise ValueError(
+                f"DB schema_version ({db_schema_version}) and payload schema_version ({payload_schema_version}) disagree"
+            )
+        schema_version = int(payload.get("schema_version", db_schema_version))
+        if schema_version > _CURRENT_SCHEMA_VERSION:
             raise ValueError(f"Unsupported candidate observation schema_version={schema_version}")
         payload.setdefault("schema_version", schema_version)
         data_as_of_date_raw = row["data_as_of_date"]

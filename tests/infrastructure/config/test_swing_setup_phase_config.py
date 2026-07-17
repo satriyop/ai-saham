@@ -15,6 +15,8 @@ setup_phase:
   thresholds:
     compression_max_bb_width_pctile: 0.15
     breakout_min_volume_ratio: 1.5
+  # rs_policy_by_setup_family removed (Task HIGH-1): a leftover key here must
+  # be silently ignored, not error and not gain any parsed effect.
   rs_policy_by_setup_family:
     foreign-bounce:
       lag_warning_below: -2.0
@@ -51,10 +53,8 @@ setup_phase:
     assert cfg.setup_phase_config.volume_trigger.dry_up_max_ratio == 0.40
     assert cfg.setup_phase_config.volume_trigger.expansion_min_ratio == 1.75
     assert cfg.setup_phase_config.volume_trigger.expansion_requires_positive_close is False
-    assert (
-        cfg.setup_phase_config.rs_policy_for("foreign-bounce").hard_exclude_below
-        == -5.0
-    )
+    assert not hasattr(cfg.setup_phase_config, "rs_policy_for")
+    assert not hasattr(cfg.setup_phase_config, "rs_policy_by_setup_family")
 
 
 def test_load_swing_config_parses_setup_phase_requirements(tmp_path: Path):

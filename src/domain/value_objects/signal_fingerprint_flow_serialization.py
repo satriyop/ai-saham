@@ -15,7 +15,6 @@ def _serialize_flow_fields(fp: "SignalObservationFingerprint") -> dict[str, Any]
         "rsi": fp.rsi,
         "bb_width_pctile": fp.bb_width_pctile,
         "vwap_position": fp.vwap_position,
-        "rs_vs_ihsg": fp.rs_vs_ihsg,
         "volume_ratio": fp.volume_ratio,
         "volume_dry_up_ratio": fp.volume_dry_up_ratio,
         "volume_expansion_ratio": fp.volume_expansion_ratio,
@@ -37,9 +36,6 @@ def _parse_flow_fields(data: dict[str, Any]) -> dict[str, Any]:
         ),
         "vwap_position": _optional_float(
             data.get("vwap_position", data.get("vwap_position_at_signal"))
-        ),
-        "rs_vs_ihsg": _optional_float(
-            data.get("rs_vs_ihsg", data.get("rs_vs_ihsg_20d_at_signal"))
         ),
         "volume_ratio": _optional_float(
             data.get("volume_ratio", data.get("volume_ratio_at_signal"))

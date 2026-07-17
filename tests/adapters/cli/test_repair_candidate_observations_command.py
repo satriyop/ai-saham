@@ -27,7 +27,7 @@ def _build_candidate_observations_db(db_path: Path, *, with_legacy_row: bool) ->
             (ticker, snapshot_date, captured_at, schema_version, payload_json, config_hash)
         VALUES (?, ?, ?, ?, ?, ?)
         """,
-        ("BBCA", "2026-07-15", "2026-07-15T00:00:00", 1, "{}", "canonical-hash"),
+        ("BBCA", "2026-07-15", "2026-07-15T00:00:00", 2, "{}", "canonical-hash"),
     )
     if with_legacy_row:
         conn.execute(

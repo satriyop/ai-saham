@@ -234,4 +234,4 @@ def test_screen_persists_rejected_candidates_with_filter_outcome():
     payload = spy_repo.saved[0].payload
     assert payload["screen_result"] == "rejected_flow"
     assert payload["ticker"] == "BBCA"
-    assert payload["schema_version"] == 1
+    assert payload["schema_version"] == 2

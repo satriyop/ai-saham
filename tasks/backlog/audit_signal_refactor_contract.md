@@ -24,24 +24,65 @@ to skip an unmet phase entry gate.
 |---|---------|----------|-------------|
 | 0 | `DQ-CONTRACT-GATE` | P0 | Complete DQ-000..DQ-002 before semantic/schema repairs |
 | 1 | `HIGH-1` | P0 | Repair benchmark excess-return evidence and demote unvalidated RS gates |
-| 2 | `HIGH-2` | P0 | Replace ambiguous coverage/conviction floors with explicit authority coverage and setup readiness |
-| 3 | `ARTIFACT-IDENTITY` | P0 | Bind observations to code, config, universe, source cutoff, and authority versions |
-| 4 | `CONTROL-POPULATION` | P0 | Capture eligible-universe controls, not only selected candidates |
-| 5 | `PROMO-INTEGRITY` | P0 | Bind promotion to immutable, independently verified evaluation artifacts |
-| 6 | `AUTH-SCOPE` | P0 | Scope authority by evidence, setup, horizon, and market tier |
-| 7 | `HIGH-3` | P1 | Remove flags-only SignalEngine assessment paths and fail closed without production evidence |
-| 8 | `IDX-EXECUTION-LABELS` | P1 | Label executable net outcomes under IDX market constraints |
-| 9 | `WALKFORWARD-VALIDATION` | P1 | Replace one 70/30 split with purged, embargoed walk-forward evaluation |
-| 10 | `INCREMENTAL-EDGE` | P1 | Require paired baseline-versus-challenger ablation |
-| 11 | `SHADOW-PROMOTION` | P1 | Add challenger, staged authority, monitoring, and rollback lifecycle |
-| 12 | `BASELINE-RECERT` | P0 | Recertify or demote legacy baseline authority after the valid evaluation path exists |
-| 13 | `MEDIUM-1` | MEDIUM | Remove producer-config authority from institutional accumulation evidence |
-| 14 | `MEDIUM-2` | MEDIUM | Rename the persisted Alpha/Trigger sector evidence identity without changing real market context |
-| 15 | `MEDIUM-3` | MEDIUM | Make output ownership truthful and remove the dead regime-method dimension |
+| 2 | `CANONICAL-EVIDENCE-BOUNDARY` | P0 | Bind evidence, consumed-row provenance, and shadow availability across screen and swing |
+| 3 | `HIGH-2` | P0 | Replace ambiguous coverage/conviction floors with explicit authority coverage and setup readiness |
+| 4 | `ARTIFACT-IDENTITY` | P0 | Bind observations to code, config, universe, source cutoff, and authority versions |
+| 5 | `CONTROL-POPULATION` | P0 | Capture eligible-universe controls, not only selected candidates |
+| 6 | `PROMO-INTEGRITY` | P0 | Bind promotion to immutable, independently verified evaluation artifacts |
+| 7 | `AUTH-SCOPE` | P0 | Scope authority by evidence, setup, horizon, and market tier |
+| 8 | `HIGH-3` | P1 | Remove flags-only SignalEngine assessment paths and fail closed without production evidence |
+| 9 | `IDX-EXECUTION-LABELS` | P1 | Label executable net outcomes under IDX market constraints |
+| 10 | `WALKFORWARD-VALIDATION` | P1 | Replace one 70/30 split with purged, embargoed walk-forward evaluation |
+| 11 | `INCREMENTAL-EDGE` | P1 | Require paired baseline-versus-challenger ablation |
+| 12 | `SHADOW-PROMOTION` | P1 | Add challenger, staged authority, monitoring, and rollback lifecycle |
+| 13 | `BASELINE-RECERT` | P0 | Recertify or demote legacy baseline authority after the valid evaluation path exists |
+| 14 | `MEDIUM-1` | MEDIUM | Remove producer-config authority from institutional accumulation evidence |
+| 15 | `MEDIUM-2` | MEDIUM | Rename the persisted Alpha/Trigger sector evidence identity without changing real market context |
+| 16 | `MEDIUM-3` | MEDIUM | Make output ownership truthful and remove the dead regime-method dimension |
 
 ---
 
 ## Task HIGH-1 — Repair Benchmark Excess-Return Evidence and Authority
+
+### Status (2026-07-17)
+
+Calculation repair and authority demotion are complete:
+
+- `BenchmarkExcessReturnCalculator` (renamed from `RelativeStrengthCalculator`)
+  aligns ticker/IHSG candles on common completed sessions before computing
+  either window; 5-session requires 6 aligned closes, 20-session requires 21;
+  future rows, zero base closes, and conflicting duplicate candles resolve to
+  `UNAVAILABLE`, never a fabricated value.
+- `SetupEvidence` carries typed `benchmark_excess_return_5_session` /
+  `benchmark_excess_return_20_session` (`BenchmarkExcessReturn`,
+  domain/value_objects/benchmark_excess_return.py) instead of the ambiguous
+  `rs_vs_ihsg_5d`/`rs_freshness` fields.
+- `setup_phase_rs_policy.py` (the production authority path — `rs_policy_warning`
+  / `rs_policy_hard_exclude` reason generation and the non-functional
+  support-reclaim exception) is deleted, not disabled.
+  `DecisionPolicyService` no longer parses `setup_phase.reasons` for any
+  `rs_policy_*` string. `SetupPhaseRSPolicyConfig` and
+  `rs_policy_by_setup_family` are removed from `SetupPhaseConfig`, the YAML
+  config parser, `config/swing_setups.yaml`, and the tuning-bounds validator.
+- Both horizons are persisted, for every candidate observation, with an
+  explicit `benchmark_excess_return_authority_status: "DIAGNOSTIC_UNVALIDATED"`
+  marker alongside component returns, excess return, exact window dates,
+  common-session count, status, and unavailable reason.
+- Candidate-observation payload `schema_version` is bumped 1 → 2. No migration
+  fabricates v2 typed evidence from v1 `rs_vs_ihsg_*_at_signal` payloads; v1
+  rows remain readable (non-canonical, enforced by Finding 1) but never populate the new fields.
+- Focused and full test suites pass (4726 tests); `git diff --check` is clean;
+  `rg -n "rs_policy_warning|rs_policy_hard_exclude|mean_reversion_exception_requires_support_reclaim"
+  src config` and `rg -n "rs_vs_ihsg_5d|rs_vs_ihsg_20d|rs_vs_ihsg_20d_at_signal"
+  src config` return no active-code matches.
+
+**Not done, deliberately deferred to later program phases:** point-in-time
+backfill, mature forward labels, OOS evaluation by setup family/regime/
+liquidity tier, horizon selection, threshold calibration, and any production
+promotion. Both horizons remain diagnostic-only and cannot constrain
+ENTER/WATCH/AVOID. Authority demotion and calculation repair (Stage 1) are complete,
+while Stage 2 evidence collection/evaluation remains deferred. This is a Stage 1
+completion only — Stage 2 and Stage 3 (explicit evidence promotion) have not started.
 
 ### Metadata
 
@@ -234,12 +275,114 @@ Layer plan:
 
 ---
 
+## Task CANONICAL-EVIDENCE-BOUNDARY — Bind Evidence To Provenance And Availability
+
+### Metadata
+
+- **Type:** Application-boundary architecture + shadow availability migration
+- **Priority:** P0
+- **Depends on:** HIGH-1
+- **Required before:** HIGH-2 authority enforcement
+- **Architecture:** ADR-041
+- **Decision:** Replace workflow-specific evidence/availability plumbing with
+  one typed signal-evidence input shared by the candidate-producing
+  accumulation screen and `saham analyze swing`. Keep availability shadow-only
+  and preserve every current score and decision. Implement this option only.
+
+### Problem
+
+Both workflows call `AssessSignalEvidenceUseCase`, but evidence is assembled
+through different paths. DQ-002J adds useful `analyze swing` shadow diagnostics
+after scoring; it is a prototype, not the final boundary. Extending that pattern
+independently into the screener would allow evidence, consumed-row provenance,
+and availability to drift and would leave HIGH-2 without one trustworthy input
+on which to base authority coverage or setup readiness.
+
+### Required Contract
+
+Introduce typed application/domain contracts, following established naming,
+that bind per evidence group:
+
+```text
+evidence value
+exact consumed-row provenance
+resolved EvidenceSourceAvailability
+```
+
+The candidate-producing path (`AccumulationScreenUseCase` /
+`AccumulationCandidateSignalAssessor`) and deep-analysis path
+(`SwingAnalysisWorkflowUseCase`) must both construct that same contract before
+calling the canonical signal assessment. Evidence builders own provenance of
+what they consumed; they must not ask downstream code to infer it from a
+different query or a generic snapshot date.
+
+The migration must remain `SHADOW`: availability is returned for diagnostics
+but cannot affect scoring, coverage, classification, candidate selection,
+TradeSetup, persistence eligibility, or tuning.
+
+### End-To-End Invariants
+
+- Evidence and its provenance/availability cannot be supplied independently.
+- Every production-authority contributor is assessed or named as unassessed;
+  unassessed contributors prevent complete-authority claims.
+- Missing provenance resolves non-authoritatively; it is never inferred from
+  execution time, database mtime, or a row not consumed.
+- Both workflows use one effective session and one compatible calendar snapshot
+  per execution, not per source or field.
+- Diagnostic sources cannot raise production authority.
+- `AssessSignalEvidenceUseCase` remains repository-free.
+- Adapters perform dependency wiring/rendering only.
+- DQ-002J response diagnostics may be preserved for compatibility, but their
+  values must originate from the canonical pre-score input, not a second
+  workflow-specific assessment.
+
+### Do Not Interpret This As
+
+- Do not implement HIGH-2 authority coverage or setup readiness in this task.
+- Do not activate availability as a decision gate.
+- Do not integrate all registry sources without proving they feed a scored
+  evidence group.
+- Do not add a generic freshness/authority scalar or average statuses.
+- Do not add repository reads to the signal scorer or policy to CLI adapters.
+- Do not infer missing provenance or silently neutral-fill unavailable inputs.
+- Do not persist a new canonical observation schema here; that belongs to
+  `ARTIFACT-IDENTITY`.
+- Do not change weights, thresholds, recommendations, or tuning eligibility.
+
+### Negative Tests
+
+- A planted future row is excluded from both evidence and its provenance.
+- Evidence cannot be constructed with availability from a different source
+  read/cutoff.
+- Missing and unassessed contributors cannot yield complete authority.
+- Diagnostic evidence cannot increase authority.
+- Screen and swing produce equivalent canonical evidence inputs for identical
+  ticker/session/source fixtures.
+- With shadow metadata removed from comparison, pre/post-migration signal,
+  candidate inclusion/rank, TradeSetup, and serialized decision fields are
+  unchanged.
+
+### Close Criteria
+
+- One typed canonical evidence input is used by both real
+  `AssessSignalEvidenceUseCase` call paths.
+- Provenance identifies the exact rows/dates/timestamps consumed by each scored
+  evidence group.
+- Source availability is resolved once and remains shadow-only.
+- DQ-002J no longer owns a separate post-score source-of-truth assessment.
+- Focused screen/swing/signal/temporal-leakage tests and architecture tests
+  pass; full suite passes when feasible; `git diff --check` is clean.
+- HIGH-2 explicitly depends on this completed task before enforcing authority.
+
+---
+
 ## Task HIGH-2 — Fix Coverage/Conviction Gating Source and Naming
 
 ### Metadata
 
 - **Type:** Decision-contract correctness + persisted-data semantic repair
 - **Priority:** P0
+- **Depends on:** CANONICAL-EVIDENCE-BOUNDARY
 - **Affects entry gating:** YES — two differently defined coverage metrics and a
   non-directional phase-strength metric currently control ENTER
 - **Decision:** Gate once on canonical production-authority coverage; represent

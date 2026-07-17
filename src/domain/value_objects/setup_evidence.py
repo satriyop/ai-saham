@@ -4,8 +4,8 @@ Setup evidence value object.
 Diagnostic evidence contract for swing setup/timing structure. Introduced in
 Phase 2 of the SignalEngine refactor. Captures the setup gate result and the
 technical structure (trend, RSI, volatility compression, VWAP positioning)
-alongside date-gated relative-strength and data-quality-gated volume
-sub-signals.
+alongside typed benchmark excess-return (DIAGNOSTIC_UNVALIDATED) and
+data-quality-gated volume sub-signals.
 
 This object carries NO scoring or setup-policy logic — it is a descriptive
 record produced by SetupEvidenceBuilder (application layer) from a
@@ -14,6 +14,7 @@ does NOT consume this until Phase 4.
 
 Layer: Domain
 Depends on: stdlib only (dataclasses, datetime) + Freshness from factor_evidence
++ BenchmarkExcessReturn
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
+from src.domain.value_objects.benchmark_excess_return import BenchmarkExcessReturn
 from src.domain.value_objects.factor_evidence import Freshness
 
 _VALID_MATCH = {"MATCH", "PARTIAL", "NO_MATCH"}
@@ -44,9 +46,11 @@ class SetupEvidence:
     bb_width_pctile: float | None  # 0–1; lower = tighter volatility compression
     vwap_discount_pct: float | None
     vwap_pct: float | None
-    # RS vs IHSG sub-signal (pre-computed by caller; date-gated at 2025-07-01)
-    rs_vs_ihsg_5d: float | None  # None when date-gated or unavailable
-    rs_freshness: Freshness
+    # Benchmark excess-return sub-signal (pre-computed by caller). Diagnostic
+    # and unvalidated — never authoritative for ENTER/WATCH/AVOID. See
+    # tasks/backlog/audit_signal_refactor_contract.md Task HIGH-1.
+    benchmark_excess_return_5_session: BenchmarkExcessReturn
+    benchmark_excess_return_20_session: BenchmarkExcessReturn
     # Volume trend sub-signal (data-quality-gated; vendor identity is not policy)
     volume_trend_ratio: float | None  # 5d/20d volume ratio; None when unavailable
     volume_freshness: Freshness
@@ -71,10 +75,15 @@ class SetupEvidence:
                 f"SetupEvidence setup_match must be one of {_VALID_MATCH}, "
                 f"got {self.setup_match!r}"
             )
-        if not isinstance(self.rs_freshness, Freshness):
+        if not isinstance(self.benchmark_excess_return_5_session, BenchmarkExcessReturn):
             raise ValueError(
-                f"SetupEvidence rs_freshness must be a Freshness instance, "
-                f"got {self.rs_freshness!r}"
+                "SetupEvidence benchmark_excess_return_5_session must be a "
+                f"BenchmarkExcessReturn instance, got {self.benchmark_excess_return_5_session!r}"
+            )
+        if not isinstance(self.benchmark_excess_return_20_session, BenchmarkExcessReturn):
+            raise ValueError(
+                "SetupEvidence benchmark_excess_return_20_session must be a "
+                f"BenchmarkExcessReturn instance, got {self.benchmark_excess_return_20_session!r}"
             )
         if not isinstance(self.volume_freshness, Freshness):
             raise ValueError(
@@ -100,8 +109,9 @@ class SetupEvidence:
             "bb_width_pctile": self.bb_width_pctile,
             "vwap_discount_pct": self.vwap_discount_pct,
             "vwap_pct": self.vwap_pct,
-            "rs_vs_ihsg_5d": self.rs_vs_ihsg_5d,
-            "rs_freshness": self.rs_freshness.value,
+            "benchmark_excess_return_5_session": self.benchmark_excess_return_5_session.to_dict(),
+            "benchmark_excess_return_20_session": self.benchmark_excess_return_20_session.to_dict(),
+            "benchmark_excess_return_authority_status": "DIAGNOSTIC_UNVALIDATED",
             "volume_trend_ratio": self.volume_trend_ratio,
             "volume_freshness": self.volume_freshness.value,
             "candle_source": self.candle_source,

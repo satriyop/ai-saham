@@ -29,6 +29,7 @@ def _insert_row(
     snapshot_date: str = "2026-07-01",
     config_hash: str = "",
 ) -> int:
+    schema_version = 2 if config_hash != "" else 1
     conn = sqlite3.connect(str(db_path))
     cursor = conn.execute(
         """
@@ -36,7 +37,7 @@ def _insert_row(
             (ticker, snapshot_date, captured_at, schema_version, payload_json, config_hash)
         VALUES (?, ?, ?, ?, ?, ?)
         """,
-        (ticker, snapshot_date, f"{snapshot_date}T00:00:00", 1, "{}", config_hash),
+        (ticker, snapshot_date, f"{snapshot_date}T00:00:00", schema_version, "{}", config_hash),
     )
     conn.commit()
     row_id = cursor.lastrowid

@@ -35,6 +35,7 @@ if TYPE_CHECKING:
         PrimarySetupFamilyResult,
     )
     from src.application.services.volatility_context import VolatilityContext
+    from src.domain.value_objects.benchmark_excess_return import BenchmarkExcessReturn
     from src.domain.value_objects.company_quality_context_evidence import (
         CompanyQualityContextEvidence,
     )
@@ -155,7 +156,7 @@ def build_candidate_observation_payload(
     )
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "artifact_type": "candidate_observation",
         "ticker": candidate.ticker,
         "snapshot_date": snapshot_date.isoformat(),
@@ -260,8 +261,13 @@ def _sub_signal_fingerprint(
         "rsi_at_signal": candidate.rsi,
         "bb_width_pctile_at_signal": candidate.bb_width_pctile,
         "vwap_position_at_signal": candidate.vwap_pct,
-        "rs_vs_ihsg_20d_at_signal": getattr(candidate, "rs_vs_ihsg_20d", None),
-        "rs_vs_ihsg_5d_at_signal": getattr(candidate, "rs_vs_ihsg_5d", None),
+        "benchmark_excess_return_5_session": _benchmark_excess_return_dict(
+            getattr(candidate, "benchmark_excess_return_5_session", None)
+        ),
+        "benchmark_excess_return_20_session": _benchmark_excess_return_dict(
+            getattr(candidate, "benchmark_excess_return_20_session", None)
+        ),
+        "benchmark_excess_return_authority_status": "DIAGNOSTIC_UNVALIDATED",
         "volume_ratio_at_signal": candidate.avg_flow_ratio,
         "cnfb_20d_at_signal": float(candidate.total_net_value),
         "foreign_participation_at_signal": candidate.net_buy_ratio,
@@ -278,3 +284,9 @@ def _sub_signal_fingerprint(
         "coverage_score": coverage_score,
         "conviction_score": conviction_score,
     }
+
+
+def _benchmark_excess_return_dict(
+    window: "BenchmarkExcessReturn | None",
+) -> dict | None:
+    return window.to_dict() if window is not None else None
