@@ -91,3 +91,43 @@ def test_to_dict_includes_group_and_each_assessment():
 def test_availability_enforcement_mode_has_only_shadow_today():
     assert AvailabilityEnforcementMode.SHADOW.value == "SHADOW"
     assert list(AvailabilityEnforcementMode) == [AvailabilityEnforcementMode.SHADOW]
+
+
+def test_all_authoritative_false_when_a_contributor_is_unassessed():
+    # Every listed assessment is authoritative, but a real, currently-present
+    # contributor to this evidence group (e.g. a live-scraped sub-signal with
+    # no settlement rule) was never given an assessment at all. This must not
+    # be able to report all_authoritative=True — an unassessed contributor is
+    # not the same as "no contributors exist to worry about".
+    group = EvidenceSourceAvailability(
+        evidence_group="flow",
+        assessments=(
+            _assessment("broker_summaries", SourceAvailabilityStatus.CURRENT, True),
+            _assessment("broker_daily_flow", SourceAvailabilityStatus.CURRENT, True),
+        ),
+        unassessed_contributors=("bandar_detector",),
+    )
+    assert group.all_authoritative is False
+
+
+def test_all_authoritative_true_when_no_unassessed_contributors():
+    group = EvidenceSourceAvailability(
+        evidence_group="flow",
+        assessments=(
+            _assessment("broker_summaries", SourceAvailabilityStatus.CURRENT, True),
+            _assessment("broker_daily_flow", SourceAvailabilityStatus.CURRENT, True),
+        ),
+    )
+    assert group.unassessed_contributors == ()
+    assert group.all_authoritative is True
+
+
+def test_to_dict_includes_unassessed_contributors():
+    group = EvidenceSourceAvailability(
+        evidence_group="flow",
+        assessments=(_assessment("broker_summaries", SourceAvailabilityStatus.CURRENT, True),),
+        unassessed_contributors=("bandar_detector",),
+    )
+    payload = group.to_dict()
+    assert payload["unassessed_contributors"] == ["bandar_detector"]
+    assert payload["all_authoritative"] is False

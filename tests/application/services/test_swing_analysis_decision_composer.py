@@ -304,3 +304,103 @@ def test_real_rescore_path_with_availability_matches_real_rescore_without_it():
     assert non_diagnostic_without == non_diagnostic_with
     assert dict_without["setup_source_availability"] is None
     assert dict_with["setup_source_availability"] is not None
+
+
+def _real_source_availability_use_case():
+    from src.application.services.effective_market_session_resolver import (
+        EffectiveMarketSession,
+    )
+    from src.application.use_case.assess_source_availability_use_case import (
+        AssessSourceAvailabilityUseCase,
+    )
+    from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
+    from src.domain.value_objects.idx_market import IDX_TIMEZONE
+
+    decision_at = datetime(2026, 7, 17, 20, 0, tzinfo=IDX_TIMEZONE)
+    effective_session = EffectiveMarketSession(
+        run_at=decision_at,
+        decision_at=decision_at,
+        latest_completed_session=date(2026, 7, 17),
+        analysis_as_of=date(2026, 7, 17),
+        market_session_name="AFTER_CLOSE",
+        is_eod_pending=False,
+        resolution_source="test_fixture",
+        notes=(),
+    )
+    calendar = KnownTradingSessionCalendar(
+        sessions=(date(2026, 7, 17),),
+        coverage_start=date(2026, 7, 17),
+        coverage_end=date(2026, 7, 17),
+    )
+    return AssessSourceAvailabilityUseCase(calendar=calendar), effective_session
+
+
+def test_setup_availability_stays_none_when_setup_evidence_was_not_produced():
+    # P2: availability must describe evidence that was actually produced,
+    # not evidence a candidate could theoretically have produced. Only
+    # flow_confirmation_evidence exists here (e.g. no setup was requested) —
+    # setup_source_availability must remain None even though
+    # accumulation_candidate and source_availability_use_case both exist.
+    use_case, effective_session = _real_source_availability_use_case()
+    state = _real_rescore_state()
+    state.source_availability_use_case = use_case
+    state.effective_session = effective_session
+    state.candles = [SimpleNamespace(date=date(2026, 7, 17))]
+    state.evidence = replace(state.evidence, setup_evidence=None)
+
+    composer = SwingAnalysisDecisionComposer(
+        risk_trade_setup_composer=_FakeRiskTradeSetupComposer(),
+        signal_engine=_FakeSignalEngine(),
+    )
+    result = composer.recompose_after_evidence(_request(), state)
+
+    assert result.setup_source_availability is None
+    assert result.flow_source_availability is not None
+    assert result.signal_assessment.setup_source_availability is None
+    assert result.signal_assessment.flow_source_availability is not None
+
+
+def test_setup_availability_computed_when_setup_evidence_was_produced():
+    use_case, effective_session = _real_source_availability_use_case()
+    state = _real_rescore_state()
+    state.source_availability_use_case = use_case
+    state.effective_session = effective_session
+    state.candles = [SimpleNamespace(date=date(2026, 7, 17))]
+    # state.evidence.setup_evidence is already "SENTINEL_SETUP_EVIDENCE".
+
+    composer = SwingAnalysisDecisionComposer(
+        risk_trade_setup_composer=_FakeRiskTradeSetupComposer(),
+        signal_engine=_FakeSignalEngine(),
+    )
+    result = composer.recompose_after_evidence(_request(), state)
+
+    assert result.setup_source_availability is not None
+    assert result.setup_source_availability.assessments[0].source_family == "candles"
+    assert result.setup_source_availability.assessments[0].status == SourceAvailabilityStatus.CURRENT
+
+
+def test_bandar_present_prevents_flow_all_authoritative_true_end_to_end():
+    # P1: a real, currently-consumed contributor to flow evidence
+    # (bandar_detector) that has no settlement rule must prevent
+    # flow_source_availability.all_authoritative from ever reporting True,
+    # even when broker_summaries/broker_daily_flow are both CURRENT.
+    use_case, effective_session = _real_source_availability_use_case()
+    state = _real_rescore_state()
+    state.source_availability_use_case = use_case
+    state.effective_session = effective_session
+    state.candles = [SimpleNamespace(date=date(2026, 7, 17))]
+    state.accumulation_candidate.latest_broker_date = date(2026, 7, 17)
+    state.accumulation_candidate.latest_broker_daily_flow_date = date(2026, 7, 17)
+    state.accumulation_candidate.bandar_detector = SimpleNamespace(broad_score=5)
+
+    composer = SwingAnalysisDecisionComposer(
+        risk_trade_setup_composer=_FakeRiskTradeSetupComposer(),
+        signal_engine=_FakeSignalEngine(),
+    )
+    result = composer.recompose_after_evidence(_request(), state)
+
+    flow_availability = result.signal_assessment.flow_source_availability
+    assert flow_availability is not None
+    assert all(a.is_authoritative for a in flow_availability.assessments)
+    assert flow_availability.unassessed_contributors == ("bandar_detector",)
+    assert flow_availability.all_authoritative is False

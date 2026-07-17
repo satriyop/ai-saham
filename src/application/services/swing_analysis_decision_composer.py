@@ -16,6 +16,9 @@ from src.application.dto import swing_analysis as swing_analysis_dto
 from src.application.services.signal_context_builder import (
     build_signal_context_from_candidate,
 )
+from src.application.services.evidence_source_availability_assembler import (
+    EvidenceSourceAvailabilityAssembler,
+)
 from src.application.services.swing_analysis_workflow_state import (
     SwingAnalysisWorkflowState,
 )
@@ -216,12 +219,36 @@ class SwingAnalysisDecisionComposer:
                     market_context_trade_setup_preview=_new_mce_trade_preview,
                 )
 
-        # DQ-002 Blocker 2 (shadow mode): attach observational source-
-        # availability diagnostics to the canonical signal assessment
-        # response. Purely additive — never changes score, coverage,
-        # entry_quality, or trade_setup, since it is copied onto whichever
-        # signal_assessment already resulted from the logic above (rescored
-        # or not).
+        # DQ-002 Blocker 2 (shadow mode): assemble availability only for
+        # evidence groups that were actually produced this run — availability
+        # must describe evidence that exists, not evidence a candidate could
+        # theoretically have produced. `setup_evidence`/
+        # `flow_confirmation_evidence` above already carry that presence
+        # check; reuse it here rather than gating on `accumulation_candidate`
+        # alone (which exists even when, say, no setup was requested).
+        if state.source_availability_use_case is not None:
+            assembler = EvidenceSourceAvailabilityAssembler(state.source_availability_use_case)
+            if setup_evidence is not None:
+                try:
+                    state.setup_source_availability = assembler.assess_setup(
+                        effective_session=state.effective_session, candles=state.candles
+                    )
+                except Exception as exc:
+                    state.warnings.append(f"Setup source availability unavailable: {exc}")
+            if flow_confirmation_evidence is not None:
+                try:
+                    state.flow_source_availability = assembler.assess_flow(
+                        effective_session=state.effective_session,
+                        candidate=state.accumulation_candidate,
+                    )
+                except Exception as exc:
+                    state.warnings.append(f"Flow source availability unavailable: {exc}")
+
+        # Attach observational source-availability diagnostics to the
+        # canonical signal assessment response. Purely additive — never
+        # changes score, coverage, entry_quality, or trade_setup, since it is
+        # copied onto whichever signal_assessment already resulted from the
+        # logic above (rescored or not).
         if (
             state.signal_assessment is not None
             and (

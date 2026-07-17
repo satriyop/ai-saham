@@ -18,7 +18,7 @@ actually consumes:
   `SwingAnalysisEvidenceBuilder`/the setup-phase detector — never
   `AccumulationCandidate.latest_candle_date`, which is computed from a
   separate repository call and previously caused availability to describe a
-  different read than the one evidence actually consumed.
+  different read than the one evidence actually consumes.
 - **flow**: `broker_summaries` (via `AccumulationCandidate.latest_broker_date`
   — proven to be exactly `window_summaries`' window, the same rows
   `ScoreForeignFlowUseCase`'s net_buy_ratio/streak/vwap/flow sub-signals are
@@ -28,15 +28,26 @@ actually consumes:
   `bci_label`/`top_brokers` sub-signals). Both `None` when the candidate
   never populated them (fails closed to `UNKNOWN`, never inferred).
 
-**Known gap, not covered by this integration**: `FlowConfirmationEvidence`'s
-Bandar sub-signal (`candidate.bandar_detector`) is sourced from
-`StockbitBandarDetectorProvider` — a live Stockbit browser/API scrape, not
-one of `SourceSettlementRegistry`'s persisted SQLite source families. It has
-no settlement rule and cannot be given one without a separate registry/ADR
-decision, so it is not assessed here; `flow_availability` describes
-`broker_summaries`/`broker_daily_flow` only, not Bandar. `foreign_flow_points`/
+**Known gap, deliberately not assessed, but not silently hidden either**:
+`FlowConfirmationEvidence`'s Bandar sub-signal (`candidate.bandar_detector`)
+is sourced from `StockbitBandarDetectorProvider` — a live Stockbit
+browser/API scrape, not one of `SourceSettlementRegistry`'s persisted SQLite
+source families. It has no settlement rule and cannot be given one without a
+separate registry/ADR decision, so it is never given a
+`SourceAvailabilityAssessment`. Whenever `candidate.bandar_detector is not
+None` (i.e. it actually contributed to `FlowConfirmationEvidence` for this
+decision), it is named in `flow_availability.unassessed_contributors`, which
+forces `flow_availability.all_authoritative` to `False` — this prevents the
+group from ever claiming full authority while a real, present contributor
+went unassessed. When Bandar was never fetched (`None`), it is not a
+contributor to this decision and is not listed. `foreign_flow_points`/
 `foreign_flow_snapshots` are likewise not consumed by this workflow's
 setup/flow evidence path and are intentionally out of scope.
+
+Callers should call `assess_setup`/`assess_flow` only once the corresponding
+evidence (`SetupEvidence`/`FlowConfirmationEvidence`) actually exists —
+availability describes evidence that was produced, not evidence that could
+theoretically have been produced from the same candidate.
 
 This module does not decide availability policy itself (that stays in
 `AssessSourceAvailabilityUseCase`/`SourceSettlementRegistry`); it only shapes
@@ -65,24 +76,18 @@ class EvidenceSourceAvailabilityAssembler:
     def __init__(self, use_case: "AssessSourceAvailabilityUseCase") -> None:
         self._use_case = use_case
 
-    def assess_setup_and_flow(
+    def assess_setup(
         self,
         *,
         effective_session: "EffectiveMarketSession",
-        candidate: Any,
         candles: Sequence[Any],
-    ) -> tuple[EvidenceSourceAvailability, EvidenceSourceAvailability]:
-        # Derived from the literal candles list the caller is about to pass
-        # to the evidence builder — not a separately fetched candidate
-        # field — so availability can never describe a different read than
-        # the one setup evidence actually consumes.
+    ) -> EvidenceSourceAvailability:
+        # Derived from the literal candles list the caller actually passed to
+        # the evidence builder — not a separately fetched candidate field —
+        # so availability can never describe a different read than the one
+        # setup evidence actually consumed.
         latest_candle_date = max((c.date for c in candles), default=None)
-        latest_broker_date = getattr(candidate, "latest_broker_date", None)
-        latest_broker_daily_flow_date = getattr(
-            candidate, "latest_broker_daily_flow_date", None
-        )
-
-        setup_availability = EvidenceSourceAvailability(
+        return EvidenceSourceAvailability(
             evidence_group="setup",
             assessments=(
                 self._use_case.execute(
@@ -92,7 +97,21 @@ class EvidenceSourceAvailabilityAssembler:
                 ),
             ),
         )
-        flow_availability = EvidenceSourceAvailability(
+
+    def assess_flow(
+        self,
+        *,
+        effective_session: "EffectiveMarketSession",
+        candidate: Any,
+    ) -> EvidenceSourceAvailability:
+        latest_broker_date = getattr(candidate, "latest_broker_date", None)
+        latest_broker_daily_flow_date = getattr(
+            candidate, "latest_broker_daily_flow_date", None
+        )
+        bandar_detector = getattr(candidate, "bandar_detector", None)
+        unassessed_contributors = ("bandar_detector",) if bandar_detector is not None else ()
+
+        return EvidenceSourceAvailability(
             evidence_group="flow",
             assessments=(
                 self._use_case.execute(
@@ -106,5 +125,5 @@ class EvidenceSourceAvailabilityAssembler:
                     observed_through=latest_broker_daily_flow_date,
                 ),
             ),
+            unassessed_contributors=unassessed_contributors,
         )
-        return setup_availability, flow_availability

@@ -16,9 +16,6 @@ from typing import TYPE_CHECKING, Any
 from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSessionResolver,
 )
-from src.application.services.evidence_source_availability_assembler import (
-    EvidenceSourceAvailabilityAssembler,
-)
 from src.application.services.swing_analysis_workflow_state import (
     SwingAnalysisWorkflowState,
 )
@@ -154,20 +151,33 @@ class SwingAnalysisInputCollector:
         # DQ-002 Blocker 2 (shadow mode, partial — analyze swing only): one
         # bounded trading-session calendar and one
         # AssessSourceAvailabilityUseCase, resolved once per workflow
-        # execution and reused across both evidence-group assessments below —
-        # never constructed per-ticker or per-source. The calendar window is
-        # the minimal range that can prove every session gap this decision
-        # actually needs — min(observed source date)..latest_completed_session
-        # — not an arbitrary fixed lookback, since a wider window is both
-        # unnecessary and more likely to hit an unrelated gap elsewhere in
-        # the range and fail closed for no reason. A calendar the loader
-        # cannot prove (missing loader, or a real gap in the underlying
-        # candle data — a known limitation until blocker 1's holiday
-        # handling improves) falls back to an empty calendar rather than a
-        # weekday fallback, so every session-aligned assessment fails closed
-        # to UNKNOWN instead of silently assuming 0 sessions apart.
-        setup_source_availability = None
-        flow_source_availability = None
+        # execution and reused for both evidence-group assessments — never
+        # constructed per-ticker or per-source. Actual assessment is deferred
+        # to `SwingAnalysisDecisionComposer.recompose_after_evidence`, which
+        # only calls it for evidence groups (setup/flow) that were actually
+        # produced — availability must describe evidence that exists, not
+        # evidence a candidate could theoretically have produced. The
+        # calendar window is the minimal range that can prove every session
+        # gap this decision actually needs —
+        # min(observed source date <= coverage_end)..coverage_end — not an
+        # arbitrary fixed lookback: a wider window is both unnecessary and
+        # more likely to hit an unrelated gap elsewhere and fail closed for
+        # no reason. Observed dates strictly after coverage_end (e.g. an
+        # in-progress intraday candle dated today while
+        # latest_completed_session is still yesterday) are excluded from the
+        # window's lower bound — they are not a "gap in the past" the
+        # calendar needs to prove, and including them would make
+        # coverage_start > coverage_end and break calendar construction
+        # entirely; the future-dated observation itself is still passed
+        # through to the use case at assessment time, whose existing
+        # future-observation guard resolves it to INVALID rather than
+        # dropping it. A calendar the loader cannot prove (missing loader, or
+        # a real gap in the underlying candle data — a known limitation
+        # until blocker 1's holiday handling improves) falls back to an empty
+        # calendar rather than a weekday fallback, so every session-aligned
+        # assessment fails closed to UNKNOWN instead of silently assuming 0
+        # sessions apart.
+        source_availability_use_case = None
         if accumulation_candidate is not None:
             try:
                 latest_broker_date = getattr(
@@ -186,7 +196,8 @@ class SwingAnalysisInputCollector:
                     if d is not None
                 ]
                 coverage_end = effective_session.latest_completed_session or request.today
-                coverage_start = min(observed_dates) if observed_dates else coverage_end
+                proven_dates = [d for d in observed_dates if d <= coverage_end]
+                coverage_start = min(proven_dates) if proven_dates else coverage_end
                 calendar = None
                 if self._trading_session_calendar_loader is not None:
                     calendar = self._trading_session_calendar_loader(
@@ -198,19 +209,11 @@ class SwingAnalysisInputCollector:
                         coverage_start=coverage_start,
                         coverage_end=coverage_end,
                     )
-                availability_assembler = EvidenceSourceAvailabilityAssembler(
-                    AssessSourceAvailabilityUseCase(calendar=calendar)
-                )
-                (
-                    setup_source_availability,
-                    flow_source_availability,
-                ) = availability_assembler.assess_setup_and_flow(
-                    effective_session=effective_session,
-                    candidate=accumulation_candidate,
-                    candles=candles,
+                source_availability_use_case = AssessSourceAvailabilityUseCase(
+                    calendar=calendar
                 )
             except Exception as exc:
-                warnings.append(f"Source availability assessment unavailable: {exc}")
+                warnings.append(f"Source availability calendar unavailable: {exc}")
 
         market_regime = None
         if request.with_market_context:
@@ -237,6 +240,5 @@ class SwingAnalysisInputCollector:
             accumulation_candidate=accumulation_candidate,
             effective_session=effective_session,
             market_regime=market_regime,
-            setup_source_availability=setup_source_availability,
-            flow_source_availability=flow_source_availability,
+            source_availability_use_case=source_availability_use_case,
         )

@@ -2136,6 +2136,78 @@ a whole is not complete (see Deferred items below).
        wiring present, asserting every field is identical except the three
        new diagnostic keys (including a `signal_response_to_dict()`
        comparison, not just attribute equality).
+  - **Review correction, round 2 (2026-07-17, same day, before this was
+    considered done):** a second review pass, after round 1 above, found
+    three more defects — all fixed below:
+    1. **P1 — `flow.all_authoritative` could be falsely `True`.**
+       `FlowConfirmationEvidence` can consume `candidate.bandar_detector`
+       (the live Stockbit scrape identified in round 1's P1 fix as
+       out-of-scope), but the flow group's `all_authoritative` only ever
+       looked at the two *listed* assessments (`broker_summaries`,
+       `broker_daily_flow`) — if both happened to be `CURRENT` while Bandar
+       was present but unassessed, `all_authoritative` reported `True`, which
+       falsely implies every real contributor was checked. Dangerous once
+       HIGH-2 later trusts this property. **Fixed:** added
+       `EvidenceSourceAvailability.unassessed_contributors: tuple[str, ...] =
+       ()`; `all_authoritative` is now `False` whenever this tuple is
+       non-empty, regardless of how many listed assessments are
+       authoritative.
+       `EvidenceSourceAvailabilityAssembler.assess_flow` populates
+       `("bandar_detector",)` only when `candidate.bandar_detector is not
+       None` (i.e. it actually contributed to this decision's
+       `FlowConfirmationEvidence`) — a candidate that never fetched Bandar
+       does not list it, per the instruction not to invent a settlement rule
+       or otherwise treat a non-contributor as unassessed.
+    2. **P1 — an intraday run could silently drop the whole diagnostic.**
+       The calendar window was `min(observed_dates)..latest_completed_session`.
+       During an intraday run, an in-progress candle can be dated *today*
+       while `latest_completed_session` is still yesterday, so
+       `min(observed_dates)` (today) could exceed `coverage_end`
+       (yesterday) — `coverage_start > coverage_end` breaks
+       `KnownTradingSessionCalendar` construction; the surrounding exception
+       handler caught it, but the result was both availability objects
+       silently `None` instead of a typed `INVALID` assessment. **Fixed:**
+       the window's lower bound now excludes any observed date strictly
+       after `coverage_end` before taking the minimum
+       (`proven_dates = [d for d in observed_dates if d <= coverage_end]`,
+       `coverage_start = min(proven_dates) if proven_dates else
+       coverage_end`) — the future-dated observation is not a "gap in the
+       past" the calendar needs to prove, so it no longer participates in
+       the window bound, but it is still passed through to
+       `AssessSourceAvailabilityUseCase` at assessment time (see the next
+       fix for *when* that now happens), whose existing
+       `SESSION_LEAKAGE_FUTURE_OBSERVATION` guard resolves it to `INVALID`
+       rather than the diagnostic being dropped.
+    3. **P2 — availability could describe evidence that doesn't exist.**
+       Availability was assembled in `SwingAnalysisInputCollector.collect()`
+       whenever `accumulation_candidate` existed — before
+       `SetupEvidence`/`FlowConfirmationEvidence` are actually constructed
+       later in the pipeline. With no setup requested (`setup_eval is
+       None`), the response could carry `setup_source_availability=CURRENT`
+       alongside `setup_evidence=None` — describing the *source*'s
+       availability, not the availability of an evidence input that was
+       never produced. **Fixed** (the reviewer's preferred option — keep
+       provenance adjacent to the evidence it describes): assembly moved out
+       of `collect()` entirely. `collect()` now only builds the reused
+       `AssessSourceAvailabilityUseCase` (calendar + registry) and stores it
+       on `SwingAnalysisWorkflowState.source_availability_use_case`, doing
+       no per-source assessment itself.
+       `SwingAnalysisDecisionComposer.recompose_after_evidence` — which
+       already knows `setup_evidence`/`flow_confirmation_evidence`'s actual
+       presence for the rescore-gating check just above it — now calls
+       `EvidenceSourceAvailabilityAssembler.assess_setup`/`assess_flow`
+       individually, each gated on its own evidence actually being
+       non-`None` this run. A candidate with no setup requested now
+       correctly yields `setup_source_availability=None`, never a
+       misleadingly-populated assessment.
+    - Verification for round 2: 8 tests in
+      `test_swing_analysis_decision_composer.py` (was 5), 7 in
+      `test_swing_analysis_input_collector.py`, 20 in
+      `test_evidence_source_availability_assembler.py` (split into
+      `assess_setup`/`assess_flow`, plus new Bandar/unassessed-contributor
+      cases), 8 in `test_evidence_source_availability.py` — all passing;
+      `pytest tests/architecture/test_layer_boundaries.py` — 4 passed; full
+      suite — 4712 passed; `git diff --check` clean.
   - **Covered evidence groups and source families** (traced from the real
     call graph, not assumed): `SwingAnalysisWorkflowUseCase` →
     `SwingAnalysisDecisionComposer.recompose_after_evidence` →
@@ -2152,11 +2224,18 @@ a whole is not complete (see Deferred items below).
     - **setup** evidence group → `candles` (`SESSION_ALIGNED`), using the
       max date of the literal (now `end_date`-bounded) `candles` list passed
       to the evidence builder — not a separately fetched candidate field.
+      Only assessed when `setup_evidence is not None` this run (round-2 P2
+      fix — see below); otherwise `setup_source_availability` stays `None`.
     - **flow** evidence group → `broker_summaries` (`SESSION_ALIGNED`), using
       `AccumulationCandidate.latest_broker_date`; and `broker_daily_flow`
       (`SESSION_ALIGNED`), using the new
       `AccumulationCandidate.latest_broker_daily_flow_date`. Both fail
-      closed to `UNKNOWN` when the candidate never populated them.
+      closed to `UNKNOWN` when the candidate never populated them. Only
+      assessed when `flow_confirmation_evidence is not None` this run.
+      Additionally carries `unassessed_contributors=("bandar_detector",)`
+      whenever `candidate.bandar_detector is not None` (round-2 P1 fix),
+      which forces `flow_availability.all_authoritative` to `False` even
+      when both listed assessments are themselves authoritative.
   - **Not integrated in this task** (out of scope, not merely deferred):
     Bandar (`candidate.bandar_detector`, a live Stockbit scrape, not a
     registry source family — see P1 correction above); `foreign_flow_points`,
@@ -2178,18 +2257,24 @@ a whole is not complete (see Deferred items below).
     its scoring/decision logic):
     - `src/domain/value_objects/evidence_source_availability.py` —
       `EvidenceSourceAvailability` (frozen VO grouping
-      `SourceAvailabilityAssessment`s per evidence group, `all_authoritative`
-      property that is `False` whenever any one assessment is
-      non-authoritative — never averaged) and
-      `AvailabilityEnforcementMode` (`SHADOW` today; a typed enum so a
-      future HIGH-2 value can't be a bare string operators toggle casually).
+      `SourceAvailabilityAssessment`s per evidence group;
+      `unassessed_contributors: tuple[str, ...] = ()` names real,
+      currently-consumed contributors that have no assessment (round-2 P1
+      fix); `all_authoritative` is `False` whenever any one listed
+      assessment is non-authoritative OR `unassessed_contributors` is
+      non-empty — never averaged, never silently `True` on partial
+      coverage) and `AvailabilityEnforcementMode` (`SHADOW` today; a typed
+      enum so a future HIGH-2 value can't be a bare string operators toggle
+      casually).
     - `src/application/services/evidence_source_availability_assembler.py`
-      — `EvidenceSourceAvailabilityAssembler`, the only place that maps the
-      literal consumed `candles` list and
-      `AccumulationCandidate.latest_broker_date`/
-      `latest_broker_daily_flow_date` onto the three source-family
-      assessments above via one already-constructed
-      `AssessSourceAvailabilityUseCase`.
+      — `EvidenceSourceAvailabilityAssembler`, with separate `assess_setup`
+      (literal consumed `candles` list → `candles` family) and
+      `assess_flow` (`AccumulationCandidate.latest_broker_date`/
+      `latest_broker_daily_flow_date`/`bandar_detector` presence →
+      `broker_summaries`/`broker_daily_flow` assessments plus
+      `unassessed_contributors`) methods, each callable independently so a
+      caller can assess only the groups whose evidence actually exists
+      (round-2 P2 fix).
     - `AccumulationCandidate.latest_broker_daily_flow_date` (new field on
       the existing DTO, additive, default `None`) and its population in
       `AccumulationCandidateEvaluator.evaluate`.
@@ -2204,28 +2289,41 @@ a whole is not complete (see Deferred items below).
     construction lives in the CLI composition root,
     `analyze_swing_workflow_factory.py`, matching the existing
     `evaluate_market_context` callable-injection pattern in the same file),
-    constructs one `AssessSourceAvailabilityUseCase`, and computes both
-    groups via `EvidenceSourceAvailabilityAssembler`. A missing loader or an
+    and constructs one `AssessSourceAvailabilityUseCase`, stored on
+    `SwingAnalysisWorkflowState.source_availability_use_case` — `collect()`
+    does no per-source assessment itself (round-2 P2 fix). The window's
+    lower bound is `min(observed source date <= coverage_end)`, excluding
+    any observed date after `coverage_end` so an in-progress intraday
+    observation can't push `coverage_start` past `coverage_end` and break
+    calendar construction (round-2 P2 intraday fix). A missing loader or an
     unprovable calendar (gap in the underlying candle data) falls back to an
     empty `KnownTradingSessionCalendar` — every session-aligned assessment
     then fails closed to `UNKNOWN` (`TRADING_CALENDAR_COVERAGE_UNPROVEN`),
-    never a weekday-fallback guess. Results are attached to the canonical
-    `AssessSignalResponse` only in
-    `SwingAnalysisDecisionComposer.recompose_after_evidence`, unconditionally
-    after any evidence rescore (whether or not the rescore branch itself
-    ran), via `dataclasses.replace()` — this touches no scoring code path,
-    so it is structurally impossible for this attach step to change
+    never a weekday-fallback guess. Actual assessment happens in
+    `SwingAnalysisDecisionComposer.recompose_after_evidence`, which calls
+    `assess_setup`/`assess_flow` individually, each gated on the
+    corresponding evidence (`setup_evidence`/`flow_confirmation_evidence`)
+    actually being non-`None` this run — the same presence check the
+    rescore-gating logic immediately above it already uses. Results are
+    attached to the canonical `AssessSignalResponse` unconditionally after
+    any evidence rescore (whether or not the rescore branch itself ran), via
+    `dataclasses.replace()` — this touches no scoring code path, so it is
+    structurally impossible for this attach step to change
     `score`/`strength`/`entry_quality`/`coverage_score`. Exposed in JSON
     output via `swing_analysis_serialization.py`'s
     `signal_response_to_dict()` (`setup_source_availability`,
     `flow_source_availability`, `availability_enforcement` keys) — no CLI
     text-rendering change.
   - **Known UNKNOWN cases:** Bandar's contribution to flow evidence is never
-    assessed (see above, by design); any ticker with no
+    given its own assessment (see above, by design — it is instead surfaced
+    via `unassessed_contributors`); any ticker with no
     `accumulation_candidate` (screener-rejected or data-unavailable tickers)
     gets no availability assessment at all (`None` on both groups, not a
-    forced `UNKNOWN`); any decision whose minimal observed-date window has a
-    candle gap (real holiday, partial ingestion, or quarantined row —
+    forced `UNKNOWN`); a ticker whose candidate exists but for which no
+    setup/flow evidence was produced this run gets `None` for that specific
+    group only (round-2 P2 fix — no longer describes evidence that doesn't
+    exist); any decision whose minimal observed-date window has a candle gap
+    (real holiday, partial ingestion, or quarantined row —
     `MarketDataRepository` still cannot distinguish these, per DQ-002I's
     known limitation) falls back to the empty calendar and reports every
     session-aligned source as `UNKNOWN` — this remains a real operational
@@ -2239,13 +2337,14 @@ a whole is not complete (see Deferred items below).
     tests/application/services/test_evidence_source_availability_assembler.py
     tests/application/services/test_swing_analysis_input_collector.py
     tests/application/services/test_swing_analysis_decision_composer.py` —
-    28 tests, all passing; `pytest tests/architecture/
-    test_layer_boundaries.py` — 4 passed; full suite — 4700 passed
-    (4675 pre-existing + 25 net new after the review-driven fixes; zero
-    regressions, including from bounding the previously-unbounded
-    `state.candles` fetch); `git diff --check` clean; `git status --short`
-    shows only the files touched by this task. The Data Contract Audit Gate
-    (`saham audit data ...`) was not run: this task adds no schema,
+    43 tests, all passing; `pytest tests/architecture/
+    test_layer_boundaries.py` — 4 passed; full suite — 4712 passed (4675
+    pre-existing + 37 net new after both review rounds; zero regressions,
+    including from bounding the previously-unbounded `state.candles` fetch
+    and from moving availability assembly out of `collect()`); `git diff
+    --check` clean; `git status --short` shows only the files touched by
+    this task. The Data Contract Audit Gate (`saham audit data ...`) was not
+    run: this task adds no schema,
     provider, repository-method, or field-mapping change to persisted
     tables — the one new field (`latest_broker_daily_flow_date`) is a
     derived DTO field computed from already-consumed rows, not a new

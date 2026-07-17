@@ -19,6 +19,9 @@ if TYPE_CHECKING:
         EffectiveMarketSession,
     )
     from src.application.services.position_sizer import PercentSizingResult, SizingResult
+    from src.application.use_case.assess_source_availability_use_case import (
+        AssessSourceAvailabilityUseCase,
+    )
     from src.domain.rules.risk_gate import GateContext
     from src.domain.value_objects.evidence_source_availability import (
         EvidenceSourceAvailability,
@@ -41,6 +44,11 @@ class SwingAnalysisWorkflowState:
     accumulation_candidate: Any | None = None
     effective_session: "EffectiveMarketSession | None" = None
     market_regime: "MarketContext | None" = None
+    # One AssessSourceAvailabilityUseCase per workflow execution (DQ-002
+    # Blocker 2), reused for both evidence-group assessments below. Actual
+    # assessment happens in SwingAnalysisDecisionComposer.recompose_after_
+    # evidence, gated on the corresponding evidence actually existing.
+    source_availability_use_case: "AssessSourceAvailabilityUseCase | None" = None
     setup_source_availability: "EvidenceSourceAvailability | None" = None
     flow_source_availability: "EvidenceSourceAvailability | None" = None
     gate_ctx: "GateContext | None" = None
