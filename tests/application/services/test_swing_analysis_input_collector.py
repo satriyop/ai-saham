@@ -9,6 +9,8 @@ from datetime import date, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from src.application.dto.swing_analysis import SwingAnalysisWorkflowRequest
 from src.application.services.swing_analysis_input_collector import (
     SwingAnalysisInputCollector,
@@ -406,3 +408,132 @@ def test_collector_stores_exact_context_object_from_builder():
 
     # Assert that the final state stores the exact context object from the builder
     assert state.signal_evidence_execution_context is sentinel_context
+
+
+def _collector_with_accumulation_callback(
+    *, build_accumulation_candidate_evaluation, today: date
+) -> SwingAnalysisInputCollector:
+    market_repo = SimpleNamespace(
+        get_candles=lambda ticker, end_date=None: [SimpleNamespace(close=100.0, date=today)]
+    )
+    fake_session = _fake_effective_session(today)
+    return SwingAnalysisInputCollector(
+        market_repository=market_repo,
+        broker_repository=SimpleNamespace(),
+        refresh_data=lambda **kwargs: ("disabled",),
+        build_data_freshness=lambda **kwargs: None,
+        build_flow_detail=lambda **kwargs: None,
+        build_broker_detail=lambda **kwargs: None,
+        build_accumulation_candidate_evaluation=build_accumulation_candidate_evaluation,
+        evaluate_market_context=None,
+        session_resolver=SimpleNamespace(resolve=lambda **kwargs: fake_session),
+        signal_evidence_context_builder=SignalEvidenceExecutionContextBuilder(
+            trading_session_calendar_loader=None
+        ),
+    )
+
+
+class TestAccumulationCandidateExceptionBoundary:
+    """Finding 5: contract/programmer errors from
+    _build_accumulation_candidate_evaluation() must fail closed and
+    propagate; only ordinary operational failures remain a best-effort
+    warning."""
+
+    def test_value_error_propagates_unchanged(self):
+        today = date(2026, 7, 17)
+        expected = ValueError("selected candidate has no matching evaluation result")
+        calls: list[dict] = []
+
+        def build_accumulation_candidate_evaluation(**kwargs):
+            calls.append(kwargs)
+            raise expected
+
+        collector = _collector_with_accumulation_callback(
+            build_accumulation_candidate_evaluation=build_accumulation_candidate_evaluation,
+            today=today,
+        )
+
+        with pytest.raises(ValueError) as exc_info:
+            collector.collect(_request(today))
+
+        assert exc_info.value is expected
+        assert len(calls) == 1
+
+    def test_type_error_propagates_unchanged(self):
+        today = date(2026, 7, 17)
+        expected = TypeError("malformed accumulation evaluation contract")
+        calls: list[dict] = []
+
+        def build_accumulation_candidate_evaluation(**kwargs):
+            calls.append(kwargs)
+            raise expected
+
+        collector = _collector_with_accumulation_callback(
+            build_accumulation_candidate_evaluation=build_accumulation_candidate_evaluation,
+            today=today,
+        )
+
+        with pytest.raises(TypeError) as exc_info:
+            collector.collect(_request(today))
+
+        assert exc_info.value is expected
+        assert len(calls) == 1
+
+    def test_runtime_error_remains_a_warning(self):
+        today = date(2026, 7, 17)
+        calls: list[dict] = []
+
+        def build_accumulation_candidate_evaluation(**kwargs):
+            calls.append(kwargs)
+            raise RuntimeError("broker provider unavailable")
+
+        collector = _collector_with_accumulation_callback(
+            build_accumulation_candidate_evaluation=build_accumulation_candidate_evaluation,
+            today=today,
+        )
+
+        state = collector.collect(_request(today))
+
+        assert state.accumulation_evaluation is None
+        assert state.warnings == ["Accumulation unavailable: broker provider unavailable"]
+        assert len(calls) == 1
+
+    def test_returning_none_is_not_a_failure(self):
+        today = date(2026, 7, 17)
+        calls: list[dict] = []
+
+        def build_accumulation_candidate_evaluation(**kwargs):
+            calls.append(kwargs)
+            return None
+
+        collector = _collector_with_accumulation_callback(
+            build_accumulation_candidate_evaluation=build_accumulation_candidate_evaluation,
+            today=today,
+        )
+
+        state = collector.collect(_request(today))
+
+        assert state.accumulation_evaluation is None
+        assert not any(
+            warning.startswith("Accumulation unavailable:") for warning in state.warnings
+        )
+        assert len(calls) == 1
+
+    def test_successful_result_is_retained_by_identity(self):
+        today = date(2026, 7, 17)
+        sentinel_result = SimpleNamespace(candidate=SimpleNamespace(ticker="BBRI"))
+        calls: list[dict] = []
+
+        def build_accumulation_candidate_evaluation(**kwargs):
+            calls.append(kwargs)
+            return sentinel_result
+
+        collector = _collector_with_accumulation_callback(
+            build_accumulation_candidate_evaluation=build_accumulation_candidate_evaluation,
+            today=today,
+        )
+
+        state = collector.collect(_request(today))
+
+        assert state.accumulation_evaluation is sentinel_result
+        assert len(calls) == 1

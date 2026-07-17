@@ -176,6 +176,10 @@ class SwingAnalysisInputCollector:
                 as_of_date=request.today,
                 execution_context=execution_context,
             )
+        # Contract and programmer errors must fail closed; only operational
+        # accumulation unavailability remains a best-effort warning.
+        except (ValueError, TypeError):
+            raise
         except Exception as exc:
             warnings.append(f"Accumulation unavailable: {exc}")
 
