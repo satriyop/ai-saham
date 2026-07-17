@@ -73,6 +73,10 @@ semantics before this gate passes.
   shadow availability contract before HIGH-2 enforcement;
 - repeated interactive assessment against the same semantic inputs is
   side-effect-free and cannot multiply the learning sample;
+- the installed 19:15 swing-observation cron no longer relies on implicit
+  `screen accum` writes: it either uses the explicit provisional capture path
+  below or fails visibly; a successful read-only screen must not masquerade as
+  observation capture;
 - diagnostic evidence cannot gain authority through naming/config shortcuts;
 - new observation/label schemas can bind corrected semantics;
 - valid partial evidence is distinct from no evidence and unavailable data.
@@ -114,6 +118,30 @@ Interactive `screen` and `analyze` commands remain assessment consumers and do
 not become implicit capture triggers. A manually selected single ticker is
 diagnostic inspection, not a canonical learning population; if exposed, use a
 separate read-only interface equivalent to `saham analyze signal inspect`.
+
+### Operational cron bridge before Phase 3
+
+`install_cron.sh` currently invokes `saham screen accum --universe lq45
+--multi --format json` at 19:15 WIB to collect observations. Once interactive
+screening is read-only, that command can succeed while writing nothing. Phase 2
+must therefore migrate the scheduled job to an explicit transitional command:
+
+```text
+saham learn signal capture --contract legacy-accumulation-candidates --session YYYY-MM-DD
+```
+
+This bridge calls the existing explicit observation-recording application use
+case and preserves the existing schema/selected-candidate population. Its rows
+are `LEGACY_PROVISIONAL`: they may support continuity and diagnostics but cannot
+claim universe recall, control-population coverage, professional-grade
+evaluation, readiness, tuning, or promotion. It must not fabricate the future
+`accumulation-discovery` contract.
+
+Phase 3 replaces the bridge with `accumulation-discovery` after control rows and
+artifact identity exist. The cutover records the last provisional session and
+first new-contract session, prevents dual-write duplicates, and updates the
+19:45 label cron from the legacy `analyze signal-labels` route to the
+lifecycle-correct `learn signal labels` route.
 
 **Exit gate: `CANONICAL-EVIDENCE-GATE`**
 

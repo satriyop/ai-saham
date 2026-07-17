@@ -363,6 +363,10 @@ generators. Canonical capture belongs to `CONTROL-POPULATION` after
   observations, even behind an idempotent upsert.
 - Do not use CLI invocation frequency, invocation timestamp, or user-selected
   tickers to define the future learning population.
+- Do not leave `install_cron.sh` invoking a now-read-only `screen accum` command
+  while describing the job as observation capture.
+- Do not label the existing selected-candidate recorder
+  `accumulation-discovery`; it lacks the required eligible-universe controls.
 - Do not change weights, thresholds, recommendations, or tuning eligibility.
 
 ### Negative Tests
@@ -393,6 +397,13 @@ generators. Canonical capture belongs to `CONTROL-POPULATION` after
 - Source availability is resolved once and remains shadow-only.
 - The shared builder is side-effect-free with respect to canonical learning
   persistence.
+- The existing 19:15 observation cron is migrated to explicit
+  `saham learn signal capture --contract legacy-accumulation-candidates ...`
+  using the existing recording use case, or is deliberately disabled with a
+  visible non-zero failure. It cannot silently run read-only screening as if
+  capture succeeded.
+- Transitional rows are explicitly `LEGACY_PROVISIONAL` and ineligible for
+  control-population, readiness, tuning, or promotion claims.
 - DQ-002J no longer owns a separate post-score source-of-truth assessment.
 - Focused screen/swing/signal/temporal-leakage tests and architecture tests
   pass; full suite passes when feasible; `git diff --check` is clean.
@@ -1546,6 +1557,24 @@ saham analyze signal inspect TICKER --contract swing-setup --setup NAME --sessio
 Inspection must not write canonical observations or enter readiness, tuning, or
 promotion populations.
 
+#### Scheduled-capture migration
+
+The current `install_cron.sh` 19:15 job invokes `screen accum` for observation
+side effects. During the Phase 2/3 transition it must use the explicit
+`legacy-accumulation-candidates` capture contract backed by
+`RecordAccumulationObservationsUseCase`; ordinary screening remains read-only.
+The provisional contract preserves only the existing selected-candidate
+population/schema and is never treated as an alias for
+`accumulation-discovery`.
+
+When this task delivers the full control population, replace the cron contract
+atomically with `accumulation-discovery`. Record the last provisional and first
+new-contract sessions, prohibit overlapping dual writes, make retries
+idempotent, fail non-zero on ambiguous/holiday/incomplete sessions, and expose
+inserted/already-existing/rejected/unavailable/failed counts. Migrate the 19:45
+label job to `saham learn signal labels`; label generation must not silently
+continue from an incomplete capture.
+
 `screen accum` and `analyze swing` remain read/assessment workflows with respect
 to canonical learning persistence. User attention and command frequency must
 not select or weight the training population.
@@ -1563,6 +1592,10 @@ not select or weight the training population.
 - [ ] Discovery and swing-setup observations cannot overwrite or substitute for one another
 - [ ] Swing-setup capture requires a named setup and evaluates a population, not a user-picked ticker
 - [ ] Single-ticker inspection is read-only and excluded from canonical learning/readiness
+- [ ] `install_cron.sh` uses explicit lifecycle-correct capture/label commands
+- [ ] Cron retries are idempotent and capture failures are visible/non-zero
+- [ ] Last provisional and first full-contract sessions are recorded with no dual-write duplicates
+- [ ] Holidays or unresolved completed sessions cannot fabricate observations
 
 ---
 

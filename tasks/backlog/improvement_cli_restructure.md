@@ -55,6 +55,7 @@ saham analyze signal readiness --target TARGET
 saham learn signal backfill-observations --universe ... --start ... --end ...
 saham learn signal capture --contract accumulation-discovery --session ...
 saham learn signal capture --contract swing-setup --setup ... --session ...
+saham learn signal capture --contract legacy-accumulation-candidates --session ...  # transitional only
 saham learn signal labels [SNAPSHOT_DATE] [options]
 
 saham learn sentiment audit
@@ -80,6 +81,7 @@ Flags modify one operation. They must not select workflows with different argume
 | `saham analyze signal-readiness --target TARGET` | `saham analyze signal readiness --target TARGET` | Analysis | Read-only |
 | `saham analyze signal-backfill-observations ...` | `saham learn signal backfill-observations ...` | Learning | Writes observations; may generate labels when requested |
 | New explicit canonical capture workflow | `saham learn signal capture --contract ...` | Learning | Idempotently writes universe-driven canonical observations |
+| `install_cron.sh` implicit `screen accum` observation write | `saham learn signal capture --contract legacy-accumulation-candidates ...`, then `accumulation-discovery` | Learning | Explicit provisional bridge, later full universe/control capture |
 | `saham analyze signal-labels ...` | `saham learn signal labels ...` | Learning | Read-only summary unless a generation flag is used; generation persists labels |
 | `saham analyze audit` | `saham learn sentiment audit` | Learning | Persists sentiment audit outcomes |
 | `saham analyze accum-audit ...` | `saham analyze accumulation evaluate ...` | Analysis | Offline evaluation; CSV write remains explicit through `--output` |
@@ -190,6 +192,10 @@ saham learn signal capture \
   --contract swing-setup --setup NAME --session DATE \
   [--format table|json] [--db PATH]
 
+saham learn signal capture \
+  --contract legacy-accumulation-candidates --session DATE \
+  [--format table|json] [--db PATH]  # transitional; not promotion-eligible
+
 saham learn signal backfill-observations \
   --universe UNIVERSE --start DATE --end DATE \
   [--horizon HORIZON] [--generate-labels] [--format table|json] [--db PATH]
@@ -205,12 +211,19 @@ saham learn signal labels [SNAPSHOT_DATE] \
 - Create a focused router, suggested file: `src/adapters/cli/learn_signal_router.py`.
 - Register it under the existing `learn_app`.
 - Reuse current application use cases and persistence repositories.
-- Route both capture contracts through the one application capture use case
-  defined by `CONTROL-POPULATION`; the CLI must not implement universe,
-  selection, setup-readiness, identity, or idempotency policy.
+- Route the two full capture contracts through the one application capture use
+  case defined by `CONTROL-POPULATION`; the CLI must not implement universe,
+  selection, setup-readiness, identity, or idempotency policy. The transitional
+  contract delegates to the existing `RecordAccumulationObservationsUseCase`
+  until that bridge is retired.
 - State side effects in the first help paragraph.
 - Keep label summary behavior available, but clearly distinguish `SUMMARY ONLY` from `GENERATE AND PERSIST` in output.
 - Preserve local-only/deterministic backfill behavior.
+- Treat `install_cron.sh` as a real caller. First migrate its 19:15 job to the
+  explicit provisional capture contract backed by the existing recorder; then
+  replace it with `accumulation-discovery` when `CONTROL-POPULATION` closes.
+- Migrate the 19:45 label cron from `analyze signal-labels` to
+  `learn signal labels`. Scheduled and manual paths share handlers/use cases.
 
 **Do not interpret this as:**
 
@@ -220,6 +233,10 @@ saham learn signal labels [SNAPSHOT_DATE] \
 - Do not make ordinary `analyze signal` commands persist observations or labels.
 - Do not allow single-ticker capture into the canonical learning population;
   per-ticker reconstruction belongs to read-only `analyze signal inspect`.
+- Do not claim the provisional selected-candidate cron bridge has rejected
+  controls or professional-grade discovery coverage.
+- Do not leave a successful read-only `screen accum` cron entry labelled as
+  observation capture.
 - Do not alter observation identity, deduplication, eligibility, horizons, or label definitions.
 - Do not automatically generate labels unless the existing explicit option requests it.
 
@@ -228,6 +245,9 @@ saham learn signal labels [SNAPSHOT_DATE] \
 - [ ] `saham learn signal --help` lists `capture`, `backfill-observations`, and `labels`.
 - [ ] `capture` requires an explicit supported observation contract; swing setup capture also requires `--setup`.
 - [ ] Discovery and swing-setup capture are universe-driven and idempotent.
+- [ ] Provisional capture is visibly `LEGACY_PROVISIONAL` and cannot enter readiness/tuning/promotion.
+- [ ] Installed capture and label cron entries use lifecycle-correct paths and the same application use cases as manual runs.
+- [ ] Cron retry, holiday, failure, cutover, and no-dual-write tests pass.
 - [ ] Help explicitly identifies written tables/artifacts at a user-meaningful level.
 - [ ] Identical requests produce the same DTOs and persistence effects as old paths.
 - [ ] Summary-only label invocation remains read-only.

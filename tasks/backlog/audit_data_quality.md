@@ -2486,6 +2486,17 @@ assessment-only and are not observation-capture triggers.
   learning population.
 - Report inserted, already-existing, unavailable, rejected, and failed capture
   counts. Rerunning the same semantic capture must not increase sample size.
+- Audit `install_cron.sh` as a production observation producer. Before the full
+  control-population contract exists, its 19:15 job must use the explicit
+  `legacy-accumulation-candidates` capture bridge rather than rely on read-only
+  `screen accum`; bridge rows are `LEGACY_PROVISIONAL` and cannot authorize
+  recall/readiness/tuning/promotion. Replace that bridge atomically with
+  `accumulation-discovery` when this task closes.
+- Migrate the 19:45 label job to `saham learn signal labels`. Prove labels do not
+  proceed silently after a missing, partial, or failed scheduled capture.
+- Reconcile the last provisional session, first full-contract session, cron
+  retries, holidays, failures, and logs. No overlap may duplicate observations
+  and no successful exit may conceal zero capture caused by the wrong command.
 - Preserve suspended, delisted, stale, and unavailable names as explicit states;
   do not erase them from evaluation denominators.
 
@@ -2502,6 +2513,9 @@ If canonical identity omits a meaning-changing dimension, replace it and rebuild
 - [ ] CLI, scheduler, and agent capture paths share one application use case.
 - [ ] Discovery and named swing-setup populations are separately identified and reconciled.
 - [ ] Single-ticker inspection cannot write or count as canonical learning evidence.
+- [ ] Installed cron calls the same application capture/label use cases as manual execution.
+- [ ] Cron cutover has no silent collection gap or duplicate dual-write session.
+- [ ] Holiday/retry/failure fixtures prove fail-closed session handling and visible errors.
 - [ ] Changing a semantic identity dimension creates a distinct artifact or explicit version replacement.
 - [ ] Candidate and control rows share one PIT cutoff but cannot overwrite one another.
 - [ ] Candidate-only datasets are ineligible for screener recall/filter-value claims.
