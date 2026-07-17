@@ -167,7 +167,8 @@ For code changes, also read:
 
 For architecture, layer boundary, persistence, scoring, signal, risk, tuning, strategy, market context, or evidence-promotion work, also read:
 
-- `ARCHITECTURE_DECISIONS.md`
+- `ARCHITECTURE_DECISIONS.md`, then only the individual ADRs selected by its
+  task-to-ADR reading matrix
 - Relevant design docs under `docs/`
 - Relevant config files under `config/`
 

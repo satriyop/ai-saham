@@ -50,7 +50,7 @@ Read these in order:
 1. [AGENT_QUICKSTART.md](AGENT_QUICKSTART.md) — mandatory constraints and the
    task-specific reading matrix.
 2. [AGENTS.md](AGENTS.md) and the active agent contract, if any.
-3. [ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md) — binding decisions,
+3. [ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md) — compact binding-decision hub and task-to-ADR reading matrix,
    current-state index, and amendment map.
 4. Only the design/config/source files relevant to the task.
 
@@ -286,7 +286,7 @@ deterministic workflows must remain usable when AI or the network is absent.
 
 | Need | Document |
 |---|---|
-| Binding architecture decisions and amendments | [ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md) |
+| Binding architecture decisions, amendments, and task routing | [ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md) |
 | Agent constraints and task reading matrix | [AGENT_QUICKSTART.md](AGENT_QUICKSTART.md) |
 | CLI learning guide | [CLI_README.md](CLI_README.md) |
 | Signal engine model | [docs/signal_engine_design_overview.md](docs/signal_engine_design_overview.md) |
