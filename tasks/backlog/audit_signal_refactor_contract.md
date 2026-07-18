@@ -1060,11 +1060,11 @@ population.
 
 ## Task ARTIFACT-IDENTITY — Reproducible Signal Artifact Identity
 
-**State:** Active — immutable identity dimensions, compatibility dimensions,
-provenance, final-ID wrappers, canonical serialization, pure identity
-resolution, observation persistence support, and label persistence support
-are implemented; producers, readiness, and canonical capture integration
-remain absent.
+**State:** Foundation Done — identity value objects, resolution, persistence
+support, and the typed semantic-contract registry are committed. Canonical
+capture integration is owned by `CONTROL-POPULATION`/DQ-003; readiness cohort
+integration is owned by DQ-006. Those later data tasks do not block the next
+deterministic live-contract task.
 
 **Committed progress:**
 
@@ -1074,6 +1074,7 @@ remain absent.
 | Pure identity resolver | `5c367a3 Add pure signal artifact identity resolver` |
 | Candidate-observation persistence support | `68b2004 Persist optional signal artifact identity on observations` |
 | Forward-label persistence and strict identity audit | `2c828c7 Slice 4: forward-label identity persistence + codec-triplet audit` |
+| Typed semantic-contract registry | `2b0bff1 Fix Slice 5 Identity Collision: Preserve institutional window duplicate multiplicity and normalize commodity weights to float` |
 
 Component persistence does not satisfy an end-to-end close criterion by itself.
 
@@ -1166,6 +1167,11 @@ all source files into compatibility identity is forbidden because non-semantic
 refactors must not fragment cohorts.
 
 ### Close criteria
+
+The criteria below are end-to-end program criteria. The identity foundation
+implemented here supplies their contract; DQ-003 owns canonical production and
+idempotent capture, while DQ-006 owns readiness grouping and mixed-cohort
+rejection.
 
 - [ ] Semantically different engines cannot share one `semantic_compatibility_id`
 - [ ] Exact reruns reproduce `artifact_id`, `semantic_compatibility_id`, and material outputs
@@ -1286,15 +1292,29 @@ refactors must not fragment cohorts.
 - Producers, readiness, and artifact-ID uniqueness are still not integrated.
   No close criterion for the overall ARTIFACT-IDENTITY task is checked.
 
-### Next Slice — Typed Semantic Contract Registry
+### Slice 5 Checkpoint — Typed Semantic Contract Registry
 
-Before wiring observation or label producers, implement one typed application
-contract that resolves the current evidence-contract version, semantic-engine
-version, observation/label schema versions, execution/label-policy version,
-material scoring/policy config identity, and authority-registration identity.
-It must fail closed on missing declared material inputs and must not write
-artifacts, change persistence, or alter scoring. Producer integration follows
-only after this contract is verified.
+- One typed application registry now resolves observation and label semantic-
+  compatibility dimensions from the declared contract, material runtime config,
+  and authority registrations.
+- Material config identity is setup-family and horizon aware. Runtime-equivalent
+  unordered inputs are normalized without erasing meaningful multiplicity.
+- Resolution fails closed for missing or invalid material inputs, authority-
+  registration mismatches, and unsupported strategy-enabled artifacts.
+- This slice does not write artifacts or change scoring, persistence, readiness,
+  or capture behavior.
+- Producer, readiness-cohort, and canonical-capture integration remain absent;
+  no overall close criterion is checked by this slice alone.
+
+### Integration Ownership
+
+- `CONTROL-POPULATION`/DQ-003 must use this identity foundation when it creates
+  the universe-driven canonical observation producer.
+- DQ-004 must preserve compatible observation identity when producing labels.
+- DQ-006 must group readiness by semantic compatibility and reject incompatible
+  mixtures.
+- The legacy accumulation recorder is not the canonical capture boundary and
+  must not be upgraded into one as part of this task.
 
 ---
 
