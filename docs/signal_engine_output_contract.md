@@ -58,8 +58,11 @@ foreign participation and concentration
 domestic broker accumulation evidence
 market/sector regime metadata
 ticker profile and profile confidence
-coverage_score
-conviction_score
+signal_authority_coverage
+typed setup readiness
+phase_input_coverage (diagnostic)
+phase_detection_strength (diagnostic)
+directional signal score
 evidence authority statuses
 ```
 
@@ -93,8 +96,11 @@ scores:
   trigger_score
   exact/raw composite score
   display score where compatibility requires an integer
-  coverage_score
-  conviction_score
+  signal_authority_coverage
+  typed setup readiness
+  phase_input_coverage (diagnostic)
+  phase_detection_strength (diagnostic)
+  directional signal score
 
 state:
   SetupPhaseState
@@ -134,26 +140,12 @@ silently changing persisted or public types.
 Decision policy should make constraint ordering visible. Conceptually:
 
 ```text
-hard gate failed
- -> AVOID
-
-coverage below floor
- -> INSUFFICIENT_DATA or WATCH
-
-conviction below floor
- -> WATCH or AVOID
-
-distribution/exhaustion/failed phase
- -> capped WATCH or AVOID
-
-regime/setup disallows ENTER
- -> WATCH
-
-required phase sequence or trigger missing
- -> WATCH or alternate setup family
-
-score and all floors satisfied
- -> ENTER
+hard risk gate
+ -> signal authority coverage floor
+ -> typed setup readiness
+ -> phase/regime constraints
+ -> directional score threshold
+ -> ENTER/WATCH/AVOID
 ```
 
 Exact labels, ordering, thresholds, and exceptions come from current validated

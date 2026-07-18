@@ -31,8 +31,8 @@ def _make_candidate(ticker: str, foreign_flow_score: float = 50.0) -> Accumulati
     )
 
 
-def _with_signal(candidate: AccumulationCandidate, score: int, coverage_score: float):
-    assessment = SimpleNamespace(score=score, signal_authority_coverage=coverage_score)
+def _with_signal(candidate: AccumulationCandidate, score: int, signal_authority_coverage: float):
+    assessment = SimpleNamespace(score=score, signal_authority_coverage=signal_authority_coverage)
     candidate.signal_assessment = SimpleNamespace(assessment=assessment)
     return candidate
 
@@ -110,7 +110,7 @@ def test_summary_counts_enter_watch_blocked_unclassified():
 
 def test_projection_carries_signal_risk_and_phase_fields():
     candidate = _make_candidate("GOTO", foreign_flow_score=77.3)
-    candidate = _with_signal(candidate, score=61, coverage_score=0.64)
+    candidate = _with_signal(candidate, score=61, signal_authority_coverage=0.64)
     candidate = _with_risk(candidate, gate_triggered="liquidity_gate")
     candidate = _with_setup_phase(candidate, SetupPhaseState.EXHAUSTION)
     candidate = _with_trade_setup(candidate, SetupAction.AVOID)
@@ -122,7 +122,30 @@ def test_projection_carries_signal_risk_and_phase_fields():
     projected = projection.candidates[0]
     assert projected.flow_score == 77.3
     assert projected.signal_score == 61
-    assert projected.coverage_score == 0.64
+    assert projected.signal_authority_coverage == 0.64
     assert projected.risk_status == "BLOCK"
     assert projected.setup_phase == "EXHAUSTION"
     assert projected.action == "AVOID"
+
+
+def test_daily_projection_contract():
+    # Test A: Daily Projection Contract
+    candidate = _make_candidate("GOTO")
+    candidate = _with_signal(candidate, score=61, signal_authority_coverage=0.64)
+    projection = DailyAccumulationProjector().project(
+        candidates=[candidate], checked=1, data_ready=1
+    )
+    projected = projection.candidates[0]
+    assert projected.signal_authority_coverage == 0.64
+    assert not hasattr(projected, "coverage_score")
+
+
+def test_daily_missing_assessment():
+    # Test B: Daily Missing Assessment
+    candidate = _make_candidate("GOTO")
+    assert candidate.signal_assessment is None
+    projection = DailyAccumulationProjector().project(
+        candidates=[candidate], checked=1, data_ready=1
+    )
+    projected = projection.candidates[0]
+    assert projected.signal_authority_coverage is None

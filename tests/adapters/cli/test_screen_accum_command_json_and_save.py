@@ -719,3 +719,70 @@ def test_screen_accum_multi_json_partial_result_false_when_nothing_skipped(monke
     payload = json.loads(result.output)
     assert payload["warnings"] == []
     assert payload["partial_result"] is False
+
+
+def test_screen_accum_multi_cli_json_contract(monkeypatch):
+    # Test F: Real Multi CLI JSON
+    from types import SimpleNamespace
+
+    assessment = SimpleNamespace(
+        score=85.0,
+        signal_authority_coverage=0.83,
+        setup_readiness_status="READY",
+        setup_readiness_current_phase="ACCUMULATION",
+        setup_readiness_missing_required_inputs=(),
+        setup_readiness_failed_requirements=(),
+        phase_detection_strength=0.8,
+        phase_input_coverage=1.0,
+        strength=SimpleNamespace(value="MODERATE"),
+        entry_quality=SimpleNamespace(value="FAIR"),
+        breakdown_dict={},
+        decision_constraints=None,
+    )
+
+    candidate = _candidate(ticker="BBCA")
+    candidate.signal_assessment = SimpleNamespace(
+        assessment=assessment,
+        coverage_warning=None,
+        setup_readiness=None,
+    )
+
+    def fake_uc(*, db_path, screener_config, swing_config):
+        uc = SimpleNamespace()
+        uc.execute = lambda req: _fake_workflow_result(
+            multi_results={
+                7: AccumulationScreenResponse(
+                    candidates=[candidate],
+                    screened_at=date(2026, 6, 28),
+                    window_days=7,
+                    total_tickers_checked=1,
+                    tickers_skipped=0,
+                    provider="fake",
+                ),
+            },
+        )
+        return uc
+
+    monkeypatch.setattr(
+        accum_cli,
+        "create_run_accumulation_screen_workflow_use_case",
+        fake_uc,
+    )
+
+    result = runner.invoke(
+        app, ["screen", "accum", "BBCA", "--multi", "--format", "json"]
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+
+    # Parse the emitted JSON and find the ticker object in tickers
+    tickers = payload.get("tickers", {})
+    assert "BBCA" in tickers
+    ticker_row = tickers["BBCA"]
+
+    # Assert it contains signal_authority_coverage
+    assert ticker_row["signal_authority_coverage"] == 0.83
+    # Assert it does not contain legacy keys
+    assert "signal_coverage" not in ticker_row
+    assert "coverage_score" not in ticker_row

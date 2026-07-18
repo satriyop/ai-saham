@@ -157,7 +157,7 @@ class ScreenAccumMultiRow:
     canonical_window: int
     canonical_candidate: AccumulationCandidate | None
     signal_score: float | None
-    signal_coverage: float | None
+    signal_authority_coverage: float | None
     risk_status: str | None
     setup_phase: str | None
     data_status: str | None
@@ -177,7 +177,7 @@ class ScreenAccumMultiRow:
             ),
             "canonical_window": self.canonical_window,
             "signal_score": self.signal_score,
-            "signal_coverage": self.signal_coverage,
+            "signal_authority_coverage": self.signal_authority_coverage,
             "risk_status": self.risk_status,
             "setup_phase": self.setup_phase,
             "data_status": self.data_status,
@@ -191,20 +191,20 @@ def _canonical_evidence_fields(candidate: AccumulationCandidate | None) -> dict:
     if candidate is None:
         return {
             "signal_score": None,
-            "signal_coverage": None,
+            "signal_authority_coverage": None,
             "risk_status": None,
             "setup_phase": None,
             "data_status": None,
             "next_action": None,
         }
     signal_score = None
-    signal_coverage = None
+    signal_authority_coverage = None
     if candidate.signal_assessment is not None:
         signal_score = candidate.signal_assessment.assessment.score
-        signal_coverage = candidate.signal_assessment.assessment.signal_authority_coverage
+        signal_authority_coverage = candidate.signal_assessment.assessment.signal_authority_coverage
     return {
         "signal_score": signal_score,
-        "signal_coverage": signal_coverage,
+        "signal_authority_coverage": signal_authority_coverage,
         "risk_status": (
             candidate.risk_assessment.risk_level_name if candidate.risk_assessment else None
         ),

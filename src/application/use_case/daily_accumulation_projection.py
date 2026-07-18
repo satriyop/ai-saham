@@ -24,7 +24,7 @@ class DailyAccumulationCandidate:
     flow_score: float
     setup_phase: str | None
     signal_score: int | None
-    coverage_score: float | None
+    signal_authority_coverage: float | None
     risk_status: str
     action: str | None
 
@@ -96,10 +96,10 @@ class DailyAccumulationProjector:
             setup_phase = phase.value if hasattr(phase, "value") else str(phase)
 
         signal_score = None
-        coverage_score = None
+        signal_authority_coverage = None
         if candidate.signal_assessment is not None:
             signal_score = candidate.signal_assessment.assessment.score
-            coverage_score = candidate.signal_assessment.assessment.signal_authority_coverage
+            signal_authority_coverage = candidate.signal_assessment.assessment.signal_authority_coverage
 
         if candidate.risk_assessment is None:
             risk_status = "UNKNOWN"
@@ -119,7 +119,7 @@ class DailyAccumulationProjector:
             flow_score=candidate.foreign_flow_score,
             setup_phase=setup_phase,
             signal_score=signal_score,
-            coverage_score=coverage_score,
+            signal_authority_coverage=signal_authority_coverage,
             risk_status=risk_status,
             action=action,
         )

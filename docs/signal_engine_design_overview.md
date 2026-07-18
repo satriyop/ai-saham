@@ -143,23 +143,22 @@ Exact thresholds and ordering must be read from current config, code, and tests.
 Do not collapse availability and evidence strength into one confidence number.
 
 ```text
-coverage_score:
-  how much required evidence is available and fresh enough to use
-
-conviction_score:
-  how strongly the available evidence supports a directional conclusion
+- signal_authority_coverage: availability of required production-authority groups;
+- signal_score: directional evidence strength;
+- SetupPhaseReadiness: typed family-specific readiness;
+- phase_input_coverage and phase_detection_strength: diagnostic only.
 ```
 
 Rules:
 
 ```text
-missing evidence     -> lowers coverage, not conviction
-weak or mixed signal -> lowers conviction, not coverage
+missing required production evidence -> lowers signal_authority_coverage
+weak or mixed signal                 -> lowers signal_score
 ```
 
-High conviction with low coverage should normally remain `WATCH` or
-`INSUFFICIENT_DATA`; it must not become `ENTER` through conviction alone. High
-coverage with low conviction should remain weak `WATCH` or `AVOID`.
+High signal score with low signal authority coverage should normally remain `WATCH` or
+`INSUFFICIENT_DATA`; it must not become `ENTER` through score alone. High
+signal authority coverage with low signal score should remain weak `WATCH` or `AVOID`.
 
 ## Evidence Authority Status
 

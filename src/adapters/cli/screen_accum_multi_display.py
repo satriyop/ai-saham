@@ -62,7 +62,7 @@ def display_multi(
     for w in windows:
         table.add_column(f"{w}s", justify="right")
     table.add_column("Pattern")
-    table.add_column("Signal")
+    table.add_column("Signal/Auth")
     table.add_column("Risk")
     table.add_column("Phase")
     table.add_column("Data")
@@ -85,8 +85,8 @@ def display_multi(
             )
             score_cells.append(Text(f"{candidate.foreign_flow_score:.0f}", style=style))
 
-        if row.signal_score is not None and row.signal_coverage is not None:
-            signal_cell = f"{row.signal_score:.0f}/{row.signal_coverage:.2f}"
+        if row.signal_score is not None and row.signal_authority_coverage is not None:
+            signal_cell = f"{row.signal_score:.0f}/{row.signal_authority_coverage:.2f}"
         elif row.signal_score is not None:
             signal_cell = f"{row.signal_score:.0f}"
         else:
@@ -132,6 +132,11 @@ def display_multi(
         f"Checked: {total_tickers_checked} | "
         f"Shown: {len(rows)} | "
         f"Provider: {provider}"
+    )
+
+    meta_table.add_row(
+        "Signal/Auth",
+        "score / signal authority coverage from the canonical window"
     )
 
     enter_score = display_config.enter_min_foreign_flow_score

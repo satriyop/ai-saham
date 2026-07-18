@@ -299,7 +299,7 @@ def test_today_marks_partial_accumulation_output():
         flow_score=80.0,
         setup_phase="ACCUMULATION",
         signal_score=70,
-        coverage_score=0.8,
+        signal_authority_coverage=0.8,
         risk_status="OPEN",
         action="WATCH",
     )
@@ -677,7 +677,7 @@ def test_today_accumulation_screen_renders_canonical_projection():
                 flow_score=60.6,
                 setup_phase="ACCUMULATION",
                 signal_score=72,
-                coverage_score=0.82,
+                signal_authority_coverage=0.82,
                 risk_status="OPEN",
                 action="WATCH",
             )
@@ -738,7 +738,7 @@ def test_today_accumulation_not_ready_suppresses_projection_rows():
                 flow_score=99.0,
                 setup_phase="ACCUMULATION",
                 signal_score=90,
-                coverage_score=0.9,
+                signal_authority_coverage=0.9,
                 risk_status="OPEN",
                 action="ENTER",
             )
@@ -1070,7 +1070,7 @@ def test_today_fallback_next_uses_first_accumulation_candidate():
                 flow_score=80.0,
                 setup_phase="ACCUMULATION",
                 signal_score=70,
-                coverage_score=0.8,
+                signal_authority_coverage=0.8,
                 risk_status="OPEN",
                 action="WATCH",
             )
@@ -1156,3 +1156,36 @@ def test_today_fallback_next_screen_accum_when_no_candidates():
         result = runner.invoke(app, ["today", "--universe", "lq45", "--date", "2026-06-19"])
         assert result.exit_code == 0
         assert "Next: saham screen accum --universe lq45" in result.stdout
+
+
+def test_daily_display():
+    # Test C: Daily Display
+    from src.adapters.cli.today_commands import _accumulation_screen_table
+    from rich.console import Console
+    from src.application.use_case.daily_accumulation_projection import DailyAccumulationCandidate
+
+    candidate = DailyAccumulationCandidate(
+        ticker="BBCA",
+        flow_score=80.0,
+        setup_phase="ACCUMULATION",
+        signal_score=70,
+        signal_authority_coverage=0.85,
+        risk_status="OPEN",
+        action="WATCH",
+    )
+
+    # Assert candidate constructor uses signal_authority_coverage
+    assert candidate.signal_authority_coverage == 0.85
+    # Assert no candidate field named coverage_score is used
+    assert not hasattr(candidate, "coverage_score")
+
+    console_inst = Console()
+    with console_inst.capture() as capture:
+        table = _accumulation_screen_table([candidate])
+        console_inst.print(table)
+
+    output = capture.get()
+    # Assert output contains Authority
+    assert "Authority" in output
+    # Assert output contains expected percentage
+    assert "85%" in output

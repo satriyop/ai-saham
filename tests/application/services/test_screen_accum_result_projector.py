@@ -553,7 +553,8 @@ def test_multi_projection_populates_canonical_fields_from_canonical_window():
     (row,) = projection.rows
     assert row.canonical_window == 7
     assert row.signal_score == 72
-    assert row.signal_coverage == 0.83
+    assert row.signal_authority_coverage == 0.83
+    assert not hasattr(row, "signal_coverage")
     assert row.risk_status == "OPEN"
     assert row.setup_phase == "ACCUMULATION"
     assert row.data_status == "ALIGNED"
@@ -585,7 +586,7 @@ def test_multi_projection_canonical_fields_none_when_ticker_missing_from_canonic
     (row,) = projection.rows
     assert row.candidates_by_window.get(7) is None
     assert row.signal_score is None
-    assert row.signal_coverage is None
+    assert row.signal_authority_coverage is None
     assert row.risk_status is None
     assert row.setup_phase is None
     assert row.data_status is None
@@ -632,7 +633,9 @@ def test_multi_row_to_dict_includes_canonical_fields():
     data = row.to_dict()
     assert data["canonical_window"] == 7
     assert data["signal_score"] == 72
-    assert data["signal_coverage"] == 0.83
+    assert data["signal_authority_coverage"] == 0.83
+    assert "signal_coverage" not in data
+    assert "coverage_score" not in data
     assert data["risk_status"] == "OPEN"
     assert data["setup_phase"] == "ACCUMULATION"
     assert data["data_status"] == "ALIGNED"
@@ -644,3 +647,45 @@ def test_multi_row_to_dict_includes_canonical_fields():
     assert "trend" in data
     assert "tracked_broker_flow" in data
     assert "broker_quality" not in data
+
+
+def test_behavior_preservation():
+    # Test H: Behavior Preservation
+    c_7 = _enriched_candidate(ticker="A", foreign_flow_score=80.0)
+    c_30 = _enriched_candidate(ticker="A", foreign_flow_score=90.0)
+
+    multi_results = {
+        7: _response([c_7], window_days=7),
+        30: _response([c_30], window_days=30),
+    }
+
+    projection = project_multi_screen_result(
+        multi_results,
+        tracked_broker_flow=None,
+        windows=[7, 30],
+        top=10,
+        sort_by="avg",
+        squeeze_only=False,
+        coiled_spring_min_foreign_flow_score=50.0,
+        coiled_spring_bb_pctile=0.20,
+        canonical_window=7,
+        effective_session=_EFFECTIVE_SESSION
+    )
+
+    (row,) = projection.rows
+    # Check that canonical fields from c_7 (canonical window = 7) are preserved:
+    # - signal score
+    assert row.signal_score == 72
+    # - authority coverage numeric value
+    assert row.signal_authority_coverage == 0.83
+    # - risk status
+    assert row.risk_status == "OPEN"
+    # - setup phase
+    assert row.setup_phase == "ACCUMULATION"
+    # - data status
+    assert row.data_status == "ALIGNED"
+    # - next action
+    assert row.next_action == "WATCH"
+    # - canonical window selection
+    assert row.canonical_window == 7
+    assert row.canonical_candidate == c_7

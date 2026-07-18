@@ -111,7 +111,7 @@ def _accumulation_screen_table(candidates: list[DailyAccumulationCandidate]):
     table.add_column("Flow", justify="right")
     table.add_column("Phase")
     table.add_column("Signal", justify="right")
-    table.add_column("Coverage", justify="right")
+    table.add_column("Authority", justify="right")
     table.add_column("Risk")
     table.add_column("Action")
     for candidate in candidates:
@@ -119,7 +119,7 @@ def _accumulation_screen_table(candidates: list[DailyAccumulationCandidate]):
         phase_text = candidate.setup_phase or "-"
         signal_text = str(candidate.signal_score) if candidate.signal_score is not None else "-"
         coverage_text = (
-            f"{candidate.coverage_score:.0%}" if candidate.coverage_score is not None else "-"
+            f"{candidate.signal_authority_coverage:.0%}" if candidate.signal_authority_coverage is not None else "-"
         )
         risk_style = _RISK_STATUS_STYLE.get(candidate.risk_status, "white")
         risk_text = f"[{risk_style}]{candidate.risk_status}[/{risk_style}]"

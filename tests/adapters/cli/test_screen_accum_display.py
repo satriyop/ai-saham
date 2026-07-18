@@ -318,7 +318,7 @@ def test_display_multi_renders_canonical_signal_risk_phase_data_next(capsys):
     )
 
     out = capsys.readouterr().out
-    assert "Signal" in out
+    assert "Signal/Auth" in out
     assert "Risk" in out
     assert "Phase" in out
     assert "Data" in out
@@ -385,3 +385,43 @@ def test_display_results_shows_unknown_phase_when_detection_unavailable(capsys):
 
     out = capsys.readouterr().out
     assert "UNKNOWN" in out
+
+
+def test_display_multi_with_explanation_signal_auth(capsys):
+    # Test G: Multi Display
+    from src.application.services.screen_accum_result_projector import ScreenAccumMultiRow
+
+    row = ScreenAccumMultiRow(
+        ticker="BBCA",
+        candidates_by_window={7: _candidate(foreign_flow_score=72.0, window_days=7)},
+        pattern="sustained",
+        trend="UP",
+        tracked_broker_flow=None,
+        canonical_window=7,
+        canonical_candidate=_candidate(foreign_flow_score=72.0, window_days=7),
+        signal_score=72.0,
+        signal_authority_coverage=0.83,
+        risk_status="OPEN",
+        setup_phase="ACCUMULATION",
+        data_status="ALIGNED",
+        next_action="WATCH",
+    )
+
+    display_multi(
+        rows=[row],
+        universe_label="lq45",
+        windows=[7],
+        screened_at=date(2026, 6, 19),
+        display_config=_CFG,
+        include_explanation=True,
+        canonical_window=7,
+    )
+
+    out = capsys.readouterr().out
+    # Assert:
+    # - header contains Signal/Auth;
+    assert "Signal/Auth" in out
+    # - cell contains the expected score/authority value;
+    assert "72/0.83" in out
+    # - the Run Context explains it as canonical-window score and authority coverage.
+    assert "score / signal authority coverage from the canonical window" in out
