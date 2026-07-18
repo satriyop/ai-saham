@@ -16,9 +16,6 @@ from pathlib import Path
 from src.application.services.engine_bootstrap.signal_scoring_config_resolver import (
     resolve_signal_engine_config,
 )
-from src.application.services.engine_bootstrap.signal_weight_config_resolver import (
-    _resolve_signal_weights,
-)
 from src.application.services.signal_engine import SignalEngine
 from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
 from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
@@ -48,16 +45,16 @@ def create_signal_engine(
         db_path: Path to the SQLite database (e.g. data/db/data.db).
         with_enrichment: When True, inject all 5 Stockbit enrichment providers
             (bandar, fundamentals, seasonality, analyst, forward_estimates) using
-            the SQLite cache so evaluate() works without a live broker session.
-            When False (default), all providers are None and all factors fall
-            back to neutral (50.0) — useful for testing the engine wiring.
+            the SQLite cache so evaluate_with_context() has real enrichment data
+            without a live broker session. When False (default), all providers
+            are None and canonical evidence groups fed by them are MISSING —
+            useful for testing the engine wiring.
     """
     cfg = load_signal_engine_config_raw()
-    weights = _resolve_signal_weights(cfg)
     signal_config = resolve_signal_engine_config(cfg)
 
     if not with_enrichment:
-        return SignalEngine(weights=weights, config=signal_config)
+        return SignalEngine(config=signal_config)
 
     resolved = Path(db_path)
     market_repository = SQLiteMarketRepository(db_path=resolved)
@@ -102,6 +99,5 @@ def create_signal_engine(
             stockbit_config=stockbit_config,
         ),
         latest_price_provider=_latest_close,
-        weights=weights,
         config=signal_config,
     )

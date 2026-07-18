@@ -1,5 +1,7 @@
 from datetime import date
 
+import pytest
+
 from src.application.services.signal_engine import SignalEngine
 from src.application.use_case.assess_signal_use_case import (
     BandarScoringConfig,
@@ -205,3 +207,13 @@ def test_flags_only_assessment_methods_are_removed():
     assert not hasattr(SignalEngine, "evaluate_request")
     assert hasattr(SignalEngine, "build_context")
     assert hasattr(SignalEngine, "evaluate_with_context")
+
+
+def test_signal_engine_rejects_legacy_weights_argument():
+    with pytest.raises(TypeError):
+        SignalEngine(weights={"bandar_intensity": 1.0})
+
+
+def test_signal_engine_constructs_with_config_only():
+    engine = SignalEngine(config=SignalEngineConfig())
+    assert isinstance(engine, SignalEngine)
