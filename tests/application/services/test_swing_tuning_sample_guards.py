@@ -245,6 +245,11 @@ def test_null_oos_metrics_with_sufficient_oos_trades_fail_guard(tmp_path):
         },
     }
     report = _patch_with_source_review(review, tmp_path)
+    assert report.valid is False
+    assert any("sample_not_ready" in issue and "profit_factor" in issue for issue in report.issues)
+    assert any(
+        "sample_not_ready" in issue and "average_return_pct" in issue for issue in report.issues
+    )
     assert any(
         "sample_not_ready" in issue and "drawdown_regression_pct" in issue
         for issue in report.issues
