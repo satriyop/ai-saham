@@ -31,8 +31,7 @@ prerequisites remain unresolved.
 
 ### Current-Code Audit — 2026-07-18
 
-- 544 focused contract and artifact-identity tests passed.
-- The full suite passed: 5,223 tests.
+- Focused contract suites and the full suite pass through `2c828c7`.
 - Completed tasks remain implemented at the current worktree state.
 - No `ARTIFACT-IDENTITY` close criterion is checked: current slices provide
   domain resolution and persistence support, but canonical producers,
@@ -1074,10 +1073,9 @@ remain absent.
 | Domain identity and canonical serialization | `c8a04cd ARTIFACT-IDENTITY Slice 1 — domain contracts + canonical serialization` |
 | Pure identity resolver | `5c367a3 Add pure signal artifact identity resolver` |
 | Candidate-observation persistence support | `68b2004 Persist optional signal artifact identity on observations` |
+| Forward-label persistence and strict identity audit | `2c828c7 Slice 4: forward-label identity persistence + codec-triplet audit` |
 
-Forward-label persistence support is present only in the dirty worktree and is
-not completion evidence until committed. Component persistence does not satisfy
-an end-to-end close criterion by itself.
+Component persistence does not satisfy an end-to-end close criterion by itself.
 
 ### Decision
 
@@ -1279,10 +1277,24 @@ refactors must not fragment cohorts.
   (identity text), `artifact_provenance_json` (non-scalar JSON), all with
   `null_policy="fail"` and `invalid_values=frozenset({""})` /
   `invalid_value_policy="warn"`.
+- The source-contract audit validates complete observation and label identity
+  triplets through the strict codec. Partial or malformed triplets produce the
+  blocking `INVALID_ARTIFACT_IDENTITY` finding; all-empty transitional triplets
+  remain visible as field-level warnings.
 - `SignalForwardLabel.to_dict()` and `from_dict()` are unchanged — identity is
   repository metadata, matching the candidate-observation persistence pattern.
 - Producers, readiness, and artifact-ID uniqueness are still not integrated.
   No close criterion for the overall ARTIFACT-IDENTITY task is checked.
+
+### Next Slice — Typed Semantic Contract Registry
+
+Before wiring observation or label producers, implement one typed application
+contract that resolves the current evidence-contract version, semantic-engine
+version, observation/label schema versions, execution/label-policy version,
+material scoring/policy config identity, and authority-registration identity.
+It must fail closed on missing declared material inputs and must not write
+artifacts, change persistence, or alter scoring. Producer integration follows
+only after this contract is verified.
 
 ---
 

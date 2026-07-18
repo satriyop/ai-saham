@@ -30,7 +30,7 @@ truth and PIT prerequisites remain in
 | 1 | `BENCHMARK-EXCESS-RETURN` | Done | `5b9f3f0 tasks:update, adr:update` |
 | 2 | `CANONICAL-EVIDENCE-BOUNDARY` | Done | `2526608 Fix Finding 6: replace fake screen/swing parity test with real boundary test` |
 | 3 | `AUTHORITY-COVERAGE-READINESS` | Done | `8c4dee1 Close remaining HIGH-2 Findings and Reconcile Acceptance State` |
-| 4 | `ARTIFACT-IDENTITY` | Active | Committed slices through observation persistence; label persistence is uncommitted |
+| 4 | `ARTIFACT-IDENTITY` | Active | Persistence support is committed for observations and labels; typed semantic-contract resolution and producer integration remain |
 | 5 | `EVIDENCE-BACKED-ASSESSMENT` | Ready | Current flags-only public paths still exist; no artifact dependency |
 | 6 | `CENTRAL-EVIDENCE-AUTHORITY` | Ready | Current producer YAML/dataclass still controls its own status |
 | 7 | `SECTOR-CONTEXT-IDENTITY` | Blocked | Requires the active artifact/schema identity contract |

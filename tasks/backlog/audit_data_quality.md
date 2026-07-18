@@ -226,8 +226,8 @@ meaning and availability contract; diagnostic/optional fields remain visible
 without pretending to be authoritative.
 
 **State:** Blocked — waits for DQ-000; the executable live gate also currently
-fails on invalid seasonality provenance and the in-progress forward-label
-artifact schema.
+fails on invalid seasonality provenance and the committed forward-label
+artifact schema has not yet been applied to the live database.
 
 **Audit each source family:**
 
