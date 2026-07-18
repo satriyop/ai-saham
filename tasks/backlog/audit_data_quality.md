@@ -634,6 +634,19 @@ Existing logs/audits without prediction-time provenance or classifier version ar
 **Priority:** P0  
 **Depends on:** DQ-003 through DQ-008 findings resolved; sentiment-specific cleanup may run independently after DQ-009
 
+**Completed HIGH-2 artifact subset (2026-07-18):**
+- 19,317 incompatible candidate observations were moved to
+  `candidate_observations_quarantine`; the canonical table contains 0.
+- 5,760 linked legacy forward labels were moved to
+  `signal_forward_labels_quarantine`; the canonical table contains 0.
+- Canonical observation, label, readiness, attribution, and tuning consumers
+  reject incompatible schema versions rather than coercing them.
+- No rebuild was performed because the quarantined artifacts lack the current
+  canonical semantic contract.
+
+This completes only the HIGH-2 historical-artifact requirement. DQ-010 remains
+Partial for its broader dry-run, rollback, rebuild, and reconciliation criteria.
+
 **Outcome:** Canonical tables contain only artifacts satisfying the corrected contracts.
 
 **Implementation guideline:**

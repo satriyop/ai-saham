@@ -49,13 +49,14 @@ def signal_audit(
     db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
 ) -> None:
     """
-    Audit current SignalEngine inputs for one ticker — factor presence, scores, weights.
+    Audit the archived six-factor signal baseline for one ticker.
 
-    Shows per-factor: present/missing, raw context value, component score (0-100),
-    configured weight, active weight, weighted contribution, and composite total.
+    Shows archived factor presence, component scores, configured weights,
+    weighted contributions, the archived neutral-fill baseline score, and an
+    archived renormalized diagnostic preview.
 
-    Also shows the legacy flat-factor renormalized score (missing factors excluded
-    from the weight pool) for diagnostic reference alongside the canonical score.
+    This command does not calculate or display the canonical evidence-backed
+    SignalEngine score or canonical signal_authority_coverage.
 
     Use --coverage to see DB-level usable row counts per factor across all tickers.
 

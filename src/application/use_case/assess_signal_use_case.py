@@ -234,7 +234,7 @@ class AssessSignalUseCase:
             return (
                 f"{missing}/6 enrichment factors missing — archived baseline score defaulted to neutral "
                 f"({self._config.missing_data.neutral_score:g}) "
-                f"for those factors. Refresh or import enrichment data for more accurate scores."
+                f"for those factors. Refresh or import enrichment data for more complete archived baseline diagnostics."
             )
         return None
 

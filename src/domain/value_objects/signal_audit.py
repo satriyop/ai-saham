@@ -1,15 +1,11 @@
 """
 Signal audit value objects.
 
-Phase 0 observability artifacts for the SignalEngine refactor. These make the
-current flat-weighted composite scoring measurable without changing production
-scoring. A SignalAuditReport captures, per factor: presence, raw context value,
-component score (0–100), configured vs. active (renormalized) weight, and each
-factor's weighted contribution to the composite total.
-
-The renormalized_score field is a preview of Phase 4 behavior (missing factors
-excluded from the weight pool rather than defaulting to neutral 50). It is
-informational only — it does not affect the production score.
+- These value objects describe the archived six-factor baseline.
+- final_score is the archived neutral-fill baseline score.
+- renormalized_score is an archived diagnostic preview.
+- Neither value is the canonical production score.
+- Factor presence is not canonical signal authority coverage.
 
 Layer: Domain
 Depends on: stdlib only

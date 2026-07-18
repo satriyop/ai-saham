@@ -1,9 +1,8 @@
 # Backlog: Signal Refactor Contract Fixes
 
 **Source audit:** `tasks/thought/signal_refactor_audit.md` (verified 2026-07-14)
-**Status:** Partial — HIGH-1 and CANONICAL-EVIDENCE-BOUNDARY are done; HIGH-2
-is Partial (post-review Finding 1 fixed 2026-07-18: mandatory configured
-SignalEngine wiring — see Task HIGH-2 below); ARTIFACT-IDENTITY is next.
+**Status:** Partial — HIGH-1, CANONICAL-EVIDENCE-BOUNDARY, and HIGH-2 are
+done; ARTIFACT-IDENTITY is next.
 
 ---
 
@@ -374,36 +373,37 @@ generators. Canonical capture belongs to `CONTROL-POPULATION` after
 
 ## Task HIGH-2 — Fix Coverage/Conviction Gating Source and Naming
 
-**State:** Partial (2026-07-18) — signal_authority_coverage is the single
-canonical authority-coverage metric (scoring, policy, output, persistence);
-typed SetupPhaseReadiness replaces phase coverage/conviction gating; candidate
-observations are schema 3 and forward labels schema 2; full test suite and
-architecture tests pass; `git diff --check` clean. A post-review pass found
-the scoring/policy contract above was correct but not universally enforced in
-production: `AccumulationScreenUseCase` and its factories accepted an
-optional `signal_engine` and silently fell back to a bare, unconfigured
-`SignalEngine()` when a caller omitted it, and `signal_engine_config.py`'s
-own Python defaults for RISK_ON/NEUTRAL `min_signal_authority_coverage` were
-`0.0` instead of the canonical `0.70` in `config/signal_engine.yaml` — so an
-unconfigured engine enforced no coverage floor at all. **Finding 1 fixed
-(2026-07-18):** `signal_engine` is now a mandatory constructor/factory
-parameter with no default and no `signal_engine or SignalEngine()` fallback
-across `AccumulationScreenUseCase`, `AccumulationAuditUseCase`,
-`SwingBacktestUseCase`, and both `accumulation_screen_factory.py` factories;
-every production composition root (`screen accum`/`screen compare`,
-`analyze swing` and its nested per-ticker screen, `analyze accum-audit`,
-`trade log-accum`, `trade backtest-swing`, `analyze swing-compare`, and the
-daily briefing) now injects one configured engine per invocation; the
-RISK_ON/NEUTRAL code defaults now match the YAML (0.70). A follow-up review
-of this fix found the YAML resolver itself
+**State:** Done (2026-07-18) — canonical authority coverage, typed setup
+readiness, schema isolation, historical-artifact exclusion, and active
+terminology were verified against current code and tests.
+
+### Verification Record
+
+A post-review pass found the scoring/policy contract above was correct but not
+universally enforced in production: `AccumulationScreenUseCase` and its
+factories accepted an optional `signal_engine` and silently fell back to a bare,
+unconfigured `SignalEngine()` when a caller omitted it, and
+`signal_engine_config.py`'s own Python defaults for RISK_ON/NEUTRAL
+`min_signal_authority_coverage` were `0.0` instead of the canonical `0.70` in
+`config/signal_engine.yaml` — so an unconfigured engine enforced no coverage
+floor at all. **Finding 1 fixed (2026-07-18):** `signal_engine` is now a
+mandatory constructor/factory parameter with no default and no `signal_engine or
+SignalEngine()` fallback across `AccumulationScreenUseCase`,
+`AccumulationAuditUseCase`, `SwingBacktestUseCase`, and both
+`accumulation_screen_factory.py` factories; every production composition root
+(`screen accum`/`screen compare`, `analyze swing` and its nested per-ticker screen,
+`analyze accum-audit`, `trade log-accum`, `trade backtest-swing`, `analyze
+swing-compare`, and the daily briefing) now injects one configured engine per
+invocation; the RISK_ON/NEUTRAL code defaults now match the YAML (0.70). A
+follow-up review of this fix found the YAML resolver itself
 (`engine_bootstrap/signal_decision_policy_config_resolver.py`) still failed
 open: `raw.get("min_signal_authority_coverage", 0.0)` meant any regime block
-that omitted the key from `config/signal_engine.yaml` silently resolved to a
-0.0 floor, recreating the original bypass despite the corrected dataclass
-defaults. **Fixed (2026-07-18):** the resolver now raises `ValueError` when
-`min_signal_authority_coverage` is missing from a regime's config block
-instead of defaulting it, with a regression test covering a four-regime
-config that omits the key from one regime. **Finding 2 fixed (2026-07-18):**
+that omitted the key from `config/signal_engine.yaml` silently resolved to a 0.0
+floor, recreating the original bypass despite the corrected dataclass defaults.
+**Fixed (2026-07-18):** the resolver now raises `ValueError` when
+`min_signal_authority_coverage` is missing from a regime's config block instead
+of defaulting it, with a regression test covering a four-regime config that
+omits the key from one regime. **Finding 2 fixed (2026-07-18):**
 `GenerateSignalForwardLabelsUseCase` now excludes any candidate observation
 from label generation entirely (with no label, no fingerprint parse, no candle
 read, and no repository write) unless both conditions are met: (1) exact
@@ -415,26 +415,23 @@ non-empty config_hash. Legacy diagnostic rows remain readable through
 noncanonical repository methods. **Follow-up Finding 3 fixed (2026-07-18):**
 The archived six-factor scorer now explicitly assigns `None` (representing that
 canonical coverage was not evaluated) instead of fabricating `1.0` defaults.
-**Finding 4 fixed (2026-07-18):**
-`SummarizeSignalForwardLabelsUseCase` now filters to exact schema-2 forward
-labels before building any bucket, replaced the ambiguous
-`coverage_bucket`/`conviction_bucket` groups with a canonical
+**Finding 4 fixed (2026-07-18):** `SummarizeSignalForwardLabelsUseCase` now
+filters to exact schema-2 forward labels before building any bucket, replaced
+the ambiguous `coverage_bucket`/`conviction_bucket` groups with a canonical
 `signal_authority_coverage_bucket`, and added typed
 `setup_readiness_status`/`setup_readiness_current_phase`/missing-input/
 failed-requirement attribution — with no fallback to the legacy fingerprint
 fields. **Follow-up Finding 4 fixed (2026-07-18):** Active docs, config comments,
 archived rationale, and the signal-audit command now cleanly distinguish
 canonical production authority coverage from archived factor presence.
-**Finding 5 fixed (2026-07-18):** schema-2 label JSON and SQLite
-fingerprint persistence omit generic legacy coverage/conviction and phase
-aliases; schema-1 parsing remains diagnostic and read-compatible. **Finding 6
-fixed (2026-07-18):** daily briefing and multi-screen DTOs, JSON, and displays
-now expose signal_authority_coverage; ambiguous coverage_score and
-signal_coverage aliases were removed with a clean break. **HIGH-2 Finding 1
-fixed (2026-07-18):** swing tuning patch readiness validation now requires
-canonical authority-coverage and typed readiness attribution. HIGH-2 stays
-Partial — other audit findings against this task are not yet verified — do not
-mark Done until they are.
+**Finding 5 fixed (2026-07-18):** schema-2 label JSON and SQLite fingerprint
+persistence omit generic legacy coverage/conviction and phase aliases; schema-1
+parsing remains diagnostic and read-compatible. **Finding 6 fixed (2026-07-18):**
+daily briefing and multi-screen DTOs, JSON, and displays now expose
+signal_authority_coverage; ambiguous coverage_score and signal_coverage
+aliases were removed with a clean break. **HIGH-2 Finding 1 fixed (2026-07-18):**
+swing tuning patch readiness validation now requires canonical
+authority-coverage and typed readiness attribution.
 
 ### Metadata
 
@@ -639,7 +636,7 @@ Layer plan:
 
 ### Acceptance Criteria
 
-- [ ] `signal_authority_coverage` has one formula across scoring, policy, output, persistence, and learning
+- [x] `signal_authority_coverage` has one formula across scoring, policy, output, persistence, and learning
 - [x] Only present PRODUCTION evidence contributes to its numerator
 - [x] Required PRODUCTION evidence remains in its denominator when unavailable
 - [x] Diagnostic evidence cannot improve production-authority coverage
@@ -654,9 +651,9 @@ Layer plan:
 - [x] Regression test: diagnostic evidence presence cannot raise authority coverage
 - [x] Negative test: high FAILED or DISTRIBUTION phase strength cannot satisfy bullish setup readiness
 - [x] Observation/fingerprint persistence stores canonical coverage with an explicit schema/version
-- [ ] Historical flow-derived coverage rows are identified as incompatible and excluded from canonical learning/tuning; their physical quarantine/rebuild is recorded for DQ-010
+- [x] Historical flow-derived coverage rows are identified as incompatible and excluded from canonical learning/tuning; their physical quarantine/rebuild is recorded for DQ-010
 - [x] Existing tests that preserve phase scalars as generic decision floors are updated, not bypassed
-- [ ] Config, public output, current docs, and archived rationale annotations use the same semantics
+- [x] Config, public output, current docs, and archived rationale annotations use the same semantics
 - [x] Focused decision-policy, readiness, persistence, and negative tests pass
 - [x] Full test suite passes
 - [x] `git diff --check` clean
@@ -1639,7 +1636,7 @@ not select or weight the training population.
 
 ## Task ARTIFACT-IDENTITY — Reproducible Signal Artifact Identity
 
-**State:** Partial — waits for HIGH-2.
+**State:** Not started — HIGH-2 prerequisite is complete.
 
 ### Decision
 
