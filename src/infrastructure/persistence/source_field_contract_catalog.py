@@ -657,6 +657,63 @@ _CANDIDATE_OBSERVATIONS_FIELDS: tuple[SourceFieldContract, ...] = (
         point_in_time_support="HISTORICAL",
         null_policy="fail",
     ),
+    SourceFieldContract(
+        field="artifact_id",
+        required=True,
+        semantic_name="Resolved artifact hash identity",
+        source_owner="local observation recorder",
+        unit="sha256:hex",
+        sign_convention=None,
+        aggregation="none",
+        grain="one observation per canonical workflow/window/data_as_of/config identity",
+        temporal_meaning="none",
+        null_semantics=(
+            "NULL means corruption (column is NOT NULL); empty string means "
+            "identity not yet resolved — transitional, warned via invalid_values"
+        ),
+        point_in_time_support="HISTORICAL",
+        null_policy="fail",
+        invalid_values=frozenset({""}),
+        invalid_value_policy="warn",
+    ),
+    SourceFieldContract(
+        field="semantic_compatibility_id",
+        required=True,
+        semantic_name="Resolved semantic compatibility hash",
+        source_owner="local observation recorder",
+        unit="sha256:hex",
+        sign_convention=None,
+        aggregation="none",
+        grain="one observation per canonical workflow/window/data_as_of/config identity",
+        temporal_meaning="none",
+        null_semantics=(
+            "NULL means corruption (column is NOT NULL); empty string means "
+            "identity not yet resolved — transitional, warned via invalid_values"
+        ),
+        point_in_time_support="HISTORICAL",
+        null_policy="fail",
+        invalid_values=frozenset({""}),
+        invalid_value_policy="warn",
+    ),
+    SourceFieldContract(
+        field="artifact_provenance_json",
+        required=True,
+        semantic_name="Serialized artifact provenance bundle",
+        source_owner="local observation recorder",
+        unit="canonical JSON",
+        sign_convention=None,
+        aggregation="none",
+        grain="one observation per canonical workflow/window/data_as_of/config identity",
+        temporal_meaning="none",
+        null_semantics=(
+            "NULL means corruption (column is NOT NULL); empty string means "
+            "identity not yet resolved — transitional, warned via invalid_values"
+        ),
+        point_in_time_support="HISTORICAL",
+        null_policy="fail",
+        invalid_values=frozenset({""}),
+        invalid_value_policy="warn",
+    ),
     *_effective_session_provenance_fields("local observation recorder"),
 )
 
@@ -2202,6 +2259,9 @@ FIELD_STATS_MODE: dict[tuple[str, str], str] = {
     ("candidate_observations", "is_eod_pending"): "numeric",
     ("candidate_observations", "resolution_source"): "enum_text",
     ("candidate_observations", "resolution_notes_json"): "none",
+    ("candidate_observations", "artifact_id"): "identity_text",
+    ("candidate_observations", "semantic_compatibility_id"): "identity_text",
+    ("candidate_observations", "artifact_provenance_json"): "none",
     ("signal_forward_labels", "ticker"): "identity_text",
     ("signal_forward_labels", "signal_date"): "date",
     ("signal_forward_labels", "horizon"): "enum_text",

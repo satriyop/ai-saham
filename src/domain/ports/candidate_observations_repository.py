@@ -6,6 +6,10 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Protocol
 
+from src.domain.value_objects.signal_artifact_identity import (
+    SignalArtifactIdentity,
+)
+
 
 @dataclass(frozen=True)
 class CandidateObservation:
@@ -34,6 +38,7 @@ class CandidateObservation:
     is_eod_pending: bool | None = None
     resolution_source: str | None = None
     resolution_notes: tuple[str, ...] = ()
+    artifact_identity: SignalArtifactIdentity | None = None
 
 
 class CandidateObservationsRepository(Protocol):

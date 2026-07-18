@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -10,6 +10,13 @@ import pytest
 from src.domain.ports.candidate_observations_repository import CandidateObservation
 from src.domain.value_objects.signal_artifact_schema import (
     CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+)
+from src.domain.value_objects.signal_artifact_identity import (
+    ArtifactId,
+    ArtifactProvenance,
+    ArtifactSourceProvenance,
+    SemanticCompatibilityId,
+    SignalArtifactIdentity,
 )
 from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
     SQLiteCandidateObservationsRepository,
@@ -206,7 +213,7 @@ def test_schema_created_via_migration_runner(tmp_path: Path):
         ).fetchall()
         tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
 
-    assert {row[0] for row in versions} == set(range(14))
+    assert {row[0] for row in versions} == set(range(17))
     assert "candidate_observations" in {row[0] for row in tables}
 
 
@@ -891,3 +898,287 @@ def test_list_canonical_by_date_excludes_v1_payloads_with_non_empty_config_hash(
 
     canonical = repo.list_canonical_by_date(day)
     assert len(canonical) == 0
+
+
+def _sample_identity() -> SignalArtifactIdentity:
+    return SignalArtifactIdentity(
+        artifact_id=ArtifactId(
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ),
+        semantic_compatibility_id=SemanticCompatibilityId(
+            "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        ),
+        provenance=ArtifactProvenance(
+            application_revision="abc1234",
+            complete_config_hash="c" * 64,
+            complete_authority_registry_hash="d" * 64,
+            universe_snapshot_id="univ-001",
+            idx_calendar_version="2026-v3",
+            session_rule_version="sr-v2",
+            decision_at=datetime(2026, 7, 3, 16, 0, 0, 123456, tzinfo=timezone.utc),
+            captured_at=datetime(2026, 7, 3, 9, 30, 0, 456789, tzinfo=timezone.utc),
+            latest_completed_session=date(2026, 7, 3),
+            analysis_as_of=date(2026, 7, 3),
+            sources=(
+                ArtifactSourceProvenance(
+                    source_family="exchange",
+                    provider="idx",
+                    source_snapshot_id="snap-001",
+                    observed_through=date(2026, 7, 3),
+                    available_at=datetime(2026, 7, 3, 7, 0, 0, tzinfo=timezone.utc),
+                    cutoff_at=datetime(2026, 7, 3, 8, 0, 0, tzinfo=timezone.utc),
+                ),
+            ),
+        ),
+    )
+
+
+# ── ARTIFACT-IDENTITY Slice 3: artifact_identity persistence ──────────────────
+
+
+def test_artifact_identity_defaults_to_none(tmp_path: Path):
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+
+    repo.save_many(
+        [
+            CandidateObservation(
+                ticker="BBCA",
+                snapshot_date=day,
+                captured_at=datetime(2026, 7, 3, 9, 0, 0),
+                payload={"schema_version": 1, "ticker": "BBCA"},
+            )
+        ]
+    )
+
+    obs = repo.get_latest("BBCA", day)
+    assert obs is not None
+    assert obs.artifact_identity is None
+
+
+def test_artifact_identity_round_trips_completely(tmp_path: Path):
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+    identity = _sample_identity()
+
+    repo.save_many(
+        [
+            CandidateObservation(
+                ticker="BBCA",
+                snapshot_date=day,
+                captured_at=datetime(2026, 7, 3, 9, 30, 0, 456789),
+                payload={
+                    "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+                    "ticker": "BBCA",
+                },
+                workflow="screen_accum",
+                window_sessions=7,
+                data_as_of_date=day,
+                config_hash="abc123",
+                artifact_identity=identity,
+            )
+        ]
+    )
+
+    obs = repo.get_latest("BBCA", day)
+    assert obs is not None
+    assert obs.artifact_identity is not None
+    assert obs.artifact_identity.artifact_id == identity.artifact_id
+    assert obs.artifact_identity.semantic_compatibility_id == identity.semantic_compatibility_id
+    assert obs.artifact_identity.provenance.application_revision == "abc1234"
+    assert obs.artifact_identity.provenance.complete_config_hash == "c" * 64
+    assert obs.artifact_identity.provenance.captured_at == datetime(
+        2026, 7, 3, 9, 30, 0, 456789, tzinfo=timezone.utc
+    )
+    assert obs.artifact_identity.provenance.decision_at == datetime(
+        2026, 7, 3, 16, 0, 0, 123456, tzinfo=timezone.utc
+    )
+    assert len(obs.artifact_identity.provenance.sources) == 1
+    src = obs.artifact_identity.provenance.sources[0]
+    assert src.source_family == "exchange"
+    assert src.provider == "idx"
+    assert src.source_snapshot_id == "snap-001"
+
+
+def test_legacy_rows_without_identity_read_as_none(tmp_path: Path):
+    """Rows predating the artifact-identity columns must remain readable
+    with artifact_identity=None."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+
+    repo.save_many(
+        [
+            CandidateObservation(
+                ticker="BBCA",
+                snapshot_date=day,
+                captured_at=datetime(2026, 7, 3, 9, 0, 0),
+                payload={"schema_version": 1, "ticker": "BBCA"},
+            )
+        ]
+    )
+
+    obs = repo.get_latest("BBCA", day)
+    assert obs is not None
+    assert obs.artifact_identity is None
+    assert obs.payload["ticker"] == "BBCA"
+
+
+def test_identity_preserved_across_upsert(tmp_path: Path):
+    """When a canonical row is UPSERTed, the artifact_identity from the latest
+    write must replace the previous identity."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+    first_id = _sample_identity()
+    second_id = SignalArtifactIdentity(
+        artifact_id=ArtifactId(
+            "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        ),
+        semantic_compatibility_id=SemanticCompatibilityId(
+            "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        ),
+        provenance=ArtifactProvenance(
+            application_revision="def5678",
+            complete_config_hash="e" * 64,
+            complete_authority_registry_hash="f" * 64,
+            universe_snapshot_id="univ-002",
+            idx_calendar_version="2026-v4",
+            session_rule_version="sr-v3",
+            decision_at=datetime(2026, 7, 4, 16, 0, 0, tzinfo=timezone.utc),
+            captured_at=datetime(2026, 7, 3, 10, 0, 0, tzinfo=timezone.utc),
+            latest_completed_session=date(2026, 7, 3),
+            analysis_as_of=date(2026, 7, 3),
+            sources=(),
+        ),
+    )
+
+    repo.save_many(
+        [
+            CandidateObservation(
+                ticker="BBCA",
+                snapshot_date=day,
+                captured_at=datetime(2026, 7, 3, 9, 0, 0),
+                payload={
+                    "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+                    "ticker": "BBCA",
+                },
+                workflow="screen_accum",
+                window_sessions=7,
+                data_as_of_date=day,
+                config_hash="abc123",
+                artifact_identity=first_id,
+            )
+        ]
+    )
+    repo.save_many(
+        [
+            CandidateObservation(
+                ticker="BBCA",
+                snapshot_date=day,
+                captured_at=datetime(2026, 7, 3, 10, 0, 0),
+                payload={
+                    "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+                    "ticker": "BBCA",
+                },
+                workflow="screen_accum",
+                window_sessions=7,
+                data_as_of_date=day,
+                config_hash="abc123",
+                artifact_identity=second_id,
+            )
+        ]
+    )
+
+    rows = repo.list_all_by_date(day)
+    assert len(rows) == 1
+    assert rows[0].artifact_identity is not None
+    assert rows[0].artifact_identity.artifact_id == second_id.artifact_id
+
+
+def test_no_artifact_id_unique_index_exists(tmp_path: Path):
+    """Slice 3 must not add a unique index on artifact_id.
+
+    Inspect PRAGMA index_list and PRAGMA index_info to catch uniquely-indexed
+    artifact_id even under a non-obvious index name.
+    """
+    db_path = tmp_path / "data.db"
+    SQLiteCandidateObservationsRepository(db_path)
+
+    with sqlite3.connect(str(db_path)) as conn:
+        index_list = conn.execute(
+            "SELECT name, \"unique\" FROM pragma_index_list('candidate_observations')"
+        ).fetchall()
+
+    for index_name, is_unique in index_list:
+        if not is_unique:
+            continue
+        with sqlite3.connect(str(db_path)) as conn:
+            columns = [
+                row[2]
+                for row in conn.execute(
+                    "SELECT * FROM pragma_index_info(?)", (index_name,)
+                )
+            ]
+        assert "artifact_id" not in columns, (
+            f"Unique index {index_name!r} contains artifact_id — "
+            "no uniqueness on artifact_id in this slice"
+        )
+
+
+def test_config_hash_upsert_behavior_unchanged_with_identity(tmp_path: Path):
+    """Existing config_hash UPSERT (canonical replacement) must still work
+    correctly when artifact_identity is present."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+
+    repo.save_many([_canonical_observation(value="first", config_hash="same-hash")])
+    repo.save_many([_canonical_observation(value="second", config_hash="same-hash")])
+
+    rows = repo.list_all_by_date(day)
+    assert len(rows) == 1
+    assert rows[0].payload["value"] == "second"
+
+
+# ── Source contract catalog contains identity columns ─────────────────────────
+
+
+def test_source_contract_catalog_includes_identity_columns():
+    """The source-field contract catalog must include all three identity columns
+    with null_policy='fail' (NULL is corruption),
+    invalid_values=frozenset({""}) and invalid_value_policy='warn'
+    (transitional empty strings warn, not fail)."""
+    from src.infrastructure.persistence.source_field_contract_catalog import (
+        _CANDIDATE_OBSERVATIONS_FIELDS,
+        FIELD_STATS_MODE,
+    )
+
+    field_names = {c.field for c in _CANDIDATE_OBSERVATIONS_FIELDS}
+    assert "artifact_id" in field_names
+    assert "semantic_compatibility_id" in field_names
+    assert "artifact_provenance_json" in field_names
+
+    for c in _CANDIDATE_OBSERVATIONS_FIELDS:
+        if c.field in ("artifact_id", "semantic_compatibility_id", "artifact_provenance_json"):
+            assert c.null_policy == "fail", (
+                f"{c.field} should have null_policy='fail' (NULL is corruption)"
+            )
+            assert c.invalid_values == frozenset({""}), (
+                f"{c.field} should declare '' as an invalid value"
+            )
+            assert c.invalid_value_policy == "warn", (
+                f"{c.field} should have invalid_value_policy='warn' "
+                "(transitional empty values warn, not fail)"
+            )
+
+    assert FIELD_STATS_MODE[("candidate_observations", "artifact_id")] == "identity_text"
+    assert (
+        FIELD_STATS_MODE[("candidate_observations", "semantic_compatibility_id")]
+        == "identity_text"
+    )
+    assert (
+        FIELD_STATS_MODE[("candidate_observations", "artifact_provenance_json")] == "none"
+    )

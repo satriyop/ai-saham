@@ -3,10 +3,19 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import pytest
 
+from src.domain.ports.candidate_observations_repository import CandidateObservation
+from src.domain.value_objects.signal_artifact_identity import (
+    ArtifactId,
+    ArtifactProvenance,
+    ArtifactSourceProvenance,
+    SemanticCompatibilityId,
+    SignalArtifactIdentity,
+)
 from src.domain.value_objects.signal_artifact_schema import (
     CANDIDATE_OBSERVATION_SCHEMA_VERSION,
 )
@@ -400,3 +409,182 @@ def test_apply_works_when_source_table_has_no_id_column(tmp_path: Path):
     assert row["id"] is None
     assert row["config_hash"] is None
     assert row["source_row_id"] is not None
+
+
+# ── ARTIFACT-IDENTITY Slice 3: identity columns in quarantine ─────────────────
+
+
+def _identity_row(
+    db_path: Path,
+    *,
+    ticker: str = "BBCA",
+    snapshot_date: str = "2026-07-01",
+    config_hash: str = "",
+) -> int:
+    """Insert a candidate_observation row with a non-empty artifact identity
+    and return the row id."""
+    schema_version = CANDIDATE_OBSERVATION_SCHEMA_VERSION if config_hash != "" else 1
+    identity = SignalArtifactIdentity(
+        artifact_id=ArtifactId(
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ),
+        semantic_compatibility_id=SemanticCompatibilityId(
+            "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        ),
+        provenance=ArtifactProvenance(
+            application_revision="abc1234",
+            complete_config_hash="c" * 64,
+            complete_authority_registry_hash="d" * 64,
+            universe_snapshot_id="univ-001",
+            idx_calendar_version="2026-v3",
+            session_rule_version="sr-v2",
+            decision_at=datetime(2026, 7, 3, 16, 0, 0, tzinfo=timezone.utc),
+            captured_at=datetime(2026, 7, 3, 9, 30, 0, tzinfo=timezone.utc),
+            latest_completed_session=date(2026, 7, 3),
+            analysis_as_of=date(2026, 7, 3),
+            sources=(
+                ArtifactSourceProvenance(
+                    source_family="exchange",
+                    provider="idx",
+                    source_snapshot_id="snap-001",
+                    observed_through=date(2026, 7, 3),
+                    available_at=datetime(2026, 7, 3, 7, 0, 0, tzinfo=timezone.utc),
+                    cutoff_at=datetime(2026, 7, 3, 8, 0, 0, tzinfo=timezone.utc),
+                ),
+            ),
+        ),
+    )
+    from src.infrastructure.persistence.sqlite_signal_artifact_identity_codec import (
+        encode_signal_artifact_identity,
+    )
+
+    aid, scid, pj = encode_signal_artifact_identity(identity)
+    conn = sqlite3.connect(str(db_path))
+    cursor = conn.execute(
+        """
+        INSERT INTO candidate_observations
+            (ticker, snapshot_date, captured_at, schema_version, payload_json,
+             config_hash, artifact_id, semantic_compatibility_id,
+             artifact_provenance_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            ticker,
+            snapshot_date,
+            f"{snapshot_date}T00:00:00",
+            schema_version,
+            "{}",
+            config_hash,
+            aid,
+            scid,
+            pj,
+        ),
+    )
+    conn.commit()
+    row_id = cursor.lastrowid
+    conn.close()
+    return row_id
+
+
+def test_quarantine_preserves_identity_columns(tmp_path: Path):
+    """When a legacy row with a non-empty artifact identity is quarantined,
+    all three identity columns must round-trip into the quarantine table."""
+    db_path = tmp_path / "data.db"
+    _build_schema(db_path)
+    _identity_row(db_path, ticker="LEGACY1", config_hash="")
+
+    repairer = _make_repairer(db_path)
+    repairer.ensure_quarantine_table()
+    quarantined, deleted = repairer.quarantine_and_delete_legacy(_REPAIR_RUN_ID)
+
+    assert quarantined == 1
+    assert deleted == 1
+
+    with sqlite3.connect(str(db_path)) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT * FROM candidate_observations_quarantine WHERE ticker = 'LEGACY1'"
+        ).fetchone()
+    assert row is not None
+    assert row["artifact_id"] is not None
+    assert row["semantic_compatibility_id"] is not None
+    assert row["artifact_provenance_json"] is not None
+    assert "sha256:" in row["artifact_id"]
+    assert "sha256:" in row["semantic_compatibility_id"]
+
+
+def test_existing_quarantine_table_is_upgraded(tmp_path: Path):
+    """A quarantine table created before the identity columns existed must be
+    upgraded by ensure_quarantine_table() before identity-bearing rows are
+    copied."""
+    db_path = tmp_path / "data.db"
+    _build_schema(db_path)
+    _identity_row(db_path, ticker="LEGACY1", config_hash="")
+
+    # Create quarantine table with all columns EXCEPT the 3 identity columns
+    # (simulating the schema before ARTIFACT-IDENTITY Slice 3)
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS candidate_observations_quarantine (
+            quarantine_id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_row_id                INTEGER NOT NULL,
+            id                          INTEGER,
+            ticker                      TEXT,
+            snapshot_date               TEXT,
+            captured_at                 TEXT,
+            schema_version              INTEGER,
+            payload_json                TEXT,
+            workflow                    TEXT,
+            window_sessions             INTEGER,
+            data_as_of_date             TEXT,
+            config_hash                 TEXT,
+            decision_at                 TEXT,
+            latest_completed_session    TEXT,
+            analysis_as_of              TEXT,
+            market_session_name         TEXT,
+            is_eod_pending               INTEGER,
+            resolution_source           TEXT,
+            resolution_notes_json       TEXT,
+            quarantine_reason           TEXT NOT NULL,
+            quarantined_at              TEXT NOT NULL,
+            repair_run_id                TEXT NOT NULL,
+            original_table               TEXT NOT NULL DEFAULT 'candidate_observations',
+            quarantine_schema_version    INTEGER NOT NULL DEFAULT 1,
+            UNIQUE(source_row_id)
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    # Verify identity columns are missing before upgrade
+    with sqlite3.connect(str(db_path)) as conn:
+        cols = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM pragma_table_info('candidate_observations_quarantine')"
+            )
+        }
+    assert "artifact_id" not in cols
+    assert "semantic_compatibility_id" not in cols
+    assert "artifact_provenance_json" not in cols
+
+    # Upgrade + quarantine
+    repairer = _make_repairer(db_path)
+    repairer.ensure_quarantine_table()
+    quarantined, deleted = repairer.quarantine_and_delete_legacy(_REPAIR_RUN_ID)
+
+    assert quarantined == 1
+    assert deleted == 1
+
+    # Verify identity columns now exist and are populated
+    with sqlite3.connect(str(db_path)) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT * FROM candidate_observations_quarantine WHERE ticker = 'LEGACY1'"
+        ).fetchone()
+    assert row is not None
+    assert row["artifact_id"] is not None
+    assert row["semantic_compatibility_id"] is not None
+    assert row["artifact_provenance_json"] is not None

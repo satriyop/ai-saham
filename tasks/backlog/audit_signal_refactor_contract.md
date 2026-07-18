@@ -1751,6 +1751,42 @@ does not imply semantic incompatibility.
   exists yet.
 - No close criterion for the overall ARTIFACT-IDENTITY task is checked.
 
+### Slice 3 Checkpoint — Candidate Observation Persistence Support
+
+- `CandidateObservation` gains an optional `artifact_identity:
+  SignalArtifactIdentity | None` field after existing optional provenance
+  fields. Existing constructors without the keyword default to `None`.
+- A strict SQLite codec (`sqlite_signal_artifact_identity_codec.py`)
+  round-trips `SignalArtifactIdentity | None` to/from three `TEXT NOT NULL
+  DEFAULT ''` columns (`artifact_id`, `semantic_compatibility_id`,
+  `artifact_provenance_json`). Encoding is delegated to
+  `ArtifactProvenance.to_canonical_json()`; the codec never re-serializes or
+  re-hashes.
+- Three new migrations (versions 14, 15, 16) add the columns to the existing
+  `candidate_observations` table. No unique index on `artifact_id` is created.
+- `save_many()` calls the codec for each observation and persists the three
+  values. It does not invoke `SignalArtifactIdentityResolver` or hash anything.
+- `_row_to_observation()` calls the codec on every read. Malformed identity
+  data raises `ValueError` — never silently coerced to `None`.
+- Empty/legacy identity columns decode to `None`. Partial non-empty columns
+  raise `ValueError` (fail-closed on corruption).
+- Config-hash canonical identity, UPSERT conflict target, and
+  schema-version validation are unchanged.
+- Quarantine schema (`candidate_observations_quarantine`) preserves all three
+  identity columns. `ensure_quarantine_table()` upgrades existing quarantine
+  tables that lack them using bounded `ALTER TABLE` statements.
+- `SOURCE_COLUMNS` in the repairer includes the three columns.
+- Source-field contract catalog adds three entries: `artifact_id` and
+  `semantic_compatibility_id` (identity text), `artifact_provenance_json`
+  (non-scalar JSON), all with:
+  - `null_policy="fail"` — actual NULL is corruption and must fail.
+  - `invalid_values=frozenset({""})` — transitional empty string produces
+    `INVALID_FIELD_VALUE` at WARN severity (via `invalid_value_policy="warn"`),
+    so empty identity is visible in the audit without blocking.
+- Producers, labels, readiness, and artifact-ID uniqueness are still not
+  integrated. No close criterion for the overall ARTIFACT-IDENTITY task is
+  checked.
+
 ---
 
 ## Task WALKFORWARD-VALIDATION — Purged Walk-Forward Evaluation

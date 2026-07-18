@@ -45,6 +45,9 @@ SOURCE_COLUMNS: tuple[str, ...] = (
     "is_eod_pending",
     "resolution_source",
     "resolution_notes_json",
+    "artifact_id",
+    "semantic_compatibility_id",
+    "artifact_provenance_json",
 )
 
 _QUARANTINE_TABLE = "candidate_observations_quarantine"
@@ -70,6 +73,9 @@ CREATE TABLE IF NOT EXISTS {_QUARANTINE_TABLE} (
     is_eod_pending               INTEGER,
     resolution_source           TEXT,
     resolution_notes_json       TEXT,
+    artifact_id                 TEXT,
+    semantic_compatibility_id   TEXT,
+    artifact_provenance_json    TEXT,
     quarantine_reason           TEXT NOT NULL,
     quarantined_at              TEXT NOT NULL,
     repair_run_id                TEXT NOT NULL,
@@ -84,6 +90,26 @@ _LEGACY_WHERE = (
     f"OR schema_version != {CANDIDATE_OBSERVATION_SCHEMA_VERSION}"
 )
 _LEGACY_REASON = "LEGACY_MISSING_CONFIG_HASH_OR_OLD_SCHEMA"
+
+# Columns that may be missing from an existing quarantine table created before
+# ARTIFACT-IDENTITY Slice 3. ensure_quarantine_table() upgrades them one by one.
+_QUARANTINE_UPGRADE_COLUMNS: tuple[tuple[str, str], ...] = (
+    (
+        "artifact_id",
+        "ALTER TABLE candidate_observations_quarantine "
+        "ADD COLUMN artifact_id TEXT",
+    ),
+    (
+        "semantic_compatibility_id",
+        "ALTER TABLE candidate_observations_quarantine "
+        "ADD COLUMN semantic_compatibility_id TEXT",
+    ),
+    (
+        "artifact_provenance_json",
+        "ALTER TABLE candidate_observations_quarantine "
+        "ADD COLUMN artifact_provenance_json TEXT",
+    ),
+)
 
 
 class SQLiteCandidateObservationsRepairer:
@@ -101,6 +127,15 @@ class SQLiteCandidateObservationsRepairer:
     def ensure_quarantine_table(self) -> None:
         with self._connect() as conn:
             conn.execute(_CREATE_QUARANTINE_TABLE)
+            existing = {
+                row["name"]
+                for row in conn.execute(
+                    "SELECT name FROM pragma_table_info('candidate_observations_quarantine')"
+                )
+            }
+            for col, ddl in _QUARANTINE_UPGRADE_COLUMNS:
+                if col not in existing:
+                    conn.execute(ddl)
             conn.commit()
 
     def quarantine_and_delete_legacy(self, repair_run_id: str) -> tuple[int, int]:

@@ -678,6 +678,210 @@ def _minimal_dq_001e_schema(conn: sqlite3.Connection) -> None:
     )
 
 
+def _create_candidate_observations_with_identity_columns(
+    conn: sqlite3.Connection,
+) -> None:
+    conn.execute(
+        """
+        CREATE TABLE candidate_observations (
+            id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker                   TEXT    NOT NULL,
+            snapshot_date            TEXT    NOT NULL,
+            captured_at              TEXT    NOT NULL,
+            schema_version           INTEGER NOT NULL,
+            payload_json             TEXT    NOT NULL,
+            workflow                 TEXT    NOT NULL DEFAULT '',
+            window_sessions          INTEGER NOT NULL DEFAULT 0,
+            data_as_of_date          TEXT    NOT NULL DEFAULT '',
+            config_hash              TEXT    NOT NULL DEFAULT '',
+            decision_at              TEXT    NOT NULL DEFAULT '',
+            latest_completed_session TEXT    NOT NULL DEFAULT '',
+            analysis_as_of           TEXT    NOT NULL DEFAULT '',
+            market_session_name      TEXT    NOT NULL DEFAULT '',
+            is_eod_pending           INTEGER,
+            resolution_source        TEXT    NOT NULL DEFAULT '',
+            resolution_notes_json    TEXT    NOT NULL DEFAULT '[]',
+            artifact_id              TEXT    NOT NULL DEFAULT '',
+            semantic_compatibility_id TEXT   NOT NULL DEFAULT '',
+            artifact_provenance_json TEXT   NOT NULL DEFAULT ''
+        )
+        """
+    )
+
+
+def test_artifact_identity_empty_strings_produce_warn_invalid_value(
+    tmp_path: Path, catalog: StaticSourceFieldContractCatalog
+):
+    """Transitional empty identity strings must produce INVALID_FIELD_VALUE
+    at WARN severity, not PASS silently."""
+    db_path = tmp_path / "empty_identity.db"
+    conn = sqlite3.connect(str(db_path))
+    _create_candidate_observations_with_identity_columns(conn)
+    conn.execute(
+        """
+        INSERT INTO candidate_observations
+            (ticker, snapshot_date, captured_at, schema_version, payload_json,
+             workflow, window_sessions, data_as_of_date, config_hash)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        ("BBCA", "2026-07-03", "2026-07-03T09:00:00", 1, "{}",
+         "", 0, "", ""),
+    )
+    conn.commit()
+    conn.close()
+
+    reader = SQLiteSourceFieldContractReader(db_path, catalog=catalog)
+    use_case = AuditSourceFieldContractsUseCase(
+        reader=reader, catalog=catalog, clock=lambda: "2026-07-16T00:00:00+00:00"
+    )
+    response = use_case.execute()
+
+    for field in ("artifact_id", "semantic_compatibility_id", "artifact_provenance_json"):
+        findings = [
+            f for f in response.findings
+            if f.field == field and f.code == "INVALID_FIELD_VALUE"
+        ]
+        assert len(findings) == 1, (
+            f"Expected one INVALID_FIELD_VALUE for {field}, got {len(findings)}"
+        )
+        assert findings[0].severity == "WARN", (
+            f"{field} empty string should be WARN, got {findings[0].severity}"
+        )
+
+
+def test_artifact_identity_populated_produces_no_findings(
+    tmp_path: Path, catalog: StaticSourceFieldContractCatalog
+):
+    """Populated canonical artifact identity must produce no findings for
+    the three identity columns."""
+    db_path = tmp_path / "populated_identity.db"
+    conn = sqlite3.connect(str(db_path))
+    _create_candidate_observations_with_identity_columns(conn)
+    conn.execute(
+        """
+        INSERT INTO candidate_observations
+            (ticker, snapshot_date, captured_at, schema_version, payload_json,
+             workflow, window_sessions, data_as_of_date, config_hash,
+             artifact_id, semantic_compatibility_id, artifact_provenance_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        ("BBCA", "2026-07-03", "2026-07-03T09:00:00",
+         3, "{}", "screen_accum", 7, "2026-07-03", "abc123",
+         "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+         "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+         '{"analysis_as_of":"2026-07-03","application_revision":"abc1234",'
+         '"captured_at":"2026-07-03T09:30:00.456789Z",'
+         '"complete_authority_registry_hash":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",'
+         '"complete_config_hash":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",'
+         '"decision_at":"2026-07-03T16:00:00.123456Z",'
+         '"idx_calendar_version":"2026-v3",'
+         '"invocation_actor":null,"invocation_command":null,'
+         '"latest_completed_session":"2026-07-03",'
+         '"session_rule_version":"sr-v2",'
+         '"sources":[{"available_at":"2026-07-03T07:00:00.000000Z",'
+         '"cutoff_at":"2026-07-03T08:00:00.000000Z",'
+         '"observed_through":"2026-07-03",'
+         '"provider":"idx","source_family":"exchange",'
+         '"source_snapshot_id":"snap-001"}],'
+         '"universe_snapshot_id":"univ-001"}'),
+    )
+    conn.commit()
+    conn.close()
+
+    reader = SQLiteSourceFieldContractReader(db_path, catalog=catalog)
+    use_case = AuditSourceFieldContractsUseCase(
+        reader=reader, catalog=catalog, clock=lambda: "2026-07-16T00:00:00+00:00"
+    )
+    response = use_case.execute()
+
+    for field in ("artifact_id", "semantic_compatibility_id", "artifact_provenance_json"):
+        findings = [
+            f for f in response.findings
+            if f.field == field
+        ]
+        assert len(findings) == 0, (
+            f"Expected no findings for {field} with populated identity, "
+            f"got {len(findings)}: {[f.code for f in findings]}"
+        )
+
+
+def test_artifact_identity_null_produces_fail(
+    tmp_path: Path, catalog: StaticSourceFieldContractCatalog
+):
+    """Actual NULL in an identity column must produce FAIL (null_policy='fail')."""
+    db_path = tmp_path / "null_identity.db"
+    conn = sqlite3.connect(str(db_path))
+    # Create table with NULLABLE identity columns to simulate corruption
+    conn.execute(
+        """
+        CREATE TABLE candidate_observations (
+            id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker                   TEXT    NOT NULL,
+            snapshot_date            TEXT    NOT NULL,
+            captured_at              TEXT    NOT NULL,
+            schema_version           INTEGER NOT NULL,
+            payload_json             TEXT    NOT NULL,
+            workflow                 TEXT    NOT NULL DEFAULT '',
+            window_sessions          INTEGER NOT NULL DEFAULT 0,
+            data_as_of_date          TEXT    NOT NULL DEFAULT '',
+            config_hash              TEXT    NOT NULL DEFAULT '',
+            decision_at              TEXT    NOT NULL DEFAULT '',
+            latest_completed_session TEXT    NOT NULL DEFAULT '',
+            analysis_as_of           TEXT    NOT NULL DEFAULT '',
+            market_session_name      TEXT    NOT NULL DEFAULT '',
+            is_eod_pending           INTEGER,
+            resolution_source        TEXT    NOT NULL DEFAULT '',
+            resolution_notes_json    TEXT    NOT NULL DEFAULT '[]',
+            artifact_id              TEXT,
+            semantic_compatibility_id TEXT,
+            artifact_provenance_json TEXT
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO candidate_observations
+            (ticker, snapshot_date, captured_at, schema_version, payload_json,
+             workflow, window_sessions, data_as_of_date, config_hash,
+             artifact_id, semantic_compatibility_id, artifact_provenance_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        ("BBCA", "2026-07-03", "2026-07-03T09:00:00", 1, "{}",
+         "", 0, "", "",
+         None, None, None),
+    )
+    conn.commit()
+    conn.close()
+
+    reader = SQLiteSourceFieldContractReader(db_path, catalog=catalog)
+    use_case = AuditSourceFieldContractsUseCase(
+        reader=reader, catalog=catalog, clock=lambda: "2026-07-16T00:00:00+00:00"
+    )
+    response = use_case.execute()
+
+    for field in ("artifact_id", "semantic_compatibility_id", "artifact_provenance_json"):
+        null_findings = [
+            f for f in response.findings
+            if f.field == field and f.code == "NULLS_IN_REQUIRED_FIELD"
+        ]
+        invalid_findings = [
+            f for f in response.findings
+            if f.field == field and f.code == "INVALID_FIELD_VALUE"
+        ]
+        assert len(null_findings) == 1, (
+            f"Expected NULLS_IN_REQUIRED_FIELD for {field} (null), "
+            f"got {len(null_findings)}"
+        )
+        assert null_findings[0].severity == "FAIL", (
+            f"NULL in {field} should be FAIL, got {null_findings[0].severity}"
+        )
+        # NULL also counts as an invalid value (reader counts IS NULL + invalid values together)
+        assert len(invalid_findings) == 1, (
+            f"Expected INVALID_FIELD_VALUE for {field} (null+empty), "
+            f"got {len(invalid_findings)}"
+        )
+
+
 def test_dq_001e_live_schema_fixture_reports_no_missing_table_or_field(
     tmp_path: Path, catalog: StaticSourceFieldContractCatalog
 ):

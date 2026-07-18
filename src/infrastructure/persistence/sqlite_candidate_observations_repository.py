@@ -14,6 +14,10 @@ from src.domain.value_objects.signal_artifact_schema import (
     CANDIDATE_OBSERVATION_SCHEMA_VERSION,
 )
 from src.infrastructure.persistence.sqlite_migration_runner import SqliteMigrationRunner
+from src.infrastructure.persistence.sqlite_signal_artifact_identity_codec import (
+    decode_signal_artifact_identity,
+    encode_signal_artifact_identity,
+)
 
 # v1 -> v2 (Task HIGH-1, 2026-07-17): sub_signal_fingerprint replaced the
 # ambiguous rs_vs_ihsg_5d_at_signal/rs_vs_ihsg_20d_at_signal fields with typed
@@ -103,11 +107,25 @@ _ADD_RESOLUTION_NOTES_JSON_COLUMN = """
 ALTER TABLE candidate_observations ADD COLUMN resolution_notes_json TEXT NOT NULL DEFAULT '[]'
 """
 
+# Signal-artifact identity columns (ARTIFACT-IDENTITY Slice 3). Metadata only
+# — never part of canonical identity. Legacy/default rows have empty strings,
+# which decode as None. No unique index on artifact_id yet.
+_ADD_ARTIFACT_ID_COLUMN = """
+ALTER TABLE candidate_observations ADD COLUMN artifact_id TEXT NOT NULL DEFAULT ''
+"""
+_ADD_SEMANTIC_COMPATIBILITY_ID_COLUMN = """
+ALTER TABLE candidate_observations ADD COLUMN semantic_compatibility_id TEXT NOT NULL DEFAULT ''
+"""
+_ADD_ARTIFACT_PROVENANCE_JSON_COLUMN = """
+ALTER TABLE candidate_observations ADD COLUMN artifact_provenance_json TEXT NOT NULL DEFAULT ''
+"""
+
 _SELECT_COLUMNS = (
     "ticker, snapshot_date, captured_at, schema_version, payload_json, "
     "workflow, window_sessions, data_as_of_date, config_hash, "
     "decision_at, latest_completed_session, analysis_as_of, market_session_name, "
-    "is_eod_pending, resolution_source, resolution_notes_json"
+    "is_eod_pending, resolution_source, resolution_notes_json, "
+    "artifact_id, semantic_compatibility_id, artifact_provenance_json"
 )
 
 
@@ -135,6 +153,9 @@ class SQLiteCandidateObservationsRepository:
                 (11, _ADD_IS_EOD_PENDING_COLUMN),
                 (12, _ADD_RESOLUTION_SOURCE_COLUMN),
                 (13, _ADD_RESOLUTION_NOTES_JSON_COLUMN),
+                (14, _ADD_ARTIFACT_ID_COLUMN),
+                (15, _ADD_SEMANTIC_COMPATIBILITY_ID_COLUMN),
+                (16, _ADD_ARTIFACT_PROVENANCE_JSON_COLUMN),
             ],
         )
 
@@ -168,6 +189,9 @@ class SQLiteCandidateObservationsRepository:
             payload_schema_version = payload.get("schema_version")
             if payload_schema_version is not None and int(payload_schema_version) != schema_version:
                 raise ValueError("DB-column and payload schema versions disagree")
+            artifact_id_str, sem_compat_id_str, provenance_json = (
+                encode_signal_artifact_identity(obs.artifact_identity)
+            )
             rows.append(
                 (
                     obs.ticker.upper(),
@@ -190,6 +214,9 @@ class SQLiteCandidateObservationsRepository:
                     _bool_to_db(obs.is_eod_pending),
                     obs.resolution_source or "",
                     json.dumps(list(obs.resolution_notes), separators=(",", ":")),
+                    artifact_id_str,
+                    sem_compat_id_str,
+                    provenance_json,
                 )
             )
         with self._connect() as conn:
@@ -200,8 +227,9 @@ class SQLiteCandidateObservationsRepository:
                      workflow, window_sessions, data_as_of_date, config_hash,
                      decision_at, latest_completed_session, analysis_as_of,
                      market_session_name, is_eod_pending, resolution_source,
-                     resolution_notes_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     resolution_notes_json,
+                     artifact_id, semantic_compatibility_id, artifact_provenance_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT {_IDENTITY_CONFLICT_TARGET} WHERE config_hash != ''
                 DO UPDATE SET
                     captured_at = excluded.captured_at,
@@ -213,7 +241,10 @@ class SQLiteCandidateObservationsRepository:
                     market_session_name = excluded.market_session_name,
                     is_eod_pending = excluded.is_eod_pending,
                     resolution_source = excluded.resolution_source,
-                    resolution_notes_json = excluded.resolution_notes_json
+                    resolution_notes_json = excluded.resolution_notes_json,
+                    artifact_id = excluded.artifact_id,
+                    semantic_compatibility_id = excluded.semantic_compatibility_id,
+                    artifact_provenance_json = excluded.artifact_provenance_json
                 """,
                 rows,
             )
@@ -425,6 +456,11 @@ class SQLiteCandidateObservationsRepository:
             is_eod_pending=_bool_from_db(row["is_eod_pending"]),
             resolution_source=row["resolution_source"] or None,
             resolution_notes=_resolution_notes_from_db(row["resolution_notes_json"]),
+            artifact_identity=decode_signal_artifact_identity(
+                artifact_id_raw=row["artifact_id"],
+                semantic_compatibility_id_raw=row["semantic_compatibility_id"],
+                provenance_json_raw=row["artifact_provenance_json"],
+            ),
         )
 
 
