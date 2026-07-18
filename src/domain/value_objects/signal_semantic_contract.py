@@ -20,7 +20,7 @@ _LOWERCASE_SNAKE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 ACCUMULATION_DISCOVERY_CONTRACT = "accumulation-discovery"
 
-EVIDENCE_CONTRACT_VERSION = "1.1"
+EVIDENCE_CONTRACT_VERSION = "1.2"
 SEMANTIC_ENGINE_VERSION = "1.1"
 
 _EXECUTION_LABEL_POLICY_VERSIONS: tuple[tuple[str, str], ...] = (
@@ -268,7 +268,6 @@ _INSTITUTIONAL_ACCUMULATION_PATHS: tuple[str, ...] = (
     "institutional_accumulation.domestic_bandar_track_components.broker_hhi_divergence",
     "institutional_accumulation.domestic_bandar_track_components.broker_reversal",
     "institutional_accumulation.domestic_bandar_track_components.domestic_buy_vwap_distance",
-    "institutional_accumulation.evidence_status",
     "institutional_accumulation.foreign_institutional_track_components.cnfb_price_divergence",
     "institutional_accumulation.foreign_institutional_track_components.foreign_concentration_cr4_cr8",
     "institutional_accumulation.foreign_institutional_track_components.foreign_participation",

@@ -49,6 +49,7 @@ from src.domain.entities.candle import Candle
 from src.domain.value_objects.bandar_detector_snapshot import BandarDetectorSnapshot
 from src.domain.value_objects.institutional_accumulation_evidence import (
     DomesticBandarTrack,
+    EvidenceStatus,
     ForeignInstitutionalTrack,
     InstitutionalAccumulationEvidence,
 )
@@ -197,7 +198,7 @@ class InstitutionalAccumulationEvidenceBuilder:
             counterparty_transfer=counterparty,
             coverage_score=_clamp01(coverage),
             conviction_score=_clamp01(conviction),
-            evidence_status=self._config.evidence_status,
+            evidence_status=EvidenceStatus.DIAGNOSTIC,
             reasons=reasons,
             unavailable_reasons=unavailable,
             metadata=metadata,
@@ -236,7 +237,7 @@ class InstitutionalAccumulationEvidenceBuilder:
         *,
         error: str,
     ) -> InstitutionalAccumulationEvidence:
-        status = self._config.evidence_status
+        status = EvidenceStatus.DIAGNOSTIC
         empty_foreign = ForeignInstitutionalTrack(
             foreign_participation_score=None,
             foreign_cr4_score=None,

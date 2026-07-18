@@ -12,6 +12,7 @@ from src.application.services.institutional_flow_math import (
 from src.domain.entities.broker_flow import BrokerDailyFlow
 from src.domain.value_objects.institutional_accumulation_evidence import (
     CounterpartyTransferEvidence,
+    EvidenceStatus,
 )
 
 if TYPE_CHECKING:
@@ -44,7 +45,7 @@ def _counterparty_hhi(
             sell_side_hhi=None,
             coverage_score=0.0,
             conviction_score=0.0,
-            evidence_status=config.evidence_status,
+            evidence_status=EvidenceStatus.DIAGNOSTIC,
             unavailable_reasons=("zero_net_buy_or_sell",),
         )
     buy_hhi = sum((v / total_net_buy) ** 2 for v in net_buy.values())
@@ -57,7 +58,7 @@ def _counterparty_hhi(
         sell_side_hhi=round(sell_hhi, 6),
         coverage_score=1.0,
         conviction_score=round(transfer, 4),
-        evidence_status=config.evidence_status,
+        evidence_status=EvidenceStatus.DIAGNOSTIC,
         unavailable_reasons=(),
     )
 
@@ -80,6 +81,6 @@ def build_counterparty_transfer(
             sell_side_hhi=None,
             coverage_score=0.0,
             conviction_score=0.0,
-            evidence_status=config.evidence_status,
+            evidence_status=EvidenceStatus.DIAGNOSTIC,
             unavailable_reasons=(f"counterparty_failed:{exc}",),
         )

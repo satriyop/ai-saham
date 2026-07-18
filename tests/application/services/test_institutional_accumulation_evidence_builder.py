@@ -308,7 +308,6 @@ def test_subcomputation_exception_degrades_without_raising():
 # --------------------------------------------------------------------------- #
 def test_config_validation_rejects_bad_weight_sum():
     cfg = InstitutionalAccumulationConfig(
-        evidence_status=EvidenceStatus.DIAGNOSTIC,
         cnfb_bullish_windows=(20, 30),
         cnfb_bearish_windows=(3, 5, 7),
         foreign_vwap_days=20,
@@ -326,7 +325,6 @@ def test_config_validation_rejects_bad_weight_sum():
 
 def test_valid_config_passes_validation():
     cfg = InstitutionalAccumulationConfig(
-        evidence_status=EvidenceStatus.DIAGNOSTIC,
         cnfb_bullish_windows=(20, 30),
         cnfb_bearish_windows=(3, 5, 7),
         foreign_vwap_days=20,
@@ -356,6 +354,114 @@ def test_institutional_accumulation_builder_bare_constructor_uses_valid_defaults
     application defaults and no YAML/file I/O."""
     builder = InstitutionalAccumulationEvidenceBuilder()
     assert builder is not None
+
+
+# --------------------------------------------------------------------------- #
+# Central evidence authority: legacy evidence_status rejection (CENTRAL-EVIDENCE-AUTHORITY)
+# --------------------------------------------------------------------------- #
+
+_EVIDENCE_AUTHORITY_CONFIG_ERROR = (
+    "institutional_accumulation.evidence_status is not configurable; "
+    "evidence authority is owned by the validated central authority registry"
+)
+
+
+def test_config_rejects_unwrapped_legacy_evidence_status():
+    for value in ("DIAGNOSTIC", "PRODUCTION"):
+        with pytest.raises(ValueError) as exc_info:
+            InstitutionalAccumulationConfig.from_mapping({"evidence_status": value})
+        assert str(exc_info.value) == _EVIDENCE_AUTHORITY_CONFIG_ERROR
+
+
+def test_config_rejects_wrapped_legacy_evidence_status():
+    for value in ("DIAGNOSTIC", "PRODUCTION"):
+        with pytest.raises(ValueError) as exc_info:
+            InstitutionalAccumulationConfig.from_mapping(
+                {"institutional_accumulation": {"evidence_status": value}}
+            )
+        assert str(exc_info.value) == _EVIDENCE_AUTHORITY_CONFIG_ERROR
+
+
+def test_config_dataclass_has_no_evidence_status_field():
+    from dataclasses import fields
+
+    assert "evidence_status" not in {
+        field.name for field in fields(InstitutionalAccumulationConfig)
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Central evidence authority: every producer result is DIAGNOSTIC
+# --------------------------------------------------------------------------- #
+
+def test_successful_full_build_is_diagnostic_everywhere():
+    flows = []
+    for off in range(30):
+        flows.append(_flow(FOREIGN, off, buy=100.0, sell=10.0))
+        flows.append(_flow(LOCAL, off, buy=120.0, sell=20.0))
+        flows.append(_flow(LOCAL2, off, buy=0.0, sell=50.0))
+    result = _builder().build(
+        _request(broker_daily_flows=tuple(flows), bandar_snapshot=_bandar("Big Acc"))
+    )
+    assert result.evidence_status is EvidenceStatus.DIAGNOSTIC
+    assert result.foreign_institutional_track.evidence_status is EvidenceStatus.DIAGNOSTIC
+    assert result.domestic_bandar_track.evidence_status is EvidenceStatus.DIAGNOSTIC
+    assert result.counterparty_transfer is not None
+    assert result.counterparty_transfer.evidence_status is EvidenceStatus.DIAGNOSTIC
+
+
+def test_partial_unavailable_data_stays_diagnostic():
+    result = _builder().build(_request())
+    assert result.evidence_status is EvidenceStatus.DIAGNOSTIC
+    assert result.foreign_institutional_track.evidence_status is EvidenceStatus.DIAGNOSTIC
+    assert result.domestic_bandar_track.evidence_status is EvidenceStatus.DIAGNOSTIC
+
+
+def test_whole_build_exception_fallback_stays_diagnostic(monkeypatch):
+    builder = _builder()
+
+    def boom(request):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(builder, "_build", boom)
+    result = builder.build(_request())
+    assert result.evidence_status is EvidenceStatus.DIAGNOSTIC
+    assert result.foreign_institutional_track.evidence_status is EvidenceStatus.DIAGNOSTIC
+    assert result.domestic_bandar_track.evidence_status is EvidenceStatus.DIAGNOSTIC
+    assert result.metadata["diagnostic_only"] is True
+    assert result.metadata["error"] == "boom"
+
+
+def test_counterparty_exception_fallback_stays_diagnostic(monkeypatch):
+    from src.application.services import institutional_flow_counterparty as cp_module
+    from src.application.services.institutional_accumulation_evidence_builder import (
+        DEFAULT_FOREIGN_BROKER_CODES,
+    )
+
+    def boom(flows, config):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(cp_module, "_counterparty_hhi", boom)
+    config = load_institutional_accumulation_config()
+    flows = [_flow(LOCAL, 0, buy=100.0, sell=0.0), _flow(LOCAL2, 0, buy=0.0, sell=50.0)]
+    result = cp_module.build_counterparty_transfer(
+        request=_request(broker_daily_flows=tuple(flows)),
+        config=config,
+        foreign_codes=DEFAULT_FOREIGN_BROKER_CODES,
+    )
+    assert result is not None
+    assert result.evidence_status is EvidenceStatus.DIAGNOSTIC
+    assert result.coverage_score == 0.0
+
+
+def test_ia_fingerprint_reports_diagnostic_status():
+    from src.application.services.accumulation_observation_institutional_fingerprint import (
+        _ia_evidence_fingerprint,
+    )
+
+    result = _builder().build(_request())
+    fp = _ia_evidence_fingerprint(result)
+    assert fp["institutional_accumulation_status"] == "DIAGNOSTIC"
 
 
 # --------------------------------------------------------------------------- #
@@ -439,7 +545,6 @@ def test_config_loads_foreign_broker_codes_from_yaml():
     """YAML broker_classification.foreign_broker_codes is parsed into frozenset."""
     raw = {
         "institutional_accumulation": {
-            "evidence_status": "DIAGNOSTIC",
             "broker_classification": {
                 "foreign_broker_codes": ["zp", " YU ", "ak"]
             },
@@ -498,7 +603,7 @@ def test_fallback_when_yaml_omits_broker_classification():
         DEFAULT_FOREIGN_BROKER_CODES,
     )
 
-    raw = {"institutional_accumulation": {"evidence_status": "DIAGNOSTIC"}}
+    raw = {"institutional_accumulation": {}}
     config = InstitutionalAccumulationConfig.from_mapping(raw)
     assert config.foreign_broker_codes == DEFAULT_FOREIGN_BROKER_CODES
 

@@ -20,7 +20,10 @@ from src.application.services.institutional_flow_math import (
 )
 from src.domain.entities.broker_flow import BrokerDailyFlow
 from src.domain.value_objects.bandar_detector_snapshot import BandarDetectorSnapshot
-from src.domain.value_objects.institutional_accumulation_evidence import DomesticBandarTrack
+from src.domain.value_objects.institutional_accumulation_evidence import (
+    DomesticBandarTrack,
+    EvidenceStatus,
+)
 
 if TYPE_CHECKING:
     from src.application.services.institutional_accumulation_evidence_builder import (
@@ -257,7 +260,7 @@ def build_domestic_track(
         bandar_accumulation_score_normalized=accum_norm,
         coverage_score=_clamp01(coverage),
         conviction_score=_clamp01(round(conviction, 4)),
-        evidence_status=config.evidence_status,
+        evidence_status=EvidenceStatus.DIAGNOSTIC,
         reasons=(),
         unavailable_reasons=tuple(unavailable),
     )

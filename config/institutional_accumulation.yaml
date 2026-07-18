@@ -1,8 +1,8 @@
 version: 1
 
+# Calculation parameters only. This producer always emits DIAGNOSTIC evidence.
+# Evidence authority is owned by the validated central authority registry.
 institutional_accumulation:
-  evidence_status: DIAGNOSTIC
-
   windows:
     cnfb_bullish_accumulation: [20, 30]
     cnfb_bearish_distribution: [3, 5, 7]

@@ -5,8 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from src.domain.value_objects.institutional_accumulation_evidence import EvidenceStatus
-
 DEFAULT_FOREIGN_BROKER_CODES: frozenset[str] = frozenset(
     {
         "AK", "BK", "ZP", "KZ", "YU", "RX", "HD", "CP", "DR",  # tier-1 foreign
@@ -45,9 +43,14 @@ def _parse_foreign_broker_codes(block: dict) -> frozenset[str]:
     return frozenset(c.upper().strip() for c in raw)
 
 
+_EVIDENCE_AUTHORITY_CONFIG_ERROR = (
+    "institutional_accumulation.evidence_status is not configurable; "
+    "evidence authority is owned by the validated central authority registry"
+)
+
+
 @dataclass(frozen=True)
 class InstitutionalAccumulationConfig:
-    evidence_status: EvidenceStatus
     cnfb_bullish_windows: tuple[int, ...]
     cnfb_bearish_windows: tuple[int, ...]
     foreign_vwap_days: int
@@ -76,11 +79,13 @@ class InstitutionalAccumulationConfig:
 
     @classmethod
     def from_mapping(cls, raw: dict[str, Any]) -> "InstitutionalAccumulationConfig":
+        if "evidence_status" in raw:
+            raise ValueError(_EVIDENCE_AUTHORITY_CONFIG_ERROR)
         block = raw.get("institutional_accumulation", raw)
+        if "evidence_status" in block:
+            raise ValueError(_EVIDENCE_AUTHORITY_CONFIG_ERROR)
         windows = block.get("windows", {})
-        status = EvidenceStatus(block.get("evidence_status", "DIAGNOSTIC"))
         return cls(
-            evidence_status=status,
             cnfb_bullish_windows=tuple(
                 int(w) for w in windows.get("cnfb_bullish_accumulation", [20, 30])
             ),

@@ -125,6 +125,62 @@ def test_flow_trigger_routed_for_breakout_phase_with_confirmed_flow():
     assert flow.trigger_fraction == pytest.approx(0.20)
     assert flow.trigger_weighted == pytest.approx(5.7)
     assert not [r for r in flow.reasons if r.startswith("flow_trigger_blocked:")]
+    # Canonical FlowConfirmationEvidence authority was not demoted by this task.
+    assert flow.evidence_status is EvidenceAuthorityStatus.PRODUCTION
+    assert flow.effective_weight == pytest.approx(0.30)
+
+
+def test_fabricated_producer_status_cannot_override_central_authority():
+    """A serialized/fabricated producer-local evidence_status claim must not
+    grant Alpha/Trigger scoring authority; only the central
+    AlphaTriggerConfig.evidence_registrations registry decides authority.
+
+    First proves the aggregation contract has no channel to accept a
+    producer-supplied status at all (AlphaTriggerGroupInput has no
+    evidence_status field and rejects it if injected), then proves that with
+    a central DIAGNOSTIC registration, the contribution carries zero
+    authority regardless of the score value a fabricated producer claims.
+    """
+    from dataclasses import fields, replace
+
+    from src.domain.value_objects.alpha_trigger_score import EvidenceRegistration
+
+    assert "evidence_status" not in {
+        field.name for field in fields(AlphaTriggerGroupInput)
+    }
+    with pytest.raises(TypeError):
+        AlphaTriggerGroupInput(
+            "institutional_flow",
+            100.0,
+            0.30,
+            True,
+            evidence_status="PRODUCTION",  # type: ignore[call-arg]
+        )
+
+    base_config = AlphaTriggerConfig()
+    diagnostic_registrations = dict(base_config.evidence_registrations)
+    diagnostic_registrations["institutional_flow"] = EvidenceRegistration(
+        evidence_name="institutional_flow",
+        status=EvidenceAuthorityStatus.DIAGNOSTIC,
+    )
+    config = replace(base_config, evidence_registrations=diagnostic_registrations)
+
+    score = AlphaTriggerAggregator(config).aggregate(
+        AlphaTriggerAggregationRequest(
+            horizon="SWING_10D",
+            groups=(
+                AlphaTriggerGroupInput("setup_quality", 70.0, 0.35, True),
+                AlphaTriggerGroupInput("institutional_flow", 100.0, 0.30, True),
+            ),
+            setup_phase=_breakout_phase(),
+            flow_confirmation_evidence=_flow("CONFIRMED"),
+        )
+    )
+
+    flow = [c for c in score.group_contributions if c.group == "institutional_flow"][0]
+    assert flow.evidence_status is EvidenceAuthorityStatus.DIAGNOSTIC
+    assert flow.effective_weight == 0.0
+    assert "diagnostic_report_only" in flow.reasons
 
 
 def test_flow_trigger_blocked_when_setup_phase_missing():

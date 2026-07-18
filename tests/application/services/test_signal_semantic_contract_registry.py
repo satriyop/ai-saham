@@ -2082,6 +2082,7 @@ def test_real_manifest_excludes_removed_paths():
         "signal_engine.missing_data.coverage_warning_missing_factors",
         "signal_engine.enrichment.insider_lookback_days",
         "sector_context.evidence_status",
+        "institutional_accumulation.evidence_status",
         "ticker_profile.epoch_cadence",
         "swing_setups.setups.foreign-bounce.entry_authority",
         "swing_setups.setups.foreign-bounce.can_enter_from_phases",

@@ -23,7 +23,10 @@ from src.domain.entities.broker_flow import (
     ForeignFlowPoint,
 )
 from src.domain.entities.candle import Candle
-from src.domain.value_objects.institutional_accumulation_evidence import ForeignInstitutionalTrack
+from src.domain.value_objects.institutional_accumulation_evidence import (
+    EvidenceStatus,
+    ForeignInstitutionalTrack,
+)
 
 if TYPE_CHECKING:
     from src.application.services.institutional_accumulation_evidence_builder import (
@@ -257,7 +260,7 @@ def build_foreign_track(
         foreign_vwap_distance_score=vwap_dist,
         coverage_score=_clamp01(coverage),
         conviction_score=_clamp01(round(conviction, 4)),
-        evidence_status=config.evidence_status,
+        evidence_status=EvidenceStatus.DIAGNOSTIC,
         reasons=(),
         unavailable_reasons=tuple(unavailable),
     )
