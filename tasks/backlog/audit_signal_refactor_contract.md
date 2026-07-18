@@ -835,8 +835,15 @@ Layer plan:
 
 ### Metadata
 
-- **State:** Ready — `EVIDENCE-BACKED-ASSESSMENT` and
-  `CENTRAL-EVIDENCE-AUTHORITY` are complete.
+- **State:** Done — `59bd03b` (Slice 1: removed the dead legacy-weight
+  transport from the canonical `SignalEngine` construction path) and
+  `b0e77d9` (Slice 2 + findings fix: deleted the executable
+  `AssessSignalUseCase`/`AuditSignalUseCase` path and `saham analyze
+  signal-audit`; removed the non-operational
+  `signal_engine.scoring.seasonality/analyst/forward_pe` YAML surface;
+  repaired the factory fail-closed tests; corrected impossible comments; and
+  replaced obsolete `Phase N` labels in `config/signal_engine.yaml` with
+  canonical task/contract terminology).
 - **Type:** Public application-contract cleanup
 - **Priority:** P1; required for `LIVE-CONTRACT-GATE`
 - **Required before:** DQ-007 and CLI-002
@@ -954,18 +961,18 @@ Layer plan:
 
 ### Acceptance Criteria
 
-- [ ] `AssessSignalUseCase`, `AssessSignalRequest`, and the executable six-factor audit path no longer exist
-- [ ] No compatibility/deprecated/hidden path can return a legacy signal-shaped assessment
-- [ ] `signal_engine.factors.*` and legacy-only neutral-fill/weight resolution are removed or fail explicitly
-- [ ] Shared diagnostic scorers/config are retained under truthful ownership with unchanged intended values
-- [ ] Current screen, swing, canonical observation inputs, scores, decisions, and `TradeSetup` outputs are unchanged
-- [ ] Historical persisted artifacts remain unchanged and identifiable by their original semantic/schema provenance
-- [ ] Historical payload decoders remain available unless a separate dependency audit proves they are unused
-- [ ] DQ-007 owns construction and verification of canonical inspection
-- [ ] CLI-002 no longer instructs agents to rename/reuse the legacy audit handler
-- [ ] Focused canonical signal, diagnostic company-quality, historical decoding, and negative tests pass
-- [ ] Architecture tests and full suite pass
-- [ ] `git diff --check` clean
+- [x] `AssessSignalUseCase`, `AssessSignalRequest`, and the executable six-factor audit path no longer exist
+- [x] No compatibility/deprecated/hidden path can return a legacy signal-shaped assessment
+- [x] `signal_engine.factors.*` and legacy-only neutral-fill/weight resolution are removed or fail explicitly
+- [x] Shared diagnostic scorers/config are retained under truthful ownership with unchanged intended values
+- [x] Current screen, swing, canonical observation inputs, scores, decisions, and `TradeSetup` outputs are unchanged
+- [x] Historical persisted artifacts remain unchanged and identifiable by their original semantic/schema provenance
+- [x] Historical payload decoders remain available unless a separate dependency audit proves they are unused
+- [x] DQ-007 owns construction and verification of canonical inspection
+- [x] CLI-002 no longer instructs agents to rename/reuse the legacy audit handler
+- [x] Focused canonical signal, diagnostic company-quality, historical decoding, and negative tests pass
+- [x] Architecture tests and full suite pass (5407 passed)
+- [x] `git diff --check` clean
 
 ---
 

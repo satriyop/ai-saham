@@ -33,7 +33,7 @@ truth and PIT prerequisites remain in
 | 4 | `ARTIFACT-IDENTITY` | Done (foundation) | `2b0bff1`; canonical capture/readiness integration is owned by DQ-003/DQ-006 |
 | 5 | `EVIDENCE-BACKED-ASSESSMENT` | Done | `4262ae3 Remove flags-only SignalEngine assessment paths (EVIDENCE-BACKED-ASSESSMENT)` |
 | 6 | `CENTRAL-EVIDENCE-AUTHORITY` | Done | `c93363a`; status recorded by `952d106` |
-| 7 | `RETIRE-LEGACY-SIX-FACTOR-BASELINE` | Ready | `EVIDENCE-BACKED-ASSESSMENT` and central-authority cleanup are complete; required before DQ-007 canonical inspection |
+| 7 | `RETIRE-LEGACY-SIX-FACTOR-BASELINE` | Done | `59bd03b`, `b0e77d9`; see `audit_signal_refactor_contract.md` |
 | 8 | `SECTOR-CONTEXT-IDENTITY` | Blocked | Requires the active artifact/schema identity contract |
 
 `OUTPUT-CONTRACT-OWNERSHIP` is a deferred, non-blocking documentation cleanup
