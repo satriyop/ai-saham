@@ -68,8 +68,8 @@ prerequisites remain unresolved.
 
 ## Task CENTRAL-EVIDENCE-AUTHORITY — Remove Producer-Config Authority From Institutional Accumulation
 
-**State:** Ready — current code still exposes producer-config authority; this
-task has no dependency on `EVIDENCE-BACKED-ASSESSMENT`.
+**State:** Done — `c93363a Remove producer-config authority from
+institutional accumulation evidence (CENTRAL-EVIDENCE-AUTHORITY)`.
 
 ### Metadata
 
@@ -232,21 +232,21 @@ Layer plan:
 
 ### Acceptance Criteria
 
-- [ ] `InstitutionalAccumulationConfig` has no `evidence_status` field
-- [ ] `config/institutional_accumulation.yaml` has no authority key
-- [ ] Wrapped and unwrapped mappings containing `evidence_status` fail with the
+- [x] `InstitutionalAccumulationConfig` has no `evidence_status` field
+- [x] `config/institutional_accumulation.yaml` has no authority key
+- [x] Wrapped and unwrapped mappings containing `evidence_status` fail with the
       explicit ownership error
-- [ ] Default and custom calculation configs produce DIAGNOSTIC top-level evidence
-- [ ] Foreign, domestic, and counterparty nested evidence is always DIAGNOSTIC
-- [ ] Partial-data and whole-build exception fallbacks are always DIAGNOSTIC
-- [ ] No producer-local config path can create LOW_WEIGHT or PRODUCTION output
-- [ ] Persisted institutional-accumulation fingerprints remain DIAGNOSTIC for new observations
-- [ ] Negative test proves a serialized/fabricated producer status cannot grant Alpha/Trigger scoring authority
-- [ ] Existing canonical `FlowConfirmationEvidence` and Alpha/Trigger `institutional_flow: PRODUCTION` behavior is unchanged
-- [ ] Future-promotion documentation points exclusively to the validated central authority registry
-- [ ] Focused config, builder, nested-output, fingerprint, and authority-boundary tests pass
-- [ ] Full test suite passes
-- [ ] `git diff --check` clean
+- [x] Default and custom calculation configs produce DIAGNOSTIC top-level evidence
+- [x] Foreign, domestic, and counterparty nested evidence is always DIAGNOSTIC
+- [x] Partial-data and whole-build exception fallbacks are always DIAGNOSTIC
+- [x] No producer-local config path can create LOW_WEIGHT or PRODUCTION output
+- [x] Persisted institutional-accumulation fingerprints remain DIAGNOSTIC for new observations
+- [x] Negative test proves a serialized/fabricated producer status cannot grant Alpha/Trigger scoring authority
+- [x] Existing canonical `FlowConfirmationEvidence` and Alpha/Trigger `institutional_flow: PRODUCTION` behavior is unchanged
+- [x] Future-promotion documentation points exclusively to the validated central authority registry
+- [x] Focused config, builder, nested-output, fingerprint, and authority-boundary tests pass
+- [x] Full test suite passes (5486 passed)
+- [x] `git diff --check` clean
 
 ---
 
