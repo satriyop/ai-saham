@@ -7,7 +7,7 @@
 #            decision_policy is the canonical regime gate. DO NOT tune regime_conditioning.*.
 #   Stage 3: Renormalize — missing groups excluded from denominator
 #   Stage 4: Do-no-harm flags — score penalties from SignalContext
-#   Stage 5: Confidence-aware entry classification — ENTER requires score + confidence
+#   Stage 5: Directional score classification — maps canonical score to preliminary strength/action
 #   Stage 6: Gate tightening — ENTER → WATCH cap when MarketContext.gate_tightening=True
 #   Stage 7: Decision policy — explicit regime/setup max_decision constraints (A1/A2)
 #
@@ -15,8 +15,8 @@
 #   evidence_groups.*.weight
 #   flags.*.score_penalty
 #   alpha_trigger.*
-#   classification.* score and confidence thresholds
-#   decision_policy.regime_policy.* thresholds and multipliers  ← PREFERRED for regime
+#   decision_policy.* authority-coverage, readiness, regime, and setup constraints
+#   classification.* directional score thresholds
 #   scoring.bandar.* (still active — controls bandar_max_range helper)
 #
 # NOT PATCH-ELIGIBLE FOR PHASE I TUNING:

@@ -18,7 +18,7 @@ profile-aware, evidence-based engine that separates:
 3. Context: is the market, sector, and liquidity regime supportive?
 4. Alpha: is the ticker structurally attractive for the intended horizon?
 5. Trigger: is the current window suitable for entry timing?
-6. Decision policy: what action is allowed after score, coverage, conviction,
+6. Decision policy: what action is allowed after directional signal score, signal authority coverage, typed setup readiness,
    regime, phase, and gates are considered?
 
 The core design sequence is:
@@ -104,7 +104,7 @@ The canonical design separates evidence production from policy:
 evidence values
  -> canonical group scores
  -> Alpha/Trigger routing
- -> coverage and conviction
+  -> signal authority coverage, directional signal score, and typed setup readiness
  -> setup/regime eligibility constraints
  -> DecisionPolicy
  -> persisted result and fingerprint
@@ -128,8 +128,9 @@ Decision policy remains explicit. A typical ordering is:
 
 ```text
 hard risk gate
- -> evidence coverage floor
- -> conviction floor
+  -> signal authority coverage floor
+  -> typed setup readiness
+  -> directional signal score threshold
  -> failed/distribution phase constraints
  -> regime/setup max-decision constraints
  -> valid phase sequence and trigger requirements
@@ -138,7 +139,7 @@ hard risk gate
 
 Exact thresholds and ordering must be read from current config, code, and tests.
 
-## Coverage Versus Conviction
+## Signal Authority Coverage Versus Directional Score
 
 Do not collapse availability and evidence strength into one confidence number.
 

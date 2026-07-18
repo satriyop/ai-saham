@@ -422,7 +422,10 @@ labels before building any bucket, replaced the ambiguous
 `signal_authority_coverage_bucket`, and added typed
 `setup_readiness_status`/`setup_readiness_current_phase`/missing-input/
 failed-requirement attribution — with no fallback to the legacy fingerprint
-fields. **Finding 5 fixed (2026-07-18):** schema-2 label JSON and SQLite
+fields. **Follow-up Finding 4 fixed (2026-07-18):** Active docs, config comments,
+archived rationale, and the signal-audit command now cleanly distinguish
+canonical production authority coverage from archived factor presence.
+**Finding 5 fixed (2026-07-18):** schema-2 label JSON and SQLite
 fingerprint persistence omit generic legacy coverage/conviction and phase
 aliases; schema-1 parsing remains diagnostic and read-compatible. **Finding 6
 fixed (2026-07-18):** daily briefing and multi-screen DTOs, JSON, and displays

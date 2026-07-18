@@ -113,7 +113,7 @@ def signal_audit(
 
 
 def _display_report(report: SignalAuditReport) -> None:
-    typer.echo(f"\nSignal Audit  ·  {report.ticker}  ·  {report.snapshot_date}")
+    typer.echo(f"\nArchived Signal Baseline Audit  ·  {report.ticker}  ·  {report.snapshot_date}")
     typer.echo("═" * 58)
     typer.echo("")
     typer.echo(
@@ -134,15 +134,18 @@ def _display_report(report: SignalAuditReport) -> None:
 
     typer.echo("─" * 74)
     typer.echo(
-        f"COMPOSITE SCORE: {report.final_score}/100  {report.strength}  {report.entry_quality}"
+        f"ARCHIVED BASELINE SCORE: {report.final_score}/100  {report.strength}  {report.entry_quality}"
     )
     typer.echo("")
     typer.echo(
         f"Legacy flat-factor renormalized (missing excluded): {report.renormalized_score}/100"
     )
     typer.echo("")
+    typer.echo("Note: This command audits the archived six-factor baseline and does not")
+    typer.echo("      display canonical production authority coverage.")
+    typer.echo("")
     total = report.factors_present + report.factors_missing
-    typer.echo(f"Coverage: {report.factors_present}/{total} factors present")
+    typer.echo(f"Archived factor presence: {report.factors_present}/{total}")
     if report.coverage_warning:
         typer.echo(f"[warning] {report.coverage_warning}", err=True)
 

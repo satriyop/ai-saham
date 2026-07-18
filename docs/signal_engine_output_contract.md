@@ -161,7 +161,11 @@ Future changes based on this design should satisfy these condensed gates:
 - Explicit universe, profile, horizon, setup family, flow track, phase sequence,
   regime scope, and patch-eligibility gates for calibrated setups.
 - Strategies/plugins/formulas produce evidence but do not override decisions.
-- Coverage and conviction remain distinct and both constrain `ENTER`.
+- Signal authority coverage and directional signal score remain distinct.
+  ENTER is constrained by signal_authority_coverage, typed SetupPhaseReadiness,
+  directional score, and explicit regime/setup policy. Diagnostic coverage,
+  conviction, phase_input_coverage, and phase_detection_strength do not
+  independently authorize or veto ENTER.
 - Setup phases and phase sequence are persisted and replayable.
 - Accumulation-style `ENTER` requires configured breakout confirmation after
   the required prior phases.

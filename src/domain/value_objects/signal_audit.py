@@ -36,15 +36,19 @@ class SignalAuditEntry:
 
 @dataclass(frozen=True)
 class SignalAuditReport:
-    """Full audit of the SignalEngine inputs for one ticker."""
+    """Full audit of the SignalEngine inputs for one ticker.
+
+    Audits the archived six-factor baseline, not canonical production authority
+    coverage.
+    """
 
     ticker: str
     snapshot_date: date
     entries: tuple[SignalAuditEntry, ...]
-    final_score: int
+    final_score: int         # archived baseline score
     strength: str
     entry_quality: str
     coverage_warning: str | None
-    factors_present: int
+    factors_present: int     # archived factor availability
     factors_missing: int
-    renormalized_score: int  # preview: score if missing factors excluded from weight pool
+    renormalized_score: int  # archived diagnostic preview: score if missing factors excluded from weight pool

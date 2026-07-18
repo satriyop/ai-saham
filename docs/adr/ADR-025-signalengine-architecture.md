@@ -12,8 +12,9 @@
   production composite signal score.
 - Canonical signal inputs must carry explicit evidence authority, availability,
   provenance, and as-of semantics.
-- Missing evidence is not neutral evidence. Coverage/availability and signal
-  conviction remain separate concepts.
+- Missing evidence is not neutral evidence. Signal authority coverage, directional signal score, and typed setup
+  readiness remain separate concepts. Diagnostic evidence coverage or
+  conviction cannot independently authorize or veto ENTER.
 - Market-context conditioning, when requested, occurs inside the canonical
   signal path before `TradeSetup` composition; see ADR-037.
 - Classification and decision constraints are deterministic and config-backed.

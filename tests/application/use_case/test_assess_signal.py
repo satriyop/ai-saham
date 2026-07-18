@@ -660,7 +660,12 @@ def test_archived_scorer_behavior_preservation():
     assert breakdown_dict["forward_valuation"] == 50.0
 
     # Rationale contains the expected lines
-    assert "Signal score 50/100" in response.assessment.rationale[-1]
+    assert response.assessment.rationale[-1].startswith("Archived baseline score ")
+    assert not any(line.startswith("Signal score") for line in response.assessment.rationale)
+
+    # Assert missing-data warning contains: archived baseline score defaulted to neutral
+    assert response.coverage_warning is not None
+    assert "archived baseline score defaulted to neutral" in response.coverage_warning
 
     # Assert ONLY signal_authority_coverage is None
     assert response.assessment.signal_authority_coverage is None

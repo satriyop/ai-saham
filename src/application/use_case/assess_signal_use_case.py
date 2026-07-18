@@ -1,9 +1,10 @@
 """
-AssessSignalUseCase — composite signal scoring for a single ticker.
+AssessSignalUseCase — archived six-factor baseline composite signal scoring.
 
-Implements the 6-factor weighted scoring algorithm from AccumulationScreenUseCase.
-Scoring is deterministic given a SignalContext. No IO, no providers, no side effects.
-All defaults (missing data → neutral 50.0) are explicit.
+Implements the archived 6-factor weighted scoring algorithm from AccumulationScreenUseCase.
+It is used only for audit/parity diagnostics. It does not produce canonical SignalEngine
+authority coverage. It must not be used for production decisions, observations, tuning,
+or promotion.
 
 Layer: Application
 Depends on: domain only (SignalAssessment, SignalContext)
@@ -48,14 +49,13 @@ _DEFAULT_WEIGHTS: dict[str, float] = {
 
 class AssessSignalUseCase:
     """
-    Pure computation: no repository, no providers, no state.
+    Archived six-factor baseline scorer. Used only for audit/parity diagnostics.
+    Does not produce canonical SignalEngine authority coverage. Must not be used
+    for production decisions, observations, tuning, or promotion.
 
     Callers are responsible for populating SignalContext from enrichment
     providers before calling execute(). When signal_context is None, the
     use case creates an empty context (all factors neutral).
-
-    weights: renormalized factor weights loaded from config/signal_engine.yaml by the
-    factory. When None, _DEFAULT_WEIGHTS are used (preserves historical behavior).
     """
 
     def __init__(
@@ -232,7 +232,7 @@ class AssessSignalUseCase:
         ])
         if missing >= self._config.missing_data.coverage_warning_missing_factors:
             return (
-                f"{missing}/6 enrichment factors missing — score defaulted to neutral "
+                f"{missing}/6 enrichment factors missing — archived baseline score defaulted to neutral "
                 f"({self._config.missing_data.neutral_score:g}) "
                 f"for those factors. Refresh or import enrichment data for more accurate scores."
             )
@@ -273,7 +273,7 @@ class AssessSignalUseCase:
                 lines.append(f"{label}: no data (neutral 50)")
 
         lines.append(
-            f"Signal score {score}/100 — {strength.value}, {entry_quality.value}"
+            f"Archived baseline score {score}/100 — {strength.value}, {entry_quality.value}"
         )
         return tuple(lines)
 
