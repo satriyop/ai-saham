@@ -1636,7 +1636,9 @@ not select or weight the training population.
 
 ## Task ARTIFACT-IDENTITY — Reproducible Signal Artifact Identity
 
-**State:** Not started — HIGH-2 prerequisite is complete.
+**State:** Partial — immutable identity dimensions, compatibility dimensions,
+provenance, final-ID wrappers, and canonical serialization are implemented;
+identity resolution and all production integration remain unimplemented.
 
 ### Decision
 
@@ -1714,6 +1716,21 @@ does not imply semantic incompatibility.
 - [ ] Invocation time/command cannot create a distinct canonical observation
 - [ ] Same semantic capture is a no-op/already-existing result, not a new sample
 - [ ] Different observation contracts or setup families cannot share an identity
+
+### Foundation Checkpoint (Slice 1)
+
+- No IDs are computed yet — `ArtifactId`, `SemanticCompatibilityId`, and
+  `SignalArtifactIdentity` exist as immutable wrappers but no hashing or
+  identity resolution is implemented.
+- No schema or persistence changed — `CandidateObservation`,
+  `CandidateObservationsRepository`, `SignalForwardLabel`, and all SQLite
+  tables/indexes remain untouched.
+- No readiness cohort behavior changed — grouping by
+  `semantic_compatibility_id` is not wired anywhere.
+- Slice 2 must implement the pure application identity resolver: hash
+  `SemanticCompatibilityDimensions` → `SemanticCompatibilityId`, hash
+  `ArtifactIdentityDimensions` + `SemanticCompatibilityId` →
+  `ArtifactId`, and produce a complete `SignalArtifactIdentity`.
 
 ---
 
