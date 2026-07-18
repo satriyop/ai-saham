@@ -29,6 +29,7 @@ from src.domain.value_objects.signal_forward_label import (
 
 class SignalLabelGenerationSkipReason(str, Enum):
     INCOMPATIBLE_OBSERVATION_SCHEMA = "INCOMPATIBLE_OBSERVATION_SCHEMA"
+    NON_CANONICAL_OBSERVATION_IDENTITY = "NON_CANONICAL_OBSERVATION_IDENTITY"
 
 
 @dataclass(frozen=True)
@@ -98,11 +99,12 @@ class GenerateSignalForwardLabelsUseCase:
         if observation is None:
             return GenerateSignalForwardLabelsResponse()
 
-        if not _is_canonical_observation(observation):
+        skip_reason = _canonical_observation_skip_reason(observation)
+        if skip_reason is not None:
             return GenerateSignalForwardLabelsResponse(
                 labels=(),
                 observation=observation,
-                skip_reason=SignalLabelGenerationSkipReason.INCOMPATIBLE_OBSERVATION_SCHEMA,
+                skip_reason=skip_reason,
                 source_schema_version=_observation_schema_version(observation),
             )
 
@@ -214,8 +216,8 @@ class GenerateSignalForwardLabelsUseCase:
     ) -> SignalForwardLabel:
         if not _is_canonical_observation(observation):
             raise ValueError(
-                "_build_label requires candidate observation schema "
-                f"{CANDIDATE_OBSERVATION_SCHEMA_VERSION}"
+                "_build_label requires a canonical candidate observation with "
+                f"schema_version={CANDIDATE_OBSERVATION_SCHEMA_VERSION} and non-empty config_hash"
             )
 
         payload = observation.payload
@@ -313,8 +315,24 @@ def _observation_schema_version(observation: CandidateObservation) -> int | None
     return raw if type(raw) is int else None
 
 
-def _is_canonical_observation(observation: CandidateObservation) -> bool:
-    return _observation_schema_version(observation) == CANDIDATE_OBSERVATION_SCHEMA_VERSION
+def _canonical_observation_skip_reason(
+    observation: CandidateObservation,
+) -> SignalLabelGenerationSkipReason | None:
+    schema_version = _observation_schema_version(observation)
+
+    if schema_version != CANDIDATE_OBSERVATION_SCHEMA_VERSION:
+        return SignalLabelGenerationSkipReason.INCOMPATIBLE_OBSERVATION_SCHEMA
+
+    if not isinstance(observation.config_hash, str) or observation.config_hash == "":
+        return SignalLabelGenerationSkipReason.NON_CANONICAL_OBSERVATION_IDENTITY
+
+    return None
+
+
+def _is_canonical_observation(
+    observation: CandidateObservation,
+) -> bool:
+    return _canonical_observation_skip_reason(observation) is None
 
 
 def _unavailable_label(

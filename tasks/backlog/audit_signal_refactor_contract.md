@@ -405,10 +405,10 @@ defaults. **Fixed (2026-07-18):** the resolver now raises `ValueError` when
 instead of defaulting it, with a regression test covering a four-regime
 config that omits the key from one regime. **Finding 2 fixed (2026-07-18):**
 `GenerateSignalForwardLabelsUseCase` now excludes any candidate observation
-whose schema is not exactly the canonical version (old, future, missing, or
-malformed) from label generation entirely — no label, no fingerprint parse,
-no candle read, and no repository write — instead of producing a fabricated
-schema-2 UNAVAILABLE label from an incompatible schema-1/2 observation.
+from label generation entirely (with no label, no fingerprint parse, no candle
+read, and no repository write) unless both conditions are met: (1) exact
+candidate observation schema 3, and (2) a non-empty canonical config_hash
+string.
 **Finding 3 fixed (2026-07-18):** readiness dates, latest-per-ticker counts,
 raw counts, and target counts now use only schema-3 observations with
 non-empty config_hash. Legacy diagnostic rows remain readable through

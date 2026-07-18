@@ -922,3 +922,362 @@ def _fingerprint() -> dict:
         "phase_detection_strength": 0.8,
         "phase_input_coverage": 1.0,
     }
+
+
+class AdversarialCandidateObservationsRepository(FakeCandidateObservationsRepository):
+    def list_canonical_by_date(self, snapshot_date):
+        self.list_canonical_by_date_calls.append(snapshot_date)
+        # Deliberately return the unfiltered list, allowing empty hashes and invalid schemas
+        source = (
+            self.observations_by_date.get(snapshot_date, ())
+            if self.observations_by_date
+            else self.observations
+        )
+        return list(source)
+
+
+def test_single_path_canonical_observation_generates_labels():
+    # 1. Exact schema 3 plus non-empty string config_hash still generates labels.
+    obs = CandidateObservation(
+        ticker="BBCA",
+        snapshot_date=date(2026, 7, 1),
+        captured_at=datetime(2026, 7, 1, 16, 0),
+        payload={"schema_version": 3, "candidate": {"current_price": 100}},
+        config_hash="valid_hash",
+    )
+    repo = FakeCandidateObservationsRepository(observation=obs)
+    candles = [
+        _candle(date(2026, 7, 1), "100", ticker="BBCA"),
+        *[_candle(date(2026, 7, 1) + timedelta(days=i), "105", ticker="BBCA") for i in range(1, 15)]
+    ]
+    market = FakeMarketDataRepository(candles)
+    labels_repo = SpySignalForwardLabelsRepository()
+    use_case = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=repo,
+        market_data_repository=market,
+        signal_forward_labels_repository=labels_repo,
+    )
+
+    response = use_case.execute(
+        GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=date(2026, 7, 1))
+    )
+    assert response.skip_reason is None
+    assert len(response.labels) == 1
+    assert labels_repo.save_many_call_count == 1
+    assert len(market.calls) > 0
+
+
+def test_single_path_schema_3_empty_hash_rejected():
+    # 2. Schema 3 plus config_hash="":
+    # - returns no labels;
+    # - returns NON_CANONICAL_OBSERVATION_IDENTITY;
+    # - reports source schema 3;
+    # - performs zero candle reads;
+    # - performs zero label writes.
+    obs = CandidateObservation(
+        ticker="BBCA",
+        snapshot_date=date(2026, 7, 1),
+        captured_at=datetime(2026, 7, 1, 16, 0),
+        payload={"schema_version": 3, "candidate": {"current_price": 100}},
+        config_hash="",
+    )
+    repo = FakeCandidateObservationsRepository(observation=obs)
+    market = FakeMarketDataRepository([])
+    labels_repo = SpySignalForwardLabelsRepository()
+    use_case = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=repo,
+        market_data_repository=market,
+        signal_forward_labels_repository=labels_repo,
+    )
+
+    response = use_case.execute(
+        GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=date(2026, 7, 1))
+    )
+    assert response.skip_reason == SignalLabelGenerationSkipReason.NON_CANONICAL_OBSERVATION_IDENTITY
+    assert len(response.labels) == 0
+    assert response.source_schema_version == 3
+    assert len(market.calls) == 0
+    assert labels_repo.save_many_call_count == 0
+
+
+@pytest.mark.parametrize(
+    "bad_hash",
+    [None, 0, False, b"hash"]
+)
+def test_single_path_parameterized_malformed_identity(bad_hash):
+    # 3. Parameterize malformed identity values
+    obs = CandidateObservation(
+        ticker="BBCA",
+        snapshot_date=date(2026, 7, 1),
+        captured_at=datetime(2026, 7, 1, 16, 0),
+        payload={"schema_version": 3, "candidate": {"current_price": 100}},
+        config_hash=bad_hash,
+    )
+    repo = FakeCandidateObservationsRepository(observation=obs)
+    market = FakeMarketDataRepository([])
+    labels_repo = SpySignalForwardLabelsRepository()
+    use_case = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=repo,
+        market_data_repository=market,
+        signal_forward_labels_repository=labels_repo,
+    )
+
+    response = use_case.execute(
+        GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=date(2026, 7, 1))
+    )
+    assert response.skip_reason == SignalLabelGenerationSkipReason.NON_CANONICAL_OBSERVATION_IDENTITY
+    assert len(response.labels) == 0
+    assert response.source_schema_version == 3
+    assert len(market.calls) == 0
+    assert labels_repo.save_many_call_count == 0
+
+
+def test_single_path_schema_2_non_empty_hash_rejected_as_incompatible():
+    # 4. Schema 2 plus non-empty config_hash remains INCOMPATIBLE_OBSERVATION_SCHEMA.
+    obs = CandidateObservation(
+        ticker="BBCA",
+        snapshot_date=date(2026, 7, 1),
+        captured_at=datetime(2026, 7, 1, 16, 0),
+        payload={"schema_version": 2, "candidate": {"current_price": 100}},
+        config_hash="valid_hash",
+    )
+    repo = FakeCandidateObservationsRepository(observation=obs)
+    market = FakeMarketDataRepository([])
+    labels_repo = SpySignalForwardLabelsRepository()
+    use_case = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=repo,
+        market_data_repository=market,
+        signal_forward_labels_repository=labels_repo,
+    )
+
+    response = use_case.execute(
+        GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=date(2026, 7, 1))
+    )
+    assert response.skip_reason == SignalLabelGenerationSkipReason.INCOMPATIBLE_OBSERVATION_SCHEMA
+    assert response.source_schema_version == 2
+
+
+def test_single_path_schema_2_empty_hash_precedence():
+    # 5. Schema 2 plus empty config_hash returns the schema reason, proving precedence.
+    obs = CandidateObservation(
+        ticker="BBCA",
+        snapshot_date=date(2026, 7, 1),
+        captured_at=datetime(2026, 7, 1, 16, 0),
+        payload={"schema_version": 2, "candidate": {"current_price": 100}},
+        config_hash="",
+    )
+    repo = FakeCandidateObservationsRepository(observation=obs)
+    market = FakeMarketDataRepository([])
+    labels_repo = SpySignalForwardLabelsRepository()
+    use_case = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=repo,
+        market_data_repository=market,
+        signal_forward_labels_repository=labels_repo,
+    )
+
+    response = use_case.execute(
+        GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=date(2026, 7, 1))
+    )
+    assert response.skip_reason == SignalLabelGenerationSkipReason.INCOMPATIBLE_OBSERVATION_SCHEMA
+    assert response.source_schema_version == 2
+
+
+def test_single_path_get_at_follows_same_guard():
+    # 6. get_at() follows exactly the same identity guard as get_latest().
+    obs = CandidateObservation(
+        ticker="BBCA",
+        snapshot_date=date(2026, 7, 1),
+        captured_at=datetime(2026, 7, 1, 16, 0),
+        payload={"schema_version": 3, "candidate": {"current_price": 100}},
+        config_hash="",
+    )
+    repo = FakeCandidateObservationsRepository(observation=obs)
+    market = FakeMarketDataRepository([])
+    labels_repo = SpySignalForwardLabelsRepository()
+    use_case = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=repo,
+        market_data_repository=market,
+        signal_forward_labels_repository=labels_repo,
+    )
+
+    # Trigger execute with explicit captured_at (which calls get_at())
+    response = use_case.execute(
+        GenerateSignalForwardLabelsRequest(
+            ticker="BBCA",
+            signal_date=date(2026, 7, 1),
+            observation_captured_at=datetime(2026, 7, 1, 16, 0),
+        )
+    )
+    assert response.skip_reason == SignalLabelGenerationSkipReason.NON_CANONICAL_OBSERVATION_IDENTITY
+    assert len(repo.at_calls) == 1
+    assert len(market.calls) == 0
+    assert labels_repo.save_many_call_count == 0
+
+
+def test_batch_path_defense_in_depth():
+    # For execute_all(), prove:
+    # - only the valid observation is labeled;
+    # - invalid row increments skipped_incompatible_observation_count;
+    # - no candle read occurs for the invalid ticker;
+    # - persisted labels belong only to the valid observation.
+    valid_obs = CandidateObservation(
+        ticker="BBCA",
+        snapshot_date=date(2026, 7, 1),
+        captured_at=datetime(2026, 7, 1, 16, 0),
+        payload={"schema_version": 3, "candidate": {"current_price": 100}},
+        config_hash="valid_hash",
+    )
+    invalid_obs = CandidateObservation(
+        ticker="BUMI",
+        snapshot_date=date(2026, 7, 1),
+        captured_at=datetime(2026, 7, 1, 16, 0),
+        payload={"schema_version": 3, "candidate": {"current_price": 100}},
+        config_hash="",
+    )
+    repo = AdversarialCandidateObservationsRepository(
+        observations=[valid_obs, invalid_obs]
+    )
+
+    candles = [
+        _candle(date(2026, 7, 1), "100", ticker="BBCA"),
+        *[_candle(date(2026, 7, 1) + timedelta(days=i), "105", ticker="BBCA") for i in range(1, 15)]
+    ]
+    market = FakeMarketDataRepository(candles)
+    labels_repo = SpySignalForwardLabelsRepository()
+    use_case = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=repo,
+        market_data_repository=market,
+        signal_forward_labels_repository=labels_repo,
+    )
+
+    response = use_case.execute_all(
+        GenerateAllSignalForwardLabelsRequest(signal_date=date(2026, 7, 1))
+    )
+
+    assert response.skipped_incompatible_observation_count == 1
+    assert response.observation_count == 1
+    assert response.generated_count == 1
+    assert len(response.labels) == 1
+    assert response.labels[0].ticker == "BBCA"
+
+    # Assert invalid rows do not trigger candle reads
+    assert "BUMI" not in [c[0] for c in market.calls]
+    assert "BBCA" in [c[0] for c in market.calls]
+
+    # Assert persisted labels belong only to valid observation
+    assert len(labels_repo.saved) == 1
+    assert labels_repo.saved[0].ticker == "BBCA"
+
+
+def test_eligible_date_path_defense_in_depth():
+    # Using the same adversarial behavior, prove:
+    # - the invalid identity is excluded;
+    # - the valid observation is processed normally;
+    # - skipped count includes the invalid row;
+    # - no label is persisted for the invalid row.
+    valid_obs = CandidateObservation(
+        ticker="BBCA",
+        snapshot_date=date(2026, 7, 1),
+        captured_at=datetime(2026, 7, 1, 16, 0),
+        payload={"schema_version": 3, "candidate": {"current_price": 100}},
+        config_hash="valid_hash",
+    )
+    invalid_obs = CandidateObservation(
+        ticker="BUMI",
+        snapshot_date=date(2026, 7, 1),
+        captured_at=datetime(2026, 7, 1, 16, 0),
+        payload={"schema_version": 3, "candidate": {"current_price": 100}},
+        config_hash="",
+    )
+    repo = AdversarialCandidateObservationsRepository(
+        observations_by_date={
+            date(2026, 7, 1): [valid_obs, invalid_obs]
+        }
+    )
+
+    candles = [
+        _candle(date(2026, 7, 1), "100", ticker="BBCA"),
+        *[_candle(date(2026, 7, 1) + timedelta(days=i), "105", ticker="BBCA") for i in range(1, 15)]
+    ]
+    market = FakeMarketDataRepository(candles)
+    labels_repo = SpySignalForwardLabelsRepository()
+    use_case = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=repo,
+        market_data_repository=market,
+        signal_forward_labels_repository=labels_repo,
+    )
+
+    response = use_case.execute_eligible_dates(
+        GenerateEligibleSignalForwardLabelsRequest()
+    )
+
+    assert response.skipped_incompatible_observation_count == 1
+    assert response.observation_count == 1
+    assert response.generated_count == 1
+    assert len(response.labels) == 1
+    assert response.labels[0].ticker == "BBCA"
+
+    # Assert invalid rows do not trigger candle reads
+    assert "BUMI" not in [c[0] for c in market.calls]
+    assert "BBCA" in [c[0] for c in market.calls]
+
+    # Assert persisted labels belong only to valid observation
+    assert len(labels_repo.saved) == 1
+    assert labels_repo.saved[0].ticker == "BBCA"
+
+
+def test_direct_builder_guard():
+    # Call _build_label() with schema 3 and empty config_hash and assert it raises ValueError containing: non-empty config_hash
+    obs = CandidateObservation(
+        ticker="BBCA",
+        snapshot_date=date(2026, 7, 1),
+        captured_at=datetime(2026, 7, 1, 16, 0),
+        payload={"schema_version": 3, "candidate": {"current_price": 100}},
+        config_hash="",
+    )
+    repo = FakeCandidateObservationsRepository(observation=obs)
+    market = FakeMarketDataRepository([])
+    labels_repo = SpySignalForwardLabelsRepository()
+    use_case = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=repo,
+        market_data_repository=market,
+        signal_forward_labels_repository=labels_repo,
+    )
+    with pytest.raises(ValueError, match="non-empty config_hash"):
+        use_case._build_label(obs, SignalLabelHorizon.SWING_10D)
+
+
+def test_predicate_tests():
+    # Directly test _is_canonical_observation():
+    # schema 3 + non-empty string hash -> True
+    # schema 3 + empty hash            -> False
+    # schema 2 + non-empty hash        -> False
+    from src.application.use_case.generate_signal_forward_labels_use_case import (
+        _is_canonical_observation,
+    )
+
+    obs_ok = CandidateObservation(
+        ticker="BBCA",
+        snapshot_date=date(2026, 7, 1),
+        captured_at=datetime(2026, 7, 1, 16, 0),
+        payload={"schema_version": 3, "candidate": {"current_price": 100}},
+        config_hash="valid_hash",
+    )
+    obs_empty = CandidateObservation(
+        ticker="BBCA",
+        snapshot_date=date(2026, 7, 1),
+        captured_at=datetime(2026, 7, 1, 16, 0),
+        payload={"schema_version": 3, "candidate": {"current_price": 100}},
+        config_hash="",
+    )
+    obs_schema2 = CandidateObservation(
+        ticker="BBCA",
+        snapshot_date=date(2026, 7, 1),
+        captured_at=datetime(2026, 7, 1, 16, 0),
+        payload={"schema_version": 2, "candidate": {"current_price": 100}},
+        config_hash="valid_hash",
+    )
+
+    assert _is_canonical_observation(obs_ok) is True
+    assert _is_canonical_observation(obs_empty) is False
+    assert _is_canonical_observation(obs_schema2) is False
