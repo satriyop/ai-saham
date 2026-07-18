@@ -151,9 +151,8 @@ def _breakout_phase() -> SetupPhaseSnapshot:
         current_phase=SetupPhaseState.BREAKOUT_CONFIRMATION,
         previous_phase=SetupPhaseState.COMPRESSION,
         phase_age_sessions=1,
-        phase_strength=0.8,
-        coverage_score=0.8,
-        conviction_score=0.8,
+        phase_detection_strength=0.8,
+        phase_input_coverage=0.8,
         sequence_valid=True,
     )
 
@@ -163,9 +162,8 @@ def _compression_phase() -> SetupPhaseSnapshot:
         current_phase=SetupPhaseState.COMPRESSION,
         previous_phase=SetupPhaseState.ACCUMULATION,
         phase_age_sessions=3,
-        phase_strength=0.8,
-        coverage_score=0.8,
-        conviction_score=0.8,
+        phase_detection_strength=0.8,
+        phase_input_coverage=0.8,
         sequence_valid=True,
     )
 

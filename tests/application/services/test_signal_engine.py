@@ -126,7 +126,7 @@ def test_signal_engine_empty_insider_fetch_counts_as_neutral_data():
     # 0.0 ratio does NOT trigger INSIDER_SELLING penalty
     assert "INSIDER_SELLING" not in response.active_flags
     # Self-fetch path has no SetupEvidence / FlowConfirmationEvidence → confidence=0
-    assert response.evidence_confidence == 0.0
+    assert response.signal_authority_coverage == 0.0
     assert response.coverage_warning is not None
 
 

@@ -125,7 +125,7 @@ class AssessSignalUseCase:
             breakdown=breakdown,
             rationale=rationale,
             snapshot_date=ctx.snapshot_date,
-            confidence_score=1.0,
+            signal_authority_coverage=1.0,
         )
 
     # ── factor scorers ───────────────────────────────────────────────────────

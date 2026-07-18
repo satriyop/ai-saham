@@ -185,10 +185,20 @@ def test_patch_modifying_breakout_min_volume_ratio_fails(tmp_path):
     assert "target_path_not_tunable:superseded_by_volume_trigger_policy" in result.issues
 
 
-def test_signal_strength_target_includes_enter_min_confidence_path():
+def test_signal_strength_target_excludes_removed_confidence_gate_paths():
+    # HIGH-2: enter_min_confidence/watch_min_confidence were removed as
+    # duplicate classification gates — they must not remain tunable paths.
     signal_strength = _target_by_dimension("signal_strength")
     assert (
         "config/signal_engine.yaml:signal_engine.classification.enter_min_confidence"
+        not in signal_strength.yaml_paths
+    )
+    assert (
+        "config/signal_engine.yaml:signal_engine.classification.watch_min_confidence"
+        not in signal_strength.yaml_paths
+    )
+    assert (
+        "config/signal_engine.yaml:signal_engine.classification.strong_min_score"
         in signal_strength.yaml_paths
     )
 

@@ -15,6 +15,10 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
+from src.domain.value_objects.signal_artifact_schema import (
+    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+)
+
 # Full set of candidate_observations columns copied into quarantine, in the
 # order the original table's schema introduced them. Columns absent from an
 # older DB are stored as NULL in quarantine (see SQLiteCandidateObservationsRepairReader).
@@ -75,7 +79,10 @@ CREATE TABLE IF NOT EXISTS {_QUARANTINE_TABLE} (
 )
 """
 
-_LEGACY_WHERE = "config_hash IS NULL OR TRIM(config_hash) = '' OR schema_version != 2"
+_LEGACY_WHERE = (
+    "config_hash IS NULL OR TRIM(config_hash) = '' "
+    f"OR schema_version != {CANDIDATE_OBSERVATION_SCHEMA_VERSION}"
+)
 _LEGACY_REASON = "LEGACY_MISSING_CONFIG_HASH_OR_OLD_SCHEMA"
 
 

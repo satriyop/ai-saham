@@ -94,9 +94,8 @@ def test_screen_accum_json_includes_setup_phase(monkeypatch):
         current_phase=SetupPhaseState.COMPRESSION,
         previous_phase=SetupPhaseState.ACCUMULATION,
         phase_age_sessions=2,
-        phase_strength=0.7,
-        coverage_score=0.8,
-        conviction_score=0.56,
+        phase_detection_strength=0.7,
+        phase_input_coverage=0.8,
         sequence_valid=True,
     )
 

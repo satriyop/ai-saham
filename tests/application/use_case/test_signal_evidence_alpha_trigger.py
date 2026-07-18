@@ -21,7 +21,11 @@ from tests.application.use_case.signal_evidence_fixtures import (
 )
 
 
-def test_setup_phase_coverage_and_conviction_drive_decision_floors():
+def test_signal_authority_coverage_drives_decision_floor():
+    # HIGH-2: there is one canonical signal_authority_coverage, computed by
+    # SignalEvidenceGroupScorer from evidence presence/authority — not a
+    # separate phase-level coverage/conviction pair. Flow-only evidence
+    # (weight 0.40) is below a configured 0.70 RISK_ON floor.
     config = SignalEngineConfig(
         decision_policy=DecisionPolicyConfig(
             regime_policy={
@@ -30,8 +34,7 @@ def test_setup_phase_coverage_and_conviction_drive_decision_floors():
                     max_decision="ENTER",
                     enter_threshold=70,
                     watch_threshold=45,
-                    min_coverage=0.7,
-                    min_conviction=0.7,
+                    min_signal_authority_coverage=0.7,
                 ),
                 "NEUTRAL": RegimeDecisionPolicyConfig(),
                 "RISK_OFF": RegimeDecisionPolicyConfig(enter_allowed=False, max_decision="WATCH"),
@@ -41,17 +44,15 @@ def test_setup_phase_coverage_and_conviction_drive_decision_floors():
     )
     resp = _use_case(config).execute(
         _req(
-            setup_evidence=_setup_evidence("MATCH"),
             flow_confirmation_evidence=_flow_evidence(0.95),
             setup_family="foreign-bounce",
-            setup_phase=_setup_phase(coverage=0.2, conviction=0.2),
         )
     )
 
-    assert resp.evidence_confidence == 1.0
+    assert resp.signal_authority_coverage == pytest.approx(0.40)
     assert resp.assessment.entry_quality.value == "WATCH"
     assert any(
-        "ENTER requires coverage" in reason
+        "ENTER requires signal_authority_coverage" in reason
         for reason in resp.assessment.decision_constraints.constraint_reasons
     )
 
@@ -75,7 +76,7 @@ def test_confirmation_only_setup_evidence_caps_enter_to_watch():
     assert resp.assessment.entry_quality.value == "WATCH"
     assert resp.assessment.decision_constraints.max_decision == "WATCH"
     assert any(
-        "smart_money_confirmed has no standalone entry authority" in reason
+        "Setup readiness INELIGIBLE" in reason
         for reason in resp.assessment.decision_constraints.constraint_reasons
     )
 
@@ -100,7 +101,7 @@ def test_phase_gated_setup_evidence_caps_enter_when_phase_not_breakout():
     assert resp.assessment.entry_quality.value == "WATCH"
     assert resp.assessment.decision_constraints.max_decision == "WATCH"
     assert any(
-        "requires phase BREAKOUT_CONFIRMATION for ENTER" in reason
+        "Setup readiness INELIGIBLE" in reason
         for reason in resp.assessment.decision_constraints.constraint_reasons
     )
 
@@ -146,7 +147,7 @@ def test_missing_setup_phase_with_required_phases_caps_enter_to_watch():
 
     assert resp.assessment.entry_quality.value == "WATCH"
     assert any(
-        "requires setup phase for ENTER" in reason
+        "Setup readiness UNAVAILABLE" in reason
         for reason in resp.assessment.decision_constraints.constraint_reasons
     )
 
@@ -332,7 +333,7 @@ def test_flow_still_blocked_when_breakout_phase_lacks_confirmed_flow():
     assert at.flow_trigger_allowed is False
     assert at.trigger_score == pytest.approx(100.0)
     assert "flow_trigger_blocked:flow_not_confirmed" in at.reasons
-    assert resp.evidence_confidence == pytest.approx(1.0)
+    assert resp.signal_authority_coverage == pytest.approx(1.0)
     assert resp.coverage_warning is None
 
 

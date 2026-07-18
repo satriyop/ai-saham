@@ -25,14 +25,12 @@ def _resolve(
     regime: str,
     *,
     setup_family: str | None = None,
-    coverage: float = 1.0,
-    conviction: float = 1.0,
+    signal_authority_coverage: float = 1.0,
 ):
     return DecisionPolicyService().resolve(
         entry_quality=EntryQuality.ENTER,
         score=75,
-        coverage_score=coverage,
-        conviction_score=conviction,
+        signal_authority_coverage=signal_authority_coverage,
         market_context=_mctx(regime),
         setup_family=setup_family,
     )
@@ -57,7 +55,7 @@ def test_neutral_can_permit_enter_with_reduced_size():
 
 
 def test_risk_off_blocks_enter_even_when_entry_quality_is_enter():
-    result = _resolve("RISK_OFF", coverage=0.85, conviction=0.80)
+    result = _resolve("RISK_OFF", signal_authority_coverage=0.85)
 
 
     assert result.entry_quality == EntryQuality.WATCH
@@ -87,8 +85,7 @@ def test_setup_specific_policy_cannot_reenable_enter_under_risk_off():
     result = DecisionPolicyService(config).resolve(
         entry_quality=EntryQuality.ENTER,
         score=90,
-        coverage_score=1.0,
-        conviction_score=1.0,
+        signal_authority_coverage=1.0,
         market_context=_mctx("RISK_OFF"),
         setup_family="foreign-bounce",
     )
@@ -117,8 +114,7 @@ def test_regime_transitioning_caps_enter_to_watch():
     result = DecisionPolicyService().resolve(
         entry_quality=EntryQuality.ENTER,
         score=75,
-        coverage_score=1.0,
-        conviction_score=1.0,
+        signal_authority_coverage=1.0,
         market_context=mctx,
     )
     assert result.entry_quality == EntryQuality.WATCH
@@ -139,8 +135,7 @@ def test_low_regime_confidence_caps_enter_to_watch():
     result = DecisionPolicyService().resolve(
         entry_quality=EntryQuality.ENTER,
         score=75,
-        coverage_score=1.0,
-        conviction_score=1.0,
+        signal_authority_coverage=1.0,
         market_context=mctx,
     )
     assert result.entry_quality == EntryQuality.WATCH

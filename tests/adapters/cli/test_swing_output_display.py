@@ -104,19 +104,19 @@ def test_swing_output_renders_optional_evidence_as_separate_panels(capsys):
             strength=strength,
             entry_quality=entry_quality,
             score_label="82/100",
-            confidence_score=1.0,
+            signal_authority_coverage=1.0,
             rationale=("setup quality strong", "flow confirmation positive"),
             breakdown_dict={
                 "setup_quality_group": 100.0,
                 "flow_confirmation_group": 75.0,
-                "evidence_confidence": 100.0,
+                "signal_authority_coverage": 100.0,
             },
         ),
         coverage_warning=None,
         active_flags=(),
         flag_adjustment=0,
         raw_group_score=82,
-        evidence_confidence=1.0,
+        signal_authority_coverage=1.0,
     )
     risk_resp = SimpleNamespace(
         assessment=SimpleNamespace(
@@ -239,12 +239,14 @@ def test_swing_flow_detail_calls_out_conflicted_negative_flow(capsys):
             entry_quality=SimpleNamespace(value="WATCH"),
             score_label="59/100",
             rationale=("Foreign flow: 36/100", "Bandar accumulation: 8/100"),
+            signal_authority_coverage=1.0,
             breakdown_dict={
                 "bandar_intensity": 8.3,
                 "foreign_flow_quality": 35.7,
             },
         ),
         coverage_warning=None,
+        signal_authority_coverage=1.0,
     )
     flow_detail = SimpleNamespace(
         window_sessions=30,

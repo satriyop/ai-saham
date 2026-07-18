@@ -1,6 +1,6 @@
 """Tests for AccumulationCandidateSignalAssessor."""
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock
 
@@ -44,11 +44,20 @@ def _effective_session() -> EffectiveMarketSession:
 
 
 def _source_availability_use_case() -> AssessSourceAvailabilityUseCase:
-    today = date.today()
+    # A proven IDX trading session can never be a Saturday/Sunday — use the
+    # most recent weekday so this fixture stays valid regardless of which
+    # day the test suite actually runs on.
+    today = _most_recent_weekday(date.today())
     calendar = KnownTradingSessionCalendar(
         sessions=(today,), coverage_start=today, coverage_end=today
     )
     return AssessSourceAvailabilityUseCase(calendar=calendar)
+
+
+def _most_recent_weekday(day: date) -> date:
+    while day.weekday() >= 5:
+        day -= timedelta(days=1)
+    return day
 
 
 def _built_flow_evidence():
@@ -408,13 +417,13 @@ def test_operational_availability_failure_still_passes_flow_evidence():
     assert flow_assessments[1].status == SourceAvailabilityStatus.UNKNOWN
 
 
-def test_current_and_unknown_shadow_availability_produce_identical_results_in_screen():
-    # 15. CURRENT and UNKNOWN SHADOW availability produce identical:
-    #     - signal score;
-    #     - coverage;
-    #     - entry quality;
-    #     - screen result;
-    #     - passes.
+def test_current_and_unknown_availability_produce_identical_directional_score_in_screen():
+    # 15. CURRENT and UNKNOWN availability produce identical directional
+    #     signal score — directional score arithmetic is based on attached
+    #     evidence only and is unaffected by availability. HIGH-2 explicitly
+    #     supersedes the coverage-identical guarantee this test previously
+    #     enforced: signal_authority_coverage is now availability-gated by
+    #     design, so it legitimately differs between CURRENT and UNKNOWN.
     assessor = _make_assessor_real_engine()
 
     result_current = assessor.assess(
@@ -440,10 +449,6 @@ def test_current_and_unknown_shadow_availability_produce_identical_results_in_sc
     a1 = result_current.candidate.signal_assessment
     a2 = result_unknown.candidate.signal_assessment
     assert a1.score == a2.score
-    assert a1.coverage_score == a2.coverage_score
-    assert a1.assessment.entry_quality == a2.assessment.entry_quality
-    assert result_current.screen_result == result_unknown.screen_result
-    assert result_current.passes == result_unknown.passes
 
 
 def test_flow_builder_operational_failure_results_in_missing_flow_evidence():
@@ -484,3 +489,277 @@ def test_flow_builder_value_error_propagates():
             effective_session=_effective_session(),
             source_availability_use_case=_source_availability_use_case(),
         )
+
+
+# --- HIGH-2: screen evaluation ordering tests -------------------------------
+
+
+def test_family_resolved_once_and_phase_detected_once_before_signal_engine():
+    """HIGH-2: resolve_preliminary_setup_family_result and
+    detect_candidate_setup_phase are each called exactly once, both complete
+    before SignalEngine.evaluate_with_context, and SignalEngine receives the
+    exact same family and phase objects — not value-equivalent copies."""
+    from src.application.services.primary_setup_family_resolver import (
+        PrimarySetupFamilyResult,
+    )
+    from src.application.services.accumulation_candidate_signal_assessor import (
+        AccumulationCandidateSignalAssessor,
+    )
+    from src.domain.value_objects.foreign_flow_score_breakdown import (
+        ForeignFlowScoreBreakdown,
+    )
+
+    call_order: list[str] = []
+    family_result = PrimarySetupFamilyResult(
+        matched_setup_families=("foreign_bounce",),
+        primary_setup_family="foreign_bounce",
+        setup_family_source="detected_screen_evidence",
+    )
+    phase_snapshot = object()  # identity sentinel — must reach SignalEngine unchanged
+
+    evidence_builder = MagicMock()
+
+    def _resolve_family(candidate):
+        call_order.append("resolve_family")
+        return family_result
+
+    def _detect_phase(*args, **kwargs):
+        call_order.append("detect_phase")
+        return phase_snapshot
+
+    evidence_builder.resolve_preliminary_setup_family_result.side_effect = _resolve_family
+    evidence_builder.detect_candidate_setup_phase.side_effect = _detect_phase
+
+    signal_engine = MagicMock()
+
+    def _evaluate_with_context(*args, **kwargs):
+        call_order.append("signal_engine")
+        assert kwargs["setup_family"] == "foreign_bounce"
+        assert kwargs["setup_phase"] is phase_snapshot
+        result = MagicMock()
+        result.assessment.score = 60
+        return result
+
+    signal_engine.evaluate_with_context.side_effect = _evaluate_with_context
+
+    flow_builder = MagicMock()
+    flow_builder.build.return_value = _built_flow_evidence()
+
+    foreign_flow_score_uc = MagicMock()
+    foreign_flow_score_uc.execute.return_value.evidence = ForeignFlowScoreBreakdown(
+        ticker="BBCA",
+        snapshot_date=date.today(),
+        foreign_flow_score=80.0,
+        max_score=100.0,
+        breakdown=(),
+        net_buy_ratio=0.8,
+        consecutive_streak=3,
+        vwap_discount_pct=0.0,
+        rsi=50.0,
+        avg_flow_ratio=5.0,
+        bb_width_pctile=0.3,
+        bci_label="STABLE",
+        bci_tier1_count=2,
+    )
+
+    assessor = AccumulationCandidateSignalAssessor(
+        signal_engine=signal_engine,
+        flow_confirmation_builder=flow_builder,
+        candidate_evidence_builder=evidence_builder,
+        foreign_flow_score_uc=foreign_flow_score_uc,
+    )
+
+    candidate = _candidate(foreign_flow_score=80.0)
+    assessor.assess(
+        candidate,
+        request=_request(),
+        as_of_date=date.today(),
+        consumed_broker_summaries=(),
+        consumed_broker_daily_flows=(),
+        effective_session=_effective_session(),
+        source_availability_use_case=None,
+    )
+
+    assert evidence_builder.resolve_preliminary_setup_family_result.call_count == 1
+    assert evidence_builder.detect_candidate_setup_phase.call_count == 1
+    signal_engine.evaluate_with_context.assert_called_once()
+    assert call_order == ["resolve_family", "detect_phase", "signal_engine"]
+    assert candidate.setup_family_result is family_result
+    assert candidate.setup_phase is phase_snapshot
+
+
+def test_known_family_with_absent_setup_evidence_cannot_enter():
+    """HIGH-2: the screen never fabricates SetupEvidence. A known family with
+    no setup evidence must resolve typed UNAVAILABLE readiness (via the real
+    SignalEngine/DecisionPolicy pipeline) and cannot produce canonical ENTER,
+    even when the phase snapshot alone would otherwise look constructive."""
+    from src.application.services.primary_setup_family_resolver import (
+        PrimarySetupFamilyResult,
+    )
+    from src.domain.value_objects.setup_phase import SetupPhaseSnapshot, SetupPhaseState
+
+    phase = SetupPhaseSnapshot(
+        current_phase=SetupPhaseState.BREAKOUT_CONFIRMATION,
+        previous_phase=None,
+        phase_age_sessions=1,
+        phase_detection_strength=0.95,
+        phase_input_coverage=1.0,
+        sequence_valid=True,
+    )
+    assessor = _make_assessor_real_engine(setup_phase=phase, foreign_flow_score=90.0)
+    assessor._candidate_evidence_builder.resolve_preliminary_setup_family_result.return_value = (
+        PrimarySetupFamilyResult(
+            matched_setup_families=("foreign_bounce",),
+            primary_setup_family="foreign_bounce",
+            setup_family_source="detected_screen_evidence",
+        )
+    )
+
+    result = assessor.assess(
+        _candidate(foreign_flow_score=90.0),
+        request=_request(min_signal_score=0.0),
+        as_of_date=date.today(),
+        consumed_broker_summaries=(),
+        consumed_broker_daily_flows=(),
+        effective_session=_effective_session(),
+        source_availability_use_case=None,
+    )
+
+    assessment = result.candidate.signal_assessment
+    assert assessment.setup_readiness is not None
+    assert assessment.setup_readiness.status.value == "UNAVAILABLE"
+    assert assessment.assessment.entry_quality.value != "ENTER"
+
+
+def test_unknown_family_returns_readiness_none_and_does_not_fabricate_family():
+    """HIGH-2: when no setup family can be resolved (fallback UNKNOWN), the
+    screen must pass setup_family=None through — readiness is None (genuine
+    flow-only assessment), never a fabricated family string."""
+    from src.application.services.primary_setup_family_resolver import (
+        PrimarySetupFamilyResult,
+    )
+
+    assessor = _make_assessor_real_engine(foreign_flow_score=80.0)
+    assessor._candidate_evidence_builder.resolve_preliminary_setup_family_result.return_value = (
+        PrimarySetupFamilyResult(
+            matched_setup_families=(),
+            primary_setup_family=None,
+            setup_family_source="fallback_unknown",
+        )
+    )
+
+    result = assessor.assess(
+        _candidate(foreign_flow_score=80.0),
+        request=_request(),
+        as_of_date=date.today(),
+        consumed_broker_summaries=(),
+        consumed_broker_daily_flows=(),
+        effective_session=_effective_session(),
+        source_availability_use_case=None,
+    )
+
+    assert result.candidate.setup_family_result.primary_setup_family is None
+    assert result.candidate.signal_assessment.setup_readiness is None
+    assert result.candidate.setup_family_result.setup_family_source == "fallback_unknown"
+
+
+def test_unknown_family_flow_only_authority_coverage_below_floor_blocks_enter():
+    """HIGH-2 Finding 1: production callers must inject a SignalEngine whose
+    config carries the real RISK_ON/NEUTRAL min_signal_authority_coverage
+    floor (0.70, matching config/signal_engine.yaml) — not the pre-fix
+    default of 0.0. This proves that floor with the default SignalEngine()
+    a caller gets when it supplies no explicit config: no setup family, no
+    setup evidence, flow evidence strong enough to score STRONG/ENTER on
+    directional strength alone, and flow as the only present PRODUCTION
+    group. signal_authority_coverage lands at exactly flow's 0.40 weight /
+    (0.60 setup + 0.40 flow) required-production denominator — below the
+    0.70 floor — so canonical ENTER must not survive DecisionPolicyService,
+    even though the raw directional classification alone would grant it."""
+    import pytest
+
+    from src.application.dto.built_evidence import BuiltFlowEvidence
+    from src.application.services.primary_setup_family_resolver import (
+        PrimarySetupFamilyResult,
+    )
+    from src.domain.value_objects.signal_assessment import EntryQuality
+    from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
+
+    # Use a proven weekday (never Sat/Sun) for every date in this test so the
+    # availability chain resolves CURRENT/authoritative regardless of which
+    # day the suite actually runs on.
+    day = _most_recent_weekday(date.today())
+    decision_at = datetime(day.year, day.month, day.day, 20, 0, tzinfo=IDX_TIMEZONE)
+    effective_session = EffectiveMarketSession(
+        run_at=decision_at,
+        decision_at=decision_at,
+        latest_completed_session=day,
+        analysis_as_of=day,
+        market_session_name="AFTER_CLOSE",
+        is_eod_pending=False,
+        resolution_source="test_fixture",
+        notes=(),
+    )
+    calendar = KnownTradingSessionCalendar(
+        sessions=(day,), coverage_start=day, coverage_end=day
+    )
+    source_availability_use_case = AssessSourceAvailabilityUseCase(calendar=calendar)
+
+    strong_signal = FlowSubSignal(
+        key="cons", score=90.0, weight=100.0, direction=Direction.BULLISH, freshness=Freshness.FRESH
+    )
+    strong_flow_evidence = FlowConfirmationEvidence(
+        ticker="BBCA",
+        snapshot_date=day,
+        flow_signals=(strong_signal,),
+        flow_score_ex_bb=90.0,
+        confirmation_status="CONFIRMED",
+        flow_direction="POSITIVE",
+        bandar_broad_score=None,
+        bandar_direction=Direction.NEUTRAL,
+        bandar_freshness=Freshness.MISSING,
+        bci_label=None,
+        bci_tier1_count=0,
+        uncapped_strength=0.90,
+        capped_strength=0.90,
+        group_cap=0.95,
+        group_freshness=Freshness.FRESH,
+    )
+    provenance = FlowProvenance(
+        ticker="BBCA",
+        broker_summary_rows=(
+            BrokerSummaryRowIdentity(ticker="BBCA", date=day, source="test"),
+        ),
+        broker_daily_flow_rows=(
+            BrokerDailyFlowRowIdentity(ticker="BBCA", date=day, broker_code="AK", source="test"),
+        ),
+    )
+    built_flow = BuiltFlowEvidence(evidence=strong_flow_evidence, provenance=provenance)
+
+    assessor = _make_assessor_real_engine(foreign_flow_score=90.0)
+    assessor._flow_confirmation_builder.build.return_value = built_flow
+    assessor._candidate_evidence_builder.resolve_preliminary_setup_family_result.return_value = (
+        PrimarySetupFamilyResult(
+            matched_setup_families=(),
+            primary_setup_family=None,
+            setup_family_source="fallback_unknown",
+        )
+    )
+
+    result = assessor.assess(
+        _candidate(foreign_flow_score=90.0),
+        request=_request(min_signal_score=0.0),
+        as_of_date=day,
+        consumed_broker_summaries=(),
+        consumed_broker_daily_flows=(),
+        effective_session=effective_session,
+        source_availability_use_case=source_availability_use_case,
+    )
+
+    assessment = result.candidate.signal_assessment
+
+    # Directional strength alone would classify STRONG/ENTER (score >= 70).
+    assert assessment.assessment.score >= 70
+
+    assert assessment.signal_authority_coverage == pytest.approx(0.40)
+    assert assessment.setup_readiness is None
+    assert assessment.assessment.entry_quality is not EntryQuality.ENTER

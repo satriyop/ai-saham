@@ -90,9 +90,15 @@ def test_to_dict_includes_group_and_each_assessment():
     assert payload["assessments"][0]["source_family"] == "candles"
 
 
-def test_availability_enforcement_mode_has_only_shadow_today():
+def test_availability_enforcement_mode_has_shadow_and_enforced():
+    # HIGH-2 adds ENFORCED alongside SHADOW — authority coverage enforcement
+    # is a policy change, not a new observational mode.
     assert AvailabilityEnforcementMode.SHADOW.value == "SHADOW"
-    assert list(AvailabilityEnforcementMode) == [AvailabilityEnforcementMode.SHADOW]
+    assert AvailabilityEnforcementMode.ENFORCED.value == "ENFORCED"
+    assert list(AvailabilityEnforcementMode) == [
+        AvailabilityEnforcementMode.SHADOW,
+        AvailabilityEnforcementMode.ENFORCED,
+    ]
 
 
 def test_all_authoritative_false_when_a_contributor_is_unassessed():

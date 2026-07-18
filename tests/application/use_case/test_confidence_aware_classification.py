@@ -1,8 +1,16 @@
 """
-Phase 6 confidence-aware SignalEngine classification tests.
+SignalEngine classification tests (HIGH-2).
 
-High score is no longer sufficient for ENTER. The evidence coverage/confidence
-must also clear configured thresholds.
+_classify_entry gates on directional strength only: STRONG -> ENTER,
+MODERATE -> WATCH, WEAK -> AVOID. Evidence authority coverage is applied
+exactly once downstream, by DecisionPolicyService, not by classification.
+These tests use a bare SignalEngineConfig()/DecisionPolicyConfig(), whose
+RISK_ON min_signal_authority_coverage dataclass default is 0.70 (HIGH-2
+Finding 1: matches the production YAML default, not the old, unenforced
+dataclass default of 0.0) — so single-group evidence below that floor is
+correctly capped to WATCH here despite a raw STRONG directional score. See
+test_decision_policy.py / test_signal_decision_constraints.py for more
+authority-coverage-floor scenarios.
 """
 
 from __future__ import annotations
@@ -119,32 +127,41 @@ def test_full_evidence_strong_score_can_enter():
 
     assert resp.assessment.score == 96
     assert resp.assessment.strength == SignalStrength.STRONG
-    assert resp.assessment.confidence_score == pytest.approx(1.0)
+    assert resp.assessment.signal_authority_coverage == pytest.approx(1.0)
     assert resp.assessment.entry_quality == EntryQuality.ENTER
 
 
-def test_high_score_with_setup_only_confidence_becomes_watch_not_enter():
+def test_high_score_with_setup_only_authority_coverage_capped_to_watch():
+    # HIGH-2 Finding 1: raw classification (STRONG score) is coverage-blind,
+    # but DecisionPolicyService's default 0.70 RISK_ON floor caps this
+    # single-group 0.60 coverage to WATCH, not ENTER.
     resp = _execute(setup_evidence=_setup("MATCH"))
 
     assert resp.assessment.score == 100
     assert resp.assessment.strength == SignalStrength.STRONG
-    assert resp.assessment.confidence_score == pytest.approx(0.60)
+    assert resp.assessment.signal_authority_coverage == pytest.approx(0.60)
     assert resp.assessment.entry_quality == EntryQuality.WATCH
 
 
-def test_high_score_with_flow_only_confidence_becomes_watch_not_enter():
+def test_high_score_with_flow_only_authority_coverage_capped_to_watch():
+    # HIGH-2 Finding 1: single-group flow-only 0.40 coverage is below the
+    # default 0.70 RISK_ON floor, so DecisionPolicyService caps the raw
+    # STRONG/ENTER classification to WATCH.
     resp = _execute(flow_confirmation_evidence=_flow(0.90))
 
     assert resp.assessment.score == 90
     assert resp.assessment.strength == SignalStrength.STRONG
-    assert resp.assessment.confidence_score == pytest.approx(0.40)
+    assert resp.assessment.signal_authority_coverage == pytest.approx(0.40)
     assert resp.assessment.entry_quality == EntryQuality.WATCH
 
 
-def test_no_evidence_is_avoid_even_with_neutral_moderate_score():
+def test_no_evidence_moderate_score_is_watch_not_avoid():
+    # HIGH-2: no evidence -> base_score=50 -> MODERATE -> WATCH (directional
+    # strength only). It is not automatically AVOID; a disabled-ENTER regime
+    # or a configured authority floor is what would cap WATCH to AVOID.
     resp = _execute()
 
     assert resp.assessment.score == 50
     assert resp.assessment.strength == SignalStrength.MODERATE
-    assert resp.assessment.confidence_score == pytest.approx(0.0)
-    assert resp.assessment.entry_quality == EntryQuality.AVOID
+    assert resp.assessment.signal_authority_coverage == pytest.approx(0.0)
+    assert resp.assessment.entry_quality == EntryQuality.WATCH

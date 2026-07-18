@@ -100,7 +100,7 @@ def project_single_screen_result(
 
     for c in candidates:
         coverage = (
-            c.signal_assessment.assessment.coverage_score if c.signal_assessment else None
+            c.signal_assessment.assessment.signal_authority_coverage if c.signal_assessment else None
         )
         c.freshness = compute_data_freshness(
             candle_as_of=c.latest_candle_date,
@@ -201,7 +201,7 @@ def _canonical_evidence_fields(candidate: AccumulationCandidate | None) -> dict:
     signal_coverage = None
     if candidate.signal_assessment is not None:
         signal_score = candidate.signal_assessment.assessment.score
-        signal_coverage = candidate.signal_assessment.assessment.coverage_score
+        signal_coverage = candidate.signal_assessment.assessment.signal_authority_coverage
     return {
         "signal_score": signal_score,
         "signal_coverage": signal_coverage,
@@ -344,7 +344,7 @@ def project_multi_screen_result(
             if c is None:
                 continue
             coverage = (
-                c.signal_assessment.assessment.coverage_score if c.signal_assessment else None
+                c.signal_assessment.assessment.signal_authority_coverage if c.signal_assessment else None
             )
             c.freshness = compute_data_freshness(
                 candle_as_of=c.latest_candle_date,

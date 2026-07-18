@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+from enum import Enum
 from typing import Any
 
 from src.domain.ports.candidate_observations_repository import (
@@ -15,12 +16,19 @@ from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.ports.signal_forward_labels_repository import (
     SignalForwardLabelsRepository,
 )
+from src.domain.value_objects.signal_artifact_schema import (
+    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+)
 from src.domain.value_objects.signal_forward_label import (
     SignalForwardLabel,
     SignalForwardOutcome,
     SignalLabelHorizon,
     SignalObservationFingerprint,
 )
+
+
+class SignalLabelGenerationSkipReason(str, Enum):
+    INCOMPATIBLE_OBSERVATION_SCHEMA = "INCOMPATIBLE_OBSERVATION_SCHEMA"
 
 
 @dataclass(frozen=True)
@@ -35,6 +43,8 @@ class GenerateSignalForwardLabelsRequest:
 class GenerateSignalForwardLabelsResponse:
     labels: tuple[SignalForwardLabel, ...] = field(default_factory=tuple)
     observation: CandidateObservation | None = None
+    skip_reason: SignalLabelGenerationSkipReason | None = None
+    source_schema_version: int | None = None
 
 
 @dataclass(frozen=True)
@@ -51,6 +61,7 @@ class GenerateAllSignalForwardLabelsResponse:
     unavailable_count: int = 0
     generated_dates: tuple[date, ...] = field(default_factory=tuple)
     skipped_dates: tuple[date, ...] = field(default_factory=tuple)
+    skipped_incompatible_observation_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -87,8 +98,17 @@ class GenerateSignalForwardLabelsUseCase:
         if observation is None:
             return GenerateSignalForwardLabelsResponse()
 
+        if not _is_canonical_observation(observation):
+            return GenerateSignalForwardLabelsResponse(
+                labels=(),
+                observation=observation,
+                skip_reason=SignalLabelGenerationSkipReason.INCOMPATIBLE_OBSERVATION_SCHEMA,
+                source_schema_version=_observation_schema_version(observation),
+            )
+
         labels = tuple(self._build_label(observation, horizon) for horizon in request.horizons)
-        self._labels.save_many(list(labels))
+        if labels:
+            self._labels.save_many(list(labels))
         return GenerateSignalForwardLabelsResponse(
             labels=labels,
             observation=observation,
@@ -101,15 +121,19 @@ class GenerateSignalForwardLabelsUseCase:
         # a ticker recorded across several window_sessions must get a label
         # for each one, not just the most recently captured window.
         observations = self._observations.list_canonical_by_date(request.signal_date)
-        labels = self._build_labels_for_observations(observations, request.horizons)
-        self._labels.save_many(labels)
+        eligible_observations = [obs for obs in observations if _is_canonical_observation(obs)]
+        skipped_incompatible_observation_count = len(observations) - len(eligible_observations)
+        labels = self._build_labels_for_observations(eligible_observations, request.horizons)
+        if labels:
+            self._labels.save_many(labels)
         unavailable_count = _unavailable_count(labels)
         return GenerateAllSignalForwardLabelsResponse(
             labels=tuple(labels),
-            observation_count=len(observations),
+            observation_count=len(eligible_observations),
             generated_count=len(labels),
             unavailable_count=unavailable_count,
             generated_dates=(request.signal_date,) if labels else (),
+            skipped_incompatible_observation_count=skipped_incompatible_observation_count,
         )
 
     def execute_eligible_dates(
@@ -119,23 +143,31 @@ class GenerateSignalForwardLabelsUseCase:
         observation_count = 0
         generated_dates: list[date] = []
         skipped_dates: list[date] = []
+        skipped_incompatible_observation_count = 0
         for signal_date in self._observations.list_snapshot_dates():
             observations = self._observations.list_canonical_by_date(signal_date)
-            if not observations:
+            eligible_observations = [
+                obs for obs in observations if _is_canonical_observation(obs)
+            ]
+            skipped_incompatible_observation_count += len(observations) - len(
+                eligible_observations
+            )
+            if not eligible_observations:
                 skipped_dates.append(signal_date)
                 continue
-            if not self._has_complete_forward_window(observations, request.horizon):
+            if not self._has_complete_forward_window(eligible_observations, request.horizon):
                 skipped_dates.append(signal_date)
                 continue
-            observation_count += len(observations)
+            observation_count += len(eligible_observations)
             labels.extend(
                 self._build_labels_for_observations(
-                    observations,
+                    eligible_observations,
                     (request.horizon,),
                 )
             )
             generated_dates.append(signal_date)
-        self._labels.save_many(labels)
+        if labels:
+            self._labels.save_many(labels)
         return GenerateAllSignalForwardLabelsResponse(
             labels=tuple(labels),
             observation_count=observation_count,
@@ -143,6 +175,7 @@ class GenerateSignalForwardLabelsUseCase:
             unavailable_count=_unavailable_count(labels),
             generated_dates=tuple(generated_dates),
             skipped_dates=tuple(skipped_dates),
+            skipped_incompatible_observation_count=skipped_incompatible_observation_count,
         )
 
     def _build_labels_for_observations(
@@ -179,10 +212,17 @@ class GenerateSignalForwardLabelsUseCase:
         observation: CandidateObservation,
         horizon: SignalLabelHorizon,
     ) -> SignalForwardLabel:
+        if not _is_canonical_observation(observation):
+            raise ValueError(
+                "_build_label requires candidate observation schema "
+                f"{CANDIDATE_OBSERVATION_SCHEMA_VERSION}"
+            )
+
         payload = observation.payload
         ticker = observation.ticker.upper()
         signal_date = observation.snapshot_date
         fingerprint = _fingerprint_from_payload(payload)
+
         entry = _entry_reference_price(payload)
 
         if entry is None:
@@ -266,6 +306,15 @@ class GenerateSignalForwardLabelsUseCase:
             resolution_source=observation.resolution_source,
             resolution_notes=observation.resolution_notes,
         )
+
+
+def _observation_schema_version(observation: CandidateObservation) -> int | None:
+    raw = observation.payload.get("schema_version")
+    return raw if type(raw) is int else None
+
+
+def _is_canonical_observation(observation: CandidateObservation) -> bool:
+    return _observation_schema_version(observation) == CANDIDATE_OBSERVATION_SCHEMA_VERSION
 
 
 def _unavailable_label(

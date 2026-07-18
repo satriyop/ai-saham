@@ -32,7 +32,7 @@ def _make_candidate(ticker: str, foreign_flow_score: float = 50.0) -> Accumulati
 
 
 def _with_signal(candidate: AccumulationCandidate, score: int, coverage_score: float):
-    assessment = SimpleNamespace(score=score, coverage_score=coverage_score)
+    assessment = SimpleNamespace(score=score, signal_authority_coverage=coverage_score)
     candidate.signal_assessment = SimpleNamespace(assessment=assessment)
     return candidate
 

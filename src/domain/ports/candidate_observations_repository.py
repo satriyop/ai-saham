@@ -92,17 +92,35 @@ class CandidateObservationsRepository(Protocol):
         ...
 
     def list_canonical_by_date(self, snapshot_date: date) -> list[CandidateObservation]:
-        """Return every canonical observation (config_hash != '') for the date.
+        """Return every canonical observation for the date.
 
-        Unlike list_by_date(), this does not collapse multiple canonical rows
-        for the same ticker (e.g. one per window_sessions) down to the latest
-        one — every canonical identity is returned. Legacy rows with no
-        config_hash are excluded. This is what label generation must use so
-        every recorded window gets labeled, not just the most recently
-        captured one.
+        Canonical = config_hash != '' AND schema_version ==
+        CANDIDATE_OBSERVATION_SCHEMA_VERSION. Unlike list_by_date(), this does
+        not collapse multiple canonical rows for the same ticker (e.g. one per
+        window_sessions) down to the latest one — every canonical identity is
+        returned. Legacy rows (no config_hash, or an older/newer schema) are
+        excluded. This is what label generation must use so every recorded
+        window gets labeled, not just the most recently captured one.
         """
         ...
 
     def list_snapshot_dates(self) -> list[date]:
         """Return snapshot dates with saved observations, oldest first."""
+        ...
+
+    def list_canonical_snapshot_dates(self) -> list[date]:
+        """Return snapshot dates containing at least one canonical observation.
+
+        Canonical = config_hash != '' and schema_version = current schema.
+        Dates whose only rows are legacy/non-canonical are excluded.
+        """
+        ...
+
+    def list_latest_canonical_by_date(self, snapshot_date: date) -> list[CandidateObservation]:
+        """Return the latest canonical observation per ticker for the date.
+
+        Canonical filtering (config_hash != '' and schema_version = current
+        schema) is applied before selecting the latest row per ticker, so a
+        newer legacy row can never displace an older canonical row.
+        """
         ...

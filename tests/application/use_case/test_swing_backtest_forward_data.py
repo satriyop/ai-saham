@@ -2,6 +2,8 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from src.application.services.indicator_registry import IndicatorRegistry
+from src.application.services.signal_engine import SignalEngine
+from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.use_case.swing_backtest_use_case import (
     SwingBacktestRequest,
     SwingBacktestUseCase,
@@ -30,6 +32,7 @@ def test_swing_backtest_no_forward_data_increments_skipped_no_forward_data():
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         rules_loader=FakeRulesLoader(),
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
     response = use_case.execute(SwingBacktestRequest(

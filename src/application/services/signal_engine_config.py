@@ -37,8 +37,6 @@ from src.domain.value_objects.alpha_trigger_score import (
 class SignalClassificationConfig:
     strong_min_score: int = 70
     moderate_min_score: int = 45
-    enter_min_confidence: float = 0.70
-    watch_min_confidence: float = 0.40
 
 
 @dataclass(frozen=True)
@@ -74,15 +72,27 @@ class SignalEnrichmentConfig:
 @dataclass(frozen=True)
 class EvidenceGroupConfig:
     weight: float = 1.0
+    # Key into alpha_trigger.evidence_registrations — the sole central
+    # authority-status source (HIGH-2). Do not duplicate authority status here.
+    authority_registration: str = ""
+    required_for_authority: bool = True
 
 
 @dataclass(frozen=True)
 class EvidenceGroupsConfig:
     setup_quality: EvidenceGroupConfig = field(
-        default_factory=lambda: EvidenceGroupConfig(weight=0.60)
+        default_factory=lambda: EvidenceGroupConfig(
+            weight=0.60,
+            authority_registration="setup_quality",
+            required_for_authority=True,
+        )
     )
     flow_confirmation: EvidenceGroupConfig = field(
-        default_factory=lambda: EvidenceGroupConfig(weight=0.40)
+        default_factory=lambda: EvidenceGroupConfig(
+            weight=0.40,
+            authority_registration="institutional_flow",
+            required_for_authority=True,
+        )
     )
 
 
@@ -166,8 +176,10 @@ class RegimeDecisionPolicyConfig:
     regime_size_multiplier: float = 1.0
     enter_threshold: int | None = None
     watch_threshold: int = 45
-    min_coverage: float = 0.0
-    min_conviction: float = 0.0
+    # HIGH-2: canonical production-authority coverage floor. Replaces the
+    # ambiguous min_coverage/min_conviction dual gate — numeric values are
+    # preserved from the former min_coverage, not recalibrated.
+    min_signal_authority_coverage: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -185,8 +197,7 @@ class DecisionPolicyConfig:
                 regime_size_multiplier=1.0,
                 enter_threshold=70,
                 watch_threshold=45,
-                min_coverage=0.0,
-                min_conviction=0.0,
+                min_signal_authority_coverage=0.70,
             ),
             "NEUTRAL": RegimeDecisionPolicyConfig(
                 enter_allowed=True,
@@ -194,8 +205,7 @@ class DecisionPolicyConfig:
                 regime_size_multiplier=0.50,
                 enter_threshold=72,
                 watch_threshold=45,
-                min_coverage=0.0,
-                min_conviction=0.0,
+                min_signal_authority_coverage=0.70,
             ),
             "RISK_OFF": RegimeDecisionPolicyConfig(
                 enter_allowed=False,
@@ -203,8 +213,7 @@ class DecisionPolicyConfig:
                 regime_size_multiplier=0.25,
                 enter_threshold=None,
                 watch_threshold=60,
-                min_coverage=0.80,
-                min_conviction=0.78,
+                min_signal_authority_coverage=0.80,
             ),
             "VOLATILE": RegimeDecisionPolicyConfig(
                 enter_allowed=False,
@@ -212,8 +221,7 @@ class DecisionPolicyConfig:
                 regime_size_multiplier=0.0,
                 enter_threshold=None,
                 watch_threshold=65,
-                min_coverage=1.0,
-                min_conviction=1.0,
+                min_signal_authority_coverage=1.0,
             ),
         }
     )

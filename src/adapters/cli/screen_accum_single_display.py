@@ -295,7 +295,7 @@ def display_results(
             bd = sa.breakdown_dict
             _setup = bd.get("setup_quality_group")
             _flow = bd.get("flow_confirmation_group")
-            _conf = bd.get("evidence_confidence")
+            _conf = bd.get("signal_authority_coverage")
             _flags = getattr(c.signal_assessment, "active_flags", ())
             _constraints = getattr(sa, "decision_constraints", None)
             _flag_abbr = {

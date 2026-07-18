@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from src.application.dto.signal_evidence_execution_context import (
         SignalEvidenceExecutionContext,
     )
+    from src.application.services.signal_engine import SignalEngine
 
 
 def create_accumulation_candidate_builder(
@@ -41,6 +42,7 @@ def create_accumulation_candidate_builder(
     swing_config: SwingConfig,
     analyze_config: AnalyzeSwingConfig,
     accumulation_config: AccumulationScreenerConfig,
+    signal_engine: "SignalEngine",
 ):
     def _build_accumulation_candidate_evaluation(
         ticker: str,
@@ -55,6 +57,7 @@ def create_accumulation_candidate_builder(
             indicator_registry=deps.indicator_registry_factory(),
             rules_loader=deps.rules_loader_factory(),
             stockbit_providers=deps.stockbit_providers,
+            signal_engine=signal_engine,
             foreign_flow_score_policy=accumulation_config.foreign_flow_score_policy,
             derived_feature_policy=accumulation_config.derived_features,
             ticker_profile_classifier_factory=deps.ticker_profile_classifier_factory,

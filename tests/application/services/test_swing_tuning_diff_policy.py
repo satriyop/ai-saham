@@ -400,7 +400,10 @@ def test_weight_grid_snapping():
         ),
     )
     resolution = TuningConfigValueResolution(
-        target_path=_path("config/signal_engine.yaml:signal_engine.classification.enter_min_confidence"),
+        target_path=_path(
+            "config/signal_engine.yaml:signal_engine.decision_policy.regime_policy.RISK_ON."
+            "min_signal_authority_coverage"
+        ),
         resolved=True,
         current_value=0.72,
     )
@@ -408,7 +411,10 @@ def test_weight_grid_snapping():
     assert suggestion.proposed_value == 0.75
 
     resolution2 = TuningConfigValueResolution(
-        target_path=_path("config/signal_engine.yaml:signal_engine.classification.enter_min_confidence"),
+        target_path=_path(
+            "config/signal_engine.yaml:signal_engine.decision_policy.regime_policy.RISK_ON."
+            "min_signal_authority_coverage"
+        ),
         resolved=True,
         current_value=0.73,
     )

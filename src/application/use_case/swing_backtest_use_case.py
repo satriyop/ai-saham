@@ -8,7 +8,7 @@ AI usage: None
 import logging
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.application.dto.signal_evidence_execution_context import (
     SignalEvidenceExecutionContext,
@@ -66,6 +66,9 @@ from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.value_objects.market_context import MarketContext
 from src.domain.value_objects.setup_evaluation import SetupEvaluation
 
+if TYPE_CHECKING:
+    from src.application.services.signal_engine import SignalEngine
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
@@ -95,6 +98,7 @@ class SwingBacktestUseCase:
         market_repository: MarketDataRepository,
         indicator_registry: Any,
         rules_loader: RulesLoader,
+        signal_engine: "SignalEngine",
         derived_feature_policy: AccumulationDerivedFeaturePolicy | None = None,
         risk_engine: Any | None = None,
         market_context_provider: MarketContextProvider | None = None,
@@ -108,6 +112,7 @@ class SwingBacktestUseCase:
             market_repository=market_repository,
             indicator_registry=indicator_registry,
             rules_loader=rules_loader,
+            signal_engine=signal_engine,
             derived_feature_policy=self._derived_features,
         )
         self._market_context_provider = market_context_provider

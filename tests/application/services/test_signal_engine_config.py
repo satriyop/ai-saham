@@ -4,6 +4,7 @@ import pytest
 import yaml
 
 from src.application.services.bootstrap import _resolve_signal_config
+from src.application.services.signal_engine_config import DecisionPolicyConfig
 
 
 def _valid_promotion(
@@ -84,8 +85,7 @@ def test_resolve_signal_config_reads_policy_blocks():
                         "enter_allowed": True,
                         "enter_threshold": 71,
                         "watch_threshold": 46,
-                        "min_coverage": 0.61,
-                        "min_conviction": 0.62,
+                        "min_signal_authority_coverage": 0.61,
                         "max_decision": "ENTER",
                         "regime_size_multiplier": 1.0,
                     },
@@ -93,8 +93,7 @@ def test_resolve_signal_config_reads_policy_blocks():
                         "enter_allowed": True,
                         "enter_threshold": 73,
                         "watch_threshold": 52,
-                        "min_coverage": 0.65,
-                        "min_conviction": 0.66,
+                        "min_signal_authority_coverage": 0.65,
                         "max_decision": "ENTER",
                         "regime_size_multiplier": 0.5,
                     },
@@ -102,8 +101,7 @@ def test_resolve_signal_config_reads_policy_blocks():
                         "enter_allowed": False,
                         "enter_threshold": None,
                         "watch_threshold": 60,
-                        "min_coverage": 0.8,
-                        "min_conviction": 0.78,
+                        "min_signal_authority_coverage": 0.8,
                         "max_decision": "WATCH",
                         "regime_size_multiplier": 0.25,
                     },
@@ -111,8 +109,7 @@ def test_resolve_signal_config_reads_policy_blocks():
                         "enter_allowed": False,
                         "enter_threshold": None,
                         "watch_threshold": 65,
-                        "min_coverage": 1.0,
-                        "min_conviction": 1.0,
+                        "min_signal_authority_coverage": 1.0,
                         "max_decision": "WATCH",
                         "regime_size_multiplier": 0.0,
                     },
@@ -182,6 +179,10 @@ def test_resolve_signal_config_reads_policy_blocks():
     assert resolved.decision_policy.regime_policy["RISK_OFF"].max_decision == "WATCH"
     assert resolved.decision_policy.regime_policy["NEUTRAL"].regime_size_multiplier == 0.5
     assert (
+        resolved.decision_policy.regime_policy["RISK_ON"].min_signal_authority_coverage
+        == 0.61
+    )
+    assert (
         resolved.decision_policy.setup_regime_policy["foreign_bounce"]["RISK_OFF"]
         == "allowed_if_flow_confirmation_strong"
     )
@@ -225,6 +226,34 @@ def test_resolve_signal_config_current_file_passes():
         ].status.value
         == "DIAGNOSTIC"
     )
+    # HIGH-2 Finding 1: production RISK_ON/NEUTRAL enforce a 0.70
+    # signal_authority_coverage floor (config/signal_engine.yaml) — the
+    # code-level DecisionPolicyConfig() default must match exactly so a
+    # caller that constructs SignalEngine() without an explicit config
+    # cannot silently fall back to an unenforced (0.0) floor.
+    assert (
+        resolved.decision_policy.regime_policy["RISK_ON"].min_signal_authority_coverage
+        == 0.70
+    )
+    assert (
+        resolved.decision_policy.regime_policy["NEUTRAL"].min_signal_authority_coverage
+        == 0.70
+    )
+
+
+def test_decision_policy_config_defaults_match_canonical_yaml_floor():
+    """HIGH-2 Finding 1: DecisionPolicyConfig()'s bare Python defaults (used
+    whenever a caller builds SignalEngine()/SignalEngineConfig() without
+    loading config/signal_engine.yaml) must already carry the same
+    min_signal_authority_coverage floor the YAML declares for RISK_ON and
+    NEUTRAL — otherwise an unconfigured engine would silently authorize
+    ENTER at coverage levels the real policy forbids."""
+    config = DecisionPolicyConfig()
+
+    assert config.regime_policy["RISK_ON"].min_signal_authority_coverage == 0.70
+    assert config.regime_policy["NEUTRAL"].min_signal_authority_coverage == 0.70
+    assert config.regime_policy["RISK_OFF"].min_signal_authority_coverage == 0.80
+    assert config.regime_policy["VOLATILE"].min_signal_authority_coverage == 1.00
 
 
 def test_resolve_signal_config_current_file_emits_no_archived_warning(caplog):
@@ -479,10 +508,10 @@ def test_resolve_signal_config_rejects_invalid_decision_name():
         "signal_engine": {
             "decision_policy": {
                 "regime_policy": {
-                    "RISK_ON": {"max_decision": "BUY"},
-                    "NEUTRAL": {"max_decision": "ENTER"},
-                    "RISK_OFF": {"max_decision": "WATCH"},
-                    "VOLATILE": {"max_decision": "WATCH"},
+                    "RISK_ON": {"max_decision": "BUY", "min_signal_authority_coverage": 0.70},
+                    "NEUTRAL": {"max_decision": "ENTER", "min_signal_authority_coverage": 0.70},
+                    "RISK_OFF": {"max_decision": "WATCH", "min_signal_authority_coverage": 0.80},
+                    "VOLATILE": {"max_decision": "WATCH", "min_signal_authority_coverage": 1.0},
                 },
             },
         },
@@ -522,3 +551,145 @@ def test_resolve_signal_config_rejects_negative_alpha_trigger_group_weight():
 
     with pytest.raises(ValueError, match="group_weights.market_context"):
         _resolve_signal_config(cfg)
+
+
+# ── HIGH-2: evidence-group config fail-closed validation ────────────────────
+
+
+def test_resolve_signal_config_rejects_non_positive_evidence_group_weight():
+    cfg = {
+        "signal_engine": {
+            "evidence_groups": {
+                "setup_quality": {"weight": 0.0},
+            },
+        },
+    }
+
+    with pytest.raises(ValueError, match="evidence_groups.setup_quality.weight must be > 0"):
+        _resolve_signal_config(cfg)
+
+
+def test_resolve_signal_config_rejects_empty_authority_registration():
+    cfg = {
+        "signal_engine": {
+            "evidence_groups": {
+                "flow_confirmation": {"authority_registration": ""},
+            },
+        },
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="evidence_groups.flow_confirmation.authority_registration cannot be empty",
+    ):
+        _resolve_signal_config(cfg)
+
+
+def test_resolve_signal_config_rejects_unknown_authority_registration():
+    # Not a "resolve to diagnostic" case — a misspelled registration name
+    # must fail closed at config-load time, never silently pass through.
+    cfg = {
+        "signal_engine": {
+            "evidence_groups": {
+                "setup_quality": {"authority_registration": "setup_qualty"},
+            },
+        },
+    }
+
+    with pytest.raises(
+        ValueError,
+        match=r"authority_registration='setup_qualty' does not exist",
+    ):
+        _resolve_signal_config(cfg)
+
+
+def test_resolve_signal_config_rejects_non_boolean_required_for_authority():
+    cfg = {
+        "signal_engine": {
+            "evidence_groups": {
+                "setup_quality": {"required_for_authority": "yes"},
+            },
+        },
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="evidence_groups.setup_quality.required_for_authority must be a boolean",
+    ):
+        _resolve_signal_config(cfg)
+
+
+def test_resolve_signal_config_rejects_out_of_range_min_signal_authority_coverage():
+    cfg = {
+        "signal_engine": {
+            "decision_policy": {
+                "regime_policy": {
+                    "RISK_ON": {"max_decision": "ENTER", "min_signal_authority_coverage": 1.5},
+                    "NEUTRAL": {"max_decision": "ENTER", "min_signal_authority_coverage": 0.70},
+                    "RISK_OFF": {"max_decision": "WATCH", "min_signal_authority_coverage": 0.80},
+                    "VOLATILE": {"max_decision": "WATCH", "min_signal_authority_coverage": 1.0},
+                },
+            },
+        },
+    }
+
+    with pytest.raises(
+        ValueError,
+        match=r"RISK_ON\.min_signal_authority_coverage must be within \[0\.0, 1\.0\]",
+    ):
+        _resolve_signal_config(cfg)
+
+
+def test_resolve_signal_config_rejects_omitted_min_signal_authority_coverage():
+    """HIGH-2 Finding 1 (post-review): the resolver must not fail open to 0.0
+    when min_signal_authority_coverage is omitted from a regime's config
+    block. A silent 0.0 default would recreate the original unenforced-floor
+    bypass for any config that accidentally drops this key, even though the
+    RISK_ON/NEUTRAL DecisionPolicyConfig() dataclass defaults are correctly
+    0.70. All four regimes are present (so the missing-regime check does not
+    fire first); only NEUTRAL omits the key."""
+    cfg = {
+        "signal_engine": {
+            "decision_policy": {
+                "regime_policy": {
+                    "RISK_ON": {"max_decision": "ENTER", "min_signal_authority_coverage": 0.70},
+                    "NEUTRAL": {"max_decision": "ENTER"},
+                    "RISK_OFF": {"max_decision": "WATCH", "min_signal_authority_coverage": 0.80},
+                    "VOLATILE": {"max_decision": "WATCH", "min_signal_authority_coverage": 1.0},
+                },
+            },
+        },
+    }
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"signal_engine\.decision_policy\.regime_policy\.NEUTRAL\."
+            r"min_signal_authority_coverage is required"
+        ),
+    ):
+        _resolve_signal_config(cfg)
+
+
+def test_resolve_signal_config_accepts_valid_evidence_group_config():
+    cfg = {
+        "signal_engine": {
+            "evidence_groups": {
+                "setup_quality": {
+                    "weight": 0.55,
+                    "authority_registration": "setup_quality",
+                    "required_for_authority": True,
+                },
+                "flow_confirmation": {
+                    "weight": 0.45,
+                    "authority_registration": "institutional_flow",
+                    "required_for_authority": True,
+                },
+            },
+        },
+    }
+
+    resolved = _resolve_signal_config(cfg)
+    assert resolved.evidence_groups.setup_quality.weight == 0.55
+    assert resolved.evidence_groups.setup_quality.authority_registration == "setup_quality"
+    assert resolved.evidence_groups.flow_confirmation.weight == 0.45

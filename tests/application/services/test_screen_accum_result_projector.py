@@ -479,14 +479,14 @@ def _enriched_candidate(**overrides) -> AccumulationCandidate:
     signal_assessment = SimpleNamespace(
         assessment=SimpleNamespace(
             score=72,
-            coverage_score=0.83,
-            confidence_score=0.83,
+            signal_authority_coverage=0.83,
             strength=SimpleNamespace(value="MODERATE"),
             entry_quality=SimpleNamespace(value="FAIR"),
             breakdown_dict={},
             decision_constraints=None,
         ),
         coverage_warning=None,
+        setup_readiness=None,
     )
     risk_assessment = RiskAssessment(
         rationale=("ok",),
@@ -500,9 +500,8 @@ def _enriched_candidate(**overrides) -> AccumulationCandidate:
         current_phase=SetupPhaseState.ACCUMULATION,
         previous_phase=None,
         phase_age_sessions=1,
-        phase_strength=0.6,
-        coverage_score=0.67,
-        conviction_score=0.4,
+        phase_detection_strength=0.6,
+        phase_input_coverage=0.67,
         sequence_valid=True,
     )
     trade_setup = TradeSetup(

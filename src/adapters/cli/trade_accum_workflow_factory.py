@@ -62,6 +62,7 @@ def create_log_accumulation_trade_workflow(
         indicator_registry=deps.indicator_registry_factory(),
         rules_loader=deps.rules_loader_factory(),
         stockbit_providers=deps.stockbit_providers,
+        signal_engine=deps.create_signal_engine(),
         ticker_profile_classifier_factory=deps.ticker_profile_classifier_factory,
         institutional_accumulation_config_factory=(
             deps.institutional_accumulation_config_factory

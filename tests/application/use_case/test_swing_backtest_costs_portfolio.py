@@ -2,6 +2,8 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from src.application.services.indicator_registry import IndicatorRegistry
+from src.application.services.signal_engine import SignalEngine
+from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.use_case.swing_backtest_use_case import (
     DEFAULT_SWING_COST_BPS,
     SwingBacktestRequest,
@@ -29,6 +31,7 @@ def test_swing_backtest_default_applies_transaction_costs():
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(_base_candles("BBCA", base)),
         rules_loader=FakeRulesLoader(),
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
     response = use_case.execute(SwingBacktestRequest(
@@ -63,6 +66,7 @@ def test_swing_backtest_respects_max_positions():
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         rules_loader=FakeRulesLoader(),
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
     response = use_case.execute(SwingBacktestRequest(

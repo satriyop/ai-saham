@@ -155,6 +155,7 @@ def _run_swing_backtest(
         market_repository=deps.market_repository,
         indicator_registry=deps.indicator_registry_factory(),
         rules_loader=deps.rules_loader_factory(),
+        signal_engine=deps.create_signal_engine(),
         derived_feature_policy=runner_config.accumulation_config.derived_features,
         risk_engine=deps.create_risk_engine(),
         market_context_provider=deps.create_market_context_provider(),

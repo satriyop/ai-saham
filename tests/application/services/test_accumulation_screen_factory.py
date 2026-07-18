@@ -10,6 +10,8 @@ from src.application.services.accumulation_screen_factory import (
     create_accumulation_screen_use_case_bundle,
 )
 from src.application.services.indicator_registry import IndicatorRegistry
+from src.application.services.signal_engine import SignalEngine
+from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from src.application.use_case.record_accumulation_observations_use_case import (
     RecordAccumulationObservationsUseCase,
@@ -94,6 +96,7 @@ def test_bundle_factory_supplies_screen_use_case_and_working_recorder():
         market_repository=MockMarketRepository(candles),
         rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo,
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
     assert isinstance(bundle, AccumulationScreenUseCaseBundle)
@@ -123,3 +126,24 @@ def test_bundle_factory_supplies_screen_use_case_and_working_recorder():
     assert result.recorded_count == 1
     assert len(spy_repo.saved) == 1
     assert spy_repo.saved[0].ticker == "BBCA"
+
+
+def test_bundle_factory_shares_one_signal_engine_instance_across_screen_and_persister():
+    """HIGH-2 Finding 1: create_accumulation_screen_use_case_bundle() must not
+    construct a second, independently-configured SignalEngine for the
+    observation persister's evidence builder — the screen use case and the
+    persister's AccumulationCandidateEvidenceBuilder must own the exact same
+    injected instance, never separate screen/persistence engines."""
+    engine = SignalEngine(config=SignalEngineConfig())
+
+    bundle = create_accumulation_screen_use_case_bundle(
+        indicator_registry=IndicatorRegistry(),
+        broker_repository=MockBrokerRepository([]),
+        market_repository=MockMarketRepository([]),
+        rules_loader=FakeRulesLoader(),
+        signal_engine=engine,
+    )
+
+    assert bundle.screen_use_case._signal_engine is engine
+    persister = bundle.record_observations_use_case._observation_persister
+    assert persister._candidate_evidence_builder._signal_engine is engine

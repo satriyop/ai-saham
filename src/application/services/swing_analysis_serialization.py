@@ -22,9 +22,10 @@ def signal_response_to_dict(
         "strength": response.assessment.strength.value,
         "entry_quality": response.assessment.entry_quality.value,
         "breakdown": response.assessment.breakdown_dict,
-        "coverage_score": response.coverage_score,             # canonical
-        "evidence_confidence": response.evidence_confidence,   # legacy alias
-        "confidence_score": response.assessment.confidence_score,  # legacy alias
+        "signal_authority_coverage": response.signal_authority_coverage,
+        "setup_readiness": (
+            response.setup_readiness.to_dict() if response.setup_readiness else None
+        ),
         "coverage_warning": response.coverage_warning,
         "alpha_trigger_score": (
             response.assessment.alpha_trigger_score.to_dict()
@@ -34,8 +35,10 @@ def signal_response_to_dict(
             response.assessment.decision_constraints.to_dict()
             if getattr(response.assessment, "decision_constraints", None) else None
         ),
-        # DQ-002 Blocker 2: shadow-mode source-availability diagnostics.
-        # Purely observational — never consumed to derive score/entry_quality.
+        # DQ-002 Blocker 2 / HIGH-2: source-availability diagnostics.
+        # availability_enforcement=ENFORCED means this same availability
+        # already gated signal_authority_coverage above — never consumed a
+        # second time here to derive score/entry_quality directly.
         "setup_source_availability": (
             response.setup_source_availability.to_dict()
             if response.setup_source_availability else None

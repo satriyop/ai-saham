@@ -52,6 +52,7 @@ from src.application.use_case.evaluate_swing_setup_use_case import (
 from src.infrastructure.composition.indicator_registry_factory import (
     create_indicator_registry,
 )
+from src.infrastructure.composition.signal_engine_factory import create_signal_engine
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
 )
@@ -337,6 +338,7 @@ def today(
             rules_loader=RulesYamlLoader(),
             derived_feature_policy=accumulation_config.derived_features,
             risk_use_case=risk_use_case,
+            signal_engine=create_signal_engine(db_path=db_path, with_enrichment=True),
         ),
         universe_loader=YamlUniverseConfigLoader(),
         setup_lens_impact_use_case=_build_setup_lens_impact_use_case(

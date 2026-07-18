@@ -17,6 +17,8 @@ from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSession,
 )
 from src.application.services.indicator_registry import IndicatorRegistry
+from src.application.services.signal_engine import SignalEngine
+from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from src.application.use_case.run_accumulation_screen_workflow_use_case import (
     RunAccumulationScreenWorkflowRequest,
@@ -401,6 +403,7 @@ def test_multi_mode_writes_zero_candidate_observations():
         market_repository=MockMarketRepository(candles),
         rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo,
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
     broker_repo = MagicMock()
     broker_repo.get_broker_daily_flows.return_value = []

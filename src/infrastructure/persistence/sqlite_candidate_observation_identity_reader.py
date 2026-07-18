@@ -11,13 +11,26 @@ Layer: Infrastructure
 from __future__ import annotations
 
 import contextlib
-import json
 import sqlite3
 from pathlib import Path
 
 from src.application.use_case.audit_candidate_observation_identity_use_case import (
     CandidateObservationIdentityReader,
     RawCandidateObservationIdentityData,
+)
+from src.domain.value_objects.signal_artifact_schema import (
+    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+)
+
+# HIGH-2: the shared schema-version constant is the only source of the
+# current canonical version — never hardcode 2 or 3 in these SQL filters.
+_CANONICAL_SCHEMA_FILTER = (
+    "config_hash IS NOT NULL AND TRIM(config_hash) != '' "
+    f"AND schema_version = {CANDIDATE_OBSERVATION_SCHEMA_VERSION}"
+)
+_LEGACY_SCHEMA_FILTER = (
+    "config_hash IS NULL OR TRIM(config_hash) = '' "
+    f"OR schema_version != {CANDIDATE_OBSERVATION_SCHEMA_VERSION}"
 )
 
 _MISSING_IDENTITY_COLUMNS = (
@@ -74,7 +87,7 @@ class SQLiteCandidateObservationIdentityReader:
                 legacy = total if config_hash_missing else self._scalar(
                     conn,
                     "SELECT COUNT(*) FROM candidate_observations "
-                    "WHERE config_hash IS NULL OR TRIM(config_hash) = '' OR schema_version != 2",
+                    f"WHERE {_LEGACY_SCHEMA_FILTER}",
                 )
                 canonical = total - legacy
                 missing_counts = {}
@@ -106,7 +119,7 @@ class SQLiteCandidateObservationIdentityReader:
                     else (
                         "SELECT snapshot_date, COUNT(*) as row_count "
                         "FROM candidate_observations "
-                        "WHERE config_hash IS NULL OR TRIM(config_hash) = '' OR schema_version != 2 "
+                        f"WHERE {_LEGACY_SCHEMA_FILTER} "
                         "GROUP BY snapshot_date ORDER BY row_count DESC"
                     )
                 )
@@ -133,7 +146,7 @@ class SQLiteCandidateObservationIdentityReader:
             legacy = self._scalar(
                 conn,
                 "SELECT COUNT(*) FROM candidate_observations "
-                "WHERE config_hash IS NULL OR TRIM(config_hash) = '' OR schema_version != 2",
+                f"WHERE {_LEGACY_SCHEMA_FILTER}",
             )
             canonical = total - legacy
 
@@ -170,7 +183,7 @@ class SQLiteCandidateObservationIdentityReader:
                 conn,
                 "SELECT snapshot_date, COUNT(*) as row_count "
                 "FROM candidate_observations "
-                "WHERE config_hash IS NULL OR TRIM(config_hash) = '' OR schema_version != 2 "
+                f"WHERE {_LEGACY_SCHEMA_FILTER} "
                 "GROUP BY snapshot_date ORDER BY row_count DESC",
             )
 
@@ -232,7 +245,7 @@ class SQLiteCandidateObservationIdentityReader:
             "SELECT ticker, snapshot_date, workflow, window_sessions, "
             "data_as_of_date, config_hash, COUNT(*) as cnt "
             "FROM candidate_observations "
-            "WHERE config_hash IS NOT NULL AND TRIM(config_hash) != '' AND schema_version = 2 "
+            f"WHERE {_CANONICAL_SCHEMA_FILTER} "
             "GROUP BY ticker, snapshot_date, workflow, window_sessions, "
             "data_as_of_date, config_hash "
             "HAVING COUNT(*) > 1"
@@ -289,7 +302,7 @@ class SQLiteCandidateObservationIdentityReader:
         canonical_row = conn.execute(
             "SELECT COUNT(*) as cnt FROM candidate_observations "
             "WHERE snapshot_date = ? "
-            "AND config_hash IS NOT NULL AND TRIM(config_hash) != '' AND schema_version = 2",
+            f"AND {_CANONICAL_SCHEMA_FILTER}",
             (row["snapshot_date"],),
         ).fetchone()
         latest_canonical = canonical_row["cnt"] if canonical_row else 0
@@ -306,9 +319,9 @@ class SQLiteCandidateObservationIdentityReader:
     def _latest_readiness_dependency(self, conn: sqlite3.Connection) -> dict:
         row = conn.execute(
             "SELECT snapshot_date, COUNT(*) as total, "
-            "SUM(CASE WHEN config_hash IS NOT NULL AND TRIM(config_hash) != '' AND schema_version = 2 "
+            f"SUM(CASE WHEN {_CANONICAL_SCHEMA_FILTER} "
             "THEN 1 ELSE 0 END) as canonical, "
-            "SUM(CASE WHEN config_hash IS NULL OR TRIM(config_hash) = '' OR schema_version != 2 "
+            f"SUM(CASE WHEN {_LEGACY_SCHEMA_FILTER} "
             "THEN 1 ELSE 0 END) as legacy "
             "FROM candidate_observations "
             "GROUP BY snapshot_date ORDER BY snapshot_date DESC LIMIT 1"

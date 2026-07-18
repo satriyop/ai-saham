@@ -16,10 +16,14 @@ from src.application.use_case.generate_signal_forward_labels_use_case import (
     GenerateEligibleSignalForwardLabelsRequest,
     GenerateSignalForwardLabelsRequest,
     GenerateSignalForwardLabelsUseCase,
+    SignalLabelGenerationSkipReason,
 )
 from src.application.use_case.summarize_signal_forward_labels_use_case import (
     SummarizeSignalForwardLabelsRequest,
     SummarizeSignalForwardLabelsUseCase,
+)
+from src.domain.value_objects.signal_artifact_schema import (
+    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
 )
 from src.domain.value_objects.signal_forward_label import SignalLabelHorizon
 from src.infrastructure.config.app_config import load_app_config
@@ -138,6 +142,19 @@ def signal_labels(
             typer.echo(f"[error] No stored signal observation for {ticker_u} on {day}.", err=True)
             typer.echo("        Run: saham screen accum to capture observations first.", err=True)
             raise typer.Exit(1)
+        if response.skip_reason is SignalLabelGenerationSkipReason.INCOMPATIBLE_OBSERVATION_SCHEMA:
+            found = (
+                str(response.source_schema_version)
+                if response.source_schema_version is not None
+                else "missing-or-invalid"
+            )
+            typer.echo(
+                f"[error] Stored observation for {ticker_u} on {day} is not canonical: "
+                f"expected schema {CANDIDATE_OBSERVATION_SCHEMA_VERSION}, found {found}. "
+                "No label was generated.",
+                err=True,
+            )
+            raise typer.Exit(1)
         if fmt != "json":
             label = response.labels[0]
             typer.echo(
@@ -167,7 +184,9 @@ def signal_labels(
             typer.echo(
                 f"Generated {response.generated_count} {label_horizon.value} labels "
                 f"from {response.observation_count} observations "
-                f"({response.unavailable_count} unavailable)."
+                f"({response.unavailable_count} unavailable, "
+                f"{response.skipped_incompatible_observation_count} incompatible "
+                "observations skipped)."
             )
 
     summary = SummarizeSignalForwardLabelsUseCase(labels_repo).execute(

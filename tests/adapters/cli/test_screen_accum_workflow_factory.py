@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 
 from src.adapters.cli.screen_accum_workflow_factory import (
     create_accumulation_screen_workflow,
+    create_accumulation_screen_workflow_bundle,
 )
 
 MODULE_PATH = "src.adapters.cli.screen_accum_workflow_factory"
@@ -47,6 +48,44 @@ def test_with_risk_true_calls_risk_factory_with_market_repository():
 
     mock_risk.assert_called_once_with(market_repository=deps.market_repository)
     assert mock_use_case.call_args.kwargs["risk_use_case"] is mock_risk.return_value
+
+
+def test_workflow_uses_deps_configured_signal_engine_exactly_once():
+    """HIGH-2 Finding 1: the composition root must build exactly one
+    configured SignalEngine per invocation via deps.create_signal_engine()
+    and inject that same instance into the screen use case — never a bare
+    unconfigured SignalEngine(), and never more than one engine per call."""
+    deps = _make_dependencies()
+    with patch(f"{MODULE_PATH}.create_accumulation_screen_use_case") as mock_use_case:
+        create_accumulation_screen_workflow(
+            db_path=Path("db.sqlite"),
+            screener_config=MagicMock(),
+            dependencies=deps,
+        )
+
+    deps.create_signal_engine.assert_called_once_with()
+    assert (
+        mock_use_case.call_args.kwargs["signal_engine"]
+        is deps.create_signal_engine.return_value
+    )
+
+
+def test_workflow_bundle_uses_deps_configured_signal_engine_exactly_once():
+    """Same composition-root guarantee for the observation-recording bundle
+    path (create_accumulation_screen_workflow_bundle)."""
+    deps = _make_dependencies()
+    with patch(f"{MODULE_PATH}.create_accumulation_screen_use_case_bundle") as mock_bundle:
+        create_accumulation_screen_workflow_bundle(
+            db_path=Path("db.sqlite"),
+            screener_config=MagicMock(),
+            dependencies=deps,
+        )
+
+    deps.create_signal_engine.assert_called_once_with()
+    assert (
+        mock_bundle.call_args.kwargs["signal_engine"]
+        is deps.create_signal_engine.return_value
+    )
 
 
 def test_module_does_not_import_private_or_bootstrap_helpers():

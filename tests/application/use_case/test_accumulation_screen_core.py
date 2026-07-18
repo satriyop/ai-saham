@@ -12,6 +12,8 @@ from src.application.services.accumulation_multi_window_pattern import (
     classify_multi_window_pattern,
 )
 from src.application.services.indicator_registry import IndicatorRegistry
+from src.application.services.signal_engine import SignalEngine
+from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenUseCase,
 )
@@ -67,6 +69,7 @@ def test_screen_window_uses_latest_broker_sessions_not_calendar_days():
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         rules_loader=FakeRulesLoader(),
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
     response = use_case.execute(
@@ -102,6 +105,7 @@ def test_screen_passes_as_of_date_to_insider_provider():
         market_repository=MockMarketRepository(candles),
         rules_loader=FakeRulesLoader(),
         insider_activity_provider=insider_provider,
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
     use_case.execute(
@@ -145,6 +149,7 @@ def test_screen_ignores_unsafe_broker_summary_rows():
         broker_repository=MockBrokerRepository([*valid_summaries, unsafe_latest]),
         market_repository=MockMarketRepository(candles),
         rules_loader=FakeRulesLoader(),
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
     response = use_case.execute(
@@ -184,6 +189,7 @@ def test_screen_uses_derived_feature_policy_for_trend_threshold():
             trend_sma_period=20,
             trend_threshold_pct=5.0,
         ),
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
     strict_threshold = AccumulationScreenUseCase(
         indicator_registry=IndicatorRegistry(),
@@ -194,6 +200,7 @@ def test_screen_uses_derived_feature_policy_for_trend_threshold():
             trend_sma_period=20,
             trend_threshold_pct=2.0,
         ),
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
     request = AccumulationScreenRequest(
@@ -267,3 +274,19 @@ def test_classify_coiled_spring_when_squeeze_and_high_score():
 def test_classify_weak_when_no_windows_hot():
     candidates = {w: _make_candidate(score=30.0) for w in _WINDOWS}
     assert classify_multi_window_pattern(_WINDOWS, candidates, _MIN_SCORE, _BB_PCTILE) == "weak"
+
+
+def test_accumulation_screen_use_case_requires_signal_engine():
+    """HIGH-2 Finding 1: signal_engine has no default and no
+    `signal_engine or SignalEngine()` fallback — omitting it must fail the
+    normal Python constructor call, not silently construct an unconfigured
+    engine that bypasses the configured authority-coverage floor."""
+    import pytest
+
+    with pytest.raises(TypeError):
+        AccumulationScreenUseCase(
+            broker_repository=MockBrokerRepository([]),
+            market_repository=MockMarketRepository([]),
+            indicator_registry=IndicatorRegistry(),
+            rules_loader=FakeRulesLoader(),
+        )

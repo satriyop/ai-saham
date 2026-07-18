@@ -118,7 +118,10 @@ class SignalAssessment:
     breakdown: tuple[tuple[str, float], ...] # (factor_name, component_score) pairs
     rationale: tuple[str, ...]
     snapshot_date: date
-    confidence_score: float = 1.0          # legacy alias for coverage_score (evidence completeness, 0.0–1.0)
+    # HIGH-2 canonical name: production-authority coverage (0.0-1.0). Not
+    # statistical confidence or trade conviction — see
+    # SignalEvidenceGroupScorer._compute_signal_authority_coverage.
+    signal_authority_coverage: float = 1.0
     decision_constraints: "DecisionConstraints | None" = None
     legacy_conditioned_score: int | None = None
     raw_exact_score: float | None = None
@@ -132,21 +135,16 @@ class SignalAssessment:
                 f"SignalAssessment legacy_conditioned_score must be 0–100, "
                 f"got {self.legacy_conditioned_score}"
             )
-        if not (0.0 <= self.confidence_score <= 1.0):
+        if not (0.0 <= self.signal_authority_coverage <= 1.0):
             raise ValueError(
-                f"SignalAssessment confidence_score must be 0.0–1.0, "
-                f"got {self.confidence_score}"
+                f"SignalAssessment signal_authority_coverage must be 0.0–1.0, "
+                f"got {self.signal_authority_coverage}"
             )
         if self.raw_exact_score is not None and not (0.0 <= self.raw_exact_score <= 100.0):
             raise ValueError(
                 f"SignalAssessment raw_exact_score must be 0.0–100.0, "
                 f"got {self.raw_exact_score}"
             )
-
-    @property
-    def coverage_score(self) -> float:
-        """Canonical name: evidence completeness (0.0–1.0). Alias for confidence_score."""
-        return self.confidence_score
 
     @property
     def breakdown_dict(self) -> dict[str, float]:
@@ -177,8 +175,7 @@ class SignalAssessment:
             "breakdown": self.breakdown_dict,
             "rationale": list(self.rationale),
             "snapshot_date": self.snapshot_date.isoformat(),
-            "coverage_score": self.confidence_score,   # canonical
-            "confidence_score": self.confidence_score,  # legacy alias
+            "signal_authority_coverage": self.signal_authority_coverage,
             "raw_exact_score": self.raw_exact_score,
             "alpha_trigger_score": (
                 self.alpha_trigger_score.to_dict()

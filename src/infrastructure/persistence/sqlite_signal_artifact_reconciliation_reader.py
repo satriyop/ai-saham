@@ -31,6 +31,9 @@ from src.application.dto.source_reconciliation_dto import (
     RawSignalForwardLabelsLinkageObservation,
 )
 from src.domain.value_objects.market_context import MarketRegime
+from src.domain.value_objects.signal_artifact_schema import (
+    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+)
 
 _MAX_SAMPLE_ROWS = 10
 
@@ -110,12 +113,12 @@ class SQLiteSignalArtifactReconciliationReader:
                 )
 
             canonical_row_count = conn.execute(
-                f"SELECT COUNT(*) FROM {table} WHERE config_hash != '' AND schema_version = 2"
+                f"SELECT COUNT(*) FROM {table} WHERE config_hash != '' AND schema_version = {CANDIDATE_OBSERVATION_SCHEMA_VERSION}"
             ).fetchone()[0]
             legacy_row_count = row_count - canonical_row_count
 
             canonical_missing_condition = (
-                "config_hash != '' AND schema_version = 2 AND ("
+                f"config_hash != '' AND schema_version = {CANDIDATE_OBSERVATION_SCHEMA_VERSION} AND ("
                 "ticker IS NULL OR ticker = '' OR "
                 "snapshot_date IS NULL OR snapshot_date = '' OR "
                 "captured_at IS NULL OR captured_at = '' OR "
@@ -136,7 +139,7 @@ class SQLiteSignalArtifactReconciliationReader:
 
             duplicate_canonical_identity_count = conn.execute(
                 f"SELECT COALESCE(SUM(cnt - 1), 0) FROM ("
-                f"SELECT COUNT(*) AS cnt FROM {table} WHERE config_hash != '' AND schema_version = 2 "
+                f"SELECT COUNT(*) AS cnt FROM {table} WHERE config_hash != '' AND schema_version = {CANDIDATE_OBSERVATION_SCHEMA_VERSION} "
                 "GROUP BY ticker, snapshot_date, workflow, window_sessions, "
                 "data_as_of_date, config_hash HAVING cnt > 1"
                 ")"
@@ -145,7 +148,7 @@ class SQLiteSignalArtifactReconciliationReader:
                 conn,
                 "SELECT ticker, snapshot_date, workflow, window_sessions, data_as_of_date, "
                 f"config_hash, COUNT(*) AS duplicate_row_count FROM {table} "
-                "WHERE config_hash != '' AND schema_version = 2 GROUP BY ticker, snapshot_date, workflow, "
+                f"WHERE config_hash != '' AND schema_version = {CANDIDATE_OBSERVATION_SCHEMA_VERSION} GROUP BY ticker, snapshot_date, workflow, "
                 "window_sessions, data_as_of_date, config_hash "
                 f"HAVING COUNT(*) > 1 LIMIT {_MAX_SAMPLE_ROWS}",
             )

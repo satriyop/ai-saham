@@ -483,8 +483,11 @@ def test_contract_value_error_escapes_in_swing():
         composer.recompose_after_evidence(_request(), state)
 
 
-def test_current_and_unknown_shadow_availability_produce_identical_results_in_swing():
-    # 12. CURRENT and UNKNOWN SHADOW availability produce identical score, coverage, entry quality, and decision constraints.
+def test_current_and_unknown_availability_produce_identical_directional_score_in_swing():
+    # 12. CURRENT and UNKNOWN availability produce identical directional
+    #     score. HIGH-2 explicitly supersedes the coverage/entry-quality-
+    #     identical guarantee this test previously enforced:
+    #     signal_authority_coverage is now availability-gated by design.
     from src.application.services.signal_engine import SignalEngine
     engine = SignalEngine()
     composer = SwingAnalysisDecisionComposer(
@@ -508,6 +511,3 @@ def test_current_and_unknown_shadow_availability_produce_identical_results_in_sw
     a1 = result_current.signal_assessment
     a2 = result_unknown.signal_assessment
     assert a1.score == a2.score
-    assert a1.coverage_score == a2.coverage_score
-    assert a1.assessment.entry_quality == a2.assessment.entry_quality
-    assert a1.assessment.decision_constraints == a2.assessment.decision_constraints

@@ -81,9 +81,8 @@ def test_swing_evidence_to_dict_includes_setup_phase():
         current_phase=SetupPhaseState.BREAKOUT_CONFIRMATION,
         previous_phase=SetupPhaseState.COMPRESSION,
         phase_age_sessions=1,
-        phase_strength=0.8,
-        coverage_score=1.0,
-        conviction_score=0.8,
+        phase_detection_strength=0.8,
+        phase_input_coverage=1.0,
         sequence_valid=True,
         reasons=("breakout: VWAP reclaim",),
     )
@@ -105,7 +104,7 @@ def test_swing_evidence_to_dict_includes_setup_phase():
     assert d["setup_phase"]["sequence_valid"] is True
 
 
-def test_signal_response_to_dict_emits_coverage_fields():
+def test_signal_response_to_dict_emits_signal_authority_coverage():
     from datetime import date as _date
 
     from src.application.use_case.assess_signal_use_case import AssessSignalResponse
@@ -123,22 +122,24 @@ def test_signal_response_to_dict_emits_coverage_fields():
         entry_quality=EntryQuality.ENTER,
         breakdown=(("setup_quality_group", 80.0),),
         rationale=(),
-        confidence_score=0.85,
+        signal_authority_coverage=0.85,
     )
     response = AssessSignalResponse(
         ticker="BBCA",
         assessment=assessment,
-        evidence_confidence=0.85,
+        signal_authority_coverage=0.85,
     )
 
     d = signal_response_to_dict(response)
     assert d is not None
-    assert "coverage_score" in d
-    assert d["coverage_score"] == pytest.approx(0.85)
-    assert "evidence_confidence" in d
-    assert "confidence_score" in d
-    assert d["evidence_confidence"] == d["coverage_score"]
-    assert d["confidence_score"] == d["coverage_score"]
+    assert "signal_authority_coverage" in d
+    assert d["signal_authority_coverage"] == pytest.approx(0.85)
+    assert "setup_readiness" in d
+    assert d["setup_readiness"] is None
+    # HIGH-2: removed aliases must not reappear in canonical output
+    assert "coverage_score" not in d
+    assert "evidence_confidence" not in d
+    assert "confidence_score" not in d
 
 
 def test_signal_response_to_dict_none_returns_none():

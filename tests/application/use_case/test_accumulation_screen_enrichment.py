@@ -9,6 +9,8 @@ from src.application.dto.accumulation_screen import (
     AccumulationScreenRequest,
 )
 from src.application.services.indicator_registry import IndicatorRegistry
+from src.application.services.signal_engine import SignalEngine
+from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenUseCase,
 )
@@ -118,6 +120,7 @@ def test_screen_attaches_ticker_notation_without_changing_score():
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         rules_loader=FakeRulesLoader(),
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     ).execute(
         AccumulationScreenRequest(
             tickers=["BTEK"],
@@ -134,6 +137,7 @@ def test_screen_attaches_ticker_notation_without_changing_score():
         market_repository=MockMarketRepository(candles),
         rules_loader=FakeRulesLoader(),
         ticker_notation_provider=MockTickerNotationProvider(),
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     ).execute(
         AccumulationScreenRequest(
             tickers=["BTEK"],
@@ -179,6 +183,7 @@ def test_historical_screen_uses_as_of_date_for_point_in_time_enrichment():
         analyst_consensus_provider=analyst,
         forward_estimates_provider=forward,
         ticker_notation_provider=notation,
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     ).execute(
         AccumulationScreenRequest(
             tickers=["BBCA"],
@@ -217,6 +222,7 @@ def test_live_screen_passes_none_as_of_date_to_fetch_capable_enrichment():
         analyst_consensus_provider=analyst,
         forward_estimates_provider=forward,
         ticker_notation_provider=notation,
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     ).execute(
         AccumulationScreenRequest(
             tickers=["BBCA"],
@@ -300,6 +306,7 @@ def test_screen_derives_forward_pe_from_latest_price_when_cache_has_eps_only():
         market_repository=MockMarketRepository(candles),
         rules_loader=FakeRulesLoader(),
         forward_estimates_provider=forward_provider,
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
     response = use_case.execute(
@@ -381,6 +388,7 @@ def test_screener_populates_signal_assessment():
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         rules_loader=FakeRulesLoader(),
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
     resp = uc.execute(
         AccumulationScreenRequest(
@@ -399,8 +407,9 @@ def test_screener_populates_signal_assessment():
     assert 0 <= c.signal_assessment.assessment.score <= 100
 
 
-def test_candidate_to_dict_emits_canonical_coverage_score():
-    """Candidate.to_dict() signal_assessment block must include canonical coverage_score."""
+def test_candidate_to_dict_emits_canonical_signal_authority_coverage():
+    """Candidate.to_dict() signal_assessment block must include canonical
+    signal_authority_coverage and no removed aliases."""
     session_dates = _weekdays(date(2026, 1, 1), 7)
     as_of = session_dates[-1]
     candles = [
@@ -413,6 +422,7 @@ def test_candidate_to_dict_emits_canonical_coverage_score():
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         rules_loader=FakeRulesLoader(),
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
     resp = uc.execute(
         AccumulationScreenRequest(
@@ -429,7 +439,7 @@ def test_candidate_to_dict_emits_canonical_coverage_score():
     assert c.signal_assessment is not None
     d = c.to_dict()
     sa_dict = d["signal_assessment"]
-    assert "coverage_score" in sa_dict
-    assert "confidence_score" in sa_dict
-    assert sa_dict["coverage_score"] == sa_dict["confidence_score"]
-    assert sa_dict["coverage_score"] is not None
+    assert "signal_authority_coverage" in sa_dict
+    assert sa_dict["signal_authority_coverage"] is not None
+    assert "coverage_score" not in sa_dict
+    assert "confidence_score" not in sa_dict

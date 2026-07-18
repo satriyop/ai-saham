@@ -18,6 +18,9 @@ if TYPE_CHECKING:
     from src.domain.value_objects.data_freshness_status import DataFreshnessStatus
     from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.forward_estimates import ForwardEstimates
+    from src.application.services.primary_setup_family_resolver import (
+        PrimarySetupFamilyResult,
+    )
     from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.risk_assessment import RiskAssessment
     from src.domain.value_objects.seasonal_edge import SeasonalEdge
@@ -226,6 +229,11 @@ class AccumulationCandidate:
     # Accumulation-lifecycle diagnostic (ACCUMULATION/COMPRESSION/BREAKOUT_CONFIRMATION/
     # EXHAUSTION/DISTRIBUTION/FAILED/NONE); None when detection is unavailable or fails.
     setup_phase: "SetupPhaseSnapshot | None" = None
+    # HIGH-2: resolved exactly once in AccumulationCandidateSignalAssessor —
+    # the same family passed to SignalEngine.evaluate_with_context() and to
+    # setup_phase detection. Persistence reuses this verbatim; it must never
+    # be recomputed with strategy_evidence after scoring.
+    setup_family_result: "PrimarySetupFamilyResult | None" = None
     # Market-calendar-aware freshness/alignment (S3); None until the screen
     # accum projector computes it — table and JSON both render this field.
     freshness: "DataFreshnessStatus | None" = None
@@ -303,8 +311,14 @@ class AccumulationCandidate:
                 "strength": self.signal_assessment.assessment.strength.value,
                 "entry_quality": self.signal_assessment.assessment.entry_quality.value,
                 "breakdown": self.signal_assessment.assessment.breakdown_dict,
-                "coverage_score": self.signal_assessment.assessment.coverage_score,   # canonical
-                "confidence_score": self.signal_assessment.assessment.confidence_score,  # legacy alias
+                "signal_authority_coverage": (
+                    self.signal_assessment.assessment.signal_authority_coverage
+                ),
+                "setup_readiness": (
+                    self.signal_assessment.setup_readiness.to_dict()
+                    if self.signal_assessment.setup_readiness
+                    else None
+                ),
                 "coverage_warning": self.signal_assessment.coverage_warning,
                 "decision_constraints": (
                     self.signal_assessment.assessment.decision_constraints.to_dict()

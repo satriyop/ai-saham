@@ -9,6 +9,8 @@ from src.application.dto.accumulation_screen import (
     AccumulationScreenRequest,
 )
 from src.application.services.indicator_registry import IndicatorRegistry
+from src.application.services.signal_engine import SignalEngine
+from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenUseCase,
 )
@@ -73,6 +75,7 @@ def test_screen_persists_sector_context_fingerprint_when_builder_available():
         rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo,
         sector_context_builder_factory=lambda: FakeSectorContextBuilder(),
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
     execute_and_record(
@@ -160,6 +163,7 @@ def test_screen_persists_benchmark_excess_return_as_diagnostic_evidence():
         rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo,
         swing_setup_catalog=swing_setup_catalog,
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
     response = execute_and_record(
@@ -210,6 +214,7 @@ def test_screen_benchmark_excess_return_unavailable_when_ihsg_candles_missing():
         market_repository=MockMarketRepository(candles),  # no IHSG candles seeded
         rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo,
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
     response = execute_and_record(
@@ -254,6 +259,7 @@ def test_screen_persists_volatility_context_fingerprint_from_injected_registry()
         rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo,
         indicator_registry=FakeATRRegistry(),
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
     response = execute_and_record(
@@ -305,6 +311,7 @@ def test_screen_volatility_context_falls_back_to_unknown_when_atr_unavailable():
             rules_loader=FakeRulesLoader(),
             candidate_observations_repository=spy_repo,
             indicator_registry=registry,
+            signal_engine=SignalEngine(config=SignalEngineConfig()),
         )
 
         response = execute_and_record(
@@ -359,6 +366,7 @@ def test_volatility_context_fingerprint_never_leaks_into_scoring():
         rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo_a,
         indicator_registry=FakeATRRegistry(),
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
     response_a = execute_and_record(
         use_case_a,
@@ -377,6 +385,7 @@ def test_volatility_context_fingerprint_never_leaks_into_scoring():
         rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo_b,
         indicator_registry=EmptyATRRegistry(),
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
     response_b = execute_and_record(
         use_case_b,

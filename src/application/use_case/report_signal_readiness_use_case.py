@@ -13,6 +13,9 @@ from src.domain.ports.candidate_observations_repository import (
 from src.domain.ports.signal_forward_labels_repository import (
     SignalForwardLabelsRepository,
 )
+from src.domain.value_objects.signal_artifact_schema import (
+    SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
+)
 from src.domain.value_objects.signal_forward_label import (
     SignalForwardLabel,
     SignalForwardOutcome,
@@ -179,13 +182,15 @@ class ReportSignalReadinessUseCase:
 
     def execute(self, request: ReportSignalReadinessRequest) -> SignalReadinessReport:
         target = SignalReadinessTarget.parse(request.target)
-        observation_dates = tuple(self._observations.list_snapshot_dates())
+        observation_dates = tuple(self._observations.list_canonical_snapshot_dates())
         latest_date = observation_dates[-1] if observation_dates else None
         latest_observations = (
-            self._observations.list_by_date(latest_date) if latest_date is not None else []
+            self._observations.list_latest_canonical_by_date(latest_date)
+            if latest_date is not None
+            else []
         )
         raw_latest_observations = (
-            self._observations.list_all_by_date(latest_date)
+            self._observations.list_canonical_by_date(latest_date)
             if latest_date is not None
             else []
         )
@@ -200,7 +205,14 @@ class ReportSignalReadinessUseCase:
             if _observation_matches_target(observation, target)
         ]
 
-        labels = tuple(self._labels.list(horizon=target.horizon))
+        # HIGH-2: schema 1 labels remain diagnostic-readable but are excluded
+        # from canonical readiness — only schema 2 (canonical) labels feed
+        # IS/OOS counts, profit factor, and patch-eligibility below.
+        labels = tuple(
+            label
+            for label in self._labels.list(horizon=target.horizon)
+            if label.schema_version == SIGNAL_FORWARD_LABEL_SCHEMA_VERSION
+        )
         unavailable_count = sum(
             1 for label in labels if label.outcome_label is SignalForwardOutcome.UNAVAILABLE
         )
@@ -395,8 +407,8 @@ def _blockers(
             )
         if not _has_regime_attribution(oos_rows):
             blockers.append("OOS labels missing market regime attribution")
-        if not _has_coverage_conviction_attribution(oos_rows):
-            blockers.append("OOS labels missing coverage/conviction attribution")
+        if not _has_signal_authority_coverage_attribution(oos_rows):
+            blockers.append("OOS labels missing signal_authority_coverage attribution")
     return blockers
 
 
@@ -424,11 +436,9 @@ def _has_regime_attribution(labels: tuple[SignalForwardLabel, ...]) -> bool:
     return all(label.fingerprint.market_regime.get("regime") for label in labels)
 
 
-def _has_coverage_conviction_attribution(
+def _has_signal_authority_coverage_attribution(
     labels: tuple[SignalForwardLabel, ...],
 ) -> bool:
     return all(
-        label.fingerprint.coverage is not None
-        and label.fingerprint.conviction is not None
-        for label in labels
+        label.fingerprint.signal_authority_coverage is not None for label in labels
     )

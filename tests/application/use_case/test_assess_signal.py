@@ -482,8 +482,7 @@ class TestSignalAssessmentValueObject:
         assert set(d.keys()) == {
             "ticker", "score", "legacy_conditioned_score", "strength", "entry_quality",
             "breakdown", "rationale", "snapshot_date",
-            "coverage_score",    # canonical
-            "confidence_score",  # legacy alias
+            "signal_authority_coverage",
             "raw_exact_score", "alpha_trigger_score", "decision_constraints",
         }
         assert d["ticker"] == "BBCA"
@@ -511,12 +510,12 @@ class TestSignalContext:
         assert ctx.forward_pe is None
 
 
-# ── coverage/conviction naming normalization ──────────────────────────────────
-# Verify that canonical property aliases exist and match legacy field values.
-# No behavior change; purely naming contract.
+# ── signal_authority_coverage naming (HIGH-2) ─────────────────────────────────
+# confidence_score/coverage_score aliases are removed entirely — there is one
+# canonical field, signal_authority_coverage, with no compatibility property.
 
-class TestCoverageConvictionNaming:
-    def _make_assessment(self, confidence: float = 0.75) -> SignalAssessment:
+class TestSignalAuthorityCoverageNaming:
+    def _make_assessment(self, signal_authority_coverage: float = 0.75) -> SignalAssessment:
         return SignalAssessment(
             ticker="BBCA",
             score=60,
@@ -525,26 +524,25 @@ class TestCoverageConvictionNaming:
             breakdown=(("bandar_intensity", 60.0),),
             rationale=(),
             snapshot_date=date.today(),
-            confidence_score=confidence,
+            signal_authority_coverage=signal_authority_coverage,
         )
 
-    def test_signal_assessment_coverage_score_is_alias_for_confidence_score(self):
+    def test_signal_assessment_has_no_removed_aliases(self):
         a = self._make_assessment(0.75)
-        assert a.coverage_score == a.confidence_score
-        assert a.coverage_score == pytest.approx(0.75)
+        assert a.signal_authority_coverage == pytest.approx(0.75)
+        assert not hasattr(a, "coverage_score")
+        assert not hasattr(a, "confidence_score")
 
-    def test_to_dict_emits_both_canonical_and_legacy_keys(self):
+    def test_to_dict_emits_canonical_key_only(self):
         a = self._make_assessment(0.80)
         d = a.to_dict()
-        # Both keys present and equal
-        assert "coverage_score" in d
-        assert "confidence_score" in d
-        assert d["coverage_score"] == pytest.approx(d["confidence_score"])
-        assert d["coverage_score"] == pytest.approx(0.80)
+        assert "signal_authority_coverage" in d
+        assert d["signal_authority_coverage"] == pytest.approx(0.80)
+        assert "coverage_score" not in d
+        assert "confidence_score" not in d
 
     def test_signal_assessment_score_and_entry_quality_unchanged_by_naming(self):
-        # Sanity: adding properties does not change computed score or entry_quality
         a = self._make_assessment(0.60)
         assert a.score == 60
         assert a.entry_quality == EntryQuality.WATCH
-        assert a.coverage_score == pytest.approx(0.60)
+        assert a.signal_authority_coverage == pytest.approx(0.60)

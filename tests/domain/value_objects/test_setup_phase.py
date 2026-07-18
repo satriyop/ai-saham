@@ -14,9 +14,8 @@ def test_setup_phase_snapshot_serializes_round_trip():
         current_phase=SetupPhaseState.COMPRESSION,
         previous_phase=SetupPhaseState.ACCUMULATION,
         phase_age_sessions=3,
-        phase_strength=0.7,
-        coverage_score=0.8,
-        conviction_score=0.56,
+        phase_detection_strength=0.7,
+        phase_input_coverage=0.8,
         sequence_valid=True,
         reasons=("compression: BB width readiness",),
         unavailable_evidence_reasons=("volume unavailable",),
@@ -39,14 +38,13 @@ def test_setup_phase_snapshot_serializes_round_trip():
 
 
 def test_setup_phase_snapshot_validates_score_bounds():
-    with pytest.raises(ValueError, match="coverage_score"):
+    with pytest.raises(ValueError, match="phase_input_coverage"):
         SetupPhaseSnapshot(
             current_phase=SetupPhaseState.NONE,
             previous_phase=None,
             phase_age_sessions=0,
-            phase_strength=0.0,
-            coverage_score=1.1,
-            conviction_score=0.0,
+            phase_detection_strength=0.0,
+            phase_input_coverage=1.1,
             sequence_valid=None,
         )
 

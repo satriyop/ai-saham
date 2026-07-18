@@ -10,7 +10,7 @@ AI usage: None
 """
 
 from datetime import date, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.application.dto.signal_evidence_execution_context import (
     SignalEvidenceExecutionContext,
@@ -51,6 +51,9 @@ from src.application.use_case.accumulation_screen_use_case import AccumulationSc
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
 
+if TYPE_CHECKING:
+    from src.application.services.signal_engine import SignalEngine
+
 # Compatibility re-exports: tests and adapters historically imported DTOs
 # from this module. Keep these import-only; implementations live in the
 # DTO/service modules above.
@@ -82,6 +85,7 @@ class AccumulationAuditUseCase:
         market_repository: MarketDataRepository,
         indicator_registry: Any,
         rules_loader: RulesLoader,
+        signal_engine: "SignalEngine",
         derived_feature_policy: AccumulationDerivedFeaturePolicy | None = None,
     ) -> None:
         self._broker_repo = broker_repository
@@ -93,6 +97,7 @@ class AccumulationAuditUseCase:
             market_repository=market_repository,
             indicator_registry=indicator_registry,
             rules_loader=rules_loader,
+            signal_engine=signal_engine,
             derived_feature_policy=self._derived_features,
         )
         self._broker_quality_classifier = AccumulationBrokerQualityClassifier(broker_repository)

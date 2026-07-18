@@ -7,6 +7,9 @@ from src.application.use_case.summarize_signal_forward_labels_use_case import (
     SummarizeSignalForwardLabelsRequest,
     SummarizeSignalForwardLabelsUseCase,
 )
+from src.domain.value_objects.signal_artifact_schema import (
+    SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
+)
 from src.domain.value_objects.signal_forward_label import (
     SignalForwardLabel,
     SignalForwardOutcome,
@@ -49,8 +52,6 @@ def test_summarize_uses_saved_label_fingerprints_for_attribution():
             outcome=SignalForwardOutcome.SUCCESS,
             setup_family="foreign_bounce",
             regime="RISK_ON",
-            coverage=0.8,
-            conviction=0.9,
             close_return=5.0,
         ),
         _label(
@@ -59,8 +60,6 @@ def test_summarize_uses_saved_label_fingerprints_for_attribution():
             outcome=SignalForwardOutcome.FAILURE,
             setup_family="foreign_bounce",
             regime="RISK_OFF",
-            coverage=0.5,
-            conviction=0.3,
             close_return=-3.0,
         ),
     ]
@@ -80,10 +79,8 @@ def test_summarize_uses_saved_label_fingerprints_for_attribution():
     assert by_group[("setup_family", "foreign_bounce")].failure_count == 1
     assert by_group[("market_regime", "RISK_ON")].success_count == 1
     assert by_group[("market_regime", "RISK_OFF")].failure_count == 1
-    assert by_group[("coverage_bucket", "HIGH")].observation_count == 1
-    assert by_group[("coverage_bucket", "MEDIUM")].observation_count == 1
-    assert by_group[("conviction_bucket", "HIGH")].observation_count == 1
-    assert by_group[("conviction_bucket", "LOW")].observation_count == 1
+    assert ("coverage_bucket", "HIGH") not in by_group
+    assert ("conviction_bucket", "HIGH") not in by_group
 
 
 def test_summarize_groups_by_regime_attribution_fingerprint():
@@ -98,8 +95,6 @@ def test_summarize_groups_by_regime_attribution_fingerprint():
         outcome=SignalForwardOutcome.SUCCESS,
         setup_family="foreign_bounce",
         regime="RISK_ON",
-        coverage=0.8,
-        conviction=0.9,
         close_return=5.0,
         regime_at_signal="BULLISH",
         regime_confidence_at_signal=0.85,
@@ -139,8 +134,6 @@ def test_summarize_groups_by_setup_phase_and_sequence_validity():
         outcome=SignalForwardOutcome.SUCCESS,
         setup_family="foreign_bounce",
         regime="RISK_ON",
-        coverage=0.8,
-        conviction=0.9,
         close_return=5.0,
     )
     label = SignalForwardLabel(
@@ -444,6 +437,11 @@ def test_summarize_missing_phase_i_fields_as_unknown():
     assert by_group[("volume_dry_up_confirmed", "UNKNOWN")].observation_count == 1
     assert by_group[("volume_expansion_confirmed", "UNKNOWN")].observation_count == 1
     assert by_group[("volume_trigger_confirmed", "UNKNOWN")].observation_count == 1
+    assert by_group[("signal_authority_coverage_bucket", "UNKNOWN")].observation_count == 1
+    assert by_group[("setup_readiness_status", "UNKNOWN")].observation_count == 1
+    assert by_group[("setup_readiness_current_phase", "UNKNOWN")].observation_count == 1
+    assert by_group[("setup_readiness_missing_required_input", "NONE")].observation_count == 1
+    assert by_group[("setup_readiness_failed_requirement", "NONE")].observation_count == 1
 
 
 def test_summarize_groups_by_volatility_context_buckets():
@@ -539,6 +537,235 @@ def test_summarize_groups_by_volatility_context_buckets():
     assert by_group[("volatility_size_multiplier_bucket", "UNKNOWN")].observation_count == 1
 
 
+# ---------------------------------------------------------------------------
+# HIGH-2 Finding 4: canonical forward-label attribution
+# ---------------------------------------------------------------------------
+
+
+def test_summarize_excludes_legacy_schema_labels_from_canonical_attribution():
+    """Test A: a schema-1 label with an extreme return must not enter the
+    response or contaminate any bucket's counts/returns."""
+    day = date(2026, 7, 1)
+    canonical_label = _label(
+        ticker="BBCA",
+        day=day,
+        outcome=SignalForwardOutcome.SUCCESS,
+        setup_family="foreign_bounce",
+        regime="RISK_ON",
+        close_return=5.0,
+    )
+    assert canonical_label.schema_version == SIGNAL_FORWARD_LABEL_SCHEMA_VERSION
+    legacy_label = SignalForwardLabel(
+        ticker="BBRI",
+        signal_date=day,
+        horizon=SignalLabelHorizon.SWING_10D,
+        entry_reference_price=Decimal("100"),
+        label_window_start=date(2026, 7, 2),
+        label_window_end=date(2026, 7, 15),
+        close_return=999.0,
+        max_forward_return=999.0,
+        max_adverse_excursion=0.0,
+        days_to_peak=1,
+        days_to_trough=1,
+        stop_would_trigger=False,
+        target_would_trigger=True,
+        outcome_label=SignalForwardOutcome.SUCCESS,
+        unavailable_reason=None,
+        fingerprint=SignalObservationFingerprint(setup_family="foreign_bounce"),
+        schema_version=1,
+    )
+    repo = FakeSignalForwardLabelsRepository([canonical_label, legacy_label])
+
+    response = SummarizeSignalForwardLabelsUseCase(repo).execute(
+        SummarizeSignalForwardLabelsRequest(signal_date=day)
+    )
+
+    assert response.labels == (canonical_label,)
+    by_group = {(bucket.group, bucket.key): bucket for bucket in response.buckets}
+    bucket = by_group[("setup_family", "foreign_bounce")]
+    assert bucket.observation_count == 1
+    assert bucket.average_close_return == 5.0
+
+
+def test_summarize_never_falls_back_to_legacy_coverage_or_conviction():
+    """Test B: signal_authority_coverage drives the canonical bucket even
+    when legacy coverage/conviction fields disagree; no legacy bucket must
+    be emitted at all."""
+    day = date(2026, 7, 1)
+    label = SignalForwardLabel(
+        ticker="BBCA",
+        signal_date=day,
+        horizon=SignalLabelHorizon.SWING_10D,
+        entry_reference_price=Decimal("100"),
+        label_window_start=date(2026, 7, 2),
+        label_window_end=date(2026, 7, 15),
+        close_return=4.0,
+        max_forward_return=5.0,
+        max_adverse_excursion=-1.0,
+        days_to_peak=2,
+        days_to_trough=1,
+        stop_would_trigger=False,
+        target_would_trigger=True,
+        outcome_label=SignalForwardOutcome.SUCCESS,
+        unavailable_reason=None,
+        fingerprint=SignalObservationFingerprint(
+            signal_authority_coverage=0.30,
+            coverage=0.95,
+            conviction=0.95,
+        ),
+    )
+    repo = FakeSignalForwardLabelsRepository([label])
+
+    response = SummarizeSignalForwardLabelsUseCase(repo).execute(
+        SummarizeSignalForwardLabelsRequest()
+    )
+
+    by_group = {(bucket.group, bucket.key): bucket for bucket in response.buckets}
+    assert by_group[("signal_authority_coverage_bucket", "LOW")].observation_count == 1
+    assert not any(group == "coverage_bucket" for group, _ in by_group)
+    assert not any(group == "conviction_bucket" for group, _ in by_group)
+
+
+def test_summarize_returns_empty_when_only_legacy_labels_exist():
+    """Test C: schema-1-only repository input must produce an empty
+    response, never legacy labels surfaced as UNKNOWN buckets."""
+    day = date(2026, 7, 1)
+    legacy_label = SignalForwardLabel(
+        ticker="BBCA",
+        signal_date=day,
+        horizon=SignalLabelHorizon.SWING_10D,
+        entry_reference_price=Decimal("100"),
+        label_window_start=date(2026, 7, 2),
+        label_window_end=date(2026, 7, 15),
+        close_return=1.0,
+        max_forward_return=1.0,
+        max_adverse_excursion=0.0,
+        days_to_peak=1,
+        days_to_trough=1,
+        stop_would_trigger=False,
+        target_would_trigger=False,
+        outcome_label=SignalForwardOutcome.NEUTRAL,
+        unavailable_reason=None,
+        fingerprint=SignalObservationFingerprint(),
+        schema_version=1,
+    )
+    repo = FakeSignalForwardLabelsRepository([legacy_label])
+
+    response = SummarizeSignalForwardLabelsUseCase(repo).execute(
+        SummarizeSignalForwardLabelsRequest()
+    )
+
+    assert response.labels == ()
+    assert response.buckets == ()
+
+
+def test_summarize_groups_by_typed_setup_readiness_attribution():
+    """Test D: setup_readiness_status/current_phase/missing-required-input/
+    failed-requirement attribution — absent maps to UNKNOWN, empty
+    membership tuples map to NONE, duplicate/blank membership values
+    collapse to one normalized entry per label, and bucket ordering is
+    deterministic (sorted by group then key)."""
+    day = date(2026, 7, 1)
+    ready_label = SignalForwardLabel(
+        ticker="BBCA",
+        signal_date=day,
+        horizon=SignalLabelHorizon.SWING_10D,
+        entry_reference_price=Decimal("100"),
+        label_window_start=date(2026, 7, 2),
+        label_window_end=date(2026, 7, 15),
+        close_return=4.0,
+        max_forward_return=5.0,
+        max_adverse_excursion=-1.0,
+        days_to_peak=2,
+        days_to_trough=1,
+        stop_would_trigger=False,
+        target_would_trigger=True,
+        outcome_label=SignalForwardOutcome.SUCCESS,
+        unavailable_reason=None,
+        fingerprint=SignalObservationFingerprint(
+            setup_readiness_status="READY",
+            setup_readiness_current_phase="BREAKOUT_CONFIRMATION",
+        ),
+    )
+    incomplete_label = SignalForwardLabel(
+        ticker="BBRI",
+        signal_date=day,
+        horizon=SignalLabelHorizon.SWING_10D,
+        entry_reference_price=Decimal("100"),
+        label_window_start=date(2026, 7, 2),
+        label_window_end=date(2026, 7, 15),
+        close_return=-2.0,
+        max_forward_return=0.0,
+        max_adverse_excursion=-2.0,
+        days_to_peak=1,
+        days_to_trough=2,
+        stop_would_trigger=True,
+        target_would_trigger=False,
+        outcome_label=SignalForwardOutcome.FAILURE,
+        unavailable_reason=None,
+        fingerprint=SignalObservationFingerprint(
+            setup_readiness_status="INCOMPLETE",
+            setup_readiness_current_phase="ACCUMULATION_BASE",
+            # Duplicate and blank values must collapse to one normalized
+            # entry each; group totals may exceed the label count because
+            # this single label contributes to two missing-input buckets.
+            setup_readiness_missing_required_inputs=(
+                "volume_confirmation",
+                "  ",
+                "volume_confirmation",
+                "regime_check",
+            ),
+            setup_readiness_failed_requirements=("rsi_below_70", "", "rsi_below_70"),
+        ),
+    )
+    unknown_label = SignalForwardLabel(
+        ticker="TLKM",
+        signal_date=day,
+        horizon=SignalLabelHorizon.SWING_10D,
+        entry_reference_price=Decimal("100"),
+        label_window_start=date(2026, 7, 2),
+        label_window_end=date(2026, 7, 15),
+        close_return=1.0,
+        max_forward_return=1.0,
+        max_adverse_excursion=0.0,
+        days_to_peak=1,
+        days_to_trough=1,
+        stop_would_trigger=False,
+        target_would_trigger=False,
+        outcome_label=SignalForwardOutcome.NEUTRAL,
+        unavailable_reason=None,
+        fingerprint=SignalObservationFingerprint(),
+    )
+    repo = FakeSignalForwardLabelsRepository([ready_label, incomplete_label, unknown_label])
+
+    response = SummarizeSignalForwardLabelsUseCase(repo).execute(
+        SummarizeSignalForwardLabelsRequest()
+    )
+
+    by_group = {(bucket.group, bucket.key): bucket for bucket in response.buckets}
+    assert by_group[("setup_readiness_status", "READY")].observation_count == 1
+    assert by_group[("setup_readiness_status", "INCOMPLETE")].observation_count == 1
+    assert by_group[("setup_readiness_status", "UNKNOWN")].observation_count == 1
+    assert by_group[("setup_readiness_current_phase", "BREAKOUT_CONFIRMATION")].observation_count == 1
+    assert by_group[("setup_readiness_current_phase", "ACCUMULATION_BASE")].observation_count == 1
+    assert by_group[("setup_readiness_current_phase", "UNKNOWN")].observation_count == 1
+
+    # ready_label and unknown_label both have empty membership tuples -> NONE.
+    assert by_group[("setup_readiness_missing_required_input", "NONE")].observation_count == 2
+    assert by_group[("setup_readiness_missing_required_input", "regime_check")].observation_count == 1
+    assert by_group[("setup_readiness_missing_required_input", "volume_confirmation")].observation_count == 1
+    assert by_group[("setup_readiness_failed_requirement", "NONE")].observation_count == 2
+    assert by_group[("setup_readiness_failed_requirement", "rsi_below_70")].observation_count == 1
+
+    missing_input_keys = [
+        bucket.key
+        for bucket in response.buckets
+        if bucket.group == "setup_readiness_missing_required_input"
+    ]
+    assert missing_input_keys == sorted(missing_input_keys)
+    assert missing_input_keys == ["NONE", "regime_check", "volume_confirmation"]
+
+
 def _label(
     *,
     ticker: str,
@@ -546,8 +773,6 @@ def _label(
     outcome: SignalForwardOutcome,
     setup_family: str,
     regime: str,
-    coverage: float,
-    conviction: float,
     close_return: float,
     regime_at_signal: str | None = None,
     regime_confidence_at_signal: float | None = None,
@@ -574,8 +799,6 @@ def _label(
         fingerprint=SignalObservationFingerprint(
             setup_family=setup_family,
             market_regime={"regime": regime},
-            coverage=coverage,
-            conviction=conviction,
             market_regime_at_signal=regime_at_signal,
             regime_confidence_at_signal=regime_confidence_at_signal,
             regime_stability_at_signal=regime_stability_at_signal,

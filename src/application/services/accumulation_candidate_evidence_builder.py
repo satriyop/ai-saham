@@ -52,6 +52,7 @@ if TYPE_CHECKING:
     )
     from src.application.services.primary_setup_family_resolver import (
         PrimarySetupFamilyResolver,
+        PrimarySetupFamilyResult,
     )
     from src.application.services.sector_context_evidence_builder import (
         SectorContextEvidenceBuilder,
@@ -141,14 +142,25 @@ class AccumulationCandidateEvidenceBuilder:
             _normalize_company_quality_context_factory(company_quality_context_builder_factory)
         )
 
-    def resolve_preliminary_setup_family(
+    def resolve_preliminary_setup_family_result(
         self, candidate: "accumulation_dto.AccumulationCandidate"
-    ) -> str | None:
-        """Stage-1 family resolution before strategy evidence exists."""
+    ) -> "PrimarySetupFamilyResult":
+        """Stage-1 family resolution before strategy evidence exists.
+
+        HIGH-2: this is the single resolution call for the screen path — its
+        result is stored on the candidate and reused verbatim by SignalEngine,
+        phase detection, and persistence. Never re-resolved after scoring.
+        """
         return self._setup_family_resolver.resolve(
             candidate=candidate,
             swing_setup_catalog=self._swing_setup_catalog,
-        ).primary_setup_family
+        )
+
+    def resolve_preliminary_setup_family(
+        self, candidate: "accumulation_dto.AccumulationCandidate"
+    ) -> str | None:
+        """Convenience wrapper returning only the primary family string."""
+        return self.resolve_preliminary_setup_family_result(candidate).primary_setup_family
 
     def build_candidate_strategy_evidence(
         self,
@@ -156,6 +168,7 @@ class AccumulationCandidateEvidenceBuilder:
         setup_phase: "SetupPhaseSnapshot | None",
         snapshot_date: date,
         request: accumulation_dto.AccumulationScreenRequest,
+        setup_family: "str | None" = _UNSET_SETUP_FAMILY,  # type: ignore[assignment]
     ) -> "StrategyEvidence | None":
         if request.strategy_name is None:
             return None
@@ -170,7 +183,10 @@ class AccumulationCandidateEvidenceBuilder:
                 candidate.ticker,
                 end_date=snapshot_date,
             )
-            setup_family = self.resolve_preliminary_setup_family(candidate)
+            if setup_family is _UNSET_SETUP_FAMILY:
+                # No caller-supplied family (e.g. tests calling this in
+                # isolation) — fall back to resolving it here.
+                setup_family = self.resolve_preliminary_setup_family(candidate)
             return StrategyEvidenceBuilder(
                 loader=StrategyLoader(rules_loader=self._rules_loader),
             ).build(

@@ -6,6 +6,8 @@ from unittest.mock import MagicMock, patch
 
 from src.application.dto.accumulation_screen import AccumulationCandidate
 from src.application.services.indicator_registry import IndicatorRegistry
+from src.application.services.signal_engine import SignalEngine
+from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from src.application.use_case.daily_briefing_use_case import (
     DailyBriefingRequest,
@@ -234,6 +236,7 @@ def test_daily_briefing_writes_zero_candidate_observations(monkeypatch):
         market_repository=MockMarketRepository(candles),
         rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo,
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
     monkeypatch.setattr(module, "load_universe", lambda *a, **kw: ["BBCA"])

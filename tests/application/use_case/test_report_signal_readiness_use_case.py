@@ -11,6 +11,9 @@ from src.application.use_case.report_signal_readiness_use_case import (
     SignalReadinessTarget,
 )
 from src.domain.ports.candidate_observations_repository import CandidateObservation
+from src.domain.value_objects.signal_artifact_schema import (
+    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+)
 from src.domain.value_objects.signal_forward_label import (
     SignalForwardLabel,
     SignalForwardOutcome,
@@ -22,15 +25,32 @@ TARGET = "foreign_institutional_accumulation_large_cap_SWING_10D"
 DIAGNOSTIC_TARGET = "foreign_institutional_accumulation_SWING_10D"
 
 
+def _is_canonical(observation: CandidateObservation) -> bool:
+    schema_version = observation.payload.get("schema_version")
+    return (
+        type(schema_version) is int
+        and schema_version == CANDIDATE_OBSERVATION_SCHEMA_VERSION
+        and observation.config_hash != ""
+    )
+
+
 class FakeCandidateObservationsRepository:
     def __init__(self, observations_by_date):
         self.observations_by_date = observations_by_date
 
-    def list_snapshot_dates(self):
-        return sorted(self.observations_by_date)
+    def list_canonical_snapshot_dates(self):
+        return sorted(
+            snapshot_date
+            for snapshot_date, rows in self.observations_by_date.items()
+            if any(_is_canonical(row) for row in rows)
+        )
 
-    def list_by_date(self, snapshot_date):
-        rows = list(self.observations_by_date.get(snapshot_date, ()))
+    def list_latest_canonical_by_date(self, snapshot_date):
+        rows = [
+            row
+            for row in self.observations_by_date.get(snapshot_date, ())
+            if _is_canonical(row)
+        ]
         latest_by_ticker = {}
         for row in rows:
             current = latest_by_ticker.get(row.ticker)
@@ -38,8 +58,12 @@ class FakeCandidateObservationsRepository:
                 latest_by_ticker[row.ticker] = row
         return [latest_by_ticker[ticker] for ticker in sorted(latest_by_ticker)]
 
-    def list_all_by_date(self, snapshot_date):
-        return list(self.observations_by_date.get(snapshot_date, ()))
+    def list_canonical_by_date(self, snapshot_date):
+        return [
+            row
+            for row in self.observations_by_date.get(snapshot_date, ())
+            if _is_canonical(row)
+        ]
 
     def save_many(self, observations):
         raise AssertionError("not used")
@@ -52,6 +76,15 @@ class FakeCandidateObservationsRepository:
 
     def list_recent(self, ticker, *, before_date=None, limit=20):
         raise AssertionError("not used")
+
+    def list_snapshot_dates(self):
+        raise AssertionError("readiness must use canonical dates")
+
+    def list_by_date(self, snapshot_date):
+        raise AssertionError("readiness must use latest canonical rows")
+
+    def list_all_by_date(self, snapshot_date):
+        raise AssertionError("readiness must use raw canonical rows")
 
 
 class FakeSignalForwardLabelsRepository:
@@ -120,6 +153,155 @@ def test_readiness_reports_observation_counts_and_label_blockers():
     assert "no available labels match target filter" in report.blockers
 
 
+# ---------------------------------------------------------------------------
+# HIGH-2 Finding 3: readiness must use only canonical observations
+# ---------------------------------------------------------------------------
+
+
+def test_readiness_reports_nothing_ready_from_legacy_only_observations():
+    """A. Legacy-only database state: schema-1/2 or empty-config-hash
+    observations must never surface as readiness-eligible."""
+    day = date(2026, 7, 7)
+    report = ReportSignalReadinessUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(
+            {
+                day: [
+                    _observation("BBCA", day, _fingerprint(), schema_version=2),
+                    _observation("BBRI", day, _fingerprint(), config_hash=""),
+                ]
+            }
+        ),
+        signal_forward_labels_repository=FakeSignalForwardLabelsRepository(),
+    ).execute(ReportSignalReadinessRequest(target=TARGET))
+
+    assert report.observation_dates == ()
+    assert report.latest_observation_date is None
+    assert report.latest_observation_count == 0
+    assert report.raw_latest_observation_count == 0
+    assert report.target_filter_count == 0
+    assert report.raw_target_filter_count == 0
+    assert report.patch_eligible is False
+
+
+def test_readiness_latest_date_skips_a_newer_legacy_only_date():
+    """B. A newer date with only legacy observations must not become the
+    latest readiness date — the latest canonical date must win."""
+    canonical_day = date(2026, 7, 1)
+    legacy_day = date(2026, 7, 2)
+    report = ReportSignalReadinessUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(
+            {
+                canonical_day: [_observation("BBCA", canonical_day, _fingerprint())],
+                legacy_day: [
+                    _observation(
+                        "BBCA", legacy_day, _fingerprint(), schema_version=2
+                    )
+                ],
+            }
+        ),
+        signal_forward_labels_repository=FakeSignalForwardLabelsRepository(),
+    ).execute(ReportSignalReadinessRequest(target=TARGET))
+
+    assert report.observation_dates == (canonical_day,)
+    assert report.latest_observation_date == canonical_day
+
+
+def test_readiness_newer_legacy_row_cannot_displace_canonical_row():
+    """C. For the same ticker/date, a later-captured legacy row must not
+    displace an earlier canonical row as the 'latest' observation."""
+    day = date(2026, 7, 7)
+    report = ReportSignalReadinessUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(
+            {
+                day: [
+                    _observation(
+                        "BBCA",
+                        day,
+                        _fingerprint(),
+                        captured_at=datetime(2026, 7, 7, 18, 0, 0),
+                    ),
+                    _observation(
+                        "BBCA",
+                        day,
+                        _fingerprint(),
+                        captured_at=datetime(2026, 7, 7, 19, 0, 0),
+                        schema_version=2,
+                    ),
+                ]
+            }
+        ),
+        signal_forward_labels_repository=FakeSignalForwardLabelsRepository(),
+    ).execute(ReportSignalReadinessRequest(target=TARGET))
+
+    assert report.latest_observation_count == 1
+    assert report.raw_latest_observation_count == 1
+    assert report.target_filter_count == 1
+
+
+def test_readiness_counts_every_canonical_window_raw_but_one_latest_per_ticker():
+    """D. Multi-window canonical counts: three canonical windows (7/30/90) for
+    one ticker/date — distinct identities because window_sessions differs —
+    collapse to one latest-per-ticker row but all three remain in the raw
+    canonical count. Rows must differ by window_sessions, not merely
+    captured_at, since captured_at alone is metadata and would UPSERT into a
+    single identity in the real repository."""
+    day = date(2026, 7, 7)
+    report = ReportSignalReadinessUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(
+            {
+                day: [
+                    _observation(
+                        "BBCA",
+                        day,
+                        _fingerprint(),
+                        captured_at=datetime(2026, 7, 7, 18, 0, 0),
+                        window_sessions=7,
+                    ),
+                    _observation(
+                        "BBCA",
+                        day,
+                        _fingerprint(),
+                        captured_at=datetime(2026, 7, 7, 18, 1, 0),
+                        window_sessions=30,
+                    ),
+                    _observation(
+                        "BBCA",
+                        day,
+                        _fingerprint(),
+                        captured_at=datetime(2026, 7, 7, 18, 2, 0),
+                        window_sessions=90,
+                    ),
+                ]
+            }
+        ),
+        signal_forward_labels_repository=FakeSignalForwardLabelsRepository(),
+    ).execute(ReportSignalReadinessRequest(target=TARGET))
+
+    assert report.latest_observation_count == 1
+    assert report.raw_latest_observation_count == 3
+
+
+def test_readiness_target_counts_exclude_legacy_rows_in_mixed_batch():
+    """E. Mixed canonical and legacy targets: only canonical matching
+    observations contribute to target_filter_count/raw_target_filter_count."""
+    day = date(2026, 7, 7)
+    report = ReportSignalReadinessUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(
+            {
+                day: [
+                    _observation("BBCA", day, _fingerprint()),
+                    _observation("BBRI", day, _fingerprint(), schema_version=2),
+                    _observation("TLKM", day, _fingerprint(), config_hash=""),
+                ]
+            }
+        ),
+        signal_forward_labels_repository=FakeSignalForwardLabelsRepository(),
+    ).execute(ReportSignalReadinessRequest(target=TARGET))
+
+    assert report.target_filter_count == 1
+    assert report.raw_target_filter_count == 1
+
+
 def test_readiness_can_be_patch_eligible_with_sufficient_is_oos_labels():
     day = date(2026, 7, 7)
     labels = tuple(
@@ -154,17 +336,22 @@ def _observation(
     fingerprint: SignalObservationFingerprint,
     *,
     captured_at: datetime = datetime(2026, 7, 7, 19, 0, 0),
+    schema_version: int = CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+    config_hash: str = "test-config-hash",
+    window_sessions: int = 7,
 ) -> CandidateObservation:
     return CandidateObservation(
         ticker=ticker,
         snapshot_date=snapshot_date,
         captured_at=captured_at,
         payload={
-            "schema_version": 1,
+            "schema_version": schema_version,
             "ticker": ticker,
             "snapshot_date": snapshot_date.isoformat(),
             "sub_signal_fingerprint": fingerprint.to_dict(),
         },
+        config_hash=config_hash,
+        window_sessions=window_sessions,
     )
 
 
@@ -213,8 +400,7 @@ def _fingerprint(
         tp_market_cap_bucket=market_cap_bucket,
         alpha_trigger_horizon="SWING_10D",
         market_regime={"regime": "RISK_ON"},
-        coverage=0.8,
-        conviction=0.8,
+        signal_authority_coverage=0.8,
     )
 
 
@@ -444,6 +630,5 @@ def _fingerprint_no_setup(
         tp_market_cap_bucket=market_cap_bucket,
         alpha_trigger_horizon="SWING_10D",
         market_regime={"regime": "RISK_ON"},
-        coverage=0.8,
-        conviction=0.8,
+        signal_authority_coverage=0.8,
     )

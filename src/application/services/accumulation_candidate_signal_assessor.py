@@ -135,11 +135,8 @@ class AccumulationCandidateSignalAssessor:
         # Flow evidence is built from candidate data already in memory — no
         # extra fetch. SetupEvidence is intentionally absent here: the batch
         # screener does not evaluate named setup patterns per ticker; that
-        # happens only in the per-ticker swing workflow. Confidence will be
-        # 0.40 (flow group only) until the full workflow enriches it further.
+        # happens only in the per-ticker swing workflow.
         flow_ev: FlowConfirmationEvidence | None = None
-        canonical_evidence: CanonicalSignalEvidenceInput | None = None
-
         built_flow = None
         try:
             built_flow = self._flow_confirmation_builder.build(
@@ -155,11 +152,35 @@ class AccumulationCandidateSignalAssessor:
 
         if built_flow is not None:
             flow_ev = built_flow.evidence
+
+        # HIGH-2: resolve the preliminary setup family exactly once, then
+        # detect setup phase exactly once using that same family and flow
+        # evidence — both BEFORE calling SignalEngine, and BEFORE building
+        # canonical evidence. Store both on the candidate so persistence
+        # reuses them verbatim instead of recomputing after scoring.
+        setup_family_result = (
+            self._candidate_evidence_builder.resolve_preliminary_setup_family_result(
+                candidate
+            )
+        )
+        setup_family = setup_family_result.primary_setup_family
+        candidate.setup_family_result = setup_family_result
+        candidate.setup_phase = (
+            self._candidate_evidence_builder.detect_candidate_setup_phase(
+                candidate, flow_ev, as_of_date, setup_family=setup_family
+            )
+        )
+
+        canonical_evidence: CanonicalSignalEvidenceInput | None = None
+        if built_flow is not None:
             # ADR-041 CANONICAL-EVIDENCE-BOUNDARY: availability is resolved
             # once, pre-score, from this exact provenance and bound
             # immediately into the canonical group — never a separate
             # post-score assembly, and never supplied to SignalEngine as a
-            # loose evidence value disconnected from its provenance.
+            # loose evidence value disconnected from its provenance. The
+            # screen never fabricates SetupEvidence — `setup=None` here means
+            # a known family with absent setup evidence resolves to typed
+            # UNAVAILABLE readiness, not a canonical ENTER.
             flow_availability = EvidenceSourceAvailabilityAssembler(
                 source_availability_use_case
             ).assess_flow(
@@ -176,15 +197,11 @@ class AccumulationCandidateSignalAssessor:
             )
 
         candidate.signal_assessment = self._signal_engine.evaluate_with_context(
-            candidate.ticker, signal_ctx, canonical_evidence=canonical_evidence
-        )
-
-        # Accumulation-lifecycle diagnostic — computed once here so observation
-        # persistence can reuse it without detecting twice.
-        candidate.setup_phase = (
-            self._candidate_evidence_builder.detect_candidate_setup_phase(
-                candidate, flow_ev, as_of_date
-            )
+            candidate.ticker,
+            signal_ctx,
+            canonical_evidence=canonical_evidence,
+            setup_family=setup_family,
+            setup_phase=candidate.setup_phase,
         )
 
         # Classification: first-match-wins (preserved order)

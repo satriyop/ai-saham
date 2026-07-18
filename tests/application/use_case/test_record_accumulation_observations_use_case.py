@@ -17,6 +17,8 @@ from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSession,
 )
 from src.application.services.indicator_registry import IndicatorRegistry
+from src.application.services.signal_engine import SignalEngine
+from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.use_case.record_accumulation_observations_use_case import (
     RecordAccumulationObservationsUseCase,
 )
@@ -67,6 +69,7 @@ def _build_bundle(repo):
         market_repository=MockMarketRepository(candles),
         rules_loader=FakeRulesLoader(),
         candidate_observations_repository=repo,
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
     return bundle, as_of
 

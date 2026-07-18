@@ -8,6 +8,8 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from src.application.services.indicator_registry import IndicatorRegistry
+from src.application.services.signal_engine import SignalEngine
+from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.services.stats import pct_change as _pct_change
 from src.application.use_case.accumulation_audit_use_case import (
     AccumulationAuditPolicy,
@@ -205,6 +207,7 @@ def test_accumulation_audit_replays_signal_and_forward_returns_without_ai():
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         rules_loader=FakeRulesLoader(),
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
     response = use_case.execute(
@@ -252,6 +255,7 @@ def test_accumulation_audit_does_not_use_future_candle_as_signal_price():
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         rules_loader=FakeRulesLoader(),
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
     response = use_case.execute(
@@ -294,6 +298,7 @@ def test_accumulation_audit_strict_filters_keep_only_matching_candidates():
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         rules_loader=FakeRulesLoader(),
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
     response = use_case.execute(
@@ -370,6 +375,7 @@ def test_accumulation_audit_groups_outcomes_by_broker_quality():
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         rules_loader=FakeRulesLoader(),
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
     response = use_case.execute(
@@ -425,6 +431,7 @@ def test_accumulation_audit_exit_simulation_reports_target_and_max_hold_stats():
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         rules_loader=FakeRulesLoader(),
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
     response = use_case.execute(
@@ -481,6 +488,7 @@ def test_accumulation_audit_exit_simulation_can_prioritize_target_on_same_day():
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         rules_loader=FakeRulesLoader(),
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
     response = use_case.execute(

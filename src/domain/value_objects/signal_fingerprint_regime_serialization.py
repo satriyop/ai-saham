@@ -21,6 +21,11 @@ def _serialize_regime_fields(fp: "SignalObservationFingerprint") -> dict[str, An
         "regime_detection_method_at_signal": fp.regime_detection_method_at_signal,
         "coverage": fp.coverage,
         "conviction": fp.conviction,
+        "signal_authority_coverage": fp.signal_authority_coverage,
+        "setup_readiness_status": fp.setup_readiness_status,
+        "setup_readiness_current_phase": fp.setup_readiness_current_phase,
+        "setup_readiness_missing_required_inputs": list(fp.setup_readiness_missing_required_inputs),
+        "setup_readiness_failed_requirements": list(fp.setup_readiness_failed_requirements),
     }
 
 
@@ -60,6 +65,20 @@ def _parse_regime_fields(data: dict[str, Any]) -> dict[str, Any]:
             or (regime.get("transition_warning") if regime else None)
         ),
         "regime_detection_method_at_signal": data.get("regime_detection_method_at_signal"),
+        # Legacy (schema 1/2) fields — read only from the ambiguous legacy
+        # keys those schemas actually produced. Never fall back to the
+        # canonical signal_authority_coverage key below.
         "coverage": _optional_float(data.get("coverage", data.get("coverage_score"))),
         "conviction": _optional_float(data.get("conviction", data.get("conviction_score"))),
+        # HIGH-2 canonical (schema 3) fields — read only from their own named
+        # keys, never fabricated from the legacy coverage_score/conviction_score.
+        "signal_authority_coverage": _optional_float(data.get("signal_authority_coverage")),
+        "setup_readiness_status": data.get("setup_readiness_status"),
+        "setup_readiness_current_phase": data.get("setup_readiness_current_phase"),
+        "setup_readiness_missing_required_inputs": tuple(
+            str(v) for v in data.get("setup_readiness_missing_required_inputs") or ()
+        ),
+        "setup_readiness_failed_requirements": tuple(
+            str(v) for v in data.get("setup_readiness_failed_requirements") or ()
+        ),
     }

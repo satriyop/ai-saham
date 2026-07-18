@@ -1,115 +1,114 @@
 from src.application.services.decision_policy import DecisionPolicyService
-from src.domain.value_objects.setup_phase import SetupPhaseSnapshot, SetupPhaseState
+from src.domain.value_objects.setup_phase import SetupPhaseState
+from src.domain.value_objects.setup_phase_readiness import (
+    SetupPhaseReadiness,
+    SetupReadinessStatus,
+)
 from src.domain.value_objects.signal_assessment import EntryQuality
 
 
-def _phase(reason: str, *, sequence_valid=True) -> SetupPhaseSnapshot:
-    return SetupPhaseSnapshot(
-        current_phase=SetupPhaseState.BREAKOUT_CONFIRMATION,
-        previous_phase=SetupPhaseState.COMPRESSION,
-        phase_age_sessions=1,
-        phase_strength=0.8,
-        coverage_score=1.0,
-        conviction_score=0.8,
-        sequence_valid=sequence_valid,
-        reasons=(reason,),
+def _readiness(
+    status: SetupReadinessStatus,
+    *,
+    current_phase: SetupPhaseState | None = SetupPhaseState.BREAKOUT_CONFIRMATION,
+    failed_requirements: tuple[str, ...] = (),
+    missing_required_inputs: tuple[str, ...] = (),
+) -> SetupPhaseReadiness:
+    return SetupPhaseReadiness(
+        setup_family="foreign_bounce",
+        status=status,
+        current_phase=current_phase,
+        failed_requirements=failed_requirements,
+        missing_required_inputs=missing_required_inputs,
     )
 
 
-def _terminal_phase(phase: SetupPhaseState) -> SetupPhaseSnapshot:
-    return SetupPhaseSnapshot(
-        current_phase=phase,
-        previous_phase=None,
-        phase_age_sessions=1,
-        phase_strength=0.9,
-        coverage_score=1.0,
-        conviction_score=0.9,
-        sequence_valid=None,
-        reasons=(f"terminal: {phase.value}",),
-    )
-
-
-def test_legacy_rs_policy_warning_reason_ignored():
-    """Task HIGH-1 removed the RS authority path: a legacy rs_policy_warning
-    reason string surviving in a phase snapshot (e.g. from an old replay) must
-    not be parsed as an authority constraint by DecisionPolicyService."""
+def test_ready_setup_readiness_applies_no_cap():
+    """HIGH-2: DecisionPolicyService consumes typed SetupPhaseReadiness only —
+    it structurally cannot parse setup_phase reason strings (no such
+    parameter exists), unlike the removed legacy rs_policy_warning/hard_exclude
+    reason-string path this replaces."""
     result = DecisionPolicyService().resolve(
         entry_quality=EntryQuality.ENTER,
         score=90,
-        coverage_score=1.0,
-        conviction_score=1.0,
+        signal_authority_coverage=1.0,
         market_context=None,
         setup_family="foreign-bounce",
-        setup_phase=_phase("rs_policy_warning: RS -2.00 <= -1.00; max_decision=WATCH"),
+        setup_readiness=_readiness(SetupReadinessStatus.READY),
     )
 
     assert result.entry_quality == EntryQuality.ENTER
     assert result.constraints.max_decision == "ENTER"
-    assert not any(
-        "rs_policy_warning" in r for r in result.constraints.constraint_reasons
-    )
 
 
-def test_legacy_rs_policy_hard_exclude_reason_ignored():
-    """Same guarantee for the legacy hard-exclude reason string."""
+def test_ordinary_ineligible_readiness_caps_enter_to_watch():
     result = DecisionPolicyService().resolve(
         entry_quality=EntryQuality.ENTER,
         score=90,
-        coverage_score=1.0,
-        conviction_score=1.0,
-        market_context=None,
-        setup_family="foreign-bounce",
-        setup_phase=_phase("rs_policy_hard_exclude: RS -5.00 <= -4.00; max_decision=AVOID"),
-    )
-
-    assert result.entry_quality == EntryQuality.ENTER
-    assert result.constraints.max_decision == "ENTER"
-    assert not any(
-        "rs_policy_hard_exclude" in r for r in result.constraints.constraint_reasons
-    )
-
-
-def test_invalid_phase_sequence_caps_enter_to_watch():
-    result = DecisionPolicyService().resolve(
-        entry_quality=EntryQuality.ENTER,
-        score=90,
-        coverage_score=1.0,
-        conviction_score=1.0,
+        signal_authority_coverage=1.0,
         market_context=None,
         setup_family="pullback-continuation",
-        setup_phase=_phase("sequence policy", sequence_valid=False),
+        setup_readiness=_readiness(
+            SetupReadinessStatus.INELIGIBLE,
+            current_phase=SetupPhaseState.BREAKOUT_CONFIRMATION,
+            failed_requirements=("sequence_invalid",),
+        ),
     )
 
     assert result.entry_quality == EntryQuality.WATCH
-    assert "Setup phase sequence invalid" in result.constraints.constraint_reasons[-1]
+    assert "caps ENTER to WATCH" in result.constraints.constraint_reasons[-1]
 
 
-def test_distribution_and_failed_terminal_phases_cap_to_avoid():
+def test_distribution_and_failed_ineligible_readiness_caps_to_avoid():
     for phase in (SetupPhaseState.DISTRIBUTION, SetupPhaseState.FAILED):
         result = DecisionPolicyService().resolve(
             entry_quality=EntryQuality.ENTER,
             score=90,
-            coverage_score=1.0,
-            conviction_score=1.0,
+            signal_authority_coverage=1.0,
             market_context=None,
             setup_family="foreign-bounce",
-            setup_phase=_terminal_phase(phase),
+            setup_readiness=_readiness(
+                SetupReadinessStatus.INELIGIBLE,
+                current_phase=phase,
+                failed_requirements=(f"phase:{phase.value}",),
+            ),
         )
 
         assert result.entry_quality == EntryQuality.AVOID
         assert result.constraints.max_decision == "AVOID"
 
 
-def test_exhaustion_terminal_phase_caps_enter_to_watch():
+def test_exhaustion_ineligible_readiness_caps_enter_to_watch():
     result = DecisionPolicyService().resolve(
         entry_quality=EntryQuality.ENTER,
         score=90,
-        coverage_score=1.0,
-        conviction_score=1.0,
+        signal_authority_coverage=1.0,
         market_context=None,
         setup_family="foreign-bounce",
-        setup_phase=_terminal_phase(SetupPhaseState.EXHAUSTION),
+        setup_readiness=_readiness(
+            SetupReadinessStatus.INELIGIBLE,
+            current_phase=SetupPhaseState.EXHAUSTION,
+            failed_requirements=("phase:EXHAUSTION",),
+        ),
     )
 
     assert result.entry_quality == EntryQuality.WATCH
     assert result.constraints.max_decision == "WATCH"
+
+
+def test_incomplete_and_unavailable_readiness_cap_enter_to_watch():
+    for status, kwargs in (
+        (SetupReadinessStatus.INCOMPLETE, {"failed_requirements": ("setup_match:PARTIAL",)}),
+        (SetupReadinessStatus.UNAVAILABLE, {"missing_required_inputs": ("setup_evidence",)}),
+    ):
+        result = DecisionPolicyService().resolve(
+            entry_quality=EntryQuality.ENTER,
+            score=90,
+            signal_authority_coverage=1.0,
+            market_context=None,
+            setup_family="foreign-bounce",
+            setup_readiness=_readiness(status, current_phase=None, **kwargs),
+        )
+
+        assert result.entry_quality == EntryQuality.WATCH
+        assert result.constraints.max_decision == "WATCH"

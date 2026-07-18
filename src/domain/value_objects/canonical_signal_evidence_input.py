@@ -8,10 +8,12 @@ must both cross before `AssessSignalEvidenceUseCase` scores evidence — it
 prevents availability from ever describing a different repository read than
 the one that produced the scored evidence.
 
-`SHADOW` availability (the only mode this ADR authorizes today) is
-observable but must never change score, coverage, classification, candidate
-selection, or verdict. Enforcing availability as authority is a separate,
-unstarted HIGH-2 policy change.
+`SHADOW` availability is observable but must never change score, coverage,
+classification, candidate selection, or verdict. HIGH-2 (see ADR-041's
+amendment) enforces availability as production-authority coverage — this
+changes `signal_authority_coverage` and downstream decision eligibility only.
+Directional score arithmetic remains based on attached evidence exactly as
+before; it is never affected by availability under either mode.
 
 Layer: Domain (pure value objects, no I/O)
 """

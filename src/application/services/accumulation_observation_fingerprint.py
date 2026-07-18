@@ -25,8 +25,10 @@ from src.application.services.accumulation_observation_setup_fingerprint import 
 )
 from src.application.services.accumulation_observation_signal_fingerprint import (
     _alpha_trigger_fingerprint,
-    _candidate_observation_coverage_score,
     _strategy_evidence_fingerprint,
+)
+from src.domain.value_objects.signal_artifact_schema import (
+    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
 )
 
 if TYPE_CHECKING:
@@ -90,6 +92,9 @@ def compute_accumulation_config_hash(
     """
     values = {name: getattr(request, name) for name in _CONFIG_HASH_FIELDS}
     values["tier1_broker_codes"] = sorted(request.tier1_broker_codes)
+    # HIGH-2: schema version is part of canonical identity — a schema-3 write
+    # must never overwrite a schema-2 identity-equivalent row (or vice versa).
+    values["candidate_observation_schema_version"] = CANDIDATE_OBSERVATION_SCHEMA_VERSION
     canonical = json.dumps(values, sort_keys=True, default=str, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
 
@@ -128,7 +133,10 @@ def build_candidate_observation_payload(
         signal_payload = {
             "assessment": signal.assessment.to_dict(),
             "coverage_warning": signal.coverage_warning,
-            "evidence_confidence": signal.evidence_confidence,
+            "signal_authority_coverage": signal.signal_authority_coverage,
+            "setup_readiness": (
+                signal.setup_readiness.to_dict() if signal.setup_readiness is not None else None
+            ),
             "active_flags": list(signal.active_flags),
             "flag_adjustment": signal.flag_adjustment,
             "raw_group_score": signal.raw_group_score,
@@ -156,7 +164,7 @@ def build_candidate_observation_payload(
     )
 
     return {
-        "schema_version": 2,
+        "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
         "artifact_type": "candidate_observation",
         "ticker": candidate.ticker,
         "snapshot_date": snapshot_date.isoformat(),
@@ -193,19 +201,22 @@ def _sub_signal_fingerprint(
     volatility_context: "VolatilityContext | None" = None,
     market_context: "MarketContext | None" = None,
 ) -> dict:
-    """Persist raw sub-signal values as they were at observation time."""
+    """Persist raw sub-signal values as they were at observation time.
+
+    HIGH-2 schema 3: signal_authority_coverage is persisted directly from the
+    assessed AssessSignalResponse — never recomputed from flow presence,
+    scores, phase metrics, or Alpha/Trigger. Typed setup readiness is
+    persisted as its explicit status/phase/missing-inputs/failed-requirements
+    fields, not as a derived float.
+    """
     assessment = signal.assessment if signal is not None else None
     constraints = (
         assessment.decision_constraints.to_dict()
         if assessment is not None and assessment.decision_constraints is not None
         else {}
     )
-    coverage_score = _candidate_observation_coverage_score(flow_ev=flow_ev)
-    conviction_score = (
-        round(signal.raw_group_score / 100.0, 4)
-        if signal is not None and signal.raw_group_score is not None
-        else None
-    )
+    signal_authority_coverage = signal.signal_authority_coverage if signal is not None else None
+    readiness = signal.setup_readiness if signal is not None else None
     flow_dict = flow_ev.to_dict() if flow_ev is not None else {}
     phase_dict = _setup_phase_fingerprint(setup_phase)
     strategy_dict = _strategy_evidence_fingerprint(strategy_evidence)
@@ -281,8 +292,19 @@ def _sub_signal_fingerprint(
         "market_regime_at_signal": market_regime_at_signal,
         **_market_context_fingerprint(market_context),
         "decision_constraints": constraints or None,
-        "coverage_score": coverage_score,
-        "conviction_score": conviction_score,
+        "signal_authority_coverage": signal_authority_coverage,
+        "setup_readiness_status": readiness.status.value if readiness is not None else None,
+        "setup_readiness_current_phase": (
+            readiness.current_phase.value
+            if readiness is not None and readiness.current_phase is not None
+            else None
+        ),
+        "setup_readiness_missing_required_inputs": (
+            list(readiness.missing_required_inputs) if readiness is not None else []
+        ),
+        "setup_readiness_failed_requirements": (
+            list(readiness.failed_requirements) if readiness is not None else []
+        ),
     }
 
 

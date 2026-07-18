@@ -8,6 +8,9 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
 
+from src.domain.value_objects.signal_artifact_schema import (
+    SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
+)
 from src.domain.value_objects.signal_forward_label import (
     SignalForwardLabel,
     SignalForwardOutcome,
@@ -281,7 +284,7 @@ class SQLiteSignalForwardLabelsRepository:
 
 def _row_to_label(row: sqlite3.Row) -> SignalForwardLabel:
     schema_version = int(row["schema_version"])
-    if schema_version > 1:
+    if schema_version > SIGNAL_FORWARD_LABEL_SCHEMA_VERSION:
         raise ValueError(f"Unsupported signal forward label schema_version={schema_version}")
     return SignalForwardLabel(
         ticker=row["ticker"],

@@ -227,6 +227,7 @@ def _patch_swing_backtest_command(monkeypatch):
     fake_deps.market_repository = object()
     fake_deps.indicator_registry_factory = lambda *args, **kwargs: object()
     fake_deps.rules_loader_factory = lambda: object()
+    fake_deps.create_signal_engine = lambda: object()
     fake_deps.create_risk_engine = lambda: object()
     fake_deps.create_market_context_provider = lambda: object()
 

@@ -101,3 +101,28 @@ production-authority input.
   verified.
 - New evidence producers must expose consumed-row provenance rather than asking
   downstream code to reconstruct or infer it.
+
+### HIGH-2 Amendment (2026-07-18)
+
+`CANONICAL-EVIDENCE-BOUNDARY` and HIGH-2 are both implemented. This amendment
+records the resulting behavior without rewriting the historical decision above.
+
+- `AssessSignalEvidenceUseCase` now consumes the canonical evidence input's
+  resolved availability to compute `signal_authority_coverage`
+  (`SignalEvidenceGroupScorer`), and `DecisionPolicyService` is the sole
+  consumer of that coverage plus typed `SetupPhaseReadiness`. Screen and swing
+  both cross this same boundary before scoring — neither builds a second,
+  independently-assembled availability check after the fact.
+- `AvailabilityEnforcementMode.ENFORCED` (added alongside `SHADOW`) is what
+  `AssessSignalEvidenceUseCase` now emits. Availability is no longer purely
+  observational: an unavailable or non-authoritative required PRODUCTION
+  source lowers `signal_authority_coverage`, which `DecisionPolicyService` can
+  use to cap ENTER/WATCH.
+- Directional score arithmetic is unaffected by this change. `base_score` is
+  still computed only from attached evidence groups' scores, exactly as
+  before HIGH-2 — availability changes authority coverage and downstream
+  decision eligibility only, never the directional score itself.
+- `SHADOW` remains a valid mode for any future evidence producer that has not
+  yet been wired into authority-coverage enforcement; it is not removed by
+  this amendment, only superseded for the setup/flow groups HIGH-2 covers
+  today.

@@ -3,14 +3,20 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
+import pytest
+
 from src.application.use_case.generate_signal_forward_labels_use_case import (
     GenerateAllSignalForwardLabelsRequest,
     GenerateEligibleSignalForwardLabelsRequest,
     GenerateSignalForwardLabelsRequest,
     GenerateSignalForwardLabelsUseCase,
+    SignalLabelGenerationSkipReason,
 )
 from src.domain.entities.candle import Candle
 from src.domain.ports.candidate_observations_repository import CandidateObservation
+from src.domain.value_objects.signal_artifact_schema import (
+    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+)
 from src.domain.value_objects.signal_forward_label import (
     SignalForwardOutcome,
     SignalLabelHorizon,
@@ -84,8 +90,10 @@ class FakeMarketDataRepository:
 class SpySignalForwardLabelsRepository:
     def __init__(self):
         self.saved = []
+        self.save_many_call_count = 0
 
     def save_many(self, labels):
+        self.save_many_call_count += 1
         self.saved.extend(labels)
 
     def get(self, ticker, signal_date, horizon):
@@ -125,6 +133,12 @@ def test_generates_swing_10d_success_label_from_saved_observation():
     assert label.fingerprint.coverage == 0.5
     assert label.fingerprint.conviction == 0.8
     assert labels_repo.saved == [label]
+
+    from src.domain.value_objects.signal_artifact_schema import (
+        SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
+    )
+
+    assert label.schema_version == SIGNAL_FORWARD_LABEL_SCHEMA_VERSION
 
 
 def test_small_positive_swing_return_is_neutral_not_success():
@@ -279,6 +293,116 @@ def test_marks_missing_entry_price_unavailable_without_fetching_candles():
     assert market_repo.calls == []
 
 
+@pytest.mark.parametrize(
+    "schema_value",
+    [1, 2, 4, None, "3", True],
+)
+def test_incompatible_observation_schema_produces_no_label_artifacts(schema_value):
+    """HIGH-2 Finding 2: only an exact schema-3 observation may produce a
+    canonical forward label. Any other schema — old, future, missing, or a
+    malformed non-int value like a numeric string or a bool — must be
+    skipped entirely: no label, no fingerprint parse, no candle read, no
+    repository write."""
+    signal_date = date(2026, 7, 1)
+    payload = {"candidate": {"current_price": "100"}, "schema_version": schema_value}
+    # Deliberately malformed: if fingerprint parsing ran, this would raise
+    # AttributeError (str has no .get) instead of being silently skipped.
+    payload["sub_signal_fingerprint"] = "not-a-dict"
+    observation = _observation(signal_date, payload)
+    candles = [_candle(signal_date, "100")]
+    candles.extend(_candle(signal_date + timedelta(days=i), str(100 + i)) for i in range(1, 11))
+    labels_repo = SpySignalForwardLabelsRepository()
+    market_repo = FakeMarketDataRepository(candles)
+
+    response = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(observation),
+        market_data_repository=market_repo,
+        signal_forward_labels_repository=labels_repo,
+    ).execute(GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=signal_date))
+
+    assert response.labels == ()
+    assert response.observation is observation
+    assert (
+        response.skip_reason
+        is SignalLabelGenerationSkipReason.INCOMPATIBLE_OBSERVATION_SCHEMA
+    )
+    assert labels_repo.saved == []
+    assert labels_repo.save_many_call_count == 0
+    assert market_repo.calls == []
+
+
+def test_incompatible_schema_response_reports_source_schema_version():
+    signal_date = date(2026, 7, 1)
+    observation = _observation(
+        signal_date,
+        {"schema_version": 2, "candidate": {"current_price": "100"}},
+    )
+
+    response = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(observation),
+        market_data_repository=FakeMarketDataRepository([]),
+        signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+    ).execute(GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=signal_date))
+
+    assert response.source_schema_version == 2
+
+
+def test_new_labels_use_schema_2_and_only_schema_3_observations_are_eligible():
+    """HIGH-2: new labels use SIGNAL_FORWARD_LABEL_SCHEMA_VERSION (2), and a
+    canonical label can only be generated from a schema-3 observation."""
+    from src.domain.value_objects.signal_artifact_schema import (
+        SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
+    )
+
+    signal_date = date(2026, 7, 1)
+    observation = _observation(
+        signal_date,
+        {"candidate": {"current_price": "100"}, "sub_signal_fingerprint": _fingerprint()},
+    )
+    candles = [_candle(signal_date, "100")]
+    candles.extend(_candle(signal_date + timedelta(days=i), str(100 + i)) for i in range(1, 11))
+
+    response = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(observation),
+        market_data_repository=FakeMarketDataRepository(candles),
+        signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+    ).execute(GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=signal_date))
+
+    label = response.labels[0]
+    assert label.schema_version == SIGNAL_FORWARD_LABEL_SCHEMA_VERSION
+    assert label.outcome_label == SignalForwardOutcome.SUCCESS
+    assert response.skip_reason is None
+
+
+def test_empty_horizons_request_performs_no_reads_or_writes():
+    signal_date = date(2026, 7, 1)
+    observation = _observation(
+        signal_date,
+        {"candidate": {"current_price": "100"}, "sub_signal_fingerprint": _fingerprint()},
+    )
+    labels_repo = SpySignalForwardLabelsRepository()
+    market_repo = FakeMarketDataRepository([])
+
+    response = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(observation),
+        market_data_repository=market_repo,
+        signal_forward_labels_repository=labels_repo,
+    ).execute(
+        GenerateSignalForwardLabelsRequest(
+            ticker="BBCA",
+            signal_date=signal_date,
+            horizons=(),
+        )
+    )
+
+    assert response.labels == ()
+    assert response.observation is observation
+    assert response.skip_reason is None
+    assert market_repo.calls == []
+    assert labels_repo.saved == []
+    assert labels_repo.save_many_call_count == 0
+
+
 def test_generate_all_labels_latest_observations_for_date():
     signal_date = date(2026, 7, 1)
     observations = (
@@ -343,6 +467,74 @@ def test_generate_all_marks_incomplete_windows_unavailable():
     assert response.labels[0].unavailable_reason == (
         "incomplete_forward_window: required 10 trading days, found 1"
     )
+
+
+def test_generate_all_labels_only_schema_3_observations_in_mixed_batch():
+    """A batch mixing a canonical schema-3 observation with an incompatible
+    schema-2 observation must label only the schema-3 row; the schema-2 row
+    contributes zero labels, zero candle reads, and is excluded from
+    observation_count, while being reflected in the skipped-incompatible
+    count."""
+    signal_date = date(2026, 7, 1)
+    canonical = _observation(
+        signal_date,
+        {"candidate": {"current_price": "100"}, "sub_signal_fingerprint": _fingerprint()},
+        ticker="BBCA",
+    )
+    incompatible = _observation(
+        signal_date,
+        {"schema_version": 2, "candidate": {"current_price": "200"}},
+        ticker="BBRI",
+    )
+    candles = [
+        _candle(signal_date + timedelta(days=i), str(100 + i), ticker="BBCA")
+        for i in range(1, 11)
+    ]
+    observations_repo = FakeCandidateObservationsRepository(
+        observations=[canonical, incompatible]
+    )
+    labels_repo = SpySignalForwardLabelsRepository()
+    market_repo = FakeMarketDataRepository(candles)
+
+    response = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=observations_repo,
+        market_data_repository=market_repo,
+        signal_forward_labels_repository=labels_repo,
+    ).execute_all(GenerateAllSignalForwardLabelsRequest(signal_date=signal_date))
+
+    assert response.observation_count == 1
+    assert response.generated_count == 1
+    assert response.skipped_incompatible_observation_count == 1
+    assert {label.ticker for label in response.labels} == {"BBCA"}
+    assert labels_repo.saved == list(response.labels)
+    assert all(call[0] == "BBCA" for call in market_repo.calls)
+
+
+def test_generate_all_batch_of_only_incompatible_observations_writes_nothing():
+    signal_date = date(2026, 7, 1)
+    incompatible = _observation(
+        signal_date,
+        {"schema_version": 1, "candidate": {"current_price": "100"}},
+        ticker="BBCA",
+    )
+    labels_repo = SpySignalForwardLabelsRepository()
+    market_repo = FakeMarketDataRepository([])
+
+    response = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(
+            observations=[incompatible]
+        ),
+        market_data_repository=market_repo,
+        signal_forward_labels_repository=labels_repo,
+    ).execute_all(GenerateAllSignalForwardLabelsRequest(signal_date=signal_date))
+
+    assert response.labels == ()
+    assert response.observation_count == 0
+    assert response.generated_count == 0
+    assert response.skipped_incompatible_observation_count == 1
+    assert labels_repo.saved == []
+    assert labels_repo.save_many_call_count == 0
+    assert market_repo.calls == []
 
 
 def test_generate_all_labels_covers_every_canonical_window_not_just_latest():
@@ -440,6 +632,60 @@ def test_generate_eligible_dates_skips_dates_without_forward_window():
     assert response.unavailable_count == 0
     assert response.labels[0].ticker == "BBCA"
     assert labels_repo.saved == list(response.labels)
+
+
+def test_generate_eligible_dates_excludes_incompatible_observations_from_batch():
+    signal_date = date(2026, 7, 1)
+    canonical = _observation(
+        signal_date,
+        {"candidate": {"current_price": "100"}, "sub_signal_fingerprint": _fingerprint()},
+        ticker="BBCA",
+    )
+    incompatible = _observation(
+        signal_date,
+        {"schema_version": 4, "candidate": {"current_price": "200"}},
+        ticker="BBRI",
+    )
+    candles = [
+        _candle(signal_date + timedelta(days=i), str(100 + i), ticker="BBCA")
+        for i in range(1, 11)
+    ]
+    observations_repo = FakeCandidateObservationsRepository(
+        observations_by_date={signal_date: [canonical, incompatible]}
+    )
+    labels_repo = SpySignalForwardLabelsRepository()
+
+    response = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=observations_repo,
+        market_data_repository=FakeMarketDataRepository(candles),
+        signal_forward_labels_repository=labels_repo,
+    ).execute_eligible_dates(
+        GenerateEligibleSignalForwardLabelsRequest(horizon=SignalLabelHorizon.SWING_10D)
+    )
+
+    assert response.observation_count == 1
+    assert response.generated_count == 1
+    assert response.skipped_incompatible_observation_count == 1
+    assert {label.ticker for label in response.labels} == {"BBCA"}
+    assert labels_repo.saved == list(response.labels)
+
+
+def test_build_label_raises_on_non_canonical_observation_as_a_programmer_error():
+    """_build_label() is a private helper that every public entrypoint must
+    filter before calling. If it is ever reached with a non-canonical
+    observation, that is a contract violation in this use case's own code,
+    not ordinary missing data — it must raise, not return an UNAVAILABLE
+    label."""
+    signal_date = date(2026, 7, 1)
+    incompatible = _observation(signal_date, {"schema_version": 2})
+    use_case = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(),
+        market_data_repository=FakeMarketDataRepository([]),
+        signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+    )
+
+    with pytest.raises(ValueError):
+        use_case._build_label(incompatible, SignalLabelHorizon.SWING_10D)
 
 
 def test_available_label_copies_provenance_from_source_observation():
@@ -555,7 +801,7 @@ def _observation(
     resolution_notes: tuple[str, ...] = (),
 ) -> CandidateObservation:
     payload = {
-        "schema_version": 1,
+        "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
         "artifact_type": "candidate_observation",
         "ticker": ticker,
         "snapshot_date": signal_date.isoformat(),

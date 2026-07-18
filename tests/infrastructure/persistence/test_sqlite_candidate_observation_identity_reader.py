@@ -11,6 +11,9 @@ import pytest
 from src.application.use_case.audit_candidate_observation_identity_use_case import (
     RawCandidateObservationIdentityData,
 )
+from src.domain.value_objects.signal_artifact_schema import (
+    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+)
 from src.infrastructure.persistence.sqlite_candidate_observation_identity_reader import (
     SQLiteCandidateObservationIdentityReader,
 )
@@ -48,7 +51,7 @@ def _insert(
 ) -> None:
     if config_hash is None:
         config_hash = ""
-    schema_version = 2 if config_hash != "" else 1
+    schema_version = CANDIDATE_OBSERVATION_SCHEMA_VERSION if config_hash != "" else 1
     conn.execute(
         "INSERT INTO candidate_observations "
         "(ticker, snapshot_date, captured_at, schema_version, payload_json, "

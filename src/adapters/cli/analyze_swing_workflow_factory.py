@@ -73,12 +73,14 @@ def create_swing_analysis_workflow(
     """Build the composite swing analysis workflow with CLI infrastructure."""
     deps = dependencies or create_stock_analysis_workflow_dependencies(db_path)
     accumulation_config = load_accumulation_screener_config()
+    signal_engine = deps.create_signal_engine()
 
     build_accumulation_candidate_evaluation = create_accumulation_candidate_builder(
         deps=deps,
         swing_config=swing_config,
         analyze_config=analyze_config,
         accumulation_config=accumulation_config,
+        signal_engine=signal_engine,
     )
     build_broker_detail = create_broker_detail_builder(
         smart_money_brokers=smart_money_brokers,
@@ -119,7 +121,7 @@ def create_swing_analysis_workflow(
         evaluate_market_context=evaluate_market_context,
         structural_gates=create_structural_gates(),
         execution_gates=create_execution_gates(),
-        signal_engine=deps.create_signal_engine(),
+        signal_engine=signal_engine,
         risk_engine=deps.create_risk_engine(),
         candidate_observations_repository=deps.candidate_observations_repository,
         foreign_flow_score_policy=accumulation_config.foreign_flow_score_policy,

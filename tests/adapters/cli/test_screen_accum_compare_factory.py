@@ -16,6 +16,8 @@ from src.application.dto.accumulation_screen import (
     AccumulationScreenResponse,
 )
 from src.application.services.indicator_registry import IndicatorRegistry
+from src.application.services.signal_engine import SignalEngine
+from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
 from tests.application.use_case.accumulation_screen_fixtures import (
@@ -259,6 +261,7 @@ def test_compare_writes_zero_candidate_observations(monkeypatch):
         market_repository=fake_market_repository,
         rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo,
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
     monkeypatch.setattr(

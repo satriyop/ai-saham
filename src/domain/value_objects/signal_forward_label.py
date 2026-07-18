@@ -16,6 +16,9 @@ from src.domain.value_objects.signal_label_parsing import (
     _parse_optional_date,
     _parse_optional_datetime,
 )
+from src.domain.value_objects.signal_artifact_schema import (
+    SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
+)
 from src.domain.value_objects.signal_observation_fingerprint import (
     SignalObservationFingerprint,
 )
@@ -77,14 +80,17 @@ class SignalForwardLabel:
     is_eod_pending: bool | None = None
     resolution_source: str | None = None
     resolution_notes: tuple[str, ...] = ()
-    schema_version: int = 1
+    # HIGH-2: new labels are schema 2 (canonical). Schema 1 remains
+    # diagnostic-readable but is excluded from canonical readiness/tuning/
+    # promotion — see report_signal_readiness_use_case.py.
+    schema_version: int = SIGNAL_FORWARD_LABEL_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
         if not self.ticker:
             raise ValueError("ticker cannot be empty")
         if self.entry_reference_price is not None and self.entry_reference_price <= Decimal("0"):
             raise ValueError("entry_reference_price must be positive when provided")
-        if self.schema_version != 1:
+        if self.schema_version < 1 or self.schema_version > SIGNAL_FORWARD_LABEL_SCHEMA_VERSION:
             raise ValueError(
                 f"unsupported signal forward label schema_version={self.schema_version}"
             )

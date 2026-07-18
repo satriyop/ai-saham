@@ -66,7 +66,13 @@ def _display_replay(payload: dict) -> None:
     typer.echo(f"Captured: {captured_at}")
     typer.echo(f"Schema:   {payload.get('schema_version', '?')}")
     typer.echo("")
-    coverage = assessment.get("coverage_score") or assessment.get("confidence_score")
+    # HIGH-2 canonical field; legacy schema 1/2 payloads persisted before the
+    # schema-3 rename only have the old ambiguous keys — read them here only
+    # as an explicit legacy diagnostic fallback for display, never remapped
+    # into canonical signal_authority_coverage semantics elsewhere.
+    coverage = assessment.get("signal_authority_coverage")
+    if coverage is None:
+        coverage = assessment.get("coverage_score") or assessment.get("confidence_score")
     coverage_text = "—" if coverage is None else f"{float(coverage):.0%}"
     typer.echo(
         "Signal:  "

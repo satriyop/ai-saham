@@ -14,11 +14,12 @@ from typing import TYPE_CHECKING
 from src.application.services.signal_engine_config import DecisionPolicyConfig
 from src.domain.value_objects.decision_constraints import DecisionConstraints
 from src.domain.value_objects.setup_phase import SetupPhaseState
+from src.domain.value_objects.setup_phase_readiness import SetupReadinessStatus
 from src.domain.value_objects.signal_assessment import EntryQuality
 
 if TYPE_CHECKING:
     from src.domain.value_objects.market_context import MarketContext
-    from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
+    from src.domain.value_objects.setup_phase_readiness import SetupPhaseReadiness
 
 
 _ORDER: dict[str, int] = {
@@ -45,13 +46,10 @@ class DecisionPolicyService:
         *,
         entry_quality: EntryQuality,
         score: int,
-        coverage_score: float,
-        conviction_score: float,
+        signal_authority_coverage: float,
         market_context: "MarketContext | None",
         setup_family: str | None = None,
-        setup_phase: "SetupPhaseSnapshot | None" = None,
-        setup_entry_authority: bool = True,
-        setup_can_enter_from_phases: tuple[str, ...] = (),
+        setup_readiness: "SetupPhaseReadiness | None" = None,
     ) -> DecisionPolicyResult:
         regime = market_context.regime.value if market_context else "RISK_ON"
         regime_policy = self._config.regime_policy[regime]
@@ -103,33 +101,26 @@ class DecisionPolicyService:
                 f"{regime} WATCH requires score >= {regime_policy.watch_threshold}"
             )
 
+        # ── HIGH-2: canonical signal_authority_coverage floor, applied exactly
+        # once here. No other code path may apply a second coverage check.
         if regime_policy.enter_allowed and entry_quality == EntryQuality.ENTER:
-            # In enter-allowed regimes: floors gate ENTER → cap to WATCH if not met
-            if coverage_score < regime_policy.min_coverage:
+            # In enter-allowed regimes: floor gates ENTER → cap to WATCH if not met
+            if signal_authority_coverage < regime_policy.min_signal_authority_coverage:
                 max_decision = _stricter(max_decision, EntryQuality.WATCH.value)
                 reasons.append(
-                    f"{regime} ENTER requires coverage >= {regime_policy.min_coverage:.0%}"
-                )
-            if conviction_score < regime_policy.min_conviction:
-                max_decision = _stricter(max_decision, EntryQuality.WATCH.value)
-                reasons.append(
-                    f"{regime} ENTER requires conviction >= {regime_policy.min_conviction:.0%}"
+                    f"{regime} ENTER requires signal_authority_coverage >= "
+                    f"{regime_policy.min_signal_authority_coverage:.0%}"
                 )
 
         if not regime_policy.enter_allowed and entry_quality in {EntryQuality.ENTER, EntryQuality.WATCH}:
-            # In disabled regimes (RISK_OFF/VOLATILE): floors govern WATCH diagnostic quality
+            # In disabled regimes (RISK_OFF/VOLATILE): floor governs WATCH diagnostic quality
             # — below floor means insufficient evidence for even a watchlist entry
-            if coverage_score < regime_policy.min_coverage:
+            if signal_authority_coverage < regime_policy.min_signal_authority_coverage:
                 max_decision = _stricter(max_decision, EntryQuality.AVOID.value)
                 reasons.append(
-                    f"{regime} WATCH requires coverage >= {regime_policy.min_coverage:.0%} "
-                    f"(got {coverage_score:.0%})"
-                )
-            if conviction_score < regime_policy.min_conviction:
-                max_decision = _stricter(max_decision, EntryQuality.AVOID.value)
-                reasons.append(
-                    f"{regime} WATCH requires conviction >= {regime_policy.min_conviction:.0%} "
-                    f"(got {conviction_score:.0%})"
+                    f"{regime} WATCH requires signal_authority_coverage >= "
+                    f"{regime_policy.min_signal_authority_coverage:.0%} "
+                    f"(got {signal_authority_coverage:.0%})"
                 )
 
         # ── A2: regime quality caps (tightening-only; never relax A1 caps) ────
@@ -156,51 +147,31 @@ class DecisionPolicyService:
                     f"{self._config.regime_confidence_min_enter:.2f}) — ENTER capped"
                 )
 
-        if setup_phase is not None:
-            if setup_phase.current_phase in {
+        # ── HIGH-2: typed setup-family readiness (replaces phase/entry-
+        # authority/can-enter-from-phases parsing — SetupPhaseReadinessEvaluator
+        # is the sole producer of this typed result; no reason-string parsing
+        # here). None or READY applies no readiness cap.
+        if setup_readiness is not None:
+            status = setup_readiness.status
+            phase = setup_readiness.current_phase
+            if status == SetupReadinessStatus.INELIGIBLE and phase in {
                 SetupPhaseState.DISTRIBUTION,
                 SetupPhaseState.FAILED,
             }:
                 max_decision = _stricter(max_decision, EntryQuality.AVOID.value)
                 reasons.append(
-                    f"Setup phase {setup_phase.current_phase.value} blocks entry"
+                    f"Setup readiness INELIGIBLE (phase {phase.value}) blocks entry"
                 )
-            elif setup_phase.current_phase == SetupPhaseState.EXHAUSTION:
+            elif status == SetupReadinessStatus.INELIGIBLE and phase == SetupPhaseState.EXHAUSTION:
                 max_decision = _stricter(max_decision, EntryQuality.WATCH.value)
-                reasons.append("Setup phase EXHAUSTION caps ENTER to WATCH")
-            # Benchmark excess-return evidence (SetupEvidence.
-            # benchmark_excess_return_5_session/20_session) is
-            # DIAGNOSTIC_UNVALIDATED and intentionally NOT parsed here — see
-            # tasks/backlog/audit_signal_refactor_contract.md Task HIGH-1.
-            # setup_phase.reasons is never scanned for authority strings.
-            if setup_phase.sequence_valid is False:
+                reasons.append("Setup readiness EXHAUSTION caps ENTER to WATCH")
+            elif status in {
+                SetupReadinessStatus.INCOMPLETE,
+                SetupReadinessStatus.UNAVAILABLE,
+                SetupReadinessStatus.INELIGIBLE,
+            }:
                 max_decision = _stricter(max_decision, EntryQuality.WATCH.value)
-                reasons.append("Setup phase sequence invalid — ENTER capped to WATCH")
-
-        # ── Setup entry authority (explicit config; never inferred from name) ──
-        # A setup MATCH alone must not create ENTER. entry_authority and
-        # can_enter_from_phases come from config/swing_setups.yaml via
-        # SetupEvidence — this is the only place that enforces them.
-        if entry_quality == EntryQuality.ENTER:
-            setup_label = setup_key or "setup"
-            if not setup_entry_authority:
-                max_decision = _stricter(max_decision, EntryQuality.WATCH.value)
-                reasons.append(
-                    f"Setup {setup_label} has no standalone entry authority"
-                )
-            elif setup_can_enter_from_phases:
-                if setup_phase is None:
-                    max_decision = _stricter(max_decision, EntryQuality.WATCH.value)
-                    reasons.append(
-                        f"Setup {setup_label} requires setup phase for ENTER"
-                    )
-                elif setup_phase.current_phase.value not in setup_can_enter_from_phases:
-                    max_decision = _stricter(max_decision, EntryQuality.WATCH.value)
-                    reasons.append(
-                        f"Setup {setup_label} requires phase "
-                        f"{', '.join(setup_can_enter_from_phases)} for ENTER; "
-                        f"current phase {setup_phase.current_phase.value}"
-                    )
+                reasons.append(f"Setup readiness {status.value} caps ENTER to WATCH")
 
         constrained = _cap_entry(entry_quality, max_decision)
         constraints = DecisionConstraints(

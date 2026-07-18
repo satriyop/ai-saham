@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     )
     from src.domain.value_objects.alpha_trigger_score import AlphaTriggerScore
     from src.domain.value_objects.decision_constraints import DecisionConstraints
+    from src.domain.value_objects.setup_phase_readiness import SetupPhaseReadiness
     from src.domain.value_objects.signal_assessment import EntryQuality, SignalStrength
 
 
@@ -31,13 +32,14 @@ class SignalEvidenceResponseBuilder:
         entry_quality: EntryQuality,
         decision_constraints: DecisionConstraints | None,
         alpha_trigger_score: AlphaTriggerScore | None,
+        setup_readiness: "SetupPhaseReadiness | None" = None,
     ) -> AssessSignalResponse:
         breakdown = SignalEvidenceResponseBuilder._build_breakdown(
             setup_score=group_scores.setup_score,
             setup_present=group_scores.setup_present,
             flow_score=group_scores.flow_score,
             flow_present=group_scores.flow_present,
-            confidence=group_scores.confidence,
+            signal_authority_coverage=group_scores.signal_authority_coverage,
             active_flags=group_scores.active_flags,
             flag_adj=group_scores.flag_adjustment,
             regime_conditioned=bool(legacy_conditioning.notes),
@@ -51,7 +53,7 @@ class SignalEvidenceResponseBuilder:
             entry_quality=entry_quality,
             setup_present=group_scores.setup_present,
             flow_present=group_scores.flow_present,
-            confidence=group_scores.confidence,
+            signal_authority_coverage=group_scores.signal_authority_coverage,
             active_flags=group_scores.active_flags,
             flag_adj=group_scores.flag_adjustment,
             regime_notes=legacy_conditioning.notes,
@@ -66,7 +68,7 @@ class SignalEvidenceResponseBuilder:
             breakdown=breakdown,
             rationale=rationale,
             snapshot_date=request.snapshot_date,
-            confidence_score=round(group_scores.confidence, 4),
+            signal_authority_coverage=round(group_scores.signal_authority_coverage, 4),
             decision_constraints=decision_constraints,
             legacy_conditioned_score=legacy_conditioning.legacy_conditioned_score,
             raw_exact_score=round(group_scores.raw_exact_score, 4),
@@ -77,13 +79,14 @@ class SignalEvidenceResponseBuilder:
             ticker=request.ticker,
             assessment=assessment,
             coverage_warning=group_scores.coverage_warning,
-            evidence_confidence=round(group_scores.confidence, 4),
+            signal_authority_coverage=round(group_scores.signal_authority_coverage, 4),
             active_flags=group_scores.active_flags,
             flag_adjustment=group_scores.flag_adjustment,
             raw_group_score=group_scores.raw_group_score,
             signal_score_raw=group_scores.final_score,
             raw_exact_score=round(group_scores.raw_exact_score, 4),
             alpha_trigger_score=alpha_trigger_score,
+            setup_readiness=setup_readiness,
         )
 
     @staticmethod
@@ -92,7 +95,7 @@ class SignalEvidenceResponseBuilder:
         setup_present: bool,
         flow_score: float,
         flow_present: bool,
-        confidence: float,
+        signal_authority_coverage: float,
         active_flags: tuple[str, ...],
         flag_adj: int,
         regime_conditioned: bool,
@@ -103,7 +106,7 @@ class SignalEvidenceResponseBuilder:
             entries.append(("setup_quality_group", round(setup_score, 2)))
         if flow_present:
             entries.append(("flow_confirmation_group", round(flow_score, 2)))
-        entries.append(("evidence_confidence", round(confidence * 100.0, 2)))
+        entries.append(("signal_authority_coverage", round(signal_authority_coverage * 100.0, 2)))
         if flag_adj != 0:
             entries.append(("flag_adjustment", float(flag_adj)))
         if regime_conditioned:
@@ -120,7 +123,7 @@ class SignalEvidenceResponseBuilder:
         entry_quality: EntryQuality,
         setup_present: bool,
         flow_present: bool,
-        confidence: float,
+        signal_authority_coverage: float,
         active_flags: tuple[str, ...],
         flag_adj: int,
         regime_notes: tuple[str, ...],
@@ -139,7 +142,7 @@ class SignalEvidenceResponseBuilder:
         if gate_tightened:
             lines.append("Gate tightening: ENTER → WATCH (regime gate_tightening=True)")
         lines.append(
-            f"Evidence confidence: {confidence:.0%} — "
+            f"Signal authority coverage: {signal_authority_coverage:.0%} — "
             f"score {final_score} ({strength.value}/{entry_quality.value})"
         )
         return tuple(lines)

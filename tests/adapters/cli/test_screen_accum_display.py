@@ -247,9 +247,8 @@ def test_display_multi_renders_canonical_signal_risk_phase_data_next(capsys):
         current_phase=SetupPhaseState.ACCUMULATION,
         previous_phase=None,
         phase_age_sessions=1,
-        phase_strength=0.6,
-        coverage_score=0.67,
-        conviction_score=0.4,
+        phase_detection_strength=0.6,
+        phase_input_coverage=0.67,
         sequence_valid=True,
     )
     risk_assessment = RiskAssessment(
@@ -336,9 +335,8 @@ def test_display_results_renders_phase_column_and_note(capsys):
         current_phase=SetupPhaseState.ACCUMULATION,
         previous_phase=None,
         phase_age_sessions=1,
-        phase_strength=0.6,
-        coverage_score=0.67,
-        conviction_score=0.4,
+        phase_detection_strength=0.6,
+        phase_input_coverage=0.67,
         sequence_valid=True,
     )
     response = AccumulationScreenResponse(

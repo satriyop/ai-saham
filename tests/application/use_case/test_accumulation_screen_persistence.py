@@ -27,6 +27,8 @@ from decimal import Decimal
 
 from src.application.dto.accumulation_screen import AccumulationScreenRequest
 from src.application.services.indicator_registry import IndicatorRegistry
+from src.application.services.signal_engine import SignalEngine
+from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from src.domain.entities.broker_flow import BrokerSummary, ForeignFlowPoint
 from src.domain.entities.candle import Candle
@@ -361,6 +363,7 @@ class TestIaCnfbDivergenceWithPlausibleFlowData:
             market_repository=_MockMarketRepo(candles),
             rules_loader=FakeRulesLoader(),
             candidate_observations_repository=obs_repo,
+            signal_engine=SignalEngine(config=SignalEngineConfig()),
             **_EVIDENCE_BUILDER_FACTORY_KWARGS,
         )
         execute_and_record(
@@ -446,6 +449,7 @@ class TestScFingerprintWithPeerCandles:
             candidate_observations_repository=obs_repo,
             # Provides sector="Finance" so sc_sector flows into SectorContextRequest.
             ticker_notation_provider=_MockTickerNotationProvider("Finance"),
+            signal_engine=SignalEngine(config=SignalEngineConfig()),
             **_EVIDENCE_BUILDER_FACTORY_KWARGS,
         )
         execute_and_record(
@@ -530,6 +534,7 @@ class TestFingerprintKeysExistWhenInputsUnavailable:
             market_repository=_MockMarketRepo(candles),
             rules_loader=FakeRulesLoader(),
             candidate_observations_repository=obs_repo,
+            signal_engine=SignalEngine(config=SignalEngineConfig()),
             **_EVIDENCE_BUILDER_FACTORY_KWARGS,
             # No ticker_notation_provider — sc_sector will be None.
         )

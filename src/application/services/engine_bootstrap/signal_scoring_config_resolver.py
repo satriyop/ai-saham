@@ -22,6 +22,7 @@ from src.application.services.engine_bootstrap.signal_decision_policy_config_res
 from src.application.services.signal_engine_config import (
     AnalystBearishFlagConfig,
     AnalystScoringConfig,
+    AlphaTriggerConfig,
     BandarScoringConfig,
     EvidenceGroupConfig,
     EvidenceGroupsConfig,
@@ -42,6 +43,35 @@ from src.application.services.signal_engine_config import (
     ValuationStretchedFlagConfig,
     VolatileRegimeConfig,
 )
+
+
+def _validate_evidence_group_config(
+    name: str,
+    group: EvidenceGroupConfig,
+    alpha_trigger_cfg: AlphaTriggerConfig,
+) -> None:
+    """HIGH-2: fail closed on malformed evidence-group config at load time —
+    a misspelled or missing authority_registration must never silently
+    resolve as diagnostic in production config."""
+    if group.weight <= 0:
+        raise ValueError(
+            f"signal_engine.evidence_groups.{name}.weight must be > 0, got {group.weight!r}"
+        )
+    if not group.authority_registration:
+        raise ValueError(
+            f"signal_engine.evidence_groups.{name}.authority_registration cannot be empty"
+        )
+    if group.authority_registration not in alpha_trigger_cfg.evidence_registrations:
+        raise ValueError(
+            f"signal_engine.evidence_groups.{name}.authority_registration="
+            f"{group.authority_registration!r} does not exist in "
+            "signal_engine.alpha_trigger.evidence_registrations"
+        )
+    if not isinstance(group.required_for_authority, bool):
+        raise ValueError(
+            f"signal_engine.evidence_groups.{name}.required_for_authority must be "
+            f"a boolean, got {group.required_for_authority!r}"
+        )
 
 
 def resolve_signal_engine_config(cfg: dict) -> SignalEngineConfig:
@@ -70,12 +100,33 @@ def resolve_signal_engine_config(cfg: dict) -> SignalEngineConfig:
     decision_policy = resolve_decision_policy_config(decision_cfg)
     alpha_trigger_cfg = resolve_alpha_trigger_config(root.get("alpha_trigger", {}))
 
+    setup_quality_group = EvidenceGroupConfig(
+        weight=evidence_groups.get("setup_quality", {}).get("weight", 0.60),
+        authority_registration=evidence_groups.get("setup_quality", {}).get(
+            "authority_registration", "setup_quality"
+        ),
+        required_for_authority=evidence_groups.get("setup_quality", {}).get(
+            "required_for_authority", True
+        ),
+    )
+    flow_confirmation_group = EvidenceGroupConfig(
+        weight=evidence_groups.get("flow_confirmation", {}).get("weight", 0.40),
+        authority_registration=evidence_groups.get("flow_confirmation", {}).get(
+            "authority_registration", "institutional_flow"
+        ),
+        required_for_authority=evidence_groups.get("flow_confirmation", {}).get(
+            "required_for_authority", True
+        ),
+    )
+    _validate_evidence_group_config("setup_quality", setup_quality_group, alpha_trigger_cfg)
+    _validate_evidence_group_config(
+        "flow_confirmation", flow_confirmation_group, alpha_trigger_cfg
+    )
+
     return SignalEngineConfig(
         classification=SignalClassificationConfig(
             strong_min_score=classification.get("strong_min_score", 70),
             moderate_min_score=classification.get("moderate_min_score", 45),
-            enter_min_confidence=classification.get("enter_min_confidence", 0.70),
-            watch_min_confidence=classification.get("watch_min_confidence", 0.40),
         ),
         missing_data=SignalMissingDataConfig(
             neutral_score=missing.get("neutral_score", 50.0),
@@ -121,12 +172,8 @@ def resolve_signal_engine_config(cfg: dict) -> SignalEngineConfig:
             insider_lookback_days=enrichment.get("insider_lookback_days", 90),
         ),
         evidence_groups=EvidenceGroupsConfig(
-            setup_quality=EvidenceGroupConfig(
-                weight=evidence_groups.get("setup_quality", {}).get("weight", 0.60),
-            ),
-            flow_confirmation=EvidenceGroupConfig(
-                weight=evidence_groups.get("flow_confirmation", {}).get("weight", 0.40),
-            ),
+            setup_quality=setup_quality_group,
+            flow_confirmation=flow_confirmation_group,
         ),
         flags=SignalFlagsConfig(
             valuation_stretched=ValuationStretchedFlagConfig(

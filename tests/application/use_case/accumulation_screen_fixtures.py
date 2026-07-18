@@ -6,6 +6,8 @@ from unittest.mock import MagicMock
 
 from src.application.ports.rules_loader import RulesLoader
 from src.application.services.indicator_registry import IndicatorRegistry
+from src.application.services.signal_engine import SignalEngine
+from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenUseCase,
 )
@@ -256,6 +258,7 @@ def _make_use_case(summaries, daily_flows=None):
             broker_repository=MockBrokerRepositoryWithDaily(summaries, daily_flows),
             market_repository=MockMarketRepository(candles),
             rules_loader=FakeRulesLoader(),
+            signal_engine=SignalEngine(config=SignalEngineConfig()),
         ),
         session_dates,
     )
@@ -293,6 +296,7 @@ def _make_use_case_with_fundamentals(piotroski_score: int | None):
         market_repository=MockMarketRepository(candles),
         rules_loader=FakeRulesLoader(),
         fundamentals_provider=fund_prov,
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
     return use_case, as_of
 
@@ -348,6 +352,7 @@ def _make_use_case_with_all_providers(
         analyst_consensus_provider=analyst_prov,
         candidate_observations_repository=candidate_observations_repository,
         ticker_profile_classifier_factory=create_ticker_profile_classifier,
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
     return use_case, as_of, fund_prov, seasonality_prov, bandar_prov, analyst_prov
 

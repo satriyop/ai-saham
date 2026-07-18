@@ -80,15 +80,24 @@ class AccumulationCandidateObservationPersister:
             observations = []
             for oc in observation_candidates:
                 c, screen_result, flow_ev = oc.candidate, oc.screen_result, oc.flow_evidence
-                # Reuse the phase already detected in execute() — same candidate,
-                # same flow evidence, same snapshot date. Avoids detecting twice.
+                # HIGH-2: reuse the exact setup family and phase resolved once
+                # in AccumulationCandidateSignalAssessor.assess() — the same
+                # values SignalEngine scored against. Persistence must not
+                # recompute or rewrite the assessed family/phase; strategy
+                # evidence remains diagnostic-only input to the payload.
                 setup_phase = c.setup_phase
+                setup_family_result = c.setup_family_result
                 strategy_evidence = (
                     self._candidate_evidence_builder.build_candidate_strategy_evidence(
                         c,
                         setup_phase,
                         snapshot_date,
                         request,
+                        setup_family=(
+                            setup_family_result.primary_setup_family
+                            if setup_family_result is not None
+                            else None
+                        ),
                     )
                 )
                 builder = self._candidate_evidence_builder
@@ -116,33 +125,6 @@ class AccumulationCandidateObservationPersister:
                         snapshot_date,
                     )
                 )
-                # Stage 2 resolution: strategy_evidence, setup_phase, and flow
-                # evidence are all available now — final family for this
-                # persisted observation.
-                preliminary_family = (
-                    self._candidate_evidence_builder.resolve_preliminary_setup_family(c)
-                )
-                setup_family_result = self._setup_family_resolver.resolve(
-                    candidate=c,
-                    strategy_evidence=strategy_evidence,
-                    setup_phase=setup_phase,
-                    flow_confirmation_evidence=flow_ev,
-                    swing_setup_catalog=self._swing_setup_catalog,
-                )
-                if setup_family_result.primary_setup_family != preliminary_family:
-                    # A higher-priority source (e.g. strategy_evidence) revised
-                    # the family after phase detection already ran with the
-                    # stage-1 preliminary family. Recompute setup_phase with
-                    # the final family so the persisted setup_phase and
-                    # setup_family always share one contract — attribution
-                    # must be able to trust that phase_sequence_valid was
-                    # evaluated under the same family as primary_setup_family.
-                    setup_phase = self._candidate_evidence_builder.detect_candidate_setup_phase(
-                        c,
-                        flow_ev,
-                        snapshot_date,
-                        setup_family=setup_family_result.primary_setup_family,
-                    )
                 data_as_of_date = c.latest_broker_date or c.latest_candle_date or snapshot_date
                 observations.append(
                     CandidateObservation(

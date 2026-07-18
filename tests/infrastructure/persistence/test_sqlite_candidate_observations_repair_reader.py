@@ -5,6 +5,9 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+from src.domain.value_objects.signal_artifact_schema import (
+    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+)
 from src.infrastructure.persistence.sqlite_candidate_observations_repair_reader import (
     SQLiteCandidateObservationsRepairReader,
 )
@@ -28,7 +31,7 @@ def _insert_row(
     window_sessions: int = 0,
     data_as_of_date: str = "",
 ) -> None:
-    schema_version = 2 if config_hash != "" else 1
+    schema_version = CANDIDATE_OBSERVATION_SCHEMA_VERSION if config_hash != "" else 1
     conn = sqlite3.connect(str(db_path))
     conn.execute(
         """

@@ -189,8 +189,7 @@ _WEIGHT_STEP = 0.05
 _QUANTIZED_STEP_PATHS = (
     "evidence_groups.setup_quality.weight",
     "evidence_groups.flow_confirmation.weight",
-    "classification.enter_min_confidence",
-    "classification.watch_min_confidence",
+    "min_signal_authority_coverage",
     # regime_conditioning.* removed: transitional layer — not to be tuned (TD-1)
 )
 

@@ -18,8 +18,14 @@ from src.application.use_case.repair_candidate_observations_use_case import (
     CandidateObservationsRepairReader,
     RawCandidateObservationsRepairState,
 )
+from src.domain.value_objects.signal_artifact_schema import (
+    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+)
 
-_LEGACY_WHERE = "config_hash IS NULL OR TRIM(config_hash) = '' OR schema_version != 2"
+_LEGACY_WHERE = (
+    "config_hash IS NULL OR TRIM(config_hash) = '' "
+    f"OR schema_version != {CANDIDATE_OBSERVATION_SCHEMA_VERSION}"
+)
 
 
 class SQLiteCandidateObservationsRepairReader:

@@ -308,7 +308,7 @@ def test_volume_trigger_unavailable_for_synthetic_source_or_zero_volume_window()
         setup_family="foreign-bounce",
     )
 
-    assert snapshot.coverage_score < 1.0
+    assert snapshot.phase_input_coverage < 1.0
     assert any(
         "synthetic/missing source" in reason
         for reason in snapshot.unavailable_evidence_reasons
@@ -536,7 +536,7 @@ def test_detect_reports_partial_coverage_with_fewer_than_20_candles():
         setup_family="foreign-bounce",
     )
 
-    assert snapshot.coverage_score < 1.0
+    assert snapshot.phase_input_coverage < 1.0
 
 
 def test_volume_trigger_evidence_zero_volume_distortion_above_tolerance():

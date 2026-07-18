@@ -7,6 +7,9 @@ from pathlib import Path
 
 import pytest
 
+from src.domain.value_objects.signal_artifact_schema import (
+    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+)
 from src.infrastructure.persistence.sqlite_candidate_observations_repairer import (
     SQLiteCandidateObservationsRepairer,
 )
@@ -29,7 +32,7 @@ def _insert_row(
     snapshot_date: str = "2026-07-01",
     config_hash: str = "",
 ) -> int:
-    schema_version = 2 if config_hash != "" else 1
+    schema_version = CANDIDATE_OBSERVATION_SCHEMA_VERSION if config_hash != "" else 1
     conn = sqlite3.connect(str(db_path))
     cursor = conn.execute(
         """

@@ -8,6 +8,9 @@ from datetime import date
 from src.domain.ports.signal_forward_labels_repository import (
     SignalForwardLabelsRepository,
 )
+from src.domain.value_objects.signal_artifact_schema import (
+    SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
+)
 from src.domain.value_objects.signal_forward_label import (
     SignalForwardLabel,
     SignalForwardOutcome,
@@ -72,12 +75,20 @@ class SummarizeSignalForwardLabelsUseCase:
         self,
         request: SummarizeSignalForwardLabelsRequest,
     ) -> SummarizeSignalForwardLabelsResponse:
-        labels = tuple(
+        all_labels = tuple(
             self._repository.list(
                 signal_date=request.signal_date,
                 horizon=request.horizon,
                 ticker=request.ticker,
             )
+        )
+        # HIGH-2 Finding 4: canonical attribution only. Legacy schema labels
+        # remain readable through the repository directly but must never
+        # contaminate canonical buckets/counts/returns.
+        labels = tuple(
+            label
+            for label in all_labels
+            if label.schema_version == SIGNAL_FORWARD_LABEL_SCHEMA_VERSION
         )
         buckets = tuple(_build_buckets(labels))
         return SummarizeSignalForwardLabelsResponse(labels=labels, buckets=buckets)
@@ -140,8 +151,18 @@ def _build_buckets(
                 "flow_trigger_allowed",
                 "UNKNOWN" if fp.flow_trigger_allowed is None else str(fp.flow_trigger_allowed),
             ),
-            ("coverage_bucket", _score_bucket(fp.coverage)),
-            ("conviction_bucket", _score_bucket(fp.conviction)),
+            # HIGH-2 Finding 4: canonical production-authority coverage
+            # replaces the removed legacy fingerprint fields below — no
+            # fallback to those ambiguous generic fields is permitted here.
+            (
+                "signal_authority_coverage_bucket",
+                _score_bucket(fp.signal_authority_coverage),
+            ),
+            ("setup_readiness_status", fp.setup_readiness_status or "UNKNOWN"),
+            (
+                "setup_readiness_current_phase",
+                fp.setup_readiness_current_phase or "UNKNOWN",
+            ),
             # Point 3: explicit dry-up/expansion volume trigger evidence.
             (
                 "volume_dry_up_confirmed",
@@ -183,6 +204,16 @@ def _build_buckets(
         for key in keys:
             groups.setdefault(key, []).append(label)
 
+        # Membership groups: one label may have multiple missing/failed
+        # requirements, so it is counted under each normalized value — group
+        # totals may therefore exceed the overall label count.
+        for value in _normalized_memberships(fp.setup_readiness_missing_required_inputs):
+            groups.setdefault(("setup_readiness_missing_required_input", value), []).append(
+                label
+            )
+        for value in _normalized_memberships(fp.setup_readiness_failed_requirements):
+            groups.setdefault(("setup_readiness_failed_requirement", value), []).append(label)
+
     return [
         _summarize(group, key, rows)
         for (group, key), rows in sorted(groups.items(), key=lambda item: item[0])
@@ -214,6 +245,11 @@ def _summarize(
         average_max_forward_return=_average(label.max_forward_return for label in labels),
         average_max_adverse_excursion=_average(label.max_adverse_excursion for label in labels),
     )
+
+
+def _normalized_memberships(values: tuple[str, ...]) -> tuple[str, ...]:
+    normalized = tuple(sorted({value.strip() for value in values if value.strip()}))
+    return normalized or ("NONE",)
 
 
 def _score_bucket(value: float | None) -> str:

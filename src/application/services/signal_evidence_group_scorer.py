@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from src.domain.value_objects.alpha_trigger_score import EvidenceAuthorityStatus
 from src.domain.value_objects.signal_assessment import (
     EntryQuality,
     SignalStrength,
@@ -16,11 +17,32 @@ from src.domain.value_objects.signal_assessment import (
 
 if TYPE_CHECKING:
     from src.application.dto.assess_signal import AssessSignalEvidenceRequest
-    from src.application.services.signal_engine_config import SignalEngineConfig
+    from src.application.services.signal_engine_config import (
+        EvidenceGroupConfig,
+        SignalEngineConfig,
+    )
+    from src.domain.value_objects.canonical_signal_evidence_input import (
+        FlowEvidenceGroupInput,
+        SetupEvidenceGroupInput,
+    )
     from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.setup_evidence import SetupEvidence
     from src.domain.value_objects.signal_assessment import SignalContext
+
+
+@dataclass(frozen=True)
+class _GroupAuthorityFacts:
+    """Typed per-group authority facts (HIGH-2) — the single source both
+    signal_authority_coverage computation and coverage-warning generation
+    read from, so they can never disagree."""
+
+    name: str
+    weight: float
+    required: bool
+    is_production: bool
+    present: bool
+    authoritative: bool
 
 
 @dataclass(frozen=True)
@@ -30,7 +52,10 @@ class SignalEvidenceGroupScores:
     flow_score: float
     flow_present: bool
     base_score: float
-    confidence: float
+    # Canonical production-authority coverage (HIGH-2): weighted fraction of
+    # required PRODUCTION evidence groups that are both present and
+    # source-authoritative. NOT statistical confidence or trade conviction.
+    signal_authority_coverage: float
     active_flags: tuple[str, ...]
     flag_adjustment: int
     raw_exact_score: float
@@ -55,8 +80,15 @@ class SignalEvidenceGroupScorer:
             request.flow_confirmation_evidence
         )
 
-        base_score, confidence = SignalEvidenceGroupScorer.renormalize(
+        base_score, _presence_ratio = SignalEvidenceGroupScorer.renormalize(
             setup_score, setup_present, flow_score, flow_present, config
+        )
+
+        group_authority_facts = SignalEvidenceGroupScorer._group_authority_facts(
+            request, setup_present, flow_present, config
+        )
+        signal_authority_coverage = SignalEvidenceGroupScorer._compute_signal_authority_coverage(
+            group_authority_facts
         )
 
         active_flags, flag_adjustment = SignalEvidenceGroupScorer._evaluate_flags(
@@ -68,15 +100,13 @@ class SignalEvidenceGroupScorer:
         final_score = max(0, min(100, raw_group_score + flag_adjustment))
 
         strength = SignalEvidenceGroupScorer._classify_strength(final_score, config)
-        entry_quality = SignalEvidenceGroupScorer._classify_entry(strength, confidence, config)
+        entry_quality = SignalEvidenceGroupScorer._classify_entry(strength, config)
 
         entry_quality, gate_tightened = SignalEvidenceGroupScorer._apply_gate_tightening(
             entry_quality, request.market_context
         )
 
-        coverage_warning = SignalEvidenceGroupScorer._coverage_warning(
-            confidence, setup_present, flow_present
-        )
+        coverage_warning = SignalEvidenceGroupScorer._coverage_warning(group_authority_facts)
 
         return SignalEvidenceGroupScores(
             setup_score=setup_score,
@@ -84,7 +114,7 @@ class SignalEvidenceGroupScorer:
             flow_score=flow_score,
             flow_present=flow_present,
             base_score=base_score,
-            confidence=confidence,
+            signal_authority_coverage=signal_authority_coverage,
             active_flags=tuple(active_flags),
             flag_adjustment=flag_adjustment,
             raw_exact_score=raw_exact_score,
@@ -116,10 +146,18 @@ class SignalEvidenceGroupScorer:
         flow_present: bool,
         config: SignalEngineConfig,
     ) -> tuple[float, float]:
-        """Compute base score and confidence from present evidence groups.
+        """Compute directional base score and raw group-presence ratio.
 
-        confidence = present_weight / total_weight.
-        When no groups are present, base_score = 50.0 (no directional information).
+        base_score is a weighted average of present groups' scores; missing
+        groups are excluded from the denominator (never neutral-filled). The
+        second returned value is a raw presence ratio — NOT
+        signal_authority_coverage. It exists only for internal call-signature
+        compatibility with SignalLegacyRegimeConditioning's diagnostic path.
+        Production-authority coverage is computed separately by
+        `_compute_signal_authority_coverage`, since directional score
+        arithmetic must remain based on attached evidence exactly as today
+        while authority coverage additionally requires PRODUCTION
+        registration and source availability.
         """
         g = config.evidence_groups
         total_weight = g.setup_quality.weight + g.flow_confirmation.weight
@@ -135,8 +173,96 @@ class SignalEvidenceGroupScorer:
 
         present_weight = sum(w for _, w in active)
         base_score = sum(s * w for s, w in active) / present_weight
-        confidence = min(1.0, present_weight / total_weight) if total_weight > 0 else 0.0
-        return base_score, confidence
+        presence_ratio = min(1.0, present_weight / total_weight) if total_weight > 0 else 0.0
+        return base_score, presence_ratio
+
+    @staticmethod
+    def _is_production_registered(
+        group_config: EvidenceGroupConfig,
+        config: SignalEngineConfig,
+    ) -> bool:
+        """Unknown registration resolves as diagnostic (HIGH-2)."""
+        registration = config.alpha_trigger.evidence_registrations.get(
+            group_config.authority_registration
+        )
+        if registration is None:
+            return False
+        return registration.status == EvidenceAuthorityStatus.PRODUCTION
+
+    @staticmethod
+    def _group_authoritative_present(
+        group_input: "SetupEvidenceGroupInput | FlowEvidenceGroupInput | None",
+    ) -> bool:
+        return group_input is not None and group_input.availability.all_authoritative
+
+    @staticmethod
+    def _group_authority_facts(
+        request: AssessSignalEvidenceRequest,
+        setup_present: bool,
+        flow_present: bool,
+        config: SignalEngineConfig,
+    ) -> tuple[_GroupAuthorityFacts, ...]:
+        """Single source of truth for per-group authority facts, consumed by
+        both `_compute_signal_authority_coverage` and `_coverage_warning` so
+        the two can never disagree about what is present/registered/
+        authoritative for a given assessment."""
+        g = config.evidence_groups
+        canonical_evidence = request.canonical_evidence
+        setup_group_input = canonical_evidence.setup if canonical_evidence else None
+        flow_group_input = canonical_evidence.flow if canonical_evidence else None
+        return (
+            _GroupAuthorityFacts(
+                name="setup_quality",
+                weight=g.setup_quality.weight,
+                required=g.setup_quality.required_for_authority,
+                is_production=SignalEvidenceGroupScorer._is_production_registered(
+                    g.setup_quality, config
+                ),
+                present=setup_present,
+                authoritative=SignalEvidenceGroupScorer._group_authoritative_present(
+                    setup_group_input
+                ),
+            ),
+            _GroupAuthorityFacts(
+                name="flow_confirmation",
+                weight=g.flow_confirmation.weight,
+                required=g.flow_confirmation.required_for_authority,
+                is_production=SignalEvidenceGroupScorer._is_production_registered(
+                    g.flow_confirmation, config
+                ),
+                present=flow_present,
+                authoritative=SignalEvidenceGroupScorer._group_authoritative_present(
+                    flow_group_input
+                ),
+            ),
+        )
+
+    @staticmethod
+    def _compute_signal_authority_coverage(
+        facts: tuple[_GroupAuthorityFacts, ...],
+    ) -> float:
+        """signal_authority_coverage = present-authoritative PRODUCTION weight
+        / required PRODUCTION weight (HIGH-2).
+
+        DIAGNOSTIC/LOW_WEIGHT groups never enter the numerator or denominator.
+        A required PRODUCTION group stays in the denominator even when absent
+        or unavailable — it is never renormalized away. A group enters the
+        numerator only when its evidence is present AND its resolved
+        EvidenceSourceAvailability.all_authoritative is True; this changes
+        authority coverage only, never the directional base_score above.
+        """
+        denominator = 0.0
+        numerator = 0.0
+        for fact in facts:
+            if not (fact.is_production and fact.required):
+                continue
+            denominator += fact.weight
+            if fact.present and fact.authoritative:
+                numerator += fact.weight
+
+        if denominator <= 0:
+            return 0.0
+        return min(1.0, numerator / denominator)
 
     @staticmethod
     def _evaluate_flags(
@@ -187,15 +313,14 @@ class SignalEvidenceGroupScorer:
 
     @staticmethod
     def _classify_entry(
-        strength: SignalStrength, confidence: float, config: SignalEngineConfig
+        strength: SignalStrength, config: SignalEngineConfig
     ) -> EntryQuality:
-        cfg = config.classification
-        if strength == SignalStrength.STRONG and confidence >= cfg.enter_min_confidence:
+        """Directional strength only (HIGH-2). Authority coverage is applied
+        exactly once, downstream, by DecisionPolicyService — never here."""
+        del config  # kept for call-signature stability; no thresholds remain
+        if strength == SignalStrength.STRONG:
             return EntryQuality.ENTER
-        if (
-            strength in {SignalStrength.STRONG, SignalStrength.MODERATE}
-            and confidence >= cfg.watch_min_confidence
-        ):
+        if strength == SignalStrength.MODERATE:
             return EntryQuality.WATCH
         return EntryQuality.AVOID
 
@@ -213,18 +338,39 @@ class SignalEvidenceGroupScorer:
         return entry_quality, False
 
     @staticmethod
-    def _coverage_warning(
-        confidence: float,
-        setup_present: bool,
-        flow_present: bool,
-    ) -> str | None:
-        if confidence == 0.0:
+    def _coverage_warning(facts: tuple[_GroupAuthorityFacts, ...]) -> str | None:
+        """HIGH-2: distinguish exactly why authority coverage is incomplete.
+
+        1. No setup or flow evidence attached at all — reported once, no
+           per-group detail needed.
+        2. Evidence attached but its registration is not PRODUCTION —
+           diagnostic/low-weight evidence never raises authority coverage.
+        3. Evidence attached and PRODUCTION-registered but its resolved
+           source availability is not authoritative — names the group.
+        4. Required PRODUCTION evidence absent — names the group.
+
+        Never renders an empty "missing:" list, and never uses the phrases
+        "evidence confidence" or "conviction".
+        """
+        if not any(fact.present for fact in facts):
             return "No evidence groups present — score is neutral prior only"
-        if confidence < 0.5:
-            missing = []
-            if not setup_present:
-                missing.append("setup_quality")
-            if not flow_present:
-                missing.append("flow_confirmation")
-            return f"Low evidence confidence ({confidence:.0%}) — missing: {', '.join(missing)}"
-        return None
+
+        problems: list[str] = []
+        for fact in facts:
+            if not (fact.required and fact.is_production):
+                if fact.present:
+                    problems.append(
+                        f"{fact.name}: attached but registration is not PRODUCTION "
+                        "(diagnostic/low-weight evidence cannot raise authority coverage)"
+                    )
+                continue
+            if not fact.present:
+                problems.append(f"{fact.name}: required evidence absent")
+            elif not fact.authoritative:
+                problems.append(
+                    f"{fact.name}: present but not source-authoritative"
+                )
+
+        if not problems:
+            return None
+        return "Incomplete signal authority coverage — " + "; ".join(problems)

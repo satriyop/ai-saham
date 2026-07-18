@@ -48,14 +48,27 @@ def resolve_decision_policy_config(decision_cfg: dict) -> DecisionPolicyConfig:
             raise ValueError(
                 f"Invalid max_decision for {regime}: {decision!r}"
             )
+        if "min_signal_authority_coverage" not in raw:
+            raise ValueError(
+                "signal_engine.decision_policy.regime_policy."
+                f"{regime}.min_signal_authority_coverage is required"
+            )
+        min_signal_authority_coverage = float(
+            raw["min_signal_authority_coverage"]
+        )
+        if not (0.0 <= min_signal_authority_coverage <= 1.0):
+            raise ValueError(
+                f"signal_engine.decision_policy.regime_policy.{regime}."
+                "min_signal_authority_coverage must be within [0.0, 1.0], got "
+                f"{min_signal_authority_coverage!r}"
+            )
         resolved_regimes[regime] = RegimeDecisionPolicyConfig(
             enter_allowed=bool(raw.get("enter_allowed", True)),
             max_decision=decision,
             regime_size_multiplier=float(raw.get("regime_size_multiplier", 1.0)),
             enter_threshold=raw.get("enter_threshold"),
             watch_threshold=int(raw.get("watch_threshold", 45)),
-            min_coverage=float(raw.get("min_coverage", 0.0)),
-            min_conviction=float(raw.get("min_conviction", 0.0)),
+            min_signal_authority_coverage=min_signal_authority_coverage,
         )
 
     raw_actions = decision_cfg.get("setup_regime_actions", {})

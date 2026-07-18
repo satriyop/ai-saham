@@ -25,12 +25,10 @@ DEFAULT_TUNING_TARGETS: tuple[TuningTarget, ...] = (
         yaml_paths=(
             "config/signal_engine.yaml:signal_engine.classification.strong_min_score",
             "config/signal_engine.yaml:signal_engine.classification.moderate_min_score",
-            "config/signal_engine.yaml:signal_engine.classification.enter_min_confidence",
-            "config/signal_engine.yaml:signal_engine.classification.watch_min_confidence",
         ),
         allowed_use=(
-            "Tune signal classification score thresholds and confidence gating "
-            "from completed trade outcomes."
+            "Tune signal classification score thresholds from completed trade "
+            "outcomes."
         ),
     ),
     TuningTarget(
@@ -63,14 +61,9 @@ DEFAULT_TUNING_TARGETS: tuple[TuningTarget, ...] = (
             "config/signal_engine.yaml:signal_engine.flags.valuation_stretched.score_penalty",
             "config/signal_engine.yaml:signal_engine.flags.analyst_bearish.score_penalty",
             "config/signal_engine.yaml:signal_engine.flags.insider_selling.score_penalty",
-            "config/signal_engine.yaml:signal_engine.classification.enter_min_confidence",
-            "config/signal_engine.yaml:signal_engine.classification.watch_min_confidence",
             "config/signal_engine.yaml:signal_engine.scoring.bandar",
         ),
-        allowed_use=(
-            "Tune evidence group weights, flag penalty thresholds, and "
-            "confidence gating."
-        ),
+        allowed_use="Tune evidence group weights and flag penalty thresholds.",
     ),
     TuningTarget(
         dimension="risk_status",
@@ -129,8 +122,7 @@ DEFAULT_TUNING_TARGETS: tuple[TuningTarget, ...] = (
             "config/signal_engine.yaml:signal_engine.decision_policy",
             "config/signal_engine.yaml:signal_engine.decision_policy.regime_policy.*.enter_threshold",
             "config/signal_engine.yaml:signal_engine.decision_policy.regime_policy.*.watch_threshold",
-            "config/signal_engine.yaml:signal_engine.decision_policy.regime_policy.*.min_coverage",
-            "config/signal_engine.yaml:signal_engine.decision_policy.regime_policy.*.min_conviction",
+            "config/signal_engine.yaml:signal_engine.decision_policy.regime_policy.*.min_signal_authority_coverage",
             "config/signal_engine.yaml:signal_engine.decision_policy.regime_policy.*.regime_size_multiplier",
             "config/swing_targets.yaml:setup_targets",
             "config/swing_targets.yaml:setup_targets.risk_on.take_profit_pct",
@@ -172,12 +164,10 @@ DEFAULT_TUNING_TARGETS: tuple[TuningTarget, ...] = (
             "config/signal_engine.yaml:signal_engine.classification",
             "config/signal_engine.yaml:signal_engine.classification.strong_min_score",
             "config/signal_engine.yaml:signal_engine.classification.moderate_min_score",
-            "config/signal_engine.yaml:signal_engine.classification.enter_min_confidence",
-            "config/signal_engine.yaml:signal_engine.classification.watch_min_confidence",
         ),
         allowed_use=(
-            "Bias check for signal score thresholds and confidence gating "
-            "before validating on completed trades."
+            "Bias check for signal score thresholds before validating on "
+            "completed trades."
         ),
     ),
     TuningTarget(
@@ -210,13 +200,11 @@ DEFAULT_TUNING_TARGETS: tuple[TuningTarget, ...] = (
             "config/signal_engine.yaml:signal_engine.flags.valuation_stretched.score_penalty",
             "config/signal_engine.yaml:signal_engine.flags.analyst_bearish.score_penalty",
             "config/signal_engine.yaml:signal_engine.flags.insider_selling.score_penalty",
-            "config/signal_engine.yaml:signal_engine.classification.enter_min_confidence",
-            "config/signal_engine.yaml:signal_engine.classification.watch_min_confidence",
             "config/signal_engine.yaml:signal_engine.scoring.bandar",
         ),
         allowed_use=(
-            "Bias check for evidence group tuning and confidence gating before "
-            "completed-trade validation."
+            "Bias check for evidence group tuning before completed-trade "
+            "validation."
         ),
     ),
     TuningTarget(
@@ -283,8 +271,7 @@ DEFAULT_TUNING_TARGETS: tuple[TuningTarget, ...] = (
             "config/signal_engine.yaml:signal_engine.decision_policy",
             "config/signal_engine.yaml:signal_engine.decision_policy.regime_policy.*.enter_threshold",
             "config/signal_engine.yaml:signal_engine.decision_policy.regime_policy.*.watch_threshold",
-            "config/signal_engine.yaml:signal_engine.decision_policy.regime_policy.*.min_coverage",
-            "config/signal_engine.yaml:signal_engine.decision_policy.regime_policy.*.min_conviction",
+            "config/signal_engine.yaml:signal_engine.decision_policy.regime_policy.*.min_signal_authority_coverage",
             "config/signal_engine.yaml:signal_engine.decision_policy.regime_policy.*.regime_size_multiplier",
             "config/swing_targets.yaml:setup_targets",
             "config/swing_targets.yaml:setup_targets.risk_on.take_profit_pct",

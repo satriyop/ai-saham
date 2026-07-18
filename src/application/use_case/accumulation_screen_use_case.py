@@ -168,7 +168,6 @@ class AccumulationScreenUseCase:
         ticker_notation_provider: "TickerNotationProvider | None" = None,
         idx_groups: "dict[str, list[str]] | None" = None,
         risk_use_case: "AssessRiskUseCase | None" = None,
-        signal_engine: "SignalEngine | None" = None,
         candidate_observations_repository: "CandidateObservationsRepository | None" = None,
         foreign_flow_score_use_case: ScoreForeignFlowUseCase | None = None,
         derived_feature_policy: accumulation_dto.AccumulationDerivedFeaturePolicy | None = None,
@@ -176,6 +175,7 @@ class AccumulationScreenUseCase:
         primary_setup_family_resolver: "PrimarySetupFamilyResolver | None" = None,
         benchmark_excess_return_calculator: "BenchmarkExcessReturnCalculator | None" = None,
         *,
+        signal_engine: "SignalEngine",
         indicator_registry: "IndicatorRegistry",
         rules_loader: RulesLoader,
         ticker_profile_classifier_factory: Callable[[], TickerProfileClassifier] | None = None,
@@ -196,12 +196,11 @@ class AccumulationScreenUseCase:
         from src.application.services.benchmark_excess_return_calculator import (
             BenchmarkExcessReturnCalculator as _BenchmarkExcessReturnCalculator,
         )
-        from src.application.services.signal_engine import SignalEngine as _SignalEngine
 
         self._broker_repo = broker_repository
         self._market_repo = market_repository
         self._risk_use_case = risk_use_case
-        self._signal_engine = signal_engine or _SignalEngine()
+        self._signal_engine = signal_engine
         self._candidate_observations_repo = candidate_observations_repository
         self._foreign_flow_score_uc = foreign_flow_score_use_case or ScoreForeignFlowUseCase()
         self._derived_features = (

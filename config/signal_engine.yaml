@@ -41,8 +41,6 @@ signal_engine:
   classification:
     strong_min_score: 70
     moderate_min_score: 45
-    enter_min_confidence: 0.70
-    watch_min_confidence: 0.40
 
   # [ARCHIVED — Phase 4] Missing-data neutral fill is no longer used.
   # Phase 4 excludes missing groups from the denominator instead of filling neutral.
@@ -135,8 +133,14 @@ signal_engine:
   evidence_groups:
     setup_quality:
       weight: 0.60
+      # Central authority status lives only in alpha_trigger.evidence_registrations
+      # (HIGH-2) — this key just points at the registration name.
+      authority_registration: setup_quality
+      required_for_authority: true
     flow_confirmation:
       weight: 0.40
+      authority_registration: institutional_flow
+      required_for_authority: true
 
   # PRODUCTION / CANONICAL EVIDENCE ENGINE.
   # Phase G: diagnostic Alpha/Trigger projection. This is derived from the
@@ -230,8 +234,7 @@ signal_engine:
         enter_allowed: true
         enter_threshold: 70
         watch_threshold: 45
-        min_coverage: 0.70
-        min_conviction: 0.70
+        min_signal_authority_coverage: 0.70
         max_decision: ENTER
         regime_size_multiplier: 1.00
 
@@ -239,8 +242,7 @@ signal_engine:
         enter_allowed: true
         enter_threshold: 72
         watch_threshold: 45
-        min_coverage: 0.70
-        min_conviction: 0.70
+        min_signal_authority_coverage: 0.70
         max_decision: ENTER
         regime_size_multiplier: 0.50
 
@@ -248,8 +250,7 @@ signal_engine:
         enter_allowed: false
         enter_threshold: null
         watch_threshold: 60
-        min_coverage: 0.80
-        min_conviction: 0.78
+        min_signal_authority_coverage: 0.80
         max_decision: WATCH
         regime_size_multiplier: 0.25
 
@@ -257,8 +258,7 @@ signal_engine:
         enter_allowed: false
         enter_threshold: null
         watch_threshold: 65
-        min_coverage: 1.00
-        min_conviction: 1.00
+        min_signal_authority_coverage: 1.00
         max_decision: WATCH
         regime_size_multiplier: 0.00
 

@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
     from src.domain.value_objects.setup_evidence import SetupEvidence
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
+    from src.domain.value_objects.setup_phase_readiness import SetupPhaseReadiness
     from src.domain.value_objects.signal_assessment import SignalContext
 
 
@@ -90,26 +91,29 @@ class AssessSignalResponse:
     assessment: SignalAssessment
     coverage_warning: str | None = None
     signal_score_raw: int | None = None
-    # Phase 4 evidence fields — None/empty when produced by the old flat path
-    evidence_confidence: float | None = None  # legacy alias for coverage_score
+    # HIGH-2 canonical name: production-authority coverage (0.0-1.0). None
+    # when produced by the old flat archived path.
+    signal_authority_coverage: float | None = None
     active_flags: tuple[str, ...] = field(default_factory=tuple)
     flag_adjustment: int = 0
     raw_group_score: int | None = None
     raw_exact_score: float | None = None
     alpha_trigger_score: AlphaTriggerScore | None = None
-    # DQ-002 Blocker 2 (shadow mode): observational source-availability facts
-    # for the setup/flow evidence groups. Never read by scoring, coverage, or
-    # classification logic — populated only for later HIGH-2 authority-
-    # coverage enforcement to consume. None when not yet assessed (e.g. no
-    # accumulation candidate for this ticker/decision).
+    # HIGH-2: typed setup-family readiness, built exactly once by
+    # AssessSignalEvidenceUseCase and reused verbatim by DecisionPolicyService,
+    # serialization, and persistence. None when no setup family applies (pure
+    # flow-only assessment) or when produced by the old flat archived path.
+    setup_readiness: "SetupPhaseReadiness | None" = None
+    # DQ-002 Blocker 2 / HIGH-2: source-availability facts for the setup/flow
+    # evidence groups. Never read by directional scoring or classification —
+    # HIGH-2's AssessSignalEvidenceUseCase already consumed this same
+    # availability to compute signal_authority_coverage (availability_
+    # enforcement=ENFORCED below); these fields are the observational record
+    # of that same input, not a second independent assessment. None when not
+    # yet assessed (e.g. no accumulation candidate for this ticker/decision).
     setup_source_availability: "EvidenceSourceAvailability | None" = None
     flow_source_availability: "EvidenceSourceAvailability | None" = None
     availability_enforcement: "AvailabilityEnforcementMode | None" = None
-
-    @property
-    def coverage_score(self) -> float | None:
-        """Canonical name: evidence completeness (0.0–1.0). Alias for evidence_confidence."""
-        return self.evidence_confidence
 
     @property
     def score(self) -> int:

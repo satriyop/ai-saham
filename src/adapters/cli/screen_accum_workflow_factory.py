@@ -82,6 +82,7 @@ def create_accumulation_screen_workflow(
         if with_risk
         else None
     )
+    signal_engine = deps.create_signal_engine()
 
     use_case = create_accumulation_screen_use_case(
         broker_repository=deps.broker_repository,
@@ -89,6 +90,7 @@ def create_accumulation_screen_workflow(
         indicator_registry=deps.indicator_registry_factory(),
         stockbit_providers=deps.stockbit_providers,
         risk_use_case=risk_use_case,
+        signal_engine=signal_engine,
         candidate_observations_repository=deps.candidate_observations_repository,
         foreign_flow_score_policy=screener_config.foreign_flow_score_policy,
         derived_feature_policy=screener_config.derived_features,
@@ -139,6 +141,7 @@ def create_accumulation_screen_workflow_bundle(
         if with_risk
         else None
     )
+    signal_engine = deps.create_signal_engine()
 
     return create_accumulation_screen_use_case_bundle(
         broker_repository=deps.broker_repository,
@@ -146,6 +149,7 @@ def create_accumulation_screen_workflow_bundle(
         indicator_registry=deps.indicator_registry_factory(),
         stockbit_providers=deps.stockbit_providers,
         risk_use_case=risk_use_case,
+        signal_engine=signal_engine,
         candidate_observations_repository=deps.candidate_observations_repository,
         foreign_flow_score_policy=screener_config.foreign_flow_score_policy,
         derived_feature_policy=screener_config.derived_features,

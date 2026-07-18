@@ -40,7 +40,7 @@ def _minimal_signal_assessment(alpha_trigger_score=None) -> SimpleNamespace:
             strength=strength,
             entry_quality=entry_quality,
             score_label="65/100",
-            confidence_score=0.8,
+            signal_authority_coverage=0.8,
             rationale=("moderate signal",),
             breakdown_dict={},
             decision_constraints=None,
@@ -49,7 +49,7 @@ def _minimal_signal_assessment(alpha_trigger_score=None) -> SimpleNamespace:
         active_flags=(),
         flag_adjustment=0,
         raw_group_score=65,
-        evidence_confidence=0.8,
+        signal_authority_coverage=0.8,
         alpha_trigger_score=alpha_trigger_score,
     )
 

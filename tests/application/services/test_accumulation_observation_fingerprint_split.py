@@ -13,6 +13,9 @@ from types import SimpleNamespace
 from src.application.services.accumulation_observation_fingerprint import (
     build_candidate_observation_payload,
 )
+from src.domain.value_objects.signal_artifact_schema import (
+    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+)
 
 TOP_LEVEL_KEYS = frozenset({
     "schema_version",
@@ -103,7 +106,7 @@ class TestTopLevelKeysPreserved:
             captured_at=datetime(2026, 7, 1, 10, 30, 0),
             request=request,
         )
-        assert payload["schema_version"] == 2
+        assert payload["schema_version"] == CANDIDATE_OBSERVATION_SCHEMA_VERSION
         assert payload["artifact_type"] == "candidate_observation"
         assert payload["ticker"] == "BBCA"
         assert payload["snapshot_date"] == "2026-07-01"
@@ -163,11 +166,10 @@ class TestSubSignalFingerprintSections:
         assert fp["setup_phase_previous"] is None
         assert fp["phase_sequence_valid"] is None
         assert fp["phase_age_sessions"] is None
-        assert fp["phase_strength"] is None
+        assert fp["phase_detection_strength"] is None
         assert fp["phase_reasons"] == []
         assert fp["phase_history"] == []
-        assert fp["phase_coverage_score"] is None
-        assert fp["phase_conviction_score"] is None
+        assert fp["phase_input_coverage"] is None
 
     def test_volume_keys_present(self):
         fp = self._build_fingerprint()
@@ -274,10 +276,13 @@ class TestSubSignalFingerprintSections:
         assert fp["setup_family_rationale"] == []
         assert fp["setup_name"] is None
 
-    def test_coverage_and_conviction_present(self):
+    def test_signal_authority_coverage_and_readiness_present(self):
         fp = self._build_fingerprint()
-        assert fp["coverage_score"] == 0.0  # flow_ev None → 0/2 = 0.0
-        assert fp["conviction_score"] is None  # signal None → None
+        assert fp["signal_authority_coverage"] is None  # signal None → None
+        assert fp["setup_readiness_status"] is None
+        assert fp["setup_readiness_current_phase"] is None
+        assert fp["setup_readiness_missing_required_inputs"] == []
+        assert fp["setup_readiness_failed_requirements"] == []
 
     def test_decision_constraints_present(self):
         fp = self._build_fingerprint()

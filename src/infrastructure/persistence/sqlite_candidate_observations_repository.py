@@ -10,13 +10,21 @@ from pathlib import Path
 from src.domain.ports.candidate_observations_repository import (
     CandidateObservation,
 )
+from src.domain.value_objects.signal_artifact_schema import (
+    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+)
 from src.infrastructure.persistence.sqlite_migration_runner import SqliteMigrationRunner
 
 # v1 -> v2 (Task HIGH-1, 2026-07-17): sub_signal_fingerprint replaced the
 # ambiguous rs_vs_ihsg_5d_at_signal/rs_vs_ihsg_20d_at_signal fields with typed
-# benchmark_excess_return_5_session/20_session evidence. No migration
-# fabricates v2 fields from v1 payloads — v1 rows simply lack them.
-_CURRENT_SCHEMA_VERSION = 2
+# benchmark_excess_return_5_session/20_session evidence.
+# v2 -> v3 (Task HIGH-2, 2026-07-17): persists canonical signal_authority_
+# coverage and typed setup_readiness_* fields; drops the ambiguous
+# coverage_score/conviction_score/phase_strength/phase_coverage_score/
+# phase_conviction_score fields. No migration fabricates newer-schema fields
+# from older payloads — older rows simply lack them and remain diagnostic-
+# readable but non-canonical.
+_CURRENT_SCHEMA_VERSION = CANDIDATE_OBSERVATION_SCHEMA_VERSION
 
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS candidate_observations (
@@ -152,9 +160,10 @@ class SQLiteCandidateObservationsRepository:
         for obs in observations:
             payload = dict(obs.payload)
             schema_version = int(payload.get("schema_version", 1))
-            if obs.config_hash != "" and schema_version != 2:
+            if obs.config_hash != "" and schema_version != _CURRENT_SCHEMA_VERSION:
                 raise ValueError(
-                    f"A non-empty config_hash write requires schema_version == 2 (got {schema_version})"
+                    "A non-empty config_hash write requires schema_version == "
+                    f"{_CURRENT_SCHEMA_VERSION} (got {schema_version})"
                 )
             payload_schema_version = payload.get("schema_version")
             if payload_schema_version is not None and int(payload_schema_version) != schema_version:
@@ -334,6 +343,48 @@ class SQLiteCandidateObservationsRepository:
                 """
             ).fetchall()
         return [date.fromisoformat(row["snapshot_date"]) for row in rows]
+
+    def list_canonical_snapshot_dates(self) -> list[date]:
+        """Return dates containing at least one canonical observation."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT DISTINCT snapshot_date
+                FROM candidate_observations
+                WHERE config_hash != '' AND schema_version = ?
+                ORDER BY snapshot_date ASC
+                """,
+                (_CURRENT_SCHEMA_VERSION,),
+            ).fetchall()
+        return [date.fromisoformat(row["snapshot_date"]) for row in rows]
+
+    def list_latest_canonical_by_date(self, snapshot_date: date) -> list[CandidateObservation]:
+        """Return the latest canonical observation per ticker for the date.
+
+        Canonical filtering is applied inside the subquery, before
+        ROW_NUMBER() partitions by ticker — a newer legacy row can never
+        displace an older canonical row.
+        """
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT {_SELECT_COLUMNS}
+                FROM (
+                    SELECT
+                        {_SELECT_COLUMNS},
+                        ROW_NUMBER() OVER (
+                            PARTITION BY ticker
+                            ORDER BY captured_at DESC, id DESC
+                        ) AS row_num
+                    FROM candidate_observations
+                    WHERE snapshot_date = ? AND config_hash != '' AND schema_version = ?
+                )
+                WHERE row_num = 1
+                ORDER BY ticker ASC
+                """,
+                (snapshot_date.isoformat(), _CURRENT_SCHEMA_VERSION),
+            ).fetchall()
+        return [self._row_to_observation(row) for row in rows]
 
     def _row_to_observation(self, row: sqlite3.Row) -> CandidateObservation:
         payload = json.loads(row["payload_json"])

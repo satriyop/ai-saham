@@ -90,11 +90,7 @@ def _build_signal_panel(signal_assessment) -> Any:
 
     assessment = signal_assessment.assessment
     strength_value, strength_style, _ = _signal_label(signal_assessment)
-    coverage_score = (
-        getattr(assessment, "coverage_score", None)
-        or getattr(signal_assessment, "evidence_confidence", None)
-        or 1.0
-    )
+    coverage_score = assessment.signal_authority_coverage
 
     headline_table = compact_table(show_header=False)
     headline_table.add_column("Strength")
@@ -123,7 +119,7 @@ def _build_signal_panel(signal_assessment) -> Any:
         key_map = [
             ("setup_quality_group", "Setup", False),
             ("flow_confirmation_group", "Flow", False),
-            ("evidence_confidence", "Cov%", True),
+            ("signal_authority_coverage", "Cov%", True),
         ]
         factor_table = compact_table()
         for _, header, _ in key_map:

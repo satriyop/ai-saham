@@ -21,6 +21,9 @@ from src.application.use_case.record_accumulation_observations_use_case import (
 from src.domain.entities.candle import Candle
 from src.domain.ports.candidate_observations_repository import CandidateObservation
 from src.domain.value_objects.market_context import MarketContext, MarketRegime
+from src.domain.value_objects.signal_artifact_schema import (
+    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+)
 from src.domain.value_objects.signal_forward_label import SignalLabelHorizon
 
 
@@ -61,7 +64,11 @@ class FakeCandidateObservationsRepository:
                 ticker=ticker.upper(),
                 snapshot_date=snapshot_date,
                 captured_at=datetime(2026, 7, 7, 12, 0, len(observations)),
-                payload={"ticker": ticker.upper(), "snapshot_date": snapshot_date.isoformat()},
+                payload={
+                    "ticker": ticker.upper(),
+                    "snapshot_date": snapshot_date.isoformat(),
+                    "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+                },
                 window_sessions=window_sessions,
                 data_as_of_date=snapshot_date,
                 config_hash="test-hash",
@@ -178,6 +185,7 @@ class FakeAccumulationScreenUseCaseWithFingerprint:
                     payload={
                         "ticker": ticker.upper(),
                         "snapshot_date": request.as_of_date.isoformat(),
+                        "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
                         "sub_signal_fingerprint": fingerprint,
                     },
                     window_sessions=7,

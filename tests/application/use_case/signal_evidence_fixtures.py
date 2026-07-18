@@ -13,6 +13,7 @@ from src.domain.value_objects.benchmark_excess_return import (
 )
 from src.domain.value_objects.benchmark_symbol import CANONICAL_BENCHMARK_TICKER
 from src.domain.value_objects.canonical_signal_evidence_input import (
+    BrokerDailyFlowRowIdentity,
     BrokerSummaryRowIdentity,
     CandleRowIdentity,
     CanonicalSignalEvidenceInput,
@@ -90,7 +91,17 @@ def _wrap_setup_evidence(evidence: SetupEvidence | None) -> "SetupEvidenceGroupI
 
 def _wrap_flow_evidence(
     evidence: FlowConfirmationEvidence | None,
+    *,
+    all_authoritative: bool = True,
 ) -> "FlowEvidenceGroupInput | None":
+    """Wrap bare FlowConfirmationEvidence into the canonical group (ADR-041).
+
+    Defaults to a fully-authoritative availability (real broker_daily_flow row,
+    both source families CURRENT) so pre-HIGH-2 scoring-logic tests keep
+    exercising group-scoring math rather than incidentally exercising the
+    authority-coverage gate. Pass `all_authoritative=False` for tests that
+    specifically need a non-authoritative flow group.
+    """
     if evidence is None:
         return None
     provenance = FlowProvenance(
@@ -100,21 +111,36 @@ def _wrap_flow_evidence(
                 ticker=evidence.ticker, date=evidence.snapshot_date, source="test"
             ),
         ),
-        broker_daily_flow_rows=(),
+        broker_daily_flow_rows=(
+            ()
+            if not all_authoritative
+            else (
+                BrokerDailyFlowRowIdentity(
+                    ticker=evidence.ticker,
+                    date=evidence.snapshot_date,
+                    broker_code="TESTBROKER",
+                    source="test",
+                ),
+            )
+        ),
     )
+    if all_authoritative:
+        daily_flow_assessment = _current_assessment("broker_daily_flow", evidence.snapshot_date)
+    else:
+        daily_flow_assessment = SourceAvailabilityAssessment(
+            source_family="broker_daily_flow",
+            decision_at=_DECISION_AT,
+            observed_through=None,
+            available_at=None,
+            status=SourceAvailabilityStatus.UNKNOWN,
+            is_authoritative=False,
+            reason="TEST_FIXTURE_NO_DAILY_FLOW_ROWS",
+        )
     availability = EvidenceSourceAvailability(
         evidence_group="flow",
         assessments=(
             _current_assessment("broker_summaries", evidence.snapshot_date),
-            SourceAvailabilityAssessment(
-                source_family="broker_daily_flow",
-                decision_at=_DECISION_AT,
-                observed_through=None,
-                available_at=None,
-                status=SourceAvailabilityStatus.UNKNOWN,
-                is_authoritative=False,
-                reason="TEST_FIXTURE_NO_DAILY_FLOW_ROWS",
-            ),
+            daily_flow_assessment,
         ),
     )
     return FlowEvidenceGroupInput(evidence=evidence, provenance=provenance, availability=availability)
@@ -147,12 +173,15 @@ def _req(**kwargs) -> AssessSignalEvidenceRequest:
     # so the ~90 existing scoring-logic call sites don't need individual edits.
     setup_evidence = kwargs.pop("setup_evidence", None)
     flow_confirmation_evidence = kwargs.pop("flow_confirmation_evidence", None)
+    flow_all_authoritative = kwargs.pop("flow_all_authoritative", True)
     if "canonical_evidence" not in kwargs and (
         setup_evidence is not None or flow_confirmation_evidence is not None
     ):
         kwargs["canonical_evidence"] = CanonicalSignalEvidenceInput(
             setup=_wrap_setup_evidence(setup_evidence),
-            flow=_wrap_flow_evidence(flow_confirmation_evidence),
+            flow=_wrap_flow_evidence(
+                flow_confirmation_evidence, all_authoritative=flow_all_authoritative
+            ),
         )
     defaults = {"ticker": "TEST", "snapshot_date": SNAP}
     defaults.update(kwargs)
@@ -230,9 +259,8 @@ def _setup_phase(*, coverage: float, conviction: float) -> SetupPhaseSnapshot:
         current_phase=SetupPhaseState.BREAKOUT_CONFIRMATION,
         previous_phase=SetupPhaseState.COMPRESSION,
         phase_age_sessions=1,
-        phase_strength=conviction,
-        coverage_score=coverage,
-        conviction_score=conviction,
+        phase_detection_strength=conviction,
+        phase_input_coverage=coverage,
         sequence_valid=True,
     )
 
@@ -242,9 +270,8 @@ def _phase_state(state: SetupPhaseState) -> SetupPhaseSnapshot:
         current_phase=state,
         previous_phase=SetupPhaseState.COMPRESSION,
         phase_age_sessions=1,
-        phase_strength=0.8,
-        coverage_score=0.8,
-        conviction_score=0.8,
+        phase_detection_strength=0.8,
+        phase_input_coverage=0.8,
         sequence_valid=True,
     )
 

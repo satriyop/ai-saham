@@ -17,8 +17,6 @@ _SIGNAL_ENGINE_YAML = (
     "  classification:\n"
     "    strong_min_score: 70\n"
     "    moderate_min_score: 45\n"
-    "    enter_min_confidence: 0.70\n"
-    "    watch_min_confidence: 0.40\n"
     "  evidence_groups:\n"
     "    setup_quality:\n"
     "      weight: 0.60\n"

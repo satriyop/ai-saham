@@ -7,8 +7,13 @@ from src.application.dto.accumulation_screen import (
     AccumulationScreenRequest,
 )
 from src.application.services.indicator_registry import IndicatorRegistry
+from src.application.services.signal_engine import SignalEngine
+from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenUseCase,
+)
+from src.domain.value_objects.signal_artifact_schema import (
+    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
 )
 from tests.application.use_case.accumulation_screen_fixtures import (
     FakeRulesLoader,
@@ -224,6 +229,7 @@ def test_screen_persists_rejected_candidates_with_filter_outcome():
         market_repository=MockMarketRepository(candles),
         rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo,
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
     response = execute_and_record(
@@ -245,4 +251,4 @@ def test_screen_persists_rejected_candidates_with_filter_outcome():
     payload = spy_repo.saved[0].payload
     assert payload["screen_result"] == "rejected_flow"
     assert payload["ticker"] == "BBCA"
-    assert payload["schema_version"] == 2
+    assert payload["schema_version"] == CANDIDATE_OBSERVATION_SCHEMA_VERSION

@@ -402,12 +402,24 @@ class _RecordingCandidateEvidenceBuilder:
     def __init__(self) -> None:
         self.calls: list[dict] = []
 
-    def detect_candidate_setup_phase(self, candidate, flow_evidence, as_of_date):
+    def resolve_preliminary_setup_family_result(self, candidate):
+        from src.application.services.primary_setup_family_resolver import (
+            PrimarySetupFamilyResult,
+        )
+
+        return PrimarySetupFamilyResult(
+            matched_setup_families=(),
+            primary_setup_family=None,
+            setup_family_source="fallback_unknown",
+        )
+
+    def detect_candidate_setup_phase(self, candidate, flow_evidence, as_of_date, setup_family=None):
         self.calls.append(
             {
                 "candidate": candidate,
                 "flow_evidence": flow_evidence,
                 "as_of_date": as_of_date,
+                "setup_family": setup_family,
             }
         )
         return None

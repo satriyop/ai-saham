@@ -27,6 +27,7 @@ from src.infrastructure.config.accumulation_audit_config import (
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
 )
+from src.infrastructure.composition.signal_engine_factory import create_signal_engine
 from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
@@ -47,6 +48,7 @@ def create_run_accumulation_audit_workflow(
         market_repository=SQLiteMarketRepository(db_path=db_path),
         indicator_registry=create_indicator_registry(),
         rules_loader=RulesYamlLoader(),
+        signal_engine=create_signal_engine(db_path=db_path, with_enrichment=True),
         derived_feature_policy=cfg_screen.derived_features,
     )
 

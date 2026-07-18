@@ -99,7 +99,7 @@ class DailyAccumulationProjector:
         coverage_score = None
         if candidate.signal_assessment is not None:
             signal_score = candidate.signal_assessment.assessment.score
-            coverage_score = candidate.signal_assessment.assessment.coverage_score
+            coverage_score = candidate.signal_assessment.assessment.signal_authority_coverage
 
         if candidate.risk_assessment is None:
             risk_status = "UNKNOWN"

@@ -26,6 +26,8 @@ from src.application.dto.accumulation_screen import (
 )
 from src.application.services.accumulation_risk_funnel import AccumulationRiskFunnel
 from src.application.services.indicator_registry import IndicatorRegistry
+from src.application.services.signal_engine import SignalEngine
+from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from src.application.use_case.assess_risk_use_case import AssessRiskResponse, AssessRiskUseCase
 from src.application.use_case.assess_signal_use_case import AssessSignalResponse
@@ -105,6 +107,7 @@ def test_risk_assessment_none_when_no_risk_use_case():
         market_repository=mkt_repo,
         rules_loader=FakeRulesLoader(),
         risk_use_case=None,
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
     context = SignalEvidenceExecutionContext(
         effective_session=EffectiveMarketSession(

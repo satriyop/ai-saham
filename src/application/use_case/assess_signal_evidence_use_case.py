@@ -26,6 +26,9 @@ from typing import TYPE_CHECKING
 
 from src.application.dto.assess_signal import AssessSignalEvidenceRequest
 from src.application.services.decision_policy import DecisionPolicyService
+from src.application.services.setup_phase_readiness_evaluator import (
+    SetupPhaseReadinessEvaluator,
+)
 from src.application.services.signal_alpha_trigger_projection import SignalAlphaTriggerProjection
 from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.services.signal_evidence_group_scorer import (
@@ -68,35 +71,21 @@ class AssessSignalEvidenceUseCase:
             flag_adjustment=group_scores.flag_adjustment,
         )
 
-        # 3. Apply flags/classification/decision policy
-        policy_coverage = (
-            request.setup_phase.coverage_score
-            if request.setup_phase is not None
-            else group_scores.confidence
-        )
-        policy_conviction = (
-            request.setup_phase.conviction_score
-            if request.setup_phase is not None
-            else group_scores.confidence
+        # 3. Build typed setup-family readiness once (HIGH-2), then apply
+        # flags/classification/decision policy. DecisionPolicyService is the
+        # only gate that consumes signal_authority_coverage and readiness.
+        setup_readiness = SetupPhaseReadinessEvaluator().evaluate(
+            setup_family=request.setup_family,
+            setup_evidence=request.setup_evidence,
+            setup_phase=request.setup_phase,
         )
         decision_result = DecisionPolicyService(self._config.decision_policy).resolve(
             entry_quality=group_scores.entry_quality,
             score=group_scores.final_score,
-            coverage_score=policy_coverage,
-            conviction_score=policy_conviction,
+            signal_authority_coverage=group_scores.signal_authority_coverage,
             market_context=request.market_context,
             setup_family=request.setup_family,
-            setup_phase=request.setup_phase,
-            setup_entry_authority=(
-                request.setup_evidence.entry_authority
-                if request.setup_evidence is not None
-                else True
-            ),
-            setup_can_enter_from_phases=(
-                request.setup_evidence.can_enter_from_phases
-                if request.setup_evidence is not None
-                else ()
-            ),
+            setup_readiness=setup_readiness,
         )
         entry_quality = decision_result.entry_quality
         decision_constraints = decision_result.constraints
@@ -106,7 +95,8 @@ class AssessSignalEvidenceUseCase:
             request, self._config, group_scores
         )
 
-        # 5. Build response
+        # 5. Build response — setup_readiness is the exact same object built
+        # in step 3 and passed to DecisionPolicyService; never rebuilt here.
         response = SignalEvidenceResponseBuilder.build(
             request=request,
             group_scores=group_scores,
@@ -114,14 +104,16 @@ class AssessSignalEvidenceUseCase:
             entry_quality=entry_quality,
             decision_constraints=decision_constraints,
             alpha_trigger_score=alpha_trigger_score,
+            setup_readiness=setup_readiness,
         )
 
-        # 6. Attach SHADOW availability diagnostics — sourced exclusively from
-        # the canonical pre-score input (ADR-041 CANONICAL-EVIDENCE-BOUNDARY),
+        # 6. Attach availability diagnostics — sourced exclusively from the
+        # canonical pre-score input (ADR-041 CANONICAL-EVIDENCE-BOUNDARY),
         # never from a second, independently-assembled availability check
-        # after scoring. Purely additive: nothing above this point read
-        # `.availability`, so this cannot influence score, coverage,
-        # classification, or decision_constraints.
+        # after scoring. HIGH-2: signal_authority_coverage (step 1, via
+        # SignalEvidenceGroupScorer) already consumed this same availability,
+        # so enforcement mode is ENFORCED, not SHADOW — raw directional score
+        # remains based on attached evidence only, unaffected by availability.
         if request.canonical_evidence is not None:
             setup_group = request.canonical_evidence.setup
             flow_group = request.canonical_evidence.flow
@@ -134,6 +126,6 @@ class AssessSignalEvidenceUseCase:
                     flow_source_availability=(
                         flow_group.availability if flow_group is not None else None
                     ),
-                    availability_enforcement=AvailabilityEnforcementMode.SHADOW,
+                    availability_enforcement=AvailabilityEnforcementMode.ENFORCED,
                 )
         return response

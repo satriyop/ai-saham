@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.application.dto.assess_signal import AssessSignalResponse
-    from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.strategy_evidence import StrategyEvidence
 
 
@@ -65,11 +64,3 @@ def _strategy_evidence_fingerprint(
         "strategy_freshness_score": strategy_evidence.freshness_score,
         "strategy_rationale": list(strategy_evidence.rationale),
     }
-
-
-def _candidate_observation_coverage_score(
-    *,
-    flow_ev: "FlowConfirmationEvidence | None",
-) -> float:
-    present_groups = 1 if flow_ev is not None else 0
-    return round(present_groups / 2.0, 4)

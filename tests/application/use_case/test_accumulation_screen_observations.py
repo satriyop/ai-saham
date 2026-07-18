@@ -8,12 +8,17 @@ from src.application.dto.accumulation_screen import (
 )
 from src.application.ports.rules_loader import RulesLoader
 from src.application.services.indicator_registry import IndicatorRegistry
+from src.application.services.signal_engine import SignalEngine
+from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenUseCase,
 )
 from src.domain.ports.candidate_observations_repository import CandidateObservation
 from src.domain.value_objects.market_context import MarketContext, MarketRegime
 from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
+from src.domain.value_objects.signal_artifact_schema import (
+    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+)
 from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.config.ticker_profile_config_loader import (
     create_ticker_profile_classifier,
@@ -51,6 +56,7 @@ def test_screen_persists_candidate_observations_when_repo_injected():
         rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo,
         ticker_profile_classifier_factory=create_ticker_profile_classifier,
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
     response = execute_and_record(
@@ -72,19 +78,27 @@ def test_screen_persists_candidate_observations_when_repo_injected():
     assert obs.snapshot_date == as_of
 
     payload = obs.payload
-    assert payload["schema_version"] == 2
+    assert payload["schema_version"] == CANDIDATE_OBSERVATION_SCHEMA_VERSION
     assert payload["artifact_type"] == "candidate_observation"
     assert payload["ticker"] == "BBCA"
     assert payload["screen_result"] == "pass"
     fingerprint = payload["sub_signal_fingerprint"]
     assert fingerprint["rsi_at_signal"] is not None
     assert fingerprint["cnfb_20d_at_signal"] is not None
-    assert fingerprint["coverage_score"] == 0.5
-    assert fingerprint["conviction_score"] is not None
-    assert fingerprint["coverage_score"] != fingerprint["conviction_score"]
+    assert fingerprint["signal_authority_coverage"] is not None
+    assert fingerprint["setup_readiness_status"] is None or isinstance(
+        fingerprint["setup_readiness_status"], str
+    )
     assert fingerprint["setup_phase_current"] is not None
-    assert fingerprint["phase_coverage_score"] is not None
-    assert fingerprint["phase_conviction_score"] is not None
+    assert fingerprint["phase_input_coverage"] is not None
+    assert fingerprint["phase_detection_strength"] is not None
+    # HIGH-2 schema 3: ambiguous coverage_score/conviction_score/phase_strength/
+    # phase_coverage_score/phase_conviction_score must not appear in new writes.
+    assert "coverage_score" not in fingerprint
+    assert "conviction_score" not in fingerprint
+    assert "phase_strength" not in fingerprint
+    assert "phase_coverage_score" not in fingerprint
+    assert "phase_conviction_score" not in fingerprint
     assert fingerprint["tp_market_cap_bucket"] == "UNKNOWN"
     assert "phase_history" in fingerprint
     assert "flow_evidence" in (payload.get("signal") or {})
@@ -117,6 +131,7 @@ def test_screen_persists_regime_attribution_fingerprint_when_market_context_supp
         market_repository=MockMarketRepository(candles),
         rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo,
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
     market_context = MarketContext(
@@ -183,6 +198,7 @@ def test_market_context_never_leaks_into_scoring_only_into_fingerprint_attributi
         market_repository=MockMarketRepository(_fresh_candles()),
         rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo_a,
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
     response_a = execute_and_record(
         use_case_a,
@@ -204,6 +220,7 @@ def test_market_context_never_leaks_into_scoring_only_into_fingerprint_attributi
         market_repository=MockMarketRepository(_fresh_candles()),
         rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo_b,
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
     market_context = MarketContext(
         regime=MarketRegime.RISK_OFF,
@@ -341,6 +358,7 @@ def test_screen_persists_setup_family_fingerprint_when_swing_setup_catalog_match
         rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo,
         swing_setup_catalog=swing_setup_catalog,
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
     response = execute_and_record(
@@ -412,6 +430,7 @@ def test_screen_result_returned_even_when_persistence_fails():
         market_repository=MockMarketRepository(candles),
         rules_loader=FakeRulesLoader(),
         candidate_observations_repository=spy_repo,
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
     result = record_observations(
@@ -444,6 +463,7 @@ def test_screen_populates_setup_phase_for_displayed_candidates():
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         rules_loader=FakeRulesLoader(),
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
     response = use_case.execute(
@@ -484,6 +504,7 @@ def test_screen_setup_phase_is_none_when_detection_fails(monkeypatch):
         broker_repository=MockBrokerRepository(summaries),
         market_repository=MockMarketRepository(candles),
         rules_loader=FakeRulesLoader(),
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
     response = use_case.execute(
@@ -501,7 +522,12 @@ def test_screen_setup_phase_is_none_when_detection_fails(monkeypatch):
     assert response.candidates[0].to_dict()["setup_phase"] is None
 
 
-def test_screen_recomputes_setup_phase_when_stage2_family_differs_from_preliminary():
+def test_screen_persistence_reuses_preliminary_family_not_a_strategy_evidence_recompute():
+    """HIGH-2: persistence must reuse the exact setup family (and phase)
+    resolved once in AccumulationCandidateSignalAssessor.assess() — the same
+    family SignalEngine scored against. It must not recompute the family
+    using strategy_evidence after scoring, even when strategy_evidence would
+    imply a different family."""
     from src.application.services.primary_setup_family_resolver import (
         PrimarySetupFamilyResult,
     )
@@ -514,6 +540,9 @@ def test_screen_recomputes_setup_phase_when_stage2_family_differs_from_prelimina
                     primary_setup_family="breakout",
                     setup_family_source="detected_screen_evidence",
                 )
+            # This branch must never be reached by persistence — strategy
+            # evidence is diagnostic-only and must not revise the assessed
+            # family/phase after SignalEngine has already scored them.
             return PrimarySetupFamilyResult(
                 matched_setup_families=("foreign_bounce", "breakout"),
                 primary_setup_family="foreign_bounce",
@@ -536,6 +565,7 @@ def test_screen_recomputes_setup_phase_when_stage2_family_differs_from_prelimina
         candidate_observations_repository=spy_repo,
         primary_setup_family_resolver=_FakeResolver(),
         rules_loader=RulesYamlLoader(),
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
     response = execute_and_record(
@@ -552,14 +582,18 @@ def test_screen_recomputes_setup_phase_when_stage2_family_differs_from_prelimina
     assert len(response.candidates) == 1
     assert len(spy_repo.saved) == 1
 
+    candidate = response.candidates[0]
     obs = spy_repo.saved[0]
     assert isinstance(obs, CandidateObservation)
     fingerprint = obs.payload["sub_signal_fingerprint"]
 
-    assert fingerprint["primary_setup_family"] == "foreign_bounce"
-    assert fingerprint["setup_family_source"] == "strategy_evidence"
-    assert fingerprint["setup_phase_current"] == "COMPRESSION"
-    assert fingerprint["phase_sequence_valid"] is False
+    # Preliminary (stage-1) family — never overridden by strategy evidence.
+    assert fingerprint["primary_setup_family"] == "breakout"
+    assert fingerprint["setup_family_source"] == "detected_screen_evidence"
+    assert candidate.setup_family_result.primary_setup_family == "breakout"
+    # Persisted phase is the exact SetupPhaseSnapshot object detected once —
+    # not a second, independently-detected snapshot.
+    assert fingerprint["setup_phase_current"] == candidate.setup_phase.current_phase.value
 
 
 class _RecordingRulesLoader(RulesLoader):
@@ -599,6 +633,7 @@ def test_screen_uses_injected_rules_loader_for_strategy_evidence(tmp_path):
         market_repository=MockMarketRepository(candles),
         candidate_observations_repository=SpyCandidateObservationsRepository(),
         rules_loader=fake_loader,
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
     execute_and_record(

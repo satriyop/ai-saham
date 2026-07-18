@@ -26,11 +26,17 @@ class SignalObservationFingerprint:
     setup_phase_previous: str | None = None
     phase_sequence_valid: bool | None = None
     phase_age_sessions: int | None = None
+    # Legacy (schema 1/2) diagnostic-only fields — populated only when the
+    # source row actually used these ambiguous names. Never fabricated from
+    # phase_detection_strength/phase_input_coverage below.
     phase_strength: float | None = None
-    phase_reasons: tuple[str, ...] = ()
-    phase_history: tuple[dict[str, Any], ...] = ()
     phase_coverage_score: float | None = None
     phase_conviction_score: float | None = None
+    phase_reasons: tuple[str, ...] = ()
+    phase_history: tuple[dict[str, Any], ...] = ()
+    # HIGH-2 canonical (schema 3) truthfully-named diagnostic phase metrics.
+    phase_detection_strength: float | None = None
+    phase_input_coverage: float | None = None
     strategy_name: str | None = None
     strategy_rule_name: str | None = None
     strategy_rule_outcome: str | None = None
@@ -61,8 +67,18 @@ class SignalObservationFingerprint:
     days_in_regime_at_signal: int | None = None
     regime_transition_warning_at_signal: str | None = None
     regime_detection_method_at_signal: str | None = None
+    # Legacy (schema 1/2) diagnostic-only candidate-level fields — coverage was
+    # computed from flow presence divided by two, conviction from
+    # raw_group_score / 100. Never fabricated from signal_authority_coverage.
     coverage: float | None = None
     conviction: float | None = None
+    # HIGH-2 canonical (schema 3) production-authority coverage.
+    signal_authority_coverage: float | None = None
+    # HIGH-2 canonical (schema 3) typed setup readiness.
+    setup_readiness_status: str | None = None
+    setup_readiness_current_phase: str | None = None
+    setup_readiness_missing_required_inputs: tuple[str, ...] = ()
+    setup_readiness_failed_requirements: tuple[str, ...] = ()
     # Phase E: institutional accumulation evidence fingerprint
     institutional_accumulation_status: str | None = None
     ia_foreign_participation: float | None = None

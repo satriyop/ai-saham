@@ -8,6 +8,9 @@ from pathlib import Path
 import pytest
 
 from src.domain.ports.candidate_observations_repository import CandidateObservation
+from src.domain.value_objects.signal_artifact_schema import (
+    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+)
 from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
     SQLiteCandidateObservationsRepository,
 )
@@ -221,7 +224,7 @@ def _canonical_observation(
         ticker=ticker,
         snapshot_date=snapshot_date,
         captured_at=captured_at,
-        payload={"schema_version": 2, "ticker": ticker, "value": value},
+        payload={"schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION, "ticker": ticker, "value": value},
         workflow="screen_accum",
         window_sessions=window_sessions,
         data_as_of_date=data_as_of_date,
@@ -395,7 +398,7 @@ def test_unsupported_schema_version_rejected(tmp_path: Path):
                 ticker="BBCA",
                 snapshot_date=day,
                 captured_at=datetime(2026, 7, 3, 9, 0, 0),
-                payload={"schema_version": 3, "ticker": "BBCA"},
+                payload={"schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION + 1, "ticker": "BBCA"},
             )
         ]
     )
@@ -404,10 +407,11 @@ def test_unsupported_schema_version_rejected(tmp_path: Path):
         repo.get_latest("BBCA", day)
 
 
-def test_current_schema_version_2_round_trips(tmp_path: Path):
-    """Task HIGH-1 bumped the canonical schema to v2 (typed benchmark
-    excess-return fields replace the old rs_vs_ihsg_*_at_signal keys) — v2
-    payloads must read back without raising."""
+def test_current_schema_version_3_round_trips(tmp_path: Path):
+    """Task HIGH-2 bumped the canonical schema to v3 (typed
+    signal_authority_coverage/setup_readiness_* fields replace the ambiguous
+    coverage_score/conviction_score/phase_* fields) — v3 payloads must read
+    back without raising."""
     db_path = tmp_path / "data.db"
     repo = SQLiteCandidateObservationsRepository(db_path)
     day = date(2026, 7, 3)
@@ -417,14 +421,14 @@ def test_current_schema_version_2_round_trips(tmp_path: Path):
                 ticker="BBCA",
                 snapshot_date=day,
                 captured_at=datetime(2026, 7, 3, 9, 0, 0),
-                payload={"schema_version": 2, "ticker": "BBCA"},
+                payload={"schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION, "ticker": "BBCA"},
             )
         ]
     )
 
     observation = repo.get_latest("BBCA", day)
     assert observation is not None
-    assert observation.payload["schema_version"] == 2
+    assert observation.payload["schema_version"] == CANDIDATE_OBSERVATION_SCHEMA_VERSION
 
 
 def test_legacy_schema_version_1_is_readable_but_not_canonical(tmp_path: Path):
@@ -458,6 +462,46 @@ def test_legacy_schema_version_1_is_readable_but_not_canonical(tmp_path: Path):
     fingerprint = observation.payload["sub_signal_fingerprint"]
     assert "benchmark_excess_return_5_session" not in fingerprint
     assert "benchmark_excess_return_20_session" not in fingerprint
+
+
+def test_legacy_schema_version_2_is_readable_but_excluded_from_canonical(tmp_path: Path):
+    """HIGH-2: v2 rows (pre-HIGH-2, ambiguous coverage_score/conviction_score/
+    phase_* fields) remain readable for diagnostics but are excluded from
+    list_canonical_by_date now that v3 is canonical — no migration relabels
+    or mutates them."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+
+    with repo._connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO candidate_observations (
+                ticker, snapshot_date, captured_at, schema_version, payload_json,
+                workflow, window_sessions, data_as_of_date, config_hash
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "BBCA",
+                day.isoformat(),
+                datetime(2026, 7, 3, 9, 0, 0).isoformat(),
+                2,
+                json.dumps({"schema_version": 2, "ticker": "BBCA", "coverage_score": 0.5}),
+                "screen_accum",
+                7,
+                day.isoformat(),
+                "abc123",
+            ),
+        )
+        conn.commit()
+
+    observation = repo.get_latest("BBCA", day)
+    assert observation is not None
+    assert observation.payload["schema_version"] == 2
+    assert observation.payload["coverage_score"] == 0.5
+
+    canonical = repo.list_canonical_by_date(day)
+    assert len(canonical) == 0
 
 
 def test_effective_session_provenance_round_trips(tmp_path: Path):
@@ -545,7 +589,11 @@ def test_provenance_only_change_does_not_create_new_canonical_row(tmp_path: Path
                 ticker="BBCA",
                 snapshot_date=day,
                 captured_at=datetime(2026, 7, 3, 10, 0, 0),
-                payload={"schema_version": 2, "ticker": "BBCA", "value": "second"},
+                payload={
+                    "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+                    "ticker": "BBCA",
+                    "value": "second",
+                },
                 workflow="screen_accum",
                 window_sessions=7,
                 data_as_of_date=day,
@@ -567,12 +615,12 @@ def test_provenance_only_change_does_not_create_new_canonical_row(tmp_path: Path
     assert rows[0].resolution_source == "ihsg_cache_same_day"
 
 
-def test_non_empty_config_hash_requires_schema_version_2_on_write(tmp_path: Path):
+def test_non_empty_config_hash_requires_current_schema_version_on_write(tmp_path: Path):
     db_path = tmp_path / "data.db"
     repo = SQLiteCandidateObservationsRepository(db_path)
     day = date(2026, 7, 3)
 
-    # Attempts to write a non-empty config_hash with schema_version 1 must raise ValueError
+    # Attempts to write a non-empty config_hash with an old schema_version must raise ValueError
     v1_obs = CandidateObservation(
         ticker="BBCA",
         snapshot_date=day,
@@ -580,8 +628,231 @@ def test_non_empty_config_hash_requires_schema_version_2_on_write(tmp_path: Path
         payload={"schema_version": 1, "ticker": "BBCA"},
         config_hash="abc123",
     )
-    with pytest.raises(ValueError, match="requires schema_version == 2"):
+    with pytest.raises(
+        ValueError,
+        match=f"requires schema_version == {CANDIDATE_OBSERVATION_SCHEMA_VERSION}",
+    ):
         repo.save_many([v1_obs])
+
+
+def test_list_canonical_snapshot_dates_excludes_legacy_only_dates(tmp_path: Path):
+    """1. Canonical dates exclude legacy-only dates."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    canonical_day = date(2026, 7, 1)
+    legacy_day = date(2026, 7, 2)
+
+    repo.save_many([_canonical_observation(snapshot_date=canonical_day)])
+    repo.save_many(
+        [
+            CandidateObservation(
+                ticker="BBCA",
+                snapshot_date=legacy_day,
+                captured_at=datetime(2026, 7, 2, 9, 0, 0),
+                payload={"schema_version": 1, "ticker": "BBCA", "value": "legacy"},
+            )
+        ]
+    )
+
+    assert repo.list_canonical_snapshot_dates() == [canonical_day]
+
+
+def test_list_canonical_snapshot_dates_ordered_ascending(tmp_path: Path):
+    """2. Canonical dates are ordered ascending."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    later = date(2026, 7, 5)
+    earlier = date(2026, 7, 1)
+    middle = date(2026, 7, 3)
+
+    repo.save_many([_canonical_observation(snapshot_date=later, config_hash="hash-1")])
+    repo.save_many([_canonical_observation(snapshot_date=earlier, config_hash="hash-2")])
+    repo.save_many([_canonical_observation(snapshot_date=middle, config_hash="hash-3")])
+
+    assert repo.list_canonical_snapshot_dates() == [earlier, middle, later]
+
+
+def test_list_canonical_snapshot_dates_empty_result_returns_empty_list(tmp_path: Path):
+    """8. Empty canonical result returns []."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+
+    assert repo.list_canonical_snapshot_dates() == []
+
+
+def test_list_latest_canonical_by_date_ignores_newer_legacy_row(tmp_path: Path):
+    """3. Latest canonical query ignores a newer legacy row — a later-captured
+    legacy row must not displace an earlier canonical row."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+
+    repo.save_many(
+        [_canonical_observation(captured_at=datetime(2026, 7, 3, 9, 0, 0), value="canonical")]
+    )
+    repo.save_many(
+        [
+            CandidateObservation(
+                ticker="BBCA",
+                snapshot_date=day,
+                captured_at=datetime(2026, 7, 3, 10, 0, 0),
+                payload={"schema_version": 1, "ticker": "BBCA", "value": "legacy-newer"},
+            )
+        ]
+    )
+
+    rows = repo.list_latest_canonical_by_date(day)
+    assert len(rows) == 1
+    assert rows[0].payload["value"] == "canonical"
+
+
+def test_list_latest_canonical_by_date_returns_one_row_per_ticker(tmp_path: Path):
+    """4. Latest canonical query returns one row per ticker."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+
+    repo.save_many(
+        [
+            _canonical_observation(
+                ticker="BBCA",
+                config_hash="hash-bbca",
+                captured_at=datetime(2026, 7, 3, 9, 0, 0),
+                window_sessions=7,
+                value="bbca_w7",
+            )
+        ]
+    )
+    repo.save_many(
+        [
+            _canonical_observation(
+                ticker="BBCA",
+                config_hash="hash-bbca-2",
+                captured_at=datetime(2026, 7, 3, 9, 1, 0),
+                window_sessions=30,
+                value="bbca_w30",
+            )
+        ]
+    )
+    repo.save_many(
+        [
+            _canonical_observation(
+                ticker="BBRI",
+                config_hash="hash-bbri",
+                captured_at=datetime(2026, 7, 3, 9, 30, 0),
+                value="bbri",
+            )
+        ]
+    )
+
+    rows = repo.list_latest_canonical_by_date(day)
+    assert [(row.ticker, row.payload["value"]) for row in rows] == [
+        ("BBCA", "bbca_w30"),
+        ("BBRI", "bbri"),
+    ]
+
+
+def test_list_latest_canonical_by_date_excludes_empty_config_hash(tmp_path: Path):
+    """6. Empty config_hash is excluded."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+
+    repo.save_many(
+        [
+            CandidateObservation(
+                ticker="BBCA",
+                snapshot_date=day,
+                captured_at=datetime(2026, 7, 3, 9, 0, 0),
+                payload={
+                    "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+                    "ticker": "BBCA",
+                    "value": "no-config-hash",
+                },
+            )
+        ]
+    )
+
+    assert repo.list_latest_canonical_by_date(day) == []
+    assert repo.list_canonical_snapshot_dates() == []
+
+
+def test_list_latest_canonical_by_date_excludes_schema_1_and_2(tmp_path: Path):
+    """7. Schema 1/2 is excluded, even with a non-empty config_hash."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+
+    with repo._connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO candidate_observations (
+                ticker, snapshot_date, captured_at, schema_version, payload_json,
+                workflow, window_sessions, data_as_of_date, config_hash
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "BBCA",
+                day.isoformat(),
+                datetime(2026, 7, 3, 9, 0, 0).isoformat(),
+                2,
+                json.dumps({"schema_version": 2, "ticker": "BBCA"}),
+                "screen_accum",
+                7,
+                day.isoformat(),
+                "abc123",
+            ),
+        )
+        conn.commit()
+
+    assert repo.list_latest_canonical_by_date(day) == []
+    assert repo.list_canonical_snapshot_dates() == []
+
+
+def test_list_latest_canonical_by_date_empty_result_returns_empty_list(tmp_path: Path):
+    """8. Empty canonical result returns []."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+
+    assert repo.list_latest_canonical_by_date(day) == []
+
+
+def test_list_canonical_by_date_still_returns_all_windows_alongside_latest_canonical(
+    tmp_path: Path,
+):
+    """5. Raw canonical query (list_canonical_by_date) still returns all
+    windows, distinct from the collapsed latest-per-ticker canonical query."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+
+    repo.save_many(
+        [
+            _canonical_observation(
+                window_sessions=7,
+                captured_at=datetime(2026, 7, 3, 9, 0, 0),
+                value="w7",
+            ),
+            _canonical_observation(
+                window_sessions=30,
+                captured_at=datetime(2026, 7, 3, 9, 1, 0),
+                value="w30",
+            ),
+            _canonical_observation(
+                window_sessions=90,
+                captured_at=datetime(2026, 7, 3, 9, 2, 0),
+                value="w90",
+            ),
+        ]
+    )
+
+    latest_canonical = repo.list_latest_canonical_by_date(day)
+    assert len(latest_canonical) == 1
+
+    raw_canonical = repo.list_canonical_by_date(day)
+    assert len(raw_canonical) == 3
+    assert {row.payload["value"] for row in raw_canonical} == {"w7", "w30", "w90"}
 
 
 def test_list_canonical_by_date_excludes_v1_payloads_with_non_empty_config_hash(tmp_path: Path):

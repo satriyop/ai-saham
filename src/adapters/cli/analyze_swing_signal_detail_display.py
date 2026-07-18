@@ -29,11 +29,7 @@ def print_signal_detail_panel(ctx: SwingOutputDisplayContext) -> None:
             "MODERATE": "yellow",
             "WEAK": "red",
         }.get(sa.strength.value, "white")
-        evidence_coverage = (
-            getattr(sa, "coverage_score", None)
-            or getattr(signal_assessment, "evidence_confidence", None)
-            or 1.0
-        )
+        evidence_coverage = sa.signal_authority_coverage
         signal_text.append(Text(
             f"Explains the Signal column in Verdict: {sa.score_label} "
             f"{sa.strength.value} / {evidence_coverage:.0%} coverage "
@@ -48,18 +44,18 @@ def print_signal_detail_panel(ctx: SwingOutputDisplayContext) -> None:
         active_flags = getattr(signal_assessment, "active_flags", ())
         flag_adj = getattr(signal_assessment, "flag_adjustment", 0)
         raw_score = getattr(signal_assessment, "raw_group_score", None)
-        conf = getattr(signal_assessment, "evidence_confidence", None)
+        conf = sa.signal_authority_coverage
         if breakdown:
             _group_labels = {
                 "setup_quality_group": "Setup Quality",
                 "flow_confirmation_group": "Flow Confirmation",
-                "evidence_confidence": "Evidence Coverage",
+                "signal_authority_coverage": "Signal Authority Coverage",
                 "flag_adjustment": "Flag Adjustment",
             }
             _group_sources = {
                 "setup_quality_group": "SetupEvidence.match_strength (MATCH=100, PARTIAL=60, NO_MATCH=20)",
                 "flow_confirmation_group": "FlowConfirmationEvidence.capped_strength × 100",
-                "evidence_confidence": "coverage: present weight / total weight (60% Setup + 40% Flow)",
+                "signal_authority_coverage": "present-authoritative PRODUCTION weight / required PRODUCTION weight (60% Setup + 40% Flow)",
                 "flag_adjustment": "sum of active flag penalties",
             }
             bd_table = compact_table()
@@ -69,7 +65,7 @@ def print_signal_detail_panel(ctx: SwingOutputDisplayContext) -> None:
             for _key, _val in breakdown.items():
                 _label = _group_labels.get(_key, _key)
                 _source = _group_sources.get(_key, "")
-                if _key == "evidence_confidence":
+                if _key == "signal_authority_coverage":
                     bd_table.add_row(_label, f"{_val:.0f}%", _source)
                 else:
                     bd_table.add_row(_label, f"{_val:.1f}", _source)
@@ -89,7 +85,7 @@ def print_signal_detail_panel(ctx: SwingOutputDisplayContext) -> None:
             ))
         if conf is not None:
             signal_text.append(Text(
-                f"  Evidence confidence: {conf:.0%} of scoring weight covered",
+                f"  Signal authority coverage: {conf:.0%} of scoring weight covered",
                 style="dim",
             ))
         for line in sa.rationale[-3:]:

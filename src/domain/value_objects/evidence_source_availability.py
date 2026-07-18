@@ -12,10 +12,14 @@ rule yet (e.g. a live browser/API scrape, not a persisted SQLite source
 family), and `all_authoritative=True` must never claim that unassessed
 contributor is fine just because the sources this container does list are.
 
-`AvailabilityEnforcementMode` marks whether availability facts are currently
-observational-only (`SHADOW`) or actively gate evidence (a later, unstarted
-HIGH-2 phase). Shadow mode never changes scores, coverage, or classification;
-it only exposes verified facts for later authority-coverage enforcement.
+`AvailabilityEnforcementMode` marks whether availability facts are
+observational-only (`SHADOW`) or actively gate evidence (`ENFORCED`, HIGH-2).
+Under `SHADOW`, availability never changes scores, coverage, or
+classification — it only exposes verified facts. Under `ENFORCED` (the mode
+`AssessSignalEvidenceUseCase` emits today), availability changes
+`signal_authority_coverage` and downstream decision eligibility only; it
+still never changes directional score, which is computed from attached
+evidence exactly as before in both modes.
 
 Layer: Domain (pure value object, no I/O)
 """
@@ -32,6 +36,7 @@ class AvailabilityEnforcementMode(str, Enum):
     """Whether source availability facts are observational or enforced."""
 
     SHADOW = "SHADOW"
+    ENFORCED = "ENFORCED"
 
 
 @dataclass(frozen=True)

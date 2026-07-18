@@ -68,9 +68,11 @@ class SetupPhaseSnapshot:
     current_phase: SetupPhaseState
     previous_phase: SetupPhaseState | None
     phase_age_sessions: int
-    phase_strength: float
-    coverage_score: float
-    conviction_score: float
+    # Diagnostic only — heuristic detector strength, not trade conviction. Must
+    # never gate ENTER/WATCH/AVOID directly; see SetupPhaseReadiness.
+    phase_detection_strength: float
+    # Diagnostic only — equal-weight presence of setup/flow/volume inputs.
+    phase_input_coverage: float
     sequence_valid: bool | None
     reasons: tuple[str, ...] = field(default_factory=tuple)
     unavailable_evidence_reasons: tuple[str, ...] = field(default_factory=tuple)
@@ -86,18 +88,16 @@ class SetupPhaseSnapshot:
     def __post_init__(self) -> None:
         if self.phase_age_sessions < 0:
             raise ValueError("phase_age_sessions must be >= 0")
-        _validate_score("phase_strength", self.phase_strength)
-        _validate_score("coverage_score", self.coverage_score)
-        _validate_score("conviction_score", self.conviction_score)
+        _validate_score("phase_detection_strength", self.phase_detection_strength)
+        _validate_score("phase_input_coverage", self.phase_input_coverage)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "current_phase": self.current_phase.value,
             "previous_phase": self.previous_phase.value if self.previous_phase else None,
             "phase_age_sessions": self.phase_age_sessions,
-            "phase_strength": self.phase_strength,
-            "coverage_score": self.coverage_score,
-            "conviction_score": self.conviction_score,
+            "phase_detection_strength": self.phase_detection_strength,
+            "phase_input_coverage": self.phase_input_coverage,
             "sequence_valid": self.sequence_valid,
             "reasons": list(self.reasons),
             "unavailable_evidence_reasons": list(self.unavailable_evidence_reasons),
@@ -118,9 +118,8 @@ class SetupPhaseSnapshot:
                 if data.get("previous_phase") else None
             ),
             phase_age_sessions=int(data.get("phase_age_sessions", 0)),
-            phase_strength=float(data.get("phase_strength", 0.0)),
-            coverage_score=float(data.get("coverage_score", 0.0)),
-            conviction_score=float(data.get("conviction_score", 0.0)),
+            phase_detection_strength=float(data.get("phase_detection_strength", 0.0)),
+            phase_input_coverage=float(data.get("phase_input_coverage", 0.0)),
             sequence_valid=data.get("sequence_valid"),
             reasons=tuple(str(v) for v in data.get("reasons") or ()),
             unavailable_evidence_reasons=tuple(
