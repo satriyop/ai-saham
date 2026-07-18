@@ -1706,6 +1706,29 @@ count are excluded from both canonical identities. Identical semantic capture
 inputs resolve to one `artifact_id`; changed provenance alone is visible but
 does not imply semantic incompatibility.
 
+### Semantic-change guardrail
+
+Every change to signal, setup, regime, risk, execution, evidence, observation,
+or label behavior must be classified before implementation as one or more of:
+`CONFIG_MATERIAL`, `SEMANTIC_ENGINE`, `EVIDENCE_CONTRACT`,
+`OBSERVATION_SCHEMA`, `LABEL_POLICY`, `LABEL_SCHEMA`, or `NON_SEMANTIC`.
+`NON_SEMANTIC` requires an explicit explanation that deterministic behavior and
+canonical outputs are unchanged.
+
+Production integration must use one typed semantic-contract registry as the
+source of evidence-contract, semantic-engine, execution/label-policy, material
+config-path, and authority-registration identities. Canonical artifact creation
+must fail closed when a required version, material config value, authority
+registration, universe identity, or source identity cannot be resolved.
+
+Executable contract tests must prove that every declared material config path
+changes compatibility identity, display-only config does not, semantic and
+label-policy versions affect the correct identities, identity-free artifacts do
+not enter canonical readiness, and mixed compatibility identities are never
+pooled. Full repository revision remains provenance only; automatically hashing
+all source files into compatibility identity is forbidden because non-semantic
+refactors must not fragment cohorts.
+
 ### Close criteria
 
 - [ ] Semantically different engines cannot share one `semantic_compatibility_id`

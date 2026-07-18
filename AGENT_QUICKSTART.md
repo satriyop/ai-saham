@@ -43,6 +43,34 @@ Read this before every task. This is the mandatory entry point for agents. The l
 6. Pick focused verification before changing files.
 7. Check `git status --short` before edits or git operations, and treat unrelated dirty files as user/other-agent work.
 
+## Semantic Change Classification
+
+Before changing signal, setup, regime, risk, execution, evidence, observation,
+or label behavior, classify the change explicitly in preflight. Use exactly one
+or more of these categories:
+
+- `CONFIG_MATERIAL`: a scoring/policy/config value can change canonical output;
+  include its resolved path/value in the material config identity.
+- `SEMANTIC_ENGINE`: deterministic calculation or decision behavior changes;
+  bump the semantic engine/scoring contract version.
+- `EVIDENCE_CONTRACT`: evidence meaning, availability, authority, or derivation
+  changes; bump the evidence contract version.
+- `OBSERVATION_SCHEMA`: persisted observation meaning or shape changes; bump the
+  observation schema version and preserve old rows unchanged.
+- `LABEL_POLICY`: execution, costs, stop/target, sizing, or label interpretation
+  changes; bump the execution/label-policy version.
+- `LABEL_SCHEMA`: persisted label meaning or shape changes; bump the label schema
+  version and preserve old rows unchanged.
+- `NON_SEMANTIC`: behavior and canonical outputs are unchanged; state why no
+  compatibility identity changes.
+
+Do not classify a material change as `NON_SEMANTIC` merely because tests still
+pass. Do not hash the whole repository into semantic compatibility: the full
+revision belongs in provenance, while explicit contract versions and resolved
+material config belong in compatibility identity. Until canonical artifact
+identity production is fully wired, do not claim changed rules/config are
+comparable with earlier observations or labels.
+
 Layer plan format:
 
 ```md
