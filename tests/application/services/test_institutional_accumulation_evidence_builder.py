@@ -592,3 +592,80 @@ def test_explicit_nonexistent_config_path_raises_file_not_found():
         load_institutional_accumulation_config("nonexistent_config_path_xyz_123.yaml")
 
 
+def test_runtime_parity_cnfb_bullish_calculation_multiplicity(monkeypatch):
+    """Prove that duplicated bullish windows change calculated evidence output
+    while reordering them preserves the output (multiset semantics)."""
+    from src.application.services.institutional_flow_foreign_track import _cnfb_bullish
+
+    # Mock _cnfb_divergence to return different deterministic values by window:
+    # 20 -> 1.0, 30 -> 0.0
+    def mock_cnfb_divergence(points, candles, window, threshold, bearish=False):
+        if window == 20:
+            return 1.0
+        if window == 30:
+            return 0.0
+        return None
+
+    monkeypatch.setattr(
+        "src.application.services.institutional_flow_foreign_track._cnfb_divergence",
+        mock_cnfb_divergence,
+    )
+
+    # Build configurations locally using InstitutionalAccumulationConfig.from_mapping()
+    baseline_cfg = InstitutionalAccumulationConfig.from_mapping({
+        "institutional_accumulation": {
+            "windows": {
+                "cnfb_bullish_accumulation": [20, 30]
+            }
+        }
+    })
+    reordered_cfg = InstitutionalAccumulationConfig.from_mapping({
+        "institutional_accumulation": {
+            "windows": {
+                "cnfb_bullish_accumulation": [30, 20]
+            }
+        }
+    })
+    duplicated_cfg = InstitutionalAccumulationConfig.from_mapping({
+        "institutional_accumulation": {
+            "windows": {
+                "cnfb_bullish_accumulation": [20, 30, 20]
+            }
+        }
+    })
+
+    # Call _cnfb_bullish() with configurations
+    metadata_baseline = {}
+    baseline_res = _cnfb_bullish(
+        points=(),
+        candles=[],
+        config=baseline_cfg,
+        metadata=metadata_baseline,
+    )
+
+    metadata_reordered = {}
+    reordered_res = _cnfb_bullish(
+        points=(),
+        candles=[],
+        config=reordered_cfg,
+        metadata=metadata_reordered,
+    )
+
+    metadata_duplicated = {}
+    duplicated_res = _cnfb_bullish(
+        points=(),
+        candles=[],
+        config=duplicated_cfg,
+        metadata=metadata_duplicated,
+    )
+
+    # Assert results
+    assert baseline_res == reordered_res
+    assert baseline_res != duplicated_res
+    assert baseline_res == 0.5
+    assert duplicated_res == pytest.approx(2 / 3)
+
+    # Assert metadata contains the expected keyed window diagnostics
+    assert metadata_baseline["cnfb_bullish_scores"] == {"cnfb_20d": 1.0, "cnfb_30d": 0.0}
+    assert metadata_reordered["cnfb_bullish_scores"] == {"cnfb_20d": 1.0, "cnfb_30d": 0.0}
+    assert metadata_duplicated["cnfb_bullish_scores"] == {"cnfb_20d": 1.0, "cnfb_30d": 0.0}
