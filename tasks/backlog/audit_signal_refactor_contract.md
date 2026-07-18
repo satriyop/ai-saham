@@ -412,9 +412,10 @@ string.
 **Finding 3 fixed (2026-07-18):** readiness dates, latest-per-ticker counts,
 raw counts, and target counts now use only schema-3 observations with
 non-empty config_hash. Legacy diagnostic rows remain readable through
-noncanonical repository methods. The archived six-factor scorer now explicitly
-assigns `None` (representing that canonical coverage was not evaluated) instead of
-fabricating `1.0` defaults. **Finding 4 fixed (2026-07-18):**
+noncanonical repository methods. **Follow-up Finding 3 fixed (2026-07-18):**
+The archived six-factor scorer now explicitly assigns `None` (representing that
+canonical coverage was not evaluated) instead of fabricating `1.0` defaults.
+**Finding 4 fixed (2026-07-18):**
 `SummarizeSignalForwardLabelsUseCase` now filters to exact schema-2 forward
 labels before building any bucket, replaced the ambiguous
 `coverage_bucket`/`conviction_bucket` groups with a canonical

@@ -118,7 +118,8 @@ class SignalAssessment:
     breakdown: tuple[tuple[str, float], ...] # (factor_name, component_score) pairs
     rationale: tuple[str, ...]
     snapshot_date: date
-    # HIGH-2 canonical name: production-authority coverage (0.0-1.0). Not
+    # HIGH-2 canonical name: production-authority coverage (0.0-1.0), or None
+    # if not evaluated (e.g., in the archived six-factor scorer). Not
     # statistical confidence or trade conviction — see
     # SignalEvidenceGroupScorer._compute_signal_authority_coverage.
     signal_authority_coverage: float | None
