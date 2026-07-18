@@ -1637,8 +1637,9 @@ not select or weight the training population.
 ## Task ARTIFACT-IDENTITY — Reproducible Signal Artifact Identity
 
 **State:** Partial — immutable identity dimensions, compatibility dimensions,
-provenance, final-ID wrappers, and canonical serialization are implemented;
-identity resolution and all production integration remain unimplemented.
+provenance, final-ID wrappers, canonical serialization, and pure identity
+resolution are implemented; no persistence or production integration exists
+yet.
 
 ### Decision
 
@@ -1717,20 +1718,38 @@ does not imply semantic incompatibility.
 - [ ] Same semantic capture is a no-op/already-existing result, not a new sample
 - [ ] Different observation contracts or setup families cannot share an identity
 
-### Foundation Checkpoint (Slice 1)
+### Foundation Checkpoint (Slice 1, as shipped)
 
-- No IDs are computed yet — `ArtifactId`, `SemanticCompatibilityId`, and
-  `SignalArtifactIdentity` exist as immutable wrappers but no hashing or
-  identity resolution is implemented.
+- After Slice 1, no IDs were computed yet — `ArtifactId`,
+  `SemanticCompatibilityId`, and `SignalArtifactIdentity` existed as immutable
+  wrappers but no hashing or identity resolution was implemented.
 - No schema or persistence changed — `CandidateObservation`,
   `CandidateObservationsRepository`, `SignalForwardLabel`, and all SQLite
   tables/indexes remain untouched.
 - No readiness cohort behavior changed — grouping by
   `semantic_compatibility_id` is not wired anywhere.
-- Slice 2 must implement the pure application identity resolver: hash
+- Slice 2 was designated to implement the pure application identity resolver: hash
   `SemanticCompatibilityDimensions` → `SemanticCompatibilityId`, hash
   `ArtifactIdentityDimensions` + `SemanticCompatibilityId` →
   `ArtifactId`, and produce a complete `SignalArtifactIdentity`.
+
+### Slice 2 Checkpoint — Pure Identity Resolver
+
+- `SignalArtifactIdentityResolver` implements canonical semantic and artifact
+  SHA-256 hashing from `SemanticCompatibilityDimensions.to_canonical_json()` and
+  `ArtifactIdentityDimensions.to_canonical_json()` respectively.
+- Provenance is excluded from both hashes.
+- Semantic-ID binding is validated: `artifact_dimensions.semantic_compatibility_id`
+  must match the resolved semantic ID or `ValueError` is raised.
+- Universe-snapshot binding is validated: artifact and provenance
+  `universe_snapshot_id` must match or `ValueError` is raised.
+- Wrong argument types raise `TypeError` with explicit messages.
+- Known SHA-256 vectors are verified: semantic ID
+  `sha256:38fa9b[…]`, artifact ID `sha256:96ea7e[…]`.
+- The resolver imports only `hashlib` and domain identity types; no
+  persistence, schema, CLI, readiness, producer, or migration integration
+  exists yet.
+- No close criterion for the overall ARTIFACT-IDENTITY task is checked.
 
 ---
 
