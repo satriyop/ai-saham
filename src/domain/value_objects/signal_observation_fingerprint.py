@@ -8,6 +8,7 @@ from typing import Any
 from src.domain.value_objects.benchmark_excess_return import BenchmarkExcessReturn
 from src.domain.value_objects.signal_observation_fingerprint_serialization import (
     signal_observation_fingerprint_from_dict,
+    signal_observation_fingerprint_to_canonical_dict,
     signal_observation_fingerprint_to_dict,
 )
 
@@ -160,6 +161,10 @@ class SignalObservationFingerprint:
     def to_dict(self) -> dict[str, Any]:
         """Serialize fingerprint to a flat dictionary."""
         return signal_observation_fingerprint_to_dict(self)
+
+    def to_canonical_dict(self) -> dict[str, Any]:
+        """Serialize canonical fields for current-schema persisted artifacts."""
+        return signal_observation_fingerprint_to_canonical_dict(self)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "SignalObservationFingerprint":

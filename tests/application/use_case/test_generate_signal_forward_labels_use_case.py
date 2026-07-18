@@ -130,8 +130,15 @@ def test_generates_swing_10d_success_label_from_saved_observation():
     assert label.days_to_trough == 1
     assert label.fingerprint.setup_family == "foreign_bounce"
     assert label.fingerprint.market_regime["regime"] == "RISK_ON"
-    assert label.fingerprint.coverage == 0.5
-    assert label.fingerprint.conviction == 0.8
+    assert label.fingerprint.coverage is None
+    assert label.fingerprint.conviction is None
+    assert label.fingerprint.signal_authority_coverage == 0.5
+    assert label.fingerprint.setup_readiness_status == "READY"
+    assert label.fingerprint.setup_readiness_current_phase == "ACCUMULATION"
+    assert label.fingerprint.setup_readiness_missing_required_inputs == ()
+    assert label.fingerprint.setup_readiness_failed_requirements == ()
+    assert label.fingerprint.phase_detection_strength == 0.8
+    assert label.fingerprint.phase_input_coverage == 1.0
     assert labels_repo.saved == [label]
 
     from src.domain.value_objects.signal_artifact_schema import (
@@ -139,6 +146,57 @@ def test_generates_swing_10d_success_label_from_saved_observation():
     )
 
     assert label.schema_version == SIGNAL_FORWARD_LABEL_SCHEMA_VERSION
+
+
+def test_label_generator_output_serialization():
+    signal_date = date(2026, 7, 1)
+    observation = _observation(
+        signal_date,
+        {
+            "candidate": {"current_price": "100"},
+            "sub_signal_fingerprint": _fingerprint(),
+        },
+    )
+    candles = [_candle(signal_date, "100")]
+    candles.extend(_candle(signal_date + timedelta(days=i), str(100 + i)) for i in range(1, 11))
+
+    response = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(observation),
+        market_data_repository=FakeMarketDataRepository(candles),
+        signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+    ).execute(GenerateSignalForwardLabelsRequest(ticker="bbca", signal_date=signal_date))
+
+    assert len(response.labels) == 1
+    label = response.labels[0]
+
+    from src.domain.value_objects.signal_artifact_schema import (
+        SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
+    )
+    assert label.schema_version == SIGNAL_FORWARD_LABEL_SCHEMA_VERSION
+
+    # Serialize it
+    payload = label.to_dict()
+    fingerprint_payload = payload["fingerprint"]
+
+    # Assert canonical authority/readiness fields are present
+    assert fingerprint_payload["signal_authority_coverage"] == 0.5
+    assert fingerprint_payload["setup_readiness_status"] == "READY"
+    assert fingerprint_payload["setup_readiness_current_phase"] == "ACCUMULATION"
+    assert fingerprint_payload["setup_readiness_missing_required_inputs"] == []
+    assert fingerprint_payload["setup_readiness_failed_requirements"] == []
+    assert fingerprint_payload["phase_detection_strength"] == 0.8
+    assert fingerprint_payload["phase_input_coverage"] == 1.0
+
+    # Assert none of the five forbidden aliases are present
+    forbidden_keys = [
+        "coverage",
+        "conviction",
+        "phase_strength",
+        "phase_coverage_score",
+        "phase_conviction_score",
+    ]
+    for key in forbidden_keys:
+        assert key not in fingerprint_payload
 
 
 def test_small_positive_swing_return_is_neutral_not_success():
@@ -856,6 +914,11 @@ def _fingerprint() -> dict:
         "foreign_participation_at_signal": 0.7,
         "foreign_concentration_at_signal": 0.6,
         "market_regime_at_signal": "RISK_ON",
-        "coverage_score": 0.5,
-        "conviction_score": 0.8,
+        "signal_authority_coverage": 0.5,
+        "setup_readiness_status": "READY",
+        "setup_readiness_current_phase": "ACCUMULATION",
+        "setup_readiness_missing_required_inputs": [],
+        "setup_readiness_failed_requirements": [],
+        "phase_detection_strength": 0.8,
+        "phase_input_coverage": 1.0,
     }

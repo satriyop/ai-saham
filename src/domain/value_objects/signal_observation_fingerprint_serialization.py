@@ -45,6 +45,26 @@ if TYPE_CHECKING:
     )
 
 
+_CANONICAL_LABEL_FORBIDDEN_FINGERPRINT_KEYS = frozenset(
+    {
+        "coverage",
+        "conviction",
+        "phase_strength",
+        "phase_coverage_score",
+        "phase_conviction_score",
+    }
+)
+
+
+def signal_observation_fingerprint_to_canonical_dict(
+    fingerprint: "SignalObservationFingerprint",
+) -> dict[str, Any]:
+    data = signal_observation_fingerprint_to_dict(fingerprint)
+    for key in _CANONICAL_LABEL_FORBIDDEN_FINGERPRINT_KEYS:
+        data.pop(key, None)
+    return data
+
+
 def signal_observation_fingerprint_to_dict(
     fingerprint: "SignalObservationFingerprint",
 ) -> dict[str, Any]:

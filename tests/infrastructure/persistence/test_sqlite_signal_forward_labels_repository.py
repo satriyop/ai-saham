@@ -252,3 +252,114 @@ def test_signal_forward_label_benchmark_excess_return_round_trips(tmp_path: Path
     assert restored.fingerprint.benchmark_excess_return_5_session == r5
     assert restored.fingerprint.benchmark_excess_return_20_session == r20
     assert restored.fingerprint.benchmark_excess_return_authority_status == "DIAGNOSTIC_UNVALIDATED"
+
+
+def test_sqlite_persistence_canonical_only(tmp_path: Path):
+    db_path = tmp_path / "data.db"
+    repo = SQLiteSignalForwardLabelsRepository(db_path)
+
+    label = SignalForwardLabel(
+        ticker="BBCA",
+        signal_date=date(2026, 7, 1),
+        horizon=SignalLabelHorizon.SWING_10D,
+        entry_reference_price=Decimal("100"),
+        label_window_start=date(2026, 7, 2),
+        label_window_end=date(2026, 7, 15),
+        close_return=10.0,
+        max_forward_return=12.0,
+        max_adverse_excursion=-2.0,
+        days_to_peak=8,
+        days_to_trough=2,
+        stop_would_trigger=False,
+        target_would_trigger=True,
+        outcome_label=SignalForwardOutcome.SUCCESS,
+        unavailable_reason=None,
+        fingerprint=SignalObservationFingerprint(
+            setup_family="foreign_bounce",
+            # Legacy fields
+            coverage=0.8,
+            conviction=0.8,
+            phase_strength=0.7,
+            phase_coverage_score=0.6,
+            phase_conviction_score=0.4,
+            # Canonical replacement fields
+            signal_authority_coverage=0.75,
+            setup_readiness_status="READY",
+            setup_readiness_current_phase="ACCUMULATION",
+            setup_readiness_missing_required_inputs=("input1",),
+            setup_readiness_failed_requirements=("req1",),
+            phase_detection_strength=0.85,
+            phase_input_coverage=0.95,
+            # Scoped metrics (must be preserved)
+            ia_foreign_track_conviction=0.9,
+            ia_foreign_track_coverage=0.85,
+            strategy_conviction_score=0.7,
+            strategy_coverage_score=0.6,
+            cq_coverage_score=0.8,
+            market_regime={"regime": "RISK_ON"},
+        ),
+        observation_captured_at=datetime(2026, 7, 1, 9, 0, 0),
+        schema_version=2,
+    )
+
+    repo.save_many([label])
+
+    # Test D: SQLite Raw Persistence
+    with sqlite3.connect(str(db_path)) as conn:
+        row = conn.execute(
+            "SELECT fingerprint_json FROM signal_forward_labels WHERE ticker='BBCA' LIMIT 1"
+        ).fetchone()
+
+    assert row is not None
+    import json
+    raw_fingerprint = json.loads(row[0])
+
+    # Assert the raw JSON:
+    # - omits all five forbidden keys;
+    forbidden_keys = [
+        "coverage",
+        "conviction",
+        "phase_strength",
+        "phase_coverage_score",
+        "phase_conviction_score",
+    ]
+    for key in forbidden_keys:
+        assert key not in raw_fingerprint
+
+    # - includes canonical authority coverage and readiness;
+    assert raw_fingerprint["signal_authority_coverage"] == 0.75
+    assert raw_fingerprint["setup_readiness_status"] == "READY"
+    assert raw_fingerprint["setup_readiness_current_phase"] == "ACCUMULATION"
+    assert raw_fingerprint["setup_readiness_missing_required_inputs"] == ["input1"]
+    assert raw_fingerprint["setup_readiness_failed_requirements"] == ["req1"]
+
+    # - includes canonical phase metrics;
+    assert raw_fingerprint["phase_detection_strength"] == 0.85
+    assert raw_fingerprint["phase_input_coverage"] == 0.95
+
+    # - includes representative scoped fields.
+    assert raw_fingerprint["ia_foreign_track_conviction"] == 0.9
+    assert raw_fingerprint["ia_foreign_track_coverage"] == 0.85
+    assert raw_fingerprint["strategy_conviction_score"] == 0.7
+    assert raw_fingerprint["strategy_coverage_score"] == 0.6
+    assert raw_fingerprint["cq_coverage_score"] == 0.8
+
+    # Test E: SQLite Canonical Round Trip
+    restored = repo.get("BBCA", date(2026, 7, 1), SignalLabelHorizon.SWING_10D)
+    assert restored is not None
+
+    # Assert canonical values survive.
+    assert restored.fingerprint.signal_authority_coverage == 0.75
+    assert restored.fingerprint.setup_readiness_status == "READY"
+    assert restored.fingerprint.setup_readiness_current_phase == "ACCUMULATION"
+    assert restored.fingerprint.setup_readiness_missing_required_inputs == ("input1",)
+    assert restored.fingerprint.setup_readiness_failed_requirements == ("req1",)
+    assert restored.fingerprint.phase_detection_strength == 0.85
+    assert restored.fingerprint.phase_input_coverage == 0.95
+
+    # Assert the five legacy fields are None after round-trip because they were not persisted.
+    assert restored.fingerprint.coverage is None
+    assert restored.fingerprint.conviction is None
+    assert restored.fingerprint.phase_strength is None
+    assert restored.fingerprint.phase_coverage_score is None
+    assert restored.fingerprint.phase_conviction_score is None

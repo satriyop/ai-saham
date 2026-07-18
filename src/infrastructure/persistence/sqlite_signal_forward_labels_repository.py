@@ -141,7 +141,7 @@ class SQLiteSignalForwardLabelsRepository:
                     label.outcome_label.value,
                     label.unavailable_reason,
                     json.dumps(
-                        label.fingerprint.to_dict(),
+                        label.fingerprint_payload(),
                         sort_keys=True,
                         separators=(",", ":"),
                     ),

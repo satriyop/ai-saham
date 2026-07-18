@@ -419,8 +419,11 @@ labels before building any bucket, replaced the ambiguous
 `signal_authority_coverage_bucket`, and added typed
 `setup_readiness_status`/`setup_readiness_current_phase`/missing-input/
 failed-requirement attribution — with no fallback to the legacy fingerprint
-fields. HIGH-2 stays Partial — other audit findings against this task are
-not yet verified — do not mark Done until they are.
+fields. **Finding 5 fixed (2026-07-18):** schema-2 label JSON and SQLite
+fingerprint persistence omit generic legacy coverage/conviction and phase
+aliases; schema-1 parsing remains diagnostic and read-compatible. HIGH-2 stays
+Partial — other audit findings against this task are not yet verified — do not
+mark Done until they are.
 
 ### Metadata
 

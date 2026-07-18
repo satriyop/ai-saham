@@ -99,6 +99,15 @@ class SignalForwardLabel:
         if self.outcome_label != SignalForwardOutcome.UNAVAILABLE and self.unavailable_reason:
             raise ValueError("available labels must not set unavailable_reason")
 
+    def fingerprint_payload(self) -> dict[str, Any]:
+        if self.schema_version == 1:
+            return self.fingerprint.to_dict()
+        if self.schema_version == SIGNAL_FORWARD_LABEL_SCHEMA_VERSION:
+            return self.fingerprint.to_canonical_dict()
+        raise ValueError(
+            f"unsupported signal forward label schema_version={self.schema_version}"
+        )
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "schema_version": self.schema_version,
@@ -123,7 +132,7 @@ class SignalForwardLabel:
             "target_would_trigger": self.target_would_trigger,
             "outcome_label": self.outcome_label.value,
             "unavailable_reason": self.unavailable_reason,
-            "fingerprint": self.fingerprint.to_dict(),
+            "fingerprint": self.fingerprint_payload(),
             "observation_captured_at": (
                 self.observation_captured_at.isoformat() if self.observation_captured_at else None
             ),
