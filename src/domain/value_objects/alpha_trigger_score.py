@@ -10,6 +10,25 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+# Canonical Alpha/Trigger group identity for the SectorContextEvidence
+# producer (SECTOR-CONTEXT-IDENTITY). market_context is removed from the
+# Alpha/Trigger evidence namespace. It remains only as a rejection tombstone:
+# REMOVED_MARKET_CONTEXT_EVIDENCE_NAME exists solely to produce explicit
+# failures. It is NOT a compatibility identity and must never act as an alias,
+# translation, or normalization target for the canonical name. (The genuine
+# market-wide MarketContext / MarketContextEngine subsystem is unrelated and
+# untouched.)
+SECTOR_CONTEXT_EVIDENCE_NAME = "sector_context"
+REMOVED_MARKET_CONTEXT_EVIDENCE_NAME = "market_context"
+
+
+def _reject_removed_evidence_name(value: str, field: str) -> None:
+    if value == REMOVED_MARKET_CONTEXT_EVIDENCE_NAME:
+        raise ValueError(
+            f"{field}: Alpha/Trigger evidence name 'market_context' was removed; "
+            "use 'sector_context' for SectorContextEvidence"
+        )
+
 
 class EvidenceAuthorityStatus(str, Enum):
     DIAGNOSTIC = "DIAGNOSTIC"
@@ -32,6 +51,7 @@ class EvidencePromotionRecord:
             raise ValueError("promotion.target cannot be empty")
         if not self.evidence_name:
             raise ValueError("promotion.evidence_name cannot be empty")
+        _reject_removed_evidence_name(self.evidence_name, "promotion.evidence_name")
         if not isinstance(self.promoted_to, EvidenceAuthorityStatus):
             raise ValueError("promotion.promoted_to must be an EvidenceAuthorityStatus")
         if not self.promoted_by:
@@ -81,6 +101,7 @@ class EvidenceRegistration:
     def __post_init__(self) -> None:
         if not self.evidence_name:
             raise ValueError("evidence_name cannot be empty")
+        _reject_removed_evidence_name(self.evidence_name, "registration.evidence_name")
         if not isinstance(self.status, EvidenceAuthorityStatus):
             raise ValueError("status must be an EvidenceAuthorityStatus")
         _validate_unit("low_weight_cap", self.low_weight_cap)
@@ -131,6 +152,7 @@ class AlphaTriggerGroupContribution:
     def __post_init__(self) -> None:
         if not self.group:
             raise ValueError("group cannot be empty")
+        _reject_removed_evidence_name(self.group, "contribution.group")
         if self.present:
             _validate_score("score", self.score)
         elif self.score != 0.0:

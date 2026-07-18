@@ -108,7 +108,7 @@ def test_patch_changing_evidence_registration_status_rejected(tmp_path):
     promoted by the tuning system — only a manual promotion record review."""
     result = _validate_single(
         tmp_path,
-        "signal_engine.alpha_trigger.evidence_registrations.market_context.status",
+        "signal_engine.alpha_trigger.evidence_registrations.sector_context.status",
         "DIAGNOSTIC",
         "LOW_WEIGHT",
     )
@@ -124,7 +124,7 @@ def test_patch_changing_evidence_promotion_record_rejected(tmp_path):
     promotion is a manual-review artifact, not a tuning-diff target."""
     result = _validate_single(
         tmp_path,
-        "signal_engine.alpha_trigger.evidence_registrations.market_context.promotion.promoted_to",
+        "signal_engine.alpha_trigger.evidence_registrations.sector_context.promotion.promoted_to",
         "DIAGNOSTIC",
         "LOW_WEIGHT",
     )

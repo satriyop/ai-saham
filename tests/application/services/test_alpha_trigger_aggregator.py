@@ -26,7 +26,7 @@ def test_four_group_coverage_and_diagnostic_authority_caps_are_separate():
             groups=(
                 AlphaTriggerGroupInput("setup_quality", 100.0, 0.35, True),
                 AlphaTriggerGroupInput("institutional_flow", 50.0, 0.30, True),
-                AlphaTriggerGroupInput("market_context", 100.0, 0.25, True),
+                AlphaTriggerGroupInput("sector_context", 100.0, 0.25, True),
                 AlphaTriggerGroupInput("company_quality_context", 0.0, 0.10, False),
             ),
             setup_phase=_breakout_phase(),
@@ -38,7 +38,7 @@ def test_four_group_coverage_and_diagnostic_authority_caps_are_separate():
     assert score.authority_coverage == pytest.approx(0.65)
     assert score.alpha_score == pytest.approx(50.0)
     assert score.trigger_score == pytest.approx(92.6829268293)
-    market = [c for c in score.group_contributions if c.group == "market_context"][0]
+    market = [c for c in score.group_contributions if c.group == "sector_context"][0]
     assert market.present is True
     assert market.effective_weight == 0.0
     assert "diagnostic_report_only" in market.reasons
@@ -67,7 +67,7 @@ def test_market_and_company_diagnostic_groups_do_not_move_final_score():
             groups=(
                 AlphaTriggerGroupInput("setup_quality", 100.0, 0.35, True),
                 AlphaTriggerGroupInput("institutional_flow", 50.0, 0.30, True),
-                AlphaTriggerGroupInput("market_context", 100.0, 0.25, True),
+                AlphaTriggerGroupInput("sector_context", 100.0, 0.25, True),
                 AlphaTriggerGroupInput("company_quality_context", 100.0, 0.10, True),
             ),
         )
@@ -76,7 +76,7 @@ def test_market_and_company_diagnostic_groups_do_not_move_final_score():
     assert filled.final_exact_score == pytest.approx(baseline.final_exact_score)
     assert filled.alpha_score == pytest.approx(baseline.alpha_score)
     assert filled.trigger_score == pytest.approx(baseline.trigger_score)
-    market = [c for c in filled.group_contributions if c.group == "market_context"][0]
+    market = [c for c in filled.group_contributions if c.group == "sector_context"][0]
     company = [
         c for c in filled.group_contributions
         if c.group == "company_quality_context"

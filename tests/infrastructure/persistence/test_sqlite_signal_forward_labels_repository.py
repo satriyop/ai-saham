@@ -163,6 +163,75 @@ def test_legacy_label_rows_with_no_provenance_read_as_none(tmp_path: Path):
     assert restored.resolution_notes == ()
 
 
+def _sector_context_label(schema_version: int = 2) -> SignalForwardLabel:
+    return SignalForwardLabel(
+        ticker="BBCA",
+        signal_date=date(2026, 7, 1),
+        horizon=SignalLabelHorizon.SWING_10D,
+        entry_reference_price=Decimal("100"),
+        label_window_start=date(2026, 7, 2),
+        label_window_end=date(2026, 7, 15),
+        close_return=5.0,
+        max_forward_return=5.0,
+        max_adverse_excursion=0.0,
+        days_to_peak=1,
+        days_to_trough=1,
+        stop_would_trigger=False,
+        target_would_trigger=True,
+        outcome_label=SignalForwardOutcome.SUCCESS,
+        unavailable_reason=None,
+        fingerprint=SignalObservationFingerprint(
+            alpha_trigger_route_metadata=({"group": "sector_context", "score": 75.0},),
+        ),
+        observation_captured_at=datetime(2026, 7, 1, 9, 0, 0),
+        schema_version=schema_version,
+    )
+
+
+def test_repository_write_guard_rejects_in_memory_corrupted_current_label(tmp_path: Path):
+    """SECTOR-CONTEXT-IDENTITY (Finding 1): the save_many defense-in-depth guard
+    must reject a current label carrying the removed identity even when it
+    reaches the repository past the construction guard. Simulate in-memory
+    corruption by mutating the frozen fingerprint, then assert the write raises
+    and persists zero rows."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteSignalForwardLabelsRepository(db_path)
+
+    corrupt_label = _sector_context_label(schema_version=2)
+    object.__setattr__(
+        corrupt_label.fingerprint,
+        "alpha_trigger_route_metadata",
+        ({"group": "market_context", "score": 75.0},),
+    )
+
+    with pytest.raises(ValueError, match="removed Alpha/Trigger group 'market_context'"):
+        repo.save_many([corrupt_label])
+
+    assert tuple(repo.list()) == ()
+
+
+def test_raw_inserted_current_label_with_removed_identity_fails_on_read(tmp_path: Path):
+    """A current label row smuggled directly into the table (bypassing the
+    write/construction guards) must still fail closed on read — the reader does
+    not trust stored fingerprint contents."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteSignalForwardLabelsRepository(db_path)
+    repo.save_many([_sector_context_label(schema_version=2)])
+
+    corrupt_fingerprint = json.dumps(
+        {"alpha_trigger_route_metadata": [{"group": "market_context", "score": 75.0}]}
+    )
+    with sqlite3.connect(str(db_path)) as conn:
+        conn.execute(
+            "UPDATE signal_forward_labels SET fingerprint_json = ? WHERE ticker = 'BBCA'",
+            (corrupt_fingerprint,),
+        )
+        conn.commit()
+
+    with pytest.raises(ValueError, match="removed Alpha/Trigger group 'market_context'"):
+        list(repo.list())
+
+
 def _label(
     *,
     captured_at: datetime,

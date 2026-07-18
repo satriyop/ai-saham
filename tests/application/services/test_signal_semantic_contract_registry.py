@@ -100,7 +100,7 @@ _SMALL_POLICY_VERSIONS: tuple[tuple[str, str], ...] = (
 _AUTHORITY_NAMES = (
     "company_quality_context",
     "institutional_flow",
-    "market_context",
+    "sector_context",
     "setup_quality",
 )
 
@@ -157,8 +157,8 @@ def authority_regs() -> dict[str, EvidenceRegistration]:
             status=EvidenceAuthorityStatus.PRODUCTION,
             low_weight_cap=0.10,
         ),
-        "market_context": EvidenceRegistration(
-            evidence_name="market_context",
+        "sector_context": EvidenceRegistration(
+            evidence_name="sector_context",
             status=EvidenceAuthorityStatus.DIAGNOSTIC,
             low_weight_cap=0.10,
         ),
@@ -272,7 +272,7 @@ def test_authority_registration_order_independence(
 ):
     reordered = {
         "setup_quality": authority_regs["setup_quality"],
-        "market_context": authority_regs["market_context"],
+        "sector_context": authority_regs["sector_context"],
         "institutional_flow": authority_regs["institutional_flow"],
         "company_quality_context": authority_regs["company_quality_context"],
     }
@@ -2082,8 +2082,20 @@ def test_real_manifest_excludes_removed_paths():
         "swing_setups.setups.smart-money-confirmed.can_enter_from_phases",
         "swing_setups.setups.pullback-continuation.entry_authority",
         "swing_setups.setups.pullback-continuation.can_enter_from_phases",
+        "signal_engine.alpha_trigger.group_weights.market_context",
+        "signal_engine.alpha_trigger.route_fractions.TACTICAL_3D.market_context.alpha_fraction",
+        "signal_engine.alpha_trigger.route_fractions.SWING_10D.market_context.alpha_fraction",
+        "signal_engine.alpha_trigger.route_fractions.ACCUM_20D.market_context.alpha_fraction",
     ):
         assert forbidden not in all_declared
+
+
+def test_real_manifest_authority_registration_names_use_sector_context_not_market_context():
+    """SECTOR-CONTEXT-IDENTITY: the Alpha/Trigger group fed by
+    SectorContextEvidence is registered as sector_context, never the
+    misleading market_context identity."""
+    assert "sector_context" in ACCUMULATION_DISCOVERY.authority_registration_names
+    assert "market_context" not in ACCUMULATION_DISCOVERY.authority_registration_names
 
 
 def test_real_manifest_excludes_removed_non_operational_scoring_prefixes():

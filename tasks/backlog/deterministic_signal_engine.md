@@ -34,7 +34,7 @@ truth and PIT prerequisites remain in
 | 5 | `EVIDENCE-BACKED-ASSESSMENT` | Done | `4262ae3 Remove flags-only SignalEngine assessment paths (EVIDENCE-BACKED-ASSESSMENT)` |
 | 6 | `CENTRAL-EVIDENCE-AUTHORITY` | Done | `c93363a`; status recorded by `952d106` |
 | 7 | `RETIRE-LEGACY-SIX-FACTOR-BASELINE` | Done | `59bd03b`, `b0e77d9`; see `audit_signal_refactor_contract.md` |
-| 8 | `SECTOR-CONTEXT-IDENTITY` | Blocked | Requires the active artifact/schema identity contract |
+| 8 | `SECTOR-CONTEXT-IDENTITY` | Done | `532135c Remove Alpha/Trigger market_context identity, adopt sector_context`; clean break, schema 4 |
 
 `OUTPUT-CONTRACT-OWNERSHIP` is a deferred, non-blocking documentation cleanup
 after `SECTOR-CONTEXT-IDENTITY`. It does not block `LIVE-CONTRACT-GATE`.
@@ -67,17 +67,21 @@ ML roadmap.
 
 ## LIVE-CONTRACT-GATE Close Criteria
 
+**State: satisfied.** All prerequisite tasks (1–8) are Done, and each gate
+criterion below is met by vetted, tested code. Recorded after
+`532135c` closed the final prerequisite (`SECTOR-CONTEXT-IDENTITY`).
+
 `LIVE-CONTRACT-GATE` passes only when:
 
-- one canonical evidence-backed assessment path exists;
-- screen and swing preserve the same evidence/provenance contract;
-- no flags-only path can return a canonical signal assessment;
-- diagnostic evidence cannot gain authority from producer config;
-- no public application use case or CLI command can return a signal-shaped
-  result from the retired six-factor formula;
-- canonical artifacts bind compatible identity dimensions;
-- partial evidence, unavailable evidence, and no evidence remain distinct;
-- sector evidence uses a truthful canonical identity.
+- [x] one canonical evidence-backed assessment path exists — `EVIDENCE-BACKED-ASSESSMENT`;
+- [x] screen and swing preserve the same evidence/provenance contract — `CANONICAL-EVIDENCE-BOUNDARY`;
+- [x] no flags-only path can return a canonical signal assessment — `EVIDENCE-BACKED-ASSESSMENT`;
+- [x] diagnostic evidence cannot gain authority from producer config — `CENTRAL-EVIDENCE-AUTHORITY`;
+- [x] no public application use case or CLI command can return a signal-shaped
+  result from the retired six-factor formula — `RETIRE-LEGACY-SIX-FACTOR-BASELINE`;
+- [x] canonical artifacts bind compatible identity dimensions — `ARTIFACT-IDENTITY`;
+- [x] partial evidence, unavailable evidence, and no evidence remain distinct — `AUTHORITY-COVERAGE-READINESS`;
+- [x] sector evidence uses a truthful canonical identity — `SECTOR-CONTEXT-IDENTITY`.
 
 `LIVE-CONTRACT-GATE` does **not** require:
 

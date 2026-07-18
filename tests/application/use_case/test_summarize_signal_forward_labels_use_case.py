@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 
+import pytest
+
 from src.application.use_case.summarize_signal_forward_labels_use_case import (
     SummarizeSignalForwardLabelsRequest,
     SummarizeSignalForwardLabelsUseCase,
@@ -540,6 +542,49 @@ def test_summarize_groups_by_volatility_context_buckets():
 # ---------------------------------------------------------------------------
 # HIGH-2 Finding 4: canonical forward-label attribution
 # ---------------------------------------------------------------------------
+
+
+def test_summarize_rejects_current_label_with_removed_market_context_identity():
+    """SECTOR-CONTEXT-IDENTITY: attribution is the last line of defense. Even if
+    a current (schema-2) label reaches it with the removed market_context group
+    (here forced past the construction guard via a frozen-field bypass to
+    simulate an in-memory corruption), attribution must fail closed with the
+    artifact identity rather than mapping it to sector_context or skipping it."""
+    day = date(2026, 7, 1)
+    corrupt_label = SignalForwardLabel(
+        ticker="BBCA",
+        signal_date=day,
+        horizon=SignalLabelHorizon.SWING_10D,
+        entry_reference_price=Decimal("100"),
+        label_window_start=date(2026, 7, 2),
+        label_window_end=date(2026, 7, 15),
+        close_return=4.0,
+        max_forward_return=5.0,
+        max_adverse_excursion=-1.0,
+        days_to_peak=2,
+        days_to_trough=1,
+        stop_would_trigger=False,
+        target_would_trigger=True,
+        outcome_label=SignalForwardOutcome.SUCCESS,
+        unavailable_reason=None,
+        fingerprint=SignalObservationFingerprint(
+            alpha_trigger_route_metadata=({"group": "sector_context", "score": 75.0},),
+        ),
+    )
+    assert corrupt_label.schema_version == SIGNAL_FORWARD_LABEL_SCHEMA_VERSION
+    # Bypass the frozen fingerprint's construction guard to plant the removed
+    # identity, proving the summarize-level guard is independent of it.
+    object.__setattr__(
+        corrupt_label.fingerprint,
+        "alpha_trigger_route_metadata",
+        ({"group": "market_context", "score": 75.0},),
+    )
+    repo = FakeSignalForwardLabelsRepository([corrupt_label])
+
+    with pytest.raises(ValueError, match="BBCA"):
+        SummarizeSignalForwardLabelsUseCase(repo).execute(
+            SummarizeSignalForwardLabelsRequest(signal_date=day)
+        )
 
 
 def test_summarize_excludes_legacy_schema_labels_from_canonical_attribution():

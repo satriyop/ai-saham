@@ -25,8 +25,15 @@ from src.application.services.signal_scoring_config import (
     SignalScoringConfig,
 )
 from src.domain.value_objects.alpha_trigger_score import (
+    REMOVED_MARKET_CONTEXT_EVIDENCE_NAME,
+    SECTOR_CONTEXT_EVIDENCE_NAME,
     EvidenceAuthorityStatus,
     EvidenceRegistration,
+)
+
+_REMOVED_GROUP_MESSAGE = (
+    f"Alpha/Trigger group {REMOVED_MARKET_CONTEXT_EVIDENCE_NAME!r} was removed; "
+    f"use {SECTOR_CONTEXT_EVIDENCE_NAME!r}"
 )
 
 # ── Phase 1: classification & missing-data config ──────────────────────────────
@@ -244,19 +251,19 @@ class AlphaTriggerRouteFractionsConfig:
             "TACTICAL_3D": {
                 "setup_quality": 0.00,
                 "institutional_flow": 0.70,
-                "market_context": 0.25,
+                SECTOR_CONTEXT_EVIDENCE_NAME: 0.25,
                 "company_quality_context": 1.00,
             },
             "SWING_10D": {
                 "setup_quality": 0.00,
                 "institutional_flow": 0.80,
-                "market_context": 0.60,
+                SECTOR_CONTEXT_EVIDENCE_NAME: 0.60,
                 "company_quality_context": 1.00,
             },
             "ACCUM_20D": {
                 "setup_quality": 0.10,
                 "institutional_flow": 0.90,
-                "market_context": 0.75,
+                SECTOR_CONTEXT_EVIDENCE_NAME: 0.75,
                 "company_quality_context": 1.00,
             },
         }
@@ -271,7 +278,7 @@ class AlphaTriggerConfig:
         default_factory=lambda: {
             "setup_quality": 0.35,
             "institutional_flow": 0.30,
-            "market_context": 0.25,
+            SECTOR_CONTEXT_EVIDENCE_NAME: 0.25,
             "company_quality_context": 0.10,
         }
     )
@@ -296,8 +303,8 @@ class AlphaTriggerConfig:
                 evidence_name="institutional_flow",
                 status=EvidenceAuthorityStatus.PRODUCTION,
             ),
-            "market_context": EvidenceRegistration(
-                evidence_name="market_context",
+            SECTOR_CONTEXT_EVIDENCE_NAME: EvidenceRegistration(
+                evidence_name=SECTOR_CONTEXT_EVIDENCE_NAME,
                 status=EvidenceAuthorityStatus.DIAGNOSTIC,
             ),
             "company_quality_context": EvidenceRegistration(
@@ -306,6 +313,37 @@ class AlphaTriggerConfig:
             ),
         }
     )
+
+    def __post_init__(self) -> None:
+        """Fail closed against the removed Alpha/Trigger group identity even
+        under direct typed construction (manual DI), not only YAML resolving
+        (SECTOR-CONTEXT-IDENTITY). market_context is removed from the
+        Alpha/Trigger namespace; its producer is SectorContextEvidence, which
+        registers under sector_context. This is a rejection guard, not an
+        alias — the removed key is never translated to the canonical name."""
+        if REMOVED_MARKET_CONTEXT_EVIDENCE_NAME in self.group_weights:
+            raise ValueError(
+                "AlphaTriggerConfig.group_weights."
+                f"{REMOVED_MARKET_CONTEXT_EVIDENCE_NAME}: {_REMOVED_GROUP_MESSAGE}"
+            )
+        for horizon, groups in self.route_fractions.items():
+            if REMOVED_MARKET_CONTEXT_EVIDENCE_NAME in groups:
+                raise ValueError(
+                    f"AlphaTriggerConfig.route_fractions.{horizon}."
+                    f"{REMOVED_MARKET_CONTEXT_EVIDENCE_NAME}: {_REMOVED_GROUP_MESSAGE}"
+                )
+        if REMOVED_MARKET_CONTEXT_EVIDENCE_NAME in self.evidence_registrations:
+            raise ValueError(
+                "AlphaTriggerConfig.evidence_registrations."
+                f"{REMOVED_MARKET_CONTEXT_EVIDENCE_NAME}: {_REMOVED_GROUP_MESSAGE}"
+            )
+        for key, registration in self.evidence_registrations.items():
+            if key != registration.evidence_name:
+                raise ValueError(
+                    f"AlphaTriggerConfig.evidence_registrations.{key}: "
+                    f"registration key {key!r} must equal "
+                    f"registration.evidence_name {registration.evidence_name!r}"
+                )
 
 
 # ── Aggregated Engine Config ────────────────────────────────────────────────────

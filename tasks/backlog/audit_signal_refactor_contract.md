@@ -250,9 +250,34 @@ Layer plan:
 
 ---
 
-## Task SECTOR-CONTEXT-IDENTITY — Rename Alpha/Trigger `market_context` to `sector_context`
+## Task SECTOR-CONTEXT-IDENTITY — Remove Alpha/Trigger `market_context`, adopt `sector_context`
 
-**State:** Blocked — requires the active artifact/schema identity contract.
+**State:** Done — clean break implemented, reviewed, all criteria met.
+
+### Implementation Note (Clean Break)
+
+At implementation time the active `candidate_observations` and
+`signal_forward_labels` tables were empty; all older artifacts had already been
+moved to `candidate_observations_quarantine` / `signal_forward_labels_quarantine`.
+A **clean break** was therefore selected instead of an active compatibility
+mapping:
+
+- `market_context` is **removed** from the Alpha/Trigger evidence namespace; it
+  survives only as a rejection tombstone (`REMOVED_MARKET_CONTEXT_EVIDENCE_NAME`)
+  used to produce explicit failures.
+- There is **no** active compatibility alias, translation, normalization, or
+  historical interpretation of `market_context` as a valid evidence identity.
+- Quarantine tables are **raw audit storage only** — not executable, canonical,
+  attributable, labelable, or promotable — and their JSON is left untouched.
+- Current typed config, YAML config, live projection, schema-4 observations
+  (build/write/read), label generation, and canonical attribution all **reject**
+  `market_context`.
+- The genuine market-wide `MarketContext` / `MarketContextEngine` subsystem is
+  unchanged.
+
+The historical "5,760 legacy labels" figure below described the pre-quarantine
+state and is retained only as background; those rows are now quarantined and out
+of the current canonical contract.
 
 ### Metadata
 
@@ -263,10 +288,12 @@ Layer plan:
 - **Risk:** The misleading name can corrupt future tuning/promotion decisions;
   an incomplete rename can split historical attribution or accidentally alter
   the real market-wide `MarketContext` system
-- **Decision:** Cleanly rename only the Alpha/Trigger group populated by
-  `SectorContextEvidence` to `sector_context`; reject the legacy key in new
-  config; version persisted fingerprints; preserve old raw provenance through
-  schema-aware historical interpretation. Implement this option only.
+- **Decision:** Remove the misleading `market_context` Alpha/Trigger identity;
+  the group populated by `SectorContextEvidence` is `sector_context`. Reject the
+  removed key in typed and YAML config; bump the persisted observation schema to
+  4; reject `market_context` at every current canonical boundary. No active
+  compatibility mapping — old rows are quarantined raw audit storage only.
+  Implement this option only.
 
 ### Problem
 
@@ -351,26 +378,30 @@ signal_engine.alpha_trigger.evidence_registrations
 Use an actionable error equivalent to:
 
 ```text
-Alpha/Trigger group 'market_context' was renamed to 'sector_context' because
+Alpha/Trigger group 'market_context' was removed; use 'sector_context' because
 its producer is SectorContextEvidence
 ```
+
+The typed `AlphaTriggerConfig.__post_init__` enforces the same rejection so
+direct manual-DI construction cannot bypass the YAML resolver.
 
 Do not reject legitimate market-wide `market_context_engine`, decision-policy,
 risk-gate, repository, or CLI configuration.
 
-#### Persisted compatibility
+#### Persisted contract (clean break)
 
-New observations must use a new fingerprint/schema version and persist only
+New observations use `CANDIDATE_OBSERVATION_SCHEMA_VERSION = 4` and persist only
 `sector_context` in `alpha_trigger_route_metadata[].group`.
 
-Do not rewrite existing fingerprint JSON in place. Historical analysis may map
-`market_context` to the canonical analytical identity `sector_context` only
-when the row's old schema version proves it predates this rename. Under the new
-schema, `market_context` is invalid rather than a compatibility alias.
+There is no active compatibility mapping. `validate_current_alpha_trigger_identity`
+only interprets the current schema (4): a schema-4 payload containing
+`market_context` fails on build, write, and read. Older schema (1–3) rows are
+outside the current canonical contract — they are neither validated nor
+reinterpreted, and are never mapped to `sector_context`.
 
-If the learning/attribution reader cannot perform version-aware normalization,
-quarantine old rows from group-identity aggregation until rebuilt. Never merge
-the strings without checking schema version.
+Existing raw JSON is never rewritten. Old artifacts are held in the quarantine
+tables as raw audit storage only; they are not executable, canonical,
+attributable, labelable, or promotable.
 
 #### Promotion identity
 
@@ -386,8 +417,9 @@ promote sector context; it remains DIAGNOSTIC until separately validated.
 ### Desired Outcome
 
 - Machine-readable identity matches the actual sector-context producer.
-- New config cannot retain or create the misleading legacy Alpha/Trigger group.
-- Historical attribution remains interpretable without mutating raw provenance.
+- New config cannot retain or create the removed Alpha/Trigger group.
+- No active compatibility mapping exists; old rows are quarantined raw audit
+  storage only and are never mapped to `sector_context`.
 - Genuine market-wide `MarketContext` concepts remain unchanged.
 - Numerical Alpha/Trigger output is identical apart from identity strings and
   fingerprint schema version.
@@ -407,10 +439,11 @@ promote sector context; it remains DIAGNOSTIC until separately validated.
 - Do not perform a repository-wide textual replacement of `market_context`.
 - Do not rename `MarketContext`, `MarketContextEngine`, their config, persistence,
   CLI commands, risk gates, or regime inputs.
-- Do not preserve `market_context` as an accepted new-config alias.
+- Do not preserve `market_context` as an active alias, and do not map it to
+  `sector_context` during parsing, attribution, or readback.
 - Do not let resolver merging create both `market_context` and `sector_context`.
-- Do not silently relabel historical fingerprint JSON in place.
-- Do not normalize legacy identity without verifying the fingerprint schema version.
+- Do not rewrite, migrate, or reinterpret quarantined fingerprint JSON.
+- Do not aggregate old and new identities together.
 - Do not alter weights, route fractions, score mapping, presence logic, authority,
   decision policy, or risk behavior.
 - Do not combine the adjacent question of whether categorical sector scoring is
@@ -420,30 +453,32 @@ promote sector context; it remains DIAGNOSTIC until separately validated.
 
 ```md
 Layer plan:
-- Domain: rename Alpha/Trigger contribution/registration identity expectations; no market-wide context changes
-- Application: rename defaults, projection, resolver validation, reasons, and schema-aware attribution interpretation
-- Infrastructure: persist the new fingerprint schema/version; preserve historical raw JSON
-- Adapter: emit `sector_context` in Alpha/Trigger output only; do not rename market-context workflows
-- Documentation/Config: rename the scoped Alpha/Trigger keys and document legacy schema interpretation
+- Domain: remove the market_context Alpha/Trigger identity; guard contribution/registration/promotion, the current-schema route-metadata validator, and current-schema forward-label construction; no market-wide context changes
+- Application: adopt sector_context defaults, projection, resolver rejection, reasons; reject the removed identity at the label-generation and attribution boundaries (current artifacts only; no historical interpretation or mapping)
+- Infrastructure: bump observation schema to 4; validate observation and current-label write/read; leave quarantined raw JSON untouched
+- Adapter: emit `sector_context` in Alpha/Trigger output only; surface the current-contract violation error; do not rename market-context workflows
+- Documentation/Config: adopt the scoped Alpha/Trigger keys and document the clean break (current artifacts reject the removed identity; historical artifacts remain quarantine-only)
 ```
 
 ### Acceptance Criteria
 
-- [ ] All live Alpha/Trigger sector evidence uses the canonical `sector_context` identity
-- [ ] No Alpha/Trigger default, YAML route, weight, registration, contribution, or reason uses `market_context`
-- [ ] Legacy keys are rejected in group weights, every horizon route, and evidence registrations
-- [ ] Resolver cannot produce simultaneous old and new group identities
-- [ ] Genuine market-wide `MarketContext` code/config/output remains unchanged
-- [ ] New fingerprints use a new schema/version and persist only `sector_context`
-- [ ] Historical raw fingerprints remain unchanged
-- [ ] Old-schema attribution maps the legacy identity explicitly, or old rows are quarantined until rebuilt
-- [ ] New-schema fingerprints containing `market_context` fail validation
-- [ ] Promotion records using the legacy identity fail; no promotion is added
-- [ ] Regression test proves scores, weights, route fractions, effective authority, and decisions are numerically unchanged
-- [ ] Negative test proves real market regime inputs are not routed into the renamed sector slot
-- [ ] Focused config, resolver, projection, aggregation, persistence, attribution, and output tests pass
-- [ ] Full test suite passes
-- [ ] `git diff --check` clean
+- [x] All live Alpha/Trigger sector evidence uses the canonical `sector_context` identity
+- [x] No Alpha/Trigger default, YAML route, weight, registration, contribution, or reason uses `market_context`
+- [x] Removed keys are rejected in group weights, every horizon route, and evidence registrations (typed config and YAML resolver)
+- [x] Resolver cannot produce simultaneous old and new group identities
+- [x] Genuine market-wide `MarketContext` code/config/output remains unchanged
+- [x] New fingerprints use schema 4 and persist only `sector_context`
+- [x] Quarantined raw fingerprints remain unchanged and unmigrated
+- [x] No active compatibility mapping exists; old rows are audit-only quarantine
+- [x] Schema-4 fingerprints containing `market_context` fail on build, write, and read
+- [x] Current forward labels containing `market_context` fail on construction, repository write, and read
+- [x] Canonical attribution rejects a current label containing `market_context`
+- [x] Promotion records using the removed identity fail; no promotion is added
+- [x] Regression test proves scores, weights, route fractions, effective authority, and decisions are numerically unchanged
+- [x] Negative test proves real market regime inputs are not routed into the renamed sector slot
+- [x] Focused config, resolver, projection, aggregation, persistence, attribution, and output tests pass
+- [x] Full test suite passes (5451 passed)
+- [x] `git diff --check` clean
 
 ---
 

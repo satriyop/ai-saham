@@ -21,6 +21,7 @@ from src.domain.value_objects.signal_artifact_identity import (
 )
 from src.domain.value_objects.signal_artifact_schema import (
     SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
+    validate_route_metadata_identity,
 )
 from src.domain.value_objects.signal_observation_fingerprint import (
     SignalObservationFingerprint,
@@ -99,6 +100,15 @@ class SignalForwardLabel:
         if self.schema_version < 1 or self.schema_version > SIGNAL_FORWARD_LABEL_SCHEMA_VERSION:
             raise ValueError(
                 f"unsupported signal forward label schema_version={self.schema_version}"
+            )
+        # SECTOR-CONTEXT-IDENTITY: a current (canonical-schema) label must never
+        # carry the removed market_context Alpha/Trigger identity in its
+        # fingerprint route metadata. Older raw schema labels are outside the
+        # current contract and are left untouched.
+        if self.schema_version == SIGNAL_FORWARD_LABEL_SCHEMA_VERSION:
+            validate_route_metadata_identity(
+                self.fingerprint.alpha_trigger_route_metadata,
+                context="signal forward label",
             )
         if self.outcome_label == SignalForwardOutcome.UNAVAILABLE and not self.unavailable_reason:
             raise ValueError("UNAVAILABLE labels require unavailable_reason")

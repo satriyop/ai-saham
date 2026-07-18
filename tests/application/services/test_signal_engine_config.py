@@ -4,12 +4,19 @@ import pytest
 import yaml
 
 from src.application.services.bootstrap import _resolve_signal_config
-from src.application.services.signal_engine_config import DecisionPolicyConfig
+from src.application.services.signal_engine_config import (
+    AlphaTriggerConfig,
+    DecisionPolicyConfig,
+)
+from src.domain.value_objects.alpha_trigger_score import (
+    EvidenceAuthorityStatus,
+    EvidenceRegistration,
+)
 
 
 def _valid_promotion(
     *,
-    evidence_name: str = "market_context",
+    evidence_name: str = "sector_context",
     promoted_to: str = "LOW_WEIGHT",
 ) -> dict:
     return {
@@ -104,7 +111,7 @@ def test_resolve_signal_config_reads_policy_blocks():
                 "group_weights": {
                     "setup_quality": 0.40,
                     "institutional_flow": 0.25,
-                    "market_context": 0.25,
+                    "sector_context": 0.25,
                     "company_quality_context": 0.10,
                 },
                 "horizon_alpha_weights": {
@@ -116,7 +123,7 @@ def test_resolve_signal_config_reads_policy_blocks():
                     },
                 },
                 "evidence_registrations": {
-                    "market_context": {
+                    "sector_context": {
                         "status": "LOW_WEIGHT",
                         "low_weight_cap": 0.05,
                         "promotion": _valid_promotion(),
@@ -151,7 +158,7 @@ def test_resolve_signal_config_reads_policy_blocks():
     assert resolved.alpha_trigger.low_weight_cap == 0.15
     assert resolved.alpha_trigger.group_weights["setup_quality"] == 0.40
     assert resolved.alpha_trigger.group_weights["institutional_flow"] == 0.25
-    assert resolved.alpha_trigger.group_weights["market_context"] == 0.25
+    assert resolved.alpha_trigger.group_weights["sector_context"] == 0.25
     assert resolved.alpha_trigger.group_weights["company_quality_context"] == 0.10
     assert resolved.alpha_trigger.horizon_alpha_weights["TACTICAL_3D"] == 0.25
     assert (
@@ -159,7 +166,7 @@ def test_resolve_signal_config_reads_policy_blocks():
         == 0.65
     )
     assert (
-        resolved.alpha_trigger.evidence_registrations["market_context"].status.value
+        resolved.alpha_trigger.evidence_registrations["sector_context"].status.value
         == "LOW_WEIGHT"
     )
 
@@ -178,7 +185,7 @@ def test_resolve_signal_config_current_file_passes():
         == "PRODUCTION"
     )
     assert (
-        resolved.alpha_trigger.evidence_registrations["market_context"].status.value
+        resolved.alpha_trigger.evidence_registrations["sector_context"].status.value
         == "DIAGNOSTIC"
     )
     assert (
@@ -262,18 +269,221 @@ def test_resolve_signal_config_rejects_removed_scoring_key(removed_scoring_key):
         _resolve_signal_config(cfg)
 
 
-def test_resolve_signal_config_rejects_market_context_production_without_promotion():
+# ── SECTOR-CONTEXT-IDENTITY: legacy 'market_context' Alpha/Trigger key rejection ──
+
+
+def test_resolve_signal_config_rejects_legacy_market_context_group_weight():
     cfg = {
         "signal_engine": {
             "alpha_trigger": {
-                "evidence_registrations": {
-                    "market_context": {"status": "PRODUCTION"},
+                "group_weights": {"market_context": 0.25},
+            },
+        },
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="Alpha/Trigger group 'market_context' was removed; use 'sector_context'",
+    ):
+        _resolve_signal_config(cfg)
+
+
+@pytest.mark.parametrize("horizon", ["TACTICAL_3D", "SWING_10D", "ACCUM_20D"])
+def test_resolve_signal_config_rejects_legacy_market_context_route_fraction(horizon):
+    cfg = {
+        "signal_engine": {
+            "alpha_trigger": {
+                "route_fractions": {
+                    horizon: {"market_context": {"alpha_fraction": 0.5}},
                 },
             },
         },
     }
 
-    with pytest.raises(ValueError, match="market_context\\.promotion is required"):
+    with pytest.raises(
+        ValueError,
+        match="Alpha/Trigger group 'market_context' was removed; use 'sector_context'",
+    ):
+        _resolve_signal_config(cfg)
+
+
+def test_resolve_signal_config_rejects_legacy_market_context_evidence_registration():
+    cfg = {
+        "signal_engine": {
+            "alpha_trigger": {
+                "evidence_registrations": {
+                    "market_context": {"status": "DIAGNOSTIC"},
+                },
+            },
+        },
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="Alpha/Trigger group 'market_context' was removed; use 'sector_context'",
+    ):
+        _resolve_signal_config(cfg)
+
+
+def test_resolve_signal_config_rejects_both_legacy_and_canonical_group_identity():
+    """Both names present must fail, not silently merge into two groups."""
+    cfg = {
+        "signal_engine": {
+            "alpha_trigger": {
+                "group_weights": {
+                    "market_context": 0.25,
+                    "sector_context": 0.25,
+                },
+            },
+        },
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="Alpha/Trigger group 'market_context' was removed; use 'sector_context'",
+    ):
+        _resolve_signal_config(cfg)
+
+
+# ── SECTOR-CONTEXT-IDENTITY: sector_context route configuration parity ──
+
+
+def _assert_sector_context_route_config(alpha_trigger):
+    assert alpha_trigger.group_weights["sector_context"] == 0.25
+    assert alpha_trigger.route_fractions["TACTICAL_3D"]["sector_context"] == 0.25
+    assert alpha_trigger.route_fractions["SWING_10D"]["sector_context"] == 0.60
+    assert alpha_trigger.route_fractions["ACCUM_20D"]["sector_context"] == 0.75
+    registration = alpha_trigger.evidence_registrations["sector_context"]
+    assert registration.status is EvidenceAuthorityStatus.DIAGNOSTIC
+    assert registration.effective_weight(0.25) == 0.0
+    # No market_context identity survives anywhere in the resolved config.
+    assert "market_context" not in alpha_trigger.group_weights
+    assert "market_context" not in alpha_trigger.evidence_registrations
+    for groups in alpha_trigger.route_fractions.values():
+        assert "market_context" not in groups
+
+
+def test_sector_context_route_config_from_python_defaults():
+    _assert_sector_context_route_config(AlphaTriggerConfig())
+
+
+def test_sector_context_route_config_from_resolved_yaml():
+    raw = yaml.safe_load(Path("config/signal_engine.yaml").read_text())
+    resolved = _resolve_signal_config(raw)
+    _assert_sector_context_route_config(resolved.alpha_trigger)
+
+
+# ── SECTOR-CONTEXT-IDENTITY: typed AlphaTriggerConfig direct-construction ──
+# These bypass the YAML resolver entirely to prove the manual-DI construction
+# path (AlphaTriggerConfig.__post_init__) fails closed on its own.
+
+_REMOVED_MATCH = "Alpha/Trigger group 'market_context' was removed; use 'sector_context'"
+
+
+def test_alpha_trigger_config_direct_rejects_removed_group_weight():
+    with pytest.raises(ValueError, match=_REMOVED_MATCH):
+        AlphaTriggerConfig(
+            group_weights={"market_context": 0.25, "setup_quality": 0.75},
+        )
+
+
+@pytest.mark.parametrize("horizon", ["TACTICAL_3D", "SWING_10D", "ACCUM_20D"])
+def test_alpha_trigger_config_direct_rejects_removed_route_fraction(horizon):
+    base = AlphaTriggerConfig()
+    route_fractions = {h: dict(g) for h, g in base.route_fractions.items()}
+    route_fractions[horizon]["market_context"] = 0.5
+    with pytest.raises(ValueError, match=_REMOVED_MATCH):
+        AlphaTriggerConfig(route_fractions=route_fractions)
+
+
+def test_alpha_trigger_config_direct_rejects_removed_registration_key():
+    with pytest.raises(ValueError, match=_REMOVED_MATCH):
+        AlphaTriggerConfig(
+            evidence_registrations={
+                # Domain guards forbid evidence_name='market_context', so the
+                # removed identity can only reach the config as a stale KEY.
+                "market_context": EvidenceRegistration(
+                    evidence_name="sector_context",
+                    status=EvidenceAuthorityStatus.DIAGNOSTIC,
+                ),
+            },
+        )
+
+
+def test_alpha_trigger_config_direct_rejects_registration_key_name_mismatch():
+    with pytest.raises(ValueError, match="must equal registration.evidence_name"):
+        AlphaTriggerConfig(
+            evidence_registrations={
+                "sector_context": EvidenceRegistration(
+                    evidence_name="setup_quality",
+                    status=EvidenceAuthorityStatus.DIAGNOSTIC,
+                ),
+            },
+        )
+
+
+def test_alpha_trigger_config_direct_rejects_both_removed_and_canonical():
+    with pytest.raises(ValueError, match=_REMOVED_MATCH):
+        AlphaTriggerConfig(
+            group_weights={"market_context": 0.25, "sector_context": 0.25},
+        )
+
+
+def test_alpha_trigger_config_default_construction_succeeds():
+    config = AlphaTriggerConfig()
+    assert config.group_weights["sector_context"] == 0.25
+    assert "market_context" not in config.group_weights
+    assert "sector_context" in config.evidence_registrations
+
+
+def test_alpha_trigger_config_custom_sector_context_construction_succeeds():
+    config = AlphaTriggerConfig(
+        group_weights={
+            "setup_quality": 0.35,
+            "institutional_flow": 0.30,
+            "sector_context": 0.25,
+            "company_quality_context": 0.10,
+        },
+        evidence_registrations={
+            "sector_context": EvidenceRegistration(
+                evidence_name="sector_context",
+                status=EvidenceAuthorityStatus.DIAGNOSTIC,
+            ),
+        },
+    )
+    assert config.group_weights["sector_context"] == 0.25
+
+
+def test_resolve_signal_config_does_not_reject_genuine_market_context_engine_settings():
+    """market_context_engine is a different, genuine config root and must not
+    be caught by the Alpha/Trigger legacy-key rejection."""
+    cfg = {
+        "signal_engine": {
+            "alpha_trigger": {
+                "group_weights": {"sector_context": 0.25},
+            },
+        },
+        "market_context_engine": {
+            "regime_thresholds": {"risk_on_min_score": 0.65},
+        },
+    }
+
+    resolved = _resolve_signal_config(cfg)
+    assert resolved.alpha_trigger.group_weights["sector_context"] == 0.25
+
+
+def test_resolve_signal_config_rejects_sector_context_production_without_promotion():
+    cfg = {
+        "signal_engine": {
+            "alpha_trigger": {
+                "evidence_registrations": {
+                    "sector_context": {"status": "PRODUCTION"},
+                },
+            },
+        },
+    }
+
+    with pytest.raises(ValueError, match="sector_context\\.promotion is required"):
         _resolve_signal_config(cfg)
 
 
@@ -319,7 +529,7 @@ def test_resolve_signal_config_rejects_promotion_evidence_name_mismatch():
         "signal_engine": {
             "alpha_trigger": {
                 "evidence_registrations": {
-                    "market_context": {
+                    "sector_context": {
                         "status": "LOW_WEIGHT",
                         "promotion": _valid_promotion(
                             evidence_name="company_quality_context"
@@ -339,7 +549,7 @@ def test_resolve_signal_config_rejects_promotion_status_mismatch():
         "signal_engine": {
             "alpha_trigger": {
                 "evidence_registrations": {
-                    "market_context": {
+                    "sector_context": {
                         "status": "PRODUCTION",
                         "promotion": _valid_promotion(promoted_to="LOW_WEIGHT"),
                     },
@@ -359,7 +569,7 @@ def test_resolve_signal_config_rejects_invalid_promotion_date():
         "signal_engine": {
             "alpha_trigger": {
                 "evidence_registrations": {
-                    "market_context": {
+                    "sector_context": {
                         "status": "LOW_WEIGHT",
                         "promotion": promotion,
                     },
@@ -401,7 +611,7 @@ def test_resolve_signal_config_rejects_promotion_below_phase_i_gates(
         "signal_engine": {
             "alpha_trigger": {
                 "evidence_registrations": {
-                    "market_context": {
+                    "sector_context": {
                         "status": "LOW_WEIGHT",
                         "promotion": promotion,
                     },
@@ -419,7 +629,7 @@ def test_resolve_signal_config_complete_valid_promotion_record_passes():
         "signal_engine": {
             "alpha_trigger": {
                 "evidence_registrations": {
-                    "market_context": {
+                    "sector_context": {
                         "status": "LOW_WEIGHT",
                         "promotion": _valid_promotion(),
                     },
@@ -431,10 +641,10 @@ def test_resolve_signal_config_complete_valid_promotion_record_passes():
     resolved = _resolve_signal_config(cfg)
 
     promotion = resolved.alpha_trigger.evidence_registrations[
-        "market_context"
+        "sector_context"
     ].promotion
     assert promotion is not None
-    assert promotion.evidence_name == "market_context"
+    assert promotion.evidence_name == "sector_context"
     assert promotion.promoted_to.value == "LOW_WEIGHT"
 
 
@@ -495,13 +705,13 @@ def test_resolve_signal_config_rejects_negative_alpha_trigger_group_weight():
         "signal_engine": {
             "alpha_trigger": {
                 "group_weights": {
-                    "market_context": -0.10,
+                    "sector_context": -0.10,
                 },
             },
         },
     }
 
-    with pytest.raises(ValueError, match="group_weights.market_context"):
+    with pytest.raises(ValueError, match="group_weights.sector_context"):
         _resolve_signal_config(cfg)
 
 

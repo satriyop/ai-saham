@@ -9,7 +9,9 @@ from src.domain.ports.signal_forward_labels_repository import (
     SignalForwardLabelsRepository,
 )
 from src.domain.value_objects.signal_artifact_schema import (
+    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
     SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
+    validate_current_alpha_trigger_identity,
 )
 from src.domain.value_objects.signal_forward_label import (
     SignalForwardLabel,
@@ -90,6 +92,22 @@ class SummarizeSignalForwardLabelsUseCase:
             for label in all_labels
             if label.schema_version == SIGNAL_FORWARD_LABEL_SCHEMA_VERSION
         )
+        # SECTOR-CONTEXT-IDENTITY: a current label whose fingerprint still
+        # carries the removed market_context Alpha/Trigger group is a corrupt
+        # canonical artifact. Fail closed with its identity rather than mapping
+        # it to sector_context, merging buckets, or silently skipping it.
+        for label in labels:
+            try:
+                validate_current_alpha_trigger_identity(
+                    schema_version=CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+                    alpha_trigger_route_metadata=label.fingerprint.alpha_trigger_route_metadata,
+                )
+            except ValueError as exc:
+                raise ValueError(
+                    "Signal forward label violates the current Alpha/Trigger "
+                    f"identity contract: ticker={label.ticker} "
+                    f"signal_date={label.signal_date} horizon={label.horizon.value}: {exc}"
+                ) from exc
         buckets = tuple(_build_buckets(labels))
         return SummarizeSignalForwardLabelsResponse(labels=labels, buckets=buckets)
 

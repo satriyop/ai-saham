@@ -317,3 +317,95 @@ class TestSubSignalFingerprintSections:
             captured_at=datetime(2026, 7, 1, 10, 30, 0),
             request=request,
         )
+
+
+def test_real_producer_payload_is_schema_4_with_sector_context_only():
+    """SECTOR-CONTEXT-IDENTITY (Step 10): the real observation payload builder,
+    driven by a real AssessSignalResponse, must emit schema 4 with non-empty
+    route metadata containing sector_context and never market_context."""
+    from src.domain.value_objects.setup_phase import SetupPhaseState
+    from tests.application.use_case.signal_evidence_fixtures import (
+        _flow_evidence,
+        _phase_state,
+        _req,
+        _sector_context,
+        _setup_evidence,
+        _use_case,
+    )
+
+    response = _use_case().execute(
+        _req(
+            setup_evidence=_setup_evidence("MATCH"),
+            flow_confirmation_evidence=_flow_evidence(capped_strength=0.50),
+            setup_phase=_phase_state(SetupPhaseState.BREAKOUT_CONFIRMATION),
+            sector_context_evidence=_sector_context("BULLISH"),
+        )
+    )
+    assert response.alpha_trigger_score is not None
+
+    candidate = _minimal_candidate(signal_assessment=response)
+    payload = build_candidate_observation_payload(
+        candidate=candidate,
+        screen_result="pass",
+        flow_ev=None,
+        setup_phase=None,
+        snapshot_date=date(2026, 7, 1),
+        captured_at=datetime(2026, 7, 1, 10, 30, 0),
+        request=_minimal_request(),
+        sc_evidence=_sector_context("BULLISH"),
+    )
+
+    assert payload["schema_version"] == CANDIDATE_OBSERVATION_SCHEMA_VERSION
+    route_metadata = payload["sub_signal_fingerprint"]["alpha_trigger_route_metadata"]
+    assert route_metadata  # non-empty
+    groups = {entry["group"] for entry in route_metadata}
+    assert "sector_context" in groups
+    assert "market_context" not in groups
+
+
+def test_real_producer_schema_4_fingerprint_parses_to_sector_context_route_only():
+    """Parsing the schema-4 observation fingerprint (via
+    SignalObservationFingerprint.from_dict) round-trips the route identity as
+    sector_context only — no market_context leaks through serialization. This is
+    a fingerprint-parsing check; the full producer -> observation repo -> label
+    generator -> label repo round trip lives in
+    test_generate_signal_forward_labels_use_case.py."""
+    from src.domain.value_objects.signal_observation_fingerprint import (
+        SignalObservationFingerprint,
+    )
+    from src.domain.value_objects.setup_phase import SetupPhaseState
+    from tests.application.use_case.signal_evidence_fixtures import (
+        _flow_evidence,
+        _phase_state,
+        _req,
+        _sector_context,
+        _setup_evidence,
+        _use_case,
+    )
+
+    response = _use_case().execute(
+        _req(
+            setup_evidence=_setup_evidence("MATCH"),
+            flow_confirmation_evidence=_flow_evidence(capped_strength=0.50),
+            setup_phase=_phase_state(SetupPhaseState.BREAKOUT_CONFIRMATION),
+            sector_context_evidence=_sector_context("BULLISH"),
+        )
+    )
+    candidate = _minimal_candidate(signal_assessment=response)
+    payload = build_candidate_observation_payload(
+        candidate=candidate,
+        screen_result="pass",
+        flow_ev=None,
+        setup_phase=None,
+        snapshot_date=date(2026, 7, 1),
+        captured_at=datetime(2026, 7, 1, 10, 30, 0),
+        request=_minimal_request(),
+        sc_evidence=_sector_context("BULLISH"),
+    )
+
+    # The label consumes the same fingerprint; round-trip it and confirm the
+    # route identity is sector_context only.
+    fingerprint = SignalObservationFingerprint.from_dict(payload["sub_signal_fingerprint"])
+    groups = {entry["group"] for entry in fingerprint.alpha_trigger_route_metadata}
+    assert "sector_context" in groups
+    assert "market_context" not in groups

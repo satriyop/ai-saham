@@ -1,6 +1,8 @@
 import pytest
 
 from src.domain.value_objects.alpha_trigger_score import (
+    REMOVED_MARKET_CONTEXT_EVIDENCE_NAME,
+    SECTOR_CONTEXT_EVIDENCE_NAME,
     AlphaTriggerGroupContribution,
     AlphaTriggerScore,
     EvidenceAuthorityStatus,
@@ -9,8 +11,81 @@ from src.domain.value_objects.alpha_trigger_score import (
 )
 
 
+# ── SECTOR-CONTEXT-IDENTITY: removed market_context evidence-name rejection ──
+# market_context is a removal tombstone, not an alias. No domain object may be
+# constructed with it as an Alpha/Trigger evidence identity.
+
+_REMOVED_MATCH = "'market_context' was removed; use 'sector_context'"
+
+
+def test_evidence_promotion_record_rejects_removed_market_context_name():
+    with pytest.raises(ValueError, match=_REMOVED_MATCH):
+        EvidencePromotionRecord(
+            target="foreign_institutional_accumulation_large_cap_SWING_10D",
+            evidence_name=REMOVED_MARKET_CONTEXT_EVIDENCE_NAME,
+            promoted_to=EvidenceAuthorityStatus.LOW_WEIGHT,
+            promoted_by="manual",
+            promoted_date="2026-07-08",
+            attribution_ref="journals/report.json",
+            requirements=(),
+        )
+
+
+def test_evidence_registration_rejects_removed_market_context_name():
+    with pytest.raises(ValueError, match=_REMOVED_MATCH):
+        EvidenceRegistration(
+            evidence_name=REMOVED_MARKET_CONTEXT_EVIDENCE_NAME,
+            status=EvidenceAuthorityStatus.DIAGNOSTIC,
+        )
+
+
+def test_group_contribution_rejects_removed_market_context_group():
+    with pytest.raises(ValueError, match=_REMOVED_MATCH):
+        AlphaTriggerGroupContribution(
+            group=REMOVED_MARKET_CONTEXT_EVIDENCE_NAME,
+            score=50.0,
+            configured_weight=0.25,
+            effective_weight=0.0,
+            alpha_fraction=0.60,
+            trigger_fraction=0.40,
+            alpha_weighted=0.0,
+            trigger_weighted=0.0,
+            evidence_status=EvidenceAuthorityStatus.DIAGNOSTIC,
+        )
+
+
+def test_equivalent_sector_context_domain_objects_succeed():
+    promotion = EvidencePromotionRecord(
+        target="foreign_institutional_accumulation_large_cap_SWING_10D",
+        evidence_name=SECTOR_CONTEXT_EVIDENCE_NAME,
+        promoted_to=EvidenceAuthorityStatus.LOW_WEIGHT,
+        promoted_by="manual",
+        promoted_date="2026-07-08",
+        attribution_ref="journals/report.json",
+        requirements=(),
+    )
+    registration = EvidenceRegistration(
+        evidence_name=SECTOR_CONTEXT_EVIDENCE_NAME,
+        status=EvidenceAuthorityStatus.DIAGNOSTIC,
+    )
+    contribution = AlphaTriggerGroupContribution(
+        group=SECTOR_CONTEXT_EVIDENCE_NAME,
+        score=50.0,
+        configured_weight=0.25,
+        effective_weight=0.0,
+        alpha_fraction=0.60,
+        trigger_fraction=0.40,
+        alpha_weighted=0.0,
+        trigger_weighted=0.0,
+        evidence_status=EvidenceAuthorityStatus.DIAGNOSTIC,
+    )
+    assert promotion.evidence_name == SECTOR_CONTEXT_EVIDENCE_NAME
+    assert registration.evidence_name == SECTOR_CONTEXT_EVIDENCE_NAME
+    assert contribution.group == SECTOR_CONTEXT_EVIDENCE_NAME
+
+
 def test_evidence_registration_enforces_status_caps():
-    diagnostic = EvidenceRegistration("market_context", EvidenceAuthorityStatus.DIAGNOSTIC)
+    diagnostic = EvidenceRegistration("sector_context", EvidenceAuthorityStatus.DIAGNOSTIC)
     low_weight = EvidenceRegistration(
         "institutional_flow",
         EvidenceAuthorityStatus.LOW_WEIGHT,
@@ -26,7 +101,7 @@ def test_evidence_registration_enforces_status_caps():
 def test_evidence_promotion_record_stores_requirements_immutably():
     record = EvidencePromotionRecord(
         target="foreign_institutional_accumulation_large_cap_SWING_10D",
-        evidence_name="market_context",
+        evidence_name="sector_context",
         promoted_to=EvidenceAuthorityStatus.LOW_WEIGHT,
         promoted_by="manual",
         promoted_date="2026-07-08",
