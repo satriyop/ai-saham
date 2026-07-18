@@ -13,6 +13,7 @@ from src.application.services.alpha_trigger_aggregator import (
     AlphaTriggerAggregator,
     AlphaTriggerGroupInput,
 )
+from src.domain.value_objects.alpha_trigger_score import SECTOR_CONTEXT_EVIDENCE_NAME
 
 if TYPE_CHECKING:
     from src.application.dto.assess_signal import AssessSignalEvidenceRequest
@@ -58,12 +59,12 @@ class SignalAlphaTriggerProjection:
                         present=group_scores.flow_present,
                     ),
                     AlphaTriggerGroupInput(
-                        group="market_context",
-                        score=SignalAlphaTriggerProjection._score_sector_market_context(
+                        group=SECTOR_CONTEXT_EVIDENCE_NAME,
+                        score=SignalAlphaTriggerProjection._score_sector_context(
                             request.sector_context_evidence
                         ),
                         configured_weight=config.alpha_trigger.group_weights.get(
-                            "market_context", 0.0
+                            SECTOR_CONTEXT_EVIDENCE_NAME, 0.0
                         ),
                         present=SignalAlphaTriggerProjection._sector_context_present(
                             request.sector_context_evidence
@@ -88,7 +89,7 @@ class SignalAlphaTriggerProjection:
         )
 
     @staticmethod
-    def _score_sector_market_context(
+    def _score_sector_context(
         ev: SectorContextEvidence | None,
     ) -> float:
         if ev is None:

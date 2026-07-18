@@ -414,11 +414,8 @@ def test_unsupported_schema_version_rejected(tmp_path: Path):
         repo.get_latest("BBCA", day)
 
 
-def test_current_schema_version_3_round_trips(tmp_path: Path):
-    """Task HIGH-2 bumped the canonical schema to v3 (typed
-    signal_authority_coverage/setup_readiness_* fields replace the ambiguous
-    coverage_score/conviction_score/phase_* fields) — v3 payloads must read
-    back without raising."""
+def test_current_schema_version_round_trips(tmp_path: Path):
+    """Current-schema payloads must read back without raising."""
     db_path = tmp_path / "data.db"
     repo = SQLiteCandidateObservationsRepository(db_path)
     day = date(2026, 7, 3)
@@ -436,6 +433,146 @@ def test_current_schema_version_3_round_trips(tmp_path: Path):
     observation = repo.get_latest("BBCA", day)
     assert observation is not None
     assert observation.payload["schema_version"] == CANDIDATE_OBSERVATION_SCHEMA_VERSION
+
+
+def test_schema_4_observation_persists_only_sector_context(tmp_path: Path):
+    """SECTOR-CONTEXT-IDENTITY: a current-schema (v4) observation whose Alpha/
+    Trigger route metadata uses the canonical sector_context identity must
+    save and read back unchanged."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+    repo.save_many(
+        [
+            CandidateObservation(
+                ticker="BBCA",
+                snapshot_date=day,
+                captured_at=datetime(2026, 7, 3, 9, 0, 0),
+                payload={
+                    "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+                    "ticker": "BBCA",
+                    "sub_signal_fingerprint": {
+                        "alpha_trigger_route_metadata": [
+                            {"group": "sector_context", "score": 75.0},
+                        ],
+                    },
+                },
+            )
+        ]
+    )
+
+    observation = repo.get_latest("BBCA", day)
+    assert observation is not None
+    route_metadata = observation.payload["sub_signal_fingerprint"]["alpha_trigger_route_metadata"]
+    assert route_metadata == [{"group": "sector_context", "score": 75.0}]
+
+
+def test_schema_4_observation_containing_removed_market_context_fails_on_save(tmp_path: Path):
+    """A schema-4 write must never persist the removed market_context Alpha/
+    Trigger identity — the fail-closed boundary is enforced before any row
+    is written."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+
+    with pytest.raises(
+        ValueError,
+        match="schema_version=4 cannot contain removed Alpha/Trigger group 'market_context'",
+    ):
+        repo.save_many(
+            [
+                CandidateObservation(
+                    ticker="BBCA",
+                    snapshot_date=day,
+                    captured_at=datetime(2026, 7, 3, 9, 0, 0),
+                    payload={
+                        "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+                        "ticker": "BBCA",
+                        "sub_signal_fingerprint": {
+                            "alpha_trigger_route_metadata": [
+                                {"group": "market_context", "score": 75.0},
+                            ],
+                        },
+                    },
+                )
+            ]
+        )
+
+
+def test_schema_4_raw_inserted_market_context_fails_on_read(tmp_path: Path):
+    """A schema-4 row smuggled directly into the table (bypassing save_many's
+    write guard) must still fail closed on read — the readback boundary does
+    not trust stored payload contents."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+
+    with repo._connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO candidate_observations (
+                ticker, snapshot_date, captured_at, schema_version, payload_json,
+                workflow, window_sessions, data_as_of_date, config_hash
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "BBCA",
+                day.isoformat(),
+                datetime(2026, 7, 3, 9, 0, 0).isoformat(),
+                CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+                json.dumps(
+                    {
+                        "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+                        "ticker": "BBCA",
+                        "sub_signal_fingerprint": {
+                            "alpha_trigger_route_metadata": [
+                                {"group": "market_context", "score": 75.0},
+                            ],
+                        },
+                    }
+                ),
+                "screen_accum",
+                7,
+                day.isoformat(),
+                "abc123",
+            ),
+        )
+        conn.commit()
+
+    with pytest.raises(
+        ValueError,
+        match="schema_version=4 cannot contain removed Alpha/Trigger group 'market_context'",
+    ):
+        repo.get_latest("BBCA", day)
+
+
+def test_schema_4_malformed_route_metadata_fails(tmp_path: Path):
+    """A schema-4 payload whose route metadata is malformed (entry without a
+    non-empty string group) must fail closed rather than be silently
+    discarded."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+
+    with pytest.raises(ValueError, match="non-empty string 'group'"):
+        repo.save_many(
+            [
+                CandidateObservation(
+                    ticker="BBCA",
+                    snapshot_date=day,
+                    captured_at=datetime(2026, 7, 3, 9, 0, 0),
+                    payload={
+                        "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+                        "ticker": "BBCA",
+                        "sub_signal_fingerprint": {
+                            "alpha_trigger_route_metadata": [
+                                {"score": 75.0},
+                            ],
+                        },
+                    },
+                )
+            ]
+        )
 
 
 def test_legacy_schema_version_1_is_readable_but_not_canonical(tmp_path: Path):

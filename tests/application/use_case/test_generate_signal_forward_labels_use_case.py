@@ -353,11 +353,11 @@ def test_marks_missing_entry_price_unavailable_without_fetching_candles():
 
 @pytest.mark.parametrize(
     "schema_value",
-    [1, 2, 4, None, "3", True],
+    [1, 2, 3, 5, None, "4", True],
 )
 def test_incompatible_observation_schema_produces_no_label_artifacts(schema_value):
-    """HIGH-2 Finding 2: only an exact schema-3 observation may produce a
-    canonical forward label. Any other schema — old, future, missing, or a
+    """HIGH-2 Finding 2: only an exact current-schema observation may produce
+    a canonical forward label. Any other schema — old, future, missing, or a
     malformed non-int value like a numeric string or a bool — must be
     skipped entirely: no label, no fingerprint parse, no candle read, no
     repository write."""
@@ -701,7 +701,7 @@ def test_generate_eligible_dates_excludes_incompatible_observations_from_batch()
     )
     incompatible = _observation(
         signal_date,
-        {"schema_version": 4, "candidate": {"current_price": "200"}},
+        {"schema_version": 3, "candidate": {"current_price": "200"}},
         ticker="BBRI",
     )
     candles = [
@@ -842,6 +842,111 @@ def test_label_generation_does_not_resolve_a_new_session():
     assert label.resolution_notes == ()
 
 
+def test_real_producer_to_label_repository_round_trip_emits_only_sector_context(tmp_path):
+    """SECTOR-CONTEXT-IDENTITY (Finding 2): a full real round trip —
+    AssessSignalResponse -> observation payload builder -> SQLite observation
+    repository -> label generator -> SQLite label repository -> readback — must
+    actually generate and persist a label whose fingerprint route metadata
+    carries sector_context only, never market_context."""
+    from src.application.services.accumulation_observation_fingerprint import (
+        build_candidate_observation_payload,
+    )
+    from src.domain.value_objects.setup_phase import SetupPhaseState
+    from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
+        SQLiteCandidateObservationsRepository,
+    )
+    from src.infrastructure.persistence.sqlite_signal_forward_labels_repository import (
+        SQLiteSignalForwardLabelsRepository,
+    )
+    from tests.application.services.test_accumulation_observation_fingerprint_split import (
+        _minimal_candidate,
+        _minimal_request,
+    )
+    from tests.application.use_case.signal_evidence_fixtures import (
+        _flow_evidence,
+        _phase_state,
+        _req,
+        _sector_context,
+        _setup_evidence,
+        _use_case,
+    )
+
+    day = date(2026, 7, 1)
+
+    # 1. Real signal assessment producing a sector_context Alpha/Trigger group.
+    response = _use_case().execute(
+        _req(
+            setup_evidence=_setup_evidence("MATCH"),
+            flow_confirmation_evidence=_flow_evidence(capped_strength=0.50),
+            setup_phase=_phase_state(SetupPhaseState.BREAKOUT_CONFIRMATION),
+            sector_context_evidence=_sector_context("BULLISH"),
+        )
+    )
+    assert response.alpha_trigger_score is not None
+
+    # 2. Real observation payload builder (schema 4).
+    candidate = _minimal_candidate(
+        ticker="BBCA",
+        current_price=Decimal("1000"),
+        signal_assessment=response,
+    )
+    payload = build_candidate_observation_payload(
+        candidate=candidate,
+        screen_result="pass",
+        flow_ev=None,
+        setup_phase=None,
+        snapshot_date=day,
+        captured_at=datetime(2026, 7, 1, 10, 30, 0),
+        request=_minimal_request(),
+        sc_evidence=_sector_context("BULLISH"),
+    )
+    assert payload["schema_version"] == CANDIDATE_OBSERVATION_SCHEMA_VERSION
+
+    # 3. Persist through the real SQLite observation repository.
+    db_path = tmp_path / "round_trip.db"
+    observations_repo = SQLiteCandidateObservationsRepository(db_path)
+    observations_repo.save_many(
+        [
+            CandidateObservation(
+                ticker="BBCA",
+                snapshot_date=day,
+                captured_at=datetime(2026, 7, 1, 10, 30, 0),
+                payload=payload,
+                window_sessions=7,
+                data_as_of_date=day,
+                config_hash="round-trip-hash",
+            )
+        ]
+    )
+
+    # 4. Generate a real label from rising forward candles.
+    candles = [
+        _candle(day, "1000", ticker="BBCA"),
+        *[_candle(day + timedelta(days=i), "1050", ticker="BBCA") for i in range(1, 15)],
+    ]
+    labels_repo = SQLiteSignalForwardLabelsRepository(db_path)
+    generator = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=observations_repo,
+        market_data_repository=FakeMarketDataRepository(candles),
+        signal_forward_labels_repository=labels_repo,
+    )
+    response_labels = generator.execute(
+        GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=day)
+    )
+    assert response_labels.skip_reason is None
+    assert len(response_labels.labels) == 1
+
+    # 5. Read the persisted label back and assert the route identity.
+    persisted = tuple(labels_repo.list(signal_date=day))
+    assert len(persisted) == 1
+    groups = {
+        entry["group"]
+        for entry in persisted[0].fingerprint.alpha_trigger_route_metadata
+    }
+    assert "sector_context" in groups
+    assert "market_context" not in groups
+
+
 def _observation(
     signal_date: date,
     payload: dict,
@@ -942,7 +1047,7 @@ def test_single_path_canonical_observation_generates_labels():
         ticker="BBCA",
         snapshot_date=date(2026, 7, 1),
         captured_at=datetime(2026, 7, 1, 16, 0),
-        payload={"schema_version": 3, "candidate": {"current_price": 100}},
+        payload={"schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION, "candidate": {"current_price": 100}},
         config_hash="valid_hash",
     )
     repo = FakeCandidateObservationsRepository(observation=obs)
@@ -967,18 +1072,18 @@ def test_single_path_canonical_observation_generates_labels():
     assert len(market.calls) > 0
 
 
-def test_single_path_schema_3_empty_hash_rejected():
-    # 2. Schema 3 plus config_hash="":
+def test_single_path_current_schema_empty_hash_rejected():
+    # 2. Current schema plus config_hash="":
     # - returns no labels;
     # - returns NON_CANONICAL_OBSERVATION_IDENTITY;
-    # - reports source schema 3;
+    # - reports the current source schema version;
     # - performs zero candle reads;
     # - performs zero label writes.
     obs = CandidateObservation(
         ticker="BBCA",
         snapshot_date=date(2026, 7, 1),
         captured_at=datetime(2026, 7, 1, 16, 0),
-        payload={"schema_version": 3, "candidate": {"current_price": 100}},
+        payload={"schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION, "candidate": {"current_price": 100}},
         config_hash="",
     )
     repo = FakeCandidateObservationsRepository(observation=obs)
@@ -995,7 +1100,7 @@ def test_single_path_schema_3_empty_hash_rejected():
     )
     assert response.skip_reason == SignalLabelGenerationSkipReason.NON_CANONICAL_OBSERVATION_IDENTITY
     assert len(response.labels) == 0
-    assert response.source_schema_version == 3
+    assert response.source_schema_version == CANDIDATE_OBSERVATION_SCHEMA_VERSION
     assert len(market.calls) == 0
     assert labels_repo.save_many_call_count == 0
 
@@ -1010,7 +1115,7 @@ def test_single_path_parameterized_malformed_identity(bad_hash):
         ticker="BBCA",
         snapshot_date=date(2026, 7, 1),
         captured_at=datetime(2026, 7, 1, 16, 0),
-        payload={"schema_version": 3, "candidate": {"current_price": 100}},
+        payload={"schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION, "candidate": {"current_price": 100}},
         config_hash=bad_hash,
     )
     repo = FakeCandidateObservationsRepository(observation=obs)
@@ -1027,7 +1132,47 @@ def test_single_path_parameterized_malformed_identity(bad_hash):
     )
     assert response.skip_reason == SignalLabelGenerationSkipReason.NON_CANONICAL_OBSERVATION_IDENTITY
     assert len(response.labels) == 0
-    assert response.source_schema_version == 3
+    assert response.source_schema_version == CANDIDATE_OBSERVATION_SCHEMA_VERSION
+    assert len(market.calls) == 0
+    assert labels_repo.save_many_call_count == 0
+
+
+def test_single_path_current_schema_with_removed_market_context_is_invalid_contract():
+    # SECTOR-CONTEXT-IDENTITY: a stored schema-4 observation whose route
+    # metadata still carries the removed market_context group is a contract
+    # violation. The use case must not trust the repository to have validated
+    # payload contents: it skips with INVALID_OBSERVATION_CONTRACT, parses no
+    # fingerprint, reads no candles, and writes no labels.
+    obs = CandidateObservation(
+        ticker="BBCA",
+        snapshot_date=date(2026, 7, 1),
+        captured_at=datetime(2026, 7, 1, 16, 0),
+        payload={
+            "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+            "candidate": {"current_price": 100},
+            "sub_signal_fingerprint": {
+                "alpha_trigger_route_metadata": [
+                    {"group": "market_context", "score": 75.0},
+                ],
+            },
+        },
+        config_hash="valid_hash",
+    )
+    repo = FakeCandidateObservationsRepository(observation=obs)
+    market = FakeMarketDataRepository([])
+    labels_repo = SpySignalForwardLabelsRepository()
+    use_case = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=repo,
+        market_data_repository=market,
+        signal_forward_labels_repository=labels_repo,
+    )
+
+    response = use_case.execute(
+        GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=date(2026, 7, 1))
+    )
+    assert response.skip_reason == SignalLabelGenerationSkipReason.INVALID_OBSERVATION_CONTRACT
+    assert len(response.labels) == 0
+    assert response.source_schema_version == CANDIDATE_OBSERVATION_SCHEMA_VERSION
     assert len(market.calls) == 0
     assert labels_repo.save_many_call_count == 0
 
@@ -1088,7 +1233,7 @@ def test_single_path_get_at_follows_same_guard():
         ticker="BBCA",
         snapshot_date=date(2026, 7, 1),
         captured_at=datetime(2026, 7, 1, 16, 0),
-        payload={"schema_version": 3, "candidate": {"current_price": 100}},
+        payload={"schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION, "candidate": {"current_price": 100}},
         config_hash="",
     )
     repo = FakeCandidateObservationsRepository(observation=obs)
@@ -1124,14 +1269,14 @@ def test_batch_path_defense_in_depth():
         ticker="BBCA",
         snapshot_date=date(2026, 7, 1),
         captured_at=datetime(2026, 7, 1, 16, 0),
-        payload={"schema_version": 3, "candidate": {"current_price": 100}},
+        payload={"schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION, "candidate": {"current_price": 100}},
         config_hash="valid_hash",
     )
     invalid_obs = CandidateObservation(
         ticker="BUMI",
         snapshot_date=date(2026, 7, 1),
         captured_at=datetime(2026, 7, 1, 16, 0),
-        payload={"schema_version": 3, "candidate": {"current_price": 100}},
+        payload={"schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION, "candidate": {"current_price": 100}},
         config_hash="",
     )
     repo = AdversarialCandidateObservationsRepository(
@@ -1179,14 +1324,14 @@ def test_eligible_date_path_defense_in_depth():
         ticker="BBCA",
         snapshot_date=date(2026, 7, 1),
         captured_at=datetime(2026, 7, 1, 16, 0),
-        payload={"schema_version": 3, "candidate": {"current_price": 100}},
+        payload={"schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION, "candidate": {"current_price": 100}},
         config_hash="valid_hash",
     )
     invalid_obs = CandidateObservation(
         ticker="BUMI",
         snapshot_date=date(2026, 7, 1),
         captured_at=datetime(2026, 7, 1, 16, 0),
-        payload={"schema_version": 3, "candidate": {"current_price": 100}},
+        payload={"schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION, "candidate": {"current_price": 100}},
         config_hash="",
     )
     repo = AdversarialCandidateObservationsRepository(
@@ -1232,7 +1377,7 @@ def test_direct_builder_guard():
         ticker="BBCA",
         snapshot_date=date(2026, 7, 1),
         captured_at=datetime(2026, 7, 1, 16, 0),
-        payload={"schema_version": 3, "candidate": {"current_price": 100}},
+        payload={"schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION, "candidate": {"current_price": 100}},
         config_hash="",
     )
     repo = FakeCandidateObservationsRepository(observation=obs)
@@ -1260,14 +1405,14 @@ def test_predicate_tests():
         ticker="BBCA",
         snapshot_date=date(2026, 7, 1),
         captured_at=datetime(2026, 7, 1, 16, 0),
-        payload={"schema_version": 3, "candidate": {"current_price": 100}},
+        payload={"schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION, "candidate": {"current_price": 100}},
         config_hash="valid_hash",
     )
     obs_empty = CandidateObservation(
         ticker="BBCA",
         snapshot_date=date(2026, 7, 1),
         captured_at=datetime(2026, 7, 1, 16, 0),
-        payload={"schema_version": 3, "candidate": {"current_price": 100}},
+        payload={"schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION, "candidate": {"current_price": 100}},
         config_hash="",
     )
     obs_schema2 = CandidateObservation(

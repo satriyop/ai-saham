@@ -12,6 +12,7 @@ from src.domain.ports.candidate_observations_repository import (
 )
 from src.domain.value_objects.signal_artifact_schema import (
     CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+    validate_current_alpha_trigger_identity,
 )
 from src.infrastructure.persistence.sqlite_migration_runner import SqliteMigrationRunner
 from src.infrastructure.persistence.sqlite_signal_artifact_identity_codec import (
@@ -28,6 +29,11 @@ from src.infrastructure.persistence.sqlite_signal_artifact_identity_codec import
 # phase_conviction_score fields. No migration fabricates newer-schema fields
 # from older payloads — older rows simply lack them and remain diagnostic-
 # readable but non-canonical.
+# v3 -> v4 (SECTOR-CONTEXT-IDENTITY): the Alpha/Trigger sector evidence identity
+# market_context was removed; SectorContextEvidence emits sector_context.
+# Existing schema 1-3 rows are outside the current canonical contract — they
+# remain diagnostic-readable and non-canonical, and are not mutated, migrated,
+# or reinterpreted (the current-contract validator only inspects schema-4 rows).
 _CURRENT_SCHEMA_VERSION = CANDIDATE_OBSERVATION_SCHEMA_VERSION
 
 _CREATE_TABLE = """
@@ -189,6 +195,12 @@ class SQLiteCandidateObservationsRepository:
             payload_schema_version = payload.get("schema_version")
             if payload_schema_version is not None and int(payload_schema_version) != schema_version:
                 raise ValueError("DB-column and payload schema versions disagree")
+            validate_current_alpha_trigger_identity(
+                schema_version=schema_version,
+                alpha_trigger_route_metadata=(
+                    payload.get("sub_signal_fingerprint") or {}
+                ).get("alpha_trigger_route_metadata"),
+            )
             artifact_id_str, sem_compat_id_str, provenance_json = (
                 encode_signal_artifact_identity(obs.artifact_identity)
             )
@@ -428,6 +440,13 @@ class SQLiteCandidateObservationsRepository:
         schema_version = int(payload.get("schema_version", db_schema_version))
         if schema_version > _CURRENT_SCHEMA_VERSION:
             raise ValueError(f"Unsupported candidate observation schema_version={schema_version}")
+        if schema_version == _CURRENT_SCHEMA_VERSION:
+            validate_current_alpha_trigger_identity(
+                schema_version=schema_version,
+                alpha_trigger_route_metadata=(
+                    payload.get("sub_signal_fingerprint") or {}
+                ).get("alpha_trigger_route_metadata"),
+            )
         payload.setdefault("schema_version", schema_version)
         data_as_of_date_raw = row["data_as_of_date"]
         return CandidateObservation(

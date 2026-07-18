@@ -20,7 +20,7 @@ _LOWERCASE_SNAKE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 ACCUMULATION_DISCOVERY_CONTRACT = "accumulation-discovery"
 
-EVIDENCE_CONTRACT_VERSION = "1.2"
+EVIDENCE_CONTRACT_VERSION = "1.3"
 SEMANTIC_ENGINE_VERSION = "1.1"
 
 _EXECUTION_LABEL_POLICY_VERSIONS: tuple[tuple[str, str], ...] = (
@@ -32,7 +32,7 @@ _EXECUTION_LABEL_POLICY_VERSIONS: tuple[tuple[str, str], ...] = (
 _AUTHORITY_REGISTRATION_NAMES: tuple[str, ...] = (
     "company_quality_context",
     "institutional_flow",
-    "market_context",
+    "sector_context",
     "setup_quality",
 )
 
@@ -104,7 +104,7 @@ _COMMON_MATERIAL_CONFIG_PATHS_BASE: tuple[str, ...] = (
     "signal_engine.alpha_trigger.enabled",
     "signal_engine.alpha_trigger.group_weights.company_quality_context",
     "signal_engine.alpha_trigger.group_weights.institutional_flow",
-    "signal_engine.alpha_trigger.group_weights.market_context",
+    "signal_engine.alpha_trigger.group_weights.sector_context",
     "signal_engine.alpha_trigger.group_weights.setup_quality",
     "signal_engine.alpha_trigger.low_weight_cap",
     "signal_engine.classification.moderate_min_score",
@@ -476,7 +476,7 @@ _MATERIAL_CONFIG_PATHS_BY_EVALUATION_HORIZON: tuple[tuple[str, tuple[str, ...]],
             "signal_engine.alpha_trigger.horizon_alpha_weights.ACCUM_20D",
             "signal_engine.alpha_trigger.route_fractions.ACCUM_20D.company_quality_context.alpha_fraction",
             "signal_engine.alpha_trigger.route_fractions.ACCUM_20D.institutional_flow.alpha_fraction",
-            "signal_engine.alpha_trigger.route_fractions.ACCUM_20D.market_context.alpha_fraction",
+            "signal_engine.alpha_trigger.route_fractions.ACCUM_20D.sector_context.alpha_fraction",
             "signal_engine.alpha_trigger.route_fractions.ACCUM_20D.setup_quality.alpha_fraction",
         ),
     ),
@@ -486,7 +486,7 @@ _MATERIAL_CONFIG_PATHS_BY_EVALUATION_HORIZON: tuple[tuple[str, tuple[str, ...]],
             "signal_engine.alpha_trigger.horizon_alpha_weights.SWING_10D",
             "signal_engine.alpha_trigger.route_fractions.SWING_10D.company_quality_context.alpha_fraction",
             "signal_engine.alpha_trigger.route_fractions.SWING_10D.institutional_flow.alpha_fraction",
-            "signal_engine.alpha_trigger.route_fractions.SWING_10D.market_context.alpha_fraction",
+            "signal_engine.alpha_trigger.route_fractions.SWING_10D.sector_context.alpha_fraction",
             "signal_engine.alpha_trigger.route_fractions.SWING_10D.setup_quality.alpha_fraction",
         ),
     ),
@@ -496,7 +496,7 @@ _MATERIAL_CONFIG_PATHS_BY_EVALUATION_HORIZON: tuple[tuple[str, tuple[str, ...]],
             "signal_engine.alpha_trigger.horizon_alpha_weights.TACTICAL_3D",
             "signal_engine.alpha_trigger.route_fractions.TACTICAL_3D.company_quality_context.alpha_fraction",
             "signal_engine.alpha_trigger.route_fractions.TACTICAL_3D.institutional_flow.alpha_fraction",
-            "signal_engine.alpha_trigger.route_fractions.TACTICAL_3D.market_context.alpha_fraction",
+            "signal_engine.alpha_trigger.route_fractions.TACTICAL_3D.sector_context.alpha_fraction",
             "signal_engine.alpha_trigger.route_fractions.TACTICAL_3D.setup_quality.alpha_fraction",
         ),
     ),

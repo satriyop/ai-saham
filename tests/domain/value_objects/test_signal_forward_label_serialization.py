@@ -4,6 +4,8 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
+import pytest
+
 from src.domain.value_objects.signal_forward_label import (
     SignalForwardLabel,
     SignalLabelHorizon,
@@ -12,6 +14,36 @@ from src.domain.value_objects.signal_forward_label import (
 from src.domain.value_objects.signal_observation_fingerprint import (
     SignalObservationFingerprint,
 )
+
+
+def test_current_label_construction_rejects_removed_market_context_identity():
+    """SECTOR-CONTEXT-IDENTITY (Finding 1): a current-schema label must reject
+    the removed market_context Alpha/Trigger group in its fingerprint route
+    metadata at construction time, before it can be persisted or feed
+    readiness."""
+    fp = SignalObservationFingerprint(
+        alpha_trigger_route_metadata=({"group": "market_context", "score": 75.0},),
+    )
+    with pytest.raises(ValueError, match="removed Alpha/Trigger group 'market_context'"):
+        make_label(2, fp)
+
+
+def test_current_label_construction_accepts_sector_context_identity():
+    fp = SignalObservationFingerprint(
+        alpha_trigger_route_metadata=({"group": "sector_context", "score": 75.0},),
+    )
+    label = make_label(2, fp)
+    assert label.fingerprint.alpha_trigger_route_metadata[0]["group"] == "sector_context"
+
+
+def test_legacy_schema_1_label_construction_ignores_removed_identity():
+    """Schema-1 raw labels predate the current contract and are not validated
+    for group identity — they remain constructible for audit/history."""
+    fp = SignalObservationFingerprint(
+        alpha_trigger_route_metadata=({"group": "market_context", "score": 75.0},),
+    )
+    label = make_label(1, fp)
+    assert label.schema_version == 1
 
 
 def make_label(

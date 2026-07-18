@@ -18,6 +18,7 @@ from src.domain.ports.signal_forward_labels_repository import (
 )
 from src.domain.value_objects.signal_artifact_schema import (
     CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+    validate_current_alpha_trigger_identity,
 )
 from src.domain.value_objects.signal_forward_label import (
     SignalForwardLabel,
@@ -30,6 +31,7 @@ from src.domain.value_objects.signal_forward_label import (
 class SignalLabelGenerationSkipReason(str, Enum):
     INCOMPATIBLE_OBSERVATION_SCHEMA = "INCOMPATIBLE_OBSERVATION_SCHEMA"
     NON_CANONICAL_OBSERVATION_IDENTITY = "NON_CANONICAL_OBSERVATION_IDENTITY"
+    INVALID_OBSERVATION_CONTRACT = "INVALID_OBSERVATION_CONTRACT"
 
 
 @dataclass(frozen=True)
@@ -88,14 +90,24 @@ class GenerateSignalForwardLabelsUseCase:
         self, request: GenerateSignalForwardLabelsRequest
     ) -> GenerateSignalForwardLabelsResponse:
         ticker = request.ticker.upper()
-        if request.observation_captured_at is not None:
-            observation = self._observations.get_at(
-                ticker,
-                request.signal_date,
-                request.observation_captured_at,
+        # A repository that validates payloads on read (e.g. the canonical
+        # SQLite implementation) raises ValueError for a stored observation that
+        # violates the current contract — before the object ever reaches the
+        # skip-reason check below. Treat that as INVALID_OBSERVATION_CONTRACT so
+        # the outcome is identical whether or not the repository self-validates.
+        try:
+            if request.observation_captured_at is not None:
+                observation = self._observations.get_at(
+                    ticker,
+                    request.signal_date,
+                    request.observation_captured_at,
+                )
+            else:
+                observation = self._observations.get_latest(ticker, request.signal_date)
+        except ValueError:
+            return GenerateSignalForwardLabelsResponse(
+                skip_reason=SignalLabelGenerationSkipReason.INVALID_OBSERVATION_CONTRACT,
             )
-        else:
-            observation = self._observations.get_latest(ticker, request.signal_date)
         if observation is None:
             return GenerateSignalForwardLabelsResponse()
 
@@ -325,6 +337,20 @@ def _canonical_observation_skip_reason(
 
     if not isinstance(observation.config_hash, str) or observation.config_hash == "":
         return SignalLabelGenerationSkipReason.NON_CANONICAL_OBSERVATION_IDENTITY
+
+    # Do not assume the repository implementation validated payload contents.
+    # A stored schema-4 observation carrying the removed market_context group is
+    # a contract violation: skip it here rather than parsing its fingerprint,
+    # reading candles, or writing any label.
+    try:
+        validate_current_alpha_trigger_identity(
+            schema_version=schema_version,
+            alpha_trigger_route_metadata=(
+                observation.payload.get("sub_signal_fingerprint") or {}
+            ).get("alpha_trigger_route_metadata"),
+        )
+    except ValueError:
+        return SignalLabelGenerationSkipReason.INVALID_OBSERVATION_CONTRACT
 
     return None
 

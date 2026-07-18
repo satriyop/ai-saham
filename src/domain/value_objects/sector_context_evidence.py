@@ -1,7 +1,7 @@
 """Sector context evidence — local-universe sector diagnostics (Phase H).
 
 DIAGNOSTIC-ONLY: persisted at observation time for replay and attribution.
-May feed the Alpha/Trigger market_context slot as coverage/diagnostic evidence,
+May feed the Alpha/Trigger sector_context slot as coverage/diagnostic evidence,
 but DIAGNOSTIC authority prevents scoring impact. Never affects DecisionPolicy.
 
 All sector metrics are computed from local candles of same-sector tickers

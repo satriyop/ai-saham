@@ -5,6 +5,14 @@ Pure config normalization for the alpha_trigger section of
 signal_engine.yaml: route fractions, group weights, horizon alpha weights,
 low weight cap, and evidence registration/promotion records. No engine
 construction, no infrastructure wiring.
+
+The `market_context` Alpha/Trigger group identity was removed
+(SECTOR-CONTEXT-IDENTITY); the SectorContextEvidence producer registers under
+`sector_context`, not the genuine market-wide MarketContext. New config
+supplying the removed key under group_weights, any route_fractions horizon, or
+evidence_registrations is rejected explicitly rather than silently merged or
+translated — the resolver never aliases, normalizes, or produces both group
+identities at once.
 """
 
 from __future__ import annotations
@@ -15,9 +23,15 @@ from src.application.services.engine_bootstrap.evidence_authority_validation imp
 )
 from src.application.services.signal_engine_config import AlphaTriggerConfig
 from src.domain.value_objects.alpha_trigger_score import (
+    REMOVED_MARKET_CONTEXT_EVIDENCE_NAME,
     EvidenceAuthorityStatus,
     EvidencePromotionRecord,
     EvidenceRegistration,
+)
+
+_REMOVED_GROUP_MESSAGE = (
+    "Alpha/Trigger group 'market_context' was removed; use 'sector_context' "
+    "because its producer is SectorContextEvidence"
 )
 
 
@@ -31,6 +45,11 @@ def resolve_alpha_trigger_config(raw: dict) -> AlphaTriggerConfig:
         for horizon, groups in defaults.route_fractions.items()
     }
     for horizon, groups in (raw.get("route_fractions") or {}).items():
+        if REMOVED_MARKET_CONTEXT_EVIDENCE_NAME in (groups or {}):
+            raise ValueError(
+                f"signal_engine.alpha_trigger.route_fractions.{horizon}."
+                f"{REMOVED_MARKET_CONTEXT_EVIDENCE_NAME}: {_REMOVED_GROUP_MESSAGE}"
+            )
         resolved_groups = dict(route_fractions.get(horizon, {}))
         for group, group_cfg in (groups or {}).items():
             alpha_fraction = (
@@ -46,8 +65,14 @@ def resolve_alpha_trigger_config(raw: dict) -> AlphaTriggerConfig:
             resolved_groups[group] = value
         route_fractions[horizon] = resolved_groups
 
+    raw_group_weights = raw.get("group_weights") or {}
+    if REMOVED_MARKET_CONTEXT_EVIDENCE_NAME in raw_group_weights:
+        raise ValueError(
+            f"signal_engine.alpha_trigger.group_weights."
+            f"{REMOVED_MARKET_CONTEXT_EVIDENCE_NAME}: {_REMOVED_GROUP_MESSAGE}"
+        )
     group_weights = dict(defaults.group_weights)
-    for group, value in (raw.get("group_weights") or {}).items():
+    for group, value in raw_group_weights.items():
         weight = float(value)
         if weight < 0.0:
             raise ValueError(
@@ -71,8 +96,14 @@ def resolve_alpha_trigger_config(raw: dict) -> AlphaTriggerConfig:
     if not (0.0 <= low_weight_cap <= 1.0):
         raise ValueError("signal_engine.alpha_trigger.low_weight_cap must be 0.0-1.0")
 
+    raw_evidence_registrations = raw.get("evidence_registrations") or {}
+    if REMOVED_MARKET_CONTEXT_EVIDENCE_NAME in raw_evidence_registrations:
+        raise ValueError(
+            f"signal_engine.alpha_trigger.evidence_registrations."
+            f"{REMOVED_MARKET_CONTEXT_EVIDENCE_NAME}: {_REMOVED_GROUP_MESSAGE}"
+        )
     registrations = dict(defaults.evidence_registrations)
-    for name, reg in (raw.get("evidence_registrations") or {}).items():
+    for name, reg in raw_evidence_registrations.items():
         status_raw = str((reg or {}).get("status", "DIAGNOSTIC")).upper()
         try:
             status = EvidenceAuthorityStatus(status_raw)

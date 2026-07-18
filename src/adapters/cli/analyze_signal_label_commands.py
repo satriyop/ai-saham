@@ -138,6 +138,16 @@ def signal_labels(
                 horizons=(label_horizon,),
             )
         )
+        if response.skip_reason is SignalLabelGenerationSkipReason.INVALID_OBSERVATION_CONTRACT:
+            # A self-validating repository may reject a corrupt observation on
+            # read, leaving no observation object to report — the skip reason is
+            # still authoritative, so check it before the "not found" branch.
+            typer.echo(
+                f"[error] Stored observation for {ticker_u} on {day} violates the current "
+                "signal observation contract. No label was generated.",
+                err=True,
+            )
+            raise typer.Exit(1)
         if response.observation is None:
             typer.echo(f"[error] No stored signal observation for {ticker_u} on {day}.", err=True)
             typer.echo("        Run: saham screen accum to capture observations first.", err=True)

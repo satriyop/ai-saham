@@ -29,6 +29,7 @@ from src.application.services.accumulation_observation_signal_fingerprint import
 )
 from src.domain.value_objects.signal_artifact_schema import (
     CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+    validate_current_alpha_trigger_identity,
 )
 
 if TYPE_CHECKING:
@@ -225,6 +226,10 @@ def _sub_signal_fingerprint(
     sc_dict = _sc_fingerprint(sc_evidence)
     cq_dict = _cq_fingerprint(cq_evidence)
     alpha_trigger_dict = _alpha_trigger_fingerprint(signal)
+    validate_current_alpha_trigger_identity(
+        schema_version=CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+        alpha_trigger_route_metadata=alpha_trigger_dict["alpha_trigger_route_metadata"],
+    )
     volatility_dict = _volatility_fingerprint(volatility_context)
     if setup_family_result is not None:
         resolved_setup_family = (

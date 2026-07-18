@@ -173,10 +173,10 @@ def test_alpha_trigger_projection_uses_existing_group_scores():
     assert {c.group for c in at.group_contributions} == {
         "setup_quality",
         "institutional_flow",
-        "market_context",
+        "sector_context",
         "company_quality_context",
     }
-    assert "market_context:missing" in at.unavailable_reasons
+    assert "sector_context:missing" in at.unavailable_reasons
     assert "company_quality_context:missing" in at.unavailable_reasons
     assert resp.assessment.score == 80
     assert resp.assessment.raw_exact_score == pytest.approx(80.0)
@@ -184,7 +184,7 @@ def test_alpha_trigger_projection_uses_existing_group_scores():
     assert final_score == pytest.approx(75.6098)
 
 
-def test_alpha_trigger_sector_context_feeds_market_slot_as_diagnostic_coverage():
+def test_alpha_trigger_sector_context_feeds_sector_context_slot_as_diagnostic_coverage():
     resp = _use_case().execute(
         _req(
             setup_evidence=_setup_evidence("MATCH"),
@@ -201,11 +201,103 @@ def test_alpha_trigger_sector_context_feeds_market_slot_as_diagnostic_coverage()
     assert at.authority_coverage == pytest.approx(0.65)
     assert at.alpha_score == pytest.approx(50.0)
     assert at.trigger_score == pytest.approx(92.6829268293)
-    market = [c for c in at.group_contributions if c.group == "market_context"][0]
+    market = [c for c in at.group_contributions if c.group == "sector_context"][0]
     assert market.present is True
     assert market.score == pytest.approx(75.0)
     assert market.effective_weight == pytest.approx(0.0)
     assert "diagnostic_report_only" in market.reasons
+
+
+@pytest.mark.parametrize(
+    "regime,expected_score",
+    [("BULLISH", 75.0), ("NEUTRAL", 50.0), ("BEARISH", 25.0)],
+)
+def test_sector_context_regime_maps_to_exact_slot_score(regime, expected_score):
+    """SECTOR-CONTEXT-IDENTITY score mapping is fixed and identity-only —
+    the numbers are unchanged from the pre-removal market_context slot."""
+    resp = _use_case().execute(
+        _req(
+            setup_evidence=_setup_evidence("MATCH"),
+            flow_confirmation_evidence=_flow_evidence(capped_strength=0.50),
+            setup_phase=_phase_state(SetupPhaseState.BREAKOUT_CONFIRMATION),
+            sector_context_evidence=_sector_context(regime),
+        )
+    )
+    at = resp.alpha_trigger_score
+    contribution = [c for c in at.group_contributions if c.group == "sector_context"][0]
+    assert contribution.present is True
+    assert contribution.score == pytest.approx(expected_score)
+
+
+def test_sector_context_unknown_regime_is_absent_from_scoring():
+    """UNKNOWN sector regime is not a present contribution: score 0.0 and the
+    slot is reported missing per the current presence contract."""
+    resp = _use_case().execute(
+        _req(
+            setup_evidence=_setup_evidence("MATCH"),
+            flow_confirmation_evidence=_flow_evidence(capped_strength=0.50),
+            setup_phase=_phase_state(SetupPhaseState.BREAKOUT_CONFIRMATION),
+            sector_context_evidence=_sector_context("UNKNOWN"),
+        )
+    )
+    at = resp.alpha_trigger_score
+    contribution = [c for c in at.group_contributions if c.group == "sector_context"][0]
+    assert contribution.present is False
+    assert contribution.score == pytest.approx(0.0)
+    assert "sector_context:missing" in at.unavailable_reasons
+
+
+def test_genuine_market_context_does_not_create_sector_context_contribution():
+    """Genuine market-wide MarketContext (regime conditioning) must never
+    populate the Alpha/Trigger sector_context slot, and no group is ever named
+    'market_context'. Only SectorContextEvidence populates sector_context."""
+    from src.domain.value_objects.market_context import MarketContext, MarketRegime
+    from tests.application.use_case.signal_evidence_fixtures import SNAP
+
+    genuine_market_context = MarketContext(
+        regime=MarketRegime("RISK_ON"),
+        conviction=0.7,
+        factors=(),
+        signal_multiplier=1.0,
+        gate_tightening=False,
+        as_of_date=SNAP,
+    )
+
+    # 1-4: genuine MarketContext supplied, no SectorContextEvidence.
+    resp_without = _use_case().execute(
+        _req(
+            setup_evidence=_setup_evidence("MATCH"),
+            flow_confirmation_evidence=_flow_evidence(capped_strength=0.50),
+            setup_phase=_phase_state(SetupPhaseState.BREAKOUT_CONFIRMATION),
+            market_context=genuine_market_context,
+            sector_context_evidence=None,
+        )
+    )
+    groups_without = {c.group for c in resp_without.alpha_trigger_score.group_contributions}
+    assert "market_context" not in groups_without
+    sector_without = [
+        c for c in resp_without.alpha_trigger_score.group_contributions
+        if c.group == "sector_context"
+    ][0]
+    assert sector_without.present is False
+
+    # 5-6: only once SectorContextEvidence is supplied is sector_context present.
+    resp_with = _use_case().execute(
+        _req(
+            setup_evidence=_setup_evidence("MATCH"),
+            flow_confirmation_evidence=_flow_evidence(capped_strength=0.50),
+            setup_phase=_phase_state(SetupPhaseState.BREAKOUT_CONFIRMATION),
+            market_context=genuine_market_context,
+            sector_context_evidence=_sector_context("BULLISH"),
+        )
+    )
+    groups_with = {c.group for c in resp_with.alpha_trigger_score.group_contributions}
+    assert "market_context" not in groups_with
+    sector_with = [
+        c for c in resp_with.alpha_trigger_score.group_contributions
+        if c.group == "sector_context"
+    ][0]
+    assert sector_with.present is True
 
 
 def test_alpha_trigger_company_quality_feeds_slot_as_diagnostic_coverage():
@@ -271,7 +363,7 @@ def test_alpha_trigger_missing_groups_do_not_neutral_fill_side_denominators():
     assert at.coverage == pytest.approx(0.35)
     assert at.authority_coverage == pytest.approx(0.35)
     assert "institutional_flow:missing" in at.unavailable_reasons
-    assert "market_context:missing" in at.unavailable_reasons
+    assert "sector_context:missing" in at.unavailable_reasons
     assert "company_quality_context:missing" in at.unavailable_reasons
     assert "alpha:no_production_weight" in at.unavailable_reasons
 
@@ -368,7 +460,7 @@ def test_diagnostic_producers_zero_authority():
     )
     assert filled.assessment.score == empty.assessment.score
     market = [
-        c for c in filled.alpha_trigger_score.group_contributions if c.group == "market_context"
+        c for c in filled.alpha_trigger_score.group_contributions if c.group == "sector_context"
     ][0]
     cq = [
         c

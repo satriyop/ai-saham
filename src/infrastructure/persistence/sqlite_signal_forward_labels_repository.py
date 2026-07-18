@@ -10,6 +10,7 @@ from pathlib import Path
 
 from src.domain.value_objects.signal_artifact_schema import (
     SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
+    validate_route_metadata_identity,
 )
 from src.domain.value_objects.signal_forward_label import (
     SignalForwardLabel,
@@ -134,6 +135,13 @@ class SQLiteSignalForwardLabelsRepository:
         now = datetime.now(UTC).isoformat()
         rows = []
         for label in labels:
+            # SECTOR-CONTEXT-IDENTITY defense-in-depth: never persist a current
+            # label carrying the removed market_context Alpha/Trigger identity.
+            if label.schema_version == SIGNAL_FORWARD_LABEL_SCHEMA_VERSION:
+                validate_route_metadata_identity(
+                    label.fingerprint.alpha_trigger_route_metadata,
+                    context="signal forward label write",
+                )
             artifact_id_str, sem_compat_id_str, provenance_json = (
                 encode_signal_artifact_identity(label.artifact_identity)
             )
@@ -316,6 +324,15 @@ def _row_to_label(row: sqlite3.Row) -> SignalForwardLabel:
     schema_version = int(row["schema_version"])
     if schema_version > SIGNAL_FORWARD_LABEL_SCHEMA_VERSION:
         raise ValueError(f"Unsupported signal forward label schema_version={schema_version}")
+    fingerprint_data = json.loads(row["fingerprint_json"])
+    # SECTOR-CONTEXT-IDENTITY defense-in-depth: reject a raw-inserted current
+    # label carrying the removed market_context identity before it is decoded
+    # into a canonical label (readers must not trust stored payload contents).
+    if schema_version == SIGNAL_FORWARD_LABEL_SCHEMA_VERSION:
+        validate_route_metadata_identity(
+            (fingerprint_data or {}).get("alpha_trigger_route_metadata"),
+            context="signal forward label read",
+        )
     return SignalForwardLabel(
         ticker=row["ticker"],
         signal_date=date.fromisoformat(row["signal_date"]),
@@ -336,7 +353,7 @@ def _row_to_label(row: sqlite3.Row) -> SignalForwardLabel:
         target_would_trigger=_bool_from_db(row["target_would_trigger"]),
         outcome_label=SignalForwardOutcome(row["outcome_label"]),
         unavailable_reason=row["unavailable_reason"],
-        fingerprint=SignalObservationFingerprint.from_dict(json.loads(row["fingerprint_json"])),
+        fingerprint=SignalObservationFingerprint.from_dict(fingerprint_data),
         observation_captured_at=(
             datetime.fromisoformat(row["observation_captured_at"])
             if row["observation_captured_at"]
