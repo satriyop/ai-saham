@@ -155,6 +155,13 @@ def signal_labels(
                 err=True,
             )
             raise typer.Exit(1)
+        if response.skip_reason is SignalLabelGenerationSkipReason.NON_CANONICAL_OBSERVATION_IDENTITY:
+            typer.echo(
+                f"[error] Stored observation for {ticker_u} on {day} has no canonical "
+                "config_hash. No label was generated.",
+                err=True,
+            )
+            raise typer.Exit(1)
         if fmt != "json":
             label = response.labels[0]
             typer.echo(
