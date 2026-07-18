@@ -107,7 +107,7 @@ def test_swing_evidence_to_dict_includes_setup_phase():
 def test_signal_response_to_dict_emits_signal_authority_coverage():
     from datetime import date as _date
 
-    from src.application.use_case.assess_signal_use_case import AssessSignalResponse
+    from src.application.dto.assess_signal import AssessSignalResponse
     from src.domain.value_objects.signal_assessment import (
         EntryQuality,
         SignalAssessment,

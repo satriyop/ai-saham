@@ -1,7 +1,7 @@
 """Flag and penalty tests for signal evidence use case."""
 
 
-from src.application.use_case.assess_signal_use_case import (
+from src.application.services.signal_engine_config import (
     AnalystBearishFlagConfig,
     InsiderSellingFlagConfig,
     SignalEngineConfig,

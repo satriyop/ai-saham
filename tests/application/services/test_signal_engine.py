@@ -3,7 +3,7 @@ from datetime import date
 import pytest
 
 from src.application.services.signal_engine import SignalEngine
-from src.application.use_case.assess_signal_use_case import (
+from src.application.services.signal_engine_config import (
     BandarScoringConfig,
     ForeignFlowScoreMappingConfig,
     SignalEngineConfig,

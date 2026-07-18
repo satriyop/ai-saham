@@ -7,7 +7,7 @@ from src.application.services.alpha_trigger_aggregator import (
     AlphaTriggerAggregator,
     AlphaTriggerGroupInput,
 )
-from src.application.use_case.assess_signal_use_case import AlphaTriggerConfig
+from src.application.services.signal_engine_config import AlphaTriggerConfig
 from src.domain.value_objects.alpha_trigger_score import EvidenceAuthorityStatus
 from src.domain.value_objects.factor_evidence import Direction, Freshness
 from src.domain.value_objects.flow_confirmation_evidence import (

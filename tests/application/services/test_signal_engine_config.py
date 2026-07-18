@@ -36,10 +36,6 @@ def test_resolve_signal_config_reads_policy_blocks():
                 "strong_min_score": 80,
                 "moderate_min_score": 55,
             },
-            "missing_data": {
-                "neutral_score": 45.0,
-                "coverage_warning_missing_factors": 4,
-            },
             "enrichment": {
                 "insider_lookback_days": 120,
             },
@@ -54,29 +50,6 @@ def test_resolve_signal_config_reads_policy_blocks():
                     "mandatory_signal_count": 4,
                     "signal_score_unit": 3,
                     "default_max_range": 12,
-                },
-                "seasonality": {
-                    "tailwind_min_avg_return_pct": 1.0,
-                    "tailwind_min_win_rate_pct": 60.0,
-                    "headwind_max_avg_return_pct": -1.0,
-                    "headwind_max_win_rate_pct": 40.0,
-                },
-                "analyst": {
-                    "buy_score_max_points": 55.0,
-                    "upside_score_max_points": 45.0,
-                    "upside_cap_pct": 25.0,
-                },
-                "forward_pe": {
-                    "very_cheap_pe": 8.0,
-                    "cheap_pe": 12.0,
-                    "fair_pe": 18.0,
-                    "expensive_pe": 28.0,
-                    "very_cheap_score": 98.0,
-                    "cheap_score": 78.0,
-                    "fair_score": 48.0,
-                    "expensive_score": 18.0,
-                    "post_expensive_pe_step": 8.0,
-                    "post_expensive_score_decay": 12.0,
                 },
             },
             "decision_policy": {
@@ -157,24 +130,12 @@ def test_resolve_signal_config_reads_policy_blocks():
 
     assert resolved.classification.strong_min_score == 80
     assert resolved.classification.moderate_min_score == 55
-    assert resolved.missing_data.neutral_score == 45.0
-    assert resolved.missing_data.coverage_warning_missing_factors == 4
     assert resolved.enrichment.insider_lookback_days == 120
     assert resolved.input_mapping.foreign_flow_score.max_score == 150.0
     assert resolved.input_mapping.foreign_flow_score.clamp is False
     assert resolved.scoring.bandar.mandatory_signal_count == 4
     assert resolved.scoring.bandar.signal_score_unit == 3
     assert resolved.scoring.bandar.default_max_range == 12
-    assert resolved.scoring.seasonality.tailwind_min_avg_return_pct == 1.0
-    assert resolved.scoring.seasonality.tailwind_min_win_rate_pct == 60.0
-    assert resolved.scoring.seasonality.headwind_max_avg_return_pct == -1.0
-    assert resolved.scoring.seasonality.headwind_max_win_rate_pct == 40.0
-    assert resolved.scoring.analyst.buy_score_max_points == 55.0
-    assert resolved.scoring.analyst.upside_score_max_points == 45.0
-    assert resolved.scoring.analyst.upside_cap_pct == 25.0
-    assert resolved.scoring.forward_pe.very_cheap_pe == 8.0
-    assert resolved.scoring.forward_pe.expensive_score == 18.0
-    assert resolved.scoring.forward_pe.post_expensive_score_decay == 12.0
     assert resolved.decision_policy.regime_policy["RISK_OFF"].enter_allowed is False
     assert resolved.decision_policy.regime_policy["RISK_OFF"].max_decision == "WATCH"
     assert resolved.decision_policy.regime_policy["NEUTRAL"].regime_size_multiplier == 0.5
@@ -256,18 +217,7 @@ def test_decision_policy_config_defaults_match_canonical_yaml_floor():
     assert config.regime_policy["VOLATILE"].min_signal_authority_coverage == 1.00
 
 
-def test_resolve_signal_config_current_file_emits_no_archived_warning(caplog):
-    cfg = yaml.safe_load(Path("config/signal_engine.yaml").read_text()) or {}
-
-    _resolve_signal_config(cfg)
-
-    assert not [
-        r for r in caplog.records
-        if "archived/baseline-only" in r.getMessage()
-    ]
-
-
-def test_resolve_signal_config_warns_when_archived_factor_changes(caplog):
+def test_resolve_signal_config_rejects_removed_factors_key():
     cfg = {
         "signal_engine": {
             "factors": {
@@ -279,35 +229,37 @@ def test_resolve_signal_config_warns_when_archived_factor_changes(caplog):
         },
     }
 
-    _resolve_signal_config(cfg)
-
-    assert any(
-        "signal_engine.factors.bandar_intensity.weight" in r.getMessage()
-        and "archived/baseline-only" in r.getMessage()
-        for r in caplog.records
-    )
+    with pytest.raises(ValueError, match="signal_engine.factors"):
+        _resolve_signal_config(cfg)
 
 
-def test_resolve_signal_config_warns_when_archived_analyst_scoring_changes(caplog):
+def test_resolve_signal_config_rejects_removed_missing_data_key():
     cfg = {
         "signal_engine": {
-            "scoring": {
-                "analyst": {
-                    "buy_score_max_points": 55.0,
-                },
+            "missing_data": {
+                "neutral_score": 45.0,
             },
         },
     }
 
-    resolved = _resolve_signal_config(cfg)
+    with pytest.raises(ValueError, match="signal_engine.missing_data"):
+        _resolve_signal_config(cfg)
 
-    assert resolved.scoring.analyst.buy_score_max_points == 55.0
-    assert any(
-        "signal_engine.scoring.analyst.buy_score_max_points" in r.getMessage()
-        and "diagnostic company-quality scorer" in r.getMessage()
-        and "company_quality_context remains DIAGNOSTIC" in r.getMessage()
-        for r in caplog.records
-    )
+
+@pytest.mark.parametrize("removed_scoring_key", ["seasonality", "analyst", "forward_pe"])
+def test_resolve_signal_config_rejects_removed_scoring_key(removed_scoring_key):
+    cfg = {
+        "signal_engine": {
+            "scoring": {
+                removed_scoring_key: {"some_field": 1.0},
+            },
+        },
+    }
+
+    with pytest.raises(
+        ValueError, match=f"signal_engine.scoring.{removed_scoring_key}"
+    ):
+        _resolve_signal_config(cfg)
 
 
 def test_resolve_signal_config_rejects_market_context_production_without_promotion():

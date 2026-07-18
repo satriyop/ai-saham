@@ -1,9 +1,9 @@
 """Shared signal scoring configuration dataclasses.
 
 These frozen config types parameterize the pure conviction scorers in
-``company_quality_scoring`` and the flat-factor scoring in ``AssessSignalUseCase``.
-They live in a standalone config module (not inside a use case) so both the use
-case and ``CompanyQualityContextEvidenceBuilder`` can depend on them without an
+``company_quality_scoring``, consumed by ``CompanyQualityContextEvidenceBuilder``.
+They live in a standalone config module (not inside a use case) so scoring
+functions and their callers can depend on them without an
 application-service → use-case import.
 
 Layer: Application (configuration only). Depends on stdlib only.

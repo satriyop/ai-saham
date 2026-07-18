@@ -1,10 +1,8 @@
 """Shared company-quality conviction scorers (single source of truth).
 
-These four pure scorers were originally private methods on AssessSignalUseCase.
-They are extracted here so BOTH the flat-factor path (AssessSignalUseCase) AND
-the CompanyQualityContextEvidenceBuilder call the exact same formulas — no
-copy-paste, no drift. AssessSignalUseCase's flat breakdown output is byte-identical
-after delegation (guarded by its existing tests).
+These four pure scorers back CompanyQualityContextEvidenceBuilder, the sole
+diagnostic company-quality evidence producer (RETIRE-LEGACY-SIX-FACTOR-BASELINE
+removed the flat-factor scorer that formerly duplicated these formulas).
 
 Each function is pure: (SignalContext + config sub-object + neutral_score) →
 (score 0-100, present bool). No IO, no providers, no side effects.

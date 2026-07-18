@@ -1,7 +1,9 @@
 """
 AssessSignal request/response DTOs.
 
-Data transfer objects for the AssessSignalUseCase. These are pure data
+Data transfer objects for AssessSignalEvidenceUseCase, the canonical
+staged-evidence signal assessment path. AssessSignalEvidenceRequest is the
+input; AssessSignalResponse is the shared output shape. These are pure data
 containers with no business logic — they only hold input/output for the
 use case boundary.
 
@@ -76,14 +78,6 @@ class AssessSignalEvidenceRequest:
 
 
 @dataclass
-class AssessSignalRequest:
-    """Input for signal assessment use case."""
-
-    ticker: str
-    signal_context: SignalContext | None = None
-
-
-@dataclass
 class AssessSignalResponse:
     """Output from signal assessment use case."""
 
@@ -92,7 +86,7 @@ class AssessSignalResponse:
     coverage_warning: str | None = None
     signal_score_raw: int | None = None
     # HIGH-2 canonical name: production-authority coverage (0.0-1.0). None
-    # when produced by the old flat archived path.
+    # when not yet supplied/evaluated for this response.
     signal_authority_coverage: float | None = None
     active_flags: tuple[str, ...] = field(default_factory=tuple)
     flag_adjustment: int = 0
@@ -102,7 +96,7 @@ class AssessSignalResponse:
     # HIGH-2: typed setup-family readiness, built exactly once by
     # AssessSignalEvidenceUseCase and reused verbatim by DecisionPolicyService,
     # serialization, and persistence. None when no setup family applies (pure
-    # flow-only assessment) or when produced by the old flat archived path.
+    # flow-only assessment) — i.e. no resolved setup family for this ticker.
     setup_readiness: "SetupPhaseReadiness | None" = None
     # DQ-002 Blocker 2 / HIGH-2: source-availability facts for the setup/flow
     # evidence groups. Never read by directional scoring or classification —

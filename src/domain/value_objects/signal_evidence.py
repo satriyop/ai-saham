@@ -1,12 +1,14 @@
 """
 Signal evidence value object.
 
-Aggregate evidence contract for a ticker snapshot. Introduced in Phase 1 of the
-SignalEngine refactor. Bundles per-factor FactorEvidence records with coverage
-and confidence roll-ups.
+Archived historical payload-decoding contract: aggregate evidence for a
+ticker snapshot, introduced in Phase 1 of the SignalEngine refactor. Bundles
+per-factor FactorEvidence records with coverage and confidence roll-ups.
 
-This object carries NO scoring logic — it is a descriptive record produced by
-SignalEvidenceBuilder (application layer).
+This object carries NO scoring logic. It is a descriptive record decoded
+from persisted historical payloads; its producer (the retired flat-factor
+scorer) has been removed (RETIRE-LEGACY-SIX-FACTOR-BASELINE). Kept so older
+persisted `SignalEvidence`/`FactorEvidence` payloads can still be decoded.
 
 Layer: Domain
 Depends on: stdlib + FactorEvidence

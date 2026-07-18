@@ -2023,16 +2023,6 @@ def test_real_accumulation_sorting_is_non_material():
     assert unchanged == baseline
 
 
-def test_real_archived_six_factor_weight_is_non_material():
-    reg = SignalSemanticContractRegistry(ACCUMULATION_DISCOVERY)
-    baseline = _material_hash_for(reg, setup_family=None)
-    mutated = _mutated_documents({
-        "signal_engine.factors.bandar_intensity.weight": 0.99,
-    })
-    unchanged = _material_hash_for(reg, setup_family=None, documents=mutated)
-    assert unchanged == baseline
-
-
 def test_real_archived_regime_conditioning_value_is_non_material():
     reg = SignalSemanticContractRegistry(ACCUMULATION_DISCOVERY)
     baseline = _material_hash_for(reg, setup_family=None)
@@ -2094,6 +2084,27 @@ def test_real_manifest_excludes_removed_paths():
         "swing_setups.setups.pullback-continuation.can_enter_from_phases",
     ):
         assert forbidden not in all_declared
+
+
+def test_real_manifest_excludes_removed_non_operational_scoring_prefixes():
+    """signal_engine.scoring.seasonality/analyst/forward_pe were removed
+    (RETIRE-LEGACY-SIX-FACTOR-BASELINE Slice 2 findings fix, non-operational —
+    no producer ever read them from YAML). No declared active material or
+    non-material path may reference them; the resolver rejects them outright."""
+    all_declared = set(ACCUMULATION_DISCOVERY.common_material_config_paths)
+    for _family, paths in ACCUMULATION_DISCOVERY.material_config_paths_by_setup_family:
+        all_declared |= set(paths)
+    for _horizon, paths in ACCUMULATION_DISCOVERY.material_config_paths_by_evaluation_horizon:
+        all_declared |= set(paths)
+    non_material = set(_NON_MATERIAL_EXACT_PATHS) | set(_NON_MATERIAL_PREFIX_REASONS)
+    removed_prefixes = (
+        "signal_engine.scoring.seasonality",
+        "signal_engine.scoring.analyst",
+        "signal_engine.scoring.forward_pe",
+    )
+    for prefix in removed_prefixes:
+        assert not any(path.startswith(prefix) for path in all_declared), prefix
+        assert not any(path.startswith(prefix) for path in non_material), prefix
 
 
 def test_real_manifest_retains_accumulation_screener_insider_lookback_days():
@@ -2236,44 +2247,6 @@ for _setup_name in (
 
 # Narrowly named prefix exclusions — never an entire active document root.
 _NON_MATERIAL_PREFIX_REASONS: dict[str, str] = {
-    "signal_engine.missing_data.": (
-        "archived Phase 4 diagnostic; canonical AssessSignalEvidenceUseCase "
-        "excludes missing groups from the denominator instead of neutral-filling"
-    ),
-    "signal_engine.scoring.seasonality.": (
-        "accumulation-discovery's composition builds the company-quality "
-        "evidence builder via CompanyQualityContextEvidenceBuilder(config) "
-        "without passing a scoring argument (see "
-        "accumulation_candidate_evidence_builder.py), so it falls back to "
-        "SignalScoringConfig() defaults; changes to this YAML path currently "
-        "do not alter accumulation-discovery output. If production wiring "
-        "later injects YAML-resolved scoring into that builder, this "
-        "exclusion must be removed and the path made material"
-    ),
-    "signal_engine.scoring.analyst.": (
-        "accumulation-discovery's composition builds the company-quality "
-        "evidence builder via CompanyQualityContextEvidenceBuilder(config) "
-        "without passing a scoring argument (see "
-        "accumulation_candidate_evidence_builder.py), so it falls back to "
-        "SignalScoringConfig() defaults; changes to this YAML path currently "
-        "do not alter accumulation-discovery output. If production wiring "
-        "later injects YAML-resolved scoring into that builder, this "
-        "exclusion must be removed and the path made material"
-    ),
-    "signal_engine.scoring.forward_pe.": (
-        "accumulation-discovery's composition builds the company-quality "
-        "evidence builder via CompanyQualityContextEvidenceBuilder(config) "
-        "without passing a scoring argument (see "
-        "accumulation_candidate_evidence_builder.py), so it falls back to "
-        "SignalScoringConfig() defaults; changes to this YAML path currently "
-        "do not alter accumulation-discovery output. If production wiring "
-        "later injects YAML-resolved scoring into that builder, this "
-        "exclusion must be removed and the path made material"
-    ),
-    "signal_engine.factors.": (
-        "archived baseline six-factor compatibility weights; not read by "
-        "canonical AssessSignalEvidenceUseCase"
-    ),
     "signal_engine.regime_conditioning.": (
         "archived Stage 5 diagnostic; legacy_conditioned_score does not affect "
         "canonical assessment.score, decision_policy is the canonical regime gate"

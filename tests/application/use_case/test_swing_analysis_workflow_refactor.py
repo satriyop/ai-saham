@@ -13,8 +13,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from src.application.dto.assess_signal import AssessSignalResponse
 from src.application.ports.rules_loader import RulesLoader
-from src.application.use_case.assess_signal_use_case import AssessSignalResponse
 from src.application.use_case.swing_analysis_workflow_use_case import (
     SwingAnalysisDataUnavailable,
     SwingAnalysisWorkflowUseCase,

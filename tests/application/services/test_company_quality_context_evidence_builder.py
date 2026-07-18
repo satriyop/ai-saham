@@ -6,7 +6,8 @@ Covers:
   - zero coverage → aggregate None / present_axes empty
   - seasonality cap actually lowers its influence in the aggregate
   - coverage_score correctness
-  - shared-scorer extraction is byte-identical to AssessSignalUseCase methods
+  - shared scorers (company_quality_scoring) match known hand-computed vectors
+    against SignalScoringConfig() defaults
   - evidence_status is always DIAGNOSTIC; deferred axes are recorded
 """
 
@@ -22,12 +23,14 @@ from src.application.services.company_quality_context_evidence_builder import (
     CompanyQualityContextRequest,
 )
 from src.application.services import company_quality_scoring as cqs
-from src.application.use_case.assess_signal_use_case import AssessSignalUseCase
+from src.application.services.signal_scoring_config import SignalScoringConfig
 from src.domain.value_objects.institutional_accumulation_evidence import EvidenceStatus
 from src.domain.value_objects.signal_assessment import SignalContext
 from src.infrastructure.config.company_quality_context_config_loader import (
     create_company_quality_context_evidence_builder,
 )
+
+_NEUTRAL_SCORE = 50.0
 
 SNAP = date(2026, 7, 3)
 
@@ -159,59 +162,112 @@ def test_config_from_mapping_defaults():
     assert cfg.scored_axis_count == 4
 
 
-# ── shared-scorer extraction is byte-identical to the use-case methods ─────────
+# ── shared scorers match known hand-computed vectors ───────────────────────────
+# Fixed expectations against SignalScoringConfig() defaults (very_cheap_pe=10,
+# cheap_pe=15, fair_pe=20, expensive_pe=30, very_cheap_score=95, cheap_score=75,
+# fair_score=50, expensive_score=25, post_expensive_pe_step=10,
+# post_expensive_score_decay=15; buy_score_max_points=60,
+# upside_score_max_points=40, upside_cap_pct=30). Independent of any use case —
+# proves company_quality_scoring's formulas directly, not merely that two call
+# sites agree.
 
-@pytest.mark.parametrize("ctx", [
-    _ctx(forward_pe=8.0),
-    _ctx(forward_pe=12.0),
-    _ctx(forward_pe=18.0),
-    _ctx(forward_pe=25.0),
-    _ctx(forward_pe=45.0),
-    _ctx(analyst_buy_pct=0.8, analyst_upside_pct=20.0),
-    _ctx(insider_net_buy_ratio=0.5),
-    _ctx(seasonality_win_rate=70.0, seasonality_avg_return_pct=2.0, seasonality_total_years=6),
-    _ctx(seasonality_win_rate=70.0, seasonality_avg_return_pct=2.0, seasonality_total_years=3),
-])
-def test_shared_scorers_match_use_case_methods(ctx):
-    uc = AssessSignalUseCase()
-    neutral = uc._config.missing_data.neutral_score
-    scoring = uc._config.scoring
+_SCORING = SignalScoringConfig()
 
-    assert cqs.score_forward_pe(
-        ctx,
-        very_cheap_pe=scoring.forward_pe.very_cheap_pe,
-        cheap_pe=scoring.forward_pe.cheap_pe,
-        fair_pe=scoring.forward_pe.fair_pe,
-        expensive_pe=scoring.forward_pe.expensive_pe,
-        very_cheap_score=scoring.forward_pe.very_cheap_score,
-        cheap_score=scoring.forward_pe.cheap_score,
-        fair_score=scoring.forward_pe.fair_score,
-        expensive_score=scoring.forward_pe.expensive_score,
-        post_expensive_pe_step=scoring.forward_pe.post_expensive_pe_step,
-        post_expensive_score_decay=scoring.forward_pe.post_expensive_score_decay,
-        neutral_score=neutral,
-    ) == uc._score_forward_pe(ctx)
 
-    assert cqs.score_analyst(
-        ctx,
-        buy_score_max_points=scoring.analyst.buy_score_max_points,
-        upside_score_max_points=scoring.analyst.upside_score_max_points,
-        upside_cap_pct=scoring.analyst.upside_cap_pct,
-        neutral_score=neutral,
-    ) == uc._score_analyst(ctx)
+@pytest.mark.parametrize(
+    "pe,expected_score,expected_present",
+    [
+        (8.0, 95.0, True),     # <= very_cheap_pe: flat very_cheap_score
+        (12.0, 87.0, True),    # interpolate(12, 10, 15, 95, 75)
+        (18.0, 60.0, True),    # interpolate(18, 15, 20, 75, 50)
+        (25.0, 37.5, True),    # interpolate(25, 20, 30, 50, 25)
+        (45.0, 2.5, True),     # post-expensive decay: 25 - (45-30)/10*15
+        (None, _NEUTRAL_SCORE, False),
+    ],
+)
+def test_score_forward_pe_known_vectors(pe, expected_score, expected_present):
+    score, present = cqs.score_forward_pe(
+        _ctx(forward_pe=pe),
+        very_cheap_pe=_SCORING.forward_pe.very_cheap_pe,
+        cheap_pe=_SCORING.forward_pe.cheap_pe,
+        fair_pe=_SCORING.forward_pe.fair_pe,
+        expensive_pe=_SCORING.forward_pe.expensive_pe,
+        very_cheap_score=_SCORING.forward_pe.very_cheap_score,
+        cheap_score=_SCORING.forward_pe.cheap_score,
+        fair_score=_SCORING.forward_pe.fair_score,
+        expensive_score=_SCORING.forward_pe.expensive_score,
+        post_expensive_pe_step=_SCORING.forward_pe.post_expensive_pe_step,
+        post_expensive_score_decay=_SCORING.forward_pe.post_expensive_score_decay,
+        neutral_score=_NEUTRAL_SCORE,
+    )
+    assert score == pytest.approx(expected_score)
+    assert present is expected_present
 
-    assert cqs.score_insider_activity(
-        ctx, neutral_score=neutral
-    ) == uc._score_insider_activity(ctx)
 
-    assert cqs.score_seasonality(
-        ctx,
-        tailwind_min_avg_return_pct=scoring.seasonality.tailwind_min_avg_return_pct,
-        tailwind_min_win_rate_pct=scoring.seasonality.tailwind_min_win_rate_pct,
-        headwind_max_avg_return_pct=scoring.seasonality.headwind_max_avg_return_pct,
-        headwind_max_win_rate_pct=scoring.seasonality.headwind_max_win_rate_pct,
-        neutral_score=neutral,
-    ) == uc._score_seasonality(ctx)
+def test_score_analyst_known_vector():
+    score, present = cqs.score_analyst(
+        _ctx(analyst_buy_pct=0.8, analyst_upside_pct=20.0),
+        buy_score_max_points=_SCORING.analyst.buy_score_max_points,
+        upside_score_max_points=_SCORING.analyst.upside_score_max_points,
+        upside_cap_pct=_SCORING.analyst.upside_cap_pct,
+        neutral_score=_NEUTRAL_SCORE,
+    )
+    # buy_score = 0.8 * 60 = 48.0; upside_score = min(30, 20)/30 * 40 = 26.6667
+    assert score == pytest.approx(48.0 + 20.0 / 30.0 * 40.0)
+    assert present is True
+
+
+def test_score_analyst_missing_is_neutral():
+    score, present = cqs.score_analyst(
+        _ctx(),
+        buy_score_max_points=_SCORING.analyst.buy_score_max_points,
+        upside_score_max_points=_SCORING.analyst.upside_score_max_points,
+        upside_cap_pct=_SCORING.analyst.upside_cap_pct,
+        neutral_score=_NEUTRAL_SCORE,
+    )
+    assert score == _NEUTRAL_SCORE
+    assert present is False
+
+
+def test_score_insider_activity_known_vector():
+    score, present = cqs.score_insider_activity(
+        _ctx(insider_net_buy_ratio=0.5), neutral_score=_NEUTRAL_SCORE
+    )
+    assert score == pytest.approx(75.0)
+    assert present is True
+
+
+def test_score_insider_activity_missing_is_neutral():
+    score, present = cqs.score_insider_activity(_ctx(), neutral_score=_NEUTRAL_SCORE)
+    assert score == _NEUTRAL_SCORE
+    assert present is False
+
+
+@pytest.mark.parametrize(
+    "win_rate,avg_return,total_years,expected_score,expected_present",
+    [
+        (70.0, 2.0, 6, 70.0, True),    # tailwind: avg>0 and win>50 -> score=win
+        (70.0, 2.0, 3, _NEUTRAL_SCORE, False),  # < 5 years -> neutral, absent
+        (None, None, None, _NEUTRAL_SCORE, False),
+    ],
+)
+def test_score_seasonality_known_vectors(
+    win_rate, avg_return, total_years, expected_score, expected_present
+):
+    score, present = cqs.score_seasonality(
+        _ctx(
+            seasonality_win_rate=win_rate,
+            seasonality_avg_return_pct=avg_return,
+            seasonality_total_years=total_years,
+        ),
+        tailwind_min_avg_return_pct=_SCORING.seasonality.tailwind_min_avg_return_pct,
+        tailwind_min_win_rate_pct=_SCORING.seasonality.tailwind_min_win_rate_pct,
+        headwind_max_avg_return_pct=_SCORING.seasonality.headwind_max_avg_return_pct,
+        headwind_max_win_rate_pct=_SCORING.seasonality.headwind_max_win_rate_pct,
+        neutral_score=_NEUTRAL_SCORE,
+    )
+    assert score == pytest.approx(expected_score)
+    assert present is expected_present
 
 
 # ── round-trip serialization ──────────────────────────────────────────────────

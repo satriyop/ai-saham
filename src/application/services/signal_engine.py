@@ -99,9 +99,10 @@ class SignalEngine:
     def build_context(self, ticker: str, as_of_date: date | None = None) -> SignalContext:
         """Public accessor for the enrichment SignalContext (observability path).
 
-        Used by the archived signal-audit path to inspect the exact inputs that
-        feed flag evaluation without re-implementing provider wiring. Not the
-        canonical evidence source — canonical scoring uses evaluate_with_context().
+        Lets callers inspect the exact enrichment inputs (bandar, insider,
+        seasonality, analyst, forward estimates) without re-implementing
+        provider wiring. Not the canonical evidence source — canonical
+        scoring uses evaluate_with_context().
         """
         return self._build_signal_context(ticker, as_of_date=as_of_date)
 

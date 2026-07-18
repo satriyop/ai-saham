@@ -127,7 +127,7 @@ def test_swing_tuning_patch_validator_rejects_archived_factor_target(tmp_path):
     report = SwingTuningPatchValidator(document_loader=swing_tuning_document_loader(tmp_path)).validate(patch_path)
 
     assert report.valid is False
-    assert "target_path_not_tunable:archived_baseline_only" in report.item_results[0].issues
+    assert "target_path_not_tunable:removed_legacy_baseline" in report.item_results[0].issues
 
 
 def test_swing_tuning_patch_validator_rejects_archived_forward_pe_target(tmp_path):
@@ -156,7 +156,7 @@ def test_swing_tuning_patch_validator_rejects_archived_forward_pe_target(tmp_pat
 
     assert report.valid is False
     assert (
-        "target_path_not_tunable:diagnostic_company_quality_not_patch_eligible"
+        "target_path_not_tunable:removed_non_operational_diagnostic_config"
         in report.item_results[0].issues
     )
 

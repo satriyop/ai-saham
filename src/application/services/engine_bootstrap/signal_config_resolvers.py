@@ -4,8 +4,6 @@ Signal engine config resolving compatibility facade.
 Historically this module owned all signal-engine config resolving. That
 behavior now lives in dedicated section resolver modules:
 
-- `signal_weight_config_resolver` — factor weight resolving
-- `signal_archived_config_warnings` — archived six-factor config warnings
 - `signal_decision_policy_config_resolver` — decision policy resolving
 - `signal_alpha_trigger_config_resolver` — alpha/trigger + evidence authority
 - `signal_scoring_config_resolver` — full SignalEngineConfig composition
@@ -22,14 +20,8 @@ from src.application.services.engine_bootstrap.signal_alpha_trigger_config_resol
 from src.application.services.engine_bootstrap.signal_scoring_config_resolver import (
     resolve_signal_engine_config as _resolve_signal_config,
 )
-from src.application.services.engine_bootstrap.signal_weight_config_resolver import (
-    _resolve_signal_raw_weights,
-    _resolve_signal_weights,
-)
 
 __all__ = [
     "_resolve_alpha_trigger_config",
     "_resolve_signal_config",
-    "_resolve_signal_raw_weights",
-    "_resolve_signal_weights",
 ]

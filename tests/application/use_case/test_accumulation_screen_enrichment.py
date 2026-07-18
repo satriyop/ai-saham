@@ -3,8 +3,6 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
-import pytest
-
 from src.application.dto.accumulation_screen import (
     AccumulationScreenRequest,
 )
@@ -14,16 +12,8 @@ from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.use_case.accumulation_screen_use_case import (
     AccumulationScreenUseCase,
 )
-from src.application.use_case.assess_signal_use_case import (
-    AssessSignalRequest,
-    AssessSignalUseCase,
-)
 from src.domain.value_objects.analyst_consensus import AnalystConsensus
 from src.domain.value_objects.forward_estimates import ForwardEstimates
-from src.domain.value_objects.signal_assessment import (
-    SignalContext,
-    SignalStrength,
-)
 from src.domain.value_objects.ticker_notation import (
     TickerNotation,
     TickerNotationSnapshot,
@@ -239,49 +229,6 @@ def test_live_screen_passes_none_as_of_date_to_fetch_capable_enrichment():
     assert notation.calls == [("BBCA", None)]
 
 
-def _assess(
-    flow_score: float = 50.0,
-    bandar_broad_score: int | None = None,
-    bandar_max_range: int = 6,
-    insider_net_buy_ratio: float | None = None,
-    seasonality_win_rate: float | None = None,
-    seasonality_avg_return_pct: float | None = None,
-    seasonality_total_years: int | None = None,
-    seasonality_back_years: int | None = None,
-    analyst_buy_pct: float | None = None,
-    analyst_upside_pct: float | None = None,
-    forward_pe: float | None = None,
-):
-    """Build a SignalContext from screener-path data and run AssessSignalUseCase."""
-    ctx = SignalContext(
-        ticker="TEST",
-        snapshot_date=date.today(),
-        foreign_flow_quality=min(flow_score, 100.0) / 100.0,
-        bandar_broad_score=bandar_broad_score,
-        bandar_max_range=bandar_max_range,
-        insider_net_buy_ratio=insider_net_buy_ratio,
-        seasonality_win_rate=seasonality_win_rate,
-        seasonality_avg_return_pct=seasonality_avg_return_pct,
-        seasonality_total_years=seasonality_total_years,
-        seasonality_back_years=seasonality_back_years,
-        analyst_buy_pct=analyst_buy_pct,
-        analyst_upside_pct=analyst_upside_pct,
-        forward_pe=forward_pe,
-    )
-    return AssessSignalUseCase().execute(AssessSignalRequest(ticker="TEST", signal_context=ctx))
-
-
-def test_signal_all_neutral_when_no_enrichment():
-    sa = _assess(flow_score=50.0)
-    assert sa.assessment.score == 50
-    bd = sa.assessment.breakdown_dict
-    assert bd["bandar_intensity"] == 50.0
-    assert bd["insider_activity"] == 50.0
-    assert bd["seasonality_edge"] == 50.0
-    assert bd["analyst_consensus"] == 50.0
-    assert bd["forward_valuation"] == 50.0
-
-
 def test_screen_derives_forward_pe_from_latest_price_when_cache_has_eps_only():
     from unittest.mock import MagicMock
 
@@ -323,55 +270,6 @@ def test_screen_derives_forward_pe_from_latest_price_when_cache_has_eps_only():
     assert candidate.forward_estimates is not None
     assert candidate.forward_estimates.forward_pe == 10.0
     assert "VALUATION_STRETCHED" not in candidate.signal_assessment.active_flags
-
-
-def test_signal_insider_full_buy_raises_score():
-    sa = _assess(flow_score=50.0, insider_net_buy_ratio=1.0)
-    bd = sa.assessment.breakdown_dict
-    assert bd["insider_activity"] == pytest.approx(100.0)
-    assert sa.assessment.score > 50
-
-
-def test_signal_analyst_all_buy_full_upside():
-    sa = _assess(flow_score=50.0, analyst_buy_pct=1.0, analyst_upside_pct=30.0)
-    bd = sa.assessment.breakdown_dict
-    assert bd["analyst_consensus"] == 100.0
-    assert sa.assessment.score > 50
-
-
-def test_signal_seasonality_tailwind_uses_win_rate():
-    sa = _assess(
-        flow_score=50.0,
-        seasonality_win_rate=80.0,
-        seasonality_avg_return_pct=2.5,
-        seasonality_total_years=5,
-        seasonality_back_years=5,
-    )
-    bd = sa.assessment.breakdown_dict
-    assert bd["seasonality_edge"] == 80.0
-
-
-def test_signal_bandar_full_accumulation():
-    sa = _assess(flow_score=50.0, bandar_broad_score=10, bandar_max_range=12)
-    bd = sa.assessment.breakdown_dict
-    assert bd["bandar_intensity"] > 85.0
-
-
-def test_signal_strong_when_multiple_factors_elevated():
-    sa = _assess(
-        flow_score=91.7,
-        insider_net_buy_ratio=1.0,
-        analyst_buy_pct=0.8,
-        analyst_upside_pct=20.0,
-        seasonality_win_rate=75.0,
-        seasonality_avg_return_pct=1.5,
-        seasonality_total_years=5,
-        seasonality_back_years=5,
-        bandar_broad_score=4,
-        bandar_max_range=6,
-    )
-    assert sa.assessment.strength == SignalStrength.STRONG
-    assert sa.assessment.score > 70
 
 
 def test_screener_populates_signal_assessment():

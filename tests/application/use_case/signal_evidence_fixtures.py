@@ -3,10 +3,10 @@
 from datetime import date, datetime
 
 from src.application.dto.assess_signal import AssessSignalEvidenceRequest
+from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.use_case.assess_signal_evidence_use_case import (
     AssessSignalEvidenceUseCase,
 )
-from src.application.use_case.assess_signal_use_case import SignalEngineConfig
 from src.domain.value_objects.benchmark_excess_return import (
     BenchmarkExcessReturn,
     BenchmarkExcessReturnStatus,

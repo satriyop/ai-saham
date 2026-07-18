@@ -72,7 +72,6 @@ EXPECTED_COMMANDS: dict[tuple[str, ...], tuple[str, ...]] = {
         "swing",
         "accum-audit",
         "swing-compare",
-        "signal-audit",
         "signal-backfill-observations",
         "signal-labels",
         "signal-readiness",
@@ -129,6 +128,7 @@ REMOVED_PATHS: tuple[tuple[str, ...], ...] = (
     ("trade", "intraday"),
     ("trade", "opening"),
     ("trade", "review", "pre-open"),
+    ("analyze", "signal-audit"),
 )
 
 
@@ -215,6 +215,7 @@ REMOVED_HELP_SNIPPETS: tuple[str, ...] = (
     "saham chart",
     "saham status",
     "broker fetch",
+    "saham analyze signal-audit",
 )
 
 
@@ -224,12 +225,18 @@ REMOVED_ADAPTER_FILES: tuple[str, ...] = (
     "src/adapters/cli/opening_commands.py",
     "src/adapters/cli/screen_commands.py",
     "src/adapters/cli/analyze_regime_display.py",
+    "src/adapters/cli/analyze_signal_audit_commands.py",
 )
 
 
 REMOVED_TEST_FILES: tuple[str, ...] = (
     "tests/adapters/cli/test_update_commands.py",
     "tests/adapters/cli/test_screen_commands.py",
+    "tests/adapters/cli/test_analyze_signal_audit_commands.py",
+    "tests/application/use_case/test_assess_signal.py",
+    "tests/application/use_case/test_signal_baseline.py",
+    "tests/application/use_case/test_audit_signal_use_case.py",
+    "tests/application/services/test_signal_evidence_builder.py",
 )
 
 REMOVED_SOURCE_REFERENCE_PATTERNS: tuple[str, ...] = (
@@ -239,6 +246,12 @@ REMOVED_SOURCE_REFERENCE_PATTERNS: tuple[str, ...] = (
     "src.adapters.cli.screen_commands",
     "src.adapters.cli.analyze_regime_display",
     "src.application.use_case.market_regime_use_case",
+    "src.adapters.cli.analyze_signal_audit_commands",
+    "src.application.use_case.assess_signal_use_case",
+    "src.application.use_case.audit_signal_use_case",
+    "src.application.services.signal_evidence_builder",
+    "src.application.services.engine_bootstrap.signal_weight_config_resolver",
+    "src.domain.value_objects.signal_audit",
     "data_commands.py",
     "update_commands.py",
     "opening_commands.py",
@@ -247,6 +260,16 @@ REMOVED_SOURCE_REFERENCE_PATTERNS: tuple[str, ...] = (
     "market_regime_use_case.py",
     "test_update_commands.py",
     "test_screen_commands.py",
+    "analyze_signal_audit_commands.py",
+    "assess_signal_use_case.py",
+    "audit_signal_use_case.py",
+    "signal_evidence_builder.py",
+    "signal_weight_config_resolver.py",
+    "test_assess_signal.py",
+    "test_signal_baseline.py",
+    "test_audit_signal_use_case.py",
+    "test_signal_evidence_builder.py",
+    "test_analyze_signal_audit_commands.py",
 )
 
 

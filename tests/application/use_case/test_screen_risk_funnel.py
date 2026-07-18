@@ -29,8 +29,8 @@ from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.services.signal_engine import SignalEngine
 from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
+from src.application.dto.assess_signal import AssessSignalResponse
 from src.application.use_case.assess_risk_use_case import AssessRiskResponse, AssessRiskUseCase
-from src.application.use_case.assess_signal_use_case import AssessSignalResponse
 from src.domain.entities.candle import Candle
 from src.domain.rules.fundamental_gate import FundamentalGate
 from src.domain.value_objects.company_fundamentals import CompanyFundamentals

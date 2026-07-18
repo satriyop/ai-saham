@@ -3,14 +3,12 @@ Signal Engine Configuration — all frozen dataclasses for signal scoring.
 
 This module consolidates every config type used by the signal engine:
 - Factor scoring config (shared with company_quality_scoring)
-- Signal engine config (classification, missing data, input mapping, etc.)
+- Signal engine config (classification, input mapping, etc.)
 - Evidence group weights
 - Risk flag configs
 - Regime conditioning configs
 - Decision policy configs
 - Alpha trigger configs
-
-All defaults are preserved exactly from the original assess_signal_use_case.py.
 
 Layer: Application (configuration only). Depends on stdlib only.
 """
@@ -37,12 +35,6 @@ from src.domain.value_objects.alpha_trigger_score import (
 class SignalClassificationConfig:
     strong_min_score: int = 70
     moderate_min_score: int = 45
-
-
-@dataclass(frozen=True)
-class SignalMissingDataConfig:
-    neutral_score: float = 50.0
-    coverage_warning_missing_factors: int = 3
 
 
 # ── Phase 2: input mapping config ──────────────────────────────────────────────
@@ -321,7 +313,6 @@ class AlphaTriggerConfig:
 @dataclass(frozen=True)
 class SignalEngineConfig:
     classification: SignalClassificationConfig = field(default_factory=SignalClassificationConfig)
-    missing_data: SignalMissingDataConfig = field(default_factory=SignalMissingDataConfig)
     scoring: SignalScoringConfig = field(default_factory=SignalScoringConfig)
     input_mapping: SignalInputMappingConfig = field(default_factory=SignalInputMappingConfig)
     enrichment: SignalEnrichmentConfig = field(default_factory=SignalEnrichmentConfig)
@@ -342,7 +333,6 @@ __all__ = [
     "ForwardPeScoringConfig",
     # New configs
     "SignalClassificationConfig",
-    "SignalMissingDataConfig",
     "ForeignFlowScoreMappingConfig",
     "SignalInputMappingConfig",
     "SignalEnrichmentConfig",

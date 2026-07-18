@@ -44,7 +44,7 @@ class EntryQuality(Enum):
 @dataclass(frozen=True)
 class SignalContext:
     """
-    Pre-loaded enrichment data passed to AssessSignalUseCase.
+    Pre-loaded enrichment data passed to AssessSignalEvidenceUseCase.
 
     The application layer (SignalEngine._build_signal_context) is responsible
     for populating this from provider calls. The use case receives only plain
@@ -104,7 +104,7 @@ class SignalAssessment:
     """
     Immutable result of signal evaluation.
 
-    Produced by AssessSignalUseCase and consumed by CLI display, screeners,
+    Produced by AssessSignalEvidenceUseCase and consumed by CLI display, screeners,
     and CombinedAssessment composition (ADR-026).
 
     breakdown uses tuple-of-tuples (not dict) so the frozen dataclass remains
@@ -119,9 +119,8 @@ class SignalAssessment:
     rationale: tuple[str, ...]
     snapshot_date: date
     # HIGH-2 canonical name: production-authority coverage (0.0-1.0), or None
-    # if not evaluated (e.g., in the archived six-factor scorer). Not
-    # statistical confidence or trade conviction — see
-    # SignalEvidenceGroupScorer._compute_signal_authority_coverage.
+    # if not yet evaluated for this assessment. Not statistical confidence or
+    # trade conviction — see SignalEvidenceGroupScorer._compute_signal_authority_coverage.
     signal_authority_coverage: float | None
     decision_constraints: "DecisionConstraints | None" = None
     legacy_conditioned_score: int | None = None

@@ -1,34 +1,50 @@
 """
 Regression coverage for the SignalEngine composition root boundary.
 
-Proves malformed archived signal_engine.factors.* config cannot participate in
-canonical engine construction, and that no legacy weight resolver is imported
-or invoked through the factory module (RETIRE-LEGACY-SIX-FACTOR-BASELINE Slice 1).
+Proves the factory (1) resolves canonical config exactly once through the
+real resolver with the raw config passed by identity, and (2) actually fails
+closed against removed legacy config through the real resolver, not a mock
+that would swallow the error (RETIRE-LEGACY-SIX-FACTOR-BASELINE).
 """
 
 from __future__ import annotations
+
+import pytest
 
 from src.application.services.signal_engine import SignalEngine
 from src.application.services.signal_engine_config import SignalEngineConfig
 from src.infrastructure.composition import signal_engine_factory
 
-_MALFORMED_RAW_CONFIG = {
+_VALID_RAW_CONFIG = {
     "signal_engine": {
+        "classification": {
+            "strong_min_score": 70,
+            "moderate_min_score": 45,
+        },
+    }
+}
+
+_RAW_CONFIG_WITH_REMOVED_FACTORS = {
+    "signal_engine": {
+        "classification": {
+            "strong_min_score": 70,
+            "moderate_min_score": 45,
+        },
         "factors": {
-            "legacy_invalid": {
+            "bandar_intensity": {
                 "enabled": True,
-                "weight": "not-a-number",
-            }
-        }
+                "weight": 0.20,
+            },
+        },
     }
 }
 
 
-def test_signal_engine_factory_never_calls_legacy_weight_resolver(monkeypatch):
+def test_factory_passes_valid_raw_config_to_resolver_once(monkeypatch):
     recorded_calls = []
 
     def _fake_load_raw():
-        return _MALFORMED_RAW_CONFIG
+        return _VALID_RAW_CONFIG
 
     def _fake_resolve(cfg):
         recorded_calls.append(cfg)
@@ -47,7 +63,24 @@ def test_signal_engine_factory_never_calls_legacy_weight_resolver(monkeypatch):
 
     assert isinstance(engine, SignalEngine)
     assert len(recorded_calls) == 1
-    assert recorded_calls[0] is _MALFORMED_RAW_CONFIG
+    assert recorded_calls[0] is _VALID_RAW_CONFIG
+
+
+def test_factory_rejects_removed_factors_config(monkeypatch):
+    def _fake_load_raw():
+        return _RAW_CONFIG_WITH_REMOVED_FACTORS
+
+    monkeypatch.setattr(
+        signal_engine_factory, "load_signal_engine_config_raw", _fake_load_raw
+    )
+    # resolve_signal_engine_config is NOT mocked — the real resolver must
+    # itself raise, proving the factory's fail-closed boundary is genuine
+    # rather than asserted through a mock that would swallow the error.
+
+    with pytest.raises(ValueError, match="signal_engine.factors"):
+        signal_engine_factory.create_signal_engine(
+            db_path="unused.db", with_enrichment=False
+        )
 
 
 def test_signal_engine_factory_has_no_legacy_weight_resolver_reference():

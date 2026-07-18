@@ -21,7 +21,6 @@ from src.adapters.cli.analyze_regime_commands import regime as _regime_fn
 from src.adapters.cli.analyze_risk_commands import risk as _risk_fn
 from src.adapters.cli.analyze_sentiment_commands import sentiment as _sentiment_fn
 from src.adapters.cli.analyze_sentiment_commands import sentiment_audit as _sentiment_audit_fn
-from src.adapters.cli.analyze_signal_commands import signal_audit as _signal_audit_fn
 from src.adapters.cli.analyze_signal_commands import (
     signal_backfill_observations as _signal_backfill_observations_fn,
 )
@@ -50,7 +49,6 @@ analyze_app.command("regime")(_regime_fn)
 analyze_app.command("swing")(_swing_fn)
 analyze_app.command("accum-audit")(_accumulation_audit_fn)
 analyze_app.command("swing-compare")(_swing_compare_fn)
-analyze_app.command("signal-audit")(_signal_audit_fn)
 analyze_app.command("signal-backfill-observations")(_signal_backfill_observations_fn)
 analyze_app.command("signal-labels")(_signal_labels_fn)
 analyze_app.command("signal-readiness")(_signal_readiness_fn)

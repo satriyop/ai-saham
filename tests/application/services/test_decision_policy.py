@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 
 from src.application.services.decision_policy import DecisionPolicyService
-from src.application.use_case.assess_signal_use_case import DecisionPolicyConfig
+from src.application.services.signal_engine_config import DecisionPolicyConfig
 from src.domain.value_objects.market_context import MarketContext, MarketRegime
 from src.domain.value_objects.signal_assessment import EntryQuality
 

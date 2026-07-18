@@ -1,13 +1,15 @@
 """
 Factor evidence value object.
 
-Canonical evidence contract for a single signal factor. Introduced in Phase 1
-of the SignalEngine refactor. Annotates a component score with direction,
-strength, confidence, freshness, provenance, and human-readable rationale.
+Archived historical payload-decoding contract for a single signal factor,
+introduced in Phase 1 of the SignalEngine refactor. Annotates a component
+score with direction, strength, confidence, freshness, provenance, and
+human-readable rationale.
 
-This object carries NO scoring logic — it is a descriptive record produced by
-SignalEvidenceBuilder (application layer) from scores already computed by
-AssessSignalUseCase.
+This object carries NO scoring logic. It is a descriptive record decoded
+from persisted historical payloads; its producer (the retired flat-factor
+scorer) has been removed (RETIRE-LEGACY-SIX-FACTOR-BASELINE). Kept so older
+persisted `SignalEvidence`/`FactorEvidence` payloads can still be decoded.
 
 Layer: Domain
 Depends on: stdlib only (dataclasses, enum)

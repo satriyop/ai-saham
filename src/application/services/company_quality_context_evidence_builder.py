@@ -3,8 +3,8 @@
 Computes ticker-alpha / contextual-conviction diagnostics from enrichment already
 present on SignalContext: valuation (forward P/E), analyst consensus, insider
 net-buy direction, and CAPPED generic seasonality. Calls the SHARED conviction
-scorers (company_quality_scoring) — the same formulas AssessSignalUseCase uses, so
-there is a single source of truth and no drift.
+scorers (company_quality_scoring) — a single source of truth for these
+formulas, with no other producer duplicating them.
 
 Design invariants:
 - The builder NEVER fetches data. All inputs arrive on the request (SignalContext).
@@ -98,8 +98,8 @@ class CompanyQualityContextEvidenceBuilder:
     ) -> None:
         self._config = config
         # Axis-scorer thresholds live in signal_engine.yaml (factory-owned). For
-        # the DIAGNOSTIC producer we default to the same values AssessSignalUseCase
-        # uses; callers holding the full engine config may override.
+        # the DIAGNOSTIC producer we default to SignalScoringConfig()'s bare
+        # defaults; callers holding the full engine config may override.
         self._scoring = scoring or SignalScoringConfig()
         self._neutral_score = neutral_score
 
