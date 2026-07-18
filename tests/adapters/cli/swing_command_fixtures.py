@@ -42,8 +42,8 @@ _COMPLETE_SOURCE_REVIEW = {
                 {"key": "NEUTRAL", "oos_trade_count": 15, "oos_profit": 0.8},
             ],
         },
-        "coverage_bucket": {"buckets": [{"key": "HIGH", "observation_count": 30}]},
-        "conviction_bucket": {"buckets": [{"key": "HIGH", "observation_count": 30}]},
+        "signal_authority_coverage_bucket": {"buckets": [{"key": "HIGH", "observation_count": 30}]},
+        "setup_readiness_status": {"buckets": [{"key": "READY", "observation_count": 30}]},
     },
 }
 

@@ -145,6 +145,18 @@ def _first_float_field(payload: dict, fields: tuple[str, ...]) -> float | None:
     return None
 
 
+_REQUIRED_ATTRIBUTION_GROUPS = (
+    "market_regime",
+    "signal_authority_coverage_bucket",
+    "setup_readiness_status",
+)
+
+_LEGACY_ATTRIBUTION_GROUP_REPLACEMENTS = {
+    "coverage_bucket": "signal_authority_coverage_bucket",
+    "conviction_bucket": "setup_readiness_status",
+}
+
+
 def _validate_attribution_readiness(
     source_review: dict,
     *,
@@ -155,7 +167,13 @@ def _validate_attribution_readiness(
     if not isinstance(attribution, dict):
         return (f"{prefix} source_review.attribution must be a dict",)
 
-    for group in ("market_regime", "coverage_bucket", "conviction_bucket"):
+    for legacy_key, replacement in _LEGACY_ATTRIBUTION_GROUP_REPLACEMENTS.items():
+        if legacy_key in attribution:
+            issues.append(
+                f"{prefix} attribution.{legacy_key} was removed by HIGH-2; use attribution.{replacement}"
+            )
+
+    for group in _REQUIRED_ATTRIBUTION_GROUPS:
         buckets = _attribution_buckets(attribution.get(group))
         if not buckets:
             issues.append(f"{prefix} attribution.{group} must include buckets")

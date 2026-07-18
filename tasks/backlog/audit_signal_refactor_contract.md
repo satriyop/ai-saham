@@ -424,7 +424,9 @@ fingerprint persistence omit generic legacy coverage/conviction and phase
 aliases; schema-1 parsing remains diagnostic and read-compatible. **Finding 6
 fixed (2026-07-18):** daily briefing and multi-screen DTOs, JSON, and displays
 now expose signal_authority_coverage; ambiguous coverage_score and
-signal_coverage aliases were removed with a clean break. HIGH-2 stays
+signal_coverage aliases were removed with a clean break. **HIGH-2 Finding 1
+fixed (2026-07-18):** swing tuning patch readiness validation now requires
+canonical authority-coverage and typed readiness attribution. HIGH-2 stays
 Partial — other audit findings against this task are not yet verified — do not
 mark Done until they are.
 

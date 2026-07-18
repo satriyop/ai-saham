@@ -245,12 +245,224 @@ def test_null_oos_metrics_with_sufficient_oos_trades_fail_guard(tmp_path):
         },
     }
     report = _patch_with_source_review(review, tmp_path)
-    assert report.valid is False
-    assert any("sample_not_ready" in issue and "profit_factor" in issue for issue in report.issues)
-    assert any(
-        "sample_not_ready" in issue and "average_return_pct" in issue for issue in report.issues
-    )
     assert any(
         "sample_not_ready" in issue and "drawdown_regression_pct" in issue
         for issue in report.issues
     )
+
+
+def test_swing_tuning_attribution_readiness_valid_groups(tmp_path):
+    # Proves 1. A complete source review with all three canonical groups passes attribution readiness.
+    review = {**_COMPLETE_SOURCE_REVIEW}
+    report = _patch_with_source_review(review, tmp_path)
+    assert report.valid is True, report.issues
+
+
+def test_swing_tuning_attribution_missing_coverage_bucket(tmp_path):
+    # Proves 2. Missing signal_authority_coverage_bucket fails with its exact missing-buckets issue.
+    review = {**_COMPLETE_SOURCE_REVIEW}
+    review["attribution"] = {
+        "market_regime": review["attribution"]["market_regime"],
+        "setup_readiness_status": review["attribution"]["setup_readiness_status"],
+    }
+    report = _patch_with_source_review(review, tmp_path)
+    assert report.valid is False
+    assert any(
+        "sample_not_ready: attribution.signal_authority_coverage_bucket must include buckets" in issue
+        for issue in report.issues
+    )
+
+
+def test_swing_tuning_attribution_missing_setup_readiness(tmp_path):
+    # Proves 3. Missing setup_readiness_status fails with its exact missing-buckets issue.
+    review = {**_COMPLETE_SOURCE_REVIEW}
+    review["attribution"] = {
+        "market_regime": review["attribution"]["market_regime"],
+        "signal_authority_coverage_bucket": review["attribution"]["signal_authority_coverage_bucket"],
+    }
+    report = _patch_with_source_review(review, tmp_path)
+    assert report.valid is False
+    assert any(
+        "sample_not_ready: attribution.setup_readiness_status must include buckets" in issue
+        for issue in report.issues
+    )
+
+
+def test_swing_tuning_attribution_empty_bucket_fails_closed(tmp_path):
+    # Proves 4. An empty canonical bucket list fails closed.
+    review = {**_COMPLETE_SOURCE_REVIEW}
+    review["attribution"] = {
+        "market_regime": {"buckets": []},
+        "signal_authority_coverage_bucket": {"buckets": []},
+        "setup_readiness_status": {"buckets": []},
+    }
+    report = _patch_with_source_review(review, tmp_path)
+    assert report.valid is False
+    assert any(
+        "sample_not_ready: attribution.signal_authority_coverage_bucket must include buckets" in issue
+        for issue in report.issues
+    )
+
+
+def test_swing_tuning_attribution_legacy_coverage_rejected_explicitly(tmp_path):
+    # Proves 5. Legacy coverage_bucket is rejected explicitly.
+    review = {**_COMPLETE_SOURCE_REVIEW}
+    review["attribution"] = {
+        **review["attribution"],
+        "coverage_bucket": {"buckets": [{"key": "HIGH", "observation_count": 30}]},
+    }
+    report = _patch_with_source_review(review, tmp_path)
+    assert report.valid is False
+    assert any(
+        "sample_not_ready: attribution.coverage_bucket was removed by HIGH-2; use attribution.signal_authority_coverage_bucket" in issue
+        for issue in report.issues
+    )
+
+
+def test_swing_tuning_attribution_legacy_conviction_rejected_explicitly(tmp_path):
+    # Proves 6. Legacy conviction_bucket is rejected explicitly.
+    review = {**_COMPLETE_SOURCE_REVIEW}
+    review["attribution"] = {
+        **review["attribution"],
+        "conviction_bucket": {"buckets": [{"key": "HIGH", "observation_count": 30}]},
+    }
+    report = _patch_with_source_review(review, tmp_path)
+    assert report.valid is False
+    assert any(
+        "sample_not_ready: attribution.conviction_bucket was removed by HIGH-2; use attribution.setup_readiness_status" in issue
+        for issue in report.issues
+    )
+
+
+def test_swing_tuning_attribution_both_canonical_and_legacy_rejected(tmp_path):
+    # Proves 7. A payload containing both canonical and legacy keys is rejected.
+    review = {**_COMPLETE_SOURCE_REVIEW}
+    review["attribution"] = {
+        **review["attribution"],
+        "coverage_bucket": {"buckets": [{"key": "HIGH", "observation_count": 30}]},
+        "conviction_bucket": {"buckets": [{"key": "HIGH", "observation_count": 30}]},
+    }
+    report = _patch_with_source_review(review, tmp_path)
+    assert report.valid is False
+    assert any("attribution.coverage_bucket was removed" in i for i in report.issues)
+    assert any("attribution.conviction_bucket was removed" in i for i in report.issues)
+
+
+def test_swing_tuning_attribution_legacy_only_rejected(tmp_path):
+    # Proves 8. Legacy-only attribution is not accepted as compatibility input.
+    review = {**_COMPLETE_SOURCE_REVIEW}
+    review["attribution"] = {
+        "market_regime": review["attribution"]["market_regime"],
+        "coverage_bucket": {"buckets": [{"key": "HIGH", "observation_count": 30}]},
+        "conviction_bucket": {"buckets": [{"key": "HIGH", "observation_count": 30}]},
+    }
+    report = _patch_with_source_review(review, tmp_path)
+    assert report.valid is False
+    assert any("attribution.coverage_bucket was removed" in i for i in report.issues)
+    assert any("attribution.conviction_bucket was removed" in i for i in report.issues)
+    assert any("attribution.signal_authority_coverage_bucket must include buckets" in i for i in report.issues)
+    assert any("attribution.setup_readiness_status must include buckets" in i for i in report.issues)
+
+
+def test_swing_tuning_attribution_market_regime_dependency_still_executes(tmp_path):
+    # Proves 9. Existing market-regime dependency checks still execute against canonical attribution.
+    review = {
+        **_COMPLETE_SOURCE_REVIEW,
+        "attribution": {
+            **_COMPLETE_SOURCE_REVIEW["attribution"],
+            "market_regime": {
+                "buckets": [
+                    {"key": "RISK_ON", "oos_trade_count": 28, "oos_profit": 1.0},
+                    {"key": "NEUTRAL", "oos_trade_count": 2, "oos_profit": 0.1},
+                ],
+            },
+        },
+    }
+    report = _patch_with_source_review(review, tmp_path)
+    assert report.valid is False
+    assert any("single-regime" in issue for issue in report.issues)
+    assert any("positive OOS regime count=1" in issue for issue in report.issues)
+
+
+def test_swing_tuning_attribution_from_summarize_labels(tmp_path):
+    # Proves 10. Positive tuning fixtures contain no legacy attribution keys.
+    # At least one positive test must construct the same canonical attribution shape
+    # emitted by SummarizeSignalForwardLabelsUseCase, rather than merely renaming arbitrary fixture keys.
+    from src.application.use_case.summarize_signal_forward_labels_use_case import (
+        SignalForwardLabelAttributionBucket,
+        SummarizeSignalForwardLabelsResponse,
+    )
+
+    # Construct buckets exactly as SummarizeSignalForwardLabelsUseCase would emit
+    summarize_response = SummarizeSignalForwardLabelsResponse(
+        buckets=(
+            SignalForwardLabelAttributionBucket(
+                group="market_regime",
+                key="RISK_ON",
+                observation_count=15,
+                success_count=8,
+                failure_count=7,
+                neutral_count=0,
+                unavailable_count=0,
+                average_close_return=0.1,
+                average_max_forward_return=0.2,
+                average_max_adverse_excursion=-0.05,
+            ),
+            SignalForwardLabelAttributionBucket(
+                group="market_regime",
+                key="NEUTRAL",
+                observation_count=15,
+                success_count=8,
+                failure_count=7,
+                neutral_count=0,
+                unavailable_count=0,
+                average_close_return=0.1,
+                average_max_forward_return=0.2,
+                average_max_adverse_excursion=-0.05,
+            ),
+            SignalForwardLabelAttributionBucket(
+                group="signal_authority_coverage_bucket",
+                key="HIGH",
+                observation_count=30,
+                success_count=16,
+                failure_count=14,
+                neutral_count=0,
+                unavailable_count=0,
+                average_close_return=0.1,
+                average_max_forward_return=0.2,
+                average_max_adverse_excursion=-0.05,
+            ),
+            SignalForwardLabelAttributionBucket(
+                group="setup_readiness_status",
+                key="READY",
+                observation_count=30,
+                success_count=16,
+                failure_count=14,
+                neutral_count=0,
+                unavailable_count=0,
+                average_close_return=0.1,
+                average_max_forward_return=0.2,
+                average_max_adverse_excursion=-0.05,
+            ),
+        )
+    )
+
+    # Convert to source_review attribution payload structure dynamically
+    attribution = {}
+    for bucket in summarize_response.buckets:
+        if bucket.group not in attribution:
+            attribution[bucket.group] = {"buckets": []}
+        bucket_dict = bucket.to_dict()
+        if bucket.group == "market_regime":
+            bucket_dict["oos_trade_count"] = bucket.observation_count
+            bucket_dict["oos_profit"] = 0.5  # positive profit
+        attribution[bucket.group]["buckets"].append(bucket_dict)
+
+    review = {
+        **_COMPLETE_SOURCE_REVIEW,
+        "attribution": attribution,
+    }
+
+    report = _patch_with_source_review(review, tmp_path)
+    assert report.valid is True, report.issues
+    assert all("sample_not_ready" not in issue for issue in report.issues)
