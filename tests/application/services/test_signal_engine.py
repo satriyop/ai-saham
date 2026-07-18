@@ -118,19 +118,30 @@ def test_signal_engine_input_mapping_helpers_use_config():
 
 
 def test_signal_engine_empty_insider_fetch_counts_as_neutral_data():
+    from src.domain.value_objects.canonical_signal_evidence_input import CanonicalSignalEvidenceInput
+    from tests.application.use_case.signal_evidence_fixtures import _flow_evidence, _wrap_flow_evidence
+
     # Empty insider list → insider_net_buy_ratio=0.0 (not INSIDER_SELLING threshold of -0.30)
     engine = SignalEngine(insider_activity_provider=EmptyInsiderProvider())
 
-    response = engine.evaluate("BBCA")
+    ctx = engine.build_context("BBCA")
+    response = engine.evaluate_with_context(
+        ticker="BBCA",
+        signal_context=ctx,
+        canonical_evidence=CanonicalSignalEvidenceInput(
+            setup=None,
+            flow=_wrap_flow_evidence(_flow_evidence(capped_strength=0.70))
+        )
+    )
 
     # 0.0 ratio does NOT trigger INSIDER_SELLING penalty
     assert "INSIDER_SELLING" not in response.active_flags
-    # Self-fetch path has no SetupEvidence / FlowConfirmationEvidence → confidence=0
-    assert response.signal_authority_coverage == 0.0
-    assert response.coverage_warning is not None
 
 
 def test_signal_engine_derives_forward_pe_from_latest_price_before_analyst_price():
+    from src.domain.value_objects.canonical_signal_evidence_input import CanonicalSignalEvidenceInput
+    from tests.application.use_case.signal_evidence_fixtures import _flow_evidence, _wrap_flow_evidence
+
     # With latest_price=250.0: PE = 250/2 = 125.0 > 50 → VALUATION_STRETCHED fires.
     # Without latest_price (analyst_price=80.0 only): PE = 80/2 = 40.0 ≤ 50 → no flag.
     # Flag firing proves latest_price was used in preference to analyst_current_price.
@@ -140,7 +151,15 @@ def test_signal_engine_derives_forward_pe_from_latest_price_before_analyst_price
         latest_price_provider=lambda ticker: 250.0,
     )
 
-    response = engine.evaluate("BBCA")
+    ctx = engine.build_context("BBCA")
+    response = engine.evaluate_with_context(
+        ticker="BBCA",
+        signal_context=ctx,
+        canonical_evidence=CanonicalSignalEvidenceInput(
+            setup=None,
+            flow=_wrap_flow_evidence(_flow_evidence(capped_strength=0.70))
+        )
+    )
 
     assert "VALUATION_STRETCHED" in response.active_flags
 
@@ -179,3 +198,10 @@ def test_signal_engine_passes_none_as_of_for_live_enrichment_and_date_for_replay
     assert seasonality.calls[1] == ("BBCA", 2026, 6, date(2026, 6, 15))
     assert insider.calls[0]["as_of_date"] is None
     assert insider.calls[1]["as_of_date"] == date(2026, 6, 15)
+
+
+def test_flags_only_assessment_methods_are_removed():
+    assert not hasattr(SignalEngine, "evaluate")
+    assert not hasattr(SignalEngine, "evaluate_request")
+    assert hasattr(SignalEngine, "build_context")
+    assert hasattr(SignalEngine, "evaluate_with_context")

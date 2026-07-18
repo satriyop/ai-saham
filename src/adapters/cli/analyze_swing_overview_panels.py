@@ -26,10 +26,25 @@ from src.adapters.cli.view_market_context_display import (
     REGIME_DISPLAY_LABEL,
     context_conviction_score,
 )
+from src.application.dto.swing_analysis import (
+    SignalAssessmentAvailability,
+    SignalAssessmentStatus,
+)
 from src.domain.value_objects.market_context import MarketContext
 
 
-def _signal_label(signal_assessment: Any | None) -> tuple[str, str, str]:
+def _signal_label(
+    signal_assessment: Any | None,
+    availability: SignalAssessmentAvailability,
+) -> tuple[str, str, str]:
+    if not isinstance(availability, SignalAssessmentAvailability):
+        raise TypeError("availability must be a SignalAssessmentAvailability")
+
+    if availability.status is SignalAssessmentStatus.UNAVAILABLE:
+        reason_str = availability.unavailable_reason.value if availability.unavailable_reason else "unknown"
+        reason_display = reason_str.replace("_", " ")
+        return "N/A", "bright_black", f"signal unavailable: {reason_display}"
+
     if signal_assessment is None:
         return "N/A", "white", "signal unavailable"
     assessment = signal_assessment.assessment
@@ -84,12 +99,23 @@ def _market_label(market_regime: MarketContext | None) -> tuple[str, str, str]:
     return label, style, f"conviction {score}/7"
 
 
-def _build_signal_panel(signal_assessment) -> Any:
+def _build_signal_panel(
+    signal_assessment: Any | None,
+    availability: SignalAssessmentAvailability,
+) -> Any:
+    if not isinstance(availability, SignalAssessmentAvailability):
+        raise TypeError("availability must be a SignalAssessmentAvailability")
+
+    if availability.status is SignalAssessmentStatus.UNAVAILABLE:
+        reason_str = availability.unavailable_reason.value if availability.unavailable_reason else "unknown"
+        reason_display = reason_str.replace("_", " ")
+        return panel(Text(f"Signal unavailable: {reason_display}", style="dim red"), title="Signal")
+
     if signal_assessment is None:
         return panel(Text("Signal unavailable", style="dim"), title="Signal")
 
     assessment = signal_assessment.assessment
-    strength_value, strength_style, _ = _signal_label(signal_assessment)
+    strength_value, strength_style, _ = _signal_label(signal_assessment, availability)
     coverage_score = assessment.signal_authority_coverage
 
     headline_table = compact_table(show_header=False)

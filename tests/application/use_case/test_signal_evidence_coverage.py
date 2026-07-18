@@ -75,7 +75,7 @@ def test_breakdown_omits_missing_groups():
 def test_flag_adjustment_in_breakdown_when_nonzero():
     uc = _use_case()
     ctx = _ctx(forward_pe=55.0)
-    resp = uc.execute(_req(signal_context=ctx))
+    resp = uc.execute(_req(signal_context=ctx, flow_confirmation_evidence=_flow_evidence(capped_strength=0.50)))
     bd = resp.assessment.breakdown_dict
     assert "flag_adjustment" in bd
     assert bd["flag_adjustment"] == -10.0
@@ -83,24 +83,25 @@ def test_flag_adjustment_in_breakdown_when_nonzero():
 
 def test_no_flag_adjustment_in_breakdown_when_zero():
     uc = _use_case()
-    resp = uc.execute(_req())
+    resp = uc.execute(_req(flow_confirmation_evidence=_flow_evidence(capped_strength=0.50)))
     bd = resp.assessment.breakdown_dict
     assert "flag_adjustment" not in bd
 
 
 def test_response_has_all_phase4_fields():
     uc = _use_case()
-    resp = uc.execute(_req())
+    resp = uc.execute(_req(flow_confirmation_evidence=_flow_evidence(capped_strength=0.50)))
     assert resp.signal_authority_coverage is not None
     assert isinstance(resp.active_flags, tuple)
     assert isinstance(resp.flag_adjustment, int)
     assert resp.raw_group_score is not None
 
 
-def test_no_evidence_at_all_reports_no_groups_present_without_per_group_detail():
+def test_no_evidence_at_all_raises_no_production_signal_evidence_error():
+    from src.application.exceptions import NoProductionSignalEvidenceError
     uc = _use_case()
-    resp = uc.execute(_req())
-    assert resp.coverage_warning == "No evidence groups present — score is neutral prior only"
+    with pytest.raises(NoProductionSignalEvidenceError):
+        uc.execute(_req())
 
 
 def test_present_but_non_authoritative_flow_names_the_group():

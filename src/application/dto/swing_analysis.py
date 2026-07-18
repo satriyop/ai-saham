@@ -5,8 +5,40 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
+from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+class SignalAssessmentStatus(str, Enum):
+    AVAILABLE = "AVAILABLE"
+    UNAVAILABLE = "UNAVAILABLE"
+
+
+class SignalAssessmentUnavailableReason(str, Enum):
+    NO_PRODUCTION_SIGNAL_EVIDENCE = "no_production_signal_evidence"
+    SIGNAL_ENGINE_UNAVAILABLE = "signal_engine_unavailable"
+    ASSESSMENT_FAILED = "assessment_failed"
+
+
+@dataclass(frozen=True)
+class SignalAssessmentAvailability:
+    status: SignalAssessmentStatus
+    unavailable_reason: SignalAssessmentUnavailableReason | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.status, SignalAssessmentStatus):
+            raise TypeError("status must be a SignalAssessmentStatus")
+        if self.unavailable_reason is not None and not isinstance(
+            self.unavailable_reason, SignalAssessmentUnavailableReason
+        ):
+            raise TypeError("unavailable_reason must be a SignalAssessmentUnavailableReason")
+
+        if self.status == SignalAssessmentStatus.AVAILABLE:
+            if self.unavailable_reason is not None:
+                raise ValueError("AVAILABLE requires no unavailable reason.")
+        elif self.status == SignalAssessmentStatus.UNAVAILABLE:
+            if self.unavailable_reason is None:
+                raise ValueError("UNAVAILABLE requires a reason.")
 
 from src.application.services.position_sizer import PercentSizingResult, SizingResult
 from src.application.services.swing_analysis_serialization import (
@@ -75,9 +107,28 @@ class SwingVerdict:
     signal_assessment: "AssessSignalResponse | None"
     risk_response: Any | None
     market_regime: "MarketContext | None"
+    signal_assessment_availability: SignalAssessmentAvailability
     market_context_signal_preview: "AssessSignalResponse | None" = None
     market_context_risk_preview: Any | None = None
     market_context_trade_setup_preview: "TradeSetup | None" = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.signal_assessment_availability, SignalAssessmentAvailability):
+            raise TypeError("signal_assessment_availability must be a SignalAssessmentAvailability")
+
+        status = self.signal_assessment_availability.status
+        if status == SignalAssessmentStatus.AVAILABLE:
+            if self.signal_assessment is None:
+                raise ValueError("AVAILABLE requires signal_assessment to be present.")
+        elif status == SignalAssessmentStatus.UNAVAILABLE:
+            if self.signal_assessment is not None:
+                raise ValueError("UNAVAILABLE requires signal_assessment to be None.")
+            if self.trade_setup is not None:
+                raise ValueError("UNAVAILABLE requires trade_setup to be None.")
+            if self.market_context_signal_preview is not None:
+                raise ValueError("UNAVAILABLE requires market_context_signal_preview to be None.")
+            if self.market_context_trade_setup_preview is not None:
+                raise ValueError("UNAVAILABLE requires market_context_trade_setup_preview to be None.")
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -86,6 +137,14 @@ class SwingVerdict:
             "risk_assessment": risk_response_to_dict(self.risk_response),
             "market_context": (
                 self.market_regime.to_dict() if self.market_regime else None
+            ),
+            "signal_assessment_status": (
+                self.signal_assessment_availability.status.value
+                if self.signal_assessment_availability else None
+            ),
+            "signal_assessment_unavailable_reason": (
+                self.signal_assessment_availability.unavailable_reason.value
+                if self.signal_assessment_availability and self.signal_assessment_availability.unavailable_reason else None
             ),
             "market_context_preview": {
                 "signal_preview": signal_response_to_dict(
@@ -260,6 +319,7 @@ class SwingAnalysisWorkflowResponse:
     take_profit_pct: Decimal
     stop_loss_pct: Decimal
     regime_label: str | None
+    signal_assessment_availability: SignalAssessmentAvailability
     signal_assessment: "AssessSignalResponse | None" = None
     trade_setup: "TradeSetup | None" = None
     market_context_signal_preview: "AssessSignalResponse | None" = None
@@ -270,6 +330,26 @@ class SwingAnalysisWorkflowResponse:
     diagnostics: SwingDiagnostics | None = None
     modules: dict[str, bool] | None = None
     warnings: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.signal_assessment_availability, SignalAssessmentAvailability):
+            raise TypeError("signal_assessment_availability must be a SignalAssessmentAvailability")
+
+        status = self.signal_assessment_availability.status
+        if status == SignalAssessmentStatus.AVAILABLE:
+            if self.signal_assessment is None:
+                raise ValueError("AVAILABLE requires signal_assessment to be present.")
+        elif status == SignalAssessmentStatus.UNAVAILABLE:
+            if self.signal_assessment is not None:
+                raise ValueError("UNAVAILABLE requires signal_assessment to be None.")
+
+        if self.verdict is not None:
+            if self.signal_assessment_availability != self.verdict.signal_assessment_availability:
+                raise ValueError("Response availability must match verdict availability.")
+            if self.signal_assessment is not self.verdict.signal_assessment:
+                raise ValueError("Response signal_assessment must match verdict signal_assessment.")
+            if self.trade_setup is not self.verdict.trade_setup:
+                raise ValueError("Response trade_setup must match verdict trade_setup.")
 
     def to_dict(
         self,
@@ -286,6 +366,7 @@ class SwingAnalysisWorkflowResponse:
             market_context_signal_preview=self.market_context_signal_preview,
             market_context_risk_preview=self.market_context_risk_preview,
             market_context_trade_setup_preview=self.market_context_trade_setup_preview,
+            signal_assessment_availability=self.signal_assessment_availability,
         )
         evidence = self.evidence or SwingEvidence(
             accumulation_candidate=self.accumulation_candidate,

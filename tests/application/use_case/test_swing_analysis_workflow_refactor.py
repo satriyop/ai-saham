@@ -160,9 +160,6 @@ def test_signal_assessment_failure_returns_exact_warning():
         def evaluate_with_context(self, ticker, signal_context, market_context=None, **kwargs):
             raise RuntimeError("signal boom")
 
-        def evaluate(self, ticker, as_of_date=None, market_context=None):
-            raise RuntimeError("signal boom")
-
     workflow = SwingAnalysisWorkflowUseCase(
         **_base_kwargs(
             FakeMarketRepository([_candle(date(2026, 6, 18))]),
@@ -175,7 +172,7 @@ def test_signal_assessment_failure_returns_exact_warning():
 
     response = workflow.execute(_request())
 
-    assert "Signal assessment unavailable: signal boom" in response.warnings
+    assert "Evidence-enriched signal re-score unavailable: signal boom" in response.warnings
 
 
 class _RescoreSignalEngine:
@@ -192,6 +189,7 @@ class _RescoreSignalEngine:
         return 0
 
     def evaluate(self, ticker, as_of_date=None, market_context=None):
+        # Exist solely as an explicit regression trap. Standalone evaluate should not run when candidate present.
         raise AssertionError("standalone evaluate should not run when candidate present")
 
     def evaluate_with_context(self, ticker, signal_context, market_context=None, **kwargs):
@@ -274,9 +272,18 @@ def test_evidence_enriched_rescore_failure_returns_exact_warning():
 
     assert signal_engine.rescore_calls == 1
     assert "Evidence-enriched signal re-score unavailable: rescore boom" in response.warnings
-    # Failed rescore must not overwrite the fast-path signal/verdict.
-    assert response.signal_assessment.assessment.score == 40.0
-    assert response.verdict.signal_assessment.assessment.score == 40.0
+    # Under the new availability-aware design, a failed rescore clears the signal assessment
+    assert response.signal_assessment is None
+    from src.application.dto.swing_analysis import SignalAssessmentStatus, SignalAssessmentUnavailableReason
+    assert response.signal_assessment_availability.status == SignalAssessmentStatus.UNAVAILABLE
+    assert response.signal_assessment_availability.unavailable_reason == SignalAssessmentUnavailableReason.ASSESSMENT_FAILED
+    assert response.verdict.signal_assessment is None
+    assert response.trade_setup is None
+    assert response.market_context_signal_preview is None
+    assert response.market_context_trade_setup_preview is None
+    assert response.verdict.trade_setup is None
+    assert response.verdict.market_context_signal_preview is None
+    assert response.verdict.market_context_trade_setup_preview is None
 
 
 def test_evidence_enriched_rescore_success_updates_response():
@@ -306,6 +313,66 @@ def test_evidence_enriched_rescore_success_updates_response():
     assert response.verdict.market_context_trade_setup_preview is (
         response.market_context_trade_setup_preview
     )
+
+
+class _SignalEngineMustNotAssessWithoutEvidence:
+    def __init__(self) -> None:
+        self.evaluate_with_context_calls = 0
+
+    def evaluate_with_context(self, *args, **kwargs):
+        self.evaluate_with_context_calls += 1
+        raise AssertionError(
+            "SignalEngine must not assess when no candidate evidence exists"
+        )
+
+
+def test_no_candidate_reports_typed_unavailable_without_signal_assessment():
+    signal_engine = _SignalEngineMustNotAssessWithoutEvidence()
+
+    workflow = SwingAnalysisWorkflowUseCase(
+        **_base_kwargs(
+            FakeMarketRepository([_candle(date(2026, 6, 18))]),
+            build_accumulation_candidate_evaluation=lambda **kwargs: None,
+            signal_engine=signal_engine,
+        )
+    )
+
+    response = workflow.execute(_request())
+
+    assert signal_engine.evaluate_with_context_calls == 0
+
+    from src.application.dto.swing_analysis import (
+        SignalAssessmentStatus,
+        SignalAssessmentUnavailableReason,
+    )
+
+    assert response.signal_assessment_availability.status is (
+        SignalAssessmentStatus.UNAVAILABLE
+    )
+    assert response.signal_assessment_availability.unavailable_reason is (
+        SignalAssessmentUnavailableReason.NO_PRODUCTION_SIGNAL_EVIDENCE
+    )
+
+    assert response.signal_assessment is None
+    assert response.trade_setup is None
+    assert response.market_context_signal_preview is None
+    assert response.market_context_trade_setup_preview is None
+
+    assert response.verdict.signal_assessment is None
+    assert response.verdict.trade_setup is None
+    assert response.verdict.market_context_signal_preview is None
+    assert response.verdict.market_context_trade_setup_preview is None
+
+    payload = response.to_dict()
+    verdict_payload = payload["verdict"]
+
+    assert verdict_payload["signal_assessment_status"] == "UNAVAILABLE"
+    assert (
+        verdict_payload["signal_assessment_unavailable_reason"]
+        == "no_production_signal_evidence"
+    )
+    assert verdict_payload["signal_assessment"] is None
+    assert verdict_payload["trade_setup"] is None
 
 
 class _PassingSetupEval:

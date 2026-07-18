@@ -272,6 +272,9 @@ def _state(
         signal_assessment=state.signal_assessment,
         risk_response=None,
         market_regime=None,
+        signal_assessment_availability=swing_analysis_dto.SignalAssessmentAvailability(
+            status=swing_analysis_dto.SignalAssessmentStatus.AVAILABLE
+        ),
     )
     return state
 
@@ -512,3 +515,89 @@ def test_current_and_unknown_availability_produce_identical_directional_score_in
     a1 = result_current.signal_assessment
     a2 = result_unknown.signal_assessment
     assert a1.score == a2.score
+
+
+def test_recompose_after_evidence_forwards_market_context_to_signal_engine():
+    from src.domain.value_objects.market_context import MarketContext, MarketRegime
+
+    _RISK_OFF_CONTEXT = MarketContext(
+        regime=MarketRegime.RISK_OFF,
+        conviction=0.9,
+        factors=(),
+        signal_multiplier=0.4,
+        gate_tightening=True,
+        as_of_date=SNAP,
+        staleness_warning=None,
+        coverage_warning=None,
+    )
+
+    engine = _RecordingSignalEngine()
+    composer = SwingAnalysisDecisionComposer(
+        risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(),
+        signal_engine=engine,
+    )
+
+    state = _state(
+        built_setup_evidence=_built_setup_evidence(),
+        built_flow_evidence=_built_flow_evidence(),
+        source_availability_use_case=_source_availability_use_case(),
+    )
+    state.market_regime = _RISK_OFF_CONTEXT
+
+    composer.recompose_after_evidence(_request(), state)
+
+    assert len(engine.calls) == 1
+    assert engine.calls[0].get("market_context") is _RISK_OFF_CONTEXT
+
+
+def test_recompose_after_evidence_failure_clears_pre_existing_trade_setup():
+    class FailingSignalEngine:
+        def foreign_flow_quality_from_foreign_flow_score(self, score):
+            return None
+        def bandar_max_range(self, n):
+            return 0
+        def evaluate_with_context(self, ticker, signal_context, market_context=None, **kwargs):
+            raise RuntimeError("rescore boom")
+
+    engine = FailingSignalEngine()
+    composer = SwingAnalysisDecisionComposer(
+        risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(),
+        signal_engine=engine,
+    )
+
+    # Pre-existing verdict and trade setup
+    from src.domain.value_objects.trade_setup import TradeSetup, SetupAction
+    from src.domain.value_objects.signal_assessment import SignalStrength
+    pre_existing_setup = TradeSetup(
+        ticker=TICKER,
+        snapshot_date=SNAP,
+        action=SetupAction.ENTER,
+        signal_score=75,
+        signal_score_raw=75,
+        signal_strength=SignalStrength.STRONG,
+        blocking_gates=(),
+        regime=None,
+        signal_multiplier=1.0,
+        gate_tightening=False,
+        rationale="test",
+    )
+
+    state = _state(
+        built_setup_evidence=_built_setup_evidence(),
+        built_flow_evidence=_built_flow_evidence(),
+        source_availability_use_case=_source_availability_use_case(),
+    )
+    state.trade_setup = pre_existing_setup
+
+    composer.recompose_after_evidence(_request(), state)
+
+    assert state.trade_setup is None
+    assert state.signal_assessment is None
+    assert state.market_context_signal_preview is None
+    assert state.market_context_trade_setup_preview is None
+    assert state.verdict.trade_setup is None
+    assert state.verdict.signal_assessment is None
+    assert state.verdict.market_context_signal_preview is None
+    assert state.verdict.market_context_trade_setup_preview is None
+    assert state.signal_assessment_availability.status == swing_analysis_dto.SignalAssessmentStatus.UNAVAILABLE
+    assert state.signal_assessment_availability.unavailable_reason == swing_analysis_dto.SignalAssessmentUnavailableReason.ASSESSMENT_FAILED

@@ -14,6 +14,9 @@ from src.application.dto.swing_analysis import (
     SwingDiagnostics,
     SwingEvidence,
     SwingVerdict,
+    SignalAssessmentAvailability,
+    SignalAssessmentStatus,
+    SignalAssessmentUnavailableReason,
 )
 from src.application.services.swing_data_freshness import SwingDataFreshness
 from src.domain.value_objects.foreign_flow_score_breakdown import (
@@ -48,6 +51,10 @@ def test_swing_output_renders_rich_decision_overview(capsys):
             signal_assessment=None,
             risk_response=None,
             market_regime=None,
+            signal_assessment_availability=SignalAssessmentAvailability(
+                status=SignalAssessmentStatus.UNAVAILABLE,
+                unavailable_reason=SignalAssessmentUnavailableReason.NO_PRODUCTION_SIGNAL_EVIDENCE,
+            ),
         ),
         evidence=SwingEvidence(
             accumulation_candidate=_candidate(score=70.0, trend="DOWN"),
@@ -163,6 +170,9 @@ def test_swing_output_renders_optional_evidence_as_separate_panels(capsys):
             signal_assessment=signal_assessment,
             risk_response=risk_resp,
             market_regime=None,
+            signal_assessment_availability=SignalAssessmentAvailability(
+                status=SignalAssessmentStatus.AVAILABLE
+            ),
             market_context_trade_setup_preview=None,
         ),
         evidence=SwingEvidence(
@@ -300,6 +310,9 @@ def test_swing_flow_detail_calls_out_conflicted_negative_flow(capsys):
             signal_assessment=signal_assessment,
             risk_response=risk_resp,
             market_regime=None,
+            signal_assessment_availability=SignalAssessmentAvailability(
+                status=SignalAssessmentStatus.AVAILABLE
+            ),
             market_context_trade_setup_preview=None,
         ),
         evidence=SwingEvidence(
@@ -346,3 +359,45 @@ def test_swing_flow_detail_calls_out_conflicted_negative_flow(capsys):
     assert "lacks foreign-flow" in out
     assert "confirmation" in out
     assert "recent signal-window accumulation is occurring" not in out
+
+
+def test_cli_rendering_of_unavailable_reasons():
+    from rich.console import Console
+    from src.adapters.cli.analyze_swing_overview_panels import _signal_label, _build_signal_panel
+
+    reasons_map = [
+        (SignalAssessmentUnavailableReason.NO_PRODUCTION_SIGNAL_EVIDENCE, "no production signal evidence"),
+        (SignalAssessmentUnavailableReason.SIGNAL_ENGINE_UNAVAILABLE, "signal engine unavailable"),
+        (SignalAssessmentUnavailableReason.ASSESSMENT_FAILED, "assessment failed"),
+    ]
+
+    for reason, expected_text in reasons_map:
+        availability = SignalAssessmentAvailability(
+            status=SignalAssessmentStatus.UNAVAILABLE,
+            unavailable_reason=reason,
+        )
+
+        # Test _signal_label
+        label_text, style, detail = _signal_label(None, availability)
+        assert label_text == "N/A"
+        assert style == "bright_black"
+        assert expected_text in detail
+
+        # Test _build_signal_panel
+        panel_obj = _build_signal_panel(None, availability)
+        console = Console(color_system=None)
+        with console.capture() as capture:
+            console.print(panel_obj)
+        rendered = capture.get().lower()
+        assert expected_text in rendered
+
+
+def test_cli_rendering_missing_availability_raises_type_error():
+    from src.adapters.cli.analyze_swing_overview_panels import _signal_label, _build_signal_panel
+    import pytest
+
+    with pytest.raises(TypeError):
+        _signal_label(None, None)
+
+    with pytest.raises(TypeError):
+        _build_signal_panel(None, None)

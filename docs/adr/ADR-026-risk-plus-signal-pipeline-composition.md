@@ -70,7 +70,7 @@ else:
 `MarketContextEngine` output is optional. Current code records `regime`, `signal_multiplier`, and `gate_tightening` in `TradeSetup` when the caller supplies `market_context`.
 
 Engine-level adjustment is owned by the engines, not by `AssessTradeSetupUseCase`:
-- `SignalEngine.evaluate(..., market_context=...)` applies `score × signal_multiplier` and caps ENTER to WATCH when `gate_tightening=True`.
+- `SignalEngine.evaluate_with_context(..., market_context=...)` applies `score × signal_multiplier` and caps ENTER to WATCH when `gate_tightening=True`. This evaluation consumes the enriched context built via `build_context()`.
 - `RiskEngine.assess(..., market_context=...)` marks HIGH_RISK assessments with a `regime:{REGIME}` structural gate when `gate_tightening=True`.
 
 Callers that compute signal/risk before market context is available may still pass market context to `AssessTradeSetupUseCase`; in that case the regime is recorded in the verdict rationale, but signal/risk scores are not retroactively recomputed.
@@ -86,3 +86,14 @@ Callers that compute signal/risk before market context is available may still pa
 
 **Rationale**
 Without a formal composition rule, every CLI command that shows both signal and risk invents its own merging logic — creating divergent action columns in `screen accum`, `analyze swing`, and future commands. `AssessTradeSetupUseCase` ensures the same ENTER/WATCH/AVOID/BLOCKED logic everywhere. The BLOCKED split enables the learning loop (ADR-027) to attribute outcomes separately: structural blocks have no actionable signal, execution blocks may yield profitable retries.
+
+---
+
+## Amendment: Evidence-Backed Signal Assessment (July 2026)
+
+* **Context & Rules:**
+  * `build_context()` returns enrichment/flag context only and never returns a signal assessment.
+  * `evaluate_with_context()` is the only canonical `SignalEngine` assessment API.
+  * It requires at least one setup or flow production evidence group.
+  * Zero production evidence raises `NoProductionSignalEvidenceError`.
+  * Flags cannot independently produce an assessment.

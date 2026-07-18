@@ -23,6 +23,17 @@ class SwingAnalysisResponseAssembler:
         state: SwingAnalysisWorkflowState,
     ) -> swing_analysis_dto.SwingAnalysisWorkflowResponse:
         verdict = state.verdict
+        if verdict is None:
+            raise ValueError("state.verdict is missing")
+        if state.signal_assessment_availability is None:
+            raise ValueError("state.signal_assessment_availability is missing")
+        if (
+            state.signal_assessment_availability
+            != verdict.signal_assessment_availability
+        ):
+            raise ValueError(
+                "state and verdict signal assessment availability differ"
+            )
         diagnostics = swing_analysis_dto.SwingDiagnostics(
             data_freshness=state.data_freshness,
             flow_detail=state.flow_detail,
@@ -64,6 +75,7 @@ class SwingAnalysisResponseAssembler:
             verdict=verdict,
             evidence=state.evidence,
             diagnostics=diagnostics,
+            signal_assessment_availability=verdict.signal_assessment_availability,
             modules={
                 "setup": request.setup_name is not None,
                 "sizing": request.capital is not None,

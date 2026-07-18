@@ -29,7 +29,14 @@ from src.adapters.cli.analyze_swing_display import (
     SwingOutputDisplayOptions,
     print_swing_output,
 )
-from src.application.dto.swing_analysis import SwingDiagnostics, SwingEvidence, SwingVerdict
+from src.application.dto.swing_analysis import (
+    SwingDiagnostics,
+    SwingEvidence,
+    SwingVerdict,
+    SignalAssessmentAvailability,
+    SignalAssessmentStatus,
+    SignalAssessmentUnavailableReason,
+)
 from src.application.services.swing_data_freshness import SwingDataFreshness
 from src.domain.value_objects.strategy_evidence import (
     StrategyEvidence,
@@ -110,6 +117,10 @@ def _call_print(
             signal_assessment=None,
             risk_response=None,
             market_regime=None,
+            signal_assessment_availability=SignalAssessmentAvailability(
+                status=SignalAssessmentStatus.UNAVAILABLE,
+                unavailable_reason=SignalAssessmentUnavailableReason.NO_PRODUCTION_SIGNAL_EVIDENCE,
+            ),
         ),
         evidence=SwingEvidence(
             accumulation_candidate=None,

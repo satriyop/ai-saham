@@ -24,6 +24,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
+from src.application.exceptions import NoProductionSignalEvidenceError
 from src.application.dto.assess_signal import AssessSignalEvidenceRequest
 from src.application.services.decision_policy import DecisionPolicyService
 from src.application.services.setup_phase_readiness_evaluator import (
@@ -57,6 +58,11 @@ class AssessSignalEvidenceUseCase:
         self._config = config or SignalEngineConfig()
 
     def execute(self, request: AssessSignalEvidenceRequest) -> AssessSignalResponse:
+        if request.setup_evidence is None and request.flow_confirmation_evidence is None:
+            raise NoProductionSignalEvidenceError(
+                "Canonical signal assessment requires setup or flow evidence."
+            )
+
         # 1. Score evidence groups
         group_scores = SignalEvidenceGroupScorer.score(request, self._config)
 

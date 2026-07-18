@@ -7,7 +7,14 @@ from src.adapters.cli.analyze_swing_display import (
     SwingOutputDisplayOptions,
     print_swing_output,
 )
-from src.application.dto.swing_analysis import SwingDiagnostics, SwingEvidence, SwingVerdict
+from src.application.dto.swing_analysis import (
+    SwingDiagnostics,
+    SwingEvidence,
+    SwingVerdict,
+    SignalAssessmentAvailability,
+    SignalAssessmentStatus,
+    SignalAssessmentUnavailableReason,
+)
 from src.application.services.swing_data_freshness import SwingDataFreshness
 from src.domain.value_objects.alpha_trigger_score import (
     AlphaTriggerGroupContribution,
@@ -162,6 +169,18 @@ def _call_print(
     sector_context_evidence=None,
     institutional_accumulation_evidence=None,
 ) -> None:
+    if signal_assessment is None:
+        availability = SignalAssessmentAvailability(
+            status=SignalAssessmentStatus.UNAVAILABLE,
+            unavailable_reason=(
+                SignalAssessmentUnavailableReason.NO_PRODUCTION_SIGNAL_EVIDENCE
+            ),
+        )
+    else:
+        availability = SignalAssessmentAvailability(
+            status=SignalAssessmentStatus.AVAILABLE,
+        )
+
     ctx = SwingOutputDisplayContext(
         ticker="BBCA",
         today=date(2026, 7, 1),
@@ -172,6 +191,7 @@ def _call_print(
             signal_assessment=signal_assessment,
             risk_response=None,
             market_regime=None,
+            signal_assessment_availability=availability,
         ),
         evidence=SwingEvidence(
             accumulation_candidate=None,

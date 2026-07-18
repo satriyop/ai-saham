@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from src.application.dto.accumulation_screen import AccumulationCandidate
     from src.application.services.position_sizer import SizingResult
     from src.application.services.swing_data_freshness import SwingDataFreshness
+    from src.application.dto.swing_analysis import SignalAssessmentAvailability
 
 from rich.console import Group
 from rich.text import Text
@@ -42,6 +43,7 @@ from src.application.dto.swing_broker_detail import (
     BrokerDetail,
     BrokerQualityNote,
 )
+from src.application.dto.swing_analysis import SignalAssessmentAvailability
 from src.domain.value_objects.market_context import MarketContext
 from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
 
@@ -361,6 +363,7 @@ def print_swing_rich_overview(
     sentiment_resp,
     sentiment_warning: str | None,
     config: SwingDisplayConfig,
+    signal_assessment_availability: SignalAssessmentAvailability,
     include_strategy: bool = False,
     include_sentiment: bool = False,
     include_flow_detail: bool = False,
@@ -375,6 +378,9 @@ def print_swing_rich_overview(
     with_technical_gate: bool = False,
     sector_context_evidence: "SectorContextEvidence | None" = None,
 ) -> None:
+    if not isinstance(signal_assessment_availability, SignalAssessmentAvailability):
+        raise TypeError("signal_assessment_availability must be a SignalAssessmentAvailability")
+
     signal_source = signal_assessment or getattr(accum, "signal_assessment", None)
 
     plan_text, plan_style = swing_plan_text(
@@ -393,7 +399,7 @@ def print_swing_rich_overview(
     setup_value, setup_style = _setup_match_label(setup_eval)
     price = _price_text(accum, sizing, setup_sizing)
 
-    signal_value, signal_style, _ = _signal_label(signal_source)
+    signal_value, signal_style, _ = _signal_label(signal_source, signal_assessment_availability)
     risk_value, risk_style, _ = _risk_label(risk_resp)
     market_value, market_style, _ = _market_label(market_regime)
 
@@ -418,7 +424,7 @@ def print_swing_rich_overview(
 
     sections = [
         panel(verdict, title="Verdict"),
-        _build_signal_panel(signal_source),
+        _build_signal_panel(signal_source, signal_assessment_availability),
         _build_risk_panel(risk_resp, with_technical_gate),
     ]
     if market_regime is not None:

@@ -678,6 +678,9 @@ def parity_boundaries() -> _ParityBoundaryResult:
         signal_assessment=state.signal_assessment,
         risk_response=None,
         market_regime=None,
+        signal_assessment_availability=swing_analysis_dto.SignalAssessmentAvailability(
+            status=swing_analysis_dto.SignalAssessmentStatus.AVAILABLE
+        ),
     )
 
     swing_signal_engine = _CanonicalInputRecordingSignalEngine()

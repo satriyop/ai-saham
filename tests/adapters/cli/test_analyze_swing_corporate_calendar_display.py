@@ -23,7 +23,14 @@ from src.adapters.cli.analyze_swing_output_context import (
     SwingOutputDisplayContext,
     SwingOutputDisplayOptions,
 )
-from src.application.dto.swing_analysis import SwingDiagnostics, SwingEvidence, SwingVerdict
+from src.application.dto.swing_analysis import (
+    SwingDiagnostics,
+    SwingEvidence,
+    SwingVerdict,
+    SignalAssessmentAvailability,
+    SignalAssessmentStatus,
+    SignalAssessmentUnavailableReason,
+)
 from src.domain.value_objects.corporate_action_event_risk import (
     CorporateActionEventRiskFlag,
     CorporateActionEventRiskSeverity,
@@ -68,6 +75,10 @@ def _ctx(corporate_action_risk=None) -> SwingOutputDisplayContext:
             signal_assessment=None,
             risk_response=None,
             market_regime=None,
+            signal_assessment_availability=SignalAssessmentAvailability(
+                status=SignalAssessmentStatus.UNAVAILABLE,
+                unavailable_reason=SignalAssessmentUnavailableReason.NO_PRODUCTION_SIGNAL_EVIDENCE,
+            ),
         ),
         evidence=_evidence(corporate_action_risk),
         diagnostics=SwingDiagnostics(

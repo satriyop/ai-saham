@@ -22,7 +22,12 @@ if TYPE_CHECKING:
     from src.application.dto.signal_evidence_execution_context import (
         SignalEvidenceExecutionContext,
     )
-    from src.application.dto.swing_analysis import SwingDiagnostics, SwingEvidence, SwingVerdict
+    from src.application.dto.swing_analysis import (
+        SignalAssessmentAvailability,
+        SwingDiagnostics,
+        SwingEvidence,
+        SwingVerdict,
+    )
     from src.application.services.effective_market_session_resolver import (
         EffectiveMarketSession,
     )
@@ -56,6 +61,7 @@ class SwingAnalysisWorkflowState:
     gate_ctx: "GateContext | None" = None
     risk_response: Any | None = None
     signal_assessment: "AssessSignalResponse | None" = None
+    signal_assessment_availability: "SignalAssessmentAvailability | None" = None
     atr_value: Decimal | None = None
     setup_eval: Any | None = None
     broker_quality_note: Any | None = None

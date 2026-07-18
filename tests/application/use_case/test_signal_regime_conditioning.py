@@ -334,13 +334,10 @@ def test_volatile_with_only_flow():
 
 
 def test_no_evidence_conditioning_is_noop():
-    """With no evidence groups, conditioning has nothing to discount."""
+    from src.application.exceptions import NoProductionSignalEvidenceError
     for regime in ("NEUTRAL", "RISK_OFF", "VOLATILE"):
-        r = UC.execute(_req(market_context=_mctx(regime)))
-        bd = _breakdown_dict(r)
-        assert "regime_conditioning" not in bd, f"unexpected flag for {regime}"
-        assert "setup_quality_group" not in bd
-        assert "flow_confirmation_group" not in bd
+        with pytest.raises(NoProductionSignalEvidenceError):
+            UC.execute(_req(market_context=_mctx(regime)))
 
 
 def test_no_market_context_baseline():

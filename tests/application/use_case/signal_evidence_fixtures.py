@@ -174,15 +174,19 @@ def _req(**kwargs) -> AssessSignalEvidenceRequest:
     setup_evidence = kwargs.pop("setup_evidence", None)
     flow_confirmation_evidence = kwargs.pop("flow_confirmation_evidence", None)
     flow_all_authoritative = kwargs.pop("flow_all_authoritative", True)
-    if "canonical_evidence" not in kwargs and (
-        setup_evidence is not None or flow_confirmation_evidence is not None
-    ):
-        kwargs["canonical_evidence"] = CanonicalSignalEvidenceInput(
-            setup=_wrap_setup_evidence(setup_evidence),
-            flow=_wrap_flow_evidence(
-                flow_confirmation_evidence, all_authoritative=flow_all_authoritative
-            ),
-        )
+
+    if "canonical_evidence" not in kwargs:
+        if setup_evidence is not None or flow_confirmation_evidence is not None:
+            kwargs["canonical_evidence"] = CanonicalSignalEvidenceInput(
+                setup=_wrap_setup_evidence(setup_evidence),
+                flow=_wrap_flow_evidence(
+                    flow_confirmation_evidence, all_authoritative=flow_all_authoritative
+                ),
+            )
+    else:
+        if kwargs.get("canonical_evidence") is None:
+            kwargs["canonical_evidence"] = None
+
     defaults = {"ticker": "TEST", "snapshot_date": SNAP}
     defaults.update(kwargs)
     return AssessSignalEvidenceRequest(**defaults)

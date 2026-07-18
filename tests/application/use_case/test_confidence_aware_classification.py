@@ -155,13 +155,7 @@ def test_high_score_with_flow_only_authority_coverage_capped_to_watch():
     assert resp.assessment.entry_quality == EntryQuality.WATCH
 
 
-def test_no_evidence_moderate_score_is_watch_not_avoid():
-    # HIGH-2: no evidence -> base_score=50 -> MODERATE -> WATCH (directional
-    # strength only). It is not automatically AVOID; a disabled-ENTER regime
-    # or a configured authority floor is what would cap WATCH to AVOID.
-    resp = _execute()
-
-    assert resp.assessment.score == 50
-    assert resp.assessment.strength == SignalStrength.MODERATE
-    assert resp.assessment.signal_authority_coverage == pytest.approx(0.0)
-    assert resp.assessment.entry_quality == EntryQuality.WATCH
+def test_no_evidence_moderate_score_raises_no_production_signal_evidence_error():
+    from src.application.exceptions import NoProductionSignalEvidenceError
+    with pytest.raises(NoProductionSignalEvidenceError):
+        _execute()

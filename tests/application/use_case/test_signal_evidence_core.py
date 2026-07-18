@@ -16,33 +16,11 @@ from tests.application.use_case.signal_evidence_fixtures import (
 )
 
 
-def test_both_groups_missing_returns_neutral_prior():
+def test_both_groups_missing_raises_no_production_signal_evidence_error():
+    from src.application.exceptions import NoProductionSignalEvidenceError
     uc = _use_case()
-    resp = uc.execute(_req())
-    assert resp.assessment.score == 50
-    assert resp.signal_authority_coverage == 0.0
-    assert resp.raw_exact_score == 50
-
-
-def test_both_groups_missing_strength_is_moderate():
-    uc = _use_case()
-    resp = uc.execute(_req())
-    assert resp.assessment.strength == SignalStrength.MODERATE
-
-
-def test_both_groups_missing_coverage_warning_present():
-    uc = _use_case()
-    resp = uc.execute(_req())
-    assert resp.coverage_warning is not None
-    assert "No evidence groups present" in resp.coverage_warning
-
-
-def test_both_groups_missing_no_flags_score_stays_50():
-    uc = _use_case()
-    resp = uc.execute(_req())
-    assert resp.active_flags == ()
-    assert resp.flag_adjustment == 0
-    assert resp.assessment.score == 50
+    with pytest.raises(NoProductionSignalEvidenceError, match="Canonical signal assessment requires setup or flow evidence."):
+        uc.execute(_req())
 
 
 def test_only_flow_evidence_renormalized_to_flow_score():

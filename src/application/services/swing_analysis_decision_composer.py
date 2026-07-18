@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
+from src.application.exceptions import NoProductionSignalEvidenceError
 from src.application.dto import swing_analysis as swing_analysis_dto
 from src.application.services.evidence_source_availability_assembler import (
     EvidenceSourceAvailabilityAssembler,
@@ -66,41 +67,41 @@ class SwingAnalysisDecisionComposer:
         state.warnings.extend(risk_warnings)
 
         signal_assessment = None
-        if self._signal_engine is not None:
+        availability = None
+
+        if self._signal_engine is None:
+            availability = swing_analysis_dto.SignalAssessmentAvailability(
+                status=swing_analysis_dto.SignalAssessmentStatus.UNAVAILABLE,
+                unavailable_reason=swing_analysis_dto.SignalAssessmentUnavailableReason.SIGNAL_ENGINE_UNAVAILABLE,
+            )
+        else:
             try:
                 if (
                     state.accumulation_candidate is not None
                     and state.accumulation_candidate.signal_assessment is not None
                 ):
-                    # Fast path: reuse screener's pre-computed raw signal — no recomputation
                     signal_assessment = state.accumulation_candidate.signal_assessment
-                elif state.accumulation_candidate is not None:
-                    # Fallback: candidate exists but screener ran without a signal_engine
-                    signal_ctx = build_signal_context_from_candidate(
-                        ticker=request.ticker,
-                        snapshot_date=request.today,
-                        candidate=state.accumulation_candidate,
-                        signal_engine=self._signal_engine,
-                    )
-                    signal_assessment = self._signal_engine.evaluate_with_context(
-                        request.ticker,
-                        signal_ctx,
-                        market_context=state.market_regime,
-                        setup_family=request.setup_name,
+                    availability = swing_analysis_dto.SignalAssessmentAvailability(
+                        status=swing_analysis_dto.SignalAssessmentStatus.AVAILABLE,
                     )
                 else:
-                    # No candidate — provider-based standalone evaluation
-                    signal_assessment = self._signal_engine.evaluate(
-                        request.ticker,
-                        request.today,
-                        market_context=state.market_regime,
+                    availability = swing_analysis_dto.SignalAssessmentAvailability(
+                        status=swing_analysis_dto.SignalAssessmentStatus.UNAVAILABLE,
+                        unavailable_reason=swing_analysis_dto.SignalAssessmentUnavailableReason.NO_PRODUCTION_SIGNAL_EVIDENCE,
                     )
+            except (NoProductionSignalEvidenceError, TypeError, ValueError):
+                raise
             except Exception as exc:
                 state.warnings.append(f"Signal assessment unavailable: {exc}")
+                availability = swing_analysis_dto.SignalAssessmentAvailability(
+                    status=swing_analysis_dto.SignalAssessmentStatus.UNAVAILABLE,
+                    unavailable_reason=swing_analysis_dto.SignalAssessmentUnavailableReason.ASSESSMENT_FAILED,
+                )
 
         state.gate_ctx = gate_ctx
         state.risk_response = risk_response
         state.signal_assessment = signal_assessment
+        state.signal_assessment_availability = availability
         return state
 
     def compose_trade_setup_and_preview(
@@ -108,10 +109,17 @@ class SwingAnalysisDecisionComposer:
         request: swing_analysis_dto.SwingAnalysisWorkflowRequest,
         state: SwingAnalysisWorkflowState,
     ) -> SwingAnalysisWorkflowState:
+        signal_assessment_to_pass = state.signal_assessment
+        if (
+            state.signal_assessment_availability is not None
+            and state.signal_assessment_availability.status == swing_analysis_dto.SignalAssessmentStatus.UNAVAILABLE
+        ):
+            signal_assessment_to_pass = None
+
         trade_setup, trade_setup_warnings = self._risk_trade_setup_composer.compose_trade_setup(
             ticker=request.ticker,
             snapshot_date=request.today,
-            signal_assessment=state.signal_assessment,
+            signal_assessment=signal_assessment_to_pass,
             risk_response=state.risk_response,
         )
         state.warnings.extend(trade_setup_warnings)
@@ -125,7 +133,7 @@ class SwingAnalysisDecisionComposer:
             ticker=request.ticker,
             snapshot_date=request.today,
             market_regime=state.market_regime,
-            signal_assessment=state.signal_assessment,
+            signal_assessment=signal_assessment_to_pass,
             risk_response=state.risk_response,
         )
         state.warnings.extend(mce_preview_warnings)
@@ -136,12 +144,13 @@ class SwingAnalysisDecisionComposer:
         state.market_context_trade_setup_preview = market_context_trade_setup_preview
         state.verdict = swing_analysis_dto.SwingVerdict(
             trade_setup=trade_setup,
-            signal_assessment=state.signal_assessment,
+            signal_assessment=signal_assessment_to_pass,
             risk_response=state.risk_response,
             market_regime=state.market_regime,
             market_context_signal_preview=market_context_signal_preview,
             market_context_risk_preview=market_context_risk_preview,
             market_context_trade_setup_preview=market_context_trade_setup_preview,
+            signal_assessment_availability=state.signal_assessment_availability,
         )
         return state
 
@@ -153,15 +162,6 @@ class SwingAnalysisDecisionComposer:
         evidence = state.evidence
         canonical_evidence = self._build_canonical_evidence(state)
 
-        # Re-score with evidence now that the canonical evidence groups are
-        # available. Signal was computed earlier (before setup_eval existed),
-        # so that score had no evidence groups and confidence=0. Recompose
-        # all downstream outputs (TradeSetup, MCE preview) so verdict is
-        # internally consistent. Availability is bound inside
-        # canonical_evidence (ADR-041 CANONICAL-EVIDENCE-BOUNDARY) — there is
-        # no separate post-score availability step; response diagnostics are
-        # attached by AssessSignalEvidenceUseCase itself, from this same
-        # canonical_evidence.
         if (
             self._signal_engine is not None
             and state.accumulation_candidate is not None
@@ -190,7 +190,7 @@ class SwingAnalysisDecisionComposer:
                         if evidence is not None else None
                     ),
                 )
-            except (ValueError, TypeError):
+            except (NoProductionSignalEvidenceError, TypeError, ValueError):
                 # A malformed evidence/provenance/availability contract is a
                 # programming or data-integrity defect, not an operational
                 # "evidence unavailable" condition — it must fail closed,
@@ -198,6 +198,22 @@ class SwingAnalysisDecisionComposer:
                 raise
             except Exception as exc:
                 state.warnings.append(f"Evidence-enriched signal re-score unavailable: {exc}")
+                state.signal_assessment_availability = swing_analysis_dto.SignalAssessmentAvailability(
+                    status=swing_analysis_dto.SignalAssessmentStatus.UNAVAILABLE,
+                    unavailable_reason=swing_analysis_dto.SignalAssessmentUnavailableReason.ASSESSMENT_FAILED,
+                )
+                state.signal_assessment = None
+                state.trade_setup = None
+                state.market_context_signal_preview = None
+                state.market_context_trade_setup_preview = None
+                state.verdict = replace(
+                    state.verdict,
+                    signal_assessment=None,
+                    trade_setup=None,
+                    market_context_signal_preview=None,
+                    market_context_trade_setup_preview=None,
+                    signal_assessment_availability=state.signal_assessment_availability,
+                )
             else:
                 # Re-score succeeded — recompose trade_setup and MCE preview so
                 # all three fields in verdict use the same enriched signal score.
@@ -222,12 +238,16 @@ class SwingAnalysisDecisionComposer:
                 state.warnings.extend(recompose_warnings)
 
                 state.signal_assessment = signal_assessment
+                state.signal_assessment_availability = swing_analysis_dto.SignalAssessmentAvailability(
+                    status=swing_analysis_dto.SignalAssessmentStatus.AVAILABLE,
+                )
                 state.verdict = replace(
                     state.verdict,
                     signal_assessment=signal_assessment,
                     trade_setup=_new_trade_setup,
                     market_context_signal_preview=_new_mce_signal,
                     market_context_trade_setup_preview=_new_mce_trade_preview,
+                    signal_assessment_availability=state.signal_assessment_availability,
                 )
         return state
 

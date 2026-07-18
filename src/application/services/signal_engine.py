@@ -2,9 +2,8 @@
 SignalEngine — first-class application service for composite signal assessment.
 
 Parallel to RiskEngine. Self-sufficient: callers never instantiate SignalContext,
-build provider chains, or wire AssessSignalEvidenceUseCase. Two entry points:
+build provider chains, or wire AssessSignalEvidenceUseCase. Single entry point:
 
-  evaluate()              — self-fetches enrichment from injected providers
   evaluate_with_context() — pipeline path; accepts pre-loaded SignalContext
                             to avoid N+1 fetches in screener loops
 
@@ -28,7 +27,6 @@ from typing import TYPE_CHECKING, Callable
 
 from src.application.dto.assess_signal import (
     AssessSignalEvidenceRequest,
-    AssessSignalRequest,
     AssessSignalResponse,
 )
 from src.application.services.signal_engine_config import SignalEngineConfig
@@ -63,8 +61,8 @@ class SignalEngine:
     Self-sufficient signal evaluation service.
 
     Owns enrichment provider wiring. Callers never see SignalContext,
-    AssessSignalEvidenceUseCase, or provider imports — they call evaluate() and
-    get an AssessSignalResponse.
+    AssessSignalEvidenceUseCase, or provider imports — they call
+    evaluate_with_context() and get an AssessSignalResponse.
 
     All providers are optional:
       - bandar_provider:            BandarDetectorProvider (broad_score)
@@ -98,31 +96,6 @@ class SignalEngine:
         self._analyst = analyst_provider
         self._forward_estimates = forward_estimates_provider
         self._latest_price_provider = latest_price_provider
-
-    def evaluate(
-        self,
-        ticker: str,
-        as_of_date: date | None = None,
-        market_context: "MarketContext | None" = None,
-        horizon: str | None = None,
-    ) -> AssessSignalResponse:
-        """
-        Full self-contained evaluation.
-
-        Fetches enrichment from injected providers for flag evaluation.
-        Evidence groups (SetupEvidence, FlowConfirmationEvidence) are not
-        available in the self-fetch path — confidence will be 0, flags still apply.
-        """
-        ctx = self._build_signal_context(ticker, as_of_date=as_of_date)
-        return self._evidence_use_case.execute(
-            AssessSignalEvidenceRequest(
-                ticker=ticker,
-                snapshot_date=ctx.snapshot_date,
-                signal_context=ctx,
-                market_context=market_context,
-                horizon=horizon,
-            )
-        )
 
     def build_context(self, ticker: str, as_of_date: date | None = None) -> SignalContext:
         """Public accessor for the enrichment SignalContext (observability path).
@@ -169,29 +142,6 @@ class SignalEngine:
                 horizon=horizon,
                 sector_context_evidence=sector_context_evidence,
                 company_quality_context_evidence=company_quality_context_evidence,
-            )
-        )
-
-    def evaluate_request(
-        self,
-        request: AssessSignalRequest,
-        market_context: "MarketContext | None" = None,
-        horizon: str | None = None,
-    ) -> AssessSignalResponse:
-        """
-        Advanced path: caller provides a full AssessSignalRequest.
-
-        Injects signal_context automatically when the caller hasn't supplied one.
-        Evidence groups are not available via this path (flags only).
-        """
-        ctx = request.signal_context or self._build_signal_context(request.ticker)
-        return self._evidence_use_case.execute(
-            AssessSignalEvidenceRequest(
-                ticker=request.ticker,
-                snapshot_date=ctx.snapshot_date,
-                signal_context=ctx,
-                market_context=market_context,
-                horizon=horizon,
             )
         )
 
