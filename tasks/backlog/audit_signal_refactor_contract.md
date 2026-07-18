@@ -645,8 +645,8 @@ Layer plan:
 
 ## Task EVIDENCE-BACKED-ASSESSMENT — Remove Flags-Only SignalEngine Assessment Paths
 
-**State:** Ready — current flags-only assessment paths remain live; removal has
-no technical dependency on `ARTIFACT-IDENTITY`.
+**State:** Done — `4262ae3 Remove flags-only SignalEngine assessment paths
+(EVIDENCE-BACKED-ASSESSMENT)`.
 
 ### Metadata
 
@@ -812,22 +812,22 @@ Layer plan:
 
 ### Acceptance Criteria
 
-- [ ] `SignalEngine.evaluate()` and `evaluate_request()` no longer exist
-- [ ] No compatibility wrapper returns `AssessSignalResponse` without production evidence
-- [ ] Canonical assessment raises an explicit typed error when both production groups are absent
-- [ ] Setup-only and flow-only assessment remain supported
-- [ ] Both-group assessment remains supported
-- [ ] Valid assessment scores, classifications, constraints, and output are numerically unchanged
-- [ ] No-candidate swing workflow reports typed UNAVAILABLE/no-production-evidence state
-- [ ] No-candidate workflow does not pass a fabricated assessment into TradeSetup or preview composition
-- [ ] Unexpected no-evidence canonical calls are not swallowed as generic success/warning behavior
-- [ ] `build_context()` remains available for deterministic enrichment and flag audits
-- [ ] Negative test proves enrichment flags alone cannot produce any `AssessSignalResponse`
-- [ ] Negative test proves missing evidence is not represented as WATCH or AVOID
-- [ ] CLI displays application-owned status without inferring policy
-- [ ] Focused SignalEngine, swing workflow, TradeSetup composition, DTO, and CLI tests pass
-- [ ] Full test suite passes
-- [ ] `git diff --check` clean
+- [x] `SignalEngine.evaluate()` and `evaluate_request()` no longer exist
+- [x] No compatibility wrapper returns `AssessSignalResponse` without production evidence
+- [x] Canonical assessment raises an explicit typed error when both production groups are absent
+- [x] Setup-only and flow-only assessment remain supported
+- [x] Both-group assessment remains supported
+- [x] Valid assessment scores, classifications, constraints, and output are numerically unchanged
+- [x] No-candidate swing workflow reports typed UNAVAILABLE/no-production-evidence state
+- [x] No-candidate workflow does not pass a fabricated assessment into TradeSetup or preview composition
+- [x] Unexpected no-evidence canonical calls are not swallowed as generic success/warning behavior
+- [x] `build_context()` remains available for deterministic enrichment and flag audits
+- [x] Negative test proves enrichment flags alone cannot produce any `AssessSignalResponse`
+- [x] Negative test proves missing evidence is not represented as WATCH or AVOID
+- [x] CLI displays application-owned status without inferring policy
+- [x] Focused SignalEngine, swing workflow, TradeSetup composition, DTO, and CLI tests pass
+- [x] Full test suite passes
+- [x] `git diff --check` clean
 
 ---
 

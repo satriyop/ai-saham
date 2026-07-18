@@ -28,10 +28,10 @@
 - ADR-041 for the target canonical pre-score evidence boundary
 
 The original six-factor `SignalContext`, weights, thresholds, and scoring
-formula are retired implementation detail. AssessSignalUseCase and its six-factor configuration remain temporarily in
-active source as an archived audit/parity baseline pending EVIDENCE-BACKED-ASSESSMENT. They have
-no production scoring or authority role and must not be used as a production
-contract.
+formula are retired implementation detail. AssessSignalUseCase and its
+six-factor configuration remain in active source as an archived audit/parity
+baseline. They have no production scoring or authority role and must not be
+used as a production contract.
 
 ## Consequences
 
