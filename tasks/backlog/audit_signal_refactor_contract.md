@@ -1,244 +1,53 @@
-# Backlog: Signal Refactor Contract Fixes
+# Detailed Signal Contract Task Specifications
 
 **Source audit:** `tasks/thought/signal_refactor_audit.md` (verified 2026-07-14)
-**Status:** Partial — HIGH-1, CANONICAL-EVIDENCE-BOUNDARY, and HIGH-2 are
-done; ARTIFACT-IDENTITY is next.
-
----
 
 > [!IMPORTANT]
-> All tasks in this backlog touch live scoring/policy code.
-> Before starting ANY task: read `AGENT_QUICKSTART.md`, confirm `AGENTS.md` / `GEMINI.md` compliance, and **state the layer plan**.
-> Do not promote diagnostic evidence or tune thresholds while these contract ambiguities remain unresolved.
-> Under ADR-042, narrow local-ML output may enter this backlog only as a typed
-> evidence producer with immutable model/feature identity and model-specific
-> validation. Full ML/API decisions remain separate non-authoritative
-> challengers and are outside the evidence-promotion lifecycle.
+> This is the detailed contract appendix, not the execution entry point.
+> Start with [`signal_evidence_program.md`](signal_evidence_program.md), then
+> use [`deterministic_signal_engine.md`](deterministic_signal_engine.md) or
+> [`evidence_validation_and_promotion.md`](evidence_validation_and_promotion.md)
+> to select one task before opening its specification here.
 
 ---
 
-## Execution Order
-
-The authoritative cross-backlog phase order is
-`tasks/backlog/signal_evidence_program.md`. This table is the signal-program task
-inventory in approximate dependency order; do not interpret priority as license
-to skip an unmet phase entry gate.
-
-State labels are evidence claims: `Done` requires code/test verification,
-`Partial` requires at least one verified task-owned implementation slice,
-`Blocked` means a prerequisite prevents implementation, and `Not started` means
-no task-owned implementation has been verified. Do not mark a task `Partial`
-solely because adjacent infrastructure exists.
-
-| # | Task ID | Priority | Description |
-|---|---------|----------|-------------|
-| 0 | `DQ-CONTRACT-GATE` | P0 | Resolve authoritative live-source/time blockers before semantic repairs |
-| 1 | `HIGH-1` | P0 | Repair benchmark excess-return evidence and demote unvalidated RS gates |
-| 2 | `CANONICAL-EVIDENCE-BOUNDARY` | P0 | Bind evidence, consumed-row provenance, and shadow availability across screen and swing |
-| 3 | `HIGH-2` | P0 | Replace ambiguous coverage/conviction floors with explicit authority coverage and setup readiness |
-| 4 | `ARTIFACT-IDENTITY` | P0 | Separate artifact uniqueness, semantic compatibility, and complete provenance |
-| 5 | `CONTROL-POPULATION` | P0 | Capture eligible-universe controls, not only selected candidates |
-| 6 | `PROMO-INTEGRITY` | P0 | Bind promotion to immutable, independently verified evaluation artifacts |
-| 7 | `AUTH-SCOPE` | P0 | Scope authority by evidence, setup, horizon, and only proven segmentation dimensions |
-| 8 | `HIGH-3` | P1 | Remove flags-only SignalEngine assessment paths and fail closed without production evidence |
-| 9 | `IDX-EXECUTION-LABELS` | P1 | Label executable net outcomes under IDX market constraints |
-| 10 | `WALKFORWARD-VALIDATION` | P1 | Replace one 70/30 split with purged, embargoed walk-forward evaluation |
-| 11 | `INCREMENTAL-EDGE` | P1 | Require paired baseline-versus-evidence-challenger ablation |
-| 12 | `SHADOW-PROMOTION` | P1 | Add evidence-challenger staged authority, monitoring, and rollback lifecycle |
-| 13 | `BASELINE-RECERT` | P0 | Recertify or demote legacy baseline authority after the valid evaluation path exists |
-| 14 | `MEDIUM-1` | MEDIUM | Remove producer-config authority from institutional accumulation evidence |
-| 15 | `MEDIUM-2` | MEDIUM | Rename the persisted Alpha/Trigger sector evidence identity without changing real market context |
-| 16 | `MEDIUM-3` | MEDIUM | Make output ownership truthful; defer dead-field migration to canonical artifact schema work |
+Before starting a task, read `AGENT_QUICKSTART.md`, follow the selected lane,
+verify the task state against code and tests, and state the layer plan. Do not
+promote diagnostic evidence or tune thresholds while relevant contract or data
+prerequisites remain unresolved.
 
 ---
 
-## Task HIGH-1 — Repair Benchmark Excess-Return Evidence and Authority
+## How To Use This Appendix
+
+- Task identity is semantic; priority remains separate metadata.
+- `Done` records a final verification commit.
+- `Active` requires at least one committed task-owned slice.
+- `Ready` means prerequisites pass but implementation has not started.
+- `Blocked` means an explicit prerequisite remains open.
+- `Deferred` means the task is intentionally outside the active lane.
+- Dependencies and active ordering live in the lane documents, not here.
+- Exact contracts, forbidden interpretations, and close criteria live here.
+
+### Current-Code Audit — 2026-07-18
+
+- 544 focused contract and artifact-identity tests passed.
+- The full suite passed: 5,223 tests.
+- Completed tasks remain implemented at the current worktree state.
+- No `ARTIFACT-IDENTITY` close criterion is checked: current slices provide
+  domain resolution and persistence support, but canonical producers,
+  readiness grouping, and artifact-level idempotency are not integrated.
+- Unchecked criteria under `Ready`, `Blocked`, or `Deferred` tasks describe
+  future task completion; incidental adjacent code is not counted as task-owned
+  completion.
+
+---
+
+## Task BENCHMARK-EXCESS-RETURN — Repair Benchmark Excess-Return Evidence and Authority
 
 **State:** Done
 
-### Metadata
-
-- **Type:** Data correctness + evidence-authority guardrail
-- **Priority:** P0
-- **Affects entry caps:** YES — the current unvalidated 5-session measurement can cap ENTER to WATCH or AVOID
-- **Decision:** Temporarily make both measured horizons diagnostic-only. Repair the
-  calculation and evidence contract, collect point-in-time labelled evidence,
-  then promote only a validated setup-family-specific policy. Implement this
-  option only.
-
-### Problem
-
-The current code calls the measurement `relative strength`, but the calculator
-actually computes a benchmark excess return in percentage points:
-
-```text
-ticker return over N sessions - IHSG return over N sessions
-```
-
-`setup_phase_rs_policy.py` applies the 5-session value as production entry
-authority. It emits `rs_policy_warning` or `rs_policy_hard_exclude`, and
-`DecisionPolicyService` caps ENTER to WATCH or AVOID.
-
-The archived design rationale proposes a 20-day field, but it is not an
-executable specification:
-
-- it is archived rather than a current authority document;
-- it uses example thresholds such as `-0.03` and `-0.06`, implying different
-  units from the calculator's percentage-point output;
-- it provides no point-in-time out-of-sample evidence that either horizon or
-  threshold should control entry.
-
-The calculator also slices ticker and benchmark closes independently. It does
-not align them by common IDX session date. Missing ticker candles, suspensions,
-or provider gaps can therefore compare returns over different start/end dates.
-That makes the current measurement unsafe as an authoritative gate.
-
-Local database evidence confirms the horizon choice is material but does not
-select a winner. Among 1,214 observations containing both measurements, applying
-the current `-1/-4` percentage-point thresholds produces 688 different policy
-buckets (56.7%). The mature `SWING_10D` labels currently match older
-observations that do not contain these measurements, so the database cannot yet
-justify 5 sessions, 20 sessions, or either threshold as a hard entry constraint.
-
-The support-reclaim exception is also not a real exception. The code still
-emits an `rs_policy_warning` marker, so `DecisionPolicyService` caps the result
-to WATCH regardless of appended exception text. Its boolean condition appears
-inverted, and no coherent mean-reversion family contract currently consumes it.
-
-Key files:
-
-- `src/application/services/relative_strength_calculator.py` — current formula
-  and independently sliced candle series
-- `src/domain/value_objects/setup_evidence.py` — formally carries only the
-  5-session measurement
-- `src/application/services/setup_evidence_builder.py` — hard-coded benchmark
-  availability/freshness gate
-- `src/application/services/candidate_setup_phase_evidence_assembler.py` —
-  computes both values but passes only 5-session evidence into `SetupEvidence`
-- `src/application/services/setup_phase_rs_policy.py` — creates authoritative
-  warning/hard-exclude reason strings
-- `src/application/services/decision_policy.py` — converts those strings into
-  WATCH/AVOID caps
-- `config/swing_setups.yaml` — current generic `-1/-4` thresholds shared across
-  materially different setup families
-- `docs/archive/signal_refactor_full_rationale.md` — historical design intent,
-  not current executable authority
-
-### Exact Measurement Contract
-
-Do not introduce interpretive source fields such as `rs_tactical` or
-`rs_structural`. The raw concept is benchmark excess return over an explicit
-number of common sessions.
-
-Preferred semantic names:
-
-```text
-excess_return_vs_ihsg_5_session_pct
-excess_return_vs_ihsg_20_session_pct
-```
-
-Each computed window must expose a typed record equivalent to:
-
-```text
-BenchmarkExcessReturn
-  benchmark
-  window_sessions
-  ticker_return_pct
-  benchmark_return_pct
-  excess_return_pct
-  window_start
-  window_end
-  common_session_count
-  status
-  unavailable_reason
-```
-
-`window_sessions=5` means five close-to-close returns and therefore requires
-six aligned closing prices. `window_start` and `window_end` must be identical
-for ticker and benchmark.
-
-### Desired Outcome
-
-#### Stage 1 — Safe demotion and truthful naming
-
-- Stop `rs_policy_warning` and `rs_policy_hard_exclude` from constraining the
-  canonical decision.
-- Continue computing and persisting both horizons as diagnostic measurements.
-- Replace ambiguous `rs_vs_ihsg_*` naming in the corrected schema/contract with
-  benchmark excess-return naming.
-- Remove or disable the non-functional support-reclaim exception until a
-  precise setup-family policy is validated.
-- Mark the policy state explicitly as `DIAGNOSTIC_UNVALIDATED`.
-
-#### Stage 2 — Calculation repair and evidence collection
-
-- Align ticker and IHSG candles on common completed IDX sessions before
-  calculating either return.
-- Persist the component returns, exact common-session window, status, and
-  unavailable reason.
-- Backfill point-in-time observations only after common-session alignment is
-  correct.
-- Generate mature forward labels bound to the exact observation identity.
-- Evaluate each horizon independently by setup family, regime, liquidity tier,
-  and out-of-sample period.
-- Compare each proposed gate against the same setup without the gate, after
-  realistic costs.
-
-#### Stage 3 — Explicit evidence promotion
-
-- Promote a horizon to production authority only when point-in-time OOS results
-  demonstrate incremental value for a named setup family.
-- Give the policy role an explicit name in policy/config; do not encode an
-  inferred role such as tactical or structural in the raw measurement.
-- Calibrate horizon-specific, unit-explicit thresholds. Never reuse `-1/-4`
-  automatically across horizons or setup families.
-- Record the promotion decision through the repository's evidence-promotion
-  guardrail/ADR process.
-
-### Non-Goals
-
-- No blind replacement of 5-session input with 20-session input.
-- No threshold tuning before the point-in-time dataset is valid and labelled.
-- No claim that either horizon represents tactical timing or structural
-  leadership at the raw evidence layer.
-- No preservation of ambiguous legacy field names in the new canonical schema
-  merely for compatibility.
-- No new data providers.
-- No risk engine changes.
-
-### Do Not Interpret This As
-
-- Do not treat the archived rationale as canonical proof.
-- Do not add `rs_vs_ihsg_20d` to `SetupEvidence` and declare the task complete.
-- Do not calculate ticker and benchmark windows independently.
-- Do not retain authoritative reason-string parsing while labelling the
-  evidence diagnostic.
-- Do not keep the support-reclaim flag as documentation-only behavior.
-- Do not promote either horizon from in-sample results or row counts alone.
-- Do not make missing excess-return evidence neutral or passed.
-
-### Layer Plan (Agent Must State Before Coding)
-
-```md
-Layer plan:
-- Domain: add/rename a pure benchmark excess-return evidence value object and explicit availability status
-- Application: common-session calculation, evidence assembly, temporary diagnostic authority, policy removal/guarding
-- Infrastructure: no provider change; migration/version handling only if persisted canonical fields change
-- Adapter: render exact measurement name, units, window dates, status, and diagnostic authority
-- Documentation/config: remove unvalidated production thresholds and document the measurement/promotion contract
-```
-
-### Acceptance Criteria
-
-- [x] Ticker and IHSG returns use the same common-session start and end dates
-- [x] Five-session calculation requires six aligned closes; 20-session requires 21
-- [x] Missing/suspended/gapped series return unavailable or use only explicitly aligned common sessions
-- [x] Both horizons expose component returns, excess return, exact window, unit, status, and unavailable reason
-- [x] Neither horizon can cap ENTER while status is `DIAGNOSTIC_UNVALIDATED`
-- [x] `DecisionPolicyService` does not infer authority from diagnostic RS reason strings
-- [x] The broken support-reclaim exception is removed
-- [x] Full test suite passes
-- [x] `git diff --check` is clean
+**Completed:** `5b9f3f0 tasks:update, adr:update`
 
 ---
 
@@ -246,428 +55,29 @@ Layer plan:
 
 **State:** Done
 
-### Metadata
-
-- **Type:** Application-boundary architecture + shadow availability migration
-- **Priority:** P0
-- **Depends on:** HIGH-1
-- **Required before:** HIGH-2 authority enforcement
-- **Architecture:** ADR-041
-- **Decision:** Replace workflow-specific evidence/availability plumbing with
-  one typed signal-evidence input shared by the candidate-producing
-  accumulation screen and `saham analyze swing`. Keep availability shadow-only
-  and preserve every current score and decision. Implement this option only.
-
-### Problem
-
-Both workflows call `AssessSignalEvidenceUseCase`, but evidence is assembled
-through different paths. DQ-002J adds useful `analyze swing` shadow diagnostics
-after scoring; it is a prototype, not the final boundary. Extending that pattern
-independently into the screener would allow evidence, consumed-row provenance,
-and availability to drift and would leave HIGH-2 without one trustworthy input
-on which to base authority coverage or setup readiness.
-
-### Required Contract
-
-Introduce typed application/domain contracts, following established naming,
-that bind per evidence group:
-
-```text
-evidence value
-exact consumed-row provenance
-resolved EvidenceSourceAvailability
-```
-
-The candidate-producing path (`AccumulationScreenUseCase` /
-`AccumulationCandidateSignalAssessor`) and deep-analysis path
-(`SwingAnalysisWorkflowUseCase`) must both construct that same contract before
-calling the canonical signal assessment. Evidence builders own provenance of
-what they consumed; they must not ask downstream code to infer it from a
-different query or a generic snapshot date.
-
-The migration must remain `SHADOW`: availability is returned for diagnostics
-but cannot affect scoring, coverage, classification, candidate selection,
-TradeSetup, persistence eligibility, or tuning.
-
-Here, "construct evidence" means build a typed in-memory assessment input. It
-does not mean persist a canonical learning observation. `screen accum` and
-`analyze swing` are consumers of the shared builder, not observation event
-generators. Canonical capture belongs to `CONTROL-POPULATION` after
-`ARTIFACT-IDENTITY`.
-
-### End-To-End Invariants
-
-- Evidence and its provenance/availability cannot be supplied independently.
-- Every production-authority contributor is assessed or named as unassessed;
-  unassessed contributors prevent complete-authority claims.
-- Missing provenance resolves non-authoritatively; it is never inferred from
-  execution time, database mtime, or a row not consumed.
-- Both workflows use one effective session and one compatible calendar snapshot
-  per execution, not per source or field.
-- Diagnostic sources cannot raise production authority.
-- Repeating either interactive command with the same effective session, source
-  snapshot/cutoff, config, code, and evidence-contract identity cannot create a
-  second learning sample or materially different canonical input.
-- Invocation timestamp and command name are not canonical evidence inputs.
-- Auto-refresh may change an assessment only through an explainable change in
-  consumed source rows/snapshot identity.
-- `AssessSignalEvidenceUseCase` remains repository-free.
-- Adapters perform dependency wiring/rendering only.
-- DQ-002J response diagnostics may be preserved for compatibility, but their
-  values must originate from the canonical pre-score input, not a second
-  workflow-specific assessment.
-
-### Do Not Interpret This As
-
-- Do not implement HIGH-2 authority coverage or setup readiness in this task.
-- Do not activate availability as a decision gate.
-- Do not integrate all registry sources without proving they feed a scored
-  evidence group.
-- Do not add a generic freshness/authority scalar or average statuses.
-- Do not add repository reads to the signal scorer or policy to CLI adapters.
-- Do not infer missing provenance or silently neutral-fill unavailable inputs.
-- Do not persist a new canonical observation schema here; that belongs to
-  `ARTIFACT-IDENTITY`.
-- Do not make `screen accum` or `analyze swing` implicitly capture learning
-  observations, even behind an idempotent upsert.
-- Do not use CLI invocation frequency, invocation timestamp, or user-selected
-  tickers to define the future learning population.
-- Do not label the existing selected-candidate recorder
-  `accumulation-discovery`; it lacks the required eligible-universe controls.
-- Do not change weights, thresholds, recommendations, or tuning eligibility.
-
-### Negative Tests
-
-- A planted future row is excluded from both evidence and its provenance.
-- Evidence cannot be constructed with availability from a different source
-  read/cutoff.
-- Missing and unassessed contributors cannot yield complete authority.
-- Diagnostic evidence cannot increase authority.
-- Screen and swing produce equivalent canonical evidence inputs for identical
-  ticker/session/source fixtures.
-- Repeated `screen accum` and `analyze swing` assessment does not add canonical
-  observation rows.
-- Identical semantic inputs produce equivalent canonical input regardless of
-  command or invocation time; changed consumed source rows produce different,
-  explainable provenance. Formal persisted identity belongs to
-  `ARTIFACT-IDENTITY`.
-- With shadow metadata removed from comparison, pre/post-migration signal,
-  candidate inclusion/rank, TradeSetup, and serialized decision fields are
-  unchanged.
-
-### Close Criteria
-
-- One typed canonical evidence input is used by both real
-  `AssessSignalEvidenceUseCase` call paths.
-- Provenance identifies the exact rows/dates/timestamps consumed by each scored
-  evidence group.
-- Source availability is resolved once and remains shadow-only.
-- The shared builder is side-effect-free with respect to canonical learning
-  persistence.
-- DQ-002J no longer owns a separate post-score source-of-truth assessment.
-- Focused screen/swing/signal/temporal-leakage tests and architecture tests
-  pass; full suite passes when feasible; `git diff --check` is clean.
-- HIGH-2 explicitly depends on this completed task before enforcing authority.
+**Completed:** `2526608 Fix Finding 6: replace fake screen/swing parity test with real boundary test`
 
 ---
 
-## Task HIGH-2 — Fix Coverage/Conviction Gating Source and Naming
+## Task AUTHORITY-COVERAGE-READINESS — Fix Coverage/Conviction Gating Source and Naming
 
-**State:** Done (2026-07-18) — canonical authority coverage, typed setup
-readiness, schema isolation, historical-artifact exclusion, and active
-terminology were verified against current code and tests.
+**State:** Done
 
-### Verification Record
-
-A post-review pass found the scoring/policy contract above was correct but not
-universally enforced in production: `AccumulationScreenUseCase` and its
-factories accepted an optional `signal_engine` and silently fell back to a bare,
-unconfigured `SignalEngine()` when a caller omitted it, and
-`signal_engine_config.py`'s own Python defaults for RISK_ON/NEUTRAL
-`min_signal_authority_coverage` were `0.0` instead of the canonical `0.70` in
-`config/signal_engine.yaml` — so an unconfigured engine enforced no coverage
-floor at all. **Finding 1 fixed (2026-07-18):** `signal_engine` is now a
-mandatory constructor/factory parameter with no default and no `signal_engine or
-SignalEngine()` fallback across `AccumulationScreenUseCase`,
-`AccumulationAuditUseCase`, `SwingBacktestUseCase`, and both
-`accumulation_screen_factory.py` factories; every production composition root
-(`screen accum`/`screen compare`, `analyze swing` and its nested per-ticker screen,
-`analyze accum-audit`, `trade log-accum`, `trade backtest-swing`, `analyze
-swing-compare`, and the daily briefing) now injects one configured engine per
-invocation; the RISK_ON/NEUTRAL code defaults now match the YAML (0.70). A
-follow-up review of this fix found the YAML resolver itself
-(`engine_bootstrap/signal_decision_policy_config_resolver.py`) still failed
-open: `raw.get("min_signal_authority_coverage", 0.0)` meant any regime block
-that omitted the key from `config/signal_engine.yaml` silently resolved to a 0.0
-floor, recreating the original bypass despite the corrected dataclass defaults.
-**Fixed (2026-07-18):** the resolver now raises `ValueError` when
-`min_signal_authority_coverage` is missing from a regime's config block instead
-of defaulting it, with a regression test covering a four-regime config that
-omits the key from one regime. **Finding 2 fixed (2026-07-18):**
-`GenerateSignalForwardLabelsUseCase` now excludes any candidate observation
-from label generation entirely (with no label, no fingerprint parse, no candle
-read, and no repository write) unless both conditions are met: (1) exact
-candidate observation schema 3, and (2) a non-empty canonical config_hash
-string.
-**Finding 3 fixed (2026-07-18):** readiness dates, latest-per-ticker counts,
-raw counts, and target counts now use only schema-3 observations with
-non-empty config_hash. Legacy diagnostic rows remain readable through
-noncanonical repository methods. **Follow-up Finding 3 fixed (2026-07-18):**
-The archived six-factor scorer now explicitly assigns `None` (representing that
-canonical coverage was not evaluated) instead of fabricating `1.0` defaults.
-**Finding 4 fixed (2026-07-18):** `SummarizeSignalForwardLabelsUseCase` now
-filters to exact schema-2 forward labels before building any bucket, replaced
-the ambiguous `coverage_bucket`/`conviction_bucket` groups with a canonical
-`signal_authority_coverage_bucket`, and added typed
-`setup_readiness_status`/`setup_readiness_current_phase`/missing-input/
-failed-requirement attribution — with no fallback to the legacy fingerprint
-fields. **Follow-up Finding 4 fixed (2026-07-18):** Active docs, config comments,
-archived rationale, and the signal-audit command now cleanly distinguish
-canonical production authority coverage from archived factor presence.
-**Finding 5 fixed (2026-07-18):** schema-2 label JSON and SQLite fingerprint
-persistence omit generic legacy coverage/conviction and phase aliases; schema-1
-parsing remains diagnostic and read-compatible. **Finding 6 fixed (2026-07-18):**
-daily briefing and multi-screen DTOs, JSON, and displays now expose
-signal_authority_coverage; ambiguous coverage_score and signal_coverage
-aliases were removed with a clean break. **HIGH-2 Finding 1 fixed (2026-07-18):**
-swing tuning patch readiness validation now requires canonical
-authority-coverage and typed readiness attribution.
-
-### Metadata
-
-- **Type:** Decision-contract correctness + persisted-data semantic repair
-- **Priority:** P0
-- **Depends on:** CANONICAL-EVIDENCE-BOUNDARY
-- **Affects entry gating:** YES — two differently defined coverage metrics and a
-  non-directional phase-strength metric currently control ENTER
-- **Decision:** Gate once on canonical production-authority coverage; represent
-  setup-family readiness as typed requirements; keep phase strength and phase
-  input completeness diagnostic; remove the generic derived conviction floor.
-  Implement this option only.
-
-### Problem
-
-The current contract uses the words `coverage`, `confidence`, and `conviction`
-for materially different calculations, then substitutes one calculation for
-another depending on whether setup-phase evidence exists.
-
-`SignalEvidenceGroupScorer.confidence` is not statistical confidence or trade
-conviction. It is weighted evidence presence: setup contributes `0.60`, flow
-contributes `0.40`, and the scorer already uses it to constrain classification.
-The same value is exposed under aliases including `confidence_score`,
-`coverage_score`, and `evidence_confidence`.
-
-When setup phase exists, `AssessSignalEvidenceUseCase` does not pass that metric
-to `DecisionPolicyService`. It substitutes:
-
-- `setup_phase.coverage_score`: equal-weight presence of setup evidence, flow
-  evidence, and a volume-valid flag;
-- `setup_phase.conviction_score`: phase strength multiplied by that coverage.
-
-Phase strength is a heuristic detector-strength value, not bullish trade
-conviction. DISTRIBUTION and FAILED phases can legitimately receive high phase
-strength. Calling this value `conviction` and imposing a generic minimum can
-therefore make a strong bearish/failed classification look more entry-ready.
-The phase coverage calculation also omits inputs such as benchmark evidence and
-does not express setup-family-specific requirements.
-
-When setup phase does not exist, both policy arguments fall back to the same
-group-presence value. The policy then checks that one fact twice under different
-names. This is not independent confirmation.
-
-Alpha/Trigger does not provide a safe replacement scalar:
-
-- its coverage includes configured diagnostic groups;
-- its authority coverage is constrained by the current production/diagnostic
-  weight split and has different semantics;
-- its `conviction` is the normalized final score, so using both a score floor
-  and conviction floor double-gates the same fact;
-- the projection is currently built after decision policy resolution.
-
-Persisted observations introduce a separate correctness defect. The candidate
-fingerprint helper derives observation coverage from present flow fields divided
-by two, rather than persisting the canonical signal metric. Those rows must not
-be treated as compatible learning evidence merely because the column is named
-`coverage_score`.
-
-Local database inspection found 19,272 observations containing both signal and
-phase metrics. Their signal and phase coverage values differed in every row;
-the persisted signal coverage was `0.5` in all 19,272 rows, while phase coverage
-was `1.0` in 19,269 rows. This is implementation-path evidence of semantic
-incompatibility, not evidence that either threshold is calibrated correctly.
-
-Key files:
-
-- `src/application/use_case/assess_signal_evidence_use_case.py` — substitutes
-  phase metrics into generic decision-policy arguments
-- `src/application/services/signal_evidence_group_scorer.py` — weighted evidence
-  presence currently named `confidence`
-- `src/application/services/setup_phase_detector.py` — phase input coverage and
-  detector strength currently combined as `conviction_score`
-- `src/application/services/decision_policy.py` — generic regime-level
-  `min_coverage` / `min_conviction` checks
-- Alpha/Trigger projection and response mapping — additional conflicting names
-  for coverage and normalized score
-- candidate observation/fingerprint persistence path — persists flow presence
-  divided by two as signal coverage
-- decision-policy and observation regression tests — preserve current semantics
-  and must be changed rather than worked around
-
-### Exact Decision Contract
-
-#### 1. Canonical signal authority coverage
-
-Define one metric with one meaning:
-
-```text
-signal_authority_coverage =
-  sum(configured weight for present PRODUCTION evidence groups)
-  / sum(configured weight for required PRODUCTION evidence groups)
-```
-
-The denominator must be explicit for the evaluated signal contract. Diagnostic
-groups cannot increase or decrease production-authority coverage. An unavailable
-required production group remains missing; it is not silently renormalized away.
-
-Rename `SignalEvidenceGroupScorer.confidence` and public aliases to
-`signal_authority_coverage`. Apply any minimum authority-coverage gate exactly
-once. If a regime-specific threshold is retained, name it
-`min_signal_authority_coverage`; it must not silently change denominator or
-meaning by regime.
-
-#### 2. Directional signal score
-
-`signal_score` is the scored directional evidence result. Do not derive a
-second generic `conviction` scalar from that score and then gate on both. A
-score threshold and `score / 100` conviction threshold are duplicate authority,
-not independent evidence.
-
-#### 3. Typed setup-family readiness
-
-Replace generic phase coverage/conviction floors with a typed result equivalent
-to:
-
-```text
-SetupPhaseReadiness
-  setup_family
-  status: READY | INCOMPLETE | INELIGIBLE | UNAVAILABLE
-  missing_required_inputs
-  failed_requirements
-```
-
-Each setup family owns explicit deterministic requirements. These may include
-eligible phase state, required transition/sequence, volume confirmation, and
-benchmark evidence only after that evidence has production authority. The
-decision policy consumes the typed readiness result; it does not infer readiness
-from a generic scalar.
-
-`INCOMPLETE`, `INELIGIBLE`, and `UNAVAILABLE` are distinct. Missing data must not
-be treated as a failed setup, and an ineligible phase must not be presented as
-low confidence.
-
-#### 4. Diagnostic phase metrics
-
-If useful for observability, retain truthfully named metrics such as:
-
-```text
-phase_input_coverage
-phase_detection_strength
-```
-
-They are diagnostic measurements. They are not trade conviction and cannot
-independently authorize or veto ENTER.
-
-#### 5. Persistence compatibility
-
-Persist canonical `signal_authority_coverage` from the assessed signal contract,
-not from a flow-only shortcut. Version the observation/fingerprint schema.
-Readers must reject or exclude historical rows whose `coverage_score` came from
-the flow-presence-divided-by-two path. HIGH-2 records their incompatible schema
-and blast radius; physical quarantine or rebuild is owned by DQ-010. Do not
-relabel those values in place.
-
-### Desired Outcome
-
-- One production-authority coverage definition is computed, exposed, persisted,
-  and gated consistently.
-- Setup eligibility/readiness is explicit per setup family and cannot be
-  substituted by a detector-strength scalar.
-- Directional score is not double-gated under the name `conviction`.
-- Diagnostic phase completeness and strength remain observable without acquiring
-  decision authority.
-- Persisted observations have an explicit compatible schema/version and learning
-  workflows exclude incompatible rows.
-
-### Non-Goals
-
-- No change to scoring weights.
-- No new evidence builders.
-- No risk engine changes.
-- No threshold tuning or evidence promotion.
-- No claim that authority coverage predicts outcome probability.
-- No conversion of Alpha/Trigger diagnostic-group coverage into entry authority.
-
-### Do Not Interpret This As
-
-- Do not choose either current scalar wholesale and merely rename it.
-- Do not rename `setup_phase.conviction_score` while preserving it as a generic
-  entry floor.
-- Do not use Alpha/Trigger `final_exact_score / 100` as independent conviction.
-- Do not count diagnostic evidence toward production-authority coverage.
-- Do not renormalize missing required production evidence out of the denominator.
-- Do not preserve generic `min_coverage` or `min_conviction` compatibility aliases
-  that retain ambiguous behavior.
-- Do not encode setup-family readiness as another untyped float.
-- Do not relabel historical `coverage_score` values as canonical without proving
-  their producer and schema version.
-- Do not update only output naming; all producers, consumers, persistence,
-  tuning exclusions, tests, config, and docs must follow the same contract.
-
-### Layer Plan (Agent Must State Before Coding)
-
-```md
-Layer plan:
-- Domain: add typed setup-family readiness/status; rename semantic assessment fields without IO or policy orchestration
-- Application: compute canonical authority coverage, evaluate family readiness, remove duplicate conviction gating, and pass explicit facts to decision policy
-- Infrastructure: version persisted observation/fingerprint semantics and reject incompatible coverage rows from canonical consumers; DQ-010 owns physical quarantine/rebuild
-- Adapter: expose truthful authority-coverage, readiness, missing-input, and diagnostic phase fields; remove ambiguous aliases
-- Documentation/config: replace generic floors and pseudocode with the exact contract; document schema compatibility
-```
-
-### Acceptance Criteria
-
-- [x] `signal_authority_coverage` has one formula across scoring, policy, output, persistence, and learning
-- [x] Only present PRODUCTION evidence contributes to its numerator
-- [x] Required PRODUCTION evidence remains in its denominator when unavailable
-- [x] Diagnostic evidence cannot improve production-authority coverage
-- [x] Any retained floor is named `min_signal_authority_coverage` and is applied once
-- [x] Generic `min_coverage` and `min_conviction` decision floors are removed
-- [x] No decision floor is derived from `signal_score / 100` or Alpha/Trigger normalized score
-- [x] Each authoritative setup family returns typed READY, INCOMPLETE, INELIGIBLE, or UNAVAILABLE readiness
-- [x] Readiness exposes missing inputs and failed requirements separately
-- [x] Phase input coverage and detector strength, if retained, are diagnostic-only and truthfully named
-- [x] Regression test: identical signal score and authority coverage with different diagnostic phase strength does not change authority by itself
-- [x] Regression test: missing required production evidence lowers authority coverage and cannot be renormalized away
-- [x] Regression test: diagnostic evidence presence cannot raise authority coverage
-- [x] Negative test: high FAILED or DISTRIBUTION phase strength cannot satisfy bullish setup readiness
-- [x] Observation/fingerprint persistence stores canonical coverage with an explicit schema/version
-- [x] Historical flow-derived coverage rows are identified as incompatible and excluded from canonical learning/tuning; their physical quarantine/rebuild is recorded for DQ-010
-- [x] Existing tests that preserve phase scalars as generic decision floors are updated, not bypassed
-- [x] Config, public output, current docs, and archived rationale annotations use the same semantics
-- [x] Focused decision-policy, readiness, persistence, and negative tests pass
-- [x] Full test suite passes
-- [x] `git diff --check` clean
+**Completed:** `8c4dee1 Close remaining HIGH-2 Findings and Reconcile Acceptance State`
 
 ---
 
-## Task MEDIUM-1 — Remove Producer-Config Authority From Institutional Accumulation
+## Task CENTRAL-EVIDENCE-AUTHORITY — Remove Producer-Config Authority From Institutional Accumulation
 
-**State:** Partial — scheduled after HIGH-3 in Phase 2.
+**State:** Ready — current code still exposes producer-config authority; this
+task has no dependency on `EVIDENCE-BACKED-ASSESSMENT`.
 
 ### Metadata
 
 - **Type:** Authority-boundary bugfix + persisted-provenance guardrail
-- **Priority:** MEDIUM
+- **Priority:** P2
+- **Proportionality:** Keep. This is a bounded fail-closed config/builder fix;
+  it does not require promotion infrastructure.
 - **Risk:** YAML or direct config construction can falsely label diagnostic
   evidence as production, contaminating display and persisted fingerprints and
   creating an unsafe future-consumer trap
@@ -762,10 +172,10 @@ No caller-supplied calculation config may alter that status.
 #### Future promotion
 
 If this producer later contributes to scoring, introduce or map it to an
-explicitly named central evidence registration. Promotion requires the existing
-manual OOS attribution record, validator, authority cap, and aggregation-path
-enforcement. Do not reintroduce an authority field into the producer's
-calculation YAML.
+explicitly named central evidence registration. Promotion then requires the
+deferred `evidence_validation_and_promotion.md` contract; the current
+YAML-declared metric validator is not sufficient proof. Do not reintroduce an
+authority field into the producer's calculation YAML.
 
 Keep the identities explicit:
 
@@ -841,14 +251,16 @@ Layer plan:
 
 ---
 
-## Task MEDIUM-2 — Rename Alpha/Trigger `market_context` to `sector_context`
+## Task SECTOR-CONTEXT-IDENTITY — Rename Alpha/Trigger `market_context` to `sector_context`
 
-**State:** Partial — scheduled after MEDIUM-1 in Phase 2.
+**State:** Blocked — requires the active artifact/schema identity contract.
 
 ### Metadata
 
 - **Type:** Evidence-identity rename + persisted-schema compatibility
-- **Priority:** MEDIUM
+- **Priority:** P2
+- **Proportionality:** Keep. This is a machine-readable identity correction,
+  not a cosmetic rename; it must precede new canonical attribution rows.
 - **Risk:** The misleading name can corrupt future tuning/promotion decisions;
   an incomplete rename can split historical attribution or accidentally alter
   the real market-wide `MarketContext` system
@@ -1036,14 +448,17 @@ Layer plan:
 
 ---
 
-## Task MEDIUM-3 — Make Output Ownership Truthful
+## Task OUTPUT-CONTRACT-OWNERSHIP — Make Output Ownership Truthful
 
-**State:** Partial — scheduled after MEDIUM-2 in Phase 2.
+**State:** Deferred, non-blocking — perform after `SECTOR-CONTEXT-IDENTITY`;
+this documentation cleanup does not block `LIVE-CONTRACT-GATE`.
 
 ### Metadata
 
 - **Type:** Output-contract documentation correction
-- **Priority:** MEDIUM
+- **Priority:** P2
+- **Proportionality:** Simplify. Keep only truthful ownership and dead-field
+  guidance; do not turn this into a new output or sizing implementation.
 - **Risk:** A permanently-null field creates meaningless attribution, while the
   conceptual output guide can make agents duplicate existing volatility and
   authority output or invent an unvalidated liquidity-sizing feature
@@ -1135,7 +550,7 @@ Document these current truths:
 
 Document `regime_detection_method_at_signal` as a legacy, never-produced field
 that is ineligible for canonical attribution. Do not modify persistence,
-serialization, or historical JSON in MEDIUM-3.
+serialization, or historical JSON in OUTPUT-CONTRACT-OWNERSHIP.
 
 `ARTIFACT-IDENTITY` must exclude the field from the new canonical fingerprint
 schema. DQ-010 owns quarantine/rebuild of old rows and removal of the resulting
@@ -1218,27 +633,28 @@ Layer plan:
 ### Acceptance Criteria
 
 - [ ] The active output guide names exact current locations and owners for decision constraints, volatility, and evidence authority
-- [ ] Liquidity and final composed position sizing are explicitly marked unimplemented/deferred
-- [ ] The guide marks `regime_detection_method_at_signal` legacy/non-canonical and assigns new-schema exclusion to ARTIFACT-IDENTITY and physical cleanup to DQ-010
-- [ ] No fabricated replacement method value is introduced
-- [ ] Existing volatility context output, persistence, attribution, thresholds, and values are documented without being changed
-- [ ] No volatility/liquidity field is added to `DecisionConstraints`
-- [ ] No duplicate `evidence_statuses` map is added
-- [ ] Per-group Alpha/Trigger scoring authority remains canonical
-- [ ] Producer provenance is not described as scoring authority
-- [ ] Current code/config/output pointers in the guide are verified directly
+- [ ] Liquidity/final sizing remains explicitly unimplemented and no new
+      `DecisionConstraints` or duplicate authority fields are introduced
+- [ ] `regime_detection_method_at_signal` is documented as legacy/non-canonical;
+      new-schema exclusion remains owned by ARTIFACT-IDENTITY and cleanup by DQ-010
+- [ ] Existing volatility output and per-group Alpha/Trigger authority remain
+      unchanged and producer provenance is not described as scoring authority
+- [ ] Current code/config/output pointers are verified directly
 - [ ] `git diff --check` clean
 
 ---
 
-## Task HIGH-3 — Remove Flags-Only SignalEngine Assessment Paths
+## Task EVIDENCE-BACKED-ASSESSMENT — Remove Flags-Only SignalEngine Assessment Paths
 
-**State:** Partial — waits for ARTIFACT-IDENTITY.
+**State:** Ready — current flags-only assessment paths remain live; removal has
+no technical dependency on `ARTIFACT-IDENTITY`.
 
 ### Metadata
 
 - **Type:** Public application-contract cleanup + fail-closed guardrail
 - **Priority:** P1
+- **Proportionality:** Keep. This removes a real signal-shaped pseudo-result
+  that can be mistaken for canonical evidence-backed assessment.
 - **Risk:** A signal-shaped response with zero production evidence can be
   mistaken for a real assessment and passed into TradeSetup composition
 - **Decision:** Remove `evaluate()` and `evaluate_request()` as assessment entry
@@ -1326,7 +742,7 @@ Do not convert this state into WATCH, AVOID, zero score, or a warning-bearing
 success response.
 
 Flow-only and setup-only calls remain allowed. Their incomplete authority
-coverage is handled by the canonical coverage/readiness contract from HIGH-2.
+coverage is handled by the canonical coverage/readiness contract from AUTHORITY-COVERAGE-READINESS.
 
 #### Workflow behavior
 
@@ -1416,14 +832,15 @@ Layer plan:
 
 ---
 
-## Task PROMO-INTEGRITY — Evidence-Bound Promotion Artifacts
+## Task PROMOTION-ARTIFACT-INTEGRITY — Evidence-Bound Promotion Artifacts
 
-**State:** Partial — waits for ARTIFACT-IDENTITY and cannot authorize promotion before DQ-BASELINE-GATE.
+**State:** Deferred — activation requires `ARTIFACT-IDENTITY`, canonical
+evaluation data, and `DQ-BASELINE-GATE`.
 
 ### Decision and dependency
 
 - **Priority:** P0
-- **Depends on:** `DQ-CONTRACT-GATE`, HIGH-1, HIGH-2, and `ARTIFACT-IDENTITY`;
+- **Depends on:** `DQ-CONTRACT-GATE`, BENCHMARK-EXCESS-RETURN, AUTHORITY-COVERAGE-READINESS, and `ARTIFACT-IDENTITY`;
   no artifact may approve promotion until `DQ-BASELINE-GATE` also passes
 - **Decision:** YAML may request promotion but may not declare its own proof.
   Promotion must reference an immutable evaluation artifact that the application
@@ -1435,7 +852,7 @@ Persist an `EvidenceEvaluationArtifact` with at least:
 
 ```text
 evaluation_id, artifact_hash, created_at, target, evidence_name, setup_family,
-horizon, market_tier, evaluation_period, dataset_snapshot_id,
+horizon, authority_segment when declared, evaluation_period, dataset_snapshot_id,
 observation_schema_version, label_schema_version, code_version, config_hash,
 IS/OOS metrics, fold metrics, costs, blockers, approval_state
 ```
@@ -1451,7 +868,7 @@ approver, and approval timestamp. Bootstrap validation must load the artifact
 through an application port, recompute/verify its hash and gates, and prove that
 identity/scope matches the registration. Missing, mutable, stale, mismatched, or
 failed artifacts reject startup/config resolution. The existing baseline
-exemption is handled only by `BASELINE-RECERT`.
+exemption is handled only by `BASELINE-AUTHORITY-RECERTIFICATION`.
 
 ### Do Not Interpret This As
 
@@ -1464,7 +881,8 @@ exemption is handled only by `BASELINE-RECERT`.
 
 - [ ] Forged qualifying YAML metrics cannot promote evidence
 - [ ] Mutated/missing/hash-mismatched artifacts fail closed
-- [ ] Target, evidence, horizon, setup, tier, schema, code, and config identities must match
+- [ ] Target, evidence, horizon, setup, schema, code, config, and any declared
+      authority-segment identities must match
 - [ ] Local-ML evidence promotion additionally matches immutable model, feature, training-data, and inference identities
 - [ ] Full-decision ML/API challenger artifacts are rejected as evidence-promotion proof
 - [ ] Repository and validator negative tests pass
@@ -1472,14 +890,15 @@ exemption is handled only by `BASELINE-RECERT`.
 
 ---
 
-## Task AUTH-SCOPE — Setup/Horizon-Scoped Evidence Authority
+## Task EVIDENCE-AUTHORITY-SCOPE — Setup/Horizon-Scoped Evidence Authority
 
-**State:** Partial — waits for ARTIFACT-IDENTITY and cannot authorize promotion before DQ-BASELINE-GATE.
+**State:** Deferred — activation requires `ARTIFACT-IDENTITY`, canonical
+evaluation data, and `DQ-BASELINE-GATE`.
 
 ### Decision and dependency
 
 - **Priority:** P0 before any non-baseline promotion
-- **Depends on:** HIGH-2 and `ARTIFACT-IDENTITY`
+- **Depends on:** AUTHORITY-COVERAGE-READINESS and `ARTIFACT-IDENTITY`
 - **Decision:** Replace global group authority with an explicit scoped key.
 
 ### Exact contract
@@ -1516,14 +935,15 @@ key, optional segment, and registration version in every observation.
 
 ---
 
-## Task BASELINE-RECERT — Legacy Baseline Authority Recertification
+## Task BASELINE-AUTHORITY-RECERTIFICATION — Legacy Baseline Authority Recertification
 
-**State:** Partial — waits for valid evaluation and promotion-governance gates.
+**State:** Deferred — activation requires valid evaluation and promotion
+governance.
 
 ### Decision and dependency
 
 - **Priority:** P0 governance; staged operational migration
-- **Depends on:** HIGH-1, HIGH-2, `PROMO-INTEGRITY`, and `AUTH-SCOPE`
+- **Depends on:** BENCHMARK-EXCESS-RETURN, AUTHORITY-COVERAGE-READINESS, `PROMOTION-ARTIFACT-INTEGRITY`, and `EVIDENCE-AUTHORITY-SCOPE`
 - **Decision:** Stop treating `setup_quality` and `institutional_flow` as
   empirically proven merely because they are baseline exemptions.
 
@@ -1552,7 +972,7 @@ only after equivalent evidence-bound registrations exist.
 
 ## Task CONTROL-POPULATION — Point-in-Time Universe Controls
 
-**State:** Partial — starts in Phase 3 with DQ-003 after the live contract gate.
+**State:** Blocked — starts with DQ-003 after `LIVE-CONTRACT-GATE`.
 
 ### Decision and dependency
 
@@ -1617,6 +1037,11 @@ promotion populations.
 to canonical learning persistence. User attention and command frequency must
 not select or weight the training population.
 
+For proportional delivery, implement and validate one named observation
+contract at a time. The first contract does not need to wait for the second,
+but it cannot answer the other contract's evaluation question or reuse its
+population.
+
 ### Close criteria
 
 - [ ] Persisted selected/rejected controls contain the identity and outcome-linkage fields required for later precision, recall/opportunity-cost, and missed-winner evaluation; metric calculation belongs after DQ-004 labels
@@ -1636,10 +1061,23 @@ not select or weight the training population.
 
 ## Task ARTIFACT-IDENTITY — Reproducible Signal Artifact Identity
 
-**State:** Partial — immutable identity dimensions, compatibility dimensions,
-provenance, final-ID wrappers, canonical serialization, and pure identity
-resolution are implemented; no persistence or production integration exists
-yet.
+**State:** Active — immutable identity dimensions, compatibility dimensions,
+provenance, final-ID wrappers, canonical serialization, pure identity
+resolution, observation persistence support, and label persistence support
+are implemented; producers, readiness, and canonical capture integration
+remain absent.
+
+**Committed progress:**
+
+| Slice | Commit |
+|---|---|
+| Domain identity and canonical serialization | `c8a04cd ARTIFACT-IDENTITY Slice 1 — domain contracts + canonical serialization` |
+| Pure identity resolver | `5c367a3 Add pure signal artifact identity resolver` |
+| Candidate-observation persistence support | `68b2004 Persist optional signal artifact identity on observations` |
+
+Forward-label persistence support is present only in the dirty worktree and is
+not completion evidence until committed. Component persistence does not satisfy
+an end-to-end close criterion by itself.
 
 ### Decision
 
@@ -1810,11 +1248,48 @@ refactors must not fragment cohorts.
   integrated. No close criterion for the overall ARTIFACT-IDENTITY task is
   checked.
 
+### Slice 4 Checkpoint — Forward Label Persistence Support
+
+- `SignalForwardLabel` gains an optional `artifact_identity:
+  SignalArtifactIdentity | None` field after `schema_version`. Existing
+  constructors without the keyword default to `None`.
+- The existing strict SQLite codec (`sqlite_signal_artifact_identity_codec.py`)
+  is reused — `encode_signal_artifact_identity()` and
+  `decode_signal_artifact_identity()` — without duplication of parsing,
+  canonicalization, hashing, or validation.
+- Three new migrations (versions 9, 10, 11) add the columns to the existing
+  `signal_forward_labels` table (`artifact_id TEXT NOT NULL DEFAULT ''`,
+  `semantic_compatibility_id TEXT NOT NULL DEFAULT ''`,
+  `artifact_provenance_json TEXT NOT NULL DEFAULT ''`). No unique index on
+  `artifact_id`.
+- `save_many()` calls `encode_signal_artifact_identity()` for each label and
+  persists all three values. The UPSERT conflict target
+  `(ticker, signal_date, horizon, observation_captured_at)` and ON CONFLICT
+  DO UPDATE SET include all three identity columns.
+- `_row_to_label()` calls `decode_signal_artifact_identity()` on every read.
+  Empty all-three decode as `None`; partial non-empty columns raise
+  `ValueError` (fail-closed on corruption). NULL values raise `ValueError`
+  (the codec requires strings, matching the NOT NULL column contract).
+- Quarantine schema (`signal_forward_labels_quarantine`) preserves all three
+  identity columns. `ensure_quarantine_table()` upgrades existing quarantine
+  tables that lack them using bounded `ALTER TABLE` statements.
+- `SOURCE_COLUMNS` in the repairer includes the three columns.
+- Source-field contract catalog adds three entries matching the
+  candidate-observation pattern: `artifact_id` and `semantic_compatibility_id`
+  (identity text), `artifact_provenance_json` (non-scalar JSON), all with
+  `null_policy="fail"` and `invalid_values=frozenset({""})` /
+  `invalid_value_policy="warn"`.
+- `SignalForwardLabel.to_dict()` and `from_dict()` are unchanged — identity is
+  repository metadata, matching the candidate-observation persistence pattern.
+- Producers, readiness, and artifact-ID uniqueness are still not integrated.
+  No close criterion for the overall ARTIFACT-IDENTITY task is checked.
+
 ---
 
-## Task WALKFORWARD-VALIDATION — Purged Walk-Forward Evaluation
+## Task PURGED-WALKFORWARD-VALIDATION — Purged Walk-Forward Evaluation
 
-**State:** Partial — waits for canonical observations, labels, and the corrected baseline gate.
+**State:** Deferred — activation requires canonical observations, executable
+labels, and `DQ-BASELINE-GATE`.
 
 ### Decision
 
@@ -1839,14 +1314,15 @@ Aggregate profit factor alone cannot pass promotion.
 
 ---
 
-## Task INCREMENTAL-EDGE — Paired Baseline/Evidence-Challenger Attribution
+## Task INCREMENTAL-EVIDENCE-EDGE — Paired Baseline/Evidence-Challenger Attribution
 
-**State:** Partial — waits for canonical evaluation artifacts and walk-forward validation.
+**State:** Deferred — activation requires canonical evaluation artifacts and
+`PURGED-WALKFORWARD-VALIDATION`.
 
 ### Decision
 
 - **Priority:** P1
-- **Depends on:** `WALKFORWARD-VALIDATION`
+- **Depends on:** `PURGED-WALKFORWARD-VALIDATION`
 - **Decision:** Promotion requires incremental pipeline value, not standalone
   correlation or a favorable subgroup average.
 
@@ -1873,7 +1349,7 @@ decisions and the exact ablation definition.
 
 ## Task IDX-EXECUTION-LABELS — Executable Net Outcome Contract
 
-**State:** Partial — starts in Phase 3 with DQ-004 after CONTROL-POPULATION.
+**State:** Blocked — starts with DQ-004 after `CONTROL-POPULATION`.
 
 ### Decision
 
@@ -1907,14 +1383,15 @@ or `UNTRADEABLE` outcomes with reasons. Do not fabricate execution certainty.
 
 ---
 
-## Task SHADOW-PROMOTION — Evidence Challenger, Monitoring, and Rollback
+## Task STAGED-EVIDENCE-PROMOTION — Evidence Challenger, Monitoring, and Rollback
 
-**State:** Partial — waits for validated incremental edge and promotion governance.
+**State:** Deferred — activation requires validated incremental edge and
+promotion governance.
 
 ### Decision
 
 - **Priority:** P1 after evidence-bound evaluation
-- **Depends on:** `PROMO-INTEGRITY`, `AUTH-SCOPE`, and `INCREMENTAL-EDGE`
+- **Depends on:** `PROMOTION-ARTIFACT-INTEGRITY`, `EVIDENCE-AUTHORITY-SCOPE`, and `INCREMENTAL-EVIDENCE-EDGE`
 - **Decision:** Promotion is staged and reversible:
 
 ```text
@@ -1924,8 +1401,10 @@ DIAGNOSTIC -> SHADOW_CHALLENGER -> LOW_WEIGHT -> PRODUCTION
 ```
 
 Shadow mode persists hypothetical contribution/decision without changing the
-canonical decision. Advancement requires a minimum live PIT period and manual
-approval. Define monitoring windows and rollback triggers for drawdown, precision,
+canonical decision. Every authority-increasing transition requires a minimum
+live PIT period, explicit human action, and an immutable transition record.
+Advancement from `LOW_WEIGHT` to `PRODUCTION` requires evidence gathered after
+low-weight deployment. Define monitoring windows and rollback triggers for drawdown, precision,
 coverage/missingness, data-semantic drift, and subgroup failure. Preserve the
 last approved registration for deterministic rollback.
 
@@ -1938,7 +1417,9 @@ to `LOW_WEIGHT` or `PRODUCTION` through this task.
 ### Close criteria
 
 - [ ] Shadow evidence cannot alter live score/decision
-- [ ] LOW_WEIGHT and PRODUCTION require separate approvals/artifacts
+- [ ] Every authority-increasing transition uses the same validated transition
+  mechanism and an explicit human-approved record
+- [ ] PRODUCTION approval uses evidence gathered after LOW_WEIGHT deployment
 - [ ] Triggered rollback deterministically restores prior authority
 - [ ] Tuning cannot advance lifecycle state
 - [ ] Retrained or identity-mismatched local models resolve to DIAGNOSTIC
@@ -1952,13 +1433,13 @@ to `LOW_WEIGHT` or `PRODUCTION` through this task.
 > These restrictions apply until the contract ambiguities above are resolved.
 
 - **Do not** promote `market_context`, `company_quality_context`, domestic bandar evidence, sector context, or event alpha based on implementation completeness alone.
-- **Do not** tune RS thresholds until HIGH-1 (5d vs 20d) is settled.
+- **Do not** tune RS thresholds until BENCHMARK-EXCESS-RETURN (5d vs 20d) is settled.
 - **Do not** tune `regime_conditioning.*` — code and config correctly mark it legacy diagnostic.
 - **Do not** use historical replay labels as production proof if fingerprints were generated before the current PIT enrichment/fingerprint contract.
-- **Do not** use `min_coverage` / `min_conviction` in tuning until HIGH-2 names are resolved.
-- **Do not** promote from YAML-declared metrics; require `PROMO-INTEGRITY`.
+- **Do not** use `min_coverage` / `min_conviction` in tuning until AUTHORITY-COVERAGE-READINESS names are resolved.
+- **Do not** promote from YAML-declared metrics; require `PROMOTION-ARTIFACT-INTEGRITY`.
 - **Do not** grant global group authority from setup/horizon-specific proof.
-- **Do not** call baseline authority OOS-validated until `BASELINE-RECERT` passes.
+- **Do not** call baseline authority OOS-validated until `BASELINE-AUTHORITY-RECERTIFICATION` passes.
 - **Do not** use candidate-only observations to prove screener recall or filter value.
 - **Do not** use the current 70/30 split as production promotion proof.
 - **Do not** promote on gross close returns without the executable IDX label contract.

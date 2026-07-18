@@ -16,7 +16,7 @@ is not the target architecture.
 Evidence, exact consumed-row provenance, and source availability must not travel
 as unrelated facts. Otherwise availability can describe a different repository
 read from the one that produced the scored evidence, and separate screen/swing
-integrations can drift. This becomes decision-critical when HIGH-2 introduces
+integrations can drift. This becomes decision-critical when AUTHORITY-COVERAGE-READINESS introduces
 production-authority coverage and typed setup readiness.
 
 ### Decision
@@ -72,7 +72,7 @@ permitted only as temporary shadow instrumentation.
 
 `SHADOW` availability is observable but cannot affect score, coverage,
 classification, candidate selection, persistence eligibility, or TradeSetup.
-Moving to enforced authority is a HIGH-2 policy change, not an operator toggle:
+Moving to enforced authority is an AUTHORITY-COVERAGE-READINESS policy change, not an operator toggle:
 it requires both canonical workflows to use this boundary, decision-parity and
 negative tests, and explicit review of missing/unassessed-source behavior.
 
@@ -86,25 +86,25 @@ existing observations canonical.
 
 ### Non-Goals
 
-This ADR does not define scoring weights, HIGH-2 readiness predicates, an IDX
+This ADR does not define scoring weights, AUTHORITY-COVERAGE-READINESS readiness predicates, an IDX
 holiday calendar, predictive validation, evidence promotion, or ML training.
 It does not require every registered or diagnostic data source to become a
 production-authority input.
 
 ### Consequences
 
-- HIGH-1 establishes corrected evidence meaning before the shared boundary is
+- BENCHMARK-EXCESS-RETURN establishes corrected evidence meaning before the shared boundary is
   implemented.
 - `CANONICAL-EVIDENCE-BOUNDARY` then migrates screen and swing in shadow mode
   without changing decisions.
-- HIGH-2 may enforce authority coverage/readiness only after that migration is
+- AUTHORITY-COVERAGE-READINESS may enforce authority coverage/readiness only after that migration is
   verified.
 - New evidence producers must expose consumed-row provenance rather than asking
   downstream code to reconstruct or infer it.
 
-### HIGH-2 Amendment (2026-07-18)
+### AUTHORITY-COVERAGE-READINESS Amendment (2026-07-18)
 
-`CANONICAL-EVIDENCE-BOUNDARY` and HIGH-2 are both implemented. This amendment
+`CANONICAL-EVIDENCE-BOUNDARY` and AUTHORITY-COVERAGE-READINESS are both implemented. This amendment
 records the resulting behavior without rewriting the historical decision above.
 
 - `AssessSignalEvidenceUseCase` now consumes the canonical evidence input's
@@ -120,9 +120,9 @@ records the resulting behavior without rewriting the historical decision above.
   use to cap ENTER/WATCH.
 - Directional score arithmetic is unaffected by this change. `base_score` is
   still computed only from attached evidence groups' scores, exactly as
-  before HIGH-2 — availability changes authority coverage and downstream
+  before AUTHORITY-COVERAGE-READINESS — availability changes authority coverage and downstream
   decision eligibility only, never the directional score itself.
 - `SHADOW` remains a valid mode for any future evidence producer that has not
   yet been wired into authority-coverage enforcement; it is not removed by
-  this amendment, only superseded for the setup/flow groups HIGH-2 covers
+  this amendment, only superseded for the setup/flow groups AUTHORITY-COVERAGE-READINESS covers
   today.

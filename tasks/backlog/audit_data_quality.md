@@ -5,7 +5,9 @@
 **Task title:** Prove and repair point-in-time correctness for signal observations, labels, replay, readiness, accumulation evaluation, and sentiment outcomes  
 **Task type:** Spike / Research followed by Bugfix and Refactor gates  
 **Overall priority:** Critical / P0  
-**Status:** Partial — canonical signal and independent sentiment gates remain open.
+**Status:** Active — the live DQ contract gate currently has blocking findings;
+canonical observation/label work remains blocked and sentiment validation is
+independently deferred.
 **Decision:** Audit the producer-to-consumer chain in the order defined here. Implement this option only.  
 **Compatibility policy:** Clean break is allowed. Do not preserve incorrect data, schemas, outputs, or tests merely for backward compatibility.
 
@@ -16,9 +18,15 @@ The authoritative cross-backlog execution sequence lives in
 
 - This document owns source truth, point-in-time/session correctness, artifact
   data integrity, quarantine/rebuild, and baseline freezing.
-- `tasks/backlog/audit_signal_refactor_contract.md` owns SignalEngine semantics,
-  scoring/authority contracts, empirical evaluation, and promotion lifecycle.
-- Neither document independently authorizes evidence promotion.
+- `tasks/backlog/deterministic_signal_engine.md` owns active SignalEngine
+  semantic and deterministic-contract work.
+- `tasks/backlog/evidence_validation_and_promotion.md` owns deferred empirical
+  validation and authority promotion.
+- `tasks/backlog/audit_signal_refactor_contract.md` is the detailed task-contract
+  appendix shared by those two lanes.
+- Data-quality and deterministic-contract completion do not independently
+  authorize evidence promotion. The evidence-governance lane requires its own
+  evaluation and transition contracts after their prerequisites pass.
 
 This backlog has three gates; do not treat all checklist items in DQ-000..DQ-011
 as a prerequisite for repairing signal semantics:
@@ -32,13 +40,25 @@ DQ-SENTIMENT-GATE = DQ-009 plus any sentiment-specific DQ-010 cleanup
 `DQ-CONTRACT-GATE` blocks Phase 2 only for defects that can change authoritative
 live scoring. Diagnostic-only source defects, repair-command hardening, and
 historical leakage proof remain required but instead block canonical capture,
-empirical evaluation, tuning, and promotion. HIGH-1, HIGH-2, artifact identity,
+empirical evaluation, tuning, and promotion. BENCHMARK-EXCESS-RETURN, AUTHORITY-COVERAGE-READINESS, artifact identity,
 and related live-contract corrections define the schema that DQ-003 onward must
 audit and rebuild. `DQ-BASELINE-GATE` unblocks CLI restructuring and empirical
 evaluation for the canonical signal and accumulation lifecycle; it does not
 authorize threshold tuning or production promotion. `DQ-SENTIMENT-GATE`
 independently blocks sentiment calibration and the sentiment CLI migration, not
 unrelated signal capture, evaluation, or CLI work.
+
+Task states use one meaning throughout this file:
+
+- `Done`: every task-owned close criterion is verified by current code/tests or
+  an executable clean-data artifact.
+- `Active`: implementation is in progress now.
+- `Ready`: dependencies pass and the task can start.
+- `Blocked`: a named prerequisite is not complete.
+- `Deferred`: intentionally outside the active canonical-signal lane.
+
+Do not use `Partial`. Committed preparatory slices are evidence in the task body,
+not completion state.
 
 ## 2. Why this comes before CLI restructuring
 
@@ -168,7 +188,8 @@ rebuild/quarantine requirement
 **Depends on:** none  
 **Outcome:** Audits are repeatable and cannot accidentally corrupt the working database.
 
-**State:** Partial — repair commands still permit the configured database when `--db` is omitted.
+**State:** Ready — read-only audit protection is complete; mutating repair
+commands still need an explicit target-database guard.
 
 **Implementation guideline:**
 
@@ -191,7 +212,8 @@ rebuild/quarantine requirement
 
 - [x] Audit commands default to read-only.
 - [x] Baseline manifest includes database/config/code identity.
-- [ ] All repair operations require explicit target database and dry-run output.
+- [ ] Repair commands default to dry-run, execute transactionally, and require
+      explicit `--db` together with `--apply` before mutating data.
 - [x] The validation panel and dates are committed as deterministic fixtures or manifests.
 - [x] A failed audit cannot partially mutate canonical tables.
 
@@ -199,9 +221,13 @@ rebuild/quarantine requirement
 
 **Priority:** P0  
 **Depends on:** DQ-000  
-**Outcome:** Every consumed field has a proven source meaning and availability contract.
+**Outcome:** Every field that can affect canonical authority has a proven source
+meaning and availability contract; diagnostic/optional fields remain visible
+without pretending to be authoritative.
 
-**State:** Partial — the live contract gate fails on 14 seasonality rows with invalid source provenance.
+**State:** Blocked — waits for DQ-000; the executable live gate also currently
+fails on invalid seasonality provenance and the in-progress forward-label
+artifact schema.
 
 **Audit each source family:**
 
@@ -232,7 +258,9 @@ If two sources are not semantically equivalent, do not retain one generic field 
 
 **Acceptance criteria:**
 
-- [ ] Every authoritative input has a field-level contract and executable invariants where the source permits them.
+- [ ] Every authoritative input used by the canonical assessment path has a
+      field-level contract and executable invariants where the source permits
+      them.
 - [ ] Semantically equivalent cross-table/source overlaps are reconciled on a sampled and aggregate basis; sources without a valid counterpart have provider fixtures and explicit limitations instead.
 - [ ] Unverifiable historical fields are marked diagnostic/unavailable or removed from replay authority.
 - [ ] Null and zero are never conflated.
@@ -245,7 +273,8 @@ If two sources are not semantically equivalent, do not retain one generic field 
 **Depends on:** DQ-001  
 **Outcome:** Every workflow agrees on what data was available at a given decision timestamp.
 
-**State:** Partial — session contracts exist, but all-artifact provenance and end-to-end leakage proof remain open.
+**State:** Blocked — waits for DQ-001 and completion of canonical artifact
+provenance in `ARTIFACT-IDENTITY`.
 
 **Required contract:**
 
@@ -281,14 +310,20 @@ Artifacts without a defensible effective timestamp or data cutoff are invalid fo
 
 **Acceptance criteria:**
 
-- [ ] One application-layer session service is used by all audited workflows.
+- [ ] One application-layer session service is used by every canonical signal,
+      capture, and label workflow; independently activated pipelines use the
+      same contract before claiming readiness.
 - [x] Weekend, holiday, pre-open, intraday, post-close, and late-provider tests pass.
-- [ ] Every persisted artifact distinguishes execution time from effective market session.
-- [ ] Temporal leakage tests intentionally plant future rows and prove they are excluded.
+- [ ] Every persisted canonical signal artifact distinguishes execution time
+      from effective market session.
+- [x] Temporal leakage tests intentionally plant future rows across the current
+      authoritative source families and prove they are excluded or
+      non-authoritative.
 
 ### DQ-003 — Audit and repair historical candidate-observation backfill
 
-**State:** Partial — canonical population capture, full artifact identity, and PIT replay proof remain open.
+**State:** Blocked — waits for `LIVE-CONTRACT-GATE`, including completion of
+`ARTIFACT-IDENTITY`.
 
 **Priority:** P0  
 **Depends on:** DQ-001, DQ-002  
@@ -367,7 +402,7 @@ If canonical identity omits a meaning-changing dimension, replace it and rebuild
 
 ### DQ-004 — Audit and repair forward-label generation
 
-**State:** Partial — waits for DQ-003 and the IDX execution-label contract.
+**State:** Blocked — waits for DQ-003 and `IDX-EXECUTION-LABELS`.
 
 **Priority:** P0  
 **Depends on:** DQ-003  
@@ -413,7 +448,8 @@ Labels with ambiguous entry price, incomplete windows, orphaned observations, mi
 
 ### DQ-005 — Audit signal replay for reproducibility, not retrieval
 
-**State:** Partial — waits for canonical observations and labels from DQ-003 and DQ-004.
+**State:** Blocked — waits for canonical observations and labels from DQ-003
+and DQ-004.
 
 **Priority:** P0  
 **Depends on:** DQ-003, DQ-004  
@@ -447,7 +483,7 @@ If reproducibility cannot be achieved because the required code/config/source ve
 
 ### DQ-006 — Audit signal readiness counts and patch eligibility
 
-**State:** Partial — waits for DQ-003 through DQ-005 reconciliation.
+**State:** Blocked — waits for DQ-003 through DQ-005 reconciliation.
 
 **Priority:** P0  
 **Depends on:** DQ-003, DQ-004, DQ-005  
@@ -456,8 +492,8 @@ If reproducibility cannot be achieved because the required code/config/source ve
 **Promotion boundary:** Correct counts are necessary but insufficient for
 promotion. The current chronological 70/30 split is diagnostic only. Production
 proof additionally requires a compatible `semantic_compatibility_id`, purged
-`WALKFORWARD-VALIDATION`, `INCREMENTAL-EDGE`, and a verified
-`PROMO-INTEGRITY` artifact.
+`PURGED-WALKFORWARD-VALIDATION`, `INCREMENTAL-EVIDENCE-EDGE`, and a verified
+`PROMOTION-ARTIFACT-INTEGRITY` artifact.
 
 **Accurate pointers:**
 
@@ -492,7 +528,7 @@ Any readiness metric based on contaminated, duplicate, in-sample, or invalid dat
 
 ### DQ-007 — Audit current SignalEngine inspection accuracy
 
-**State:** Partial — waits for completion of the Phase 2 live signal contract.
+**State:** Blocked — waits for `LIVE-CONTRACT-GATE`.
 
 **Priority:** P1  
 **Depends on:** DQ-001, DQ-002  
@@ -530,7 +566,7 @@ Remove the “legacy” score if it is routinely misread or cannot be justified.
 
 ### DQ-008 — Audit accumulation historical evaluation
 
-**State:** Partial — waits for DQ-003, DQ-004, and DQ-007.
+**State:** Blocked — waits for DQ-003, DQ-004, and DQ-007.
 
 **Priority:** P1  
 **Depends on:** DQ-001 through DQ-004, DQ-007  
@@ -556,10 +592,10 @@ Remove the “legacy” score if it is routinely misread or cannot be justified.
 - Separate absolute return from excess return versus IHSG and sector.
 - Record chronological split and overlapping-horizon risks explicitly.
   Promotion-grade purged walk-forward and embargo policy is owned by
-  `WALKFORWARD-VALIDATION`.
+  `PURGED-WALKFORWARD-VALIDATION`.
 - Mark descriptive, in-sample, validation, and OOS results explicitly.
   Baseline-versus-evidence-challenger edge proof is owned by
-  `INCREMENTAL-EDGE`.
+  `INCREMENTAL-EVIDENCE-EDGE`.
 - Verify CSV and JSON preserve numeric units and exact record identities.
 
 **Clean-break rule:**
@@ -576,7 +612,9 @@ Invalidate published metrics produced with leakage, survivorship bias presented 
 
 ### DQ-009 — Audit sentiment outcome data independently
 
-**State:** Partial — the independent sentiment audit remains open.
+**State:** Deferred — activate only when sentiment calibration or the
+sentiment-specific CLI migration is requested. It does not block the canonical
+signal baseline.
 
 **Priority:** P1  
 **Depends on:** DQ-001, DQ-002  
@@ -629,12 +667,13 @@ Existing logs/audits without prediction-time provenance or classifier version ar
 
 ### DQ-010 — Quarantine, migrate, rebuild, and prove the clean break
 
-**State:** Partial — waits for canonical signal findings from DQ-003 through DQ-008 to close.
+**State:** Blocked — waits for canonical signal findings from DQ-003 through
+DQ-008 to close. Sentiment cleanup remains independently gated by DQ-009.
 
 **Priority:** P0  
 **Depends on:** DQ-003 through DQ-008 findings resolved; sentiment-specific cleanup may run independently after DQ-009
 
-**Completed HIGH-2 artifact subset (2026-07-18):**
+**Completed AUTHORITY-COVERAGE-READINESS artifact subset (2026-07-18):**
 - 19,317 incompatible candidate observations were moved to
   `candidate_observations_quarantine`; the canonical table contains 0.
 - 5,760 linked legacy forward labels were moved to
@@ -644,8 +683,9 @@ Existing logs/audits without prediction-time provenance or classifier version ar
 - No rebuild was performed because the quarantined artifacts lack the current
   canonical semantic contract.
 
-This completes only the HIGH-2 historical-artifact requirement. DQ-010 remains
-Partial for its broader dry-run, rollback, rebuild, and reconciliation criteria.
+This completes only the AUTHORITY-COVERAGE-READINESS historical-artifact
+requirement. It does not close DQ-010's broader dry-run, rollback, rebuild, and
+reconciliation criteria.
 
 **Outcome:** Canonical tables contain only artifacts satisfying the corrected contracts.
 
@@ -680,7 +720,8 @@ Partial for its broader dry-run, rollback, rebuild, and reconciliation criteria.
 
 ### DQ-011 — Freeze the corrected baseline and unblock CLI restructuring
 
-**State:** Partial — waits for DQ-010 and the corrected baseline gate.
+**State:** Blocked — waits for DQ-010 and the corrected canonical baseline
+gate.
 
 **Priority:** P0  
 **Depends on:** DQ-000 through DQ-008 and the canonical-signal portion of DQ-010
@@ -689,8 +730,8 @@ Partial for its broader dry-run, rollback, rebuild, and reconciliation criteria.
 
 Passing DQ-011 unblocks CLI restructuring and empirical evaluation only. It
 does not authorize evidence promotion, threshold tuning, or legacy baseline
-recertification; those remain governed by the signal-refactor backlog and
-`signal_evidence_program.md`.
+recertification; those remain governed by
+`evidence_validation_and_promotion.md` and `signal_evidence_program.md`.
 
 **Required baseline:**
 
@@ -715,6 +756,24 @@ recertification; those remain governed by the signal-refactor backlog and
 
 DQ-011 does not authorize the sentiment-specific CLI migration. That migration
 also requires DQ-009 and any resulting sentiment cleanup to pass.
+
+### Solo-project proportionality
+
+- Keep DQ-000 through DQ-002 narrow: executable source/time contracts and
+  fail-closed behavior are required; a generic data-governance platform is not.
+- DQ-003 and DQ-004 are mandatory because biased populations or incorrect
+  labels invalidate every later conclusion. Implement one observation contract
+  and one label policy before generalizing.
+- DQ-005 through DQ-008 require representative golden fixtures and independent
+  reconciliation, not exhaustive reproduction of every historical ticker/date.
+- DQ-009 is optional and independent until sentiment calibration is explicitly
+  requested.
+- DQ-010 repairs only artifacts proven incompatible by the preceding tasks. Do
+  not build a generic migration registry.
+- DQ-011 freezes only the canonical commands and schemas needed by the planned
+  CLI work; it is not a release-management system.
+- Property tests, manual SQL, and full-suite runs apply when their failure mode
+  is relevant. They are not mandatory checkbox theater for every small change.
 
 ## 9. Cross-cutting database checks
 
@@ -823,30 +882,37 @@ mandatory ceremony for every task:
 
 ## 16. Required audit deliverables
 
-- Field-level source contract matrix.
+- Field-level source contract matrix for authoritative inputs.
 - IDX effective-session specification.
-- Per-command finding register.
-- Reproduction commands and SQL queries.
-- Golden point-in-time fixtures.
-- Before/after blast-radius report.
-- Quarantine/rebuild manifest.
-- Corrected schema and artifact-version documentation.
-- Verified behavioral baseline consumed by the CLI restructure.
+- Per-command finding record for actual DQ-P0/P1 defects.
+- Reproduction commands or SQL for each recorded defect.
+- Representative golden point-in-time fixtures.
+- Before/after blast-radius report when behavior or persisted data changes.
+- Quarantine/rebuild manifest when rows are removed or rebuilt.
+- Corrected schema and artifact-version documentation when identity changes.
+- Verified canonical behavioral baseline consumed by the CLI restructure.
 - Explicit list of limitations that remain non-authoritative.
 
 ## 17. Final completion gate
 
-This backlog is complete only when:
+The canonical `DQ-BASELINE-GATE` is complete only when:
 
-- [ ] Every authoritative field has verified semantics and temporal availability.
-- [ ] All workflows use one IDX effective-session contract.
+- [ ] Every field that can affect canonical signal authority has verified
+      semantics and temporal availability.
+- [ ] All canonical signal, capture, label, replay, readiness, inspection, and
+      accumulation-evaluation workflows use one IDX effective-session contract.
 - [ ] Observations are point-in-time, uniquely identified, reproducible, and idempotent.
 - [ ] Labels use complete future session windows and exact observation identity.
 - [ ] Replay accurately distinguishes retrieval, recomputation, and drift.
 - [ ] Readiness excludes invalid, duplicate, diagnostic, and contaminated samples.
 - [ ] Signal inspection reconciles every canonical factor and weight.
 - [ ] Accumulation evaluation matches live logic and reports execution/bias assumptions.
-- [ ] Sentiment outcomes use correct session timing and prediction identity.
 - [ ] Invalid historical artifacts are quarantined or rebuilt and cannot affect canonical metrics.
 - [ ] Zero DQ-P0 or DQ-P1 findings remain open.
 - [ ] Corrected contracts and golden outputs are frozen for CLI restructuring.
+
+The independent `DQ-SENTIMENT-GATE` is complete only when:
+
+- [ ] Sentiment outcomes use correct session timing and prediction identity.
+- [ ] Invalid sentiment artifacts cannot affect sentiment calibration metrics.
+- [ ] DQ-009 and any sentiment-specific DQ-010 cleanup pass.
