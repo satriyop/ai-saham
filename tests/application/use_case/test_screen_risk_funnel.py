@@ -195,6 +195,7 @@ def test_risk_funnel_composes_trade_setup_from_signal_and_risk():
             breakdown=(("foreign_flow_quality", 80.0),),
             rationale=("signal supportive",),
             snapshot_date=_TODAY,
+            signal_authority_coverage=None,
         ),
     )
     risk_response = AssessRiskResponse(

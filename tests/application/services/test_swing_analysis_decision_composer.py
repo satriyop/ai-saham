@@ -191,6 +191,7 @@ def _signal_response(score: int = 72) -> AssessSignalResponse:
         breakdown=(("setup", 60.0), ("flow", 40.0)),
         rationale=("test rationale",),
         snapshot_date=SNAP,
+        signal_authority_coverage=None,
     )
     return AssessSignalResponse(ticker=TICKER, assessment=assessment)
 

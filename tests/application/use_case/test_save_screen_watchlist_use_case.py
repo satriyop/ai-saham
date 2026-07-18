@@ -62,6 +62,7 @@ def _signal_assessment(score: int = 65) -> AssessSignalResponse:
             breakdown=(("factor_a", 50.0),),
             rationale=("decent",),
             snapshot_date=date(2026, 6, 28),
+            signal_authority_coverage=None,
         ),
     )
 

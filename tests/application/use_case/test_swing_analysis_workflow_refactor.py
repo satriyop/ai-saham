@@ -143,6 +143,7 @@ def _signal_response(score: float) -> AssessSignalResponse:
             entry_quality=EntryQuality.ENTER,
             breakdown=(),
             rationale=(),
+            signal_authority_coverage=None,
         ),
         coverage_warning=None,
     )

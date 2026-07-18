@@ -115,6 +115,7 @@ def test_swing_workflow_mce_regime_forwarded_to_signal_engine():
         entry_quality=EntryQuality.ENTER,
         breakdown=(("bandar_intensity", 80.0), ("foreign_flow_quality", 70.0)),
         rationale=("bandar supportive",),
+        signal_authority_coverage=None,
     )
 
     def _raw_signal_response():

@@ -121,7 +121,7 @@ class SignalAssessment:
     # HIGH-2 canonical name: production-authority coverage (0.0-1.0). Not
     # statistical confidence or trade conviction — see
     # SignalEvidenceGroupScorer._compute_signal_authority_coverage.
-    signal_authority_coverage: float = 1.0
+    signal_authority_coverage: float | None
     decision_constraints: "DecisionConstraints | None" = None
     legacy_conditioned_score: int | None = None
     raw_exact_score: float | None = None
@@ -135,7 +135,10 @@ class SignalAssessment:
                 f"SignalAssessment legacy_conditioned_score must be 0–100, "
                 f"got {self.legacy_conditioned_score}"
             )
-        if not (0.0 <= self.signal_authority_coverage <= 1.0):
+        if (
+            self.signal_authority_coverage is not None
+            and not 0.0 <= self.signal_authority_coverage <= 1.0
+        ):
             raise ValueError(
                 f"SignalAssessment signal_authority_coverage must be 0.0–1.0, "
                 f"got {self.signal_authority_coverage}"

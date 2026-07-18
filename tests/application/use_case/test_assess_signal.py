@@ -424,6 +424,7 @@ class TestSignalAssessmentValueObject:
             breakdown=(("bandar_intensity", 50.0),),
             rationale=("Score 50 — MODERATE, WATCH",),
             snapshot_date=date.today(),
+            signal_authority_coverage=None,
         )
 
     def test_frozen_raises_on_mutation(self):
@@ -441,6 +442,7 @@ class TestSignalAssessmentValueObject:
                 breakdown=(),
                 rationale=(),
                 snapshot_date=date.today(),
+                signal_authority_coverage=None,
             )
 
     def test_score_zero_is_valid(self):
@@ -454,7 +456,8 @@ class TestSignalAssessmentValueObject:
     def test_score_label_strong(self):
         a = SignalAssessment(
             ticker="BBCA", score=75, strength=SignalStrength.STRONG,
-            entry_quality=EntryQuality.ENTER, breakdown=(), rationale=(), snapshot_date=date.today()
+            entry_quality=EntryQuality.ENTER, breakdown=(), rationale=(), snapshot_date=date.today(),
+            signal_authority_coverage=None,
         )
         assert "75" in a.score_label
         assert "★" in a.score_label
@@ -469,7 +472,8 @@ class TestSignalAssessmentValueObject:
             ticker="BBCA", score=60, strength=SignalStrength.MODERATE,
             entry_quality=EntryQuality.WATCH,
             breakdown=(("bandar_intensity", 75.0), ("insider_activity", 44.0)),
-            rationale=(), snapshot_date=date.today()
+            rationale=(), snapshot_date=date.today(),
+            signal_authority_coverage=None,
         )
         d = a.breakdown_dict
         assert isinstance(d, dict)
@@ -546,3 +550,117 @@ class TestSignalAuthorityCoverageNaming:
         assert a.score == 60
         assert a.entry_quality == EntryQuality.WATCH
         assert a.signal_authority_coverage == pytest.approx(0.60)
+
+
+def test_archived_scorer_returns_null_authority_coverage():
+    # 1. AssessSignalUseCase.execute() returns:
+    # response.signal_authority_coverage is None
+    # response.assessment.signal_authority_coverage is None
+    from src.application.dto.assess_signal import AssessSignalRequest
+    from src.application.use_case.assess_signal_use_case import AssessSignalUseCase
+
+    use_case = AssessSignalUseCase()
+    req = AssessSignalRequest(ticker="BBCA")
+    response = use_case.execute(req)
+
+    assert response.signal_authority_coverage is None
+    assert response.assessment.signal_authority_coverage is None
+
+
+def test_archived_assessment_serialization_includes_null():
+    # 2. Archived assessment serialization includes:
+    # assessment.to_dict()["signal_authority_coverage"] is None
+    from src.application.dto.assess_signal import AssessSignalRequest
+    from src.application.use_case.assess_signal_use_case import AssessSignalUseCase
+
+    use_case = AssessSignalUseCase()
+    req = AssessSignalRequest(ticker="BBCA")
+    response = use_case.execute(req)
+
+    d = response.assessment.to_dict()
+    assert "signal_authority_coverage" in d
+    assert d["signal_authority_coverage"] is None
+
+
+def test_signal_assessment_nullable_validity():
+    # 3. SignalAssessment(signal_authority_coverage=None, ...) is valid.
+    # 4. Numeric values 0.0 and 1.0 are valid.
+    # 5. Values below 0.0 and above 1.0 raise ValueError.
+    a_none = SignalAssessment(
+        ticker="BBCA", score=50, strength=SignalStrength.MODERATE,
+        entry_quality=EntryQuality.WATCH, breakdown=(), rationale=(),
+        snapshot_date=date.today(), signal_authority_coverage=None
+    )
+    assert a_none.signal_authority_coverage is None
+
+    a_0 = SignalAssessment(
+        ticker="BBCA", score=50, strength=SignalStrength.MODERATE,
+        entry_quality=EntryQuality.WATCH, breakdown=(), rationale=(),
+        snapshot_date=date.today(), signal_authority_coverage=0.0
+    )
+    assert a_0.signal_authority_coverage == 0.0
+
+    a_1 = SignalAssessment(
+        ticker="BBCA", score=50, strength=SignalStrength.MODERATE,
+        entry_quality=EntryQuality.WATCH, breakdown=(), rationale=(),
+        snapshot_date=date.today(), signal_authority_coverage=1.0
+    )
+    assert a_1.signal_authority_coverage == 1.0
+
+    with pytest.raises(ValueError, match="signal_authority_coverage must be 0.0–1.0"):
+        SignalAssessment(
+            ticker="BBCA", score=50, strength=SignalStrength.MODERATE,
+            entry_quality=EntryQuality.WATCH, breakdown=(), rationale=(),
+            snapshot_date=date.today(), signal_authority_coverage=-0.1
+        )
+
+    with pytest.raises(ValueError, match="signal_authority_coverage must be 0.0–1.0"):
+        SignalAssessment(
+            ticker="BBCA", score=50, strength=SignalStrength.MODERATE,
+            entry_quality=EntryQuality.WATCH, breakdown=(), rationale=(),
+            snapshot_date=date.today(), signal_authority_coverage=1.1
+        )
+
+
+def test_omitting_signal_authority_coverage_raises_type_error():
+    # 6. Omitting signal_authority_coverage from direct construction raises TypeError.
+    # This locks removal of the fabricated default.
+    with pytest.raises(TypeError):
+        # We deliberately omit signal_authority_coverage
+        SignalAssessment(
+            ticker="BBCA", score=50, strength=SignalStrength.MODERATE,
+            entry_quality=EntryQuality.WATCH, breakdown=(), rationale=(),
+            snapshot_date=date.today(),
+        )
+
+
+def test_archived_scorer_behavior_preservation():
+    # Capture score, strength, entry quality, breakdown, and rationale for a representative context.
+    # Assert those values are unchanged.
+    # Assert only canonical authority coverage is now None.
+    from src.application.dto.assess_signal import AssessSignalRequest
+    from src.application.use_case.assess_signal_use_case import AssessSignalUseCase
+
+    use_case = AssessSignalUseCase()
+
+    # Representative context (e.g. empty/defaults)
+    req = AssessSignalRequest(ticker="BBCA")
+    response = use_case.execute(req)
+
+    assert response.assessment.score == 50
+    assert response.assessment.strength == SignalStrength.MODERATE
+    assert response.assessment.entry_quality == EntryQuality.WATCH
+    # Verify breakdown values are neutral 50
+    breakdown_dict = response.assessment.breakdown_dict
+    assert breakdown_dict["bandar_intensity"] == 50.0
+    assert breakdown_dict["foreign_flow_quality"] == 50.0
+    assert breakdown_dict["insider_activity"] == 50.0
+    assert breakdown_dict["seasonality_edge"] == 50.0
+    assert breakdown_dict["analyst_consensus"] == 50.0
+    assert breakdown_dict["forward_valuation"] == 50.0
+
+    # Rationale contains the expected lines
+    assert "Signal score 50/100" in response.assessment.rationale[-1]
+
+    # Assert ONLY signal_authority_coverage is None
+    assert response.assessment.signal_authority_coverage is None

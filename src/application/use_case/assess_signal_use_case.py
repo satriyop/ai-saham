@@ -125,7 +125,9 @@ class AssessSignalUseCase:
             breakdown=breakdown,
             rationale=rationale,
             snapshot_date=ctx.snapshot_date,
-            signal_authority_coverage=1.0,
+            # Archived six-factor scorer does not evaluate canonical production
+            # evidence-group authority.
+            signal_authority_coverage=None,
         )
 
     # ── factor scorers ───────────────────────────────────────────────────────
