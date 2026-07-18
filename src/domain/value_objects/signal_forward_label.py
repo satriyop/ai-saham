@@ -16,6 +16,9 @@ from src.domain.value_objects.signal_label_parsing import (
     _parse_optional_date,
     _parse_optional_datetime,
 )
+from src.domain.value_objects.signal_artifact_identity import (
+    SignalArtifactIdentity,
+)
 from src.domain.value_objects.signal_artifact_schema import (
     SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
 )
@@ -84,6 +87,9 @@ class SignalForwardLabel:
     # diagnostic-readable but is excluded from canonical readiness/tuning/
     # promotion — see report_signal_readiness_use_case.py.
     schema_version: int = SIGNAL_FORWARD_LABEL_SCHEMA_VERSION
+    # Repository metadata: pre-resolved artifact identity. Never serialized
+    # in to_dict()/from_dict(). See ARTIFACT-IDENTITY Slice 4.
+    artifact_identity: SignalArtifactIdentity | None = None
 
     def __post_init__(self) -> None:
         if not self.ticker:

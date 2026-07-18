@@ -1281,3 +1281,30 @@ def test_predicate_tests():
     assert _is_canonical_observation(obs_ok) is True
     assert _is_canonical_observation(obs_empty) is False
     assert _is_canonical_observation(obs_schema2) is False
+
+
+# ── ARTIFACT-IDENTITY Slice 4: labels produced by the use case carry no identity ──
+
+
+def test_generated_label_has_artifact_identity_none():
+    """Labels produced by GenerateSignalForwardLabelsUseCase must have
+    artifact_identity is None — no resolver or identity injection is wired."""
+    signal_date = date(2026, 7, 1)
+    observation = _observation(
+        signal_date,
+        {
+            "candidate": {"current_price": "100"},
+            "sub_signal_fingerprint": _fingerprint(),
+        },
+    )
+    candles = [_candle(signal_date, "100")]
+    candles.extend(_candle(signal_date + timedelta(days=i), str(100 + i)) for i in range(1, 11))
+
+    response = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(observation),
+        market_data_repository=FakeMarketDataRepository(candles),
+        signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+    ).execute(GenerateSignalForwardLabelsRequest(ticker="bbca", signal_date=signal_date))
+
+    assert len(response.labels) == 1
+    assert response.labels[0].artifact_identity is None

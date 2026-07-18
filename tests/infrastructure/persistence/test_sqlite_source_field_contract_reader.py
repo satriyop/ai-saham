@@ -882,6 +882,574 @@ def test_artifact_identity_null_produces_fail(
         )
 
 
+# ── ARTIFACT-IDENTITY Slice 4: signal_forward_labels identity audits ─────
+
+
+def _create_signal_forward_labels_with_identity(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE signal_forward_labels (
+            id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker                   TEXT    NOT NULL,
+            signal_date              TEXT    NOT NULL,
+            horizon                  TEXT    NOT NULL,
+            observation_captured_at  TEXT    NOT NULL DEFAULT '',
+            entry_reference_price    TEXT,
+            label_window_start       TEXT,
+            label_window_end         TEXT,
+            close_return             REAL,
+            max_forward_return       REAL,
+            max_adverse_excursion    REAL,
+            days_to_peak             INTEGER,
+            days_to_trough           INTEGER,
+            stop_would_trigger       INTEGER,
+            target_would_trigger     INTEGER,
+            outcome_label            TEXT    NOT NULL,
+            unavailable_reason       TEXT,
+            fingerprint_json         TEXT    NOT NULL,
+            schema_version           INTEGER NOT NULL DEFAULT 1,
+            created_at               TEXT    NOT NULL,
+            updated_at               TEXT    NOT NULL,
+            decision_at              TEXT    NOT NULL DEFAULT '',
+            latest_completed_session TEXT    NOT NULL DEFAULT '',
+            analysis_as_of           TEXT    NOT NULL DEFAULT '',
+            market_session_name      TEXT    NOT NULL DEFAULT '',
+            is_eod_pending           INTEGER,
+            resolution_source        TEXT    NOT NULL DEFAULT '',
+            resolution_notes_json    TEXT    NOT NULL DEFAULT '[]',
+            artifact_id              TEXT    NOT NULL DEFAULT '',
+            semantic_compatibility_id TEXT   NOT NULL DEFAULT '',
+            artifact_provenance_json TEXT   NOT NULL DEFAULT ''
+        )
+        """
+    )
+
+
+def test_signal_forward_labels_empty_identity_produces_warn_invalid_value(
+    tmp_path: Path, catalog: StaticSourceFieldContractCatalog
+):
+    """Empty identity strings in signal_forward_labels must produce
+    INVALID_FIELD_VALUE at WARN severity, not PASS silently."""
+    db_path = tmp_path / "empty_label_identity.db"
+    conn = sqlite3.connect(str(db_path))
+    _create_signal_forward_labels_with_identity(conn)
+    conn.execute(
+        """
+        INSERT INTO signal_forward_labels
+            (ticker, signal_date, horizon, observation_captured_at,
+             outcome_label, fingerprint_json, schema_version, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        ("BBCA", "2026-07-01", "SWING_10D", "2026-07-01T09:00:00",
+         "SUCCESS", '{"v":1}', 2, "2026-07-16T00:00:00", "2026-07-16T00:00:00"),
+    )
+    conn.commit()
+    conn.close()
+
+    reader = SQLiteSourceFieldContractReader(db_path, catalog=catalog)
+    use_case = AuditSourceFieldContractsUseCase(
+        reader=reader, catalog=catalog, clock=lambda: "2026-07-16T00:00:00+00:00"
+    )
+    response = use_case.execute()
+
+    for field in ("artifact_id", "semantic_compatibility_id", "artifact_provenance_json"):
+        findings = [
+            f for f in response.findings
+            if f.table == "signal_forward_labels"
+            and f.field == field
+            and f.code == "INVALID_FIELD_VALUE"
+        ]
+        assert len(findings) == 1, (
+            f"Expected one INVALID_FIELD_VALUE for signal_forward_labels.{field}, "
+            f"got {len(findings)}"
+        )
+        assert findings[0].severity == "WARN", (
+            f"signal_forward_labels.{field} empty string should be WARN, "
+            f"got {findings[0].severity}"
+        )
+
+
+def test_signal_forward_labels_populated_identity_produces_no_findings(
+    tmp_path: Path, catalog: StaticSourceFieldContractCatalog
+):
+    """Populated canonical artifact identity on labels must produce no
+    findings for the three identity columns."""
+    db_path = tmp_path / "populated_label_identity.db"
+    conn = sqlite3.connect(str(db_path))
+    _create_signal_forward_labels_with_identity(conn)
+    conn.execute(
+        """
+        INSERT INTO signal_forward_labels
+            (ticker, signal_date, horizon, observation_captured_at,
+             outcome_label, fingerprint_json, schema_version, created_at, updated_at,
+             artifact_id, semantic_compatibility_id, artifact_provenance_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        ("BBCA", "2026-07-01", "SWING_10D", "2026-07-01T09:00:00",
+         "SUCCESS", '{"v":1}', 2, "2026-07-16T00:00:00", "2026-07-16T00:00:00",
+         "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+         "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+         '{"analysis_as_of":"2026-07-01","application_revision":"abc1234",'
+         '"captured_at":"2026-07-01T09:30:00.456789Z",'
+         '"complete_authority_registry_hash":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",'
+         '"complete_config_hash":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",'
+         '"decision_at":"2026-07-01T16:00:00.123456Z",'
+         '"idx_calendar_version":"2026-v3",'
+         '"invocation_actor":null,"invocation_command":null,'
+         '"latest_completed_session":"2026-07-01",'
+         '"session_rule_version":"sr-v2",'
+         '"sources":[{"available_at":"2026-07-01T07:00:00.000000Z",'
+         '"cutoff_at":"2026-07-01T08:00:00.000000Z",'
+         '"observed_through":"2026-07-01",'
+         '"provider":"idx","source_family":"exchange",'
+         '"source_snapshot_id":"snap-001"}],'
+         '"universe_snapshot_id":"univ-001"}'),
+    )
+    conn.commit()
+    conn.close()
+
+    reader = SQLiteSourceFieldContractReader(db_path, catalog=catalog)
+    use_case = AuditSourceFieldContractsUseCase(
+        reader=reader, catalog=catalog, clock=lambda: "2026-07-16T00:00:00+00:00"
+    )
+    response = use_case.execute()
+
+    for field in ("artifact_id", "semantic_compatibility_id", "artifact_provenance_json"):
+        findings = [
+            f for f in response.findings
+            if f.table == "signal_forward_labels" and f.field == field
+        ]
+        assert len(findings) == 0, (
+            f"Expected no findings for signal_forward_labels.{field} "
+            f"with populated identity, got {len(findings)}: {[f.code for f in findings]}"
+        )
+
+
+def test_signal_forward_labels_nullable_identity_produces_fail(
+    tmp_path: Path, catalog: StaticSourceFieldContractCatalog
+):
+    """Actual NULL in label identity columns must produce FAIL findings."""
+    db_path = tmp_path / "null_label_identity.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        """
+        CREATE TABLE signal_forward_labels (
+            id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker                   TEXT    NOT NULL,
+            signal_date              TEXT    NOT NULL,
+            horizon                  TEXT    NOT NULL,
+            observation_captured_at  TEXT    NOT NULL DEFAULT '',
+            entry_reference_price    TEXT,
+            label_window_start       TEXT,
+            label_window_end         TEXT,
+            close_return             REAL,
+            max_forward_return       REAL,
+            max_adverse_excursion    REAL,
+            days_to_peak             INTEGER,
+            days_to_trough           INTEGER,
+            stop_would_trigger       INTEGER,
+            target_would_trigger     INTEGER,
+            outcome_label            TEXT    NOT NULL,
+            unavailable_reason       TEXT,
+            fingerprint_json         TEXT    NOT NULL,
+            schema_version           INTEGER NOT NULL DEFAULT 1,
+            created_at               TEXT    NOT NULL,
+            updated_at               TEXT    NOT NULL,
+            decision_at              TEXT    NOT NULL DEFAULT '',
+            latest_completed_session TEXT    NOT NULL DEFAULT '',
+            analysis_as_of           TEXT    NOT NULL DEFAULT '',
+            market_session_name      TEXT    NOT NULL DEFAULT '',
+            is_eod_pending           INTEGER,
+            resolution_source        TEXT    NOT NULL DEFAULT '',
+            resolution_notes_json    TEXT    NOT NULL DEFAULT '[]',
+            artifact_id              TEXT,
+            semantic_compatibility_id TEXT,
+            artifact_provenance_json TEXT
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO signal_forward_labels
+            (ticker, signal_date, horizon, observation_captured_at,
+             outcome_label, fingerprint_json, schema_version, created_at, updated_at,
+             artifact_id, semantic_compatibility_id, artifact_provenance_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        ("BBCA", "2026-07-01", "SWING_10D", "2026-07-01T09:00:00",
+         "SUCCESS", '{"v":1}', 2, "2026-07-16T00:00:00", "2026-07-16T00:00:00",
+         None, None, None),
+    )
+    conn.commit()
+    conn.close()
+
+    reader = SQLiteSourceFieldContractReader(db_path, catalog=catalog)
+    use_case = AuditSourceFieldContractsUseCase(
+        reader=reader, catalog=catalog, clock=lambda: "2026-07-16T00:00:00+00:00"
+    )
+    response = use_case.execute()
+
+    for field in ("artifact_id", "semantic_compatibility_id", "artifact_provenance_json"):
+        null_findings = [
+            f for f in response.findings
+            if f.table == "signal_forward_labels"
+            and f.field == field
+            and f.code == "NULLS_IN_REQUIRED_FIELD"
+        ]
+        assert len(null_findings) == 1, (
+            f"Expected NULLS_IN_REQUIRED_FIELD for signal_forward_labels.{field}, "
+            f"got {len(null_findings)}"
+        )
+        assert null_findings[0].severity == "FAIL", (
+            f"NULL in signal_forward_labels.{field} should be FAIL, "
+            f"got {null_findings[0].severity}"
+        )
+
+
+_VALID_SHA256_AAA = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+_VALID_SHA256_BBB = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+
+_VALID_CANONICAL_PROVENANCE = (
+    '{"analysis_as_of":"2026-07-01","application_revision":"abc1234",'
+    '"captured_at":"2026-07-01T09:30:00.456789Z",'
+    '"complete_authority_registry_hash":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",'
+    '"complete_config_hash":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",'
+    '"decision_at":"2026-07-01T16:00:00.123456Z",'
+    '"idx_calendar_version":"2026-v3",'
+    '"invocation_actor":null,"invocation_command":null,'
+    '"latest_completed_session":"2026-07-01",'
+    '"session_rule_version":"sr-v2",'
+    '"sources":[{"available_at":"2026-07-01T07:00:00.000000Z",'
+    '"cutoff_at":"2026-07-01T08:00:00.000000Z",'
+    '"observed_through":"2026-07-01",'
+    '"provider":"idx","source_family":"exchange",'
+    '"source_snapshot_id":"snap-001"}],'
+    '"universe_snapshot_id":"univ-001"}'
+)
+
+_DUPLICATE_SOURCE_PROVENANCE = (
+    '{"analysis_as_of":"2026-07-01","application_revision":"abc1234",'
+    '"captured_at":"2026-07-01T09:30:00.456789Z",'
+    '"complete_authority_registry_hash":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",'
+    '"complete_config_hash":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",'
+    '"decision_at":"2026-07-01T16:00:00.123456Z",'
+    '"idx_calendar_version":"2026-v3",'
+    '"invocation_actor":null,"invocation_command":null,'
+    '"latest_completed_session":"2026-07-01",'
+    '"session_rule_version":"sr-v2",'
+    '"sources":[{"available_at":"2026-07-01T07:00:00.000000Z",'
+    '"cutoff_at":"2026-07-01T08:00:00.000000Z",'
+    '"observed_through":"2026-07-01",'
+    '"provider":"idx","source_family":"exchange",'
+    '"source_snapshot_id":"snap-001"},'
+    '{"available_at":"2026-07-01T07:00:00.000000Z",'
+    '"cutoff_at":"2026-07-01T08:00:00.000000Z",'
+    '"observed_through":"2026-07-01",'
+    '"provider":"idx","source_family":"exchange",'
+    '"source_snapshot_id":"snap-001"}],'
+    '"universe_snapshot_id":"univ-001"}'
+)
+
+
+def _verify_identity_audit(
+    tmp_path: Path,
+    catalog: StaticSourceFieldContractCatalog,
+    table: str,
+    identity_values: tuple[str, str, str],
+    *,
+    expect_identity_finding: bool = True,
+) -> int:
+    """Create a temp DB with schema for *table*, insert one row with the given
+    identity triplet, run the audit, and check INVALID_ARTIFACT_IDENTITY.
+
+    Returns the finding count (caller can assert == 0 or == 1).
+    """
+    db_path = tmp_path / f"{table}_identity_audit.db"
+    conn = sqlite3.connect(str(db_path))
+
+    if table == "signal_forward_labels":
+        _create_signal_forward_labels_with_identity(conn)
+        insert_sql = """
+            INSERT INTO signal_forward_labels
+                (ticker, signal_date, horizon, observation_captured_at,
+                 outcome_label, fingerprint_json, schema_version, created_at, updated_at,
+                 artifact_id, semantic_compatibility_id, artifact_provenance_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        params = ("BBCA", "2026-07-01", "SWING_10D", "2026-07-01T09:00:00",
+                  "SUCCESS", '{"v":1}', 2, "2026-07-16T00:00:00", "2026-07-16T00:00:00",
+                  *identity_values)
+    else:
+        _create_candidate_observations_with_identity_columns(conn)
+        insert_sql = """
+            INSERT INTO candidate_observations
+                (ticker, snapshot_date, captured_at, schema_version, payload_json,
+                 workflow, window_sessions, data_as_of_date, config_hash,
+                 artifact_id, semantic_compatibility_id, artifact_provenance_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        params = ("BBCA", "2026-07-03", "2026-07-03T09:00:00",
+                  3, "{}", "screen_accum", 7, "2026-07-03", "abc123",
+                  *identity_values)
+
+    conn.execute(insert_sql, params)
+    conn.commit()
+    conn.close()
+
+    reader = SQLiteSourceFieldContractReader(db_path, catalog=catalog)
+    use_case = AuditSourceFieldContractsUseCase(
+        reader=reader, catalog=catalog, clock=lambda: "2026-07-16T00:00:00+00:00"
+    )
+    response = use_case.execute()
+
+    findings = [
+        f for f in response.findings
+        if f.table == table and f.code == "INVALID_ARTIFACT_IDENTITY"
+    ]
+    if expect_identity_finding:
+        assert len(findings) == 1, (
+            f"Expected one INVALID_ARTIFACT_IDENTITY for {table} with "
+            f"identity=({identity_values[0][:20]}..., {identity_values[1][:20]}..., "
+            f"{identity_values[2][:40]}...), got {len(findings)}"
+        )
+        assert findings[0].severity == "FAIL", (
+            f"INVALID_ARTIFACT_IDENTITY should be FAIL, got {findings[0].severity}"
+        )
+        return 1
+    else:
+        assert len(findings) == 0, (
+            f"Expected no INVALID_ARTIFACT_IDENTITY for {table}, "
+            f"got {len(findings)}: {findings}"
+        )
+        return 0
+
+
+# ── signal_forward_labels malformed identity tests ──────────────────────
+
+
+@pytest.mark.parametrize(
+    "aid,sid,prov,desc",
+    [
+        pytest.param(
+            "sha256:not-a-valid-hex-string",
+            _VALID_SHA256_BBB,
+            _VALID_CANONICAL_PROVENANCE,
+            "malformed SHA-256 hash in artifact_id",
+            id="malformed-hash",
+        ),
+        pytest.param(
+            _VALID_SHA256_AAA,
+            _VALID_SHA256_BBB,
+            "not-valid-json-at-all",
+            "non-JSON string in provenance",
+            id="malformed-json",
+        ),
+        pytest.param(
+            _VALID_SHA256_AAA,
+            _VALID_SHA256_BBB,
+            "[1, 2, 3]",
+            "JSON array instead of provenance dict",
+            id="json-array-not-dict",
+        ),
+        pytest.param(
+            _VALID_SHA256_AAA,
+            _VALID_SHA256_BBB,
+            '{"anything":"goes"}',
+            "valid JSON object but wrong schema (missing all provenance keys)",
+            id="wrong-schema-object",
+        ),
+        pytest.param(
+            _VALID_SHA256_AAA,
+            _VALID_SHA256_BBB,
+            '{"application_revision":"abc1234","analysis_as_of":"2026-07-01",'
+            '"captured_at":"2026-07-01T09:30:00.456789Z",'
+            '"complete_authority_registry_hash":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",'
+            '"complete_config_hash":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",'
+            '"decision_at":"2026-07-01T16:00:00.123456Z",'
+            '"idx_calendar_version":"2026-v3",'
+            '"invocation_actor":null,"invocation_command":null,'
+            '"latest_completed_session":"2026-07-01",'
+            '"session_rule_version":"sr-v2",'
+            '"sources":[{"available_at":"2026-07-01T07:00:00.000000Z",'
+            '"cutoff_at":"2026-07-01T08:00:00.000000Z",'
+            '"observed_through":"2026-07-01",'
+            '"provider":"idx","source_family":"exchange",'
+            '"source_snapshot_id":"snap-001"}],'
+            '"universe_snapshot_id":"univ-001"}',
+            "non-canonical key ordering (application_revision before analysis_as_of)",
+            id="noncanonical-key-order",
+        ),
+        pytest.param(
+            _VALID_SHA256_AAA,
+            _VALID_SHA256_BBB,
+            '{"analysis_as_of":"2026-07-01","application_revision":"abc1234",'
+            '"captured_at":"2026-07-01T09:30:00.456789Z",'
+            '"complete_authority_registry_hash":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",'
+            '"complete_config_hash":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",'
+            '"decision_at":"2026-07-01T16:00:00.123456Z",'
+            '"extra_key":"oops",'
+            '"idx_calendar_version":"2026-v3",'
+            '"invocation_actor":null,"invocation_command":null,'
+            '"latest_completed_session":"2026-07-01",'
+            '"session_rule_version":"sr-v2",'
+            '"sources":[{"available_at":"2026-07-01T07:00:00.000000Z",'
+            '"cutoff_at":"2026-07-01T08:00:00.000000Z",'
+            '"observed_through":"2026-07-01",'
+            '"provider":"idx","source_family":"exchange",'
+            '"source_snapshot_id":"snap-001"}],'
+            '"universe_snapshot_id":"univ-001"}',
+            "extra provenance key",
+            id="extra-keys",
+        ),
+        pytest.param(
+            _VALID_SHA256_AAA,
+            _VALID_SHA256_BBB,
+            '{"sources":[]}',
+            "valid JSON dict but missing most provenance keys",
+            id="missing-keys",
+        ),
+        pytest.param(
+            _VALID_SHA256_AAA,
+            _VALID_SHA256_BBB,
+            '{"analysis_as_of":"2026-07-01","application_revision":"abc1234",'
+            '"captured_at":"not-a-timestamp",'
+            '"complete_authority_registry_hash":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",'
+            '"complete_config_hash":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",'
+            '"decision_at":"2026-07-01T16:00:00.123456Z",'
+            '"idx_calendar_version":"2026-v3",'
+            '"invocation_actor":null,"invocation_command":null,'
+            '"latest_completed_session":"2026-07-01",'
+            '"session_rule_version":"sr-v2",'
+            '"sources":[{"available_at":"2026-07-01T07:00:00.000000Z",'
+            '"cutoff_at":"2026-07-01T08:00:00.000000Z",'
+            '"observed_through":"2026-07-01",'
+            '"provider":"idx","source_family":"exchange",'
+            '"source_snapshot_id":"snap-001"}],'
+            '"universe_snapshot_id":"univ-001"}',
+            "invalid timestamp in provenance",
+            id="invalid-timestamp",
+        ),
+        pytest.param(
+            _VALID_SHA256_AAA,
+            _VALID_SHA256_BBB,
+            '{"analysis_as_of":"2026-07-01","application_revision":"abc1234",'
+            '"captured_at":"2026-07-01T09:30:00.456789Z",'
+            '"complete_authority_registry_hash":"not-a-64-hex-hash",'
+            '"complete_config_hash":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",'
+            '"decision_at":"2026-07-01T16:00:00.123456Z",'
+            '"idx_calendar_version":"2026-v3",'
+            '"invocation_actor":null,"invocation_command":null,'
+            '"latest_completed_session":"2026-07-01",'
+            '"session_rule_version":"sr-v2",'
+            '"sources":[{"available_at":"2026-07-01T07:00:00.000000Z",'
+            '"cutoff_at":"2026-07-01T08:00:00.000000Z",'
+            '"observed_through":"2026-07-01",'
+            '"provider":"idx","source_family":"exchange",'
+            '"source_snapshot_id":"snap-001"}],'
+            '"universe_snapshot_id":"univ-001"}',
+            "invalid nested hash (authority registry hash not 64 hex)",
+            id="invalid-nested-hash",
+        ),
+        pytest.param(
+            _VALID_SHA256_AAA,
+            _VALID_SHA256_BBB,
+            _DUPLICATE_SOURCE_PROVENANCE,
+            "duplicate source entries",
+            id="duplicate-sources",
+        ),
+        pytest.param(
+            _VALID_SHA256_AAA,
+            "",
+            "",
+            "partial triplet: artifact_id populated, others empty",
+            id="partial-triplet",
+        ),
+    ],
+)
+def test_signal_forward_labels_malformed_artifact_identity(
+    tmp_path: Path,
+    catalog: StaticSourceFieldContractCatalog,
+    aid: str,
+    sid: str,
+    prov: str,
+    desc: str,
+):
+    _verify_identity_audit(
+        tmp_path, catalog, "signal_forward_labels", (aid, sid, prov),
+        expect_identity_finding=True,
+    )
+
+
+def test_signal_forward_labels_valid_empty_triplet_no_identity_finding(
+    tmp_path: Path, catalog: StaticSourceFieldContractCatalog
+):
+    """All-empty identity triplet must NOT trigger INVALID_ARTIFACT_IDENTITY."""
+    _verify_identity_audit(
+        tmp_path, catalog, "signal_forward_labels", ("", "", ""),
+        expect_identity_finding=False,
+    )
+
+
+# ── candidate_observations malformed identity tests ─────────────────────
+
+
+@pytest.mark.parametrize(
+    "aid,sid,prov,desc",
+    [
+        pytest.param(
+            "sha256:not-a-valid-hex-string",
+            _VALID_SHA256_BBB,
+            _VALID_CANONICAL_PROVENANCE,
+            "malformed SHA-256 hash in artifact_id",
+            id="obs-malformed-hash",
+        ),
+        pytest.param(
+            _VALID_SHA256_AAA,
+            _VALID_SHA256_BBB,
+            '{"anything":"goes"}',
+            "wrong-schema provenance object",
+            id="obs-wrong-schema-object",
+        ),
+        pytest.param(
+            _VALID_SHA256_AAA,
+            _VALID_SHA256_BBB,
+            _DUPLICATE_SOURCE_PROVENANCE,
+            "duplicate source entries",
+            id="obs-duplicate-sources",
+        ),
+        pytest.param(
+            _VALID_SHA256_AAA,
+            "",
+            "",
+            "partial triplet",
+            id="obs-partial-triplet",
+        ),
+    ],
+)
+def test_candidate_observations_malformed_artifact_identity(
+    tmp_path: Path,
+    catalog: StaticSourceFieldContractCatalog,
+    aid: str,
+    sid: str,
+    prov: str,
+    desc: str,
+):
+    _verify_identity_audit(
+        tmp_path, catalog, "candidate_observations", (aid, sid, prov),
+        expect_identity_finding=True,
+    )
+
+
+def test_candidate_observations_valid_empty_triplet_no_identity_finding(
+    tmp_path: Path, catalog: StaticSourceFieldContractCatalog
+):
+    """All-empty identity triplet must NOT trigger INVALID_ARTIFACT_IDENTITY."""
+    _verify_identity_audit(
+        tmp_path, catalog, "candidate_observations", ("", "", ""),
+        expect_identity_finding=False,
+    )
+
+
 def test_dq_001e_live_schema_fixture_reports_no_missing_table_or_field(
     tmp_path: Path, catalog: StaticSourceFieldContractCatalog
 ):

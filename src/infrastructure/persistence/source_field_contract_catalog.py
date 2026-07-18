@@ -1004,6 +1004,63 @@ _SIGNAL_FORWARD_LABELS_FIELDS: tuple[SourceFieldContract, ...] = (
         point_in_time_support="HISTORICAL",
         null_policy="warn",
     ),
+    SourceFieldContract(
+        field="artifact_id",
+        required=True,
+        semantic_name="Resolved artifact hash identity",
+        source_owner="local forward-label generator",
+        unit="sha256:hex",
+        sign_convention=None,
+        aggregation="none",
+        grain="one label per ticker/signal_date/horizon/observation_captured_at",
+        temporal_meaning="none",
+        null_semantics=(
+            "NULL means corruption (column is NOT NULL); empty string means "
+            "identity not yet resolved — transitional, warned via invalid_values"
+        ),
+        point_in_time_support="HISTORICAL",
+        null_policy="fail",
+        invalid_values=frozenset({""}),
+        invalid_value_policy="warn",
+    ),
+    SourceFieldContract(
+        field="semantic_compatibility_id",
+        required=True,
+        semantic_name="Resolved semantic compatibility hash",
+        source_owner="local forward-label generator",
+        unit="sha256:hex",
+        sign_convention=None,
+        aggregation="none",
+        grain="one label per ticker/signal_date/horizon/observation_captured_at",
+        temporal_meaning="none",
+        null_semantics=(
+            "NULL means corruption (column is NOT NULL); empty string means "
+            "identity not yet resolved — transitional, warned via invalid_values"
+        ),
+        point_in_time_support="HISTORICAL",
+        null_policy="fail",
+        invalid_values=frozenset({""}),
+        invalid_value_policy="warn",
+    ),
+    SourceFieldContract(
+        field="artifact_provenance_json",
+        required=True,
+        semantic_name="Serialized artifact provenance bundle",
+        source_owner="local forward-label generator",
+        unit="canonical JSON",
+        sign_convention=None,
+        aggregation="none",
+        grain="one label per ticker/signal_date/horizon/observation_captured_at",
+        temporal_meaning="none",
+        null_semantics=(
+            "NULL means corruption (column is NOT NULL); empty string means "
+            "identity not yet resolved — transitional, warned via invalid_values"
+        ),
+        point_in_time_support="HISTORICAL",
+        null_policy="fail",
+        invalid_values=frozenset({""}),
+        invalid_value_policy="warn",
+    ),
     *_effective_session_provenance_fields("local forward-label generator"),
 )
 
@@ -2394,6 +2451,9 @@ FIELD_STATS_MODE: dict[tuple[str, str], str] = {
     ("signal_forward_labels", "is_eod_pending"): "numeric",
     ("signal_forward_labels", "resolution_source"): "enum_text",
     ("signal_forward_labels", "resolution_notes_json"): "none",
+    ("signal_forward_labels", "artifact_id"): "identity_text",
+    ("signal_forward_labels", "semantic_compatibility_id"): "identity_text",
+    ("signal_forward_labels", "artifact_provenance_json"): "none",
     ("market_context_snapshots", "as_of_date"): "date",
     ("market_context_snapshots", "regime"): "enum_text",
     ("market_context_snapshots", "conviction"): "numeric",

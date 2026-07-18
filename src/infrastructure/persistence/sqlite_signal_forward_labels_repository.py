@@ -18,6 +18,10 @@ from src.domain.value_objects.signal_forward_label import (
     SignalObservationFingerprint,
 )
 from src.infrastructure.persistence.sqlite_migration_runner import SqliteMigrationRunner
+from src.infrastructure.persistence.sqlite_signal_artifact_identity_codec import (
+    decode_signal_artifact_identity,
+    encode_signal_artifact_identity,
+)
 
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS signal_forward_labels (
@@ -77,6 +81,19 @@ _ADD_RESOLUTION_NOTES_JSON_COLUMN = """
 ALTER TABLE signal_forward_labels ADD COLUMN resolution_notes_json TEXT NOT NULL DEFAULT '[]'
 """
 
+# ARTIFACT-IDENTITY Slice 4: pre-resolved artifact identity columns.
+# All three are TEXT NOT NULL DEFAULT ''. Empty strings decode as None;
+# partial non-empty values fail on read.
+_ADD_ARTIFACT_ID_COLUMN = """
+ALTER TABLE signal_forward_labels ADD COLUMN artifact_id TEXT NOT NULL DEFAULT ''
+"""
+_ADD_SEMANTIC_COMPATIBILITY_ID_COLUMN = """
+ALTER TABLE signal_forward_labels ADD COLUMN semantic_compatibility_id TEXT NOT NULL DEFAULT ''
+"""
+_ADD_ARTIFACT_PROVENANCE_JSON_COLUMN = """
+ALTER TABLE signal_forward_labels ADD COLUMN artifact_provenance_json TEXT NOT NULL DEFAULT ''
+"""
+
 
 class SQLiteSignalForwardLabelsRepository:
     """Persists schema-versioned signal_forward_labels records."""
@@ -99,6 +116,9 @@ class SQLiteSignalForwardLabelsRepository:
                 (6, _ADD_IS_EOD_PENDING_COLUMN),
                 (7, _ADD_RESOLUTION_SOURCE_COLUMN),
                 (8, _ADD_RESOLUTION_NOTES_JSON_COLUMN),
+                (9, _ADD_ARTIFACT_ID_COLUMN),
+                (10, _ADD_SEMANTIC_COMPATIBILITY_ID_COLUMN),
+                (11, _ADD_ARTIFACT_PROVENANCE_JSON_COLUMN),
             ],
         )
 
@@ -114,6 +134,9 @@ class SQLiteSignalForwardLabelsRepository:
         now = datetime.now(UTC).isoformat()
         rows = []
         for label in labels:
+            artifact_id_str, sem_compat_id_str, provenance_json = (
+                encode_signal_artifact_identity(label.artifact_identity)
+            )
             rows.append(
                 (
                     label.ticker.upper(),
@@ -159,6 +182,9 @@ class SQLiteSignalForwardLabelsRepository:
                     _bool_to_db(label.is_eod_pending),
                     label.resolution_source or "",
                     json.dumps(list(label.resolution_notes), separators=(",", ":")),
+                    artifact_id_str,
+                    sem_compat_id_str,
+                    provenance_json,
                 )
             )
         with self._connect() as conn:
@@ -173,9 +199,10 @@ class SQLiteSignalForwardLabelsRepository:
                      fingerprint_json, schema_version, created_at, updated_at,
                      decision_at, latest_completed_session, analysis_as_of,
                      market_session_name, is_eod_pending, resolution_source,
-                     resolution_notes_json)
+                     resolution_notes_json,
+                     artifact_id, semantic_compatibility_id, artifact_provenance_json)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                        ?, ?, ?, ?, ?, ?, ?)
+                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(ticker, signal_date, horizon, observation_captured_at)
                 DO UPDATE SET
                     entry_reference_price = excluded.entry_reference_price,
@@ -199,7 +226,10 @@ class SQLiteSignalForwardLabelsRepository:
                     market_session_name = excluded.market_session_name,
                     is_eod_pending = excluded.is_eod_pending,
                     resolution_source = excluded.resolution_source,
-                    resolution_notes_json = excluded.resolution_notes_json
+                    resolution_notes_json = excluded.resolution_notes_json,
+                    artifact_id = excluded.artifact_id,
+                    semantic_compatibility_id = excluded.semantic_compatibility_id,
+                    artifact_provenance_json = excluded.artifact_provenance_json
                 """,
                 rows,
             )
@@ -322,6 +352,11 @@ def _row_to_label(row: sqlite3.Row) -> SignalForwardLabel:
         resolution_source=row["resolution_source"] or None,
         resolution_notes=_resolution_notes_from_db(row["resolution_notes_json"]),
         schema_version=schema_version,
+        artifact_identity=decode_signal_artifact_identity(
+            artifact_id_raw=row["artifact_id"],
+            semantic_compatibility_id_raw=row["semantic_compatibility_id"],
+            provenance_json_raw=row["artifact_provenance_json"],
+        ),
     )
 
 

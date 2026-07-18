@@ -433,6 +433,25 @@ class AuditSourceFieldContractsUseCase:
                     )
                 )
 
+        malformed_identity = checks.get("malformed_artifact_identity_count", 0)
+        if malformed_identity:
+            findings.append(
+                SourceContractFinding(
+                    severity="FAIL",
+                    code="INVALID_ARTIFACT_IDENTITY",
+                    table=table,
+                    field=None,
+                    message=(
+                        f"{malformed_identity} row(s) have malformed or incomplete "
+                        "artifact identity triplet."
+                    ),
+                    impact=(
+                        "These rows have irreproducible or corrupt artifact identity; "
+                        "they cannot be used for canonical evidence or replay."
+                    ),
+                )
+            )
+
         if table == "signal_forward_labels":
             unavailable_missing_reason = checks.get("unavailable_without_reason_count", 0)
             if unavailable_missing_reason:

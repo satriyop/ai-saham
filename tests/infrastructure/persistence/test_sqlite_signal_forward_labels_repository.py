@@ -1,10 +1,20 @@
 from __future__ import annotations
 
+import json
 import sqlite3
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 
+import pytest
+
+from src.domain.value_objects.signal_artifact_identity import (
+    ArtifactId,
+    ArtifactProvenance,
+    ArtifactSourceProvenance,
+    SemanticCompatibilityId,
+    SignalArtifactIdentity,
+)
 from src.domain.value_objects.signal_forward_label import (
     SignalForwardLabel,
     SignalForwardOutcome,
@@ -101,7 +111,7 @@ def test_schema_created_via_migration_runner(tmp_path: Path):
         ).fetchall()
         tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
 
-    assert {row[0] for row in versions} == set(range(9))
+    assert {row[0] for row in versions} == set(range(12))
     assert "signal_forward_labels" in {row[0] for row in tables}
 
 
@@ -363,3 +373,519 @@ def test_sqlite_persistence_canonical_only(tmp_path: Path):
     assert restored.fingerprint.phase_strength is None
     assert restored.fingerprint.phase_coverage_score is None
     assert restored.fingerprint.phase_conviction_score is None
+
+
+# ── ARTIFACT-IDENTITY Slice 4: label identity persistence ────────────────────
+
+
+_VALID_SHA256 = "ab" * 32
+_ALT_SHA256 = "cd" * 32
+_ANOTHER_SHA256 = "ef" * 32
+_VALID_ARTIFACT_ID = f"sha256:{_VALID_SHA256}"
+_VALID_SEM_COMPAT_ID = f"sha256:{_ALT_SHA256}"
+_ANOTHER_ARTIFACT_ID = f"sha256:{_ANOTHER_SHA256}"
+
+
+def _make_provenance() -> ArtifactProvenance:
+    return ArtifactProvenance(
+        application_revision="abc123",
+        complete_config_hash=_VALID_SHA256,
+        complete_authority_registry_hash=_ALT_SHA256,
+        universe_snapshot_id="snap_001",
+        idx_calendar_version="v2",
+        session_rule_version="v1",
+        decision_at=datetime(2026, 7, 1, 16, 0, 0, tzinfo=timezone.utc),
+        captured_at=datetime(2026, 7, 1, 16, 30, 0, 123456, tzinfo=timezone.utc),
+        latest_completed_session=date(2026, 7, 1),
+        analysis_as_of=date(2026, 7, 1),
+        sources=(
+            ArtifactSourceProvenance(
+                source_family="candles",
+                provider="stockbit",
+                source_snapshot_id=None,
+                observed_through=date(2026, 7, 1),
+                available_at=datetime(2026, 7, 1, 15, 30, 0, tzinfo=timezone.utc),
+                cutoff_at=None,
+            ),
+        ),
+        invocation_command=None,
+        invocation_actor=None,
+    )
+
+
+def test_artifact_identity_none_reads_as_none(tmp_path: Path):
+    db_path = tmp_path / "data.db"
+    repo = SQLiteSignalForwardLabelsRepository(db_path)
+    label = _label(captured_at=datetime(2026, 7, 1, 9, 0, 0), close_return=4.0)
+    assert label.artifact_identity is None
+
+    repo.save_many([label])
+
+    with sqlite3.connect(str(db_path)) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT artifact_id, semantic_compatibility_id, artifact_provenance_json "
+            "FROM signal_forward_labels WHERE ticker='BBCA'"
+        ).fetchone()
+    assert row["artifact_id"] == ""
+    assert row["semantic_compatibility_id"] == ""
+    assert row["artifact_provenance_json"] == ""
+
+    restored = repo.get("BBCA", date(2026, 7, 1), SignalLabelHorizon.SWING_10D)
+    assert restored is not None
+    assert restored.artifact_identity is None
+
+
+def test_artifact_identity_round_trip(tmp_path: Path):
+    db_path = tmp_path / "data.db"
+    repo = SQLiteSignalForwardLabelsRepository(db_path)
+
+    provenance = _make_provenance()
+    identity = SignalArtifactIdentity(
+        artifact_id=ArtifactId(_VALID_ARTIFACT_ID),
+        semantic_compatibility_id=SemanticCompatibilityId(_VALID_SEM_COMPAT_ID),
+        provenance=provenance,
+    )
+    label = SignalForwardLabel(
+        ticker="BBCA",
+        signal_date=date(2026, 7, 1),
+        horizon=SignalLabelHorizon.SWING_10D,
+        entry_reference_price=Decimal("100"),
+        label_window_start=date(2026, 7, 2),
+        label_window_end=date(2026, 7, 15),
+        close_return=5.0,
+        max_forward_return=8.0,
+        max_adverse_excursion=-1.0,
+        days_to_peak=3,
+        days_to_trough=1,
+        stop_would_trigger=False,
+        target_would_trigger=True,
+        outcome_label=SignalForwardOutcome.SUCCESS,
+        unavailable_reason=None,
+        fingerprint=SignalObservationFingerprint(
+            setup_family="foreign_bounce",
+            coverage=0.8,
+            conviction=0.8,
+            market_regime={"regime": "RISK_ON"},
+        ),
+        observation_captured_at=datetime(2026, 7, 1, 9, 0, 0),
+        artifact_identity=identity,
+    )
+
+    repo.save_many([label])
+    restored = repo.get("BBCA", date(2026, 7, 1), SignalLabelHorizon.SWING_10D)
+    assert restored is not None
+    assert restored.artifact_identity is not None
+    assert restored.artifact_identity.artifact_id == ArtifactId(_VALID_ARTIFACT_ID)
+    assert restored.artifact_identity.semantic_compatibility_id == SemanticCompatibilityId(_VALID_SEM_COMPAT_ID)
+    assert restored.artifact_identity.provenance == provenance
+
+
+def test_partial_identity_columns_fail_on_read(tmp_path: Path):
+    db_path = tmp_path / "data.db"
+    SQLiteSignalForwardLabelsRepository(db_path)
+
+    with sqlite3.connect(str(db_path)) as conn:
+        conn.execute(
+            "INSERT INTO signal_forward_labels "
+            "(ticker, signal_date, horizon, observation_captured_at, "
+            "outcome_label, fingerprint_json, schema_version, created_at, updated_at, "
+            "artifact_id, semantic_compatibility_id, artifact_provenance_json) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                "BBCA", "2026-07-01", "SWING_10D", "2026-07-01T09:00:00",
+                "SUCCESS", '{"v":1}', 2, "2026-07-16T00:00:00", "2026-07-16T00:00:00",
+                _VALID_ARTIFACT_ID, "", "",
+            ),
+        )
+
+    repo = SQLiteSignalForwardLabelsRepository(db_path)
+    with pytest.raises(ValueError, match="Partial signal artifact identity"):
+        repo.get("BBCA", date(2026, 7, 1), SignalLabelHorizon.SWING_10D)
+
+
+def test_null_identity_columns_fail_on_read(tmp_path: Path):
+    """Actual NULL in an identity column must raise ValueError on repo.read.
+
+    Create table without NOT NULL on identity columns to simulate a corrupt
+    or manually-tampered database, insert a row with NULL identity, then
+    verify repo.get() fails closed.
+    """
+    db_path = tmp_path / "null_identity.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("CREATE TABLE _schema_migrations (namespace TEXT, version INTEGER, UNIQUE(namespace, version))")
+    conn.execute(
+        "INSERT INTO _schema_migrations (namespace, version) VALUES (?, ?)",
+        ("signal_forward_labels", 11),
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS signal_forward_labels ("
+        "id                       INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "ticker                   TEXT    NOT NULL, "
+        "signal_date              TEXT    NOT NULL, "
+        "horizon                  TEXT    NOT NULL, "
+        "observation_captured_at  TEXT    NOT NULL DEFAULT '', "
+        "entry_reference_price    TEXT, "
+        "label_window_start       TEXT, "
+        "label_window_end         TEXT, "
+        "close_return             REAL, "
+        "max_forward_return       REAL, "
+        "max_adverse_excursion    REAL, "
+        "days_to_peak             INTEGER, "
+        "days_to_trough           INTEGER, "
+        "stop_would_trigger       INTEGER, "
+        "target_would_trigger     INTEGER, "
+        "outcome_label            TEXT    NOT NULL, "
+        "unavailable_reason       TEXT, "
+        "fingerprint_json         TEXT    NOT NULL, "
+        "schema_version           INTEGER NOT NULL DEFAULT 1, "
+        "created_at               TEXT    NOT NULL, "
+        "updated_at               TEXT    NOT NULL, "
+        "decision_at              TEXT    NOT NULL DEFAULT '', "
+        "latest_completed_session TEXT    NOT NULL DEFAULT '', "
+        "analysis_as_of           TEXT    NOT NULL DEFAULT '', "
+        "market_session_name      TEXT    NOT NULL DEFAULT '', "
+        "is_eod_pending           INTEGER, "
+        "resolution_source        TEXT    NOT NULL DEFAULT '', "
+        "resolution_notes_json    TEXT    NOT NULL DEFAULT '[]', "
+        "artifact_id              TEXT, "
+        "semantic_compatibility_id TEXT, "
+        "artifact_provenance_json TEXT"
+        ")"
+    )
+    conn.execute(
+        "INSERT INTO signal_forward_labels "
+        "(ticker, signal_date, horizon, observation_captured_at, "
+        "outcome_label, fingerprint_json, schema_version, created_at, updated_at, "
+        "artifact_id, semantic_compatibility_id, artifact_provenance_json) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            "BBCA", "2026-07-01", "SWING_10D", "2026-07-01T09:00:00",
+            "SUCCESS", '{"v":1}', 1, "2026-07-16T00:00:00", "2026-07-16T00:00:00",
+            None, None, None,
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    repo = SQLiteSignalForwardLabelsRepository(db_path)
+    with pytest.raises(ValueError, match="is NULL"):
+        repo.get("BBCA", date(2026, 7, 1), SignalLabelHorizon.SWING_10D)
+
+
+def test_noncanonical_provenance_json_fails_on_read(tmp_path: Path):
+    db_path = tmp_path / "data.db"
+    SQLiteSignalForwardLabelsRepository(db_path)
+
+    with sqlite3.connect(str(db_path)) as conn:
+        conn.execute(
+            "INSERT INTO signal_forward_labels "
+            "(ticker, signal_date, horizon, observation_captured_at, "
+            "outcome_label, fingerprint_json, schema_version, created_at, updated_at, "
+            "artifact_id, semantic_compatibility_id, artifact_provenance_json) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                "BBCA", "2026-07-01", "SWING_10D", "2026-07-01T09:00:00",
+                "SUCCESS", '{"v":1}', 2, "2026-07-16T00:00:00", "2026-07-16T00:00:00",
+                _VALID_ARTIFACT_ID, _VALID_SEM_COMPAT_ID, '{"noncanonical": true}',
+            ),
+        )
+
+    repo = SQLiteSignalForwardLabelsRepository(db_path)
+    with pytest.raises(ValueError, match="artifact_provenance_json"):
+        repo.get("BBCA", date(2026, 7, 1), SignalLabelHorizon.SWING_10D)
+
+
+def test_upsert_replaces_identity_columns(tmp_path: Path):
+    db_path = tmp_path / "data.db"
+    repo = SQLiteSignalForwardLabelsRepository(db_path)
+
+    provenance_a = _make_provenance()
+    identity_a = SignalArtifactIdentity(
+        artifact_id=ArtifactId(_VALID_ARTIFACT_ID),
+        semantic_compatibility_id=SemanticCompatibilityId(_VALID_SEM_COMPAT_ID),
+        provenance=provenance_a,
+    )
+    label_a = SignalForwardLabel(
+        ticker="BBCA",
+        signal_date=date(2026, 7, 1),
+        horizon=SignalLabelHorizon.SWING_10D,
+        entry_reference_price=Decimal("100"),
+        label_window_start=date(2026, 7, 2),
+        label_window_end=date(2026, 7, 15),
+        close_return=5.0,
+        max_forward_return=8.0,
+        max_adverse_excursion=-1.0,
+        days_to_peak=3,
+        days_to_trough=1,
+        stop_would_trigger=False,
+        target_would_trigger=True,
+        outcome_label=SignalForwardOutcome.SUCCESS,
+        unavailable_reason=None,
+        fingerprint=SignalObservationFingerprint(
+            setup_family="foreign_bounce",
+            coverage=0.8,
+            conviction=0.8,
+            market_regime={"regime": "RISK_ON"},
+        ),
+        observation_captured_at=datetime(2026, 7, 1, 9, 0, 0),
+        artifact_identity=identity_a,
+    )
+
+    repo.save_many([label_a])
+
+    label_b = SignalForwardLabel(
+        ticker="BBCA",
+        signal_date=date(2026, 7, 1),
+        horizon=SignalLabelHorizon.SWING_10D,
+        entry_reference_price=Decimal("200"),
+        label_window_start=date(2026, 7, 2),
+        label_window_end=date(2026, 7, 15),
+        close_return=10.0,
+        max_forward_return=12.0,
+        max_adverse_excursion=-2.0,
+        days_to_peak=5,
+        days_to_trough=2,
+        stop_would_trigger=True,
+        target_would_trigger=False,
+        outcome_label=SignalForwardOutcome.FAILURE,
+        unavailable_reason=None,
+        fingerprint=SignalObservationFingerprint(
+            setup_family="foreign_bounce",
+            coverage=0.9,
+            conviction=0.9,
+            market_regime={"regime": "RISK_OFF"},
+        ),
+        observation_captured_at=datetime(2026, 7, 1, 9, 0, 0),
+    )
+    repo.save_many([label_b])
+
+    restored = repo.get("BBCA", date(2026, 7, 1), SignalLabelHorizon.SWING_10D)
+    assert restored is not None
+    assert restored.close_return == 10.0
+    assert restored.artifact_identity is None
+
+    with sqlite3.connect(str(db_path)) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT artifact_id, semantic_compatibility_id, artifact_provenance_json "
+            "FROM signal_forward_labels WHERE ticker='BBCA'"
+        ).fetchone()
+    assert row["artifact_id"] == ""
+    assert row["semantic_compatibility_id"] == ""
+    assert row["artifact_provenance_json"] == ""
+
+
+def test_no_unique_index_on_artifact_id(tmp_path: Path):
+    db_path = tmp_path / "data.db"
+    SQLiteSignalForwardLabelsRepository(db_path)
+
+    with sqlite3.connect(str(db_path)) as conn:
+        indexes = conn.execute(
+            "SELECT name FROM pragma_index_list('signal_forward_labels')"
+        ).fetchall()
+
+    for idx_row in indexes:
+        idx_name = idx_row[0]
+        with sqlite3.connect(str(db_path)) as conn:
+            cols = conn.execute(
+                "SELECT name FROM pragma_index_info(?)", (idx_name,)
+            ).fetchall()
+        col_names = {c[0] for c in cols}
+        assert "artifact_id" not in col_names, (
+            f"Index {idx_name} includes artifact_id"
+        )
+
+
+def test_migrations_0_to_11_registered(tmp_path: Path):
+    db_path = tmp_path / "data.db"
+    SQLiteSignalForwardLabelsRepository(db_path)
+
+    with sqlite3.connect(str(db_path)) as conn:
+        versions = {
+            row[0]
+            for row in conn.execute(
+                "SELECT version FROM _schema_migrations WHERE namespace=?",
+                ("signal_forward_labels",),
+            )
+        }
+    assert versions == set(range(12))
+
+
+def test_to_dict_unchanged_by_identity_metadata(tmp_path: Path):
+    label_without = SignalForwardLabel(
+        ticker="BBCA",
+        signal_date=date(2026, 7, 1),
+        horizon=SignalLabelHorizon.SWING_10D,
+        entry_reference_price=Decimal("100"),
+        label_window_start=date(2026, 7, 2),
+        label_window_end=date(2026, 7, 15),
+        close_return=5.0,
+        max_forward_return=8.0,
+        max_adverse_excursion=-1.0,
+        days_to_peak=3,
+        days_to_trough=1,
+        stop_would_trigger=False,
+        target_would_trigger=True,
+        outcome_label=SignalForwardOutcome.SUCCESS,
+        unavailable_reason=None,
+        fingerprint=SignalObservationFingerprint(
+            setup_family="foreign_bounce",
+            coverage=0.8,
+            conviction=0.8,
+            market_regime={"regime": "RISK_ON"},
+        ),
+        observation_captured_at=datetime(2026, 7, 1, 9, 0, 0),
+    )
+
+    provenance = _make_provenance()
+    identity = SignalArtifactIdentity(
+        artifact_id=ArtifactId(_ANOTHER_ARTIFACT_ID),
+        semantic_compatibility_id=SemanticCompatibilityId(_VALID_SEM_COMPAT_ID),
+        provenance=provenance,
+    )
+    label_with = SignalForwardLabel(
+        ticker="BBCA",
+        signal_date=date(2026, 7, 1),
+        horizon=SignalLabelHorizon.SWING_10D,
+        entry_reference_price=Decimal("100"),
+        label_window_start=date(2026, 7, 2),
+        label_window_end=date(2026, 7, 15),
+        close_return=5.0,
+        max_forward_return=8.0,
+        max_adverse_excursion=-1.0,
+        days_to_peak=3,
+        days_to_trough=1,
+        stop_would_trigger=False,
+        target_would_trigger=True,
+        outcome_label=SignalForwardOutcome.SUCCESS,
+        unavailable_reason=None,
+        fingerprint=SignalObservationFingerprint(
+            setup_family="foreign_bounce",
+            coverage=0.8,
+            conviction=0.8,
+            market_regime={"regime": "RISK_ON"},
+        ),
+        observation_captured_at=datetime(2026, 7, 1, 9, 0, 0),
+        artifact_identity=identity,
+    )
+
+    keys_without = set(label_without.to_dict().keys())
+    keys_with = set(label_with.to_dict().keys())
+    assert keys_without == keys_with, (
+        "to_dict() keys differ when artifact_identity is set"
+    )
+    assert "artifact_identity" not in keys_with
+
+
+def test_label_default_artifact_identity_is_none():
+    label = SignalForwardLabel(
+        ticker="BBCA",
+        signal_date=date(2026, 7, 1),
+        horizon=SignalLabelHorizon.SWING_10D,
+        entry_reference_price=Decimal("100"),
+        label_window_start=date(2026, 7, 2),
+        label_window_end=date(2026, 7, 15),
+        close_return=5.0,
+        max_forward_return=8.0,
+        max_adverse_excursion=-1.0,
+        days_to_peak=3,
+        days_to_trough=1,
+        stop_would_trigger=False,
+        target_would_trigger=True,
+        outcome_label=SignalForwardOutcome.SUCCESS,
+        unavailable_reason=None,
+        fingerprint=SignalObservationFingerprint(
+            setup_family="foreign_bounce",
+            coverage=0.8,
+            conviction=0.8,
+            market_regime={"regime": "RISK_ON"},
+        ),
+        observation_captured_at=datetime(2026, 7, 1, 9, 0, 0),
+    )
+    assert label.artifact_identity is None
+
+
+def test_legacy_label_migration_preserves_row_and_reads_none(tmp_path: Path):
+    """Pre-Slice-4 label remains present after migrations 9-11 run, all three
+    columns are empty, and repository read returns artifact_identity=None."""
+    db_path = tmp_path / "legacy_migrate.db"
+
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("CREATE TABLE _schema_migrations (namespace TEXT, version INTEGER)")
+    for v in range(9):
+        conn.execute(
+            "INSERT INTO _schema_migrations (namespace, version) VALUES (?, ?)",
+            ("signal_forward_labels", v),
+        )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS signal_forward_labels ("
+        "id                       INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "ticker                   TEXT    NOT NULL, "
+        "signal_date              TEXT    NOT NULL, "
+        "horizon                  TEXT    NOT NULL, "
+        "observation_captured_at  TEXT    NOT NULL DEFAULT '', "
+        "entry_reference_price    TEXT, "
+        "label_window_start       TEXT, "
+        "label_window_end         TEXT, "
+        "close_return             REAL, "
+        "max_forward_return       REAL, "
+        "max_adverse_excursion    REAL, "
+        "days_to_peak             INTEGER, "
+        "days_to_trough           INTEGER, "
+        "stop_would_trigger       INTEGER, "
+        "target_would_trigger     INTEGER, "
+        "outcome_label            TEXT    NOT NULL, "
+        "unavailable_reason       TEXT, "
+        "fingerprint_json         TEXT    NOT NULL, "
+        "schema_version           INTEGER NOT NULL DEFAULT 1, "
+        "created_at               TEXT    NOT NULL, "
+        "updated_at               TEXT    NOT NULL, "
+        "decision_at              TEXT    NOT NULL DEFAULT '', "
+        "latest_completed_session TEXT    NOT NULL DEFAULT '', "
+        "analysis_as_of           TEXT    NOT NULL DEFAULT '', "
+        "market_session_name      TEXT    NOT NULL DEFAULT '', "
+        "is_eod_pending           INTEGER, "
+        "resolution_source        TEXT    NOT NULL DEFAULT '', "
+        "resolution_notes_json    TEXT    NOT NULL DEFAULT '[]'"
+        ")"
+    )
+    conn.execute(
+        "INSERT OR IGNORE INTO signal_forward_labels "
+        "(ticker, signal_date, horizon, observation_captured_at, "
+        "outcome_label, fingerprint_json, schema_version, created_at, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            "BBCA", "2026-07-01", "SWING_10D", "2026-07-01T09:00:00",
+            "SUCCESS", '{"v":1}', 2, "2026-07-16T00:00:00", "2026-07-16T00:00:00",
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    repo = SQLiteSignalForwardLabelsRepository(db_path)
+
+    with sqlite3.connect(str(db_path)) as conn:
+        versions = {
+            row[0]
+            for row in conn.execute(
+                "SELECT version FROM _schema_migrations WHERE namespace=?",
+                ("signal_forward_labels",),
+            ).fetchall()
+        }
+    assert versions == set(range(12))
+
+    with sqlite3.connect(str(db_path)) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT artifact_id, semantic_compatibility_id, artifact_provenance_json "
+            "FROM signal_forward_labels WHERE ticker='BBCA'"
+        ).fetchone()
+    assert row["artifact_id"] == ""
+    assert row["semantic_compatibility_id"] == ""
+    assert row["artifact_provenance_json"] == ""
+
+    restored = repo.get("BBCA", date(2026, 7, 1), SignalLabelHorizon.SWING_10D)
+    assert restored is not None
+    assert restored.ticker == "BBCA"
+    assert restored.artifact_identity is None

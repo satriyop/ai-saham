@@ -22,6 +22,9 @@ from src.infrastructure.persistence.source_field_contract_catalog import (
     FIELD_STATS_MODE,
     StaticSourceFieldContractCatalog,
 )
+from src.infrastructure.persistence.sqlite_signal_artifact_identity_codec import (
+    decode_signal_artifact_identity,
+)
 
 
 class SQLiteSourceFieldContractReader:
@@ -162,7 +165,40 @@ class SQLiteSourceFieldContractReader:
                     "AND close_return IS NULL"
                 ).fetchone()[0]
 
+        if table in ("candidate_observations", "signal_forward_labels"):
+            self._check_artifact_identity_triplet(conn, table, columns, checks)
+
         return checks
+
+    @staticmethod
+    def _check_artifact_identity_triplet(
+        conn: sqlite3.Connection,
+        table: str,
+        columns: set[str],
+        checks: dict[str, int],
+    ) -> None:
+        identity_cols = {"artifact_id", "semantic_compatibility_id", "artifact_provenance_json"}
+        if not identity_cols <= columns:
+            return
+
+        rows = conn.execute(
+            f"SELECT artifact_id, semantic_compatibility_id, artifact_provenance_json "
+            f"FROM {table}"
+        ).fetchall()
+
+        malformed = 0
+        for artifact_id, sem_compat_id, provenance_json in rows:
+            try:
+                decode_signal_artifact_identity(
+                    artifact_id_raw=artifact_id,
+                    semantic_compatibility_id_raw=sem_compat_id,
+                    provenance_json_raw=provenance_json,
+                )
+            except (ValueError, TypeError):
+                malformed += 1
+
+        if malformed:
+            checks["malformed_artifact_identity_count"] = malformed
 
     def _connect(self) -> sqlite3.Connection:
         uri = f"file:{self._db_path}?mode=ro"

@@ -3,9 +3,18 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import pytest
+
+from src.domain.value_objects.signal_artifact_identity import (
+    ArtifactId,
+    ArtifactProvenance,
+    ArtifactSourceProvenance,
+    SemanticCompatibilityId,
+    SignalArtifactIdentity,
+)
 
 from src.infrastructure.persistence.sqlite_signal_forward_labels_repairer import (
     SQLiteSignalForwardLabelsRepairer,
@@ -460,3 +469,154 @@ def test_apply_works_when_source_table_has_no_id_column(tmp_path: Path):
             "SELECT * FROM signal_forward_labels_quarantine WHERE ticker = 'BBCA'"
         ).fetchone()
     assert row["source_row_id"] is not None
+
+
+# ── ARTIFACT-IDENTITY Slice 4: quarantine identity preservation ──────────────
+
+
+def _make_test_provenance() -> ArtifactProvenance:
+    return ArtifactProvenance(
+        application_revision="abc123",
+        complete_config_hash="ab" * 32,
+        complete_authority_registry_hash="cd" * 32,
+        universe_snapshot_id="snap_001",
+        idx_calendar_version="v2",
+        session_rule_version="v1",
+        decision_at=datetime(2026, 7, 1, 16, 0, 0, tzinfo=timezone.utc),
+        captured_at=datetime(2026, 7, 1, 16, 30, 0, tzinfo=timezone.utc),
+        latest_completed_session=date(2026, 7, 1),
+        analysis_as_of=date(2026, 7, 1),
+        sources=(
+            ArtifactSourceProvenance(
+                source_family="candles",
+                provider="stockbit",
+                source_snapshot_id=None,
+                observed_through=date(2026, 7, 1),
+                available_at=datetime(2026, 7, 1, 15, 30, 0, tzinfo=timezone.utc),
+                cutoff_at=None,
+            ),
+        ),
+        invocation_command=None,
+        invocation_actor=None,
+    )
+
+
+def test_quarantine_preserves_identity_values(tmp_path: Path):
+    db_path = tmp_path / "data.db"
+    _build_schemas(db_path)
+    _insert_co_row(db_path, ticker="BBCA", snapshot_date="2026-07-01")
+
+    _VALID_AID = "sha256:" + "aa" * 32
+    _VALID_SCID = "sha256:" + "bb" * 32
+    identity = SignalArtifactIdentity(
+        artifact_id=ArtifactId(_VALID_AID),
+        semantic_compatibility_id=SemanticCompatibilityId(_VALID_SCID),
+        provenance=_make_test_provenance(),
+    )
+
+    conn = sqlite3.connect(str(db_path))
+    aid = str(identity.artifact_id)
+    scid = str(identity.semantic_compatibility_id)
+    prov_json = identity.provenance.to_canonical_json()
+    conn.execute(
+        "INSERT INTO signal_forward_labels "
+        "(ticker, signal_date, horizon, observation_captured_at, "
+        "outcome_label, fingerprint_json, schema_version, created_at, updated_at, "
+        "artifact_id, semantic_compatibility_id, artifact_provenance_json) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            "BBCA", "2026-07-02", "SWING_10D", "2026-07-02T09:00:00",
+            "SUCCESS", '{"v":1}', 2, "2026-07-16T00:00:00", "2026-07-16T00:00:00",
+            aid, scid, prov_json,
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    repairer = _make_repairer(db_path)
+    repairer.ensure_quarantine_table()
+    quarantined, deleted = repairer.quarantine_and_delete_orphans(_REPAIR_RUN_ID)
+
+    assert quarantined == 1
+    assert deleted == 1
+
+    with sqlite3.connect(str(db_path)) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT artifact_id, semantic_compatibility_id, artifact_provenance_json "
+            "FROM signal_forward_labels_quarantine"
+        ).fetchone()
+    assert row["artifact_id"] == aid
+    assert row["semantic_compatibility_id"] == scid
+    assert row["artifact_provenance_json"] == prov_json
+
+
+def test_existing_quarantine_table_upgraded_safely(tmp_path: Path):
+    db_path = tmp_path / "data.db"
+    _build_schemas(db_path)
+    _insert_co_row(db_path, ticker="BBCA", snapshot_date="2026-07-01")
+    _insert_label_row(db_path, ticker="BBCA", signal_date="2026-07-02")
+
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("DROP TABLE IF EXISTS signal_forward_labels_quarantine")
+    conn.execute(
+        "CREATE TABLE signal_forward_labels_quarantine ("
+        "quarantine_id                INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "source_row_id                INTEGER NOT NULL, "
+        "id                          INTEGER, "
+        "ticker                      TEXT, "
+        "signal_date                 TEXT, "
+        "horizon                     TEXT, "
+        "observation_captured_at     TEXT, "
+        "entry_reference_price       TEXT, "
+        "label_window_start          TEXT, "
+        "label_window_end            TEXT, "
+        "close_return                REAL, "
+        "max_forward_return          REAL, "
+        "max_adverse_excursion       REAL, "
+        "days_to_peak                INTEGER, "
+        "days_to_trough              INTEGER, "
+        "stop_would_trigger          INTEGER, "
+        "target_would_trigger        INTEGER, "
+        "outcome_label               TEXT, "
+        "unavailable_reason          TEXT, "
+        "fingerprint_json            TEXT, "
+        "schema_version              INTEGER, "
+        "created_at                  TEXT, "
+        "updated_at                  TEXT, "
+        "decision_at                 TEXT, "
+        "latest_completed_session    TEXT, "
+        "analysis_as_of              TEXT, "
+        "market_session_name         TEXT, "
+        "is_eod_pending               INTEGER, "
+        "resolution_source           TEXT, "
+        "resolution_notes_json       TEXT, "
+        "quarantine_reason           TEXT NOT NULL, "
+        "quarantined_at              TEXT NOT NULL, "
+        "repair_run_id                TEXT NOT NULL, "
+        "original_table               TEXT NOT NULL DEFAULT 'signal_forward_labels', "
+        "quarantine_schema_version    INTEGER NOT NULL DEFAULT 1, "
+        "UNIQUE(source_row_id)"
+        ")"
+    )
+    conn.commit()
+    conn.close()
+
+    repairer = _make_repairer(db_path)
+    repairer.ensure_quarantine_table()
+
+    with sqlite3.connect(str(db_path)) as conn:
+        conn.row_factory = sqlite3.Row
+        cols = {
+            row["name"]
+            for row in conn.execute(
+                "SELECT name FROM pragma_table_info('signal_forward_labels_quarantine')"
+            )
+        }
+    assert "artifact_id" in cols
+    assert "semantic_compatibility_id" in cols
+    assert "artifact_provenance_json" in cols
+
+    quarantined, deleted = repairer.quarantine_and_delete_orphans(_REPAIR_RUN_ID)
+    assert quarantined == 1
+    assert deleted == 1
