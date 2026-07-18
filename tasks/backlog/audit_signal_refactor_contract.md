@@ -831,6 +831,144 @@ Layer plan:
 
 ---
 
+## Task RETIRE-LEGACY-SIX-FACTOR-BASELINE — Remove The Executable Legacy Signal Scorer
+
+### Metadata
+
+- **State:** Ready — `EVIDENCE-BACKED-ASSESSMENT` and
+  `CENTRAL-EVIDENCE-AUTHORITY` are complete.
+- **Type:** Public application-contract cleanup
+- **Priority:** P1; required for `LIVE-CONTRACT-GATE`
+- **Required before:** DQ-007 and CLI-002
+- **Decision:** Remove the executable six-factor `AssessSignalUseCase` path and
+  its public audit command. Preserve shared pure diagnostic scorers, historical
+  decoding contracts, legacy stored artifacts, fixtures, and git history.
+  Canonical inspection is implemented and verified later by DQ-007. Implement
+  this option only.
+
+### Problem
+
+The production `SignalEngine` delegates canonical assessment to
+`AssessSignalEvidenceUseCase`, but active source still contains
+`AssessSignalUseCase`, a retired flat six-factor scorer. It returns the same
+general `AssessSignalResponse` shape and remains reachable through
+`AuditSignalUseCase` and `saham analyze signal-audit`. Its `factors.*` weights
+and neutral-fill settings remain in `config/signal_engine.yaml`.
+
+The path does not currently control screen, swing, `TradeSetup`, persistence,
+tuning, or promotion. The defect is authority ambiguity: a public executable
+use case can produce a score, classification, and entry quality without the
+canonical evidence, provenance, availability, authority-coverage, and readiness
+contract. CLI-002 would otherwise rename this legacy audit to `signal inspect`,
+making the obsolete calculation look like the explanation of current behavior.
+
+Running the old formula against current data/config is also not reliable
+historical reproduction. True reproduction requires the original code/config,
+source cutoff, and artifact schema identity. Current git history and immutable
+legacy artifacts are more truthful than an active compatibility scorer.
+
+### Exact Contract
+
+#### Remove the executable legacy assessment path
+
+Remove from executable/public application paths:
+
+- `src/application/use_case/assess_signal_use_case.py`;
+- `AssessSignalRequest` and any request/response aliases used only by that path;
+- `src/application/use_case/audit_signal_use_case.py`;
+- legacy six-factor weight resolution used only by that audit;
+- `signal_engine.factors.*` and archived neutral-fill config after proving no
+  canonical or retained diagnostic consumer reads them;
+- tests and comments that execute or describe the retired scorer as production.
+
+No compatibility wrapper, deprecated alias, factory, test helper, or CLI path
+may return `AssessSignalResponse` from the retired formula.
+
+#### Preserve genuinely shared current components
+
+Do not delete or duplicate:
+
+- `SignalContext` fields still consumed by canonical enrichment/flag policy;
+- pure company-quality scoring helpers used by current diagnostic evidence;
+- their required typed config, relocated to an accurately named diagnostic
+  boundary if it currently lives under legacy factor config;
+- canonical `SignalEngine`, `AssessSignalEvidenceUseCase`, evidence DTOs,
+  authority coverage, readiness, constraints, and response serialization;
+- historical persisted rows and their schema/code/config identities;
+- `SignalEvidence`, `FactorEvidence`, and any reader required to decode or
+  identify historical payloads; their later removal is a separate non-blocking
+  cleanup requiring proof that no persisted artifact depends on them;
+- minimal golden legacy fixtures or archived documentation needed to identify
+  old artifacts.
+
+Do not rewrite historical artifacts or recalculate them with the current engine.
+
+#### Leave canonical inspection to DQ-007
+
+This task removes the misleading executable score; it does not build its
+replacement. DQ-007 owns the read-only canonical inspection use case, its
+point-in-time verification, and its output contract. CLI-002 later exposes that
+verified use case as `saham analyze signal inspect`.
+
+It is acceptable for `saham analyze signal-audit` to be absent between this
+task and CLI-002. Do not keep the legacy command alive as a compatibility bridge.
+
+### Do Not Interpret This As
+
+- Do not delete `SignalContext` merely because its old six-factor interpretation
+  is retired.
+- Do not delete shared company-quality math/config still used by current
+  diagnostic evidence.
+- Do not retain the old scorer under a `legacy`, `compatibility`, `audit`, or
+  hidden name.
+- Do not preserve a legacy score in canonical inspection for comparison.
+- Do not delete historical decoders merely to remove the executable scorer;
+  retain schema/version documentation, golden fixtures where needed, and git
+  history.
+- Do not change canonical scores, weights, thresholds, classifications,
+  authority coverage, readiness, or `TradeSetup` behavior.
+- Do not build canonical inspection or implement CLI hierarchy restructuring
+  here; those are owned by DQ-007 and CLI-002 respectively.
+
+### Negative Tests
+
+- No importable public application path can instantiate or call
+  `AssessSignalUseCase` or produce its six-factor score.
+- Changing or supplying removed `factors.*` configuration fails clearly rather
+  than silently tuning canonical production or a hidden compatibility scorer.
+- Diagnostic company-quality evidence remains numerically unchanged where its
+  shared scorers/config are intentionally retained.
+- Historical legacy payloads remain readable/classifiable without executing the
+  retired scorer or rewriting stored JSON.
+
+### Layer Plan (Agent Must State Before Coding)
+
+```md
+Layer plan:
+- Domain: preserve canonical and historical decoding contracts; remove only request/response types proven exclusive to the retired executable path
+- Application: delete the retired scorer/audit path; do not build a replacement inspector
+- Infrastructure: remove legacy factor-weight loading used only by the retired audit; preserve historical readers
+- Adapter: unregister and remove the old signal-audit calculation/handler; CLI hierarchy routing remains owned by CLI-002
+- Documentation/config: remove active six-factor tuning surfaces and describe legacy artifacts by version/history
+```
+
+### Acceptance Criteria
+
+- [ ] `AssessSignalUseCase`, `AssessSignalRequest`, and the executable six-factor audit path no longer exist
+- [ ] No compatibility/deprecated/hidden path can return a legacy signal-shaped assessment
+- [ ] `signal_engine.factors.*` and legacy-only neutral-fill/weight resolution are removed or fail explicitly
+- [ ] Shared diagnostic scorers/config are retained under truthful ownership with unchanged intended values
+- [ ] Current screen, swing, canonical observation inputs, scores, decisions, and `TradeSetup` outputs are unchanged
+- [ ] Historical persisted artifacts remain unchanged and identifiable by their original semantic/schema provenance
+- [ ] Historical payload decoders remain available unless a separate dependency audit proves they are unused
+- [ ] DQ-007 owns construction and verification of canonical inspection
+- [ ] CLI-002 no longer instructs agents to rename/reuse the legacy audit handler
+- [ ] Focused canonical signal, diagnostic company-quality, historical decoding, and negative tests pass
+- [ ] Architecture tests and full suite pass
+- [ ] `git diff --check` clean
+
+---
+
 ## Task PROMOTION-ARTIFACT-INTEGRITY — Evidence-Bound Promotion Artifacts
 
 **State:** Deferred — activation requires `ARTIFACT-IDENTITY`, canonical
@@ -1006,7 +1144,7 @@ snapshot, builds selected and rejected/control observations from the same
 cutoff, and persists them idempotently. It reports inserted, already-existing,
 unavailable, rejected, and failed counts. Re-running the same semantic capture
 must not increase sample size. Capture does not generate forward labels, tune
-policy, or promote evidence. Phase 3 verifies this application contract without
+policy, or promote evidence. DQ-003 verifies this application contract without
 requiring the later CLI router or cron migration.
 
 The contracts answer different evaluation questions:

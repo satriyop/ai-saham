@@ -37,7 +37,7 @@ DQ-BASELINE-GATE = DQ-003 through DQ-008, then DQ-010 and DQ-011
 DQ-SENTIMENT-GATE = DQ-009 plus any sentiment-specific DQ-010 cleanup
 ```
 
-`DQ-CONTRACT-GATE` blocks Phase 2 only for defects that can change authoritative
+`DQ-CONTRACT-GATE` blocks `LIVE-CONTRACT-GATE` only for defects that can change authoritative
 live scoring. Diagnostic-only source defects, repair-command hardening, and
 historical leakage proof remain required but instead block canonical capture,
 empirical evaluation, tuning, and promotion. BENCHMARK-EXCESS-RETURN, AUTHORITY-COVERAGE-READINESS, artifact identity,
@@ -528,7 +528,8 @@ Any readiness metric based on contaminated, duplicate, in-sample, or invalid dat
 
 ### DQ-007 — Audit current SignalEngine inspection accuracy
 
-**State:** Blocked — waits for `LIVE-CONTRACT-GATE`.
+**State:** Blocked — waits for `LIVE-CONTRACT-GATE`; the gate includes
+`RETIRE-LEGACY-SIX-FACTOR-BASELINE`.
 
 **Priority:** P1  
 **Depends on:** DQ-001, DQ-002  
@@ -536,26 +537,36 @@ Any readiness metric based on contaminated, duplicate, in-sample, or invalid dat
 
 **Accurate pointers:**
 
-- CLI: `src/adapters/cli/analyze_signal_audit_commands.py`
-- Use case: `src/application/use_case/audit_signal_use_case.py`
+- CLI: canonical routing is owned by CLI-002 after this task passes
+- Use case: new canonical read-only inspection use case owned by this task
 - Engine factory: `src/infrastructure/composition/signal_engine_factory.py`
 - Config loader: `src/infrastructure/config/signal_engine_config_loader.py`
-- Bootstrap/weight resolution: `src/application/services/bootstrap.py`
 - Coverage provider: `src/infrastructure/persistence/sqlite_signal_coverage_provider.py`
 
 **Audit requirements:**
 
-- Recompute every factor score and weighted contribution independently from raw source rows.
-- Reconcile configured, active, effective, alpha, and trigger weights.
-- Verify missing factors use the documented neutral/unavailable behavior and do not inflate conviction.
-- Verify canonical score, legacy diagnostic score, coverage, authority coverage, and entry-quality mapping use distinct labels.
+- Build one read-only inspection use case that consumes the same prepared
+  canonical evidence input and invokes the same canonical scorer as screen and
+  swing. It must not reconstruct a parallel composite.
+- Independently verify the exact consumed source rows, evidence inputs,
+  configured group weights, resolved authority, missing-data behavior, known
+  calculation vectors, and final scorer output.
+- Verify unavailable/missing evidence cannot inflate authority coverage,
+  readiness, or directional conviction.
+- Verify there is no executable/displayed legacy six-factor score.
 - Prove `--date T` builds a point-in-time context rather than joining latest enrichment.
 - Validate factor coverage counts against SQL and distinguish rows from usable rows and unique tickers.
 - Display source date, value, unit, freshness, authority, and unavailable reason for every factor.
+- Expose effective session, exact provenance, source availability,
+  `signal_authority_coverage`, typed setup readiness, decision constraints,
+  diagnostic groups, and final canonical assessment.
+- Perform no observation, label, tuning, promotion, or config writes.
 
 **Clean-break rule:**
 
-Remove the “legacy” score if it is routinely misread or cannot be justified. Do not preserve dual scores solely for compatibility. Rename `signal-audit` semantics to inspection after correctness is proven.
+The executable legacy scorer is removed before this audit starts. Do not
+preserve or reconstruct a dual score for compatibility. Rename `signal-audit`
+semantics to inspection only after canonical correctness is proven.
 
 **Acceptance criteria:**
 
@@ -563,6 +574,9 @@ Remove the “legacy” score if it is routinely misread or cannot be justified.
 - [ ] Historical dates cannot consume future/current-only values.
 - [ ] Missing data cannot increase authority or readiness.
 - [ ] Table, JSON, and DTO use identical score/coverage terminology.
+- [ ] Inspection consumes the same canonical input/scorer as screen and swing and computes no parallel composite.
+- [ ] Inspection is read-only and exposes provenance, availability, authority, readiness, constraints, diagnostics, and final assessment.
+- [ ] No legacy six-factor score or active factor-weight surface remains in inspection output.
 
 ### DQ-008 — Audit accumulation historical evaluation
 

@@ -147,7 +147,8 @@ Old paths become hidden transitional aliases. They must call the same command ha
 ### CLI-002 — Introduce the read-only `analyze signal` group
 
 **Priority:** P0  
-**Depends on:** CLI-001  
+**Depends on:** CLI-001 and DQ-007; DQ-007 already requires the completed
+`RETIRE-LEGACY-SIX-FACTOR-BASELINE` gate prerequisite
 **Outcome:** Signal inspection commands are discoverable under one read-only analysis group.
 
 **Canonical contract:**
@@ -162,8 +163,11 @@ saham analyze signal readiness --target TARGET [--format table|json] [--db PATH]
 
 - Create a focused Typer router, suggested file: `src/adapters/cli/analyze_signal_router.py`.
 - Register it with `analyze_app.add_typer(signal_app, name="signal")`.
-- Reuse existing focused handlers; do not copy their logic.
-- Rename the internal audit handler to `inspect_signal` when compatibility permits. The public artifact is a factor inspection report, not a historical audit.
+- Reuse the canonical inspection handler delivered and verified by DQ-007; do
+  not copy its logic.
+- Remove the old six-factor audit handler. Do not rename or wrap it as
+  `inspect_signal`. The public artifact explains the current canonical
+  evidence-backed assessment, not a historical audit or compatibility score.
 - Update module docstrings and examples to canonical paths.
 - Help text must say `Read-only SignalEngine diagnostics from local data.`
 
@@ -173,12 +177,17 @@ saham analyze signal readiness --target TARGET [--format table|json] [--db PATH]
 - Do not change factor weights, neutral-fill behavior, scoring, coverage policy, or evidence authority.
 - Do not make repositories/services public merely to share handlers.
 - Do not create a second SignalEngine construction path.
+- Do not display, recompute, or preserve the retired six-factor score under a
+  legacy/diagnostic/compatibility panel.
 
 **Acceptance criteria:**
 
 - [ ] `saham analyze signal --help` lists only `inspect`, `replay`, and `readiness`.
-- [ ] Canonical commands match old output/artifacts for identical inputs.
+- [ ] Replay/readiness preserve their verified contracts; inspection matches
+      DQ-007 canonical output rather than the old audit artifact.
 - [ ] The canonical commands are read-only.
+- [ ] Inspection shows canonical evidence/provenance/availability/authority
+      coverage/readiness/constraints and no parallel composite.
 - [ ] Help and error examples use canonical paths.
 - [ ] Negative tests prove write-producing signal operations are absent from this group.
 

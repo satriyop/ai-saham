@@ -32,8 +32,9 @@ truth and PIT prerequisites remain in
 | 3 | `AUTHORITY-COVERAGE-READINESS` | Done | `8c4dee1 Close remaining HIGH-2 Findings and Reconcile Acceptance State` |
 | 4 | `ARTIFACT-IDENTITY` | Done (foundation) | `2b0bff1`; canonical capture/readiness integration is owned by DQ-003/DQ-006 |
 | 5 | `EVIDENCE-BACKED-ASSESSMENT` | Done | `4262ae3 Remove flags-only SignalEngine assessment paths (EVIDENCE-BACKED-ASSESSMENT)` |
-| 6 | `CENTRAL-EVIDENCE-AUTHORITY` | Ready | Current producer YAML/dataclass still controls its own status |
-| 7 | `SECTOR-CONTEXT-IDENTITY` | Blocked | Requires the active artifact/schema identity contract |
+| 6 | `CENTRAL-EVIDENCE-AUTHORITY` | Done | `c93363a`; status recorded by `952d106` |
+| 7 | `RETIRE-LEGACY-SIX-FACTOR-BASELINE` | Ready | `EVIDENCE-BACKED-ASSESSMENT` and central-authority cleanup are complete; required before DQ-007 canonical inspection |
+| 8 | `SECTOR-CONTEXT-IDENTITY` | Blocked | Requires the active artifact/schema identity contract |
 
 `OUTPUT-CONTRACT-OWNERSHIP` is a deferred, non-blocking documentation cleanup
 after `SECTOR-CONTEXT-IDENTITY`. It does not block `LIVE-CONTRACT-GATE`.
@@ -64,19 +65,21 @@ ML roadmap.
 - CLI and cron migration remain owned by `CLI-003` after DQ-011; no temporary
   screen-side write path is allowed.
 
-## Phase 2 Close Criteria
+## LIVE-CONTRACT-GATE Close Criteria
 
-Phase 2 closes only when:
+`LIVE-CONTRACT-GATE` passes only when:
 
 - one canonical evidence-backed assessment path exists;
 - screen and swing preserve the same evidence/provenance contract;
 - no flags-only path can return a canonical signal assessment;
 - diagnostic evidence cannot gain authority from producer config;
+- no public application use case or CLI command can return a signal-shaped
+  result from the retired six-factor formula;
 - canonical artifacts bind compatible identity dimensions;
 - partial evidence, unavailable evidence, and no evidence remain distinct;
 - sector evidence uses a truthful canonical identity.
 
-Phase 2 does **not** require:
+`LIVE-CONTRACT-GATE` does **not** require:
 
 - an ML framework or model;
 - local-ML evidence;
@@ -90,7 +93,7 @@ Phase 2 does **not** require:
 - Do not promote diagnostic evidence because its implementation is complete.
 - Do not implement deferred promotion infrastructure without a concrete
   evidence candidate and canonical evaluation data.
-- Do not add ML or API challenger code to close Phase 2.
+- Do not add ML or API challenger code to pass `LIVE-CONTRACT-GATE`.
 - Do not duplicate detailed task acceptance criteria in this scan document.
 
 ## Solo-Project Proportionality
@@ -100,7 +103,8 @@ Phase 2 does **not** require:
 | `ARTIFACT-IDENTITY` | Keep the current minimal IDs and provenance. Do not add a generic artifact registry or extra uniqueness infrastructure before canonical capture needs it. |
 | `EVIDENCE-BACKED-ASSESSMENT` | Keep. It removes a real misleading public API, not governance ceremony. |
 | `CENTRAL-EVIDENCE-AUTHORITY` | Keep. It is a small fail-closed config cleanup that prevents false persisted authority. |
+| `RETIRE-LEGACY-SIX-FACTOR-BASELINE` | Keep, narrowly scoped. Remove the executable/public legacy score before the live gate; DQ-007 separately owns canonical inspection. |
 | `SECTOR-CONTEXT-IDENTITY` | Keep. Wrong machine-readable identity contaminates future attribution and promotion. |
-| `OUTPUT-CONTRACT-OWNERSHIP` | Simplify and keep non-blocking. It is documentation hygiene, not a Phase 2 runtime gate. |
+| `OUTPUT-CONTRACT-OWNERSHIP` | Simplify and keep non-blocking. It is documentation hygiene, not a `LIVE-CONTRACT-GATE` requirement. |
 | `CONTROL-POPULATION` | Keep, but implement one observation contract at a time. Controls are required to measure false negatives without selection bias. |
 | `IDX-EXECUTION-LABELS` | Keep a conservative executable model. Unsupported fills remain unavailable; do not build order-book simulation. |
