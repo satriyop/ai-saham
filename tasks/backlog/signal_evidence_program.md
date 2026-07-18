@@ -54,6 +54,14 @@ claims.
 ## Non-Negotiable Invariants
 
 - The deterministic rule/config engine is the canonical champion.
+- Every task in this program is a clean break. Removed contracts are rejected;
+  they are never retained as aliases, fallbacks, translations, dual paths, or
+  active historical compatibility layers.
+- Historical payloads may remain unchanged only in quarantine or raw audit
+  storage. Quarantined data cannot participate in execution, labeling,
+  attribution, readiness, tuning, promotion, or canonical reads.
+- New schemas create new canonical cohorts. Rebuild through the new producer;
+  never rewrite old payloads to impersonate the new contract.
 - No historical artifact is canonical without PIT provenance and compatible
   semantic identity.
 - Interactive command frequency must not determine the learning population.
@@ -83,6 +91,12 @@ governance lane. ML/API implementation is intentionally deferred to the roadmap.
 4. Do not implement roadmap work to satisfy deterministic close criteria.
 5. Do not copy mutable task status into this index.
 6. Stop if a task crosses lane boundaries without an explicit dependency.
+7. Apply the program-wide clean-break policy even when an older task appendix
+   mentions compatibility, mapping, aliases, or active legacy interpretation;
+   that older language is superseded.
+8. Do not globally remove a genuine active concept merely because a retired
+   scoped identity used the same word. Prove the namespace boundary with a
+   negative regression test.
 
 Stop rather than weakening a contract when a prerequisite gate lacks
 reproducible evidence, artifacts have incompatible identities, historical PIT

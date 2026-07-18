@@ -71,6 +71,36 @@ material config belong in compatibility identity. Until canonical artifact
 identity production is fully wired, do not claim changed rules/config are
 comparable with earlier observations or labels.
 
+### Signal Evidence Program Clean-Break Policy
+
+Every task owned by `tasks/backlog/signal_evidence_program.md` is a clean-break
+task. This program-wide rule supersedes compatibility, alias, dual-path,
+fallback, translation, or active historical-normalization language in older
+task drafts.
+
+- Removed contracts, names, schemas, commands, config keys, and execution paths
+  must be rejected by every new canonical producer and consumer. Do not retain
+  an active alias, compatibility property, silent translation, fallback, or
+  parallel old/new path.
+- A schema/version bump creates a new canonical cohort. Older rows may remain
+  byte-for-byte unchanged only in quarantine or raw audit storage; raw
+  retention does not grant execution, labeling, attribution, readiness,
+  tuning, promotion, or canonical-read authority.
+- Do not rewrite old payloads to look as though they were produced under the
+  new contract. Quarantine or rebuild them through the new canonical producer.
+- Reject removed identities at all applicable typed-config, domain, producer,
+  persistence, label, attribution, and promotion boundaries. Repository-only
+  rejection is insufficient when application code consumes a repository port.
+- Scope removals to the retired contract. A genuine active concept that happens
+  to share a word with a removed identity remains active and must be protected
+  by explicit regression tests.
+- If clean break would destroy non-quarantined user data or an owning task truly
+  requires a compatibility bridge, stop before editing and request an explicit
+  program-contract change. Do not infer an exception.
+
+For this policy, "preserve old rows unchanged" means preserve raw historical
+truth only. It never means preserve active compatibility.
+
 Layer plan format:
 
 ```md
@@ -111,6 +141,9 @@ Required structure:
    - Add a `Do Not Interpret This As` section.
    - Explicitly list shortcuts, compatibility behavior, or alternative readings
      that are not allowed.
+   - For Signal Evidence Program tasks, state that clean break is mandatory and
+     enumerate every old alias, fallback, translation, and canonical historical
+     interpretation that must not survive.
 3. Define exact contracts.
    - Name methods, DTOs, repository methods, config keys, CLI flags, and
      ownership boundaries when they are known.
