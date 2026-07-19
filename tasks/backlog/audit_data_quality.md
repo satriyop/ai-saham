@@ -200,8 +200,9 @@ rebuild/quarantine requirement
 **Depends on:** none  
 **Outcome:** Audits are repeatable and cannot accidentally corrupt the working database.
 
-**State:** Ready — read-only audit protection is complete; mutating repair
-commands still need an explicit target-database guard.
+**State:** Done — read-only audit protection is complete; mutating repair
+commands now reject `--apply` without an explicit `--db`, failing before any
+configuration load, repository construction, or mutation.
 
 **Implementation guideline:**
 
@@ -224,7 +225,7 @@ commands still need an explicit target-database guard.
 
 - [x] Audit commands default to read-only.
 - [x] Baseline manifest includes database/config/code identity.
-- [ ] Repair commands default to dry-run, execute transactionally, and require
+- [x] Repair commands default to dry-run, execute transactionally, and require
       explicit `--db` together with `--apply` before mutating data.
 - [x] The validation panel and dates are committed as deterministic fixtures or manifests.
 - [x] A failed audit cannot partially mutate canonical tables.

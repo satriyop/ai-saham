@@ -236,6 +236,24 @@ def seasonality_cleanup_plan(
     _run_seasonality_cleanup_plan(db_path=db_path, output_format=output_format)
 
 
+def _require_explicit_db_for_apply(
+    *,
+    apply: bool,
+    db_path: Path | None,
+) -> None:
+    """Guard: a mutating --apply run must name its target database explicitly.
+
+    Pure input validation for repair commands. Does not load configuration or
+    inspect the filesystem; it only rejects the unsafe flag combination so the
+    configured default database can never be mutated implicitly.
+    """
+    if apply and db_path is None:
+        raise typer.BadParameter(
+            "--apply requires an explicit --db PATH; "
+            "the configured default database is read-only for repair commands"
+        )
+
+
 def repair_seasonality_cache(
     db_path: Annotated[
         Optional[Path],
@@ -257,8 +275,12 @@ def repair_seasonality_cache(
     """
     Repair invalid seasonality_cache rows by quarantining them (DQ-001H).
 
-    Default is dry-run: reports which rows would be quarantined without
-    mutating the database.  Use --apply to perform the quarantine.
+    Default mode is dry-run: reports which rows would be quarantined without
+    mutating the database. Dry-run may use the configured default database.
+
+    Mutation requires both --apply and an explicit --db PATH; --apply without
+    an explicit --db is rejected so the configured default database can never
+    be mutated implicitly.
 
     Never deletes rows without quarantining them first.  The quarantine
     table preserves the full original row plus reasons, repair_run_id, and
@@ -269,6 +291,7 @@ def repair_seasonality_cache(
             "Cannot use both --dry-run and --apply. "
             "Default (no flag) is dry-run."
         )
+    _require_explicit_db_for_apply(apply=apply, db_path=db_path)
     if output_format not in _VALID_FORMATS:
         raise typer.BadParameter(
             f"--format must be one of {_VALID_FORMATS}, got '{output_format}'."
@@ -327,8 +350,12 @@ def repair_candidate_observations(
     Legacy = config_hash IS NULL or empty after trim (or the config_hash
     column is missing entirely, in which case every row is legacy).
 
-    Default is dry-run: reports legacy rows without mutating the database.
-    Use --apply to quarantine and delete them in one transaction.
+    Default mode is dry-run: reports legacy rows without mutating the
+    database. Dry-run may use the configured default database.
+
+    Mutation requires both --apply and an explicit --db PATH; --apply without
+    an explicit --db is rejected so the configured default database can never
+    be mutated implicitly.
 
     Never deletes rows without quarantining them first. The quarantine
     table preserves the full original row plus reason, repair_run_id, and
@@ -339,6 +366,7 @@ def repair_candidate_observations(
             "Cannot use both --dry-run and --apply. "
             "Default (no flag) is dry-run."
         )
+    _require_explicit_db_for_apply(apply=apply, db_path=db_path)
     if output_format not in _VALID_FORMATS:
         raise typer.BadParameter(
             f"--format must be one of {_VALID_FORMATS}, got '{output_format}'."
@@ -377,9 +405,12 @@ def repair_signal_forward_labels(
     columns, no mutation is performed — a missing other side is not
     proof of orphanhood.
 
-    Default is dry-run: reports orphan rows without mutating the
-    database.  Use --apply to quarantine and delete them in one
-    transaction.
+    Default mode is dry-run: reports orphan rows without mutating the
+    database. Dry-run may use the configured default database.
+
+    Mutation requires both --apply and an explicit --db PATH; --apply without
+    an explicit --db is rejected so the configured default database can never
+    be mutated implicitly.
 
     Never deletes rows without quarantining them first.  The quarantine
     table preserves the full original row plus reason, repair_run_id,
@@ -390,6 +421,7 @@ def repair_signal_forward_labels(
             "Cannot use both --dry-run and --apply. "
             "Default (no flag) is dry-run."
         )
+    _require_explicit_db_for_apply(apply=apply, db_path=db_path)
     if output_format not in _VALID_FORMATS:
         raise typer.BadParameter(
             f"--format must be one of {_VALID_FORMATS}, got '{output_format}'."
