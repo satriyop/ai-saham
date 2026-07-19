@@ -38,9 +38,16 @@ claims.
    OUTPUT-CONTRACT-OWNERSHIP
 
 3. CANONICAL OBSERVATIONS AND LABELS
-   CONTROL-POPULATION + DQ-003
-   -> IDX-EXECUTION-LABELS + DQ-004
-   -> DQ-005 through DQ-011
+   Accumulation baseline:
+     CONTROL-POPULATION + DQ-003 (`accumulation-discovery`)
+     -> IDX-EXECUTION-LABELS + DQ-004
+     -> DQ-005 through DQ-011
+
+   Named-setup extension after DQ-003:
+     NAMED-SWING-SETUP-CAPTURE
+     -> named-setup labels/readiness
+
+   The named-setup extension does not block the accumulation baseline.
    Exit: CANONICAL-EVIDENCE-GATE, then DQ-BASELINE-GATE
 
 4. EVIDENCE VALIDATION AND PROMOTION

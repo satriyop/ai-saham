@@ -53,7 +53,29 @@ ML roadmap.
 |---|---|---|---|
 | `CONTROL-POPULATION` | Blocked | Capture selected and rejected eligible-universe controls | DQ-003 + `ARTIFACT-IDENTITY` |
 | `IDX-EXECUTION-LABELS` | Blocked | Produce executable net outcome labels | DQ-004 + `CONTROL-POPULATION` |
+| `NAMED-SWING-SETUP-CAPTURE` | Blocked | Capture population-based evaluations for an explicit named swing setup | DQ-003 + `CONTROL-POPULATION` |
 | DQ-005 through DQ-011 | See DQ backlog | Replay, readiness, inspection, cleanup, and baseline freeze | [`audit_data_quality.md`](audit_data_quality.md) |
+
+### Named Swing Setup Capture
+
+`NAMED-SWING-SETUP-CAPTURE` starts only after DQ-003 has completed the
+`accumulation-discovery` capture, identity, PIT, and control-population
+contracts. It is required before labels, readiness metrics, attribution, or
+tuning claims are produced for a named setup such as breakout, pullback, or
+mean reversion. It does not block accumulation-discovery labels or the first
+corrected accumulation baseline.
+
+Scope and close criteria:
+
+- require one explicit setup-family identity per capture;
+- evaluate the setup across its contemporaneous eligible population, never a
+  user-selected ticker;
+- use a distinct `observation_contract` and artifact identity from
+  `accumulation-discovery`;
+- reuse the DQ-003 PIT, control-population, idempotence, and provenance
+  contracts without adding a compatibility alias or dual write path;
+- keep named-setup label generation separate and blocked until this capture
+  contract is complete.
 
 ### Capture Boundary
 

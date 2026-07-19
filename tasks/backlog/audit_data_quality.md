@@ -5,9 +5,10 @@
 **Task title:** Prove and repair point-in-time correctness for signal observations, labels, replay, readiness, accumulation evaluation, and sentiment outcomes  
 **Task type:** Spike / Research followed by Bugfix and Refactor gates  
 **Overall priority:** Critical / P0  
-**Status:** Active — the live DQ contract gate currently has blocking findings;
-canonical observation/label work remains blocked and sentiment validation is
-independently deferred.
+**Status:** Active — the executable DQ contract gate currently reports `PASS`,
+but authoritative null/zero semantics and canonical artifact provenance remain
+unresolved. Canonical observation/label work remains blocked, and sentiment
+validation is independently deferred.
 **Decision:** Audit the producer-to-consumer chain in the order defined here. Implement this option only.  
 **Compatibility policy:** Clean break is allowed. Do not preserve incorrect data, schemas, outputs, or tests merely for backward compatibility.
 
@@ -232,15 +233,21 @@ commands still need an explicit target-database guard.
 
 **Priority:** P0  
 **Depends on:** DQ-000  
-**Outcome:** Every field that can affect canonical authority has a proven source
-meaning and availability contract; diagnostic/optional fields remain visible
-without pretending to be authoritative.
+**Outcome:** Each field currently used by the production `setup_quality` or
+`institutional_flow` evidence groups has a proven source meaning and
+availability contract. Diagnostic/optional fields remain visible without
+pretending to be authoritative.
 
-**State:** Blocked — waits for DQ-000; the executable live gate also currently
-fails on invalid seasonality provenance and the committed forward-label
-artifact schema has not yet been applied to the live database.
+**State:** Blocked — waits for DQ-000 and correction of authoritative
+null-versus-zero flow semantics. The executable gate currently reports `PASS`,
+but does not yet detect that semantic defect.
 
-**Audit each source family:**
+**Current production scope:** candles, broker summaries, and tracked-broker
+daily flow consumed by `setup_quality` or `institutional_flow`. The remaining
+source families below are audited for explicit diagnostic/unavailable status;
+they do not block this task unless current production authority consumes them.
+
+**Audit source families:**
 
 - candles: OHLCV, adjusted/unadjusted status, session date, duplicate bars, zero volume, impossible ranges;
 - broker summaries and daily flow: aggregation grain, foreign net value, buy/sell values, broker code identity, missing brokers, session completeness;
@@ -269,23 +276,35 @@ If two sources are not semantically equivalent, do not retain one generic field 
 
 **Acceptance criteria:**
 
-- [ ] Every authoritative input used by the canonical assessment path has a
-      field-level contract and executable invariants where the source permits
-      them.
-- [ ] Semantically equivalent cross-table/source overlaps are reconciled on a sampled and aggregate basis; sources without a valid counterpart have provider fixtures and explicit limitations instead.
-- [ ] Unverifiable historical fields are marked diagnostic/unavailable or removed from replay authority.
-- [ ] Null and zero are never conflated.
-- [ ] Schema/display names include units and aggregation meaning where ambiguity exists.
-- [ ] The live contract gate has no blocking findings.
+- [ ] Each input currently used by production `setup_quality` or
+      `institutional_flow` has a field-level contract and executable invariants
+      where its source permits them.
+- [x] Semantically equivalent overlaps among current production sources are
+      reconciled on sampled and aggregate data; a source without a valid
+      counterpart has a provider fixture and an explicit limitation instead.
+- [x] Historical fields consumed by the current assessment/replay path that
+      cannot be verified point-in-time are diagnostic, unavailable, or excluded
+      from authority.
+- [ ] Missing and real zero values remain distinct throughout current production
+      evidence construction, scoring, authority, and persisted fingerprints.
+- [ ] Canonical persisted fields and public outputs state units and aggregation
+      meaning where the current production concept would otherwise be ambiguous.
+      Internal legacy table names may rely on an explicit field contract when
+      renaming them provides no behavioral safety benefit.
+- [ ] The live contract gate has no authority-impacting blocker for the current
+      production evidence groups.
 
 ### DQ-002 — Implement one IDX market-session and effective-time contract
 
 **Priority:** P0  
 **Depends on:** DQ-001  
-**Outcome:** Every workflow agrees on what data was available at a given decision timestamp.
+**Outcome:** Current screen, swing, canonical capture, and label-generation
+workflows agree on what production evidence was available at a given decision
+timestamp.
 
-**State:** Blocked — waits for DQ-001 and completion of canonical artifact
-provenance in `ARTIFACT-IDENTITY`.
+**State:** Blocked — waits for DQ-001 and production integration of canonical
+artifact identity/effective-session provenance. The `ARTIFACT-IDENTITY`
+foundation exists, but current canonical reads do not require it.
 
 **Required contract:**
 
@@ -304,15 +323,18 @@ freshness_status           # CURRENT | STALE | PARTIAL | UNKNOWN | INVALID
 - Use the IDX trading calendar, not weekdays.
 - Define pre-open, intraday, post-close, and provider-settlement cutoffs.
 - Define how holidays, special sessions, suspensions, and missing provider rows behave.
-- Prove that a T observation never reads candles, broker data, enrichment, labels, or market context that became available after `decision_at`.
-- Ensure corporate-event offsets count appropriate calendar/session semantics explicitly.
+- Prove that a T observation excludes future rows from the current production
+  evidence sources. A diagnostic source must remain non-authoritative when its
+  point-in-time availability is unproven.
+- Apply explicit calendar/session semantics to a corporate event only when that
+  event is consumed by the current production assessment or label contract.
 
 **Accurate pointers:**
 
 - Session resolver: `src/application/services/effective_market_session_resolver.py`
 - Source availability: `src/application/use_case/assess_source_availability_use_case.py`
 - Trading-session calendar contracts/providers under `src/domain/ports/` and `src/infrastructure/persistence/`
-- Observation dates: `src/domain/value_objects/candidate_observation.py`
+- Observation contract: `src/domain/ports/candidate_observations_repository.py`
 - Candidate persistence: `src/infrastructure/persistence/sqlite_candidate_observations_repository.py`
 
 **Clean-break rule:**
@@ -321,28 +343,38 @@ Artifacts without a defensible effective timestamp or data cutoff are invalid fo
 
 **Acceptance criteria:**
 
-- [ ] One application-layer session service is used by every canonical signal,
-      capture, and label workflow; independently activated pipelines use the
-      same contract before claiming readiness.
+- [ ] One application-layer effective-session contract governs current screen,
+      swing, and canonical capture workflows. Label generation inherits and
+      validates the originating observation's contract instead of independently
+      resolving another session.
 - [x] Weekend, holiday, pre-open, intraday, post-close, and late-provider tests pass.
-- [ ] Every persisted canonical signal artifact distinguishes execution time
-      from effective market session.
+- [ ] Current-schema canonical candidate observations and forward labels require
+      execution time, effective market session, and data-cutoff provenance;
+      artifacts missing them are excluded from canonical reads.
 - [x] Temporal leakage tests intentionally plant future rows across the current
       authoritative source families and prove they are excluded or
       non-authoritative.
 
 ### DQ-003 — Audit and repair historical candidate-observation backfill
 
-**State:** Blocked — waits for `LIVE-CONTRACT-GATE`, including completion of
-`ARTIFACT-IDENTITY`.
+**State:** Blocked — waits for the unresolved DQ-001 authoritative null/zero
+semantics and DQ-002 canonical provenance eligibility contract.
 
 **Priority:** P0  
 **Depends on:** DQ-001, DQ-002  
-**Outcome:** Backfilled observations are point-in-time reproductions of what the live workflow could have known.
+**Outcome:** The first `accumulation-discovery` capture and backfill contract is
+an idempotent point-in-time reproduction of what its live universe workflow
+could have known. Named `swing-setup` capture is owned by
+`NAMED-SWING-SETUP-CAPTURE` in `deterministic_signal_engine.md`.
 
 **Program prerequisite:** `LIVE-CONTRACT-GATE`, including
 `ARTIFACT-IDENTITY`. Ordinary `screen` and `analyze` invocations remain
 assessment-only and are not observation-capture triggers.
+
+`NAMED-SWING-SETUP-CAPTURE` starts after this task. It must complete before
+named-setup labels, readiness metrics, attribution, or tuning claims are
+allowed, but it does not block accumulation-discovery labels or this task's
+close criteria.
 
 **Accurate pointers:**
 
@@ -354,7 +386,9 @@ assessment-only and are not observation-capture triggers.
 
 **Audit requirements:**
 
-- Compare backfilled T observations with independently recomputed T snapshots using data physically truncated at T.
+- Compare backfilled T observations with one compact deterministic database
+  fixture physically truncated at T. Cover at least one selected ticker, one
+  rejected control, one missing/unavailable input, and one planted future row.
 - Prove all indicator warm-up windows end at T.
 - Prove broker windows contain broker sessions, not calendar approximations.
 - Verify current-only enrichment is excluded or explicitly unavailable.
@@ -374,10 +408,11 @@ assessment-only and are not observation-capture triggers.
 - Implement canonical observation creation through one dedicated application
   capture use case. Reserve the future `saham learn signal capture` adapter
   routes for CLI-003; they are not part of this task's close criteria.
-- Treat `accumulation-discovery` as the selected/rejected/ranked eligible-universe
-  observation and `swing-setup` as a named-setup evaluation across its eligible
-  population. Persist `observation_contract` and `setup_family` where applicable
-  so the two datasets cannot overwrite or masquerade as one another.
+- Implement `accumulation-discovery` first as the selected/rejected/ranked
+  eligible-universe observation. Persist its `observation_contract`. Reserve a
+  distinct identity for `NAMED-SWING-SETUP-CAPTURE`, but do not implement that
+  producer in DQ-003. The two contracts must never overwrite or masquerade as
+  one another once both exist.
 - Do not admit manually selected single-ticker inspection into the canonical
   population. A future `saham analyze signal inspect TICKER --contract ...`
   path is read-only diagnostic reconstruction and creates no
@@ -387,7 +422,9 @@ assessment-only and are not observation-capture triggers.
   Neither user attention nor invocation frequency may select or weight the
   learning population.
 - Report inserted, already-existing, unavailable, rejected, and failed capture
-  counts. Rerunning the same semantic capture must not increase sample size.
+  counts with machine-readable reasons at the ticker/date capture boundary.
+  Internal diagnostic warnings do not require a new reason taxonomy. Rerunning
+  the same semantic capture must not increase sample size.
 - Preserve suspended, delisted, stale, and unavailable names as explicit states;
   do not erase them from evaluation denominators.
 
@@ -397,19 +434,31 @@ If canonical identity omits a meaning-changing dimension, replace it and rebuild
 
 **Acceptance criteria:**
 
-- [ ] Golden truncated-database fixtures match the canonical semantic projection of backfill output; volatile audit metadata is validated separately.
+- [ ] One compact truncated-database fixture matches the canonical semantic
+      projection of `accumulation-discovery` backfill output; volatile audit
+      metadata is validated separately.
 - [ ] Repeating the same run creates no duplicates or drift.
 - [x] Repeating interactive screen/analyze commands creates no canonical observations.
 - [ ] Explicit capture is idempotent and separate from forward-label generation.
 - [ ] The capture application use case is adapter-independent and ready for CLI-003 wiring.
-- [ ] Discovery and named swing-setup populations are separately identified and reconciled.
+- [ ] `accumulation-discovery` rows carry an explicit observation contract, and
+      identity rules reserve a distinct contract for
+      `NAMED-SWING-SETUP-CAPTURE`, preventing that later population from
+      overwriting or substituting for discovery rows. Implementing the later
+      producer is not required here.
 - [ ] Single-ticker inspection cannot write or count as canonical learning evidence.
 - [ ] Holiday/retry/failure fixtures prove fail-closed session handling and visible errors.
 - [ ] Changing a semantic identity dimension creates a distinct artifact or explicit version replacement.
 - [ ] Candidate and control rows share one PIT cutoff but cannot overwrite one another.
 - [ ] Candidate-only datasets are ineligible for screener recall/filter-value claims.
-- [ ] Every skip has a machine-readable reason.
-- [ ] Survivorship and coverage limitations are quantified, not buried in prose.
+- [ ] Every ticker/date exclusion or failure at the canonical capture boundary
+      has a machine-readable reason; internal diagnostic warnings are out of
+      scope.
+- [ ] Capture reports universe size, evaluated count, selected count, rejected
+      count, unavailable count, and universe-membership source identity. When
+      historical membership is unavailable, the current-universe survivorship
+      limitation is explicit; building a new historical-membership platform is
+      out of scope.
 
 ### DQ-004 — Audit and repair forward-label generation
 
