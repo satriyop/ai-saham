@@ -1,7 +1,20 @@
 from datetime import date
 
 from src.domain.value_objects.foreign_flow_evidence import ForeignFlowEvidence
-from src.domain.value_objects.foreign_flow_score_breakdown import ForeignFlowScoreBreakdown
+from src.domain.value_objects.foreign_flow_score_breakdown import (
+    ForeignFlowComponentScore,
+    ForeignFlowComponentStatus,
+    ForeignFlowScoreBreakdown,
+)
+
+
+def _comp(key: str, points: float | None, max_points: float, status: ForeignFlowComponentStatus):
+    return ForeignFlowComponentScore(
+        key=key,
+        score_points=points,
+        max_points=max_points,
+        status=status,
+    )
 
 
 def _foreign_flow_score_breakdown(
@@ -11,19 +24,56 @@ def _foreign_flow_score_breakdown(
     avg_flow_ratio: float | None,
     vwap_discount_pct: float | None,
     bb_width_pctile: float | None,
-    breakdown: tuple[tuple[str, float], ...] = (),
+    components: tuple[ForeignFlowComponentScore, ...] = (),
 ) -> ForeignFlowScoreBreakdown:
+    max_by_key = {
+        "cons": 33.3,
+        "streak": 25.0,
+        "vwap": 16.7,
+        "rsi": 8.3,
+        "flow": 8.3,
+        "bb": 8.3,
+        "inst": 12.5,
+    }
+    raw_available = {
+        "cons": True,
+        "streak": True,
+        "vwap": vwap_discount_pct is not None,
+        "rsi": False,
+        "flow": avg_flow_ratio is not None,
+        "bb": bb_width_pctile is not None,
+        "inst": False,
+    }
+    supplied = {component.key: component for component in components}
+    remaining = score
+    complete: list[ForeignFlowComponentScore] = []
+    for key in ("cons", "streak", "vwap", "rsi", "flow", "bb", "inst"):
+        if key in supplied:
+            complete.append(supplied[key])
+            remaining -= supplied[key].score_points or 0.0
+            continue
+        if raw_available[key]:
+            points = min(max(remaining, 0.0), max_by_key[key])
+            remaining -= points
+            complete.append(
+                _comp(key, points, max_by_key[key], ForeignFlowComponentStatus.AVAILABLE)
+            )
+        else:
+            complete.append(
+                _comp(key, None, max_by_key[key], ForeignFlowComponentStatus.MISSING)
+            )
+    if round(max(remaining, 0.0), 1) != 0.0:
+        raise AssertionError("test fixture cannot represent requested score")
     return ForeignFlowScoreBreakdown(
         ticker="BBCA",
         snapshot_date=date(2026, 6, 29),
-        foreign_flow_score=score,
         max_score=100.0,
         net_buy_ratio=0.7,
         consecutive_streak=streak,
         vwap_discount_pct=vwap_discount_pct,
         avg_flow_ratio=avg_flow_ratio,
         bb_width_pctile=bb_width_pctile,
-        breakdown=breakdown,
+        components=tuple(complete),
     )
 
 
@@ -35,7 +85,6 @@ def test_foreign_flow_evidence_classifies_positive_confirmed_flow():
             avg_flow_ratio=8.5,
             vwap_discount_pct=3.2,
             bb_width_pctile=0.18,
-            breakdown=(("cons", 28.6), ("flow", 4.2)),
         ),
         net_buy_days=5,
         total_days=7,
@@ -46,7 +95,8 @@ def test_foreign_flow_evidence_classifies_positive_confirmed_flow():
     assert evidence.score_family == "composite_foreign_flow"
     assert evidence.flow_direction == "POSITIVE"
     assert evidence.confirmation_status == "CONFIRMED"
-    assert evidence.to_dict()["component_breakdown"] == {"cons": 28.6, "flow": 4.2}
+    assert evidence.to_dict()["components"]
+    assert evidence.component_coverage < 1.0
 
 
 def test_foreign_flow_evidence_keeps_watch_zone_separate_from_negative_flow():
@@ -115,3 +165,35 @@ def test_foreign_flow_evidence_longer_term_context_is_hashable_and_serializes_as
         "labels": ["positive", "confirmed"],
         "nested": {"net": 12.5},
     }
+
+
+def test_missing_and_zero_components_remain_distinct_in_evidence():
+    missing = ForeignFlowEvidence.from_score_breakdown(
+        _foreign_flow_score_breakdown(
+            score=33.3,
+            streak=0,
+            avg_flow_ratio=None,
+            vwap_discount_pct=None,
+            bb_width_pctile=None,
+        ),
+        net_buy_days=5,
+        total_days=7,
+    )
+    zero = ForeignFlowEvidence.from_score_breakdown(
+        _foreign_flow_score_breakdown(
+            score=33.3,
+            streak=0,
+            avg_flow_ratio=0.0,
+            vwap_discount_pct=0.0,
+            bb_width_pctile=None,
+        ),
+        net_buy_days=5,
+        total_days=7,
+    )
+
+    assert {"vwap", "flow"} <= set(missing.missing_components)
+    assert "vwap" not in zero.missing_components
+    assert "flow" not in zero.missing_components
+    assert missing.component_coverage < 1.0
+    assert zero.component_coverage > missing.component_coverage
+    assert missing.to_dict()["components"] != zero.to_dict()["components"]

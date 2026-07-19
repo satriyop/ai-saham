@@ -34,6 +34,12 @@ from src.domain.value_objects.flow_confirmation_evidence import (
     FlowConfirmationEvidence,
     FlowSubSignal,
 )
+from src.domain.value_objects.foreign_flow_score_breakdown import (
+    FOREIGN_FLOW_COMPONENT_KEYS,
+    ForeignFlowComponentScore,
+    ForeignFlowComponentStatus,
+)
+from src.domain.value_objects.foreign_flow_evidence import ForeignFlowEvidence
 
 # Sub-signal keys extracted from the ForeignFlowScoreBreakdown.
 # BB excluded (SetupEvidence owns it). RSI excluded (price-action, not flow).
@@ -73,8 +79,15 @@ class FlowConfirmationEvidenceBuilder:
             # max achievable = cluster_points (CLUSTER > STABLE)
             "inst": policy.bci.cluster_points if policy.bci.enabled else 0.0,
         }
-        self._flow_max_score = sum(self._flow_signal_weights.values())
-
+        self._component_contracts: dict[str, tuple[bool, float]] = {
+            "cons": (policy.consistency.enabled, policy.consistency.weight),
+            "streak": (policy.streak.enabled, policy.streak.weight),
+            "vwap": (policy.vwap_discount.enabled, policy.vwap_discount.weight),
+            "rsi": (policy.rsi_headroom.enabled, policy.rsi_headroom.weight),
+            "flow": (policy.foreign_flow_ratio.enabled, policy.foreign_flow_ratio.weight),
+            "bb": (policy.bb_squeeze.enabled, policy.bb_squeeze.weight),
+            "inst": (policy.bci.enabled, policy.bci.cluster_points),
+        }
     def build(
         self,
         candidate: Any,  # AccumulationCandidate; Any avoids domain coupling
@@ -89,14 +102,34 @@ class FlowConfirmationEvidenceBuilder:
 
         # --- Extract foreign flow sub-signals --------------------------------
         flow_evidence = getattr(candidate, "foreign_flow_evidence", None) if candidate else None
-        breakdown_dict = self._extract_breakdown(flow_evidence)
-        flow_freshness = Freshness.FRESH if flow_evidence is not None else Freshness.MISSING
+        components = self._extract_components(flow_evidence)
 
-        flow_signals = tuple(
-            self._make_sub_signal(key, breakdown_dict, flow_freshness)
-            for key in _FLOW_SIGNAL_KEYS
+        flow_signals_list: list[FlowSubSignal] = []
+        missing: list[str] = []
+        available_weight = 0.0
+        enabled_weight = 0.0
+        available_score = 0.0
+
+        for key in _FLOW_SIGNAL_KEYS:
+            policy_weight = self._flow_signal_weights.get(key, 0.0)
+            component = components.get(key)
+            sub = self._make_sub_signal(key, component, policy_weight)
+            if sub is None:
+                continue
+            flow_signals_list.append(sub)
+            if sub.freshness is Freshness.MISSING:
+                missing.append(key)
+            if sub.weight > 0:
+                enabled_weight += sub.weight
+                if sub.freshness is Freshness.FRESH:
+                    available_weight += sub.weight
+                    available_score += sub.score
+
+        flow_signals = tuple(flow_signals_list)
+        flow_score_ex_bb = round(available_score, 1)
+        component_coverage = (
+            min(1.0, available_weight / enabled_weight) if enabled_weight > 0 else 0.0
         )
-        flow_score_ex_bb = round(sum(s.score for s in flow_signals), 1)
 
         confirmation_status = (
             getattr(flow_evidence, "confirmation_status", None)
@@ -132,11 +165,12 @@ class FlowConfirmationEvidenceBuilder:
         bci_tier1_count = int(getattr(candidate, "bci_tier1_count", 0) or 0) if candidate else 0
 
         # --- Group aggregate with cap ----------------------------------------
-        # Guard against a zero denominator (e.g. every included component
-        # disabled in the policy) rather than dividing by zero.
+        # Directional strength denominator uses available enabled flow-component
+        # weights only. True-zero AVAILABLE components remain in that denominator.
+        # MISSING components are excluded from the directional denominator.
         flow_strength = (
-            flow_score_ex_bb / self._flow_max_score
-            if flow_evidence is not None and self._flow_max_score > 0
+            available_score / available_weight
+            if available_weight > 0
             else 0.0
         )
 
@@ -147,7 +181,11 @@ class FlowConfirmationEvidenceBuilder:
             uncapped_strength = flow_strength
 
         capped_strength = min(uncapped_strength, group_cap)
-        group_freshness = flow_freshness  # group is fresh iff flow evidence is fresh
+        # Completeness is represented by component statuses and coverage. It
+        # must not be mislabeled as temporal staleness.
+        group_freshness = (
+            Freshness.FRESH if flow_evidence is not None else Freshness.MISSING
+        )
 
         evidence = FlowConfirmationEvidence(
             ticker=ticker,
@@ -166,6 +204,10 @@ class FlowConfirmationEvidenceBuilder:
             group_cap=group_cap,
             group_freshness=group_freshness,
         )
+        if round(evidence.component_coverage, 4) != round(component_coverage, 4):
+            raise ValueError("derived flow component coverage differs from builder state")
+        if evidence.missing_components != tuple(missing):
+            raise ValueError("derived missing flow components differ from builder state")
         provenance = FlowProvenance(
             ticker=ticker,
             broker_summary_rows=tuple(
@@ -184,36 +226,72 @@ class FlowConfirmationEvidenceBuilder:
         )
         return BuiltFlowEvidence(evidence=evidence, provenance=provenance)
 
-    @staticmethod
-    def _extract_breakdown(flow_evidence: Any) -> dict[str, float]:
-        """Extract {key: score} from ForeignFlowEvidence.component_breakdown."""
+    def _extract_components(
+        self,
+        flow_evidence: Any,
+    ) -> dict[str, ForeignFlowComponentScore]:
+        """Extract typed components from ForeignFlowEvidence."""
         if flow_evidence is None:
             return {}
-        breakdown = getattr(flow_evidence, "component_breakdown", None)
-        if not breakdown:
-            return {}
-        return {k: float(v) for k, v in breakdown if isinstance(k, str)}
+        if not isinstance(flow_evidence, ForeignFlowEvidence):
+            raise TypeError(
+                "flow_evidence must be ForeignFlowEvidence; legacy numeric "
+                "component breakdowns are not accepted"
+            )
+        components = flow_evidence.components_by_key
+        if set(components) != FOREIGN_FLOW_COMPONENT_KEYS:
+            raise ValueError("flow_evidence does not contain the canonical component set")
+        for key, component in components.items():
+            enabled, configured_max = self._component_contracts[key]
+            if abs(component.max_points - configured_max) > 1e-9:
+                raise ValueError(
+                    f"flow component {key!r} max_points={component.max_points} "
+                    f"does not match active policy {configured_max}"
+                )
+            if enabled and component.status is ForeignFlowComponentStatus.DISABLED:
+                raise ValueError(
+                    f"flow component {key!r} is DISABLED but active policy enables it"
+                )
+            if not enabled and component.status is not ForeignFlowComponentStatus.DISABLED:
+                raise ValueError(
+                    f"flow component {key!r} must be DISABLED under the active policy"
+                )
+        return components
 
     def _make_sub_signal(
         self,
         key: str,
-        breakdown: dict[str, float],
-        freshness: Freshness,
-    ) -> FlowSubSignal:
-        weight = self._flow_signal_weights.get(key, 0.0)
-        # Policy-disabled components must not contribute even if stale,
-        # malformed, or custom breakdown data still carries a nonzero score
-        # for that key (ScoreForeignFlowUseCase itself always emits 0.0 for a
-        # disabled component, but this builder does not control every caller
-        # of build()).
-        score = breakdown.get(key, 0.0) if weight > 0 else 0.0
-        direction = Direction.BULLISH if score > 0 else Direction.NEUTRAL
+        component: ForeignFlowComponentScore | None,
+        policy_weight: float,
+    ) -> FlowSubSignal | None:
+        if policy_weight <= 0:
+            # Policy-disabled: excluded from the flow group entirely.
+            return None
+        if component is None:
+            return FlowSubSignal(
+                key=key,
+                score=0.0,
+                weight=policy_weight,
+                direction=Direction.NEUTRAL,
+                freshness=Freshness.MISSING,
+            )
+        if component.status is ForeignFlowComponentStatus.DISABLED:
+            return None
+        if component.status is ForeignFlowComponentStatus.MISSING:
+            return FlowSubSignal(
+                key=key,
+                score=0.0,
+                weight=component.max_points if component.max_points > 0 else policy_weight,
+                direction=Direction.NEUTRAL,
+                freshness=Freshness.MISSING,
+            )
+        score = float(component.score_points or 0.0)
         return FlowSubSignal(
             key=key,
             score=round(score, 1),
-            weight=weight,
-            direction=direction,
-            freshness=freshness,
+            weight=component.max_points if component.max_points > 0 else policy_weight,
+            direction=Direction.BULLISH if score > 0 else Direction.NEUTRAL,
+            freshness=Freshness.FRESH,
         )
 
     @staticmethod

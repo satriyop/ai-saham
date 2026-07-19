@@ -20,8 +20,8 @@ _LOWERCASE_SNAKE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 ACCUMULATION_DISCOVERY_CONTRACT = "accumulation-discovery"
 
-EVIDENCE_CONTRACT_VERSION = "1.3"
-SEMANTIC_ENGINE_VERSION = "1.1"
+EVIDENCE_CONTRACT_VERSION = "1.4"
+SEMANTIC_ENGINE_VERSION = "1.2"
 
 _EXECUTION_LABEL_POLICY_VERSIONS: tuple[tuple[str, str], ...] = (
     ("TACTICAL_3D", "tactical_3d_v1"),
@@ -80,7 +80,6 @@ _COMMON_MATERIAL_CONFIG_PATHS_BASE: tuple[str, ...] = (
     "accumulation_screener.evidence.components.rsi_headroom.enabled",
     "accumulation_screener.evidence.components.rsi_headroom.high",
     "accumulation_screener.evidence.components.rsi_headroom.low",
-    "accumulation_screener.evidence.components.rsi_headroom.missing_fraction",
     "accumulation_screener.evidence.components.rsi_headroom.peak",
     "accumulation_screener.evidence.components.rsi_headroom.weight",
     "accumulation_screener.evidence.components.streak.enabled",

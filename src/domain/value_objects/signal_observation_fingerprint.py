@@ -11,6 +11,9 @@ from src.domain.value_objects.signal_observation_fingerprint_serialization impor
     signal_observation_fingerprint_to_canonical_dict,
     signal_observation_fingerprint_to_dict,
 )
+from src.domain.value_objects.signal_artifact_schema import (
+    validate_flow_component_fingerprint,
+)
 
 
 @dataclass(frozen=True)
@@ -61,6 +64,9 @@ class SignalObservationFingerprint:
     foreign_participation: float | None = None
     foreign_concentration: float | None = None
     domestic_broker_accumulation: float | None = None
+    # DQ-001: flow component availability used by the assessment (not recomputed).
+    flow_component_coverage: float | None = None
+    flow_missing_components: tuple[str, ...] = ()
     market_regime: dict[str, Any] = field(default_factory=dict)
     market_regime_at_signal: str | None = None
     regime_confidence_at_signal: float | None = None
@@ -157,6 +163,13 @@ class SignalObservationFingerprint:
     benchmark_excess_return_5_session: BenchmarkExcessReturn | None = None
     benchmark_excess_return_20_session: BenchmarkExcessReturn | None = None
     benchmark_excess_return_authority_status: str | None = None
+
+    def __post_init__(self) -> None:
+        validate_flow_component_fingerprint(
+            component_coverage=self.flow_component_coverage,
+            missing_components=self.flow_missing_components,
+            context="SignalObservationFingerprint",
+        )
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize fingerprint to a flat dictionary."""

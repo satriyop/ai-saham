@@ -13,7 +13,10 @@ from src.application.services.alpha_trigger_aggregator import (
     AlphaTriggerAggregator,
     AlphaTriggerGroupInput,
 )
-from src.domain.value_objects.alpha_trigger_score import SECTOR_CONTEXT_EVIDENCE_NAME
+from src.domain.value_objects.alpha_trigger_score import (
+    EvidenceAuthorityStatus,
+    SECTOR_CONTEXT_EVIDENCE_NAME,
+)
 
 if TYPE_CHECKING:
     from src.application.dto.assess_signal import AssessSignalEvidenceRequest
@@ -23,6 +26,7 @@ if TYPE_CHECKING:
     from src.domain.value_objects.company_quality_context_evidence import (
         CompanyQualityContextEvidence,
     )
+    from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
 
 
@@ -37,6 +41,15 @@ class SignalAlphaTriggerProjection:
             return None
 
         aggregator = AlphaTriggerAggregator(config.alpha_trigger)
+        setup_source_auth = SignalAlphaTriggerProjection._source_authority_fraction(
+            request, group="setup"
+        )
+        flow_source_auth = SignalAlphaTriggerProjection._source_authority_fraction(
+            request, group="flow"
+        )
+        flow_component_coverage = SignalAlphaTriggerProjection._flow_component_coverage(
+            request.flow_confirmation_evidence
+        )
 
         return aggregator.aggregate(
             AlphaTriggerAggregationRequest(
@@ -49,6 +62,10 @@ class SignalAlphaTriggerProjection:
                             "setup_quality", 0.0
                         ),
                         present=group_scores.setup_present,
+                        coverage_fraction=1.0 if group_scores.setup_present else 0.0,
+                        authority_fraction=(
+                            setup_source_auth if group_scores.setup_present else 0.0
+                        ),
                     ),
                     AlphaTriggerGroupInput(
                         group="institutional_flow",
@@ -57,6 +74,14 @@ class SignalAlphaTriggerProjection:
                             "institutional_flow", 0.0
                         ),
                         present=group_scores.flow_present,
+                        coverage_fraction=(
+                            flow_component_coverage if group_scores.flow_present else 0.0
+                        ),
+                        authority_fraction=(
+                            flow_source_auth * flow_component_coverage
+                            if group_scores.flow_present
+                            else 0.0
+                        ),
                     ),
                     AlphaTriggerGroupInput(
                         group=SECTOR_CONTEXT_EVIDENCE_NAME,
@@ -69,6 +94,14 @@ class SignalAlphaTriggerProjection:
                         present=SignalAlphaTriggerProjection._sector_context_present(
                             request.sector_context_evidence
                         ),
+                        coverage_fraction=SignalAlphaTriggerProjection._diagnostic_coverage(
+                            present=SignalAlphaTriggerProjection._sector_context_present(
+                                request.sector_context_evidence
+                            ),
+                            config=config,
+                            group=SECTOR_CONTEXT_EVIDENCE_NAME,
+                        ),
+                        authority_fraction=0.0,
                     ),
                     AlphaTriggerGroupInput(
                         group="company_quality_context",
@@ -81,12 +114,58 @@ class SignalAlphaTriggerProjection:
                         present=SignalAlphaTriggerProjection._company_quality_present(
                             request.company_quality_context_evidence
                         ),
+                        coverage_fraction=SignalAlphaTriggerProjection._diagnostic_coverage(
+                            present=SignalAlphaTriggerProjection._company_quality_present(
+                                request.company_quality_context_evidence
+                            ),
+                            config=config,
+                            group="company_quality_context",
+                        ),
+                        authority_fraction=0.0,
                     ),
                 ),
                 setup_phase=request.setup_phase,
                 flow_confirmation_evidence=request.flow_confirmation_evidence,
             )
         )
+
+    @staticmethod
+    def _source_authority_fraction(
+        request: AssessSignalEvidenceRequest,
+        *,
+        group: str,
+    ) -> float:
+        canonical = request.canonical_evidence
+        if canonical is None:
+            return 0.0
+        group_input = canonical.setup if group == "setup" else canonical.flow
+        if group_input is None:
+            return 0.0
+        return 1.0 if group_input.availability.all_authoritative else 0.0
+
+    @staticmethod
+    def _flow_component_coverage(
+        flow_ev: "FlowConfirmationEvidence | None",
+    ) -> float:
+        if flow_ev is None:
+            return 0.0
+        return max(0.0, min(1.0, float(flow_ev.component_coverage)))
+
+    @staticmethod
+    def _diagnostic_coverage(
+        *,
+        present: bool,
+        config: SignalEngineConfig,
+        group: str,
+    ) -> float:
+        """Diagnostic groups contribute to configured coverage when present,
+        but never to authority coverage."""
+        if not present:
+            return 0.0
+        registration = config.alpha_trigger.evidence_registrations.get(group)
+        if registration is not None and registration.status == EvidenceAuthorityStatus.PRODUCTION:
+            return 1.0
+        return 1.0
 
     @staticmethod
     def _score_sector_context(

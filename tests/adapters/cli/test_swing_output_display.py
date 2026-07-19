@@ -20,6 +20,8 @@ from src.application.dto.swing_analysis import (
 )
 from src.application.services.swing_data_freshness import SwingDataFreshness
 from src.domain.value_objects.foreign_flow_score_breakdown import (
+    ForeignFlowComponentScore,
+    ForeignFlowComponentStatus,
     ForeignFlowScoreBreakdown,
 )
 from src.domain.value_objects.setup_evaluation import (
@@ -280,17 +282,20 @@ def test_swing_flow_detail_calls_out_conflicted_negative_flow(capsys):
         foreign_flow_score_breakdown=ForeignFlowScoreBreakdown(
             ticker="ASII",
             snapshot_date=date(2026, 6, 27),
-            foreign_flow_score=42.8,
             max_score=100.0,
-            breakdown=(
-                ("cons", 17.1),
-                ("streak", 0.0),
-                ("vwap", 1.2),
-                ("rsi", 9.4),
-                ("flow", 0.0),
-                ("bb", 0.0),
-                ("inst", 15.0),
+            components=(
+                ForeignFlowComponentScore("cons", 17.2, 17.2, ForeignFlowComponentStatus.AVAILABLE),
+                ForeignFlowComponentScore("streak", 0.0, 1.0, ForeignFlowComponentStatus.AVAILABLE),
+                ForeignFlowComponentScore("vwap", 1.2, 1.2, ForeignFlowComponentStatus.AVAILABLE),
+                ForeignFlowComponentScore("rsi", 9.4, 9.4, ForeignFlowComponentStatus.AVAILABLE),
+                ForeignFlowComponentScore("flow", 0.0, 1.0, ForeignFlowComponentStatus.AVAILABLE),
+                ForeignFlowComponentScore("bb", None, 8.3, ForeignFlowComponentStatus.DISABLED),
+                ForeignFlowComponentScore("inst", 15.0, 15.0, ForeignFlowComponentStatus.AVAILABLE),
             ),
+            vwap_discount_pct=1.0,
+            rsi=50.0,
+            avg_flow_ratio=-9.0,
+            bci_label="STABLE",
         ),
         bandar_detector=SimpleNamespace(
             label="Dist | today=Big Dist",

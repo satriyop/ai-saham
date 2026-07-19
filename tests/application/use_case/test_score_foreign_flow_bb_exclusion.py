@@ -6,6 +6,9 @@ from src.application.use_case.score_foreign_flow_use_case import (
     ScoreForeignFlowRequest,
     ScoreForeignFlowUseCase,
 )
+from src.domain.value_objects.foreign_flow_score_breakdown import (
+    ForeignFlowComponentStatus,
+)
 
 
 def _request(bb_width_pctile):
@@ -23,29 +26,30 @@ def _request(bb_width_pctile):
     )
 
 
-def test_bb_score_zero_at_maximum_squeeze():
+def test_bb_disabled_by_default_is_not_zero_points():
     uc = ScoreForeignFlowUseCase()
     resp = uc.execute(_request(0.0))
-    assert resp.evidence.breakdown_dict["bb"] == 0.0
+    assert resp.evidence.component("bb").status is ForeignFlowComponentStatus.DISABLED
+    assert resp.evidence.breakdown_dict["bb"] is None
 
 
-def test_bb_score_zero_at_moderate_squeeze():
+def test_bb_disabled_at_moderate_squeeze():
     uc = ScoreForeignFlowUseCase()
     resp = uc.execute(_request(0.15))
-    assert resp.evidence.breakdown_dict["bb"] == 0.0
+    assert resp.evidence.breakdown_dict["bb"] is None
 
 
-def test_bb_score_zero_at_loose():
+def test_bb_disabled_at_loose():
     uc = ScoreForeignFlowUseCase()
     resp = uc.execute(_request(0.50))
-    assert resp.evidence.breakdown_dict["bb"] == 0.0
+    assert resp.evidence.breakdown_dict["bb"] is None
 
 
-def test_bb_key_still_in_breakdown():
+def test_bb_key_still_in_breakdown_as_disabled():
     uc = ScoreForeignFlowUseCase()
     resp = uc.execute(_request(0.0))
     assert "bb" in resp.evidence.breakdown_dict
-    assert resp.evidence.breakdown_dict["bb"] == 0.0
+    assert resp.evidence.component("bb").status is ForeignFlowComponentStatus.DISABLED
 
 
 def test_total_score_excludes_bb_contribution():
@@ -61,13 +65,14 @@ def test_bb_can_be_re_enabled_via_explicit_policy():
     )
     uc = ScoreForeignFlowUseCase(policy)
     resp = uc.execute(_request(0.0))
+    assert resp.evidence.component("bb").status is ForeignFlowComponentStatus.AVAILABLE
     assert resp.evidence.breakdown_dict["bb"] > 0.0
 
 
-def test_bb_score_zero_with_live_loaded_config_at_maximum_squeeze():
+def test_bb_disabled_with_live_loaded_config_at_maximum_squeeze():
     """Regression guard: the shipped config/accumulation_screener.yaml must
     not re-enable bb_squeeze scoring. bb_width_pctile stays populated for
-    setup-phase diagnostics; only the score contribution is zero."""
+    setup-phase diagnostics; only the score contribution is disabled."""
     from src.infrastructure.config.accumulation_screener_config import (
         load_accumulation_screener_config,
     )
@@ -76,5 +81,6 @@ def test_bb_score_zero_with_live_loaded_config_at_maximum_squeeze():
     uc = ScoreForeignFlowUseCase(loaded_policy)
     resp = uc.execute(_request(0.0))
 
-    assert resp.evidence.breakdown_dict["bb"] == 0.0
+    assert resp.evidence.component("bb").status is ForeignFlowComponentStatus.DISABLED
+    assert resp.evidence.breakdown_dict["bb"] is None
     assert resp.evidence.bb_width_pctile == 0.0

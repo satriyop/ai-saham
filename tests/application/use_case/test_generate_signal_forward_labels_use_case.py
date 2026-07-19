@@ -353,14 +353,14 @@ def test_marks_missing_entry_price_unavailable_without_fetching_candles():
 
 @pytest.mark.parametrize(
     "schema_value",
-    [1, 2, 3, 5, None, "4", True],
+    [1, 2, 3, 4, 6, None, "4", True],
 )
 def test_incompatible_observation_schema_produces_no_label_artifacts(schema_value):
     """HIGH-2 Finding 2: only an exact current-schema observation may produce
-    a canonical forward label. Any other schema — old, future, missing, or a
-    malformed non-int value like a numeric string or a bool — must be
-    skipped entirely: no label, no fingerprint parse, no candle read, no
-    repository write."""
+    a canonical forward label. Any other schema — old (incl. schema 4), future,
+    missing, or a malformed non-int value like a numeric string or a bool —
+    must be skipped entirely: no label, no fingerprint parse, no candle read,
+    no repository write."""
     signal_date = date(2026, 7, 1)
     payload = {"candidate": {"current_price": "100"}, "schema_version": schema_value}
     # Deliberately malformed: if fingerprint parsing ran, this would raise

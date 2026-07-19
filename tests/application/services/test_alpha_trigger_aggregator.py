@@ -7,6 +7,30 @@ from src.application.services.alpha_trigger_aggregator import (
     AlphaTriggerAggregator,
     AlphaTriggerGroupInput,
 )
+
+
+def test_group_input_rejects_authority_for_absent_group():
+    with pytest.raises(ValueError, match="absent.*zero coverage and authority"):
+        AlphaTriggerGroupInput(
+            "institutional_flow",
+            0.0,
+            0.30,
+            False,
+            coverage_fraction=1.0,
+            authority_fraction=1.0,
+        )
+
+
+def test_group_input_rejects_authority_above_coverage():
+    with pytest.raises(ValueError, match="cannot exceed"):
+        AlphaTriggerGroupInput(
+            "institutional_flow",
+            50.0,
+            0.30,
+            True,
+            coverage_fraction=0.5,
+            authority_fraction=0.75,
+        )
 from src.application.services.signal_engine_config import AlphaTriggerConfig
 from src.domain.value_objects.alpha_trigger_score import EvidenceAuthorityStatus
 from src.domain.value_objects.factor_evidence import Direction, Freshness
@@ -24,10 +48,10 @@ def test_four_group_coverage_and_diagnostic_authority_caps_are_separate():
         AlphaTriggerAggregationRequest(
             horizon="SWING_10D",
             groups=(
-                AlphaTriggerGroupInput("setup_quality", 100.0, 0.35, True),
-                AlphaTriggerGroupInput("institutional_flow", 50.0, 0.30, True),
-                AlphaTriggerGroupInput("sector_context", 100.0, 0.25, True),
-                AlphaTriggerGroupInput("company_quality_context", 0.0, 0.10, False),
+                AlphaTriggerGroupInput("setup_quality", 100.0, 0.35, True, coverage_fraction=1.0, authority_fraction=1.0),
+                AlphaTriggerGroupInput("institutional_flow", 50.0, 0.30, True, coverage_fraction=1.0, authority_fraction=1.0),
+                AlphaTriggerGroupInput("sector_context", 100.0, 0.25, True, coverage_fraction=1.0, authority_fraction=0.0),
+                AlphaTriggerGroupInput("company_quality_context", 0.0, 0.10, False, coverage_fraction=0.0, authority_fraction=0.0),
             ),
             setup_phase=_breakout_phase(),
             flow_confirmation_evidence=_flow(),
@@ -56,8 +80,8 @@ def test_market_and_company_diagnostic_groups_do_not_move_final_score():
         AlphaTriggerAggregationRequest(
             **common,
             groups=(
-                AlphaTriggerGroupInput("setup_quality", 100.0, 0.35, True),
-                AlphaTriggerGroupInput("institutional_flow", 50.0, 0.30, True),
+                AlphaTriggerGroupInput("setup_quality", 100.0, 0.35, True, coverage_fraction=1.0, authority_fraction=1.0),
+                AlphaTriggerGroupInput("institutional_flow", 50.0, 0.30, True, coverage_fraction=1.0, authority_fraction=1.0),
             ),
         )
     )
@@ -65,10 +89,10 @@ def test_market_and_company_diagnostic_groups_do_not_move_final_score():
         AlphaTriggerAggregationRequest(
             **common,
             groups=(
-                AlphaTriggerGroupInput("setup_quality", 100.0, 0.35, True),
-                AlphaTriggerGroupInput("institutional_flow", 50.0, 0.30, True),
-                AlphaTriggerGroupInput("sector_context", 100.0, 0.25, True),
-                AlphaTriggerGroupInput("company_quality_context", 100.0, 0.10, True),
+                AlphaTriggerGroupInput("setup_quality", 100.0, 0.35, True, coverage_fraction=1.0, authority_fraction=1.0),
+                AlphaTriggerGroupInput("institutional_flow", 50.0, 0.30, True, coverage_fraction=1.0, authority_fraction=1.0),
+                AlphaTriggerGroupInput("sector_context", 100.0, 0.25, True, coverage_fraction=1.0, authority_fraction=0.0),
+                AlphaTriggerGroupInput("company_quality_context", 100.0, 0.10, True, coverage_fraction=1.0, authority_fraction=0.0),
             ),
         )
     )
@@ -92,8 +116,8 @@ def test_flow_trigger_blocked_by_non_breakout_phase_keeps_flow_score_visible():
         AlphaTriggerAggregationRequest(
             horizon="SWING_10D",
             groups=(
-                AlphaTriggerGroupInput("setup_quality", 70.0, 0.35, True),
-                AlphaTriggerGroupInput("institutional_flow", 95.0, 0.30, True),
+                AlphaTriggerGroupInput("setup_quality", 70.0, 0.35, True, coverage_fraction=1.0, authority_fraction=1.0),
+                AlphaTriggerGroupInput("institutional_flow", 95.0, 0.30, True, coverage_fraction=1.0, authority_fraction=1.0),
             ),
             setup_phase=_compression_phase(),
             flow_confirmation_evidence=_flow("CONFIRMED"),
@@ -112,8 +136,8 @@ def test_flow_trigger_routed_for_breakout_phase_with_confirmed_flow():
         AlphaTriggerAggregationRequest(
             horizon="SWING_10D",
             groups=(
-                AlphaTriggerGroupInput("setup_quality", 70.0, 0.35, True),
-                AlphaTriggerGroupInput("institutional_flow", 95.0, 0.30, True),
+                AlphaTriggerGroupInput("setup_quality", 70.0, 0.35, True, coverage_fraction=1.0, authority_fraction=1.0),
+                AlphaTriggerGroupInput("institutional_flow", 95.0, 0.30, True, coverage_fraction=1.0, authority_fraction=1.0),
             ),
             setup_phase=_breakout_phase(),
             flow_confirmation_evidence=_flow("CONFIRMED"),
@@ -154,6 +178,8 @@ def test_fabricated_producer_status_cannot_override_central_authority():
             100.0,
             0.30,
             True,
+            coverage_fraction=1.0,
+            authority_fraction=1.0,
             evidence_status="PRODUCTION",  # type: ignore[call-arg]
         )
 
@@ -169,8 +195,8 @@ def test_fabricated_producer_status_cannot_override_central_authority():
         AlphaTriggerAggregationRequest(
             horizon="SWING_10D",
             groups=(
-                AlphaTriggerGroupInput("setup_quality", 70.0, 0.35, True),
-                AlphaTriggerGroupInput("institutional_flow", 100.0, 0.30, True),
+                AlphaTriggerGroupInput("setup_quality", 70.0, 0.35, True, coverage_fraction=1.0, authority_fraction=1.0),
+                AlphaTriggerGroupInput("institutional_flow", 100.0, 0.30, True, coverage_fraction=1.0, authority_fraction=1.0),
             ),
             setup_phase=_breakout_phase(),
             flow_confirmation_evidence=_flow("CONFIRMED"),
@@ -188,8 +214,8 @@ def test_flow_trigger_blocked_when_setup_phase_missing():
         AlphaTriggerAggregationRequest(
             horizon="SWING_10D",
             groups=(
-                AlphaTriggerGroupInput("setup_quality", 70.0, 0.35, True),
-                AlphaTriggerGroupInput("institutional_flow", 95.0, 0.30, True),
+                AlphaTriggerGroupInput("setup_quality", 70.0, 0.35, True, coverage_fraction=1.0, authority_fraction=1.0),
+                AlphaTriggerGroupInput("institutional_flow", 95.0, 0.30, True, coverage_fraction=1.0, authority_fraction=1.0),
             ),
             setup_phase=None,
             flow_confirmation_evidence=_flow("CONFIRMED"),

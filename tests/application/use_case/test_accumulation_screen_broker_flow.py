@@ -110,7 +110,8 @@ def test_bci_none_when_no_daily_flow_data():
 
     assert c.bci_label is None
     assert c.bci_tier1_count == 0
-    assert c.foreign_flow_score_breakdown.breakdown_dict["inst"] == 0.0
+    # Missing daily-flow rows → BCI MISSING (not available zero / RETAIL-LED).
+    assert c.foreign_flow_score_breakdown.breakdown_dict["inst"] is None
 
 
 def test_bci_counts_all_net_buyers_not_just_top5():

@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
 )
@@ -84,3 +86,22 @@ accumulation_screener:
     loaded = load_accumulation_screener_config(config)
     assert loaded.foreign_flow_score_policy.bb_squeeze.enabled is True
     assert loaded.foreign_flow_score_policy.bb_squeeze.weight == 8.0
+
+
+def test_removed_rsi_missing_fraction_is_rejected(tmp_path: Path):
+    config = tmp_path / "accumulation_screener.yaml"
+    config.write_text(
+        """
+accumulation_screener:
+  evidence:
+    components:
+      rsi_headroom:
+        enabled: true
+        weight: 8.3
+        missing_fraction: 0.5
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="missing_fraction was removed"):
+        load_accumulation_screener_config(config)

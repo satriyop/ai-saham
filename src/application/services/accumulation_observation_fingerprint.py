@@ -30,6 +30,7 @@ from src.application.services.accumulation_observation_signal_fingerprint import
 from src.domain.value_objects.signal_artifact_schema import (
     CANDIDATE_OBSERVATION_SCHEMA_VERSION,
     validate_current_alpha_trigger_identity,
+    validate_current_flow_component_fingerprint,
 )
 
 if TYPE_CHECKING:
@@ -164,7 +165,7 @@ def build_candidate_observation_payload(
         market_context=request.market_context,
     )
 
-    return {
+    payload = {
         "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
         "artifact_type": "candidate_observation",
         "ticker": candidate.ticker,
@@ -185,6 +186,7 @@ def build_candidate_observation_payload(
             candidate.trade_setup.to_dict() if candidate.trade_setup is not None else None
         ),
     }
+    return payload
 
 
 def _sub_signal_fingerprint(
@@ -243,7 +245,7 @@ def _sub_signal_fingerprint(
         if market_context is not None
         else constraints.get("regime")
     )
-    return {
+    fingerprint = {
         "setup_family": resolved_setup_family,
         "matched_setup_families": (
             list(setup_family_result.matched_setup_families)
@@ -294,6 +296,12 @@ def _sub_signal_fingerprint(
             and hasattr(candidate.bandar_detector, "bandar_score")
             else None
         ),
+        "flow_component_coverage": (
+            flow_ev.component_coverage if flow_ev is not None else None
+        ),
+        "flow_missing_components": (
+            list(flow_ev.missing_components) if flow_ev is not None else []
+        ),
         "market_regime_at_signal": market_regime_at_signal,
         **_market_context_fingerprint(market_context),
         "decision_constraints": constraints or None,
@@ -311,6 +319,11 @@ def _sub_signal_fingerprint(
             list(readiness.failed_requirements) if readiness is not None else []
         ),
     }
+    validate_current_flow_component_fingerprint(
+        schema_version=CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+        fingerprint=fingerprint,
+    )
+    return fingerprint
 
 
 def _benchmark_excess_return_dict(

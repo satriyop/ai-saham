@@ -239,9 +239,7 @@ configuration load, repository construction, or mutation.
 availability contract. Diagnostic/optional fields remain visible without
 pretending to be authoritative.
 
-**State:** Blocked — waits for DQ-000 and correction of authoritative
-null-versus-zero flow semantics. The executable gate currently reports `PASS`,
-but does not yet detect that semantic defect.
+**State:** Done — authoritative source and field contracts are established; missing-vs-zero flow semantics resolved.
 
 **Current production scope:** candles, broker summaries, and tracked-broker
 daily flow consumed by `setup_quality` or `institutional_flow`. The remaining
@@ -277,7 +275,7 @@ If two sources are not semantically equivalent, do not retain one generic field 
 
 **Acceptance criteria:**
 
-- [ ] Each input currently used by production `setup_quality` or
+- [x] Each input currently used by production `setup_quality` or
       `institutional_flow` has a field-level contract and executable invariants
       where its source permits them.
 - [x] Semantically equivalent overlaps among current production sources are
@@ -286,13 +284,13 @@ If two sources are not semantically equivalent, do not retain one generic field 
 - [x] Historical fields consumed by the current assessment/replay path that
       cannot be verified point-in-time are diagnostic, unavailable, or excluded
       from authority.
-- [ ] Missing and real zero values remain distinct throughout current production
+- [x] Missing and real zero values remain distinct throughout current production
       evidence construction, scoring, authority, and persisted fingerprints.
-- [ ] Canonical persisted fields and public outputs state units and aggregation
+- [x] Canonical persisted fields and public outputs state units and aggregation
       meaning where the current production concept would otherwise be ambiguous.
       Internal legacy table names may rely on an explicit field contract when
       renaming them provides no behavioral safety benefit.
-- [ ] The live contract gate has no authority-impacting blocker for the current
+- [x] The live contract gate has no authority-impacting blocker for the current
       production evidence groups.
 
 ### DQ-002 — Implement one IDX market-session and effective-time contract

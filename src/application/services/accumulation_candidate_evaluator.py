@@ -222,16 +222,17 @@ class AccumulationCandidateEvaluator:
             )
             if net_buyers:
                 top_brokers = [code for code, _ in net_buyers[:5]]
-                # BCI: count all Tier 1 codes among any net-buyers (not just top 5)
-                all_net_buyer_codes = {code for code, _ in net_buyers}
-                bci_tier1_count = len(all_net_buyer_codes & tier1_broker_codes)
-                if bci_tier1_count >= bci_cluster_min_count:
-                    bci_label = BCI_CLUSTER
-                elif bci_tier1_count >= bci_stable_min_count:
-                    bci_label = BCI_STABLE
-                else:
-                    bci_label = BCI_RETAIL
-                institutional_flag = bci_tier1_count > 0
+            # BCI requires usable daily-flow rows. Zero Tier-1 net buyers among
+            # those rows is observed RETAIL-LED (available zero), not missing.
+            all_net_buyer_codes = {code for code, _ in net_buyers}
+            bci_tier1_count = len(all_net_buyer_codes & tier1_broker_codes)
+            if bci_tier1_count >= bci_cluster_min_count:
+                bci_label = BCI_CLUSTER
+            elif bci_tier1_count >= bci_stable_min_count:
+                bci_label = BCI_STABLE
+            else:
+                bci_label = BCI_RETAIL
+            institutional_flag = bci_tier1_count > 0
 
         candidate = accumulation_dto.AccumulationCandidate(
             ticker=ticker,

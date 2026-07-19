@@ -25,10 +25,19 @@ def _serialize_flow_fields(fp: "SignalObservationFingerprint") -> dict[str, Any]
         "foreign_participation": fp.foreign_participation,
         "foreign_concentration": fp.foreign_concentration,
         "domestic_broker_accumulation": fp.domestic_broker_accumulation,
+        "flow_component_coverage": fp.flow_component_coverage,
+        "flow_missing_components": list(fp.flow_missing_components),
     }
 
 
 def _parse_flow_fields(data: dict[str, Any]) -> dict[str, Any]:
+    missing_raw = data.get("flow_missing_components")
+    if missing_raw is None:
+        missing_components: tuple[str, ...] = ()
+    elif isinstance(missing_raw, (list, tuple)):
+        missing_components = tuple(missing_raw)
+    else:
+        raise ValueError("flow_missing_components must be a list/tuple")
     return {
         "rsi": _optional_float(data.get("rsi", data.get("rsi_at_signal"))),
         "bb_width_pctile": _optional_float(
@@ -68,4 +77,6 @@ def _parse_flow_fields(data: dict[str, Any]) -> dict[str, Any]:
                 data.get("domestic_broker_accumulation_at_signal"),
             )
         ),
+        "flow_component_coverage": _optional_float(data.get("flow_component_coverage")),
+        "flow_missing_components": missing_components,
     }

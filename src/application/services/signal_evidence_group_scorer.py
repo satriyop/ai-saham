@@ -43,6 +43,10 @@ class _GroupAuthorityFacts:
     is_production: bool
     present: bool
     authoritative: bool
+    # Fraction of group weight that is both source-authoritative and
+    # component-complete. Setup remains 1.0/0.0; flow multiplies source
+    # authority by flow.component_coverage.
+    authority_fraction: float
 
 
 @dataclass(frozen=True)
@@ -106,7 +110,10 @@ class SignalEvidenceGroupScorer:
             entry_quality, request.market_context
         )
 
-        coverage_warning = SignalEvidenceGroupScorer._coverage_warning(group_authority_facts)
+        coverage_warning = SignalEvidenceGroupScorer._coverage_warning(
+            group_authority_facts,
+            flow_evidence=request.flow_confirmation_evidence,
+        )
 
         return SignalEvidenceGroupScores(
             setup_score=setup_score,
@@ -196,6 +203,22 @@ class SignalEvidenceGroupScorer:
         return group_input is not None and group_input.availability.all_authoritative
 
     @staticmethod
+    def _source_authority_fraction(
+        group_input: "SetupEvidenceGroupInput | FlowEvidenceGroupInput | None",
+    ) -> float:
+        if group_input is None:
+            return 0.0
+        return 1.0 if group_input.availability.all_authoritative else 0.0
+
+    @staticmethod
+    def _flow_component_coverage(
+        flow_ev: "FlowConfirmationEvidence | None",
+    ) -> float:
+        if flow_ev is None:
+            return 0.0
+        return max(0.0, min(1.0, float(flow_ev.component_coverage)))
+
+    @staticmethod
     def _group_authority_facts(
         request: AssessSignalEvidenceRequest,
         setup_present: bool,
@@ -210,6 +233,17 @@ class SignalEvidenceGroupScorer:
         canonical_evidence = request.canonical_evidence
         setup_group_input = canonical_evidence.setup if canonical_evidence else None
         flow_group_input = canonical_evidence.flow if canonical_evidence else None
+        setup_source_auth = SignalEvidenceGroupScorer._source_authority_fraction(
+            setup_group_input
+        )
+        flow_source_auth = SignalEvidenceGroupScorer._source_authority_fraction(
+            flow_group_input
+        )
+        flow_component_coverage = SignalEvidenceGroupScorer._flow_component_coverage(
+            request.flow_confirmation_evidence
+        )
+        setup_auth = setup_present and setup_source_auth > 0.0
+        flow_auth = flow_present and flow_source_auth > 0.0
         return (
             _GroupAuthorityFacts(
                 name="setup_quality",
@@ -219,8 +253,10 @@ class SignalEvidenceGroupScorer:
                     g.setup_quality, config
                 ),
                 present=setup_present,
-                authoritative=SignalEvidenceGroupScorer._group_authoritative_present(
-                    setup_group_input
+                authoritative=setup_auth,
+                # Setup remains source-authoritative 1.0 or 0.0.
+                authority_fraction=(
+                    setup_source_auth if setup_present else 0.0
                 ),
             ),
             _GroupAuthorityFacts(
@@ -231,8 +267,12 @@ class SignalEvidenceGroupScorer:
                     g.flow_confirmation, config
                 ),
                 present=flow_present,
-                authoritative=SignalEvidenceGroupScorer._group_authoritative_present(
-                    flow_group_input
+                authoritative=flow_auth and flow_component_coverage > 0.0,
+                # flow authority = source_authoritative_fraction * component_coverage
+                authority_fraction=(
+                    flow_source_auth * flow_component_coverage
+                    if flow_present
+                    else 0.0
                 ),
             ),
         )
@@ -241,15 +281,14 @@ class SignalEvidenceGroupScorer:
     def _compute_signal_authority_coverage(
         facts: tuple[_GroupAuthorityFacts, ...],
     ) -> float:
-        """signal_authority_coverage = present-authoritative PRODUCTION weight
-        / required PRODUCTION weight (HIGH-2).
+        """signal_authority_coverage = weighted authority_fraction of required
+        PRODUCTION groups / required PRODUCTION weight (HIGH-2 + DQ-001).
 
         DIAGNOSTIC/LOW_WEIGHT groups never enter the numerator or denominator.
         A required PRODUCTION group stays in the denominator even when absent
-        or unavailable — it is never renormalized away. A group enters the
-        numerator only when its evidence is present AND its resolved
-        EvidenceSourceAvailability.all_authoritative is True; this changes
-        authority coverage only, never the directional base_score above.
+        or unavailable — it is never renormalized away. Flow contributes
+        proportionally via component_coverage; setup remains binary.
+        Directional base_score is unchanged by authority arithmetic.
         """
         denominator = 0.0
         numerator = 0.0
@@ -257,8 +296,7 @@ class SignalEvidenceGroupScorer:
             if not (fact.is_production and fact.required):
                 continue
             denominator += fact.weight
-            if fact.present and fact.authoritative:
-                numerator += fact.weight
+            numerator += fact.weight * max(0.0, min(1.0, fact.authority_fraction))
 
         if denominator <= 0:
             return 0.0
@@ -338,8 +376,12 @@ class SignalEvidenceGroupScorer:
         return entry_quality, False
 
     @staticmethod
-    def _coverage_warning(facts: tuple[_GroupAuthorityFacts, ...]) -> str | None:
-        """HIGH-2: distinguish exactly why authority coverage is incomplete.
+    def _coverage_warning(
+        facts: tuple[_GroupAuthorityFacts, ...],
+        *,
+        flow_evidence: "FlowConfirmationEvidence | None" = None,
+    ) -> str | None:
+        """HIGH-2 + DQ-001: distinguish exactly why authority coverage is incomplete.
 
         1. No setup or flow evidence attached at all — reported once, no
            per-group detail needed.
@@ -348,6 +390,8 @@ class SignalEvidenceGroupScorer:
         3. Evidence attached and PRODUCTION-registered but its resolved
            source availability is not authoritative — names the group.
         4. Required PRODUCTION evidence absent — names the group.
+        5. Flow present with partial component coverage — names missing
+           flow components.
 
         Never renders an empty "missing:" list, and never uses the phrases
         "evidence confidence" or "conviction".
@@ -366,10 +410,25 @@ class SignalEvidenceGroupScorer:
                 continue
             if not fact.present:
                 problems.append(f"{fact.name}: required evidence absent")
-            elif not fact.authoritative:
+            elif fact.authority_fraction <= 0.0:
                 problems.append(
                     f"{fact.name}: present but not source-authoritative"
                 )
+            elif fact.authority_fraction < 1.0:
+                if (
+                    fact.name == "flow_confirmation"
+                    and flow_evidence is not None
+                    and flow_evidence.missing_components
+                ):
+                    missing = ", ".join(flow_evidence.missing_components)
+                    problems.append(
+                        f"{fact.name}: missing components: {missing}"
+                    )
+                else:
+                    problems.append(
+                        f"{fact.name}: partial authority "
+                        f"(authority_fraction={fact.authority_fraction:.4f})"
+                    )
 
         if not problems:
             return None

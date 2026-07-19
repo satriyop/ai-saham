@@ -163,7 +163,7 @@ def test_legacy_label_rows_with_no_provenance_read_as_none(tmp_path: Path):
     assert restored.resolution_notes == ()
 
 
-def _sector_context_label(schema_version: int = 2) -> SignalForwardLabel:
+def _sector_context_label(schema_version: int = 3) -> SignalForwardLabel:
     return SignalForwardLabel(
         ticker="BBCA",
         signal_date=date(2026, 7, 1),
@@ -197,7 +197,7 @@ def test_repository_write_guard_rejects_in_memory_corrupted_current_label(tmp_pa
     db_path = tmp_path / "data.db"
     repo = SQLiteSignalForwardLabelsRepository(db_path)
 
-    corrupt_label = _sector_context_label(schema_version=2)
+    corrupt_label = _sector_context_label(schema_version=3)
     object.__setattr__(
         corrupt_label.fingerprint,
         "alpha_trigger_route_metadata",
@@ -216,7 +216,7 @@ def test_raw_inserted_current_label_with_removed_identity_fails_on_read(tmp_path
     not trust stored fingerprint contents."""
     db_path = tmp_path / "data.db"
     repo = SQLiteSignalForwardLabelsRepository(db_path)
-    repo.save_many([_sector_context_label(schema_version=2)])
+    repo.save_many([_sector_context_label(schema_version=3)])
 
     corrupt_fingerprint = json.dumps(
         {"alpha_trigger_route_metadata": [{"group": "market_context", "score": 75.0}]}
@@ -229,6 +229,40 @@ def test_raw_inserted_current_label_with_removed_identity_fails_on_read(tmp_path
         conn.commit()
 
     with pytest.raises(ValueError, match="removed Alpha/Trigger group 'market_context'"):
+        list(repo.list())
+
+
+def test_current_label_malformed_flow_coverage_fails_on_write(tmp_path: Path):
+    repo = SQLiteSignalForwardLabelsRepository(tmp_path / "data.db")
+    label = _sector_context_label(schema_version=3)
+    object.__setattr__(label.fingerprint, "flow_component_coverage", 1.0)
+    object.__setattr__(label.fingerprint, "flow_missing_components", ("vwap",))
+
+    with pytest.raises(ValueError, match="full flow coverage with missing components"):
+        repo.save_many([label])
+
+    assert tuple(repo.list()) == ()
+
+
+def test_current_label_malformed_flow_coverage_fails_on_read(tmp_path: Path):
+    db_path = tmp_path / "data.db"
+    repo = SQLiteSignalForwardLabelsRepository(db_path)
+    repo.save_many([_sector_context_label(schema_version=3)])
+    with sqlite3.connect(str(db_path)) as conn:
+        conn.execute(
+            "UPDATE signal_forward_labels SET fingerprint_json = ? WHERE ticker = 'BBCA'",
+            (
+                json.dumps(
+                    {
+                        "flow_component_coverage": 0.5,
+                        "flow_missing_components": ["unknown_component"],
+                    }
+                ),
+            ),
+        )
+        conn.commit()
+
+    with pytest.raises(ValueError, match="unknown flow_missing_components"):
         list(repo.list())
 
 
@@ -378,7 +412,7 @@ def test_sqlite_persistence_canonical_only(tmp_path: Path):
             market_regime={"regime": "RISK_ON"},
         ),
         observation_captured_at=datetime(2026, 7, 1, 9, 0, 0),
-        schema_version=2,
+        schema_version=3,
     )
 
     repo.save_many([label])

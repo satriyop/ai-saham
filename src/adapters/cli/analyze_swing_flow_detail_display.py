@@ -117,7 +117,7 @@ def print_flow_detail_panel(ctx: SwingOutputDisplayContext) -> None:
             for key, value in breakdown.items():
                 component_table.add_row(
                     component_labels.get(key, key),
-                    f"{value:.1f}",
+                    f"{value:.1f}" if value is not None else "—",
                 )
             flow_group.append(component_table)
 

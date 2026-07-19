@@ -23,7 +23,7 @@ _VALID_FLOW_SIGNAL_KEYS = {"cons", "streak", "vwap", "flow", "inst"}
 class FlowSubSignal:
     """One scored sub-signal within the flow confirmation group."""
     key: str        # "cons" | "streak" | "vwap" | "flow" | "inst"
-    score: float    # raw component score from breakdown
+    score: float    # raw component score from breakdown; 0.0 when MISSING
     weight: float   # max weight (ceiling) for this component
     direction: Direction
     freshness: Freshness
@@ -65,7 +65,7 @@ class FlowConfirmationEvidence:
     snapshot_date: date
     # Foreign flow sub-signals (bb and rsi excluded)
     flow_signals: tuple[FlowSubSignal, ...]
-    flow_score_ex_bb: float       # sum of flow_signals.score (BB excluded)
+    flow_score_ex_bb: float       # sum of available flow_signals.score
     confirmation_status: str      # "CONFIRMED" | "WATCH_ZONE" | "WEAK"
     flow_direction: str           # "POSITIVE" | "NEGATIVE" | "FLAT" | "UNKNOWN"
     # Bandar (smart money operator) sub-signal — Stockbit only
@@ -80,7 +80,8 @@ class FlowConfirmationEvidence:
     capped_strength: float    # 0.0–1.0, after group_cap applied
     group_cap: float          # cap ceiling (default 0.80)
     group_freshness: Freshness
-
+    # Weighted coverage of enabled institutional-flow components only
+    # (cons, streak, vwap, flow, inst). RSI/BB never enter this denominator.
     def __post_init__(self):
         if self.confirmation_status not in _VALID_CONFIRMATION_STATUS:
             raise ValueError(
@@ -98,6 +99,15 @@ class FlowConfirmationEvidence:
             raise ValueError(f"FlowConfirmationEvidence capped_strength must be 0.0–1.0, got {self.capped_strength}")
         if not (0.0 < self.group_cap <= 1.0):
             raise ValueError(f"FlowConfirmationEvidence group_cap must be (0.0, 1.0], got {self.group_cap}")
+        keys = [signal.key for signal in self.flow_signals]
+        if len(keys) != len(set(keys)):
+            raise ValueError(f"flow_signals keys must be unique, got {keys}")
+        expected_score = round(sum(signal.score for signal in self.flow_signals), 1)
+        if round(self.flow_score_ex_bb, 1) != expected_score:
+            raise ValueError(
+                "flow_score_ex_bb must equal the sum of flow_signals scores; "
+                f"expected {expected_score}, got {self.flow_score_ex_bb}"
+            )
         if self.bandar_broad_score is not None and not (-12 <= self.bandar_broad_score <= 12):
             raise ValueError(
                 f"FlowConfirmationEvidence bandar_broad_score must be -12 to +12, "
@@ -109,6 +119,26 @@ class FlowConfirmationEvidence:
             raise ValueError(f"bandar_freshness must be Freshness enum, got {self.bandar_freshness!r}")
         if not isinstance(self.group_freshness, Freshness):
             raise ValueError(f"group_freshness must be Freshness enum, got {self.group_freshness!r}")
+
+    @property
+    def component_coverage(self) -> float:
+        enabled_weight = sum(signal.weight for signal in self.flow_signals)
+        if enabled_weight <= 0:
+            return 0.0
+        available_weight = sum(
+            signal.weight
+            for signal in self.flow_signals
+            if signal.freshness is not Freshness.MISSING
+        )
+        return min(1.0, available_weight / enabled_weight)
+
+    @property
+    def missing_components(self) -> tuple[str, ...]:
+        return tuple(
+            signal.key
+            for signal in self.flow_signals
+            if signal.freshness is Freshness.MISSING
+        )
 
     def to_dict(self) -> dict:
         return {
@@ -127,4 +157,7 @@ class FlowConfirmationEvidence:
             "capped_strength": round(self.capped_strength, 4),
             "group_cap": self.group_cap,
             "group_freshness": self.group_freshness.value,
+            "component_coverage": round(self.component_coverage, 4),
+            "component_coverage_unit": "ratio_0_1",
+            "missing_components": list(self.missing_components),
         }

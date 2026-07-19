@@ -10,7 +10,11 @@ import math
 from dataclasses import dataclass, field
 from datetime import date
 
-from src.domain.value_objects.foreign_flow_score_breakdown import ForeignFlowScoreBreakdown
+from src.domain.value_objects.foreign_flow_score_breakdown import (
+    ForeignFlowComponentScore,
+    ForeignFlowComponentStatus,
+    ForeignFlowScoreBreakdown,
+)
 
 
 @dataclass(frozen=True)
@@ -24,7 +28,6 @@ class RsiEvidencePolicy(EvidenceComponentPolicy):
     low: float = 25.0
     peak: float = 40.0
     high: float = 75.0
-    missing_fraction: float = 0.5
 
 
 @dataclass(frozen=True)
@@ -111,50 +114,42 @@ class ScoreForeignFlowUseCase:
         request: ScoreForeignFlowRequest,
     ) -> ScoreForeignFlowResponse:
         p = self._policy
-        breakdown: dict[str, float] = {}
+        components: list[ForeignFlowComponentScore] = [
+            self._score_consistency(request.net_buy_ratio, p.consistency),
+            self._score_streak(request.consecutive_streak, p.streak),
+            self._score_linear_optional(
+                key="vwap",
+                value=request.vwap_discount_pct,
+                policy=p.vwap_discount,
+            ),
+            self._score_rsi(request.rsi, p.rsi_headroom),
+            self._score_linear_optional(
+                key="flow",
+                value=request.avg_flow_ratio,
+                policy=p.foreign_flow_ratio,
+            ),
+            self._score_bb(request.bb_width_pctile, p.bb_squeeze),
+            self._score_bci(request.bci_label, p.bci),
+        ]
 
-        breakdown["cons"] = (
-            max(0.0, min(request.net_buy_ratio, 1.0)) * p.consistency.weight
-            if p.consistency.enabled else 0.0
+        rounded_components = tuple(
+            ForeignFlowComponentScore(
+                key=c.key,
+                score_points=(
+                    round(c.score_points, 1) if c.score_points is not None else None
+                ),
+                max_points=c.max_points,
+                status=c.status,
+            )
+            for c in components
         )
-
-        if p.streak.enabled:
-            tau = max(p.streak.tau_days, 0.01)
-            streak = max(request.consecutive_streak, 0)
-            breakdown["streak"] = p.streak.weight * (1.0 - math.exp(-streak / tau))
-        else:
-            breakdown["streak"] = 0.0
-
-        if p.vwap_discount.enabled:
-            d = max(0.0, min(request.vwap_discount_pct or 0.0, p.vwap_discount.saturate_at))
-            breakdown["vwap"] = d / p.vwap_discount.saturate_at * p.vwap_discount.weight
-        else:
-            breakdown["vwap"] = 0.0
-
-        breakdown["rsi"] = self._score_rsi(request.rsi, p.rsi_headroom)
-
-        if p.foreign_flow_ratio.enabled:
-            fr = max(0.0, min(request.avg_flow_ratio or 0.0, p.foreign_flow_ratio.saturate_at))
-            breakdown["flow"] = fr / p.foreign_flow_ratio.saturate_at * p.foreign_flow_ratio.weight
-        else:
-            breakdown["flow"] = 0.0
-
-        breakdown["bb"] = self._score_bb(request.bb_width_pctile, p.bb_squeeze)
-        breakdown["inst"] = self._score_bci(request.bci_label, p.bci)
-
-        rounded_breakdown = {
-            key: round(value, 1)
-            for key, value in breakdown.items()
-        }
-        total = round(min(sum(breakdown.values()), p.max_score), 1)
 
         return ScoreForeignFlowResponse(
             evidence=ForeignFlowScoreBreakdown(
                 ticker=request.ticker,
                 snapshot_date=request.snapshot_date,
-                foreign_flow_score=total,
                 max_score=p.max_score,
-                breakdown=tuple(rounded_breakdown.items()),
+                components=rounded_components,
                 net_buy_ratio=request.net_buy_ratio,
                 consecutive_streak=request.consecutive_streak,
                 vwap_discount_pct=request.vwap_discount_pct,
@@ -167,35 +162,125 @@ class ScoreForeignFlowUseCase:
         )
 
     @staticmethod
-    def _score_rsi(rsi: float | None, policy: RsiEvidencePolicy) -> float:
+    def _disabled(key: str, max_points: float) -> ForeignFlowComponentScore:
+        return ForeignFlowComponentScore(
+            key=key,
+            score_points=None,
+            max_points=max_points,
+            status=ForeignFlowComponentStatus.DISABLED,
+        )
+
+    @staticmethod
+    def _missing(key: str, max_points: float) -> ForeignFlowComponentScore:
+        return ForeignFlowComponentScore(
+            key=key,
+            score_points=None,
+            max_points=max(max_points, 0.01),
+            status=ForeignFlowComponentStatus.MISSING,
+        )
+
+    @staticmethod
+    def _available(key: str, score: float, max_points: float) -> ForeignFlowComponentScore:
+        return ForeignFlowComponentScore(
+            key=key,
+            score_points=score,
+            max_points=max_points,
+            status=ForeignFlowComponentStatus.AVAILABLE,
+        )
+
+    def _score_consistency(
+        self,
+        net_buy_ratio: float,
+        policy: EvidenceComponentPolicy,
+    ) -> ForeignFlowComponentScore:
         if not policy.enabled:
-            return 0.0
+            return self._disabled("cons", policy.weight)
+        score = max(0.0, min(net_buy_ratio, 1.0)) * policy.weight
+        return self._available("cons", score, policy.weight)
+
+    def _score_streak(
+        self,
+        consecutive_streak: int,
+        policy: StreakEvidencePolicy,
+    ) -> ForeignFlowComponentScore:
+        if not policy.enabled:
+            return self._disabled("streak", policy.weight)
+        tau = max(policy.tau_days, 0.01)
+        streak = max(consecutive_streak, 0)
+        score = policy.weight * (1.0 - math.exp(-streak / tau))
+        return self._available("streak", score, policy.weight)
+
+    def _score_linear_optional(
+        self,
+        *,
+        key: str,
+        value: float | None,
+        policy: LinearSaturationPolicy,
+    ) -> ForeignFlowComponentScore:
+        if not policy.enabled:
+            return self._disabled(key, policy.weight)
+        if value is None:
+            return self._missing(key, policy.weight)
+        clamped = max(0.0, min(value, policy.saturate_at))
+        score = clamped / policy.saturate_at * policy.weight
+        return self._available(key, score, policy.weight)
+
+    def _score_rsi(
+        self,
+        rsi: float | None,
+        policy: RsiEvidencePolicy,
+    ) -> ForeignFlowComponentScore:
+        if not policy.enabled:
+            return self._disabled("rsi", policy.weight)
         if rsi is None:
-            return policy.weight * policy.missing_fraction
+            return self._missing("rsi", policy.weight)
         if rsi <= policy.low or rsi >= policy.high:
-            return 0.0
-        if rsi <= policy.peak:
-            return (rsi - policy.low) / (policy.peak - policy.low) * policy.weight
-        return (policy.high - rsi) / (policy.high - policy.peak) * policy.weight
+            score = 0.0
+        elif rsi <= policy.peak:
+            score = (rsi - policy.low) / (policy.peak - policy.low) * policy.weight
+        else:
+            score = (policy.high - rsi) / (policy.high - policy.peak) * policy.weight
+        return self._available("rsi", score, policy.weight)
 
-    @staticmethod
-    def _score_bb(pctile: float | None, policy: BollingerSqueezePolicy) -> float:
-        if not policy.enabled or pctile is None:
-            return 0.0
-        if pctile <= policy.tight_pctile:
-            return policy.weight - pctile / policy.tight_pctile * (policy.weight / 2)
-        if pctile <= policy.loose_pctile:
-            return (policy.weight / 2) - (
-                (pctile - policy.tight_pctile) / (policy.loose_pctile - policy.tight_pctile)
-            ) * (policy.weight / 2)
-        return 0.0
-
-    @staticmethod
-    def _score_bci(label: str | None, policy: BciEvidencePolicy) -> float:
+    def _score_bb(
+        self,
+        pctile: float | None,
+        policy: BollingerSqueezePolicy,
+    ) -> ForeignFlowComponentScore:
         if not policy.enabled:
-            return 0.0
+            return self._disabled("bb", policy.weight)
+        if pctile is None:
+            return self._missing("bb", policy.weight)
+        if pctile <= policy.tight_pctile:
+            score = policy.weight - pctile / policy.tight_pctile * (policy.weight / 2)
+        elif pctile <= policy.loose_pctile:
+            score = (policy.weight / 2) - (
+                (pctile - policy.tight_pctile)
+                / (policy.loose_pctile - policy.tight_pctile)
+            ) * (policy.weight / 2)
+        else:
+            score = 0.0
+        return self._available("bb", score, policy.weight)
+
+    def _score_bci(
+        self,
+        label: str | None,
+        policy: BciEvidencePolicy,
+    ) -> ForeignFlowComponentScore:
+        max_points = policy.cluster_points
+        if not policy.enabled:
+            return self._disabled("inst", max_points)
+        if label is None:
+            return self._missing("inst", max_points)
         if label == "CLUSTER":
-            return policy.cluster_points
-        if label == "STABLE":
-            return policy.stable_points
-        return 0.0
+            score = policy.cluster_points
+        elif label == "STABLE":
+            score = policy.stable_points
+        elif label == "RETAIL-LED":
+            score = 0.0
+        else:
+            raise ValueError(
+                "bci_label must be CLUSTER, STABLE, RETAIL-LED, or None, "
+                f"got {label!r}"
+            )
+        return self._available("inst", score, max_points)

@@ -4,14 +4,18 @@ Layer: Domain
 Depends on: stdlib only
 
 These are the single source of truth for candidate-observation and
-forward-label schema identity. Do not hardcode another canonical 2, 3, or 4
+forward-label schema identity. Do not hardcode another canonical 2, 3, 4, or 5
 anywhere else — import these constants instead.
 
 v3 -> v4 (SECTOR-CONTEXT-IDENTITY): the Alpha/Trigger sector evidence identity
 `market_context` was removed; the SectorContextEvidence producer emits
-`sector_context`. Older schema (1-3) rows are outside the current canonical
-contract — they are never mutated, migrated, or reinterpreted here, and their
-raw payloads are not validated by the current-contract validator below.
+`sector_context`.
+
+v4 -> v5 (DQ-001): missing-vs-zero flow component semantics and
+flow_component_coverage / flow_missing_components fingerprint fields.
+Older schema (1-4) rows are outside the current canonical contract — they are
+never mutated, migrated, or reinterpreted here, and their raw payloads are not
+validated by the current-contract validator below.
 """
 
 from __future__ import annotations
@@ -20,9 +24,12 @@ from src.domain.value_objects.alpha_trigger_score import (
     REMOVED_MARKET_CONTEXT_EVIDENCE_NAME,
     SECTOR_CONTEXT_EVIDENCE_NAME,
 )
+from src.domain.value_objects.foreign_flow_score_breakdown import (
+    INSTITUTIONAL_FLOW_COMPONENT_KEYS,
+)
 
-CANDIDATE_OBSERVATION_SCHEMA_VERSION = 4
-SIGNAL_FORWARD_LABEL_SCHEMA_VERSION = 2
+CANDIDATE_OBSERVATION_SCHEMA_VERSION = 5
+SIGNAL_FORWARD_LABEL_SCHEMA_VERSION = 3
 
 
 def validate_route_metadata_identity(
@@ -33,9 +40,9 @@ def validate_route_metadata_identity(
     """Schema-independent Alpha/Trigger route-metadata identity validation.
 
     Applies to any artifact already known to be a *current canonical* artifact
-    (a schema-4 observation or a current-schema forward label), regardless of
-    which schema-version constant labels it. The metadata must be either None or
-    a list/tuple of dicts, and every dict must carry a non-empty string
+    (a current-schema observation or a current-schema forward label), regardless
+    of which schema-version constant labels it. The metadata must be either None
+    or a list/tuple of dicts, and every dict must carry a non-empty string
     ``group``. The removed ``market_context`` identity raises; ``sector_context``
     and other current group identities pass. Malformed metadata raises rather
     than being silently discarded — the value is never rewritten or mapped.
@@ -90,4 +97,64 @@ def validate_current_alpha_trigger_identity(
     validate_route_metadata_identity(
         alpha_trigger_route_metadata,
         context=f"schema_version={CANDIDATE_OBSERVATION_SCHEMA_VERSION}",
+    )
+
+
+def validate_flow_component_fingerprint(
+    *,
+    component_coverage: object,
+    missing_components: object,
+    context: str,
+) -> None:
+    """Validate DQ-001 flow completeness without normalizing malformed data."""
+    if missing_components is None:
+        missing: tuple[object, ...] = ()
+    elif isinstance(missing_components, (list, tuple)):
+        missing = tuple(missing_components)
+    else:
+        raise ValueError(f"{context} flow_missing_components must be a list/tuple")
+
+    if component_coverage is None:
+        if missing:
+            raise ValueError(
+                f"{context} cannot name missing flow components without coverage"
+            )
+        return
+    if isinstance(component_coverage, bool) or not isinstance(
+        component_coverage, (int, float)
+    ):
+        raise ValueError(f"{context} flow_component_coverage must be numeric or None")
+    coverage = float(component_coverage)
+    if not 0.0 <= coverage <= 1.0:
+        raise ValueError(f"{context} flow_component_coverage must be in [0, 1]")
+    if any(not isinstance(key, str) for key in missing):
+        raise ValueError(f"{context} flow_missing_components entries must be strings")
+    if len(missing) != len(set(missing)):
+        raise ValueError(f"{context} flow_missing_components must be unique")
+    unexpected = sorted(set(missing) - INSTITUTIONAL_FLOW_COMPONENT_KEYS)
+    if unexpected:
+        raise ValueError(
+            f"{context} has unknown flow_missing_components: {unexpected}"
+        )
+    if missing and coverage >= 1.0:
+        raise ValueError(
+            f"{context} cannot have full flow coverage with missing components"
+        )
+
+
+def validate_current_flow_component_fingerprint(
+    *,
+    schema_version: int,
+    fingerprint: object,
+) -> None:
+    if schema_version != CANDIDATE_OBSERVATION_SCHEMA_VERSION:
+        return
+    if not isinstance(fingerprint, dict):
+        raise ValueError(
+            f"schema_version={schema_version} sub_signal_fingerprint must be a dict"
+        )
+    validate_flow_component_fingerprint(
+        component_coverage=fingerprint.get("flow_component_coverage"),
+        missing_components=fingerprint.get("flow_missing_components"),
+        context=f"schema_version={schema_version}",
     )

@@ -25,6 +25,11 @@ from src.domain.value_objects.flow_confirmation_evidence import (
     FlowConfirmationEvidence,
     FlowSubSignal,
 )
+from src.domain.value_objects.foreign_flow_score_breakdown import (
+    ForeignFlowComponentScore,
+    ForeignFlowComponentStatus,
+    ForeignFlowScoreBreakdown,
+)
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
 
 
@@ -96,6 +101,55 @@ def _built_flow_evidence():
     return BuiltFlowEvidence(evidence=evidence, provenance=provenance)
 
 
+def _foreign_flow_breakdown(score: float) -> ForeignFlowScoreBreakdown:
+    """Build a complete typed breakdown whose canonical derived score is *score*."""
+    max_points = {
+        "cons": 33.3,
+        "streak": 25.0,
+        "vwap": 16.7,
+        "rsi": 8.3,
+        "flow": 8.3,
+        "inst": 12.5,
+    }
+    remaining = score
+    components = []
+    for key in ("cons", "streak", "vwap", "rsi", "flow", "inst"):
+        points = min(max(remaining, 0.0), max_points[key])
+        remaining -= points
+        components.append(
+            ForeignFlowComponentScore(
+                key=key,
+                score_points=points,
+                max_points=max_points[key],
+                status=ForeignFlowComponentStatus.AVAILABLE,
+            )
+        )
+    if round(max(remaining, 0.0), 1) != 0.0:
+        raise AssertionError(f"test score {score} exceeds fixture capacity")
+    components.append(
+        ForeignFlowComponentScore(
+            key="bb",
+            score_points=None,
+            max_points=8.3,
+            status=ForeignFlowComponentStatus.DISABLED,
+        )
+    )
+    return ForeignFlowScoreBreakdown(
+        ticker="BBCA",
+        snapshot_date=date.today(),
+        max_score=100.0,
+        components=tuple(components),
+        net_buy_ratio=0.8,
+        consecutive_streak=3,
+        vwap_discount_pct=0.0,
+        rsi=50.0,
+        avg_flow_ratio=5.0,
+        bb_width_pctile=0.3,
+        bci_label="STABLE",
+        bci_tier1_count=2,
+    )
+
+
 def _make_assessor(
     flow_builder_raises: bool = False,
     signal_score: int = 60,
@@ -106,10 +160,6 @@ def _make_assessor(
     from src.application.services.accumulation_candidate_signal_assessor import (
         AccumulationCandidateSignalAssessor,
     )
-    from src.domain.value_objects.foreign_flow_score_breakdown import (
-        ForeignFlowScoreBreakdown,
-    )
-
     signal_engine = MagicMock()
     signal_engine.evaluate_with_context.return_value.assessment.score = signal_score
 
@@ -123,20 +173,8 @@ def _make_assessor(
     evidence_builder.detect_candidate_setup_phase.return_value = setup_phase
 
     foreign_flow_score_uc = MagicMock()
-    foreign_flow_score_uc.execute.return_value.evidence = ForeignFlowScoreBreakdown(
-        ticker="BBCA",
-        snapshot_date=date.today(),
-        foreign_flow_score=foreign_flow_score,
-        max_score=100.0,
-        breakdown=(),
-        net_buy_ratio=0.8,
-        consecutive_streak=3,
-        vwap_discount_pct=0.0,
-        rsi=50.0,
-        avg_flow_ratio=5.0,
-        bb_width_pctile=0.3,
-        bci_label="STABLE",
-        bci_tier1_count=2,
+    foreign_flow_score_uc.execute.return_value.evidence = _foreign_flow_breakdown(
+        foreign_flow_score
     )
 
     return AccumulationCandidateSignalAssessor(
@@ -318,10 +356,6 @@ def _make_assessor_real_engine(
     from src.application.services.accumulation_candidate_signal_assessor import (
         AccumulationCandidateSignalAssessor,
     )
-    from src.domain.value_objects.foreign_flow_score_breakdown import (
-        ForeignFlowScoreBreakdown,
-    )
-
     signal_engine = SignalEngine()
 
     flow_builder = MagicMock()
@@ -334,20 +368,8 @@ def _make_assessor_real_engine(
     evidence_builder.detect_candidate_setup_phase.return_value = setup_phase
 
     foreign_flow_score_uc = MagicMock()
-    foreign_flow_score_uc.execute.return_value.evidence = ForeignFlowScoreBreakdown(
-        ticker="BBCA",
-        snapshot_date=date.today(),
-        foreign_flow_score=foreign_flow_score,
-        max_score=100.0,
-        breakdown=(),
-        net_buy_ratio=0.8,
-        consecutive_streak=3,
-        vwap_discount_pct=0.0,
-        rsi=50.0,
-        avg_flow_ratio=5.0,
-        bb_width_pctile=0.3,
-        bci_label="STABLE",
-        bci_tier1_count=2,
+    foreign_flow_score_uc.execute.return_value.evidence = _foreign_flow_breakdown(
+        foreign_flow_score
     )
 
     return AccumulationCandidateSignalAssessor(
@@ -546,21 +568,7 @@ def test_family_resolved_once_and_phase_detected_once_before_signal_engine():
     flow_builder.build.return_value = _built_flow_evidence()
 
     foreign_flow_score_uc = MagicMock()
-    foreign_flow_score_uc.execute.return_value.evidence = ForeignFlowScoreBreakdown(
-        ticker="BBCA",
-        snapshot_date=date.today(),
-        foreign_flow_score=80.0,
-        max_score=100.0,
-        breakdown=(),
-        net_buy_ratio=0.8,
-        consecutive_streak=3,
-        vwap_discount_pct=0.0,
-        rsi=50.0,
-        avg_flow_ratio=5.0,
-        bb_width_pctile=0.3,
-        bci_label="STABLE",
-        bci_tier1_count=2,
-    )
+    foreign_flow_score_uc.execute.return_value.evidence = _foreign_flow_breakdown(80.0)
 
     assessor = AccumulationCandidateSignalAssessor(
         signal_engine=signal_engine,

@@ -28,6 +28,31 @@ class AlphaTriggerGroupInput:
     score: float
     configured_weight: float
     present: bool
+    coverage_fraction: float
+    authority_fraction: float
+
+    def __post_init__(self) -> None:
+        if not (0.0 <= self.coverage_fraction <= 1.0):
+            raise ValueError(
+                f"AlphaTriggerGroupInput.coverage_fraction must be 0.0–1.0, "
+                f"got {self.coverage_fraction}"
+            )
+        if not (0.0 <= self.authority_fraction <= 1.0):
+            raise ValueError(
+                f"AlphaTriggerGroupInput.authority_fraction must be 0.0–1.0, "
+                f"got {self.authority_fraction}"
+            )
+        if not self.present and (
+            self.coverage_fraction != 0.0 or self.authority_fraction != 0.0
+        ):
+            raise ValueError(
+                "absent AlphaTriggerGroupInput requires zero coverage and authority"
+            )
+        if self.authority_fraction > self.coverage_fraction:
+            raise ValueError(
+                "AlphaTriggerGroupInput.authority_fraction cannot exceed "
+                "coverage_fraction"
+            )
 
 
 @dataclass(frozen=True)
@@ -45,6 +70,10 @@ class AlphaTriggerAggregator:
     routed only when setup phase is BREAKOUT_CONFIRMATION and flow confirmation
     status is CONFIRMED. Otherwise the flow score remains visible as evidence,
     but trigger contribution is blocked with an explicit reason.
+
+    DQ-001: directional group scores are never multiplied by coverage.
+    Configured coverage uses configured_weight * coverage_fraction.
+    Authority coverage uses effective_weight * authority_fraction.
     """
 
     def __init__(self, config: "AlphaTriggerConfig") -> None:
@@ -71,7 +100,7 @@ class AlphaTriggerAggregator:
         trigger_den = 0.0
         configured_required_weight = 0.0
         configured_available_weight = 0.0
-        effective_present_weight = 0.0
+        effective_authority_weight = 0.0
         inputs_by_group = {group.group: group for group in request.groups}
 
         for group_name, alpha_fraction in route_cfg.items():
@@ -104,10 +133,14 @@ class AlphaTriggerAggregator:
                 )
                 continue
 
-            configured_available_weight += configured_weight
+            coverage_fraction = max(0.0, min(1.0, group_input.coverage_fraction))
+            authority_fraction = max(0.0, min(1.0, group_input.authority_fraction))
+            configured_available_weight += configured_weight * coverage_fraction
             registration = self._registration_for(group_input.group)
             effective_weight = registration.effective_weight(configured_weight)
-            effective_present_weight += effective_weight
+            # Authority coverage uses effective_weight * authority_fraction.
+            # Diagnostic registrations keep effective_weight at 0.
+            effective_authority_weight += effective_weight * authority_fraction
 
             trigger_fraction = 1.0 - alpha_fraction
             trigger_allowed = True
@@ -123,6 +156,7 @@ class AlphaTriggerAggregator:
             elif registration.status == EvidenceAuthorityStatus.LOW_WEIGHT:
                 group_reasons.append("low_weight_status_cap_applied")
 
+            # Directional scores are NOT multiplied by coverage.
             alpha_routed_weight = effective_weight * alpha_fraction
             trigger_routed_weight = effective_weight * trigger_fraction
             alpha_weighted = group_input.score * alpha_routed_weight
@@ -166,7 +200,7 @@ class AlphaTriggerAggregator:
             if configured_required_weight > 0 else 0.0
         )
         authority_coverage = (
-            min(1.0, effective_present_weight / configured_required_weight)
+            min(1.0, effective_authority_weight / configured_required_weight)
             if configured_required_weight > 0 else 0.0
         )
         conviction = (final_exact / 100.0) if final_exact is not None else 0.0

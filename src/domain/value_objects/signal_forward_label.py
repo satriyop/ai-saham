@@ -22,6 +22,7 @@ from src.domain.value_objects.signal_artifact_identity import (
 from src.domain.value_objects.signal_artifact_schema import (
     SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
     validate_route_metadata_identity,
+    validate_flow_component_fingerprint,
 )
 from src.domain.value_objects.signal_observation_fingerprint import (
     SignalObservationFingerprint,
@@ -110,6 +111,11 @@ class SignalForwardLabel:
                 self.fingerprint.alpha_trigger_route_metadata,
                 context="signal forward label",
             )
+            validate_flow_component_fingerprint(
+                component_coverage=self.fingerprint.flow_component_coverage,
+                missing_components=self.fingerprint.flow_missing_components,
+                context="signal forward label",
+            )
         if self.outcome_label == SignalForwardOutcome.UNAVAILABLE and not self.unavailable_reason:
             raise ValueError("UNAVAILABLE labels require unavailable_reason")
         if self.outcome_label != SignalForwardOutcome.UNAVAILABLE and self.unavailable_reason:
@@ -118,7 +124,10 @@ class SignalForwardLabel:
     def fingerprint_payload(self) -> dict[str, Any]:
         if self.schema_version == 1:
             return self.fingerprint.to_dict()
-        if self.schema_version == SIGNAL_FORWARD_LABEL_SCHEMA_VERSION:
+        # Schema 2+ canonical fingerprints omit forbidden legacy keys.
+        # Only the current schema is authoritative for new writes; older
+        # non-1 schemas remain readable for quarantine/audit payloads.
+        if self.schema_version >= 2:
             return self.fingerprint.to_canonical_dict()
         raise ValueError(
             f"unsupported signal forward label schema_version={self.schema_version}"

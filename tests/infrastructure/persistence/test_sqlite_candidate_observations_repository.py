@@ -477,7 +477,7 @@ def test_schema_4_observation_containing_removed_market_context_fails_on_save(tm
 
     with pytest.raises(
         ValueError,
-        match="schema_version=4 cannot contain removed Alpha/Trigger group 'market_context'",
+        match="schema_version=5 cannot contain removed Alpha/Trigger group 'market_context'",
     ):
         repo.save_many(
             [
@@ -541,7 +541,7 @@ def test_schema_4_raw_inserted_market_context_fails_on_read(tmp_path: Path):
 
     with pytest.raises(
         ValueError,
-        match="schema_version=4 cannot contain removed Alpha/Trigger group 'market_context'",
+        match="schema_version=5 cannot contain removed Alpha/Trigger group 'market_context'",
     ):
         repo.get_latest("BBCA", day)
 
@@ -573,6 +573,57 @@ def test_schema_4_malformed_route_metadata_fails(tmp_path: Path):
                 )
             ]
         )
+
+
+def test_current_schema_malformed_flow_coverage_fails_on_write(tmp_path: Path):
+    repo = SQLiteCandidateObservationsRepository(tmp_path / "data.db")
+    observation = _canonical_observation()
+    observation.payload["sub_signal_fingerprint"] = {
+        "flow_component_coverage": 1.0,
+        "flow_missing_components": ["vwap"],
+    }
+
+    with pytest.raises(ValueError, match="full flow coverage with missing components"):
+        repo.save_many([observation])
+
+
+def test_current_schema_malformed_flow_coverage_fails_on_read(tmp_path: Path):
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+    with repo._connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO candidate_observations (
+                ticker, snapshot_date, captured_at, schema_version, payload_json,
+                workflow, window_sessions, data_as_of_date, config_hash
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "BBCA",
+                day.isoformat(),
+                datetime(2026, 7, 3, 9, 0, 0).isoformat(),
+                CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+                json.dumps(
+                    {
+                        "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+                        "ticker": "BBCA",
+                        "sub_signal_fingerprint": {
+                            "flow_component_coverage": 0.5,
+                            "flow_missing_components": ["unknown_component"],
+                        },
+                    }
+                ),
+                "screen_accum",
+                7,
+                day.isoformat(),
+                "abc123",
+            ),
+        )
+        conn.commit()
+
+    with pytest.raises(ValueError, match="unknown flow_missing_components"):
+        repo.get_latest("BBCA", day)
 
 
 def test_legacy_schema_version_1_is_readable_but_not_canonical(tmp_path: Path):

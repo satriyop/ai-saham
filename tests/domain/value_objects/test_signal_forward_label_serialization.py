@@ -25,14 +25,14 @@ def test_current_label_construction_rejects_removed_market_context_identity():
         alpha_trigger_route_metadata=({"group": "market_context", "score": 75.0},),
     )
     with pytest.raises(ValueError, match="removed Alpha/Trigger group 'market_context'"):
-        make_label(2, fp)
+        make_label(3, fp)
 
 
 def test_current_label_construction_accepts_sector_context_identity():
     fp = SignalObservationFingerprint(
         alpha_trigger_route_metadata=({"group": "sector_context", "score": 75.0},),
     )
-    label = make_label(2, fp)
+    label = make_label(3, fp)
     assert label.fingerprint.alpha_trigger_route_metadata[0]["group"] == "sector_context"
 
 
@@ -72,7 +72,7 @@ def make_label(
 
 
 def test_canonical_domain_serialization():
-    # Construct a schema-2 label whose fingerprint intentionally contains:
+    # Construct a current-schema label whose fingerprint intentionally contains:
     # - all five forbidden legacy values;
     # - all canonical replacement values;
     # - representative scoped fields that must be preserved.
@@ -99,7 +99,7 @@ def test_canonical_domain_serialization():
         cq_coverage_score=0.8,
     )
 
-    label = make_label(schema_version=2, fingerprint=fp)
+    label = make_label(schema_version=3, fingerprint=fp)
     payload = label.to_dict()
     fingerprint_payload = payload["fingerprint"]
 

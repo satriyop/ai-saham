@@ -123,6 +123,10 @@ def load_accumulation_screener_config(
             sort_secondary=str(sorting.get("secondary", defaults.sort_secondary)),
             sort_tertiary=str(sorting.get("tertiary", defaults.sort_tertiary)),
         )
+    except ValueError:
+        # Invalid material values and removed keys are contract errors, not a
+        # reason to silently run the default deterministic model.
+        raise
     except Exception:
         return defaults
 
@@ -189,15 +193,17 @@ def _build_foreign_flow_score_policy(
     )
 
     rsi_raw = components.get("rsi_headroom") or {}
+    if "missing_fraction" in rsi_raw:
+        raise ValueError(
+            "accumulation_screener.evidence.components.rsi_headroom."
+            "missing_fraction was removed by DQ-001; missing RSI receives no points"
+        )
     rsi = RsiEvidencePolicy(
         enabled=_b(rsi_raw, "enabled", default.rsi_headroom.enabled),
         weight=_f(rsi_raw, "weight", default.rsi_headroom.weight),
         low=_f(rsi_raw, "low", default.rsi_headroom.low),
         peak=_f(rsi_raw, "peak", default.rsi_headroom.peak),
         high=_f(rsi_raw, "high", default.rsi_headroom.high),
-        missing_fraction=_f(
-            rsi_raw, "missing_fraction", default.rsi_headroom.missing_fraction
-        ),
     )
 
     flow_raw = components.get("foreign_flow_ratio") or {}

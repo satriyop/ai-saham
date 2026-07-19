@@ -11,6 +11,7 @@ from pathlib import Path
 from src.domain.value_objects.signal_artifact_schema import (
     SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
     validate_route_metadata_identity,
+    validate_flow_component_fingerprint,
 )
 from src.domain.value_objects.signal_forward_label import (
     SignalForwardLabel,
@@ -140,6 +141,11 @@ class SQLiteSignalForwardLabelsRepository:
             if label.schema_version == SIGNAL_FORWARD_LABEL_SCHEMA_VERSION:
                 validate_route_metadata_identity(
                     label.fingerprint.alpha_trigger_route_metadata,
+                    context="signal forward label write",
+                )
+                validate_flow_component_fingerprint(
+                    component_coverage=label.fingerprint.flow_component_coverage,
+                    missing_components=label.fingerprint.flow_missing_components,
                     context="signal forward label write",
                 )
             artifact_id_str, sem_compat_id_str, provenance_json = (
@@ -331,6 +337,11 @@ def _row_to_label(row: sqlite3.Row) -> SignalForwardLabel:
     if schema_version == SIGNAL_FORWARD_LABEL_SCHEMA_VERSION:
         validate_route_metadata_identity(
             (fingerprint_data or {}).get("alpha_trigger_route_metadata"),
+            context="signal forward label read",
+        )
+        validate_flow_component_fingerprint(
+            component_coverage=(fingerprint_data or {}).get("flow_component_coverage"),
+            missing_components=(fingerprint_data or {}).get("flow_missing_components"),
             context="signal forward label read",
         )
     return SignalForwardLabel(

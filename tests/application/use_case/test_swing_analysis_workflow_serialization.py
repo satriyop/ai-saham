@@ -1,3 +1,8 @@
+from src.domain.value_objects.foreign_flow_score_breakdown import (
+    ForeignFlowComponentScore,
+    ForeignFlowComponentStatus,
+)
+from src.domain.value_objects.foreign_flow_evidence import ForeignFlowEvidence
 from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
@@ -15,13 +20,24 @@ from src.domain.value_objects.setup_phase import SetupPhaseSnapshot, SetupPhaseS
 def test_swing_evidence_to_dict_includes_flow_confirmation_evidence():
     candidate = SimpleNamespace(
         ticker="BBCA",
-        foreign_flow_evidence=SimpleNamespace(
-            component_breakdown=(
-                ("cons", 40.0), ("streak", 19.0), ("vwap", 20.0),
-                ("rsi", 10.0), ("flow", 10.0), ("bb", 0.0), ("inst", 15.0),
-            ),
-            confirmation_status="CONFIRMED",
+        foreign_flow_evidence=ForeignFlowEvidence(
+            max_score=100.0,
+            score_family="composite_foreign_flow",
             flow_direction="POSITIVE",
+            confirmation_status="CONFIRMED",
+            net_buy_days=5,
+            total_days=7,
+            streak=4,
+            avg_flow_ratio=8.0,
+            components=(
+                ForeignFlowComponentScore("cons", 33.3, 33.3, ForeignFlowComponentStatus.AVAILABLE),
+                ForeignFlowComponentScore("streak", 25.0, 25.0, ForeignFlowComponentStatus.AVAILABLE),
+                ForeignFlowComponentScore("vwap", 16.7, 16.7, ForeignFlowComponentStatus.AVAILABLE),
+                ForeignFlowComponentScore("rsi", 8.3, 8.3, ForeignFlowComponentStatus.AVAILABLE),
+                ForeignFlowComponentScore("flow", 8.3, 8.3, ForeignFlowComponentStatus.AVAILABLE),
+                ForeignFlowComponentScore("bb", None, 8.3, ForeignFlowComponentStatus.DISABLED),
+                ForeignFlowComponentScore("inst", 12.5, 12.5, ForeignFlowComponentStatus.AVAILABLE),
+            ),
         ),
         bandar_detector=None,
         bci_label="CLUSTER",

@@ -9,7 +9,12 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
-from src.domain.value_objects.foreign_flow_score_breakdown import ForeignFlowScoreBreakdown
+from src.domain.value_objects.foreign_flow_score_breakdown import (
+    FOREIGN_FLOW_COMPONENT_KEYS,
+    ForeignFlowComponentScore,
+    ForeignFlowComponentStatus,
+    ForeignFlowScoreBreakdown,
+)
 
 
 COMPOSITE_FOREIGN_FLOW = "composite_foreign_flow"
@@ -19,7 +24,6 @@ COMPOSITE_FOREIGN_FLOW = "composite_foreign_flow"
 class ForeignFlowEvidence:
     """Explicit foreign-flow evidence contract used by swing workflows."""
 
-    composite_score: float
     max_score: float
     score_family: str
     flow_direction: str
@@ -31,7 +35,7 @@ class ForeignFlowEvidence:
     f_vwap_pct: float | None = None
     vwap_pct: float | None = None
     bb_width_pctile: float | None = None
-    component_breakdown: tuple[tuple[str, float], ...] = field(default_factory=tuple)
+    components: tuple[ForeignFlowComponentScore, ...] = field(default_factory=tuple)
     longer_term_context: tuple[tuple[str, object], ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
@@ -57,21 +61,73 @@ class ForeignFlowEvidence:
             )
         if self.max_score <= 0:
             raise ValueError("ForeignFlowEvidence max_score must be positive")
-        if not 0 <= self.composite_score <= self.max_score:
-            raise ValueError(
-                f"ForeignFlowEvidence composite_score must be 0-{self.max_score:g}, "
-                f"got {self.composite_score}"
-            )
         if self.total_days < 0:
             raise ValueError("ForeignFlowEvidence total_days cannot be negative")
         if self.net_buy_days < 0:
             raise ValueError("ForeignFlowEvidence net_buy_days cannot be negative")
         if self.net_buy_days > self.total_days:
             raise ValueError("ForeignFlowEvidence net_buy_days cannot exceed total_days")
+        keys = [c.key for c in self.components]
+        if len(keys) != len(set(keys)):
+            raise ValueError(
+                f"ForeignFlowEvidence component keys must be unique, got {keys}"
+            )
+        if set(keys) != FOREIGN_FLOW_COMPONENT_KEYS:
+            missing = sorted(FOREIGN_FLOW_COMPONENT_KEYS - set(keys))
+            unexpected = sorted(set(keys) - FOREIGN_FLOW_COMPONENT_KEYS)
+            raise ValueError(
+                "ForeignFlowEvidence requires exactly the canonical component keys; "
+                f"missing={missing}, unexpected={unexpected}"
+            )
 
     @property
-    def component_breakdown_dict(self) -> dict[str, float]:
-        return dict(self.component_breakdown)
+    def composite_score(self) -> float:
+        return round(
+            min(
+                sum(
+                    component.score_points
+                    for component in self.components
+                    if component.status is ForeignFlowComponentStatus.AVAILABLE
+                    and component.score_points is not None
+                ),
+                self.max_score,
+            ),
+            1,
+        )
+
+    def component(self, key: str) -> ForeignFlowComponentScore | None:
+        for component in self.components:
+            if component.key == key:
+                return component
+        return None
+
+    @property
+    def components_by_key(self) -> dict[str, ForeignFlowComponentScore]:
+        return {c.key: c for c in self.components}
+
+    @property
+    def component_coverage(self) -> float:
+        enabled = sum(
+            c.max_points
+            for c in self.components
+            if c.status is not ForeignFlowComponentStatus.DISABLED
+        )
+        if enabled <= 0:
+            return 0.0
+        available = sum(
+            c.max_points
+            for c in self.components
+            if c.status is ForeignFlowComponentStatus.AVAILABLE
+        )
+        return min(1.0, available / enabled)
+
+    @property
+    def missing_components(self) -> tuple[str, ...]:
+        return tuple(
+            c.key
+            for c in self.components
+            if c.status is ForeignFlowComponentStatus.MISSING
+        )
 
     @property
     def longer_term_context_dict(self) -> dict[str, object]:
@@ -93,7 +149,6 @@ class ForeignFlowEvidence:
     ) -> "ForeignFlowEvidence":
         flow_direction = classify_flow_direction(breakdown.avg_flow_ratio)
         return cls(
-            composite_score=breakdown.foreign_flow_score,
             max_score=breakdown.max_score,
             score_family=COMPOSITE_FOREIGN_FLOW,
             flow_direction=flow_direction,
@@ -109,7 +164,7 @@ class ForeignFlowEvidence:
             f_vwap_pct=breakdown.vwap_discount_pct,
             vwap_pct=vwap_pct,
             bb_width_pctile=breakdown.bb_width_pctile,
-            component_breakdown=breakdown.breakdown,
+            components=breakdown.components,
             longer_term_context=tuple(
                 sorted(
                     (str(key), _freeze_context_value(value))
@@ -136,7 +191,11 @@ class ForeignFlowEvidence:
             if self.vwap_pct is not None else None,
             "bb_width_pctile": round(self.bb_width_pctile, 3)
             if self.bb_width_pctile is not None else None,
-            "component_breakdown": self.component_breakdown_dict,
+            "component_coverage": round(self.component_coverage, 4),
+            "component_coverage_unit": "ratio_0_1",
+            "missing_components": list(self.missing_components),
+            "score_unit": "points_0_100",
+            "components": [c.to_dict() for c in self.components],
             "longer_term_context": self.longer_term_context_dict,
         }
 

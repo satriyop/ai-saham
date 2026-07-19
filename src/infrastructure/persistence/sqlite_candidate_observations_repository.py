@@ -13,6 +13,7 @@ from src.domain.ports.candidate_observations_repository import (
 from src.domain.value_objects.signal_artifact_schema import (
     CANDIDATE_OBSERVATION_SCHEMA_VERSION,
     validate_current_alpha_trigger_identity,
+    validate_current_flow_component_fingerprint,
 )
 from src.infrastructure.persistence.sqlite_migration_runner import SqliteMigrationRunner
 from src.infrastructure.persistence.sqlite_signal_artifact_identity_codec import (
@@ -200,6 +201,10 @@ class SQLiteCandidateObservationsRepository:
                 alpha_trigger_route_metadata=(
                     payload.get("sub_signal_fingerprint") or {}
                 ).get("alpha_trigger_route_metadata"),
+            )
+            validate_current_flow_component_fingerprint(
+                schema_version=schema_version,
+                fingerprint=payload.get("sub_signal_fingerprint") or {},
             )
             artifact_id_str, sem_compat_id_str, provenance_json = (
                 encode_signal_artifact_identity(obs.artifact_identity)
@@ -446,6 +451,10 @@ class SQLiteCandidateObservationsRepository:
                 alpha_trigger_route_metadata=(
                     payload.get("sub_signal_fingerprint") or {}
                 ).get("alpha_trigger_route_metadata"),
+            )
+            validate_current_flow_component_fingerprint(
+                schema_version=schema_version,
+                fingerprint=payload.get("sub_signal_fingerprint") or {},
             )
         payload.setdefault("schema_version", schema_version)
         data_as_of_date_raw = row["data_as_of_date"]

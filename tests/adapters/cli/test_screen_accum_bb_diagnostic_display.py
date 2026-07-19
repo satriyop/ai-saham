@@ -21,7 +21,11 @@ from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenResponse,
 )
-from src.domain.value_objects.foreign_flow_score_breakdown import ForeignFlowScoreBreakdown
+from src.domain.value_objects.foreign_flow_score_breakdown import (
+    ForeignFlowComponentScore,
+    ForeignFlowComponentStatus,
+    ForeignFlowScoreBreakdown,
+)
 
 
 def _bb_disabled_config() -> AccumulationDisplayConfig:
@@ -70,15 +74,14 @@ def _breakdown_with_tight_bb() -> ForeignFlowScoreBreakdown:
     return ForeignFlowScoreBreakdown(
         ticker="BBCA",
         snapshot_date=date(2026, 6, 19),
-        foreign_flow_score=58.3,
-        breakdown=(
-            ("cons", 23.3),
-            ("streak", 12.5),
-            ("vwap", 5.0),
-            ("rsi", 6.7),
-            ("flow", 2.5),
-            ("bb", 0.0),  # disabled by default — must be 0.0, key still present
-            ("inst", 8.3),
+        components=(
+            ForeignFlowComponentScore("cons", 23.3, 23.3, ForeignFlowComponentStatus.AVAILABLE),
+            ForeignFlowComponentScore("streak", 12.5, 12.5, ForeignFlowComponentStatus.AVAILABLE),
+            ForeignFlowComponentScore("vwap", 5.0, 5.0, ForeignFlowComponentStatus.AVAILABLE),
+            ForeignFlowComponentScore("rsi", 6.7, 6.7, ForeignFlowComponentStatus.AVAILABLE),
+            ForeignFlowComponentScore("flow", 2.5, 2.5, ForeignFlowComponentStatus.AVAILABLE),
+            ForeignFlowComponentScore("bb", None, 8.3, ForeignFlowComponentStatus.DISABLED),
+            ForeignFlowComponentScore("inst", 8.3, 8.3, ForeignFlowComponentStatus.AVAILABLE),
         ),
         max_score=100.0,
         net_buy_ratio=5 / 7,
@@ -134,7 +137,7 @@ def test_bb_width_pctile_remains_populated_in_json_dict():
         foreign_flow_score_breakdown=_breakdown_with_tight_bb(),
     )
     d = candidate.to_dict()
-    assert d["foreign_flow_score_breakdown"]["breakdown"]["bb"] == 0.0
+    assert d["foreign_flow_score_breakdown"]["breakdown"]["bb"] is None
     assert d["bb_width_pctile"] == 0.05
 
 

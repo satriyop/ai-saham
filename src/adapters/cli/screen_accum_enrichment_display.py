@@ -65,38 +65,43 @@ def _evidence_factor_rows(
         if candidate.bb_width_pctile is not None else "-"
     )
     bb_scored = display_config.foreign_flow_score_policy.bb_squeeze.enabled
-    bb_pts = f"{bd.get('bb', 0):.1f}" if bb_scored else "—"
+
+    def _pts(key: str) -> str:
+        value = bd.get(key)
+        return f"{value:.1f}" if value is not None else "—"
+
+    bb_pts = _pts("bb") if bb_scored else "—"
     bb_means = (
         "Volatility squeeze" if bb_scored
         else "Setup compression diagnostic, not flow score"
     )
     return [
         (
-            f"{bd.get('cons', 0):.1f}",
+            _pts("cons"),
             "Net days",
             f"{candidate.net_buy_days}/{candidate.total_days}",
             "Foreign buy consistency",
         ),
         (
-            f"{bd.get('streak', 0):.1f}",
+            _pts("streak"),
             "Streak",
             f"{candidate.consecutive_streak}s",
             "Current buy run",
         ),
         (
-            f"{bd.get('vwap', 0):.1f}",
+            _pts("vwap"),
             "F_VWAP%",
             vwap,
             "Foreign avg cost vs price",
         ),
         (
-            f"{bd.get('rsi', 0):.1f}",
+            _pts("rsi"),
             "RSI",
             rsi,
             "Entry headroom",
         ),
         (
-            f"{bd.get('flow', 0):.1f}",
+            _pts("flow"),
             "Flow%",
             flow,
             "Foreign share of turnover",
@@ -108,7 +113,7 @@ def _evidence_factor_rows(
             bb_means,
         ),
         (
-            f"{bd.get('inst', 0):.1f}",
+            _pts("inst"),
             "BCI",
             candidate.bci_label or "-",
             "Tier-1 broker concentration",
