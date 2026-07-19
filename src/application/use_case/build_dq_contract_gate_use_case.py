@@ -7,10 +7,12 @@ quarantines, or mutates data, and never re-derives contract/reconciliation
 logic itself — it only runs the two existing read-only audit use cases and
 aggregates their status/findings.
 
-Gate status is fail-closed: PASS only when both audits report PASS. A WARN
-on either audit is treated as a gate failure, not a pass — this gate is a
-CI/automation trip-wire, not a human-readable report (those remain
-`source-contracts`/`reconcile-sources`, unchanged by this gate).
+Gate status is fail-closed but severity-honest: it FAILs only on FAIL findings
+or a failing/invalid sub-audit status. WARN findings remain fully visible but
+are non-blocking — optional-data warnings must not trip the CI gate. Severity
+ownership stays in the underlying audits: a finding that must block has to be
+emitted there as FAIL. The gate never downgrades, hides, or re-classifies a
+source finding.
 
 Layer: Application
 AI usage: None
@@ -21,10 +23,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Protocol
 
+_VALID_SUB_AUDIT_STATUSES = ("PASS", "WARN", "FAIL")
+
 
 @dataclass(frozen=True)
-class DQContractGateBlocker:
-    """One machine-readable reason the gate is not PASS."""
+class DQContractGateFinding:
+    """One machine-readable gate finding, carrying its source severity verbatim."""
 
     source: str  # "source_contracts" | "source_reconciliation"
     severity: str  # "FAIL" | "WARN"
@@ -52,7 +56,8 @@ class DQContractGateResponse:
     status: str  # "PASS" | "FAIL"
     source_contract_status: str
     source_reconciliation_status: str
-    blockers: tuple[DQContractGateBlocker, ...]
+    blockers: tuple[DQContractGateFinding, ...]  # severity FAIL only
+    warnings: tuple[DQContractGateFinding, ...]  # severity WARN only
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -63,6 +68,7 @@ class DQContractGateResponse:
             "source_contract_status": self.source_contract_status,
             "source_reconciliation_status": self.source_reconciliation_status,
             "blockers": [b.to_dict() for b in self.blockers],
+            "warnings": [w.to_dict() for w in self.warnings],
         }
 
 
@@ -87,19 +93,15 @@ class SourceReconciliationAuditRunner(Protocol):
     def execute(self) -> _AuditResponseLike: ...
 
 
-# Findings at these severities are exactly the ones that can move a sub-audit
-# off PASS (see aggregate_status in both audits' DTOs, which only worsens
-# status for FAIL/WARN and ignores INFO) — so filtering on this set surfaces
-# every reason the gate isn't PASS, with no double logic to keep in sync.
-_BLOCKING_SEVERITIES = ("FAIL", "WARN")
-
-
 class BuildDQContractGateUseCase:
-    """Evaluate the DQ-CONTRACT-GATE: PASS only if source-contracts and
-    reconcile-sources both report PASS; WARN on either is a gate failure."""
+    """Evaluate the DQ-CONTRACT-GATE: FAIL only when a FAIL finding exists or a
+    sub-audit reports a failing/invalid status; WARN findings are visible but
+    non-blocking."""
 
     _ARTIFACT_TYPE = "dq_contract_gate"
-    _SCHEMA_VERSION = 1
+    # v1 -> v2: blocker semantics changed (WARN is no longer a blocker) and the
+    # serialized artifact now carries a separate `warnings` array.
+    _SCHEMA_VERSION = 2
 
     def __init__(
         self,
@@ -115,17 +117,37 @@ class BuildDQContractGateUseCase:
         contracts_response = self._source_contracts.execute()
         reconciliation_response = self._source_reconciliation.execute()
 
-        blockers = [
-            *_blockers_from(contracts_response, source="source_contracts"),
-            *_blockers_from(reconciliation_response, source="source_reconciliation"),
+        findings = [
+            *_findings_from(contracts_response, source="source_contracts"),
+            *_findings_from(reconciliation_response, source="source_reconciliation"),
         ]
 
-        gate_status = (
-            "PASS"
-            if contracts_response.status == "PASS"
-            and reconciliation_response.status == "PASS"
-            else "FAIL"
+        blockers = [f for f in findings if f.severity == "FAIL"]
+        warnings = [f for f in findings if f.severity == "WARN"]
+
+        # Fail closed on inconsistent/invalid sub-audit status: never infer PASS
+        # from findings alone. A FAIL status with no FAIL finding, or a status
+        # outside PASS|WARN|FAIL, becomes a synthetic blocker.
+        blockers.extend(
+            _status_consistency_blockers(
+                contracts_response.status,
+                source="source_contracts",
+                has_fail_finding=any(
+                    f.source == "source_contracts" for f in blockers
+                ),
+            )
         )
+        blockers.extend(
+            _status_consistency_blockers(
+                reconciliation_response.status,
+                source="source_reconciliation",
+                has_fail_finding=any(
+                    f.source == "source_reconciliation" for f in blockers
+                ),
+            )
+        )
+
+        gate_status = "FAIL" if blockers else "PASS"
 
         return DQContractGateResponse(
             artifact_type=self._ARTIFACT_TYPE,
@@ -135,14 +157,18 @@ class BuildDQContractGateUseCase:
             source_contract_status=contracts_response.status,
             source_reconciliation_status=reconciliation_response.status,
             blockers=tuple(blockers),
+            warnings=tuple(warnings),
         )
 
 
-def _blockers_from(
+def _findings_from(
     response: _AuditResponseLike, *, source: str
-) -> list[DQContractGateBlocker]:
+) -> list[DQContractGateFinding]:
+    """Convert sub-audit findings verbatim, preserving severity. Partitioning
+    into blockers/warnings happens in the caller — severity is never mutated
+    and no code-based allowlist is applied here."""
     return [
-        DQContractGateBlocker(
+        DQContractGateFinding(
             source=source,
             severity=finding.severity,
             code=finding.code,
@@ -151,8 +177,41 @@ def _blockers_from(
             message=finding.message,
         )
         for finding in response.findings
-        if finding.severity in _BLOCKING_SEVERITIES
     ]
+
+
+def _status_consistency_blockers(
+    status: str, *, source: str, has_fail_finding: bool
+) -> list[DQContractGateFinding]:
+    if status not in _VALID_SUB_AUDIT_STATUSES:
+        return [
+            DQContractGateFinding(
+                source=source,
+                severity="FAIL",
+                code="INVALID_AUDIT_STATUS",
+                table=None,
+                field=None,
+                message=(
+                    f"{source} returned status {status!r} outside "
+                    f"{_VALID_SUB_AUDIT_STATUSES}; failing closed."
+                ),
+            )
+        ]
+    if status == "FAIL" and not has_fail_finding:
+        return [
+            DQContractGateFinding(
+                source=source,
+                severity="FAIL",
+                code="AUDIT_STATUS_FAIL_WITHOUT_BLOCKING_FINDING",
+                table=None,
+                field=None,
+                message=(
+                    f"{source} reported status FAIL but supplied no FAIL "
+                    "finding; failing closed."
+                ),
+            )
+        ]
+    return []
 
 
 def _default_clock() -> str:

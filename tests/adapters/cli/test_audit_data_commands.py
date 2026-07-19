@@ -16,9 +16,13 @@ from src.domain.value_objects.signal_artifact_schema import (
 )
 from src.application.use_case.audit_source_field_contracts_use_case import (
     AuditSourceFieldContractsResponse,
+    SourceContractFinding,
 )
 from src.application.use_case.audit_source_reconciliation_use_case import (
     AuditSourceReconciliationResponse,
+)
+from src.application.dto.source_reconciliation_dto import (
+    SourceReconciliationFinding,
 )
 
 runner = CliRunner()
@@ -384,6 +388,72 @@ def _patch_both_audits_to(monkeypatch, status: str) -> None:
     )
 
 
+def _patch_audits_with_findings(
+    monkeypatch,
+    *,
+    contract_status: str,
+    contract_findings: tuple = (),
+    reconciliation_status: str,
+    reconciliation_findings: tuple = (),
+) -> None:
+    """Force both sub-audits to report the given status AND structured findings,
+    so the gate's severity partitioning is exercised end-to-end."""
+    import src.adapters.cli.audit_commands as audit_commands_module
+
+    def fake_contracts_execute(self):
+        return AuditSourceFieldContractsResponse(
+            artifact_type="source_field_contract_audit",
+            schema_version=1,
+            generated_at="2026-07-16T00:00:00+00:00",
+            tables=(),
+            findings=contract_findings,
+            status=contract_status,
+        )
+
+    def fake_reconciliation_execute(self):
+        return AuditSourceReconciliationResponse(
+            artifact_type="source_reconciliation_audit",
+            schema_version=1,
+            generated_at="2026-07-16T00:00:00+00:00",
+            status=reconciliation_status,
+            checks=(),
+            findings=reconciliation_findings,
+        )
+
+    monkeypatch.setattr(
+        audit_commands_module.AuditSourceFieldContractsUseCase,
+        "execute",
+        fake_contracts_execute,
+    )
+    monkeypatch.setattr(
+        audit_commands_module.AuditSourceReconciliationUseCase,
+        "execute",
+        fake_reconciliation_execute,
+    )
+
+
+def _contract_warn(code: str) -> SourceContractFinding:
+    return SourceContractFinding(
+        severity="WARN",
+        code=code,
+        table="analyst_cache",
+        field="avg_price_target",
+        message=f"{code}: non-blocking optional-data warning.",
+        impact="optional-data only",
+    )
+
+
+def _recon_warn(code: str) -> SourceReconciliationFinding:
+    return SourceReconciliationFinding(
+        severity="WARN",
+        code=code,
+        table="foreign_flow_points",
+        field=None,
+        message=f"{code}: partial coverage, non-blocking.",
+        impact="coverage only",
+    )
+
+
 def test_contract_gate_json_exits_zero_on_pass(tmp_path: Path, monkeypatch):
     db_path = tmp_path / "gate_pass.db"
     _build_temp_db(db_path)
@@ -397,7 +467,70 @@ def test_contract_gate_json_exits_zero_on_pass(tmp_path: Path, monkeypatch):
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert payload["status"] == "PASS"
+    assert payload["schema_version"] == 2
     assert payload["blockers"] == []
+    assert payload["warnings"] == []
+
+
+def test_contract_gate_json_warn_only_exits_zero_and_retains_warnings(
+    tmp_path: Path, monkeypatch
+):
+    """WARN sub-audits with only WARN findings must pass the gate (exit 0) while
+    keeping every warning machine-readable in the JSON artifact."""
+    db_path = tmp_path / "gate_warn.db"
+    _build_temp_db(db_path)
+    _patch_audits_with_findings(
+        monkeypatch,
+        contract_status="WARN",
+        contract_findings=(_contract_warn("NULLS_IN_OPTIONAL_FIELD"),),
+        reconciliation_status="WARN",
+        reconciliation_findings=(_recon_warn("FOREIGN_FLOW_POINTS_PARTIAL_COVERAGE"),),
+    )
+
+    result = runner.invoke(
+        app,
+        ["audit", "data", "contract-gate", "--format", "json", "--db", str(db_path)],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["status"] == "PASS"
+    assert payload["source_contract_status"] == "WARN"
+    assert payload["source_reconciliation_status"] == "WARN"
+    assert payload["blockers"] == []
+    assert {w["code"] for w in payload["warnings"]} == {
+        "NULLS_IN_OPTIONAL_FIELD",
+        "FOREIGN_FLOW_POINTS_PARTIAL_COVERAGE",
+    }
+    assert all(w["severity"] == "WARN" for w in payload["warnings"])
+
+
+def test_contract_gate_table_warn_only_shows_warnings_not_a_failure_state(
+    tmp_path: Path, monkeypatch
+):
+    """Table output for a warning-only result must render a Warnings section, no
+    Blockers section, PASS status, and exit 0 (no red failure state)."""
+    db_path = tmp_path / "gate_warn_table.db"
+    _build_temp_db(db_path)
+    _patch_audits_with_findings(
+        monkeypatch,
+        contract_status="WARN",
+        contract_findings=(_contract_warn("NULLS_IN_OPTIONAL_FIELD"),),
+        reconciliation_status="PASS",
+    )
+
+    result = runner.invoke(
+        app,
+        ["audit", "data", "contract-gate", "--db", str(db_path)],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Gate Status: PASS" in result.output
+    assert "Warnings" in result.output
+    assert "NULLS_IN_OPTIONAL_FIELD" in result.output
+    assert "non-blocking warnings" in result.output
+    # The warning must not be presented under a Blockers section.
+    assert "Blockers\n" not in result.output
 
 
 def test_contract_gate_json_output_has_required_top_level_fields(tmp_path: Path):
@@ -411,11 +544,12 @@ def test_contract_gate_json_output_has_required_top_level_fields(tmp_path: Path)
 
     payload = json.loads(result.output)
     assert payload["artifact_type"] == "dq_contract_gate"
-    assert payload["schema_version"] == 1
+    assert payload["schema_version"] == 2
     assert payload["status"] in ("PASS", "FAIL")
     assert payload["source_contract_status"] in ("PASS", "WARN", "FAIL")
     assert payload["source_reconciliation_status"] in ("PASS", "WARN", "FAIL")
     assert isinstance(payload["blockers"], list)
+    assert isinstance(payload["warnings"], list)
     assert "generated_at" in payload
 
 
