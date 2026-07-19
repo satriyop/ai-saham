@@ -204,6 +204,62 @@ def test_invalid_format_fails(tmp_path: Path):
     assert result.exit_code != 0
 
 
+def test_repair_candidate_observations_apply_requires_explicit_db(monkeypatch):
+    """--apply without --db must be rejected before any repair orchestration.
+
+    The _run_repair_* helper is replaced with a strict fake that raises if
+    called, proving rejection happens before configuration loading,
+    repository construction, or mutation."""
+    import src.adapters.cli.audit_commands as audit_commands_module
+
+    def _must_not_run(*args, **kwargs):
+        raise AssertionError(
+            "_run_repair_candidate_observations must not be called when --db is missing"
+        )
+
+    monkeypatch.setattr(
+        audit_commands_module,
+        "_run_repair_candidate_observations",
+        _must_not_run,
+    )
+
+    result = runner.invoke(
+        app,
+        ["audit", "data", "repair-candidate-observations", "--apply"],
+    )
+
+    assert result.exit_code != 0
+    assert "--apply requires an explicit --db PATH" in result.output
+
+
+def test_repair_candidate_observations_dry_run_without_db_is_allowed(monkeypatch):
+    """Dry-run (default) without --db remains allowed and forwards db_path=None
+    with apply=False. The _run_repair_* helper is stubbed so the test does not
+    read the developer's configured database."""
+    import src.adapters.cli.audit_commands as audit_commands_module
+
+    captured: dict = {}
+
+    def _record(*, db_path, apply, output_format):
+        captured["db_path"] = db_path
+        captured["apply"] = apply
+
+    monkeypatch.setattr(
+        audit_commands_module,
+        "_run_repair_candidate_observations",
+        _record,
+    )
+
+    result = runner.invoke(
+        app,
+        ["audit", "data", "repair-candidate-observations", "--format", "json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["db_path"] is None
+    assert captured["apply"] is False
+
+
 # ── source unavailable ────────────────────────────────────────────────────────
 
 
