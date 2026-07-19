@@ -205,7 +205,8 @@ def contract_gate(
     """
     Evaluate the DQ-CONTRACT-GATE: combine the source-contracts and
     reconcile-sources audits into one PASS/FAIL gate and exit non-zero on
-    FAIL. WARN on either audit is treated as a gate failure (fail closed).
+    FAIL. FAIL findings block; WARN findings remain visible but do not block.
+    An invalid or unexplained failing sub-audit status fails closed.
     """
     if output_format not in _VALID_FORMATS:
         raise typer.BadParameter(
@@ -673,6 +674,7 @@ def _print_contract_gate_table(response: DQContractGateResponse) -> None:
     status_text.append("Gate Status: ", style="bold")
     status_text.append(response.status, style=f"bold {color}")
     status_text.append(f" | Blockers: {len(response.blockers)}")
+    status_text.append(f" | Warnings: {len(response.warnings)}")
     panel = Panel(
         status_text,
         title="[bold]DQ Contract Gate[/bold]",
@@ -697,22 +699,34 @@ def _print_contract_gate_table(response: DQContractGateResponse) -> None:
     )
     console.print(summary)
 
-    if response.blockers:
+    def _print_findings(findings, *, heading: str, heading_style: str) -> None:
         console.print("")
-        console.print("[bold red]Blockers[/bold red]")
-        for blocker in response.blockers:
-            blocker_color = {"FAIL": "red", "WARN": "yellow"}.get(blocker.severity, "white")
-            location = blocker.table or "-"
-            if blocker.field:
-                location += f".{blocker.field}"
+        console.print(f"[bold {heading_style}]{heading}[/bold {heading_style}]")
+        for finding in findings:
+            finding_color = {"FAIL": "red", "WARN": "yellow"}.get(finding.severity, "white")
+            location = finding.table or "-"
+            if finding.field:
+                location += f".{finding.field}"
             console.print(
-                f"  [bold {blocker_color}][{blocker.severity}][/bold {blocker_color}] "
-                f"[dim]({blocker.source})[/dim] [bold]{blocker.code}[/bold] ({location})"
+                f"  [bold {finding_color}][{finding.severity}][/bold {finding_color}] "
+                f"[dim]({finding.source})[/dim] [bold]{finding.code}[/bold] ({location})"
             )
-            console.print(f"    [dim]Message:[/dim] {blocker.message}")
+            console.print(f"    [dim]Message:[/dim] {finding.message}")
+
+    if response.blockers:
+        _print_findings(response.blockers, heading="Blockers", heading_style="red")
+    if response.warnings:
+        _print_findings(response.warnings, heading="Warnings", heading_style="yellow")
+
+    console.print("")
+    if response.blockers:
+        pass  # failure state already shown in the panel and Blockers section
+    elif response.warnings:
+        console.print(
+            "[green]✓ DQ-CONTRACT-GATE passed with non-blocking warnings.[/green]"
+        )
     else:
-        console.print("")
-        console.print("[green]✓ DQ-CONTRACT-GATE passed — no blockers.[/green]")
+        console.print("[green]✓ DQ-CONTRACT-GATE passed — no findings.[/green]")
     console.print("")
 
 

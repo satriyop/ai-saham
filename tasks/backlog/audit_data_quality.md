@@ -48,6 +48,17 @@ authorize threshold tuning or production promotion. `DQ-SENTIMENT-GATE`
 independently blocks sentiment calibration and the sentiment CLI migration, not
 unrelated signal capture, evaluation, or CLI work.
 
+**Executable `DQ-CONTRACT-GATE` severity semantics** (`saham audit data
+contract-gate`, `BuildDQContractGateUseCase`):
+
+- FAIL findings block: the gate reports `status=FAIL` and the CLI exits non-zero.
+- WARN findings remain fully visible in the `warnings` array but do not block;
+  a WARN-only result is `status=PASS` and exits 0.
+- An invalid sub-audit status, or a sub-audit reporting FAIL without a FAIL
+  finding, fails closed via a synthetic FAIL blocker.
+- The gate never downgrades, hides, or re-classifies a source finding; severity
+  ownership stays in the underlying source-contract and reconciliation audits.
+
 Task states use one meaning throughout this file:
 
 - `Done`: every task-owned close criterion is verified by current code/tests or
