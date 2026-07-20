@@ -342,10 +342,10 @@ Artifacts without a defensible effective timestamp or data cutoff are invalid fo
 
 **Acceptance criteria:**
 
-- [ ] One application-layer effective-session contract governs current screen,
+- [x] One application-layer effective-session contract governs current screen,
       swing, and canonical capture workflows. Label generation inherits and
       validates the originating observation's contract instead of independently
-      resolving another session.
+      resolving another session (satisfied in `fa7413f`).
 - [x] Weekend, holiday, pre-open, intraday, post-close, and late-provider tests pass.
 - [ ] Current-schema canonical candidate observations and forward labels require
       execution time, effective market session, and data-cutoff provenance;
