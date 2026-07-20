@@ -927,6 +927,7 @@ def test_real_producer_to_label_repository_round_trip_emits_only_sector_context(
                 window_sessions=7,
                 data_as_of_date=day,
                 config_hash="round-trip-hash",
+                decision_at=datetime(2026, 7, 1, 16, 0, 0),
                 latest_completed_session=day,
                 analysis_as_of=day,
             )

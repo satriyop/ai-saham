@@ -148,9 +148,16 @@ def test_effective_session_provenance_round_trips(tmp_path: Path):
 def test_legacy_label_rows_with_no_provenance_read_as_none(tmp_path: Path):
     db_path = tmp_path / "data.db"
     repo = SQLiteSignalForwardLabelsRepository(db_path)
-    label = _label(captured_at=datetime(2026, 7, 1, 9, 0, 0), close_return=4.0)
+    label = _label(
+        captured_at=datetime(2026, 7, 1, 9, 0, 0),
+        close_return=4.0,
+        decision_at=None,
+        latest_completed_session=None,
+        analysis_as_of=None,
+    )
 
     repo.save_many([label])
+    # Use the permissive point lookup; list() now filters rows missing provenance.
     restored = repo.get("BBCA", date(2026, 7, 1), SignalLabelHorizon.SWING_10D)
 
     assert restored is not None
@@ -184,6 +191,12 @@ def _sector_context_label(schema_version: int = 3) -> SignalForwardLabel:
             alpha_trigger_route_metadata=({"group": "sector_context", "score": 75.0},),
         ),
         observation_captured_at=datetime(2026, 7, 1, 9, 0, 0),
+        # DQ-002 criterion 3: include provenance so smuggled-fingerprint tests
+        # exercise the read validator (list() filters out rows missing provenance
+        # before _row_to_label runs, which would mask the contract-violation raise).
+        decision_at=datetime(2026, 7, 1, 16, 0, 0),
+        latest_completed_session=date(2026, 7, 1),
+        analysis_as_of=date(2026, 7, 1),
         schema_version=schema_version,
     )
 
@@ -266,18 +279,43 @@ def test_current_label_malformed_flow_coverage_fails_on_read(tmp_path: Path):
         list(repo.list())
 
 
+_PROVENANCE_DEFAULT = object()
+
+
 def _label(
     *,
     captured_at: datetime,
     close_return: float,
-    decision_at: datetime | None = None,
-    latest_completed_session: date | None = None,
-    analysis_as_of: date | None = None,
+    decision_at: datetime | None | object = _PROVENANCE_DEFAULT,
+    latest_completed_session: date | None | object = _PROVENANCE_DEFAULT,
+    analysis_as_of: date | None | object = _PROVENANCE_DEFAULT,
     market_session_name: str | None = None,
     is_eod_pending: bool | None = None,
     resolution_source: str | None = None,
     resolution_notes: tuple[str, ...] = (),
+    schema_version: int | object = _PROVENANCE_DEFAULT,
 ) -> SignalForwardLabel:
+    # When omitted, default provenance to the label's signal_date so the row
+    # satisfies the canonical-read provenance predicate (DQ-002 criterion 3).
+    # Pass `None` explicitly to construct a provenance-missing label.
+    signal_date = date(2026, 7, 1)
+    resolved_decision_at = (
+        datetime(2026, 7, 1, 16, 0, 0)
+        if decision_at is _PROVENANCE_DEFAULT
+        else decision_at
+    )
+    resolved_latest = (
+        signal_date if latest_completed_session is _PROVENANCE_DEFAULT
+        else latest_completed_session
+    )
+    resolved_as_of = (
+        signal_date if analysis_as_of is _PROVENANCE_DEFAULT
+        else analysis_as_of
+    )
+    resolved_schema = (
+        _label_schema_version() if schema_version is _PROVENANCE_DEFAULT
+        else schema_version
+    )
     return SignalForwardLabel(
         ticker="BBCA",
         signal_date=date(2026, 7, 1),
@@ -301,14 +339,23 @@ def _label(
             market_regime={"regime": "RISK_ON"},
         ),
         observation_captured_at=captured_at,
-        decision_at=decision_at,
-        latest_completed_session=latest_completed_session,
-        analysis_as_of=analysis_as_of,
+        decision_at=resolved_decision_at,  # type: ignore[arg-type]
+        latest_completed_session=resolved_latest,  # type: ignore[arg-type]
+        analysis_as_of=resolved_as_of,  # type: ignore[arg-type]
         market_session_name=market_session_name,
         is_eod_pending=is_eod_pending,
         resolution_source=resolution_source,
         resolution_notes=resolution_notes,
+        schema_version=resolved_schema,  # type: ignore[arg-type]
     )
+
+
+def _label_schema_version() -> int:
+    from src.domain.value_objects.signal_artifact_schema import (
+        SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
+    )
+
+    return SIGNAL_FORWARD_LABEL_SCHEMA_VERSION
 
 
 def test_signal_forward_label_benchmark_excess_return_round_trips(tmp_path: Path):
@@ -992,3 +1039,247 @@ def test_legacy_label_migration_preserves_row_and_reads_none(tmp_path: Path):
     assert restored is not None
     assert restored.ticker == "BBCA"
     assert restored.artifact_identity is None
+
+
+# ── DQ-002 criterion 3: labels list() excludes rows missing provenance ───────
+
+
+def _raw_insert_label(
+    repo: SQLiteSignalForwardLabelsRepository,
+    *,
+    captured_at: str,
+    schema_version: int,
+    decision_at: str = "",
+    latest_completed_session: str = "",
+    analysis_as_of: str = "",
+    fingerprint_json: str | None = None,
+    close_return: float = 4.0,
+) -> None:
+    """Bypass save_many validation to plant a row directly, so the canonical-
+    read filter can be tested against raw stored state."""
+    if fingerprint_json is None:
+        fingerprint_json = json.dumps({"setup_family": "foreign_bounce"})
+    with repo._connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO signal_forward_labels (
+                ticker, signal_date, horizon, observation_captured_at,
+                entry_reference_price, label_window_start, label_window_end,
+                close_return, max_forward_return, max_adverse_excursion,
+                days_to_peak, days_to_trough, stop_would_trigger,
+                target_would_trigger, outcome_label, unavailable_reason,
+                fingerprint_json, schema_version, created_at, updated_at,
+                decision_at, latest_completed_session, analysis_as_of,
+                market_session_name, is_eod_pending, resolution_source,
+                resolution_notes_json,
+                artifact_id, semantic_compatibility_id, artifact_provenance_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "BBCA",
+                date(2026, 7, 1).isoformat(),
+                SignalLabelHorizon.SWING_10D.value,
+                captured_at,
+                None,
+                None,
+                None,
+                close_return,
+                close_return,
+                0.0,
+                1,
+                1,
+                0,
+                1,
+                SignalForwardOutcome.SUCCESS.value,
+                None,
+                fingerprint_json,
+                schema_version,
+                "2026-07-01T16:00:00",
+                "2026-07-01T16:00:00",
+                decision_at,
+                latest_completed_session,
+                analysis_as_of,
+                "",
+                None,
+                "",
+                "[]",
+                "",
+                "",
+                "",
+            ),
+        )
+        conn.commit()
+
+
+def test_list_excludes_label_missing_decision_at(tmp_path: Path):
+    from src.domain.value_objects.signal_artifact_schema import (
+        SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
+    )
+
+    repo = SQLiteSignalForwardLabelsRepository(tmp_path / "data.db")
+    session_iso = date(2026, 7, 1).isoformat()
+    decision_ts = datetime(2026, 7, 1, 16, 0, 0).isoformat()
+
+    _raw_insert_label(
+        repo,
+        captured_at="2026-07-01T09:00:00",
+        schema_version=SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
+        decision_at="",
+        latest_completed_session=session_iso,
+        analysis_as_of=session_iso,
+        close_return=4.0,
+    )
+    assert list(repo.list()) == []
+
+
+def test_list_excludes_label_missing_latest_completed_session(tmp_path: Path):
+    from src.domain.value_objects.signal_artifact_schema import (
+        SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
+    )
+
+    repo = SQLiteSignalForwardLabelsRepository(tmp_path / "data.db")
+    decision_ts = datetime(2026, 7, 1, 16, 0, 0).isoformat()
+    session_iso = date(2026, 7, 1).isoformat()
+
+    _raw_insert_label(
+        repo,
+        captured_at="2026-07-01T09:00:00",
+        schema_version=SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
+        decision_at=decision_ts,
+        latest_completed_session="",
+        analysis_as_of=session_iso,
+    )
+    assert list(repo.list()) == []
+
+
+def test_list_excludes_label_missing_analysis_as_of(tmp_path: Path):
+    from src.domain.value_objects.signal_artifact_schema import (
+        SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
+    )
+
+    repo = SQLiteSignalForwardLabelsRepository(tmp_path / "data.db")
+    decision_ts = datetime(2026, 7, 1, 16, 0, 0).isoformat()
+    session_iso = date(2026, 7, 1).isoformat()
+
+    _raw_insert_label(
+        repo,
+        captured_at="2026-07-01T09:00:00",
+        schema_version=SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
+        decision_at=decision_ts,
+        latest_completed_session=session_iso,
+        analysis_as_of="",
+    )
+    assert list(repo.list()) == []
+
+
+def test_list_excludes_label_missing_observation_captured_at(tmp_path: Path):
+    from src.domain.value_objects.signal_artifact_schema import (
+        SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
+    )
+
+    repo = SQLiteSignalForwardLabelsRepository(tmp_path / "data.db")
+    decision_ts = datetime(2026, 7, 1, 16, 0, 0).isoformat()
+    session_iso = date(2026, 7, 1).isoformat()
+
+    _raw_insert_label(
+        repo,
+        captured_at="",
+        schema_version=SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
+        decision_at=decision_ts,
+        latest_completed_session=session_iso,
+        analysis_as_of=session_iso,
+    )
+    assert list(repo.list()) == []
+
+
+def test_list_excludes_legacy_schema_label(tmp_path: Path):
+    """Under clean break, list() filters to current schema. A legacy schema-1
+    label drops from canonical bulk reads even if its provenance is full."""
+    from src.domain.value_objects.signal_artifact_schema import (
+        SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
+    )
+
+    repo = SQLiteSignalForwardLabelsRepository(tmp_path / "data.db")
+    session_iso = date(2026, 7, 1).isoformat()
+    decision_ts = datetime(2026, 7, 1, 16, 0, 0).isoformat()
+
+    _raw_insert_label(
+        repo,
+        captured_at="2026-07-01T09:00:00",
+        schema_version=1,
+        decision_at=decision_ts,
+        latest_completed_session=session_iso,
+        analysis_as_of=session_iso,
+    )
+    assert list(repo.list()) == []
+
+
+def test_list_excludes_label_missing_provenance_when_filtered_by_signal_date(
+    tmp_path: Path,
+):
+    """The canonical-read filter applies even when caller-supplied filters
+    narrow the result — a provenance-missing label for the requested date
+    still does not appear in list()."""
+    from src.domain.value_objects.signal_artifact_schema import (
+        SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
+    )
+
+    repo = SQLiteSignalForwardLabelsRepository(tmp_path / "data.db")
+    session_iso = date(2026, 7, 1).isoformat()
+
+    _raw_insert_label(
+        repo,
+        captured_at="2026-07-01T09:00:00",
+        schema_version=SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
+        decision_at="",
+        latest_completed_session=session_iso,
+        analysis_as_of=session_iso,
+    )
+    listed = repo.list(signal_date=date(2026, 7, 1), horizon=SignalLabelHorizon.SWING_10D)
+    assert listed == []
+
+
+def test_get_remains_permissive_on_missing_provenance(tmp_path: Path):
+    """Recommendation 3: get() and get_at() remain permissive so diagnostic
+    paths can still inspect non-canonical rows. The canonical-read filter is
+    applied only by list()."""
+    from src.domain.value_objects.signal_artifact_schema import (
+        SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
+    )
+
+    repo = SQLiteSignalForwardLabelsRepository(tmp_path / "data.db")
+    session_iso = date(2026, 7, 1).isoformat()
+
+    _raw_insert_label(
+        repo,
+        captured_at="2026-07-01T09:00:00",
+        schema_version=SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
+        decision_at="",
+        latest_completed_session="",
+        analysis_as_of="",
+    )
+    restored = repo.get("BBCA", date(2026, 7, 1), SignalLabelHorizon.SWING_10D)
+    assert restored is not None
+    assert restored.decision_at is None
+    assert restored.latest_completed_session is None
+
+    restored_at = repo.get_at(
+        "BBCA", date(2026, 7, 1),
+        SignalLabelHorizon.SWING_10D,
+        datetime(2026, 7, 1, 9, 0, 0),
+    )
+    assert restored_at is not None
+    assert restored_at.analysis_as_of is None
+
+
+def test_canonical_label_with_full_provenance_round_trips_through_list(tmp_path: Path):
+    """Sanity anchor: a label with full provenance saved through save_many
+    round-trips through list()."""
+    repo = SQLiteSignalForwardLabelsRepository(tmp_path / "data.db")
+    label = _label(captured_at=datetime(2026, 7, 1, 9, 0, 0), close_return=4.0)
+    repo.save_many([label])
+    listed = list(repo.list())
+    assert len(listed) == 1
+    assert listed[0].latest_completed_session == date(2026, 7, 1)
+    assert listed[0].analysis_as_of == date(2026, 7, 1)
+    assert listed[0].decision_at == datetime(2026, 7, 1, 16, 0, 0)

@@ -217,25 +217,59 @@ def test_schema_created_via_migration_runner(tmp_path: Path):
     assert "candidate_observations" in {row[0] for row in tables}
 
 
+_PROVENANCE_DEFAULT = object()
+
+
 def _canonical_observation(
     *,
     ticker: str = "BBCA",
     snapshot_date: date = date(2026, 7, 3),
     captured_at: datetime = datetime(2026, 7, 3, 9, 0, 0),
     window_sessions: int = 7,
-    data_as_of_date: date = date(2026, 7, 3),
+    data_as_of_date: date | object = _PROVENANCE_DEFAULT,
     config_hash: str = "abc123",
+    decision_at: datetime | None | object = _PROVENANCE_DEFAULT,
+    latest_completed_session: date | None | object = _PROVENANCE_DEFAULT,
+    analysis_as_of: date | None | object = _PROVENANCE_DEFAULT,
     value: str = "v1",
 ) -> CandidateObservation:
+    # When omitted, default provenance to snapshot_date so the row satisfies
+    # the canonical-read provenance predicate (DQ-002 criterion 3). Pass
+    # `None` explicitly to construct a provenance-missing observation.
+    resolved_data_as_of = (
+        snapshot_date if data_as_of_date is _PROVENANCE_DEFAULT else data_as_of_date
+    )
+    resolved_decision_at = (
+        datetime.combine(snapshot_date, datetime.min.time())
+        if decision_at is _PROVENANCE_DEFAULT
+        else decision_at
+    )
+    resolved_latest = (
+        snapshot_date if latest_completed_session is _PROVENANCE_DEFAULT
+        else latest_completed_session
+    )
+    resolved_as_of = (
+        snapshot_date if analysis_as_of is _PROVENANCE_DEFAULT
+        else analysis_as_of
+    )
     return CandidateObservation(
         ticker=ticker,
         snapshot_date=snapshot_date,
         captured_at=captured_at,
-        payload={"schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION, "ticker": ticker, "value": value},
+        payload={
+            "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+            "ticker": ticker,
+            "value": value,
+        },
         workflow="screen_accum",
         window_sessions=window_sessions,
-        data_as_of_date=data_as_of_date,
+        data_as_of_date=(
+            resolved_data_as_of if isinstance(resolved_data_as_of, date) else None
+        ),
         config_hash=config_hash,
+        decision_at=resolved_decision_at,  # type: ignore[arg-type]
+        latest_completed_session=resolved_latest,  # type: ignore[arg-type]
+        analysis_as_of=resolved_as_of,  # type: ignore[arg-type]
     )
 
 
@@ -1370,3 +1404,306 @@ def test_source_contract_catalog_includes_identity_columns():
     assert (
         FIELD_STATS_MODE[("candidate_observations", "artifact_provenance_json")] == "none"
     )
+
+
+# ── DQ-002 criterion 3: canonical reads exclude rows missing provenance ──────
+
+
+def _raw_insert_observation(
+    repo: SQLiteCandidateObservationsRepository,
+    *,
+    snapshot_date: date,
+    captured_at: datetime,
+    schema_version: int,
+    config_hash: str = "abc123",
+    decision_at: str = "",
+    latest_completed_session: str = "",
+    analysis_as_of: str = "",
+    data_as_of_date: str = "",
+    workflow: str = "screen_accum",
+    window_sessions: int = 7,
+    payload_value: str = "v1",
+) -> None:
+    """Bypass save_many validation to plant a row exactly as a corrupted
+    pre-DQ-002E-write would have been stored, so the canonical-read filter
+    can be tested against raw stored state."""
+    with repo._connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO candidate_observations (
+                ticker, snapshot_date, captured_at, schema_version, payload_json,
+                workflow, window_sessions, data_as_of_date, config_hash,
+                decision_at, latest_completed_session, analysis_as_of
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "BBCA",
+                snapshot_date.isoformat(),
+                captured_at.isoformat(),
+                schema_version,
+                json.dumps(
+                    {"schema_version": schema_version, "ticker": "BBCA", "value": payload_value}
+                ),
+                workflow,
+                window_sessions,
+                data_as_of_date,
+                config_hash,
+                decision_at,
+                latest_completed_session,
+                analysis_as_of,
+            ),
+        )
+        conn.commit()
+
+
+def test_list_canonical_by_date_excludes_current_schema_row_missing_decision_at(
+    tmp_path: Path,
+):
+    """DQ-002 criterion 3: a current-schema row with non-empty config_hash
+    but missing decision_at provenance is excluded from canonical reads."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+    decision_ts = datetime(2026, 7, 3, 16, 0, 0).isoformat()
+    session_iso = day.isoformat()
+
+    _raw_insert_observation(
+        repo,
+        snapshot_date=day,
+        captured_at=datetime(2026, 7, 3, 9, 0, 0),
+        schema_version=CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+        decision_at=decision_ts,
+        latest_completed_session=session_iso,
+        analysis_as_of=session_iso,
+        data_as_of_date=session_iso,
+        payload_value="valid",
+    )
+    _raw_insert_observation(
+        repo,
+        snapshot_date=day,
+        captured_at=datetime(2026, 7, 3, 10, 0, 0),
+        schema_version=CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+        config_hash="abc456",
+        decision_at="",
+        latest_completed_session=session_iso,
+        analysis_as_of=session_iso,
+        data_as_of_date=session_iso,
+        payload_value="no_decision_at",
+    )
+
+    canonical = repo.list_canonical_by_date(day)
+    assert len(canonical) == 1
+    assert canonical[0].payload["value"] == "valid"
+
+
+def test_list_canonical_by_date_excludes_current_schema_row_missing_latest_completed_session(
+    tmp_path: Path,
+):
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+    decision_ts = datetime(2026, 7, 3, 16, 0, 0).isoformat()
+    session_iso = day.isoformat()
+
+    _raw_insert_observation(
+        repo,
+        snapshot_date=day,
+        captured_at=datetime(2026, 7, 3, 9, 0, 0),
+        schema_version=CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+        decision_at=decision_ts,
+        latest_completed_session="",
+        analysis_as_of=session_iso,
+        data_as_of_date=session_iso,
+        payload_value="missing_latest",
+    )
+
+    assert repo.list_canonical_by_date(day) == []
+
+
+def test_list_canonical_by_date_excludes_current_schema_row_missing_analysis_as_of(
+    tmp_path: Path,
+):
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+    decision_ts = datetime(2026, 7, 3, 16, 0, 0).isoformat()
+    session_iso = day.isoformat()
+
+    _raw_insert_observation(
+        repo,
+        snapshot_date=day,
+        captured_at=datetime(2026, 7, 3, 9, 0, 0),
+        schema_version=CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+        decision_at=decision_ts,
+        latest_completed_session=session_iso,
+        analysis_as_of="",
+        data_as_of_date=session_iso,
+        payload_value="missing_as_of",
+    )
+
+    assert repo.list_canonical_by_date(day) == []
+
+
+def test_list_canonical_by_date_excludes_current_schema_row_missing_data_as_of_date(
+    tmp_path: Path,
+):
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+    decision_ts = datetime(2026, 7, 3, 16, 0, 0).isoformat()
+    session_iso = day.isoformat()
+
+    _raw_insert_observation(
+        repo,
+        snapshot_date=day,
+        captured_at=datetime(2026, 7, 3, 9, 0, 0),
+        schema_version=CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+        decision_at=decision_ts,
+        latest_completed_session=session_iso,
+        analysis_as_of=session_iso,
+        data_as_of_date="",
+        payload_value="missing_data_as_of",
+    )
+
+    assert repo.list_canonical_by_date(day) == []
+
+
+def test_list_canonical_snapshot_dates_excludes_dates_with_only_provenance_missing_rows(
+    tmp_path: Path,
+):
+    """A snapshot date whose only current-schema rows are missing provenance
+    must not appear in list_canonical_snapshot_dates()."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    missing_day = date(2026, 7, 1)
+    valid_day = date(2026, 7, 2)
+    session_iso = valid_day.isoformat()
+    decision_ts = datetime(2026, 7, 2, 16, 0, 0).isoformat()
+
+    # missing_day: only row is missing provenance
+    _raw_insert_observation(
+        repo,
+        snapshot_date=missing_day,
+        captured_at=datetime(2026, 7, 1, 9, 0, 0),
+        schema_version=CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+        decision_at="",
+        latest_completed_session="",
+        analysis_as_of="",
+        data_as_of_date="",
+        payload_value="all_missing",
+    )
+    # valid_day: full provenance
+    _raw_insert_observation(
+        repo,
+        snapshot_date=valid_day,
+        captured_at=datetime(2026, 7, 2, 9, 0, 0),
+        schema_version=CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+        decision_at=decision_ts,
+        latest_completed_session=session_iso,
+        analysis_as_of=session_iso,
+        data_as_of_date=session_iso,
+        payload_value="valid",
+    )
+
+    assert repo.list_canonical_snapshot_dates() == [valid_day]
+
+
+def test_list_latest_canonical_by_date_excludes_row_missing_provenance(
+    tmp_path: Path,
+):
+    """A row that would otherwise be selected by list_latest_canonical_by_date
+    is excluded when its provenance is missing — the per-ticker latest row
+    returned is either absent or a provenance-complete older row."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+    session_iso = day.isoformat()
+    decision_ts = datetime(2026, 7, 3, 16, 0, 0).isoformat()
+
+    # Older canonical row, full provenance.
+    _raw_insert_observation(
+        repo,
+        snapshot_date=day,
+        captured_at=datetime(2026, 7, 3, 9, 0, 0),
+        schema_version=CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+        decision_at=decision_ts,
+        latest_completed_session=session_iso,
+        analysis_as_of=session_iso,
+        data_as_of_date=session_iso,
+        payload_value="older_valid",
+    )
+    # Newer current-schema row, config_hash set, but missing provenance.
+    _raw_insert_observation(
+        repo,
+        snapshot_date=day,
+        captured_at=datetime(2026, 7, 3, 10, 0, 0),
+        schema_version=CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+        decision_at="",
+        latest_completed_session="",
+        analysis_as_of="",
+        data_as_of_date="",
+        payload_value="newer_missing_provenance",
+    )
+
+    rows = repo.list_latest_canonical_by_date(day)
+    assert len(rows) == 1
+    assert rows[0].payload["value"] == "older_valid"
+
+
+def test_get_latest_remains_permissive_on_missing_provenance(tmp_path: Path):
+    """DQ-002 criterion 3 limits canonical-read filtering to list_canonical_*
+    methods. get_latest() and get_at() are point lookups used by the label
+    generator (which validates the contract in-app); they must NOT silently
+    swallow provenance-missing rows as missing."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+
+    _raw_insert_observation(
+        repo,
+        snapshot_date=day,
+        captured_at=datetime(2026, 7, 3, 9, 0, 0),
+        schema_version=CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+        decision_at="",
+        latest_completed_session="",
+        analysis_as_of="",
+        data_as_of_date="",
+        payload_value="missing_provenance",
+    )
+
+    obs = repo.get_latest("BBCA", day)
+    assert obs is not None
+    assert obs.payload["value"] == "missing_provenance"
+    assert obs.decision_at is None
+    assert obs.latest_completed_session is None
+
+
+def test_canonical_observation_with_full_provenance_passes_all_canonical_reads(
+    tmp_path: Path,
+):
+    """Sanity anchor: a row with full provenance passes every canonical read
+    — list_canonical_by_date, list_canonical_snapshot_dates, and
+    list_latest_canonical_by_date."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteCandidateObservationsRepository(db_path)
+    day = date(2026, 7, 3)
+    session_iso = day.isoformat()
+    decision_ts = datetime(2026, 7, 3, 16, 0, 0).isoformat()
+
+    _raw_insert_observation(
+        repo,
+        snapshot_date=day,
+        captured_at=datetime(2026, 7, 3, 9, 0, 0),
+        schema_version=CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+        decision_at=decision_ts,
+        latest_completed_session=session_iso,
+        analysis_as_of=session_iso,
+        data_as_of_date=session_iso,
+        payload_value="fully_canonical",
+    )
+
+    assert len(repo.list_canonical_by_date(day)) == 1
+    assert repo.list_canonical_snapshot_dates() == [day]
+    rows = repo.list_latest_canonical_by_date(day)
+    assert len(rows) == 1
+    assert rows[0].payload["value"] == "fully_canonical"

@@ -96,6 +96,20 @@ _ADD_ARTIFACT_PROVENANCE_JSON_COLUMN = """
 ALTER TABLE signal_forward_labels ADD COLUMN artifact_provenance_json TEXT NOT NULL DEFAULT ''
 """
 
+# DQ-002 criterion 3: a canonical forward label must carry execution-time +
+# effective-session provenance. Labels have no data_as_of_date column of their
+# own — their data cutoff is the observation's latest_completed_session,
+# inherited verbatim via observation_captured_at + the session fields. Rows
+# missing any of these are excluded from list(), the canonical bulk read used
+# by summary/readiness aggregates. Point lookups (get, get_at) remain
+# permissive so diagnostic paths can still inspect non-canonical rows.
+_LABEL_CANONICAL_PROVENANCE_PREDICATES = (
+    "decision_at != '' "
+    "AND latest_completed_session != '' "
+    "AND analysis_as_of != '' "
+    "AND observation_captured_at != ''"
+)
+
 
 class SQLiteSignalForwardLabelsRepository:
     """Persists schema-versioned signal_forward_labels records."""
@@ -301,8 +315,19 @@ class SQLiteSignalForwardLabelsRepository:
         horizon: SignalLabelHorizon | None = None,
         ticker: str | None = None,
     ) -> list[SignalForwardLabel]:
-        clauses: list[str] = []
-        params: list[str] = []
+        """Bulk canonical read for forward labels.
+
+        DQ-002 criterion 3: returns only current-schema labels that carry
+        full effective-session + execution-time provenance (decision_at,
+        latest_completed_session, analysis_as_of, observation_captured_at).
+        Legacy-schema or provenance-missing rows drop from this read;
+        point lookups (get, get_at) remain permissive for diagnostics.
+        """
+        clauses: list[str] = [
+            "schema_version = ?",
+            _LABEL_CANONICAL_PROVENANCE_PREDICATES,
+        ]
+        params: list[str | int] = [SIGNAL_FORWARD_LABEL_SCHEMA_VERSION]
         if signal_date is not None:
             clauses.append("signal_date = ?")
             params.append(signal_date.isoformat())
@@ -312,7 +337,7 @@ class SQLiteSignalForwardLabelsRepository:
         if ticker is not None:
             clauses.append("ticker = ?")
             params.append(ticker.upper())
-        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        where = f"WHERE {' AND '.join(clauses)}"
         with self._connect() as conn:
             rows = conn.execute(
                 f"""

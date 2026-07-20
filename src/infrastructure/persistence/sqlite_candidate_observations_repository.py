@@ -135,6 +135,19 @@ _SELECT_COLUMNS = (
     "artifact_id, semantic_compatibility_id, artifact_provenance_json"
 )
 
+# DQ-002 criterion 3: a canonical candidate observation must carry
+# execution-time + effective-session + data-cutoff provenance. Rows missing
+# any of these are excluded from canonical reads regardless of config_hash
+# or schema version — provenance is what makes a row reproducible as a
+# point-in-time artifact. The canonical identity columns (config_hash,
+# schema_version) remain necessary; provenance makes them sufficient.
+_CANONICAL_PROVENANCE_PREDICATES = (
+    "decision_at != '' "
+    "AND latest_completed_session != '' "
+    "AND analysis_as_of != '' "
+    "AND data_as_of_date != ''"
+)
+
 
 class SQLiteCandidateObservationsRepository:
     def __init__(self, db_path: str | Path) -> None:
@@ -364,7 +377,11 @@ class SQLiteCandidateObservationsRepository:
     def list_canonical_by_date(self, snapshot_date: date) -> list[CandidateObservation]:
         """Return every canonical observation for the date — no collapsing.
 
-        Canonical = config_hash != '' and schema_version = _CURRENT_SCHEMA_VERSION.
+        Canonical = config_hash != '' and schema_version = _CURRENT_SCHEMA_VERSION
+        AND full effective-session + data-cutoff provenance (DQ-002 criterion 3):
+        a current-schema row missing decision_at, latest_completed_session,
+        analysis_as_of, or data_as_of_date is excluded from canonical reads.
+
         A ticker with observations across several window_sessions returns one row
         per window, not just the latest.
         """
@@ -373,7 +390,10 @@ class SQLiteCandidateObservationsRepository:
                 f"""
                 SELECT {_SELECT_COLUMNS}
                 FROM candidate_observations
-                WHERE snapshot_date = ? AND config_hash != '' AND schema_version = ?
+                WHERE snapshot_date = ?
+                  AND config_hash != ''
+                  AND schema_version = ?
+                  AND {_CANONICAL_PROVENANCE_PREDICATES}
                 ORDER BY ticker ASC, window_sessions ASC, data_as_of_date DESC,
                          captured_at DESC, id DESC
                 """,
@@ -393,13 +413,19 @@ class SQLiteCandidateObservationsRepository:
         return [date.fromisoformat(row["snapshot_date"]) for row in rows]
 
     def list_canonical_snapshot_dates(self) -> list[date]:
-        """Return dates containing at least one canonical observation."""
+        """Return dates containing at least one canonical observation.
+
+        A date whose only current-schema rows are missing provenance is
+        excluded — those rows are not canonical (DQ-002 criterion 3).
+        """
         with self._connect() as conn:
             rows = conn.execute(
-                """
+                f"""
                 SELECT DISTINCT snapshot_date
                 FROM candidate_observations
-                WHERE config_hash != '' AND schema_version = ?
+                WHERE config_hash != ''
+                  AND schema_version = ?
+                  AND {_CANONICAL_PROVENANCE_PREDICATES}
                 ORDER BY snapshot_date ASC
                 """,
                 (_CURRENT_SCHEMA_VERSION,),
@@ -409,9 +435,10 @@ class SQLiteCandidateObservationsRepository:
     def list_latest_canonical_by_date(self, snapshot_date: date) -> list[CandidateObservation]:
         """Return the latest canonical observation per ticker for the date.
 
-        Canonical filtering is applied inside the subquery, before
-        ROW_NUMBER() partitions by ticker — a newer legacy row can never
-        displace an older canonical row.
+        Canonical filtering (config_hash, schema_version, and DQ-002
+        criterion 3 provenance) is applied inside the subquery, before
+        ROW_NUMBER() partitions by ticker — a newer legacy or
+        provenance-missing row can never displace an older canonical row.
         """
         with self._connect() as conn:
             rows = conn.execute(
@@ -425,7 +452,10 @@ class SQLiteCandidateObservationsRepository:
                             ORDER BY captured_at DESC, id DESC
                         ) AS row_num
                     FROM candidate_observations
-                    WHERE snapshot_date = ? AND config_hash != '' AND schema_version = ?
+                    WHERE snapshot_date = ?
+                      AND config_hash != ''
+                      AND schema_version = ?
+                      AND {_CANONICAL_PROVENANCE_PREDICATES}
                 )
                 WHERE row_num = 1
                 ORDER BY ticker ASC
