@@ -301,9 +301,7 @@ If two sources are not semantically equivalent, do not retain one generic field 
 workflows agree on what production evidence was available at a given decision
 timestamp.
 
-**State:** Blocked — waits for DQ-001 and production integration of canonical
-artifact identity/effective-session provenance. The `ARTIFACT-IDENTITY`
-foundation exists, but current canonical reads do not require it.
+**State:** Completed — DQ-002 criteria fully satisfied (Criteria 1 satisfied in `fa7413f`, Criteria 3 satisfied in `07bc21c`).
 
 **Required contract:**
 
@@ -347,17 +345,16 @@ Artifacts without a defensible effective timestamp or data cutoff are invalid fo
       validates the originating observation's contract instead of independently
       resolving another session (satisfied in `fa7413f`).
 - [x] Weekend, holiday, pre-open, intraday, post-close, and late-provider tests pass.
-- [ ] Current-schema canonical candidate observations and forward labels require
+- [x] Current-schema canonical candidate observations and forward labels require
       execution time, effective market session, and data-cutoff provenance;
-      artifacts missing them are excluded from canonical reads.
+      artifacts missing them are excluded from canonical reads (satisfied in `07bc21c`).
 - [x] Temporal leakage tests intentionally plant future rows across the current
       authoritative source families and prove they are excluded or
       non-authoritative.
 
 ### DQ-003 — Audit and repair historical candidate-observation backfill
 
-**State:** Blocked — waits for the unresolved DQ-001 authoritative null/zero
-semantics and DQ-002 canonical provenance eligibility contract.
+**State:** Ready — unblocked by completion of DQ-001 and DQ-002.
 
 **Priority:** P0  
 **Depends on:** DQ-001, DQ-002  
