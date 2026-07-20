@@ -814,12 +814,24 @@ def test_unavailable_label_copies_provenance_from_source_observation():
 
 def test_label_generation_does_not_resolve_a_new_session():
     """Provenance must be copied from the observation, never derived from
-    signal_date or produced by a fresh resolver lookup during labeling."""
+    signal_date or produced by a fresh resolver lookup during labeling.
+
+    The labeler has no ``EffectiveMarketSessionResolver`` dependency; it
+    inherits the originating observation's effective-session contract and
+    propagates those exact values onto the label. A canonical swing
+    observation under the clean-break contract always carries provenance
+    equal to its snapshot_date.
+    """
     signal_date = date(2026, 7, 1)
+    decision_at = datetime(2026, 7, 1, 16, 0, 0)
     observation = _observation(
         signal_date,
         {"candidate": {"current_price": "100"}, "sub_signal_fingerprint": _fingerprint()},
-        # No provenance on the source observation (legacy/unresolved case).
+        decision_at=decision_at,
+        market_session_name="AFTER_CLOSE",
+        is_eod_pending=False,
+        resolution_source="ihsg_cache_same_day",
+        resolution_notes=("a note",),
     )
     candles = [_candle(signal_date + timedelta(days=i), str(100 + i)) for i in range(1, 11)]
 
@@ -831,15 +843,15 @@ def test_label_generation_does_not_resolve_a_new_session():
 
     label = response.labels[0]
     # No resolver was injected into GenerateSignalForwardLabelsUseCase at all
-    # (its constructor has no such dependency) — an absent observation
-    # provenance must simply propagate as None, not get backfilled.
-    assert label.decision_at is None
-    assert label.latest_completed_session is None
-    assert label.analysis_as_of is None
-    assert label.market_session_name is None
-    assert label.is_eod_pending is None
-    assert label.resolution_source is None
-    assert label.resolution_notes == ()
+    # (its constructor has no such dependency) — the label's provenance must
+    # be inherited verbatim from the observation, not backfilled or re-resolved.
+    assert label.decision_at == decision_at
+    assert label.latest_completed_session == signal_date
+    assert label.analysis_as_of == signal_date
+    assert label.market_session_name == "AFTER_CLOSE"
+    assert label.is_eod_pending is False
+    assert label.resolution_source == "ihsg_cache_same_day"
+    assert label.resolution_notes == ("a note",)
 
 
 def test_real_producer_to_label_repository_round_trip_emits_only_sector_context(tmp_path):
@@ -915,6 +927,8 @@ def test_real_producer_to_label_repository_round_trip_emits_only_sector_context(
                 window_sessions=7,
                 data_as_of_date=day,
                 config_hash="round-trip-hash",
+                latest_completed_session=day,
+                analysis_as_of=day,
             )
         ]
     )
@@ -947,6 +961,9 @@ def test_real_producer_to_label_repository_round_trip_emits_only_sector_context(
     assert "market_context" not in groups
 
 
+_PROVENANCE_DEFAULT = object()
+
+
 def _observation(
     signal_date: date,
     payload: dict,
@@ -956,18 +973,30 @@ def _observation(
     window_sessions: int = 7,
     config_hash: str = "test-hash",
     decision_at: datetime | None = None,
-    latest_completed_session: date | None = None,
-    analysis_as_of: date | None = None,
+    latest_completed_session: date | None | object = _PROVENANCE_DEFAULT,
+    analysis_as_of: date | None | object = _PROVENANCE_DEFAULT,
     market_session_name: str | None = None,
     is_eod_pending: bool | None = None,
     resolution_source: str | None = None,
     resolution_notes: tuple[str, ...] = (),
 ) -> CandidateObservation:
+    # When omitted, default session provenance to signal_date so the
+    # observation satisfies the canonical swing effective-session contract.
+    # Pass `None` explicitly to construct an observation missing provenance
+    # (e.g. for skip-reason tests).
+    resolved_latest = (
+        signal_date if latest_completed_session is _PROVENANCE_DEFAULT
+        else latest_completed_session
+    )
+    resolved_as_of = (
+        signal_date if analysis_as_of is _PROVENANCE_DEFAULT
+        else analysis_as_of
+    )
     payload = {
         "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
         "artifact_type": "candidate_observation",
         "ticker": ticker,
-        "snapshot_date": signal_date.isoformat(),
+        "snapshotDate": signal_date.isoformat(),
         **payload,
     }
     return CandidateObservation(
@@ -979,8 +1008,8 @@ def _observation(
         data_as_of_date=signal_date,
         config_hash=config_hash,
         decision_at=decision_at,
-        latest_completed_session=latest_completed_session,
-        analysis_as_of=analysis_as_of,
+        latest_completed_session=resolved_latest,
+        analysis_as_of=resolved_as_of,
         market_session_name=market_session_name,
         is_eod_pending=is_eod_pending,
         resolution_source=resolution_source,
@@ -1043,12 +1072,15 @@ class AdversarialCandidateObservationsRepository(FakeCandidateObservationsReposi
 
 def test_single_path_canonical_observation_generates_labels():
     # 1. Exact schema 3 plus non-empty string config_hash still generates labels.
+    day = date(2026, 7, 1)
     obs = CandidateObservation(
         ticker="BBCA",
-        snapshot_date=date(2026, 7, 1),
+        snapshot_date=day,
         captured_at=datetime(2026, 7, 1, 16, 0),
         payload={"schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION, "candidate": {"current_price": 100}},
         config_hash="valid_hash",
+        latest_completed_session=day,
+        analysis_as_of=day,
     )
     repo = FakeCandidateObservationsRepository(observation=obs)
     candles = [
@@ -1265,12 +1297,15 @@ def test_batch_path_defense_in_depth():
     # - invalid row increments skipped_incompatible_observation_count;
     # - no candle read occurs for the invalid ticker;
     # - persisted labels belong only to the valid observation.
+    day = date(2026, 7, 1)
     valid_obs = CandidateObservation(
         ticker="BBCA",
-        snapshot_date=date(2026, 7, 1),
+        snapshot_date=day,
         captured_at=datetime(2026, 7, 1, 16, 0),
         payload={"schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION, "candidate": {"current_price": 100}},
         config_hash="valid_hash",
+        latest_completed_session=day,
+        analysis_as_of=day,
     )
     invalid_obs = CandidateObservation(
         ticker="BUMI",
@@ -1320,12 +1355,15 @@ def test_eligible_date_path_defense_in_depth():
     # - the valid observation is processed normally;
     # - skipped count includes the invalid row;
     # - no label is persisted for the invalid row.
+    day = date(2026, 7, 1)
     valid_obs = CandidateObservation(
         ticker="BBCA",
-        snapshot_date=date(2026, 7, 1),
+        snapshot_date=day,
         captured_at=datetime(2026, 7, 1, 16, 0),
         payload={"schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION, "candidate": {"current_price": 100}},
         config_hash="valid_hash",
+        latest_completed_session=day,
+        analysis_as_of=day,
     )
     invalid_obs = CandidateObservation(
         ticker="BUMI",
@@ -1394,19 +1432,22 @@ def test_direct_builder_guard():
 
 def test_predicate_tests():
     # Directly test _is_canonical_observation():
-    # schema 3 + non-empty string hash -> True
-    # schema 3 + empty hash            -> False
-    # schema 2 + non-empty hash        -> False
+    # schema 3 + non-empty string hash + provenance -> True
+    # schema 3 + empty hash                        -> False
+    # schema 2 + non-empty hash                     -> False
     from src.application.use_case.generate_signal_forward_labels_use_case import (
         _is_canonical_observation,
     )
 
+    day = date(2026, 7, 1)
     obs_ok = CandidateObservation(
         ticker="BBCA",
-        snapshot_date=date(2026, 7, 1),
+        snapshot_date=day,
         captured_at=datetime(2026, 7, 1, 16, 0),
         payload={"schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION, "candidate": {"current_price": 100}},
         config_hash="valid_hash",
+        latest_completed_session=day,
+        analysis_as_of=day,
     )
     obs_empty = CandidateObservation(
         ticker="BBCA",
@@ -1453,3 +1494,214 @@ def test_generated_label_has_artifact_identity_none():
 
     assert len(response.labels) == 1
     assert response.labels[0].artifact_identity is None
+
+
+# ── DQ-002 criterion 1: one application-layer effective-session contract ─────
+
+
+def test_observation_missing_provenance_skipped_with_invalid_contract_reason():
+    """A canonical-schema observation that lacks latest_completed_session or
+    analysis_as_of cannot prove its point-in-time session provenance. Under
+    the clean-break contract it must be rejected with
+    INVALID_OBSERVATION_CONTRACT: no label, no candle read, no write."""
+    signal_date = date(2026, 7, 1)
+    observation = _observation(
+        signal_date,
+        {"candidate": {"current_price": "100"}, "sub_signal_fingerprint": _fingerprint()},
+        latest_completed_session=None,
+        analysis_as_of=None,
+    )
+    market_repo = FakeMarketDataRepository([])
+    labels_repo = SpySignalForwardLabelsRepository()
+
+    response = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(observation),
+        market_data_repository=market_repo,
+        signal_forward_labels_repository=labels_repo,
+    ).execute(GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=signal_date))
+
+    assert response.labels == ()
+    assert response.skip_reason is SignalLabelGenerationSkipReason.INVALID_OBSERVATION_CONTRACT
+    assert response.observation is observation
+    assert market_repo.calls == []
+    assert labels_repo.save_many_call_count == 0
+
+
+def test_observation_with_snapshot_date_ahead_of_latest_completed_session_skipped():
+    """A swing observation whose snapshot_date is later than its
+    latest_completed_session is not anchored on the closed session — it is
+    either intraday, stale, or corruptly written. It must be rejected as
+    INVALID_OBSERVATION_CONTRACT."""
+    signal_date = date(2026, 7, 2)
+    observation = _observation(
+        signal_date,
+        {"candidate": {"current_price": "100"}, "sub_signal_fingerprint": _fingerprint()},
+        latest_completed_session=date(2026, 7, 1),
+        analysis_as_of=signal_date,
+    )
+    market_repo = FakeMarketDataRepository([])
+    labels_repo = SpySignalForwardLabelsRepository()
+
+    response = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(observation),
+        market_data_repository=market_repo,
+        signal_forward_labels_repository=labels_repo,
+    ).execute(GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=signal_date))
+
+    assert response.labels == ()
+    assert response.skip_reason is SignalLabelGenerationSkipReason.INVALID_OBSERVATION_CONTRACT
+    assert market_repo.calls == []
+
+
+def test_observation_with_analysis_as_of_behind_snapshot_date_skipped():
+    """A swing observation whose analysis_as_of is behind snapshot_date
+    means analysis was performed at a different session than the snapshot.
+    Reject it as INVALID_OBSERVATION_CONTRACT."""
+    signal_date = date(2026, 7, 2)
+    observation = _observation(
+        signal_date,
+        {"candidate": {"current_price": "100"}, "sub_signal_fingerprint": _fingerprint()},
+        latest_completed_session=signal_date,
+        analysis_as_of=date(2026, 7, 1),
+    )
+    market_repo = FakeMarketDataRepository([])
+    labels_repo = SpySignalForwardLabelsRepository()
+
+    response = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(observation),
+        market_data_repository=market_repo,
+        signal_forward_labels_repository=labels_repo,
+    ).execute(GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=signal_date))
+
+    assert response.labels == ()
+    assert response.skip_reason is SignalLabelGenerationSkipReason.INVALID_OBSERVATION_CONTRACT
+    assert market_repo.calls == []
+
+
+def test_label_inherits_observation_effective_session_contract():
+    """DQ-002 criterion 1: label generation must inherit and validate the
+    originating observation's effective-session contract rather than
+    independently resolving another session. The label's
+    latest_completed_session and analysis_as_of must equal the
+    observation's exactly, with no fresh resolution."""
+    signal_date = date(2026, 7, 1)
+    observation = _observation(
+        signal_date,
+        {"candidate": {"current_price": "100"}, "sub_signal_fingerprint": _fingerprint()},
+        decision_at=datetime(2026, 7, 1, 16, 0, 0),
+        market_session_name="AFTER_CLOSE",
+        is_eod_pending=False,
+        resolution_source="ihsg_cache_same_day",
+    )
+    candles = [_candle(signal_date + timedelta(days=i), str(100 + i)) for i in range(1, 11)]
+
+    response = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(observation),
+        market_data_repository=FakeMarketDataRepository(candles),
+        signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+    ).execute(GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=signal_date))
+
+    label = response.labels[0]
+    assert label.latest_completed_session == observation.latest_completed_session
+    assert label.analysis_as_of == observation.analysis_as_of
+    assert label.latest_completed_session == label.analysis_as_of == signal_date
+    assert label.decision_at == observation.decision_at
+    assert label.market_session_name == observation.market_session_name
+    assert label.resolution_source == observation.resolution_source
+
+
+def test_execute_all_skips_observations_missing_provenance_without_candle_reads():
+    """execute_all() must filter out observations missing session provenance
+    before any candle read or label write. The skipped count reflects them
+    alongside other incompatible observations."""
+    signal_date = date(2026, 7, 1)
+    valid = _observation(
+        signal_date,
+        {"candidate": {"current_price": "100"}, "sub_signal_fingerprint": _fingerprint()},
+        ticker="BBCA",
+    )
+    missing_provenance = _observation(
+        signal_date,
+        {"candidate": {"current_price": "200"}, "sub_signal_fingerprint": _fingerprint()},
+        ticker="BUMI",
+        latest_completed_session=None,
+        analysis_as_of=None,
+    )
+    candles = [
+        _candle(signal_date + timedelta(days=i), str(100 + i), ticker="BBCA")
+        for i in range(1, 11)
+    ]
+    observations_repo = FakeCandidateObservationsRepository(
+        observations=[valid, missing_provenance]
+    )
+    market_repo = FakeMarketDataRepository(candles)
+    labels_repo = SpySignalForwardLabelsRepository()
+
+    response = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=observations_repo,
+        market_data_repository=market_repo,
+        signal_forward_labels_repository=labels_repo,
+    ).execute_all(GenerateAllSignalForwardLabelsRequest(signal_date=signal_date))
+
+    assert response.observation_count == 1
+    assert response.generated_count == 1
+    assert response.skipped_incompatible_observation_count == 1
+    assert {label.ticker for label in response.labels} == {"BBCA"}
+    # The missing-provenance ticker never reaches the candle repository.
+    assert all(call[0] == "BBCA" for call in market_repo.calls)
+    assert labels_repo.saved == list(response.labels)
+
+
+def test_forward_window_excludes_candle_at_signal_date():
+    """Leakage regression: a candle whose date equals the observation's
+    signal_date is in-session data — not a forward session — and must
+    never appear in the label's forward window. The forward-candle slice
+    relies on `c.date > signal_date`, which combined with the swing
+    equality rule `signal_date == latest_completed_session` keeps the
+    in-session candle out of the outcome calculation."""
+    signal_date = date(2026, 7, 1)
+    observation = _observation(
+        signal_date,
+        {"candidate": {"current_price": "100"}, "sub_signal_fingerprint": _fingerprint()},
+    )
+    # A same-day candle with a wildly different close must NOT move the
+    # label's close_return, which is computed from the entry price and the
+    # 10th forward-session close.
+    same_day = _candle(signal_date, "999")
+    forward = [_candle(signal_date + timedelta(days=i), str(100 + i)) for i in range(1, 11)]
+    candles = [same_day, *forward]
+
+    response = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(observation),
+        market_data_repository=FakeMarketDataRepository(candles),
+        signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+    ).execute(GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=signal_date))
+
+    label = response.labels[0]
+    assert label.outcome_label == SignalForwardOutcome.SUCCESS
+    assert label.close_return == 10.0
+    assert label.label_window_start == signal_date + timedelta(days=1)
+    assert label.label_window_end == signal_date + timedelta(days=10)
+
+
+def test_build_label_raises_on_observation_missing_provenance_as_programmer_error():
+    """_build_label() is a private helper whose public entrypoints must
+    filter invalid observations first. If it is ever reached with a
+    provenance-missing observation, that is a contract violation in this
+    use case's own code — it must raise, not silently produce an
+    UNAVAILABLE label."""
+    signal_date = date(2026, 7, 1)
+    observation = _observation(
+        signal_date,
+        {"candidate": {"current_price": "100"}, "sub_signal_fingerprint": _fingerprint()},
+        latest_completed_session=None,
+        analysis_as_of=None,
+    )
+    use_case = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(),
+        market_data_repository=FakeMarketDataRepository([]),
+        signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+    )
+
+    with pytest.raises(ValueError):
+        use_case._build_label(observation, SignalLabelHorizon.SWING_10D)

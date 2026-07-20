@@ -16,6 +16,9 @@ from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.ports.signal_forward_labels_repository import (
     SignalForwardLabelsRepository,
 )
+from src.domain.value_objects.canonical_swing_session_contract import (
+    CanonicalSwingSessionContract,
+)
 from src.domain.value_objects.signal_artifact_schema import (
     CANDIDATE_OBSERVATION_SCHEMA_VERSION,
     validate_current_alpha_trigger_identity,
@@ -348,6 +351,20 @@ def _canonical_observation_skip_reason(
             alpha_trigger_route_metadata=(
                 observation.payload.get("sub_signal_fingerprint") or {}
             ).get("alpha_trigger_route_metadata"),
+        )
+    except ValueError:
+        return SignalLabelGenerationSkipReason.INVALID_OBSERVATION_CONTRACT
+
+    # DQ-002 criterion 1: a canonical swing observation must carry the
+    # originating effective-session contract inherited from one
+    # application-layer resolver. Missing or mismatched session provenance
+    # means the observation cannot be reproduced as a defensible point-in-time
+    # artifact and must not produce a canonical forward label.
+    try:
+        CanonicalSwingSessionContract.from_observation_fields(
+            snapshot_date=observation.snapshot_date,
+            latest_completed_session=observation.latest_completed_session,
+            analysis_as_of=observation.analysis_as_of,
         )
     except ValueError:
         return SignalLabelGenerationSkipReason.INVALID_OBSERVATION_CONTRACT

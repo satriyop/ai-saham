@@ -72,6 +72,8 @@ class FakeCandidateObservationsRepository:
                 window_sessions=window_sessions,
                 data_as_of_date=snapshot_date,
                 config_hash="test-hash",
+                latest_completed_session=snapshot_date,
+                analysis_as_of=snapshot_date,
             )
         )
 
