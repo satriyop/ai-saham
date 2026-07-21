@@ -531,28 +531,30 @@ def test_date_without_source_candles_is_skipped_with_machine_readable_reason(tmp
     assert response.skipped_dates[0].date == _T
 
 
-def test_persistence_failure_is_currently_swallowed_to_zero_count(tmp_path):
-    """DQ-003 Slice D finding probe (fail-SOFT, recorded in audit_data_quality.md).
+def test_backfill_fails_closed_on_save_failure(tmp_path):
+    """DQ-003 Slice D finding RESOLVED (see audit_data_quality.md).
 
-    When `save_many` raises, the persister catches ALL exceptions and returns 0
-    (logs a warning). The backfill then reports evaluated candidates but zero
-    saved observations and NO explicit failure marker — a silent write loss.
-    This test PINS that current behavior so the fail-soft is documented and any
-    future narrowing of the persister's exception boundary is a deliberate,
-    tested contract change (see the recorded finding's disposition).
+    When `save_many` raises (a locked DB / contract / infrastructure error), the
+    persister no longer swallows it — the exception propagates through the
+    record use case and the backfill loop so the run aborts VISIBLY instead of
+    reporting a silent 0-count. A run can no longer show
+    `evaluated_count > saved_observation_count` from a lost write, because it
+    fails closed before returning a response at all.
     """
-    db_path = tmp_path / "save_fails.db"
-    _seed_db(db_path, with_forward=False)
+    import sqlite3
 
     import pytest
+
+    db_path = tmp_path / "save_fails.db"
+    _seed_db(db_path, with_forward=False)
 
     deps = create_stock_analysis_workflow_dependencies(db_path)
 
     def _boom(_observations):
-        # A contract/infrastructure error (e.g. locked DB, schema/IntegrityError),
-        # NOT provider/data absence — precisely the class §14 says must fail
-        # closed rather than degrade to ordinary missing evidence.
-        raise RuntimeError("simulated persistence failure (locked DB / contract)")
+        # A contract/infrastructure error (e.g. locked DB), NOT provider/data
+        # absence — precisely the class §14 says must fail closed rather than
+        # degrade to ordinary missing evidence.
+        raise sqlite3.OperationalError("database is locked")
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(deps.candidate_observations_repository, "save_many", _boom)
@@ -574,40 +576,84 @@ def test_persistence_failure_is_currently_swallowed_to_zero_count(tmp_path):
         market_repo = SQLiteMarketRepository(db_path)
         observations_repo = SQLiteCandidateObservationsRepository(db_path)
 
-        response = BackfillSignalObservationsUseCase(
+        backfill = BackfillSignalObservationsUseCase(
             record_observations_use_case=screen_bundle.record_observations_use_case,
             screen_request_builder=request_builder,
             market_data_repository=market_repo,
             candidate_observations_repository=observations_repo,
             observation_identity=_IDENTITY,
             session_resolver=EffectiveMarketSessionResolver(market_repo),
-        ).execute(
-            BackfillSignalObservationsRequest(
-                tickers=(_SELECTED, _CONTROL, _MISSING),
-                start_date=_T,
-                end_date=_T,
-                windows=(7,),
-            )
         )
 
-    # CURRENT (fail-soft) behavior: the save failure is swallowed. Tickers were
-    # evaluated but nothing was saved, and the response surfaces NO explicit
-    # failure marker — the discrepancy is only inferable from
-    # evaluated_count > saved_observation_count.
-    assert response.saved_observation_count == 0, (
-        "expected the swallowed save to leave zero saved observations"
+        # Fail closed: the save failure propagates out of the backfill run
+        # rather than being converted to a silent 0-count success.
+        with pytest.raises(sqlite3.OperationalError, match="database is locked"):
+            backfill.execute(
+                BackfillSignalObservationsRequest(
+                    tickers=(_SELECTED, _CONTROL, _MISSING),
+                    start_date=_T,
+                    end_date=_T,
+                    windows=(7,),
+                )
+            )
+
+    # And nothing was persisted — the aborted run left no partial canonical rows
+    # for the failed write.
+    assert SQLiteCandidateObservationsRepository(db_path).list_all_by_date(_T) == []
+
+
+def test_persister_empty_input_returns_zero_without_raising(tmp_path):
+    """The genuine "nothing to do" path is preserved: a None repository or an
+    empty candidate list returns 0 WITHOUT raising — only real failures fail
+    closed, not empty input."""
+    from src.application.services.accumulation_candidate_observation_persister import (
+        AccumulationCandidateObservationPersister,
     )
-    assert response.evaluated_count > 0, (
-        "the probe needs at least one evaluated ticker for the discrepancy to exist"
+    from src.application.dto.accumulation_screen import AccumulationScreenRequest
+
+    request = AccumulationScreenRequest(tickers=[], window_days=7, as_of_date=_T)
+
+    # No repository -> nothing to do -> 0, no raise. Evidence builder/setup
+    # resolver are never reached, so None is safe here.
+    no_repo_persister = AccumulationCandidateObservationPersister(
+        candidate_observations_repository=None,
+        candidate_evidence_builder=None,
+        setup_family_resolver=None,
+        swing_setup_catalog=None,
     )
-    assert response.evaluated_count > response.saved_observation_count
-    # Nothing was actually persisted despite the run reporting a processed date.
-    assert observations_repo.list_all_by_date(_T) == []
-    # Documents the gap: no skipped-date reason names the persistence failure.
-    assert all(
-        "persist" not in skipped.reason and "save" not in skipped.reason
-        for skipped in response.skipped_dates
-    ), "if a persistence-failure reason now exists, the finding fix landed — update this test"
+    assert (
+        no_repo_persister.persist(
+            [],
+            _T,
+            request,
+            observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
+            semantic_compatibility_id=_IDENTITY.semantic_compatibility_id,
+        )
+        == 0
+    )
+
+    # A repository is present but there are no evaluated candidates -> still 0,
+    # still no raise (empty input is not a failure).
+    class _UnusedRepo:
+        def save_many(self, observations):  # pragma: no cover - must not be called
+            raise AssertionError("save_many must not run for empty input")
+
+    empty_input_persister = AccumulationCandidateObservationPersister(
+        candidate_observations_repository=_UnusedRepo(),
+        candidate_evidence_builder=None,
+        setup_family_resolver=None,
+        swing_setup_catalog=None,
+    )
+    assert (
+        empty_input_persister.persist(
+            [],
+            _T,
+            request,
+            observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
+            semantic_compatibility_id=_IDENTITY.semantic_compatibility_id,
+        )
+        == 0
+    )
 
 
 # --------------------------------------------------------------------------- #

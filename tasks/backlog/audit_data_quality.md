@@ -484,20 +484,24 @@ If canonical identity omits a meaning-changing dimension, replace it and rebuild
       recorder while only `create_accumulation_screen_workflow_bundle` — whose
       sole caller is the backfill capture command — does. No inspection writer
       exists today; the guard keeps it that way.)
-- [~] Holiday/retry/failure fixtures prove fail-closed session handling and
-      visible errors. **Session handling: satisfied** (Slice D). A holiday/
-      stale-cache decision date resolves to an explicitly *marked* fallback
+- [x] Holiday/retry/failure fixtures prove fail-closed session handling and
+      visible errors. **Session handling** (Slice D): a holiday/stale-cache
+      decision date resolves to an explicitly *marked* fallback
       (`ihsg_cache_stale_or_holiday`, `is_eod_pending=False`, with a note), and
       that marker propagates end-to-end onto the persisted observation's
       provenance columns; a date with no source candles is skipped with the
       machine-readable `missing_source_candles_for_universe` reason.
-      **Write-path failure: fail-SOFT finding (deferred).** The
-      persistence-failure probe confirmed the persister swallows ALL `save_many`
-      exceptions to a 0-count with no visible failure marker — see "Slice D
-      finding (2026-07-21)" above. Current behavior is pinned by a test;
-      narrowing the exception boundary is deferred pending an exception-taxonomy
-      decision. Criterion 8 is therefore closed for session handling and blocked
-      on the recorded finding for the write path.
+      **Write-path failure** (DQ-003 follow-up): the persister no longer
+      swallows failures — a `save_many` error (locked DB, `IntegrityError`,
+      schema mismatch, malformed canonical object, or any programmer error)
+      propagates through the record use case and the backfill loop, so the
+      capture aborts visibly (non-zero) instead of reporting a silent 0-count. A
+      run can no longer show `evaluated_count > saved_observation_count` from a
+      lost write. Proven by
+      `test_dq_003_slice_d_fail_closed_separation.py::
+      test_backfill_fails_closed_on_save_failure`; the empty-input "nothing to
+      do" path still returns 0 without raising. See "Slice D finding
+      (2026-07-21)" below — now RESOLVED.
 - [x] Changing a semantic identity dimension creates a distinct artifact or
       explicit version replacement. (Satisfied by Slice A in commit `e00b4aa`:
       any resolved-config change forks the `semantic_compatibility_id` cohort
@@ -581,8 +585,10 @@ question, not a Slice C blocker.
 
 #### Slice D finding (2026-07-21) — the persister swallows ALL save failures
 
-**Status:** CONFIRMED fail-soft. **Disposition:** fix deferred (needs an
-explicit exception-boundary decision; out of Slice D's test-only scope).
+**Status:** RESOLVED (DQ-003 follow-up, 2026-07-21). The blanket
+`except Exception: return 0` was removed; the persister now fails closed. See the
+disposition at the end of this subsection. **Original finding (CONFIRMED
+fail-soft) retained below for the record.**
 
 `AccumulationCandidateObservationPersister.persist(...)`
 (`src/application/services/accumulation_candidate_observation_persister.py`)
@@ -605,12 +611,26 @@ Current behavior is pinned by
 test_persistence_failure_is_currently_swallowed_to_zero_count`, so any future
 narrowing is a deliberate, tested contract change.
 
-**Proposed fix (deferred):** narrow the `except` to the expected
-provider/data-absence error types (returning 0 only for those), and let
-contract/infrastructure exceptions propagate so the backfill fails closed with a
-visible non-zero error. Do not implement without the exception-taxonomy decision
-— which exact types are "expected absence" vs "must fail closed" — recorded
-here or in a follow-up task.
+**Disposition (RESOLVED 2026-07-21):** the blanket `except Exception:
+logger.warning(...); return 0` wrapping the evidence-assembly + `save_many`
+block was **removed entirely** — no allowlist was needed. Investigation
+confirmed there is no legitimately-expected exception on this write path: the
+evidence builders already degrade missing data to `None` rather than raising,
+and the persister only runs on already-enriched candidates. So every exception
+here is a contract/infrastructure/programmer error and now propagates and fails
+closed. **Capture-failure contract change:** on such an error the capture run
+now raises (non-zero exit) instead of returning a silent 0-count; a lost write
+aborts the run visibly. The two pre-`try` guards (contract rejection, `None`
+compatibility-id) are unchanged, and the genuine "nothing to do" early return
+(no repository / no evaluated candidates) still returns 0 without raising. No
+score/identity/schema/persisted-shape change, so no version bump. Aborting the
+whole run on failure is the accepted behavior; resilient per-`(date, window)`
+failure reporting that continues sibling dates is a separate future follow-up,
+explicitly out of scope. Behavior pinned by
+`test_dq_003_slice_d_fail_closed_separation.py::test_backfill_fails_closed_on_save_failure`
+and `test_persister_empty_input_returns_zero_without_raising`; the reversed
+best-effort contract is re-pinned by
+`test_accumulation_screen_observations.py::test_persistence_failure_propagates_out_of_record_use_case`.
 
 #### Lean identity amendment (2026-07-21)
 

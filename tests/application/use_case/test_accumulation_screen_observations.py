@@ -3,6 +3,8 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
+import pytest
+
 from src.application.dto.accumulation_screen import (
     AccumulationScreenRequest,
 )
@@ -411,9 +413,11 @@ def test_screen_persists_market_cap_bucket_when_fundamentals_available():
     assert fingerprint["tp_market_cap_bucket"] == "large"
 
 
-def test_screen_result_returned_even_when_persistence_fails():
-    """save_many failure must not block the screen response (best-effort
-    persistence) or raise out of RecordAccumulationObservationsUseCase."""
+def test_persistence_failure_propagates_out_of_record_use_case():
+    """Fail-closed (DQ-003 criterion 8): a save_many failure MUST propagate out
+    of RecordAccumulationObservationsUseCase — a lost write aborts the run
+    visibly rather than being swallowed into a silent 0-count. (Reverses the old
+    best-effort contract; see the resolved 'Slice D finding' in DQ-003.)"""
     session_dates = _weekdays(date(2026, 1, 1), 7)
     as_of = session_dates[-1]
     candles = [
@@ -433,19 +437,16 @@ def test_screen_result_returned_even_when_persistence_fails():
         signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
-    result = record_observations(
-        use_case,
-        AccumulationScreenRequest(
-            tickers=["BBCA"],
-            window_days=7,
-            min_net_buy_days=1,
-            as_of_date=as_of,
-        ),
-    )
-
-    assert len(result.response.candidates) == 1
-    assert result.response.candidates[0].ticker == "BBCA"
-    assert result.recorded_count == 0
+    with pytest.raises(RuntimeError, match="DB write failed"):
+        record_observations(
+            use_case,
+            AccumulationScreenRequest(
+                tickers=["BBCA"],
+                window_days=7,
+                min_net_buy_days=1,
+                as_of_date=as_of,
+            ),
+        )
 
 
 def test_screen_populates_setup_phase_for_displayed_candidates():
