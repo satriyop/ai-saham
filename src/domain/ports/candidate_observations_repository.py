@@ -7,6 +7,7 @@ from datetime import date, datetime
 from typing import Protocol
 
 from src.domain.value_objects.signal_artifact_identity import (
+    SemanticCompatibilityId,
     SignalArtifactIdentity,
 )
 
@@ -39,6 +40,16 @@ class CandidateObservation:
     resolution_source: str | None = None
     resolution_notes: tuple[str, ...] = ()
     artifact_identity: SignalArtifactIdentity | None = None
+    # Lean observation identity (DQ-003 Slice A). Metadata only — never part of
+    # canonical identity: two observations differing only in these fields are
+    # still the same canonical observation. observation_contract is the
+    # canonical contract label ("accumulation-discovery"); semantic_compatibility_id
+    # is the whole-config-hash cohort tag. These are the lean subset of the
+    # parked SignalArtifactIdentity; they are persisted directly (the
+    # semantic_compatibility_id column is written from this field, not via the
+    # all-three-or-none artifact-identity codec).
+    observation_contract: str | None = None
+    semantic_compatibility_id: SemanticCompatibilityId | None = None
 
 
 class CandidateObservationsRepository(Protocol):

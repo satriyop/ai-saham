@@ -7,9 +7,23 @@ from src.application.dto.accumulation_screen import AccumulationScreenResponse
 from src.application.services.signal_observation_request_builder import (
     BuildSignalObservationScreenRequest,
 )
+from src.application.services.lean_observation_identity import (
+    LeanObservationIdentity,
+)
 from src.application.use_case.backfill_signal_observations_use_case import (
     BackfillSignalObservationsRequest,
     BackfillSignalObservationsUseCase,
+)
+from src.domain.value_objects.signal_artifact_identity import (
+    SemanticCompatibilityId,
+)
+from src.domain.value_objects.signal_semantic_contract import (
+    ACCUMULATION_DISCOVERY_CONTRACT,
+)
+
+_LEAN_IDENTITY = LeanObservationIdentity(
+    observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
+    semantic_compatibility_id=SemanticCompatibilityId("sha256:" + "c" * 64),
 )
 from src.application.use_case.generate_signal_forward_labels_use_case import (
     GenerateAllSignalForwardLabelsResponse,
@@ -256,6 +270,7 @@ def test_backfill_multi_window_generates_one_label_per_canonical_window():
         screen_request_builder=_request_builder(),
         market_data_repository=market,
         candidate_observations_repository=observations,
+        observation_identity=_LEAN_IDENTITY,
         label_generation_use_case=real_label_use_case,
     ).execute(
         BackfillSignalObservationsRequest(
@@ -288,6 +303,7 @@ def test_backfill_processes_eligible_dates_and_passes_as_of_date():
             [_candle("IHSG", signal_date), _candle("BBCA", signal_date)]
         ),
         candidate_observations_repository=observations,
+        observation_identity=_LEAN_IDENTITY,
     ).execute(
         BackfillSignalObservationsRequest(
             tickers=("BBCA",),
@@ -325,6 +341,7 @@ def test_backfill_skips_trading_date_without_target_source_candles():
         screen_request_builder=_request_builder(),
         market_data_repository=FakeMarketRepository([_candle("IHSG", signal_date)]),
         candidate_observations_repository=observations,
+        observation_identity=_LEAN_IDENTITY,
     ).execute(
         BackfillSignalObservationsRequest(
             tickers=("BBCA",),
@@ -350,6 +367,7 @@ def test_backfill_generates_labels_only_after_saved_observations_have_forward_wi
         screen_request_builder=_request_builder(),
         market_data_repository=FakeMarketRepository(candles),
         candidate_observations_repository=observations,
+        observation_identity=_LEAN_IDENTITY,
         label_generation_use_case=labels,
     ).execute(
         BackfillSignalObservationsRequest(
@@ -380,6 +398,7 @@ def test_backfill_does_not_generate_labels_without_enough_future_candles():
         screen_request_builder=_request_builder(),
         market_data_repository=FakeMarketRepository(candles),
         candidate_observations_repository=observations,
+        observation_identity=_LEAN_IDENTITY,
         label_generation_use_case=labels,
     ).execute(
         BackfillSignalObservationsRequest(
@@ -415,6 +434,7 @@ def test_backfill_as_of_date_changes_per_historical_date():
             ]
         ),
         candidate_observations_repository=observations,
+        observation_identity=_LEAN_IDENTITY,
     ).execute(
         BackfillSignalObservationsRequest(
             tickers=("BBCA",),
@@ -474,6 +494,7 @@ def test_backfill_evaluates_market_context_once_per_date_and_persists_regime_att
             [_candle("IHSG", signal_date), _candle("BBCA", signal_date)]
         ),
         candidate_observations_repository=observations,
+        observation_identity=_LEAN_IDENTITY,
         evaluate_market_context=evaluator,
     ).execute(
         BackfillSignalObservationsRequest(
@@ -511,6 +532,7 @@ def test_backfill_market_context_failure_does_not_block_observations_but_notes_i
             [_candle("IHSG", signal_date), _candle("BBCA", signal_date)]
         ),
         candidate_observations_repository=observations,
+        observation_identity=_LEAN_IDENTITY,
         evaluate_market_context=evaluator,
     ).execute(
         BackfillSignalObservationsRequest(
@@ -556,6 +578,7 @@ def test_backfill_resolves_one_deterministic_session_per_trading_date():
         screen_request_builder=_request_builder(),
         market_data_repository=FakeMarketRepository(candles),
         candidate_observations_repository=observations,
+        observation_identity=_LEAN_IDENTITY,
     ).execute(
         BackfillSignalObservationsRequest(
             tickers=("BBCA",),

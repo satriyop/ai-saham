@@ -432,6 +432,12 @@ def make_signal_evidence_execution_context(
         EffectiveMarketSession,
     )
     from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
+    from src.domain.value_objects.signal_artifact_identity import (
+        SemanticCompatibilityId,
+    )
+    from src.domain.value_objects.signal_semantic_contract import (
+        ACCUMULATION_DISCOVERY_CONTRACT,
+    )
 
     session = EffectiveMarketSession(
         run_at=datetime.combine(as_of, MARKET_CLOSE, tzinfo=IDX_TIMEZONE),
@@ -445,5 +451,10 @@ def make_signal_evidence_execution_context(
     return SignalEvidenceExecutionContext(
         effective_session=session,
         source_availability_use_case=source_availability_use_case,
+        # Lean DQ-003 identity so the canonical capture path (record → persist)
+        # accepts the write. The persister rejects any other contract and
+        # fail-closes on a None compatibility id.
+        observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
+        semantic_compatibility_id=SemanticCompatibilityId("sha256:" + "0" * 64),
     )
 

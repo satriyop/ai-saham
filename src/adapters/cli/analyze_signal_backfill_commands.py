@@ -17,6 +17,10 @@ from src.adapters.cli.screen_accum_workflow_factory import (
 from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSessionResolver,
 )
+from src.application.services.lean_observation_identity import (
+    LeanObservationIdentity,
+    resolve_lean_semantic_compatibility_id,
+)
 from src.application.services.signal_observation_request_builder import (
     BuildSignalObservationScreenRequest,
 )
@@ -31,6 +35,9 @@ from src.application.use_case.generate_signal_forward_labels_use_case import (
 )
 from src.domain.value_objects.market_context import MarketContext
 from src.domain.value_objects.signal_forward_label import SignalLabelHorizon
+from src.domain.value_objects.signal_semantic_contract import (
+    ACCUMULATION_DISCOVERY_CONTRACT,
+)
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
 )
@@ -46,6 +53,43 @@ from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarket
 from src.infrastructure.persistence.sqlite_signal_forward_labels_repository import (
     SQLiteSignalForwardLabelsRepository,
 )
+
+# Scoring config files whose resolved content is folded into the lean
+# semantic_compatibility_id. The full scoring set: any material change to any
+# of these forks the learning cohort. Over-forking on a cosmetic edit is safe;
+# silent under-forking is the failure mode this hash prevents.
+_SCORING_CONFIG_PATH_ATTRS = (
+    "accumulation_screener",
+    "swing_setups",
+    "swing_targets",
+    "swing_risk_policy",
+    "analyze_swing",
+    "signal_engine",
+    "institutional_accumulation",
+    "ticker_profile",
+    "sector_context",
+    "company_quality_context",
+    "market_context_engine",
+)
+
+
+def _read_scoring_config_canonical(config_paths) -> str:
+    """Read the resolved scoring config file contents into a deterministic
+    canonical string.
+
+    The adapter owns file I/O only; it performs NO hashing. Each file is
+    rendered as a path-labelled block, blocks are ordered by path so the string
+    is deterministic regardless of attribute order, and a NUL delimiter keeps
+    file boundaries unambiguous. The application resolver hashes this string.
+    """
+    rel_paths = sorted(
+        {getattr(config_paths, attr) for attr in _SCORING_CONFIG_PATH_ATTRS}
+    )
+    blocks = []
+    for rel_path in rel_paths:
+        content = Path(rel_path).read_text(encoding="utf-8")
+        blocks.append(f"# path: {rel_path}\n{content}")
+    return "\n\x00\n".join(blocks)
 
 
 def signal_backfill_observations(
@@ -127,11 +171,22 @@ def signal_backfill_observations(
             universe=universe,
         )
 
+    # Resolve the lean observation identity ONCE. The adapter reads config file
+    # contents (I/O) and passes the canonical string to the application
+    # resolver, which owns the hashing/policy.
+    observation_identity = LeanObservationIdentity(
+        observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
+        semantic_compatibility_id=resolve_lean_semantic_compatibility_id(
+            _read_scoring_config_canonical(cfg.config_paths)
+        ),
+    )
+
     response = BackfillSignalObservationsUseCase(
         record_observations_use_case=screen_bundle.record_observations_use_case,
         screen_request_builder=screen_request_builder,
         market_data_repository=market_repo,
         candidate_observations_repository=observations_repo,
+        observation_identity=observation_identity,
         label_generation_use_case=label_use_case,
         evaluate_market_context=_evaluate_market_context_for_backfill,
         session_resolver=EffectiveMarketSessionResolver(market_repo),

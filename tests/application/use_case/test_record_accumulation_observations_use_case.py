@@ -23,9 +23,17 @@ from src.application.use_case.record_accumulation_observations_use_case import (
     RecordAccumulationObservationsUseCase,
 )
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
+from src.domain.value_objects.signal_artifact_identity import (
+    SemanticCompatibilityId,
+)
+from src.domain.value_objects.signal_semantic_contract import (
+    ACCUMULATION_DISCOVERY_CONTRACT,
+)
 from src.application.dto.signal_evidence_execution_context import (
     SignalEvidenceExecutionContext,
 )
+
+_LEAN_ID = SemanticCompatibilityId("sha256:" + "a" * 64)
 from tests.application.use_case.accumulation_screen_fixtures import (
     FakeRulesLoader,
     MockBrokerRepository,
@@ -53,6 +61,8 @@ def _context(as_of: date, session: EffectiveMarketSession | None = None) -> Sign
     return SignalEvidenceExecutionContext(
         effective_session=session,
         source_availability_use_case=None,
+        observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
+        semantic_compatibility_id=_LEAN_ID,
     )
 
 
@@ -204,6 +214,8 @@ def test_no_effective_session_leaves_provenance_fields_empty():
     context = SignalEvidenceExecutionContext(
         effective_session=empty_session,
         source_availability_use_case=None,
+        observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
+        semantic_compatibility_id=_LEAN_ID,
     )
 
     result = bundle.record_observations_use_case.execute(
@@ -275,9 +287,22 @@ class _RecordingScreenFake:
 class _RecordingPersister:
     def __init__(self) -> None:
         self.recorded_effective_sessions: list[EffectiveMarketSession] = []
+        self.recorded_contracts: list[str | None] = []
+        self.recorded_compat_ids: list[SemanticCompatibilityId | None] = []
 
-    def persist(self, observation_candidates, screened_at, request, *, effective_session):
+    def persist(
+        self,
+        observation_candidates,
+        screened_at,
+        request,
+        *,
+        effective_session,
+        observation_contract,
+        semantic_compatibility_id,
+    ):
         self.recorded_effective_sessions.append(effective_session)
+        self.recorded_contracts.append(observation_contract)
+        self.recorded_compat_ids.append(semantic_compatibility_id)
         return len(observation_candidates)
 
 
@@ -316,3 +341,8 @@ def test_recorder_passes_exact_context_to_screen_and_exact_session_to_persister(
 
     assert len(persister.recorded_effective_sessions) == 1
     assert persister.recorded_effective_sessions[0] is context.effective_session
+
+    # Transport chain: the record use case forwards the lean identity from the
+    # execution context to the persister verbatim.
+    assert persister.recorded_contracts == [context.observation_contract]
+    assert persister.recorded_compat_ids == [context.semantic_compatibility_id]

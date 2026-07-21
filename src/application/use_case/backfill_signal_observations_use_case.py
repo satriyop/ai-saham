@@ -12,6 +12,9 @@ from src.application.dto.signal_evidence_execution_context import (
 from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSessionResolver,
 )
+from src.application.services.lean_observation_identity import (
+    LeanObservationIdentity,
+)
 from src.application.services.signal_observation_request_builder import (
     BuildSignalObservationScreenRequest,
 )
@@ -88,6 +91,7 @@ class BackfillSignalObservationsUseCase:
         screen_request_builder: BuildSignalObservationScreenRequest,
         market_data_repository: MarketDataRepository,
         candidate_observations_repository: CandidateObservationsRepository,
+        observation_identity: LeanObservationIdentity,
         label_generation_use_case: GenerateSignalForwardLabelsUseCase | None = None,
         evaluate_market_context: "Callable[..., MarketContext] | None" = None,
         session_resolver: EffectiveMarketSessionResolver | None = None,
@@ -96,6 +100,10 @@ class BackfillSignalObservationsUseCase:
         self._request_builder = screen_request_builder
         self._market = market_data_repository
         self._observations = candidate_observations_repository
+        # Lean DQ-003 identity resolved once by the adapter (which owns reading
+        # config file contents) and stamped onto every capture context. This
+        # use case never computes the hash; it only transports the resolved id.
+        self._observation_identity = observation_identity
         self._labels = label_generation_use_case
         self._evaluate_market_context = evaluate_market_context
         self._session_resolver = session_resolver or EffectiveMarketSessionResolver(
@@ -170,6 +178,10 @@ class BackfillSignalObservationsUseCase:
             context = SignalEvidenceExecutionContext(
                 effective_session=effective_session,
                 source_availability_use_case=None,
+                observation_contract=self._observation_identity.observation_contract,
+                semantic_compatibility_id=(
+                    self._observation_identity.semantic_compatibility_id
+                ),
             )
 
             for window in request.windows:

@@ -10,6 +10,9 @@ from pathlib import Path
 from src.domain.ports.candidate_observations_repository import (
     CandidateObservation,
 )
+from src.domain.value_objects.signal_artifact_identity import (
+    SemanticCompatibilityId,
+)
 from src.domain.value_objects.signal_artifact_schema import (
     CANDIDATE_OBSERVATION_SCHEMA_VERSION,
     validate_current_alpha_trigger_identity,
@@ -127,12 +130,23 @@ _ADD_ARTIFACT_PROVENANCE_JSON_COLUMN = """
 ALTER TABLE candidate_observations ADD COLUMN artifact_provenance_json TEXT NOT NULL DEFAULT ''
 """
 
+# Lean observation identity (DQ-003 Slice A). observation_contract labels the
+# canonical contract ("accumulation-discovery"); the whole-config-hash
+# semantic_compatibility_id reuses the ARTIFACT-IDENTITY column above but is
+# written directly from CandidateObservation.semantic_compatibility_id, NOT via
+# the all-three-or-none artifact-identity codec. Legacy/default rows have '',
+# which read back as None. Not part of canonical identity.
+_ADD_OBSERVATION_CONTRACT_COLUMN = """
+ALTER TABLE candidate_observations ADD COLUMN observation_contract TEXT NOT NULL DEFAULT ''
+"""
+
 _SELECT_COLUMNS = (
     "ticker, snapshot_date, captured_at, schema_version, payload_json, "
     "workflow, window_sessions, data_as_of_date, config_hash, "
     "decision_at, latest_completed_session, analysis_as_of, market_session_name, "
     "is_eod_pending, resolution_source, resolution_notes_json, "
-    "artifact_id, semantic_compatibility_id, artifact_provenance_json"
+    "artifact_id, semantic_compatibility_id, artifact_provenance_json, "
+    "observation_contract"
 )
 
 # DQ-002 criterion 3: a canonical candidate observation must carry
@@ -145,7 +159,11 @@ _CANONICAL_PROVENANCE_PREDICATES = (
     "decision_at != '' "
     "AND latest_completed_session != '' "
     "AND analysis_as_of != '' "
-    "AND data_as_of_date != ''"
+    "AND data_as_of_date != '' "
+    # DQ-003 Slice A: a canonical row must carry an explicit observation_contract.
+    # A row written without one is not a canonical accumulation-discovery
+    # observation, regardless of config_hash/schema/provenance.
+    "AND observation_contract != ''"
 )
 
 
@@ -176,6 +194,7 @@ class SQLiteCandidateObservationsRepository:
                 (14, _ADD_ARTIFACT_ID_COLUMN),
                 (15, _ADD_SEMANTIC_COMPATIBILITY_ID_COLUMN),
                 (16, _ADD_ARTIFACT_PROVENANCE_JSON_COLUMN),
+                (17, _ADD_OBSERVATION_CONTRACT_COLUMN),
             ],
         )
 
@@ -222,6 +241,12 @@ class SQLiteCandidateObservationsRepository:
             artifact_id_str, sem_compat_id_str, provenance_json = (
                 encode_signal_artifact_identity(obs.artifact_identity)
             )
+            # Lean DQ-003 identity: write the semantic_compatibility_id column
+            # from the plain field when present, leaving artifact_id/provenance
+            # empty. This deliberately bypasses the all-three-or-none codec —
+            # the lean contract persists only the compatibility cohort tag.
+            if obs.semantic_compatibility_id is not None:
+                sem_compat_id_str = str(obs.semantic_compatibility_id)
             rows.append(
                 (
                     obs.ticker.upper(),
@@ -247,6 +272,7 @@ class SQLiteCandidateObservationsRepository:
                     artifact_id_str,
                     sem_compat_id_str,
                     provenance_json,
+                    obs.observation_contract or "",
                 )
             )
         with self._connect() as conn:
@@ -258,8 +284,9 @@ class SQLiteCandidateObservationsRepository:
                      decision_at, latest_completed_session, analysis_as_of,
                      market_session_name, is_eod_pending, resolution_source,
                      resolution_notes_json,
-                     artifact_id, semantic_compatibility_id, artifact_provenance_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     artifact_id, semantic_compatibility_id, artifact_provenance_json,
+                     observation_contract)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT {_IDENTITY_CONFLICT_TARGET} WHERE config_hash != ''
                 DO UPDATE SET
                     captured_at = excluded.captured_at,
@@ -274,7 +301,8 @@ class SQLiteCandidateObservationsRepository:
                     resolution_notes_json = excluded.resolution_notes_json,
                     artifact_id = excluded.artifact_id,
                     semantic_compatibility_id = excluded.semantic_compatibility_id,
-                    artifact_provenance_json = excluded.artifact_provenance_json
+                    artifact_provenance_json = excluded.artifact_provenance_json,
+                    observation_contract = excluded.observation_contract
                 """,
                 rows,
             )
@@ -488,6 +516,24 @@ class SQLiteCandidateObservationsRepository:
             )
         payload.setdefault("schema_version", schema_version)
         data_as_of_date_raw = row["data_as_of_date"]
+        # Lean DQ-003 identity vs. full parked artifact identity. A lean row
+        # populates ONLY the semantic_compatibility_id column; the all-three-or-
+        # none codec would reject that as a partial identity, so detect it and
+        # decode the compatibility tag directly. Full-identity rows (all three
+        # columns present) still round-trip through the codec.
+        artifact_id_raw = row["artifact_id"]
+        sem_compat_id_raw = row["semantic_compatibility_id"]
+        provenance_json_raw = row["artifact_provenance_json"]
+        lean_semantic_compatibility_id = None
+        if sem_compat_id_raw and not artifact_id_raw and not provenance_json_raw:
+            lean_semantic_compatibility_id = SemanticCompatibilityId(sem_compat_id_raw)
+            artifact_identity = None
+        else:
+            artifact_identity = decode_signal_artifact_identity(
+                artifact_id_raw=artifact_id_raw,
+                semantic_compatibility_id_raw=sem_compat_id_raw,
+                provenance_json_raw=provenance_json_raw,
+            )
         return CandidateObservation(
             ticker=row["ticker"],
             snapshot_date=date.fromisoformat(row["snapshot_date"]),
@@ -514,11 +560,9 @@ class SQLiteCandidateObservationsRepository:
             is_eod_pending=_bool_from_db(row["is_eod_pending"]),
             resolution_source=row["resolution_source"] or None,
             resolution_notes=_resolution_notes_from_db(row["resolution_notes_json"]),
-            artifact_identity=decode_signal_artifact_identity(
-                artifact_id_raw=row["artifact_id"],
-                semantic_compatibility_id_raw=row["semantic_compatibility_id"],
-                provenance_json_raw=row["artifact_provenance_json"],
-            ),
+            artifact_identity=artifact_identity,
+            observation_contract=row["observation_contract"] or None,
+            semantic_compatibility_id=lean_semantic_compatibility_id,
         )
 
 

@@ -11,6 +11,9 @@ from src.domain.ports.candidate_observations_repository import CandidateObservat
 from src.domain.value_objects.signal_artifact_schema import (
     CANDIDATE_OBSERVATION_SCHEMA_VERSION,
 )
+from src.domain.value_objects.signal_semantic_contract import (
+    ACCUMULATION_DISCOVERY_CONTRACT,
+)
 from src.domain.value_objects.signal_artifact_identity import (
     ArtifactId,
     ArtifactProvenance,
@@ -213,7 +216,7 @@ def test_schema_created_via_migration_runner(tmp_path: Path):
         ).fetchall()
         tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
 
-    assert {row[0] for row in versions} == set(range(17))
+    assert {row[0] for row in versions} == set(range(18))
     assert "candidate_observations" in {row[0] for row in tables}
 
 
@@ -231,6 +234,7 @@ def _canonical_observation(
     decision_at: datetime | None | object = _PROVENANCE_DEFAULT,
     latest_completed_session: date | None | object = _PROVENANCE_DEFAULT,
     analysis_as_of: date | None | object = _PROVENANCE_DEFAULT,
+    observation_contract: str | object = _PROVENANCE_DEFAULT,
     value: str = "v1",
 ) -> CandidateObservation:
     # When omitted, default provenance to snapshot_date so the row satisfies
@@ -252,6 +256,14 @@ def _canonical_observation(
         snapshot_date if analysis_as_of is _PROVENANCE_DEFAULT
         else analysis_as_of
     )
+    # Lean DQ-003 identity. Default to the canonical contract so the row
+    # satisfies the canonical-read predicate; pass '' explicitly to construct a
+    # contract-missing (non-canonical) observation.
+    resolved_contract = (
+        ACCUMULATION_DISCOVERY_CONTRACT
+        if observation_contract is _PROVENANCE_DEFAULT
+        else observation_contract
+    )
     return CandidateObservation(
         ticker=ticker,
         snapshot_date=snapshot_date,
@@ -270,6 +282,7 @@ def _canonical_observation(
         decision_at=resolved_decision_at,  # type: ignore[arg-type]
         latest_completed_session=resolved_latest,  # type: ignore[arg-type]
         analysis_as_of=resolved_as_of,  # type: ignore[arg-type]
+        observation_contract=resolved_contract,  # type: ignore[arg-type]
     )
 
 
@@ -1422,6 +1435,7 @@ def _raw_insert_observation(
     data_as_of_date: str = "",
     workflow: str = "screen_accum",
     window_sessions: int = 7,
+    observation_contract: str = ACCUMULATION_DISCOVERY_CONTRACT,
     payload_value: str = "v1",
 ) -> None:
     """Bypass save_many validation to plant a row exactly as a corrupted
@@ -1433,8 +1447,9 @@ def _raw_insert_observation(
             INSERT INTO candidate_observations (
                 ticker, snapshot_date, captured_at, schema_version, payload_json,
                 workflow, window_sessions, data_as_of_date, config_hash,
-                decision_at, latest_completed_session, analysis_as_of
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                decision_at, latest_completed_session, analysis_as_of,
+                observation_contract
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 "BBCA",
@@ -1451,6 +1466,7 @@ def _raw_insert_observation(
                 decision_at,
                 latest_completed_session,
                 analysis_as_of,
+                observation_contract,
             ),
         )
         conn.commit()

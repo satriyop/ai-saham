@@ -245,3 +245,85 @@ def _patch_command_dependencies(monkeypatch, backfill_cls=None):
         "BackfillSignalObservationsUseCase",
         backfill_cls or DefaultBackfillUseCase,
     )
+
+
+def test_read_scoring_config_canonical_reads_full_scoring_set():
+    """The adapter helper reads the full scoring config set into a
+    deterministic, content-bearing string (no hashing)."""
+    cfg = load_app_config()
+    canonical = analyze_signal_commands._read_scoring_config_canonical(cfg.config_paths)
+    assert isinstance(canonical, str)
+    for rel_path in (
+        cfg.config_paths.accumulation_screener,
+        cfg.config_paths.signal_engine,
+        cfg.config_paths.market_context_engine,
+        cfg.config_paths.ticker_profile,
+    ):
+        assert f"# path: {rel_path}" in canonical
+    # It carries raw config content, not a digest.
+    assert len(canonical) > 64
+
+
+def test_adapter_delegates_hashing_to_application_resolver(monkeypatch):
+    """Architecture boundary: the adapter passes raw config content to the
+    application resolver and computes NO hash itself. The resolved id must flow
+    to the backfill use case verbatim."""
+    from src.domain.value_objects.signal_artifact_identity import (
+        SemanticCompatibilityId,
+    )
+    from src.domain.value_objects.signal_semantic_contract import (
+        ACCUMULATION_DISCOVERY_CONTRACT,
+    )
+
+    captured = {}
+    spy_return = SemanticCompatibilityId("sha256:" + "e" * 64)
+
+    def _spy_resolver(resolved_config_canonical):
+        captured["resolver_arg"] = resolved_config_canonical
+        return spy_return
+
+    class CapturingBackfillUseCase:
+        def __init__(self, **kwargs):
+            captured["dependencies"] = kwargs
+
+        def execute(self, request):
+            return BackfillSignalObservationsResponse(
+                requested_date_count=0,
+                processed_date_count=0,
+                skipped_date_count=0,
+                saved_observation_count=0,
+                generated_label_count=0,
+                unavailable_label_count=0,
+            )
+
+    _patch_command_dependencies(monkeypatch, CapturingBackfillUseCase)
+    monkeypatch.setattr(
+        analyze_signal_commands,
+        "resolve_lean_semantic_compatibility_id",
+        _spy_resolver,
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "analyze",
+            "signal-backfill-observations",
+            "--universe",
+            "lq45",
+            "--start",
+            "2026-06-01",
+            "--end",
+            "2026-06-02",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    # The adapter passed raw config CONTENT (a long YAML string), not a hash.
+    resolver_arg = captured["resolver_arg"]
+    assert isinstance(resolver_arg, str)
+    assert "# path: " in resolver_arg
+    assert len(resolver_arg) > 64
+    # The application-resolved id flows into the use case verbatim.
+    identity = captured["dependencies"]["observation_identity"]
+    assert identity.observation_contract == ACCUMULATION_DISCOVERY_CONTRACT
+    assert identity.semantic_compatibility_id is spy_return

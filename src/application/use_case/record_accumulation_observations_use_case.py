@@ -62,6 +62,8 @@ class RecordAccumulationObservationsUseCase:
             response.screened_at,
             request,
             effective_session=execution_context.effective_session,
+            observation_contract=execution_context.observation_contract,
+            semantic_compatibility_id=execution_context.semantic_compatibility_id,
         )
         return RecordAccumulationObservationsResult(
             response=response, recorded_count=recorded_count

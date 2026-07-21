@@ -17,6 +17,9 @@ from src.application.services.accumulation_observation_fingerprint import (
     compute_accumulation_config_hash,
 )
 from src.domain.ports.candidate_observations_repository import CandidateObservation
+from src.domain.value_objects.signal_semantic_contract import (
+    ACCUMULATION_DISCOVERY_CONTRACT,
+)
 
 if TYPE_CHECKING:
     from src.application.dto import accumulation_screen as accumulation_dto
@@ -34,6 +37,9 @@ if TYPE_CHECKING:
     )
     from src.domain.ports.candidate_observations_repository import (
         CandidateObservationsRepository,
+    )
+    from src.domain.value_objects.signal_artifact_identity import (
+        SemanticCompatibilityId,
     )
 
 logger = logging.getLogger(__name__)
@@ -59,6 +65,9 @@ class AccumulationCandidateObservationPersister:
         request: accumulation_dto.AccumulationScreenRequest,
         workflow: str = "screen_accum",
         effective_session: "EffectiveMarketSession | None" = None,
+        *,
+        observation_contract: str | None,
+        semantic_compatibility_id: "SemanticCompatibilityId | None",
     ) -> int:
         """Persist observations for every evaluated candidate (pass + rejected).
 
@@ -71,9 +80,34 @@ class AccumulationCandidateObservationPersister:
         persisted CandidateObservation as provenance metadata (DQ-002E). This
         method never resolves a session itself — callers that need one must
         resolve it upstream and pass it in.
+
+        observation_contract and semantic_compatibility_id carry the lean
+        DQ-003 identity. observation_contract MUST equal "accumulation-discovery"
+        — any other value is a contract violation and raises immediately
+        (reserving a distinct contract for the future named-swing-setup
+        producer, and preventing that population from overwriting or
+        masquerading as discovery rows). A canonical write (repository present
+        and candidates to write) with a None semantic_compatibility_id fails
+        closed: a canonical row without a compatibility cohort tag is exactly
+        what this slice prevents. Both are stamped verbatim onto every
+        persisted CandidateObservation.
         """
+        # Contract rejection is a hard invariant, not an expected data absence:
+        # it must raise and propagate, so it lives BEFORE the broad
+        # persistence try/except below (which converts provider/data failures
+        # into a 0-count no-op).
+        if observation_contract != ACCUMULATION_DISCOVERY_CONTRACT:
+            raise ValueError(
+                "observation_contract must be "
+                f"{ACCUMULATION_DISCOVERY_CONTRACT!r}, got {observation_contract!r}"
+            )
         if self._candidate_observations_repo is None or not observation_candidates:
             return 0
+        if semantic_compatibility_id is None:
+            raise ValueError(
+                "canonical observation write requires a semantic_compatibility_id; "
+                "a canonical row without a compatibility cohort tag is not allowed"
+            )
         try:
             captured_at = datetime.now()
             config_hash = compute_accumulation_config_hash(request)
@@ -158,6 +192,8 @@ class AccumulationCandidateObservationPersister:
                         resolution_notes=(
                             effective_session.notes if effective_session else ()
                         ),
+                        observation_contract=observation_contract,
+                        semantic_compatibility_id=semantic_compatibility_id,
                         payload=build_candidate_observation_payload(
                             c,
                             screen_result=screen_result,
