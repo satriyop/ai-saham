@@ -443,10 +443,17 @@ If canonical identity omits a meaning-changing dimension, replace it and rebuild
 
 **Acceptance criteria:**
 
-- [ ] One compact truncated-database fixture matches the canonical semantic
+- [x] One compact truncated-database fixture matches the canonical semantic
       projection of `accumulation-discovery` backfill output; volatile audit
-      metadata is validated separately.
-- [ ] Repeating the same run creates no duplicates or drift.
+      metadata is validated separately. (Satisfied by Slice C:
+      `tests/application/use_case/test_dq_003_truncated_backfill.py`. A planted
+      T+1 row on the selected ticker leaves the captured semantic projection
+      byte-identical whether or not it exists — proving the real composed
+      capture path bounds reads at T — and `captured_at` is excluded from the
+      projection and validated separately.)
+- [x] Repeating the same run creates no duplicates or drift. (Satisfied by
+      Slice C: a second capture against the same seeded DB adds no canonical
+      rows and yields an identical semantic projection.)
 - [x] Repeating interactive screen/analyze commands creates no canonical observations.
 - [ ] Explicit capture is idempotent and separate from forward-label generation.
 - [ ] The capture application use case is adapter-independent and ready for CLI-003 wiring.
@@ -470,7 +477,12 @@ If canonical identity omits a meaning-changing dimension, replace it and rebuild
       changed config replaces the row and re-stamps its cohort; incompatible
       cohorts stay distinguishable and un-poolable downstream. Forking is via
       the cohort tag, not the upsert key, per the lean amendment.)
-- [ ] Candidate and control rows share one PIT cutoff but cannot overwrite one another.
+- [x] Candidate and control rows share one PIT cutoff but cannot overwrite one
+      another. (Satisfied by Slice C: two distinct data-bearing tickers produce
+      two distinct canonical identities that both persist under one shared
+      `decision_at`/`analysis_as_of` cutoff, and neither collapses/overwrites
+      the other. See the Slice C finding below on why the "control" is a second
+      evaluated `pass` ticker rather than a `rejected_*` row.)
 - [ ] Candidate-only datasets are ineligible for screener recall/filter-value claims.
 - [ ] Every ticker/date exclusion or failure at the canonical capture boundary
       has a machine-readable reason; internal diagnostic warnings are out of
@@ -480,6 +492,33 @@ If canonical identity omits a meaning-changing dimension, replace it and rebuild
       historical membership is unavailable, the current-universe survivorship
       limitation is explicit; building a new historical-membership platform is
       out of scope.
+
+#### Slice C finding (2026-07-21) — the real capture path never emits `rejected_*`
+
+The golden-fixture proof surfaced a production-behavior fact worth recording so
+it is not mistaken for a test compromise. The production backfill composition
+(`analyze_signal_backfill_commands.py`) builds its screen request with
+`disable_score_filters=True`, and the structural market-cap / Piotroski floors
+resolve to `0` (config `min_market_cap_idr = 0`; builder `min_piotroski`
+default `0`). All four gates that can emit `screen_result != "pass"`
+(structural market-cap, structural Piotroski, foreign-flow score, signal score)
+are therefore **off**. The canonical capture path can only ever persist
+`screen_result = "pass"`: it captures the entire evaluated universe as
+negative-inclusive samples, not a screen-rejected subset.
+
+Consequence: a `rejected_*` canonical observation is not producible via the
+real path, so criterion 10's "candidate/control" pair is proven with two
+distinct evaluated `pass` tickers (the honest, non-stubbed invariant is
+distinct-identity non-overwrite under one PIT cutoff — see the Slice C test).
+Faking a `rejected_*` row would require stubbing the engine or enabling a
+non-production filter and was deliberately not done.
+
+**Deferral:** if a future consumer (e.g. DQ-006 readiness / screener recall
+claims) needs a genuine screen-rejected control population captured as
+canonical rows, that requires a product decision — either the backfill must
+stop disabling reject gates, or a separate capture mode must be defined. Do not
+retrofit it by loosening the golden fixture. Tracked here as an open design
+question, not a Slice C blocker.
 
 #### Lean identity amendment (2026-07-21)
 

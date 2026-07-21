@@ -80,21 +80,41 @@ negative tests pass, before B/C build on them.
 ## Slice B — Capture-boundary reporting
 
 **Goal:** the response answers "who was in the universe, who was evaluated,
-selected, rejected, unavailable, and by what universe identity." Closes
-criteria 12 and 13.
+selected, unavailable, and by what universe identity." Closes criteria 12 and 13.
+
+**MUST account for the Slice C finding (2026-07-21):** the production backfill
+disables every reject gate (`disable_score_filters=True`; `min_market_cap_idr=0`;
+`min_piotroski=0`), so the real path emits ONLY `screen_result="pass"`. There is
+no screen-rejected subset. Therefore:
+
+- `rejected_count` is **structurally 0** in the current production path. Keep the
+  field for forward-compatibility, but document that it is 0 by construction and
+  do NOT invent a reason taxonomy for a reject bucket that cannot occur.
+- `selected_count == evaluated_count` under current config (all evaluated tickers
+  are `pass`). Report both, but do not imply a screen was applied.
+- The only real ticker-boundary split is **evaluated (`pass`)** vs **skipped/
+  unavailable** (`eval_result is None`, missing candles/broker). The machine-
+  readable reason taxonomy covers the skipped/unavailable side only.
 
 **Contracts:**
 
 - Extend `BackfillSignalObservationsResponse` with: `universe_size`,
-  `evaluated_count`, `selected_count`, `rejected_count`, `unavailable_count`,
-  `universe_membership_source` (identity string, e.g. `lq45@current`), and a
-  `survivorship_limitation` note when historical membership is unavailable.
-- Add per-ticker machine-readable exclusion reasons at the capture boundary
-  (reuse existing `screen_result` values; map `eval_result is None` and
-  structural rejects to a small typed reason set). Internal diagnostic warnings
-  stay out of the taxonomy.
+  `evaluated_count`, `selected_count`, `rejected_count` (documented 0),
+  `unavailable_count`, `universe_membership_source` (identity string, e.g.
+  `lq45@current`), and a `survivorship_limitation` note when historical
+  membership is unavailable.
+- Add per-ticker machine-readable reasons for the skipped/unavailable side
+  (map `eval_result is None` and missing-source states to a small typed reason
+  set). Internal diagnostic warnings stay out of the taxonomy.
 - Aggregate from `AccumulationScreenResponse.observation_candidates` +
   `total_tickers_checked`/`tickers_skipped`; do not re-query.
+
+**Note for criterion 11 / Slice E:** because capture is universe-wide `pass`
+with no screen applied, the dataset inherently cannot support screener
+recall/precision claims — screening must be applied at analysis time. Slice E's
+`contains_control_population` marker should reflect this reality (there is no
+screen-rejected control today), and any recall claim must be blocked until the
+open design question in the Slice C finding is resolved.
 
 **Files:** `backfill_signal_observations_use_case.py`,
 `accumulation_screen.py` (DTO rollup if needed),
@@ -109,6 +129,14 @@ source is current-universe; JSON keys asserted present.
 ---
 
 ## Slice C — Golden truncated-DB fixture + reconciliation
+
+**Status:** DONE — `tests/application/use_case/test_dq_003_truncated_backfill.py`
+(full suite 5574 passing, test-only, no `src/` change). Closes criterion 1 and
+marks criteria 2 and 10 satisfied. Surfaced a finding: the real backfill path
+disables every reject gate so it can only emit `screen_result="pass"`, hence
+the "control" is a second evaluated `pass` ticker and invariant 4 is proven as
+distinct-identity non-overwrite (see the "Slice C finding (2026-07-21)"
+subsection in `audit_data_quality.md`).
 
 **Goal:** *prove* point-in-time correctness and idempotence. Closes criterion 1;
 hardens 2 and 10.
