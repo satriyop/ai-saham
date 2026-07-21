@@ -354,7 +354,13 @@ Artifacts without a defensible effective timestamp or data cutoff are invalid fo
 
 ### DQ-003 — Audit and repair historical candidate-observation backfill
 
-**State:** Ready — unblocked by completion of DQ-001 and DQ-002.
+**State:** Ready — unblocked by completion of DQ-001 and DQ-002. Amended
+2026-07-21 to a **lean identity contract**: capture persists an explicit
+`observation_contract` plus a `semantic_compatibility_id` derived from a
+whole-config content hash, and defers the full three-part `ARTIFACT-IDENTITY`
+apparatus (auto-detecting material-config registry, `artifact_id` split,
+complete provenance, universe-membership platform) behind named triggers. See
+"Lean identity amendment (2026-07-21)" below.
 
 **Priority:** P0  
 **Depends on:** DQ-001, DQ-002  
@@ -393,11 +399,17 @@ close criteria.
 - Test idempotence and uniqueness across ticker, effective session, workflow, window, setup/horizon where relevant, config hash, and data cutoff.
 - Verify reruns after config changes do not overwrite semantically different observations.
 - Validate `captured_at`, `snapshot_date`, `data_as_of_date`, workflow, window, config hash, and payload schema.
-- Enforce the three-part `ARTIFACT-IDENTITY` contract from the signal-refactor
-  backlog: idempotent `artifact_id`, poolable `semantic_compatibility_id`, and
-  complete provenance. Persist code/config/authority/schema/universe/calendar/
-  source-cutoff facts without treating every provenance difference as a
-  readiness-cohort boundary.
+- Enforce the **lean identity contract** (amended 2026-07-21): persist an
+  explicit `observation_contract` and a `semantic_compatibility_id` computed as
+  a SHA-256 of the resolved config-file content plus the schema/engine/evidence
+  contract versions. Reuse the existing `semantic_compatibility_id` column and
+  codec. Do NOT enumerate a per-path material-config registry, do NOT populate
+  `artifact_id` or the full `ArtifactProvenance`, and do NOT put
+  `universe_snapshot_id` into any idempotency key. The full three-part
+  `ARTIFACT-IDENTITY` apparatus stays parked (built, tested, unwired) until a
+  named trigger in "Lean identity amendment (2026-07-21)" fires. Rationale: a
+  whole-config hash cannot silently fail to fork on an unregistered path, and
+  keeping universe out of the key preserves rerun idempotence.
 - Persist the contemporaneous eligible-universe control population as well as
   selected candidates, including inclusion/exclusion state, rejection
   stage/reasons, pre-filter measurements, missing-data state, and rank.
@@ -437,11 +449,15 @@ If canonical identity omits a meaning-changing dimension, replace it and rebuild
 - [x] Repeating interactive screen/analyze commands creates no canonical observations.
 - [ ] Explicit capture is idempotent and separate from forward-label generation.
 - [ ] The capture application use case is adapter-independent and ready for CLI-003 wiring.
-- [ ] `accumulation-discovery` rows carry an explicit observation contract, and
-      identity rules reserve a distinct contract for
-      `NAMED-SWING-SETUP-CAPTURE`, preventing that later population from
+- [ ] `accumulation-discovery` rows carry an explicit `observation_contract`
+      and a config-content-hash `semantic_compatibility_id`. The writer rejects
+      any non-`accumulation-discovery` contract, reserving a distinct contract
+      for `NAMED-SWING-SETUP-CAPTURE` and preventing that later population from
       overwriting or substituting for discovery rows. Implementing the later
-      producer is not required here.
+      producer, `artifact_id`, and full provenance is explicitly out of scope
+      here (see deferral triggers). A config change that alters the resolved
+      config content forks the `semantic_compatibility_id`; the same run reruns
+      to the same id.
 - [ ] Single-ticker inspection cannot write or count as canonical learning evidence.
 - [ ] Holiday/retry/failure fixtures prove fail-closed session handling and visible errors.
 - [ ] Changing a semantic identity dimension creates a distinct artifact or explicit version replacement.
@@ -455,6 +471,49 @@ If canonical identity omits a meaning-changing dimension, replace it and rebuild
       historical membership is unavailable, the current-universe survivorship
       limitation is explicit; building a new historical-membership platform is
       out of scope.
+
+#### Lean identity amendment (2026-07-21)
+
+**Decision:** Implement DQ-003 with a lean identity contract. Implement this
+option only.
+
+**What is required now:**
+
+- Persist `observation_contract = "accumulation-discovery"` on every canonical
+  row; the capture writer rejects any other contract value.
+- Compute `semantic_compatibility_id` as
+  `sha256(canonical(resolved_config_content) + schema_version +
+  semantic_engine_version + evidence_contract_version)` and store it in the
+  existing `semantic_compatibility_id` column via the existing codec.
+- Keep the canonical upsert key exactly as today
+  (`ticker, snapshot_date, workflow, window_sessions, data_as_of_date,
+  config_hash`). `semantic_compatibility_id` is a cohort tag, not part of the
+  upsert key, and `universe_snapshot_id` never enters any idempotency key.
+
+**Do Not Interpret This As:**
+
+- Do not enumerate or maintain a per-config-path material registry. Hash the
+  whole resolved config content instead.
+- Do not populate `artifact_id`, `ArtifactProvenance`, or `universe_snapshot_id`
+  in the capture path. Leave those columns empty and the resolver/registry
+  parked (marked `# PARKED — not wired; see DQ-003`).
+- Do not delete the parked artifact-identity machinery; it is tested and
+  trigger-gated for reuse.
+- Do not treat over-forking (a cosmetic config edit forking the cohort) as a
+  bug. Over-forking is safe; silent under-forking is the failure mode this
+  amendment removes.
+
+**Deferral triggers — graduate a parked piece only when its trigger fires:**
+
+| Trigger | Wake this parked piece |
+|---|---|
+| ML challenger over-forks and wastes training data because immaterial config edits split compatible cohorts | The per-path material-config registry (`signal_semantic_contract.py`) |
+| A second producer (`NAMED-SWING-SETUP-CAPTURE`) exists so one compatibility cohort spans multiple captured artifacts | The `artifact_id` vs `semantic_compatibility_id` split + resolver wiring |
+| An ML evidence producer is promoted and needs drift monitoring or rollback | Consuming the full `ArtifactProvenance` fields |
+| Survivorship must be corrected, not merely disclosed | The historical universe-membership platform |
+
+Until a trigger fires, the corresponding acceptance-criterion obligation is
+satisfied by the lean contract above, not by the full apparatus.
 
 ### DQ-004 — Audit and repair forward-label generation
 
