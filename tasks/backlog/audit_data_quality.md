@@ -354,13 +354,14 @@ Artifacts without a defensible effective timestamp or data cutoff are invalid fo
 
 ### DQ-003 — Audit and repair historical candidate-observation backfill
 
-**State:** Ready — unblocked by completion of DQ-001 and DQ-002. Amended
-2026-07-21 to a **lean identity contract**: capture persists an explicit
-`observation_contract` plus a `semantic_compatibility_id` derived from a
-whole-config content hash, and defers the full three-part `ARTIFACT-IDENTITY`
-apparatus (auto-detecting material-config registry, `artifact_id` split,
-complete provenance, universe-membership platform) behind named triggers. See
-"Lean identity amendment (2026-07-21)" below.
+**State:** Active — amended 2026-07-21 to a **lean identity contract**: capture
+persists an explicit `observation_contract` plus a `semantic_compatibility_id`
+derived from a whole-config content hash, and defers the full three-part
+`ARTIFACT-IDENTITY` apparatus (auto-detecting material-config registry,
+`artifact_id` split, complete provenance, universe-membership platform) behind
+named triggers. See "Lean identity amendment (2026-07-21)" below. Slice A of
+`tasks/backlog/dq_003_lean_implementation_plan.md` is implemented in commit
+`e00b4aa` (criteria 6 and 9 satisfied); Slices B–E remain.
 
 **Priority:** P0  
 **Depends on:** DQ-001, DQ-002  
@@ -449,7 +450,7 @@ If canonical identity omits a meaning-changing dimension, replace it and rebuild
 - [x] Repeating interactive screen/analyze commands creates no canonical observations.
 - [ ] Explicit capture is idempotent and separate from forward-label generation.
 - [ ] The capture application use case is adapter-independent and ready for CLI-003 wiring.
-- [ ] `accumulation-discovery` rows carry an explicit `observation_contract`
+- [x] `accumulation-discovery` rows carry an explicit `observation_contract`
       and a config-content-hash `semantic_compatibility_id`. The writer rejects
       any non-`accumulation-discovery` contract, reserving a distinct contract
       for `NAMED-SWING-SETUP-CAPTURE` and preventing that later population from
@@ -457,10 +458,18 @@ If canonical identity omits a meaning-changing dimension, replace it and rebuild
       producer, `artifact_id`, and full provenance is explicitly out of scope
       here (see deferral triggers). A config change that alters the resolved
       config content forks the `semantic_compatibility_id`; the same run reruns
-      to the same id.
+      to the same id. (Satisfied by Slice A in commit `e00b4aa`:
+      `lean_observation_identity.py`, persister contract-rejection + fail-closed
+      write, repository migration 17 column + canonical-read predicate.)
 - [ ] Single-ticker inspection cannot write or count as canonical learning evidence.
 - [ ] Holiday/retry/failure fixtures prove fail-closed session handling and visible errors.
-- [ ] Changing a semantic identity dimension creates a distinct artifact or explicit version replacement.
+- [x] Changing a semantic identity dimension creates a distinct artifact or
+      explicit version replacement. (Satisfied by Slice A in commit `e00b4aa`:
+      any resolved-config change forks the `semantic_compatibility_id` cohort
+      tag, so a rerun under
+      changed config replaces the row and re-stamps its cohort; incompatible
+      cohorts stay distinguishable and un-poolable downstream. Forking is via
+      the cohort tag, not the upsert key, per the lean amendment.)
 - [ ] Candidate and control rows share one PIT cutoff but cannot overwrite one another.
 - [ ] Candidate-only datasets are ineligible for screener recall/filter-value claims.
 - [ ] Every ticker/date exclusion or failure at the canonical capture boundary

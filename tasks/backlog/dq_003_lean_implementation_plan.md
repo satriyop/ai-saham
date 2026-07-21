@@ -25,6 +25,9 @@ idempotency key.
 
 ## Slice A — Wire lean identity into capture
 
+**Status:** DONE — commit `e00b4aa` (full suite 5569 passing). Closed DQ-003
+criteria 6 and 9.
+
 **Goal:** every canonical `accumulation-discovery` row carries
 `observation_contract` + a config-content-hash `semantic_compatibility_id`.
 Closes acceptance criterion 6; satisfies criterion 9 via config-content hashing.
