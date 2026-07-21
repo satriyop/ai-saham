@@ -775,10 +775,26 @@ above now; treat dividend-ex distortion as a documented limitation for a
 follow-up rather than invalidating otherwise-good labels over typically-small
 drops.
 
-**Coverage caveat:** corporate-action invalidation is only as complete as the
-local calendar sync. A period with no synced calendar coverage must surface an
-explicit "corporate-action coverage unavailable before date D" limitation, not
-silently pass unchecked labels as clean.
+**Coverage caveat and chosen representation (decided 2026-07-22):** the
+corporate-action calendar is a forward-looking cache, not a historical archive —
+sync markers are keyed by run-date and never record which past ex-date window a
+sync covered, so per-window historical coverage is not cheaply provable. Building
+per-window coverage provenance is **parked** (over-engineering, same class as the
+DQ-003 universe-membership platform). Chosen representation is a **coarse
+global-sync gate** (mirrors the DQ-003 survivorship precedent):
+
+- If the calendar has **never** been synced (no successful sync marker at all),
+  every label fails closed to `UNAVAILABLE` with
+  `reason="corporate_action_coverage_unavailable"` — we know nothing, so we claim
+  nothing.
+- If the calendar **has** been synced, real per-event `EX_DATE` detection runs;
+  a detected mechanical action invalidates, and "no events found" passes as a raw
+  label.
+- **Accepted, documented limitation:** on a synced-but-sparse calendar a
+  historical window that was never actually covered can pass as clean. This
+  residual label noise is tolerable for research/ML (non-promotion) and tightens
+  as sync coverage grows. Labels are therefore corporate-action *best-effort*,
+  not corporate-action *complete* — no consumer may claim completeness.
 
 ### DQ-005 — Audit signal replay for reproducibility, not retrieval
 
