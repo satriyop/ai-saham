@@ -484,14 +484,31 @@ If canonical identity omits a meaning-changing dimension, replace it and rebuild
       the other. See the Slice C finding below on why the "control" is a second
       evaluated `pass` ticker rather than a `rejected_*` row.)
 - [ ] Candidate-only datasets are ineligible for screener recall/filter-value claims.
-- [ ] Every ticker/date exclusion or failure at the canonical capture boundary
+- [x] Every ticker/date exclusion or failure at the canonical capture boundary
       has a machine-readable reason; internal diagnostic warnings are out of
-      scope.
-- [ ] Capture reports universe size, evaluated count, selected count, rejected
+      scope. (Satisfied by Slice B: `BackfillSignalObservationsResponse.
+      ticker_exclusions` reports, per processed date, each universe ticker that
+      produced no observation with the machine-readable reason
+      `source_unavailable_not_evaluated`. Per the Slice C finding the production
+      path disables every reject gate, so the only real ticker-boundary split is
+      evaluated vs unavailable — the taxonomy covers the unavailable side only;
+      finer internal diagnostic causes stay out of scope. Existing per-date
+      `BackfillSkippedDate` reasons remain machine-readable.)
+- [x] Capture reports universe size, evaluated count, selected count, rejected
       count, unavailable count, and universe-membership source identity. When
       historical membership is unavailable, the current-universe survivorship
       limitation is explicit; building a new historical-membership platform is
-      out of scope.
+      out of scope. (Satisfied by Slice B: the response carries `universe_size`,
+      `evaluated_count`, `selected_count`, `rejected_count`, `unavailable_count`,
+      `universe_membership_source`, and `survivorship_limitation`, aggregated
+      from screen results already in hand — no re-query, no persistence change.
+      `rejected_count = 0` by construction per the Slice C finding (all reject
+      gates disabled), so `selected_count == evaluated_count`; `evaluated_count`
+      reconciles with `saved_observation_count`. The adapter passes
+      `universe_membership_source = "<universe>@current"`; the use case owns the
+      survivorship policy, emitting the current-universe survivorship limitation
+      whenever the source ends in `@current`. Building a historical-membership
+      platform stays parked per the deferral triggers.)
 
 #### Slice C finding (2026-07-21) — the real capture path never emits `rejected_*`
 

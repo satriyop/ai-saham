@@ -3,7 +3,12 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
-from src.application.dto.accumulation_screen import AccumulationScreenResponse
+from src.application.dto.accumulation_screen import (
+    AccumulationCandidate,
+    AccumulationCandidateEvaluationResult,
+    AccumulationScreenObservationCandidate,
+    AccumulationScreenResponse,
+)
 from src.application.services.signal_observation_request_builder import (
     BuildSignalObservationScreenRequest,
 )
@@ -217,6 +222,92 @@ class FakeAccumulationScreenUseCaseWithFingerprint:
             total_tickers_checked=len(request.tickers),
             tickers_skipped=0,
             provider="test",
+        )
+        return RecordAccumulationObservationsResult(
+            response=response, recorded_count=recorded_count
+        )
+
+
+def _observation_candidate(
+    ticker: str, as_of: date, window_days: int
+) -> AccumulationScreenObservationCandidate:
+    """Build a real observation candidate with empty consumed-row provenance
+    (all latest_*_date None), so AccumulationCandidateEvaluationResult's
+    validation passes without dragging in the evaluator."""
+    candidate = AccumulationCandidate(
+        ticker=ticker.upper(),
+        window_days=window_days,
+        net_buy_days=0,
+        total_days=0,
+        net_buy_ratio=0.0,
+        total_net_value=Decimal("0"),
+        consecutive_streak=0,
+        foreign_vwap=None,
+        current_price=Decimal("100"),
+        vwap_discount_pct=None,
+        rsi=None,
+        trend="SIDE",
+        foreign_flow_score=0.0,
+        top_brokers=None,
+        institutional_flag=False,
+    )
+    evaluation_result = AccumulationCandidateEvaluationResult(
+        candidate=candidate,
+        consumed_candles=(),
+        consumed_broker_summaries=(),
+        consumed_broker_daily_flows=(),
+        analysis_date=as_of,
+    )
+    return AccumulationScreenObservationCandidate(
+        evaluation_result=evaluation_result,
+        screen_result="pass",
+        flow_evidence=None,
+    )
+
+
+class FakeReconcilingScreenUseCase:
+    """Screen recorder fake that returns real observation_candidates for
+    tickers with data and persists exactly those, so the capture-boundary
+    rollup (evaluated/selected/unavailable) reconciles honestly with what is
+    saved. Mirrors the production config (all reject gates off): every
+    evaluated ticker is `pass`, so candidates == observation_candidates and no
+    reject population is fabricated. `total_tickers_checked` is the full
+    requested universe (as the real screen sets it), so unavailable = universe
+    minus evaluated."""
+
+    def __init__(
+        self,
+        observations: FakeCandidateObservationsRepository,
+        *,
+        unavailable: tuple[str, ...] = (),
+    ):
+        self.observations = observations
+        self.unavailable = {ticker.upper() for ticker in unavailable}
+        self.requests = []
+
+    def execute(self, request, *, execution_context):
+        self.requests.append(request)
+        evaluated = [
+            ticker for ticker in request.tickers if ticker.upper() not in self.unavailable
+        ]
+        observation_candidates = [
+            _observation_candidate(ticker, request.as_of_date, request.window_days)
+            for ticker in evaluated
+        ]
+        # All evaluated tickers pass under production config; persister records
+        # every evaluated observation, so recorded_count == len(observation_candidates).
+        recorded_count = 0
+        for ticker in evaluated:
+            self.observations.append(ticker, request.as_of_date, request.window_days)
+            recorded_count += 1
+        response = AccumulationScreenResponse(
+            candidates=[oc.candidate for oc in observation_candidates],
+            screened_at=request.as_of_date,
+            window_days=request.window_days,
+            total_tickers_checked=len(request.tickers),
+            tickers_skipped=len(request.tickers) - len(evaluated),
+            provider="test",
+            observation_candidates=observation_candidates,
         )
         return RecordAccumulationObservationsResult(
             response=response, recorded_count=recorded_count
@@ -613,6 +704,140 @@ def test_backfill_resolves_one_deterministic_session_per_trading_date():
     second_decision_at = second_date_contexts[0].effective_session.decision_at
     assert second_decision_at.date() == second_date
     assert second_decision_at.hour == 16 and second_decision_at.minute == 0
+
+
+def test_backfill_capture_counts_reconcile_with_saved_and_production_config():
+    """DQ-003 Slice B: evaluated == saved (headline persistence cross-check),
+    selected + rejected == evaluated, and under production-like config (all
+    reject gates off) rejected == 0 and selected == evaluated. Empty membership
+    source yields no survivorship note."""
+    signal_date = date(2026, 6, 1)
+    observations = FakeCandidateObservationsRepository()
+    screen = FakeReconcilingScreenUseCase(observations)
+
+    response = BackfillSignalObservationsUseCase(
+        record_observations_use_case=screen,
+        screen_request_builder=_request_builder(),
+        market_data_repository=FakeMarketRepository(
+            [
+                _candle("IHSG", signal_date),
+                _candle("BBCA", signal_date),
+                _candle("BBRI", signal_date),
+            ]
+        ),
+        candidate_observations_repository=observations,
+        observation_identity=_LEAN_IDENTITY,
+    ).execute(
+        BackfillSignalObservationsRequest(
+            tickers=("BBCA", "BBRI"),
+            start_date=signal_date,
+            end_date=signal_date,
+            windows=(7, 30, 90),
+        )
+    )
+
+    assert response.universe_size == 2
+    # 2 tickers x 3 windows evaluated, and every evaluated ticker is persisted.
+    assert response.evaluated_count == 6
+    assert response.evaluated_count == response.saved_observation_count
+    # selected + rejected == evaluated (arithmetic invariant), rejected 0 today.
+    assert response.selected_count + response.rejected_count == response.evaluated_count
+    assert response.rejected_count == 0
+    assert response.selected_count == response.evaluated_count
+    assert response.unavailable_count == 0
+    assert response.ticker_exclusions == ()
+    # No @current membership source → no survivorship limitation.
+    assert response.survivorship_limitation is None
+
+
+def test_backfill_unavailable_universe_ticker_yields_exclusion_and_count():
+    """DQ-003 Slice B (criterion 12): a universe ticker with no source input is
+    never evaluated, so it appears once per processed date in ticker_exclusions
+    with a machine-readable reason and inflates unavailable_count per window."""
+    signal_date = date(2026, 6, 1)
+    observations = FakeCandidateObservationsRepository()
+    screen = FakeReconcilingScreenUseCase(observations, unavailable=("GOTO",))
+
+    response = BackfillSignalObservationsUseCase(
+        record_observations_use_case=screen,
+        screen_request_builder=_request_builder(),
+        market_data_repository=FakeMarketRepository(
+            [_candle("IHSG", signal_date), _candle("BBCA", signal_date)]
+        ),
+        candidate_observations_repository=observations,
+        observation_identity=_LEAN_IDENTITY,
+    ).execute(
+        BackfillSignalObservationsRequest(
+            tickers=("BBCA", "GOTO"),
+            start_date=signal_date,
+            end_date=signal_date,
+            windows=(7, 30),
+        )
+    )
+
+    assert response.universe_size == 2
+    # Only BBCA evaluated across both windows; GOTO unavailable every window.
+    assert response.evaluated_count == 2
+    assert response.evaluated_count == response.saved_observation_count
+    assert response.unavailable_count == 2  # 2 windows x (universe 2 - evaluated 1)
+    # Exclusion is deduped per date, not per window.
+    assert len(response.ticker_exclusions) == 1
+    exclusion = response.ticker_exclusions[0]
+    assert exclusion.ticker == "GOTO"
+    assert exclusion.date == signal_date
+    assert exclusion.reason == "source_unavailable_not_evaluated"
+
+
+def test_backfill_current_universe_membership_surfaces_survivorship_and_dict_keys():
+    """DQ-003 Slice B (criterion 13): a `@current` membership source carries the
+    survivorship limitation, and every new reporting key is present in
+    to_dict() with ticker_exclusions serialized as dicts."""
+    signal_date = date(2026, 6, 1)
+    observations = FakeCandidateObservationsRepository()
+    screen = FakeReconcilingScreenUseCase(observations, unavailable=("GOTO",))
+
+    response = BackfillSignalObservationsUseCase(
+        record_observations_use_case=screen,
+        screen_request_builder=_request_builder(),
+        market_data_repository=FakeMarketRepository(
+            [_candle("IHSG", signal_date), _candle("BBCA", signal_date)]
+        ),
+        candidate_observations_repository=observations,
+        observation_identity=_LEAN_IDENTITY,
+    ).execute(
+        BackfillSignalObservationsRequest(
+            tickers=("BBCA", "GOTO"),
+            start_date=signal_date,
+            end_date=signal_date,
+            windows=(7,),
+            universe_membership_source="lq45@current",
+        )
+    )
+
+    assert response.universe_membership_source == "lq45@current"
+    assert response.survivorship_limitation is not None
+
+    payload = response.to_dict()
+    for key in (
+        "universe_size",
+        "evaluated_count",
+        "selected_count",
+        "rejected_count",
+        "unavailable_count",
+        "universe_membership_source",
+        "survivorship_limitation",
+        "ticker_exclusions",
+    ):
+        assert key in payload
+    assert payload["universe_membership_source"] == "lq45@current"
+    assert payload["survivorship_limitation"] is not None
+    assert payload["ticker_exclusions"] == [
+        {
+            "date": signal_date.isoformat(),
+            "ticker": "GOTO",
+            "reason": "source_unavailable_not_evaluated",
+        }
+    ]
 
 
 def _request_builder() -> BuildSignalObservationScreenRequest:

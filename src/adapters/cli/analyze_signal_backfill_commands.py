@@ -197,6 +197,10 @@ def signal_backfill_observations(
             end_date=end_date,
             horizon=label_horizon,
             generate_labels=generate_labels,
+            # Current-universe membership identity. Historical membership is
+            # unavailable; the use case turns the `@current` suffix into the
+            # survivorship limitation note (adapter passes identity only).
+            universe_membership_source=f"{universe}@current",
         )
     )
 
@@ -215,6 +219,23 @@ def _display_backfill_response(response: BackfillSignalObservationsResponse) -> 
     typer.echo(f"Saved observation rows: {response.saved_observation_count}")
     typer.echo(f"Generated labels: {response.generated_label_count}")
     typer.echo(f"Unavailable labels: {response.unavailable_label_count}")
+    typer.echo("")
+    typer.echo("Capture boundary:")
+    typer.echo(f"  Universe size: {response.universe_size}")
+    typer.echo(f"  Evaluated: {response.evaluated_count}")
+    typer.echo(f"  Selected: {response.selected_count}")
+    typer.echo(f"  Rejected: {response.rejected_count} (0 by construction; reject gates disabled)")
+    typer.echo(f"  Unavailable: {response.unavailable_count}")
+    typer.echo(f"  Universe membership source: {response.universe_membership_source}")
+    if response.survivorship_limitation:
+        typer.echo(f"  Survivorship limitation: {response.survivorship_limitation}")
+    if response.ticker_exclusions:
+        typer.echo("")
+        typer.echo("Ticker exclusions:")
+        for exclusion in response.ticker_exclusions:
+            typer.echo(
+                f"  - {exclusion.date.isoformat()} {exclusion.ticker}: {exclusion.reason}"
+            )
     if response.processed_dates:
         typer.echo("")
         typer.echo("Processed dates:")

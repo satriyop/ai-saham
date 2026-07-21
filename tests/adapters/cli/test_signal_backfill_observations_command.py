@@ -35,6 +35,14 @@ def test_signal_backfill_observations_json_output_is_stable(monkeypatch):
                 unavailable_label_count=0,
                 processed_dates=(date(2026, 6, 1),),
                 notes=("candidate_observations are timestamped",),
+                universe_size=1,
+                evaluated_count=3,
+                selected_count=3,
+                rejected_count=0,
+                unavailable_count=0,
+                universe_membership_source="lq45@current",
+                survivorship_limitation="current-universe only; survivorship-biased",
+                ticker_exclusions=(),
             )
 
     _patch_command_dependencies(monkeypatch, FakeBackfillUseCase)
@@ -63,8 +71,25 @@ def test_signal_backfill_observations_json_output_is_stable(monkeypatch):
     assert payload["requested_date_count"] == 2
     assert payload["processed_dates"] == ["2026-06-01"]
     assert payload["saved_observation_count"] == 3
+    # DQ-003 Slice B reporting keys are present in --format json.
+    for key in (
+        "universe_size",
+        "evaluated_count",
+        "selected_count",
+        "rejected_count",
+        "unavailable_count",
+        "universe_membership_source",
+        "survivorship_limitation",
+        "ticker_exclusions",
+    ):
+        assert key in payload
+    assert payload["universe_membership_source"] == "lq45@current"
+    assert payload["survivorship_limitation"] is not None
     assert captured["request"].tickers == ("BBCA",)
     assert captured["request"].generate_labels is True
+    # The adapter passes the current-universe membership identity (identity only;
+    # the use case owns the survivorship policy derived from it).
+    assert captured["request"].universe_membership_source == "lq45@current"
 
 
 def test_signal_backfill_observations_wires_evaluate_market_context(monkeypatch):

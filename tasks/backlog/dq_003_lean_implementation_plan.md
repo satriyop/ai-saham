@@ -79,6 +79,15 @@ negative tests pass, before B/C build on them.
 
 ## Slice B — Capture-boundary reporting
 
+**Status:** DONE — `BackfillSignalObservationsResponse` extended with
+`universe_size`/`evaluated_count`/`selected_count`/`rejected_count`/
+`unavailable_count`/`universe_membership_source`/`survivorship_limitation`/
+`ticker_exclusions`, aggregated from screen results already returned (no
+re-query, no persistence change; `NON_SEMANTIC`). Adapter passes
+`<universe>@current`; use case owns the survivorship policy. Closed criteria 12
+and 13. Full suite 5577 passing. `rejected_count = 0` by construction per the
+Slice C finding.
+
 **Goal:** the response answers "who was in the universe, who was evaluated,
 selected, unavailable, and by what universe identity." Closes criteria 12 and 13.
 

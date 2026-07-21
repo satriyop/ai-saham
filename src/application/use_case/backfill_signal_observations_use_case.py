@@ -46,6 +46,29 @@ class BackfillSkippedDate:
 
 
 @dataclass(frozen=True)
+class BackfillTickerExclusion:
+    """A universe ticker that produced no persisted observation on a processed
+    date (criterion 12). Machine-readable at the ticker/date capture boundary.
+
+    Only the evaluated-vs-unavailable split is real today: the production
+    backfill disables every reject gate (Slice C finding), so the sole reason a
+    processed universe ticker yields no observation is that its source input was
+    missing and it was never evaluated.
+    """
+
+    date: date
+    ticker: str
+    reason: str
+
+    def to_dict(self) -> dict:
+        return {
+            "date": self.date.isoformat(),
+            "ticker": self.ticker,
+            "reason": self.reason,
+        }
+
+
+@dataclass(frozen=True)
 class BackfillSignalObservationsRequest:
     tickers: tuple[str, ...]
     start_date: date
@@ -53,6 +76,11 @@ class BackfillSignalObservationsRequest:
     horizon: SignalLabelHorizon = SignalLabelHorizon.SWING_10D
     generate_labels: bool = False
     windows: tuple[int, ...] = (7, 30, 90)
+    # Universe-membership identity (transport decided by the adapter). The
+    # adapter sets this to e.g. "lq45@current"; the use case copies it onto the
+    # response and derives the survivorship limitation from it. The adapter must
+    # not compute the survivorship policy — only pass the universe identity.
+    universe_membership_source: str = ""
 
 
 @dataclass(frozen=True)
@@ -66,6 +94,20 @@ class BackfillSignalObservationsResponse:
     processed_dates: tuple[date, ...] = field(default_factory=tuple)
     skipped_dates: tuple[BackfillSkippedDate, ...] = field(default_factory=tuple)
     notes: tuple[str, ...] = field(default_factory=tuple)
+    # DQ-003 Slice B capture-boundary reporting (criteria 12 and 13). Counts are
+    # aggregated from screen results already returned this run — no re-query, no
+    # persistence change. `rejected_count` is 0 by construction under the
+    # production config (all reject gates disabled; see the Slice C finding), so
+    # `selected_count == evaluated_count` today. `evaluated_count` cross-checks
+    # `saved_observation_count`: every evaluated ticker is persisted.
+    universe_size: int = 0
+    evaluated_count: int = 0
+    selected_count: int = 0
+    rejected_count: int = 0
+    unavailable_count: int = 0
+    universe_membership_source: str = ""
+    survivorship_limitation: str | None = None
+    ticker_exclusions: tuple[BackfillTickerExclusion, ...] = field(default_factory=tuple)
 
     def to_dict(self) -> dict:
         return {
@@ -78,6 +120,14 @@ class BackfillSignalObservationsResponse:
             "processed_dates": [day.isoformat() for day in self.processed_dates],
             "skipped_dates": [entry.to_dict() for entry in self.skipped_dates],
             "notes": list(self.notes),
+            "universe_size": self.universe_size,
+            "evaluated_count": self.evaluated_count,
+            "selected_count": self.selected_count,
+            "rejected_count": self.rejected_count,
+            "unavailable_count": self.unavailable_count,
+            "universe_membership_source": self.universe_membership_source,
+            "survivorship_limitation": self.survivorship_limitation,
+            "ticker_exclusions": [entry.to_dict() for entry in self.ticker_exclusions],
         }
 
 
@@ -143,9 +193,16 @@ class BackfillSignalObservationsUseCase:
         processed: list[date] = []
         skipped: list[BackfillSkippedDate] = []
         market_context_notes: list[str] = []
+        ticker_exclusions: list[BackfillTickerExclusion] = []
         saved_count = 0
         generated_label_count = 0
         unavailable_label_count = 0
+        # Capture-boundary rollups (DQ-003 Slice B). Summed per processed
+        # (date, window) unit, consistent with how saved_count is summed.
+        evaluated_count = 0
+        selected_count = 0
+        rejected_count = 0
+        unavailable_count = 0
 
         for trading_date in trading_dates:
             if not self._has_any_ticker_candle(tickers, trading_date):
@@ -184,6 +241,7 @@ class BackfillSignalObservationsUseCase:
                 ),
             )
 
+            evaluated_tickers_for_date: set[str] = set()
             for window in request.windows:
                 record_result = self._record.execute(
                     self._request_builder.build(
@@ -195,7 +253,36 @@ class BackfillSignalObservationsUseCase:
                     execution_context=context,
                 )
                 saved_count += record_result.recorded_count
+
+                # Per-capture-unit derivations from the screen result already in
+                # hand. `evaluated` = every ticker the screen evaluated;
+                # `selected` = survivors (`pass`); `rejected` = evaluated minus
+                # selected (0 under production config); `unavailable` = universe
+                # tickers the screen could not evaluate (missing source).
+                unit = record_result.response
+                evaluated_unit = len(unit.observation_candidates)
+                selected_unit = len(unit.candidates)
+                evaluated_count += evaluated_unit
+                selected_count += selected_unit
+                rejected_count += evaluated_unit - selected_unit
+                unavailable_count += unit.total_tickers_checked - evaluated_unit
+                for observation_candidate in unit.observation_candidates:
+                    evaluated_tickers_for_date.add(observation_candidate.candidate.ticker)
             processed.append(trading_date)
+
+            # A universe ticker that produced no observation on this processed
+            # date (across all windows) was never evaluated because its source
+            # input was unavailable — the only real ticker-boundary exclusion
+            # today (criterion 12; Slice C finding). Per-date, deduped.
+            for ticker in tickers:
+                if ticker not in evaluated_tickers_for_date:
+                    ticker_exclusions.append(
+                        BackfillTickerExclusion(
+                            date=trading_date,
+                            ticker=ticker,
+                            reason="source_unavailable_not_evaluated",
+                        )
+                    )
 
             if request.generate_labels:
                 if self._labels is None:
@@ -237,6 +324,20 @@ class BackfillSignalObservationsUseCase:
                 generated_label_count += label_response.generated_count
                 unavailable_label_count += label_response.unavailable_count
 
+        # Survivorship limitation is owned by the use case, not the adapter. A
+        # `@current` membership source means historical membership is
+        # unavailable, so the captured universe is the current one and is
+        # survivorship-biased. Building a historical-membership platform is out
+        # of scope (parked; see DQ-003 deferral triggers).
+        survivorship_limitation = (
+            "Universe membership resolved from the current universe "
+            "(historical membership unavailable); captured population is "
+            "survivorship-biased and cannot support point-in-time universe "
+            "claims."
+            if request.universe_membership_source.endswith("@current")
+            else None
+        )
+
         return BackfillSignalObservationsResponse(
             requested_date_count=len(trading_dates),
             processed_date_count=len(processed),
@@ -253,6 +354,14 @@ class BackfillSignalObservationsUseCase:
                 "replace the existing row rather than appending a duplicate.",
                 *market_context_notes,
             ),
+            universe_size=len(request.tickers),
+            evaluated_count=evaluated_count,
+            selected_count=selected_count,
+            rejected_count=rejected_count,
+            unavailable_count=unavailable_count,
+            universe_membership_source=request.universe_membership_source,
+            survivorship_limitation=survivorship_limitation,
+            ticker_exclusions=tuple(ticker_exclusions),
         )
 
     def _has_any_ticker_candle(self, tickers: tuple[str, ...], target_date: date) -> bool:
