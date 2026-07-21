@@ -229,7 +229,7 @@ class FakeAccumulationScreenUseCaseWithFingerprint:
 
 
 def _observation_candidate(
-    ticker: str, as_of: date, window_days: int
+    ticker: str, as_of: date, window_days: int, screen_result: str = "pass"
 ) -> AccumulationScreenObservationCandidate:
     """Build a real observation candidate with empty consumed-row provenance
     (all latest_*_date None), so AccumulationCandidateEvaluationResult's
@@ -260,7 +260,7 @@ def _observation_candidate(
     )
     return AccumulationScreenObservationCandidate(
         evaluation_result=evaluation_result,
-        screen_result="pass",
+        screen_result=screen_result,
         flow_evidence=None,
     )
 
@@ -280,9 +280,16 @@ class FakeReconcilingScreenUseCase:
         observations: FakeCandidateObservationsRepository,
         *,
         unavailable: tuple[str, ...] = (),
+        rejected: tuple[str, ...] = (),
     ):
         self.observations = observations
         self.unavailable = {ticker.upper() for ticker in unavailable}
+        # Optional screen-rejected control tickers (DQ-003 Slice E). Evaluated
+        # and persisted like everyone else, but classified screen_result !=
+        # "pass", so they are NOT selected — modelling the non-production case
+        # where a reject gate is active. Constructed at the DTO/use-case
+        # boundary, not by faking the engine end-to-end.
+        self.rejected = {ticker.upper() for ticker in rejected}
         self.requests = []
 
     def execute(self, request, *, execution_context):
@@ -291,17 +298,31 @@ class FakeReconcilingScreenUseCase:
             ticker for ticker in request.tickers if ticker.upper() not in self.unavailable
         ]
         observation_candidates = [
-            _observation_candidate(ticker, request.as_of_date, request.window_days)
+            _observation_candidate(
+                ticker,
+                request.as_of_date,
+                request.window_days,
+                screen_result=(
+                    "rejected_structural"
+                    if ticker.upper() in self.rejected
+                    else "pass"
+                ),
+            )
             for ticker in evaluated
         ]
-        # All evaluated tickers pass under production config; persister records
-        # every evaluated observation, so recorded_count == len(observation_candidates).
+        # Every evaluated ticker is persisted (pass + rejected alike), so
+        # recorded_count == len(observation_candidates). Only `pass` candidates
+        # are selected (survivors).
         recorded_count = 0
         for ticker in evaluated:
             self.observations.append(ticker, request.as_of_date, request.window_days)
             recorded_count += 1
         response = AccumulationScreenResponse(
-            candidates=[oc.candidate for oc in observation_candidates],
+            candidates=[
+                oc.candidate
+                for oc in observation_candidates
+                if oc.screen_result == "pass"
+            ],
             screened_at=request.as_of_date,
             window_days=request.window_days,
             total_tickers_checked=len(request.tickers),
@@ -838,6 +859,89 @@ def test_backfill_current_universe_membership_surfaces_survivorship_and_dict_key
             "reason": "source_unavailable_not_evaluated",
         }
     ]
+
+
+def test_backfill_production_config_is_candidate_only_and_ineligible_for_recall():
+    """DQ-003 Slice E (criterion 11): under the production-like path every
+    evaluated ticker is `pass` (no reject gate), so there is no screen-rejected
+    control. `contains_control_population` is False and `recall_eligibility`
+    states the machine-readable ineligibility reason — both in the response and
+    in to_dict()."""
+    signal_date = date(2026, 6, 1)
+    observations = FakeCandidateObservationsRepository()
+    screen = FakeReconcilingScreenUseCase(observations)
+
+    response = BackfillSignalObservationsUseCase(
+        record_observations_use_case=screen,
+        screen_request_builder=_request_builder(),
+        market_data_repository=FakeMarketRepository(
+            [_candle("IHSG", signal_date), _candle("BBCA", signal_date)]
+        ),
+        candidate_observations_repository=observations,
+        observation_identity=_LEAN_IDENTITY,
+    ).execute(
+        BackfillSignalObservationsRequest(
+            tickers=("BBCA",),
+            start_date=signal_date,
+            end_date=signal_date,
+            windows=(7,),
+        )
+    )
+
+    assert response.rejected_count == 0
+    assert response.contains_control_population is False
+    assert (
+        response.recall_eligibility
+        == "ineligible_candidate_only_no_screen_rejected_control"
+    )
+
+    payload = response.to_dict()
+    assert payload["contains_control_population"] is False
+    assert (
+        payload["recall_eligibility"]
+        == "ineligible_candidate_only_no_screen_rejected_control"
+    )
+
+
+def test_backfill_with_screen_rejected_control_is_eligible():
+    """DQ-003 Slice E: when a run persists at least one screen-rejected
+    observation (screen_result != "pass"), `contains_control_population` is True
+    and eligibility flips. This proves the marker tracks real screen results, not
+    a hardcoded False. The reject is constructed at the DTO/use-case boundary."""
+    signal_date = date(2026, 6, 1)
+    observations = FakeCandidateObservationsRepository()
+    screen = FakeReconcilingScreenUseCase(observations, rejected=("GOTO",))
+
+    response = BackfillSignalObservationsUseCase(
+        record_observations_use_case=screen,
+        screen_request_builder=_request_builder(),
+        market_data_repository=FakeMarketRepository(
+            [
+                _candle("IHSG", signal_date),
+                _candle("BBCA", signal_date),
+                _candle("GOTO", signal_date),
+            ]
+        ),
+        candidate_observations_repository=observations,
+        observation_identity=_LEAN_IDENTITY,
+    ).execute(
+        BackfillSignalObservationsRequest(
+            tickers=("BBCA", "GOTO"),
+            start_date=signal_date,
+            end_date=signal_date,
+            windows=(7,),
+        )
+    )
+
+    # GOTO evaluated but rejected; BBCA evaluated and selected.
+    assert response.evaluated_count == 2
+    assert response.selected_count == 1
+    assert response.rejected_count == 1
+    assert response.contains_control_population is True
+    assert (
+        response.recall_eligibility == "eligible_contains_screen_rejected_control"
+    )
+    assert response.to_dict()["contains_control_population"] is True
 
 
 def _request_builder() -> BuildSignalObservationScreenRequest:

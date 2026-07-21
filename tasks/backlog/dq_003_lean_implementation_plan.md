@@ -170,6 +170,15 @@ deterministic seed), `tests/.../test_dq_003_truncated_backfill.py`.
 
 ## Slice D — Fail-closed + separation tests (parallel after C)
 
+**Status:** DONE (test-only, `NON_SEMANTIC`) —
+`tests/application/use_case/test_dq_003_slice_d_fail_closed_separation.py`
+(8 tests). Closes criteria 4 and 7; closes criterion 8 for session handling and
+records a CONFIRMED fail-soft finding (persister swallows all `save_many`
+failures to a 0-count) with a deferred-fix disposition for the write path — see
+the "Slice D finding (2026-07-21)" subsection in `audit_data_quality.md`. No
+`src/` change (the persister exception-boundary fix is raised as a finding, not
+applied silently).
+
 **Goal:** close criteria 4, 7, 8.
 
 - Holiday/retry/partial-failure fixtures → fail-closed session handling with
@@ -185,6 +194,14 @@ holiday/retry fixtures).
 ---
 
 ## Slice E — Candidate-only eligibility guard (parallel after C)
+
+**Status:** DONE (`NON_SEMANTIC`) — `BackfillSignalObservationsResponse` gains a
+typed `contains_control_population: bool` + machine-readable `recall_eligibility`
+(both in `to_dict()` and the CLI display), derived from Slice B's existing
+`rejected_count` aggregation — no new read, no persistence/identity change. False
+(ineligible) under the current universe-wide-`pass` capture; a run with a
+screen-rejected observation flips it True (tested). Closes criterion 11. The
+recall consumer stays with DQ-006.
 
 **Goal:** close criterion 11. Candidate-only datasets are ineligible for
 screener recall/filter-value claims.

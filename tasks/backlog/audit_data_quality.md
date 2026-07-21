@@ -455,7 +455,14 @@ If canonical identity omits a meaning-changing dimension, replace it and rebuild
       Slice C: a second capture against the same seeded DB adds no canonical
       rows and yields an identical semantic projection.)
 - [x] Repeating interactive screen/analyze commands creates no canonical observations.
-- [ ] Explicit capture is idempotent and separate from forward-label generation.
+- [x] Explicit capture is idempotent and separate from forward-label
+      generation. (Satisfied by Slice D:
+      `test_dq_003_slice_d_fail_closed_separation.py` runs the REAL production
+      capture composition with the REAL `GenerateSignalForwardLabelsUseCase`
+      always wired — a `generate_labels=False` run writes observations and zero
+      labels; a later `generate_labels=True` run over the same dates generates a
+      label and leaves the canonical observation count unchanged; and repeating
+      a capture-only run adds no canonical rows.)
 - [ ] The capture application use case is adapter-independent and ready for CLI-003 wiring.
 - [x] `accumulation-discovery` rows carry an explicit `observation_contract`
       and a config-content-hash `semantic_compatibility_id`. The writer rejects
@@ -468,8 +475,29 @@ If canonical identity omits a meaning-changing dimension, replace it and rebuild
       to the same id. (Satisfied by Slice A in commit `e00b4aa`:
       `lean_observation_identity.py`, persister contract-rejection + fail-closed
       write, repository migration 17 column + canonical-read predicate.)
-- [ ] Single-ticker inspection cannot write or count as canonical learning evidence.
-- [ ] Holiday/retry/failure fixtures prove fail-closed session handling and visible errors.
+- [x] Single-ticker inspection cannot write or count as canonical learning
+      evidence. (Satisfied by Slice D: a behavioral test runs the read-only
+      `AccumulationScreenUseCase.execute` for a single ticker against a
+      repo-backed DB and asserts `candidate_observations` stays empty — only the
+      explicit record/persist use case writes. A wiring guard asserts the
+      read-only `create_accumulation_screen_workflow` composition constructs no
+      recorder while only `create_accumulation_screen_workflow_bundle` — whose
+      sole caller is the backfill capture command — does. No inspection writer
+      exists today; the guard keeps it that way.)
+- [~] Holiday/retry/failure fixtures prove fail-closed session handling and
+      visible errors. **Session handling: satisfied** (Slice D). A holiday/
+      stale-cache decision date resolves to an explicitly *marked* fallback
+      (`ihsg_cache_stale_or_holiday`, `is_eod_pending=False`, with a note), and
+      that marker propagates end-to-end onto the persisted observation's
+      provenance columns; a date with no source candles is skipped with the
+      machine-readable `missing_source_candles_for_universe` reason.
+      **Write-path failure: fail-SOFT finding (deferred).** The
+      persistence-failure probe confirmed the persister swallows ALL `save_many`
+      exceptions to a 0-count with no visible failure marker — see "Slice D
+      finding (2026-07-21)" above. Current behavior is pinned by a test;
+      narrowing the exception boundary is deferred pending an exception-taxonomy
+      decision. Criterion 8 is therefore closed for session handling and blocked
+      on the recorded finding for the write path.
 - [x] Changing a semantic identity dimension creates a distinct artifact or
       explicit version replacement. (Satisfied by Slice A in commit `e00b4aa`:
       any resolved-config change forks the `semantic_compatibility_id` cohort
@@ -483,7 +511,21 @@ If canonical identity omits a meaning-changing dimension, replace it and rebuild
       `decision_at`/`analysis_as_of` cutoff, and neither collapses/overwrites
       the other. See the Slice C finding below on why the "control" is a second
       evaluated `pass` ticker rather than a `rejected_*` row.)
-- [ ] Candidate-only datasets are ineligible for screener recall/filter-value claims.
+- [x] Candidate-only datasets are ineligible for screener recall/filter-value
+      claims. (Satisfied by Slice E: `BackfillSignalObservationsResponse` carries
+      a typed `contains_control_population: bool` — True only if at least one
+      observation persisted this run has `screen_result != "pass"` — and a
+      machine-readable `recall_eligibility` string, both surfaced in `to_dict()`.
+      They are derived from Slice B's existing `rejected_count` aggregation (no
+      new read, no persistence/identity change). Under the current production
+      capture path every reject gate is disabled (Slice C finding), so
+      `rejected_count == 0`, `contains_control_population is False`, and
+      `recall_eligibility == "ineligible_candidate_only_no_screen_rejected_control"`
+      — eligibility is enforced via the marker and is False (ineligible) under
+      the universe-wide-`pass` capture. A downstream recall/precision consumer
+      (DQ-006, which owns recall) MUST check `contains_control_population` and is
+      blocked while it is False, pending the open design question in the Slice C
+      finding. Building the recall consumer is out of scope here.)
 - [x] Every ticker/date exclusion or failure at the canonical capture boundary
       has a machine-readable reason; internal diagnostic warnings are out of
       scope. (Satisfied by Slice B: `BackfillSignalObservationsResponse.
@@ -536,6 +578,39 @@ canonical rows, that requires a product decision — either the backfill must
 stop disabling reject gates, or a separate capture mode must be defined. Do not
 retrofit it by loosening the golden fixture. Tracked here as an open design
 question, not a Slice C blocker.
+
+#### Slice D finding (2026-07-21) — the persister swallows ALL save failures
+
+**Status:** CONFIRMED fail-soft. **Disposition:** fix deferred (needs an
+explicit exception-boundary decision; out of Slice D's test-only scope).
+
+`AccumulationCandidateObservationPersister.persist(...)`
+(`src/application/services/accumulation_candidate_observation_persister.py`)
+wraps `save_many` — and all the preceding evidence-building — in a broad
+`except Exception: logger.warning(...); return 0`. A genuine
+contract/infrastructure error on the write path (a locked DB, a schema mismatch,
+an `IntegrityError`, a malformed canonical object) is therefore converted into
+an ordinary 0-count "success". The backfill response then shows
+`evaluated_count > saved_observation_count` but carries **no machine-readable
+failure marker** — the write loss is silent unless someone diffs the two counts.
+
+This contradicts `AGENT_QUICKSTART.md` §14 ("Define the exception boundary"):
+expected provider/data **absence** may degrade to a typed missing/0 result, but
+contract, invariant, and programmer errors must propagate and fail closed. The
+contract-rejection and `None`-compatibility-id checks already sit *outside* the
+try and correctly raise; the `save_many` failure path does not.
+
+Current behavior is pinned by
+`tests/application/use_case/test_dq_003_slice_d_fail_closed_separation.py::
+test_persistence_failure_is_currently_swallowed_to_zero_count`, so any future
+narrowing is a deliberate, tested contract change.
+
+**Proposed fix (deferred):** narrow the `except` to the expected
+provider/data-absence error types (returning 0 only for those), and let
+contract/infrastructure exceptions propagate so the backfill fails closed with a
+visible non-zero error. Do not implement without the exception-taxonomy decision
+— which exact types are "expected absence" vs "must fail closed" — recorded
+here or in a follow-up task.
 
 #### Lean identity amendment (2026-07-21)
 

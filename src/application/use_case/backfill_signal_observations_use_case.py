@@ -108,6 +108,19 @@ class BackfillSignalObservationsResponse:
     universe_membership_source: str = ""
     survivorship_limitation: str | None = None
     ticker_exclusions: tuple[BackfillTickerExclusion, ...] = field(default_factory=tuple)
+    # DQ-003 Slice E candidate-only eligibility guard (criterion 11). True only
+    # if at least one observation persisted THIS run carries a screen_result
+    # other than "pass" (a genuine screen-rejected control). Derived from the
+    # same `rejected_count` aggregation Slice B already computes — no new read,
+    # no persistence change. Under the production capture path every reject gate
+    # is disabled (Slice C finding), so `rejected_count == 0` and this is False:
+    # the captured population is candidate-only and ineligible for screener
+    # recall/precision/filter-value claims. `recall_eligibility` states that
+    # reason machine-readably. A downstream recall/precision consumer (DQ-006)
+    # MUST check `contains_control_population` and refuse claims while it is
+    # False, pending the open design question in the Slice C finding.
+    contains_control_population: bool = False
+    recall_eligibility: str = "ineligible_candidate_only_no_screen_rejected_control"
 
     def to_dict(self) -> dict:
         return {
@@ -128,6 +141,8 @@ class BackfillSignalObservationsResponse:
             "universe_membership_source": self.universe_membership_source,
             "survivorship_limitation": self.survivorship_limitation,
             "ticker_exclusions": [entry.to_dict() for entry in self.ticker_exclusions],
+            "contains_control_population": self.contains_control_population,
+            "recall_eligibility": self.recall_eligibility,
         }
 
 
@@ -338,6 +353,19 @@ class BackfillSignalObservationsUseCase:
             else None
         )
 
+        # DQ-003 Slice E (criterion 11): a genuine screen-rejected control exists
+        # only if at least one evaluated observation this run was not `pass`
+        # (rejected_count > 0). Derived from the aggregation above — no new read.
+        # A candidate-only population (rejected_count == 0) is ineligible for
+        # screener recall/precision/filter-value claims; the reason is stated
+        # machine-readably so a downstream consumer (DQ-006) can refuse claims.
+        contains_control_population = rejected_count > 0
+        recall_eligibility = (
+            "eligible_contains_screen_rejected_control"
+            if contains_control_population
+            else "ineligible_candidate_only_no_screen_rejected_control"
+        )
+
         return BackfillSignalObservationsResponse(
             requested_date_count=len(trading_dates),
             processed_date_count=len(processed),
@@ -362,6 +390,8 @@ class BackfillSignalObservationsUseCase:
             universe_membership_source=request.universe_membership_source,
             survivorship_limitation=survivorship_limitation,
             ticker_exclusions=tuple(ticker_exclusions),
+            contains_control_population=contains_control_population,
+            recall_eligibility=recall_eligibility,
         )
 
     def _has_any_ticker_candle(self, tickers: tuple[str, ...], target_date: date) -> bool:

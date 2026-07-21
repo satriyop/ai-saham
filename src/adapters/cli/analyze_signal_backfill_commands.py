@@ -229,6 +229,10 @@ def _display_backfill_response(response: BackfillSignalObservationsResponse) -> 
     typer.echo(f"  Universe membership source: {response.universe_membership_source}")
     if response.survivorship_limitation:
         typer.echo(f"  Survivorship limitation: {response.survivorship_limitation}")
+    typer.echo(
+        f"  Contains screen-rejected control: {response.contains_control_population} "
+        f"({response.recall_eligibility})"
+    )
     if response.ticker_exclusions:
         typer.echo("")
         typer.echo("Ticker exclusions:")
