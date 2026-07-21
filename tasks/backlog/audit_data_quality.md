@@ -677,7 +677,13 @@ satisfied by the lean contract above, not by the full apparatus.
 
 ### DQ-004 — Audit and repair forward-label generation
 
-**State:** Blocked — waits for DQ-003 and `IDX-EXECUTION-LABELS`.
+**State:** Ready (raw-label slice) — amended 2026-07-22 to a **lean raw-label
+contract**: build honest, point-in-time raw market-outcome labels now, and park
+net-executable labels (fees, taxes, slippage, price limits, fills, execution
+status) behind the `IDX-EXECUTION-LABELS` trigger. Raw labels are sufficient for
+`DQ-BASELINE-GATE` research/ML validation, which does not authorize promotion;
+execution-net labels are a promotion-lane concern. See "Lean raw-label amendment
+(2026-07-22)" below.
 
 **Priority:** P0  
 **Depends on:** DQ-003  
@@ -715,11 +721,64 @@ Labels with ambiguous entry price, incomplete windows, orphaned observations, mi
 
 - [ ] Independent SQL/manual calculations match every label field in golden fixtures.
 - [ ] Target/stop collision policy has explicit tests.
-- [ ] Missing sessions, suspensions, corporate actions, and incomplete windows have explicit outcomes.
+- [ ] Missing sessions, suspensions, corporate actions, and incomplete windows
+      have explicit outcomes. Corporate-action detection uses the local
+      `CorporateActionCalendarRepository` (real `STOCK_SPLIT`/`REVERSE_SPLIT`/
+      `RIGHTS_ISSUE`/`BONUS` ex-dates in the window), not a jump heuristic; a
+      window crossing one is invalidated to `UNAVAILABLE`, never adjusted.
 - [ ] Fees, taxes, slippage, price limits, gaps, fills, and timing follow
-      `IDX-EXECUTION-LABELS` or the label is non-canonical.
+      `IDX-EXECUTION-LABELS` or the label is explicitly a raw (non-executable)
+      market-outcome label. Under the lean amendment, raw labels are canonical
+      for research/ML validation and carry an explicit raw-outcome marker;
+      net-executable labels are parked behind `IDX-EXECUTION-LABELS`.
 - [ ] Label uniqueness cannot attach one outcome to the wrong observation version.
 - [ ] Summary use case excludes invalid/unavailable labels by contract.
+
+#### Lean raw-label amendment (2026-07-22)
+
+**Decision:** Implement DQ-004 as an honest raw market-outcome label now.
+Implement this option only.
+
+**What is required now:**
+
+- Keep the existing raw outcome computation (close/max-high/min-low returns,
+  days-to-peak/trough, target/stop triggers, SUCCESS/FAILURE/NEUTRAL, complete
+  future-IDX-session windows, `UNAVAILABLE` on incomplete windows).
+- Add corporate-action fail-closed invalidation: if a `STOCK_SPLIT`,
+  `REVERSE_SPLIT`, `RIGHTS_ISSUE`, or `BONUS` has an `EX_DATE` inside the label
+  window (queried from `CorporateActionCalendarRepository`), the label is
+  `UNAVAILABLE` with a machine-readable reason — never a computed distorted
+  return.
+- Add an explicit raw-outcome marker so no consumer mistakes a raw label for a
+  net-of-cost tradeable result.
+- Prove every label field against hand/SQL candle math in a golden fixture.
+
+**Do Not Interpret This As:**
+
+- Do not model fees, taxes, slippage, price limits, fills, or execution status
+  (`FILLED`/`PARTIAL`/`UNFILLED`/`UNTRADEABLE`). That is parked.
+- Do not adjust prices across a corporate action; invalidate the label instead.
+- Do not use a price-jump heuristic when the corporate-action calendar has the
+  real event.
+- Do not claim tradeable/net edge from raw labels; they are research/ML inputs
+  only.
+
+**Deferral trigger:**
+
+| Trigger | Wake this parked work |
+|---|---|
+| A promotion/evaluation task needs net-of-cost tradeable outcomes | `IDX-EXECUTION-LABELS`: fees, taxes, slippage, price limits, fills, execution status, entry-model/exit-model/cost-model versioning, as a distinct net-executable label contract/schema |
+
+**Open design decision (defaulted):** ordinary `DIVIDEND` ex-dates also drop the
+close by the dividend amount. Default: invalidate only the four mechanical types
+above now; treat dividend-ex distortion as a documented limitation for a
+follow-up rather than invalidating otherwise-good labels over typically-small
+drops.
+
+**Coverage caveat:** corporate-action invalidation is only as complete as the
+local calendar sync. A period with no synced calendar coverage must surface an
+explicit "corporate-action coverage unavailable before date D" limitation, not
+silently pass unchecked labels as clean.
 
 ### DQ-005 — Audit signal replay for reproducibility, not retrieval
 
