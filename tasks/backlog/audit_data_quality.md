@@ -828,8 +828,8 @@ global-sync gate** (mirrors the DQ-003 survivorship precedent):
 
 ### DQ-005 — Audit signal replay for reproducibility, not retrieval
 
-**State:** Blocked — waits for canonical observations and labels from DQ-003
-and DQ-004.
+**State:** Active — Slice A (retrieval honesty) done 2026-07-22; Slice B
+(true recompute + drift classification) not started.
 
 **Priority:** P0  
 **Depends on:** DQ-003, DQ-004  
@@ -837,8 +837,9 @@ and DQ-004.
 
 **Accurate pointers:**
 
-- CLI: `src/adapters/cli/analyze_signal_replay_commands.py`
-- Use case: `src/application/use_case/replay_signal_observation_use_case.py`
+- CLI: `src/adapters/cli/analyze_signal_replay_commands.py` (command name
+  `signal-replay` retained until CLI restructure; behavior is retrieval-only)
+- Use case: `src/application/use_case/retrieve_stored_signal_observation_use_case.py`
 - Observation repository: `src/infrastructure/persistence/sqlite_candidate_observations_repository.py`
 
 **Audit requirements:**
@@ -856,10 +857,20 @@ If reproducibility cannot be achieved because the required code/config/source ve
 
 **Acceptance criteria:**
 
-- [ ] Output names the exact observation identity selected.
-- [ ] Stored-versus-recomputed comparison is explicit or the command is explicitly retrieval-only.
-- [ ] Multiple-version ambiguity fails or requires explicit selection.
+- [x] Output names the exact observation identity selected.
+      *Satisfied (Slice A, 2026-07-22):* response carries `selected_identity`
+      (ticker, snapshot_date, captured_at, window_sessions, config_hash,
+      schema_version, …); CLI prints Identity line. Silent `get_latest` removed.
+- [x] Stored-versus-recomputed comparison is explicit or the command is explicitly retrieval-only.
+      *Satisfied (retrieval-only half, Slice A, 2026-07-22):* mode is always
+      `RETRIEVAL_ONLY`; CLI header states retrieval-only / not a reproducibility
+      proof. Recompute comparison remains Slice B.
+- [x] Multiple-version ambiguity fails or requires explicit selection.
+      *Satisfied (Slice A, 2026-07-22):* omitting `--captured-at` with ≥2
+      versions returns `AMBIGUOUS` + candidate identities (CLI exit non-zero);
+      explicit `observation_captured_at` uses `get_at`.
 - [ ] Drift is machine-readable and never collapsed into a generic warning.
+      *Parked for Slice B (true recompute).*
 
 ### DQ-006 — Audit signal readiness counts and patch eligibility
 
