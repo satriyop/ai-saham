@@ -67,9 +67,19 @@ non-executable. Closes criterion 3 (corporate-action half) and the
 - Add an explicit raw-outcome marker to `SignalForwardLabel`, e.g.
   `outcome_basis: str = "raw_market"` (future net labels will be
   `"net_executable"`). Serialize it in `to_dict`/`from_dict`.
-- **Coverage caveat:** if the calendar has no synced coverage over the window,
-  surface an explicit limitation (reason/flag) — do NOT treat "no events found
-  because nothing was synced" as "confirmed clean".
+- **Coverage gate (RESOLVED 2026-07-22 — coarse global-sync gate, Option 1):**
+  per-window historical coverage is not provable from the schema (sync markers
+  are run-date keyed, calendar is forward-looking). So evaluate ONCE per run
+  (not per label) a new port method `has_any_sync_marker() -> bool` — SQLite:
+  `SELECT 1 FROM corporate_action_calendar_sync WHERE status='success' LIMIT 1`
+  (do NOT reuse `has_synced_for_date`; its exact event-type sync_key
+  false-negatives). If **no** successful marker → every label `UNAVAILABLE`
+  with `reason="corporate_action_coverage_unavailable"`. If a marker exists →
+  run per-event detection; "no events" is a clean raw label. **Precedence:**
+  detection beats the gate — an open gate never waves through a window with a
+  detected mechanical action. Residual limitation (synced-but-sparse gap passing
+  as clean) is accepted and documented; do NOT claim completeness. Per-window
+  coverage provenance is parked.
 
 **Do Not Interpret This As:**
 - Do not adjust prices across a corporate action; invalidate.
@@ -93,8 +103,13 @@ uniformly `"raw_market"`, no existing data changes meaning) — confirm, and if 
   the raw return is NOT computed.
 - Same window with the split ex-date OUTSIDE (day after window end) → normal
   raw label.
-- No calendar coverage for the window → explicit coverage limitation, not a
-  silent clean pass.
+- No successful sync marker → every label `UNAVAILABLE` /
+  `corporate_action_coverage_unavailable`; returns not computed.
+- Sync marker present + no events in window → normal raw label (gate opens;
+  "no events" ≠ "unavailable").
+- Sync marker present + planted split ex-date in window → `UNAVAILABLE` /
+  `corporate_action_in_window:...` (detection wins over the open gate).
+- `has_any_sync_marker()` evaluated once per run, not per observation (recording fake).
 - `DIVIDEND` ex-date in window → still a normal label (documents the deferral).
 - Every persisted raw label carries `outcome_basis == "raw_market"`.
 
