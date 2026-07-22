@@ -1,8 +1,14 @@
 # TUI UI/UX Design Contract And Shell Alignment
 
-Status: `DONE`
+Status: `SUPERSEDED` — shell/accessibility evidence retained; route and product
+scope replaced by `docs/roadmap/roadmap_tui.md`
 
 Roadmap: `docs/roadmap/roadmap_tui.md`
+
+This file is historical evidence only. Do not use its route list, screen set,
+phase dependencies, or read-only product boundary for new implementation.
+The value-first roadmap now owns the product information architecture and
+milestone UX direction.
 
 Prerequisite: TUI Phase 1 is `DONE`
 
@@ -87,7 +93,6 @@ V1 routes:
 Today
   -> Candidates
        -> Ticker Research
-Research Health
 Help (overlay/pushed screen from any route)
 ```
 
@@ -95,7 +100,6 @@ The main route labels are exactly:
 
 - `Today`
 - `Candidates`
-- `Research`
 
 Ticker Research is contextual detail, not a top-level route. Help is temporary
 and returns to the previous screen.
@@ -111,7 +115,7 @@ persistent navigation rail; it consumes too much of an 80-column terminal.
 │                         active screen                          │
 │                                                                │
 ├────────────────────────────────────────────────────────────────┤
-│ 1 Today  2 Candidates  3 Research  r Reload  ? Help  q Quit   │
+│ 1 Today  2 Candidates  r Reload  ? Help  q Quit              │
 └────────────────────────────────────────────────────────────────┘
 ```
 
@@ -135,7 +139,6 @@ Footer requirements:
 |---|---|---|
 | `1` | Today | Global once route exists |
 | `2` | Candidates | Global after Phase 3 |
-| `3` | Research | Global after Phase 4 |
 | `Up`/`Down`, `j`/`k` | Move selection or scroll | Lists/tables |
 | `Enter` | Open selected item / submit focused form | Contextual |
 | `Esc` | Back or close Help | Contextual |
@@ -315,28 +318,13 @@ Compact mode uses a full-screen tab/section at a time. Wide mode may show
 canonical overview beside the selected detail. Preview may never occupy the
 canonical verdict region.
 
-## Screen 4 — Research Corpus Health
+## Excluded Screen — Signal Corpus Health
 
-```text
-┌ DIAGNOSTIC ONLY — NOT PROMOTION EVIDENCE ───────────────────────┐
-│ Target [......................................................] │
-│ Cohort [......................................................] │
-└─────────────────────────────────────────────────────────────────┘
+Signal corpus/readiness diagnostics are not an investor-facing TUI journey.
+They remain available through the specialist CLI and must not appear as a TUI
+route, hidden key, Help item, or Advanced screen.
 
-Observations 120  Labels 74  IS 52  OOS 22
-Diagnostic ready YES
-Patch eligible    NO
-Promotion eligible NO
-
-BLOCKERS
-...
-
-EXCLUSIONS
-Schema 4  Wrong cohort 18  Unavailable 9  Duplicate 3
-```
-
-The diagnostic banner and promotion status remain visible with metrics.
-Unresolved multiple cohorts show a blocking selector state, never pooled data.
+Removal contract: `tasks/backlog/tui_remove_research_screen.md`.
 
 ## Help
 
@@ -348,7 +336,6 @@ It must contain:
 - current-screen keys;
 - `Reload reads local cached inputs and never fetches provider data`;
 - canonical versus preview meaning;
-- research health diagnostic/non-promotion meaning once that route exists.
 
 Help text grows with shipped routes; do not advertise unavailable screens.
 
@@ -371,6 +358,7 @@ generation succeeds; show it as stale/refreshing if retained.
 
 - Copy canonical actions, statuses, labels, reasons, dates, and warnings exactly.
 - Presenter-written text may describe UI state only.
+- Never ask users to type an internal target grammar or compatibility hash.
 - Do not generate CLI commands, trading advice, next actions, or fallback verdicts.
 - Use `—` for missing display values and `UNAVAILABLE` for meaningful absence.
 - Show dates with their meaning, never an unlabeled date.
@@ -514,4 +502,4 @@ items only from executed evidence.
 - Focused tests: `34 passed` including TUI, boundary, and layer-boundary tests
 - Architecture tests: `62 passed` for all architecture plus TUI tests
 - `git diff --check`: passed
-- Deferred route-owned items: Candidate/Ticker numeric route and preview surface belong to Phase 3; Research route belongs to Phase 4
+- Deferred route-owned items: Candidate/Ticker numeric route and preview surface belong to Phase 3; Research Health is rejected and governed by `tasks/backlog/tui_remove_research_screen.md`

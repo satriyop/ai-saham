@@ -1,3 +1,4 @@
+from inspect import signature
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,7 @@ from src.adapters.tui.composition import (
     _forbid_tui_refresh,
     _forbid_tui_sentiment,
     _SerializedDailyCapability,
+    create_tui_app,
 )
 from src.infrastructure.config.app_config import AnalysisConfig, AppConfig
 
@@ -61,3 +63,9 @@ def test_serialized_capability_builds_once_and_executes_once_per_call():
 def test_local_only_tripwires_have_exact_messages(callable_, message):
     with pytest.raises(RuntimeError, match=f"^{message}$"):
         callable_(ticker="BBCA", force=True)
+
+
+def test_tui_composition_has_no_removed_readiness_or_scope_inputs():
+    parameters = signature(create_tui_app).parameters
+    assert "research_health_loader" not in parameters
+    assert "research_scopes_loader" not in parameters

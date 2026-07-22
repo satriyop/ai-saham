@@ -211,3 +211,21 @@ only after cohort-isolation and negative-authority tests pass.
 - Full suite: `5740 passed, 3 failed`; failures match the pre-existing unrelated stale `_FakeScreenerConfig` cases (2) and canonical-window label-count regression (1)
 - `git diff --check`: passed
 - Deferred items: Phase 5 hardening/release decision; full-suite baseline failures remain outside TUI scope
+
+## Post-Completion Product Decision — 2026-07-22
+
+Phase 4 correctly implemented its original technical contract. Subsequent UX
+work also replaced its internal target/cohort Inputs with guided selectors.
+Product review then found the deeper issue: signal corpus readiness is an
+engineering/calibration diagnostic, not part of the investor-facing TUI
+journey. Improving its input mechanics does not justify the route.
+
+Phase 4 remains `DONE`; do not uncheck or rewrite its verified readiness,
+cohort-isolation, no-write, or completion evidence.
+
+The chosen corrective task is:
+`tasks/backlog/tui_remove_research_screen.md`.
+
+It must remove the complete Research Health TUI vertical slice and its TUI-only
+scope catalog while preserving `ReportSignalReadinessUseCase` and the CLI
+readiness command. This removal blocks Phase 5 RELEASE.

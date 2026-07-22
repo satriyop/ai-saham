@@ -76,10 +76,10 @@ Controls:
 
 | Key | Action |
 |---|---|
-| `1` / `2` / `3` | Today / Candidates / Research Corpus Health |
+| `1` / `2` | Today / Candidates |
 | `r` | Explicit local recomputation of the active result |
-| `Enter` | Open the selected ticker or submit the focused research form |
-| `Tab` / `Shift+Tab` | Move form focus |
+| `Enter` | Open the selected ticker |
+| `Tab` / `Shift+Tab` | Move focus |
 | `Esc` | Return to the previous route |
 | `?` | Open Help |
 | `q` | Exit |
@@ -92,9 +92,9 @@ migrations or initialize missing tables/indexes, so do not treat launch as a
 byte-for-byte read-only database operation.
 
 Canonical verdicts remain separate from `NON-CANONICAL PREVIEW` context.
-Missing evidence stays unavailable. Research Corpus Health uses a diagnostic
-ephemeral split, never pools unresolved semantic cohorts, and never represents
-promotion evidence. The CLI remains the supported automation surface.
+Missing evidence stays unavailable. Signal-readiness diagnostics remain
+available through `saham research signal readiness`; they are not a TUI route.
+The CLI remains the supported automation surface.
 
 ---
 

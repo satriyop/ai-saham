@@ -58,10 +58,9 @@ It performs no intentional business-data writes. Repository construction may
 initialize or migrate SQLite schemas, so this is not a byte-for-byte storage
 read-only claim.
 
-Use `1` for Today, `2` for Candidates, `3` for Research Corpus Health, `r` for
-explicit local recomputation, `Enter` to open/submit, `Esc` to go back, `?` for
-Help, and `q` to quit. Research readiness is diagnostic only, uses an ephemeral
-split, isolates semantic cohorts, and is never promotion evidence. The CLI
+Use `1` for Today, `2` for Candidates, `r` for explicit local recomputation,
+`Enter` to open the selected ticker, `Esc` to go back, `?` for Help, and `q` to
+quit. Signal-readiness diagnostics remain available through the CLI. The CLI
 remains the primary automation interface.
 
 ### Coding agents

@@ -47,6 +47,8 @@ FORBIDDEN_TUI_CAPABILITY_SYMBOLS = {
     "RepairCandidateObservationsUseCase",
     "RepairSignalForwardLabelsUseCase",
     "OpeningTuneUseCase",
+    "ReportSignalReadinessUseCase",
+    "ListSignalResearchScopesUseCase",
     "auto_refresh_swing_data",
     "fetch_swing_sentiment",
 }
@@ -160,6 +162,13 @@ def test_tui_does_not_compose_forbidden_provider_or_write_capabilities():
     assert not (FORBIDDEN_TUI_CAPABILITY_SYMBOLS & set(source.split()))
     for symbol in FORBIDDEN_TUI_CAPABILITY_SYMBOLS:
         assert symbol not in source
+
+
+def test_tui_has_no_removed_research_health_modules_or_route_action():
+    source = "\n".join(path.read_text(encoding="utf-8") for path in sorted(TUI_ROOT.rglob("*.py")))
+    assert "research_health" not in source
+    assert "show_research" not in source
+    assert 'Binding("3"' not in source
 
 
 def test_tui_source_defines_no_canonical_action_vocabulary():

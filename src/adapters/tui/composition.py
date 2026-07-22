@@ -21,10 +21,6 @@ from src.adapters.tui.controllers.accumulation_controller import (
     AccumulationLoader,
 )
 from src.adapters.tui.controllers.daily_controller import DailyController, DailyLoader
-from src.adapters.tui.controllers.research_health_controller import (
-    ResearchHealthController,
-    ResearchHealthLoader,
-)
 from src.adapters.tui.controllers.ticker_research_controller import (
     TickerLoader,
     TickerResearchController,
@@ -32,9 +28,7 @@ from src.adapters.tui.controllers.ticker_research_controller import (
 from src.adapters.tui.main import SahamTuiApp
 from src.adapters.tui.presenters.accumulation_presenter import AccumulationPresenter
 from src.adapters.tui.presenters.daily_presenter import DailyPresenter
-from src.adapters.tui.presenters.research_health_presenter import ResearchHealthPresenter
 from src.adapters.tui.presenters.ticker_research_presenter import TickerResearchPresenter
-from src.adapters.tui.readiness.composition import create_readiness_capability
 from src.adapters.tui.research_capabilities import (
     ResearchExecution,
     SerializedResearchCapabilities,
@@ -520,13 +514,11 @@ def create_tui_app(
     daily_loader: DailyLoader | None = None,
     accumulation_loader: AccumulationLoader | None = None,
     ticker_loader: TickerLoader | None = None,
-    research_health_loader: ResearchHealthLoader | None = None,
 ) -> SahamTuiApp:
     daily = daily_loader or create_daily_capability()
     research = SerializedResearchCapabilities(_build_research_execution)
     accumulation = accumulation_loader or research.load_accumulation
     ticker = ticker_loader or research.load_ticker
-    health = research_health_loader or create_readiness_capability()
     return SahamTuiApp(
         DailyController(daily),
         DailyPresenter(),
@@ -534,6 +526,4 @@ def create_tui_app(
         AccumulationPresenter(),
         TickerResearchController(ticker),
         TickerResearchPresenter(),
-        ResearchHealthController(health),
-        ResearchHealthPresenter(),
     )

@@ -8,13 +8,12 @@ from threading import Event, Lock
 
 import pytest
 from textual.containers import VerticalScroll
-from textual.widgets import Input, Static
+from textual.widgets import Static
 
 from src.adapters.tui.composition import create_tui_app
 from src.adapters.tui.screens.candidate_browser_screen import CandidateBrowserScreen
 from src.adapters.tui.screens.daily_screen import DailyScreen
 from src.adapters.tui.screens.help import HelpScreen
-from src.adapters.tui.screens.research_health_screen import ResearchHealthScreen
 from src.adapters.tui.screens.ticker_research_screen import TickerResearchScreen
 
 from .daily_fixtures import (
@@ -23,7 +22,6 @@ from .daily_fixtures import (
     partial_response,
     ready_response,
 )
-from .readiness_fixtures import TARGET, empty_readiness_report, readiness_report
 from .research_fixtures import single_result, ticker_response
 
 
@@ -41,7 +39,6 @@ class _StrictJourneyCapabilities:
         self.daily_calls = 0
         self.accumulation_calls: list[bool] = []
         self.ticker_calls: list[str] = []
-        self.readiness_calls: list[tuple[str, str | None]] = []
 
     def daily(self):
         self.daily_calls += 1
@@ -54,10 +51,6 @@ class _StrictJourneyCapabilities:
     def ticker(self, ticker: str):
         self.ticker_calls.append(ticker)
         return ticker_response(ticker=ticker)
-
-    def readiness(self, target: str, cohort: str | None):
-        self.readiness_calls.append((target, cohort))
-        return readiness_report()
 
     def fetch(self):
         raise AssertionError("network/provider call forbidden")
@@ -96,8 +89,9 @@ def test_full_keyboard_journey_is_offline_read_only_and_authority_safe(size):
             daily_loader=capabilities.daily,
             accumulation_loader=capabilities.accumulation,
             ticker_loader=capabilities.ticker,
-            research_health_loader=capabilities.readiness,
         )
+        assert not hasattr(app, "action_show_research")
+        assert all(binding.key != "3" for binding in app.BINDINGS)
         async with app.run_test(size=size) as pilot:
             await _wait_until(
                 pilot,
@@ -133,35 +127,23 @@ def test_full_keyboard_journey_is_offline_read_only_and_authority_safe(size):
             assert "NON-CANONICAL PREVIEW" in preview
             assert "PREVIEW_ONLY" in preview
 
-            await pilot.press("escape", "escape", "3")
+            await pilot.press("escape", "escape")
             await pilot.pause()
-            assert isinstance(app.screen, ResearchHealthScreen)
-            assert capabilities.readiness_calls == []
-            app.screen.query_one("#research-target", Input).value = TARGET
-            await pilot.press("enter")
-            await _wait_until(
-                pilot,
-                lambda: len(capabilities.readiness_calls) == 1,
-                "Research readiness did not load",
-            )
-            assert app.screen.focused is None
-            eligibility = str(app.screen.query_one("#research-eligibility", Static).content)
-            assert "Diagnostic ready: YES" in eligibility
-            assert "Patch eligible: YES" in eligibility
-            assert "Promotion eligible: NO" in eligibility
-
-            await pilot.press("r")
-            await _wait_until(
-                pilot,
-                lambda: len(capabilities.readiness_calls) == 2,
-                "Research reload did not run",
-            )
+            assert isinstance(app.screen, DailyScreen)
+            await pilot.press("3")
+            await pilot.pause()
+            assert isinstance(app.screen, DailyScreen)
+            assert app.title == "AI Saham · Today"
             await pilot.press("?")
             await pilot.pause()
             assert isinstance(app.screen, HelpScreen)
+            help_copy = "\n".join(
+                str(widget.content) for widget in app.screen.query(Static)
+            )
+            assert "Research" not in help_copy
             await pilot.press("escape")
             await pilot.pause()
-            assert isinstance(app.screen, ResearchHealthScreen)
+            assert isinstance(app.screen, DailyScreen)
 
         assert capabilities.daily_calls == 1
         assert capabilities.accumulation_calls == [False]
@@ -201,7 +183,7 @@ def test_80x24_warnings_are_keyboard_reachable_and_large_layout_is_wide():
     asyncio.run(scenario())
 
 
-def test_empty_daily_candidate_and_corpus_states_keep_navigation_available():
+def test_empty_daily_and_candidate_states_keep_navigation_available():
     result = single_result()
     empty_projection = replace(
         result.single_projection,
@@ -215,7 +197,6 @@ def test_empty_daily_candidate_and_corpus_states_keep_navigation_available():
         app = create_tui_app(
             daily_loader=empty_response,
             accumulation_loader=lambda multi: empty_candidates,
-            research_health_loader=lambda target, cohort: empty_readiness_report(),
         )
         async with app.run_test(size=(80, 24)) as pilot:
             await _wait_until(
@@ -231,17 +212,6 @@ def test_empty_daily_candidate_and_corpus_states_keep_navigation_available():
                     and "EMPTY" in str(app.screen.query_one("#candidate-status", Static).content)
                 ),
                 "Candidate EMPTY did not render",
-            )
-            await pilot.press("escape", "3")
-            await pilot.pause()
-            app.screen.query_one("#research-target", Input).value = TARGET
-            await pilot.press("enter")
-            await _wait_until(
-                pilot,
-                lambda: (
-                    "EMPTY" in str(app.screen.query_one("#research-health-status", Static).content)
-                ),
-                "Research EMPTY did not render",
             )
             await pilot.press("escape")
             await pilot.pause()

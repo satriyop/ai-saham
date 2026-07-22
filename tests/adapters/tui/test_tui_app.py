@@ -2,24 +2,15 @@
 
 import asyncio
 
-from textual.widgets import Input, Static
+from textual.widgets import Static
 
 from src.adapters.tui.composition import create_tui_app
 from src.adapters.tui.screens.candidate_browser_screen import CandidateBrowserScreen
 from src.adapters.tui.screens.daily_screen import DailyScreen
 from src.adapters.tui.screens.help import HelpScreen
-from src.adapters.tui.screens.research_health_screen import ResearchHealthScreen
 from src.adapters.tui.screens.ticker_research_screen import TickerResearchScreen
 
 from .daily_fixtures import not_ready_response, ready_response
-from .readiness_fixtures import (
-    COHORT_A,
-    COHORT_B,
-    TARGET,
-    empty_readiness_report,
-    mixed_cohort_report,
-    readiness_report,
-)
 from .research_fixtures import multi_result, single_result, ticker_response
 
 
@@ -46,28 +37,6 @@ async def _wait_for_calls(pilot, capability, expected):
             await pilot.pause()
             return
     raise AssertionError(f"expected {expected} Daily calls, got {capability.calls}")
-
-
-class _RecordingResearchHealthCapability:
-    def __init__(self, response):
-        self.response = response
-        self.calls = []
-
-    def __call__(self, target, cohort):
-        self.calls.append((target, cohort))
-        return self.response
-
-    def save(self):
-        raise AssertionError("write fake must not be called")
-
-
-async def _wait_for_research_calls(pilot, capability, expected):
-    for _ in range(30):
-        await pilot.pause(0.01)
-        if len(capability.calls) == expected:
-            await pilot.pause()
-            return
-    raise AssertionError(f"expected {expected} Research calls, got {len(capability.calls)}")
 
 
 def test_launch_calls_daily_once_reload_once_and_navigation_does_not_call():
@@ -98,7 +67,6 @@ def test_launch_calls_daily_once_reload_once_and_navigation_does_not_call():
             assert capability.calls == 2
 
     asyncio.run(scenario())
-
 
 def test_shell_hierarchy_and_text_semantics_at_supported_sizes():
     async def scenario(size) -> None:
@@ -249,114 +217,5 @@ def test_candidate_compact_mode_keeps_canonical_action_risk_and_data_text():
             assert "Action: WATCH" in selected
             assert "Risk: OPEN" in selected
             assert "Data: ALIGNED" in selected
-
-    asyncio.run(scenario())
-
-
-def test_research_is_idle_until_explicit_submit_and_renders_exact_report():
-    async def scenario() -> None:
-        capability = _RecordingResearchHealthCapability(readiness_report())
-        app = create_tui_app(
-            daily_loader=lambda: ready_response(),
-            research_health_loader=capability,
-        )
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause(0.05)
-            await pilot.press("3")
-            await pilot.pause()
-            assert isinstance(app.screen, ResearchHealthScreen)
-            assert app.title == "AI Saham · Research"
-            assert capability.calls == []
-            assert "IDLE" in str(app.screen.query_one("#research-health-status", Static).content)
-            assert (
-                str(app.screen.query_one("#research-health-banner", Static).content)
-                == "DIAGNOSTIC ONLY — NOT PROMOTION EVIDENCE"
-            )
-
-            await pilot.press("tab", "shift+tab", "right", "left")
-            await pilot.pause()
-            assert capability.calls == []
-
-            await pilot.press("enter")
-            await pilot.pause(0.05)
-            assert capability.calls == []
-            assert "ERROR — ValueError: target must not be blank" == str(
-                app.screen.query_one("#research-health-status", Static).content
-            )
-
-            app.screen.query_one("#research-target", Input).value = f" {TARGET} "
-            app.screen.query_one("#research-cohort", Input).value = f" {COHORT_A} "
-            app.screen.query_one("#research-target", Input).focus()
-            await pilot.press("enter")
-            await _wait_for_research_calls(pilot, capability, 1)
-            assert capability.calls == [(f" {TARGET} ", f" {COHORT_A} ")]
-            assert "READY — report loaded" == str(
-                app.screen.query_one("#research-health-status", Static).content
-            )
-            eligibility = str(app.screen.query_one("#research-eligibility", Static).content)
-            assert "Split: EPHEMERAL_CHRONOLOGICAL_70_30" in eligibility
-            assert "Diagnostic ready: YES" in eligibility
-            assert "Patch eligible: YES" in eligibility
-            assert "Promotion eligible: NO" in eligibility
-            blockers = str(app.screen.query_one("#research-blockers", Static).content)
-            assert "calibration blocker" in blockers
-            exclusions = str(app.screen.query_one("#research-exclusions", Static).content)
-            for name in readiness_report().exclusions.to_dict():
-                assert name in exclusions
-
-    asyncio.run(scenario())
-
-
-def test_research_mixed_cohort_is_visible_and_never_pooled():
-    async def scenario() -> None:
-        capability = _RecordingResearchHealthCapability(mixed_cohort_report())
-        app = create_tui_app(
-            daily_loader=lambda: ready_response(),
-            research_health_loader=capability,
-        )
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause(0.05)
-            await pilot.press("3")
-            await pilot.pause()
-            app.screen.query_one("#research-target", Input).value = TARGET
-            await pilot.press("enter")
-            await _wait_for_research_calls(pilot, capability, 1)
-            cohorts = str(app.screen.query_one("#research-cohorts", Static).content)
-            eligibility = str(app.screen.query_one("#research-eligibility", Static).content)
-            blockers = str(app.screen.query_one("#research-blockers", Static).content)
-            assert "Selected: —" in cohorts
-            assert COHORT_A in cohorts
-            assert COHORT_B in cohorts
-            assert "IS / OOS: 0 / 0" in eligibility
-            assert "OOS profit factor: —" in eligibility
-            assert "OOS average return: —" in eligibility
-            assert "mixed_semantic_cohorts" in blockers
-
-    asyncio.run(scenario())
-
-
-def test_empty_research_report_keeps_other_routes_available():
-    async def scenario() -> None:
-        capability = _RecordingResearchHealthCapability(empty_readiness_report())
-        app = create_tui_app(
-            daily_loader=lambda: ready_response(),
-            research_health_loader=capability,
-        )
-        async with app.run_test(size=(100, 32)) as pilot:
-            await pilot.pause(0.05)
-            await pilot.press("3")
-            await pilot.pause()
-            app.screen.query_one("#research-target", Input).value = TARGET
-            await pilot.press("enter")
-            await _wait_for_research_calls(pilot, capability, 1)
-            assert "EMPTY — report loaded" == str(
-                app.screen.query_one("#research-health-status", Static).content
-            )
-            assert "no forward labels generated yet" in str(
-                app.screen.query_one("#research-blockers", Static).content
-            )
-            await pilot.press("escape")
-            await pilot.pause()
-            assert isinstance(app.screen, DailyScreen)
 
     asyncio.run(scenario())
