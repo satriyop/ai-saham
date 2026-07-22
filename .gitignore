@@ -102,5 +102,9 @@ journals/
 # Jupyter (if used for analysis exploration)
 .ipynb_checkpoints/
 
+# Factor proving lab generated cards (keep .gitkeep)
+research/artifacts/*
+!research/artifacts/.gitkeep
+
 #AI
 .opencode/

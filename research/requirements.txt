@@ -1,0 +1,7 @@
+# Optional Factor Proving Lab dependencies.
+# Install: pip install -r research/requirements.txt
+# Do NOT add these to src/ or default project.dependencies.
+
+polars>=1.0.0
+scikit-learn>=1.4.0
+statsmodels>=0.14.0
