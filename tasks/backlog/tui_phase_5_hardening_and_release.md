@@ -4,7 +4,9 @@ Status: `BLOCKED_BY_PHASES_3_AND_4`
 
 Roadmap: `docs/roadmap/roadmap_tui.md`
 
-Depends on: TUI Phases 0–4
+UX contract: `tasks/backlog/tui_ui_ux_design_spec.md`
+
+Depends on: TUI Phases 0–4 and the completed UX contract/alignment task
 
 ## Task Metadata
 

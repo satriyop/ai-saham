@@ -223,3 +223,25 @@ checklists and the completion record only from executed verification evidence.
 - `git diff --check`: passed; scoped Ruff passed
 - Deferred items: repository-wide Ruff currently reports 727 existing
   out-of-scope violations; Daily data execution begins in Phase 2
+
+## Post-Completion UI/UX Alignment Addendum — 2026-07-22
+
+The binding UI/UX contract was created after this phase completed:
+`tasks/backlog/tui_ui_ux_design_spec.md`.
+
+Phase 1 remains `DONE`; do not reopen or rewrite its verified packaging,
+architecture, worker, navigation, or completion evidence.
+
+Alignment audit:
+
+- Header/Footer, no persistent sidebar, Daily startup, pushed Help, `q`, `?`,
+  hidden `h`, Help `Esc`, hidden `d`, and the 80x24 foundation are compatible.
+- Route breadcrumb plus persistent `OFFLINE` context and shared semantic CSS
+  roles were not Phase 1 acceptance requirements; the UX alignment task owns
+  those shell-level follow-ups.
+- Numeric route navigation belongs to the phases that add those routes.
+- Later screen layout, responsive hierarchy, canonical/preview styling, and
+  accessibility must follow the UX contract.
+
+This addendum changes no checked Phase 1 criterion and authorizes no product
+behavior change.

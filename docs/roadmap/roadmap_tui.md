@@ -60,6 +60,11 @@ prerequisite for starting the read-only TUI.
 
 ## Product Boundary
 
+Binding UI/UX contract:
+`tasks/backlog/tui_ui_ux_design_spec.md`. It was authored after the Phase 1
+shell completed, so it preserves that foundation and governs shell alignment
+plus Phase 3 onward.
+
 ### V1 includes
 
 - Optional `saham tui` launcher.

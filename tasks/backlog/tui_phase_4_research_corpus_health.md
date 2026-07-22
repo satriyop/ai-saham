@@ -4,7 +4,9 @@ Status: `BACKLOG`
 
 Roadmap: `docs/roadmap/roadmap_tui.md`
 
-Depends on: TUI Phases 0–2
+UX contract: `tasks/backlog/tui_ui_ux_design_spec.md`
+
+Depends on: TUI Phases 0–2 and the completed UX contract/alignment task
 
 Blocks: TUI Phase 5
 
