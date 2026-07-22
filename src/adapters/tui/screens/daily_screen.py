@@ -25,6 +25,7 @@ from src.adapters.tui.widgets.daily import (
     render_setup_lens,
     render_warnings,
 )
+from src.adapters.tui.worker_lifecycle import dispatch_if_active
 
 
 class DailyScreen(Screen[None]):
@@ -70,13 +71,20 @@ class DailyScreen(Screen[None]):
         self._render_state(self._controller.state)
         self._execute_daily(generation)
 
-    @work(thread=True)
+    @work(thread=True, exclusive=True)
     def _execute_daily(self, generation: int) -> None:
         self._controller.execute_generation(
             generation,
-            dispatch=self.app.call_from_thread,
+            dispatch=lambda callback, *args: dispatch_if_active(self.app, callback, *args),
             listener=self._render_state,
         )
+
+    def cancel_active_work(self) -> None:
+        self.workers.cancel_node(self)
+        if self._controller.cancel_current():
+            self.query_one("#daily-status", Static).update(
+                "IDLE — local work cancelled; press r to retry"
+            )
 
     def _render_state(self, state: ScreenState) -> None:
         status = self.query_one("#daily-status", Static)

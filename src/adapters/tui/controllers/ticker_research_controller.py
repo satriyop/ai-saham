@@ -36,6 +36,9 @@ class TickerResearchController:
     def begin(self) -> int:
         return self._tracker.begin()
 
+    def cancel_current(self) -> bool:
+        return self._tracker.cancel_current()
+
     def execute_generation(
         self,
         generation: int,

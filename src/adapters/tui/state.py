@@ -65,6 +65,16 @@ class ScreenStateTracker:
         )
         return generation
 
+    def cancel_current(self) -> bool:
+        """Invalidate one loading generation without fabricating a result."""
+        if self._state.status is not ScreenStatus.LOADING:
+            return False
+        self._state = ScreenState(
+            generation=self._state.generation + 1,
+            status=ScreenStatus.IDLE,
+        )
+        return True
+
     def complete_current(
         self,
         generation: int,
@@ -72,10 +82,7 @@ class ScreenStateTracker:
         payload: object | None,
         status: ScreenStatus = ScreenStatus.READY,
     ) -> bool:
-        if (
-            generation != self._state.generation
-            or self._state.status is not ScreenStatus.LOADING
-        ):
+        if generation != self._state.generation or self._state.status is not ScreenStatus.LOADING:
             return False
         if status not in self._COMPLETION_STATUSES:
             raise ValueError("completion status must be READY, EMPTY, or UNAVAILABLE")
@@ -87,10 +94,7 @@ class ScreenStateTracker:
         return True
 
     def fail_current(self, generation: int, error: BaseException) -> bool:
-        if (
-            generation != self._state.generation
-            or self._state.status is not ScreenStatus.LOADING
-        ):
+        if generation != self._state.generation or self._state.status is not ScreenStatus.LOADING:
             return False
         self._state = ScreenState(
             generation=generation,

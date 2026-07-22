@@ -23,6 +23,7 @@ from src.adapters.tui.widgets.research import (
     candidate_metadata,
     selected_candidate,
 )
+from src.adapters.tui.worker_lifecycle import dispatch_if_active
 
 
 class CandidateBrowserScreen(Screen[None]):
@@ -80,14 +81,21 @@ class CandidateBrowserScreen(Screen[None]):
         self._multi = not self._multi
         self.action_reload()
 
-    @work(thread=True)
+    @work(thread=True, exclusive=True)
     def _execute_accumulation(self, generation: int, multi: bool) -> None:
         self._controller.execute_generation(
             generation,
             multi=multi,
-            dispatch=self.app.call_from_thread,
+            dispatch=lambda callback, *args: dispatch_if_active(self.app, callback, *args),
             listener=self._render_state,
         )
+
+    def cancel_active_work(self) -> None:
+        self.workers.cancel_node(self)
+        if self._controller.cancel_current():
+            self.query_one("#candidate-status", Static).update(
+                "IDLE — local work cancelled; press r to retry"
+            )
 
     def action_cursor_down(self) -> None:
         options = self.query_one("#candidate-list", OptionList)

@@ -40,6 +40,19 @@ def test_begin_is_monotonic_and_enters_loading():
     assert tracker.state == ScreenState(generation=2, status=ScreenStatus.LOADING)
 
 
+def test_cancel_current_invalidates_loading_generation_only():
+    tracker = ScreenStateTracker()
+    loading_generation = tracker.begin()
+
+    assert tracker.cancel_current() is True
+    assert tracker.state == ScreenState(
+        generation=loading_generation + 1,
+        status=ScreenStatus.IDLE,
+    )
+    assert tracker.complete_current(loading_generation, payload=object()) is False
+    assert tracker.cancel_current() is False
+
+
 def test_stale_completion_cannot_replace_newer_state_and_payload_identity_is_preserved():
     tracker = ScreenStateTracker()
     stale_generation = tracker.begin()

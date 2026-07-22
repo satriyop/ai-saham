@@ -7,6 +7,69 @@ on:
     branches: [main]
 
 jobs:
+  base-install:
+    name: Base install · Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.14"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install base and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Verify Textual is absent and base CLI is usable
+        run: |
+          python -c "import importlib.util; assert importlib.util.find_spec('textual') is None"
+          saham --help
+          pytest -q tests/adapters/cli/test_tui_commands.py tests/adapters/cli/test_tui_packaging_contract.py
+
+  tui-extra:
+    name: TUI extra · Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.14"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install from the locked TUI extra
+        run: |
+          python -m pip install --upgrade pip uv
+          uv sync --locked --extra dev --extra tui
+
+      - name: Verify installed TUI contracts
+        run: |
+          .venv/bin/python -c "import textual; import src.adapters.tui.main"
+          .venv/bin/pytest -q tests/adapters/tui tests/adapters/cli/test_tui_commands.py tests/adapters/cli/test_tui_packaging_contract.py tests/architecture/test_tui_boundaries.py
+
+      - name: Build and inspect wheel and sdist
+        if: matrix.python-version == '3.11'
+        run: |
+          uv build --out-dir dist
+          .venv/bin/python tests/packaging/verify_tui_artifacts.py dist
+
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -24,7 +87,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install -e ".[dev,tui]"
 
       - name: Run tests
         run: |

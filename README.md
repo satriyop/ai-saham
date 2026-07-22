@@ -43,6 +43,27 @@ For command options, use `saham COMMAND --help`. See [CLI_README.md](CLI_README.
 for the longer learning-oriented guide; when it conflicts with live `--help`,
 the command implementation wins.
 
+### Optional terminal workspace
+
+Install and launch the read-only Textual workspace separately from the base CLI:
+
+```bash
+pip install -e ".[tui]"
+saham tui
+```
+
+The TUI reads cached local data and never initiates provider refresh, capture,
+label generation, tuning, configuration changes, AI calls, or trading actions.
+It performs no intentional business-data writes. Repository construction may
+initialize or migrate SQLite schemas, so this is not a byte-for-byte storage
+read-only claim.
+
+Use `1` for Today, `2` for Candidates, `3` for Research Corpus Health, `r` for
+explicit local recomputation, `Enter` to open/submit, `Esc` to go back, `?` for
+Help, and `q` to quit. Research readiness is diagnostic only, uses an ephemeral
+split, isolates semantic cohorts, and is never promotion evidence. The CLI
+remains the primary automation interface.
+
 ### Coding agents
 
 Read these in order:

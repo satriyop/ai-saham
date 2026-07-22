@@ -19,6 +19,7 @@ from src.adapters.tui.controllers.ticker_research_controller import (
 from src.adapters.tui.presenters.ticker_research_presenter import TickerResearchPresenter
 from src.adapters.tui.state import ScreenState, ScreenStatus
 from src.adapters.tui.widgets.research import canonical_verdict, research_section
+from src.adapters.tui.worker_lifecycle import dispatch_if_active
 
 
 class TickerResearchScreen(Screen[None]):
@@ -61,14 +62,21 @@ class TickerResearchScreen(Screen[None]):
         self._render_state(self._controller.state)
         self._execute_ticker(generation, self._ticker)
 
-    @work(thread=True)
+    @work(thread=True, exclusive=True)
     def _execute_ticker(self, generation: int, ticker: str) -> None:
         self._controller.execute_generation(
             generation,
             ticker=ticker,
-            dispatch=self.app.call_from_thread,
+            dispatch=lambda callback, *args: dispatch_if_active(self.app, callback, *args),
             listener=self._render_state,
         )
+
+    def cancel_active_work(self) -> None:
+        self.workers.cancel_node(self)
+        if self._controller.cancel_current():
+            self.query_one("#ticker-status", Static).update(
+                "IDLE — local work cancelled; press r to retry"
+            )
 
     def _render_state(self, state: ScreenState) -> None:
         status = self.query_one("#ticker-status", Static)

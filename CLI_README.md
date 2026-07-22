@@ -62,6 +62,40 @@ saham strategy backtest BBCA --strategy my_rsi
 
 You now have a local copy of BBCA's data and can analyze it offline anytime.
 
+### Optional read-only TUI
+
+The terminal workspace is an optional interactive view over the same
+application contracts; it is not installed with the base CLI:
+
+```bash
+pip install -e ".[tui]"
+saham tui
+```
+
+Controls:
+
+| Key | Action |
+|---|---|
+| `1` / `2` / `3` | Today / Candidates / Research Corpus Health |
+| `r` | Explicit local recomputation of the active result |
+| `Enter` | Open the selected ticker or submit the focused research form |
+| `Tab` / `Shift+Tab` | Move form focus |
+| `Esc` | Return to the previous route |
+| `?` | Open Help |
+| `q` | Exit |
+
+The TUI uses cached local inputs. It does not fetch providers, persist
+watchlists, capture observations, generate labels, repair data, tune/apply
+configuration, call AI, or place orders. It performs no intentional
+business-data writes. Its SQLite repository constructors can run schema
+migrations or initialize missing tables/indexes, so do not treat launch as a
+byte-for-byte read-only database operation.
+
+Canonical verdicts remain separate from `NON-CANONICAL PREVIEW` context.
+Missing evidence stays unavailable. Research Corpus Health uses a diagnostic
+ephemeral split, never pools unresolved semantic cohorts, and never represents
+promotion evidence. The CLI remains the supported automation surface.
+
 ---
 
 ## 3. Understanding Stock Data

@@ -177,14 +177,17 @@ class SahamTuiApp(App[None]):
             self.pop_screen()
             return
         if isinstance(self.screen, TickerResearchScreen):
+            self._cancel_active_screen_work()
             self.pop_screen()
             self.call_after_refresh(self.action_show_today)
             return
         if isinstance(self.screen, CandidateBrowserScreen):
+            self._cancel_active_screen_work()
             self.set_route_context("Today")
             self.pop_screen()
             return
         if isinstance(self.screen, ResearchHealthScreen):
+            self._cancel_active_screen_work()
             self.set_route_context("Today")
             self.pop_screen()
             return
@@ -195,14 +198,17 @@ class SahamTuiApp(App[None]):
             self.pop_screen()
             return
         if isinstance(self.screen, TickerResearchScreen):
+            self._cancel_active_screen_work()
             self.set_route_context("Candidates")
             self.pop_screen()
             return
         if isinstance(self.screen, ResearchHealthScreen):
+            self._cancel_active_screen_work()
             self.pop_screen()
             self.call_after_refresh(self.action_show_candidates)
             return
         if not isinstance(self.screen, CandidateBrowserScreen):
+            self._cancel_active_screen_work()
             self.push_screen(
                 CandidateBrowserScreen(
                     self._accumulation_controller,
@@ -216,14 +222,17 @@ class SahamTuiApp(App[None]):
             self.pop_screen()
             return
         if isinstance(self.screen, TickerResearchScreen):
+            self._cancel_active_screen_work()
             self.pop_screen()
             self.call_after_refresh(self.action_show_research)
             return
         if isinstance(self.screen, CandidateBrowserScreen):
+            self._cancel_active_screen_work()
             self.pop_screen()
             self.call_after_refresh(self.action_show_research)
             return
         if not isinstance(self.screen, ResearchHealthScreen):
+            self._cancel_active_screen_work()
             self.push_screen(
                 ResearchHealthScreen(
                     self._research_health_controller,
@@ -233,6 +242,7 @@ class SahamTuiApp(App[None]):
         self.set_route_context("Research")
 
     def action_open_ticker(self, ticker: str) -> None:
+        self._cancel_active_screen_work()
         self.push_screen(
             TickerResearchScreen(
                 ticker,
@@ -248,6 +258,15 @@ class SahamTuiApp(App[None]):
     def action_close_help(self) -> None:
         if isinstance(self.screen, HelpScreen):
             self.pop_screen()
+
+    def action_quit(self) -> None:
+        self.workers.cancel_all()
+        self.exit()
+
+    def _cancel_active_screen_work(self) -> None:
+        cancel = getattr(self.screen, "cancel_active_work", None)
+        if cancel is not None:
+            cancel()
 
 
 def run_tui() -> None:

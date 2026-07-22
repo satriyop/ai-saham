@@ -27,6 +27,7 @@ from src.adapters.tui.widgets.research_health import (
     render_lines,
     render_target,
 )
+from src.adapters.tui.worker_lifecycle import dispatch_if_active
 
 
 class ResearchHealthScreen(Screen[None]):
@@ -86,7 +87,7 @@ class ResearchHealthScreen(Screen[None]):
         self._render_state(self._controller.state)
         self._execute_report(generation, target, cohort)
 
-    @work(thread=True)
+    @work(thread=True, exclusive=True)
     def _execute_report(
         self,
         generation: int,
@@ -97,9 +98,16 @@ class ResearchHealthScreen(Screen[None]):
             generation,
             target=target,
             cohort=cohort,
-            dispatch=self.app.call_from_thread,
+            dispatch=lambda callback, *args: dispatch_if_active(self.app, callback, *args),
             listener=self._render_state,
         )
+
+    def cancel_active_work(self) -> None:
+        self.workers.cancel_node(self)
+        if self._controller.cancel_current():
+            self.query_one("#research-health-status", Static).update(
+                "IDLE — local work cancelled; submit to retry"
+            )
 
     def _render_state(self, state: ScreenState) -> None:
         status = self.query_one("#research-health-status", Static)
@@ -133,6 +141,7 @@ class ResearchHealthScreen(Screen[None]):
             "NOTES\n" + render_lines(view.notes, empty="No notes.")
         )
         self._has_result = True
+        self.set_focus(None)
 
     def _clear_result(self) -> None:
         for selector in (
