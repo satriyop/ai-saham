@@ -44,20 +44,21 @@ class DailyScreen(Screen[None]):
         super().__init__()
         self._controller = controller
         self._presenter = presenter
+        self._has_rendered_result = False
 
     def compose(self) -> ComposeResult:
         yield Header()
         with Vertical(id="daily-shell"):
             yield Static("Daily", id="daily-title")
-            yield Static("Idle", id="daily-status")
+            yield Static("IDLE — OFFLINE", id="daily-status", classes="semantic-info")
             with VerticalScroll(id="daily-content"):
-                yield Static("", id="daily-clocks", classes="daily-section")
                 yield Static("", id="daily-readiness", classes="daily-section")
-                yield Static("", id="daily-freshness", classes="daily-section")
+                yield Static("", id="daily-clocks", classes="daily-section")
                 yield Static("", id="daily-regime", classes="daily-section")
-                yield Static("", id="daily-opening", classes="daily-section")
                 yield Static("", id="daily-accumulation", classes="daily-section")
+                yield Static("", id="daily-opening", classes="daily-section")
                 yield Static("", id="daily-setup-lens", classes="daily-section")
+                yield Static("", id="daily-freshness", classes="daily-section")
                 yield Static("", id="daily-warnings", classes="daily-section")
         yield Footer()
 
@@ -81,9 +82,14 @@ class DailyScreen(Screen[None]):
         status = self.query_one("#daily-status", Static)
         status.update(state.status.value)
         if state.status is ScreenStatus.LOADING:
-            self._clear_sections("Loading local Daily briefing…")
+            status.update("LOADING — OFFLINE local recomputation")
+            status.set_classes("semantic-warning")
+            if not self._has_rendered_result:
+                self._clear_sections("Loading local Daily briefing…")
             return
         if state.status is ScreenStatus.ERROR:
+            status.update("ERROR — retry with local Reload")
+            status.set_classes("semantic-error")
             self._clear_sections(
                 f"{state.error_type}: {state.error_message}",
                 section="#daily-warnings",
@@ -94,6 +100,12 @@ class DailyScreen(Screen[None]):
 
         view = self._presenter.present(state.payload)
         status.update(f"{state.status.value} — authority {view.overall_authority}")
+        status.set_classes(self._authority_class(view.overall_authority))
+        self.app.set_route_context(
+            "Today",
+            universe=view.universe,
+            as_of=view.clocks[1].value,
+        )
         self.query_one("#daily-clocks", Static).update("CLOCKS\n" + render_clocks(view))
         self.query_one("#daily-readiness", Static).update("READINESS\n" + render_readiness(view))
         self.query_one("#daily-freshness", Static).update("FRESHNESS\n" + render_freshness(view))
@@ -104,6 +116,15 @@ class DailyScreen(Screen[None]):
         )
         self.query_one("#daily-setup-lens", Static).update("SETUP LENS\n" + render_setup_lens(view))
         self.query_one("#daily-warnings", Static).update("WARNINGS\n" + render_warnings(view))
+        self._has_rendered_result = True
+
+    @staticmethod
+    def _authority_class(authority: str) -> str:
+        return {
+            "READY": "semantic-ready",
+            "PARTIAL": "semantic-warning",
+            "NOT_READY": "semantic-error",
+        }.get(authority, "semantic-unavailable")
 
     def _clear_sections(self, message: str, *, section: str = "#daily-clocks") -> None:
         for selector in (

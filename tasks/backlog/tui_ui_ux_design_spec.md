@@ -1,6 +1,6 @@
 # TUI UI/UX Design Contract And Shell Alignment
 
-Status: `BACKLOG`
+Status: `DONE`
 
 Roadmap: `docs/roadmap/roadmap_tui.md`
 
@@ -422,31 +422,31 @@ Forbidden:
 
 ## Implementation Checklist
 
-- [ ] Confirm Phase 1 remains `DONE`; do not rewrite its completion history.
-- [ ] Capture current shell behavior and sizes in the completion record.
-- [ ] Add the Phase 1 dated UX alignment addendum.
-- [ ] Align route title/breadcrumb and persistent OFFLINE context.
-- [ ] Define reusable semantic CSS roles without business calculations.
-- [ ] Update Help for only currently shipped routes.
-- [ ] Add headless assertions for 80x24 and 120x40 shell hierarchy.
-- [ ] Add text-without-color assertions for semantic states.
-- [ ] Update Phase 3–5 agents to treat this document as binding.
+- [x] Confirm Phase 1 remains `DONE`; do not rewrite its completion history.
+- [x] Capture current shell behavior and sizes in the completion record.
+- [x] Add the Phase 1 dated UX alignment addendum.
+- [x] Align route title/breadcrumb and persistent OFFLINE context.
+- [x] Define reusable semantic CSS roles without business calculations.
+- [x] Update Help for only currently shipped routes.
+- [x] Add headless assertions for 80x24 and 120x40 shell hierarchy.
+- [x] Add text-without-color assertions for semantic states.
+- [x] Update Phase 3–5 agents to treat this document as binding.
 
 ## Acceptance Criteria
 
-- [ ] Phase 1 completion status and evidence remain intact.
-- [ ] Shell uses Header/content/Footer with no sidebar.
-- [ ] Active route and OFFLINE context are visible.
-- [ ] Footer exposes only valid current actions.
-- [ ] 80x24 retains authority/warnings and usable navigation.
-- [ ] 120x40 supports the specified standard hierarchy.
-- [ ] Semantic meaning remains understandable without color.
-- [ ] Help advertises only shipped routes.
-- [ ] No UI interaction adds provider/write calls.
-- [ ] No canonical content or ordering is recalculated.
-- [ ] Phase 3, Phase 4, and Phase 5 tasks reference this contract.
-- [ ] Focused TUI tests, architecture tests, and `git diff --check` pass.
-- [ ] Status becomes `DONE`; completion record is filled.
+- [x] Phase 1 completion status and evidence remain intact.
+- [x] Shell uses Header/content/Footer with no sidebar.
+- [x] Active route and OFFLINE context are visible.
+- [x] Footer exposes only valid current actions.
+- [x] 80x24 retains authority/warnings and usable navigation.
+- [x] 120x40 supports the specified standard hierarchy.
+- [x] Semantic meaning remains understandable without color.
+- [x] Help advertises only shipped routes.
+- [x] No UI interaction adds provider/write calls.
+- [x] No canonical content or ordering is recalculated.
+- [x] Phase 3, Phase 4, and Phase 5 tasks reference this contract.
+- [x] Focused TUI tests, architecture tests, and `git diff --check` pass.
+- [x] Status becomes `DONE`; completion record is filled.
 
 ## Required Negative Tests
 
@@ -503,15 +503,15 @@ items only from executed evidence.
 
 ## Completion Record
 
-- Completed date:
-- Implementation commit:
-- Phase 1 audit revision:
-- Existing decisions preserved:
-- Alignment files changed:
-- 80x24 result:
-- 120x40 result:
-- Color-independent result:
-- Focused tests:
-- Architecture tests:
-- `git diff --check`:
-- Deferred route-owned items:
+- Completed date: 2026-07-22
+- Implementation commit: this UX alignment completion commit
+- Phase 1 audit revision: `eef3838`; status and original completion evidence unchanged
+- Existing decisions preserved: Header/Footer, no sidebar, Daily startup, pushed Help, local Reload, generation-safe workers, and hidden `h`/`d` aliases
+- Alignment files changed: TUI app shell, Daily screen, Help, headless tests, and this completion record
+- 80x24 result: Header/content/Footer, authority, warnings, and current navigation remain reachable
+- 120x40 result: standard stacked hierarchy renders with active route and offline context
+- Color-independent result: canonical READY/PARTIAL/NOT_READY and ERROR text remains explicit; preview has a separate reusable class and required text contract
+- Focused tests: `34 passed` including TUI, boundary, and layer-boundary tests
+- Architecture tests: `62 passed` for all architecture plus TUI tests
+- `git diff --check`: passed
+- Deferred route-owned items: Candidate/Ticker numeric route and preview surface belong to Phase 3; Research route belongs to Phase 4

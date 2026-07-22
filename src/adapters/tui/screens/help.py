@@ -17,12 +17,13 @@ class HelpScreen(Screen[None]):
         yield Header()
         with Vertical(id="help-shell"):
             yield Static("Help", id="help-title")
+            yield Static("1       Today", classes="help-line")
             yield Static("? / h   Open this help", classes="help-line")
             yield Static("Esc / d Return to Daily", classes="help-line")
             yield Static("r       Reload by local recomputation", classes="help-line")
             yield Static("q       Exit", classes="help-line")
             yield Static(
-                "Reload reads local cached inputs. It never fetches provider data.",
+                "Reload reads local cached inputs and never fetches provider data.",
                 id="help-scope",
             )
         yield Footer()

@@ -44,6 +44,8 @@ def test_launch_calls_daily_once_reload_once_and_navigation_does_not_call():
             await _wait_for_calls(pilot, capability, 1)
             assert isinstance(app.screen, DailyScreen)
             assert app.screen.query_one("#daily-title", Static).content == "Daily"
+            assert app.title == "AI Saham · Today"
+            assert "OFFLINE · LQ45 · EOD 2026-07-21" == app.sub_title
             assert "authority READY" in str(app.screen.query_one("#daily-status", Static).content)
             assert "local warning" in str(app.screen.query_one("#daily-warnings", Static).content)
 
@@ -60,6 +62,44 @@ def test_launch_calls_daily_once_reload_once_and_navigation_does_not_call():
             await pilot.press("r")
             await _wait_for_calls(pilot, capability, 2)
             assert capability.calls == 2
+
+    asyncio.run(scenario())
+
+
+def test_shell_hierarchy_and_text_semantics_at_supported_sizes():
+    async def scenario(size) -> None:
+        capability = _RecordingCapability(not_ready_response())
+        app = create_tui_app(daily_loader=capability)
+        async with app.run_test(size=size) as pilot:
+            await _wait_for_calls(pilot, capability, 1)
+            status = app.screen.query_one("#daily-status", Static)
+            assert "READY — authority NOT_READY" in str(status.content)
+            assert "semantic-error" in status.classes
+            assert "NOT_READY" in str(
+                app.screen.query_one("#daily-readiness", Static).content
+            )
+            assert "local warning" in str(
+                app.screen.query_one("#daily-warnings", Static).content
+            )
+            assert app.screen.query_one("Header")
+            assert app.screen.query_one("Footer")
+
+    asyncio.run(scenario((80, 24)))
+    asyncio.run(scenario((120, 40)))
+
+
+def test_reload_retains_last_good_content_while_recomputing():
+    async def scenario() -> None:
+        capability = _RecordingCapability(ready_response())
+        app = create_tui_app(daily_loader=capability)
+        async with app.run_test(size=(100, 32)) as pilot:
+            await _wait_for_calls(pilot, capability, 1)
+            previous = str(app.screen.query_one("#daily-warnings", Static).content)
+            app.screen.action_reload()
+            assert previous == str(
+                app.screen.query_one("#daily-warnings", Static).content
+            )
+            await _wait_for_calls(pilot, capability, 2)
 
     asyncio.run(scenario())
 

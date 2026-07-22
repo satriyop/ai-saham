@@ -13,9 +13,12 @@ class SahamTuiApp(App[None]):
     """Minimal offline shell shared by later read-only research screens."""
 
     TITLE = "AI Saham"
-    SUB_TITLE = "Local research workspace"
+    SUB_TITLE = "OFFLINE"
     SCREENS = {"help": HelpScreen}
-    BINDINGS = [Binding("q", "quit", "Quit")]
+    BINDINGS = [
+        Binding("1", "show_today", "Today"),
+        Binding("q", "quit", "Quit"),
+    ]
     CSS = """
     Screen {
         background: $surface;
@@ -50,6 +53,30 @@ class SahamTuiApp(App[None]):
         height: auto;
         margin-bottom: 1;
     }
+
+    .semantic-ready {
+        color: $success;
+    }
+
+    .semantic-warning {
+        color: $warning;
+    }
+
+    .semantic-error {
+        color: $error;
+    }
+
+    .semantic-unavailable {
+        color: $text-muted;
+    }
+
+    .semantic-info {
+        color: $accent;
+    }
+
+    .non-canonical-preview {
+        color: $secondary;
+    }
     """
 
     def __init__(
@@ -62,7 +89,28 @@ class SahamTuiApp(App[None]):
         self._daily_presenter = daily_presenter
 
     def on_mount(self) -> None:
+        self.set_route_context("Today")
         self.push_screen(DailyScreen(self._daily_controller, self._daily_presenter))
+
+    def set_route_context(
+        self,
+        route: str,
+        *,
+        universe: str | None = None,
+        as_of: str | None = None,
+    ) -> None:
+        self.title = f"AI Saham · {route}"
+        details = ["OFFLINE"]
+        if universe:
+            details.append(universe.upper())
+        if as_of:
+            details.append(f"EOD {as_of}")
+        self.sub_title = " · ".join(details)
+
+    def action_show_today(self) -> None:
+        if isinstance(self.screen, HelpScreen):
+            self.pop_screen()
+        self.set_route_context("Today")
 
     def action_show_help(self) -> None:
         if not isinstance(self.screen, HelpScreen):
