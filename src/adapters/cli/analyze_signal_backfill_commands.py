@@ -95,6 +95,104 @@ def _read_scoring_config_canonical(config_paths) -> str:
     return "\n\x00\n".join(blocks)
 
 
+def run_signal_observation_corpus_write(
+    *,
+    universe: str,
+    start_date: date,
+    end_date: date,
+    resolved_db: Path,
+    horizon: SignalLabelHorizon = SignalLabelHorizon.SWING_10D,
+    generate_labels: bool = False,
+) -> BackfillSignalObservationsResponse:
+    """Compose and run observation corpus write for a date range.
+
+    Shared by ``research signal backfill`` and ``research signal capture``.
+    Adapter owns I/O and wiring; ``BackfillSignalObservationsUseCase`` owns policy.
+    """
+    cfg = load_app_config()
+    try:
+        tickers = resolve_tickers(
+            universe=universe,
+            explicit=[],
+            db_path=resolved_db,
+            loader=YamlUniverseConfigLoader(),
+            repository=SQLiteBrokerRepository(resolved_db),
+        )
+    except (UniverseNotFoundError, FileNotFoundError) as exc:
+        typer.echo(f"[error] {exc}", err=True)
+        raise typer.Exit(1)
+    if not tickers:
+        typer.echo(f"[error] Universe {universe!r} resolved to no tickers.", err=True)
+        raise typer.Exit(1)
+
+    observations_repo = SQLiteCandidateObservationsRepository(resolved_db)
+    market_repo = SQLiteMarketRepository(resolved_db)
+    labels_repo = SQLiteSignalForwardLabelsRepository(resolved_db)
+    accumulation_config = load_accumulation_screener_config()
+    swing_config = load_swing_config()
+    screen_bundle = create_accumulation_screen_workflow_bundle(
+        db_path=resolved_db,
+        screener_config=accumulation_config,
+        swing_config=swing_config,
+    )
+    screen_request_builder = BuildSignalObservationScreenRequest.from_configs(
+        swing_config=swing_config,
+        accumulation_screener_config=accumulation_config,
+        min_net_buy_days=1,
+        disable_score_filters=True,
+    )
+    label_use_case = None
+    if generate_labels:
+        label_use_case = GenerateSignalForwardLabelsUseCase(
+            candidate_observations_repository=observations_repo,
+            market_data_repository=market_repo,
+            signal_forward_labels_repository=labels_repo,
+            corporate_action_calendar_repository=SQLiteCorporateActionCalendarRepository(
+                resolved_db
+            ),
+        )
+
+    def _evaluate_market_context_for_corpus(*, as_of_date: date) -> MarketContext:
+        return evaluate_market_context(
+            db_path=resolved_db,
+            as_of_date=as_of_date,
+            universe=universe,
+        )
+
+    # Resolve the lean observation identity ONCE. The adapter reads config file
+    # contents (I/O) and passes the canonical string to the application
+    # resolver, which owns the hashing/policy.
+    observation_identity = LeanObservationIdentity(
+        observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
+        semantic_compatibility_id=resolve_lean_semantic_compatibility_id(
+            _read_scoring_config_canonical(cfg.config_paths)
+        ),
+    )
+
+    return BackfillSignalObservationsUseCase(
+        record_observations_use_case=screen_bundle.record_observations_use_case,
+        screen_request_builder=screen_request_builder,
+        market_data_repository=market_repo,
+        candidate_observations_repository=observations_repo,
+        observation_identity=observation_identity,
+        label_generation_use_case=label_use_case,
+        evaluate_market_context=_evaluate_market_context_for_corpus,
+        session_resolver=EffectiveMarketSessionResolver(market_repo),
+    ).execute(
+        BackfillSignalObservationsRequest(
+            tickers=tuple(tickers),
+            start_date=start_date,
+            end_date=end_date,
+            horizon=horizon,
+            generate_labels=generate_labels,
+            # Current-universe membership identity. Historical membership is
+            # unavailable; the use case turns the `@current` suffix into the
+            # survivorship limitation note (adapter passes identity only).
+            universe_membership_source=f"{universe}@current",
+        )
+    )
+
+
 def signal_backfill_observations(
     universe: Annotated[
         str,
@@ -130,92 +228,28 @@ def signal_backfill_observations(
     except ValueError:
         typer.echo(f"[error] Invalid horizon: {horizon}", err=True)
         raise typer.Exit(1)
-    try:
-        tickers = resolve_tickers(
-            universe=universe,
-            explicit=[],
-            db_path=resolved_db,
-            loader=YamlUniverseConfigLoader(),
-            repository=SQLiteBrokerRepository(resolved_db),
-        )
-    except (UniverseNotFoundError, FileNotFoundError) as exc:
-        typer.echo(f"[error] {exc}", err=True)
-        raise typer.Exit(1)
-    if not tickers:
-        typer.echo(f"[error] Universe {universe!r} resolved to no tickers.", err=True)
-        raise typer.Exit(1)
 
-    observations_repo = SQLiteCandidateObservationsRepository(resolved_db)
-    market_repo = SQLiteMarketRepository(resolved_db)
-    labels_repo = SQLiteSignalForwardLabelsRepository(resolved_db)
-    accumulation_config = load_accumulation_screener_config()
-    swing_config = load_swing_config()
-    screen_bundle = create_accumulation_screen_workflow_bundle(
-        db_path=resolved_db,
-        screener_config=accumulation_config,
-        swing_config=swing_config,
-    )
-    screen_request_builder = BuildSignalObservationScreenRequest.from_configs(
-        swing_config=swing_config,
-        accumulation_screener_config=accumulation_config,
-        min_net_buy_days=1,
-        disable_score_filters=True,
-    )
-    label_use_case = GenerateSignalForwardLabelsUseCase(
-        candidate_observations_repository=observations_repo,
-        market_data_repository=market_repo,
-        signal_forward_labels_repository=labels_repo,
-        corporate_action_calendar_repository=SQLiteCorporateActionCalendarRepository(resolved_db),
-    )
-
-    def _evaluate_market_context_for_backfill(*, as_of_date: date) -> MarketContext:
-        return evaluate_market_context(
-            db_path=resolved_db,
-            as_of_date=as_of_date,
-            universe=universe,
-        )
-
-    # Resolve the lean observation identity ONCE. The adapter reads config file
-    # contents (I/O) and passes the canonical string to the application
-    # resolver, which owns the hashing/policy.
-    observation_identity = LeanObservationIdentity(
-        observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
-        semantic_compatibility_id=resolve_lean_semantic_compatibility_id(
-            _read_scoring_config_canonical(cfg.config_paths)
-        ),
-    )
-
-    response = BackfillSignalObservationsUseCase(
-        record_observations_use_case=screen_bundle.record_observations_use_case,
-        screen_request_builder=screen_request_builder,
-        market_data_repository=market_repo,
-        candidate_observations_repository=observations_repo,
-        observation_identity=observation_identity,
-        label_generation_use_case=label_use_case,
-        evaluate_market_context=_evaluate_market_context_for_backfill,
-        session_resolver=EffectiveMarketSessionResolver(market_repo),
-    ).execute(
-        BackfillSignalObservationsRequest(
-            tickers=tuple(tickers),
-            start_date=start_date,
-            end_date=end_date,
-            horizon=label_horizon,
-            generate_labels=generate_labels,
-            # Current-universe membership identity. Historical membership is
-            # unavailable; the use case turns the `@current` suffix into the
-            # survivorship limitation note (adapter passes identity only).
-            universe_membership_source=f"{universe}@current",
-        )
+    response = run_signal_observation_corpus_write(
+        universe=universe,
+        start_date=start_date,
+        end_date=end_date,
+        resolved_db=resolved_db,
+        horizon=label_horizon,
+        generate_labels=generate_labels,
     )
 
     if fmt == "json":
         typer.echo(json.dumps(response.to_dict(), indent=2))
         return
-    _display_backfill_response(response)
+    _display_backfill_response(response, title="Signal Observation Backfill")
 
 
-def _display_backfill_response(response: BackfillSignalObservationsResponse) -> None:
-    typer.echo("\nSignal Observation Backfill")
+def _display_backfill_response(
+    response: BackfillSignalObservationsResponse,
+    *,
+    title: str = "Signal Observation Backfill",
+) -> None:
+    typer.echo(f"\n{title}")
     typer.echo("═" * 72)
     typer.echo(f"Requested trading dates: {response.requested_date_count}")
     typer.echo(f"Processed dates: {response.processed_date_count}")

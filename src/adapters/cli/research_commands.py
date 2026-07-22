@@ -2,7 +2,7 @@
 CLI: research lifecycle — corpus construction and offline evaluation.
 
 Commands:
-  saham research signal …           — observations, labels, replay, readiness
+  saham research signal …           — capture/backfill, labels, replay, readiness
   saham research accumulation …     — offline accumulation evaluation
 
 Layer: Adapter (routing only).
@@ -14,6 +14,7 @@ import typer
 
 from src.adapters.cli.analyze_accum_commands import accumulation_audit
 from src.adapters.cli.analyze_signal_backfill_commands import signal_backfill_observations
+from src.adapters.cli.analyze_signal_capture_commands import signal_capture_observations
 from src.adapters.cli.analyze_signal_label_commands import signal_labels
 from src.adapters.cli.analyze_signal_readiness_commands import signal_readiness
 from src.adapters.cli.analyze_signal_replay_commands import signal_replay
@@ -31,7 +32,7 @@ research_app = typer.Typer(
 research_signal_app = typer.Typer(
     name="signal",
     help=(
-        "SignalEngine research corpus: backfill/label observations; "
+        "SignalEngine research corpus: capture/backfill/label observations; "
         "replay and readiness reports (read-only)."
     ),
     no_args_is_help=True,
@@ -49,6 +50,7 @@ research_accumulation_app = typer.Typer(
 )
 
 research_signal_app.command("backfill")(signal_backfill_observations)
+research_signal_app.command("capture")(signal_capture_observations)
 research_signal_app.command("labels")(signal_labels)
 research_signal_app.command("replay")(signal_replay)
 research_signal_app.command("readiness")(signal_readiness)

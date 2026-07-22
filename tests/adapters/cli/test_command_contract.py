@@ -64,7 +64,7 @@ EXPECTED_COMMANDS: dict[tuple[str, ...], tuple[str, ...]] = {
     ("screen",): ("pre-open", "accum", "watchlist", "compare"),
     ("learn",): ("snapshot", "track", "grade", "prompt", "tune"),
     ("research",): ("signal", "accumulation"),
-    ("research", "signal"): ("backfill", "labels", "replay", "readiness"),
+    ("research", "signal"): ("backfill", "capture", "labels", "replay", "readiness"),
     ("research", "accumulation"): ("evaluate",),
     ("indicator",): ("compute", "snapshot", "create", "list", "show", "delete"),
     ("analyze",): (
@@ -180,6 +180,7 @@ HELP_PATHS: tuple[tuple[str, ...], ...] = (
     ("research",),
     ("research", "signal"),
     ("research", "signal", "backfill"),
+    ("research", "signal", "capture"),
     ("research", "signal", "labels"),
     ("research", "signal", "replay"),
     ("research", "signal", "readiness"),
@@ -362,6 +363,17 @@ def test_signal_backfill_observations_help_exposes_required_options():
     assert "--start" in result.stdout
     assert "--end" in result.stdout
     assert "--generate-labels" in result.stdout
+
+
+def test_signal_capture_help_exposes_contract_and_session_options():
+    result = runner.invoke(app, ["research", "signal", "capture", "--help"])
+
+    assert result.exit_code == 0
+    assert "--universe" in result.stdout
+    assert "--session" in result.stdout
+    assert "--contract" in result.stdout
+    assert "candidate_observations" in result.stdout
+    assert "signal_forward_labels" in result.stdout
 
 
 def test_removed_legacy_paths_stay_removed():

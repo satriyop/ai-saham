@@ -19,10 +19,11 @@ before implementing.
 | `CANONICAL-EVIDENCE-GATE` | Lean-closed via DQ-003…008 (raw labels; candidate-only capture stamped) |
 | `DQ-BASELINE-GATE` | Closed (DQ-010 + DQ-011) |
 
-**Engineering next:** [`improvement_cli_restructure.md`](improvement_cli_restructure.md)
-— introduce `saham research` for corpus work + `analyze signal inspect` for live
-inspect (**clean break**, no aliases). Optional operator backfill for non-empty
-readiness data is product use, not a gate.
+**Engineering next:** CLI research remount + capture is **Done**
+([`improvement_cli_restructure.md`](improvement_cli_restructure.md)).
+Optional: populate corpus via `research signal capture` / backfill then
+`readiness` (product use, not a gate). UI: TUI Phase 0 inventory
+([`docs/roadmap/roadmap_tui.md`](../../docs/roadmap/roadmap_tui.md)) when ready.
 
 **Parked until a named trigger:** full `ARTIFACT-IDENTITY` apparatus,
 `IDX-EXECUTION-LABELS`, genuine screen-rejected controls / PIT universe

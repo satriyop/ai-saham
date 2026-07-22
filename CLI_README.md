@@ -2045,6 +2045,20 @@ saham research accumulation evaluate --universe idx80 --setup pullback-continuat
 saham research accumulation evaluate --universe lq45 --window 7 --min-score 70
 ```
 
+### Observation capture (research corpus)
+
+Persist canonical `candidate_observations` for one trading session (no labels):
+
+```bash
+saham research signal capture \
+  --contract accumulation-discovery \
+  --universe lq45 \
+  --session 2026-07-21 \
+  --format json
+```
+
+Use `saham research signal labels …` afterward to generate forward labels.
+
 ### Logging to Journal
 
 ```bash
@@ -2751,6 +2765,7 @@ saham strategy backtest BBCA --strategy my_flow_strategy
 | `saham screen accum` | Foreign accumulation screener (SignalAssessment 0–100) | `--universe`, `--window`, `--multi`, `--top-broker`, `--min-foreign-flow-score`, `--min-signal-score`, `--min-piotroski`, `--vwap-only`, `--squeeze-only`, `--save`, `--format`, `--guide`, `--explain`, `--db` |
 | `saham screen watchlist` | List saved watchlists / show tickers in a named one | — |
 | `saham screen compare NAME` | Diff saved watchlist against fresh screener run | `--universe`, `--top` |
+| `saham research signal capture` | Session observation capture (`candidate_observations`) | `--contract`, `--universe`, `--session`, `--format`, `--db` |
 | `saham research accumulation evaluate` | Historical accumulation audit | `--universe`, `--setup`, `--simulate-exits` |
 | `saham screen pre-open` | Pre-open market screener | `--movers-json`, `--fast`, `--top` |
 | `saham trade confirm` | Confirm at opening auction | `--opening-json` |

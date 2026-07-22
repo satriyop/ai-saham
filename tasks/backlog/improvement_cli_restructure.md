@@ -2,19 +2,26 @@
 
 ## 1. Task metadata
 
-**Task title:** Restructure signal and accumulation CLI by research vs analyze  
-**Task type:** Refactor  
-**Overall priority:** High  
-**Status:** Ready — chosen direction amended 2026-07-22 (not implemented)  
+**Task title:** Restructure signal and accumulation CLI by research vs analyze
+**Task type:** Refactor
+**Overall priority:** High
+**Status:** Done (v1) — 2026-07-22
 **Decision:** Implement **this document only** — `research` corpus root + live
 `analyze signal inspect`, **clean break** (no aliases, no deprecation window).
 
-**Hard prerequisite:** `DQ-BASELINE-GATE` / DQ-011 (**Done 2026-07-22**).  
+**Hard prerequisite:** `DQ-BASELINE-GATE` / DQ-011 (**Done 2026-07-22**).
 Sentiment command moves remain gated by DQ-009 (out of v1 scope below).
 
 Freeze corrected behavioral baselines from DQ-011; do not preserve known
 data-quality defects during migration. Routing only — no SignalEngine / label
 math changes.
+
+**Shipped commits (v1):**
+
+| Slice | What | Notes |
+|-------|------|-------|
+| CLI-R2 / R4 / R5 / R6 | Remount + docs/cron cutover | `dc93963` |
+| CLI-R3 | `research signal capture` + EOD cron uses capture | this change |
 
 ## 2. Problem statement
 
@@ -61,8 +68,7 @@ saham research signal backfill --universe … --start … --end …
 saham research signal labels [SNAPSHOT_DATE] [options]
 saham research signal replay TICKER DATE [--verify]
 saham research signal readiness --target TARGET
-saham research signal capture --contract accumulation-discovery --session DATE
-  # capture may land in a follow-on slice once the use case is wired; see CLI-R3
+saham research signal capture --contract accumulation-discovery --session DATE --universe …
 
 saham research accumulation evaluate [TICKERS…] [options]
 
@@ -93,15 +99,15 @@ saham research --type accumulation
 
 ## 4. Current → target (remove left column)
 
-| Remove (retired) | Canonical replacement | Side effects |
-|---|---|---|
-| `analyze signal-inspect` | `analyze signal inspect` | Read-only live |
-| `analyze signal-replay` | `research signal replay` | Read-only corpus |
-| `analyze signal-readiness` | `research signal readiness` | Read-only corpus |
-| `analyze signal-backfill-observations` | `research signal backfill` | Writes observations; optional labels |
-| `analyze signal-labels` | `research signal labels` | Summary RO; `--generate*` writes |
-| `analyze accum-audit` | `research accumulation evaluate` | Offline eval; CSV only with `--output` |
-| *(new)* | `research signal capture` | Writes observations (when implemented) |
+| Remove (retired) | Canonical replacement | Side effects | Status |
+|---|---|---|---|
+| `analyze signal-inspect` | `analyze signal inspect` | Read-only live | Done |
+| `analyze signal-replay` | `research signal replay` | Read-only corpus | Done |
+| `analyze signal-readiness` | `research signal readiness` | Read-only corpus | Done |
+| `analyze signal-backfill-observations` | `research signal backfill` | Writes observations; optional labels | Done |
+| `analyze signal-labels` | `research signal labels` | Summary RO; `--generate*` writes | Done |
+| `analyze accum-audit` | `research accumulation evaluate` | Offline eval; CSV only with `--output` | Done |
+| *(new)* | `research signal capture` | Writes observations | Done |
 
 **Out of v1 (parked):**
 
@@ -110,9 +116,9 @@ saham research --type accumulation
 | `analyze audit` (sentiment) | e.g. `research sentiment audit` | DQ-009 |
 | Opening `learn *` | optional rename to `session`/`opening` | separate product decision |
 
-**Cron honesty:** `screen accum` must not be documented or scheduled as
-“observation capture” unless it actually persists canonical observations. EOD
-writers use `research signal …` only.
+**Cron honesty:** EOD corpus writer is
+`saham research signal capture --contract accumulation-discovery …`.
+`screen accum` remains live discovery only — not observation capture.
 
 ## 5. Key principles
 
@@ -129,15 +135,14 @@ writers use `research signal …` only.
 
 ### CLI-R0 — Amend contracts / docs pointers (this file)
 
-**State:** Done when this document is the sole chosen direction (2026-07-22).  
+**State:** Done (2026-07-22).
 Update program/index pointers that still say `learn signal` for corpus work.
 
 ### CLI-R1 — Freeze checklist on behavior (not old names)
 
-**Priority:** P0  
-**Depends on:** DQ-011  
-**State:** Mostly satisfied by DQ-011 adapter tests; close gaps against **canonical
-names once mounted**, not against retired flat names.
+**Priority:** P0
+**Depends on:** DQ-011
+**State:** Done — DQ-011 contracts remounted to canonical paths with `dc93963`.
 
 **Outcome:** Args, exit codes, stdout/stderr, read/write assertions, JSON roots
 remain locked while routing changes.
@@ -146,8 +151,9 @@ Reuse DQ-011 goldens; remount tests to new paths in the same PR as each removal.
 
 ### CLI-R2 — Introduce `research` + `research signal` (corpus commands)
 
-**Priority:** P0  
-**Depends on:** CLI-R1 mindset / DQ-011  
+**Priority:** P0
+**Depends on:** CLI-R1 mindset / DQ-011
+**State:** Done (`dc93963`).
 
 **Mount (reuse existing handlers/use cases):**
 
@@ -170,31 +176,39 @@ saham research signal readiness …
 
 **Acceptance:**
 
-- [ ] `saham research signal --help` lists the mounted ops (no retired flat names).
-- [ ] Retired paths fail unknown-command.
-- [ ] DQ-011 behavioral contracts still pass on new paths.
-- [ ] Summary-only `labels` remains read-only; `--generate*` writes only labels.
-- [ ] `backfill` write assertions unchanged in meaning.
+- [x] `saham research signal --help` lists the mounted ops (no retired flat names).
+- [x] Retired paths fail unknown-command.
+- [x] DQ-011 behavioral contracts still pass on new paths.
+- [x] Summary-only `labels` remains read-only; `--generate*` writes only labels.
+- [x] `backfill` write assertions unchanged in meaning.
 
 ### CLI-R3 — `research signal capture` (when producer is ready)
 
-**Priority:** P0 after CLI-R2 (may be same release if use case already callable)  
+**Priority:** P0 after CLI-R2 (may be same release if use case already callable)
 **Depends on:** application capture use case for `accumulation-discovery`
+**State:** Done (2026-07-22) — reuses `RecordAccumulationObservationsUseCase`
+via shared `run_signal_observation_corpus_write` (single-session backfill
+composition); EOD cron cut over to capture.
 
 ```text
-saham research signal capture --contract accumulation-discovery --session DATE
+saham research signal capture --contract accumulation-discovery --session DATE --universe …
 ```
 
 Universe-driven, idempotent; not single-ticker. No provisional
 `legacy-accumulation-candidates` bridge in this clean-break plan.
 
-**Acceptance:** help states written tables; cron (if any) uses this path only;
-negative tests: no write from `analyze` / `screen`.
+**Acceptance:**
+
+- [x] help states written tables (`candidate_observations`; not labels).
+- [x] cron uses this path for EOD observation write.
+- [x] negative tests: unsupported contract / invalid session do not write;
+      `analyze signal inspect` remains read-only.
 
 ### CLI-R4 — `research accumulation evaluate`
 
-**Priority:** P0  
+**Priority:** P0
 **Depends on:** CLI-R2 pattern proven (may parallelize after R2 starts)
+**State:** Done (`dc93963`).
 
 ```text
 saham research accumulation evaluate [TICKERS…] [existing options]
@@ -206,7 +220,8 @@ Preserve DESCRIPTIVE claim stamps, no DB writes, CSV only with `--output`.
 
 ### CLI-R5 — Live `analyze signal inspect`
 
-**Priority:** P0  
+**Priority:** P0
+**State:** Done (`dc93963`).
 
 ```text
 saham analyze signal inspect TICKER …
@@ -219,8 +234,9 @@ Help: `Read-only live SignalEngine assessment from local data.`
 
 ### CLI-R6 — Docs / agent / cron sweep
 
-**Priority:** P0  
-**Depends on:** CLI-R2…R5 as each lands  
+**Priority:** P0
+**Depends on:** CLI-R2…R5 as each lands
+**State:** Done for remount (`dc93963`); capture cron/docs updated with CLI-R3.
 
 Repository search: retired strings only in `REMOVED_PATHS`, historical commits,
 and explicit “removed commands” notes — **not** in live examples.
@@ -265,12 +281,12 @@ observation/label definitions, or readiness promotion rules. Routing only.
 
 ## 10. Persistence invariants
 
-- `analyze signal inspect` — no observation/label writes  
-- `research signal replay` / `readiness` — no writes  
-- `research signal backfill` — observation writes (+ optional labels) as today  
-- `research signal labels` — writes only with explicit generate flags  
-- `research signal capture` — observation writes when implemented  
-- `research accumulation evaluate` — no DB writes; CSV only with `--output`  
+- `analyze signal inspect` — no observation/label writes
+- `research signal replay` / `readiness` — no writes
+- `research signal backfill` — observation writes (+ optional labels) as today
+- `research signal labels` — writes only with explicit generate flags
+- `research signal capture` — observation writes; **no** label generation
+- `research accumulation evaluate` — no DB writes; CSV only with `--output`
 
 ## 11. Global negative requirements
 
@@ -289,13 +305,13 @@ Do Not Interpret This As:
 
 Each slice:
 
-1. Command contract tests for **canonical** paths only.  
-2. `REMOVED_PATHS` assertions for retired names.  
-3. Reused use-case tests still green.  
-4. Negative: forbidden writes / unknown old commands.  
-5. stdout/stderr separation.  
-6. Help discovery.  
-7. Architecture boundary tests.  
+1. Command contract tests for **canonical** paths only.
+2. `REMOVED_PATHS` assertions for retired names.
+3. Reused use-case tests still green.
+4. Negative: forbidden writes / unknown old commands.
+5. stdout/stderr separation.
+6. Help discovery.
+7. Architecture boundary tests.
 8. `git diff --check`.
 
 Smoke matrix (canonical names):
@@ -306,16 +322,17 @@ Smoke matrix (canonical names):
 | `research signal replay` | ✓ | ✓ | ✓ | if any | no writes |
 | `research signal readiness` | ✓ | ✓ | ✓ | ✓ | no writes |
 | `research signal backfill` | ✓ | ✓ | ✓ | ✓ | observation writes |
+| `research signal capture` | ✓ | ✓ | ✓ | ✓ | observation writes; no labels |
 | `research signal labels` summary | ✓ | ✓ | ✓ | ✓ | no writes |
 | `research signal labels --generate*` | ✓ | ✓ | ✓ | ✓ | label writes |
 | `research accumulation evaluate` | ✓ | ✓ | ✓ | ✓ | no DB; CSV if `--output` |
 
 ## 13. Global completion gate (v1)
 
-- [ ] All v1 canonical paths exist with accurate help.  
-- [ ] All mapped retired paths are gone (`REMOVED_PATHS`).  
-- [ ] Corpus writes are only under `research`; live inspect under `analyze signal`.  
-- [ ] Opening `learn` unchanged and not used for signal corpus.  
-- [ ] Cron/docs/tests use canonical paths only.  
-- [ ] No engine/scoring/persistence semantic change.  
-- [ ] Focused + contract suites pass; `git diff --check` clean.  
+- [x] All v1 canonical paths exist with accurate help.
+- [x] All mapped retired paths are gone (`REMOVED_PATHS`).
+- [x] Corpus writes are only under `research`; live inspect under `analyze signal`.
+- [x] Opening `learn` unchanged and not used for signal corpus.
+- [x] Cron/docs/tests use canonical paths only.
+- [x] No engine/scoring/persistence semantic change.
+- [x] Focused + contract suites pass; `git diff --check` clean.
