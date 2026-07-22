@@ -44,8 +44,8 @@ class _StrictJourneyCapabilities:
         self.daily_calls += 1
         return ready_response()
 
-    def accumulation(self, multi: bool):
-        self.accumulation_calls.append(multi)
+    def accumulation(self, request):
+        self.accumulation_calls.append(request.multi)
         return single_result()
 
     def ticker(self, ticker: str):
@@ -196,7 +196,7 @@ def test_empty_daily_and_candidate_states_keep_navigation_available():
     async def scenario() -> None:
         app = create_tui_app(
             daily_loader=empty_response,
-            accumulation_loader=lambda multi: empty_candidates,
+            accumulation_loader=lambda request: empty_candidates,
         )
         async with app.run_test(size=(80, 24)) as pilot:
             await _wait_until(
@@ -270,7 +270,7 @@ def test_route_switch_cancels_late_result_before_hidden_ui_mutation():
     async def scenario() -> None:
         app = create_tui_app(
             daily_loader=delayed_daily,
-            accumulation_loader=lambda multi: single_result(),
+            accumulation_loader=lambda request: single_result(),
         )
         async with app.run_test(size=(100, 32)) as pilot:
             await _wait_until(pilot, started.is_set, "Daily worker did not start")

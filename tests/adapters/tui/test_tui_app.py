@@ -139,9 +139,9 @@ def test_candidate_navigation_has_one_load_and_enter_runs_selected_ticker_once()
         accumulation_calls = []
         ticker_calls = []
 
-        def load_accumulation(multi):
-            accumulation_calls.append(multi)
-            return multi_result() if multi else single_result()
+        def load_accumulation(request):
+            accumulation_calls.append(request.multi)
+            return multi_result() if request.multi else single_result()
 
         def load_ticker(ticker):
             ticker_calls.append(ticker)
@@ -200,7 +200,7 @@ def test_candidate_compact_mode_keeps_canonical_action_risk_and_data_text():
     async def scenario() -> None:
         app = create_tui_app(
             daily_loader=lambda: ready_response(),
-            accumulation_loader=lambda multi: single_result(),
+            accumulation_loader=lambda request: single_result(),
             ticker_loader=lambda ticker: ticker_response(ticker=ticker),
         )
         async with app.run_test(size=(80, 24)) as pilot:

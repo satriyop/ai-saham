@@ -37,10 +37,14 @@ FORBIDDEN_WRITE_CALLS = {
     "write_bytes",
     "write_text",
 }
+# Milestone B authorizes explicit watchlist Save/Compare in the TUI (roadmap
+# docs/roadmap/roadmap_tui.md). SQLiteWatchlistRepository and
+# SaveScreenWatchlistUseCase are therefore constructed by composition and are
+# intentionally NOT forbidden. The remaining symbols stay forbidden: they are
+# provider-refresh, research-health, tuning, or observation-write capabilities
+# that the local-first read/analysis TUI must never compose.
 FORBIDDEN_TUI_CAPABILITY_SYMBOLS = {
     "GetSystemStatusUseCase",
-    "SQLiteWatchlistRepository",
-    "SaveScreenWatchlistUseCase",
     "RecordAccumulationObservationsUseCase",
     "GenerateSignalForwardLabelsUseCase",
     "BackfillSignalObservationsUseCase",

@@ -5,9 +5,11 @@ from textual.binding import Binding
 
 from src.adapters.tui.controllers.accumulation_controller import AccumulationController
 from src.adapters.tui.controllers.daily_controller import DailyController
+from src.adapters.tui.controllers.discover_controller import DiscoverController
 from src.adapters.tui.controllers.ticker_research_controller import TickerResearchController
 from src.adapters.tui.presenters.accumulation_presenter import AccumulationPresenter
 from src.adapters.tui.presenters.daily_presenter import DailyPresenter
+from src.adapters.tui.presenters.discover_presenter import DiscoverPresenter
 from src.adapters.tui.presenters.ticker_research_presenter import TickerResearchPresenter
 from src.adapters.tui.screens.candidate_browser_screen import CandidateBrowserScreen
 from src.adapters.tui.screens.daily_screen import DailyScreen
@@ -84,6 +86,47 @@ class SahamTuiApp(App[None]):
         height: 1fr;
     }
 
+    #discover-tab-bar {
+        height: 3;
+        margin-bottom: 1;
+        align: left middle;
+    }
+
+    .tab-btn {
+        margin-right: 1;
+        min-width: 16;
+        background: $surface;
+        color: $text;
+        border: round $primary-muted;
+    }
+
+    .tab-btn:hover {
+        background: $primary;
+        color: $text-primary;
+    }
+
+    .active-tab {
+        background: $accent;
+        color: $surface;
+        text-style: bold;
+        border: round $accent;
+    }
+
+    #filter-toolbar {
+        height: 3;
+        margin-bottom: 1;
+        align: left middle;
+    }
+
+    #filter-toolbar Select {
+        width: 20;
+        margin-right: 1;
+    }
+
+    #filter-toolbar Checkbox {
+        margin-right: 2;
+    }
+
     #candidate-workspace {
         layout: vertical;
     }
@@ -93,12 +136,21 @@ class SahamTuiApp(App[None]):
     }
 
     #candidate-list {
-        width: 2fr;
+        width: 100%;
+        border: round $primary;
+        padding: 0 1;
+        background: $surface;
+    }
+
+    #candidate-list:focus {
+        border: round $accent;
     }
 
     #candidate-preview {
         width: 100%;
-        padding-left: 2;
+        border: round $secondary;
+        padding: 0 1;
+        background: $surface-darken-1;
     }
 
     CandidateBrowserScreen.wide #candidate-list {
@@ -166,8 +218,8 @@ class SahamTuiApp(App[None]):
         self,
         daily_controller: DailyController,
         daily_presenter: DailyPresenter,
-        accumulation_controller: AccumulationController,
-        accumulation_presenter: AccumulationPresenter,
+        accumulation_controller: AccumulationController | DiscoverController,
+        accumulation_presenter: AccumulationPresenter | DiscoverPresenter,
         ticker_controller: TickerResearchController,
         ticker_presenter: TickerResearchPresenter,
     ) -> None:

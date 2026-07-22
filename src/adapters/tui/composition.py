@@ -17,7 +17,6 @@ from threading import Lock
 from typing import Any
 
 from src.adapters.tui.controllers.accumulation_controller import (
-    AccumulationController,
     AccumulationLoader,
 )
 from src.adapters.tui.controllers.daily_controller import (
@@ -26,20 +25,16 @@ from src.adapters.tui.controllers.daily_controller import (
     DailyPreviewer,
     DailyRefresher,
 )
-from src.application.use_case.refresh_daily_workspace_use_case import (
-    DailyWorkspaceRefreshPlan,
-    PreviewDailyWorkspaceRefreshUseCase,
-    RefreshDailyWorkspaceRequest,
-    RefreshDailyWorkspaceResult,
-    RefreshDailyWorkspaceUseCase,
+from src.adapters.tui.controllers.discover_controller import (
+    DiscoverController,
 )
 from src.adapters.tui.controllers.ticker_research_controller import (
     TickerLoader,
     TickerResearchController,
 )
 from src.adapters.tui.main import SahamTuiApp
-from src.adapters.tui.presenters.accumulation_presenter import AccumulationPresenter
 from src.adapters.tui.presenters.daily_presenter import DailyPresenter
+from src.adapters.tui.presenters.discover_presenter import DiscoverPresenter
 from src.adapters.tui.presenters.ticker_research_presenter import TickerResearchPresenter
 from src.adapters.tui.research_capabilities import (
     ResearchExecution,
@@ -72,6 +67,9 @@ from src.application.use_case.assess_risk_use_case import AssessRiskUseCase
 from src.application.use_case.build_live_signal_evidence_execution_context_use_case import (
     BuildLiveSignalEvidenceExecutionContextUseCase,
 )
+from src.application.use_case.compare_screen_watchlist_use_case import (
+    CompareScreenWatchlistUseCase,
+)
 from src.application.use_case.daily_briefing_use_case import (
     DailyBriefingRequest,
     DailyBriefingResponse,
@@ -86,8 +84,21 @@ from src.application.use_case.evaluate_swing_setup_use_case import (
     EvaluateSwingSetupRequest,
     EvaluateSwingSetupUseCase,
 )
+from src.application.use_case.list_screen_watchlists_use_case import (
+    ListScreenWatchlistsUseCase,
+)
+from src.application.use_case.refresh_daily_workspace_use_case import (
+    DailyWorkspaceRefreshPlan,
+    PreviewDailyWorkspaceRefreshUseCase,
+    RefreshDailyWorkspaceRequest,
+    RefreshDailyWorkspaceResult,
+    RefreshDailyWorkspaceUseCase,
+)
 from src.application.use_case.run_accumulation_screen_workflow_use_case import (
     RunAccumulationScreenWorkflowUseCase,
+)
+from src.application.use_case.save_screen_watchlist_use_case import (
+    SaveScreenWatchlistUseCase,
 )
 from src.application.use_case.swing_analysis_workflow_use_case import (
     SwingAnalysisWorkflowUseCase,
@@ -141,6 +152,9 @@ from src.infrastructure.persistence.sqlite_corporate_action_calendar_repository 
     SQLiteCorporateActionCalendarRepository,
 )
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
+from src.infrastructure.persistence.sqlite_watchlist_repository import (
+    SQLiteWatchlistRepository,
+)
 
 
 def _forbid_tui_refresh(**kwargs) -> None:
@@ -475,6 +489,35 @@ def create_daily_capability() -> DailyLoader:
     return _SerializedDailyCapability(_build_daily_execution)
 
 
+def _resolve_universe_tickers(universe_name: str) -> list[str]:
+    try:
+        from src.application.services.universe_loader import load_universe as _load_uni
+        from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
+        return _load_uni((universe_name or "lq45").lower(), YamlUniverseConfigLoader())
+    except Exception:
+        return []
+
+
+def _build_universe_view(universe_name: str):
+    """Load the locally-cached universe summary view for the Discover Universe tab.
+
+    Reuses the same `build_universe_view` application boundary the CLI `view
+    universe` command uses; no provider fetch, offline-only.
+    """
+    from src.application.use_case.view_universe_summary_use_case import build_universe_view
+    from src.infrastructure.persistence.sqlite_universe_summary_provider import (
+        SQLiteUniverseSummaryProvider,
+    )
+
+    config = load_app_config()
+    db_path = Path(config.storage.db_path)
+    return build_universe_view(
+        universe_name=(universe_name or "lq45").lower(),
+        loader=YamlUniverseConfigLoader(),
+        provider=SQLiteUniverseSummaryProvider(db_path),
+    )
+
+
 def _build_research_execution() -> ResearchExecution:
     config = load_app_config()
     db_path = Path(config.storage.db_path)
@@ -519,6 +562,7 @@ def _build_research_execution() -> ResearchExecution:
         db_path,
         tickers,
         load_analyze_swing_config().flow_detail_window_sessions,
+        universe_resolver=_resolve_universe_tickers,
     )
 
 
@@ -533,7 +577,13 @@ def _build_daily_refresh_execution(
     sb_providers = create_readonly_stockbit_providers(db_path)
     sb_client = sb_providers.session if sb_providers else None
 
-    from src.infrastructure.composition.fetch_market.fetch_market_workflow_factory import create_workflow_use_case
+    # Milestone A data-Update wiring. The fetch-market workflow factory lives in
+    # the shared infrastructure composition root, so both the CLI and TUI
+    # composition seams build it without any adapter->adapter dependency.
+    from src.infrastructure.composition.fetch_market.fetch_market_workflow_factory import (
+        create_workflow_use_case,
+    )
+
     workflow_use_case = create_workflow_use_case(
         db_path=db_path,
         broker_provider=sb_client,
@@ -613,17 +663,44 @@ def create_tui_app(
     accumulation_loader: AccumulationLoader | None = None,
     ticker_loader: TickerLoader | None = None,
 ) -> SahamTuiApp:
+    config = load_app_config()
+    db_path = Path(config.storage.db_path)
+    watchlist_repo = SQLiteWatchlistRepository(db_path)
+
     daily = daily_loader or create_daily_capability()
     refresher = daily_refresher or _build_daily_refresh_execution
     previewer = daily_previewer or _build_daily_preview_execution
     research = SerializedResearchCapabilities(_build_research_execution)
     accumulation = accumulation_loader or research.load_accumulation
     ticker = ticker_loader or research.load_ticker
+
+    class _LazyScreenWorkflow:
+        """Adapt the injected accumulation callable to the workflow port the
+        compare use case expects, deferring construction to first Run."""
+
+        def execute(self, req: Any) -> Any:
+            return accumulation(req)
+
+    list_watchlists_uc = ListScreenWatchlistsUseCase(watchlist_repo)
+    save_watchlist_uc = SaveScreenWatchlistUseCase(watchlist_repo)
+    compare_watchlist_uc = CompareScreenWatchlistUseCase(
+        watchlist_repository=watchlist_repo,
+        screen_workflow_use_case=_LazyScreenWorkflow(),  # type: ignore[arg-type]
+    )
+
+    discover_controller = DiscoverController(
+        load_universe=_build_universe_view,
+        run_accumulation=accumulation,
+        list_watchlists=list_watchlists_uc,
+        compare_watchlist=compare_watchlist_uc,
+        save_watchlist=save_watchlist_uc,
+    )
+
     return SahamTuiApp(
         DailyController(daily, refresh_daily=refresher, preview_daily=previewer),
         DailyPresenter(),
-        AccumulationController(accumulation),
-        AccumulationPresenter(),
+        discover_controller,
+        DiscoverPresenter(),
         TickerResearchController(ticker),
         TickerResearchPresenter(),
     )

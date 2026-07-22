@@ -30,6 +30,7 @@ class ResearchExecution:
     db_path: Path
     tickers: list[str]
     flow_window: int
+    universe_resolver: Callable[[str], list[str]] | None = None
 
 
 class SerializedResearchCapabilities:
@@ -38,12 +39,20 @@ class SerializedResearchCapabilities:
         self._execution: ResearchExecution | None = None
         self._lock = Lock()
 
-    def load_accumulation(self, multi: bool):
+    def load_accumulation(self, request: RunAccumulationScreenWorkflowRequest | bool):
         with self._lock:
             execution = self._get_execution()
-            return execution.accumulation.execute(
-                build_accumulation_request(execution.config, execution.tickers, multi)
-            )
+            if isinstance(request, bool):
+                req = build_accumulation_request(execution.config, execution.tickers, request)
+            else:
+                tickers = request.tickers
+                if not tickers and execution.universe_resolver is not None:
+                    uni_name = (request.universe_name or request.universe_label or "lq45").lower()
+                    tickers = execution.universe_resolver(uni_name)
+                if not tickers:
+                    tickers = execution.tickers
+                req = _clone_request_with_tickers(request, tickers)
+            return execution.accumulation.execute(req)
 
     def load_ticker(self, ticker: str):
         with self._lock:
@@ -86,6 +95,31 @@ def build_accumulation_request(
         vwap_only=False,
         squeeze_only=False,
         sort_by="vwap",
+    )
+
+
+def _clone_request_with_tickers(
+    req: RunAccumulationScreenWorkflowRequest, tickers: list[str]
+) -> RunAccumulationScreenWorkflowRequest:
+    return RunAccumulationScreenWorkflowRequest(
+        tickers=tickers,
+        universe_label=req.universe_label,
+        universe_name=req.universe_name,
+        window=req.window,
+        min_streak=req.min_streak,
+        min_foreign_flow_score=req.min_foreign_flow_score,
+        min_signal_score=req.min_signal_score,
+        min_piotroski=req.min_piotroski,
+        strategy_name=req.strategy_name,
+        include_strategy_overlay=req.include_strategy_overlay,
+        multi=req.multi,
+        windows=req.windows,
+        top=req.top,
+        save_name=req.save_name,
+        save_enabled=req.save_enabled,
+        squeeze_only=req.squeeze_only,
+        vwap_only=req.vwap_only,
+        sort_by=req.sort_by,
     )
 
 

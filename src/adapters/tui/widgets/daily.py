@@ -5,6 +5,7 @@ Layer: Adapter
 
 from __future__ import annotations
 
+from src.adapters.tui.action_display import decorate_action
 from src.adapters.tui.presenters.daily_presenter import DailyViewModel
 
 
@@ -74,12 +75,7 @@ def render_accumulation(view: DailyViewModel) -> str:
             f"watch {summary.watch_count} | blocked {summary.blocked_count}"
         )
     for idx, item in enumerate(view.accumulation_candidates, 1):
-        action_symbol = (
-            "▲ ENTER" if item.action == "ENTER"
-            else "◆ WATCH" if item.action == "WATCH"
-            else "▼ AVOID" if item.action == "AVOID"
-            else item.action or "-"
-        )
+        action_symbol = decorate_action(item.action)
         lines.append(
             f"│ {idx:<2} {item.ticker:<5} | flow {item.flow_score:5.1f} | "
             f"signal {item.signal_score if item.signal_score is not None else '-':>3} | "
