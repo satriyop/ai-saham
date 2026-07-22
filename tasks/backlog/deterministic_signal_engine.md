@@ -51,10 +51,10 @@ ML roadmap.
 
 | Task | State | Purpose | Owning dependency |
 |---|---|---|---|
-| `CONTROL-POPULATION` | Blocked | Capture selected and rejected eligible-universe controls | DQ-003 + `ARTIFACT-IDENTITY` |
-| `IDX-EXECUTION-LABELS` | Blocked | Produce executable net outcome labels | DQ-004 + `CONTROL-POPULATION` |
-| `NAMED-SWING-SETUP-CAPTURE` | Blocked | Capture population-based evaluations for an explicit named swing setup | DQ-003 + `CONTROL-POPULATION` |
-| DQ-005 through DQ-011 | See DQ backlog | Replay, readiness, inspection, cleanup, and baseline freeze | [`audit_data_quality.md`](audit_data_quality.md) |
+| `CONTROL-POPULATION` | Lean-closed (parked gaps) | Capture selected (+ genuine rejected controls when triggered) | DQ-003 Done; PIT rejected-controls / universe reconstruction parked |
+| `IDX-EXECUTION-LABELS` | Blocked / parked | Produce executable net outcome labels | DQ-004 raw lane Done; net-executable parked |
+| `NAMED-SWING-SETUP-CAPTURE` | Blocked / parked | Capture population-based evaluations for an explicit named swing setup | DQ-003 Done; product trigger required |
+| DQ-005 through DQ-011 | Done (baseline frozen) | Replay, readiness, inspection, cleanup, and baseline freeze | [`audit_data_quality.md`](audit_data_quality.md) §17 |
 
 ### Named Swing Setup Capture
 

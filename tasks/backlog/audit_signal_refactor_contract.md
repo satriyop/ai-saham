@@ -29,16 +29,20 @@ prerequisites remain unresolved.
 - Dependencies and active ordering live in the lane documents, not here.
 - Exact contracts, forbidden interpretations, and close criteria live here.
 
-### Current-Code Audit — 2026-07-18
+### Current-Code Audit — refreshed 2026-07-22
 
-- Focused contract suites and the full suite pass through `2c828c7`.
-- Completed tasks remain implemented at the current worktree state.
-- No `ARTIFACT-IDENTITY` close criterion is checked: current slices provide
-  domain resolution and persistence support, but canonical producers,
-  readiness grouping, and artifact-level idempotency are not integrated.
-- Unchecked criteria under `Ready`, `Blocked`, or `Deferred` tasks describe
-  future task completion; incidental adjacent code is not counted as task-owned
-  completion.
+- `DQ-BASELINE-GATE` is closed in [`audit_data_quality.md`](audit_data_quality.md)
+  §17. Prefer that file + current code/tests over older pessimistic notes.
+- Lean identity is integrated on the capture path (`observation_contract` +
+  `semantic_compatibility_id`). Full three-part `ARTIFACT-IDENTITY` remains
+  Foundation Done / apparatus parked — not “unintegrated lean identity.”
+- `CONTROL-POPULATION` for `accumulation-discovery` is **lean-closed with
+  stamped limitations** (below). Do not treat unchecked full-control / PIT
+  universe criteria as open P0 baseline work.
+- Deferred promotion / walk-forward / ML sections remain future specs.
+- Unchecked criteria under Deferred or parked scopes describe future task
+  completion; incidental adjacent code is not counted as task-owned completion
+  unless a lean close note says so.
 
 ---
 
@@ -1151,17 +1155,27 @@ only after equivalent evidence-bound registrations exist.
 
 ## Task CONTROL-POPULATION — Point-in-Time Universe Controls
 
-**State:** Blocked — starts with DQ-003 after `LIVE-CONTRACT-GATE`.
+**State:** Lean-closed for `accumulation-discovery` (2026-07-22) — delivered via
+DQ-003 lean slices with stamped limitations. Full screen-rejected controls,
+PIT historical universe membership, and `swing-setup` population capture remain
+**parked** behind named triggers (not open baseline P0).
 
 ### Decision and dependency
 
-- **Priority:** P0 data-science correctness
-- **Depends on:** `DQ-CONTRACT-GATE` session/PIT contracts and
-  `ARTIFACT-IDENTITY`. Capture implementation and contract verification proceed
-  in DQ-003; readiness, empirical claims, tuning, and promotion require
-  `DQ-BASELINE-GATE`.
-- **Decision:** Persist both selected candidates and the contemporaneous eligible
-  universe so learning can measure false negatives and selection bias.
+- **Priority:** P0 data-science correctness (lean slice closed; remainder parked)
+- **Depends on:** `DQ-CONTRACT-GATE` session/PIT contracts and lean
+  `ARTIFACT-IDENTITY` subset used by DQ-003. Full apparatus stays parked.
+- **Delivered (lean):** dedicated capture/backfill use cases; idempotent
+  `accumulation-discovery` observations with lean identity; ordinary
+  `screen`/`analyze` remain non-writers; candidate-only datasets cannot claim
+  recall/filter-value authority (`contains_control_population=false` stamped).
+- **Parked (not bugs to reopen under DQ):** genuine screen-rejected control rows
+  (production reject gates disabled on capture path), PIT index membership
+  reconstruction (current-universe / survivorship disclosure instead),
+  `NAMED-SWING-SETUP-CAPTURE`, CLI-003 `learn signal capture` router.
+- **Decision (original full scope, still valid when triggered):** Persist both
+  selected candidates and the contemporaneous eligible universe so learning can
+  measure false negatives and selection bias.
 
 ### Exact contract
 
@@ -1224,27 +1238,37 @@ population.
 ### Close criteria
 
 - [ ] Persisted selected/rejected controls contain the identity and outcome-linkage fields required for later precision, recall/opportunity-cost, and missed-winner evaluation; metric calculation belongs after DQ-004 labels
+      *Lean (2026-07-22):* selected `accumulation-discovery` rows + lean identity Done via DQ-003. Genuine screen-rejected control rows **parked** (reject gates disabled on capture path; stamped limitation).
 - [ ] Tightening a filter cannot hide rejected outcomes
+      *Parked* with genuine rejected-control capture.
 - [ ] Universe membership is point-in-time and survivorship-safe
-- [ ] Candidate-only datasets cannot authorize screening-policy promotion
-- [ ] Explicit capture is idempotent for the same semantic observation identity
-- [ ] Repeated interactive screen/analyze calls create no canonical samples
-- [ ] Capture and later label generation are separate operations
-- [ ] The capture application use case is adapter-independent and ready for CLI-003 wiring
-- [ ] Discovery and swing-setup observations cannot overwrite or substitute for one another
+      *Lean:* current-universe membership + survivorship disclosure stamped; full PIT reconstruction parked.
+- [x] Candidate-only datasets cannot authorize screening-policy promotion
+      *Lean:* `contains_control_population=false` / recall ineligible stamped on backfill response and readiness consumers.
+- [x] Explicit capture is idempotent for the same semantic observation identity
+- [x] Repeated interactive screen/analyze calls create no canonical samples
+- [x] Capture and later label generation are separate operations
+- [x] The capture application use case is adapter-independent and ready for CLI-003 wiring
+      *Lean:* `RecordAccumulationObservationsUseCase` + backfill path exist; Typer `learn signal capture` router remains CLI-003.
+- [x] Discovery and swing-setup observations cannot overwrite or substitute for one another
+      *Lean:* non-`accumulation-discovery` contract rejected at write; swing producer parked.
 - [ ] Swing-setup capture requires a named setup and evaluates a population, not a user-picked ticker
-- [ ] Single-ticker inspection is read-only and excluded from canonical learning/readiness
-- [ ] Holidays or unresolved completed sessions cannot fabricate observations
+      *Parked:* `NAMED-SWING-SETUP-CAPTURE`.
+- [x] Single-ticker inspection is read-only and excluded from canonical learning/readiness
+- [x] Holidays or unresolved completed sessions cannot fabricate observations
 
 ---
 
 ## Task ARTIFACT-IDENTITY — Reproducible Signal Artifact Identity
 
 **State:** Foundation Done — identity value objects, resolution, persistence
-support, and the typed semantic-contract registry are committed. Canonical
-capture integration is owned by `CONTROL-POPULATION`/DQ-003; readiness cohort
-integration is owned by DQ-006. Those later data tasks do not block the next
-deterministic live-contract task.
+support, and the typed semantic-contract registry are committed. **Lean capture
+integration is Done via DQ-003** (`observation_contract` +
+`semantic_compatibility_id` on `accumulation-discovery` writes). Full
+three-part apparatus (`artifact_id`, material-config registry, complete
+provenance, universe warehouse) remains **parked** until a named trigger.
+Readiness cohort isolation is Done via DQ-006. Those parked scopes do not
+block CLI restructure after `DQ-BASELINE-GATE`.
 
 **Committed progress:**
 
@@ -1348,20 +1372,43 @@ refactors must not fragment cohorts.
 
 ### Close criteria
 
-The criteria below are end-to-end program criteria. The identity foundation
-implemented here supplies their contract; DQ-003 owns canonical production and
-idempotent capture, while DQ-006 owns readiness grouping and mixed-cohort
-rejection.
+These were originally end-to-end program criteria for the **full** three-part
+apparatus. After DQ-003 / DQ-006 lean delivery, read each line as:
 
-- [ ] Semantically different engines cannot share one `semantic_compatibility_id`
+- **Lean satisfied** → checked below (current code)
+- **Full apparatus still parked** → remains unchecked with a note
+
+Foundation slices still supply the typed contracts; lean capture uses
+`observation_contract` + config-content-hash `semantic_compatibility_id`
+without wiring full `artifact_id` / material-config registry / universe warehouse.
+
+- [x] Semantically different engines cannot share one `semantic_compatibility_id`
+      *Lean:* whole-config-content hash + schema/engine/evidence versions forks
+      the id (DQ-003). Full per-path material-config registry remains parked.
 - [ ] Exact reruns reproduce `artifact_id`, `semantic_compatibility_id`, and material outputs
-- [ ] Readiness groups by `semantic_compatibility_id`, reports provenance diversity separately, and quarantines incompatible mixtures
-- [ ] Session, ticker, universe snapshot, source cutoff, and full code revision do not fragment otherwise compatible readiness cohorts
-- [ ] Material scoring/policy changes require a new semantic contract version or resolved config identity
-- [ ] New canonical fingerprints omit `regime_detection_method_at_signal`; historical raw JSON is not rewritten
-- [ ] Invocation time/command cannot create a distinct canonical observation
-- [ ] Same semantic capture is a no-op/already-existing result, not a new sample
-- [ ] Different observation contracts or setup families cannot share an identity
+      *Lean partial:* same config → same `semantic_compatibility_id` + idempotent
+      observation upsert (DQ-003). Full `artifact_id` reproduction parked.
+- [x] Readiness groups by `semantic_compatibility_id`, reports provenance diversity separately, and quarantines incompatible mixtures
+      *Lean:* DQ-006 cohort isolation + exclusion ledger; mixed cohorts fail closed
+      / require `--cohort`. Full provenance-diversity product reporting may still grow.
+- [x] Session, ticker, universe snapshot, source cutoff, and full code revision do not fragment otherwise compatible readiness cohorts
+      *Lean:* readiness keys on lean `semantic_compatibility_id`; universe is out of
+      the lean compatibility key by design (DQ-003 amendment). Full
+      `universe_snapshot_id` warehouse remains parked.
+- [x] Material scoring/policy changes require a new semantic contract version or resolved config identity
+      *Lean:* any change to resolved scoring config content forks
+      `semantic_compatibility_id`. Explicit semantic-engine version bumps remain
+      the contract for engine-code changes (classify before editing).
+- [x] New canonical fingerprints omit `regime_detection_method_at_signal`; historical raw JSON is not rewritten
+      *Lean:* schema-4 / current fingerprint path + DQ-010 quarantine (no rewrite).
+- [x] Invocation time/command cannot create a distinct canonical observation
+      *Lean:* ordinary screen/analyze do not write; capture identity excludes
+      invocation/command frequency (DQ-003).
+- [x] Same semantic capture is a no-op/already-existing result, not a new sample
+      *Lean:* idempotent upsert on canonical observation identity (DQ-003).
+- [x] Different observation contracts or setup families cannot share an identity
+      *Lean:* writer rejects non-`accumulation-discovery`; named-setup contract
+      reserved / parked (`NAMED-SWING-SETUP-CAPTURE`).
 
 ### Foundation Checkpoint (Slice 1, as shipped)
 
@@ -1561,13 +1608,15 @@ decisions and the exact ablation definition.
 
 ## Task IDX-EXECUTION-LABELS — Executable Net Outcome Contract
 
-**State:** Blocked — starts with DQ-004 after `CONTROL-POPULATION`.
+**State:** Parked — DQ-004 raw_market lane is Done and sufficient for
+`DQ-BASELINE-GATE`. Net-executable labeling is a named product trigger, not an
+open baseline P0. Do not start from “Blocked after CONTROL-POPULATION.”
 
 ### Decision
 
-- **Priority:** P1 before threshold calibration
+- **Priority:** P1 before threshold calibration / promotion that needs net returns
 - **Depends on:** `DQ-CONTRACT-GATE` and point-in-time market data; promotion
-  use requires `DQ-BASELINE-GATE`
+  use requires `DQ-BASELINE-GATE` (already closed for the raw lane)
 - **Decision:** Label the declared executable entry/exit policy after realistic
   IDX costs; retain raw market outcomes separately.
 

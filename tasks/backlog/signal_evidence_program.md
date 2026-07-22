@@ -6,10 +6,37 @@ This is the concise execution index. It defines lane boundaries and dependency
 order; it does not duplicate task contracts or maintain independent completion
 claims.
 
+## Gate snapshot (code truth — 2026-07-22)
+
+Mutable status lives in [`audit_data_quality.md`](audit_data_quality.md) §17 and
+the owning lane docs. This snapshot is orientation only; verify against code
+before implementing.
+
+| Gate | Snapshot |
+|---|---|
+| `DQ-CONTRACT-GATE` | Closed (DQ-000…002) |
+| `LIVE-CONTRACT-GATE` | Closed (eight live-contract tasks Done) |
+| `CANONICAL-EVIDENCE-GATE` | Lean-closed via DQ-003…008 (raw labels; candidate-only capture stamped) |
+| `DQ-BASELINE-GATE` | Closed (DQ-010 + DQ-011) |
+
+**Engineering next:** [`improvement_cli_restructure.md`](improvement_cli_restructure.md)
+CLI-001 (Ready). Optional operator backfill for non-empty readiness data is
+product use, not a gate.
+
+**Parked until a named trigger:** full `ARTIFACT-IDENTITY` apparatus,
+`IDX-EXECUTION-LABELS`, genuine screen-rejected controls / PIT universe
+membership, `NAMED-SWING-SETUP-CAPTURE`, evidence promotion / purged
+walk-forward, DQ-009 sentiment.
+
+**Lean Phase 3 reading:** `CONTROL-POPULATION` for `accumulation-discovery` is
+lean-closed with stamped limitations (see refactor-contract task note). Do not
+re-open DQ plumbing to satisfy parked control/universe product scope.
+
 ## Choose The Correct Lane
 
 | Question | Lane | Document |
 |---|---|---|
+| What does PRODUCTION / DIAGNOSTIC mean in today's live SignalEngine? | Product meaning (not a task) | [`docs/signal_evidence_authority.md`](../../docs/signal_evidence_authority.md) |
 | What must be fixed in the existing deterministic engine? | Active deterministic work | [`deterministic_signal_engine.md`](deterministic_signal_engine.md) |
 | Is source data, PIT behavior, replay, or artifact integrity wrong? | Active data correctness | [`audit_data_quality.md`](audit_data_quality.md) |
 | Is new evidence seeking authority in the deterministic engine? | Deferred evidence governance | [`evidence_validation_and_promotion.md`](evidence_validation_and_promotion.md) |
@@ -38,17 +65,18 @@ claims.
    OUTPUT-CONTRACT-OWNERSHIP
 
 3. CANONICAL OBSERVATIONS AND LABELS
-   Accumulation baseline:
-     CONTROL-POPULATION + DQ-003 (`accumulation-discovery`)
-     -> IDX-EXECUTION-LABELS + DQ-004
+   Accumulation baseline (lean path closed 2026-07-22):
+     CONTROL-POPULATION lean slice + DQ-003 (`accumulation-discovery`)
+     -> DQ-004 raw labels (IDX-EXECUTION-LABELS parked)
      -> DQ-005 through DQ-011
 
-   Named-setup extension after DQ-003:
+   Named-setup extension after DQ-003 (still parked):
      NAMED-SWING-SETUP-CAPTURE
      -> named-setup labels/readiness
 
    The named-setup extension does not block the accumulation baseline.
    Exit: CANONICAL-EVIDENCE-GATE, then DQ-BASELINE-GATE
+   (both lean-closed / closed — see Gate snapshot above)
 
 4. EVIDENCE VALIDATION AND PROMOTION
    Start only for a named candidate after canonical data is ready.

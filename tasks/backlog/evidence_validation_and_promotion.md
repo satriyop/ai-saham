@@ -6,6 +6,9 @@ This is the technology-neutral governance lane for evidence or deterministic
 policy changes seeking new or expanded authority inside the deterministic
 engine.
 
+For plain-language **current** PRODUCTION / DIAGNOSTIC meanings (not task
+status), see [`docs/signal_evidence_authority.md`](../../docs/signal_evidence_authority.md).
+
 It applies to:
 
 - new deterministic evidence;

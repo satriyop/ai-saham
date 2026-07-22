@@ -178,6 +178,9 @@ after validator-approved walk-forward out-of-sample evidence. Tuning output
 must not promote evidence automatically, and validators must reject weights
 that exceed authority caps.
 
+**Current live meaning and examples** (what is PRODUCTION today vs parked
+promotion work): [`signal_evidence_authority.md`](signal_evidence_authority.md).
+
 ## Setup-Family Source Contract
 
 Setup family must have one deterministic source contract. Candidate sources

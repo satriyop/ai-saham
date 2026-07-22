@@ -354,14 +354,11 @@ Artifacts without a defensible effective timestamp or data cutoff are invalid fo
 
 ### DQ-003 — Audit and repair historical candidate-observation backfill
 
-**State:** Active — amended 2026-07-21 to a **lean identity contract**: capture
-persists an explicit `observation_contract` plus a `semantic_compatibility_id`
-derived from a whole-config content hash, and defers the full three-part
-`ARTIFACT-IDENTITY` apparatus (auto-detecting material-config registry,
-`artifact_id` split, complete provenance, universe-membership platform) behind
-named triggers. See "Lean identity amendment (2026-07-21)" below. Slice A of
-`tasks/backlog/dq_003_lean_implementation_plan.md` is implemented in commit
-`e00b4aa` (criteria 6 and 9 satisfied); Slices B–E remain.
+**State:** Done — 2026-07-22 lean identity + capture honesty closed (Slices A–E
+and follow-ups). Full `ARTIFACT-IDENTITY` apparatus, genuine screen-rejected
+controls, and PIT universe reconstruction remain parked behind named triggers.
+See "Lean identity amendment (2026-07-21)" and
+`tasks/backlog/dq_003_lean_implementation_plan.md`.
 
 **Priority:** P0  
 **Depends on:** DQ-001, DQ-002  
@@ -463,7 +460,10 @@ If canonical identity omits a meaning-changing dimension, replace it and rebuild
       labels; a later `generate_labels=True` run over the same dates generates a
       label and leaves the canonical observation count unchanged; and repeating
       a capture-only run adds no canonical rows.)
-- [ ] The capture application use case is adapter-independent and ready for CLI-003 wiring.
+- [x] The capture application use case is adapter-independent and ready for CLI-003 wiring.
+      *Lean (2026-07-22):* `RecordAccumulationObservationsUseCase` + backfill
+      composition are application-owned and tested. The Typer
+      `saham learn signal capture` router remains CLI-003 (not a DQ-003 gap).
 - [x] `accumulation-discovery` rows carry an explicit `observation_contract`
       and a config-content-hash `semantic_compatibility_id`. The writer rejects
       any non-`accumulation-discovery` contract, reserving a distinct contract
