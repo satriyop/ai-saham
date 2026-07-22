@@ -86,6 +86,8 @@ def test_source_unavailable_flow_has_zero_authority():
 
     class _Avail:
         all_authoritative = False
+        settled_authority_fraction = 0.0
+        unassessed_contributors = ()
 
     class _Group:
         availability = _Avail()
@@ -118,6 +120,8 @@ def test_partial_flow_coverage_proportionally_lowers_authority():
 
     class _Avail:
         all_authoritative = True
+        settled_authority_fraction = 1.0
+        unassessed_contributors = ()
 
     class _Group:
         availability = _Avail()
@@ -202,12 +206,12 @@ def test_fingerprint_round_trip_preserves_coverage_and_missing():
 
 
 def test_schema_versions_bumped_for_dq001():
-    # Current cohort after capture DecisionPolicy wiring (v6 / engine 1.3).
-    # DQ-001 originally landed as observation schema v5 / engine 1.2.
-    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 6
+    # Current cohort after discovery authority + settled bandar
+    # (v7 / engine 1.4 / evidence 1.5).
+    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 7
     assert SIGNAL_FORWARD_LABEL_SCHEMA_VERSION == 3
-    assert EVIDENCE_CONTRACT_VERSION == "1.4"
-    assert SEMANTIC_ENGINE_VERSION == "1.3"
+    assert EVIDENCE_CONTRACT_VERSION == "1.5"
+    assert SEMANTIC_ENGINE_VERSION == "1.4"
 
 
 def test_schema_4_observations_are_noncanonical():
@@ -331,6 +335,8 @@ def test_projection_transports_partial_flow_authority_without_changing_score():
 
     class _Avail:
         all_authoritative = True
+        settled_authority_fraction = 1.0
+        unassessed_contributors = ()
 
     class _Group:
         availability = _Avail()

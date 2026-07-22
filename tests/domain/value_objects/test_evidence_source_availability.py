@@ -86,6 +86,7 @@ def test_to_dict_includes_group_and_each_assessment():
     payload = group.to_dict()
     assert payload["evidence_group"] == "setup"
     assert payload["all_authoritative"] is True
+    assert payload["settled_authority_fraction"] == 1.0
     assert len(payload["assessments"]) == 1
     assert payload["assessments"][0]["source_family"] == "candles"
 
@@ -116,6 +117,20 @@ def test_all_authoritative_false_when_a_contributor_is_unassessed():
         unassessed_contributors=("bandar_detector",),
     )
     assert group.all_authoritative is False
+    assert group.settled_authority_fraction == 1.0
+
+
+def test_settled_authority_fraction_zero_when_settled_source_not_authoritative():
+    group = EvidenceSourceAvailability(
+        evidence_group="flow",
+        assessments=(
+            _assessment("broker_summaries", SourceAvailabilityStatus.CURRENT, True),
+            _assessment("broker_daily_flow", SourceAvailabilityStatus.UNKNOWN, False),
+        ),
+        unassessed_contributors=("bandar_detector",),
+    )
+    assert group.all_authoritative is False
+    assert group.settled_authority_fraction == 0.0
 
 
 def test_all_authoritative_true_when_no_unassessed_contributors():

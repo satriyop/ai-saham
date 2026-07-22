@@ -142,7 +142,7 @@ row.
 | [038](docs/adr/ADR-038-point-in-time-enrichment-and-conservative-derived-fundamentals.md) | Point-in-time enrichment | Accepted |
 | [039](docs/adr/ADR-039-foreign-flow-score-rescale-to-0-100-amends-adr-030.md) | Foreign-flow 0–100 scale | Accepted; amends ADR-030 |
 | [040](docs/adr/ADR-040-manual-dependency-injection-and-composition-roots.md) | Manual dependency injection | Accepted |
-| [041](docs/adr/ADR-041-canonical-signal-evidence-input-boundary.md) | Canonical signal-evidence input | Accepted; implementation pending |
+| [041](docs/adr/ADR-041-canonical-signal-evidence-input-boundary.md) | Canonical signal-evidence input | Accepted; amended 2026-07-22 (discovery ATTACHED_REQUIRED + settled bandar) |
 | [042](docs/adr/ADR-042-deterministic-champion-and-optional-model-challengers.md) | Deterministic champion, governed ML evidence, and optional decision challengers | Accepted |
 
 ## Adding or changing a decision

@@ -18,7 +18,9 @@ from datetime import date
 from typing import TYPE_CHECKING
 
 from src.domain.value_objects.alpha_trigger_score import AlphaTriggerScore
-from src.domain.value_objects.signal_assessment import SignalAssessment
+from src.domain.value_objects.evidence_source_availability import (
+    AuthorityDenominatorScope,
+)
 
 if TYPE_CHECKING:
     from src.domain.value_objects.canonical_signal_evidence_input import (
@@ -59,6 +61,13 @@ class AssessSignalEvidenceRequest:
     horizon: str | None = None
     sector_context_evidence: SectorContextEvidence | None = None
     company_quality_context_evidence: CompanyQualityContextEvidence | None = None
+    # ADR-041 amendment: which required PRODUCTION groups enter the authority
+    # denominator. Default ALL_REQUIRED preserves swing / full-contract
+    # behavior. Screen discovery passes ATTACHED_REQUIRED so intentionally
+    # unattached setup does not dilute flow-only coverage.
+    authority_denominator_scope: AuthorityDenominatorScope = (
+        AuthorityDenominatorScope.ALL_REQUIRED
+    )
 
     @property
     def setup_evidence(self) -> "SetupEvidence | None":

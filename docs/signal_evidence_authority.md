@@ -77,9 +77,19 @@ Rough split:
 
 ```text
 signal_score              → how strong the evidence looks
-signal_authority_coverage → whether required PRODUCTION inputs are present
+signal_authority_coverage → whether in-scope required PRODUCTION inputs are
+                            present and settled-authoritative
 PRODUCTION registration   → whether that group is allowed to count
 ```
+
+**Denominator scope (ADR-041 amendment):**
+
+- Swing / default (`ALL_REQUIRED`): absent required groups stay in the
+  denominator (flow-only max coverage = 0.40).
+- Screen discovery (`ATTACHED_REQUIRED`): intentionally unattached setup is
+  out of scope; authoritative flow-only coverage can reach 1.0.
+- Bandar unassessed blocks `all_authoritative` (complete claim) but does not
+  by itself zero `settled_authority_fraction` for CURRENT brokers.
 
 ---
 

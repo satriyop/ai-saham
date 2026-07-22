@@ -26,9 +26,11 @@ no settlement rule and cannot be given one without a separate registry/ADR
 decision, so it is never given a `SourceAvailabilityAssessment`. Whenever
 `provenance.has_bandar_contributor` is `True`, it is named in
 `flow_availability.unassessed_contributors`, which forces
-`flow_availability.all_authoritative` to `False` — this prevents the group
-from ever claiming full authority while a real, present contributor went
-unassessed.
+`flow_availability.all_authoritative` to `False` — this prevents a
+*complete*-authority claim while a real, present contributor went
+unassessed. Authority coverage math uses
+`settled_authority_fraction` instead, so CURRENT broker settlement can still
+contribute without pretending bandar was assessed.
 
 Callers should call `assess_setup`/`assess_flow` only once the corresponding
 evidence (`SetupEvidence`/`FlowConfirmationEvidence`) actually exists —

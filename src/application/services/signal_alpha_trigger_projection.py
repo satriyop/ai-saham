@@ -141,7 +141,7 @@ class SignalAlphaTriggerProjection:
         group_input = canonical.setup if group == "setup" else canonical.flow
         if group_input is None:
             return 0.0
-        return 1.0 if group_input.availability.all_authoritative else 0.0
+        return group_input.availability.settled_authority_fraction
 
     @staticmethod
     def _flow_component_coverage(

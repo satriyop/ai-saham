@@ -12,6 +12,11 @@ rule yet (e.g. a live browser/API scrape, not a persisted SQLite source
 family), and `all_authoritative=True` must never claim that unassessed
 contributor is fine just because the sources this container does list are.
 
+`settled_authority_fraction` is the complementary signal for authority
+coverage math: it credits assessed/settled families only, so an unassessed
+contributor can block a *complete* authority claim without zeroing coverage
+for CURRENT broker sources that did settle.
+
 `AvailabilityEnforcementMode` marks whether availability facts are
 observational-only (`SHADOW`) or actively gate evidence (`ENFORCED`, HIGH-2).
 Under `SHADOW`, availability never changes scores, coverage, or
@@ -37,6 +42,22 @@ class AvailabilityEnforcementMode(str, Enum):
 
     SHADOW = "SHADOW"
     ENFORCED = "ENFORCED"
+
+
+class AuthorityDenominatorScope(str, Enum):
+    """Which required PRODUCTION groups enter signal_authority_coverage.
+
+    ALL_REQUIRED: every required PRODUCTION group in config stays in the
+    denominator even when intentionally unattached (swing / full contract).
+
+    ATTACHED_REQUIRED: only required PRODUCTION groups attached on this
+    request enter the denominator (flow-only discovery / screen). Intentionally
+    unattached groups are out of scope for this assessment — they are not
+    silently treated as present, and they do not dilute coverage.
+    """
+
+    ALL_REQUIRED = "all_required"
+    ATTACHED_REQUIRED = "attached_required"
 
 
 @dataclass(frozen=True)
@@ -76,10 +97,28 @@ class EvidenceSourceAvailability:
             and all(assessment.is_authoritative for assessment in self.assessments)
         )
 
+    @property
+    def settled_authority_fraction(self) -> float:
+        """Authority among assessed/settled source families only.
+
+        Unassessed contributors (e.g. bandar_detector) do not enter this
+        fraction — they only block ``all_authoritative`` (complete-authority
+        claim). Empty assessments → 0.0. When every assessed family is
+        authoritative → 1.0; otherwise → 0.0 (same binary rule as historical
+        source-authority gating, without punishing settled sources for a
+        separately named unassessed contributor).
+        """
+        if not self.assessments:
+            return 0.0
+        if all(assessment.is_authoritative for assessment in self.assessments):
+            return 1.0
+        return 0.0
+
     def to_dict(self) -> dict:
         return {
             "evidence_group": self.evidence_group,
             "all_authoritative": self.all_authoritative,
+            "settled_authority_fraction": self.settled_authority_fraction,
             "assessments": [assessment.to_dict() for assessment in self.assessments],
             "unassessed_contributors": list(self.unassessed_contributors),
         }

@@ -93,6 +93,7 @@ def _wrap_flow_evidence(
     evidence: FlowConfirmationEvidence | None,
     *,
     all_authoritative: bool = True,
+    unassessed_contributors: tuple[str, ...] = (),
 ) -> "FlowEvidenceGroupInput | None":
     """Wrap bare FlowConfirmationEvidence into the canonical group (ADR-041).
 
@@ -100,7 +101,9 @@ def _wrap_flow_evidence(
     both source families CURRENT) so pre-HIGH-2 scoring-logic tests keep
     exercising group-scoring math rather than incidentally exercising the
     authority-coverage gate. Pass `all_authoritative=False` for tests that
-    specifically need a non-authoritative flow group.
+    specifically need a non-authoritative flow group. Pass
+    `unassessed_contributors` (e.g. ``("bandar_detector",)``) to model a
+    settled-authoritative group that still cannot claim complete authority.
     """
     if evidence is None:
         return None
@@ -123,6 +126,7 @@ def _wrap_flow_evidence(
                 ),
             )
         ),
+        has_bandar_contributor="bandar_detector" in unassessed_contributors,
     )
     if all_authoritative:
         daily_flow_assessment = _current_assessment("broker_daily_flow", evidence.snapshot_date)
@@ -142,6 +146,7 @@ def _wrap_flow_evidence(
             _current_assessment("broker_summaries", evidence.snapshot_date),
             daily_flow_assessment,
         ),
+        unassessed_contributors=unassessed_contributors,
     )
     return FlowEvidenceGroupInput(evidence=evidence, provenance=provenance, availability=availability)
 
@@ -174,13 +179,16 @@ def _req(**kwargs) -> AssessSignalEvidenceRequest:
     setup_evidence = kwargs.pop("setup_evidence", None)
     flow_confirmation_evidence = kwargs.pop("flow_confirmation_evidence", None)
     flow_all_authoritative = kwargs.pop("flow_all_authoritative", True)
+    flow_unassessed_contributors = kwargs.pop("flow_unassessed_contributors", ())
 
     if "canonical_evidence" not in kwargs:
         if setup_evidence is not None or flow_confirmation_evidence is not None:
             kwargs["canonical_evidence"] = CanonicalSignalEvidenceInput(
                 setup=_wrap_setup_evidence(setup_evidence),
                 flow=_wrap_flow_evidence(
-                    flow_confirmation_evidence, all_authoritative=flow_all_authoritative
+                    flow_confirmation_evidence,
+                    all_authoritative=flow_all_authoritative,
+                    unassessed_contributors=flow_unassessed_contributors,
                 ),
             )
     else:

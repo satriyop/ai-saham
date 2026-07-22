@@ -17,7 +17,12 @@ v5 -> v6 (capture DecisionPolicy wiring): screen/backfill pass market_context
 into DecisionPolicy and wire source-availability assessment on historical
 capture so decision_constraints.regime and signal_authority_coverage reflect
 runtime policy inputs rather than RISK_ON/0.0 defaults.
-Older schema (1-5) rows are outside the current canonical contract — they are
+v6 -> v7 (discovery authority + settled bandar): screen/discovery uses
+ATTACHED_REQUIRED authority denominator scope (intentionally unattached
+setup does not dilute flow-only coverage); flow source authority uses
+settled_authority_fraction so unassessed bandar blocks complete-authority
+claims without zeroing CURRENT broker settlement.
+Older schema (1-6) rows are outside the current canonical contract — they are
 never mutated, migrated, or reinterpreted here, and their raw payloads are not
 validated by the current-contract validator below.
 """
@@ -32,7 +37,7 @@ from src.domain.value_objects.foreign_flow_score_breakdown import (
     INSTITUTIONAL_FLOW_COMPONENT_KEYS,
 )
 
-CANDIDATE_OBSERVATION_SCHEMA_VERSION = 6
+CANDIDATE_OBSERVATION_SCHEMA_VERSION = 7
 SIGNAL_FORWARD_LABEL_SCHEMA_VERSION = 3
 
 

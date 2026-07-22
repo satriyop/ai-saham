@@ -49,6 +49,9 @@ if TYPE_CHECKING:
     from src.domain.value_objects.company_quality_context_evidence import (
         CompanyQualityContextEvidence,
     )
+    from src.domain.value_objects.evidence_source_availability import (
+        AuthorityDenominatorScope,
+    )
     from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
@@ -117,6 +120,7 @@ class SignalEngine:
         horizon: str | None = None,
         sector_context_evidence: "SectorContextEvidence | None" = None,
         company_quality_context_evidence: "CompanyQualityContextEvidence | None" = None,
+        authority_denominator_scope: "AuthorityDenominatorScope | None" = None,
     ) -> AssessSignalResponse:
         """
         Pipeline path: caller supplies pre-loaded SignalContext.
@@ -130,7 +134,16 @@ class SignalEngine:
         (`canonical_evidence is None`, or `.setup`/`.flow` is None), that
         group is MISSING (excluded from the scoring denominator) — never a
         loose evidence value supplied independently of its provenance.
+
+        authority_denominator_scope (ADR-041 amendment): defaults to
+        ALL_REQUIRED (swing / full contract). Pass ATTACHED_REQUIRED for
+        flow-only discovery so intentionally unattached setup is out of
+        the authority denominator.
         """
+        from src.domain.value_objects.evidence_source_availability import (
+            AuthorityDenominatorScope,
+        )
+
         return self._evidence_use_case.execute(
             AssessSignalEvidenceRequest(
                 ticker=ticker,
@@ -143,6 +156,11 @@ class SignalEngine:
                 horizon=horizon,
                 sector_context_evidence=sector_context_evidence,
                 company_quality_context_evidence=company_quality_context_evidence,
+                authority_denominator_scope=(
+                    authority_denominator_scope
+                    if authority_denominator_scope is not None
+                    else AuthorityDenominatorScope.ALL_REQUIRED
+                ),
             )
         )
 

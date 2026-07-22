@@ -1,9 +1,9 @@
 # ADR-041: Canonical Signal Evidence Input Boundary
 
 [Architecture decision index](../../ARCHITECTURE_DECISIONS.md)
-**Status:** Accepted — implementation pending
+**Status:** Accepted — amended 2026-07-22 (discovery ATTACHED_REQUIRED + settled bandar)
 **Date:** 2026-07-17
-**Current implementation:** Not yet canonical production architecture. DQ-002J provides a prototype/assessment path; rollout must follow the shadow-to-enforcement lifecycle in this ADR.
+**Current implementation:** Canonical boundary is live for screen and swing. See AUTHORITY-COVERAGE-READINESS and Discovery Authority amendments below.
 
 ### Context
 
@@ -126,3 +126,35 @@ records the resulting behavior without rewriting the historical decision above.
   yet been wired into authority-coverage enforcement; it is not removed by
   this amendment, only superseded for the setup/flow groups AUTHORITY-COVERAGE-READINESS covers
   today.
+
+### Discovery Authority + Settled Bandar Amendment (2026-07-22)
+
+Screen discovery remains intentionally flow-only (`setup=None` on
+`CanonicalSignalEvidenceInput`). That is not a missing setup default and must
+not fabricate `SetupEvidence`.
+
+This amendment records two related authority-policy clarifications without
+changing the shared evidence / provenance / availability *definitions*:
+
+1. **Authority denominator scope** (`AuthorityDenominatorScope`):
+   - `ALL_REQUIRED` (default; swing / full contract): every required
+     PRODUCTION group in config stays in the
+     `signal_authority_coverage` denominator even when absent.
+   - `ATTACHED_REQUIRED` (screen discovery): only required PRODUCTION groups
+     attached on this request enter the denominator. Intentionally unattached
+     setup is out of scope for that assessment and does not permanently cap
+     coverage at flow's weight share.
+   Screen and swing still share one scorer, one availability contract, and one
+   meaning of each evidence group; only the request declares whether an
+   unattached required group is in-scope for this assessment's denominator.
+
+2. **Settled vs complete authority for bandar**:
+   - Unassessed contributors (e.g. `bandar_detector`) still force
+     `all_authoritative=False` — no complete-authority claim while a real
+     contributor went unassessed (invariant preserved).
+   - Coverage math uses `settled_authority_fraction` over assessed source
+     families, so CURRENT broker settlement can contribute without zeroing
+     the whole flow group for unassessed bandar.
+
+Observation schema / semantic / evidence-contract versions bump for this
+cohort; older rows remain raw/non-canonical and are not reinterpreted.

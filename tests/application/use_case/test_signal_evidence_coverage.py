@@ -19,7 +19,7 @@ from tests.application.use_case.signal_evidence_fixtures import (
 def test_flow_only_emits_coverage_warning_naming_absent_setup_group():
     # HIGH-2: only flow evidence attached -> setup_quality is a required
     # PRODUCTION group that is absent; the warning must name it and must not
-    # use the phrase "evidence confidence".
+    # use the phrase "evidence confidence". Default ALL_REQUIRED scope.
     uc = _use_case()
     resp = uc.execute(_req(flow_confirmation_evidence=_flow_evidence()))
     assert resp.coverage_warning is not None
@@ -27,6 +27,22 @@ def test_flow_only_emits_coverage_warning_naming_absent_setup_group():
     assert "required evidence absent" in resp.coverage_warning
     assert "evidence confidence" not in resp.coverage_warning.lower()
     assert "conviction" not in resp.coverage_warning.lower()
+
+
+def test_attached_required_flow_only_skips_absent_setup_warning():
+    from src.domain.value_objects.evidence_source_availability import (
+        AuthorityDenominatorScope,
+    )
+
+    uc = _use_case()
+    resp = uc.execute(
+        _req(
+            flow_confirmation_evidence=_flow_evidence(),
+            authority_denominator_scope=AuthorityDenominatorScope.ATTACHED_REQUIRED,
+        )
+    )
+    assert resp.coverage_warning is None
+    assert resp.signal_authority_coverage == pytest.approx(1.0)
 
 
 def test_full_confidence_no_coverage_warning():

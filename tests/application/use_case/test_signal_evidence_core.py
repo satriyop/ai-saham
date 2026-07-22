@@ -42,6 +42,43 @@ def test_only_flow_evidence_renormalized_to_flow_score():
     assert resp.assessment.signal_authority_coverage == pytest.approx(0.40)
 
 
+def test_attached_required_flow_only_reaches_full_authority_coverage():
+    from src.domain.value_objects.evidence_source_availability import (
+        AuthorityDenominatorScope,
+    )
+
+    uc = _use_case()
+    resp = uc.execute(
+        _req(
+            flow_confirmation_evidence=_flow_evidence(capped_strength=0.80),
+            authority_denominator_scope=AuthorityDenominatorScope.ATTACHED_REQUIRED,
+        )
+    )
+    assert resp.signal_authority_coverage == pytest.approx(1.0)
+    assert resp.assessment.entry_quality.name == "ENTER"
+
+
+def test_settled_bandar_unassessed_does_not_zero_flow_authority():
+    """Unassessed bandar blocks complete claim but settled brokers still count."""
+    from src.domain.value_objects.evidence_source_availability import (
+        AuthorityDenominatorScope,
+    )
+
+    uc = _use_case()
+    resp = uc.execute(
+        _req(
+            flow_confirmation_evidence=_flow_evidence(capped_strength=0.80),
+            flow_unassessed_contributors=("bandar_detector",),
+            authority_denominator_scope=AuthorityDenominatorScope.ATTACHED_REQUIRED,
+        )
+    )
+    assert resp.signal_authority_coverage == pytest.approx(1.0)
+    assert resp.flow_source_availability is not None
+    assert resp.flow_source_availability.all_authoritative is False
+    assert resp.flow_source_availability.settled_authority_fraction == pytest.approx(1.0)
+    assert "unassessed contributors" in (resp.coverage_warning or "")
+
+
 def test_only_setup_evidence_renormalized_to_setup_score():
     # MATCH → match_strength=100.0; only setup (weight=0.60) present → score=100
     # HIGH-2 Finding 1: coverage 0.60 is below the default 0.70 floor, so

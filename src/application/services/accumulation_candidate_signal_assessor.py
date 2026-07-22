@@ -30,6 +30,9 @@ from src.domain.value_objects.canonical_signal_evidence_input import (
     CanonicalSignalEvidenceInput,
     FlowEvidenceGroupInput,
 )
+from src.domain.value_objects.evidence_source_availability import (
+    AuthorityDenominatorScope,
+)
 from src.domain.value_objects.foreign_flow_evidence import ForeignFlowEvidence
 
 if TYPE_CHECKING:
@@ -154,7 +157,10 @@ class AccumulationCandidateSignalAssessor:
         # Flow evidence is built from candidate data already in memory — no
         # extra fetch. SetupEvidence is intentionally absent here: the batch
         # screener does not evaluate named setup patterns per ticker; that
-        # happens only in the per-ticker swing workflow.
+        # happens only in the per-ticker swing workflow. Authority uses
+        # ATTACHED_REQUIRED so unattached setup is out of the coverage
+        # denominator (ADR-041 amendment) rather than permanently capping
+        # discovery coverage at flow's 0.40 weight share.
         flow_ev: FlowConfirmationEvidence | None = None
         built_flow = None
         try:
@@ -222,6 +228,7 @@ class AccumulationCandidateSignalAssessor:
             canonical_evidence=canonical_evidence,
             setup_family=setup_family,
             setup_phase=candidate.setup_phase,
+            authority_denominator_scope=AuthorityDenominatorScope.ATTACHED_REQUIRED,
         )
         return CanonicalFlowScoreResult(
             candidate=candidate,

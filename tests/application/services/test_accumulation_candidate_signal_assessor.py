@@ -701,18 +701,12 @@ def test_unknown_family_returns_readiness_none_and_does_not_fabricate_family():
     assert result.candidate.setup_family_result.setup_family_source == "fallback_unknown"
 
 
-def test_unknown_family_flow_only_authority_coverage_below_floor_blocks_enter():
-    """HIGH-2 Finding 1: production callers must inject a SignalEngine whose
-    config carries the real RISK_ON/NEUTRAL min_signal_authority_coverage
-    floor (0.70, matching config/signal_engine.yaml) — not the pre-fix
-    default of 0.0. This proves that floor with the default SignalEngine()
-    a caller gets when it supplies no explicit config: no setup family, no
-    setup evidence, flow evidence strong enough to score STRONG/ENTER on
-    directional strength alone, and flow as the only present PRODUCTION
-    group. signal_authority_coverage lands at exactly flow's 0.40 weight /
-    (0.60 setup + 0.40 flow) required-production denominator — below the
-    0.70 floor — so canonical ENTER must not survive DecisionPolicyService,
-    even though the raw directional classification alone would grant it."""
+def test_unknown_family_flow_only_attached_required_can_clear_authority_floor():
+    """ADR-041 amendment: screen discovery uses ATTACHED_REQUIRED so
+    intentionally unattached setup does not dilute flow-only coverage.
+    With authoritative settled flow and full component coverage, coverage
+    reaches 1.0 and DecisionPolicy can keep directional ENTER.
+    """
     import pytest
 
     from src.application.dto.built_evidence import BuiltFlowEvidence
@@ -798,6 +792,6 @@ def test_unknown_family_flow_only_authority_coverage_below_floor_blocks_enter():
     # Directional strength alone would classify STRONG/ENTER (score >= 70).
     assert assessment.assessment.score >= 70
 
-    assert assessment.signal_authority_coverage == pytest.approx(0.40)
+    assert assessment.signal_authority_coverage == pytest.approx(1.0)
     assert assessment.setup_readiness is None
-    assert assessment.assessment.entry_quality is not EntryQuality.ENTER
+    assert assessment.assessment.entry_quality is EntryQuality.ENTER

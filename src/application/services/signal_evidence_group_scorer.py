@@ -10,6 +10,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from src.domain.value_objects.alpha_trigger_score import EvidenceAuthorityStatus
+from src.domain.value_objects.evidence_source_availability import (
+    AuthorityDenominatorScope,
+)
 from src.domain.value_objects.signal_assessment import (
     EntryQuality,
     SignalStrength,
@@ -47,6 +50,10 @@ class _GroupAuthorityFacts:
     # component-complete. Setup remains 1.0/0.0; flow multiplies source
     # authority by flow.component_coverage.
     authority_fraction: float
+    # True when a real consumed contributor was left unassessed (e.g. bandar).
+    # Blocks complete-authority claims without necessarily zeroing
+    # settled_authority_fraction.
+    has_unassessed_contributors: bool = False
 
 
 @dataclass(frozen=True)
@@ -92,7 +99,8 @@ class SignalEvidenceGroupScorer:
             request, setup_present, flow_present, config
         )
         signal_authority_coverage = SignalEvidenceGroupScorer._compute_signal_authority_coverage(
-            group_authority_facts
+            group_authority_facts,
+            scope=request.authority_denominator_scope,
         )
 
         active_flags, flag_adjustment = SignalEvidenceGroupScorer._evaluate_flags(
@@ -113,6 +121,7 @@ class SignalEvidenceGroupScorer:
         coverage_warning = SignalEvidenceGroupScorer._coverage_warning(
             group_authority_facts,
             flow_evidence=request.flow_confirmation_evidence,
+            scope=request.authority_denominator_scope,
         )
 
         return SignalEvidenceGroupScores(
@@ -208,7 +217,17 @@ class SignalEvidenceGroupScorer:
     ) -> float:
         if group_input is None:
             return 0.0
-        return 1.0 if group_input.availability.all_authoritative else 0.0
+        # Settled families only — unassessed contributors block
+        # all_authoritative but must not zero coverage for CURRENT brokers.
+        return group_input.availability.settled_authority_fraction
+
+    @staticmethod
+    def _has_unassessed_contributors(
+        group_input: "SetupEvidenceGroupInput | FlowEvidenceGroupInput | None",
+    ) -> bool:
+        if group_input is None:
+            return False
+        return bool(group_input.availability.unassessed_contributors)
 
     @staticmethod
     def _flow_component_coverage(
@@ -258,6 +277,11 @@ class SignalEvidenceGroupScorer:
                 authority_fraction=(
                     setup_source_auth if setup_present else 0.0
                 ),
+                has_unassessed_contributors=(
+                    SignalEvidenceGroupScorer._has_unassessed_contributors(
+                        setup_group_input
+                    )
+                ),
             ),
             _GroupAuthorityFacts(
                 name="flow_confirmation",
@@ -274,26 +298,45 @@ class SignalEvidenceGroupScorer:
                     if flow_present
                     else 0.0
                 ),
+                has_unassessed_contributors=(
+                    SignalEvidenceGroupScorer._has_unassessed_contributors(
+                        flow_group_input
+                    )
+                ),
             ),
         )
 
     @staticmethod
     def _compute_signal_authority_coverage(
         facts: tuple[_GroupAuthorityFacts, ...],
+        *,
+        scope: AuthorityDenominatorScope = AuthorityDenominatorScope.ALL_REQUIRED,
     ) -> float:
         """signal_authority_coverage = weighted authority_fraction of required
         PRODUCTION groups / required PRODUCTION weight (HIGH-2 + DQ-001).
 
         DIAGNOSTIC/LOW_WEIGHT groups never enter the numerator or denominator.
-        A required PRODUCTION group stays in the denominator even when absent
-        or unavailable — it is never renormalized away. Flow contributes
-        proportionally via component_coverage; setup remains binary.
-        Directional base_score is unchanged by authority arithmetic.
+
+        ALL_REQUIRED (default / swing): a required PRODUCTION group stays in
+        the denominator even when absent or unavailable — it is never
+        renormalized away.
+
+        ATTACHED_REQUIRED (screen discovery): only required PRODUCTION groups
+        attached on this request enter the denominator. Intentionally
+        unattached groups are out of scope for this assessment.
+
+        Flow contributes proportionally via component_coverage; setup remains
+        binary. Directional base_score is unchanged by authority arithmetic.
         """
         denominator = 0.0
         numerator = 0.0
         for fact in facts:
             if not (fact.is_production and fact.required):
+                continue
+            if (
+                scope is AuthorityDenominatorScope.ATTACHED_REQUIRED
+                and not fact.present
+            ):
                 continue
             denominator += fact.weight
             numerator += fact.weight * max(0.0, min(1.0, fact.authority_fraction))
@@ -380,6 +423,7 @@ class SignalEvidenceGroupScorer:
         facts: tuple[_GroupAuthorityFacts, ...],
         *,
         flow_evidence: "FlowConfirmationEvidence | None" = None,
+        scope: AuthorityDenominatorScope = AuthorityDenominatorScope.ALL_REQUIRED,
     ) -> str | None:
         """HIGH-2 + DQ-001: distinguish exactly why authority coverage is incomplete.
 
@@ -389,9 +433,13 @@ class SignalEvidenceGroupScorer:
            diagnostic/low-weight evidence never raises authority coverage.
         3. Evidence attached and PRODUCTION-registered but its resolved
            source availability is not authoritative — names the group.
-        4. Required PRODUCTION evidence absent — names the group.
+        4. Required PRODUCTION evidence absent — names the group
+           (ALL_REQUIRED scope only; ATTACHED_REQUIRED skips intentionally
+           unattached groups).
         5. Flow present with partial component coverage — names missing
            flow components.
+        6. Settled sources authoritative but unassessed contributors present
+           — complete-authority claim unavailable (e.g. bandar_detector).
 
         Never renders an empty "missing:" list, and never uses the phrases
         "evidence confidence" or "conviction".
@@ -409,6 +457,8 @@ class SignalEvidenceGroupScorer:
                     )
                 continue
             if not fact.present:
+                if scope is AuthorityDenominatorScope.ATTACHED_REQUIRED:
+                    continue
                 problems.append(f"{fact.name}: required evidence absent")
             elif fact.authority_fraction <= 0.0:
                 problems.append(
@@ -429,6 +479,15 @@ class SignalEvidenceGroupScorer:
                         f"{fact.name}: partial authority "
                         f"(authority_fraction={fact.authority_fraction:.4f})"
                     )
+            if (
+                fact.present
+                and fact.has_unassessed_contributors
+                and fact.authority_fraction > 0.0
+            ):
+                problems.append(
+                    f"{fact.name}: settled sources authoritative but "
+                    "unassessed contributors prevent complete-authority claim"
+                )
 
         if not problems:
             return None
