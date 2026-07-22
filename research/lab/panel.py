@@ -12,6 +12,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from src.domain.value_objects.signal_artifact_schema import (
+    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+)
+
 
 DEFAULT_DB = Path("data/db/data.db")
 
@@ -138,8 +142,10 @@ def load_swing10d_panel(db_path: Path | None = None) -> list[PanelRow]:
             LEFT JOIN regime_observations r
               ON date(c.snapshot_date) = date(r.observation_date)
             WHERE l.horizon = 'SWING_10D'
+              AND c.schema_version = ?
             ORDER BY c.snapshot_date, c.ticker
-            """
+            """,
+            (CANDIDATE_OBSERVATION_SCHEMA_VERSION,),
         ).fetchall()
     finally:
         conn.close()
