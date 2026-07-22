@@ -13,6 +13,7 @@ from decimal import Decimal
 from src.application.dto.accumulation_screen import AccumulationDerivedFeaturePolicy
 from src.application.services.accumulation_candidate_evaluator import (
     AccumulationCandidateEvaluator,
+    compute_bci_absorption_ratio,
 )
 from tests.application.use_case.accumulation_screen_fixtures import (
     MockBrokerRepositoryWithDaily,
@@ -229,3 +230,37 @@ def test_consumed_rows_match_normal_honest_repository_behavior():
     assert len(result.consumed_broker_daily_flows) == len(session_dates)
     assert result.candidate.latest_candle_date == today
     assert result.candidate.latest_broker_date == today
+
+
+def test_compute_bci_absorption_ratio_none_when_aggregate_not_selling():
+    assert (
+        compute_bci_absorption_ratio(
+            bci_tier1_net_value=Decimal("100"),
+            total_net_value=Decimal("50"),
+        )
+        is None
+    )
+    assert (
+        compute_bci_absorption_ratio(
+            bci_tier1_net_value=Decimal("100"),
+            total_net_value=Decimal("0"),
+        )
+        is None
+    )
+
+
+def test_compute_bci_absorption_ratio_when_aggregate_selling():
+    assert (
+        compute_bci_absorption_ratio(
+            bci_tier1_net_value=Decimal("21000000"),
+            total_net_value=Decimal("-70000000"),
+        )
+        == 0.3
+    )
+    assert (
+        compute_bci_absorption_ratio(
+            bci_tier1_net_value=Decimal("0"),
+            total_net_value=Decimal("-100"),
+        )
+        == 0.0
+    )

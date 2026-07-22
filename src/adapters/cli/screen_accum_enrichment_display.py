@@ -115,10 +115,19 @@ def _evidence_factor_rows(
         (
             _pts("inst"),
             "BCI",
-            candidate.bci_label or "-",
+            _format_bci_status(candidate),
             "Tier-1 broker concentration",
         ),
     ]
+
+
+def _format_bci_status(candidate: AccumulationCandidate) -> str:
+    """BCI label plus diagnostic absorption ratio when aggregate is net-selling."""
+    label = candidate.bci_label or "-"
+    ratio = candidate.bci_absorption_ratio
+    if ratio is None:
+        return label
+    return f"{label} (abs={ratio:.2f})"
 
 
 def build_enrichment_details_table(
@@ -286,6 +295,8 @@ def build_enrichment_details_table(
                 broker_line += f"  [BCI:{c.bci_label}({c.bci_tier1_count}T1)]"
             elif c.bci_label == "RETAIL-LED":
                 broker_line += "  [BCI:RETAIL-LED]"
+            if c.bci_absorption_ratio is not None:
+                broker_line += f" [abs={c.bci_absorption_ratio:.2f}]"
             _add_detail_row(
                 details_table,
                 show_context_ticker,

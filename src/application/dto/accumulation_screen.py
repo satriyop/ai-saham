@@ -181,6 +181,10 @@ class AccumulationCandidate:
     # BCI — Broker Concentration Index
     bci_label: str | None = None  # "CLUSTER" | "STABLE" | "RETAIL-LED" | None
     bci_tier1_count: int = 0  # distinct Tier 1 foreign desks in net-buyers
+    # Diagnostic only (Stage 1): Tier-1 net-buy IDR among lot-based net buyers, and
+    # absorption vs aggregate foreign net when aggregate is selling. Never scored.
+    bci_tier1_net_value: Decimal | None = None
+    bci_absorption_ratio: float | None = None
     vwap_pct: float | None = None  # (price - VWAP20) / VWAP20 * 100; negative = below VWAP
     # Phase 2.2 — resistance-proximity gate
     ma200: Decimal | None = None  # 200-day SMA of close prices
@@ -259,6 +263,16 @@ class AccumulationCandidate:
             "institutional_flag": self.institutional_flag,
             "bci_label": self.bci_label,
             "bci_tier1_count": self.bci_tier1_count,
+            "bci_tier1_net_value": (
+                str(self.bci_tier1_net_value)
+                if self.bci_tier1_net_value is not None
+                else None
+            ),
+            "bci_absorption_ratio": (
+                round(self.bci_absorption_ratio, 4)
+                if self.bci_absorption_ratio is not None
+                else None
+            ),
             "vwap_pct": round(self.vwap_pct, 2) if self.vwap_pct is not None else None,
             "avg_flow_ratio": round(self.avg_flow_ratio, 2)
             if self.avg_flow_ratio is not None

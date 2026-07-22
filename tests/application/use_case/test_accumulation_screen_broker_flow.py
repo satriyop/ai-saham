@@ -16,6 +16,7 @@ from tests.application.use_case.accumulation_screen_fixtures import (
     _daily_flow,
     _make_use_case,
     _summary,
+    _summary_net,
     _weekdays,
     make_signal_evidence_execution_context,
 )
@@ -45,6 +46,11 @@ def test_bci_cluster_when_three_or_more_tier1_codes_are_net_buyers():
     assert c.bci_label == BCI_CLUSTER
     assert c.bci_tier1_count == 3
     assert c.foreign_flow_score_breakdown.breakdown_dict["inst"] == 12.5
+    # Aggregate is net-buy in fixture summaries → absorption ratio not applicable.
+    assert c.bci_tier1_net_value == Decimal("29000000")  # (100+80+60+50)*100*1000
+    assert c.bci_absorption_ratio is None
+    assert "bci_tier1_net_value" in c.to_dict()
+    assert c.to_dict()["bci_absorption_ratio"] is None
 
 
 def test_bci_stable_when_one_or_two_tier1_codes_are_net_buyers():
@@ -178,3 +184,71 @@ def test_tier1_codes_override_changes_bci():
         execution_context=make_signal_evidence_execution_context(as_of),
     )
     assert resp_custom.candidates[0].bci_label == BCI_STABLE
+
+
+def test_bci_absorption_ratio_when_aggregate_is_net_selling():
+    """Diagnostic: Tier-1 buy size vs aggregate sell; scoring unchanged."""
+    session_dates = _weekdays(date(2026, 1, 1), 7)
+    as_of = session_dates[-1]
+    # Aggregate foreign net = 7 * (0 - 10_000_000) = -70_000_000
+    summaries = [
+        _summary_net(
+            "BBCA",
+            day,
+            foreign_buy_value=Decimal("0"),
+            foreign_sell_value=Decimal("10000000"),
+        )
+        for day in session_dates
+    ]
+    # Tier-1 net buyers: AK+BK+ZP = 21_000_000 IDR → ratio 21/70 = 0.3
+    daily_flows = [
+        _daily_flow("BBCA", session_dates[0], "AK", 70, net_value=Decimal("7000000")),
+        _daily_flow("BBCA", session_dates[0], "BK", 70, net_value=Decimal("7000000")),
+        _daily_flow("BBCA", session_dates[0], "ZP", 70, net_value=Decimal("7000000")),
+    ]
+    use_case, _ = _make_use_case(summaries, daily_flows)
+
+    response = use_case.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"], window_days=7, min_net_buy_days=1, as_of_date=as_of
+        ),
+        execution_context=make_signal_evidence_execution_context(as_of),
+    )
+    c = response.candidates[0]
+
+    assert c.bci_label == BCI_CLUSTER
+    assert c.bci_tier1_count == 3
+    assert c.total_net_value == Decimal("-70000000")
+    assert c.bci_tier1_net_value == Decimal("21000000")
+    assert c.bci_absorption_ratio == 0.3
+    # Zero scoring authority: CLUSTER still full points.
+    assert c.foreign_flow_score_breakdown.breakdown_dict["inst"] == 12.5
+    payload = c.to_dict()
+    assert payload["bci_tier1_net_value"] == "21000000"
+    assert payload["bci_absorption_ratio"] == 0.3
+
+
+def test_bci_absorption_unavailable_without_daily_flows():
+    session_dates = _weekdays(date(2026, 1, 1), 7)
+    as_of = session_dates[-1]
+    summaries = [
+        _summary_net(
+            "BBCA",
+            day,
+            foreign_buy_value=Decimal("0"),
+            foreign_sell_value=Decimal("10000000"),
+        )
+        for day in session_dates
+    ]
+    use_case, _ = _make_use_case(summaries, daily_flows=None)
+
+    response = use_case.execute(
+        AccumulationScreenRequest(
+            tickers=["BBCA"], window_days=7, min_net_buy_days=1, as_of_date=as_of
+        ),
+        execution_context=make_signal_evidence_execution_context(as_of),
+    )
+    c = response.candidates[0]
+
+    assert c.bci_tier1_net_value is None
+    assert c.bci_absorption_ratio is None

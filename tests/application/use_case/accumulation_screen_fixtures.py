@@ -190,6 +190,28 @@ def _summary(ticker: str, day: date, foreign_vwap: Decimal) -> BrokerSummary:
     )
 
 
+def _summary_net(
+    ticker: str,
+    day: date,
+    *,
+    foreign_buy_value: Decimal,
+    foreign_sell_value: Decimal,
+) -> BrokerSummary:
+    """BrokerSummary with explicit foreign buy/sell IDR for absorption tests."""
+    return BrokerSummary(
+        ticker=ticker,
+        date=day,
+        top_buyers=(),
+        top_sellers=(),
+        foreign_buy_value=foreign_buy_value,
+        foreign_sell_value=foreign_sell_value,
+        foreign_buy_lot=10_000,
+        foreign_sell_lot=10_000,
+        total_value=foreign_buy_value + foreign_sell_value,
+        total_lot=20_000,
+    )
+
+
 def _weekdays(start: date, count: int) -> list[date]:
     days: list[date] = []
     current = start
@@ -200,7 +222,19 @@ def _weekdays(start: date, count: int) -> list[date]:
     return days
 
 
-def _daily_flow(ticker: str, day: date, broker_code: str, net_lot: int) -> BrokerDailyFlow:
+def _daily_flow(
+    ticker: str,
+    day: date,
+    broker_code: str,
+    net_lot: int,
+    *,
+    net_value: Decimal | None = None,
+) -> BrokerDailyFlow:
+    resolved_net_value = (
+        net_value if net_value is not None else Decimal(net_lot * 100 * 1000)
+    )
+    buy_value = resolved_net_value if resolved_net_value > 0 else Decimal("0")
+    sell_value = -resolved_net_value if resolved_net_value < 0 else Decimal("0")
     return BrokerDailyFlow(
         ticker=ticker,
         broker_code=broker_code,
@@ -209,9 +243,9 @@ def _daily_flow(ticker: str, day: date, broker_code: str, net_lot: int) -> Broke
         buy_lot=max(net_lot, 0),
         sell_lot=max(-net_lot, 0),
         net_lot=net_lot,
-        buy_value=Decimal(max(net_lot, 0) * 100 * 1000),
-        sell_value=Decimal(max(-net_lot, 0) * 100 * 1000),
-        net_value=Decimal(net_lot * 100 * 1000),
+        buy_value=buy_value if net_value is not None else Decimal(max(net_lot, 0) * 100 * 1000),
+        sell_value=sell_value if net_value is not None else Decimal(max(-net_lot, 0) * 100 * 1000),
+        net_value=resolved_net_value,
         avg_buy_price=Decimal("1000"),
         avg_sell_price=Decimal("1000"),
         avg_price=Decimal("1000"),

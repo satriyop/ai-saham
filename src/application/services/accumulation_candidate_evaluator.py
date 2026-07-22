@@ -30,6 +30,20 @@ BCI_STABLE = "STABLE"  # 1–2 Tier 1 codes                         → +5 pts
 BCI_RETAIL = "RETAIL-LED"  # 0 Tier 1 codes                           → +0 pts
 
 
+def compute_bci_absorption_ratio(
+    *,
+    bci_tier1_net_value: Decimal,
+    total_net_value: Decimal,
+) -> float | None:
+    """Diagnostic ratio: Tier-1 net-buy IDR / |aggregate foreign net| when selling.
+
+    Returns None when aggregate is not net-selling. Never used for scoring.
+    """
+    if total_net_value >= Decimal("0"):
+        return None
+    return round(float(bci_tier1_net_value / abs(total_net_value)), 4)
+
+
 def _is_usable_broker_summary(summary) -> bool:
     """Return True when a broker summary is safe for accumulation metrics."""
     return (
@@ -204,16 +218,20 @@ class AccumulationCandidateEvaluator:
         institutional_flag = False
         bci_label: str | None = None
         bci_tier1_count: int = 0
+        bci_tier1_net_value: Decimal | None = None
+        bci_absorption_ratio: float | None = None
 
         latest_broker_daily_flow_date: date | None = None
         if window_flows:
             latest_broker_daily_flow_date = max(f.date for f in window_flows)
-            # Aggregate net_lot per broker across the window
+            # Aggregate net_lot / net_value per broker across the window
             from collections import defaultdict
 
             broker_net: dict[str, int] = defaultdict(int)
+            broker_net_value: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
             for f in window_flows:
                 broker_net[f.broker_code] += f.net_lot
+                broker_net_value[f.broker_code] += f.net_value
 
             net_buyers = sorted(
                 [(code, net) for code, net in broker_net.items() if net > 0],
@@ -225,7 +243,8 @@ class AccumulationCandidateEvaluator:
             # BCI requires usable daily-flow rows. Zero Tier-1 net buyers among
             # those rows is observed RETAIL-LED (available zero), not missing.
             all_net_buyer_codes = {code for code, _ in net_buyers}
-            bci_tier1_count = len(all_net_buyer_codes & tier1_broker_codes)
+            tier1_buyer_codes = all_net_buyer_codes & tier1_broker_codes
+            bci_tier1_count = len(tier1_buyer_codes)
             if bci_tier1_count >= bci_cluster_min_count:
                 bci_label = BCI_CLUSTER
             elif bci_tier1_count >= bci_stable_min_count:
@@ -233,6 +252,15 @@ class AccumulationCandidateEvaluator:
             else:
                 bci_label = BCI_RETAIL
             institutional_flag = bci_tier1_count > 0
+            # Diagnostic size of the same lot-based Tier-1 net-buyer set (IDR).
+            bci_tier1_net_value = sum(
+                (broker_net_value[code] for code in tier1_buyer_codes),
+                Decimal("0"),
+            )
+            bci_absorption_ratio = compute_bci_absorption_ratio(
+                bci_tier1_net_value=bci_tier1_net_value,
+                total_net_value=total_net_value,
+            )
 
         candidate = accumulation_dto.AccumulationCandidate(
             ticker=ticker,
@@ -252,6 +280,8 @@ class AccumulationCandidateEvaluator:
             institutional_flag=institutional_flag,
             bci_label=bci_label,
             bci_tier1_count=bci_tier1_count,
+            bci_tier1_net_value=bci_tier1_net_value,
+            bci_absorption_ratio=bci_absorption_ratio,
             vwap_pct=vwap_pct,
             avg_flow_ratio=avg_flow_ratio,
             bb_width=bb_width,
