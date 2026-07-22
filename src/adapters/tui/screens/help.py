@@ -19,6 +19,7 @@ class HelpScreen(Screen[None]):
             yield Static("Help", id="help-title")
             yield Static("1       Today", classes="help-line")
             yield Static("2       Candidates", classes="help-line")
+            yield Static("3       Research", classes="help-line")
             yield Static("? / h   Open this help", classes="help-line")
             yield Static("Esc / d Return to Daily", classes="help-line")
             yield Static("r       Reload by local recomputation", classes="help-line")
@@ -30,5 +31,9 @@ class HelpScreen(Screen[None]):
             yield Static(
                 "Canonical verdict drives decisions; NON-CANONICAL PREVIEW is separate context.",
                 id="help-authority",
+            )
+            yield Static(
+                "Research uses an ephemeral diagnostic split and is not promotion evidence.",
+                id="help-research",
             )
         yield Footer()

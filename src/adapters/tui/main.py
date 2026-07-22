@@ -5,13 +5,16 @@ from textual.binding import Binding
 
 from src.adapters.tui.controllers.accumulation_controller import AccumulationController
 from src.adapters.tui.controllers.daily_controller import DailyController
+from src.adapters.tui.controllers.research_health_controller import ResearchHealthController
 from src.adapters.tui.controllers.ticker_research_controller import TickerResearchController
 from src.adapters.tui.presenters.accumulation_presenter import AccumulationPresenter
 from src.adapters.tui.presenters.daily_presenter import DailyPresenter
+from src.adapters.tui.presenters.research_health_presenter import ResearchHealthPresenter
 from src.adapters.tui.presenters.ticker_research_presenter import TickerResearchPresenter
 from src.adapters.tui.screens.candidate_browser_screen import CandidateBrowserScreen
 from src.adapters.tui.screens.daily_screen import DailyScreen
 from src.adapters.tui.screens.help import HelpScreen
+from src.adapters.tui.screens.research_health_screen import ResearchHealthScreen
 from src.adapters.tui.screens.ticker_research_screen import TickerResearchScreen
 
 
@@ -24,6 +27,7 @@ class SahamTuiApp(App[None]):
     BINDINGS = [
         Binding("1", "show_today", "Today"),
         Binding("2", "show_candidates", "Candidates"),
+        Binding("3", "show_research", "Research"),
         Binding("q", "quit", "Quit"),
     ]
     CSS = """
@@ -31,7 +35,7 @@ class SahamTuiApp(App[None]):
         background: $surface;
     }
 
-    #daily-shell, #candidate-shell, #ticker-shell, #help-shell {
+    #daily-shell, #candidate-shell, #ticker-shell, #research-health-shell, #help-shell {
         width: 100%;
         height: 1fr;
         padding: 2 4;
@@ -136,6 +140,8 @@ class SahamTuiApp(App[None]):
         accumulation_presenter: AccumulationPresenter,
         ticker_controller: TickerResearchController,
         ticker_presenter: TickerResearchPresenter,
+        research_health_controller: ResearchHealthController,
+        research_health_presenter: ResearchHealthPresenter,
     ) -> None:
         super().__init__()
         self._daily_controller = daily_controller
@@ -144,6 +150,8 @@ class SahamTuiApp(App[None]):
         self._accumulation_presenter = accumulation_presenter
         self._ticker_controller = ticker_controller
         self._ticker_presenter = ticker_presenter
+        self._research_health_controller = research_health_controller
+        self._research_health_presenter = research_health_presenter
 
     def on_mount(self) -> None:
         self.set_route_context("Today")
@@ -176,6 +184,10 @@ class SahamTuiApp(App[None]):
             self.set_route_context("Today")
             self.pop_screen()
             return
+        if isinstance(self.screen, ResearchHealthScreen):
+            self.set_route_context("Today")
+            self.pop_screen()
+            return
         self.set_route_context("Today")
 
     def action_show_candidates(self) -> None:
@@ -186,6 +198,10 @@ class SahamTuiApp(App[None]):
             self.set_route_context("Candidates")
             self.pop_screen()
             return
+        if isinstance(self.screen, ResearchHealthScreen):
+            self.pop_screen()
+            self.call_after_refresh(self.action_show_candidates)
+            return
         if not isinstance(self.screen, CandidateBrowserScreen):
             self.push_screen(
                 CandidateBrowserScreen(
@@ -194,6 +210,27 @@ class SahamTuiApp(App[None]):
                 )
             )
         self.set_route_context("Candidates")
+
+    def action_show_research(self) -> None:
+        if isinstance(self.screen, HelpScreen):
+            self.pop_screen()
+            return
+        if isinstance(self.screen, TickerResearchScreen):
+            self.pop_screen()
+            self.call_after_refresh(self.action_show_research)
+            return
+        if isinstance(self.screen, CandidateBrowserScreen):
+            self.pop_screen()
+            self.call_after_refresh(self.action_show_research)
+            return
+        if not isinstance(self.screen, ResearchHealthScreen):
+            self.push_screen(
+                ResearchHealthScreen(
+                    self._research_health_controller,
+                    self._research_health_presenter,
+                )
+            )
+        self.set_route_context("Research")
 
     def action_open_ticker(self, ticker: str) -> None:
         self.push_screen(

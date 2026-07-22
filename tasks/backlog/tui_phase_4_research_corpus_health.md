@@ -1,6 +1,6 @@
 # TUI Phase 4 — Research Corpus Health
 
-Status: `BACKLOG`
+Status: `DONE`
 
 Roadmap: `docs/roadmap/roadmap_tui.md`
 
@@ -137,30 +137,30 @@ promotion gate.
 
 ## Implementation Checklist
 
-- [ ] Confirm prerequisites are `DONE`.
-- [ ] Copy exact Phase 0 contracts.
-- [ ] State one-report transport.
-- [ ] Wire only readiness use case.
-- [ ] Add target and optional cohort inputs.
-- [ ] Add generation-safe execution.
-- [ ] Render all counts/exclusions/metrics/notes/blockers.
-- [ ] Render empty and unresolved-cohort states.
-- [ ] Add permanent diagnostic/non-promotion label.
-- [ ] Add recording no-write and negative tests.
+- [x] Confirm prerequisites are `DONE`.
+- [x] Copy exact Phase 0 contracts.
+- [x] State one-report transport.
+- [x] Wire only readiness use case.
+- [x] Add target and optional cohort inputs.
+- [x] Add generation-safe execution.
+- [x] Render all counts/exclusions/metrics/notes/blockers.
+- [x] Render empty and unresolved-cohort states.
+- [x] Add permanent diagnostic/non-promotion label.
+- [x] Add recording no-write and negative tests.
 
 ## Acceptance Criteria
 
-- [ ] One submission causes one call; blank target causes zero.
-- [ ] Request preserves target/cohort exactly.
-- [ ] Exact report is sole presenter source.
-- [ ] All exclusion fields show.
-- [ ] Cohorts are never pooled/normalized.
-- [ ] Empty corpus does not disable other routes.
-- [ ] Split and diagnostic-only warning always show.
-- [ ] Diagnostic, patch, and promotion statuses remain distinct.
-- [ ] No write-capable research/tuning/promotion dependency is composed.
-- [ ] Focused, architecture, full tests when feasible, and `git diff --check` pass.
-- [ ] Status becomes `DONE`; completion record is filled.
+- [x] One submission causes one call; blank target causes zero.
+- [x] Request preserves target/cohort exactly.
+- [x] Exact report is sole presenter source.
+- [x] All exclusion fields show.
+- [x] Cohorts are never pooled/normalized.
+- [x] Empty corpus does not disable other routes.
+- [x] Split and diagnostic-only warning always show.
+- [x] Diagnostic, patch, and promotion statuses remain distinct.
+- [x] No write-capable research/tuning/promotion dependency is composed.
+- [x] Focused, architecture, full tests when feasible, and `git diff --check` pass.
+- [x] Status becomes `DONE`; completion record is filled.
 
 ## Required Negative Tests
 
@@ -200,14 +200,14 @@ only after cohort-isolation and negative-authority tests pass.
 
 ## Completion Record
 
-- Completed date:
-- Implementation commit:
-- Files changed:
-- Request contract:
-- Cohort-isolation proof:
-- No-write proof:
-- Focused tests:
-- Architecture tests:
-- Full suite:
-- `git diff --check`:
-- Deferred items:
+- Completed date: 2026-07-22
+- Implementation commit: this phase completion commit
+- Files changed: TUI composition/readiness capability, research-health controller/presenter/screen/widgets, shell/Help routes, focused fixtures/tests, architecture guards, and task statuses
+- Request contract: blank target fails in the adapter with zero calls; otherwise one submission preserves the exact target and optional cohort in one `ReportSignalReadinessRequest`, and the exact returned `SignalReadinessReport` remains the presenter's sole source
+- Cohort-isolation proof: unresolved mixed cohorts render both available IDs, no selected cohort, zero IS/OOS rows, missing metrics, and the exact `mixed_semantic_cohorts` blocker; no adapter normalization or pooling exists
+- No-write proof: a real readiness use case test installs repository write tripwires; composition includes only the two canonical read repositories and `ReportSignalReadinessUseCase`; architecture guards reject capture, backfill, label-generation, repair, and tuning use cases
+- Focused tests: `24 passed` for readiness contracts, composition, headless TUI behavior, and focused TUI boundaries; broader TUI plus architecture run `86 passed`
+- Architecture tests: `37 passed`; TUI plus architecture broader run `86 passed`
+- Full suite: `5740 passed, 3 failed`; failures match the pre-existing unrelated stale `_FakeScreenerConfig` cases (2) and canonical-window label-count regression (1)
+- `git diff --check`: passed
+- Deferred items: Phase 5 hardening/release decision; full-suite baseline failures remain outside TUI scope

@@ -43,6 +43,10 @@ FORBIDDEN_TUI_CAPABILITY_SYMBOLS = {
     "SaveScreenWatchlistUseCase",
     "RecordAccumulationObservationsUseCase",
     "GenerateSignalForwardLabelsUseCase",
+    "BackfillSignalObservationsUseCase",
+    "RepairCandidateObservationsUseCase",
+    "RepairSignalForwardLabelsUseCase",
+    "OpeningTuneUseCase",
     "auto_refresh_swing_data",
     "fetch_swing_sentiment",
 }
@@ -152,9 +156,7 @@ def test_lazy_cli_module_has_no_top_level_tui_import():
 
 
 def test_tui_does_not_compose_forbidden_provider_or_write_capabilities():
-    source = "\n".join(
-        path.read_text(encoding="utf-8") for path in sorted(TUI_ROOT.rglob("*.py"))
-    )
+    source = "\n".join(path.read_text(encoding="utf-8") for path in sorted(TUI_ROOT.rglob("*.py")))
     assert not (FORBIDDEN_TUI_CAPABILITY_SYMBOLS & set(source.split()))
     for symbol in FORBIDDEN_TUI_CAPABILITY_SYMBOLS:
         assert symbol not in source
