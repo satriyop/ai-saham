@@ -56,6 +56,13 @@ class PanelRow:
     # Setup-gate inputs (Package B2)
     trend: str | None = None
     bb_width_pctile: float | None = None
+    # DecisionPolicy inputs (Package B6)
+    signal_score: float | None = None
+    entry_quality: str | None = None
+    trade_setup_action: str | None = None
+    signal_authority_coverage: float | None = None
+    gate_tightening: bool | None = None
+    decision_regime: str | None = None
 
 
 def resolve_db_path(db_path: Path | None = None) -> Path:
@@ -76,6 +83,31 @@ def _candidate_fields(payload_json: str) -> dict[str, Any]:
     if not isinstance(candidate, dict):
         return {}
     return candidate
+
+
+def _decision_fields(payload_json: str) -> dict[str, Any]:
+    payload = json.loads(payload_json)
+    signal = payload.get("signal") or {}
+    assessment = signal.get("assessment") if isinstance(signal, dict) else {}
+    if not isinstance(assessment, dict):
+        assessment = {}
+    constraints = assessment.get("decision_constraints") or {}
+    if not isinstance(constraints, dict):
+        constraints = {}
+    trade_setup = payload.get("trade_setup") or {}
+    if not isinstance(trade_setup, dict):
+        trade_setup = {}
+    coverage = assessment.get("signal_authority_coverage")
+    if coverage is None and isinstance(signal, dict):
+        coverage = signal.get("signal_authority_coverage")
+    return {
+        "signal_score": assessment.get("score", trade_setup.get("signal_score")),
+        "entry_quality": assessment.get("entry_quality"),
+        "trade_setup_action": trade_setup.get("action"),
+        "signal_authority_coverage": coverage,
+        "gate_tightening": trade_setup.get("gate_tightening"),
+        "decision_regime": constraints.get("regime"),
+    }
 
 
 def load_swing10d_panel(db_path: Path | None = None) -> list[PanelRow]:
@@ -115,6 +147,7 @@ def load_swing10d_panel(db_path: Path | None = None) -> list[PanelRow]:
     panel: list[PanelRow] = []
     for row in rows:
         cand = _candidate_fields(row["payload_json"])
+        decision = _decision_fields(row["payload_json"])
         breakdown = cand.get("foreign_flow_score_breakdown") or {}
         points = _component_points(breakdown)
         total = _as_float(cand.get("foreign_flow_score"))
@@ -155,6 +188,14 @@ def load_swing10d_panel(db_path: Path | None = None) -> list[PanelRow]:
                 top_brokers=_as_broker_codes(cand.get("top_brokers")),
                 trend=_as_trend(cand.get("trend")),
                 bb_width_pctile=_as_float(cand.get("bb_width_pctile")),
+                signal_score=_as_float(decision.get("signal_score")),
+                entry_quality=_as_upper(decision.get("entry_quality")),
+                trade_setup_action=_as_upper(decision.get("trade_setup_action")),
+                signal_authority_coverage=_as_float(
+                    decision.get("signal_authority_coverage")
+                ),
+                gate_tightening=_as_bool(decision.get("gate_tightening")),
+                decision_regime=_as_upper(decision.get("decision_regime")),
             )
         )
     return panel
@@ -217,6 +258,13 @@ def _as_broker_codes(value: Any) -> tuple[str, ...] | None:
 
 
 def _as_trend(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip().upper()
+    return text or None
+
+
+def _as_upper(value: Any) -> str | None:
     if value is None:
         return None
     text = str(value).strip().upper()

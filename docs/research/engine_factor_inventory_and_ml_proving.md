@@ -359,7 +359,7 @@ Organize work as **proving packages**, not as one mega-model.
 | B3 | Group weights 60/40 | Reweight search under non-negative constraint | SWING_10D | Hold out by date |
 | B4 | Flow cap 0.80 + Bandar blend | Cap sensitivity; Bandar equal-weight vs flow-only | SWING_10D | |
 | B5 | Classification 70/45 | Decision curve / utility vs ENTER rate | SWING_10D | |
-| B6 | DecisionPolicy regime floors | Authority coverage & enter thresholds by regime | join regime_observations | |
+| B6 | DecisionPolicy regime floors | Authority coverage & enter thresholds by regime | join regime_observations | card: `factor_card_regime_policy.py` |
 | B7 | Setup×regime matrix | Especially dead “strong flow” RISK_OFF path | regime-stratified | Fix code vs delete config first |
 | B8 | Phase readiness thresholds | DISTRIBUTION/EXHAUSTION/BREAKOUT rules | phase fields in fingerprint | |
 
@@ -458,7 +458,7 @@ Offline lab lives at `research/` (see `research/README.md`). It is Mode A only.
 |------|--------|
 | Layout | `research/lab/` panel loaders, `research/scripts/` cards, `research/artifacts/` outputs |
 | Deps | Optional `[project.optional-dependencies] research` / `research/requirements.txt` — not default install |
-| First scripts | `factor_card_vwap_buckets.py`, `factor_card_bci_flow_sign.py`, `factor_card_accum_components.py`, `factor_card_sector_breadth.py`, `factor_card_broker_lists.py`, `factor_card_setup_gates.py`, `factor_card_mce_factors.py` under `research/scripts/` |
+| First scripts | `factor_card_vwap_buckets.py`, `factor_card_bci_flow_sign.py`, `factor_card_accum_components.py`, `factor_card_sector_breadth.py`, `factor_card_broker_lists.py`, `factor_card_setup_gates.py`, `factor_card_regime_policy.py`, `factor_card_mce_factors.py` under `research/scripts/` |
 | Forbidden | Lab code must not be imported by `src/`; no auto-writes to production YAML |
 | Authority | Factor cards propose; humans + promotion lane decide |
 
