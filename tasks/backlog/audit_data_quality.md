@@ -828,8 +828,10 @@ global-sync gate** (mirrors the DQ-003 survivorship precedent):
 
 ### DQ-005 — Audit signal replay for reproducibility, not retrieval
 
-**State:** Active — Slice A (retrieval honesty) done 2026-07-22; Slice B
-(true recompute + drift classification) not started.
+**State:** Done — Slice A (retrieval honesty) + Slice B (lean local verify)
+complete 2026-07-22. Default `signal-replay` is retrieval-only; `--verify`
+runs local cutoff-aware recompute with machine-readable MATCH/DRIFT/
+UNREPRODUCIBLE. See `tasks/backlog/dq_005_lean_slice_b_plan.md`.
 
 **Priority:** P0  
 **Depends on:** DQ-003, DQ-004  
@@ -838,8 +840,11 @@ global-sync gate** (mirrors the DQ-003 survivorship precedent):
 **Accurate pointers:**
 
 - CLI: `src/adapters/cli/analyze_signal_replay_commands.py` (command name
-  `signal-replay` retained until CLI restructure; behavior is retrieval-only)
-- Use case: `src/application/use_case/retrieve_stored_signal_observation_use_case.py`
+  `signal-replay` retained until CLI restructure; default = retrieval-only;
+  `--verify` = Slice B local recompute)
+- Retrieval use case: `src/application/use_case/retrieve_stored_signal_observation_use_case.py`
+- Verify use case: `src/application/use_case/verify_stored_signal_observation_use_case.py`
+- Verify plan: `tasks/backlog/dq_005_lean_slice_b_plan.md`
 - Observation repository: `src/infrastructure/persistence/sqlite_candidate_observations_repository.py`
 
 **Audit requirements:**
@@ -869,12 +874,19 @@ If reproducibility cannot be achieved because the required code/config/source ve
       *Satisfied (Slice A, 2026-07-22):* omitting `--captured-at` with ≥2
       versions returns `AMBIGUOUS` + candidate identities (CLI exit non-zero);
       explicit `observation_captured_at` uses `get_at`.
-- [ ] Drift is machine-readable and never collapsed into a generic warning.
-      *Parked for Slice B (true recompute).*
+- [x] Drift is machine-readable and never collapsed into a generic warning.
+      *Satisfied (Slice B, 2026-07-22):* `VerifyStoredSignalObservationUseCase`
+      reports `MATCH` / `DRIFT` / `UNREPRODUCIBLE` / `AMBIGUOUS` with structured
+      `reasons` and `differences[{field, stored, recomputed}]`. Local
+      cutoff-aware re-screen only (no network refetch). Cohort mismatch and
+      non-canonical rows fail closed without pretending a diff is meaningful.
+      Residual risk of post-capture local backfill is documented on the
+      response notes; MATCH is not promotion-grade bit-identity.
 
 ### DQ-006 — Audit signal readiness counts and patch eligibility
 
-**State:** Blocked — waits for DQ-003 through DQ-005 reconciliation.
+**State:** Ready — waits for independent readiness reconciliation work; DQ-003
+through DQ-005 prerequisites are complete (DQ-005 Done 2026-07-22).
 
 **Priority:** P0  
 **Depends on:** DQ-003, DQ-004, DQ-005  

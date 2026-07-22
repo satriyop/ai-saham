@@ -101,10 +101,15 @@ class AccumulationScreenUseCaseBundle:
     explicit observation-generation callers (e.g. signal-backfill); ordinary
     manual screens, --multi, screen compare, and DailyBriefingUseCase must use
     screen_use_case only.
+
+    ``candidate_evidence_builder`` is exposed for read-only verify/recompute
+    paths (DQ-005 Slice B) that rebuild the capture fingerprint without
+    persisting.
     """
 
     screen_use_case: AccumulationScreenUseCase
     record_observations_use_case: RecordAccumulationObservationsUseCase
+    candidate_evidence_builder: AccumulationCandidateEvidenceBuilder
 
 
 def create_accumulation_screen_use_case_bundle(
@@ -191,4 +196,5 @@ def create_accumulation_screen_use_case_bundle(
     return AccumulationScreenUseCaseBundle(
         screen_use_case=screen_use_case,
         record_observations_use_case=record_observations_use_case,
+        candidate_evidence_builder=candidate_evidence_builder,
     )
