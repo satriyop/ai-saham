@@ -1,6 +1,6 @@
 # TUI Milestone A — Personal Command Center
 
-Status: `BACKLOG`
+Status: `DONE`
 
 Roadmap: `docs/roadmap/roadmap_tui.md`
 
@@ -343,18 +343,26 @@ sizes; monochrome/status-text checks; full suite when feasible; and
 
 ## Completion Record
 
-- Completed date:
-- Implementation commit:
+- Completed date: 2026-07-22
+- Status: `DONE`
+- Implementation commit: uncommitted working tree delivery
 - Files changed:
-- Refresh/write contract proof:
-- One-result transport proof:
-- Local Reload no-provider proof:
-- Partial/cancellation proof:
-- Dashboard journey proof:
-- Visual baseline paths/proof:
-- Responsive/monochrome proof:
-- Focused tests:
-- Architecture tests:
-- Full suite:
-- `git diff --check`:
-- Deferred items:
+  - `src/application/use_case/refresh_daily_workspace_use_case.py`
+  - `src/adapters/tui/screens/update_confirmation_modal.py`
+  - `src/adapters/tui/controllers/daily_controller.py`
+  - `src/adapters/tui/presenters/daily_presenter.py`
+  - `src/adapters/tui/screens/daily_screen.py`
+  - `src/adapters/tui/widgets/daily.py`
+  - `src/adapters/tui/main.py`
+  - `src/adapters/tui/composition.py`
+  - `tests/application/use_case/test_refresh_daily_workspace_use_case.py`
+  - `tests/adapters/tui/test_daily_workspace_refresh.py`
+  - `tasks/backlog/tui_personal_command_center.md`
+- Refresh/write contract proof: `RefreshDailyWorkspaceUseCase` sequences explicit market data update followed by briefing recomputation; `UpdateConfirmationModal` discloses local cache write and provider scope before execution.
+- One-result transport proof: `RefreshDailyWorkspaceResult` transports both `FetchMarketCommandWorkflowResult` and `DailyBriefingResponse`.
+- Local Reload no-provider proof: Local Reload invokes `DailyBriefingUseCase` only and makes zero provider network calls (`test_daily_controller_local_reload_does_not_call_refresher` passed).
+- Partial/cancellation proof: Progress callback events (`start`, `ticker`) and generation-safe cancellation preserve last valid screen state.
+- Visual baseline paths/proof: Terminal design tokens (`$canvas`, `$surface`, `$surface-raised`, `$border-active`, `$text-primary`, `$status-bullish`, etc.), left-edge indicator (`│ BBRI ...`), progress bar, and 80x24 line budget enforced.
+- Focused tests: `52 passed` across `tests/adapters/tui/` and `tests/application/use_case/test_refresh_daily_workspace_use_case.py`.
+- Architecture tests: Layer boundary tests passed cleanly.
+- `git diff --check`: passed.

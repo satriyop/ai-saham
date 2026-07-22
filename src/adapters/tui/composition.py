@@ -20,7 +20,19 @@ from src.adapters.tui.controllers.accumulation_controller import (
     AccumulationController,
     AccumulationLoader,
 )
-from src.adapters.tui.controllers.daily_controller import DailyController, DailyLoader
+from src.adapters.tui.controllers.daily_controller import (
+    DailyController,
+    DailyLoader,
+    DailyPreviewer,
+    DailyRefresher,
+)
+from src.application.use_case.refresh_daily_workspace_use_case import (
+    DailyWorkspaceRefreshPlan,
+    PreviewDailyWorkspaceRefreshUseCase,
+    RefreshDailyWorkspaceRequest,
+    RefreshDailyWorkspaceResult,
+    RefreshDailyWorkspaceUseCase,
+)
 from src.adapters.tui.controllers.ticker_research_controller import (
     TickerLoader,
     TickerResearchController,
@@ -509,18 +521,105 @@ def _build_research_execution() -> ResearchExecution:
     )
 
 
+def _build_daily_refresh_execution(
+    request: RefreshDailyWorkspaceRequest,
+    *,
+    on_start: Any = None,
+    on_ticker_complete: Any = None,
+) -> RefreshDailyWorkspaceResult:
+    config = load_app_config()
+    db_path = Path(config.storage.db_path)
+    sb_providers = create_readonly_stockbit_providers(db_path)
+    sb_client = sb_providers.session if sb_providers else None
+
+    from src.adapters.cli.fetch_market_workflow_factory import create_workflow_use_case
+    workflow_use_case = create_workflow_use_case(
+        db_path=db_path,
+        broker_provider=sb_client,
+        broker_provider_name="stockbit" if sb_client else "none",
+    )
+
+    from src.application.use_case.fetch_market_command_workflow_use_case import (
+        FetchMarketCommandWorkflowRequest,
+    )
+
+    candles_only = request.components == "CANDLES_ONLY"
+    broker_only = request.components == "BROKER_ONLY"
+
+    workflow_req = FetchMarketCommandWorkflowRequest(
+        tickers=list(request.tickers),
+        universe=request.universe if not request.tickers else None,
+        days=request.days,
+        db_path=db_path,
+        candles_provider="yfinance",
+        broker_provider=sb_client,
+        broker_provider_name="stockbit" if sb_client else "none",
+        refresh=request.force_refresh,
+        candles_only=candles_only,
+        broker_only=broker_only,
+        no_meta=not request.include_meta,
+        no_enrichment=not request.include_enrichment,
+        no_calendar=not request.include_calendar,
+    )
+
+    def refresh_market_data_capability(req: Any, on_start: Any = None, on_ticker_complete: Any = None):
+        return workflow_use_case.execute(
+            workflow_req,
+            on_start=on_start,
+            on_ticker_complete=on_ticker_complete,
+        )
+
+    daily_exec = _build_daily_execution()
+    use_case = RefreshDailyWorkspaceUseCase(
+        refresh_market_data_capability=refresh_market_data_capability,
+        daily_briefing_use_case=daily_exec.use_case,
+    )
+    return use_case.execute(
+        request,
+        on_start=on_start,
+        on_ticker_complete=on_ticker_complete,
+    )
+
+
+def _build_daily_preview_execution(
+    request: RefreshDailyWorkspaceRequest,
+) -> DailyWorkspaceRefreshPlan:
+    config = load_app_config()
+    db_path = Path(config.storage.db_path)
+    sb_providers = create_readonly_stockbit_providers(db_path)
+    sb_client = sb_providers.session if sb_providers else None
+    broker_name = "stockbit" if sb_client else "none"
+
+    def resolver_capability(req: RefreshDailyWorkspaceRequest):
+        tickers = resolve_tickers(
+            universe=req.universe,
+            explicit=list(req.tickers),
+            db_path=db_path,
+            loader=YamlUniverseConfigLoader(),
+            repository=SQLiteBrokerRepository(db_path),
+        )
+        return (len(tickers), "yfinance", broker_name, ())
+
+    use_case = PreviewDailyWorkspaceRefreshUseCase(resolver_capability)
+    return use_case.execute(request)
+
+
 def create_tui_app(
     *,
     daily_loader: DailyLoader | None = None,
+    daily_refresher: DailyRefresher | None = None,
+    daily_previewer: DailyPreviewer | None = None,
     accumulation_loader: AccumulationLoader | None = None,
     ticker_loader: TickerLoader | None = None,
 ) -> SahamTuiApp:
     daily = daily_loader or create_daily_capability()
+    refresher = daily_refresher or _build_daily_refresh_execution
+    previewer = daily_previewer or _build_daily_preview_execution
     research = SerializedResearchCapabilities(_build_research_execution)
     accumulation = accumulation_loader or research.load_accumulation
     ticker = ticker_loader or research.load_ticker
     return SahamTuiApp(
-        DailyController(daily),
+        DailyController(daily, refresh_daily=refresher, preview_daily=previewer),
         DailyPresenter(),
         AccumulationController(accumulation),
         AccumulationPresenter(),

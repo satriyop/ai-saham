@@ -1,4 +1,4 @@
-"""Generation-safe controller for one offline Daily briefing capability.
+"""Generation-safe controller for Daily command center briefing & update capabilities.
 
 Layer: Adapter
 """
@@ -6,20 +6,35 @@ Layer: Adapter
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any
 
 from src.adapters.tui.state import ScreenState, ScreenStateTracker, ScreenStatus
 from src.application.use_case.daily_briefing_use_case import DailyBriefingResponse
+from src.application.use_case.refresh_daily_workspace_use_case import (
+    DailyWorkspaceRefreshPlan,
+    RefreshDailyWorkspaceRequest,
+    RefreshDailyWorkspaceResult,
+)
 
 DailyLoader = Callable[[], DailyBriefingResponse]
+DailyRefresher = Callable[..., RefreshDailyWorkspaceResult]
+DailyPreviewer = Callable[[RefreshDailyWorkspaceRequest], DailyWorkspaceRefreshPlan]
 StateListener = Callable[[ScreenState], None]
 UiDispatcher = Callable[..., object]
 
 
 class DailyController:
-    """Invoke exactly one injected Daily capability per explicit generation."""
+    """Invoke injected briefing and workspace refresh capabilities per explicit generation."""
 
-    def __init__(self, load_daily: DailyLoader) -> None:
+    def __init__(
+        self,
+        load_daily: DailyLoader,
+        refresh_daily: DailyRefresher | None = None,
+        preview_daily: DailyPreviewer | None = None,
+    ) -> None:
         self._load_daily = load_daily
+        self._refresh_daily = refresh_daily
+        self._preview_daily = preview_daily
         self._tracker = ScreenStateTracker()
 
     @property
@@ -32,6 +47,13 @@ class DailyController:
     def cancel_current(self) -> bool:
         return self._tracker.cancel_current()
 
+    def get_preview(
+        self, request: RefreshDailyWorkspaceRequest
+    ) -> DailyWorkspaceRefreshPlan | None:
+        if self._preview_daily is None:
+            return None
+        return self._preview_daily(request)
+
     def execute_generation(
         self,
         generation: int,
@@ -39,18 +61,94 @@ class DailyController:
         dispatch: UiDispatcher,
         listener: StateListener,
     ) -> None:
-        """Run on a worker thread and dispatch one terminal delivery to the UI."""
+        """Run local briefing recomputation on a worker thread (backwards-compatible entrypoint)."""
+        self.execute_reload_generation(
+            generation,
+            dispatch=dispatch,
+            listener=listener,
+        )
+
+    def execute_reload_generation(
+        self,
+        generation: int,
+        *,
+        dispatch: UiDispatcher,
+        listener: StateListener,
+    ) -> None:
+        """Run local briefing recomputation on a worker thread."""
         try:
             response = self._load_daily()
         except Exception as exc:
             dispatch(self._deliver_failure, generation, exc, listener)
             return
 
-        status = ScreenStatus.EMPTY if self._is_empty_response(response) else ScreenStatus.READY
+        status = (
+            ScreenStatus.EMPTY if self._is_empty_briefing(response) else ScreenStatus.READY
+        )
         dispatch(self._deliver_success, generation, response, status, listener)
 
+    def execute_refresh_generation(
+        self,
+        generation: int,
+        request: RefreshDailyWorkspaceRequest,
+        *,
+        dispatch: UiDispatcher,
+        listener: StateListener,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
+    ) -> None:
+        """Run explicit market data refresh followed by briefing recomputation."""
+        if self._refresh_daily is None:
+            dispatch(
+                self._deliver_failure,
+                generation,
+                RuntimeError("Refresh capability not configured."),
+                listener,
+            )
+            return
+
+        def on_start(event: Any) -> None:
+            if progress_callback:
+                dispatch(
+                    progress_callback,
+                    {
+                        "type": "start",
+                        "total": getattr(event, "ticker_count", 0),
+                        "event": event,
+                    },
+                )
+
+        def on_ticker(ticker: str, index: int, total: int, status: Any) -> None:
+            if progress_callback:
+                dispatch(
+                    progress_callback,
+                    {
+                        "type": "ticker",
+                        "ticker": ticker,
+                        "index": index,
+                        "total": total,
+                        "status": status,
+                    },
+                )
+
+        try:
+            result = self._refresh_daily(
+                request,
+                on_start=on_start,
+                on_ticker_complete=on_ticker,
+            )
+        except Exception as exc:
+            dispatch(self._deliver_failure, generation, exc, listener)
+            return
+
+        status = (
+            ScreenStatus.EMPTY
+            if self._is_empty_briefing(result.briefing)
+            else ScreenStatus.READY
+        )
+        dispatch(self._deliver_success, generation, result, status, listener)
+
     @staticmethod
-    def _is_empty_response(response: DailyBriefingResponse) -> bool:
+    def _is_empty_briefing(response: DailyBriefingResponse) -> bool:
         setup_rows = (
             response.setup_lens_impact.rows if response.setup_lens_impact is not None else ()
         )
@@ -67,13 +165,13 @@ class DailyController:
     def _deliver_success(
         self,
         generation: int,
-        response: DailyBriefingResponse,
+        payload: Any,
         status: ScreenStatus,
         listener: StateListener,
     ) -> None:
         if self._tracker.complete_current(
             generation,
-            payload=response,
+            payload=payload,
             status=status,
         ):
             listener(self._tracker.state)

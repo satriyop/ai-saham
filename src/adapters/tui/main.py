@@ -34,13 +34,37 @@ class SahamTuiApp(App[None]):
     #daily-shell, #candidate-shell, #ticker-shell, #help-shell {
         width: 100%;
         height: 1fr;
-        padding: 2 4;
+        padding: 1 2;
     }
 
     #daily-title, #help-title {
         width: 100%;
         text-style: bold;
         color: $accent;
+        margin-bottom: 0;
+    }
+
+    #daily-action-bar {
+        height: 3;
+        margin-bottom: 1;
+        align: left middle;
+    }
+
+    #daily-status {
+        width: 1fr;
+        content-align: left middle;
+    }
+
+    #update-btn {
+        margin-right: 1;
+    }
+
+    #reload-btn {
+        margin-right: 1;
+    }
+
+    #daily-progress {
+        width: 100%;
         margin-bottom: 1;
     }
 
@@ -101,18 +125,28 @@ class SahamTuiApp(App[None]):
     .daily-section {
         height: auto;
         margin-bottom: 1;
+        background: $surface;
+        border: round $primary;
+        padding: 0 1;
+    }
+
+    .daily-section:focus {
+        border: round $accent;
     }
 
     .semantic-ready {
         color: $success;
+        text-style: bold;
     }
 
     .semantic-warning {
         color: $warning;
+        text-style: bold;
     }
 
     .semantic-error {
         color: $error;
+        text-style: bold;
     }
 
     .semantic-unavailable {

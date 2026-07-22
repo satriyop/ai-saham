@@ -73,12 +73,18 @@ def render_accumulation(view: DailyViewModel) -> str:
             f"flow {summary.flow_candidates} | enter {summary.enter_count} | "
             f"watch {summary.watch_count} | blocked {summary.blocked_count}"
         )
-    lines.extend(
-        f"{item.ticker}: flow {item.flow_score:.1f} | "
-        f"signal {item.signal_score if item.signal_score is not None else '-'} | "
-        f"risk {item.risk_status} | action {item.action or '-'}"
-        for item in view.accumulation_candidates
-    )
+    for idx, item in enumerate(view.accumulation_candidates, 1):
+        action_symbol = (
+            "▲ ENTER" if item.action == "ENTER"
+            else "◆ WATCH" if item.action == "WATCH"
+            else "▼ AVOID" if item.action == "AVOID"
+            else item.action or "-"
+        )
+        lines.append(
+            f"│ {idx:<2} {item.ticker:<5} | flow {item.flow_score:5.1f} | "
+            f"signal {item.signal_score if item.signal_score is not None else '-':>3} | "
+            f"risk {item.risk_status:<6} | {action_symbol}"
+        )
     return "\n".join(lines) if lines else "No accumulation candidates."
 
 

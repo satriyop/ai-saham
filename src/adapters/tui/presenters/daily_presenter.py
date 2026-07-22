@@ -8,6 +8,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from src.application.use_case.daily_briefing_use_case import DailyBriefingResponse
+from src.application.use_case.refresh_daily_workspace_use_case import (
+    RefreshDailyWorkspaceResult,
+)
 
 
 def _date_text(value) -> str | None:
@@ -136,7 +139,16 @@ class DailyViewModel:
 class DailyPresenter:
     """Copy canonical Daily values into immutable display-only rows."""
 
-    def present(self, response: DailyBriefingResponse) -> DailyViewModel:
+    def present(
+        self, payload: DailyBriefingResponse | RefreshDailyWorkspaceResult
+    ) -> DailyViewModel:
+        if isinstance(payload, RefreshDailyWorkspaceResult):
+            response = payload.briefing
+            extra_warnings = payload.warnings
+        else:
+            response = payload
+            extra_warnings = ()
+
         regime = self._regime(response)
         suppress_rankings = response.overall_authority == "NOT_READY"
         setup_result = response.setup_lens_impact
@@ -211,7 +223,7 @@ class DailyPresenter:
                 else tuple(self._setup_row(row) for row in setup_result.rows)
             ),
             setup_lens_warnings=(() if setup_result is None else tuple(setup_result.warnings)),
-            warnings=tuple(response.warnings),
+            warnings=tuple(response.warnings) + tuple(extra_warnings),
         )
 
     @staticmethod
