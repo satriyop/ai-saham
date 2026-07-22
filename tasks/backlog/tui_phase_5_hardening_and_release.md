@@ -1,6 +1,6 @@
 # TUI Phase 5 — Hardening And Release Decision
 
-Status: `BLOCKED_BY_PHASES_3_AND_4`
+Status: `BLOCKED_BY_PHASE_4`
 
 Roadmap: `docs/roadmap/roadmap_tui.md`
 

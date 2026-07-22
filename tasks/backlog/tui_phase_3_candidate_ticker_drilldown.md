@@ -1,6 +1,6 @@
 # TUI Phase 3 — Candidate Browser And Ticker Drilldown
 
-Status: `BACKLOG`
+Status: `DONE`
 
 Roadmap: `docs/roadmap/roadmap_tui.md`
 
@@ -203,34 +203,34 @@ promotion/tuning change.
 
 ## Implementation Checklist
 
-- [ ] Confirm prerequisites are `DONE`.
-- [ ] Copy Phase 0 exact contracts.
-- [ ] State projection transport/no-second-read proof.
-- [ ] Wire both workflows.
-- [ ] Add independent generation-safe controllers.
-- [ ] Render single/multi metadata in canonical order.
-- [ ] Add selection navigation with zero calls.
-- [ ] Build local-only ticker request from selected projection ticker.
-- [ ] Separate verdict/evidence/diagnostics/preview.
-- [ ] Add unavailable/error states.
-- [ ] Add lineage, call-count, no-network, and no-write tests.
+- [x] Confirm prerequisites are `DONE`.
+- [x] Copy Phase 0 exact contracts.
+- [x] State projection transport/no-second-read proof.
+- [x] Wire both workflows.
+- [x] Add independent generation-safe controllers.
+- [x] Render single/multi metadata in canonical order.
+- [x] Add selection navigation with zero calls.
+- [x] Build local-only ticker request from selected projection ticker.
+- [x] Separate verdict/evidence/diagnostics/preview.
+- [x] Add unavailable/error states.
+- [x] Add lineage, call-count, no-network, and no-write tests.
 
 ## Acceptance Criteria
 
-- [ ] One explicit load causes one accumulation call.
-- [ ] Exact projection instance is preserved to presenter.
-- [ ] No second read/reconstructed list controls rows.
-- [ ] Row order matches projection.
-- [ ] Navigation causes no call.
-- [ ] Enter uses selected ticker exactly once.
-- [ ] Ticker request records all local-only flags.
-- [ ] No provider/AI/observation/label/watchlist/journal write is called.
-- [ ] Canonical/preview outputs are separate.
-- [ ] Unavailable signal produces no action fallback.
-- [ ] TUI source defines no canonical action vocabulary.
-- [ ] Late results cannot replace newer request.
-- [ ] Focused, architecture, full tests when feasible, and `git diff --check` pass.
-- [ ] Status becomes `DONE`; completion record is filled.
+- [x] One explicit load causes one accumulation call.
+- [x] Exact projection instance is preserved to presenter.
+- [x] No second read/reconstructed list controls rows.
+- [x] Row order matches projection.
+- [x] Navigation causes no call.
+- [x] Enter uses selected ticker exactly once.
+- [x] Ticker request records all local-only flags.
+- [x] No provider/AI/observation/label/watchlist/journal write is called.
+- [x] Canonical/preview outputs are separate.
+- [x] Unavailable signal produces no action fallback.
+- [x] TUI source defines no canonical action vocabulary.
+- [x] Late results cannot replace newer request.
+- [x] Focused and architecture tests plus `git diff --check` pass; full suite ran with only three documented unrelated baseline failures.
+- [x] Status becomes `DONE`; completion record is filled.
 
 ## Required Negative Tests
 
@@ -274,15 +274,15 @@ lineage, local-only, authority, and late-result tests pass.
 
 ## Completion Record
 
-- Completed date:
-- Implementation commit:
-- Files changed:
-- Accumulation request:
-- Ticker request:
-- Projection lineage proof:
-- Provider/write proof:
-- Focused tests:
-- Architecture tests:
-- Full suite:
-- `git diff --check`:
-- Deferred items:
+- Completed date: 2026-07-22
+- Implementation commit: this phase completion commit
+- Files changed: TUI composition/research capability boundary, accumulation and ticker controllers/presenters/screens/widgets, Help/shell routes, focused fixtures/tests, architecture guards, and task status
+- Accumulation request: exact configured universe list; single defaults use window 7 and multi uses `[7, 30, 90]`; top 20, no overlay/save, canonical projection sort `vwap`
+- Ticker request: selected ticker verbatim with configured swing values and `auto_refresh=False`, `force_refresh=False`, `include_sentiment=False`, `with_market_context=False`
+- Projection lineage proof: controller payload requires projection object identity with the workflow result; value-equivalent replacement raises `ValueError`; presenter `source` is that exact object and preserves row order
+- Provider/write proof: cached Stockbit providers retain `api_client=None`; exact refresh/sentiment tripwires remain; no watchlist/observation/label/journal/provider capability symbols are permitted by architecture tests
+- Focused tests: `46 passed` for TUI plus TUI/layer boundary tests
+- Architecture tests: `106 passed` for all architecture, TUI, and existing Daily CLI tests
+- Full suite: `5728 passed, 3 failed`; failures are the pre-existing unrelated stale `_FakeScreenerConfig` cases (2) and canonical-window label-count regression (1)
+- `git diff --check`: passed
+- Deferred items: Research Corpus Health remains Phase 4; full-suite baseline failures remain outside TUI scope

@@ -1,0 +1,120 @@
+"""Lazy serialized capability boundary and exact Phase 3 requests.
+
+Layer: Adapter
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import date
+from pathlib import Path
+from threading import Lock
+from typing import Any
+
+from src.application.dto.swing_analysis import SwingAnalysisWorkflowRequest
+from src.application.use_case.run_accumulation_screen_workflow_use_case import (
+    RunAccumulationScreenWorkflowRequest,
+    RunAccumulationScreenWorkflowUseCase,
+)
+from src.application.use_case.swing_analysis_workflow_use_case import (
+    SwingAnalysisWorkflowUseCase,
+)
+
+
+@dataclass(frozen=True)
+class ResearchExecution:
+    accumulation: RunAccumulationScreenWorkflowUseCase
+    swing: SwingAnalysisWorkflowUseCase
+    config: Any
+    db_path: Path
+    tickers: list[str]
+    flow_window: int
+
+
+class SerializedResearchCapabilities:
+    def __init__(self, factory: Callable[[], ResearchExecution]) -> None:
+        self._factory = factory
+        self._execution: ResearchExecution | None = None
+        self._lock = Lock()
+
+    def load_accumulation(self, multi: bool):
+        with self._lock:
+            execution = self._get_execution()
+            return execution.accumulation.execute(
+                build_accumulation_request(execution.config, execution.tickers, multi)
+            )
+
+    def load_ticker(self, ticker: str):
+        with self._lock:
+            execution = self._get_execution()
+            return execution.swing.execute(
+                build_ticker_request(
+                    execution.config,
+                    execution.db_path,
+                    execution.flow_window,
+                    ticker,
+                )
+            )
+
+    def _get_execution(self) -> ResearchExecution:
+        if self._execution is None:
+            self._execution = self._factory()
+        return self._execution
+
+
+def build_accumulation_request(
+    config: Any, tickers: list[str], multi: bool
+) -> RunAccumulationScreenWorkflowRequest:
+    universe = config.analysis.universe
+    return RunAccumulationScreenWorkflowRequest(
+        tickers=tickers,
+        universe_label=universe,
+        universe_name=universe,
+        window=7,
+        min_streak=0,
+        min_foreign_flow_score=None,
+        min_signal_score=None,
+        min_piotroski=0,
+        strategy_name=None,
+        include_strategy_overlay=False,
+        multi=multi,
+        windows=[7, 30, 90] if multi else [],
+        top=20,
+        save_name=None,
+        save_enabled=False,
+        vwap_only=False,
+        squeeze_only=False,
+        sort_by="vwap",
+    )
+
+
+def build_ticker_request(
+    config: Any, db_path: Path, flow_window: int, ticker: str
+) -> SwingAnalysisWorkflowRequest:
+    return SwingAnalysisWorkflowRequest(
+        ticker=ticker,
+        today=date.today(),
+        strategy_name=None,
+        setup_name=None,
+        window=config.swing.window,
+        flow_window=flow_window,
+        capital=None,
+        risk_pct=config.swing.risk_pct,
+        entry_price=None,
+        atr_mult=config.swing.atr_mult,
+        rr=config.swing.rr,
+        include_sentiment=False,
+        include_flow_detail=False,
+        include_signal_detail=False,
+        include_risk_detail=False,
+        include_market_detail=False,
+        sentiment_verbose=False,
+        auto_refresh=False,
+        force_refresh=False,
+        with_market_context=False,
+        regime_universe=config.analysis.regime_universe,
+        benchmark=config.analysis.benchmark,
+        db_path=db_path,
+        with_technical_gate=False,
+    )

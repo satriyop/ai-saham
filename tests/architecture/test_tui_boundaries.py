@@ -37,6 +37,22 @@ FORBIDDEN_WRITE_CALLS = {
     "write_bytes",
     "write_text",
 }
+FORBIDDEN_TUI_CAPABILITY_SYMBOLS = {
+    "GetSystemStatusUseCase",
+    "SQLiteWatchlistRepository",
+    "SaveScreenWatchlistUseCase",
+    "RecordAccumulationObservationsUseCase",
+    "GenerateSignalForwardLabelsUseCase",
+    "auto_refresh_swing_data",
+    "fetch_swing_sentiment",
+}
+CANONICAL_ACTION_VOCABULARY = {
+    "ENTER",
+    "WATCH",
+    "AVOID",
+    "BLOCKED_EXECUTION",
+    "BLOCKED_STRUCTURAL",
+}
 
 
 @dataclass(frozen=True)
@@ -133,3 +149,24 @@ def test_lazy_cli_module_has_no_top_level_tui_import():
         _matches(imported, "textual") or _matches(imported, "src.adapters.tui")
         for imported in top_level_imports
     )
+
+
+def test_tui_does_not_compose_forbidden_provider_or_write_capabilities():
+    source = "\n".join(
+        path.read_text(encoding="utf-8") for path in sorted(TUI_ROOT.rglob("*.py"))
+    )
+    assert not (FORBIDDEN_TUI_CAPABILITY_SYMBOLS & set(source.split()))
+    for symbol in FORBIDDEN_TUI_CAPABILITY_SYMBOLS:
+        assert symbol not in source
+
+
+def test_tui_source_defines_no_canonical_action_vocabulary():
+    string_literals = set()
+    for path in sorted(TUI_ROOT.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        string_literals.update(
+            node.value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Constant) and isinstance(node.value, str)
+        )
+    assert not (CANONICAL_ACTION_VOCABULARY & string_literals)

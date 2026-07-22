@@ -16,9 +16,23 @@ from pathlib import Path
 from threading import Lock
 from typing import Any
 
+from src.adapters.tui.controllers.accumulation_controller import (
+    AccumulationController,
+    AccumulationLoader,
+)
 from src.adapters.tui.controllers.daily_controller import DailyController, DailyLoader
+from src.adapters.tui.controllers.ticker_research_controller import (
+    TickerLoader,
+    TickerResearchController,
+)
 from src.adapters.tui.main import SahamTuiApp
+from src.adapters.tui.presenters.accumulation_presenter import AccumulationPresenter
 from src.adapters.tui.presenters.daily_presenter import DailyPresenter
+from src.adapters.tui.presenters.ticker_research_presenter import TickerResearchPresenter
+from src.adapters.tui.research_capabilities import (
+    ResearchExecution,
+    SerializedResearchCapabilities,
+)
 from src.application.dto.accumulation_screen import AccumulationScreenRequest
 from src.application.services.accumulation_screen_factory import (
     create_accumulation_screen_use_case,
@@ -43,6 +57,9 @@ from src.application.use_case.assess_corporate_action_event_risk_use_case import
     AssessCorporateActionEventRiskUseCase,
 )
 from src.application.use_case.assess_risk_use_case import AssessRiskUseCase
+from src.application.use_case.build_live_signal_evidence_execution_context_use_case import (
+    BuildLiveSignalEvidenceExecutionContextUseCase,
+)
 from src.application.use_case.daily_briefing_use_case import (
     DailyBriefingRequest,
     DailyBriefingResponse,
@@ -56,6 +73,9 @@ from src.application.use_case.evaluate_swing_setup_use_case import (
     AVAILABLE_SWING_SETUPS,
     EvaluateSwingSetupRequest,
     EvaluateSwingSetupUseCase,
+)
+from src.application.use_case.run_accumulation_screen_workflow_use_case import (
+    RunAccumulationScreenWorkflowUseCase,
 )
 from src.application.use_case.swing_analysis_workflow_use_case import (
     SwingAnalysisWorkflowUseCase,
@@ -223,8 +243,12 @@ def _build_accumulation_use_case(deps: _StockDependencies, *, risk_use_case=None
         stockbit_providers=deps.stockbit_providers,
         risk_use_case=risk_use_case,
         signal_engine=deps.signal_engine(),
+        candidate_observations_repository=deps.observations_repository,
         foreign_flow_score_policy=accumulation_config.foreign_flow_score_policy,
         derived_feature_policy=accumulation_config.derived_features,
+        swing_setup_catalog=build_swing_setup_catalog_config(
+            load_swing_config(config=deps.app_config)
+        ),
         ticker_profile_classifier_factory=deps.ticker_profile_classifier,
         institutional_accumulation_config_factory=deps.institutional_config,
         sector_context_builder_factory=deps.sector_context_builder,
@@ -316,7 +340,7 @@ def _build_setup_evaluator(setup_name, swing_config):
     return evaluator
 
 
-def _build_swing_workflow(deps: _StockDependencies, setup_name: str):
+def _build_swing_workflow(deps: _StockDependencies, setup_name: str | None):
     swing_config = load_swing_config(config=deps.app_config)
     analyze_config = load_analyze_swing_config()
     accumulation_config = load_accumulation_screener_config()
@@ -439,6 +463,67 @@ def create_daily_capability() -> DailyLoader:
     return _SerializedDailyCapability(_build_daily_execution)
 
 
-def create_tui_app(*, daily_loader: DailyLoader | None = None) -> SahamTuiApp:
-    loader = daily_loader or create_daily_capability()
-    return SahamTuiApp(DailyController(loader), DailyPresenter())
+def _build_research_execution() -> ResearchExecution:
+    config = load_app_config()
+    db_path = Path(config.storage.db_path)
+    deps = _build_dependencies(config, db_path)
+    screener = load_accumulation_screener_config()
+    swing_config = load_swing_config(config=config)
+    screen = _build_accumulation_use_case(deps)
+    live_context = BuildLiveSignalEvidenceExecutionContextUseCase(
+        session_resolver=EffectiveMarketSessionResolver(deps.market_repository),
+        context_builder=SignalEvidenceExecutionContextBuilder(
+            trading_session_calendar_loader=lambda start, end: IHSGTradingSessionCalendarProvider(
+                deps.market_repository
+            ).load(
+                coverage_start=start,
+                coverage_end=end,
+            )
+        ),
+    )
+    accumulation = RunAccumulationScreenWorkflowUseCase(
+        screen_use_case=screen,
+        broker_repository=deps.broker_repository,
+        market_repository=deps.market_repository,
+        swing_config=swing_config,
+        accumulation_screener_config=screener,
+        rules_loader=RulesYamlLoader(),
+        indicator_registry_factory=create_indicator_registry,
+        live_signal_evidence_context_use_case=live_context,
+        save_watchlist_use_case=None,
+    )
+    tickers = resolve_tickers(
+        universe=config.analysis.universe,
+        explicit=[],
+        db_path=db_path,
+        loader=YamlUniverseConfigLoader(),
+        repository=deps.broker_repository,
+    )
+    return ResearchExecution(
+        accumulation,
+        _build_swing_workflow(deps, None),
+        config,
+        db_path,
+        tickers,
+        load_analyze_swing_config().flow_detail_window_sessions,
+    )
+
+
+def create_tui_app(
+    *,
+    daily_loader: DailyLoader | None = None,
+    accumulation_loader: AccumulationLoader | None = None,
+    ticker_loader: TickerLoader | None = None,
+) -> SahamTuiApp:
+    daily = daily_loader or create_daily_capability()
+    research = SerializedResearchCapabilities(_build_research_execution)
+    accumulation = accumulation_loader or research.load_accumulation
+    ticker = ticker_loader or research.load_ticker
+    return SahamTuiApp(
+        DailyController(daily),
+        DailyPresenter(),
+        AccumulationController(accumulation),
+        AccumulationPresenter(),
+        TickerResearchController(ticker),
+        TickerResearchPresenter(),
+    )
