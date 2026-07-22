@@ -21,6 +21,7 @@ research/
   scripts/
     factor_card_vwap_buckets.py      # Package A — VWAP depth
     factor_card_bci_flow_sign.py     # Package A2 — BCI × flow sign
+    factor_card_accum_components.py  # Package A1 — Accum component ablation
     factor_card_mce_factors.py       # Package D — MCE / regime
   artifacts/                # generated reports (gitignored except .gitkeep)
 ```
@@ -76,6 +77,7 @@ A green factor card has **no** authority.
 # from repo root, using existing venv (stdlib + pandas already available)
 .venv/bin/python research/scripts/factor_card_vwap_buckets.py
 .venv/bin/python research/scripts/factor_card_bci_flow_sign.py
+.venv/bin/python research/scripts/factor_card_accum_components.py
 .venv/bin/python research/scripts/factor_card_mce_factors.py
 
 # optional richer lab deps later
