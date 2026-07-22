@@ -2038,11 +2038,11 @@ saham screen accum --universe lq45 --save morning-watch
 Replay accumulation signals historically and measure forward returns:
 
 ```bash
-saham analyze accum-audit --universe idx80 --setup foreign-bounce
-saham analyze accum-audit --universe idx80 --setup coiled-spring
-saham analyze accum-audit --universe idx80 --setup smart-money-confirmed
-saham analyze accum-audit --universe idx80 --setup pullback-continuation
-saham analyze accum-audit --universe lq45 --window 7 --min-score 70
+saham research accumulation evaluate --universe idx80 --setup foreign-bounce
+saham research accumulation evaluate --universe idx80 --setup coiled-spring
+saham research accumulation evaluate --universe idx80 --setup smart-money-confirmed
+saham research accumulation evaluate --universe idx80 --setup pullback-continuation
+saham research accumulation evaluate --universe lq45 --window 7 --min-score 70
 ```
 
 ### Logging to Journal
@@ -2751,7 +2751,7 @@ saham strategy backtest BBCA --strategy my_flow_strategy
 | `saham screen accum` | Foreign accumulation screener (SignalAssessment 0–100) | `--universe`, `--window`, `--multi`, `--top-broker`, `--min-foreign-flow-score`, `--min-signal-score`, `--min-piotroski`, `--vwap-only`, `--squeeze-only`, `--save`, `--format`, `--guide`, `--explain`, `--db` |
 | `saham screen watchlist` | List saved watchlists / show tickers in a named one | — |
 | `saham screen compare NAME` | Diff saved watchlist against fresh screener run | `--universe`, `--top` |
-| `saham analyze accum-audit` | Historical accumulation audit | `--universe`, `--setup`, `--simulate-exits` |
+| `saham research accumulation evaluate` | Historical accumulation audit | `--universe`, `--setup`, `--simulate-exits` |
 | `saham screen pre-open` | Pre-open market screener | `--movers-json`, `--fast`, `--top` |
 | `saham trade confirm` | Confirm at opening auction | `--opening-json` |
 | `saham trade log --type TYPE` | Log a paper-trade decision | `--type` (swing or intraday) |

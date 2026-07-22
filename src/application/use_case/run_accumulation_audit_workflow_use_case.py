@@ -1,9 +1,11 @@
 """
-RunAccumulationAuditWorkflow use case - orchestrates the `saham analyze accum-audit` command.
+RunAccumulationAuditWorkflow use case - orchestrates accumulation evaluate.
 
 Owns setup-preset resolution, CLI option/default normalization, date/trend/grid
 parsing, and ticker resolution before delegating to AccumulationAuditUseCase.
-This is the workflow policy previously embedded in the `accum-audit` CLI command.
+This is the workflow policy previously embedded in the accumulation CLI command.
+
+Public CLI path: `saham research accumulation evaluate`.
 
 Layer: Application
 Depends on: AccumulationAuditUseCase, AccumulationAuditPolicy, and an injected

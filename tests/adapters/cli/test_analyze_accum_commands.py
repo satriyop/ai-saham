@@ -1,4 +1,4 @@
-"""Tests for the `saham analyze accum-audit` CLI command."""
+"""Tests for the `saham research accumulation evaluate` CLI command."""
 
 import json
 from datetime import date
@@ -6,7 +6,7 @@ from datetime import date
 from typer.testing import CliRunner
 
 from src.adapters.cli import analyze_accum_commands
-from src.adapters.cli.analyze_commands import analyze_app
+from src.adapters.cli.research_commands import research_app
 from src.application.dto.accumulation_audit import AccumulationAuditResponse
 from src.application.use_case.run_accumulation_audit_workflow_use_case import (
     NoTickersError,
@@ -77,7 +77,7 @@ def _patch_workflow(monkeypatch, outcome) -> FakeWorkflow:
 def test_command_delegates_to_workflow_factory(monkeypatch):
     workflow = _patch_workflow(monkeypatch, _result())
 
-    res = runner.invoke(analyze_app, ["accum-audit", "BBCA"])
+    res = runner.invoke(research_app, ["accumulation", "evaluate", "BBCA"])
 
     assert res.exit_code == 0
     assert len(workflow.requests) == 1
@@ -87,7 +87,7 @@ def test_request_dto_contains_raw_cli_intent_not_resolved_setup_values(monkeypat
     workflow = _patch_workflow(monkeypatch, _result())
 
     res = runner.invoke(
-        analyze_app, ["accum-audit", "BBCA", "--setup", "foreign-bounce"]
+        research_app, ["accumulation", "evaluate", "BBCA", "--setup", "foreign-bounce"]
     )
 
     assert res.exit_code == 0
@@ -102,7 +102,7 @@ def test_json_mode_prints_result_to_json_dict(monkeypatch):
     response = _response(warnings=["heads up"])
     _patch_workflow(monkeypatch, _result(response=response))
 
-    res = runner.invoke(analyze_app, ["accum-audit", "BBCA", "--format", "json"])
+    res = runner.invoke(research_app, ["accumulation", "evaluate", "BBCA", "--format", "json"])
 
     assert res.exit_code == 0
     payload = json.loads(res.stdout)
@@ -126,7 +126,7 @@ def test_json_mode_prints_result_to_json_dict(monkeypatch):
 
 
 def test_json_mode_does_not_write_signal_tables(monkeypatch, tmp_path):
-    """DQ-011 D11-6: accum-audit JSON path must not touch observation/label tables."""
+    """DQ-011 D11-6: accumulation evaluate JSON path must not touch observation/label tables."""
     import sqlite3
 
     from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
@@ -142,8 +142,8 @@ def test_json_mode_does_not_write_signal_tables(monkeypatch, tmp_path):
     _patch_workflow(monkeypatch, _result())
 
     res = runner.invoke(
-        analyze_app,
-        ["accum-audit", "BBCA", "--format", "json", "--db", str(db_path)],
+        research_app,
+        ["accumulation", "evaluate", "BBCA", "--format", "json", "--db", str(db_path)],
     )
 
     assert res.exit_code == 0, res.output
@@ -163,7 +163,7 @@ def test_table_mode_prints_progress_line_and_calls_display(monkeypatch):
         "src.adapters.cli.analyze_accum_display.display_audit_summary", _fake_display
     )
 
-    res = runner.invoke(analyze_app, ["accum-audit", "BBCA", "--top-groups", "5"])
+    res = runner.invoke(research_app, ["accumulation", "evaluate", "BBCA", "--top-groups", "5"])
 
     assert res.exit_code == 0
     assert "Auditing 1 tickers" in res.output
@@ -184,7 +184,7 @@ def test_csv_output_calls_writer_and_prints_confirmation(monkeypatch, tmp_path):
 
     output_path = tmp_path / "out.csv"
     res = runner.invoke(
-        analyze_app, ["accum-audit", "BBCA", "--output", str(output_path)]
+        research_app, ["accumulation", "evaluate", "BBCA", "--output", str(output_path)]
     )
 
     assert res.exit_code == 0
@@ -201,8 +201,8 @@ def test_json_mode_with_csv_writes_confirmation_to_stderr(monkeypatch, tmp_path)
 
     output_path = tmp_path / "out.csv"
     res = runner.invoke(
-        analyze_app,
-        ["accum-audit", "BBCA", "--output", str(output_path), "--format", "json"],
+        research_app,
+        ["accumulation", "evaluate", "BBCA", "--output", str(output_path), "--format", "json"],
     )
 
     assert res.exit_code == 0
@@ -213,7 +213,7 @@ def test_json_mode_with_csv_writes_confirmation_to_stderr(monkeypatch, tmp_path)
 def test_workflow_value_error_maps_to_exit_1_with_error_prefix(monkeypatch):
     _patch_workflow(monkeypatch, ValueError("unknown setup 'x'. Available setups: a, b"))
 
-    res = runner.invoke(analyze_app, ["accum-audit", "BBCA", "--setup", "x"])
+    res = runner.invoke(research_app, ["accumulation", "evaluate", "BBCA", "--setup", "x"])
 
     assert res.exit_code == 1
     assert "Error: unknown setup 'x'. Available setups: a, b" in res.output
@@ -225,7 +225,7 @@ def test_workflow_no_tickers_error_maps_to_exit_1_without_error_prefix(monkeypat
         NoTickersError("No tickers to audit. Specify --universe or provide ticker arguments."),
     )
 
-    res = runner.invoke(analyze_app, ["accum-audit"])
+    res = runner.invoke(research_app, ["accumulation", "evaluate"])
 
     assert res.exit_code == 1
     assert "No tickers to audit. Specify --universe or provide ticker arguments." in res.output

@@ -43,7 +43,7 @@ BACKTEST
 | Flow detail | `saham analyze swing TICKER --with-flow-detail --explain` |
 | Broker flow harian | `saham view broker flow TICKER --days 30` |
 | Sizing standalone | `saham trade size TICKER --capital 10000000` |
-| Audit accumulation | `saham analyze accum-audit --universe lq45` |
+| Audit accumulation | `saham research accumulation evaluate --universe lq45` |
 
 Gunakan `--help` untuk nama option dan default yang berlaku saat ini.
 

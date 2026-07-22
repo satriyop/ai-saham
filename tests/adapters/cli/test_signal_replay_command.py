@@ -1,4 +1,4 @@
-"""DQ-011 — thin CLI contracts for `saham analyze signal-replay`."""
+"""DQ-011 — thin CLI contracts for `saham research signal replay`."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def test_signal_replay_rejects_invalid_date(tmp_path):
 
     result = runner.invoke(
         app,
-        ["analyze", "signal-replay", "BBCA", "not-a-date", "--db", str(db_path)],
+        ["research", "signal", "replay", "BBCA", "not-a-date", "--db", str(db_path)],
     )
 
     assert result.exit_code == 1
@@ -49,7 +49,7 @@ def test_signal_replay_not_found_is_read_only(tmp_path):
 
     result = runner.invoke(
         app,
-        ["analyze", "signal-replay", "BBCA", "2026-07-03", "--db", str(db_path)],
+        ["research", "signal", "replay", "BBCA", "2026-07-03", "--db", str(db_path)],
     )
 
     assert result.exit_code == 1
@@ -65,8 +65,9 @@ def test_signal_replay_verify_not_found_is_read_only(tmp_path):
     result = runner.invoke(
         app,
         [
-            "analyze",
-            "signal-replay",
+            "research",
+            "signal",
+            "replay",
             "BBCA",
             "2026-07-03",
             "--verify",

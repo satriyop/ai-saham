@@ -575,7 +575,8 @@ Each Big block decomposes into Medium modules:
 | Today Briefing | `cli/today_commands.py` | `saham today` daily briefing |
 | Status Impl | `cli/fetch_status_commands.py` | `saham fetch status` |
 | Indicator Router| `cli/indicator_commands.py` | `saham indicator [compute, snapshot, create, list, show, delete]` |
-| Analyze Router | `cli/analyze_commands.py` | `saham analyze [risk, compare, sentiment, audit, regime, chart, swing, accum-audit, swing-compare]` |
+| Analyze Router | `cli/analyze_commands.py` | `saham analyze [risk, compare, sentiment, audit, regime, chart, swing, swing-compare, signal]` |
+| Research Router | `cli/research_commands.py` | `saham research [signal, accumulation]` |
 | Trade Router | `cli/trade_commands.py` | `saham trade [confirm, log, review, size, outcome, backtest-swing, backtest-intraday]` |
 | Trade (intraday) | `cli/trade_intraday_commands.py` | Implementation of intraday trade CLI |
 | Strategy Router | `cli/strategy_commands.py` | `saham strategy [init, create, validate, list, backtest, skill]` |

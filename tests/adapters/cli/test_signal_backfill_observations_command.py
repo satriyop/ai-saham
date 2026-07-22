@@ -50,8 +50,9 @@ def test_signal_backfill_observations_json_output_is_stable(monkeypatch):
     result = runner.invoke(
         app,
         [
-            "analyze",
-            "signal-backfill-observations",
+            "research",
+            "signal",
+            "backfill",
             "--universe",
             "lq45",
             "--start",
@@ -129,8 +130,9 @@ def test_signal_backfill_observations_wires_evaluate_market_context(monkeypatch)
     result = runner.invoke(
         app,
         [
-            "analyze",
-            "signal-backfill-observations",
+            "research",
+            "signal",
+            "backfill",
             "--universe",
             "lq45",
             "--start",
@@ -162,8 +164,9 @@ def test_signal_backfill_observations_rejects_invalid_date(monkeypatch):
     result = runner.invoke(
         app,
         [
-            "analyze",
-            "signal-backfill-observations",
+            "research",
+            "signal",
+            "backfill",
             "--universe",
             "lq45",
             "--start",
@@ -183,8 +186,9 @@ def test_signal_backfill_observations_rejects_end_before_start(monkeypatch):
     result = runner.invoke(
         app,
         [
-            "analyze",
-            "signal-backfill-observations",
+            "research",
+            "signal",
+            "backfill",
             "--universe",
             "lq45",
             "--start",
@@ -331,8 +335,9 @@ def test_adapter_delegates_hashing_to_application_resolver(monkeypatch):
     result = runner.invoke(
         app,
         [
-            "analyze",
-            "signal-backfill-observations",
+            "research",
+            "signal",
+            "backfill",
             "--universe",
             "lq45",
             "--start",
@@ -372,8 +377,9 @@ def test_invalid_dates_do_not_write_signal_tables(tmp_path):
     result = runner.invoke(
         app,
         [
-            "analyze",
-            "signal-backfill-observations",
+            "research",
+            "signal",
+            "backfill",
             "--universe",
             "lq45",
             "--start",
@@ -410,8 +416,9 @@ def test_end_before_start_does_not_write_signal_tables(tmp_path):
     result = runner.invoke(
         app,
         [
-            "analyze",
-            "signal-backfill-observations",
+            "research",
+            "signal",
+            "backfill",
             "--universe",
             "lq45",
             "--start",

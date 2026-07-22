@@ -78,7 +78,7 @@ def signal_replay(
 ) -> None:
     """Retrieve a stored observation, or verify it via local recompute.
 
-    Command name remains ``signal-replay`` until CLI restructure.
+    Public path: ``saham research signal replay``.
     """
     cfg = load_app_config()
     resolved_db = db_path or Path(cfg.storage.db_path)

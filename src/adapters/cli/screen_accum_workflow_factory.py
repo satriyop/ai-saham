@@ -123,7 +123,7 @@ def create_accumulation_screen_workflow_bundle(
 ) -> AccumulationScreenUseCaseBundle:
     """Build the screen use case together with its canonical observation recorder.
 
-    Only for explicit observation-generation callers (e.g. signal-backfill).
+    Only for explicit observation-generation callers (e.g. research signal backfill).
     Diagnostic/read-only workflows must use create_accumulation_screen_workflow()
     instead, which never constructs a recorder.
     """

@@ -223,7 +223,7 @@ saham analyze swing-compare --universe lq45 --start 2025-01-01
 ### Broker Quality Audit
 
 ```bash
-saham analyze accum-audit \
+saham research accumulation evaluate \
   --universe lq45 \
   --setup foreign-bounce \
   --start 2026-01-01

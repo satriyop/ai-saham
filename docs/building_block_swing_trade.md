@@ -13,7 +13,7 @@ The swing trade feature is a **unified composite workflow** that combines accumu
 | `saham trade backtest-swing` | Portfolio walk-forward backtest | `SwingBacktestUseCase` |
 | `saham analyze swing-compare` | Compare variants across regimes | `SwingBacktestUseCase` × N variants |
 | `saham screen accum` | Accumulation screener (find candidates) | `AccumulationScreenUseCase` |
-| `saham analyze accum-audit` | Audit accumulation broker data | `AccumulationAuditUseCase` |
+| `saham research accumulation evaluate` | Audit accumulation broker data | `AccumulationAuditUseCase` |
 | `saham trade log swing` | Log a candidate to journal | `AccumulationJournal` service |
 | `saham trade review swing` | Review journal performance | `AccumulationJournal` + SQLite |
 | `saham analyze regime` | Market regime context (standalone) | `MarketRegimeUseCase` |
@@ -29,7 +29,7 @@ The swing trade feature is a **unified composite workflow** that combines accumu
 │  analyze swing       trade size       trade backtest-swing                  │
 │  analyze swing-compare                                                       │
 │  screen accum       ───► accumulation_run                                   │
-│  analyze accum-audit ───► accumulation_audit                                 │
+│  research accumulation evaluate ───► accumulation_audit                      │
 │  trade log swing    ───► accumulation_log                                   │
 │  trade review swing ───► accumulation_review                                │
 │                                                                          │

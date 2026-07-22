@@ -1,4 +1,4 @@
-"""CLI regression tests for `saham analyze signal-labels` (HIGH-2 Finding 2).
+"""CLI regression tests for `saham research signal labels` (HIGH-2 Finding 2).
 
 An incompatible-schema selected observation must fail safely: exit non-zero,
 print the canonical-schema error, never index an empty labels tuple, and
@@ -54,8 +54,9 @@ def test_generate_rejects_incompatible_observation_schema(tmp_path):
     result = runner.invoke(
         app,
         [
-            "analyze",
-            "signal-labels",
+            "research",
+            "signal",
+            "labels",
             "2026-07-01",
             "--ticker",
             "BBCA",
@@ -110,8 +111,9 @@ def test_generate_rejects_current_schema_empty_hash_observation_table_mode(tmp_p
     result = runner.invoke(
         app,
         [
-            "analyze",
-            "signal-labels",
+            "research",
+            "signal",
+            "labels",
             "2026-07-01",
             "--ticker",
             "BBCA",
@@ -180,8 +182,9 @@ def test_generate_rejects_observation_violating_current_contract(tmp_path):
     result = runner.invoke(
         app,
         [
-            "analyze",
-            "signal-labels",
+            "research",
+            "signal",
+            "labels",
             "2026-07-01",
             "--ticker",
             "BBCA",
@@ -209,8 +212,9 @@ def test_generate_rejects_current_schema_empty_hash_observation_json_mode(tmp_pa
     result = runner.invoke(
         app,
         [
-            "analyze",
-            "signal-labels",
+            "research",
+            "signal",
+            "labels",
             "2026-07-01",
             "--ticker",
             "BBCA",
@@ -255,7 +259,7 @@ def test_summary_without_generate_is_read_only(tmp_path):
 
     result = runner.invoke(
         app,
-        ["analyze", "signal-labels", "2026-07-01", "--db", str(db_path)],
+        ["research", "signal", "labels", "2026-07-01", "--db", str(db_path)],
     )
 
     assert result.exit_code == 0, result.output
@@ -278,8 +282,9 @@ def test_generate_rejection_does_not_write_labels(tmp_path):
     result = runner.invoke(
         app,
         [
-            "analyze",
-            "signal-labels",
+            "research",
+            "signal",
+            "labels",
             "2026-07-01",
             "--ticker",
             "BBCA",

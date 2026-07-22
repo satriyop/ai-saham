@@ -26,6 +26,7 @@ EXPECTED_COMMANDS: dict[tuple[str, ...], tuple[str, ...]] = {
         "audit",
         "screen",
         "learn",
+        "research",
         "view",
         "indicator",
         "analyze",
@@ -62,6 +63,9 @@ EXPECTED_COMMANDS: dict[tuple[str, ...], tuple[str, ...]] = {
     ("fetch", "universe"): ("list", "update", "inspect", "create"),
     ("screen",): ("pre-open", "accum", "watchlist", "compare"),
     ("learn",): ("snapshot", "track", "grade", "prompt", "tune"),
+    ("research",): ("signal", "accumulation"),
+    ("research", "signal"): ("backfill", "labels", "replay", "readiness"),
+    ("research", "accumulation"): ("evaluate",),
     ("indicator",): ("compute", "snapshot", "create", "list", "show", "delete"),
     ("analyze",): (
         "risk",
@@ -70,15 +74,11 @@ EXPECTED_COMMANDS: dict[tuple[str, ...], tuple[str, ...]] = {
         "audit",
         "regime",
         "swing",
-        "accum-audit",
         "swing-compare",
-        "signal-backfill-observations",
-        "signal-inspect",
-        "signal-labels",
-        "signal-readiness",
-        "signal-replay",
         "chart",
+        "signal",
     ),
+    ("analyze", "signal"): ("inspect",),
     ("analyze", "chart"): ("price", "rsi", "volume"),
     ("view",): ("broker", "universe", "market-context"),
     ("view", "broker"): (
@@ -130,6 +130,12 @@ REMOVED_PATHS: tuple[tuple[str, ...], ...] = (
     ("trade", "opening"),
     ("trade", "review", "pre-open"),
     ("analyze", "signal-audit"),
+    ("analyze", "signal-backfill-observations"),
+    ("analyze", "signal-labels"),
+    ("analyze", "signal-replay"),
+    ("analyze", "signal-readiness"),
+    ("analyze", "accum-audit"),
+    ("analyze", "signal-inspect"),
 )
 
 
@@ -171,9 +177,19 @@ HELP_PATHS: tuple[tuple[str, ...], ...] = (
     ("screen", "watchlist"),
     ("screen", "compare"),
     ("learn",),
+    ("research",),
+    ("research", "signal"),
+    ("research", "signal", "backfill"),
+    ("research", "signal", "labels"),
+    ("research", "signal", "replay"),
+    ("research", "signal", "readiness"),
+    ("research", "accumulation"),
+    ("research", "accumulation", "evaluate"),
     ("indicator",),
     ("analyze",),
     ("analyze", "swing"),
+    ("analyze", "signal"),
+    ("analyze", "signal", "inspect"),
     ("analyze", "chart"),
     ("trade",),
     ("trade", "log"),
@@ -217,6 +233,12 @@ REMOVED_HELP_SNIPPETS: tuple[str, ...] = (
     "saham status",
     "broker fetch",
     "saham analyze signal-audit",
+    "saham analyze signal-backfill-observations",
+    "saham analyze signal-labels",
+    "saham analyze signal-replay",
+    "saham analyze signal-readiness",
+    "saham analyze signal-inspect",
+    "saham analyze accum-audit",
 )
 
 
@@ -309,7 +331,7 @@ def test_public_command_tree_has_no_extra_commands():
 
 
 def test_signal_labels_help_exposes_batch_generation_flags():
-    result = runner.invoke(app, ["analyze", "signal-labels", "--help"])
+    result = runner.invoke(app, ["research", "signal", "labels", "--help"])
 
     assert result.exit_code == 0
     assert "--generate-all" in result.stdout
@@ -317,7 +339,7 @@ def test_signal_labels_help_exposes_batch_generation_flags():
 
 
 def test_signal_inspect_help_exposes_date_and_format_options():
-    result = runner.invoke(app, ["analyze", "signal-inspect", "--help"])
+    result = runner.invoke(app, ["analyze", "signal", "inspect", "--help"])
 
     assert result.exit_code == 0
     assert "--date" in result.stdout
@@ -326,14 +348,14 @@ def test_signal_inspect_help_exposes_date_and_format_options():
 
 
 def test_signal_readiness_help_exposes_target_option():
-    result = runner.invoke(app, ["analyze", "signal-readiness", "--help"])
+    result = runner.invoke(app, ["research", "signal", "readiness", "--help"])
 
     assert result.exit_code == 0
     assert "--target" in result.stdout
 
 
 def test_signal_backfill_observations_help_exposes_required_options():
-    result = runner.invoke(app, ["analyze", "signal-backfill-observations", "--help"])
+    result = runner.invoke(app, ["research", "signal", "backfill", "--help"])
 
     assert result.exit_code == 0
     assert "--universe" in result.stdout

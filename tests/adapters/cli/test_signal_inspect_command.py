@@ -1,4 +1,4 @@
-"""DQ-011 — thin CLI contracts for `saham analyze signal-inspect`."""
+"""DQ-011 — thin CLI contracts for `saham analyze signal inspect`."""
 
 from __future__ import annotations
 
@@ -79,7 +79,8 @@ def test_signal_inspect_rejects_invalid_date(tmp_path):
         app,
         [
             "analyze",
-            "signal-inspect",
+            "signal",
+            "inspect",
             "BBCA",
             "--date",
             "not-a-date",
@@ -115,7 +116,8 @@ def test_signal_inspect_json_ok_is_read_only(monkeypatch, tmp_path):
         app,
         [
             "analyze",
-            "signal-inspect",
+            "signal",
+            "inspect",
             "BBCA",
             "--date",
             day.isoformat(),
@@ -155,7 +157,8 @@ def test_signal_inspect_unavailable_prints_json_then_exits_one(monkeypatch, tmp_
         app,
         [
             "analyze",
-            "signal-inspect",
+            "signal",
+            "inspect",
             "BBCA",
             "--date",
             day.isoformat(),

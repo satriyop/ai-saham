@@ -555,12 +555,12 @@ WEAK               7     -0.8%       43%      -1,200,000
 
 This tells you which market conditions the setup works best in. If WEAK regime consistently underperforms, restrict entries with `--allow-regimes SIDEWAYS,BULLISH`.
 
-### `saham analyze accum-audit` — Validate Signal Buckets
+### `saham research accumulation evaluate` — Validate Signal Buckets
 
 Use audit before turning a confirmation signal into a hard rule:
 
 ```bash
-saham analyze accum-audit --universe lq45 --setup foreign-bounce --start 2026-01-01
+saham research accumulation evaluate --universe lq45 --setup foreign-bounce --start 2026-01-01
 ```
 
 The grouped output includes `broker_quality` buckets (`smart+`, `noise+`, `smart-`, `noise-`, `mixed`, `no_detail`) with forward returns and win rate. Treat these rows as evidence for whether broker quality should stay a warning, become a downgrade, or become a future setup gate.

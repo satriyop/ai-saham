@@ -1,4 +1,4 @@
-"""DQ-011 — thin CLI contracts for `saham analyze signal-readiness`."""
+"""DQ-011 — thin CLI contracts for `saham research signal readiness`."""
 
 from __future__ import annotations
 
@@ -38,8 +38,9 @@ def test_signal_readiness_rejects_invalid_target(tmp_path):
     result = runner.invoke(
         app,
         [
-            "analyze",
-            "signal-readiness",
+            "research",
+            "signal",
+            "readiness",
             "--target",
             "not-a-valid-target",
             "--db",
@@ -60,8 +61,9 @@ def test_signal_readiness_json_empty_db_is_read_only(tmp_path):
     result = runner.invoke(
         app,
         [
-            "analyze",
-            "signal-readiness",
+            "research",
+            "signal",
+            "readiness",
             "--target",
             TARGET,
             "--format",

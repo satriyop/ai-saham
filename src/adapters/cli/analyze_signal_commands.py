@@ -1,6 +1,9 @@
 """
-CLI implementation for saham analyze signal subcommands.
-Compatibility-only re-export module.
+Compatibility re-exports for signal CLI callables.
+
+Public registration lives under:
+  saham research signal …
+  saham analyze signal inspect
 
 Layer: Adapter
 """

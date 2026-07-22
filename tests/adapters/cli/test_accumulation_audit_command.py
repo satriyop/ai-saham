@@ -12,7 +12,7 @@ runner = CliRunner()
 def test_accumulation_audit_unknown_setup_error():
     result = runner.invoke(
         app,
-        ["analyze", "accum-audit", "--setup", "unknown-setup"],
+        ["research", "accumulation", "evaluate", "--setup", "unknown-setup"],
     )
 
     assert result.exit_code != 0

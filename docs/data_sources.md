@@ -368,7 +368,7 @@ When called via standalone `saham fetch broker TICKER --provider stockbit`, the 
 | `saham screen pre-open` | **YES** — accumulation tag + Foreign VWAP | — | — | — |
 | `saham trade backtest-swing` | **CORE** (via AccumulationScreenUseCase) | **BCI** (via AccumulationScreenUseCase) | — | — |
 | `saham analyze swing-compare` | (via SwingBacktestUseCase) | (via SwingBacktestUseCase) | — | — |
-| `saham analyze accum-audit` | (via AccumulationAuditUseCase) | — | — | — |
+| `saham research accumulation evaluate` | (via AccumulationAuditUseCase) | — | — | — |
 | `saham view broker flow` | **YES** — display | — | — | — |
 | `saham view broker top` | **YES** — display top_buyers/sellers | — | — | — |
 | `saham view broker history` | — | — | **YES** — display | — |

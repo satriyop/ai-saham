@@ -85,10 +85,10 @@ read -r -d '' SAHAM_CRON << ENTRIES || true
 40 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham learn tune' >> $LOG_DIR/opening-tune.log 2>&1
 # Swing EOD — refresh LQ45 candles after EOD data should be available 18:30 WIB
 30 18 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham fetch market --universe lq45' >> $LOG_DIR/swing-fetch-market.log 2>&1
-# Swing EOD — capture LQ45 accumulation observations 19:15 WIB
+# Swing EOD — LQ45 accumulation screener (not observation capture; use research signal backfill for corpus writes) 19:15 WIB
 15 19 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham screen accum --universe lq45 --multi --format json' >> $LOG_DIR/swing-observe-lq45.log 2>&1
 # Swing EOD — idempotent SWING_10D label generation for eligible saved dates 19:45 WIB
-45 19 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham analyze signal-labels --eligible-dates --horizon SWING_10D --generate-all --format json' >> $LOG_DIR/swing-labels.log 2>&1
+45 19 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham research signal labels --eligible-dates --horizon SWING_10D --generate-all --format json' >> $LOG_DIR/swing-labels.log 2>&1
 # --- saham-cron-end ---
 ENTRIES
 
@@ -103,7 +103,7 @@ CLEANED=$(echo "$EXISTING" | awk '
     /# --- saham-cron-begin ---/ { skip=1 }
     /# --- saham-cron-end ---/   { skip=0; next }
     skip                         { next }
-    /saham (fetch|learn|trade|screen|analyze)/  { next }
+    /saham (fetch|learn|trade|screen|analyze|research)/  { next }
     /# (IEV collector|Opening.*learning|Opening learning|Swing EOD)/  { next }
     { print }
 ')

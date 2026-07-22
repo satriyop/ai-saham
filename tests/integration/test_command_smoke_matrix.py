@@ -254,7 +254,7 @@ def test_backtest_and_audit_json_contracts(temp_workspace, monkeypatch):
     audit = runner.invoke(
         app,
         [
-            "analyze", "accum-audit", "BBCA",
+            "research", "accumulation", "evaluate", "BBCA",
             "--start", "2026-06-01",
             "--end", "2026-06-20",
             "--format", "json",

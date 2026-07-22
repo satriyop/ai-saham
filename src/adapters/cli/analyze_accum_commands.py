@@ -1,8 +1,8 @@
 """
-CLI implementation for saham analyze accum-audit command.
+CLI implementation for saham research accumulation evaluate.
 
-Public command registration lives in lifecycle routers:
-  saham analyze accum-audit
+Public command registration:
+  saham research accumulation evaluate
 
 Layer: Adapter
 """
