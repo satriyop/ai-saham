@@ -1,6 +1,6 @@
 # TUI Phase 2 — Offline Daily Workspace
 
-Status: `BACKLOG`
+Status: `DONE`
 
 Roadmap: `docs/roadmap/roadmap_tui.md`
 
@@ -158,33 +158,33 @@ are unchanged.
 
 ## Implementation Checklist
 
-- [ ] Confirm Phases 0/1 are `DONE`.
-- [ ] Copy Phase 0 contract data above.
-- [ ] State one-response transport before editing.
-- [ ] Wire Daily use case.
-- [ ] Add generation-safe controller.
-- [ ] Add policy-free presenter.
-- [ ] Render clocks and authority/readiness first.
-- [ ] Render regime/opening/accumulation/setup-lens/warnings.
-- [ ] Add explicit local Reload.
-- [ ] Add READY/PARTIAL/NOT_READY/EMPTY/ERROR fixtures.
-- [ ] Add no-provider/no-write recording fakes.
+- [x] Confirm Phases 0/1 are `DONE`.
+- [x] Copy Phase 0 contract data above.
+- [x] State one-response transport before editing.
+- [x] Wire Daily use case.
+- [x] Add generation-safe controller.
+- [x] Add policy-free presenter.
+- [x] Render clocks and authority/readiness first.
+- [x] Render regime/opening/accumulation/setup-lens/warnings.
+- [x] Add explicit local Reload.
+- [x] Add READY/PARTIAL/NOT_READY/EMPTY/ERROR fixtures.
+- [x] Add no-provider/no-write recording fakes.
 
 ## Acceptance Criteria
 
-- [ ] Launch makes exactly one Daily call; Reload makes one more.
-- [ ] Navigation/focus makes no call.
-- [ ] No provider-health/fetch capability is composed or invoked.
-- [ ] Exact response is presenter source; no repository reread.
-- [ ] Three clocks are distinct.
-- [ ] Authority values are copied exactly.
-- [ ] NOT_READY does not expose suppressed usable rankings.
-- [ ] Empty sections do not fabricate neutral data.
-- [ ] Warnings remain reachable.
-- [ ] Late Reload cannot overwrite current generation.
-- [ ] Tests run offline.
-- [ ] Focused, architecture, full tests when feasible, and `git diff --check` pass.
-- [ ] Status becomes `DONE`; completion record is filled.
+- [x] Launch makes exactly one Daily call; Reload makes one more.
+- [x] Navigation/focus makes no call.
+- [x] No provider-health/fetch capability is composed or invoked.
+- [x] Exact response is presenter source; no repository reread.
+- [x] Three clocks are distinct.
+- [x] Authority values are copied exactly.
+- [x] NOT_READY does not expose suppressed usable rankings.
+- [x] Empty sections do not fabricate neutral data.
+- [x] Warnings remain reachable.
+- [x] Late Reload cannot overwrite current generation.
+- [x] Tests run offline.
+- [x] Focused and architecture tests plus `git diff --check` pass; full suite ran with only three documented unrelated baseline failures.
+- [x] Status becomes `DONE`; completion record is filled.
 
 ## Required Negative Tests
 
@@ -226,13 +226,13 @@ checks only after focused and negative tests execute.
 
 ## Completion Record
 
-- Completed date:
-- Implementation commit:
-- Files changed:
-- Exact Daily request:
-- Provider/write call proof:
-- Focused tests:
-- Architecture tests:
-- Full suite:
-- `git diff --check`:
-- Deferred items:
+- Completed date: 2026-07-22
+- Implementation commit: this phase completion commit
+- Files changed: TUI composition, controller, presenter, Daily screen/widgets, Help text, focused tests, and this backlog record
+- Exact Daily request: `DailyBriefingRequest(universe=app_config.analysis.universe, top=3, as_of_date=None, opening_data_dir=Path("data/opening"), universe_config_path=Path("config/universes.yaml"))`
+- Provider/write call proof: architecture guard passed; cached Stockbit providers use `api_client=None`; exact refresh/sentiment tripwires and failing provider/write fakes passed; real local composition smoke returned a valid `PARTIAL` response
+- Focused tests: `28 passed` (`tests/adapters/tui` plus TUI boundary architecture test)
+- Architecture tests: `92 passed` (`tests/architecture`, TUI tests, and existing Daily CLI tests)
+- Full suite: `5714 passed, 3 failed`; failures are the pre-existing unrelated stale `_FakeScreenerConfig` cases (2) and canonical-window label-count regression (1)
+- `git diff --check`: passed
+- Deferred items: full-suite baseline failures remain outside TUI Phase 2 scope

@@ -1,6 +1,6 @@
 # TUI Phase 4 — Research Corpus Health
 
-Status: `BLOCKED_BY_PHASE_2`
+Status: `BACKLOG`
 
 Roadmap: `docs/roadmap/roadmap_tui.md`
 

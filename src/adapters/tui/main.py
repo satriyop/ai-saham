@@ -3,7 +3,9 @@
 from textual.app import App
 from textual.binding import Binding
 
-from src.adapters.tui.screens.daily import DailyShellScreen
+from src.adapters.tui.controllers.daily_controller import DailyController
+from src.adapters.tui.presenters.daily_presenter import DailyPresenter
+from src.adapters.tui.screens.daily_screen import DailyScreen
 from src.adapters.tui.screens.help import HelpScreen
 
 
@@ -12,10 +14,7 @@ class SahamTuiApp(App[None]):
 
     TITLE = "AI Saham"
     SUB_TITLE = "Local research workspace"
-    SCREENS = {
-        "daily": DailyShellScreen,
-        "help": HelpScreen,
-    }
+    SCREENS = {"help": HelpScreen}
     BINDINGS = [Binding("q", "quit", "Quit")]
     CSS = """
     Screen {
@@ -42,10 +41,28 @@ class SahamTuiApp(App[None]):
     .help-line {
         height: 1;
     }
+
+    #daily-content {
+        height: 1fr;
+    }
+
+    .daily-section {
+        height: auto;
+        margin-bottom: 1;
+    }
     """
 
+    def __init__(
+        self,
+        daily_controller: DailyController,
+        daily_presenter: DailyPresenter,
+    ) -> None:
+        super().__init__()
+        self._daily_controller = daily_controller
+        self._daily_presenter = daily_presenter
+
     def on_mount(self) -> None:
-        self.push_screen("daily")
+        self.push_screen(DailyScreen(self._daily_controller, self._daily_presenter))
 
     def action_show_help(self) -> None:
         if not isinstance(self.screen, HelpScreen):

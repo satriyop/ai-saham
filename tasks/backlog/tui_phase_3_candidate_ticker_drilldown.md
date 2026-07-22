@@ -1,6 +1,6 @@
 # TUI Phase 3 — Candidate Browser And Ticker Drilldown
 
-Status: `BLOCKED_BY_PHASE_2`
+Status: `BACKLOG`
 
 Roadmap: `docs/roadmap/roadmap_tui.md`
 

@@ -19,9 +19,10 @@ class HelpScreen(Screen[None]):
             yield Static("Help", id="help-title")
             yield Static("? / h   Open this help", classes="help-line")
             yield Static("Esc / d Return to Daily", classes="help-line")
+            yield Static("r       Reload by local recomputation", classes="help-line")
             yield Static("q       Exit", classes="help-line")
             yield Static(
-                "Phase 1 is navigation-only and performs no data access.",
+                "Reload reads local cached inputs. It never fetches provider data.",
                 id="help-scope",
             )
         yield Footer()
