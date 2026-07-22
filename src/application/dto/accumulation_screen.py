@@ -308,6 +308,12 @@ class AccumulationCandidate:
             "bandar_detector": self.bandar_detector.to_dict() if self.bandar_detector else None,
             "fundamentals": self.fundamentals.to_dict() if self.fundamentals else None,
             "ticker_notation": self.ticker_notation.to_dict() if self.ticker_notation else None,
+            "sector_breadth_pct": (
+                round(self.sector_breadth_pct, 4)
+                if self.sector_breadth_pct is not None
+                else None
+            ),
+            "sector_breadth_bonus": round(float(self.sector_breadth_bonus), 4),
             "latest_candle_date": self.latest_candle_date.isoformat()
             if self.latest_candle_date
             else None,

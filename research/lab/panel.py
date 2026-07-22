@@ -46,6 +46,8 @@ class PanelRow:
     score_without_rsi: float | None = None
     score_without_flow: float | None = None
     score_without_inst: float | None = None
+    sector_breadth_pct: float | None = None
+    sector_breadth_bonus: float | None = None
 
 
 def resolve_db_path(db_path: Path | None = None) -> Path:
@@ -137,6 +139,8 @@ def load_swing10d_panel(db_path: Path | None = None) -> list[PanelRow]:
                 score_without_rsi=_without(total, points.get("rsi")),
                 score_without_flow=_without(total, points.get("flow")),
                 score_without_inst=_without(total, points.get("inst")),
+                sector_breadth_pct=_as_float(cand.get("sector_breadth_pct")),
+                sector_breadth_bonus=_as_float(cand.get("sector_breadth_bonus")),
             )
         )
     return panel

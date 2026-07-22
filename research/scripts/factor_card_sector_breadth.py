@@ -3,11 +3,10 @@
 
 Research only — authority NONE.
 
-The live Accum feeder applies `sector_breadth_bonus_pts` when enough peers in
-the same `idx_groups` conglomerate have `net_buy_ratio > 0` (see
-`AccumulationSectorBreadthApplier`). Those fields are **not** persisted in
-`candidate.to_dict()`, so this card reconstructs eligibility from the canonical
-panel + `config/idx_groups.yaml`.
+Prefer persisted `sector_breadth_pct` / `sector_breadth_bonus` from candidate
+payloads (added to `AccumulationCandidate.to_dict()`). Fall back to
+reconstruction from same-day panel peers + `config/idx_groups.yaml` for older
+rows that lack those keys.
 
 Also reports fingerprint `sc_sector_breadth` (sector-context peer return breadth)
 as a related DIAG signal — different definition from the Accum bonus.
@@ -121,6 +120,58 @@ def _reconstruct_bonus(
     return out
 
 
+def _resolve_eligibility(
+    panel: list[PanelRow],
+    ticker_to_group: dict[str, str],
+    *,
+    threshold: float,
+    min_tickers: int,
+    bonus_pts: float,
+) -> tuple[
+    dict[tuple[str, str], tuple[bool, float | None, str | None, str]],
+    int,
+    int,
+]:
+    """Prefer persisted bonus/pct; fall back to reconstruction.
+
+    Returns:
+      map (ticker, date) -> (eligible, breadth_pct, group_id, source)
+      n_persisted, n_reconstructed
+    """
+    recon = _reconstruct_bonus(
+        panel, ticker_to_group, threshold=threshold, min_tickers=min_tickers
+    )
+    out: dict[tuple[str, str], tuple[bool, float | None, str | None, str]] = {}
+    n_persisted = 0
+    n_reconstructed = 0
+    for row in panel:
+        key = (row.ticker, row.snapshot_date)
+        group = ticker_to_group.get(row.ticker.upper())
+        bonus = row.sector_breadth_bonus
+        pct = row.sector_breadth_pct
+        # Persisted when key present in panel load (bonus may be 0.0; pct may be None).
+        # Prefer when either field was loaded from payload (bonus not None after load,
+        # or pct not None). Panel defaults both to None when absent.
+        if bonus is not None or pct is not None:
+            applied = float(bonus or 0.0)
+            eligible = applied > 0.0
+            # If only pct persisted with bonus 0, still treat as persisted evidence.
+            if bonus is None and pct is not None:
+                eligible = (
+                    group is not None
+                    and pct >= threshold
+                    # cannot know peer count from pct alone; keep eligibility on pct only
+                    # when threshold met — reconstruction still used for group/min peers
+                )
+            out[key] = (eligible, pct, group, "persisted")
+            n_persisted += 1
+        else:
+            eligible, breadth, group_id = recon[key]
+            out[key] = (eligible, breadth, group_id, "reconstructed")
+            n_reconstructed += 1
+    return out, n_persisted, n_reconstructed
+
+
 def _load_sc_breadth(db_path: Path) -> dict[tuple[str, str], float | None]:
     """Optional DIAG: fingerprint sc_sector_breadth by (ticker, date)."""
     import json
@@ -159,27 +210,31 @@ def build_report(
 ) -> str:
     dates = sorted({r.snapshot_date for r in panel})
     date_span = f"{dates[0]} → {dates[-1]}" if dates else "n/a"
-    recon = _reconstruct_bonus(
-        panel, ticker_to_group, threshold=threshold, min_tickers=min_tickers
+    resolved, n_persisted, n_reconstructed = _resolve_eligibility(
+        panel,
+        ticker_to_group,
+        threshold=threshold,
+        min_tickers=min_tickers,
+        bonus_pts=bonus_pts,
     )
 
-    eligible = [r for r in panel if recon[(r.ticker, r.snapshot_date)][0]]
-    ineligible = [r for r in panel if not recon[(r.ticker, r.snapshot_date)][0]]
+    eligible = [r for r in panel if resolved[(r.ticker, r.snapshot_date)][0]]
+    ineligible = [r for r in panel if not resolved[(r.ticker, r.snapshot_date)][0]]
     mapped = [
         r
         for r in panel
-        if recon[(r.ticker, r.snapshot_date)][2] is not None
+        if resolved[(r.ticker, r.snapshot_date)][2] is not None
     ]
     unmapped = [
         r
         for r in panel
-        if recon[(r.ticker, r.snapshot_date)][2] is None
+        if resolved[(r.ticker, r.snapshot_date)][2] is None
     ]
 
     breadth_vals = [
-        recon[(r.ticker, r.snapshot_date)][1]
+        resolved[(r.ticker, r.snapshot_date)][1]
         for r in mapped
-        if recon[(r.ticker, r.snapshot_date)][1] is not None
+        if resolved[(r.ticker, r.snapshot_date)][1] is not None
     ]
 
     lines: list[str] = [
@@ -191,15 +246,16 @@ def build_report(
         f"- Database: `{db_path}`",
         f"- Panel: canonical obs ⋈ SWING_10D labels ({len(panel)} rows; {date_span})",
         f"- Group map: `config/idx_groups.yaml` ({len(ticker_to_group)} tickers)",
-        f"- Reconstruction rule: peers on same `snapshot_date` in same conglomerate "
-        f"group; bonus if n≥{min_tickers} and breadth≥{threshold:g} "
-        f"(config defaults; bonus_pts={bonus_pts:g})",
+        f"- Eligibility: prefer persisted `sector_breadth_*`; reconstruct peers on "
+        f"same `snapshot_date` when absent (n≥{min_tickers}, breadth≥{threshold:g}; "
+        f"bonus_pts={bonus_pts:g})",
+        f"- Source mix: persisted={n_persisted}, reconstructed={n_reconstructed}",
         "",
         "## Data gaps (important)",
         "",
-        "- `AccumulationCandidate.sector_breadth_bonus` / `sector_breadth_pct` are "
-        "**not written** by `candidate.to_dict()` — cannot read applied bonus from "
-        "payloads.",
+        "- `AccumulationCandidate.to_dict()` now writes `sector_breadth_pct` / "
+        "`sector_breadth_bonus`. **Existing corpus rows** still lack keys until "
+        "re-screen / backfill — card falls back to reconstruction for those.",
         "- Reconstruction uses **same calendar day’s panel peers**, not the exact "
         "live screen result set (approximation).",
         "- `idx_groups` is conglomerate membership, not industry sector "
@@ -209,9 +265,9 @@ def build_report(
         "",
         "## Hypothesis",
         "",
-        "Tickers reconstructed as bonus-eligible (group peers mostly net-buying) "
-        "should show better SWING_10D outcomes if the Accum breadth bonus is "
-        "information, not noise/dilution.",
+        "Tickers with applied / reconstructed bonus eligibility (group peers mostly "
+        "net-buying) should show better SWING_10D outcomes if the Accum breadth bonus "
+        "is information, not noise/dilution.",
         "",
         "## Coverage",
         "",
@@ -219,8 +275,10 @@ def build_report(
         "|--------|---|",
         f"| Mapped to idx_groups | {len(mapped)} |",
         f"| Unmapped (never bonus-eligible) | {len(unmapped)} |",
-        f"| Reconstructed bonus-eligible | {len(eligible)} |",
+        f"| Bonus-eligible | {len(eligible)} |",
         f"| Not eligible | {len(ineligible)} |",
+        f"| Eligibility from persisted fields | {n_persisted} |",
+        f"| Eligibility reconstructed | {n_reconstructed} |",
         (
             f"| Breadth among mapped (median) | "
             f"{median(breadth_vals):.3f} |"
@@ -228,7 +286,7 @@ def build_report(
             else "| Breadth among mapped (median) | — |"
         ),
         "",
-        "## Reconstructed Accum bonus eligibility → outcomes",
+        "## Bonus eligibility → outcomes",
         "",
         "| Cohort | n | Hit % | Avg close ret % | PF |",
         "|--------|---|-------|-----------------|----|",
@@ -243,16 +301,16 @@ def build_report(
     # Breadth terciles among mapped
     lines.extend(
         [
-            "## Reconstructed breadth terciles (mapped only)",
+            "## Breadth terciles (mapped only)",
             "",
             "| Tercile | n | Hit % | Avg % | PF |",
             "|---------|---|-------|-------|----|",
         ]
     )
     mapped_with_b = [
-        (r, recon[(r.ticker, r.snapshot_date)][1])
+        (r, resolved[(r.ticker, r.snapshot_date)][1])
         for r in mapped
-        if recon[(r.ticker, r.snapshot_date)][1] is not None
+        if resolved[(r.ticker, r.snapshot_date)][1] is not None
     ]
     mapped_with_b.sort(key=lambda x: x[1] or 0.0)
     if len(mapped_with_b) >= 9:
@@ -293,20 +351,26 @@ def build_report(
             for r in eligible:
                 if r.foreign_flow_score is None:
                     continue
-                adj.append((r, r.foreign_flow_score - bonus_pts))
+                # Prefer exact persisted bonus when available
+                pts = (
+                    float(r.sector_breadth_bonus)
+                    if r.sector_breadth_bonus is not None and r.sector_breadth_bonus > 0
+                    else bonus_pts
+                )
+                adj.append((r, r.foreign_flow_score - pts))
             med_adj = median([s for _, s in adj])
             high_adj = [r for r, s in adj if s >= med_adj]
             low_adj = [r for r, s in adj if s < med_adj]
             lines.append(
-                f"| Eligible score−{bonus_pts:g} high | {_fmt(_stats(high_adj))} |"
+                f"| Eligible score−bonus high | {_fmt(_stats(high_adj))} |"
             )
             lines.append(
-                f"| Eligible score−{bonus_pts:g} low | {_fmt(_stats(low_adj))} |"
+                f"| Eligible score−bonus low | {_fmt(_stats(low_adj))} |"
             )
         else:
             lines.append("| (too few eligible) | — | — | — | — |")
     else:
-        lines.append("| (no reconstructed eligible rows) | — | — | — | — |")
+        lines.append("| (no eligible rows) | — | — | — | — |")
 
     # DIAG sc_sector_breadth
     sc_map = _load_sc_breadth(db_path)
@@ -341,8 +405,8 @@ def build_report(
             "",
             "## Interpretation guardrails",
             "",
-            "- Treat reconstructed Accum bonus results as **provisional** until "
-            "`sector_breadth_*` is persisted on observations.",
+            "- Prefer persisted `sector_breadth_*` after re-screen; treat "
+            "reconstructed results as provisional.",
             "- High unmapped share means most names never receive the live bonus.",
             "- Do not conflate conglomerate-group breadth with industry sector breadth.",
             "- Positive eligible−ineligible gap supports keeping the bonus; "
@@ -351,10 +415,9 @@ def build_report(
             "## Proposed config / engineering action",
             "",
             "**None automatic.** Candidate follow-ups (human review):",
-            "- Persist `sector_breadth_pct` / `sector_breadth_bonus` in "
-            "`AccumulationCandidate.to_dict()` so A3 can use exact applied bonus",
+            "- Re-screen / backfill so new observations carry `sector_breadth_*`",
             "- Optionally disable or lower `accumulation_screener.sector_breadth.bonus_pts` "
-            "if reconstructed eligible cohort does not outperform",
+            "if eligible cohort does not outperform",
             "- Next Package A item: **A4 broker list quality**",
             "",
         ]

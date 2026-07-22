@@ -345,7 +345,7 @@ Organize work as **proving packages**, not as one mega-model.
 |----|---------------|------------|----------------|-------------|
 | A1 | consistency / streak / flow% / VWAP / BCI / RSI headroom | Marginal contribution to SWING_10D; weight necessity | `signal_forward_labels` | fingerprint + candidate payload + broker recompute |
 | A2 | BCI direction / absorption | CLUSTER conditional on aggregate flow sign | same | S6 methodology, canonical join |
-| A3 | Sector breadth bonus | Does bonus improve or dilute? | same | payload |
+| A3 | Sector breadth bonus | Does bonus improve or dilute? | same | payload (`sector_breadth_pct` / `sector_breadth_bonus` now in `to_dict()`; re-screen for exact values) |
 | A4 | Broker list quality | Tier1/smart/noise membership predictive? | same + broker_daily_flow | recompute |
 
 **ML tools:** threshold sweeps, constrained linear models, ablation of components.
