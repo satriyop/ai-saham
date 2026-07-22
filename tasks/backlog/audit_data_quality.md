@@ -1005,20 +1005,25 @@ Implement this option only.
 
 ### DQ-007 — Audit current SignalEngine inspection accuracy
 
-**State:** Blocked — waits for `LIVE-CONTRACT-GATE`; the gate includes
-`RETIRE-LEGACY-SIX-FACTOR-BASELINE`.
+**State:** Done — lean D7-1 + D7-2 (2026-07-22). Slice plan:
+`tasks/backlog/dq_007_lean_implementation_plan.md`. Parked items (CLI-002
+hierarchy, coverage-provider rewrite, swing-setup mode UX) remain deferred.
 
 **Priority:** P1  
-**Depends on:** DQ-001, DQ-002  
+**Depends on:** DQ-001, DQ-002 (`LIVE-CONTRACT-GATE` prerequisite satisfied)
 **Outcome:** Signal inspection explains the exact canonical engine calculation for a defensible effective session.
 
 **Accurate pointers:**
 
-- CLI: canonical routing is owned by CLI-002 after this task passes
+- CLI: provisional thin command owned by DQ-007 D7-2; permanent routing owned
+  by CLI-002 after this task passes
 - Use case: new canonical read-only inspection use case owned by this task
 - Engine factory: `src/infrastructure/composition/signal_engine_factory.py`
 - Config loader: `src/infrastructure/config/signal_engine_config_loader.py`
 - Coverage provider: `src/infrastructure/persistence/sqlite_signal_coverage_provider.py`
+  (parked for lean slice — enrichment-cache taxonomy; not required to prove
+  scorer identity)
+- Lean plan: `tasks/backlog/dq_007_lean_implementation_plan.md`
 
 **Audit requirements:**
 
@@ -1032,8 +1037,12 @@ Implement this option only.
   readiness, or directional conviction.
 - Verify there is no executable/displayed legacy six-factor score.
 - Prove `--date T` builds a point-in-time context rather than joining latest enrichment.
-- Validate factor coverage counts against SQL and distinguish rows from usable rows and unique tickers.
-- Display source date, value, unit, freshness, authority, and unavailable reason for every factor.
+- Validate factor coverage counts against SQL and distinguish rows from usable
+  rows and unique tickers. *Lean amendment:* park enrichment `--coverage`
+  polish; not required to close scorer-identity criteria.
+- Display source date, value, unit, freshness, authority, and unavailable
+  reason for every **canonical group / diagnostic slot** (setup/flow +
+  diagnostics) — not a resurrected six enrichment-factor panel.
 - Expose effective session, exact provenance, source availability,
   `signal_authority_coverage`, typed setup readiness, decision constraints,
   diagnostic groups, and final canonical assessment.
@@ -1043,21 +1052,85 @@ Implement this option only.
 
 The executable legacy scorer is removed before this audit starts. Do not
 preserve or reconstruct a dual score for compatibility. Rename `signal-audit`
-semantics to inspection only after canonical correctness is proven.
+semantics to inspection only after canonical correctness is proven
+(permanent hierarchy: CLI-002).
 
 **Acceptance criteria:**
 
-- [ ] Golden factor calculations match engine output within declared decimal tolerances.
-- [ ] Historical dates cannot consume future/current-only values.
-- [ ] Missing data cannot increase authority or readiness.
-- [ ] Table, JSON, and DTO use identical score/coverage terminology.
-- [ ] Inspection consumes the same canonical input/scorer as screen and swing and computes no parallel composite.
-- [ ] Inspection is read-only and exposes provenance, availability, authority, readiness, constraints, diagnostics, and final assessment.
-- [ ] No legacy six-factor score or active factor-weight surface remains in inspection output.
+- [x] Golden group/scorer calculations match engine output within declared
+      decimal tolerances.
+  satisfied-notes: Inspection reuses the accumulation screen path
+  (`score_canonical_flow` → `evaluate_with_context`); DTO exposes the same
+  `AssessSignalResponse` fields (`test_inspect_returns_shared_path_assessment_fields`).
+- [x] Historical dates cannot consume future/current-only values.
+  satisfied-notes: Session resolved at `as_of @ MARKET_CLOSE WIB`; screen
+  request uses `effective_session.analysis_as_of`
+  (`test_inspect_resolves_session_at_market_close_and_passes_pit_as_of`).
+- [x] Missing data cannot increase authority or readiness.
+  satisfied-notes: Missing local sources → UNAVAILABLE (no fabricated score);
+  zero coverage remains explicit in payload
+  (`test_inspect_maps_missing_sources_to_unavailable`,
+  `test_missing_data_cannot_increase_authority_coverage_in_payload_identity`).
+- [x] Table, JSON, and DTO use identical score/coverage terminology.
+  satisfied-notes: `to_dict()` and CLI table use `score` /
+  `signal_authority_coverage` / `setup_readiness` / `decision_constraints`.
+- [x] Inspection consumes the same canonical input/scorer as screen and swing
+      and computes no parallel composite.
+  satisfied-notes: Assessor `score_canonical_flow` shared by screen `assess()`;
+  inspect runs `AccumulationScreenUseCase` (same engine). Contract
+  `accumulation-flow` documents setup=None boundary.
+- [x] Inspection is read-only and exposes provenance, availability, authority,
+      readiness, constraints, diagnostics, and final assessment.
+  satisfied-notes: Notes declare read-only; response includes session,
+  assessment, readiness, constraints, flow/setup availability; no write ports.
+- [x] No legacy six-factor score or active factor-weight surface remains in
+      inspection output.
+  satisfied-notes: `to_dict()` asserts no `factors` key; documents
+  `legacy_conditioned_score` as regime conditioning only.
+
+#### Lean inspection amendment (2026-07-22)
+
+**Decision:** Implement DQ-007 as honest live engine inspection now.
+Implement this option only.
+
+**What is required now:**
+
+- One read-only use case over the existing canonical spine
+  (`CanonicalSignalEvidenceInput` → `SignalEngine.evaluate_with_context`).
+- First contract mode: `accumulation-flow` (same boundary as screen assessor;
+  setup absent by design). Optional `swing-setup` only if cheap after D7-1.
+- Effective-session / `--date T` point-in-time honesty (fail closed or mark
+  unavailable — no silent latest enrichment join).
+- Golden shared-path tests; missing-data cannot inflate authority/readiness.
+- No six-factor / `factors.*` in output; no parallel composite.
+- Thin provisional CLI (D7-2); terminology identity across DTO/JSON/table.
+
+**Do Not Interpret This As:**
+
+- Do not resurrect `signal-audit` / `AssessSignalUseCase` / six-factor weights.
+- Do not invent a third evidence-assembly path for “inspect only.”
+- Do not treat `signal-replay --verify` or `swing --explain` as the DQ-007
+  deliverable.
+- Do not build CLI-002 hierarchy / router work here.
+- Do not rewrite `SqliteSignalCoverageProvider` taxonomy or ship `--coverage`
+  as a required close criterion.
+- Do not change live screen/swing scores, weights, or TradeSetup behavior.
+- Do not write observations, labels, tuning, or promotion artifacts.
+
+**Deferral triggers:**
+
+| Trigger | Wake parked work |
+|---|---|
+| Permanent `analyze signal inspect` hierarchy | CLI-002 |
+| Operator needs enrichment cache inventory | `--coverage` / coverage-provider rewrite |
+| Full swing-setup inspect UX with TradeSetup | Named follow-on after D7-1 |
+| Accumulation historical eval parity | DQ-008 |
 
 ### DQ-008 — Audit accumulation historical evaluation
 
-**State:** Blocked — waits for DQ-003, DQ-004, and DQ-007.
+**State:** Ready — waits only on lean implementation start; DQ-003, DQ-004
+raw-label lane, and DQ-007 are complete. Net-executable labels remain parked
+behind `IDX-EXECUTION-LABELS`.
 
 **Priority:** P1  
 **Depends on:** DQ-001 through DQ-004, DQ-007  

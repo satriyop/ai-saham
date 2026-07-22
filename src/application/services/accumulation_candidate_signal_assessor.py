@@ -61,6 +61,19 @@ class CandidateSignalAssessmentResult:
     passes: bool
 
 
+@dataclass
+class CanonicalFlowScoreResult:
+    """Shared accumulation-flow scoring outcome (screen + inspect).
+
+    Classification / pass-reject is intentionally absent — callers that need
+    screen policy apply it after this result.
+    """
+
+    candidate: accumulation_dto.AccumulationCandidate
+    flow_evidence: FlowConfirmationEvidence | None
+    canonical_evidence: CanonicalSignalEvidenceInput | None
+
+
 class AccumulationCandidateSignalAssessor:
     """Score foreign flow, assess signal, build flow evidence, detect setup
     phase, and classify.
@@ -85,18 +98,21 @@ class AccumulationCandidateSignalAssessor:
             foreign_flow_score_uc or ScoreForeignFlowUseCase()
         )
 
-    def assess(
+    def score_canonical_flow(
         self,
         candidate: accumulation_dto.AccumulationCandidate,
         *,
-        request: accumulation_dto.AccumulationScreenRequest,
         as_of_date: date,
         consumed_broker_summaries: tuple,
         consumed_broker_daily_flows: tuple,
         effective_session: "EffectiveMarketSession",
         source_availability_use_case: "AssessSourceAvailabilityUseCase | None",
-    ) -> CandidateSignalAssessmentResult:
-        """Run signal assessment on the candidate and return the outcome."""
+    ) -> CanonicalFlowScoreResult:
+        """Build flow-only canonical evidence and score via SignalEngine.
+
+        Shared by screen classification and DQ-007 inspection. Does not apply
+        pass/reject thresholds.
+        """
         # Phase 2.1: foreign-flow score assignment
         evidence_resp = self._foreign_flow_score_uc.execute(
             ScoreForeignFlowRequest(
@@ -203,6 +219,33 @@ class AccumulationCandidateSignalAssessor:
             setup_family=setup_family,
             setup_phase=candidate.setup_phase,
         )
+        return CanonicalFlowScoreResult(
+            candidate=candidate,
+            flow_evidence=flow_ev,
+            canonical_evidence=canonical_evidence,
+        )
+
+    def assess(
+        self,
+        candidate: accumulation_dto.AccumulationCandidate,
+        *,
+        request: accumulation_dto.AccumulationScreenRequest,
+        as_of_date: date,
+        consumed_broker_summaries: tuple,
+        consumed_broker_daily_flows: tuple,
+        effective_session: "EffectiveMarketSession",
+        source_availability_use_case: "AssessSourceAvailabilityUseCase | None",
+    ) -> CandidateSignalAssessmentResult:
+        """Run signal assessment on the candidate and return the outcome."""
+        scored = self.score_canonical_flow(
+            candidate,
+            as_of_date=as_of_date,
+            consumed_broker_summaries=consumed_broker_summaries,
+            consumed_broker_daily_flows=consumed_broker_daily_flows,
+            effective_session=effective_session,
+            source_availability_use_case=source_availability_use_case,
+        )
+        flow_ev = scored.flow_evidence
 
         # Classification: first-match-wins (preserved order)
         if (

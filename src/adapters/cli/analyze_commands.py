@@ -24,6 +24,7 @@ from src.adapters.cli.analyze_sentiment_commands import sentiment_audit as _sent
 from src.adapters.cli.analyze_signal_commands import (
     signal_backfill_observations as _signal_backfill_observations_fn,
 )
+from src.adapters.cli.analyze_signal_commands import signal_inspect as _signal_inspect_fn
 from src.adapters.cli.analyze_signal_commands import signal_labels as _signal_labels_fn
 from src.adapters.cli.analyze_signal_commands import signal_readiness as _signal_readiness_fn
 from src.adapters.cli.analyze_signal_commands import signal_replay as _signal_replay_fn
@@ -53,3 +54,4 @@ analyze_app.command("signal-backfill-observations")(_signal_backfill_observation
 analyze_app.command("signal-labels")(_signal_labels_fn)
 analyze_app.command("signal-readiness")(_signal_readiness_fn)
 analyze_app.command("signal-replay")(_signal_replay_fn)
+analyze_app.command("signal-inspect")(_signal_inspect_fn)
