@@ -14,6 +14,7 @@ from src.application.use_case.generate_signal_forward_labels_use_case import (
 )
 from src.domain.entities.candle import Candle
 from src.domain.ports.candidate_observations_repository import CandidateObservation
+from src.domain.value_objects.signal_artifact_identity import SemanticCompatibilityId
 from src.domain.value_objects.signal_artifact_schema import (
     CANDIDATE_OBSERVATION_SCHEMA_VERSION,
 )
@@ -21,6 +22,11 @@ from src.domain.value_objects.signal_forward_label import (
     SignalForwardOutcome,
     SignalLabelHorizon,
 )
+from src.domain.value_objects.signal_semantic_contract import (
+    ACCUMULATION_DISCOVERY_CONTRACT,
+)
+
+_LEAN_SEMANTIC_COMPATIBILITY_ID = SemanticCompatibilityId("sha256:" + "a" * 64)
 
 
 class FakeCandidateObservationsRepository:
@@ -1033,6 +1039,8 @@ def test_real_producer_to_label_repository_round_trip_emits_only_sector_context(
                 decision_at=datetime(2026, 7, 1, 16, 0, 0),
                 latest_completed_session=day,
                 analysis_as_of=day,
+                observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
+                semantic_compatibility_id=_LEAN_SEMANTIC_COMPATIBILITY_ID,
             )
         ]
     )
@@ -1084,6 +1092,10 @@ def _observation(
     is_eod_pending: bool | None = None,
     resolution_source: str | None = None,
     resolution_notes: tuple[str, ...] = (),
+    observation_contract: str | None = ACCUMULATION_DISCOVERY_CONTRACT,
+    semantic_compatibility_id: SemanticCompatibilityId | None = (
+        _LEAN_SEMANTIC_COMPATIBILITY_ID
+    ),
 ) -> CandidateObservation:
     # When omitted, default session provenance to signal_date so the
     # observation satisfies the canonical swing effective-session contract.
@@ -1119,6 +1131,8 @@ def _observation(
         is_eod_pending=is_eod_pending,
         resolution_source=resolution_source,
         resolution_notes=resolution_notes,
+        observation_contract=observation_contract,
+        semantic_compatibility_id=semantic_compatibility_id,
     )
 
 
@@ -1186,6 +1200,8 @@ def test_single_path_canonical_observation_generates_labels():
         config_hash="valid_hash",
         latest_completed_session=day,
         analysis_as_of=day,
+        observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
+        semantic_compatibility_id=_LEAN_SEMANTIC_COMPATIBILITY_ID,
     )
     repo = FakeCandidateObservationsRepository(observation=obs)
     candles = [
@@ -1297,6 +1313,8 @@ def test_single_path_current_schema_with_removed_market_context_is_invalid_contr
             },
         },
         config_hash="valid_hash",
+        observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
+        semantic_compatibility_id=_LEAN_SEMANTIC_COMPATIBILITY_ID,
     )
     repo = FakeCandidateObservationsRepository(observation=obs)
     market = FakeMarketDataRepository([])
@@ -1474,6 +1492,8 @@ def test_batch_path_defense_in_depth():
         config_hash="valid_hash",
         latest_completed_session=day,
         analysis_as_of=day,
+        observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
+        semantic_compatibility_id=_LEAN_SEMANTIC_COMPATIBILITY_ID,
     )
     invalid_obs = CandidateObservation(
         ticker="BUMI",
@@ -1533,6 +1553,8 @@ def test_eligible_date_path_defense_in_depth():
         config_hash="valid_hash",
         latest_completed_session=day,
         analysis_as_of=day,
+        observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
+        semantic_compatibility_id=_LEAN_SEMANTIC_COMPATIBILITY_ID,
     )
     invalid_obs = CandidateObservation(
         ticker="BUMI",
@@ -1603,9 +1625,10 @@ def test_direct_builder_guard():
 
 def test_predicate_tests():
     # Directly test _is_canonical_observation():
-    # schema 3 + non-empty string hash + provenance -> True
-    # schema 3 + empty hash                        -> False
-    # schema 2 + non-empty hash                     -> False
+    # schema + hash + provenance + lean id -> True
+    # empty hash                           -> False
+    # schema 2                             -> False
+    # null semantic_compatibility_id       -> False
     from src.application.use_case.generate_signal_forward_labels_use_case import (
         _is_canonical_observation,
     )
@@ -1619,6 +1642,8 @@ def test_predicate_tests():
         config_hash="valid_hash",
         latest_completed_session=day,
         analysis_as_of=day,
+        observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
+        semantic_compatibility_id=_LEAN_SEMANTIC_COMPATIBILITY_ID,
     )
     obs_empty = CandidateObservation(
         ticker="BBCA",
@@ -1634,10 +1659,61 @@ def test_predicate_tests():
         payload={"schema_version": 2, "candidate": {"current_price": 100}},
         config_hash="valid_hash",
     )
+    obs_missing_lean = CandidateObservation(
+        ticker="BBCA",
+        snapshot_date=day,
+        captured_at=datetime(2026, 7, 1, 16, 0),
+        payload={"schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION, "candidate": {"current_price": 100}},
+        config_hash="valid_hash",
+        latest_completed_session=day,
+        analysis_as_of=day,
+        observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
+        semantic_compatibility_id=None,
+    )
 
     assert _is_canonical_observation(obs_ok) is True
     assert _is_canonical_observation(obs_empty) is False
     assert _is_canonical_observation(obs_schema2) is False
+    assert _is_canonical_observation(obs_missing_lean) is False
+
+
+def test_single_path_null_semantic_compatibility_id_rejected():
+    """DQ-010 forward lock: schema+hash without lean id must not mint labels."""
+    day = date(2026, 7, 1)
+    obs = CandidateObservation(
+        ticker="BBCA",
+        snapshot_date=day,
+        captured_at=datetime(2026, 7, 1, 16, 0),
+        payload={
+            "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+            "candidate": {"current_price": 100},
+        },
+        config_hash="valid_hash",
+        latest_completed_session=day,
+        analysis_as_of=day,
+        observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
+        semantic_compatibility_id=None,
+    )
+    repo = FakeCandidateObservationsRepository(observation=obs)
+    market = FakeMarketDataRepository([])
+    labels_repo = SpySignalForwardLabelsRepository()
+    use_case = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=repo,
+        market_data_repository=market,
+        signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=_gate_open_calendar(),
+    )
+
+    response = use_case.execute(
+        GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=day)
+    )
+    assert response.skip_reason is (
+        SignalLabelGenerationSkipReason.NON_CANONICAL_OBSERVATION_IDENTITY
+    )
+    assert len(response.labels) == 0
+    assert response.source_schema_version == CANDIDATE_OBSERVATION_SCHEMA_VERSION
+    assert len(market.calls) == 0
+    assert labels_repo.save_many_call_count == 0
 
 
 # ── ARTIFACT-IDENTITY Slice 4: labels produced by the use case carry no identity ──

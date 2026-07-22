@@ -294,7 +294,8 @@ class GenerateSignalForwardLabelsUseCase:
         if not _is_canonical_observation(observation):
             raise ValueError(
                 "_build_label requires a canonical candidate observation with "
-                f"schema_version={CANDIDATE_OBSERVATION_SCHEMA_VERSION} and non-empty config_hash"
+                f"schema_version={CANDIDATE_OBSERVATION_SCHEMA_VERSION}, "
+                "non-empty config_hash, and non-null semantic_compatibility_id"
             )
 
         payload = observation.payload
@@ -473,6 +474,13 @@ def _canonical_observation_skip_reason(
         return SignalLabelGenerationSkipReason.INCOMPATIBLE_OBSERVATION_SCHEMA
 
     if not isinstance(observation.config_hash, str) or observation.config_hash == "":
+        return SignalLabelGenerationSkipReason.NON_CANONICAL_OBSERVATION_IDENTITY
+
+    # DQ-010 forward lock: labels must not be written for rows that somehow
+    # reached canonical storage without the lean observation identity. Readiness
+    # already excludes null semantic_compatibility_id; fail closed at write time
+    # so a repo bypass cannot mint authoritative-adjacent labels.
+    if observation.semantic_compatibility_id is None:
         return SignalLabelGenerationSkipReason.NON_CANONICAL_OBSERVATION_IDENTITY
 
     # Do not assume the repository implementation validated payload contents.

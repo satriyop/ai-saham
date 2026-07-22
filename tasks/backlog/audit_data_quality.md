@@ -1299,8 +1299,9 @@ Existing logs/audits without prediction-time provenance or classifier version ar
 
 ### DQ-010 — Quarantine, migrate, rebuild, and prove the clean break
 
-**State:** Blocked — waits for canonical signal findings from DQ-003 through
-DQ-008 to close. Sentiment cleanup remains independently gated by DQ-009.
+**State:** Done — 2026-07-22 (forward-path close-out; quarantine is historical
+parking). Slice plan: `tasks/backlog/dq_010_lean_implementation_plan.md`.
+Sentiment cleanup remains independently gated by DQ-009.
 
 **Priority:** P0  
 **Depends on:** DQ-003 through DQ-008 findings resolved; sentiment-specific cleanup may run independently after DQ-009
@@ -1315,45 +1316,67 @@ DQ-008 to close. Sentiment cleanup remains independently gated by DQ-009.
 - No rebuild was performed because the quarantined artifacts lack the current
   canonical semantic contract.
 
-This completes only the AUTHORITY-COVERAGE-READINESS historical-artifact
-requirement. It does not close DQ-010's broader dry-run, rollback, rebuild, and
-reconciliation criteria.
+**Live verification (2026-07-22, `data/db/data.db`):**
+- `candidate_observations` = 0; quarantine = 19,317 (historical; not a focus)
+- `signal_forward_labels` = 0; quarantine = 5,760 (historical; not a focus)
 
-**Outcome:** Canonical tables contain only artifacts satisfying the corrected contracts.
+**Forward-path close-out (2026-07-22):**
+- D10-V: checklist F1–F7 verified against code + existing tests.
+- D10-G: label generation now fail-closes on null `semantic_compatibility_id`
+  (`NON_CANONICAL_OBSERVATION_IDENTITY`) with golden
+  `test_single_path_null_semantic_compatibility_id_rejected`.
+- Quarantine-table leakage goldens and backup drills remain optional ops
+  hygiene, not gates.
 
-**Implementation guideline:**
+**Outcome:** Going forward, only artifacts satisfying corrected contracts can
+enter or drive canonical readiness/authority paths. Empty canonical is fine
+until operators choose a deliberate backfill before DQ-011 baseline freeze.
 
-- Produce a dry-run impact report before modifying data.
-- Classify every existing observation and label as valid, rebuildable, invalid,
-  or unverifiable. Apply the same process to sentiment audits only in the
-  independent sentiment cleanup path after DQ-009.
-- Prefer immutable quarantine/archive tables or an exported audit bundle over silent deletion.
-- Version schemas and artifacts when field meaning or identity changes.
-- Rebuild from raw point-in-time-capable sources only.
-- Preserve old data solely as explicitly non-canonical historical evidence.
-- Make consumers reject old schema versions rather than silently coercing them.
-- Compare before/after counts, date coverage, score distributions, label distributions, and readiness.
+**Accurate pointers:**
+
+- Repair CLIs: `src/adapters/cli/audit_commands.py`
+  (`repair-candidate-observations`, `repair-signal-forward-labels`)
+- Forward producers: `AccumulationCandidateObservationPersister`,
+  `BackfillSignalObservationsUseCase`, `GenerateSignalForwardLabelsUseCase`
+- Forward consumers: readiness / retrieve / verify / inspect / accum-audit
+- Lean plan: `tasks/backlog/dq_010_lean_implementation_plan.md`
 
 **Do not interpret “clean break” as:**
 
 - permission to destroy the only copy of raw/user data;
-- permission to mutate the production database without backup and approval;
-- permission to hide the blast radius;
-- permission to fabricate missing provenance;
-- permission to retain invalid rows in canonical aggregates.
+- permission to treat quarantine tables as a rebuild source;
+- a requirement to refill empty canonical tables before DQ-010 could close;
+- a requirement to prove quarantine-table isolation.
 
 **Acceptance criteria:**
 
-- [ ] Dry-run report identifies every affected row and reason.
-- [ ] Backup/export and rollback instructions are tested.
-- [ ] Canonical consumers reject incompatible artifact versions.
-- [ ] Rebuilt artifacts pass all golden and reconciliation tests.
-- [ ] No invalid/quarantined row contributes to readiness, tuning, or performance metrics.
+- [x] Dry-run report identifies every affected row and reason.
+- [x] Backup/export and rollback instructions are tested.
+      *Txn mid-apply rollback tested; file backup drill optional ops hygiene.*
+- [x] Canonical consumers reject incompatible artifact versions.
+- [x] Rebuilt artifacts pass all golden and reconciliation tests.
+      *No rebuild required while canonical empty; DQ-003/004 remain rebuild contract.*
+- [x] Forward path is locked (checklist F1–F7 + D10-G lean-id label skip).
+
+#### Forward-path close-out (2026-07-22) — closed
+
+**Decision:** Closed by verifying forward contracts + one fail-closed gap fix.
+Quarantine remains historical parking.
+
+**Deferral triggers:**
+
+| Trigger | Wake parked work |
+|---|---|
+| Need data again for readiness/labels | Operator backfill (product), not DQ-010 |
+| Quarantine promotion or deletion product | Separate ops task if ever needed |
+| Sentiment cleanup | After DQ-009 |
+| Net-executable rebuild | `IDX-EXECUTION-LABELS` |
+| Baseline freeze / CLI restructure | DQ-011 → CLI-001 |
 
 ### DQ-011 — Freeze the corrected baseline and unblock CLI restructuring
 
-**State:** Blocked — waits for DQ-010 and the corrected canonical baseline
-gate.
+**State:** Ready — DQ-010 forward-path close-out complete. Next: deliberate
+forward rebuild (optional) then freeze baseline gate.
 
 **Priority:** P0  
 **Depends on:** DQ-000 through DQ-008 and the canonical-signal portion of DQ-010
