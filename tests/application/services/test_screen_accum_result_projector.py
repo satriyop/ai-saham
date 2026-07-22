@@ -89,14 +89,68 @@ def test_single_projection_applies_vwap_only():
         top=10,
         min_streak=0,
         coiled_spring_bb_pctile=0.20,
-        effective_session=_EFFECTIVE_SESSION
+        effective_session=_EFFECTIVE_SESSION,
+        sort_by="score",
     )
 
     assert [c.ticker for c in projection.candidates] == ["A"]
     assert projection.raw_candidate_count == 2
     assert projection.projected_candidate_count == 1
     assert projection.applied_filters.vwap_only is True
+    assert projection.applied_filters.sort_by == "score"
 
+
+def test_single_projection_sorts_by_vwap_discount_desc():
+    shallow = _candidate(ticker="AAA", vwap_discount_pct=2.0, foreign_flow_score=90.0)
+    deep = _candidate(ticker="BBB", vwap_discount_pct=11.0, foreign_flow_score=50.0)
+    mid = _candidate(ticker="CCC", vwap_discount_pct=8.0, foreign_flow_score=70.0)
+    missing = _candidate(ticker="DDD", vwap_discount_pct=None, foreign_flow_score=99.0)
+
+    projection = project_single_screen_result(
+        _response([shallow, deep, mid, missing]),
+        vwap_only=False,
+        squeeze_only=False,
+        top=10,
+        min_streak=0,
+        coiled_spring_bb_pctile=0.20,
+        effective_session=_EFFECTIVE_SESSION,
+        sort_by="vwap",
+    )
+
+    assert [c.ticker for c in projection.candidates] == ["BBB", "CCC", "AAA", "DDD"]
+    assert projection.applied_filters.sort_by == "vwap"
+
+
+def test_single_projection_sorts_by_score_when_requested():
+    low = _candidate(ticker="LOW", foreign_flow_score=40.0, vwap_discount_pct=12.0)
+    high = _candidate(ticker="HIGH", foreign_flow_score=80.0, vwap_discount_pct=1.0)
+
+    projection = project_single_screen_result(
+        _response([low, high]),
+        vwap_only=False,
+        squeeze_only=False,
+        top=10,
+        min_streak=0,
+        coiled_spring_bb_pctile=0.20,
+        effective_session=_EFFECTIVE_SESSION,
+        sort_by="score",
+    )
+
+    assert [c.ticker for c in projection.candidates] == ["HIGH", "LOW"]
+
+
+def test_single_projection_rejects_invalid_sort_by():
+    with pytest.raises(ScreenAccumProjectionError, match="score or vwap"):
+        project_single_screen_result(
+            _response([_candidate()]),
+            vwap_only=False,
+            squeeze_only=False,
+            top=10,
+            min_streak=0,
+            coiled_spring_bb_pctile=0.20,
+            effective_session=_EFFECTIVE_SESSION,
+            sort_by="30s",
+        )
 
 def test_single_projection_applies_min_streak():
     keep = _candidate(ticker="A", consecutive_streak=5)
@@ -329,10 +383,39 @@ def test_window_specific_sort_by_fails_if_window_absent():
         validate_multi_window_request([30, 90], "7s")
 
 
-def test_avg_and_max_are_always_valid():
+def test_avg_max_and_vwap_are_always_valid():
     validate_multi_window_request([7, 30], "avg")
     validate_multi_window_request([7, 30], "max")
+    validate_multi_window_request([7, 30], "vwap")
 
+
+def test_multi_projection_sorts_by_vwap_discount():
+    shallow = _candidate(ticker="SHALLOW", vwap_discount_pct=2.0, foreign_flow_score=90.0)
+    deep = _candidate(ticker="DEEP", vwap_discount_pct=12.0, foreign_flow_score=40.0)
+    multi = {
+        7: _response([shallow, deep], window_days=7),
+        30: _response(
+            [
+                _candidate(ticker="SHALLOW", vwap_discount_pct=1.0, foreign_flow_score=80.0),
+                _candidate(ticker="DEEP", vwap_discount_pct=9.0, foreign_flow_score=35.0),
+            ],
+            window_days=30,
+        ),
+    }
+    projection = project_multi_screen_result(
+        multi,
+        tracked_broker_flow=None,
+        windows=[7, 30],
+        top=10,
+        sort_by="vwap",
+        squeeze_only=False,
+        coiled_spring_min_foreign_flow_score=50.0,
+        coiled_spring_bb_pctile=0.20,
+        canonical_window=7,
+        effective_session=_EFFECTIVE_SESSION,
+    )
+    assert [r.ticker for r in projection.rows] == ["DEEP", "SHALLOW"]
+    assert projection.applied_filters.sort_by == "vwap"
 
 def test_project_multi_screen_result_raises_on_invalid_sort_by():
     c = _candidate(ticker="A")

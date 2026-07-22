@@ -134,11 +134,12 @@ def accumulation_run(
         typer.Option(
             "--sort-by",
             help=(
-                "In --multi mode, sort by: avg|max|7s|30s|90s "
-                "(legacy 7d/30d/90d also accepted; default: avg)"
+                "Sort order: vwap|score (single); "
+                "vwap|avg|max|7s|30s|90s (multi; legacy 7d/30d/90d accepted). "
+                "Default: vwap (deepest foreign VWAP discount first)"
             ),
         ),
-    ] = "avg",
+    ] = "vwap",
     output_format: Annotated[
         Optional[str],
         typer.Option("--format", help="Output format: table or json"),
@@ -188,9 +189,7 @@ def accumulation_run(
         saham screen accum --universe lq45 --window 30
         saham screen accum --universe lq45 --multi
         saham screen accum --universe lq45 --multi --sort-by 30s
-        saham screen accum --universe lq45 --min-foreign-flow-score 50 --top 10
-        saham screen accum --universe lq45 --min-signal-score 55 --top 10
-        saham screen accum BBCA BBRI BMRI --window 7
+        saham screen accum --universe lq45 --sort-by score
         saham screen accum --universe lq45 --vwap-only
         saham screen accum --universe lq45 --squeeze-only
         saham screen accum --universe lq45 --top-broker

@@ -11,7 +11,7 @@ from datetime import date
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, console, panel
-from src.adapters.cli.screen_accum_formatters import AccumulationDisplayConfig
+from src.adapters.cli.screen_accum_formatters import AccumulationDisplayConfig, format_disc_pct
 from src.application.services.screen_accum_result_projector import ScreenAccumMultiRow
 from src.application.services.tracked_broker_flow import TrackedBrokerFlowSnapshot
 
@@ -59,15 +59,18 @@ def display_multi(
     table = compact_table()
     table.add_column("#", justify="right")
     table.add_column("Ticker", style="bold")
+    table.add_column("Disc%", justify="right")
     for w in windows:
         table.add_column(f"{w}s", justify="right")
     table.add_column("Pattern")
-    table.add_column("Signal/Auth")
+    table.add_column("Sig/Auth")
     table.add_column("Risk")
     table.add_column("Phase")
     table.add_column("Data")
     table.add_column("Next")
-    table.add_column("Tracked Broker Flow")
+    # Short header: full "Tracked Broker Flow" overflows the 100-col console
+    # once Disc% is present; meaning stays in Run Context (--explain).
+    table.add_column("Tracked")
 
     for i, row in enumerate(rows, 1):
         score_cells = []
@@ -97,10 +100,22 @@ def display_multi(
         data_cell = row.data_status or "N/A"
         next_cell = row.next_action or "N/A"
 
+        disc = None
+        if row.canonical_candidate is not None:
+            disc = row.canonical_candidate.vwap_discount_pct
+        else:
+            discounts = [
+                c.vwap_discount_pct
+                for c in row.candidates_by_window.values()
+                if c is not None and c.vwap_discount_pct is not None
+            ]
+            disc = max(discounts) if discounts else None
+
         brk = _tracked_broker_flow_cell(row.tracked_broker_flow)
         table.add_row(
             str(i),
             row.ticker,
+            format_disc_pct(disc),
             *score_cells,
             row.pattern,
             signal_cell,

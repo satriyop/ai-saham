@@ -468,8 +468,10 @@ def test_screen_accum_multi_renders_tracked_broker_flow_not_broker_quality(monke
 
     table_result = runner.invoke(app, ["screen", "accum", "A", "--multi"])
     assert table_result.exit_code == 0, table_result.output
-    assert "Tracked Broker Flow" in table_result.output
-    assert "Broker Flow" not in table_result.output.replace("Tracked Broker Flow", "")
+    # Column header is shortened to "Tracked" so Disc% fits the 100-col console.
+    assert "Tracked" in table_result.output
+    assert "Broker Flow" not in table_result.output
+    assert "Disc%" in table_result.output
 
     json_result = runner.invoke(
         app, ["screen", "accum", "A", "--multi", "--format", "json"]

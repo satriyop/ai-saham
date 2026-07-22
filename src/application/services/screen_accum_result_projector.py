@@ -43,6 +43,7 @@ class SingleScreenAppliedFilters:
     squeeze_only: bool
     min_streak: int
     top: int
+    sort_by: str
 
 
 @dataclass(frozen=True)
@@ -62,11 +63,32 @@ class ScreenAccumSingleProjection:
                 "squeeze_only": self.applied_filters.squeeze_only,
                 "min_streak": self.applied_filters.min_streak,
                 "top": self.applied_filters.top,
+                "sort_by": self.applied_filters.sort_by,
             },
             "counts_before_filter": self.raw_candidate_count,
             "counts_after_filter": self.projected_candidate_count,
             "data_as_of": self.data_as_of,
         }
+
+
+_SINGLE_SORT_BY = frozenset({"score", "vwap"})
+
+
+def validate_single_sort_by(sort_by: str) -> str:
+    """Normalize single-window sort. Accepts score|vwap; maps avg→score for compat."""
+    if sort_by in ("avg", "max"):
+        return "score"
+    if sort_by in _SINGLE_SORT_BY:
+        return sort_by
+    raise ScreenAccumProjectionError(
+        f"Invalid --sort-by value {sort_by!r} for single-window screen. "
+        "Must be score or vwap."
+    )
+
+
+def _vwap_sort_key(discount: float | None) -> float:
+    """Missing discount sorts last when reverse=True."""
+    return discount if discount is not None else float("-inf")
 
 
 def project_single_screen_result(
@@ -78,11 +100,14 @@ def project_single_screen_result(
     min_streak: int,
     coiled_spring_bb_pctile: float,
     effective_session: EffectiveMarketSession,
+    sort_by: str = "vwap",
 ) -> ScreenAccumSingleProjection:
-    """Apply min_streak/vwap_only/squeeze_only/top exactly once, in the order
-    the table has always applied them. `raw_candidate_count` reflects the
-    screen response before any of these filters."""
-    candidates = response.candidates
+    """Apply filters, sort (score|vwap), then top.
+
+    `raw_candidate_count` reflects the screen response before these filters.
+    """
+    resolved_sort = validate_single_sort_by(sort_by)
+    candidates = list(response.candidates)
     raw_count = len(candidates)
 
     if min_streak > 0:
@@ -95,6 +120,19 @@ def project_single_screen_result(
             for c in candidates
             if c.bb_width_pctile is not None and c.bb_width_pctile <= coiled_spring_bb_pctile
         ]
+
+    if resolved_sort == "vwap":
+        candidates = sorted(
+            candidates,
+            key=lambda c: _vwap_sort_key(c.vwap_discount_pct),
+            reverse=True,
+        )
+    else:
+        candidates = sorted(
+            candidates,
+            key=lambda c: c.foreign_flow_score,
+            reverse=True,
+        )
 
     candidates = candidates[:top]
 
@@ -123,6 +161,7 @@ def project_single_screen_result(
             squeeze_only=squeeze_only,
             min_streak=min_streak,
             top=top,
+            sort_by=resolved_sort,
         ),
         raw_candidate_count=raw_count,
         projected_candidate_count=len(candidates),
@@ -269,14 +308,15 @@ def validate_multi_window_request(windows: list[int], sort_by: str) -> None:
             f"Duplicate windows requested: {', '.join(str(w) for w in dupes)}."
         )
 
-    if sort_by in ("avg", "max"):
+    if sort_by in ("avg", "max", "vwap"):
         return
 
     window = _normalize_sort_by_window(sort_by)
     valid_labels = ", ".join(f"{w}s" for w in windows)
     if window is None:
         raise ScreenAccumProjectionError(
-            f"Invalid --sort-by value {sort_by!r}. Must be avg, max, or one of: {valid_labels}."
+            f"Invalid --sort-by value {sort_by!r}. "
+            f"Must be avg, max, vwap, or one of: {valid_labels}."
         )
     if window not in windows:
         raise ScreenAccumProjectionError(
@@ -326,7 +366,14 @@ def project_multi_screen_result(
 
     def sort_key(item: tuple) -> float:
         pw = item[1]
-        scores = [c.foreign_flow_score for c in pw.values()]
+        if sort_by == "vwap":
+            discounts = [
+                c.vwap_discount_pct
+                for c in pw.values()
+                if c is not None and c.vwap_discount_pct is not None
+            ]
+            return max(discounts) if discounts else float("-inf")
+        scores = [c.foreign_flow_score for c in pw.values() if c is not None]
         if not scores:
             return 0.0
         if sort_by == "avg":

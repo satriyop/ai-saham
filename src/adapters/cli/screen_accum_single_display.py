@@ -24,6 +24,7 @@ from src.adapters.cli.screen_accum_formatters import (
     _readiness_text,
     _risk_detail_line,
     _risk_tier,
+    format_disc_pct,
 )
 from src.application.dto.accumulation_screen import (
     AccumulationScreenResponse,
@@ -167,6 +168,7 @@ def display_results(
     action_table.add_column("Action")
     action_table.add_column("#", justify="right")
     action_table.add_column("Ticker", style="bold")
+    action_table.add_column("Disc%", justify="right")
     action_table.add_column("Price", justify="right")
     action_table.add_column("Signal", justify="right")
     action_table.add_column("Accum", justify="right")
@@ -268,6 +270,7 @@ def display_results(
             action_cell,
             str(i),
             c.ticker,
+            format_disc_pct(c.vwap_discount_pct),
             _price_text(c.current_price),
             cmp_cell,
             Text(f"{c.foreign_flow_score:.1f}", style=score_style),

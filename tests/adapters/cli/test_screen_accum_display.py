@@ -237,7 +237,8 @@ def test_display_multi_renders_rich_accumulation_panel(capsys):
     assert "BBCA" in out
     assert "Pattern" in out
     assert "Run Context" not in out
-    assert "Tracked Broker Flow" in out
+    assert "Tracked" in out
+    assert "Disc%" in out
 
 
 def test_display_multi_renders_canonical_signal_risk_phase_data_next(capsys):
@@ -318,7 +319,7 @@ def test_display_multi_renders_canonical_signal_risk_phase_data_next(capsys):
     )
 
     out = capsys.readouterr().out
-    assert "Signal/Auth" in out
+    assert "Sig/Auth" in out
     assert "Risk" in out
     assert "Phase" in out
     assert "Data" in out
@@ -326,6 +327,7 @@ def test_display_multi_renders_canonical_signal_risk_phase_data_next(capsys):
     assert "ACCUMULATION" in out
     assert "WATCH" in out
     assert "N/A" in out  # broker quality missing
+    assert "Disc%" in out
 
 
 def test_display_results_renders_phase_column_and_note(capsys):
@@ -361,7 +363,10 @@ def test_display_results_renders_phase_column_and_note(capsys):
     assert "Phase" in out
     assert "ACCUMULATION" in out
     assert "accumulation-lifecycle diagnostic" in out
-    assert "saham analyze swing TICKER --setup SETUP" in out
+    # Rich wraps the note across panel lines; assert the command parts separately.
+    assert "saham analyze swing" in out
+    assert "TICKER --setup SETUP" in out
+    assert "Disc%" in out
 
 
 def test_display_results_shows_unknown_phase_when_detection_unavailable(capsys):
@@ -418,10 +423,9 @@ def test_display_multi_with_explanation_signal_auth(capsys):
     )
 
     out = capsys.readouterr().out
-    # Assert:
-    # - header contains Signal/Auth;
-    assert "Signal/Auth" in out
-    # - cell contains the expected score/authority value;
+    # Table header is shortened to Sig/Auth; Run Context keeps Signal/Auth label.
+    assert "Sig/Auth" in out
+    assert "Signal/Auth" in out  # Run Context key
     assert "72/0.83" in out
-    # - the Run Context explains it as canonical-window score and authority coverage.
-    assert "score / signal authority coverage from the canonical window" in out
+    assert "score / signal authority coverage" in out
+    assert "canonical window" in out

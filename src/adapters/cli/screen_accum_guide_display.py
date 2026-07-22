@@ -33,6 +33,15 @@ def print_column_guide() -> None:
     guide_table.add_column("Details & Mechanics")
 
     guide_table.add_row(
+        "Disc% (F_VWAP)",
+        "≥ +10% deep\n≥ +8% strong\n≥ +3% shallow\nelse dim",
+        (
+            "Foreign VWAP discount: how far price is below foreigners' avg cost.\n"
+            "Positive = foreigners underwater. Default list sort is deepest Disc% first "
+            "(--sort-by vwap). Use --sort-by score to rank by Accum score instead."
+        ),
+    )
+    guide_table.add_row(
         "SCORE (0–100)",
         "≥ 58 (green)\n33-57 (yellow)\n< 33 (white)",
         (

@@ -83,6 +83,23 @@ def fmt_score(s: float | None, display_config: AccumulationDisplayConfig) -> str
     return typer.style(f"{s:>6.1f}", fg=typer.colors.WHITE)
 
 
+def format_disc_pct(discount: float | None) -> Text:
+    """Foreign VWAP discount % with depth color tiers (display-only).
+
+    ≥10 deep, ≥8 strong, ≥3 shallow, else dim / missing.
+    """
+    if discount is None:
+        return Text("—", style="bright_black")
+    label = f"{discount:+.1f}%"
+    if discount >= 10.0:
+        return Text(label, style="bold green")
+    if discount >= 8.0:
+        return Text(label, style="green")
+    if discount >= 3.0:
+        return Text(label, style="yellow")
+    return Text(label, style="bright_black")
+
+
 def classify_pattern(
     windows: list[int],
     candidates_by_window: dict[int, AccumulationCandidate | None],

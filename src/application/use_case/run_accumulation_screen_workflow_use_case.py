@@ -66,7 +66,7 @@ class RunAccumulationScreenWorkflowRequest:
     save_enabled: bool
     vwap_only: bool = False
     squeeze_only: bool = False
-    sort_by: str = "avg"
+    sort_by: str = "vwap"
 
 
 @dataclass(frozen=True)
@@ -171,6 +171,7 @@ class RunAccumulationScreenWorkflowUseCase:
             min_streak=request.min_streak,
             coiled_spring_bb_pctile=display_cfg.coiled_spring_bb_pctile,
             effective_session=execution_context.effective_session,
+            sort_by=request.sort_by,
         )
 
         strategy_signals: dict[str, str] = {}

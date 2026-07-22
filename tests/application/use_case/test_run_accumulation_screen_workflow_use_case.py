@@ -806,6 +806,7 @@ def test_single_mode_context_lineage_preserves_object_identity(monkeypatch):
         min_streak,
         coiled_spring_bb_pctile,
         effective_session,
+        sort_by="vwap",
     ):
         captured_projection_sessions.append(effective_session)
         return real_project_single(
@@ -816,6 +817,7 @@ def test_single_mode_context_lineage_preserves_object_identity(monkeypatch):
             min_streak=min_streak,
             coiled_spring_bb_pctile=coiled_spring_bb_pctile,
             effective_session=effective_session,
+            sort_by=sort_by,
         )
 
     monkeypatch.setattr(
