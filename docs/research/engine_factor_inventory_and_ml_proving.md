@@ -458,7 +458,7 @@ Offline lab lives at `research/` (see `research/README.md`). It is Mode A only.
 |------|--------|
 | Layout | `research/lab/` panel loaders, `research/scripts/` cards, `research/artifacts/` outputs |
 | Deps | Optional `[project.optional-dependencies] research` / `research/requirements.txt` — not default install |
-| First script | `research/scripts/factor_card_vwap_buckets.py` |
+| First scripts | `research/scripts/factor_card_vwap_buckets.py`, `research/scripts/factor_card_bci_flow_sign.py` |
 | Forbidden | Lab code must not be imported by `src/`; no auto-writes to production YAML |
 | Authority | Factor cards propose; humans + promotion lane decide |
 

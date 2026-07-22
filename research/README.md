@@ -19,7 +19,8 @@ research/
   lab/
     panel.py                # read-only panel loader from data.db
   scripts/
-    factor_card_vwap_buckets.py   # first runnable card (Package A / VWAP)
+    factor_card_vwap_buckets.py      # Package A — VWAP depth
+    factor_card_bci_flow_sign.py     # Package A2 — BCI × flow sign
   artifacts/                # generated reports (gitignored except .gitkeep)
 ```
 
@@ -73,6 +74,7 @@ A green factor card has **no** authority.
 ```bash
 # from repo root, using existing venv (stdlib + pandas already available)
 .venv/bin/python research/scripts/factor_card_vwap_buckets.py
+.venv/bin/python research/scripts/factor_card_bci_flow_sign.py
 
 # optional richer lab deps later
 .venv/bin/pip install -e ".[research]"
