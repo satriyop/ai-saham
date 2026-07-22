@@ -24,8 +24,37 @@ def display_audit_summary(response: AccumulationAuditResponse, top_groups: int) 
     meta_table.add_column("Value")
     meta_table.add_row("Period", f"{response.start_date} to {response.end_date}")
     meta_table.add_row("Config", f"window: {response.window_days} sessions | replay dates: {response.total_replay_dates} | tickers: {response.total_tickers}")
-    meta_table.add_row("Signal Counts", f"Signals: {response.total_records} | Skipped no forward data: {response.skipped_no_forward_data}")
-    meta_table.add_row("Interpretation", "Read fixed-hold rows as: if you bought every matching signal at the signal-date close, what happened after 5/10/20 trading days.")
+    meta_table.add_row(
+        "Signal Counts",
+        (
+            f"Signals: {response.total_records} | "
+            f"Skipped no forward data: {response.skipped_no_forward_data} | "
+            f"Audit filter excluded: {response.skip_ledger.audit_filter_excluded}"
+        ),
+    )
+    meta_table.add_row(
+        "Skip ledger",
+        (
+            f"pass={response.skip_ledger.screen_pass} "
+            f"rejected_flow={response.skip_ledger.screen_rejected_flow} "
+            f"rejected_signal={response.skip_ledger.screen_rejected_signal} "
+            f"insufficient={response.skip_ledger.screen_insufficient_data}"
+        ),
+    )
+    meta_table.add_row(
+        "Claim",
+        (
+            f"role={response.claim_stamp.evaluation_role} | "
+            f"outcome={response.claim_stamp.outcome_basis} | "
+            f"costs_modeled={response.claim_stamp.costs_modeled}"
+        ),
+    )
+    meta_table.add_row(
+        "Interpretation",
+        "DESCRIPTIVE raw close-to-close: if you marked every matching signal "
+        "at the signal-date close, what happened after 5/10/20 sessions "
+        "(not net-executable / not promotion OOS).",
+    )
 
     console().print("")
     console().print(

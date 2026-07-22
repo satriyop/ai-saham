@@ -1128,9 +1128,10 @@ Implement this option only.
 
 ### DQ-008 — Audit accumulation historical evaluation
 
-**State:** Ready — waits only on lean implementation start; DQ-003, DQ-004
-raw-label lane, and DQ-007 are complete. Net-executable labels remain parked
-behind `IDX-EXECUTION-LABELS`.
+**State:** Done — lean D8-1 + D8-2 (2026-07-22). Slice plan:
+`tasks/backlog/dq_008_lean_implementation_plan.md`. Parked items
+(`IDX-EXECUTION-LABELS`, purged walk-forward, universe warehouse, excess
+return columns, CLI rename) remain deferred.
 
 **Priority:** P1  
 **Depends on:** DQ-001 through DQ-004, DQ-007  
@@ -1144,22 +1145,36 @@ behind `IDX-EXECUTION-LABELS`.
 - Core evaluator: `src/application/use_case/accumulation_audit_use_case.py`
 - Config: accumulation audit configuration under `src/infrastructure/config/` and `config/`
 - CSV/display: `src/adapters/cli/analyze_accum_csv_writer.py`, `src/adapters/cli/analyze_accum_display.py`
+- Lean plan: `tasks/backlog/dq_008_lean_implementation_plan.md`
 
 **Audit requirements:**
 
-- Establish live-screen versus historical-evaluation parity for features, setup gates, session windows, source precedence, and missing-data policy.
+- Establish live-screen versus historical-evaluation parity for features, setup
+  gates, session windows, source precedence, and missing-data policy.
+  *Lean amendment:* parity means the **accumulation-flow screen scoring path**
+  (same screen UC / assessor / `SignalEngine`). Audit YAML “setups” are filter
+  presets, not TradeSetup evidence — must be labeled as such.
 - Require historical universe membership or quantify survivorship bias.
+  *Lean amendment:* structured survivorship warning required; full membership
+  warehouse parked.
 - Verify no forward candle participates in signal construction.
-- Verify outcome horizons, exit simulation, entry timing, fees, slippage, lot size, liquidity, price limits, suspensions, and same-day TP/SL policy.
+- Verify outcome horizons, exit simulation, entry timing, fees, slippage, lot
+  size, liquidity, price limits, suspensions, and same-day TP/SL policy.
+  *Lean amendment:* stamp raw entry/exit assumptions and `costs_modeled=false`;
+  fee/fill/net modeling stays behind `IDX-EXECUTION-LABELS`. Exit grid remains
+  diagnostic path simulation only.
 - Include delisted, suspended, and failed names where source history permits.
 - Reconcile skipped signals by reason; never drop them silently.
 - Separate absolute return from excess return versus IHSG and sector.
+  *Lean amendment:* absolute raw returns required now; excess-return columns
+  optional/parked unless free.
 - Record chronological split and overlapping-horizon risks explicitly.
   Promotion-grade purged walk-forward and embargo policy is owned by
   `PURGED-WALKFORWARD-VALIDATION`.
 - Mark descriptive, in-sample, validation, and OOS results explicitly.
-  Baseline-versus-evidence-challenger edge proof is owned by
-  `INCREMENTAL-EVIDENCE-EDGE`.
+  *Lean amendment:* lean artifacts are always `evaluation_role=DESCRIPTIVE`;
+  do not invent OOS membership here. Baseline-versus-evidence-challenger edge
+  proof is owned by `INCREMENTAL-EVIDENCE-EDGE`.
 - Verify CSV and JSON preserve numeric units and exact record identities.
 
 **Clean-break rule:**
@@ -1168,11 +1183,64 @@ Invalidate published metrics produced with leakage, survivorship bias presented 
 
 **Acceptance criteria:**
 
-- [ ] Truncated-data live reconstruction matches historical signal generation.
-- [ ] Every included/skipped candidate is accounted for.
-- [ ] Costs and execution assumptions are explicit in every result artifact.
-- [ ] OOS performance is separated from training/validation.
-- [ ] Sample size and evaluation role (`DESCRIPTIVE`, `IS`, `VALIDATION`, or `OOS`) are reported without claiming promotion-grade edge.
+- [x] Truncated-data live reconstruction matches historical signal generation.
+  satisfied-notes: Audit builds screen via `create_accumulation_screen_use_case`
+  (same factory as live) with screener foreign-flow policy; injected-screen
+  parity test proves assessment score/coverage land on records
+  (`test_accumulation_audit_uses_injected_screen_and_preserves_signal_score`);
+  no-look-ahead regression retained.
+- [x] Every included/skipped candidate is accounted for.
+  satisfied-notes: `AccumulationAuditSkipLedger` counts screen pass /
+  rejected_flow / rejected_signal / insufficient_data / audit_filter_excluded /
+  skipped_no_forward_data / included_records; filter test reconciles
+  filter+forward+records == screen_pass.
+- [x] Costs and execution assumptions are explicit in every result artifact.
+      *Lean reading:* `costs_modeled=false` + explicit raw entry/exit assumptions
+      satisfy this until `IDX-EXECUTION-LABELS`; do not invent fake fees.
+  satisfied-notes: `claim_stamp` on response + JSON schema_version 2
+  (`outcome_basis=raw_market`, entry/exit assumptions, costs_modeled=false).
+- [x] OOS performance is separated from training/validation.
+      *Lean reading:* report `evaluation_role=DESCRIPTIVE` and forbid OOS /
+      promotion claims; do not build purged splits in DQ-008.
+  satisfied-notes: always `evaluation_role=DESCRIPTIVE`; overlapping-horizon
+  note; warnings forbid promotion/net-executable claims.
+- [x] Sample size and evaluation role (`DESCRIPTIVE`, `IS`, `VALIDATION`, or `OOS`) are reported without claiming promotion-grade edge.
+  satisfied-notes: total_records + skip_ledger + claim_stamp.evaluation_role
+  on JSON/table; role is DESCRIPTIVE only.
+
+#### Lean accumulation-evaluation amendment (2026-07-22)
+
+**Decision:** Implement DQ-008 as honest DESCRIPTIVE historical evaluation now.
+Implement this option only.
+
+**What is required now:**
+
+- Shared accumulation-flow screen scoring path for historical replay (D8-1).
+- Truncated-data parity golden vs live-style single-date screen/inspect (D8-1).
+- Skip ledger by reason (D8-2).
+- Artifact stamps: `evaluation_role=DESCRIPTIVE`, `outcome_basis=raw_market`,
+  `costs_modeled=false`, entry/exit assumptions, structured survivorship note.
+- CSV/JSON identity honesty (records or explicit summary-only).
+
+**Do Not Interpret This As:**
+
+- Do not build a net-cost / fill / price-limit execution engine here.
+- Do not claim OOS, validation folds, or promotion-grade edge from accum-audit.
+- Do not treat audit YAML setups as TradeSetup / setup-evidence parity.
+- Do not build a historical universe membership warehouse.
+- Do not silently diverge screen composition (enrichment/availability/risk)
+  while claiming full live parity.
+- Do not change live screen scores as a side effect of audit wiring.
+
+**Deferral triggers:**
+
+| Trigger | Wake parked work |
+|---|---|
+| Need net-executable audit returns | `IDX-EXECUTION-LABELS` |
+| Need purged OOS / embargo | `PURGED-WALKFORWARD-VALIDATION` |
+| Need evidence-challenger edge proof | `INCREMENTAL-EVIDENCE-EDGE` |
+| Need unbiased historical membership | Universe-membership follow-on |
+| Rename command to evaluate | CLI restructure after contract accurate |
 
 ### DQ-009 — Audit sentiment outcome data independently
 

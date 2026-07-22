@@ -232,6 +232,12 @@ def test_accumulation_audit_replays_signal_and_forward_returns_without_ai():
     assert record_dict["foreign_flow_score"] == record.foreign_flow_score
     assert "score" not in record_dict
     assert response.group_stats
+    assert response.claim_stamp.evaluation_role == "DESCRIPTIVE"
+    assert response.claim_stamp.outcome_basis == "raw_market"
+    assert response.claim_stamp.costs_modeled is False
+    assert response.skip_ledger.included_records == 1
+    assert response.skip_ledger.screen_pass >= 1
+    assert record.signal_score is not None
 
 
 def test_accumulation_audit_does_not_use_future_candle_as_signal_price():
@@ -326,6 +332,13 @@ def test_accumulation_audit_strict_filters_keep_only_matching_candidates():
     assert response.records[0].flow_pct >= 5
     assert response.records[0].rsi is not None
     assert response.records[0].rsi <= 60
+    assert response.skip_ledger.audit_filter_excluded >= 1
+    assert (
+        response.skip_ledger.audit_filter_excluded
+        + response.skip_ledger.skipped_no_forward_data
+        + response.skip_ledger.included_records
+        == response.skip_ledger.screen_pass
+    )
 
 
 def test_accumulation_audit_groups_outcomes_by_broker_quality():
@@ -511,3 +524,105 @@ def test_accumulation_audit_exit_simulation_can_prioritize_target_on_same_day():
     stat = response.exit_simulations[0]
     assert stat.target_rate_pct == 100.0
     assert stat.avg_return_pct == 5.0
+
+
+def test_accumulation_audit_uses_injected_screen_and_preserves_signal_score():
+    """D8-1: audit records carry the same screen assessment score (shared path)."""
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    from src.application.dto.assess_signal import AssessSignalResponse
+    from src.application.dto.signal_evidence_execution_context import (
+        SignalEvidenceExecutionContext,
+    )
+    from src.domain.value_objects.signal_assessment import (
+        EntryQuality,
+        SignalAssessment,
+        SignalStrength,
+    )
+
+    base = date(2026, 1, 1)
+    signal_date = base + timedelta(days=20)
+    candles = [
+        _candle("BBCA", base + timedelta(days=i), Decimal(100 + i))
+        for i in range(35)
+    ]
+    summaries = [
+        _summary("BBCA", base + timedelta(days=i), Decimal(100 + i))
+        for i in range(10, 21)
+    ]
+
+    assessment = AssessSignalResponse(
+        ticker="BBCA",
+        assessment=SignalAssessment(
+            ticker="BBCA",
+            score=77,
+            strength=SignalStrength.MODERATE,
+            entry_quality=EntryQuality.WATCH,
+            breakdown=(),
+            rationale=("fixture",),
+            snapshot_date=signal_date,
+            signal_authority_coverage=0.55,
+        ),
+        signal_authority_coverage=0.55,
+    )
+    candidate = MagicMock()
+    candidate.ticker = "BBCA"
+    candidate.foreign_flow_score = 60.0
+    candidate.consecutive_streak = 3
+    candidate.net_buy_ratio = 0.5
+    candidate.total_net_value = Decimal("1000000")
+    candidate.avg_flow_ratio = 10.0
+    candidate.vwap_discount_pct = 2.0
+    candidate.rsi = 45.0
+    candidate.bb_width_pctile = 0.3
+    candidate.trend = "SIDE"
+    candidate.current_price = Decimal("120")
+    candidate.signal_assessment = assessment
+
+    observation = SimpleNamespace(
+        candidate=candidate,
+        screen_result="pass",
+    )
+    screen_response = SimpleNamespace(
+        candidates=[candidate],
+        observation_candidates=[observation],
+        total_tickers_checked=1,
+        tickers_skipped=0,
+    )
+    fake_screen = MagicMock()
+    fake_screen.execute.return_value = screen_response
+
+    use_case = AccumulationAuditUseCase(
+        indicator_registry=IndicatorRegistry(),
+        broker_repository=MockBrokerRepository(summaries),
+        market_repository=MockMarketRepository(candles),
+        rules_loader=FakeRulesLoader(),
+        signal_engine=SignalEngine(config=SignalEngineConfig()),
+        screen_use_case=fake_screen,
+    )
+    response = use_case.execute(
+        AccumulationAuditRequest(
+            tickers=["BBCA"],
+            start_date=signal_date,
+            end_date=signal_date,
+            window_days=7,
+            min_net_buy_days=1,
+            min_foreign_flow_score=0,
+            horizon_days=5,
+        )
+    )
+
+    assert fake_screen.execute.call_count == 1
+    call_kwargs = fake_screen.execute.call_args
+    assert call_kwargs.kwargs["execution_context"] is not None
+    assert isinstance(
+        call_kwargs.kwargs["execution_context"], SignalEvidenceExecutionContext
+    )
+    assert response.total_records == 1
+    assert response.records[0].signal_score == 77
+    assert response.records[0].signal_authority_coverage == 0.55
+    assert response.skip_ledger.screen_pass == 1
+    assert response.skip_ledger.included_records == 1
+    assert response.claim_stamp.evaluation_role == "DESCRIPTIVE"
+    assert any("DESCRIPTIVE" in w for w in response.warnings)

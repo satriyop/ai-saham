@@ -92,10 +92,10 @@ class RunAccumulationAuditWorkflowResult:
     resolved_tickers: tuple[str, ...]
 
     def to_json_dict(self) -> dict[str, Any]:
-        """Preserve the `accumulation_audit` artifact schema exactly."""
+        """Serialize the accumulation_audit artifact (schema_version 2, DQ-008)."""
         response = self.response
         return {
-            "schema_version": 1,
+            "schema_version": 2,
             "artifact_type": "accumulation_audit",
             "start_date": response.start_date.isoformat(),
             "end_date": response.end_date.isoformat(),
@@ -104,9 +104,12 @@ class RunAccumulationAuditWorkflowResult:
             "total_tickers": response.total_tickers,
             "total_records": response.total_records,
             "skipped_no_forward_data": response.skipped_no_forward_data,
+            "skip_ledger": response.skip_ledger.to_dict(),
+            "claim_stamp": response.claim_stamp.to_dict(),
             "warnings": response.warnings,
             "group_stats": [s.to_dict() for s in response.group_stats],
             "exit_simulations": [s.to_dict() for s in response.exit_simulations],
+            "records_in_json": response.claim_stamp.records_in_json,
         }
 
 

@@ -73,6 +73,9 @@ class AuditRecord:
     max_upside_pct: float | None
     max_drawdown_pct: float | None
     forward_returns_pct: dict[int, float | None] = field(default_factory=dict)
+    # DQ-008: carry canonical screen assessment fields for parity/debug.
+    signal_score: int | None = None
+    signal_authority_coverage: float | None = None
 
     def to_dict(self) -> dict:
         """Convert to JSON/CSV friendly primitives."""
@@ -80,6 +83,8 @@ class AuditRecord:
             "signal_date": self.signal_date.isoformat(),
             "ticker": self.ticker,
             "foreign_flow_score": self.foreign_flow_score,
+            "signal_score": self.signal_score,
+            "signal_authority_coverage": self.signal_authority_coverage,
             "streak": self.streak,
             "net_buy_ratio": round(self.net_buy_ratio, 4),
             "total_net_value": str(self.total_net_value),
@@ -165,6 +170,81 @@ class ExitSimulationStat:
 
 
 @dataclass(frozen=True)
+class AccumulationAuditSkipLedger:
+    """Visible accounting of included vs skipped candidates (DQ-008 lean)."""
+
+    screen_pass: int = 0
+    screen_rejected_flow: int = 0
+    screen_rejected_signal: int = 0
+    screen_insufficient_data: int = 0
+    audit_filter_excluded: int = 0
+    skipped_no_forward_data: int = 0
+    included_records: int = 0
+
+    def to_dict(self) -> dict:
+        return {
+            "screen_pass": self.screen_pass,
+            "screen_rejected_flow": self.screen_rejected_flow,
+            "screen_rejected_signal": self.screen_rejected_signal,
+            "screen_insufficient_data": self.screen_insufficient_data,
+            "audit_filter_excluded": self.audit_filter_excluded,
+            "skipped_no_forward_data": self.skipped_no_forward_data,
+            "included_records": self.included_records,
+            "accounted_total": (
+                self.screen_insufficient_data
+                + self.screen_rejected_flow
+                + self.screen_rejected_signal
+                + self.screen_pass
+            ),
+        }
+
+
+@dataclass(frozen=True)
+class AccumulationAuditClaimStamp:
+    """Honesty stamps for DESCRIPTIVE raw evaluation (DQ-008 lean)."""
+
+    evaluation_role: str = "DESCRIPTIVE"
+    outcome_basis: str = "raw_market"
+    costs_modeled: bool = False
+    entry_assumption: str = (
+        "signal_day_close reference; forward windows start the next session"
+    )
+    exit_assumption: str = (
+        "optional TP/SL/max-hold path simulation at exact barrier prices; "
+        "not net-executable fills"
+    )
+    setup_contract_note: str = (
+        "audit YAML setups are filter presets, not TradeSetup / setup-evidence"
+    )
+    survivorship_warning: str = (
+        "uses the supplied current universe; historical index membership "
+        "is not reconstructed"
+    )
+    source_availability_note: str = (
+        "source_availability_use_case=None on historical replay "
+        "(availability may differ from live screen)"
+    )
+    records_in_json: bool = False
+    overlapping_horizon_note: str = (
+        "overlapping forward horizons are not purged; role is DESCRIPTIVE only"
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "evaluation_role": self.evaluation_role,
+            "outcome_basis": self.outcome_basis,
+            "costs_modeled": self.costs_modeled,
+            "entry_assumption": self.entry_assumption,
+            "exit_assumption": self.exit_assumption,
+            "setup_contract_note": self.setup_contract_note,
+            "survivorship_warning": self.survivorship_warning,
+            "source_availability_note": self.source_availability_note,
+            "records_in_json": self.records_in_json,
+            "overlapping_horizon_note": self.overlapping_horizon_note,
+        }
+
+
+@dataclass(frozen=True)
 class AccumulationAuditResponse:
     """Audit output containing raw records and grouped summaries."""
 
@@ -179,6 +259,12 @@ class AccumulationAuditResponse:
     group_stats: list[AuditGroupStat] = field(default_factory=list)
     exit_simulations: list[ExitSimulationStat] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    skip_ledger: AccumulationAuditSkipLedger = field(
+        default_factory=AccumulationAuditSkipLedger
+    )
+    claim_stamp: AccumulationAuditClaimStamp = field(
+        default_factory=AccumulationAuditClaimStamp
+    )
 
 
 @dataclass(frozen=True)

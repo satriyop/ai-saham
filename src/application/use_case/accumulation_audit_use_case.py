@@ -10,7 +10,7 @@ AI usage: None
 """
 
 from datetime import date, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 from src.application.dto.signal_evidence_execution_context import (
     SignalEvidenceExecutionContext,
@@ -21,9 +21,11 @@ from src.application.services.effective_market_session_resolver import (
 from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
 
 from src.application.dto.accumulation_audit import (
+    AccumulationAuditClaimStamp,
     AccumulationAuditPolicy,
     AccumulationAuditRequest,
     AccumulationAuditResponse,
+    AccumulationAuditSkipLedger,
     AuditBucketPolicy,
     AuditGroupStat,
     AuditRecord,
@@ -47,6 +49,9 @@ from src.application.services.accumulation_audit_statistics import (
 from src.application.services.accumulation_broker_quality_classifier import (
     AccumulationBrokerQualityClassifier,
 )
+from src.application.services.accumulation_screen_factory import (
+    create_accumulation_screen_use_case,
+)
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
@@ -58,15 +63,21 @@ if TYPE_CHECKING:
 # from this module. Keep these import-only; implementations live in the
 # DTO/service modules above.
 __all__ = [
+    "AccumulationAuditClaimStamp",
     "AccumulationAuditPolicy",
     "AccumulationAuditRequest",
     "AccumulationAuditResponse",
+    "AccumulationAuditSkipLedger",
     "AuditBucketPolicy",
     "AuditGroupStat",
     "AuditRecord",
     "ExitSimulationStat",
     "AccumulationAuditUseCase",
 ]
+
+
+class _ScreenRunner(Protocol):
+    def execute(self, request: AccumulationScreenRequest, *, execution_context=None): ...
 
 
 class AccumulationAuditUseCase:
@@ -77,6 +88,11 @@ class AccumulationAuditUseCase:
     It intentionally uses the current ticker universe supplied by the caller, so
     users should treat historical results as current-universe replay unless they
     provide historical universe snapshots.
+
+    DQ-008 lean: prefers an injected screen use case built via
+    ``create_accumulation_screen_use_case`` (same factory as live screen) so
+    scoring shares the accumulation-flow path. Outcomes remain DESCRIPTIVE
+    raw-market measurements — not net-executable or promotion-grade OOS.
     """
 
     def __init__(
@@ -87,18 +103,25 @@ class AccumulationAuditUseCase:
         rules_loader: RulesLoader,
         signal_engine: "SignalEngine",
         derived_feature_policy: AccumulationDerivedFeaturePolicy | None = None,
+        *,
+        screen_use_case: AccumulationScreenUseCase | None = None,
+        foreign_flow_score_policy: Any | None = None,
     ) -> None:
         self._broker_repo = broker_repository
         self._market_repo = market_repository
         self._derived_features = derived_feature_policy or AccumulationDerivedFeaturePolicy()
         self._session_resolver = EffectiveMarketSessionResolver(market_repository)
-        self._screen = AccumulationScreenUseCase(
+        self._screen: _ScreenRunner = screen_use_case or create_accumulation_screen_use_case(
             broker_repository=broker_repository,
             market_repository=market_repository,
             indicator_registry=indicator_registry,
             rules_loader=rules_loader,
             signal_engine=signal_engine,
+            foreign_flow_score_policy=foreign_flow_score_policy,
             derived_feature_policy=self._derived_features,
+            # Historical lean: no live Stockbit enricher / risk funnel.
+            stockbit_providers=None,
+            risk_use_case=None,
         )
         self._broker_quality_classifier = AccumulationBrokerQualityClassifier(broker_repository)
         self._record_builder = AccumulationAuditRecordBuilder(
@@ -123,6 +146,11 @@ class AccumulationAuditUseCase:
 
         replay_dates = self._replay_dates(tickers, request.start_date, request.end_date)
         records: list[AuditRecord] = []
+        screen_pass = 0
+        screen_rejected_flow = 0
+        screen_rejected_signal = 0
+        screen_insufficient_data = 0
+        audit_filter_excluded = 0
         skipped_no_forward_data = 0
 
         for signal_date in replay_dates:
@@ -147,8 +175,31 @@ class AccumulationAuditUseCase:
                 execution_context=execution_context,
             )
 
+            observation_candidates = list(
+                getattr(screen_response, "observation_candidates", ()) or ()
+            )
+            total_checked = int(
+                getattr(screen_response, "total_tickers_checked", len(tickers))
+            )
+            screen_insufficient_data += max(
+                0, total_checked - len(observation_candidates)
+            )
+            for observation in observation_candidates:
+                result = getattr(observation, "screen_result", "")
+                if result == "pass":
+                    screen_pass += 1
+                elif result == "rejected_flow":
+                    screen_rejected_flow += 1
+                elif result == "rejected_signal":
+                    screen_rejected_signal += 1
+                else:
+                    # Unknown reject class — keep visible via rejected_flow bucket.
+                    screen_rejected_flow += 1
+
             for candidate in screen_response.candidates:
-                if not self._passes_filters(candidate, request, signal_date):
+                exclusion = self._filter_exclusion_reason(candidate, request, signal_date)
+                if exclusion is not None:
+                    audit_filter_excluded += 1
                     continue
                 record = self._record_builder.build(
                     candidate=candidate,
@@ -161,9 +212,25 @@ class AccumulationAuditUseCase:
                     continue
                 records.append(record)
 
+        claim_stamp = AccumulationAuditClaimStamp()
+        skip_ledger = AccumulationAuditSkipLedger(
+            screen_pass=screen_pass,
+            screen_rejected_flow=screen_rejected_flow,
+            screen_rejected_signal=screen_rejected_signal,
+            screen_insufficient_data=screen_insufficient_data,
+            audit_filter_excluded=audit_filter_excluded,
+            skipped_no_forward_data=skipped_no_forward_data,
+            included_records=len(records),
+        )
         warnings = [
-            "Audit uses the supplied current universe; "
-            "historical index membership is not reconstructed."
+            claim_stamp.survivorship_warning,
+            claim_stamp.setup_contract_note,
+            claim_stamp.source_availability_note,
+            claim_stamp.overlapping_horizon_note,
+            (
+                "evaluation_role=DESCRIPTIVE; outcome_basis=raw_market; "
+                "costs_modeled=false — not promotion-grade OOS or net-executable"
+            ),
         ]
 
         return AccumulationAuditResponse(
@@ -181,6 +248,8 @@ class AccumulationAuditUseCase:
                 if request.simulate_exits else []
             ),
             warnings=warnings,
+            skip_ledger=skip_ledger,
+            claim_stamp=claim_stamp,
         )
 
     def _validate_policy(self, policy: AccumulationAuditPolicy) -> None:
@@ -214,49 +283,49 @@ class AccumulationAuditUseCase:
         if any(v <= 0 for v in request.max_hold_days):
             raise ValueError("max_hold_days must be positive")
 
-    def _passes_filters(
+    def _filter_exclusion_reason(
         self,
         candidate: AccumulationCandidate,
         request: AccumulationAuditRequest,
         signal_date: date,
-    ) -> bool:
-        """Apply audit-only strict filters to a replayed candidate."""
+    ) -> str | None:
+        """Return audit-filter exclusion reason, or None if the candidate passes."""
         if request.min_vwap_disc_pct is not None:
             if candidate.vwap_discount_pct is None:
-                return False
+                return "audit_filter_vwap_missing"
             if candidate.vwap_discount_pct < request.min_vwap_disc_pct:
-                return False
+                return "audit_filter_vwap"
 
         if request.trend is not None:
             if candidate.trend.upper() != request.trend.upper():
-                return False
+                return "audit_filter_trend"
 
         if request.min_flow_pct is not None:
             if candidate.avg_flow_ratio is None:
-                return False
+                return "audit_filter_flow_missing"
             if candidate.avg_flow_ratio < request.min_flow_pct:
-                return False
+                return "audit_filter_flow"
 
         if request.require_rsi and candidate.rsi is None:
-            return False
+            return "audit_filter_rsi_missing"
 
         if request.max_rsi is not None:
             if candidate.rsi is None:
-                return False
+                return "audit_filter_rsi_missing"
             if candidate.rsi > request.max_rsi:
-                return False
+                return "audit_filter_rsi_max"
 
         if request.min_rsi is not None:
             if candidate.rsi is None:
-                return False
+                return "audit_filter_rsi_missing"
             if candidate.rsi < request.min_rsi:
-                return False
+                return "audit_filter_rsi_min"
 
         if request.max_bb_width_pctile is not None:
             if candidate.bb_width_pctile is None:
-                return False
+                return "audit_filter_bb_missing"
             if candidate.bb_width_pctile > request.max_bb_width_pctile:
-                return False
+                return "audit_filter_bb"
 
         if request.broker_quality is not None:
             quality = self._broker_quality_classifier.classify(
@@ -265,9 +334,9 @@ class AccumulationAuditUseCase:
                 window_sessions=request.policy.broker_quality_window_sessions,
             )
             if quality.lower() != request.broker_quality.lower():
-                return False
+                return "audit_filter_broker_quality"
 
-        return True
+        return None
 
     def _replay_dates(
         self,

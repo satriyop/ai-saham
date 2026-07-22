@@ -89,6 +89,16 @@ class AccumulationAuditRecordBuilder:
             max_upside_pct=max_upside,
             max_drawdown_pct=max_drawdown,
             forward_returns_pct=forward_returns,
+            signal_score=(
+                candidate.signal_assessment.assessment.score
+                if candidate.signal_assessment is not None
+                else None
+            ),
+            signal_authority_coverage=(
+                candidate.signal_assessment.signal_authority_coverage
+                if candidate.signal_assessment is not None
+                else None
+            ),
         )
 
 

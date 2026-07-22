@@ -179,20 +179,24 @@ def test_to_json_dict_preserves_current_schema_keys():
 
     payload = result.to_json_dict()
 
-    assert payload == {
-        "schema_version": 1,
-        "artifact_type": "accumulation_audit",
-        "start_date": "2026-01-01",
-        "end_date": "2026-01-10",
-        "window_days": 7,
-        "total_replay_dates": 1,
-        "total_tickers": 1,
-        "total_records": 0,
-        "skipped_no_forward_data": 0,
-        "warnings": ["some warning"],
-        "group_stats": [],
-        "exit_simulations": [],
-    }
+    assert payload["schema_version"] == 2
+    assert payload["artifact_type"] == "accumulation_audit"
+    assert payload["start_date"] == "2026-01-01"
+    assert payload["end_date"] == "2026-01-10"
+    assert payload["window_days"] == 7
+    assert payload["total_replay_dates"] == 1
+    assert payload["total_tickers"] == 1
+    assert payload["total_records"] == 0
+    assert payload["skipped_no_forward_data"] == 0
+    assert payload["warnings"] == ["some warning"]
+    assert payload["group_stats"] == []
+    assert payload["exit_simulations"] == []
+    assert payload["claim_stamp"]["evaluation_role"] == "DESCRIPTIVE"
+    assert payload["claim_stamp"]["outcome_basis"] == "raw_market"
+    assert payload["claim_stamp"]["costs_modeled"] is False
+    assert payload["records_in_json"] is False
+    assert "skip_ledger" in payload
+    assert "factors" not in payload
 
 
 def test_filter_label_includes_active_filters_in_current_wording_order():
