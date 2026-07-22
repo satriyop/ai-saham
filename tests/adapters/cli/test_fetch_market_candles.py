@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from src.adapters.cli.fetch_market_candle_refresh import fetch_candles
+from src.infrastructure.composition.fetch_market.fetch_market_candle_refresh import fetch_candles
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 from tests.adapters.cli.fetch_market_command_fixtures import (
     FakeMarketProvider,
@@ -35,7 +35,7 @@ def test_fetch_candles_uses_stockbit_historical_for_benchmark_with_stockbit(
             return [_candle("IHSG", start_date)]
 
     monkeypatch.setattr(
-        "src.adapters.cli.fetch_market_candle_refresh.StockbitHistoricalProvider",
+        "src.infrastructure.composition.fetch_market.fetch_market_candle_refresh.StockbitHistoricalProvider",
         FakeStockbitHistoricalProvider,
     )
 
@@ -71,7 +71,7 @@ def test_fetch_candles_backfills_older_gap(monkeypatch, tmp_path: Path):
 
     FakeMarketProvider.instances.clear()
     monkeypatch.setattr(
-        "src.adapters.cli.fetch_market_candle_refresh.StockbitHistoricalProvider",
+        "src.infrastructure.composition.fetch_market.fetch_market_candle_refresh.StockbitHistoricalProvider",
         FakeMarketProvider,
     )
     notes: list[str] = []
@@ -111,7 +111,7 @@ def test_fetch_candles_treats_small_leading_non_trading_gap_as_current(
 
     FakeMarketProvider.instances.clear()
     monkeypatch.setattr(
-        "src.adapters.cli.fetch_market_candle_refresh.StockbitHistoricalProvider",
+        "src.infrastructure.composition.fetch_market.fetch_market_candle_refresh.StockbitHistoricalProvider",
         FakeMarketProvider,
     )
     notes: list[str] = []
@@ -145,7 +145,7 @@ def test_fetch_candles_treats_recent_trading_day_as_current(monkeypatch, tmp_pat
 
     FakeMarketProvider.instances.clear()
     monkeypatch.setattr(
-        "src.adapters.cli.fetch_market_candle_refresh.StockbitHistoricalProvider",
+        "src.infrastructure.composition.fetch_market.fetch_market_candle_refresh.StockbitHistoricalProvider",
         FakeMarketProvider,
     )
 
@@ -192,7 +192,7 @@ def test_fetch_market_command_fails_fast_when_stockbit_session_missing(monkeypat
         lambda name: (object(), "idx"),
     )
     monkeypatch.setattr(
-        "src.adapters.cli.fetch_market_workflow_factory.resolve_tickers",
+        "src.infrastructure.composition.fetch_market.fetch_market_workflow_factory.resolve_tickers",
         lambda **kwargs: ["BBCA"],
     )
 

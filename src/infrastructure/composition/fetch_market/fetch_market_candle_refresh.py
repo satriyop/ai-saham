@@ -8,7 +8,7 @@ MarketFreshnessService; provider *selection* policy is owned by
 ResolveCandleProviderPolicyUseCase. This module only wires infrastructure
 implementations to those decisions.
 
-Layer: Adapter
+Layer: Infrastructure composition
 """
 
 from datetime import date, datetime

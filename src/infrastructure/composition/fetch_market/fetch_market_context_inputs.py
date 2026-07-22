@@ -12,7 +12,7 @@ Global context tickers are not IDX stocks and must never receive the
 `.JK` suffix applied to regular IDX tickers — enforced here via
 `market_suffix=""`.
 
-Layer: Adapter
+Layer: Infrastructure composition
 """
 
 from pathlib import Path

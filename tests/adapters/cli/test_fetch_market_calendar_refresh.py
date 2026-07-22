@@ -22,7 +22,7 @@ from typer import Typer
 from typer.testing import CliRunner
 
 import src.adapters.cli.fetch_market_commands as fetch_market_commands
-from src.adapters.cli.fetch_market_calendar_refresh import (
+from src.infrastructure.composition.fetch_market.fetch_market_calendar_refresh import (
     DEFAULT_CALENDAR_EVENT_TYPES,
     refresh_market_calendar,
 )
@@ -70,7 +70,7 @@ def _response(**overrides) -> SyncCorporateActionCalendarResponse:
 
 
 def _patch_use_case(monkeypatch, response=None, exception=None):
-    import src.adapters.cli.fetch_market_calendar_refresh as refresh_module
+    import src.infrastructure.composition.fetch_market.fetch_market_calendar_refresh as refresh_module
 
     fake_uc = FakeUseCase(response=response, exception=exception)
     monkeypatch.setattr(
@@ -220,7 +220,7 @@ def _base_monkeypatches(monkeypatch, tmp_path: Path):
         lambda name: (fake_broker_provider, "stockbit"),
     )
     monkeypatch.setattr(
-        "src.adapters.cli.fetch_market_workflow_factory.resolve_tickers",
+        "src.infrastructure.composition.fetch_market.fetch_market_workflow_factory.resolve_tickers",
         lambda **kwargs: ["BBCA", "BBRI", "BMRI"],
     )
     monkeypatch.setattr(
@@ -250,7 +250,7 @@ class TestCalendarCalledOnceNotPerTicker:
     ):
         counting = _CountingCalendarRefresh()
         monkeypatch.setattr(
-            "src.adapters.cli.fetch_market_calendar_refresh.refresh_market_calendar", counting
+            "src.infrastructure.composition.fetch_market.fetch_market_calendar_refresh.refresh_market_calendar", counting
         )
         runner = CliRunner()
         result = runner.invoke(
@@ -272,7 +272,7 @@ class TestCalendarCalledOnceNotPerTicker:
     def test_calendar_summary_line_appears_in_output(self, monkeypatch, _base_monkeypatches):
         counting = _CountingCalendarRefresh(status="stockbit dividend=2")
         monkeypatch.setattr(
-            "src.adapters.cli.fetch_market_calendar_refresh.refresh_market_calendar", counting
+            "src.infrastructure.composition.fetch_market.fetch_market_calendar_refresh.refresh_market_calendar", counting
         )
         runner = CliRunner()
         result = runner.invoke(
@@ -296,7 +296,7 @@ class TestSkipFlagRouting:
     ):
         counting = _CountingCalendarRefresh()
         monkeypatch.setattr(
-            "src.adapters.cli.fetch_market_calendar_refresh.refresh_market_calendar", counting
+            "src.infrastructure.composition.fetch_market.fetch_market_calendar_refresh.refresh_market_calendar", counting
         )
         runner = CliRunner()
         result = runner.invoke(
@@ -320,7 +320,7 @@ class TestSkipFlagRouting:
     ):
         counting = _CountingCalendarRefresh()
         monkeypatch.setattr(
-            "src.adapters.cli.fetch_market_calendar_refresh.refresh_market_calendar", counting
+            "src.infrastructure.composition.fetch_market.fetch_market_calendar_refresh.refresh_market_calendar", counting
         )
         runner = CliRunner()
         result = runner.invoke(
@@ -344,7 +344,7 @@ class TestSkipFlagRouting:
     ):
         counting = _CountingCalendarRefresh()
         monkeypatch.setattr(
-            "src.adapters.cli.fetch_market_calendar_refresh.refresh_market_calendar", counting
+            "src.infrastructure.composition.fetch_market.fetch_market_calendar_refresh.refresh_market_calendar", counting
         )
         runner = CliRunner()
         result = runner.invoke(
@@ -372,7 +372,7 @@ class TestSkipFlagRouting:
         )
         counting = _CountingCalendarRefresh()
         monkeypatch.setattr(
-            "src.adapters.cli.fetch_market_calendar_refresh.refresh_market_calendar", counting
+            "src.infrastructure.composition.fetch_market.fetch_market_calendar_refresh.refresh_market_calendar", counting
         )
         runner = CliRunner()
         result = runner.invoke(
@@ -404,7 +404,7 @@ class TestCalendarRefreshNeverAbortsCommand:
         (non-raising) refresh_market_calendar is what keeps the command safe,
         and that its ERR: path surfaces without an exception propagating."""
         monkeypatch.setattr(
-            "src.adapters.cli.fetch_market_calendar_refresh.refresh_market_calendar",
+            "src.infrastructure.composition.fetch_market.fetch_market_calendar_refresh.refresh_market_calendar",
             lambda db_path, api_client, refresh: "ERR:boom",
         )
         runner = CliRunner()

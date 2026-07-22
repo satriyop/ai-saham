@@ -1,22 +1,22 @@
 """
 Factory for construction and dependency injection of fetch market command workflow usecase.
 
-Layer: Adapter
+Layer: Infrastructure composition
 """
 
 import functools
 from pathlib import Path
 from typing import Any
 
-import src.adapters.cli.fetch_market_calendar_refresh as _calendar_mod
-import src.adapters.cli.fetch_market_context_inputs as _context_mod
-from src.adapters.cli.fetch_market_broker_refresh import fetch_broker
-from src.adapters.cli.fetch_market_candle_refresh import fetch_candles
-from src.adapters.cli.fetch_market_enrichment_refresh import (
+import src.infrastructure.composition.fetch_market.fetch_market_calendar_refresh as _calendar_mod
+import src.infrastructure.composition.fetch_market.fetch_market_context_inputs as _context_mod
+from src.infrastructure.composition.fetch_market.fetch_market_broker_refresh import fetch_broker
+from src.infrastructure.composition.fetch_market.fetch_market_candle_refresh import fetch_candles
+from src.infrastructure.composition.fetch_market.fetch_market_enrichment_refresh import (
     fetch_enrichment,
     read_enrichment_pit_coverage,
 )
-from src.adapters.cli.fetch_market_meta_refresh import fetch_meta
+from src.infrastructure.composition.fetch_market.fetch_market_meta_refresh import fetch_meta
 from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSessionResolver,
 )

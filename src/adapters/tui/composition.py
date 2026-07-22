@@ -533,7 +533,7 @@ def _build_daily_refresh_execution(
     sb_providers = create_readonly_stockbit_providers(db_path)
     sb_client = sb_providers.session if sb_providers else None
 
-    from src.adapters.cli.fetch_market_workflow_factory import create_workflow_use_case
+    from src.infrastructure.composition.fetch_market.fetch_market_workflow_factory import create_workflow_use_case
     workflow_use_case = create_workflow_use_case(
         db_path=db_path,
         broker_provider=sb_client,

@@ -9,7 +9,7 @@ valuation) and delegates cache-freshness-then-fetch policy to
 RefreshStockbitEnrichmentUseCase. Also owns the point-in-time enrichment
 coverage read used to render post-run PIT coverage summaries.
 
-Layer: Adapter
+Layer: Infrastructure composition
 """
 
 from datetime import date, timedelta

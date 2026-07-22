@@ -4,7 +4,7 @@ once per `saham fetch market` invocation (not per ticker). Mirrors the
 one-shot pattern used by fetch_market_context_inputs.py — this module owns
 infrastructure construction so the use case never imports infrastructure.
 
-Layer: Adapter
+Layer: Infrastructure composition
 """
 
 from datetime import date

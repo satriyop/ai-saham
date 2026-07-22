@@ -4,7 +4,7 @@ Sector/industry metadata refresh helpers for `saham fetch market`.
 Owns per-ticker sector/industry metadata refresh via Yahoo Finance,
 cached with a TTL by FetchStockMetaUseCase.
 
-Layer: Adapter
+Layer: Infrastructure composition
 """
 
 from pathlib import Path

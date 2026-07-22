@@ -30,7 +30,7 @@ ADAPTER_FACTORY_FILES = (
     "src/adapters/cli/screen_accum_workflow_factory.py",
     "src/adapters/cli/analyze_swing_workflow_factory.py",
     "src/adapters/cli/analyze_signal_backfill_commands.py",
-    "src/adapters/cli/fetch_market_workflow_factory.py",
+    "src/infrastructure/composition/fetch_market/fetch_market_workflow_factory.py",
 )
 
 # Application use cases that must invoke the resolver via .resolve() to

@@ -8,7 +8,7 @@ MarketFreshnessService; summary-provider *selection* policy is owned by
 ResolveBrokerSummaryProviderPolicyUseCase. This module only wires
 infrastructure implementations to those decisions.
 
-Layer: Adapter
+Layer: Infrastructure composition
 """
 
 from datetime import date, datetime

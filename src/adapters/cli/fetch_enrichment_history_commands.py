@@ -15,7 +15,7 @@ from typing import Annotated, Optional
 import typer
 
 from src.adapters.cli.fetch_market_display import render_enrichment_pit_coverage
-from src.adapters.cli.fetch_market_enrichment_refresh import (
+from src.infrastructure.composition.fetch_market.fetch_market_enrichment_refresh import (
     fetch_enrichment,
     read_enrichment_pit_coverage,
 )

@@ -2,7 +2,7 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
-from src.adapters.cli.fetch_market_broker_refresh import fetch_broker
+from src.infrastructure.composition.fetch_market.fetch_market_broker_refresh import fetch_broker
 from src.domain.entities.broker_flow import ForeignFlowPoint
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository

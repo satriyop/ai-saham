@@ -29,7 +29,7 @@ from src.adapters.cli.fetch_market_display import (
     render_fetch_market_row,
 )
 from src.adapters.cli.fetch_market_provider_factory import create_broker_provider
-from src.adapters.cli.fetch_market_workflow_factory import create_workflow_use_case
+from src.infrastructure.composition.fetch_market.fetch_market_workflow_factory import create_workflow_use_case
 from src.application.services.universe_loader import UniverseNotFoundError
 from src.application.use_case.fetch_market_command_workflow_use_case import (
     FetchMarketCommandStartEvent,

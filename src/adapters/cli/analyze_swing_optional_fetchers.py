@@ -30,8 +30,8 @@ def auto_refresh_swing_data(
     force_refresh: bool,
     analyze_config: AnalyzeSwingConfig,
 ) -> tuple[str, ...]:
-    from src.adapters.cli.fetch_market_broker_refresh import fetch_broker
-    from src.adapters.cli.fetch_market_candle_refresh import fetch_candles
+    from src.infrastructure.composition.fetch_market.fetch_market_broker_refresh import fetch_broker
+    from src.infrastructure.composition.fetch_market.fetch_market_candle_refresh import fetch_candles
     from src.adapters.cli.fetch_market_provider_factory import create_broker_provider
 
     return refresh_swing_data(
