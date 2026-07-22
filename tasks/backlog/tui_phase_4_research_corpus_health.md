@@ -58,14 +58,32 @@ Keep report intact to presenter. Adapter must not query repositories or
 recompute counts, exclusions, deduplication, split, metrics, readiness, or
 eligibility.
 
-Copy Phase 0 contracts:
+Phase 0 contracts (binding):
 
 ```text
-composition dependencies:
-target rules:
-multiple-cohort behavior:
-expected exceptions:
-constructor/startup side effects:
+composition dependencies: SQLiteCandidateObservationsRepository,
+  SQLiteSignalForwardLabelsRepository, and ReportSignalReadinessUseCase only
+request transport: preserve user target and optional cohort in
+  ReportSignalReadinessRequest and preserve the exact SignalReadinessReport to
+  the presenter; adapter rejects blank target before the call
+target rules: use case strips target, requires a SignalLabelHorizon suffix, and
+  parses canonical <profile>_<setup>_<bucket>_cap_<horizon> or diagnostic
+  <profile>_<setup>_<horizon>; malformed target raises ValueError with its exact
+  SignalReadinessTarget.parse message
+cohort rules: supplied cohort is stripped and must exist; omitted cohort selects
+  the sole available cohort. Zero cohorts returns blocker
+  "no semantic_compatibility_id on canonical observations"; multiple return
+  "mixed_semantic_cohorts". Both are valid fail-closed reports with no pooled
+  IS/OOS rows.
+expected ERROR: adapter ValueError("target must not be blank") with zero calls;
+  SignalReadinessTarget.parse ValueError; sqlite3.Error or OSError from startup/
+  repositories, always preserving class/message
+typed unavailable: none; missing/unresolved cohorts are report blockers
+constructor/startup side effects: both SQLite repository constructors run
+  SqliteMigrationRunner and can create _schema_migrations, tables, indexes,
+  columns, and migration rows. Product-read-only only.
+invariants: malformed artifacts, incompatible identity/cohort objects, type
+  errors, and impossible report states propagate to the outer boundary
 ```
 
 ## State And Authority Contract

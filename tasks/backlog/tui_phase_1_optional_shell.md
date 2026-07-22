@@ -71,14 +71,20 @@ Any product-layer or unrelated CLI change requires task revision first.
 Its command function imports the runner internally. Catch only the exact missing
 optional-dependency case; unrelated import/startup failures must propagate.
 
-Copy Phase 0 Resolution E before implementation:
+Phase 0 Resolution E (binding):
 
 ```text
-extra:
-requirement:
-exit code:
-message:
+extra: tui
+requirement: textual>=8.2,<9
+exit code: 1
+message: TUI support is not installed. Install this checkout with: pip install -e '.[tui]'
 ```
+
+Catch `ModuleNotFoundError` only when `exc.name == "textual"`, print the exact
+message to stderr, and raise `typer.Exit(code=1)`. Any other missing transitive
+module or startup/import failure propagates. Textual 8.2.8 was current when
+Phase 0 verified the closed range on 2026-07-22; evidence is recorded in the
+Phase 0 task and PyPI package metadata.
 
 ### Shared state
 

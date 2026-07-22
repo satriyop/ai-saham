@@ -72,13 +72,53 @@ selected projection-row ticker
   -> TickerResearchScreen
 ```
 
-Copy Phase 0 contracts before editing:
+Phase 0 contracts (binding):
 
 ```text
-accumulation request:
+accumulation default request:
+  tickers=one exactly resolved configured-universe list
+  universe_label=universe_name=app_config.analysis.universe
+  window=7, min_streak=0, min_foreign_flow_score=None,
+  min_signal_score=None, min_piotroski=0, strategy_name=None,
+  include_strategy_overlay=False, multi=False, windows=[], top=20,
+  save_name=None, save_enabled=False, vwap_only=False, squeeze_only=False,
+  sort_by="vwap"
+accumulation explicit multi request: same values except multi=True and
+  windows=[7, 30, 90]; application canonical window is 7
 ticker request:
-composition dependencies:
-expected exceptions:
+  ticker=selected projection-row ticker verbatim, today=date.today(),
+  strategy_name=None, setup_name=None, window=app_config.swing.window (7),
+  flow_window=analyze_swing_config.flow_detail_window_sessions (30),
+  capital=None, risk_pct=app_config.swing.risk_pct (1.0), entry_price=None,
+  atr_mult=app_config.swing.atr_mult (1.5), rr=app_config.swing.rr (2.0),
+  include_sentiment=False, include_flow_detail=False,
+  include_signal_detail=False, include_risk_detail=False,
+  include_market_detail=False, sentiment_verbose=False,
+  auto_refresh=False, force_refresh=False, with_market_context=False,
+  regime_universe=app_config.analysis.regime_universe ("idx80"),
+  benchmark=app_config.analysis.benchmark ("IHSG"),
+  db_path=resolved configured database path, with_technical_gate=False
+composition dependencies: cached-only shared stock-analysis graph; configured
+  accumulation/swing workflows, local repositories/config/factories/engines,
+  session/calendar builders, gates, corporate-action risk, and typed evidence
+  builders. Cached Stockbit providers retain api_client=None.
+excluded dependencies: SQLiteWatchlistRepository/save use case, observation
+  recorder, refresh/sentiment provider callables, labels, journal, tuning, and
+  promotion. Inject `_forbid_tui_refresh` and `_forbid_tui_sentiment` from
+  `composition.py`; each raises RuntimeError with the exact Phase 0 message if
+  the fixed false flags are ever violated.
+constructor/startup side effects: local repository/cache schemas may be
+  created/migrated and broker initialization may remove superseded Stockbit
+  summaries; product-read-only only.
+expected accumulation ERROR: ScreenAccumProjectionError; plus startup/config/
+  infrastructure ValueError, RulesError subclasses, sqlite3.Error,
+  MarketDataRepositoryError, BrokerDataRepositoryError, and OSError
+typed ticker UNAVAILABLE: SwingAnalysisDataUnavailable(ticker) only
+expected ticker ERROR: startup/config/infrastructure ValueError, RulesError
+  subclasses, CorporateActionPolicyConfigError, sqlite3.Error,
+  MarketDataRepositoryError, BrokerDataRepositoryError, and OSError
+invariants: TypeError, non-projection workflow/DTO ValueError, identity/
+  provenance mismatch, missing/dual projection, and impossible state propagate
 ```
 
 Ticker request must include:
@@ -88,6 +128,12 @@ auto_refresh = False
 force_refresh = False
 include_sentiment = False
 ```
+
+The exact response and exact projection remain the only presenter sources.
+Ticker presentation consumes typed `verdict`, `evidence`, and `diagnostics`;
+absence of optional detail under the false flags is displayed as unavailable,
+not reconstructed. The optional `with_market_context` flag is semantic and is
+not enabled merely to populate a panel.
 
 ## Display Contract
 

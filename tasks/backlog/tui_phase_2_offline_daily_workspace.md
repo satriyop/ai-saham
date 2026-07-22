@@ -59,15 +59,48 @@ DailyScreen/widgets
 No adapter component may re-query. Do not transport both the response and an
 independently mutable copy of readiness/candidate source data.
 
-Copy Phase 0 decisions before editing:
+Phase 0 decisions (binding):
 
 ```text
-composition dependencies:
-request fields and sources:
-excluded network dependencies:
-constructor/startup side effects:
-expected exceptions:
+composition dependencies: SQLite market/broker repositories; effective-session
+  resolver; MarketContextEngine; configured AccumulationScreenUseCase with
+  local cached enrichment, signal/risk engines, rules/indicator dependencies;
+  YamlUniverseConfigLoader; DailySetupLensImpactUseCase with four setup-bound
+  local-only swing workflows
+request: DailyBriefingRequest(
+  universe=app_config.analysis.universe,
+  top=3,
+  as_of_date=None,
+  opening_data_dir=Path("data/opening"),
+  universe_config_path=Path("config/universes.yaml"),
+)
+transport: preserve the exact DailyBriefingResponse through the controller to
+  the presenter; presenter fields are the three clocks, historical/universe
+  metadata, freshness/readiness/authority, regime, opening sections,
+  accumulation summary/daily candidates, setup-lens impact, and warnings
+excluded network dependencies: GetSystemStatusUseCase, auto_refresh_swing_data,
+  fetch_swing_sentiment, and any provider-health/fetch callable; inject
+  `_forbid_tui_refresh` and `_forbid_tui_sentiment` from `composition.py`; each
+  raises RuntimeError with the exact Phase 0 message if called, while cached
+  Stockbit providers retain api_client=None
+excluded write dependencies: watchlist save, observation capture, labels,
+  journal, tuning, patch, and promotion
+constructor/startup side effects: market/broker/candidate-observation,
+  corporate-action, and cached Stockbit repository/provider constructors can
+  create/migrate schemas; broker initialization can delete superseded Stockbit
+  summary rows. V1 is product-read-only, not byte-for-byte immutable.
+expected ERROR: composition/startup ValueError, RulesError subclasses,
+  CorporateActionPolicyConfigError, sqlite3.Error, MarketDataRepositoryError,
+  BrokerDataRepositoryError, and OSError, preserving class/message
+typed unavailable: none at screen level; dataset UNAVAILABLE and optional
+  absence remain inside a valid response. Invariants propagate outward.
 ```
+
+Phase 0 blocker: current `DailyBriefingUseCase` and
+`DailySetupLensImpactUseCase` broad catches can downgrade contract/programmer
+failures to warnings. Do not implement Phase 2 until a separately approved
+application failure-boundary task narrows those catches, or the roadmap's
+fail-closed invariant is explicitly amended.
 
 ## State And Failure Contract
 
