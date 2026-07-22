@@ -96,8 +96,8 @@ CLI hierarchy restructure
 
 Sentiment audit is an independent outcome pipeline and can be audited in parallel after the shared temporal/data rules are defined.
 
-Signal and accumulation tasks in `tasks/backlog/improvement_cli_restructure.md`
-are blocked until `DQ-BASELINE-GATE` passes. Its sentiment task additionally
+Signal and accumulation tasks in `tasks/done/improvement_cli_restructure.md`
+were blocked until `DQ-BASELINE-GATE` passed (Done 2026-07-22; CLI-001 Ready). Its sentiment task additionally
 requires `DQ-SENTIMENT-GATE`.
 
 ## 3. Problem statement
@@ -358,7 +358,7 @@ Artifacts without a defensible effective timestamp or data cutoff are invalid fo
 and follow-ups). Full `ARTIFACT-IDENTITY` apparatus, genuine screen-rejected
 controls, and PIT universe reconstruction remain parked behind named triggers.
 See "Lean identity amendment (2026-07-21)" and
-`tasks/backlog/dq_003_lean_implementation_plan.md`.
+`tasks/done/dq_003_lean_implementation_plan.md`.
 
 **Priority:** P0  
 **Depends on:** DQ-001, DQ-002  
@@ -833,7 +833,7 @@ global-sync gate** (mirrors the DQ-003 survivorship precedent):
 **State:** Done — Slice A (retrieval honesty) + Slice B (lean local verify)
 complete 2026-07-22. Default `signal-replay` is retrieval-only; `--verify`
 runs local cutoff-aware recompute with machine-readable MATCH/DRIFT/
-UNREPRODUCIBLE. See `tasks/backlog/dq_005_lean_slice_b_plan.md`.
+UNREPRODUCIBLE. See `tasks/done/dq_005_lean_slice_b_plan.md`.
 
 **Priority:** P0  
 **Depends on:** DQ-003, DQ-004  
@@ -846,7 +846,7 @@ UNREPRODUCIBLE. See `tasks/backlog/dq_005_lean_slice_b_plan.md`.
   `--verify` = Slice B local recompute)
 - Retrieval use case: `src/application/use_case/retrieve_stored_signal_observation_use_case.py`
 - Verify use case: `src/application/use_case/verify_stored_signal_observation_use_case.py`
-- Verify plan: `tasks/backlog/dq_005_lean_slice_b_plan.md`
+- Verify plan: `tasks/done/dq_005_lean_slice_b_plan.md`
 - Observation repository: `src/infrastructure/persistence/sqlite_candidate_observations_repository.py`
 
 **Audit requirements:**
@@ -888,7 +888,7 @@ If reproducibility cannot be achieved because the required code/config/source ve
 ### DQ-006 — Audit signal readiness counts and patch eligibility
 
 **State:** Done — lean D6-1 + D6-2 (2026-07-22). Slice plan:
-`tasks/backlog/dq_006_lean_implementation_plan.md`. Parked items
+`tasks/done/dq_006_lean_implementation_plan.md`. Parked items
 (immutable OOS, diversity matrix, tuning wire-up) remain deferred.
 
 **Priority:** P0  
@@ -914,7 +914,7 @@ eligibility from the ephemeral 70/30 split alone.
 - Use case: `src/application/use_case/report_signal_readiness_use_case.py`
 - Target definitions/config referenced by that use case
 - Observation and label repositories listed above
-- Lean plan: `tasks/backlog/dq_006_lean_implementation_plan.md`
+- Lean plan: `tasks/done/dq_006_lean_implementation_plan.md`
 
 **Audit requirements:**
 
@@ -1006,7 +1006,7 @@ Implement this option only.
 ### DQ-007 — Audit current SignalEngine inspection accuracy
 
 **State:** Done — lean D7-1 + D7-2 (2026-07-22). Slice plan:
-`tasks/backlog/dq_007_lean_implementation_plan.md`. Parked items (CLI-002
+`tasks/done/dq_007_lean_implementation_plan.md`. Parked items (CLI-002
 hierarchy, coverage-provider rewrite, swing-setup mode UX) remain deferred.
 
 **Priority:** P1  
@@ -1023,7 +1023,7 @@ hierarchy, coverage-provider rewrite, swing-setup mode UX) remain deferred.
 - Coverage provider: `src/infrastructure/persistence/sqlite_signal_coverage_provider.py`
   (parked for lean slice — enrichment-cache taxonomy; not required to prove
   scorer identity)
-- Lean plan: `tasks/backlog/dq_007_lean_implementation_plan.md`
+- Lean plan: `tasks/done/dq_007_lean_implementation_plan.md`
 
 **Audit requirements:**
 
@@ -1129,7 +1129,7 @@ Implement this option only.
 ### DQ-008 — Audit accumulation historical evaluation
 
 **State:** Done — lean D8-1 + D8-2 (2026-07-22). Slice plan:
-`tasks/backlog/dq_008_lean_implementation_plan.md`. Parked items
+`tasks/done/dq_008_lean_implementation_plan.md`. Parked items
 (`IDX-EXECUTION-LABELS`, purged walk-forward, universe warehouse, excess
 return columns, CLI rename) remain deferred.
 
@@ -1145,7 +1145,7 @@ return columns, CLI rename) remain deferred.
 - Core evaluator: `src/application/use_case/accumulation_audit_use_case.py`
 - Config: accumulation audit configuration under `src/infrastructure/config/` and `config/`
 - CSV/display: `src/adapters/cli/analyze_accum_csv_writer.py`, `src/adapters/cli/analyze_accum_display.py`
-- Lean plan: `tasks/backlog/dq_008_lean_implementation_plan.md`
+- Lean plan: `tasks/done/dq_008_lean_implementation_plan.md`
 
 **Audit requirements:**
 
@@ -1300,7 +1300,7 @@ Existing logs/audits without prediction-time provenance or classifier version ar
 ### DQ-010 — Quarantine, migrate, rebuild, and prove the clean break
 
 **State:** Done — 2026-07-22 (forward-path close-out; quarantine is historical
-parking). Slice plan: `tasks/backlog/dq_010_lean_implementation_plan.md`.
+parking). Slice plan: `tasks/done/dq_010_lean_implementation_plan.md`.
 Sentiment cleanup remains independently gated by DQ-009.
 
 **Priority:** P0  
@@ -1339,7 +1339,7 @@ until operators choose a deliberate backfill before DQ-011 baseline freeze.
 - Forward producers: `AccumulationCandidateObservationPersister`,
   `BackfillSignalObservationsUseCase`, `GenerateSignalForwardLabelsUseCase`
 - Forward consumers: readiness / retrieve / verify / inspect / accum-audit
-- Lean plan: `tasks/backlog/dq_010_lean_implementation_plan.md`
+- Lean plan: `tasks/done/dq_010_lean_implementation_plan.md`
 
 **Do not interpret “clean break” as:**
 
@@ -1376,7 +1376,7 @@ Quarantine remains historical parking.
 ### DQ-011 — Freeze the corrected baseline and unblock CLI restructuring
 
 **State:** Done — 2026-07-22 lean baseline freeze (code/tests as truth).
-Slice plan: `tasks/backlog/dq_011_lean_implementation_plan.md`.
+Slice plan: `tasks/done/dq_011_lean_implementation_plan.md`.
 **CLI-001 may begin** for signal/accum (`improvement_cli_restructure.md`).
 
 **Priority:** P0  
@@ -1406,7 +1406,7 @@ recertification; those remain governed by
       *Lean:* current flat names frozen via D11-1…D11-6 adapter contracts; rename is CLI-002+.
 - [x] The DQ-011-scoped audit suite passes on a clean rebuilt database.
       *Lean:* temp fixture DBs in CliRunner tests (43 focused adapter tests green).
-- [x] `tasks/backlog/improvement_cli_restructure.md` CLI-001 may begin.
+- [x] `tasks/done/improvement_cli_restructure.md` CLI-001 may begin.
 - [x] Later CLI old/new equivalence compares against this corrected baseline only.
 
 #### Lean baseline freeze (2026-07-22) — closed

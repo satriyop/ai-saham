@@ -112,7 +112,7 @@ Task order and activation rules:
 Program map:
 [`tasks/backlog/signal_evidence_program.md`](../tasks/backlog/signal_evidence_program.md).  
 CLI routing (clean break to `research` / `analyze signal`):
-[`tasks/backlog/improvement_cli_restructure.md`](../tasks/backlog/improvement_cli_restructure.md).
+[`tasks/done/improvement_cli_restructure.md`](../tasks/done/improvement_cli_restructure.md).
 
 ---
 

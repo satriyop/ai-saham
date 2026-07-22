@@ -1,648 +1,520 @@
-# Roadmap: TUI And Optional Agent Interface
+# Roadmap: Read-Only TUI Research Workspace
 
-Status: thought document / implementation roadmap  
-Date: 2026-07-16  
-Scope: Textual-based terminal UI for AI Saham, with optional later chat/agent mode
+Status: vetted roadmap / pre-implementation
 
-## Executive Summary
+Last verified: 2026-07-22
 
-The best UI direction for the current codebase is a TUI first, not a full GUI.
-The repository is already CLI-first, local-first, deterministic-first, and
-workflow-heavy. A TUI can improve navigation, drilldown, and daily research
-ergonomics while keeping the same ports-and-adapters architecture.
+Scope: optional Textual-based terminal UI for local, deterministic research
 
-The TUI must be implemented as a new adapter:
+## Decision
+
+Build a narrow, read-only TUI as a sibling adapter to the CLI. Implement this
+option only.
+
+The first useful product journey is:
 
 ```text
-CLI adapter -> application use cases -> domain/ports -> infrastructure
-TUI adapter -> application use cases -> domain/ports -> infrastructure
+Today -> accumulation candidates -> ticker research
 ```
 
-It must not become a second business-logic system. TUI screens and widgets may
-render, navigate, collect input, and call application use cases. They must not
-query SQLite directly, construct provider clients directly, recompute scores,
-invent labels, or override SignalEngine, RiskEngine, TradeSetup, tuning, or
-evidence-promotion rules.
+Do not attempt to reproduce the full CLI command tree. The TUI earns further
+scope only after this journey is useful, offline-capable, responsive, and
+architecturally thin.
 
-Recommended path:
-
-1. Stabilize data and view contracts.
-2. Build a read-only Textual TUI adapter.
-3. Add ticker drilldown and workflow navigation.
-4. Add learning/readiness panels after canonical observation data and grading
-   loops are populated enough to be trustworthy.
-5. Add optional conversational agent mode only after the TUI has stable
-   read-only context providers and approval guardrails.
-
-## Current Codebase Vetting
-
-### Strengths To Build On
-
-| Area | Current Evidence | TUI Impact |
-|---|---|---|
-| Architecture | `README.md`, `ARCHITECTURE_DECISIONS.md`, `tests/architecture/test_layer_boundaries.py` | TUI can fit cleanly as `src/adapters/tui` |
-| CLI adapter pattern | `src/adapters/cli/main.py` and many command modules | Existing command groups map naturally to TUI screens |
-| Manual dependency injection | CLI workflow factories wire concrete repositories/providers | TUI should use equivalent thin composition factories |
-| Application DTOs/use cases | `daily_briefing_use_case.py`, `run_accumulation_screen_workflow_use_case.py`, `swing_analysis_workflow_use_case.py`, readiness/label/audit use cases | TUI can render structured results without scraping CLI output |
-| Rich display components | Existing CLI display modules use Rich tables/panels | Useful reference for information hierarchy, but not a direct widget layer |
-| Projection discipline | `screen_accum_result_projector.py` centralizes screen projection | Good example: adapter should render canonical application projections |
-| AI posture | `docs/ai_modes.md`, `src/infrastructure/ai/README.md` | Optional chat/agent can reuse AI as adapter, never authority |
-
-### Current Gaps And Risks
-
-| Gap | Why It Matters For TUI | Required Response |
-|---|---|---|
-| No TUI dependency | `pyproject.toml` has Typer/Rich, not Textual | Add Textual only when implementing Phase 1, likely as optional UI dependency |
-| CLI modules mix wiring and rendering | Some CLI files are large composition/rendering surfaces | Do not copy CLI internals into TUI widgets; create TUI-specific presenters and application view use cases where needed |
-| S1 observation identity was fixed in code, but local data may still be legacy | Learning/readiness panels can show empty or provisional results if the DB has no canonical observations yet | Gate learning/calibration panels on canonical observation availability and label coverage, not on the old S1 implementation bug |
-| Some workflows are expensive or provider-backed | TUI navigation should not accidentally fetch or recompute on every cursor move | Default to local cached reads; make network refresh explicit |
-| AI docs mention older/default provider details that may drift | Agent mode could over-trust stale provider assumptions | Use current AI factory/config at implementation time; keep chat optional and provider-swappable |
-| Architecture guard scans domain/application/infrastructure, not adapters | A TUI adapter can still become fat without failing current boundary tests | Add TUI-specific adapter-thinness tests or review checklist in implementation phases |
-
-## Architectural Decision
-
-### Placement
-
-Use this package shape:
+The CLI remains the primary supported automation interface. The TUI is an
+optional interactive research workspace over the same application contracts:
 
 ```text
+CLI adapter -----\
+                  -> application use cases -> domain/ports -> infrastructure
+TUI adapter -----/
+```
+
+The TUI may navigate, collect input, schedule application calls, preserve UI
+state, and render canonical results. It must not become a second workflow or
+policy system.
+
+## Current Code Truth
+
+This roadmap is based on source, tests, live CLI help, and accepted ADRs as of
+2026-07-22. Reverify these facts before implementation.
+
+| Concern | Current truth | Roadmap consequence |
+|---|---|---|
+| Public lifecycle | `today`, `fetch`, `audit`, `screen`, `learn`, `research`, `view`, `analyze`, `strategy`, `trade` | Design around user journeys and artifact authority, not one screen per command group |
+| Daily orientation | `DailyBriefingUseCase` already returns readiness, authority, regime, opening observations, accumulation candidates, setup-lens results, and warnings | Use it as the first screen contract |
+| Accumulation | `RunAccumulationScreenWorkflowUseCase` returns application-owned single/multi projections | Render its projection; do not reconstruct filtering, ranking, or canonical-window fields |
+| Ticker research | `SwingAnalysisWorkflowUseCase` returns typed verdict, evidence, and diagnostics | Use a local-only request; do not scrape CLI output |
+| Signal corpus | Explicit `saham research signal capture`/backfill owns canonical observation writes; ordinary screen/analyze paths are read-only | Do not revive old screen-recording behavior or use interactive frequency as the learning population |
+| Readiness | `ReportSignalReadinessUseCase` is cohort-aware and exposes an exclusion ledger; its ephemeral 70/30 split is diagnostic and `promotion_eligible` remains false | Label the screen research corpus health, never promotion/calibration authority |
+| Status | `GetSystemStatusUseCase` checks provider health as well as stored freshness | It is not a local-only Phase 1 contract |
+| Runtime | Application workflows are synchronous and some are expensive | Never execute them directly on Textual's event loop |
+| Dependencies | `pyproject.toml` has Typer/Rich but no Textual | Keep Textual optional and lazy-loaded |
+| Architecture guard | The general layer scan covers domain/application/infrastructure, not adapter thinness | Add TUI-specific import and behavior guards |
+| Composition | Concrete dependencies are manually wired in infrastructure composition roots or thin adapter factories | Use one TUI composition root; never make widgets dependency containers |
+
+The earlier S1-style observation-identity precondition is retired from this
+roadmap. The signal-evidence program now reports its lean canonical evidence
+and baseline gates closed. Corpus population is optional product data, not a
+prerequisite for starting the read-only TUI.
+
+## Product Boundary
+
+### V1 includes
+
+- Optional `saham tui` launcher.
+- Offline daily briefing.
+- Accumulation candidate browsing.
+- Local-only ticker research drilldown.
+- Research corpus health after the main journey is stable.
+- Help, keyboard navigation, loading, empty, unavailable, and error states.
+
+### V1 excludes
+
+- Provider refresh or fetch actions.
+- Watchlist, observation, label, journal, or other persistence actions.
+- Config editing, tuning review/application, or strategy authoring.
+- Background schedulers or autonomous refresh loops.
+- AI chat, conversational tools, or model challengers.
+- Order placement or broker execution.
+- A screen for every CLI command group.
+
+Conversation/agent work belongs to
+`docs/roadmap/roadmap_conversational_agent_architecture.md` and requires its own
+approved implementation plan or ADR. It is not a later phase of this roadmap.
+Write-capable TUI actions likewise require separate, action-specific tasks with
+side-effect, idempotency, failure, and confirmation contracts.
+
+## Architectural Contract
+
+### Package and composition shape
+
+Start with the smallest package that supports the first vertical slice:
+
+```text
+src/adapters/cli/
+  tui_commands.py          # Typer command; no top-level Textual import
+
 src/adapters/tui/
   __init__.py
-  app.py
-  main.py
-  tui_factory.py
-  routes.py
-  bindings.py
-
-  screens/
-    dashboard_screen.py
-    accumulation_screen.py
-    ticker_detail_screen.py
-    data_status_screen.py
-    calendar_screen.py
-    readiness_screen.py
-    agent_screen.py
-
-  widgets/
-    candidate_table.py
-    ticker_header.py
-    signal_panel.py
-    risk_panel.py
-    broker_flow_panel.py
-    calendar_events_panel.py
-    data_freshness_badge.py
-    readiness_summary_panel.py
-    chat_transcript.py
-    tool_approval_panel.py
-
+  main.py                  # Textual application and run entrypoint
+  composition.py           # only TUI module allowed to import infrastructure
+  state.py                 # UI-only state and request-generation identifiers
+  controllers/
   presenters/
-    dashboard_presenter.py
-    accumulation_presenter.py
-    ticker_detail_presenter.py
-    readiness_presenter.py
-    agent_presenter.py
+  screens/
+  widgets/
 ```
 
-### Dependency Direction
+Do not pre-create speculative screens, widgets, presenters, repositories, or
+agent modules. Add a file only when an implemented screen needs it.
 
-Allowed imports in TUI screens/widgets/presenters:
+`src/adapters/cli/tui_commands.py` must register a thin `saham tui` command and
+import `src.adapters.tui.main` only inside the command function. If Textual is
+not installed, it must exit non-zero with an actionable installation message,
+not a traceback. Importing `src.adapters.cli.main`, running `saham --help`, and
+using every non-TUI command must still work without the TUI extra.
+
+`src/adapters/tui/composition.py` owns concrete repository, config-loader,
+provider, and use-case construction. Prefer existing infrastructure
+composition helpers where they match the required contract. Do not move
+concrete construction into application factories or bootstrap modules.
+
+### Import rules
+
+Screens, widgets, presenters, state, and controllers may import:
 
 ```text
-src.application.dto
-src.application.use_case
-src.application.services only for pure presentation-safe DTO helpers when already accepted
-src.domain value objects/enums for rendering canonical values
-textual
-rich
 stdlib
+textual / rich
+src.application DTOs and use-case interfaces
+src.domain value objects and enums needed for rendering
+other src.adapters.tui modules
 ```
 
-Allowed imports in `src/adapters/tui/tui_factory.py` only:
+Only `src/adapters/tui/composition.py` may import `src.infrastructure.*`.
+
+All TUI modules are forbidden from importing or invoking:
 
 ```text
-src.infrastructure.persistence
-src.infrastructure.config
-src.infrastructure.browser/provider composition when explicitly needed
-src.infrastructure.ai factory for optional agent mode
-```
-
-Forbidden in TUI screens/widgets:
-
-```text
+src.adapters.cli display or command modules
 sqlite3
-src.infrastructure.*
-provider clients
-YAML loaders
+provider clients outside composition.py
+YAML/config loaders outside composition.py
+subprocess or arbitrary shell execution
 direct filesystem persistence
-scoring formulas
-risk/signal policy
-adapter-local thresholds, buckets, labels, pseudo-actions, or rankings
+scoring, risk, setup, tuning, evidence-authority, or freshness policy
 ```
 
-### Runtime Shape
+The TUI must never parse Rich/ANSI output or CLI JSON to recover application
+state.
+
+### Responsibility boundaries
+
+| Component | Owns | Must not own |
+|---|---|---|
+| Application use case | Workflow, policy, filtering, canonical projection, business status, unavailable reasons | Textual concepts, colors, focus, navigation |
+| TUI controller | One UI interaction, loading/cancellation state, invoking one injected application capability, mapping known failures to UI state | Cross-use-case business orchestration, retries, policy, persistence decisions |
+| Presenter | DTO-to-view-model formatting, labels copied from canonical values, styles, column order | Thresholds, ranking, action wording, readiness or freshness calculation |
+| Screen | Navigation, focus, binding interaction, choosing when an explicit action starts | Infrastructure construction, provider access, business decisions |
+| Widget | Rendering and local visual state | Dependency wiring or application workflow |
+| Composition root | Concrete dependency construction and injection | Business workflow or display policy |
+
+Do not add `GetTui*UseCase` types. New application queries must be named for
+their business meaning and must be independently useful to another adapter.
+Add one only after the inventory proves an existing result cannot support the
+screen without adapter-owned workflow or policy.
+
+### Execution and concurrency
+
+Existing application workflows are synchronous. Run them in Textual thread
+workers, never directly in event handlers or reactive watchers.
+
+Each screen action must have a monotonically increasing request-generation ID:
 
 ```text
-saham tui
-  -> adapters.cli or adapters.tui entrypoint parses launch options
-  -> TUI factory wires repositories/providers/use cases
-  -> Textual app owns navigation and screen lifecycle
-  -> screens call application-facing controllers/use cases
-  -> presenters map DTOs to view models
-  -> widgets render only
+user action
+  -> mark generation N LOADING
+  -> run injected application capability in worker
+  -> post typed completion for generation N
+  -> apply only if N is still the screen's active generation
 ```
 
-Do not make Textual widgets dependency containers. They should receive already
-constructed callables, controller objects, or DTOs.
+Required rules:
 
-## Application View Contracts Needed
+- Superseding an action cancels or invalidates the older worker result.
+- A late result must never overwrite newer screen state.
+- Thread workers must not mutate widgets directly; return through Textual's
+  thread-safe message/callback mechanism.
+- No automatic retry. A retry is an explicit user action unless an application
+  use case already owns a deterministic retry policy.
+- Cursor movement, focus, and row highlighting never trigger provider calls,
+  persistence, or expensive recomputation.
+- App exit must close cleanly without applying late worker results.
 
-The TUI should not scrape CLI table output. Where existing use cases return
-good DTOs, reuse them. Where a screen would need to call many unrelated use
-cases or perform workflow assembly, add application query/view use cases.
+### Screen-state contract
 
-Recommended application use cases:
+Every data-bearing screen uses these adapter states:
 
 ```text
-GetTuiDashboardUseCase
-GetAccumulationCandidatesViewUseCase
-GetTickerResearchViewUseCase
-GetDataStatusViewUseCase
-GetCalendarRiskViewUseCase
-GetLearningReadinessViewUseCase
+IDLE
+LOADING
+READY
+EMPTY
+UNAVAILABLE
+ERROR
 ```
 
-These are not TUI-specific in behavior. They are read/query use cases returning
-stable view DTOs that could also power CLI JSON or future web UI.
+- `EMPTY`: the application call succeeded and returned a valid empty result.
+- `UNAVAILABLE`: the application result explicitly reports missing/stale data
+  or another expected unavailable condition.
+- `ERROR`: validation, configuration, infrastructure, or other execution failed.
+- Contract/invariant/programmer errors must not be converted into ordinary
+  missing data. They reach the central error boundary and remain visibly failed.
 
-Example DTO boundary:
+Implementation tasks must name the exact exception types mapped to expected
+`UNAVAILABLE` or `ERROR` states. Broad `except Exception` handlers may protect
+the terminal session only at the outer screen/app boundary; they must retain
+the error class and must not fabricate a valid business result.
+
+### Meaning of read-only
+
+V1 is product-read-only: it performs no intentional fetch, corpus, label,
+watchlist, journal, config, tuning, or other business mutation.
+
+Some current SQLite repository constructors initialize schemas. Therefore do
+not claim byte-for-byte storage immutability unless a later task introduces and
+tests a genuinely read-only persistence composition. Phase 0 must record any
+constructor/startup side effects. The UI must never present schema
+initialization as a user-requested data update.
+
+## Contract Inventory
+
+### Daily workspace
 
 ```text
-Application DTO:
-  ticker
-  canonical action/status fields
-  score fields already produced by engines/use cases
-  freshness status
-  calendar risk status
-  unavailable reasons
-  warnings
-
-TUI presenter:
-  display text
-  color/style names
-  column order
-  collapsed/expanded state
+Owner: DailyBriefingUseCase
+Input: DailyBriefingRequest
+Output: DailyBriefingResponse
 ```
 
-## UX Scope
+Render existing fields for overall authority, dataset readiness, clocks,
+regime, opening observations, accumulation summary/candidates, setup-lens
+impact, and warnings. Do not make `GetSystemStatusUseCase` part of this screen;
+its provider-health probe violates the offline-only launch contract.
 
-### TUI Should Do First
+If a separate stored-data inventory later proves necessary, add a business-
+named application query such as `GetLocalDataInventoryUseCase`. Its contract
+must read local metadata only and must not silently reuse provider health
+checks.
 
-Read-only research terminal:
+### Accumulation browser
 
 ```text
-Dashboard
-Accumulation candidate browser
-Ticker drilldown
-Data/fetch status
-Corporate calendar risk view
-Readiness/label coverage view after S1
+Owner: RunAccumulationScreenWorkflowUseCase
+Input: RunAccumulationScreenWorkflowRequest
+Output: RunAccumulationScreenWorkflowResult
+Canonical rows: ScreenAccumSingleProjection or ScreenAccumMultiProjection
 ```
 
-### TUI Should Not Do First
+The projection is the one source of truth for candidate inclusion, canonical
+window, filters, ranks/order, risk status, setup phase, data state, and next
+action. Transport the returned projection to the presenter. Do not re-query or
+reconstruct an equivalent candidate list.
+
+V1 preserves canonical order. Interactive column sorting is deferred. If later
+added, it must be labeled as presentation order and preserve the canonical rank
+as a separate visible field.
+
+### Ticker research
 
 ```text
-Config editing
-Tuning patch apply
-Autonomous fetch loops
-Background scheduling daemon
-ML views
-AI-authored decisions
-Broker deep analytics beyond available application DTOs
+Owner: SwingAnalysisWorkflowUseCase
+Input: SwingAnalysisWorkflowRequest
+Output: SwingAnalysisWorkflowResponse
 ```
 
-Write actions can be added later, but every write action must have explicit
-confirmation, application-owned workflow, and deterministic behavior when AI is
-disabled.
-
-## Phase Roadmap
-
-### Phase 0: Preconditions And Contract Cleanup
-
-Goal:
+The V1 request must be local-only:
 
 ```text
-Prepare the codebase so TUI renders canonical application outputs instead of
-recreating CLI behavior.
+auto_refresh = false
+force_refresh = false
+include_sentiment = false
 ```
+
+Other optional detail flags may expose already-local evidence. The screen must
+render `SwingVerdict`, `SwingEvidence`, and `SwingDiagnostics` without merging
+canonical and preview results. `TradeSetup` remains the sole final swing-action
+wording. Missing signal evidence remains unavailable; it must not become
+neutral, WATCH, or a presenter-authored fallback.
+
+### Research corpus health
+
+```text
+Owner: ReportSignalReadinessUseCase
+Input: ReportSignalReadinessRequest(target, semantic_compatibility_id)
+Output: SignalReadinessReport
+```
+
+The UI must require or explicitly resolve a target and cohort exactly as the
+use case does. Show:
+
+- target components and diagnostic-target status;
+- selected and available semantic compatibility IDs;
+- observation and label counts;
+- unique ticker/session counts;
+- exclusion ledger;
+- split mode, IS/OOS counts, diagnostic readiness, and blockers;
+- `patch_eligible` only with its existing meaning;
+- `promotion_eligible = false` and the diagnostic-only limitation.
+
+Do not call label generation, capture, repair, tuning, or promotion workflows
+from this screen. An empty corpus is a valid `EMPTY`/not-ready product state and
+does not block shipment of the daily workspace.
+
+## Delivery Roadmap
+
+### Phase 0 — Inventory and executable task contract
+
+Goal: prove the first journey can be built without importing CLI behavior or
+inventing application policy.
 
 Tasks:
 
-- Confirm S1 remains fixed in code: screen execution is read-only, canonical
-  recording is explicit, duplicate recording is idempotent, and labels use
-  canonical observation rows.
-- Check local data readiness before exposing learning/calibration screens:
-  canonical observation count, label count, unavailable reasons, and IS/OOS
-  split coverage.
-- Identify which CLI commands already have reusable application DTOs.
-- Identify which CLI output logic is adapter-only and should become
-  application projection before TUI uses it.
-- Decide dependency packaging:
-  - preferred: `ui = ["textual>=..."]` optional extra
-  - alternative: main dependency only if TUI becomes first-class default
-- Decide command entrypoint:
-  - `saham tui` as a Typer command
-  - optional future script: `saham-tui`
+- Record the screen-to-use-case mappings above in the implementation task.
+- Inspect each production composition root and list its concrete dependencies.
+- Record constructor/startup side effects, network-capable callables, optional
+  evidence, and local-only request values.
+- Define exact loading, empty, unavailable, error, and cancellation behavior.
+- Verify which application DTO fields each first-slice widget consumes.
+- Decide and lock the optional dependency range. At this validation date the
+  candidate is `tui = ["textual>=8.2,<9"]`; recheck before editing the lockfile.
+- Define the lazy-import failure message and exit behavior.
 
 Acceptance:
 
-- No TUI code yet required.
-- Written inventory of reusable use cases and missing view contracts.
-- S1 status and canonical-data readiness are explicit in the TUI task plan.
-- Textual dependency decision is recorded before dependency edit.
+- One implementation task covers only the optional shell and daily screen.
+- Every transported value has one named owner and producer-to-presenter path.
+- Network and mutation-capable dependencies are identified and excluded.
+- Missing and failure states are explicit; no `as needed` contracts remain.
+- No product-layer code is changed in this phase.
 
-Layer plan:
+### Phase 1 — Optional shell and execution foundation
 
-```text
-Domain: not touched
-Application: maybe add/read view-contract tasks only, no UI
-Infrastructure: not touched
-Adapter: not touched or docs only
-```
-
-### Phase 1: Minimal Read-Only TUI Shell
-
-Goal:
-
-```text
-Start a Textual app that shows local system/data status and navigates between
-empty or simple read-only screens.
-```
+Goal: launch and exit a responsive optional TUI without weakening the base CLI.
 
 Scope:
 
-- Add `src/adapters/tui`.
-- Add `saham tui` launcher.
-- Add Dashboard, Data Status, and Help/About screens.
-- Use local cached status only.
-- No provider/network fetch from screen lifecycle.
-- No AI.
-
-Recommended screens:
-
-```text
-DashboardScreen
-DataStatusScreen
-HelpScreen
-```
+- Add the `tui` optional dependency and locked version.
+- Add lazy `saham tui` registration.
+- Add the minimal TUI package and one composition root.
+- Add Help/About and an empty daily screen shell.
+- Implement the worker, request-generation, and common screen-state machinery.
 
 Acceptance:
 
-- `saham tui` starts and exits cleanly.
-- TUI works offline.
-- TUI imports no infrastructure outside `tui_factory.py`.
-- Architecture test remains green.
-- Basic smoke test covers app construction or presenter output.
+- Base installation without Textual imports and runs `saham --help`.
+- Without Textual, `saham tui` exits non-zero with the documented install hint.
+- With the extra, `saham tui` starts and exits cleanly offline.
+- No use case runs merely from focus/cursor changes.
+- A superseded worker result cannot update current state.
+- TUI-specific import guards reject infrastructure outside `composition.py`,
+  CLI display imports, SQLite, YAML loaders, subprocess, and provider clients.
+- Headless tests cover launch, Help navigation, and exit at 80x24.
 
-Layer plan:
+### Phase 2 — Offline daily workspace
 
-```text
-Domain: not touched
-Application: reuse existing status/read use cases or add read-only view use case
-Infrastructure: not touched except factory wiring through existing implementations
-Adapter: new Textual adapter, thin launcher, screens, widgets, presenters
-```
-
-### Phase 2: Accumulation Candidate Browser
-
-Goal:
-
-```text
-Make the most common human workflow easier: browse accumulation candidates and
-open a candidate detail placeholder.
-```
+Goal: make `saham tui` useful for daily orientation from cached data.
 
 Scope:
 
-- Screen for accumulation candidates using application projection.
-- Sort/filter using canonical application output only.
-- Keyboard navigation:
-  - up/down candidate
-  - enter opens ticker detail
-  - refresh runs explicit local recompute or documented use case
-- Show warnings and freshness status clearly.
-
-Dependencies:
-
-- Reuse `RunAccumulationScreenWorkflowUseCase`.
-- Reuse `screen_accum_result_projector.py` or a new application view use case.
-- Do not persist diagnostic multi-window rows; S1 fixed this contract and TUI
-  must not reintroduce the old side effect.
+- Execute `DailyBriefingUseCase` in a worker.
+- Render authority/readiness before candidate tables.
+- Render regime, opening observations, accumulation shortlist, setup-lens
+  impact, warnings, and data clocks.
+- Provide explicit Reload for local recomputation only.
 
 Acceptance:
 
-- Candidate rows match CLI JSON/table projection for equivalent inputs.
-- No adapter-local score/rank/bucket calculation.
-- Network/provider refresh is explicit, not automatic on cursor movement.
-- Multi-window mode does not worsen S1.
+- Startup and Reload perform no provider request or intentional business write.
+- `READY`, `PARTIAL`, `NOT_READY`, empty, and execution-failure fixtures render
+  distinguishable states.
+- Candidate/actions/status text comes from the application response.
+- A NOT_READY response does not show suppressed rankings as usable candidates.
+- Presenter tests assert exact authority, warning, and unavailable mappings.
+- Headless tests cover load, reload, late-result rejection, and error recovery.
 
-Layer plan:
+### Phase 3 — Candidate browser and ticker drilldown
 
-```text
-Domain: not touched
-Application: add view DTO/use case only if existing response is not enough
-Infrastructure: not touched
-Adapter: TUI screen, presenter, candidate table widget
-```
-
-### Phase 3: Ticker Research Drilldown
-
-Goal:
-
-```text
-Provide a single ticker view that combines existing deterministic evidence in
-one navigable screen.
-```
+Goal: complete the first validated journey.
 
 Scope:
 
-- Header: ticker, latest candle/broker dates, freshness.
-- Signal panel: canonical signal score, coverage, decision fields.
-- Risk panel: canonical OPEN/BLOCKED status and gates.
-- Trade setup panel: canonical TradeSetup action/status.
-- Broker flow panel: existing broker summary/detail fields.
-- Corporate calendar panel: existing event-risk context.
-- Warnings/unavailable evidence panel.
-
-Dependencies:
-
-- Reuse `SwingAnalysisWorkflowUseCase` where practical.
-- Consider `GetTickerResearchViewUseCase` to avoid screen-level orchestration.
+- Open the application-owned accumulation projection from the daily screen.
+- Navigate candidates without recomputation.
+- Run an explicit local-only ticker research request on Enter.
+- Render canonical verdict, signal coverage, risk gates, TradeSetup, supporting
+  evidence, corporate-action risk, freshness, warnings, and diagnostics.
 
 Acceptance:
 
-- TUI never creates ENTER/WATCH/AVOID text independently.
-- Every displayed action/status comes from domain/application/config.
-- Missing data appears as unavailable/unknown, not neutral.
-- No direct SQLite/provider access in widgets/screens.
+- The candidate browser receives the exact workflow projection; no second read
+  or reconstructed list determines inclusion/order.
+- Candidate order matches the canonical projection.
+- Navigation alone performs no application call.
+- Ticker request records `auto_refresh=false`, `force_refresh=false`, and
+  `include_sentiment=false` in controller tests.
+- Canonical and preview verdicts are visually and structurally separate.
+- Missing evidence is `UNAVAILABLE`, never neutral or adapter-authored advice.
+- Tests prove no TUI module creates ENTER/WATCH/AVOID/BLOCKED wording.
 
-Layer plan:
+### Phase 4 — Research corpus health
 
-```text
-Domain: not touched
-Application: likely add ticker research view DTO/use case
-Infrastructure: factory wiring only
-Adapter: TUI detail screen and presenters
-```
-
-### Phase 4: Readiness, Labels, And Calibration Panels
-
-Goal:
-
-```text
-Expose learning health only after observation identity and label binding are
-trustworthy.
-```
-
-Hard gate:
-
-```text
-Do not present learning/calibration data as authoritative unless canonical
-observations and labels exist for the selected scope. If the DB only has legacy
-candidate_observations rows, the screen must show "no canonical observations"
-or "provisional / not calibration-grade" instead of silently using legacy rows.
-```
+Goal: expose honest corpus status without implying evidence authority.
 
 Scope:
 
-- Observation counts by date/universe/setup/horizon.
-- Forward-label counts and unavailable reasons.
-- IS/OOS counts with explicit split method.
-- Patch eligibility and blockers from application readiness output.
-- Accumulation screener grading loop status when available.
-
-Dependencies:
-
-- `ReportSignalReadinessUseCase`
-- `GenerateSignalForwardLabelsUseCase`
-- `SummarizeSignalForwardLabelsUseCase`
-- future accumulation grading loop use case
+- Add target and semantic-cohort selection.
+- Render readiness counts, exclusions, split identity, metrics, and blockers.
+- Support a valid empty-corpus state.
 
 Acceptance:
 
-- IS/OOS split method is shown.
-- Provisional or incomplete data is visible.
-- No config patch apply from TUI.
-- No AI-generated tuning authority.
+- Multiple cohorts require explicit selection exactly as the application
+  contract requires; the adapter never pools them.
+- The ephemeral split and diagnostic-only meaning are always visible.
+- `promotion_eligible` is not inferred from `diagnostic_ready` or
+  `patch_eligible`.
+- No capture, label, repair, patch, tuning, or promotion use case is wired.
 
-Layer plan:
+### Phase 5 — Hardening and release decision
 
-```text
-Domain: not touched
-Application: readiness/coverage view use cases as needed
-Infrastructure: factory wiring only
-Adapter: TUI readiness screens and presenters
-```
+Goal: decide whether the narrow TUI deserves continued product investment.
 
-### Phase 5: Controlled Write Actions
+Tasks:
 
-Goal:
+- Test at 80x24, 120x40, and a representative large terminal.
+- Test keyboard-only navigation, repeated reload, worker cancellation, app exit
+  during work, error recovery, and empty databases.
+- Verify base install, TUI-extra install, and offline execution in CI.
+- Run architecture boundary and TUI adapter-thinness tests.
+- Document installation, controls, local-only behavior, and limitations.
+- Review actual user value before proposing any new screen or write action.
 
-```text
-Allow selected deterministic actions from the TUI without turning it into a
-policy layer.
-```
+Exit decision:
 
-Possible actions:
-
-```text
-Run fetch status
-Run explicit fetch market/calendar command equivalent
-Save watchlist
-Generate labels
-Run readiness report
-Open/draft tuning review without apply
-```
-
-Rules:
-
-- Every write action must call an application use case.
-- Every write action must show a confirmation dialog with exact data impact.
-- No background mutation on screen open.
-- No autonomous config apply.
-- No AI-triggered tool execution without explicit user approval.
-
-Acceptance:
-
-- Actions are deterministic for the same inputs and local data.
-- Side effects are idempotent where applicable.
-- Errors are visible and actionable.
-- Tests cover action controller behavior outside Textual where possible.
-
-Layer plan:
-
-```text
-Domain: not touched unless existing use case requires domain value objects
-Application: owns all write workflows
-Infrastructure: existing providers/repositories only
-Adapter: confirmation UI and error mapping only
-```
-
-### Phase 6: Optional Conversation Agent Mode
-
-Goal:
-
-```text
-Add a chat-style research copilot inside the TUI without giving AI authority
-over scores, risk, trade setup, config, or persistence.
-```
-
-Recommended initial capability:
-
-```text
-Ask questions about currently loaded DTOs:
-- Why is this ticker WATCH/AVOID/BLOCKED?
-- What changed in accumulation candidates?
-- Which rows have calendar risk?
-- What are the readiness blockers?
-```
-
-Architecture:
-
-```text
-AgentScreen
-  -> SendAgentMessageUseCase
-  -> AgentContextProvider ports
-  -> LlmProvider port
-  -> infrastructure AI adapter
-```
-
-Application contracts to add:
-
-```text
-StartAgentConversationUseCase
-SendAgentMessageUseCase
-BuildAgentContextUseCase
-ExecuteApprovedAgentToolUseCase
-ConversationRepository port
-LlmProvider or AgentModelProvider port
-```
-
-Agent tools must be application-owned capabilities, not arbitrary shell access:
-
-```text
-get_current_dashboard_context
-get_ticker_research_context
-get_accumulation_candidates_context
-get_readiness_context
-draft_research_note
-```
-
-Forbidden in initial agent mode:
-
-```text
-shell execution
-arbitrary file editing
-direct SQL
-config patch apply
-placing orders
-changing risk/signal/tuning authority
-claiming model output as trading advice
-```
-
-AI behavior rules:
-
-- AI is optional and disabled by default unless explicitly enabled.
-- The deterministic TUI must still work without API keys or network.
-- AI answers must cite the local DTO/context fields they used.
-- AI can summarize or explain; it cannot decide.
-- Tool calls require explicit user approval if they have side effects.
-- All prompts and model/provider choices must be versioned or logged.
-
-Acceptance:
-
-- Mock provider tests pass offline.
-- Chat fails gracefully without API keys.
-- Agent cannot access raw infrastructure from UI/widgets.
-- Agent cannot mutate config or data in read-only mode.
-
-Layer plan:
-
-```text
-Domain: optional ports/value objects only if needed for provider abstraction
-Application: agent conversation and context use cases
-Infrastructure: AI provider adapters and optional conversation persistence
-Adapter: Textual chat UI, transcript, approval panel
-```
+- Keep Textual optional unless measured adoption justifies changing ADR-011's
+  CLI-primary posture.
+- Further read-only screens require their own user journey and contract map.
+- Any write action or conversational agent requires a separate approved plan.
 
 ## Testing Strategy
 
-Use layered tests:
-
-| Test Type | Scope |
+| Test | Required proof |
 |---|---|
-| Architecture tests | TUI screens/widgets must not import infrastructure or forbidden libraries |
-| Application tests | View use cases return stable DTOs from fake repositories/providers |
-| Presenter tests | DTO to view-model formatting, no policy decisions |
-| TUI smoke tests | App starts, screen routes exist, key bindings do not crash |
-| Agent tests | Mock LLM, deterministic context, no network, side-effect approval rules |
+| Packaging/import | Base CLI works without Textual; missing-extra failure is actionable |
+| Architecture | TUI non-composition modules cannot import infrastructure, CLI display, SQLite, YAML, subprocess, or providers |
+| Application | Existing/new business queries return typed results from fakes without Textual imports |
+| Controller | Exact request values, one application call, generation handling, no automatic retry |
+| Presenter | DTO-to-view-model formatting only; no thresholds, ranking, status, or action invention |
+| Headless TUI | Navigation, bindings, loading/empty/unavailable/error states, terminal sizes |
+| Concurrency | Superseded/late results cannot overwrite current state; exit during work is safe |
+| Offline | No network/provider call in shell, daily, candidate navigation, ticker local-only, or readiness screens |
+| Negative authority | Missing evidence never becomes neutral; preview never becomes canonical; readiness never implies promotion |
 
-Prefer testing application controllers and presenters outside Textual. Keep full
-Textual integration tests small.
+Prefer controller and presenter tests outside Textual. Use Textual's headless
+`App.run_test()`/Pilot boundary for representative navigation and lifecycle
+behavior rather than trying to prove business policy through widget snapshots.
 
-## Dependency Strategy
+## Do Not Interpret This As
 
-Recommended `pyproject.toml` shape when implementation starts:
+- Do not wrap or execute CLI commands from the TUI.
+- Do not scrape Rich tables, ANSI output, or CLI JSON.
+- Do not create one screen per top-level CLI group.
+- Do not add speculative `GetTui*` application use cases.
+- Do not put workflow orchestration into controllers, screens, or presenters.
+- Do not make `GetSystemStatusUseCase` an offline-only contract; it probes
+  providers in its current composition.
+- Do not trigger fetch, persistence, or expensive recomputation from mount,
+  focus, cursor movement, or reactive field changes.
+- Do not let user-driven presentation order replace canonical rank.
+- Do not treat corpus availability, diagnostic readiness, or patch eligibility
+  as promotion evidence.
+- Do not make AI, provider credentials, network access, or model dependencies
+  required for the TUI.
+- Do not add generic write capability, arbitrary tools, direct SQL, shell
+  access, config editing, tuning apply, or order execution.
+- Do not claim storage is byte-for-byte read-only while current repository
+  construction can initialize schemas.
 
-```toml
-[project.optional-dependencies]
-ui = [
-    "textual>=0.x",
-]
-```
+## Implementation Close Criteria
 
-Do not add a UI dependency until Phase 1 starts. Do not make AI provider
-packages mandatory for TUI. Agent mode should use existing optional/provider
-patterns and fail gracefully when provider dependencies or API keys are absent.
+Each phase task must state its own exact files, request/response contracts,
+production composition roots, missing/failure mappings, negative tests, and
+focused verification before editing.
 
-## Implementation Guardrails For Future Agents
+A phase is done only when:
 
-Before implementing any TUI phase, the agent must:
+- the exact scoped journey works, not merely an empty screen shape;
+- adapters remain thin and application/domain authority is unchanged;
+- offline and no-intentional-mutation invariants have executable tests;
+- optional dependency behavior is tested both installed and absent;
+- cancellation and late-result behavior are tested;
+- forbidden imports and authority fallbacks have negative tests;
+- focused tests, architecture tests, and `git diff --check` pass;
+- no unrelated worktree changes are modified.
 
-- Read `README.md`, `PROMPT_CONTRACT.md`, `DEFINITION_OF_DONE.md`,
-  `AI_AGENT_CHECKLIST.md`, `TASK_TEMPLATE.md`, and
-  `ARCHITECTURE_DECISIONS.md`.
-- Read this roadmap and the specific use cases/screens affected.
-- State the layer plan.
-- State whether the phase touches SignalEngine, RiskEngine, TradeSetup,
-  market context, setup policy, evidence authority, persistence, or AI.
-- Confirm that TUI remains an adapter.
+## Immediate Next Task
 
-Implementation rules:
-
-- Do not scrape CLI output.
-- Do not import infrastructure from TUI widgets/screens.
-- Do not duplicate CLI rendering logic if it contains business semantics.
-- Do not invent labels, thresholds, rankings, scores, buckets, or next-step
-  recommendations in the adapter.
-- Do not make AI mandatory.
-- Do not let AI write config, apply patches, or override deterministic results.
-- Do not expose learning/calibration panels as authoritative unless canonical
-  observations and exact label binding are present for the selected scope.
-
-## Recommended Immediate Next Task
-
-Create a Phase 0 inventory document:
-
-```text
-docs/thought/tui_phase0_inventory.md
-```
-
-It should map:
+Create a strict Phase 0/1 implementation task for only:
 
 ```text
-TUI screen -> existing CLI command -> existing application use case/DTO ->
-missing application view contract -> S1/data-risk dependency -> test target
+optional lazy launcher
++ worker/screen-state foundation
++ offline DailyBriefingUseCase screen
 ```
 
-This keeps the first implementation small and prevents the TUI from inheriting
-adapter-local CLI behavior.
+Do not include candidate drilldown, readiness, writes, or agent work in that
+task. Require pre-edit confirmation of the lazy import path, dependency bundle,
+worker result transport, known exception mapping, and the exact
+`DailyBriefingResponse` fields rendered.

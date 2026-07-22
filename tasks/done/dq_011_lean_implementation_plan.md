@@ -3,7 +3,7 @@
 **Status:** Done — 2026-07-22 (thin baseline freeze; code/tests as truth).
 
 Companion to `tasks/backlog/audit_data_quality.md` → DQ-011 and
-`tasks/backlog/improvement_cli_restructure.md` → CLI-001 hard prerequisite.
+`tasks/done/improvement_cli_restructure.md` → CLI-001 hard prerequisite.
 
 ## Guiding decision (final)
 

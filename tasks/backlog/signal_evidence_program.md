@@ -20,7 +20,7 @@ before implementing.
 | `DQ-BASELINE-GATE` | Closed (DQ-010 + DQ-011) |
 
 **Engineering next:** CLI research remount + capture is **Done**
-([`improvement_cli_restructure.md`](improvement_cli_restructure.md)).
+([`improvement_cli_restructure.md`](../done/improvement_cli_restructure.md) — moved to `tasks/done/`).
 Optional: populate corpus via `research signal capture` / backfill then
 `readiness` (product use, not a gate). UI: TUI Phase 0 inventory
 ([`docs/roadmap/roadmap_tui.md`](../../docs/roadmap/roadmap_tui.md)) when ready.
