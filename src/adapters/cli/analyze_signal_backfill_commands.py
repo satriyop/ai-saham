@@ -21,6 +21,9 @@ from src.application.services.lean_observation_identity import (
     LeanObservationIdentity,
     resolve_lean_semantic_compatibility_id,
 )
+from src.application.services.signal_evidence_execution_context_builder import (
+    SignalEvidenceExecutionContextBuilder,
+)
 from src.application.services.signal_observation_request_builder import (
     BuildSignalObservationScreenRequest,
 )
@@ -45,6 +48,9 @@ from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.market_context_factory import evaluate_market_context
 from src.infrastructure.config.swing_config import load_swing_config
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
+from src.infrastructure.persistence.ihsg_trading_session_calendar_provider import (
+    IHSGTradingSessionCalendarProvider,
+)
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
     SQLiteCandidateObservationsRepository,
@@ -178,6 +184,14 @@ def run_signal_observation_corpus_write(
         label_generation_use_case=label_use_case,
         evaluate_market_context=_evaluate_market_context_for_corpus,
         session_resolver=EffectiveMarketSessionResolver(market_repo),
+        evidence_context_builder=SignalEvidenceExecutionContextBuilder(
+            trading_session_calendar_loader=lambda start, end: (
+                IHSGTradingSessionCalendarProvider(market_repo).load(
+                    coverage_start=start,
+                    coverage_end=end,
+                )
+            ),
+        ),
     ).execute(
         BackfillSignalObservationsRequest(
             tickers=tuple(tickers),

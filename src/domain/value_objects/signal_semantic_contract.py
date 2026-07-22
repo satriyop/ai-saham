@@ -21,7 +21,7 @@ _LOWERCASE_SNAKE = re.compile(r"^[a-z][a-z0-9_]*$")
 ACCUMULATION_DISCOVERY_CONTRACT = "accumulation-discovery"
 
 EVIDENCE_CONTRACT_VERSION = "1.4"
-SEMANTIC_ENGINE_VERSION = "1.2"
+SEMANTIC_ENGINE_VERSION = "1.3"
 
 _EXECUTION_LABEL_POLICY_VERSIONS: tuple[tuple[str, str], ...] = (
     ("TACTICAL_3D", "tactical_3d_v1"),

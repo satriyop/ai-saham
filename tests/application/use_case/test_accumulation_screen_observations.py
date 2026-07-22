@@ -173,13 +173,11 @@ def test_screen_persists_regime_attribution_fingerprint_when_market_context_supp
     assert fingerprint["regime_detection_method_at_signal"] is None
 
 
-def test_market_context_never_leaks_into_scoring_only_into_fingerprint_attribution():
-    """Regression guard: market_context is observation-attribution only. Running
-    the exact same screen twice — once with market_context=None and once with a
-    real MarketContext supplied — must produce an IDENTICAL signal_assessment
-    (score/strength/entry_quality) and IDENTICAL trade_setup for the same
-    candidate. Only the regime-attribution keys inside sub_signal_fingerprint
-    may differ between the two persisted observations."""
+def test_market_context_feeds_decision_policy_and_fingerprint_attribution():
+    """market_context reaches DecisionPolicy (constraints.regime) and
+    fingerprint attribution. Raw score/strength stay regime-independent;
+    decision_constraints.regime must track the supplied MarketContext.
+    """
     session_dates = _weekdays(date(2026, 1, 1), 7)
     as_of = session_dates[-1]
 
@@ -192,7 +190,7 @@ def test_market_context_never_leaks_into_scoring_only_into_fingerprint_attributi
     def _fresh_summaries():
         return [_summary("BBCA", day, Decimal("110")) for day in session_dates]
 
-    # Run 1: no market_context.
+    # Run 1: no market_context → DecisionPolicy RISK_ON defaults, regime=null.
     spy_repo_a = SpyCandidateObservationsRepository()
     use_case_a = AccumulationScreenUseCase(
         indicator_registry=IndicatorRegistry(),
@@ -213,8 +211,7 @@ def test_market_context_never_leaks_into_scoring_only_into_fingerprint_attributi
         ),
     )
 
-    # Run 2: fresh use-case instance, identical fixture data, but with a real
-    # MarketContext supplied.
+    # Run 2: RISK_OFF market_context supplied.
     spy_repo_b = SpyCandidateObservationsRepository()
     use_case_b = AccumulationScreenUseCase(
         indicator_registry=IndicatorRegistry(),
@@ -252,7 +249,6 @@ def test_market_context_never_leaks_into_scoring_only_into_fingerprint_attributi
     candidate_a = response_a.candidates[0]
     candidate_b = response_b.candidates[0]
 
-    # Scoring/verdict must be bit-for-bit identical regardless of market_context.
     assert candidate_a.signal_assessment is not None
     assert candidate_b.signal_assessment is not None
     assert (
@@ -263,12 +259,13 @@ def test_market_context_never_leaks_into_scoring_only_into_fingerprint_attributi
         candidate_a.signal_assessment.assessment.strength
         == candidate_b.signal_assessment.assessment.strength
     )
-    assert (
-        candidate_a.signal_assessment.assessment.entry_quality
-        == candidate_b.signal_assessment.assessment.entry_quality
-    )
-    assert candidate_a.trade_setup is None
-    assert candidate_b.trade_setup is None
+
+    constraints_a = candidate_a.signal_assessment.assessment.decision_constraints
+    constraints_b = candidate_b.signal_assessment.assessment.decision_constraints
+    assert constraints_a is not None and constraints_b is not None
+    assert constraints_a.regime is None
+    assert constraints_b.regime == MarketRegime.RISK_OFF.value
+    assert constraints_b.regime_enter_allowed is False
 
     assert len(spy_repo_a.saved) == 1
     assert len(spy_repo_b.saved) == 1
@@ -276,6 +273,12 @@ def test_market_context_never_leaks_into_scoring_only_into_fingerprint_attributi
     obs_b = spy_repo_b.saved[0]
     assert isinstance(obs_a, CandidateObservation)
     assert isinstance(obs_b, CandidateObservation)
+
+    assert obs_a.payload["signal"]["assessment"]["decision_constraints"]["regime"] is None
+    assert (
+        obs_b.payload["signal"]["assessment"]["decision_constraints"]["regime"]
+        == MarketRegime.RISK_OFF.value
+    )
 
     fingerprint_a = dict(obs_a.payload["sub_signal_fingerprint"])
     fingerprint_b = dict(obs_b.payload["sub_signal_fingerprint"])
@@ -287,8 +290,6 @@ def test_market_context_never_leaks_into_scoring_only_into_fingerprint_attributi
         "days_in_regime_at_signal",
         "regime_transition_warning_at_signal",
     }
-
-    # These must differ — proof the attribution was actually threaded through.
     for key in regime_attribution_keys:
         assert fingerprint_a[key] != fingerprint_b[key], (
             f"expected {key} to differ between runs, both were {fingerprint_a[key]!r}"
@@ -297,20 +298,19 @@ def test_market_context_never_leaks_into_scoring_only_into_fingerprint_attributi
     assert fingerprint_b["regime_confidence_at_signal"] == 0.9
     assert fingerprint_b["regime_stability_at_signal"] == "TRANSITIONING"
     assert fingerprint_b["days_in_regime_at_signal"] == 2
-    assert fingerprint_b["regime_transition_warning_at_signal"] == "regime shifted 2 days ago"
+    assert fingerprint_b["regime_transition_warning_at_signal"] == (
+        "regime shifted 2 days ago"
+    )
 
-    # Everything else in the fingerprint must be identical — market_context must
-    # not leak into any other sub-signal value.
-    for key in regime_attribution_keys:
-        fingerprint_a.pop(key)
-        fingerprint_b.pop(key)
+    # Policy-bound fingerprint keys may differ; strip them before equality.
+    policy_keys = {
+        "decision_constraints",
+        *regime_attribution_keys,
+    }
+    for key in policy_keys:
+        fingerprint_a.pop(key, None)
+        fingerprint_b.pop(key, None)
     assert fingerprint_a == fingerprint_b
-
-    # Full candidate/signal payload equality (minus captured_at/timestamps)
-    candidate_dict_a = obs_a.payload["candidate"]
-    candidate_dict_b = obs_b.payload["candidate"]
-    assert candidate_dict_a == candidate_dict_b
-    assert obs_a.payload["trade_setup"] == obs_b.payload["trade_setup"]
 
 
 def test_screen_persists_setup_family_fingerprint_when_swing_setup_catalog_matches():

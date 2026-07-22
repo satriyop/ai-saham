@@ -239,7 +239,7 @@ class TestSemanticSensitivity:
         self._assert_changes(evidence_contract_version="2.0")
 
     def test_observation_schema_version(self) -> None:
-        self._assert_changes(observation_schema_version=4)  # current is 5
+        self._assert_changes(observation_schema_version=5)  # current is 6
 
     def test_label_schema_version(self) -> None:
         self._assert_changes(label_schema_version=4)  # current is 3

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import date, datetime
+from dataclasses import dataclass, field, replace
+from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Callable
 
 from src.application.dto.signal_evidence_execution_context import (
@@ -14,6 +14,9 @@ from src.application.services.effective_market_session_resolver import (
 )
 from src.application.services.lean_observation_identity import (
     LeanObservationIdentity,
+)
+from src.application.services.signal_evidence_execution_context_builder import (
+    SignalEvidenceExecutionContextBuilder,
 )
 from src.application.services.signal_observation_request_builder import (
     BuildSignalObservationScreenRequest,
@@ -149,6 +152,8 @@ class BackfillSignalObservationsResponse:
 class BackfillSignalObservationsUseCase:
     """Create historical candidate observations before optional label generation."""
 
+    _AVAILABILITY_CALENDAR_LOOKBACK_DAYS = 14
+
     def __init__(
         self,
         *,
@@ -160,6 +165,7 @@ class BackfillSignalObservationsUseCase:
         label_generation_use_case: GenerateSignalForwardLabelsUseCase | None = None,
         evaluate_market_context: "Callable[..., MarketContext] | None" = None,
         session_resolver: EffectiveMarketSessionResolver | None = None,
+        evidence_context_builder: SignalEvidenceExecutionContextBuilder | None = None,
     ) -> None:
         self._record = record_observations_use_case
         self._request_builder = screen_request_builder
@@ -174,6 +180,7 @@ class BackfillSignalObservationsUseCase:
         self._session_resolver = session_resolver or EffectiveMarketSessionResolver(
             market_data_repository
         )
+        self._evidence_context_builder = evidence_context_builder
 
     def execute(
         self,
@@ -247,14 +254,7 @@ class BackfillSignalObservationsUseCase:
             effective_session = self._session_resolver.resolve(
                 run_at=datetime.combine(trading_date, MARKET_CLOSE, tzinfo=IDX_TIMEZONE)
             )
-            context = SignalEvidenceExecutionContext(
-                effective_session=effective_session,
-                source_availability_use_case=None,
-                observation_contract=self._observation_identity.observation_contract,
-                semantic_compatibility_id=(
-                    self._observation_identity.semantic_compatibility_id
-                ),
-            )
+            context = self._build_execution_context(effective_session)
 
             evaluated_tickers_for_date: set[str] = set()
             for window in request.windows:
@@ -392,6 +392,46 @@ class BackfillSignalObservationsUseCase:
             ticker_exclusions=tuple(ticker_exclusions),
             contains_control_population=contains_control_population,
             recall_eligibility=recall_eligibility,
+        )
+
+    def _build_execution_context(
+        self, effective_session
+    ) -> SignalEvidenceExecutionContext:
+        """Build capture context with availability assessment when possible.
+
+        Mirrors the live screen 14-day IHSG calendar window so historical
+        coverage is not permanently UNKNOWN via AVAILABILITY_ASSESSOR_UNAVAILABLE.
+        Identity stamps remain owned by this use case.
+        """
+        if self._evidence_context_builder is None:
+            return SignalEvidenceExecutionContext(
+                effective_session=effective_session,
+                source_availability_use_case=None,
+                observation_contract=self._observation_identity.observation_contract,
+                semantic_compatibility_id=(
+                    self._observation_identity.semantic_compatibility_id
+                ),
+            )
+
+        coverage_end = (
+            effective_session.latest_completed_session
+            or effective_session.analysis_as_of
+            or effective_session.decision_at.date()
+        )
+        coverage_start = coverage_end - timedelta(
+            days=self._AVAILABILITY_CALENDAR_LOOKBACK_DAYS
+        )
+        built = self._evidence_context_builder.build(
+            effective_session=effective_session,
+            coverage_start=coverage_start,
+            coverage_end=coverage_end,
+        )
+        return replace(
+            built,
+            observation_contract=self._observation_identity.observation_contract,
+            semantic_compatibility_id=(
+                self._observation_identity.semantic_compatibility_id
+            ),
         )
 
     def _has_any_ticker_candle(self, tickers: tuple[str, ...], target_date: date) -> bool:

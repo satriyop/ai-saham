@@ -73,9 +73,10 @@ class AccumulationScreenRequest:
     # Piotroski F-Score floor (0–9). Tickers below this are excluded (0 = disabled)
     min_piotroski: int = 0
     strategy_name: str | None = None
-    # market_context is observation-attribution only for screen accum. It is
-    # persisted into candidate observation fingerprints. It must not affect
-    # screen scoring/verdict without an explicit behavior-change task.
+    # market_context feeds DecisionPolicy (regime floors / authority caps) when
+    # supplied on observation-capture and screen paths. It is also persisted
+    # into candidate observation fingerprints for attribution. Omitting it
+    # keeps legacy RISK_ON DecisionPolicy defaults (regime=null on constraints).
     market_context: "MarketContext | None" = None
 
     def __init__(

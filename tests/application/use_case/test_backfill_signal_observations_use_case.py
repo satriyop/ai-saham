@@ -93,6 +93,8 @@ class FakeCandidateObservationsRepository:
                 config_hash="test-hash",
                 latest_completed_session=snapshot_date,
                 analysis_as_of=snapshot_date,
+                observation_contract=_LEAN_IDENTITY.observation_contract,
+                semantic_compatibility_id=_LEAN_IDENTITY.semantic_compatibility_id,
             )
         )
 
@@ -643,6 +645,60 @@ def test_backfill_evaluates_market_context_once_per_date_and_persists_regime_att
         assert fingerprint["regime_confidence_at_signal"] == 0.8
         assert fingerprint["regime_stability_at_signal"] == "STABLE"
         assert fingerprint["days_in_regime_at_signal"] == 6
+
+
+def test_backfill_uses_evidence_context_builder_for_source_availability():
+    """Historical capture must not hardcode availability=None when a builder is wired."""
+    signal_date = date(2026, 6, 1)
+    observations = FakeCandidateObservationsRepository()
+    screen = FakeAccumulationScreenUseCase(observations)
+    sentinel_uc = object()
+    builds: list[tuple] = []
+
+    class _Builder:
+        def build(self, *, effective_session, coverage_start, coverage_end):
+            builds.append((coverage_start, coverage_end, effective_session))
+            from src.application.dto.signal_evidence_execution_context import (
+                SignalEvidenceExecutionContext,
+            )
+
+            return SignalEvidenceExecutionContext(
+                effective_session=effective_session,
+                source_availability_use_case=sentinel_uc,  # type: ignore[arg-type]
+            )
+
+    contexts: list = []
+
+    class _RecordingScreen(FakeAccumulationScreenUseCase):
+        def execute(self, request, *, execution_context):
+            contexts.append(execution_context)
+            return super().execute(request, execution_context=execution_context)
+
+    screen = _RecordingScreen(observations)
+
+    BackfillSignalObservationsUseCase(
+        record_observations_use_case=screen,
+        screen_request_builder=_request_builder(),
+        market_data_repository=FakeMarketRepository(
+            [_candle("IHSG", signal_date), _candle("BBCA", signal_date)]
+        ),
+        candidate_observations_repository=observations,
+        observation_identity=_LEAN_IDENTITY,
+        evidence_context_builder=_Builder(),  # type: ignore[arg-type]
+    ).execute(
+        BackfillSignalObservationsRequest(
+            tickers=("BBCA",),
+            start_date=signal_date,
+            end_date=signal_date,
+            windows=(7,),
+        )
+    )
+
+    assert len(builds) == 1
+    assert len(contexts) == 1
+    assert contexts[0].source_availability_use_case is sentinel_uc
+    assert contexts[0].observation_contract == ACCUMULATION_DISCOVERY_CONTRACT
+    assert contexts[0].semantic_compatibility_id == _LEAN_IDENTITY.semantic_compatibility_id
 
 
 def test_backfill_market_context_failure_does_not_block_observations_but_notes_it():

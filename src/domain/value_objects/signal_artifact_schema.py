@@ -13,7 +13,11 @@ v3 -> v4 (SECTOR-CONTEXT-IDENTITY): the Alpha/Trigger sector evidence identity
 
 v4 -> v5 (DQ-001): missing-vs-zero flow component semantics and
 flow_component_coverage / flow_missing_components fingerprint fields.
-Older schema (1-4) rows are outside the current canonical contract — they are
+v5 -> v6 (capture DecisionPolicy wiring): screen/backfill pass market_context
+into DecisionPolicy and wire source-availability assessment on historical
+capture so decision_constraints.regime and signal_authority_coverage reflect
+runtime policy inputs rather than RISK_ON/0.0 defaults.
+Older schema (1-5) rows are outside the current canonical contract — they are
 never mutated, migrated, or reinterpreted here, and their raw payloads are not
 validated by the current-contract validator below.
 """
@@ -28,7 +32,7 @@ from src.domain.value_objects.foreign_flow_score_breakdown import (
     INSTITUTIONAL_FLOW_COMPONENT_KEYS,
 )
 
-CANDIDATE_OBSERVATION_SCHEMA_VERSION = 5
+CANDIDATE_OBSERVATION_SCHEMA_VERSION = 6
 SIGNAL_FORWARD_LABEL_SCHEMA_VERSION = 3
 
 

@@ -210,6 +210,7 @@ def _request(
     min_foreign_flow_score_enabled: bool = True,
     min_signal_score: float = 40.0,
     min_signal_score_enabled: bool = True,
+    market_context=None,
 ) -> AccumulationScreenRequest:
     return AccumulationScreenRequest(
         tickers=["BBCA"],
@@ -219,6 +220,7 @@ def _request(
         min_foreign_flow_score_enabled=min_foreign_flow_score_enabled,
         min_signal_score=min_signal_score,
         min_signal_score_enabled=min_signal_score_enabled,
+        market_context=market_context,
     )
 
 
@@ -406,6 +408,34 @@ def test_flow_evidence_with_missing_availability_reaches_signal_engine():
     from src.domain.value_objects.source_availability import SourceAvailabilityStatus
     assert flow_assessments[0].status == SourceAvailabilityStatus.UNKNOWN
     assert flow_assessments[1].status == SourceAvailabilityStatus.UNKNOWN
+
+
+def test_assess_forwards_request_market_context_to_signal_engine():
+    from src.domain.value_objects.market_context import MarketContext, MarketRegime
+
+    assessor = _make_assessor()
+    as_of = date.today()
+    market_context = MarketContext(
+        regime=MarketRegime.NEUTRAL,
+        conviction=0.5,
+        factors=(),
+        signal_multiplier=1.0,
+        gate_tightening=False,
+        as_of_date=as_of,
+    )
+
+    assessor.assess(
+        _candidate(),
+        request=_request(market_context=market_context),
+        as_of_date=as_of,
+        consumed_broker_summaries=(),
+        consumed_broker_daily_flows=(),
+        effective_session=_effective_session(),
+        source_availability_use_case=None,
+    )
+
+    kwargs = assessor._signal_engine.evaluate_with_context.call_args[1]
+    assert kwargs.get("market_context") is market_context
 
 
 def test_operational_availability_failure_still_passes_flow_evidence():

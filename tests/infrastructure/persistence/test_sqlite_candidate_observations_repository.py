@@ -524,7 +524,7 @@ def test_schema_4_observation_containing_removed_market_context_fails_on_save(tm
 
     with pytest.raises(
         ValueError,
-        match="schema_version=5 cannot contain removed Alpha/Trigger group 'market_context'",
+        match=f"schema_version={CANDIDATE_OBSERVATION_SCHEMA_VERSION} cannot contain removed Alpha/Trigger group 'market_context'",
     ):
         repo.save_many(
             [
@@ -588,7 +588,7 @@ def test_schema_4_raw_inserted_market_context_fails_on_read(tmp_path: Path):
 
     with pytest.raises(
         ValueError,
-        match="schema_version=5 cannot contain removed Alpha/Trigger group 'market_context'",
+        match=f"schema_version={CANDIDATE_OBSERVATION_SCHEMA_VERSION} cannot contain removed Alpha/Trigger group 'market_context'",
     ):
         repo.get_latest("BBCA", day)
 

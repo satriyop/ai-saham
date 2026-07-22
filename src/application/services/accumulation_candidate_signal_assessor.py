@@ -49,6 +49,7 @@ if TYPE_CHECKING:
     from src.domain.value_objects.flow_confirmation_evidence import (
         FlowConfirmationEvidence,
     )
+    from src.domain.value_objects.market_context import MarketContext
 
 logger = logging.getLogger(__name__)
 
@@ -107,11 +108,13 @@ class AccumulationCandidateSignalAssessor:
         consumed_broker_daily_flows: tuple,
         effective_session: "EffectiveMarketSession",
         source_availability_use_case: "AssessSourceAvailabilityUseCase | None",
+        market_context: "MarketContext | None" = None,
     ) -> CanonicalFlowScoreResult:
         """Build flow-only canonical evidence and score via SignalEngine.
 
         Shared by screen classification and DQ-007 inspection. Does not apply
-        pass/reject thresholds.
+        pass/reject thresholds. When ``market_context`` is supplied,
+        DecisionPolicy uses that regime; otherwise it defaults to RISK_ON.
         """
         # Phase 2.1: foreign-flow score assignment
         evidence_resp = self._foreign_flow_score_uc.execute(
@@ -215,6 +218,7 @@ class AccumulationCandidateSignalAssessor:
         candidate.signal_assessment = self._signal_engine.evaluate_with_context(
             candidate.ticker,
             signal_ctx,
+            market_context=market_context,
             canonical_evidence=canonical_evidence,
             setup_family=setup_family,
             setup_phase=candidate.setup_phase,
@@ -244,6 +248,7 @@ class AccumulationCandidateSignalAssessor:
             consumed_broker_daily_flows=consumed_broker_daily_flows,
             effective_session=effective_session,
             source_availability_use_case=source_availability_use_case,
+            market_context=request.market_context,
         )
         flow_ev = scored.flow_evidence
 
