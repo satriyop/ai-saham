@@ -1,525 +1,541 @@
-# Roadmap: Read-Only TUI Research Workspace
+# Roadmap: Personal TUI Investing Workstation
 
-Status: vetted roadmap / pre-implementation
+Status: product reset / value-first roadmap
 
 Last verified: 2026-07-22
 
-Scope: optional Textual-based terminal UI for local, deterministic research
+Scope: a personal, local-first terminal workspace for daily IDX discovery,
+decision support, validation, and review
 
-## Decision
+## Product Decision
 
-Build a narrow, read-only TUI as a sibling adapter to the CLI. Implement this
-option only.
+The TUI is not a visual catalog of CLI commands and not a place to expose
+internal diagnostics. Its job is to remove friction from the repeated workflow
+of one person using AI Saham to make and evaluate investing decisions.
 
-The first useful product journey is:
-
-```text
-Today -> accumulation candidates -> ticker research
-```
-
-Do not attempt to reproduce the full CLI command tree. The TUI earns further
-scope only after this journey is useful, offline-capable, responsive, and
-architecturally thin.
-
-The CLI remains the primary supported automation interface. The TUI is an
-optional interactive research workspace over the same application contracts:
+The product loop is:
 
 ```text
-CLI adapter -----\
-                  -> application use cases -> domain/ports -> infrastructure
-TUI adapter -----/
+update data
+  -> understand the market
+  -> discover and compare candidates
+  -> inspect one ticker deeply
+  -> validate the setup or strategy historically
+  -> size and record a candidate/paper-trade plan
+  -> review what worked
 ```
 
-The TUI may navigate, collect input, schedule application calls, preserve UI
-state, and render canonical results. It must not become a second workflow or
-policy system.
+If a screen does not shorten or improve that loop, it does not belong in the
+primary TUI.
 
-## Current Code Truth
+The CLI remains the automation and advanced-operations interface. The TUI
+reuses the same typed application contracts; it never shells out to CLI
+commands or parses terminal output.
 
-This roadmap is based on source, tests, live CLI help, and accepted ADRs as of
-2026-07-22. Reverify these facts before implementation.
+## Why The Previous Roadmap Was Wrong
 
-| Concern | Current truth | Roadmap consequence |
+The previous roadmap optimized for a narrow read-only implementation instead
+of personal user value. It selected capabilities that were easy to wire while
+excluding essential steps already present in the CLI:
+
+- refreshing the data used for today's decisions;
+- exploring a universe, not only a preselected shortlist;
+- using the full accumulation filters and multi-window comparison;
+- viewing price structure, RSI, volume, broker flow, and ticker context;
+- testing a named swing setup across a universe;
+- validating and backtesting a custom strategy;
+- sizing, journaling, and reviewing paper-trade outcomes.
+
+It also promoted Signal Corpus Health, an engineering/calibration diagnostic,
+to a primary menu. That screen is rejected and governed by
+`tasks/backlog/tui_remove_research_screen.md`.
+
+Completed shell, worker-safety, Daily, candidate, and ticker code may be reused
+where it supports this roadmap. Prior phase numbering is implementation history,
+not the future product plan.
+
+There is no generic hardening or release-decision phase. Every milestone must
+be usable for a real personal workflow and carries its own quality checks.
+
+## Evidence: Live CLI Capability Audit
+
+The audit used live `saham --help` output, current CLI source, application use
+cases, README workflows, and accepted ADRs. Command presence alone does not
+earn TUI placement; the user job and interaction benefit must be clear.
+
+| CLI capability | Actual user job | TUI value | Decision |
+|---|---|---:|---|
+| `fetch market`, `fetch status` | Make today's analysis current and understand missing data | Essential | First-class explicit Update workflow |
+| `today` | Orient quickly: readiness, clocks, regime, candidates, warnings | High | Dashboard summary, not the whole product |
+| `view universe` | Scan the market by flow, change, volume, or ticker | High | Market/Discovery table |
+| `screen accum --multi` | Find institutional accumulation across 7/30/90 sessions | Essential | Core Discovery workspace |
+| accumulation filters and sort | Narrow by score, streak, squeeze, VWAP, broker quality, setup | Essential | Visible filter bar and sortable table |
+| `screen watchlist`, `screen compare` | Preserve a shortlist and see new/dropped/strengthening names | High | Saved screens and comparison view |
+| `analyze swing` | Decide whether one ticker/setup is actionable and why | Essential | Core Ticker Workbench |
+| `analyze chart price/rsi/volume` | Confirm price structure, momentum, and participation | High | Ticker tabs/panels |
+| `view broker flow/top/history/distribution` | Inspect institutional behavior behind a candidate | High | Ticker Flow tab |
+| `view TICKER`, `analyze risk`, `analyze signal inspect` | Inspect cached context, risk gates, and canonical signal evidence | High | Progressive ticker evidence |
+| `trade size` | Convert an entry idea into stop, target, capital risk, and lots | Essential | Position Plan panel |
+| `trade backtest-swing`, `analyze swing-compare` | Test a named setup and compare variants/regimes | Essential | Setup Backtest |
+| `strategy list/validate/backtest` | Select and test a personal rules package | Essential | Strategy Backtest |
+| `trade log`, `trade review` | Record decisions and learn from forward outcomes | High | Journal/Review workspace |
+| `screen pre-open`, `learn snapshot/track/grade` | Run the time-sensitive opening-session workflow | Conditional | Separate later workspace only for an active intraday user |
+| signal corpus readiness/replay/capture | Maintain research evidence infrastructure | Low for daily investing | CLI engineering tools only |
+| audit, provider diagnostics, migrations | Operate and repair the system | Low for normal decisions | CLI only; surface actionable status where needed |
+| tuning apply, AI strategy creation, indicator authoring | Change policy/configuration | High risk and infrequent | CLI only until separately designed and guarded |
+
+## User Outcomes
+
+The roadmap is successful when the personal user can answer these questions
+without leaving the TUI:
+
+1. Is my data current enough to act on?
+2. What is the current market regime and breadth?
+3. Which stocks are accumulating across meaningful time windows?
+4. What changed since my last shortlist?
+5. Why is this ticker ENTER, WATCH, AVOID, or blocked?
+6. Does the selected setup match, and which gates fail?
+7. What do price, RSI, volume, and broker flow show?
+8. How many lots fit my capital and risk limit?
+9. Did this setup or strategy work over a chosen historical period?
+10. What forward outcomes followed my recorded candidate decisions?
+
+## Product Information Architecture
+
+```text
+Dashboard
+  |- data freshness and explicit Update
+  |- market regime and breadth
+  `- today's shortlist and warnings
+
+Discover
+  |- Universe
+  |- Accumulation
+  `- Saved / Compare
+
+Ticker Workbench  (opened from any ticker or global search)
+  |- Overview
+  |- Setup
+  |- Chart
+  |- Flow
+  |- Signal & Risk
+  `- Position Plan
+
+Backtest
+  |- Setup Backtest
+  `- Strategy Backtest
+
+Review
+  |- Saved candidates
+  |- Swing candidate journal
+  `- Forward-outcome breakdowns
+
+Help  (temporary overlay)
+```
+
+There is no top-level Research menu. “Ticker Workbench” means analysis of an
+investment candidate. Signal-dataset research remains in the CLI.
+
+## Shared Interaction Model
+
+### Navigation
+
+- Top-level destinations are always visible in a compact top bar or footer.
+- `1` Dashboard, `2` Discover, `3` Backtest, `4` Review.
+- `/` opens ticker search from anywhere.
+- `Enter` opens or executes the explicitly focused action.
+- `Esc` returns to the previous context without losing the current result.
+- `?` shows route-specific help; `q` quits.
+- Ticker Workbench is contextual and keeps the originating candidate list,
+  filters, selection, and scroll position when returning.
+
+### Global context
+
+Every relevant screen shows:
+
+- active universe;
+- effective/as-of trading date;
+- cache freshness and last successful update;
+- active capital and risk percentage when sizing/testing;
+- current operation state: IDLE, RUNNING, READY, PARTIAL, EMPTY, or ERROR.
+
+Raw configuration keys, target grammars, hashes, provider payloads, and CLI
+flags are not normal form fields. Friendly controls retain exact typed values
+internally. Advanced details may show exact identities read-only.
+
+### Expensive and write-capable actions
+
+- Selection, focus, sorting, and tab changes never start work.
+- `Run`, `Update`, `Save`, and `Log` are explicit buttons/actions.
+- Update shows its universe, provider plan, progress, partial failures, and
+  stored dates. It must not masquerade as local Reload.
+- Save and Log show the exact artifact to be written and report success/failure.
+- No order execution is added.
+- Tuning application, configuration editing, and AI-authored strategy changes
+  remain outside this roadmap.
+
+### Result design
+
+- Verdict and blockers appear before supporting evidence.
+- Candidate tables preserve canonical rank even when presentation sorting is
+  changed.
+- Missing evidence is visibly unavailable, never neutral-filled.
+- Canonical live decisions, historical backtests, and optional previews use
+  distinct labels and visual regions.
+- Results remain visible while a user changes tabs; an explicit rerun replaces
+  them only after a successful new result.
+- Errors preserve the last valid result and identify which operation failed.
+
+## Core Screen Designs
+
+### Dashboard
+
+```text
+ AI Saham  Dashboard   LQ45   EOD 2026-07-21   DATA: STALE 1d   [Update]
+ -----------------------------------------------------------------------
+ MARKET        SIDEWAYS   breadth 56%   foreign breadth improving
+ DATA          candles 45/45   broker 43/45   enrichment 38/45
+ WARNINGS      2 tickers missing broker flow
+
+ TODAY'S CANDIDATES
+ #  Ticker  Pattern       7s   30s  90s  Setup     Risk     Data
+ 1  BBRI    building      74   68   61   MATCH     OPEN     READY
+ 2  BMRI    coiled spring 71   64   55   PARTIAL   OPEN     READY
+
+ [Open Discover]   [Open selected ticker]
+```
+
+The dashboard is a launchpad. It does not dump every DailyBriefing field into
+one scrolling page. Details open in the owning workspace.
+
+### Discover
+
+```text
+ DISCOVER  [Universe] [Accumulation] [Saved / Compare]
+ Universe [LQ45]  Windows [7,30,90]  Min score [50]
+ [ ] Squeeze  [ ] Foreign underwater  Sort [Canonical]       [Run]
+ -----------------------------------------------------------------------
+ #  Ticker  Pattern       7s   30s  90s  Flow%  VWAP  Signal Risk  Data
+ 1  BBRI    building      74   68   61    18%   +4%   STRONG OPEN  READY
+
+ Selected: flow trend, broker-quality summary, failed gates, freshness
+ [Open ticker] [Save shortlist] [Compare saved]
+```
+
+This screen exposes the useful `screen accum` controls instead of hard-coding
+one request. A separate Universe tab supports flow/change/volume browsing even
+when a ticker is not already shortlisted.
+
+### Ticker Workbench
+
+```text
+ BBRI  4,840  +1.2%   DATA READY   Setup [foreign-bounce]   [Run analysis]
+ VERDICT  ENTER   Signal STRONG 74   Risk OPEN   Setup MATCH
+ BLOCKERS none
+ -----------------------------------------------------------------------
+ [Overview] [Setup] [Chart] [Flow] [Signal & Risk] [Position Plan]
+```
+
+- Overview: canonical `TradeSetup`, freshness, key evidence, warnings.
+- Setup: selected setup, MATCH/PARTIAL/NO_MATCH, every passed/failed gate.
+- Chart: price with SMA/EMA, RSI, and volume over selectable periods.
+- Flow: daily foreign flow, VWAP context, top brokers, history/distribution.
+- Signal & Risk: canonical components, coverage, unavailable inputs, gates.
+- Position Plan: capital, risk %, entry, stop, target, lots, max hold, and
+  invalidation; explicit candidate/plan Log action.
+
+Global ticker search must open this workbench even when the ticker did not come
+from the current candidate list.
+
+### Backtest
+
+```text
+ BACKTEST  [Setup Backtest] [Strategy Backtest]
+
+ Setup [foreign-bounce]  Universe [LQ45]  2025-01-01 -> 2026-07-21
+ Capital [100,000,000] Risk [1%] TP [5%] SL [5%] Hold [20] Cost [20 bps]
+ [ ] Regime attribution                                      [Run backtest]
+ -----------------------------------------------------------------------
+ Return 12.4%  Drawdown -6.1%  Trades 38  Win 55%  PF 1.31  Exposure 42%
+ [Equity] [Trades] [Regimes] [Attribution] [Compare runs]
+```
+
+Setup Backtest uses `SwingBacktestUseCase`. Strategy Backtest uses
+`BacktestUseCase` after selecting an existing validated strategy, ticker,
+period, and capital. The UI must show which parameters are defaults and which
+the user changed.
+
+Backtest output is historical evidence, never a current ENTER/WATCH/AVOID
+verdict. Comparisons retain the full request identity for each run so differing
+dates, costs, universes, and parameters cannot be mistaken for like-for-like
+results.
+
+Strategy authoring and tuning are not required to gain value from Backtest. The
+first useful version lists strategies, shows validation errors, runs tests, and
+compares results. Editing YAML remains an external/CLI workflow.
+
+### Review
+
+```text
+ REVIEW  [Saved Candidates] [Swing Journal]
+ Period [Last 90 sessions]  Setup [All]  Regime [All]
+ -----------------------------------------------------------------------
+ Recorded 24  Forward-evaluated 18  Awaiting data 6
+ Avg 10-session return +2.1%  Avg max drawdown -5.4%
+ [By setup] [By score] [By regime] [Entry list]
+```
+
+Review closes the loop. It must use persisted watchlist/journal artifacts and
+existing application workflows; it must not infer unrecorded trades or rewrite
+outcomes.
+
+## Application Contract Readiness
+
+| Journey | Current reusable boundary | Readiness / required work |
 |---|---|---|
-| Public lifecycle | `today`, `fetch`, `audit`, `screen`, `learn`, `research`, `view`, `analyze`, `strategy`, `trade` | Design around user journeys and artifact authority, not one screen per command group |
-| Daily orientation | `DailyBriefingUseCase` already returns readiness, authority, regime, opening observations, accumulation candidates, setup-lens results, and warnings | Use it as the first screen contract |
-| Accumulation | `RunAccumulationScreenWorkflowUseCase` returns application-owned single/multi projections | Render its projection; do not reconstruct filtering, ranking, or canonical-window fields |
-| Ticker research | `SwingAnalysisWorkflowUseCase` returns typed verdict, evidence, and diagnostics | Use a local-only request; do not scrape CLI output |
-| Signal corpus | Explicit `saham research signal capture`/backfill owns canonical observation writes; ordinary screen/analyze paths are read-only | Do not revive old screen-recording behavior or use interactive frequency as the learning population |
-| Readiness | `ReportSignalReadinessUseCase` is cohort-aware and exposes an exclusion ledger; its ephemeral 70/30 split is diagnostic and `promotion_eligible` remains false | Label the screen research corpus health, never promotion/calibration authority |
-| Status | `GetSystemStatusUseCase` checks provider health as well as stored freshness | It is not a local-only Phase 1 contract |
-| Runtime | Application workflows are synchronous and some are expensive | Never execute them directly on Textual's event loop |
-| Dependencies | `pyproject.toml` has Typer/Rich but no Textual | Keep Textual optional and lazy-loaded |
-| Architecture guard | The general layer scan covers domain/application/infrastructure, not adapter thinness | Add TUI-specific import and behavior guards |
-| Composition | Concrete dependencies are manually wired in infrastructure composition roots or thin adapter factories | Use one TUI composition root; never make widgets dependency containers |
-
-The earlier S1-style observation-identity precondition is retired from this
-roadmap. The signal-evidence program now reports its lean canonical evidence
-and baseline gates closed. Corpus population is optional product data, not a
-prerequisite for starting the read-only TUI.
-
-## Product Boundary
-
-Binding UI/UX contract:
-`tasks/backlog/tui_ui_ux_design_spec.md`. It was authored after the Phase 1
-shell completed, so it preserves that foundation and governs shell alignment
-plus Phase 3 onward.
-
-### V1 includes
-
-- Optional `saham tui` launcher.
-- Offline daily briefing.
-- Accumulation candidate browsing.
-- Local-only ticker research drilldown.
-- Research corpus health after the main journey is stable.
-- Help, keyboard navigation, loading, empty, unavailable, and error states.
-
-### V1 excludes
-
-- Provider refresh or fetch actions.
-- Watchlist, observation, label, journal, or other persistence actions.
-- Config editing, tuning review/application, or strategy authoring.
-- Background schedulers or autonomous refresh loops.
-- AI chat, conversational tools, or model challengers.
-- Order placement or broker execution.
-- A screen for every CLI command group.
-
-Conversation/agent work belongs to
-`docs/roadmap/roadmap_conversational_agent_architecture.md` and requires its own
-approved implementation plan or ADR. It is not a later phase of this roadmap.
-Write-capable TUI actions likewise require separate, action-specific tasks with
-side-effect, idempotency, failure, and confirmation contracts.
-
-## Architectural Contract
-
-### Package and composition shape
-
-Start with the smallest package that supports the first vertical slice:
-
-```text
-src/adapters/cli/
-  tui_commands.py          # Typer command; no top-level Textual import
-
-src/adapters/tui/
-  __init__.py
-  main.py                  # Textual application and run entrypoint
-  composition.py           # only TUI module allowed to import infrastructure
-  state.py                 # UI-only state and request-generation identifiers
-  controllers/
-  presenters/
-  screens/
-  widgets/
-```
-
-Do not pre-create speculative screens, widgets, presenters, repositories, or
-agent modules. Add a file only when an implemented screen needs it.
-
-`src/adapters/cli/tui_commands.py` must register a thin `saham tui` command and
-import `src.adapters.tui.main` only inside the command function. If Textual is
-not installed, it must exit non-zero with an actionable installation message,
-not a traceback. Importing `src.adapters.cli.main`, running `saham --help`, and
-using every non-TUI command must still work without the TUI extra.
-
-`src/adapters/tui/composition.py` owns concrete repository, config-loader,
-provider, and use-case construction. Prefer existing infrastructure
-composition helpers where they match the required contract. Do not move
-concrete construction into application factories or bootstrap modules.
-
-### Import rules
-
-Screens, widgets, presenters, state, and controllers may import:
-
-```text
-stdlib
-textual / rich
-src.application DTOs and use-case interfaces
-src.domain value objects and enums needed for rendering
-other src.adapters.tui modules
-```
-
-Only `src/adapters/tui/composition.py` may import `src.infrastructure.*`.
-
-All TUI modules are forbidden from importing or invoking:
-
-```text
-src.adapters.cli display or command modules
-sqlite3
-provider clients outside composition.py
-YAML/config loaders outside composition.py
-subprocess or arbitrary shell execution
-direct filesystem persistence
-scoring, risk, setup, tuning, evidence-authority, or freshness policy
-```
-
-The TUI must never parse Rich/ANSI output or CLI JSON to recover application
-state.
-
-### Responsibility boundaries
-
-| Component | Owns | Must not own |
-|---|---|---|
-| Application use case | Workflow, policy, filtering, canonical projection, business status, unavailable reasons | Textual concepts, colors, focus, navigation |
-| TUI controller | One UI interaction, loading/cancellation state, invoking one injected application capability, mapping known failures to UI state | Cross-use-case business orchestration, retries, policy, persistence decisions |
-| Presenter | DTO-to-view-model formatting, labels copied from canonical values, styles, column order | Thresholds, ranking, action wording, readiness or freshness calculation |
-| Screen | Navigation, focus, binding interaction, choosing when an explicit action starts | Infrastructure construction, provider access, business decisions |
-| Widget | Rendering and local visual state | Dependency wiring or application workflow |
-| Composition root | Concrete dependency construction and injection | Business workflow or display policy |
-
-Do not add `GetTui*UseCase` types. New application queries must be named for
-their business meaning and must be independently useful to another adapter.
-Add one only after the inventory proves an existing result cannot support the
-screen without adapter-owned workflow or policy.
-
-### Execution and concurrency
-
-Existing application workflows are synchronous. Run them in Textual thread
-workers, never directly in event handlers or reactive watchers.
-
-Each screen action must have a monotonically increasing request-generation ID:
-
-```text
-user action
-  -> mark generation N LOADING
-  -> run injected application capability in worker
-  -> post typed completion for generation N
-  -> apply only if N is still the screen's active generation
-```
-
-Required rules:
-
-- Superseding an action cancels or invalidates the older worker result.
-- A late result must never overwrite newer screen state.
-- Thread workers must not mutate widgets directly; return through Textual's
-  thread-safe message/callback mechanism.
-- No automatic retry. A retry is an explicit user action unless an application
-  use case already owns a deterministic retry policy.
-- Cursor movement, focus, and row highlighting never trigger provider calls,
-  persistence, or expensive recomputation.
-- App exit must close cleanly without applying late worker results.
-
-### Screen-state contract
-
-Every data-bearing screen uses these adapter states:
-
-```text
-IDLE
-LOADING
-READY
-EMPTY
-UNAVAILABLE
-ERROR
-```
-
-- `EMPTY`: the application call succeeded and returned a valid empty result.
-- `UNAVAILABLE`: the application result explicitly reports missing/stale data
-  or another expected unavailable condition.
-- `ERROR`: validation, configuration, infrastructure, or other execution failed.
-- Contract/invariant/programmer errors must not be converted into ordinary
-  missing data. They reach the central error boundary and remain visibly failed.
-
-Implementation tasks must name the exact exception types mapped to expected
-`UNAVAILABLE` or `ERROR` states. Broad `except Exception` handlers may protect
-the terminal session only at the outer screen/app boundary; they must retain
-the error class and must not fabricate a valid business result.
-
-### Meaning of read-only
-
-V1 is product-read-only: it performs no intentional fetch, corpus, label,
-watchlist, journal, config, tuning, or other business mutation.
-
-Some current SQLite repository constructors initialize schemas. Therefore do
-not claim byte-for-byte storage immutability unless a later task introduces and
-tests a genuinely read-only persistence composition. Phase 0 must record any
-constructor/startup side effects. The UI must never present schema
-initialization as a user-requested data update.
-
-## Contract Inventory
-
-### Daily workspace
-
-```text
-Owner: DailyBriefingUseCase
-Input: DailyBriefingRequest
-Output: DailyBriefingResponse
-```
-
-Render existing fields for overall authority, dataset readiness, clocks,
-regime, opening observations, accumulation summary/candidates, setup-lens
-impact, and warnings. Do not make `GetSystemStatusUseCase` part of this screen;
-its provider-health probe violates the offline-only launch contract.
-
-If a separate stored-data inventory later proves necessary, add a business-
-named application query such as `GetLocalDataInventoryUseCase`. Its contract
-must read local metadata only and must not silently reuse provider health
-checks.
-
-### Accumulation browser
-
-```text
-Owner: RunAccumulationScreenWorkflowUseCase
-Input: RunAccumulationScreenWorkflowRequest
-Output: RunAccumulationScreenWorkflowResult
-Canonical rows: ScreenAccumSingleProjection or ScreenAccumMultiProjection
-```
-
-The projection is the one source of truth for candidate inclusion, canonical
-window, filters, ranks/order, risk status, setup phase, data state, and next
-action. Transport the returned projection to the presenter. Do not re-query or
-reconstruct an equivalent candidate list.
-
-V1 preserves canonical order. Interactive column sorting is deferred. If later
-added, it must be labeled as presentation order and preserve the canonical rank
-as a separate visible field.
-
-### Ticker research
-
-```text
-Owner: SwingAnalysisWorkflowUseCase
-Input: SwingAnalysisWorkflowRequest
-Output: SwingAnalysisWorkflowResponse
-```
-
-The V1 request must be local-only:
-
-```text
-auto_refresh = false
-force_refresh = false
-include_sentiment = false
-```
-
-Other optional detail flags may expose already-local evidence. The screen must
-render `SwingVerdict`, `SwingEvidence`, and `SwingDiagnostics` without merging
-canonical and preview results. `TradeSetup` remains the sole final swing-action
-wording. Missing signal evidence remains unavailable; it must not become
-neutral, WATCH, or a presenter-authored fallback.
-
-### Research corpus health
-
-```text
-Owner: ReportSignalReadinessUseCase
-Input: ReportSignalReadinessRequest(target, semantic_compatibility_id)
-Output: SignalReadinessReport
-```
-
-The UI must require or explicitly resolve a target and cohort exactly as the
-use case does. Show:
-
-- target components and diagnostic-target status;
-- selected and available semantic compatibility IDs;
-- observation and label counts;
-- unique ticker/session counts;
-- exclusion ledger;
-- split mode, IS/OOS counts, diagnostic readiness, and blockers;
-- `patch_eligible` only with its existing meaning;
-- `promotion_eligible = false` and the diagnostic-only limitation.
-
-Do not call label generation, capture, repair, tuning, or promotion workflows
-from this screen. An empty corpus is a valid `EMPTY`/not-ready product state and
-does not block shipment of the daily workspace.
-
-## Delivery Roadmap
-
-### Phase 0 — Inventory and executable task contract
-
-Goal: prove the first journey can be built without importing CLI behavior or
-inventing application policy.
-
-Tasks:
-
-- Record the screen-to-use-case mappings above in the implementation task.
-- Inspect each production composition root and list its concrete dependencies.
-- Record constructor/startup side effects, network-capable callables, optional
-  evidence, and local-only request values.
-- Define exact loading, empty, unavailable, error, and cancellation behavior.
-- Verify which application DTO fields each first-slice widget consumes.
-- Decide and lock the optional dependency range. At this validation date the
-  candidate is `tui = ["textual>=8.2,<9"]`; recheck before editing the lockfile.
-- Define the lazy-import failure message and exit behavior.
-
-Acceptance:
-
-- One implementation task covers only the optional shell and daily screen.
-- Every transported value has one named owner and producer-to-presenter path.
-- Network and mutation-capable dependencies are identified and excluded.
-- Missing and failure states are explicit; no `as needed` contracts remain.
-- No product-layer code is changed in this phase.
-
-### Phase 1 — Optional shell and execution foundation
-
-Goal: launch and exit a responsive optional TUI without weakening the base CLI.
+| Dashboard | `DailyBriefingUseCase` | Reusable; redesign presentation hierarchy |
+| Data Update | `FetchMarketCommandWorkflowUseCase` | Reusable core; add an application-owned update-and-recompute result if one action must refresh Dashboard |
+| Universe | `build_universe_view` / universe summary types | Reusable but normalize function-style boundary if needed |
+| Accumulation | `RunAccumulationScreenWorkflowUseCase` | Reusable single/multi projections and filters |
+| Save shortlist | `SaveScreenWatchlistUseCase` | Reusable explicit write |
+| List/compare shortlist | current CLI reads repository and orchestrates comparison inline | Extract business-named application query/workflow before TUI wiring |
+| Ticker verdict | `SwingAnalysisWorkflowUseCase` | Reusable; expose user-selected setup/detail/refresh options |
+| Risk comparison | `RunRiskCompareUseCase` | Reusable for comparison where valuable |
+| Ticker dashboard | current `view TICKER` is adapter/display-oriented | Extract typed application response; never import its display module |
+| Broker flow | `GetBrokerDataUseCase` plus repository-backed CLI views | Reuse typed boundary; extract typed queries for top/history/distribution where absent |
+| Charts | current chart commands are adapter-oriented | Add a typed chart-series application query; do not parse ASCII output |
+| Position sizing | `compute_position_size` service | Wrap in a business-named application use case for typed request/response and validation |
+| Setup Backtest | `SwingBacktestUseCase` | Reusable; composition/config resolution must move behind a non-CLI boundary |
+| Strategy Backtest | `BacktestUseCase`, `StrategyLoader` | Reusable; add typed list/validation query contracts where needed |
+| Candidate/plan log | `LogAccumulationTradeWorkflowUseCase` / `LogSwingCandidateUseCase` | Reusable explicit write with confirmation/result; does not prove execution |
+| Review | existing trade-review CLI paths | Audit and extract typed application queries before TUI wiring |
+
+An existing Rich display or CLI helper is not an application contract. When a
+row says extraction is required, that extraction is part of the milestone and
+must be independently useful to another adapter.
+
+## Value-Ordered Milestones
+
+These are product milestones, not the previous numbered phases.
+
+### Milestone A — Personal Command Center
+
+User value: open one workspace, see whether data is usable, update it explicitly,
+understand the market, and reach today's candidates.
 
 Scope:
 
-- Add the `tui` optional dependency and locked version.
-- Add lazy `saham tui` registration.
-- Add the minimal TUI package and one composition root.
-- Add Help/About and an empty daily screen shell.
-- Implement the worker, request-generation, and common screen-state machinery.
+- redesign Dashboard around readiness, market pulse, warnings, and shortlist;
+- select universe and effective date;
+- add explicit market-data Update with progress and partial-failure reporting;
+- recompute Dashboard from the resulting application-owned workflow result;
+- retain optional dependency, worker cancellation, and late-result safety.
 
-Acceptance:
+Value acceptance:
 
-- Base installation without Textual imports and runs `saham --help`.
-- Without Textual, `saham tui` exits non-zero with the documented install hint.
-- With the extra, `saham tui` starts and exits cleanly offline.
-- No use case runs merely from focus/cursor changes.
-- A superseded worker result cannot update current state.
-- TUI-specific import guards reject infrastructure outside `composition.py`,
-  CLI display imports, SQLite, YAML loaders, subprocess, and provider clients.
-- Headless tests cover launch, Help navigation, and exit at 80x24.
+- the user can go from stale cache to an updated actionable Dashboard without
+  opening another terminal command;
+- the screen makes stale, partial, and current data impossible to confuse;
+- Update never runs on mount, focus, or local Reload;
+- provider/write behavior is explicit and tested with disposable storage.
 
-### Phase 2 — Offline daily workspace
+Backlog: `tasks/backlog/tui_personal_command_center.md`.
 
-Goal: make `saham tui` useful for daily orientation from cached data.
+### Milestone B — Candidate Discovery Workbench
 
-Scope:
-
-- Execute `DailyBriefingUseCase` in a worker.
-- Render authority/readiness before candidate tables.
-- Render regime, opening observations, accumulation shortlist, setup-lens
-  impact, warnings, and data clocks.
-- Provide explicit Reload for local recomputation only.
-
-Acceptance:
-
-- Startup and Reload perform no provider request or intentional business write.
-- `READY`, `PARTIAL`, `NOT_READY`, empty, and execution-failure fixtures render
-  distinguishable states.
-- Candidate/actions/status text comes from the application response.
-- A NOT_READY response does not show suppressed rankings as usable candidates.
-- Presenter tests assert exact authority, warning, and unavailable mappings.
-- Headless tests cover load, reload, late-result rejection, and error recovery.
-
-### Phase 3 — Candidate browser and ticker drilldown
-
-Goal: complete the first validated journey.
+User value: scan the market, run the full accumulation workflow, narrow the
+list, preserve a shortlist, and see what changed.
 
 Scope:
 
-- Open the application-owned accumulation projection from the daily screen.
-- Navigate candidates without recomputation.
-- Run an explicit local-only ticker research request on Enter.
-- Render canonical verdict, signal coverage, risk gates, TradeSetup, supporting
-  evidence, corporate-action risk, freshness, warnings, and diagnostics.
+- Universe and Accumulation tabs;
+- universe/window/filter/sort controls matching useful live CLI capabilities;
+- canonical-rank preservation and visible presentation sorting;
+- candidate preview with pattern, flow, setup/risk, and freshness;
+- save shortlist and compare against a new run;
+- restore list/filter/selection state after ticker drilldown.
 
-Acceptance:
+Value acceptance:
 
-- The candidate browser receives the exact workflow projection; no second read
-  or reconstructed list determines inclusion/order.
-- Candidate order matches the canonical projection.
-- Navigation alone performs no application call.
-- Ticker request records `auto_refresh=false`, `force_refresh=false`, and
-  `include_sentiment=false` in controller tests.
-- Canonical and preview verdicts are visually and structurally separate.
-- Missing evidence is `UNAVAILABLE`, never neutral or adapter-authored advice.
-- Tests prove no TUI module creates ENTER/WATCH/AVOID/BLOCKED wording.
+- the user can reproduce the useful `screen accum --multi` workflow without
+  typing opaque flags;
+- all filters are application-owned and execute only on explicit Run;
+- saved comparison clearly separates new, dropped, strengthening, weakening,
+  and unchanged tickers;
+- opening a ticker requires no second candidate computation.
 
-### Phase 4 — Research corpus health
+Backlog: `tasks/backlog/tui_candidate_discovery_workbench.md`.
 
-Goal: expose honest corpus status without implying evidence authority.
+### Milestone C — Ticker Decision Workbench
+
+User value: understand one candidate completely and turn it into a risk-sized
+paper-trade plan.
 
 Scope:
 
-- Add target and semantic-cohort selection.
-- Render readiness counts, exclusions, split identity, metrics, and blockers.
-- Support a valid empty-corpus state.
+- global ticker search;
+- selectable setup and analysis options;
+- Overview, Setup, Chart, Flow, Signal & Risk, and Position Plan tabs;
+- explicit cached analysis versus provider refresh choice;
+- typed chart and ticker-dashboard application queries where missing;
+- explicit candidate/plan Log action.
 
-Acceptance:
+Value acceptance:
 
-- Multiple cohorts require explicit selection exactly as the application
-  contract requires; the adapter never pools them.
-- The ephemeral split and diagnostic-only meaning are always visible.
-- `promotion_eligible` is not inferred from `diagnostic_ready` or
-  `patch_eligible`.
-- No capture, label, repair, patch, tuning, or promotion use case is wired.
+- the user can complete discovery -> analysis -> chart/flow confirmation ->
+  sizing without leaving the TUI;
+- canonical verdict, setup fit, historical evidence, and optional preview are
+  visually and semantically separate;
+- changing a tab or input does not silently rerun analysis;
+- logged data is shown before confirmation and exact success/failure is visible.
 
-### Phase 5 — Hardening and release decision
+Backlog: `tasks/backlog/tui_ticker_decision_workbench.md`.
 
-Goal: decide whether the narrow TUI deserves continued product investment.
+### Milestone D — Backtest Workspace
 
-Tasks:
+User value: test whether a setup or personal strategy has historical support
+before relying on it.
 
-- Test at 80x24, 120x40, and a representative large terminal.
-- Test keyboard-only navigation, repeated reload, worker cancellation, app exit
-  during work, error recovery, and empty databases.
-- Verify base install, TUI-extra install, and offline execution in CI.
-- Run architecture boundary and TUI adapter-thinness tests.
-- Document installation, controls, local-only behavior, and limitations.
-- Review actual user value before proposing any new screen or write action.
+Scope:
 
-Exit decision:
+- Setup Backtest over ticker(s)/universe with date, cost, capital, risk,
+  TP/SL, hold, positions, and regime controls;
+- Strategy list and validation status;
+- Strategy Backtest for ticker, period, and capital;
+- summary metrics, equity curve, trade list, regime/attribution views;
+- compare pinned runs with full parameter identity.
 
-- Keep Textual optional unless measured adoption justifies changing ADR-011's
-  CLI-primary posture.
-- Further read-only screens require their own user journey and contract map.
-- Any write action or conversational agent requires a separate approved plan.
+Value acceptance:
 
-## Testing Strategy
+- setup and strategy testing are distinct and named correctly;
+- invalid strategy/setup/input combinations fail before expensive work;
+- every result shows universe/ticker, period, costs, parameters, and warnings;
+- comparisons never hide differing inputs;
+- no backtest result is presented as a live trade verdict.
 
-| Test | Required proof |
-|---|---|
-| Packaging/import | Base CLI works without Textual; missing-extra failure is actionable |
-| Architecture | TUI non-composition modules cannot import infrastructure, CLI display, SQLite, YAML, subprocess, or providers |
-| Application | Existing/new business queries return typed results from fakes without Textual imports |
-| Controller | Exact request values, one application call, generation handling, no automatic retry |
-| Presenter | DTO-to-view-model formatting only; no thresholds, ranking, status, or action invention |
-| Headless TUI | Navigation, bindings, loading/empty/unavailable/error states, terminal sizes |
-| Concurrency | Superseded/late results cannot overwrite current state; exit during work is safe |
-| Offline | No network/provider call in shell, daily, candidate navigation, ticker local-only, or readiness screens |
-| Negative authority | Missing evidence never becomes neutral; preview never becomes canonical; readiness never implies promotion |
+Backlog: `tasks/backlog/tui_backtest_workspace.md`.
 
-Prefer controller and presenter tests outside Textual. Use Textual's headless
-`App.run_test()`/Pilot boundary for representative navigation and lifecycle
-behavior rather than trying to prove business policy through widget snapshots.
+### Milestone E — Journal And Review
 
-## Do Not Interpret This As
+User value: close the learning loop using personal recorded candidates and
+their derived forward outcomes.
 
-- Do not wrap or execute CLI commands from the TUI.
-- Do not scrape Rich tables, ANSI output, or CLI JSON.
-- Do not create one screen per top-level CLI group.
-- Do not add speculative `GetTui*` application use cases.
-- Do not put workflow orchestration into controllers, screens, or presenters.
-- Do not make `GetSystemStatusUseCase` an offline-only contract; it probes
-  providers in its current composition.
-- Do not trigger fetch, persistence, or expensive recomputation from mount,
-  focus, cursor movement, or reactive field changes.
-- Do not let user-driven presentation order replace canonical rank.
-- Do not treat corpus availability, diagnostic readiness, or patch eligibility
-  as promotion evidence.
-- Do not make AI, provider credentials, network access, or model dependencies
-  required for the TUI.
-- Do not add generic write capability, arbitrary tools, direct SQL, shell
-  access, config editing, tuning apply, or order execution.
-- Do not claim storage is byte-for-byte read-only while current repository
-  construction can initialize schemas.
+Scope:
 
-## Implementation Close Criteria
+- saved-candidate history;
+- swing candidate-journal list and detail;
+- explicit derived forward-outcome enrichment, clearly disclosed as a journal
+  write;
+- breakdown by setup, score/pattern, regime, and horizon;
+- links back to ticker and originating evidence when provenance exists.
 
-Each phase task must state its own exact files, request/response contracts,
-production composition roots, missing/failure mappings, negative tests, and
-focused verification before editing.
+Value acceptance:
 
-A phase is done only when:
+- all metrics reconcile to exact journal records;
+- evaluated, awaiting-data, and unavailable outcomes remain distinct;
+- the TUI never treats planned prices as executed entries/exits or fabricates
+  missing provenance;
+- review identifies repeatable strengths and failures without AI authority.
 
-- the exact scoped journey works, not merely an empty screen shape;
-- adapters remain thin and application/domain authority is unchanged;
-- offline and no-intentional-mutation invariants have executable tests;
-- optional dependency behavior is tested both installed and absent;
-- cancellation and late-result behavior are tested;
-- forbidden imports and authority fallbacks have negative tests;
-- focused tests, architecture tests, and `git diff --check` pass;
-- no unrelated worktree changes are modified.
+Backlog: `tasks/backlog/tui_trade_review_workspace.md`.
 
-## Immediate Next Task
+## Deferred Until Personally Needed
 
-Create a strict Phase 0/1 implementation task for only:
+### Opening Session Workspace
+
+`screen pre-open` plus `learn snapshot/track/grade` is a real workflow, but it
+is time-sensitive and operationally different from swing analysis. Add it only
+if the personal user actively trades the opening session. Its UI must follow the
+NCP clock and preserve snapshot/confirmation artifact identities.
+
+### Authoring And Tuning
+
+Strategy creation, indicator formula editing, tuning proposals, config diffs,
+and patch application remain CLI/file workflows. They are infrequent,
+write-sensitive, and need a separate design if personal usage proves the TUI
+would materially improve them.
+
+## Explicitly Excluded
+
+- Signal corpus health, capture, labeling, replay, and readiness screens.
+- Data-quality audits, migration controls, raw database browsing, and provider
+  debugging consoles.
+- A generic command launcher that merely mirrors the CLI tree.
+- Shell command execution or parsing CLI/Rich output.
+- Automated order placement or broker execution.
+- AI chat as a navigation layer or source of canonical decisions.
+- Automatic tuning/config application.
+- Background actions triggered by focus, selection, or navigation.
+
+## Architecture And Safety Contract
 
 ```text
-optional lazy launcher
-+ worker/screen-state foundation
-+ offline DailyBriefingUseCase screen
+CLI adapter ----\
+                 -> application use cases -> domain/ports -> infrastructure
+TUI adapter ----/
 ```
 
-Do not include candidate drilldown, readiness, writes, or agent work in that
-task. Require pre-edit confirmation of the lazy import path, dependency bundle,
-worker result transport, known exception mapping, and the exact
-`DailyBriefingResponse` fields rendered.
+- Screens own navigation, focus, input collection, and explicit action timing.
+- Controllers invoke one injected application capability and manage UI request
+  generations/cancellation.
+- Presenters format typed results; they do not calculate scores, filters,
+  verdicts, readiness, backtest metrics, or journal outcomes.
+- Application use cases own cross-step workflow, validation, persistence policy,
+  and typed results.
+- Only TUI composition may construct infrastructure dependencies.
+- No TUI module imports CLI commands/displays, `sqlite3`, provider clients,
+  config loaders, subprocess, or direct filesystem persistence.
+- Same typed input and persisted state must produce the same deterministic
+  result regardless of CLI or TUI adapter.
+- AI and network failures cannot replace deterministic results with invented
+  fallbacks.
+
+Write-capable tasks must name the data written, confirmation rule, idempotency
+key, partial-failure behavior, and disposable test storage. Fetch cache writes,
+watchlist saves, and journal logs are separate explicit actions; authorization
+for one does not authorize the others.
+
+## Quality Is Part Of Every Milestone
+
+There is no separate quality-only milestone. Every backlog task must include:
+
+- keyboard-only behavior at 80x24 and 120x40;
+- exact loading, partial, empty, unavailable, validation, and error states;
+- generation-safe workers and late-result rejection;
+- thin-adapter and forbidden-import tests;
+- no work on focus/selection/navigation;
+- authority separation between live verdicts, setup fit, previews, and
+  historical backtests;
+- focused application/controller/presenter/headless tests;
+- preservation of unrelated shared-worktree changes;
+- `git diff --check` and full-suite evidence when feasible.
+
+Packaging and CI remain normal Definition-of-Done concerns. They do not decide
+whether a low-value feature deserves to exist.
+
+## Backlog Reset
+
+- Completed TUI Phase 0–3 documents remain implementation history only.
+- Completed Phase 4 remains historical evidence for a rejected screen.
+- `tasks/backlog/tui_remove_research_screen.md` is the immediate cleanup task.
+- `tasks/backlog/tui_phase_5_hardening_and_release.md` is superseded and is not
+  part of this roadmap.
+- `tasks/backlog/tui_ui_ux_design_spec.md` retains useful shell/accessibility
+  evidence but its old route scope is superseded by this roadmap.
+- The Milestone A–E backlog files above are the active implementation contracts;
+  reverify their current-code claims before implementation.
+
+## Immediate Order Of Work
+
+1. Finish removing Research Health and its TUI-only scope catalog.
+2. Draft and implement Milestone A: Personal Command Center.
+3. Draft Milestone B only after the Command Center workflow is usable.
+4. Build the Ticker Workbench before adding low-frequency diagnostics.
+5. Build Backtest around actual setup/strategy backtests, not generic forms.
+6. Add Review only from exact existing journal/watchlist provenance.
+
+At every step, ask one product question first:
+
+> Which real decision becomes faster, clearer, or safer for the personal user?
+
+If the answer is unclear, do not add the screen.

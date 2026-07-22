@@ -1,6 +1,13 @@
 # TUI Phase 5 — Hardening And Release Decision
 
-Status: `DONE_NOT_RELEASED`
+Status: `SUPERSEDED` — verification evidence retained; this is not an active
+roadmap milestone
+
+Product reset: `docs/roadmap/roadmap_tui.md`
+
+Historical record only. Do not execute, reopen, or use this task as a gate for
+the value-first TUI roadmap. Its completed verification evidence may still be
+consulted by milestone-specific tests.
 
 Roadmap: `docs/roadmap/roadmap_tui.md`
 
