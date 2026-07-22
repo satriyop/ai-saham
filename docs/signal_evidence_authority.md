@@ -4,9 +4,9 @@ Plain-language guide to what **PRODUCTION** means in today’s SignalEngine, wha
 is diagnostic, and what parked “promotion” work is for.
 
 **Authoritative for runtime behavior:** current config, code, and tests.  
-**Authoritative for open work:** `tasks/backlog/` (especially
-`signal_evidence_program.md` and `evidence_validation_and_promotion.md`).  
-This page explains **meanings**. It is not a task checklist.
+**Authoritative for open work:** `tasks/backlog/parked_*.md` (and
+`tui_phase_*.md` when relevant). Archived program/lane docs live under
+`tasks/done/`. This page explains **meanings**. It is not a task checklist.
 
 Related design docs (deeper / historical):
 [`signal_engine_design_overview.md`](signal_engine_design_overview.md),
@@ -108,9 +108,13 @@ not missing pieces of the current setup+flow PRODUCTION baseline.
 | **Staged promotion** | Shadow → LOW_WEIGHT → PRODUCTION with monitoring and rollback |
 
 Task order and activation rules:
-[`tasks/backlog/evidence_validation_and_promotion.md`](../tasks/backlog/evidence_validation_and_promotion.md).  
-Program map:
-[`tasks/backlog/signal_evidence_program.md`](../tasks/backlog/signal_evidence_program.md).  
+[`tasks/backlog/parked_evidence_promotion_lane.md`](../tasks/backlog/parked_evidence_promotion_lane.md).  
+Parked residuals:
+[`tasks/backlog/parked_*.md`](../tasks/backlog/).  
+Archived program/lane docs:
+[`tasks/done/signal_evidence_program.md`](../tasks/done/signal_evidence_program.md),
+[`deterministic_signal_engine.md`](../tasks/done/deterministic_signal_engine.md),
+[`evidence_validation_and_promotion.md`](../tasks/done/evidence_validation_and_promotion.md).  
 CLI routing (clean break to `research` / `analyze signal`):
 [`tasks/done/improvement_cli_restructure.md`](../tasks/done/improvement_cli_restructure.md).
 

@@ -1,3 +1,11 @@
+> [!NOTE]
+> **Retired 2026-07-22.** Residual incomplete/parked work lives in
+> `tasks/backlog/parked_*.md`. Lane indexes
+> `deterministic_signal_engine.md` and
+> `evidence_validation_and_promotion.md` are also retired under `tasks/done/`.
+> Keep this file as historical completion evidence only; do not treat
+> unchecked parked criteria here as open baseline P0 work.
+
 # Backlog: ruthless data-quality and accuracy audit
 
 ## 1. Task metadata
@@ -15,16 +23,19 @@ validation is independently deferred.
 ### Cross-backlog ownership and gates
 
 The authoritative cross-backlog execution sequence lives in
-`tasks/backlog/signal_evidence_program.md`.
+`tasks/done/signal_evidence_program.md` (retired).
 
 - This document owns source truth, point-in-time/session correctness, artifact
   data integrity, quarantine/rebuild, and baseline freezing.
-- `tasks/backlog/deterministic_signal_engine.md` owns active SignalEngine
-  semantic and deterministic-contract work.
-- `tasks/backlog/evidence_validation_and_promotion.md` owns deferred empirical
-  validation and authority promotion.
-- `tasks/backlog/audit_signal_refactor_contract.md` is the detailed task-contract
-  appendix shared by those two lanes.
+- `tasks/done/deterministic_signal_engine.md` archived the SignalEngine
+  semantic/deterministic-contract lane (now closed; residuals in
+  `tasks/backlog/parked_*.md`).
+- `tasks/done/evidence_validation_and_promotion.md` archived the promotion lane
+  index; executable residual is
+  `tasks/backlog/parked_evidence_promotion_lane.md`.
+- `tasks/done/audit_signal_refactor_contract.md` is the retired detailed
+  task-contract appendix; residual parked work lives under
+  `tasks/backlog/parked_*.md`.
 - Data-quality and deterministic-contract completion do not independently
   authorize evidence promotion. The evidence-governance lane requires its own
   evaluation and transition contracts after their prerequisites pass.

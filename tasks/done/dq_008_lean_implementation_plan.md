@@ -2,7 +2,7 @@
 
 **Status:** DONE (D8-1 + D8-2 implemented 2026-07-22). Parked items unchanged.
 
-Companion to `tasks/backlog/audit_data_quality.md` → DQ-008 and its "Lean
+Companion to `tasks/done/audit_data_quality.md` → DQ-008 and its "Lean
 accumulation-evaluation amendment (2026-07-22)". Prove historical accumulation
 evaluation is an honest **DESCRIPTIVE** replay of the live accumulation-flow
 screen path — not a promotion-grade backtester and not a silent-leakage report.

@@ -28,7 +28,7 @@ Groups (acceptance criteria 4, 7, 8):
      onto the persisted observation's provenance columns; a date with no source
      candles is skipped with a machine-readable reason. A persistence-failure
      probe documents the CURRENT swallow-all behavior of the persister (see the
-     DQ-003 Slice D finding recorded in ``audit_data_quality.md``).
+     DQ-003 Slice D finding recorded in ``tasks/done/audit_data_quality.md``).
 """
 
 from __future__ import annotations
@@ -542,7 +542,7 @@ def test_date_without_source_candles_is_skipped_with_machine_readable_reason(tmp
 
 
 def test_backfill_fails_closed_on_save_failure(tmp_path):
-    """DQ-003 Slice D finding RESOLVED (see audit_data_quality.md).
+    """DQ-003 Slice D finding RESOLVED (see tasks/done/audit_data_quality.md).
 
     When `save_many` raises (a locked DB / contract / infrastructure error), the
     persister no longer swallows it — the exception propagates through the

@@ -1,6 +1,6 @@
 # DQ-003 lean implementation plan (amended 2026-07-21)
 
-Companion to `tasks/backlog/audit_data_quality.md` → DQ-003 and its
+Companion to `tasks/done/audit_data_quality.md` → DQ-003 and its
 "Lean identity amendment (2026-07-21)". This plan sequences the work into
 reviewable slices. Implement in order; A→B→C are a dependency chain, D and E
 may run in parallel after C.

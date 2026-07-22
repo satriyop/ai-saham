@@ -2,7 +2,7 @@
 
 **Status:** DONE (D6-1 + D6-2 implemented 2026-07-22). Parked items unchanged.
 
-Companion to `tasks/backlog/audit_data_quality.md` → DQ-006 and its "Lean
+Companion to `tasks/done/audit_data_quality.md` → DQ-006 and its "Lean
 readiness amendment (2026-07-22)". Make readiness counts honest for
 **deterministic calibration** first; do not pretend promotion or ML authority.
 

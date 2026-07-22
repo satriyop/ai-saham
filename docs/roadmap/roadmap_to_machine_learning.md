@@ -14,10 +14,12 @@ It does **not** define current implementation order, declare current maturity,
 or authorize model training, tuning, evidence promotion, or production use.
 The authoritative execution sequence is:
 
-- `tasks/backlog/signal_evidence_program.md`;
-- task contracts in `tasks/backlog/audit_data_quality.md`;
-- signal and promotion contracts in
-  `tasks/backlog/audit_signal_refactor_contract.md`.
+- residual parked contracts under `tasks/backlog/parked_*.md`
+  (promotion: `parked_evidence_promotion_lane.md`);
+- archived program/lane docs under `tasks/done/`
+  (`signal_evidence_program.md`, `audit_data_quality.md`,
+  `audit_signal_refactor_contract.md`, `deterministic_signal_engine.md`,
+  `evidence_validation_and_promotion.md`).
 
 When this document conflicts with those sources, the authoritative backlog and
 current code win.

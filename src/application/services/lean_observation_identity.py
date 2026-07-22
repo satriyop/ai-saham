@@ -8,7 +8,7 @@ parts and a per-config-path material registry. DQ-003 deliberately ships a lean
 subset: an explicit ``observation_contract`` string plus a
 ``semantic_compatibility_id`` derived from a *whole-config content hash*. The
 heavy apparatus stays parked (built, tested, trigger-gated) — see
-``tasks/backlog/audit_data_quality.md`` → "Lean identity amendment (2026-07-21)".
+``tasks/done/audit_data_quality.md`` → "Lean identity amendment (2026-07-21)".
 
 Why a whole-config hash rather than the enumerated material-path registry: a
 whole-config hash cannot silently fail to fork when an unregistered config path

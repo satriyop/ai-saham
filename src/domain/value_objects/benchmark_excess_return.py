@@ -9,7 +9,7 @@ returns over different start/end dates.
 This object carries NO decision authority. status=UNAVAILABLE must never be
 treated as neutral, zero, passed, or fresh by any consumer.
 
-See tasks/backlog/audit_signal_refactor_contract.md Task HIGH-1.
+See tasks/done/audit_signal_refactor_contract.md Task HIGH-1.
 
 Layer: Domain
 Depends on: stdlib only (dataclasses, datetime, enum)

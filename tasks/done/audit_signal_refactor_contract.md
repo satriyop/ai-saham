@@ -1,3 +1,11 @@
+> [!NOTE]
+> **Retired 2026-07-22.** Residual incomplete/parked work lives in
+> `tasks/backlog/parked_*.md`. Lane indexes
+> `deterministic_signal_engine.md` and
+> `evidence_validation_and_promotion.md` are also retired under `tasks/done/`.
+> Keep this file as historical completion evidence only; do not treat
+> unchecked parked criteria here as open baseline P0 work.
+
 # Detailed Signal Contract Task Specifications
 
 **Source audit:** `tasks/thought/signal_refactor_audit.md` (verified 2026-07-14)

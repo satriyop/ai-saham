@@ -73,10 +73,13 @@ comparable with earlier observations or labels.
 
 ### Signal Evidence Program Clean-Break Policy
 
-Every task owned by `tasks/backlog/signal_evidence_program.md` is a clean-break
-task. This program-wide rule supersedes compatibility, alias, dual-path,
-fallback, translation, or active historical-normalization language in older
-task drafts.
+Every residual signal-evidence task under `tasks/backlog/parked_*.md` is a
+clean-break task. Historical program and lane docs live in `tasks/done/`
+(`signal_evidence_program.md`, `audit_data_quality.md`,
+`audit_signal_refactor_contract.md`, `deterministic_signal_engine.md`,
+`evidence_validation_and_promotion.md`). This program-wide rule supersedes
+compatibility, alias, dual-path, fallback, translation, or active
+historical-normalization language in older task drafts.
 
 - Removed contracts, names, schemas, commands, config keys, and execution paths
   must be rejected by every new canonical producer and consumer. Do not retain

@@ -37,7 +37,7 @@ Before implementation, define:
 - drift and rollback policy.
 
 Before gaining authority, it must pass
-[`evidence_validation_and_promotion.md`](../../tasks/backlog/evidence_validation_and_promotion.md).
+[`parked_evidence_promotion_lane.md`](../../tasks/backlog/parked_evidence_promotion_lane.md).
 
 ## Roadmap B: Full-Decision Challengers
 

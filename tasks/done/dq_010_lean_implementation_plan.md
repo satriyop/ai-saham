@@ -2,7 +2,7 @@
 
 **Status:** Done — forward-path close-out complete.
 
-Companion to `tasks/backlog/audit_data_quality.md` → DQ-010.
+Companion to `tasks/done/audit_data_quality.md` → DQ-010.
 
 ## Guiding decision (final)
 

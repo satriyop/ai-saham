@@ -95,7 +95,8 @@ row.
 | Market context | `src/application/services/market_context_engine.py` |
 | Swing tuning guardrails | `src/application/services/swing_tuning_patch_validation.py` and adjacent `swing_tuning_*` services |
 | Layer enforcement | `tests/architecture/test_layer_boundaries.py` |
-| Signal-evidence execution order | `tasks/backlog/signal_evidence_program.md` |
+| Signal-evidence parked residuals | `tasks/backlog/parked_*.md` |
+| Signal-evidence archive | `tasks/done/signal_evidence_program.md` |
 
 ## Decision index
 

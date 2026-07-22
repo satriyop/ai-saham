@@ -1,13 +1,23 @@
+> [!NOTE]
+> **Retired 2026-07-22.** Lane indexes removed. Use `tasks/backlog/parked_*.md`
+> directly (especially `parked_evidence_promotion_lane.md` for promotion).
+> Keep this file as historical orientation only.
+
 # Evidence Validation And Promotion
 
 ## Scope
 
-This is the technology-neutral governance lane for evidence or deterministic
-policy changes seeking new or expanded authority inside the deterministic
-engine.
+Technology-neutral governance lane for evidence or deterministic policy changes
+seeking new or expanded authority inside the deterministic engine.
 
 For plain-language **current** PRODUCTION / DIAGNOSTIC meanings (not task
 status), see [`docs/signal_evidence_authority.md`](../../docs/signal_evidence_authority.md).
+
+Executable parked contract:
+[`parked_evidence_promotion_lane.md`](parked_evidence_promotion_lane.md).
+
+Archived detailed appendix:
+`tasks/done/audit_signal_refactor_contract.md`.
 
 It applies to:
 
@@ -22,8 +32,10 @@ ML/API challengers.
 
 This lane is deferred. Start it only when all of the following are true:
 
-1. `DQ-BASELINE-GATE` has passed.
-2. Canonical observations and executable labels exist.
+1. `DQ-BASELINE-GATE` has passed (closed).
+2. Canonical observations and executable labels exist for the claim type
+   (raw_market may be insufficient when net returns are claimed — see
+   [`parked_idx_execution_labels.md`](parked_idx_execution_labels.md)).
 3. A named evidence or policy candidate is ready for evaluation.
 4. Its proposed setup family, horizon, and optional authority segment are
    predeclared.
@@ -43,10 +55,8 @@ because this roadmap exists.
 | 5 | `STAGED-EVIDENCE-PROMOTION` | Deferred | Shadow, cap exposure, monitor, suspend, and roll back |
 | 6 | `BASELINE-AUTHORITY-RECERTIFICATION` | Deferred | Validate or demote provisional legacy baseline authority |
 
-Detailed contracts remain in
-[`audit_signal_refactor_contract.md`](audit_signal_refactor_contract.md).
-`Deferred` means the task is intentionally inactive until the activation
-trigger passes; unchecked criteria do not imply partial implementation.
+Exact contracts, checklists, and acceptance criteria live in
+[`parked_evidence_promotion_lane.md`](parked_evidence_promotion_lane.md).
 
 ## Authority Scope
 
@@ -88,24 +98,29 @@ are not sufficient.
 - immutable semantic and provenance identity;
 - purged/embargoed walk-forward evaluation;
 - untouched holdout discipline;
-- net-of-cost executable outcomes;
+- net-of-cost executable outcomes when tradeable edge is claimed;
 - paired incremental value over the identical baseline population;
 - material subgroup and worst-fold reporting;
 - monitoring, suspension, and deterministic rollback;
 - YAML cannot declare its own proof;
 - tuning cannot change authority or approval state.
 
+## Related Parked Work
+
+| Need | Task |
+|---|---|
+| Net-executable labels | [`parked_idx_execution_labels.md`](parked_idx_execution_labels.md) |
+| Full artifact-identity apparatus | [`parked_artifact_identity_apparatus.md`](parked_artifact_identity_apparatus.md) |
+| Named swing-setup population | [`parked_named_swing_setup_capture.md`](parked_named_swing_setup_capture.md) |
+| Genuine rejected controls / PIT universe | [`parked_screen_rejected_controls_and_universe.md`](parked_screen_rejected_controls_and_universe.md) |
+
 ## Solo-Project Proportionality
 
 - Build this lane only for a named candidate, never as speculative platform
   infrastructure.
-- Use one evaluation-artifact shape and one transition mechanism; do not build
-  separate approval services for each lifecycle state.
+- Use one evaluation-artifact shape and one transition mechanism.
 - Scope authority by evidence, setup, and horizon. Add a segment only after
   observed data proves it is materially necessary.
-- Begin with the minimum purged walk-forward and paired-ablation metrics needed
-  for the candidate. Add subgroup dimensions only when sample size supports
-  them.
 - Local-ML identity and drift fields are conditional requirements only when the
   candidate is a local-ML evidence producer.
 - Full-decision ML/API challenger orchestration remains in the future roadmap

@@ -1,6 +1,6 @@
 # DQ-004 lean implementation plan (amended 2026-07-22)
 
-Companion to `tasks/backlog/audit_data_quality.md` → DQ-004 and its "Lean
+Companion to `tasks/done/audit_data_quality.md` → DQ-004 and its "Lean
 raw-label amendment (2026-07-22)". Build honest raw market-outcome labels;
 park net-executable (cost-modeled) labels behind `IDX-EXECUTION-LABELS`.
 

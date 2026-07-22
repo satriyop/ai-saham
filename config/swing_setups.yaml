@@ -92,7 +92,7 @@ setup_phase:
   # rs_policy_by_setup_family removed (Task HIGH-1, 2026-07-17): the 5/20-
   # session benchmark excess-return measurement is DIAGNOSTIC_UNVALIDATED and
   # no longer constrains ENTER/WATCH/AVOID. See
-  # tasks/backlog/audit_signal_refactor_contract.md Task HIGH-1.
+  # tasks/done/audit_signal_refactor_contract.md Task HIGH-1.
   requirements:
     accumulation:
       required_sequence: [ACCUMULATION, COMPRESSION, BREAKOUT_CONFIRMATION]

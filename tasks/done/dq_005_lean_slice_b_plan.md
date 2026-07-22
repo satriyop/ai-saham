@@ -8,7 +8,7 @@ score, signal_authority_coverage, setup_phase, fingerprint_digest →
 `MATCH`/`DRIFT`. Residual post-capture backfill risk documented on notes.
 No new migrations; no network refetch; no snapshot warehouse.
 
-Companion to `tasks/backlog/audit_data_quality.md` → DQ-005.  
+Companion to `tasks/done/audit_data_quality.md` → DQ-005.  
 Slice A (retrieval honesty) is **DONE** (`68759bb`, 2026-07-22):
 `RetrieveStoredSignalObservationUseCase` is explicitly `RETRIEVAL_ONLY`, names
 identity, and returns `AMBIGUOUS` instead of silent `get_latest`.

@@ -2,7 +2,7 @@
 
 **Status:** DONE (D7-1 + D7-2 implemented 2026-07-22). Parked items unchanged.
 
-Companion to `tasks/backlog/audit_data_quality.md` → DQ-007 and its "Lean
+Companion to `tasks/done/audit_data_quality.md` → DQ-007 and its "Lean
 inspection amendment (2026-07-22)". Prove that a read-only inspector explains
 the **same** canonical SignalEngine calculation screen/swing use — not a
 resurrected six-factor audit or a second composite.

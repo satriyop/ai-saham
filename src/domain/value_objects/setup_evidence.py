@@ -48,7 +48,7 @@ class SetupEvidence:
     vwap_pct: float | None
     # Benchmark excess-return sub-signal (pre-computed by caller). Diagnostic
     # and unvalidated — never authoritative for ENTER/WATCH/AVOID. See
-    # tasks/backlog/audit_signal_refactor_contract.md Task HIGH-1.
+    # tasks/done/audit_signal_refactor_contract.md Task HIGH-1.
     benchmark_excess_return_5_session: BenchmarkExcessReturn
     benchmark_excess_return_20_session: BenchmarkExcessReturn
     # Volume trend sub-signal (data-quality-gated; vendor identity is not policy)
