@@ -68,7 +68,8 @@ echo ""
 # ── Cron entries (host local time; expected host timezone: Asia/Jakarta) ─────
 # IDX pre-open session: 08:45–09:00 WIB
 # Opening session ends: 09:30 WIB
-# Swing EOD observation starts after market data should be available.
+# Swing EOD: fetch market is on by default. Capture/labels stay commented until
+# an always-on research corpus is wanted (readiness / future ML).
 read -r -d '' SAHAM_CRON << ENTRIES || true
 # --- saham-cron-begin ---
 # IEV collector — 08:55 WIB
@@ -85,10 +86,12 @@ read -r -d '' SAHAM_CRON << ENTRIES || true
 40 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham learn tune' >> $LOG_DIR/opening-tune.log 2>&1
 # Swing EOD — refresh LQ45 candles after EOD data should be available 18:30 WIB
 30 18 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham fetch market --universe lq45' >> $LOG_DIR/swing-fetch-market.log 2>&1
+# Optional research corpus growth (not required for live screen/analyze).
+# Uncomment when building an always-on labeled dataset for readiness / future ML.
 # Swing EOD — capture LQ45 accumulation-discovery observations 19:15 WIB
-15 19 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham research signal capture --contract accumulation-discovery --universe lq45 --session $(date +\%Y-\%m-\%d) --format json' >> $LOG_DIR/swing-observe-lq45.log 2>&1
+#15 19 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham research signal capture --contract accumulation-discovery --universe lq45 --session $(date +\%Y-\%m-\%d) --format json' >> $LOG_DIR/swing-observe-lq45.log 2>&1
 # Swing EOD — idempotent SWING_10D label generation for eligible saved dates 19:45 WIB
-45 19 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham research signal labels --eligible-dates --horizon SWING_10D --generate-all --format json' >> $LOG_DIR/swing-labels.log 2>&1
+#45 19 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham research signal labels --eligible-dates --horizon SWING_10D --generate-all --format json' >> $LOG_DIR/swing-labels.log 2>&1
 # --- saham-cron-end ---
 ENTRIES
 
