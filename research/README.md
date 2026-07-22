@@ -24,6 +24,7 @@ research/
     factor_card_accum_components.py  # Package A1 — Accum component ablation
     factor_card_sector_breadth.py    # Package A3 — group/sector breadth bonus
     factor_card_broker_lists.py      # Package A4 — Tier1/smart/noise list quality
+    factor_card_setup_gates.py       # Package B2 — named setup gate thresholds
     factor_card_mce_factors.py       # Package D — MCE / regime
   artifacts/                # generated reports (gitignored except .gitkeep)
 ```
@@ -82,6 +83,7 @@ A green factor card has **no** authority.
 .venv/bin/python research/scripts/factor_card_accum_components.py
 .venv/bin/python research/scripts/factor_card_sector_breadth.py
 .venv/bin/python research/scripts/factor_card_broker_lists.py
+.venv/bin/python research/scripts/factor_card_setup_gates.py
 .venv/bin/python research/scripts/factor_card_mce_factors.py
 
 # optional richer lab deps later

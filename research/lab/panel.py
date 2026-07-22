@@ -53,6 +53,9 @@ class PanelRow:
     bci_tier1_count: int | None = None
     institutional_flag: bool | None = None
     top_brokers: tuple[str, ...] | None = None
+    # Setup-gate inputs (Package B2)
+    trend: str | None = None
+    bb_width_pctile: float | None = None
 
 
 def resolve_db_path(db_path: Path | None = None) -> Path:
@@ -150,6 +153,8 @@ def load_swing10d_panel(db_path: Path | None = None) -> list[PanelRow]:
                 bci_tier1_count=_as_int(cand.get("bci_tier1_count")),
                 institutional_flag=_as_bool(cand.get("institutional_flag")),
                 top_brokers=_as_broker_codes(cand.get("top_brokers")),
+                trend=_as_trend(cand.get("trend")),
+                bb_width_pctile=_as_float(cand.get("bb_width_pctile")),
             )
         )
     return panel
@@ -209,3 +214,10 @@ def _as_broker_codes(value: Any) -> tuple[str, ...] | None:
         return None
     codes = tuple(str(code).strip().upper() for code in value if str(code).strip())
     return codes if codes else tuple()
+
+
+def _as_trend(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip().upper()
+    return text or None

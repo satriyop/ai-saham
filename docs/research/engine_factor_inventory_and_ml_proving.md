@@ -355,7 +355,7 @@ Organize work as **proving packages**, not as one mega-model.
 | ID | Factor family | Prove what | Labels | Notes |
 |----|---------------|------------|--------|-------|
 | B1 | match_strength map 100/60/20 | Ordinal calibration vs returns | SWING_10D | May need named-setup captures |
-| B2 | Setup gate thresholds | Each gate’s ROC / precision at MATCH | SWING_10D + setup fields | Start with foreign-bounce VWAP/RSI/score |
+| B2 | Setup gate thresholds | Each gate’s ROC / precision at MATCH | SWING_10D + setup fields | Start with foreign-bounce VWAP/RSI/score; card recomputes MATCH from YAML |
 | B3 | Group weights 60/40 | Reweight search under non-negative constraint | SWING_10D | Hold out by date |
 | B4 | Flow cap 0.80 + Bandar blend | Cap sensitivity; Bandar equal-weight vs flow-only | SWING_10D | |
 | B5 | Classification 70/45 | Decision curve / utility vs ENTER rate | SWING_10D | |
@@ -458,7 +458,7 @@ Offline lab lives at `research/` (see `research/README.md`). It is Mode A only.
 |------|--------|
 | Layout | `research/lab/` panel loaders, `research/scripts/` cards, `research/artifacts/` outputs |
 | Deps | Optional `[project.optional-dependencies] research` / `research/requirements.txt` — not default install |
-| First scripts | `factor_card_vwap_buckets.py`, `factor_card_bci_flow_sign.py`, `factor_card_accum_components.py`, `factor_card_sector_breadth.py`, `factor_card_broker_lists.py`, `factor_card_mce_factors.py` under `research/scripts/` |
+| First scripts | `factor_card_vwap_buckets.py`, `factor_card_bci_flow_sign.py`, `factor_card_accum_components.py`, `factor_card_sector_breadth.py`, `factor_card_broker_lists.py`, `factor_card_setup_gates.py`, `factor_card_mce_factors.py` under `research/scripts/` |
 | Forbidden | Lab code must not be imported by `src/`; no auto-writes to production YAML |
 | Authority | Factor cards propose; humans + promotion lane decide |
 
