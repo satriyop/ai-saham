@@ -346,7 +346,7 @@ Organize work as **proving packages**, not as one mega-model.
 | A1 | consistency / streak / flow% / VWAP / BCI / RSI headroom | Marginal contribution to SWING_10D; weight necessity | `signal_forward_labels` | fingerprint + candidate payload + broker recompute |
 | A2 | BCI direction / absorption | CLUSTER conditional on aggregate flow sign | same | S6 methodology, canonical join |
 | A3 | Sector breadth bonus | Does bonus improve or dilute? | same | payload (`sector_breadth_pct` / `sector_breadth_bonus` now in `to_dict()`; re-screen for exact values) |
-| A4 | Broker list quality | Tier1/smart/noise membership predictive? | same + broker_daily_flow | recompute |
+| A4 | Broker list quality | Tier1/smart/noise membership predictive? | same + broker_daily_flow | payload (`top_brokers`, BCI) + optional daily-flow recompute |
 
 **ML tools:** threshold sweeps, constrained linear models, ablation of components.
 
@@ -458,7 +458,7 @@ Offline lab lives at `research/` (see `research/README.md`). It is Mode A only.
 |------|--------|
 | Layout | `research/lab/` panel loaders, `research/scripts/` cards, `research/artifacts/` outputs |
 | Deps | Optional `[project.optional-dependencies] research` / `research/requirements.txt` — not default install |
-| First scripts | `factor_card_vwap_buckets.py`, `factor_card_bci_flow_sign.py`, `factor_card_accum_components.py`, `factor_card_sector_breadth.py`, `factor_card_mce_factors.py` under `research/scripts/` |
+| First scripts | `factor_card_vwap_buckets.py`, `factor_card_bci_flow_sign.py`, `factor_card_accum_components.py`, `factor_card_sector_breadth.py`, `factor_card_broker_lists.py`, `factor_card_mce_factors.py` under `research/scripts/` |
 | Forbidden | Lab code must not be imported by `src/`; no auto-writes to production YAML |
 | Authority | Factor cards propose; humans + promotion lane decide |
 

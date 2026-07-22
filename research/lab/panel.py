@@ -48,6 +48,11 @@ class PanelRow:
     score_without_inst: float | None = None
     sector_breadth_pct: float | None = None
     sector_breadth_bonus: float | None = None
+    # Broker-list inputs (Package A4)
+    window_days: int | None = None
+    bci_tier1_count: int | None = None
+    institutional_flag: bool | None = None
+    top_brokers: tuple[str, ...] | None = None
 
 
 def resolve_db_path(db_path: Path | None = None) -> Path:
@@ -141,6 +146,10 @@ def load_swing10d_panel(db_path: Path | None = None) -> list[PanelRow]:
                 score_without_inst=_without(total, points.get("inst")),
                 sector_breadth_pct=_as_float(cand.get("sector_breadth_pct")),
                 sector_breadth_bonus=_as_float(cand.get("sector_breadth_bonus")),
+                window_days=_as_int(cand.get("window_days")),
+                bci_tier1_count=_as_int(cand.get("bci_tier1_count")),
+                institutional_flag=_as_bool(cand.get("institutional_flag")),
+                top_brokers=_as_broker_codes(cand.get("top_brokers")),
             )
         )
     return panel
@@ -175,3 +184,28 @@ def _as_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _as_bool(value: Any) -> bool | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"true", "1", "yes"}:
+            return True
+        if lowered in {"false", "0", "no"}:
+            return False
+    return None
+
+
+def _as_broker_codes(value: Any) -> tuple[str, ...] | None:
+    if value is None:
+        return None
+    if not isinstance(value, (list, tuple)):
+        return None
+    codes = tuple(str(code).strip().upper() for code in value if str(code).strip())
+    return codes if codes else tuple()
