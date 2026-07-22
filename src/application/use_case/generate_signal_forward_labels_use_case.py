@@ -8,6 +8,9 @@ from decimal import Decimal, InvalidOperation
 from enum import Enum
 from typing import Any
 
+from src.application.ports.corporate_action_calendar_repository import (
+    CorporateActionCalendarRepository,
+)
 from src.domain.ports.candidate_observations_repository import (
     CandidateObservation,
     CandidateObservationsRepository,
@@ -15,6 +18,10 @@ from src.domain.ports.candidate_observations_repository import (
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.ports.signal_forward_labels_repository import (
     SignalForwardLabelsRepository,
+)
+from src.domain.value_objects.corporate_action_calendar import (
+    CorporateActionDateRole,
+    CorporateActionType,
 )
 from src.domain.value_objects.canonical_swing_session_contract import (
     CanonicalSwingSessionContract,
@@ -78,16 +85,28 @@ class GenerateEligibleSignalForwardLabelsRequest:
 class GenerateSignalForwardLabelsUseCase:
     """Label the latest saved candidate observation using local candles only."""
 
+    # Mechanical corporate-action types whose EX_DATE inside a label window
+    # distorts raw returns and must fail the label closed. DIVIDEND is
+    # deliberately excluded (deferred per the DQ-004 amendment).
+    _INVALIDATING_ACTION_TYPES: tuple[CorporateActionType, ...] = (
+        CorporateActionType.STOCK_SPLIT,
+        CorporateActionType.REVERSE_SPLIT,
+        CorporateActionType.RIGHTS_ISSUE,
+        CorporateActionType.BONUS,
+    )
+
     def __init__(
         self,
         *,
         candidate_observations_repository: CandidateObservationsRepository,
         market_data_repository: MarketDataRepository,
         signal_forward_labels_repository: SignalForwardLabelsRepository,
+        corporate_action_calendar_repository: CorporateActionCalendarRepository,
     ) -> None:
         self._observations = candidate_observations_repository
         self._market = market_data_repository
         self._labels = signal_forward_labels_repository
+        self._corp_cal = corporate_action_calendar_repository
 
     def execute(
         self, request: GenerateSignalForwardLabelsRequest
@@ -123,7 +142,14 @@ class GenerateSignalForwardLabelsUseCase:
                 source_schema_version=_observation_schema_version(observation),
             )
 
-        labels = tuple(self._build_label(observation, horizon) for horizon in request.horizons)
+        # Coarse global-sync coverage gate — evaluate ONCE per call (global
+        # state, not per observation). See _build_label for how it combines with
+        # per-event detection.
+        coverage_available = self._corp_cal.has_any_sync_marker()
+        labels = tuple(
+            self._build_label(observation, horizon, coverage_available=coverage_available)
+            for horizon in request.horizons
+        )
         if labels:
             self._labels.save_many(list(labels))
         return GenerateSignalForwardLabelsResponse(
@@ -140,7 +166,11 @@ class GenerateSignalForwardLabelsUseCase:
         observations = self._observations.list_canonical_by_date(request.signal_date)
         eligible_observations = [obs for obs in observations if _is_canonical_observation(obs)]
         skipped_incompatible_observation_count = len(observations) - len(eligible_observations)
-        labels = self._build_labels_for_observations(eligible_observations, request.horizons)
+        # Global-sync coverage gate — evaluate ONCE per call, not per observation.
+        coverage_available = self._corp_cal.has_any_sync_marker()
+        labels = self._build_labels_for_observations(
+            eligible_observations, request.horizons, coverage_available=coverage_available
+        )
         if labels:
             self._labels.save_many(labels)
         unavailable_count = _unavailable_count(labels)
@@ -161,6 +191,9 @@ class GenerateSignalForwardLabelsUseCase:
         generated_dates: list[date] = []
         skipped_dates: list[date] = []
         skipped_incompatible_observation_count = 0
+        # Global-sync coverage gate — evaluate ONCE per call, not per observation
+        # or per date.
+        coverage_available = self._corp_cal.has_any_sync_marker()
         for signal_date in self._observations.list_snapshot_dates():
             observations = self._observations.list_canonical_by_date(signal_date)
             eligible_observations = [
@@ -180,6 +213,7 @@ class GenerateSignalForwardLabelsUseCase:
                 self._build_labels_for_observations(
                     eligible_observations,
                     (request.horizon,),
+                    coverage_available=coverage_available,
                 )
             )
             generated_dates.append(signal_date)
@@ -199,11 +233,13 @@ class GenerateSignalForwardLabelsUseCase:
         self,
         observations: list[CandidateObservation],
         horizons: tuple[SignalLabelHorizon, ...],
+        *,
+        coverage_available: bool,
     ) -> list[SignalForwardLabel]:
         labels: list[SignalForwardLabel] = []
         for observation in observations:
             labels.extend(
-                self._build_label(observation, horizon)
+                self._build_label(observation, horizon, coverage_available=coverage_available)
                 for horizon in horizons
             )
         return labels
@@ -228,6 +264,8 @@ class GenerateSignalForwardLabelsUseCase:
         self,
         observation: CandidateObservation,
         horizon: SignalLabelHorizon,
+        *,
+        coverage_available: bool,
     ) -> SignalForwardLabel:
         if not _is_canonical_observation(observation):
             raise ValueError(
@@ -275,6 +313,46 @@ class GenerateSignalForwardLabelsUseCase:
             )
 
         window = forward_candles[:required]
+        window_start = window[0].date
+        window_end = window[-1].date
+
+        # Corporate-action coverage & detection (DQ-004 Slice D4-1). The complete
+        # window is resolved above; decide invalidation before computing any
+        # returns so a distorted number is never produced.
+        if coverage_available:
+            # Gate open: run real per-event EX_DATE detection. Detection beats the
+            # open gate — a detected mechanical action always invalidates.
+            detected = self._detect_corporate_action(ticker, window_start, window_end)
+            if detected is not None:
+                ex_date, action_type = detected
+                return _unavailable_label(
+                    ticker=ticker,
+                    signal_date=signal_date,
+                    horizon=horizon,
+                    observation_captured_at=observation.captured_at,
+                    fingerprint=fingerprint,
+                    reason=f"corporate_action_in_window:{action_type.value}@{ex_date.isoformat()}",
+                    entry_reference_price=entry,
+                    label_window_start=window_start,
+                    label_window_end=window_end,
+                    observation=observation,
+                )
+        else:
+            # Gate closed: the calendar has never been synced, so we cannot
+            # disprove a corporate action in this window. Fail closed.
+            return _unavailable_label(
+                ticker=ticker,
+                signal_date=signal_date,
+                horizon=horizon,
+                observation_captured_at=observation.captured_at,
+                fingerprint=fingerprint,
+                reason="corporate_action_coverage_unavailable",
+                entry_reference_price=entry,
+                label_window_start=window_start,
+                label_window_end=window_end,
+                observation=observation,
+            )
+
         close_return = _pct_change(window[-1].close, entry)
         high_returns = [_pct_change(c.high, entry) for c in window]
         low_returns = [_pct_change(c.low, entry) for c in window]
@@ -312,6 +390,7 @@ class GenerateSignalForwardLabelsUseCase:
             stop_would_trigger=stop_would_trigger,
             target_would_trigger=target_would_trigger,
             outcome_label=outcome,
+            outcome_basis="raw_market",
             unavailable_reason=None,
             fingerprint=fingerprint,
             observation_captured_at=observation.captured_at,
@@ -323,6 +402,37 @@ class GenerateSignalForwardLabelsUseCase:
             resolution_source=observation.resolution_source,
             resolution_notes=observation.resolution_notes,
         )
+
+    def _detect_corporate_action(
+        self,
+        ticker: str,
+        window_start: date,
+        window_end: date,
+    ) -> tuple[date, CorporateActionType] | None:
+        """Return the earliest mechanical corporate-action (ex_date, type) whose
+        EX_DATE falls inside [window_start, window_end], or None.
+
+        Queried WITHOUT `as_of_fetched_at`: labels are computed after the fact,
+        so seeing a split that *did* occur is conservative invalidation, never
+        decision-time leakage.
+        """
+        events = self._corp_cal.get_events_for_ticker(
+            ticker,
+            window_start,
+            window_end,
+            event_types=self._INVALIDATING_ACTION_TYPES,
+        )
+        hits: list[tuple[date, CorporateActionType]] = []
+        for event in events:
+            for dated in event.dates:
+                if (
+                    dated.date_role is CorporateActionDateRole.EX_DATE
+                    and window_start <= dated.event_date <= window_end
+                ):
+                    hits.append((dated.event_date, event.event_type))
+        if not hits:
+            return None
+        return min(hits, key=lambda hit: hit[0])
 
 
 def _observation_schema_version(observation: CandidateObservation) -> int | None:

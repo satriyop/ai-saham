@@ -209,3 +209,29 @@ class TestSyncMarkers:
         repo.mark_synced(date(2026, 7, 11), types, status="partial")
         repo.mark_synced(date(2026, 7, 11), types, status="success")
         assert repo.has_synced_for_date(date(2026, 7, 11), types) is True
+
+    # ── DQ-004 coarse global-sync gate ───────────────────────────────────────
+
+    def test_has_any_sync_marker_false_when_never_synced(self, repo):
+        assert repo.has_any_sync_marker() is False
+
+    def test_has_any_sync_marker_false_when_only_partial_markers(self, repo):
+        repo.mark_synced(date(2026, 7, 11), (CorporateActionType.DIVIDEND,), status="partial")
+        assert repo.has_any_sync_marker() is False
+
+    def test_has_any_sync_marker_true_after_any_success_regardless_of_key(self, repo):
+        # A success marker for one event-type key opens the gate globally — it
+        # must NOT require the exact sync_key that has_synced_for_date needs.
+        repo.mark_synced(date(2026, 7, 11), (CorporateActionType.DIVIDEND,), status="success")
+        assert repo.has_any_sync_marker() is True
+        assert repo.has_synced_for_date(date(2026, 7, 11), (CorporateActionType.RUPS,)) is False
+
+    def test_has_any_sync_marker_scoped_by_source(self, repo):
+        repo.mark_synced(
+            date(2026, 7, 11),
+            (CorporateActionType.DIVIDEND,),
+            status="success",
+            source="stockbit",
+        )
+        assert repo.has_any_sync_marker(source="stockbit") is True
+        assert repo.has_any_sync_marker(source="other") is False

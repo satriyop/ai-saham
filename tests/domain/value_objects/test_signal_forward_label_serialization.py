@@ -71,6 +71,23 @@ def make_label(
     )
 
 
+def test_outcome_basis_defaults_to_raw_market_and_round_trips():
+    fp = SignalObservationFingerprint()
+    label = make_label(schema_version=3, fingerprint=fp)
+    # Default marker without any explicit argument.
+    assert label.outcome_basis == "raw_market"
+
+    payload = label.to_dict()
+    assert payload["outcome_basis"] == "raw_market"
+
+    # Round-trips explicitly.
+    assert SignalForwardLabel.from_dict(payload).outcome_basis == "raw_market"
+
+    # A legacy row written before the marker existed defaults on read.
+    payload.pop("outcome_basis")
+    assert SignalForwardLabel.from_dict(payload).outcome_basis == "raw_market"
+
+
 def test_canonical_domain_serialization():
     # Construct a current-schema label whose fingerprint intentionally contains:
     # - all five forbidden legacy values;

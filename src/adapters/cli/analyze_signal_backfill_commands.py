@@ -49,6 +49,9 @@ from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBroker
 from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
     SQLiteCandidateObservationsRepository,
 )
+from src.infrastructure.persistence.sqlite_corporate_action_calendar_repository import (
+    SQLiteCorporateActionCalendarRepository,
+)
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 from src.infrastructure.persistence.sqlite_signal_forward_labels_repository import (
     SQLiteSignalForwardLabelsRepository,
@@ -162,6 +165,7 @@ def signal_backfill_observations(
         candidate_observations_repository=observations_repo,
         market_data_repository=market_repo,
         signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=SQLiteCorporateActionCalendarRepository(resolved_db),
     )
 
     def _evaluate_market_context_for_backfill(*, as_of_date: date) -> MarketContext:

@@ -39,6 +39,17 @@ jump heuristic needed.
 
 ## Slice D4-1 — Corporate-action fail-closed + raw-outcome marker
 
+**Status: DONE** (2026-07-22). Implemented: `outcome_basis="raw_market"` marker on
+`SignalForwardLabel` (additive, non-schema-bumping; `from_dict` defaults it);
+coarse global-sync gate `has_any_sync_marker()` on the calendar port + SQLite
+impl, evaluated once per run in `execute`/`execute_all`/`execute_eligible_dates`;
+per-event `EX_DATE` detection (`STOCK_SPLIT`/`REVERSE_SPLIT`/`RIGHTS_ISSUE`/
+`BONUS`, DIVIDEND excluded) in `_build_label`, queried without `as_of_fetched_at`,
+detection winning over an open gate. All three composition roots (two label
+commands + backfill) inject the calendar repo. Negative-first + architecture
+boundary tests pass; full suite green. Checkpoint reached — hold for review
+before Slice D4-2.
+
 **Goal:** a label whose window crosses a real mechanical corporate action is
 `UNAVAILABLE`, never a distorted number; every raw label is explicitly marked
 non-executable. Closes criterion 3 (corporate-action half) and the

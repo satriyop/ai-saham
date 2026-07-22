@@ -69,6 +69,7 @@ from src.domain.entities.broker_flow import BrokerSummary
 from src.domain.entities.candle import Candle
 from src.domain.ports.candidate_observations_repository import CandidateObservation
 from src.domain.value_objects.company_fundamentals import CompanyFundamentals
+from src.domain.value_objects.corporate_action_calendar import CorporateActionType
 from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
 from src.domain.value_objects.signal_artifact_identity import SemanticCompatibilityId
 from src.domain.value_objects.signal_forward_label import SignalLabelHorizon
@@ -85,6 +86,9 @@ from src.infrastructure.config.swing_config import load_swing_config
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
     SQLiteCandidateObservationsRepository,
+)
+from src.infrastructure.persistence.sqlite_corporate_action_calendar_repository import (
+    SQLiteCorporateActionCalendarRepository,
 )
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 from src.infrastructure.persistence.sqlite_signal_forward_labels_repository import (
@@ -258,10 +262,16 @@ def _run_capture(
     market_repo = SQLiteMarketRepository(db_path)
     observations_repo = SQLiteCandidateObservationsRepository(db_path)
     labels_repo = SQLiteSignalForwardLabelsRepository(db_path)
+    # Real calendar repo with a seeded success marker so the DQ-004 coverage gate
+    # is open — this test exercises capture/label separation, not corporate
+    # actions, so labels must compute their real outcomes (no events → clean).
+    corp_cal = SQLiteCorporateActionCalendarRepository(db_path)
+    corp_cal.mark_synced(_T, (CorporateActionType.STOCK_SPLIT,), "success")
     label_use_case = GenerateSignalForwardLabelsUseCase(
         candidate_observations_repository=observations_repo,
         market_data_repository=market_repo,
         signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=corp_cal,
     )
 
     response = BackfillSignalObservationsUseCase(

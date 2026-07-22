@@ -207,6 +207,18 @@ class SQLiteCorporateActionCalendarRepository(CorporateActionCalendarRepository)
             ).fetchone()
         return bool(row) and row["status"] == "success"
 
+    def has_any_sync_marker(self, source: str = "stockbit") -> bool:
+        with self._get_connection() as conn:
+            row = conn.execute(
+                """
+                SELECT 1 FROM corporate_action_calendar_sync
+                WHERE source=? AND status='success'
+                LIMIT 1
+                """,
+                (source,),
+            ).fetchone()
+        return row is not None
+
     def mark_synced(
         self,
         sync_date: date,

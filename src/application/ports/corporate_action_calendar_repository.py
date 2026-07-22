@@ -43,6 +43,19 @@ class CorporateActionCalendarRepository(ABC):
         ...
 
     @abstractmethod
+    def has_any_sync_marker(self, source: str = "stockbit") -> bool:
+        """Return True when at least one successful sync marker exists at all.
+
+        Coarse global-sync coverage gate (DQ-004): unlike `has_synced_for_date`,
+        this asks only whether the calendar has *ever* been successfully synced —
+        no `sync_key`/`synced_for_date` match. It exists precisely because the
+        exact event-type `sync_key` false-negatives, so it must not be replaced
+        by `has_synced_for_date`. Callers use it to fail forward-label generation
+        closed when nothing is known about corporate actions.
+        """
+        ...
+
+    @abstractmethod
     def mark_synced(
         self,
         sync_date: date,

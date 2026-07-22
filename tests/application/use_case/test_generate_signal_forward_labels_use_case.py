@@ -100,6 +100,75 @@ class SpySignalForwardLabelsRepository:
         return None
 
 
+class FakeCorporateActionCalendarRepository:
+    """Duck-typed calendar fake for DQ-004 gate + detection.
+
+    `has_marker` toggles the coarse global-sync coverage gate. `events` mimics
+    the real repo predicate: get_events_for_ticker returns events with at least
+    one dated milestone inside [from_date, to_date] (the generator then filters
+    to EX_DATE roles itself). `sync_marker_calls` records how many times the gate
+    was evaluated, so a test can prove it runs once per run, not per observation.
+    """
+
+    def __init__(self, has_marker=True, events=None):
+        self._has_marker = has_marker
+        self._events = list(events or ())
+        self.sync_marker_calls = 0
+        self.ticker_query_calls = []
+
+    def has_any_sync_marker(self, source="stockbit"):
+        self.sync_marker_calls += 1
+        return self._has_marker
+
+    def get_events_for_ticker(
+        self, ticker, from_date, to_date, event_types=None, as_of_fetched_at=None
+    ):
+        self.ticker_query_calls.append(
+            (ticker.upper(), from_date, to_date, event_types, as_of_fetched_at)
+        )
+        result = []
+        for event in self._events:
+            if event.ticker != ticker.upper():
+                continue
+            if event_types and event.event_type not in event_types:
+                continue
+            if any(from_date <= d.event_date <= to_date for d in event.dates):
+                result.append(event)
+        return result
+
+
+def _gate_open_calendar():
+    """A synced calendar with no events — gate open, nothing detected. Existing
+    tests behave exactly as before the DQ-004 coverage gate was added."""
+    return FakeCorporateActionCalendarRepository(has_marker=True)
+
+
+def _ex_date_event(ticker, action_type, ex_date, *, cum_date=None):
+    from src.domain.value_objects.corporate_action_calendar import (
+        CorporateActionCalendarDate,
+        CorporateActionCalendarEvent,
+        CorporateActionDateRole,
+    )
+
+    dates = [
+        CorporateActionCalendarDate(
+            date_role=CorporateActionDateRole.EX_DATE, event_date=ex_date
+        )
+    ]
+    if cum_date is not None:
+        dates.append(
+            CorporateActionCalendarDate(
+                date_role=CorporateActionDateRole.CUM_DATE, event_date=cum_date
+            )
+        )
+    return CorporateActionCalendarEvent(
+        event_type=action_type,
+        source_event_id=f"{ticker}-{action_type.value}-{ex_date.isoformat()}",
+        ticker=ticker,
+        dates=tuple(dates),
+    )
+
+
 def test_generates_swing_10d_success_label_from_saved_observation():
     signal_date = date(2026, 7, 1)
     observation = _observation(
@@ -117,6 +186,7 @@ def test_generates_swing_10d_success_label_from_saved_observation():
         candidate_observations_repository=FakeCandidateObservationsRepository(observation),
         market_data_repository=FakeMarketDataRepository(candles),
         signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=_gate_open_calendar(),
     ).execute(GenerateSignalForwardLabelsRequest(ticker="bbca", signal_date=signal_date))
 
     assert len(response.labels) == 1
@@ -164,6 +234,7 @@ def test_label_generator_output_serialization():
         candidate_observations_repository=FakeCandidateObservationsRepository(observation),
         market_data_repository=FakeMarketDataRepository(candles),
         signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+        corporate_action_calendar_repository=_gate_open_calendar(),
     ).execute(GenerateSignalForwardLabelsRequest(ticker="bbca", signal_date=signal_date))
 
     assert len(response.labels) == 1
@@ -211,6 +282,7 @@ def test_small_positive_swing_return_is_neutral_not_success():
         candidate_observations_repository=FakeCandidateObservationsRepository(observation),
         market_data_repository=FakeMarketDataRepository(candles),
         signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+        corporate_action_calendar_repository=_gate_open_calendar(),
     ).execute(GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=signal_date))
 
     assert response.labels[0].close_return == 0.1
@@ -233,6 +305,7 @@ def test_swing_failure_when_adverse_threshold_hits_before_target():
         candidate_observations_repository=FakeCandidateObservationsRepository(observation),
         market_data_repository=FakeMarketDataRepository(candles),
         signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+        corporate_action_calendar_repository=_gate_open_calendar(),
     ).execute(GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=signal_date))
 
     label = response.labels[0]
@@ -257,6 +330,7 @@ def test_swing_success_when_target_hits_before_adverse_threshold():
         candidate_observations_repository=FakeCandidateObservationsRepository(observation),
         market_data_repository=FakeMarketDataRepository(candles),
         signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+        corporate_action_calendar_repository=_gate_open_calendar(),
     ).execute(GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=signal_date))
 
     label = response.labels[0]
@@ -280,6 +354,7 @@ def test_swing_same_day_target_stop_collision_is_conservative_failure():
         candidate_observations_repository=FakeCandidateObservationsRepository(observation),
         market_data_repository=FakeMarketDataRepository(candles),
         signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+        corporate_action_calendar_repository=_gate_open_calendar(),
     ).execute(GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=signal_date))
 
     label = response.labels[0]
@@ -302,6 +377,7 @@ def test_request_can_target_specific_observation_capture_time():
         candidate_observations_repository=repo,
         market_data_repository=FakeMarketDataRepository(candles),
         signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+        corporate_action_calendar_repository=_gate_open_calendar(),
     ).execute(
         GenerateSignalForwardLabelsRequest(
             ticker="BBCA",
@@ -323,6 +399,7 @@ def test_marks_incomplete_forward_window_unavailable_with_reason():
         candidate_observations_repository=FakeCandidateObservationsRepository(observation),
         market_data_repository=FakeMarketDataRepository(candles),
         signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+        corporate_action_calendar_repository=_gate_open_calendar(),
     ).execute(GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=signal_date))
 
     label = response.labels[0]
@@ -342,6 +419,7 @@ def test_marks_missing_entry_price_unavailable_without_fetching_candles():
         candidate_observations_repository=FakeCandidateObservationsRepository(observation),
         market_data_repository=market_repo,
         signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+        corporate_action_calendar_repository=_gate_open_calendar(),
     ).execute(GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=signal_date))
 
     label = response.labels[0]
@@ -376,6 +454,7 @@ def test_incompatible_observation_schema_produces_no_label_artifacts(schema_valu
         candidate_observations_repository=FakeCandidateObservationsRepository(observation),
         market_data_repository=market_repo,
         signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=_gate_open_calendar(),
     ).execute(GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=signal_date))
 
     assert response.labels == ()
@@ -400,6 +479,7 @@ def test_incompatible_schema_response_reports_source_schema_version():
         candidate_observations_repository=FakeCandidateObservationsRepository(observation),
         market_data_repository=FakeMarketDataRepository([]),
         signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+        corporate_action_calendar_repository=_gate_open_calendar(),
     ).execute(GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=signal_date))
 
     assert response.source_schema_version == 2
@@ -424,6 +504,7 @@ def test_new_labels_use_schema_2_and_only_schema_3_observations_are_eligible():
         candidate_observations_repository=FakeCandidateObservationsRepository(observation),
         market_data_repository=FakeMarketDataRepository(candles),
         signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+        corporate_action_calendar_repository=_gate_open_calendar(),
     ).execute(GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=signal_date))
 
     label = response.labels[0]
@@ -445,6 +526,7 @@ def test_empty_horizons_request_performs_no_reads_or_writes():
         candidate_observations_repository=FakeCandidateObservationsRepository(observation),
         market_data_repository=market_repo,
         signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=_gate_open_calendar(),
     ).execute(
         GenerateSignalForwardLabelsRequest(
             ticker="BBCA",
@@ -490,6 +572,7 @@ def test_generate_all_labels_latest_observations_for_date():
         candidate_observations_repository=observations_repo,
         market_data_repository=FakeMarketDataRepository(candles),
         signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=_gate_open_calendar(),
     ).execute_all(GenerateAllSignalForwardLabelsRequest(signal_date=signal_date))
 
     assert observations_repo.list_canonical_by_date_calls == [signal_date]
@@ -516,6 +599,7 @@ def test_generate_all_marks_incomplete_windows_unavailable():
             [_candle(signal_date + timedelta(days=1), "101", ticker="BBCA")]
         ),
         signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+        corporate_action_calendar_repository=_gate_open_calendar(),
     ).execute_all(GenerateAllSignalForwardLabelsRequest(signal_date=signal_date))
 
     assert response.observation_count == 1
@@ -558,6 +642,7 @@ def test_generate_all_labels_only_schema_3_observations_in_mixed_batch():
         candidate_observations_repository=observations_repo,
         market_data_repository=market_repo,
         signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=_gate_open_calendar(),
     ).execute_all(GenerateAllSignalForwardLabelsRequest(signal_date=signal_date))
 
     assert response.observation_count == 1
@@ -584,6 +669,7 @@ def test_generate_all_batch_of_only_incompatible_observations_writes_nothing():
         ),
         market_data_repository=market_repo,
         signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=_gate_open_calendar(),
     ).execute_all(GenerateAllSignalForwardLabelsRequest(signal_date=signal_date))
 
     assert response.labels == ()
@@ -635,6 +721,7 @@ def test_generate_all_labels_covers_every_canonical_window_not_just_latest():
         candidate_observations_repository=observations_repo,
         market_data_repository=FakeMarketDataRepository(candles),
         signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=_gate_open_calendar(),
     ).execute_all(GenerateAllSignalForwardLabelsRequest(signal_date=signal_date))
 
     # list_by_date() would have collapsed these 3 rows to 1 (latest captured_at).
@@ -678,6 +765,7 @@ def test_generate_eligible_dates_skips_dates_without_forward_window():
         candidate_observations_repository=observations_repo,
         market_data_repository=FakeMarketDataRepository(candles),
         signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=_gate_open_calendar(),
     ).execute_eligible_dates(
         GenerateEligibleSignalForwardLabelsRequest(horizon=SignalLabelHorizon.SWING_10D)
     )
@@ -717,6 +805,7 @@ def test_generate_eligible_dates_excludes_incompatible_observations_from_batch()
         candidate_observations_repository=observations_repo,
         market_data_repository=FakeMarketDataRepository(candles),
         signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=_gate_open_calendar(),
     ).execute_eligible_dates(
         GenerateEligibleSignalForwardLabelsRequest(horizon=SignalLabelHorizon.SWING_10D)
     )
@@ -740,10 +829,11 @@ def test_build_label_raises_on_non_canonical_observation_as_a_programmer_error()
         candidate_observations_repository=FakeCandidateObservationsRepository(),
         market_data_repository=FakeMarketDataRepository([]),
         signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+        corporate_action_calendar_repository=_gate_open_calendar(),
     )
 
     with pytest.raises(ValueError):
-        use_case._build_label(incompatible, SignalLabelHorizon.SWING_10D)
+        use_case._build_label(incompatible, SignalLabelHorizon.SWING_10D, coverage_available=True)
 
 
 def test_available_label_copies_provenance_from_source_observation():
@@ -768,6 +858,7 @@ def test_available_label_copies_provenance_from_source_observation():
         candidate_observations_repository=FakeCandidateObservationsRepository(observation),
         market_data_repository=FakeMarketDataRepository(candles),
         signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+        corporate_action_calendar_repository=_gate_open_calendar(),
     ).execute(GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=signal_date))
 
     label = response.labels[0]
@@ -799,6 +890,7 @@ def test_unavailable_label_copies_provenance_from_source_observation():
         candidate_observations_repository=FakeCandidateObservationsRepository(observation),
         market_data_repository=FakeMarketDataRepository([]),
         signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+        corporate_action_calendar_repository=_gate_open_calendar(),
     ).execute(GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=signal_date))
 
     label = response.labels[0]
@@ -839,6 +931,7 @@ def test_label_generation_does_not_resolve_a_new_session():
         candidate_observations_repository=FakeCandidateObservationsRepository(observation),
         market_data_repository=FakeMarketDataRepository(candles),
         signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+        corporate_action_calendar_repository=_gate_open_calendar(),
     ).execute(GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=signal_date))
 
     label = response.labels[0]
@@ -944,6 +1037,7 @@ def test_real_producer_to_label_repository_round_trip_emits_only_sector_context(
         candidate_observations_repository=observations_repo,
         market_data_repository=FakeMarketDataRepository(candles),
         signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=_gate_open_calendar(),
     )
     response_labels = generator.execute(
         GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=day)
@@ -1094,6 +1188,7 @@ def test_single_path_canonical_observation_generates_labels():
         candidate_observations_repository=repo,
         market_data_repository=market,
         signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=_gate_open_calendar(),
     )
 
     response = use_case.execute(
@@ -1126,6 +1221,7 @@ def test_single_path_current_schema_empty_hash_rejected():
         candidate_observations_repository=repo,
         market_data_repository=market,
         signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=_gate_open_calendar(),
     )
 
     response = use_case.execute(
@@ -1158,6 +1254,7 @@ def test_single_path_parameterized_malformed_identity(bad_hash):
         candidate_observations_repository=repo,
         market_data_repository=market,
         signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=_gate_open_calendar(),
     )
 
     response = use_case.execute(
@@ -1198,6 +1295,7 @@ def test_single_path_current_schema_with_removed_market_context_is_invalid_contr
         candidate_observations_repository=repo,
         market_data_repository=market,
         signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=_gate_open_calendar(),
     )
 
     response = use_case.execute(
@@ -1226,6 +1324,7 @@ def test_single_path_schema_2_non_empty_hash_rejected_as_incompatible():
         candidate_observations_repository=repo,
         market_data_repository=market,
         signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=_gate_open_calendar(),
     )
 
     response = use_case.execute(
@@ -1251,6 +1350,7 @@ def test_single_path_schema_2_empty_hash_precedence():
         candidate_observations_repository=repo,
         market_data_repository=market,
         signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=_gate_open_calendar(),
     )
 
     response = use_case.execute(
@@ -1276,6 +1376,7 @@ def test_single_path_get_at_follows_same_guard():
         candidate_observations_repository=repo,
         market_data_repository=market,
         signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=_gate_open_calendar(),
     )
 
     # Trigger execute with explicit captured_at (which calls get_at())
@@ -1329,6 +1430,7 @@ def test_batch_path_defense_in_depth():
         candidate_observations_repository=repo,
         market_data_repository=market,
         signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=_gate_open_calendar(),
     )
 
     response = use_case.execute_all(
@@ -1389,6 +1491,7 @@ def test_eligible_date_path_defense_in_depth():
         candidate_observations_repository=repo,
         market_data_repository=market,
         signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=_gate_open_calendar(),
     )
 
     response = use_case.execute_eligible_dates(
@@ -1426,9 +1529,10 @@ def test_direct_builder_guard():
         candidate_observations_repository=repo,
         market_data_repository=market,
         signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=_gate_open_calendar(),
     )
     with pytest.raises(ValueError, match="non-empty config_hash"):
-        use_case._build_label(obs, SignalLabelHorizon.SWING_10D)
+        use_case._build_label(obs, SignalLabelHorizon.SWING_10D, coverage_available=True)
 
 
 def test_predicate_tests():
@@ -1491,6 +1595,7 @@ def test_generated_label_has_artifact_identity_none():
         candidate_observations_repository=FakeCandidateObservationsRepository(observation),
         market_data_repository=FakeMarketDataRepository(candles),
         signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+        corporate_action_calendar_repository=_gate_open_calendar(),
     ).execute(GenerateSignalForwardLabelsRequest(ticker="bbca", signal_date=signal_date))
 
     assert len(response.labels) == 1
@@ -1519,6 +1624,7 @@ def test_observation_missing_provenance_skipped_with_invalid_contract_reason():
         candidate_observations_repository=FakeCandidateObservationsRepository(observation),
         market_data_repository=market_repo,
         signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=_gate_open_calendar(),
     ).execute(GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=signal_date))
 
     assert response.labels == ()
@@ -1547,6 +1653,7 @@ def test_observation_with_snapshot_date_ahead_of_latest_completed_session_skippe
         candidate_observations_repository=FakeCandidateObservationsRepository(observation),
         market_data_repository=market_repo,
         signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=_gate_open_calendar(),
     ).execute(GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=signal_date))
 
     assert response.labels == ()
@@ -1572,6 +1679,7 @@ def test_observation_with_analysis_as_of_behind_snapshot_date_skipped():
         candidate_observations_repository=FakeCandidateObservationsRepository(observation),
         market_data_repository=market_repo,
         signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=_gate_open_calendar(),
     ).execute(GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=signal_date))
 
     assert response.labels == ()
@@ -1600,6 +1708,7 @@ def test_label_inherits_observation_effective_session_contract():
         candidate_observations_repository=FakeCandidateObservationsRepository(observation),
         market_data_repository=FakeMarketDataRepository(candles),
         signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+        corporate_action_calendar_repository=_gate_open_calendar(),
     ).execute(GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=signal_date))
 
     label = response.labels[0]
@@ -1642,6 +1751,7 @@ def test_execute_all_skips_observations_missing_provenance_without_candle_reads(
         candidate_observations_repository=observations_repo,
         market_data_repository=market_repo,
         signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=_gate_open_calendar(),
     ).execute_all(GenerateAllSignalForwardLabelsRequest(signal_date=signal_date))
 
     assert response.observation_count == 1
@@ -1676,6 +1786,7 @@ def test_forward_window_excludes_candle_at_signal_date():
         candidate_observations_repository=FakeCandidateObservationsRepository(observation),
         market_data_repository=FakeMarketDataRepository(candles),
         signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+        corporate_action_calendar_repository=_gate_open_calendar(),
     ).execute(GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=signal_date))
 
     label = response.labels[0]
@@ -1702,7 +1813,264 @@ def test_build_label_raises_on_observation_missing_provenance_as_programmer_erro
         candidate_observations_repository=FakeCandidateObservationsRepository(),
         market_data_repository=FakeMarketDataRepository([]),
         signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+        corporate_action_calendar_repository=_gate_open_calendar(),
     )
 
     with pytest.raises(ValueError):
-        use_case._build_label(observation, SignalLabelHorizon.SWING_10D)
+        use_case._build_label(observation, SignalLabelHorizon.SWING_10D, coverage_available=True)
+
+
+# =========================================================================== #
+# DQ-004 Slice D4-1 — corporate-action fail-closed gate + raw-outcome marker
+# =========================================================================== #
+
+from src.domain.value_objects.corporate_action_calendar import CorporateActionType
+from src.domain.value_objects.signal_forward_label import SignalForwardLabel
+
+
+def _swing_scenario(signal_date: date):
+    """Canonical SWING_10D observation with a complete 10-day rising window
+    (entry 100, +1/day) that would otherwise be a clean SUCCESS label."""
+    observation = _observation(
+        signal_date,
+        {
+            "candidate": {"current_price": "100"},
+            "sub_signal_fingerprint": _fingerprint(),
+        },
+    )
+    candles = [_candle(signal_date, "100")]
+    candles.extend(_candle(signal_date + timedelta(days=i), str(100 + i)) for i in range(1, 11))
+    return observation, candles
+
+
+def _run_single(observation, candles, calendar, *, ticker="BBCA"):
+    signal_date = observation.snapshot_date
+    return GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(observation),
+        market_data_repository=FakeMarketDataRepository(candles),
+        signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+        corporate_action_calendar_repository=calendar,
+    ).execute(GenerateSignalForwardLabelsRequest(ticker=ticker, signal_date=signal_date))
+
+
+def test_no_sync_marker_fails_every_label_closed_without_computing_returns():
+    signal_date = date(2026, 7, 1)
+    observation, candles = _swing_scenario(signal_date)
+    calendar = FakeCorporateActionCalendarRepository(has_marker=False)
+
+    response = _run_single(observation, candles, calendar)
+
+    label = response.labels[0]
+    assert label.outcome_label == SignalForwardOutcome.UNAVAILABLE
+    assert label.unavailable_reason == "corporate_action_coverage_unavailable"
+    # Returns were NOT computed.
+    assert label.close_return is None
+    assert label.max_forward_return is None
+    assert label.max_adverse_excursion is None
+    # A closed gate never even queries per-event detection.
+    assert calendar.ticker_query_calls == []
+
+
+def test_sync_marker_present_no_events_produces_normal_raw_label():
+    signal_date = date(2026, 7, 1)
+    observation, candles = _swing_scenario(signal_date)
+    calendar = FakeCorporateActionCalendarRepository(has_marker=True, events=[])
+
+    response = _run_single(observation, candles, calendar)
+
+    label = response.labels[0]
+    assert label.outcome_label == SignalForwardOutcome.SUCCESS
+    assert label.unavailable_reason is None
+    assert label.close_return == 10.0
+    assert label.outcome_basis == "raw_market"
+
+
+@pytest.mark.parametrize(
+    "action_type",
+    [
+        CorporateActionType.STOCK_SPLIT,
+        CorporateActionType.REVERSE_SPLIT,
+        CorporateActionType.RIGHTS_ISSUE,
+        CorporateActionType.BONUS,
+    ],
+)
+def test_mechanical_action_ex_date_in_window_invalidates_over_open_gate(action_type):
+    signal_date = date(2026, 7, 1)
+    observation, candles = _swing_scenario(signal_date)
+    ex_date = signal_date + timedelta(days=5)  # inside window [+1, +10]
+    calendar = FakeCorporateActionCalendarRepository(
+        has_marker=True,
+        events=[_ex_date_event("BBCA", action_type, ex_date)],
+    )
+
+    response = _run_single(observation, candles, calendar)
+
+    label = response.labels[0]
+    assert label.outcome_label == SignalForwardOutcome.UNAVAILABLE
+    assert label.unavailable_reason == (
+        f"corporate_action_in_window:{action_type.value}@{ex_date.isoformat()}"
+    )
+    # Detection beats the open gate: the raw return is NOT computed.
+    assert label.close_return is None
+
+
+def test_earliest_ex_date_wins_when_several_actions_in_window():
+    signal_date = date(2026, 7, 1)
+    observation, candles = _swing_scenario(signal_date)
+    later = signal_date + timedelta(days=7)
+    earlier = signal_date + timedelta(days=3)
+    calendar = FakeCorporateActionCalendarRepository(
+        has_marker=True,
+        events=[
+            _ex_date_event("BBCA", CorporateActionType.BONUS, later),
+            _ex_date_event("BBCA", CorporateActionType.STOCK_SPLIT, earlier),
+        ],
+    )
+
+    response = _run_single(observation, candles, calendar)
+
+    label = response.labels[0]
+    assert label.unavailable_reason == (
+        f"corporate_action_in_window:stock_split@{earlier.isoformat()}"
+    )
+
+
+def test_ex_date_one_day_after_window_end_is_a_normal_raw_label():
+    signal_date = date(2026, 7, 1)
+    observation, candles = _swing_scenario(signal_date)
+    window_end = signal_date + timedelta(days=10)
+    # Event whose cum_date is inside the window (so the real repo predicate
+    # returns it) but whose EX_DATE is one day AFTER window end. The generator
+    # must filter on EX_DATE-in-window and keep the label clean.
+    calendar = FakeCorporateActionCalendarRepository(
+        has_marker=True,
+        events=[
+            _ex_date_event(
+                "BBCA",
+                CorporateActionType.STOCK_SPLIT,
+                window_end + timedelta(days=1),
+                cum_date=window_end - timedelta(days=1),
+            )
+        ],
+    )
+
+    response = _run_single(observation, candles, calendar)
+
+    label = response.labels[0]
+    assert label.outcome_label == SignalForwardOutcome.SUCCESS
+    assert label.unavailable_reason is None
+    assert label.close_return == 10.0
+
+
+def test_dividend_ex_date_in_window_is_not_invalidated():
+    signal_date = date(2026, 7, 1)
+    observation, candles = _swing_scenario(signal_date)
+    ex_date = signal_date + timedelta(days=5)
+    calendar = FakeCorporateActionCalendarRepository(
+        has_marker=True,
+        events=[_ex_date_event("BBCA", CorporateActionType.DIVIDEND, ex_date)],
+    )
+
+    response = _run_single(observation, candles, calendar)
+
+    label = response.labels[0]
+    # DIVIDEND is deferred per the amendment — a normal label survives.
+    assert label.outcome_label == SignalForwardOutcome.SUCCESS
+    assert label.unavailable_reason is None
+    # The generator only ever queries the four mechanical types, never DIVIDEND.
+    assert calendar.ticker_query_calls
+    queried_types = calendar.ticker_query_calls[0][3]
+    assert CorporateActionType.DIVIDEND not in queried_types
+
+
+def test_gate_evaluated_once_per_run_not_per_observation():
+    signal_date = date(2026, 7, 1)
+    obs_a = _observation(
+        signal_date,
+        {"candidate": {"current_price": "100"}, "sub_signal_fingerprint": _fingerprint()},
+        ticker="BBCA",
+        window_sessions=7,
+    )
+    obs_b = _observation(
+        signal_date,
+        {"candidate": {"current_price": "100"}, "sub_signal_fingerprint": _fingerprint()},
+        ticker="BBCA",
+        window_sessions=30,
+    )
+    candles = [_candle(signal_date, "100")]
+    candles.extend(_candle(signal_date + timedelta(days=i), str(100 + i)) for i in range(1, 11))
+    calendar = FakeCorporateActionCalendarRepository(has_marker=True, events=[])
+
+    GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(
+            observations_by_date={signal_date: [obs_a, obs_b]}
+        ),
+        market_data_repository=FakeMarketDataRepository(candles),
+        signal_forward_labels_repository=SpySignalForwardLabelsRepository(),
+        corporate_action_calendar_repository=calendar,
+    ).execute_all(GenerateAllSignalForwardLabelsRequest(signal_date=signal_date))
+
+    # Two observations, but the global-sync gate is a single global read.
+    assert calendar.sync_marker_calls == 1
+
+
+def test_available_labels_carry_raw_market_marker_and_persist_it():
+    signal_date = date(2026, 7, 1)
+    observation, candles = _swing_scenario(signal_date)
+    labels_repo = SpySignalForwardLabelsRepository()
+
+    GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(observation),
+        market_data_repository=FakeMarketDataRepository(candles),
+        signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=_gate_open_calendar(),
+    ).execute(GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=signal_date))
+
+    assert labels_repo.saved
+    saved = labels_repo.saved[0]
+    assert saved.outcome_basis == "raw_market"
+    assert saved.to_dict()["outcome_basis"] == "raw_market"
+
+
+def test_from_dict_defaults_outcome_basis_when_absent_in_legacy_row():
+    signal_date = date(2026, 7, 1)
+    observation, candles = _swing_scenario(signal_date)
+    labels_repo = SpySignalForwardLabelsRepository()
+    GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=FakeCandidateObservationsRepository(observation),
+        market_data_repository=FakeMarketDataRepository(candles),
+        signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=_gate_open_calendar(),
+    ).execute(GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=signal_date))
+
+    row = labels_repo.saved[0].to_dict()
+    row.pop("outcome_basis")  # legacy row written before the marker existed
+    restored = SignalForwardLabel.from_dict(row)
+    assert restored.outcome_basis == "raw_market"
+
+
+def test_architecture_boundary_generator_owns_gate_and_detection():
+    """The generator (application layer) performs BOTH the coverage gate and the
+    per-event detection — the adapter only wires the repo. Proven by a recording
+    calendar: the use case evaluates the gate and queries per-event detection
+    with the four mechanical types and WITHOUT as_of_fetched_at (after-the-fact
+    labeling is conservative, never point-in-time leakage)."""
+    signal_date = date(2026, 7, 1)
+    observation, candles = _swing_scenario(signal_date)
+    calendar = FakeCorporateActionCalendarRepository(has_marker=True, events=[])
+
+    _run_single(observation, candles, calendar)
+
+    assert calendar.sync_marker_calls == 1
+    assert len(calendar.ticker_query_calls) == 1
+    ticker, from_date, to_date, event_types, as_of = calendar.ticker_query_calls[0]
+    assert ticker == "BBCA"
+    assert from_date == signal_date + timedelta(days=1)
+    assert to_date == signal_date + timedelta(days=10)
+    assert set(event_types) == {
+        CorporateActionType.STOCK_SPLIT,
+        CorporateActionType.REVERSE_SPLIT,
+        CorporateActionType.RIGHTS_ISSUE,
+        CorporateActionType.BONUS,
+    }
+    assert as_of is None

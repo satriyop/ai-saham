@@ -30,6 +30,9 @@ from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
     SQLiteCandidateObservationsRepository,
 )
+from src.infrastructure.persistence.sqlite_corporate_action_calendar_repository import (
+    SQLiteCorporateActionCalendarRepository,
+)
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 from src.infrastructure.persistence.sqlite_signal_forward_labels_repository import (
     SQLiteSignalForwardLabelsRepository,
@@ -129,6 +132,9 @@ def signal_labels(
             candidate_observations_repository=SQLiteCandidateObservationsRepository(resolved_db),
             market_data_repository=SQLiteMarketRepository(resolved_db),
             signal_forward_labels_repository=labels_repo,
+            corporate_action_calendar_repository=SQLiteCorporateActionCalendarRepository(
+                resolved_db
+            ),
         )
         response = generator.execute(
             GenerateSignalForwardLabelsRequest(
@@ -184,6 +190,9 @@ def signal_labels(
             candidate_observations_repository=SQLiteCandidateObservationsRepository(resolved_db),
             market_data_repository=SQLiteMarketRepository(resolved_db),
             signal_forward_labels_repository=labels_repo,
+            corporate_action_calendar_repository=SQLiteCorporateActionCalendarRepository(
+                resolved_db
+            ),
         )
         if eligible_dates:
             response = generator.execute_eligible_dates(

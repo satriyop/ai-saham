@@ -721,16 +721,26 @@ Labels with ambiguous entry price, incomplete windows, orphaned observations, mi
 
 - [ ] Independent SQL/manual calculations match every label field in golden fixtures.
 - [ ] Target/stop collision policy has explicit tests.
-- [ ] Missing sessions, suspensions, corporate actions, and incomplete windows
+- [x] Missing sessions, suspensions, corporate actions, and incomplete windows
       have explicit outcomes. Corporate-action detection uses the local
       `CorporateActionCalendarRepository` (real `STOCK_SPLIT`/`REVERSE_SPLIT`/
       `RIGHTS_ISSUE`/`BONUS` ex-dates in the window), not a jump heuristic; a
       window crossing one is invalidated to `UNAVAILABLE`, never adjusted.
+      *Satisfied (corporate-action half, Slice D4-1, 2026-07-22):* generator now
+      runs a coarse global-sync coverage gate + per-event EX_DATE detection and
+      fails closed to `corporate_action_coverage_unavailable` /
+      `corporate_action_in_window:<type>@<ex_date>`; never adjusts prices, never
+      a jump heuristic. Incomplete-window/missing-session outcomes were already
+      explicit.
 - [ ] Fees, taxes, slippage, price limits, gaps, fills, and timing follow
       `IDX-EXECUTION-LABELS` or the label is explicitly a raw (non-executable)
       market-outcome label. Under the lean amendment, raw labels are canonical
       for research/ML validation and carry an explicit raw-outcome marker;
       net-executable labels are parked behind `IDX-EXECUTION-LABELS`.
+      *Progressing (raw-marker half, Slice D4-1, 2026-07-22):* every label now
+      carries an explicit `outcome_basis="raw_market"` marker (serialized +
+      round-tripped, legacy rows default). Net-executable modelling remains
+      parked behind `IDX-EXECUTION-LABELS`.
 - [ ] Label uniqueness cannot attach one outcome to the wrong observation version.
 - [ ] Summary use case excludes invalid/unavailable labels by contract.
 

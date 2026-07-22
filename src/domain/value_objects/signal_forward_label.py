@@ -75,6 +75,12 @@ class SignalForwardLabel:
     unavailable_reason: str | None
     fingerprint: SignalObservationFingerprint
     observation_captured_at: datetime | None = None
+    # DQ-004 Slice D4-1: explicit raw-outcome marker. Every label produced today
+    # is a raw market outcome (no fees/taxes/slippage/fills/execution status), so
+    # no consumer can mistake it for a net-executable result. Net labels will
+    # later carry "net_executable". Additive, non-schema-bumping: absent in a
+    # legacy row means "raw_market".
+    outcome_basis: str = "raw_market"
     # Effective-session provenance (DQ-002E). Copied verbatim from the source
     # CandidateObservation at label-generation time — never derived from
     # signal_date and never resolved fresh here.
@@ -156,6 +162,7 @@ class SignalForwardLabel:
             "stop_would_trigger": self.stop_would_trigger,
             "target_would_trigger": self.target_would_trigger,
             "outcome_label": self.outcome_label.value,
+            "outcome_basis": self.outcome_basis,
             "unavailable_reason": self.unavailable_reason,
             "fingerprint": self.fingerprint_payload(),
             "observation_captured_at": (
@@ -195,6 +202,7 @@ class SignalForwardLabel:
             stop_would_trigger=_optional_bool(data.get("stop_would_trigger")),
             target_would_trigger=_optional_bool(data.get("target_would_trigger")),
             outcome_label=SignalForwardOutcome(data["outcome_label"]),
+            outcome_basis=str(data.get("outcome_basis") or "raw_market"),
             unavailable_reason=data.get("unavailable_reason"),
             fingerprint=SignalObservationFingerprint.from_dict(data.get("fingerprint") or {}),
             observation_captured_at=_parse_optional_datetime(data.get("observation_captured_at")),

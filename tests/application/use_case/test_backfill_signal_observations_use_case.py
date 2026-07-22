@@ -360,6 +360,19 @@ class SpySignalForwardLabelsRepository:
         return None
 
 
+class _GateOpenCalendar:
+    """Gate-open, event-free calendar fake: the DQ-004 coverage gate passes and
+    no corporate action is ever detected, so labels compute real outcomes."""
+
+    def has_any_sync_marker(self, source="stockbit"):
+        return True
+
+    def get_events_for_ticker(
+        self, ticker, from_date, to_date, event_types=None, as_of_fetched_at=None
+    ):
+        return []
+
+
 def test_backfill_multi_window_generates_one_label_per_canonical_window():
     """S1 regression: windows=(7,30,90) with generate_labels=True must
     generate a label for every recorded canonical window observation — using
@@ -375,6 +388,7 @@ def test_backfill_multi_window_generates_one_label_per_canonical_window():
         candidate_observations_repository=observations,
         market_data_repository=market,
         signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=_GateOpenCalendar(),
     )
 
     response = BackfillSignalObservationsUseCase(
