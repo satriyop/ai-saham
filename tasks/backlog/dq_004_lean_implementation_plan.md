@@ -134,6 +134,19 @@ contract + negative tests pass, before the golden fixture builds on them.
 
 ## Slice D4-2 — Golden reconciliation fixture + verification tests
 
+**Status: DONE** (2026-07-22). Independent golden + verification tests in
+`tests/application/use_case/test_dq_004_forward_label_golden_reconciliation.py`
+prove existing raw-label behavior with no `src/` change (`NON_SEMANTIC`):
+hand-computed SUCCESS/FAILURE/NEUTRAL/UNAVAILABLE field reconciliation;
+same-day target/stop → FAILURE and target-first → SUCCESS collision policy;
+summary UNAVAILABLE exclusion from outcome buckets and averages; observation
+binding via `UNIQUE(ticker, signal_date, horizon, observation_captured_at)`
+(distinct versions → distinct rows; same version re-label → ON CONFLICT
+replace). Every golden/collision case injects a gate-open, event-free calendar
+so corporate-action coverage does not short-circuit raw math. With D4-1 + D4-2
+done, the raw-label lane of DQ-004 is complete; criterion 4's execution half
+remains parked behind `IDX-EXECUTION-LABELS`.
+
 **Goal:** *prove* every raw label field against independent candle math, and
 lock the existing collision / summary / binding behavior. Closes criteria 1, 2,
 5, 6.

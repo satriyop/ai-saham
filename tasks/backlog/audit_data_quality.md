@@ -677,13 +677,14 @@ satisfied by the lean contract above, not by the full apparatus.
 
 ### DQ-004 — Audit and repair forward-label generation
 
-**State:** Ready (raw-label slice) — amended 2026-07-22 to a **lean raw-label
-contract**: build honest, point-in-time raw market-outcome labels now, and park
-net-executable labels (fees, taxes, slippage, price limits, fills, execution
-status) behind the `IDX-EXECUTION-LABELS` trigger. Raw labels are sufficient for
-`DQ-BASELINE-GATE` research/ML validation, which does not authorize promotion;
-execution-net labels are a promotion-lane concern. See "Lean raw-label amendment
-(2026-07-22)" below.
+**State:** Raw-label lane complete (D4-1 + D4-2, 2026-07-22) — amended to a
+**lean raw-label contract**: honest point-in-time raw market-outcome labels are
+proven (golden reconciliation, collision, binding, summary exclusion) and
+corporate-action fail-closed + `outcome_basis="raw_market"` are in place. Net-
+executable labels (fees, taxes, slippage, price limits, fills, execution status)
+remain parked behind `IDX-EXECUTION-LABELS`. Criterion 4's execution half is the
+only open DQ-004 acceptance item. See "Lean raw-label amendment (2026-07-22)"
+below.
 
 **Priority:** P0  
 **Depends on:** DQ-003  
@@ -719,8 +720,18 @@ Labels with ambiguous entry price, incomplete windows, orphaned observations, mi
 
 **Acceptance criteria:**
 
-- [ ] Independent SQL/manual calculations match every label field in golden fixtures.
-- [ ] Target/stop collision policy has explicit tests.
+- [x] Independent SQL/manual calculations match every label field in golden fixtures.
+      *Satisfied (Slice D4-2, 2026-07-22):* hand-computed SWING_10D golden
+      scenarios in `test_dq_004_forward_label_golden_reconciliation.py`
+      reconcile close_return, max_forward_return, max_adverse_excursion,
+      days_to_peak/trough, stop/target triggers, and outcome for SUCCESS,
+      FAILURE, NEUTRAL, and UNAVAILABLE (incomplete window); available labels
+      assert `outcome_basis == "raw_market"`. Expected values computed from
+      candle OHLC independently of the generator.
+- [x] Target/stop collision policy has explicit tests.
+      *Satisfied (Slice D4-2, 2026-07-22):* same-candle high≥target and
+      low≤adverse → conservative FAILURE; target day strictly before stop day
+      → SUCCESS (ordering not inverted).
 - [x] Missing sessions, suspensions, corporate actions, and incomplete windows
       have explicit outcomes. Corporate-action detection uses the local
       `CorporateActionCalendarRepository` (real `STOCK_SPLIT`/`REVERSE_SPLIT`/
@@ -731,7 +742,8 @@ Labels with ambiguous entry price, incomplete windows, orphaned observations, mi
       fails closed to `corporate_action_coverage_unavailable` /
       `corporate_action_in_window:<type>@<ex_date>`; never adjusts prices, never
       a jump heuristic. Incomplete-window/missing-session outcomes were already
-      explicit.
+      explicit. *Reinforced (Slice D4-2):* incomplete-window UNAVAILABLE proven
+      in the golden fixture under a gate-open, event-free calendar.
 - [ ] Fees, taxes, slippage, price limits, gaps, fills, and timing follow
       `IDX-EXECUTION-LABELS` or the label is explicitly a raw (non-executable)
       market-outcome label. Under the lean amendment, raw labels are canonical
@@ -741,9 +753,17 @@ Labels with ambiguous entry price, incomplete windows, orphaned observations, mi
       carries an explicit `outcome_basis="raw_market"` marker (serialized +
       round-tripped, legacy rows default). Net-executable modelling remains
       parked behind `IDX-EXECUTION-LABELS`.
-- [ ] Label uniqueness cannot attach one outcome to the wrong observation version.
-- [ ] Summary use case excludes invalid/unavailable labels by contract.
-
+- [x] Label uniqueness cannot attach one outcome to the wrong observation version.
+      *Satisfied (Slice D4-2, 2026-07-22):* distinct `observation_captured_at`
+      versions yield distinct SQLite rows under
+      `UNIQUE(ticker, signal_date, horizon, observation_captured_at)`; re-labeling
+      the same version replaces via ON CONFLICT (no duplicate); label
+      `observation_captured_at` matches the observation it was computed from.
+- [x] Summary use case excludes invalid/unavailable labels by contract.
+      *Satisfied (Slice D4-2, 2026-07-22):* mixed SUCCESS/FAILURE/NEUTRAL/
+      UNAVAILABLE feed proves `unavailable_count` only counts UNAVAILABLE;
+      success/failure/neutral exclude it; averages skip None returns from
+      UNAVAILABLE labels.
 #### Lean raw-label amendment (2026-07-22)
 
 **Decision:** Implement DQ-004 as an honest raw market-outcome label now.
