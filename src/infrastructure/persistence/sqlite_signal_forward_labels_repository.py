@@ -96,6 +96,12 @@ _ADD_ARTIFACT_PROVENANCE_JSON_COLUMN = """
 ALTER TABLE signal_forward_labels ADD COLUMN artifact_provenance_json TEXT NOT NULL DEFAULT ''
 """
 
+# DQ-004 follow-up: durable raw-vs-executable marker. Additive; legacy rows
+# default to 'raw_market' so round-trips no longer silently invent the field.
+_ADD_OUTCOME_BASIS_COLUMN = """
+ALTER TABLE signal_forward_labels ADD COLUMN outcome_basis TEXT NOT NULL DEFAULT 'raw_market'
+"""
+
 # DQ-002 criterion 3: a canonical forward label must carry execution-time +
 # effective-session provenance. Labels have no data_as_of_date column of their
 # own — their data cutoff is the observation's latest_completed_session,
@@ -135,6 +141,7 @@ class SQLiteSignalForwardLabelsRepository:
                 (9, _ADD_ARTIFACT_ID_COLUMN),
                 (10, _ADD_SEMANTIC_COMPATIBILITY_ID_COLUMN),
                 (11, _ADD_ARTIFACT_PROVENANCE_JSON_COLUMN),
+                (12, _ADD_OUTCOME_BASIS_COLUMN),
             ],
         )
 
@@ -213,6 +220,7 @@ class SQLiteSignalForwardLabelsRepository:
                     artifact_id_str,
                     sem_compat_id_str,
                     provenance_json,
+                    label.outcome_basis or "raw_market",
                 )
             )
         with self._connect() as conn:
@@ -228,9 +236,10 @@ class SQLiteSignalForwardLabelsRepository:
                      decision_at, latest_completed_session, analysis_as_of,
                      market_session_name, is_eod_pending, resolution_source,
                      resolution_notes_json,
-                     artifact_id, semantic_compatibility_id, artifact_provenance_json)
+                     artifact_id, semantic_compatibility_id, artifact_provenance_json,
+                     outcome_basis)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(ticker, signal_date, horizon, observation_captured_at)
                 DO UPDATE SET
                     entry_reference_price = excluded.entry_reference_price,
@@ -257,7 +266,8 @@ class SQLiteSignalForwardLabelsRepository:
                     resolution_notes_json = excluded.resolution_notes_json,
                     artifact_id = excluded.artifact_id,
                     semantic_compatibility_id = excluded.semantic_compatibility_id,
-                    artifact_provenance_json = excluded.artifact_provenance_json
+                    artifact_provenance_json = excluded.artifact_provenance_json,
+                    outcome_basis = excluded.outcome_basis
                 """,
                 rows,
             )
@@ -395,6 +405,7 @@ def _row_to_label(row: sqlite3.Row) -> SignalForwardLabel:
             if row["observation_captured_at"]
             else None
         ),
+        outcome_basis=str(row["outcome_basis"] or "raw_market"),
         decision_at=(
             datetime.fromisoformat(row["decision_at"]) if row["decision_at"] else None
         ),

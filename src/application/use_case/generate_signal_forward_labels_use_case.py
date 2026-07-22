@@ -11,6 +11,12 @@ from typing import Any
 from src.application.ports.corporate_action_calendar_repository import (
     CorporateActionCalendarRepository,
 )
+from src.application.use_case.retrieve_stored_signal_observation_use_case import (
+    ObservationSelectionStatus,
+    RetrieveStoredSignalObservationRequest,
+    RetrieveStoredSignalObservationUseCase,
+    StoredObservationIdentity,
+)
 from src.domain.ports.candidate_observations_repository import (
     CandidateObservation,
     CandidateObservationsRepository,
@@ -42,6 +48,7 @@ class SignalLabelGenerationSkipReason(str, Enum):
     INCOMPATIBLE_OBSERVATION_SCHEMA = "INCOMPATIBLE_OBSERVATION_SCHEMA"
     NON_CANONICAL_OBSERVATION_IDENTITY = "NON_CANONICAL_OBSERVATION_IDENTITY"
     INVALID_OBSERVATION_CONTRACT = "INVALID_OBSERVATION_CONTRACT"
+    AMBIGUOUS_OBSERVATION_VERSION = "AMBIGUOUS_OBSERVATION_VERSION"
 
 
 @dataclass(frozen=True)
@@ -58,6 +65,7 @@ class GenerateSignalForwardLabelsResponse:
     observation: CandidateObservation | None = None
     skip_reason: SignalLabelGenerationSkipReason | None = None
     source_schema_version: int | None = None
+    candidates: tuple[StoredObservationIdentity, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True)
@@ -83,7 +91,11 @@ class GenerateEligibleSignalForwardLabelsRequest:
 
 
 class GenerateSignalForwardLabelsUseCase:
-    """Label the latest saved candidate observation using local candles only."""
+    """Label one selected saved candidate observation using local candles only.
+
+    Single-ticker ``execute()`` uses the same identity selection policy as
+    DQ-005 retrieval: never silent ``get_latest`` when multiple versions exist.
+    """
 
     # Mechanical corporate-action types whose EX_DATE inside a label window
     # distorts raw returns and must fail the label closed. DIVIDEND is
@@ -107,29 +119,41 @@ class GenerateSignalForwardLabelsUseCase:
         self._market = market_data_repository
         self._labels = signal_forward_labels_repository
         self._corp_cal = corporate_action_calendar_repository
+        self._retrieve = RetrieveStoredSignalObservationUseCase(
+            candidate_observations_repository
+        )
 
     def execute(
         self, request: GenerateSignalForwardLabelsRequest
     ) -> GenerateSignalForwardLabelsResponse:
-        ticker = request.ticker.upper()
         # A repository that validates payloads on read (e.g. the canonical
         # SQLite implementation) raises ValueError for a stored observation that
         # violates the current contract — before the object ever reaches the
         # skip-reason check below. Treat that as INVALID_OBSERVATION_CONTRACT so
         # the outcome is identical whether or not the repository self-validates.
         try:
-            if request.observation_captured_at is not None:
-                observation = self._observations.get_at(
-                    ticker,
-                    request.signal_date,
-                    request.observation_captured_at,
+            selection = self._retrieve.execute(
+                RetrieveStoredSignalObservationRequest(
+                    ticker=request.ticker,
+                    snapshot_date=request.signal_date,
+                    observation_captured_at=request.observation_captured_at,
                 )
-            else:
-                observation = self._observations.get_latest(ticker, request.signal_date)
+            )
         except ValueError:
             return GenerateSignalForwardLabelsResponse(
                 skip_reason=SignalLabelGenerationSkipReason.INVALID_OBSERVATION_CONTRACT,
             )
+
+        if selection.status is ObservationSelectionStatus.NOT_FOUND:
+            return GenerateSignalForwardLabelsResponse()
+
+        if selection.status is ObservationSelectionStatus.AMBIGUOUS:
+            return GenerateSignalForwardLabelsResponse(
+                skip_reason=SignalLabelGenerationSkipReason.AMBIGUOUS_OBSERVATION_VERSION,
+                candidates=selection.candidates,
+            )
+
+        observation = selection.observation
         if observation is None:
             return GenerateSignalForwardLabelsResponse()
 

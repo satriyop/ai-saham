@@ -154,6 +154,30 @@ def signal_labels(
                 err=True,
             )
             raise typer.Exit(1)
+        if response.skip_reason is SignalLabelGenerationSkipReason.AMBIGUOUS_OBSERVATION_VERSION:
+            typer.echo(
+                f"[error] Multiple stored observation versions for {ticker_u} on {day}.",
+                err=True,
+            )
+            typer.echo(
+                "        Label generation is not silent latest-pick. Pass --captured-at "
+                "with one of:",
+                err=True,
+            )
+            for identity in response.candidates:
+                data_as_of = (
+                    identity.data_as_of_date.isoformat()
+                    if identity.data_as_of_date is not None
+                    else "—"
+                )
+                typer.echo(
+                    f"          captured_at={identity.captured_at.isoformat()} "
+                    f"window_sessions={identity.window_sessions} "
+                    f"config_hash={identity.config_hash or '—'} "
+                    f"data_as_of={data_as_of}",
+                    err=True,
+                )
+            raise typer.Exit(1)
         if response.observation is None:
             typer.echo(f"[error] No stored signal observation for {ticker_u} on {day}.", err=True)
             typer.echo("        Run: saham screen accum to capture observations first.", err=True)

@@ -749,10 +749,12 @@ Labels with ambiguous entry price, incomplete windows, orphaned observations, mi
       market-outcome label. Under the lean amendment, raw labels are canonical
       for research/ML validation and carry an explicit raw-outcome marker;
       net-executable labels are parked behind `IDX-EXECUTION-LABELS`.
-      *Progressing (raw-marker half, Slice D4-1, 2026-07-22):* every label now
-      carries an explicit `outcome_basis="raw_market"` marker (serialized +
-      round-tripped, legacy rows default). Net-executable modelling remains
-      parked behind `IDX-EXECUTION-LABELS`.
+      *Progressing (raw-marker half, Slice D4-1 + persistence follow-up,
+      2026-07-22):* every label carries `outcome_basis="raw_market"` in the
+      value object, JSON serialization, **and** SQLite
+      (`signal_forward_labels.outcome_basis`, migration 12). Legacy rows
+      default to `raw_market`. Net-executable modelling remains parked behind
+      `IDX-EXECUTION-LABELS`.
 - [x] Label uniqueness cannot attach one outcome to the wrong observation version.
       *Satisfied (Slice D4-2, 2026-07-22):* distinct `observation_captured_at`
       versions yield distinct SQLite rows under

@@ -111,7 +111,7 @@ def test_schema_created_via_migration_runner(tmp_path: Path):
         ).fetchall()
         tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
 
-    assert {row[0] for row in versions} == set(range(12))
+    assert {row[0] for row in versions} == set(range(13))
     assert "signal_forward_labels" in {row[0] for row in tables}
 
 
@@ -143,6 +143,30 @@ def test_effective_session_provenance_round_trips(tmp_path: Path):
     assert restored.is_eod_pending is False
     assert restored.resolution_source == "ihsg_cache_same_day"
     assert restored.resolution_notes == ("note one", "note two")
+
+
+def test_outcome_basis_round_trips_through_sqlite(tmp_path: Path):
+    """DQ-004 follow-up: outcome_basis must persist, not only default in memory."""
+    db_path = tmp_path / "data.db"
+    repo = SQLiteSignalForwardLabelsRepository(db_path)
+    label = _label(
+        captured_at=datetime(2026, 7, 1, 9, 0, 0),
+        close_return=4.0,
+        outcome_basis="raw_market",
+    )
+
+    repo.save_many([label])
+    restored = repo.get("BBCA", date(2026, 7, 1), SignalLabelHorizon.SWING_10D)
+
+    assert restored is not None
+    assert restored.outcome_basis == "raw_market"
+
+    with sqlite3.connect(str(db_path)) as conn:
+        row = conn.execute(
+            "SELECT outcome_basis FROM signal_forward_labels WHERE ticker='BBCA'"
+        ).fetchone()
+    assert row is not None
+    assert row[0] == "raw_market"
 
 
 def test_legacy_label_rows_with_no_provenance_read_as_none(tmp_path: Path):
@@ -294,6 +318,7 @@ def _label(
     resolution_source: str | None = None,
     resolution_notes: tuple[str, ...] = (),
     schema_version: int | object = _PROVENANCE_DEFAULT,
+    outcome_basis: str = "raw_market",
 ) -> SignalForwardLabel:
     # When omitted, default provenance to the label's signal_date so the row
     # satisfies the canonical-read provenance predicate (DQ-002 criterion 3).
@@ -339,6 +364,7 @@ def _label(
             market_regime={"regime": "RISK_ON"},
         ),
         observation_captured_at=captured_at,
+        outcome_basis=outcome_basis,
         decision_at=resolved_decision_at,  # type: ignore[arg-type]
         latest_completed_session=resolved_latest,  # type: ignore[arg-type]
         analysis_as_of=resolved_as_of,  # type: ignore[arg-type]
@@ -847,7 +873,7 @@ def test_no_unique_index_on_artifact_id(tmp_path: Path):
         )
 
 
-def test_migrations_0_to_11_registered(tmp_path: Path):
+def test_migrations_0_to_12_registered(tmp_path: Path):
     db_path = tmp_path / "data.db"
     SQLiteSignalForwardLabelsRepository(db_path)
 
@@ -859,7 +885,7 @@ def test_migrations_0_to_11_registered(tmp_path: Path):
                 ("signal_forward_labels",),
             )
         }
-    assert versions == set(range(12))
+    assert versions == set(range(13))
 
 
 def test_to_dict_unchanged_by_identity_metadata(tmp_path: Path):
@@ -1023,17 +1049,19 @@ def test_legacy_label_migration_preserves_row_and_reads_none(tmp_path: Path):
                 ("signal_forward_labels",),
             ).fetchall()
         }
-    assert versions == set(range(12))
+    assert versions == set(range(13))
 
     with sqlite3.connect(str(db_path)) as conn:
         conn.row_factory = sqlite3.Row
         row = conn.execute(
-            "SELECT artifact_id, semantic_compatibility_id, artifact_provenance_json "
+            "SELECT artifact_id, semantic_compatibility_id, artifact_provenance_json, "
+            "outcome_basis "
             "FROM signal_forward_labels WHERE ticker='BBCA'"
         ).fetchone()
     assert row["artifact_id"] == ""
     assert row["semantic_compatibility_id"] == ""
     assert row["artifact_provenance_json"] == ""
+    assert row["outcome_basis"] == "raw_market"
 
     restored = repo.get("BBCA", date(2026, 7, 1), SignalLabelHorizon.SWING_10D)
     assert restored is not None

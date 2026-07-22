@@ -57,6 +57,16 @@ class FakeCandidateObservationsRepository:
         )
         return [obs for obs in source if obs.config_hash]
 
+    def list_all_by_date(self, snapshot_date):
+        """Required by RetrieveStoredSignalObservationUseCase selection."""
+        if self.observations_by_date:
+            return list(self.observations_by_date.get(snapshot_date, ()))
+        if self.observations:
+            return [obs for obs in self.observations if obs.snapshot_date == snapshot_date]
+        if self.observation is not None and self.observation.snapshot_date == snapshot_date:
+            return [self.observation]
+        return []
+
     def list_snapshot_dates(self):
         self.list_snapshot_dates_calls += 1
         return sorted(self.observations_by_date)
@@ -1389,6 +1399,62 @@ def test_single_path_get_at_follows_same_guard():
     )
     assert response.skip_reason == SignalLabelGenerationSkipReason.NON_CANONICAL_OBSERVATION_IDENTITY
     assert len(repo.at_calls) == 1
+    assert len(market.calls) == 0
+    assert labels_repo.save_many_call_count == 0
+
+
+def test_single_path_ambiguous_without_captured_at_does_not_call_get_latest():
+    """DQ-005 alignment: multi-version ticker/date must not silent-pick latest."""
+    day = date(2026, 7, 1)
+    older = CandidateObservation(
+        ticker="BBCA",
+        snapshot_date=day,
+        captured_at=datetime(2026, 7, 1, 9, 0),
+        payload={
+            "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+            "candidate": {"current_price": 100},
+        },
+        config_hash="hash-a",
+        window_sessions=7,
+        data_as_of_date=day,
+        latest_completed_session=day,
+        analysis_as_of=day,
+    )
+    newer = CandidateObservation(
+        ticker="BBCA",
+        snapshot_date=day,
+        captured_at=datetime(2026, 7, 1, 10, 0),
+        payload={
+            "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+            "candidate": {"current_price": 100},
+        },
+        config_hash="hash-b",
+        window_sessions=30,
+        data_as_of_date=day,
+        latest_completed_session=day,
+        analysis_as_of=day,
+    )
+    repo = FakeCandidateObservationsRepository(observations=[older, newer])
+    market = FakeMarketDataRepository([])
+    labels_repo = SpySignalForwardLabelsRepository()
+    use_case = GenerateSignalForwardLabelsUseCase(
+        candidate_observations_repository=repo,
+        market_data_repository=market,
+        signal_forward_labels_repository=labels_repo,
+        corporate_action_calendar_repository=_gate_open_calendar(),
+    )
+
+    response = use_case.execute(
+        GenerateSignalForwardLabelsRequest(ticker="BBCA", signal_date=day)
+    )
+
+    assert response.skip_reason == (
+        SignalLabelGenerationSkipReason.AMBIGUOUS_OBSERVATION_VERSION
+    )
+    assert len(response.candidates) == 2
+    assert response.labels == ()
+    assert response.observation is None
+    assert repo.calls == []  # get_latest appends here — must stay empty
     assert len(market.calls) == 0
     assert labels_repo.save_many_call_count == 0
 
