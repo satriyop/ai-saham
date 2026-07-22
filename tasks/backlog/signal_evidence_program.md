@@ -20,8 +20,9 @@ before implementing.
 | `DQ-BASELINE-GATE` | Closed (DQ-010 + DQ-011) |
 
 **Engineering next:** [`improvement_cli_restructure.md`](improvement_cli_restructure.md)
-CLI-001 (Ready). Optional operator backfill for non-empty readiness data is
-product use, not a gate.
+— introduce `saham research` for corpus work + `analyze signal inspect` for live
+inspect (**clean break**, no aliases). Optional operator backfill for non-empty
+readiness data is product use, not a gate.
 
 **Parked until a named trigger:** full `ARTIFACT-IDENTITY` apparatus,
 `IDX-EXECUTION-LABELS`, genuine screen-rejected controls / PIT universe

@@ -2,543 +2,320 @@
 
 ## 1. Task metadata
 
-**Task title:** Restructure signal and audit CLI commands by lifecycle, subject, and operation  
+**Task title:** Restructure signal and accumulation CLI by research vs analyze  
 **Task type:** Refactor  
 **Overall priority:** High  
-**Status:** Backlog — approved direction, not implemented  
-**Decision:** Implement the hierarchy in this document only.
+**Status:** Ready — chosen direction amended 2026-07-22 (not implemented)  
+**Decision:** Implement **this document only** — `research` corpus root + live
+`analyze signal inspect`, **clean break** (no aliases, no deprecation window).
 
-**Hard prerequisite:** DQ-011 must pass for canonical signal and accumulation
-CLI work, with no unresolved authoritative DQ-P0/P1 finding unless the affected
-data is explicitly enforced as non-authoritative. The sentiment-specific
-CLI-004 task additionally requires DQ-009 and any resulting sentiment cleanup.
-Freeze only corrected behavioral baselines; do not preserve known data-quality
-defects during CLI migration.
+**Hard prerequisite:** `DQ-BASELINE-GATE` / DQ-011 (**Done 2026-07-22**).  
+Sentiment command moves remain gated by DQ-009 (out of v1 scope below).
+
+Freeze corrected behavioral baselines from DQ-011; do not preserve known
+data-quality defects during migration. Routing only — no SignalEngine / label
+math changes.
 
 ## 2. Problem statement
 
-The `saham analyze` command surface currently exposes implementation-oriented flat names:
+Today’s `saham analyze` mixes unrelated leaves and hides side effects:
 
 ```text
-signal-audit
-signal-backfill-observations
-signal-labels
-signal-readiness
-signal-replay
-accum-audit
-audit
-swing-compare
-compare
+signal-inspect / signal-replay / signal-readiness   # read-only (mixed intents)
+signal-backfill-observations / signal-labels        # may WRITE
+accum-audit                                         # offline eval
+audit                                               # sentiment WRITE (separate subject)
 ```
 
-This creates four problems:
+Objective failures:
 
-1. Related SignalEngine operations are difficult to discover because they are sorted as unrelated leaf commands.
-2. Read-only analysis and persistence-producing learning workflows are mixed under `analyze`.
-3. Bare names such as `audit` and `compare` do not identify their subject.
-4. Agents can reasonably misinterpret command authority and side effects from the command path.
+1. Corpus work (backfill, labels, replay, readiness, offline eval) is not grouped.
+2. Write-producing commands live under `analyze`.
+3. `learn` already means the **opening session journal** — overloading it for
+   signal corpus persistence is dishonest.
+4. Agents misread authority and side effects from the path.
 
-The current `analyze audit` is specifically a sentiment-outcome audit and persists audit results. `analyze accum-audit` is an offline historical evaluation. `analyze signal-audit` inspects current factor inputs rather than auditing historical outcomes. They do not share one artifact or one side-effect contract.
+## 3. Chosen command model (clean break)
 
-## 3. Chosen command model
+### Category meanings
 
-Use this naming grammar:
+| Root | Means | Side effects |
+|------|--------|--------------|
+| `research` | Quant research corpus + offline study | May persist observations/labels; CSV only when explicit |
+| `analyze` | Live / interactive assessment | Read-only for signal inspect in this scope |
+| `learn` | Opening session journal (`snapshot`/`track`/`grade`/…) | Unchanged; **not** signal corpus |
+| `audit` | Data-quality ops (`audit data …`) | Unchanged |
+| `screen` | Live discovery | Unchanged (not authoritative observation capture) |
+
+### Grammar
 
 ```text
-saham {lifecycle} {subject} {operation}
+saham research {subject} {operation}
+saham analyze signal inspect …
 ```
 
-Canonical target commands:
+### Canonical v1 surface
 
 ```text
-saham analyze signal inspect TICKER
-saham analyze signal replay TICKER SNAPSHOT_DATE
-saham analyze signal readiness --target TARGET
+saham research signal backfill --universe … --start … --end …
+saham research signal labels [SNAPSHOT_DATE] [options]
+saham research signal replay TICKER DATE [--verify]
+saham research signal readiness --target TARGET
+saham research signal capture --contract accumulation-discovery --session DATE
+  # capture may land in a follow-on slice once the use case is wired; see CLI-R3
 
-saham learn signal backfill-observations --universe ... --start ... --end ...
-saham learn signal capture --contract accumulation-discovery --session ...
-saham learn signal capture --contract swing-setup --setup ... --session ...
-saham learn signal capture --contract legacy-accumulation-candidates --session ...  # transitional only
-saham learn signal labels [SNAPSHOT_DATE] [options]
+saham research accumulation evaluate [TICKERS…] [options]
 
-saham learn sentiment audit
-saham analyze accumulation evaluate [TICKERS...] [options]
+saham analyze signal inspect TICKER [--date DATE] [--window-days N] [--format …] [--db PATH]
 ```
 
-Use subcommands, not operation-selecting flags. Do not introduce forms such as:
+Use subcommands, not operation-selecting flags. Flags only modify one operation
+(e.g. `--generate` on `labels`, `--contract` on `capture`).
+
+**Forbidden forms:**
 
 ```text
 saham signal --audit
 saham analyze signal --replay
-saham analyze audit --type accumulation
+saham research --type accumulation
 ```
 
-Flags modify one operation. They must not select workflows with different arguments, artifacts, or persistence behavior.
+### Clean break (mandatory)
 
-## 4. Current-to-target mapping
+- **No aliases.** Old flat paths are **removed** in the same release as the new
+  paths land (or in ordered slices that never leave dual public surfaces).
+- **No deprecation window.** No hidden redirects, no stderr “use new path” shim.
+- **No dual handlers.** One registration per workflow; old Typer names deleted.
+- Callers (`install_cron.sh`, docs, tests, agent examples) cut over in the same
+  slice that removes the old path.
+- `tests/adapters/cli/test_command_contract.py` must list canonical names and
+  put retired names in `REMOVED_PATHS` (unknown-command, non-zero exit).
 
-| Current command | Canonical replacement | Lifecycle | Side effects |
-|---|---|---|---|
-| `saham analyze signal-inspect TICKER` (provisional; `signal-audit` removed) | `saham analyze signal inspect TICKER` | Analysis | Read-only |
-| `saham analyze signal-replay TICKER DATE` | `saham analyze signal replay TICKER DATE` | Analysis | Read-only |
-| `saham analyze signal-readiness --target TARGET` | `saham analyze signal readiness --target TARGET` | Analysis | Read-only |
-| `saham analyze signal-backfill-observations ...` | `saham learn signal backfill-observations ...` | Learning | Writes observations; may generate labels when requested |
-| New explicit canonical capture workflow | `saham learn signal capture --contract ...` | Learning | Idempotently writes universe-driven canonical observations |
-| `install_cron.sh` implicit `screen accum` observation write | `saham learn signal capture --contract legacy-accumulation-candidates ...`, then `accumulation-discovery` | Learning | Explicit provisional bridge, later full universe/control capture |
-| `saham analyze signal-labels ...` | `saham learn signal labels ...` | Learning | Read-only summary unless a generation flag is used; generation persists labels |
-| `saham analyze audit` | `saham learn sentiment audit` | Learning | Persists sentiment audit outcomes |
-| `saham analyze accum-audit ...` | `saham analyze accumulation evaluate ...` | Analysis | Offline evaluation; CSV write remains explicit through `--output` |
+## 4. Current → target (remove left column)
 
-Old paths become hidden transitional aliases. They must call the same command handler/use case as the canonical path and must not fork behavior.
+| Remove (retired) | Canonical replacement | Side effects |
+|---|---|---|
+| `analyze signal-inspect` | `analyze signal inspect` | Read-only live |
+| `analyze signal-replay` | `research signal replay` | Read-only corpus |
+| `analyze signal-readiness` | `research signal readiness` | Read-only corpus |
+| `analyze signal-backfill-observations` | `research signal backfill` | Writes observations; optional labels |
+| `analyze signal-labels` | `research signal labels` | Summary RO; `--generate*` writes |
+| `analyze accum-audit` | `research accumulation evaluate` | Offline eval; CSV only with `--output` |
+| *(new)* | `research signal capture` | Writes observations (when implemented) |
+
+**Out of v1 (parked):**
+
+| Current | Later target | Gate |
+|---|---|---|
+| `analyze audit` (sentiment) | e.g. `research sentiment audit` | DQ-009 |
+| Opening `learn *` | optional rename to `session`/`opening` | separate product decision |
+
+**Cron honesty:** `screen accum` must not be documented or scheduled as
+“observation capture” unless it actually persists canonical observations. EOD
+writers use `research signal …` only.
 
 ## 5. Key principles
 
-1. **Lifecycle before subject.** The root command communicates operational intent and likely side effects.
-2. **One canonical workflow.** Aliases share the same request mapping, use case, DTO, renderer, exit code, and artifact schema.
-3. **Names describe artifacts.** `inspect` means current factor inspection; `replay` means stored-observation replay; `evaluate` means historical outcome measurement.
-4. **No hidden writes under analysis.** Commands that generate or persist learning artifacts belong under `learn`.
-5. **Adapters stay thin.** Routers register commands; handlers parse/map/render; application use cases retain workflow and persistence policy.
-6. **Deterministic behavior is unchanged.** This refactor changes discoverability and routing, not SignalEngine, RiskEngine, TradeSetup, evidence authority, or scoring.
-7. **Migration is observable.** Deprecated aliases warn on stderr and never contaminate JSON stdout.
-8. **Agent discoverability is a contract.** Help text must state artifact, side effects, data source, and whether a command is read-only.
+1. **Category before subject.** `research` vs `analyze` vs `learn` encode real jobs.
+2. **One public path per workflow.** Clean break — no alias dual surface.
+3. **Names describe artifacts.** `inspect` = live; `replay` = stored; `evaluate` = offline outcomes; `backfill`/`labels`/`capture` = corpus writes.
+4. **No hidden writes under `analyze`.** Corpus persistence lives under `research`.
+5. **Adapters stay thin.** Routers register; handlers parse/map/render; use cases own policy.
+6. **Deterministic behavior unchanged.** Discoverability/routing only.
+7. **Agent discoverability is a contract.** Help states artifact, side effects, local/network, read vs write.
+8. **Program clean-break policy applies** to removed command identities (see `AGENT_QUICKSTART.md` / signal evidence program).
 
 ## 6. Ordered implementation backlog
 
-### CLI-001 — Freeze corrected behavioral contracts before routing changes
+### CLI-R0 — Amend contracts / docs pointers (this file)
+
+**State:** Done when this document is the sole chosen direction (2026-07-22).  
+Update program/index pointers that still say `learn signal` for corpus work.
+
+### CLI-R1 — Freeze checklist on behavior (not old names)
 
 **Priority:** P0  
-**Depends on:** `tasks/backlog/audit_data_quality.md` DQ-011 (**Done 2026-07-22**)  
-**State:** Ready — DQ-011 lean freeze delivered adapter contracts for the six
-signal/accum families; CLI-001 may start routing-prep work on top of that freeze.  
-**Outcome:** Corrected and verified command behavior is captured so routing changes cannot silently alter semantics.
+**Depends on:** DQ-011  
+**State:** Mostly satisfied by DQ-011 adapter tests; close gaps against **canonical
+names once mounted**, not against retired flat names.
 
-**Accurate pointers:**
+**Outcome:** Args, exit codes, stdout/stderr, read/write assertions, JSON roots
+remain locked while routing changes.
 
-- Router: `src/adapters/cli/analyze_commands.py`
-- Root routers: `src/adapters/cli/main.py`, `src/adapters/cli/learn_commands.py`
-- Signal compatibility exports: `src/adapters/cli/analyze_signal_commands.py`
-- Focused handlers:
-  - `src/adapters/cli/analyze_signal_inspect_commands.py` (provisional inspect; replaces removed audit module)
-  - `src/adapters/cli/analyze_signal_replay_commands.py`
-  - `src/adapters/cli/analyze_signal_readiness_commands.py`
-  - `src/adapters/cli/analyze_signal_backfill_commands.py`
-  - `src/adapters/cli/analyze_signal_label_commands.py`
-- DQ-011 freeze plan: `tasks/backlog/dq_011_lean_implementation_plan.md`
-- Sentiment handler is scoped to CLI-004 after DQ-009:
-  `src/adapters/cli/analyze_sentiment_commands.py`
-- Accumulation evaluation: `src/adapters/cli/analyze_accum_commands.py`
+Reuse DQ-011 goldens; remount tests to new paths in the same PR as each removal.
 
-**Implementation guideline:**
-
-- Import the corrected canonical signal and accumulation contracts and golden
-  fixtures produced by DQ-011. Sentiment fixtures are owned by DQ-009/CLI-004.
-- Add command-contract tests for arguments, defaults, exit codes, stdout/stderr, JSON roots, and database writes.
-- Record which in-scope paths are read-only and which write observations,
-  labels, or explicit CSV output. CLI-004 separately records sentiment-audit
-  persistence.
-- Snapshot representative `--help` output semantically; avoid brittle full-terminal snapshots.
-- Test invalid dates, missing required arguments, unsupported formats, absent data, and persistence failures.
-
-**Acceptance criteria:**
-
-- [ ] Every DQ-011-scoped command in the mapping table has a focused contract test; sentiment is verified by DQ-009/CLI-004.
-- [ ] Tests distinguish stdout from stderr.
-- [ ] Tests assert read-only commands do not change relevant row counts.
-- [ ] Tests assert in-scope generation/evaluation commands write only their documented artifacts.
-- [ ] Existing JSON `schema_version`, `artifact_type`, and canonical fields are captured where supported.
-
-### CLI-002 — Introduce the read-only `analyze signal` group
+### CLI-R2 — Introduce `research` + `research signal` (corpus commands)
 
 **Priority:** P0  
-**Depends on:** CLI-001 and DQ-007; DQ-007 already requires the completed
-`RETIRE-LEGACY-SIX-FACTOR-BASELINE` gate prerequisite
-**Outcome:** Signal inspection commands are discoverable under one read-only analysis group.
+**Depends on:** CLI-R1 mindset / DQ-011  
 
-**Canonical contract:**
+**Mount (reuse existing handlers/use cases):**
 
 ```text
-saham analyze signal inspect TICKER [--date DATE] [--coverage] [--db PATH]
-saham analyze signal replay TICKER SNAPSHOT_DATE [--db PATH]
-saham analyze signal readiness --target TARGET [--format table|json] [--db PATH]
+saham research signal backfill …
+saham research signal labels …
+saham research signal replay …
+saham research signal readiness …
 ```
 
-**Implementation guideline:**
+**Same PR must:**
 
-- Create a focused Typer router, suggested file: `src/adapters/cli/analyze_signal_router.py`.
-- Register it with `analyze_app.add_typer(signal_app, name="signal")`.
-- Reuse the canonical inspection handler delivered and verified by DQ-007; do
-  not copy its logic.
-- Remove the old six-factor audit handler. Do not rename or wrap it as
-  `inspect_signal`. The public artifact explains the current canonical
-  evidence-backed assessment, not a historical audit or compatibility score.
-- Update module docstrings and examples to canonical paths.
-- Help text must say `Read-only SignalEngine diagnostics from local data.`
+- Delete `analyze signal-backfill-observations`, `signal-labels`, `signal-replay`,
+  `signal-readiness` registrations.
+- Update `EXPECTED_COMMANDS` / `REMOVED_PATHS`, all CLI tests, cron, and docs
+  that referenced the old paths.
+- Help: `Research corpus for SignalEngine observations and labels. May persist.`
 
-**Do not interpret this as:**
+**Do not:** change observation identity, label math, or add aliases.
 
-- Do not move backfill or label generation into `analyze signal`.
-- Do not change factor weights, neutral-fill behavior, scoring, coverage policy, or evidence authority.
-- Do not make repositories/services public merely to share handlers.
-- Do not create a second SignalEngine construction path.
-- Do not display, recompute, or preserve the retired six-factor score under a
-  legacy/diagnostic/compatibility panel.
+**Acceptance:**
 
-**Acceptance criteria:**
+- [ ] `saham research signal --help` lists the mounted ops (no retired flat names).
+- [ ] Retired paths fail unknown-command.
+- [ ] DQ-011 behavioral contracts still pass on new paths.
+- [ ] Summary-only `labels` remains read-only; `--generate*` writes only labels.
+- [ ] `backfill` write assertions unchanged in meaning.
 
-- [ ] `saham analyze signal --help` lists only `inspect`, `replay`, and `readiness`.
-- [ ] Replay/readiness preserve their verified contracts; inspection matches
-      DQ-007 canonical output rather than the old audit artifact.
-- [ ] The canonical commands are read-only.
-- [ ] Inspection shows canonical evidence/provenance/availability/authority
-      coverage/readiness/constraints and no parallel composite.
-- [ ] Help and error examples use canonical paths.
-- [ ] Negative tests prove write-producing signal operations are absent from this group.
+### CLI-R3 — `research signal capture` (when producer is ready)
 
-### CLI-003 — Introduce the persistence-aware `learn signal` group
+**Priority:** P0 after CLI-R2 (may be same release if use case already callable)  
+**Depends on:** application capture use case for `accumulation-discovery`
+
+```text
+saham research signal capture --contract accumulation-discovery --session DATE
+```
+
+Universe-driven, idempotent; not single-ticker. No provisional
+`legacy-accumulation-candidates` bridge in this clean-break plan.
+
+**Acceptance:** help states written tables; cron (if any) uses this path only;
+negative tests: no write from `analyze` / `screen`.
+
+### CLI-R4 — `research accumulation evaluate`
 
 **Priority:** P0  
-**Depends on:** CLI-001  
-**Outcome:** Observation and label generation are visibly classified as learning workflows.
-
-**Canonical contract:**
+**Depends on:** CLI-R2 pattern proven (may parallelize after R2 starts)
 
 ```text
-saham learn signal capture \
-  --contract accumulation-discovery --session DATE \
-  [--format table|json] [--db PATH]
-
-saham learn signal capture \
-  --contract swing-setup --setup NAME --session DATE \
-  [--format table|json] [--db PATH]
-
-saham learn signal capture \
-  --contract legacy-accumulation-candidates --session DATE \
-  [--format table|json] [--db PATH]  # transitional; not promotion-eligible
-
-saham learn signal backfill-observations \
-  --universe UNIVERSE --start DATE --end DATE \
-  [--horizon HORIZON] [--generate-labels] [--format table|json] [--db PATH]
-
-saham learn signal labels [SNAPSHOT_DATE] \
-  [--ticker TICKER] [--horizon HORIZON] \
-  [--generate | --generate-all] [--eligible-dates] \
-  [--captured-at TIMESTAMP] [--format table|json] [--db PATH]
+saham research accumulation evaluate [TICKERS…] [existing options]
 ```
 
-**Implementation guideline:**
+**Same PR:** delete `analyze accum-audit`; update tests/docs/cron if any.
 
-- Create a focused router, suggested file: `src/adapters/cli/learn_signal_router.py`.
-- Register it under the existing `learn_app`.
-- Reuse current application use cases and persistence repositories.
-- Route the two full capture contracts through the one application capture use
-  case defined by `CONTROL-POPULATION`; the CLI must not implement universe,
-  selection, setup-readiness, identity, or idempotency policy. The transitional
-  contract delegates to the existing `RecordAccumulationObservationsUseCase`
-  until that bridge is retired.
-- State side effects in the first help paragraph.
-- Keep label summary behavior available, but clearly distinguish `SUMMARY ONLY` from `GENERATE AND PERSIST` in output.
-- Preserve local-only/deterministic backfill behavior.
-- Treat `install_cron.sh` as a real caller. First migrate its 19:15 job to the
-  explicit provisional capture contract backed by the existing recorder; then
-  replace it with `accumulation-discovery` when `CONTROL-POPULATION` closes.
-- Migrate the 19:45 label cron from `analyze signal-labels` to
-  `learn signal labels`. Scheduled and manual paths share handlers/use cases.
+Preserve DESCRIPTIVE claim stamps, no DB writes, CSV only with `--output`.
 
-**Do not interpret this as:**
+### CLI-R5 — Live `analyze signal inspect`
 
-- Do not merge observation backfill and label generation into one flag-driven command.
-- Do not put capture under a top-level `evidence` namespace; `evidence` is an
-  artifact, while `learn` is the persistence-producing lifecycle.
-- Do not make ordinary `analyze signal` commands persist observations or labels.
-- Do not allow single-ticker capture into the canonical learning population;
-  per-ticker reconstruction belongs to read-only `analyze signal inspect`.
-- Do not claim the provisional selected-candidate cron bridge has rejected
-  controls or professional-grade discovery coverage.
-- Do not leave a successful read-only `screen accum` cron entry labelled as
-  observation capture.
-- Do not alter observation identity, deduplication, eligibility, horizons, or label definitions.
-- Do not automatically generate labels unless the existing explicit option requests it.
-
-**Acceptance criteria:**
-
-- [ ] `saham learn signal --help` lists `capture`, `backfill-observations`, and `labels`.
-- [ ] `capture` requires an explicit supported observation contract; swing setup capture also requires `--setup`.
-- [ ] Discovery and swing-setup capture are universe-driven and idempotent.
-- [ ] Provisional capture is visibly `LEGACY_PROVISIONAL` and cannot enter readiness/tuning/promotion.
-- [ ] Installed capture and label cron entries use lifecycle-correct paths and the same application use cases as manual runs.
-- [ ] Cron retry, holiday, failure, cutover, and no-dual-write tests pass.
-- [ ] Help explicitly identifies written tables/artifacts at a user-meaningful level.
-- [ ] Identical requests produce the same DTOs and persistence effects as old paths.
-- [ ] Summary-only label invocation remains read-only.
-- [ ] Negative tests prove no implicit generation occurs.
-
-### CLI-004 — Replace ambiguous sentiment `analyze audit`
-
-**Priority:** P1  
-**Depends on:** CLI-001 and `tasks/backlog/audit_data_quality.md` DQ-009 plus any resulting sentiment cleanup
-
-**Outcome:** The command path identifies both its subject and its persistence lifecycle.
-
-**Canonical contract:**
+**Priority:** P0  
 
 ```text
-saham learn sentiment audit [--db PATH]
+saham analyze signal inspect TICKER …
 ```
 
-**Rationale:**
+**Same PR:** delete `analyze signal-inspect`; `analyze signal --help` lists
+**only** `inspect` (no backfill/labels under analyze).
 
-`saham analyze audit` calls `AuditSentimentUseCase`, retrieves unaudited sentiment logs, evaluates forward outcomes, and saves audit records. The bare word `audit` hides both the sentiment subject and the write behavior.
+Help: `Read-only live SignalEngine assessment from local data.`
 
-**Accurate pointers:**
+### CLI-R6 — Docs / agent / cron sweep
 
-- Registration: `src/adapters/cli/analyze_commands.py`
-- Handler/factory: `src/adapters/cli/analyze_sentiment_commands.py`, `src/adapters/cli/analyze_sentiment_workflow_factory.py`
-- Use case: `src/application/use_case/audit_sentiment_use_case.py`
-- Display: `src/adapters/cli/analyze_sentiment_display.py`
+**Priority:** P0  
+**Depends on:** CLI-R2…R5 as each lands  
 
-**Implementation guideline:**
+Repository search: retired strings only in `REMOVED_PATHS`, historical commits,
+and explicit “removed commands” notes — **not** in live examples.
 
-- Add or reuse a `learn sentiment` router and register `audit` there.
-- Keep `AuditSentimentUseCase` as the sole workflow owner.
-- Rename adapter symbols/docstrings from generic `sentiment_audit` only if doing so improves local clarity without touching application semantics.
-- Help must say that eligible audit outcomes are persisted.
+### Parked (not v1)
 
-**Acceptance criteria:**
+| Item | Why |
+|------|-----|
+| Sentiment → `research sentiment audit` | Needs DQ-009 |
+| Rename opening `learn` → `session`/`opening` | Separate UX decision |
+| `risk` / `compare` / `swing` regroup | Prove `research` pattern first |
+| Named-setup capture contract | Product trigger (`NAMED-SWING-SETUP-CAPTURE`) |
 
-- [ ] The canonical path identifies `sentiment` and `audit`.
-- [ ] Persistence behavior and displayed metrics are unchanged.
-- [ ] Running with no eligible logs remains a successful, clear no-op result.
-- [ ] A persistence failure exits non-zero and does not claim completion.
-
-### CLI-005 — Rename accumulation audit to evaluation
-
-**Priority:** P1  
-**Depends on:** CLI-001  
-**Outcome:** Historical accumulation replay is named after its produced evaluation artifact.
-
-**Canonical contract:**
-
-```text
-saham analyze accumulation evaluate [TICKERS...] [existing options]
-```
-
-**Rationale:**
-
-The workflow deterministically replays accumulation signals, measures forward returns, optionally simulates exits, and optionally exports raw records. It is not the same concern as sentiment audit or current signal inspection.
-
-**Accurate pointers:**
-
-- Registration: `src/adapters/cli/analyze_commands.py`
-- Handler: `src/adapters/cli/analyze_accum_commands.py`
-- Workflow factory: `src/adapters/cli/analyze_accum_workflow_factory.py`
-- Application workflow: `src/application/use_case/run_accumulation_audit_workflow_use_case.py`
-- Core evaluation: `src/application/use_case/accumulation_audit_use_case.py`
-- Display/export: `src/adapters/cli/analyze_accum_display.py`, `src/adapters/cli/analyze_accum_csv_writer.py`
-
-**Implementation guideline:**
-
-- Add an `analyze accumulation` router with `evaluate`.
-- Reuse the existing request/response and application workflow during migration.
-- Do not rename application types in the same task unless a separate repository-wide symbol-migration task is approved.
-- Preserve explicit `--output` CSV behavior and offline/local-data guarantees.
-
-**Acceptance criteria:**
-
-- [ ] Canonical and legacy paths return equivalent summaries and JSON for identical inputs.
-- [ ] No CSV is written without `--output`.
-- [ ] Setup/filter/exit-grid semantics remain unchanged.
-- [ ] Help clearly calls the output historical evaluation, not a current trade verdict.
-
-### CLI-006 — Add hidden deprecated aliases without duplicate workflows
-
-**Priority:** P1  
-**Depends on:** CLI-002, CLI-003, CLI-004, CLI-005  
-**Outcome:** Existing scripts receive a controlled migration window.
-
-**Legacy aliases:**
-
-```text
-analyze signal-audit
-analyze signal-replay
-analyze signal-readiness
-analyze signal-backfill-observations
-analyze signal-labels
-analyze audit
-analyze accum-audit
-```
-
-**Implementation guideline:**
-
-- Keep aliases hidden from normal group help.
-- Emit one deprecation message to stderr containing the exact canonical replacement.
-- Forward parsed arguments to the same handler/request factory; do not shell out and do not invoke Typer recursively.
-- Keep JSON stdout byte-equivalent where timestamps/runtime metadata do not prevent it.
-- Define the removal version/date in release notes before shipping.
-
-**Do not interpret this as:**
-
-- Do not preserve old commands indefinitely.
-- Do not create separate compatibility use cases.
-- Do not write warnings to stdout.
-- Do not silently redirect an old read-only command to a write-producing command.
-
-**Acceptance criteria:**
-
-- [ ] Legacy aliases are absent from normal help.
-- [ ] Every alias warns on stderr with its exact replacement.
-- [ ] Alias and canonical exit codes/artifacts match.
-- [ ] JSON stdout remains parseable without warning text.
-- [ ] Tests assert the alias removal metadata exists.
-
-### CLI-007 — Reconcile documentation and agent discovery surfaces
-
-**Priority:** P1  
-**Depends on:** CLI-002 through CLI-006  
-**Outcome:** Humans and agents find one canonical command vocabulary.
-
-**Accurate pointers:**
-
-- `README.md`
-- `CLI_README.md`
-- `docs/how_to_general.md`
-- Signal learning/tuning documentation under `docs/`
-- `AGENT_QUICKSTART.md` only if it contains affected command examples
-- Router/module docstrings and Typer help examples
-- Shell completion output and command contract tests
-
-**Implementation guideline:**
-
-- Search the repository for every legacy command string.
-- Replace user-facing examples with canonical paths.
-- Document deprecated aliases in one migration section rather than alongside canonical examples.
-- For each canonical command, state: purpose, artifact, read/write behavior, local/network behavior, and authoritative versus diagnostic meaning.
-- Make command tables sort by lifecycle → subject → operation.
-
-**Acceptance criteria:**
-
-- [ ] Repository search finds legacy paths only in alias registration, migration tests, release notes, and historical records.
-- [ ] Help and docs agree on side effects.
-- [ ] No doc calls `signal inspect` a historical audit.
-- [ ] No doc places observation/label generation under analysis.
-
-### CLI-008 — Remove deprecated aliases in a declared breaking release
-
-**Priority:** P2  
-**Depends on:** CLI-006, CLI-007, elapsed migration window  
-**Outcome:** The public command surface contains only canonical names.
-
-**Implementation guideline:**
-
-- Remove alias registrations, compatibility-only imports, warning helpers, and alias tests.
-- Retain migration documentation for the supported release window.
-- Confirm no internal automation or documentation still calls old paths.
-
-**Acceptance criteria:**
-
-- [ ] Old paths fail with Typer's unknown-command error and non-zero exit.
-- [ ] Canonical paths remain unchanged.
-- [ ] Compatibility-only modules are removed only when no imports remain.
-- [ ] Full CLI contract suite and repository command-string audit pass.
-
-## 7. Architecture impact assessment
+## 7. Architecture impact
 
 | Question | Answer |
 |---|---|
 | Domain touched? | No |
-| Application behavior changed? | No; existing use cases remain canonical |
-| Adapter touched? | Yes; router registration, command names, help, and compatibility aliases |
-| Infrastructure touched? | No, except import wiring if composition roots require path updates |
-| New runtime dependency? | No |
-| Determinism affected? | No |
-| Persistence schema changed? | No |
-| Existing write behavior moved to a clearer lifecycle path? | Yes |
-| Risk/signal/evidence authority changed? | No |
-
-Layer plan for implementation:
+| Application behavior? | No (reuse use cases) |
+| Adapter? | Yes — new `research` routers; delete old registrations |
+| Infrastructure? | No except import wiring |
+| Persistence schema? | No |
+| Aliases / compatibility shims? | **No** |
 
 ```text
-Domain: not touched
-Application: retain existing use cases and DTO contracts; symbol rename only in separately approved task
-Infrastructure: not touched except unavoidable import path updates
-Adapter: add grouped routers, canonical registrations, aliases, warnings, and help
-Documentation: update command references and migration guide
+Layer plan:
+- Domain: not touched
+- Application: not touched (unless capture wiring already exists)
+- Infrastructure: not touched
+- Adapter: research + analyze.signal routers; remove retired commands
+- Documentation: canonical paths only; cron cutover
 ```
 
-## 8. AI usage declaration
+## 8. AI usage
 
-No AI is involved in runtime behavior. The restructure must work fully offline wherever the existing command does. Existing optional AI behavior in unrelated sentiment analysis is unchanged.
+No AI in runtime. Offline wherever the current command is offline.
 
-## 9. Risk, signal, and evidence authority
+## 9. Risk / signal / evidence authority
 
-This refactor must not change:
+Must **not** change scoring, RiskEngine, TradeSetup, evidence PRODUCTION registry,
+observation/label definitions, or readiness promotion rules. Routing only.
 
-- SignalEngine factor values, weights, coverage, or score;
-- RiskEngine gates or TradeSetup composition;
-- setup evaluation or market-context authority;
-- observation/label definitions or learning eligibility;
-- diagnostic versus production evidence status;
-- what can produce ENTER, WATCH, AVOID, or BLOCKED.
+## 10. Persistence invariants
 
-The only semantic clarification is operational: persistence-producing learning workflows are exposed under `learn`, and read-only inspection remains under `analyze`.
-
-## 10. Data and persistence invariants
-
-- `analyze signal inspect`, `replay`, and `readiness` remain read-only.
-- `learn signal backfill-observations` preserves current observation writes and deduplication.
-- `learn signal labels` writes only when an explicit generation option requests it.
-- `learn sentiment audit` preserves current audit-record writes.
-- `analyze accumulation evaluate` writes no database state; CSV output occurs only with `--output`.
-- No schema migration is part of this backlog.
-- Canonical and deprecated paths must address the same configured database.
+- `analyze signal inspect` — no observation/label writes  
+- `research signal replay` / `readiness` — no writes  
+- `research signal backfill` — observation writes (+ optional labels) as today  
+- `research signal labels` — writes only with explicit generate flags  
+- `research signal capture` — observation writes when implemented  
+- `research accumulation evaluate` — no DB writes; CSV only with `--output`  
 
 ## 11. Global negative requirements
 
 Do Not Interpret This As:
 
-- Do not introduce a top-level `saham signal` group in this restructure.
+- Do not add aliases, hidden redirects, or a deprecation dual surface.
+- Do not put corpus writes under `learn` or `analyze`.
+- Do not move opening `learn snapshot|track|…` under `research`.
+- Do not treat `screen accum` as canonical observation capture.
 - Do not use flags to select distinct operations.
-- Do not combine sentiment audit, accumulation evaluation, and signal inspection into a generic audit use case.
-- Do not duplicate application workflows for aliases.
-- Do not change output schemas, scoring, persistence identity, or decision authority as cleanup.
-- Do not move application policy into Typer routers or display modules.
-- Do not make deprecated aliases visible as canonical help entries.
-- Do not restructure `risk/compare` or `swing/swing-compare` in this scope; track them separately after this migration proves the grouping pattern.
+- Do not change output schemas, scoring, or persistence identity as “cleanup.”
+- Do not ship new paths while old public paths still work.
+- Do not include sentiment rename in v1 without DQ-009.
 
-## 12. Verification requirements
+## 12. Verification
 
-Each implementation task must run:
+Each slice:
 
-1. Focused command contract tests for canonical and legacy paths.
-2. Focused application use-case tests for every reused workflow.
-3. Negative tests for forbidden writes and invalid command placement.
-4. JSON stdout/stderr separation tests.
-5. CLI help/discovery tests.
-6. Architecture boundary tests.
-7. Full test suite before removing aliases.
-8. `git diff --check` for every task.
+1. Command contract tests for **canonical** paths only.  
+2. `REMOVED_PATHS` assertions for retired names.  
+3. Reused use-case tests still green.  
+4. Negative: forbidden writes / unknown old commands.  
+5. stdout/stderr separation.  
+6. Help discovery.  
+7. Architecture boundary tests.  
+8. `git diff --check`.
 
-Representative smoke matrix:
+Smoke matrix (canonical names):
 
-| Command | Success | Invalid input | No data | JSON | Write assertion |
+| Command | Success | Invalid | No data | JSON | Write assertion |
 |---|---:|---:|---:|---:|---:|
-| `analyze signal inspect` | ✓ | ✓ | ✓ | if supported | no writes |
-| `analyze signal replay` | ✓ | ✓ | ✓ | if supported | no writes |
-| `analyze signal readiness` | ✓ | ✓ | ✓ | ✓ | no writes |
-| `learn signal backfill-observations` | ✓ | ✓ | ✓ | ✓ | exact observation writes |
-| `learn signal labels` summary | ✓ | ✓ | ✓ | ✓ | no writes |
-| `learn signal labels --generate*` | ✓ | ✓ | ✓ | ✓ | exact label writes |
-| `learn sentiment audit` | ✓ | n/a | no eligible logs | current contract | exact audit writes |
-| `analyze accumulation evaluate` | ✓ | ✓ | ✓ | ✓ | no DB writes; CSV only if requested |
+| `analyze signal inspect` | ✓ | ✓ | ✓ | ✓ | no writes |
+| `research signal replay` | ✓ | ✓ | ✓ | if any | no writes |
+| `research signal readiness` | ✓ | ✓ | ✓ | ✓ | no writes |
+| `research signal backfill` | ✓ | ✓ | ✓ | ✓ | observation writes |
+| `research signal labels` summary | ✓ | ✓ | ✓ | ✓ | no writes |
+| `research signal labels --generate*` | ✓ | ✓ | ✓ | ✓ | label writes |
+| `research accumulation evaluate` | ✓ | ✓ | ✓ | ✓ | no DB; CSV if `--output` |
 
-## 13. Global completion gate
+## 13. Global completion gate (v1)
 
-The restructure is complete only when:
-
-- [ ] All canonical paths exist and have accurate help.
-- [ ] Read-only and write-producing commands are separated by lifecycle.
-- [ ] Old aliases call the same handlers/use cases and warn only on stderr.
-- [ ] No engine, scoring, risk, evidence, or persistence semantics changed.
-- [ ] Documentation uses canonical paths consistently.
-- [ ] Side effects are stated and tested.
-- [ ] Alias removal is scheduled and later completed in a breaking release.
-- [ ] Focused tests, architecture tests, full suite at final migration, and `git diff --check` pass.
+- [ ] All v1 canonical paths exist with accurate help.  
+- [ ] All mapped retired paths are gone (`REMOVED_PATHS`).  
+- [ ] Corpus writes are only under `research`; live inspect under `analyze signal`.  
+- [ ] Opening `learn` unchanged and not used for signal corpus.  
+- [ ] Cron/docs/tests use canonical paths only.  
+- [ ] No engine/scoring/persistence semantic change.  
+- [ ] Focused + contract suites pass; `git diff --check` clean.  
