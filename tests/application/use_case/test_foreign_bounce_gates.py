@@ -97,6 +97,22 @@ def test_many_gates_fail_returns_no_match():
     assert len(evaluation.failed_reasons) > 2
 
 
+def test_passing_score_does_not_bypass_too_many_failed_gates():
+    # Score gate passes, but 4 other gates fail (> partial_max_failed_gates=2).
+    # Former force_partial_when_score_passes bypass would have forced PARTIAL.
+    c = _candidate(
+        foreign_flow_score=80.0,
+        rsi=75.0,
+        trend="UP",
+        avg_flow_ratio=1.0,
+        vwap_discount_pct=0.5,
+    )
+    evaluation = _eval(c)
+    assert evaluation.match == SetupMatch.NO_MATCH
+    assert len(evaluation.failed_reasons) > 2
+    assert not any("foreign_flow_score" in f for f in evaluation.failed_reasons)
+
+
 def test_score_gate_fail_but_few_total_fails_returns_partial():
     # Score fails, but only 1 other gate fails (<= partial_max_failed_gates=2)
     c = _candidate(foreign_flow_score=60.0, rsi=65.0)  # 2 failures: score + RSI
@@ -164,6 +180,22 @@ def test_coiled_spring_rejects_loose_bb_width_when_other_gates_fail():
 
     assert evaluation.match == SetupMatch.NO_MATCH
     assert any("bb_width_pctile" in reason for reason in evaluation.failed_reasons)
+
+
+def test_coiled_spring_passing_score_does_not_bypass_too_many_failed_gates():
+    c = _candidate(foreign_flow_score=80.0, bb_width_pctile=0.60, avg_flow_ratio=0.5, rsi=72.0)
+
+    evaluation = EvaluateSwingSetupUseCase().execute(
+        EvaluateSwingSetupRequest(
+            setup_name=COILED_SPRING_SETUP,
+            candidate=c,
+            config=SwingSetupCatalogConfig(),
+        )
+    )
+
+    assert evaluation.match == SetupMatch.NO_MATCH
+    assert len(evaluation.failed_reasons) > 2
+    assert not any("foreign_flow_score" in reason for reason in evaluation.failed_reasons)
 
 
 def test_smart_money_confirmed_requires_broker_detail():

@@ -195,7 +195,6 @@ class EvaluateSwingSetupUseCase:
         setup_name: str,
         gates: tuple[SetupGate, ...],
         partial_max_failed_gates: int,
-        force_partial_when_score_passes: bool = False,
         config: Any = None,
     ) -> SetupEvaluation:
         failed = tuple(
@@ -205,7 +204,7 @@ class EvaluateSwingSetupUseCase:
         )
         if not failed:
             match = SetupMatch.MATCH
-        elif force_partial_when_score_passes or len(failed) <= partial_max_failed_gates:
+        elif len(failed) <= partial_max_failed_gates:
             match = SetupMatch.PARTIAL
         else:
             match = SetupMatch.NO_MATCH
@@ -273,7 +272,6 @@ class EvaluateSwingSetupUseCase:
             setup_name=FOREIGN_BOUNCE_SETUP,
             gates=gates,
             partial_max_failed_gates=config.partial_max_failed_gates,
-            force_partial_when_score_passes=candidate.foreign_flow_score >= config.gate_min_foreign_flow_score,
             config=config,
         )
 
@@ -327,7 +325,6 @@ class EvaluateSwingSetupUseCase:
             setup_name=COILED_SPRING_SETUP,
             gates=gates,
             partial_max_failed_gates=config.partial_max_failed_gates,
-            force_partial_when_score_passes=candidate.foreign_flow_score >= config.gate_min_foreign_flow_score,
             config=config,
         )
 
@@ -407,7 +404,6 @@ class EvaluateSwingSetupUseCase:
             setup_name=SMART_MONEY_CONFIRMED_SETUP,
             gates=gates,
             partial_max_failed_gates=config.partial_max_failed_gates,
-            force_partial_when_score_passes=candidate.foreign_flow_score >= config.gate_min_foreign_flow_score,
             config=config,
         )
 
@@ -467,6 +463,5 @@ class EvaluateSwingSetupUseCase:
             setup_name=PULLBACK_CONTINUATION_SETUP,
             gates=gates,
             partial_max_failed_gates=config.partial_max_failed_gates,
-            force_partial_when_score_passes=candidate.foreign_flow_score >= config.gate_min_foreign_flow_score,
             config=config,
         )
