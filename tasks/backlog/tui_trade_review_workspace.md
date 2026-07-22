@@ -167,6 +167,20 @@ and `This updates derived review fields in the swing journal`.
 It does not fetch providers. Missing future candles remain unavailable with a
 reason; they are not failures or neutral results.
 
+### Visual treatment
+
+- Review reads as a journal, not a live trading screen: period and provenance
+  first, recorded/evaluated/awaiting counts next, then outcome summaries.
+- Saved Candidates and Swing Journal use the shared tabs, tables, filters, and
+  detail treatment. Dates, tickers, horizons, sample counts, and signed returns
+  use stable alignment.
+- Awaiting data, unavailable, and evaluated states combine explicit text/symbols
+  with semantic color and cannot resemble loss, zero return, or failure.
+- Summary group headings keep horizon and sample size adjacent to every metric;
+  small samples are visually muted but not silently removed.
+- At `120x40`, journal and entry detail may use master-detail. At `80x24`, detail
+  opens without losing filters, selected row, or scroll position.
+
 ## Non-Goals
 
 - No claim that a logged candidate was executed.
@@ -225,6 +239,8 @@ journal storage into TUI modules.
 - [ ] Implement explicit enrichment confirmation/progress/result.
 - [ ] Add idempotency, exact-key, missing-candle, and no-provider tests.
 - [ ] Add terminology/authority negative tests.
+- [ ] Apply shared journal table, summary metric, filter, status, confirmation,
+  and responsive components; capture wide/compact visual baselines.
 - [ ] Run focused, architecture, CLI, and full tests when feasible.
 - [ ] Fill completion record from evidence.
 
@@ -243,6 +259,14 @@ journal storage into TUI modules.
 - [ ] Saved-candidate data reuses Milestone B contracts.
 - [ ] CLI swing review retains its supported behavior through new boundaries.
 - [ ] No provider, tuning, config, or unrelated journal write is introduced.
+- [ ] The workspace is visually distinct from live analysis and never styles a
+  recorded candidate or derived outcome as an executed trade.
+- [ ] At `80x24`, date/ticker/status/horizon and the focused action remain
+  readable; at `120x40`, entry detail improves scanability without hiding counts.
+- [ ] Awaiting, UNAVAILABLE, evaluated, empty, loading, partial, and error states
+  are distinguishable in monochrome and never encode missing as zero.
+- [ ] Every rendered summary keeps sample count and horizon adjacent to its
+  metric at both supported sizes.
 - [ ] Focused tests, architecture tests, full suite when feasible, and
   `git diff --check` pass.
 
@@ -272,9 +296,10 @@ journal storage into TUI modules.
 
 Run journal identity/store tests; list/summarize/enrich application tests;
 existing CLI swing log/review tests; TUI controller/presenter/headless tests at
-80x24 and 120x40; strict read-only query and no-provider tests; disposable
-journal exact-write/idempotency tests; architecture guards; full suite when
-feasible; and `git diff --check`.
+80x24 and 120x40; deterministic journal/detail, empty, awaiting, and error
+rendered-screen baselines; monochrome missing-state checks; strict read-only
+query and no-provider tests; disposable journal exact-write/idempotency tests;
+architecture guards; full suite when feasible; and `git diff --check`.
 
 ## Completion Record
 
@@ -287,6 +312,8 @@ feasible; and `git diff --check`.
 - Count reconciliation proof:
 - Terminology/authority proof:
 - CLI preservation proof:
+- Visual baseline paths/proof:
+- Responsive/monochrome proof:
 - Focused tests:
 - Architecture tests:
 - Full suite:

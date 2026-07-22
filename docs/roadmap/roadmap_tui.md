@@ -186,6 +186,47 @@ internally. Advanced details may show exact identities read-only.
   them only after a successful new result.
 - Errors preserve the last valid result and identify which operation failed.
 
+### Visual design language
+
+The target is a calm, information-dense analytical workstation—not a neon
+trading dashboard and not a plain dump of bordered widgets.
+
+- Milestone A owns one shared theme and component vocabulary. Route modules do
+  not introduce private palettes or raw color literals.
+- Use four hierarchy levels consistently: application chrome, workspace
+  heading/context, primary decision/result, supporting detail.
+- Use restrained borders and spacing. One strong container is preferable to
+  nested boxes around every label. Blank space separates meaning; decoration
+  does not consume rows needed for evidence.
+- Define semantic theme tokens for canvas, surface, raised surface, border,
+  primary text, muted text, accent/focus, positive, caution, negative,
+  unavailable, and selected-row states. Color reinforces status but never
+  carries status alone.
+- Every status combines a word or symbol with color: for example `READY`,
+  `STALE`, `PARTIAL`, `UNAVAILABLE`, `ERROR`; do not rely on red/green alone.
+- Numeric columns are right-aligned with stable precision; dates, tickers, and
+  status labels do not jitter between states. Positive/negative signs remain
+  visible in monochrome mode.
+- Focus, selection, hover, disabled, running, validation-error, and destructive
+  confirmation states are visually distinct. Focus is always visible.
+- Loading replaces only the affected region, preserves its dimensions where
+  practical, and keeps the last valid result visible but visibly stale.
+- At `120x40`, use master-detail or side-by-side panels when that improves
+  comparison. At `80x24`, stack or tab secondary content while retaining the
+  route, data status, primary decision, focused action, and key hints.
+- Below the supported `80x24` minimum, show a concise resize message instead of
+  clipping controls into an apparently usable screen.
+- Charts use terminal-safe lines/blocks plus axes, labels, and a tabular
+  fallback. Meaning must survive ASCII/monochrome rendering.
+- Motion is limited to useful progress indication. No decorative animation,
+  blinking status, emoji-dependent iconography, or color gradients.
+
+Visual polish is part of implementation, not a later release phase. Each
+milestone must supply deterministic visual snapshots or equivalent rendered-
+screen evidence at `80x24` and `120x40`, including one non-happy state.
+Baselines are produced by the headless renderer from fixed fixtures and stored
+with tests; manually captured screenshots alone do not satisfy acceptance.
+
 ## Core Screen Designs
 
 ### Dashboard
@@ -329,6 +370,8 @@ Scope:
 - select universe and effective date;
 - add explicit market-data Update with progress and partial-failure reporting;
 - recompute Dashboard from the resulting application-owned workflow result;
+- establish the shared semantic theme, shell, reusable visual primitives, and
+  responsive/minimum-size policy consumed by Milestones B–E;
 - retain optional dependency, worker cancellation, and late-result safety.
 
 Value acceptance:
@@ -336,6 +379,8 @@ Value acceptance:
 - the user can go from stale cache to an updated actionable Dashboard without
   opening another terminal command;
 - the screen makes stale, partial, and current data impossible to confuse;
+- the shared shell is visually coherent, keyboard-first, readable in
+  monochrome, and intentionally composed at both `80x24` and `120x40`;
 - Update never runs on mount, focus, or local Reload;
 - provider/write behavior is explicit and tested with disposable storage.
 
@@ -500,6 +545,9 @@ for one does not authorize the others.
 There is no separate quality-only milestone. Every backlog task must include:
 
 - keyboard-only behavior at 80x24 and 120x40;
+- conformance to the shared theme/components with no route-private palette;
+- deterministic rendered-screen evidence at both supported sizes, including a
+  non-happy state and monochrome/status-text verification;
 - exact loading, partial, empty, unavailable, validation, and error states;
 - generation-safe workers and late-result rejection;
 - thin-adapter and forbidden-import tests;

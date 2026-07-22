@@ -178,6 +178,22 @@ or persistence work.
 - Back returns to the exact originating route state; direct search returns to
   the prior route.
 
+### Visual treatment
+
+- The persistent header is a compact decision strip: ticker and freshness,
+  canonical action, blockers, selected setup, and explicit Run. It remains
+  visually separate from historical, preview, and supporting evidence.
+- Tabs use consistent labels and one active indicator. Avoid placing every
+  evidence category into simultaneous bordered panels.
+- Overview uses progressive disclosure: primary decision and blockers first,
+  then the minimum supporting metrics, then deeper evidence.
+- Chart views use terminal-safe series, labeled axes/ranges, a visible cursor or
+  selected point when interactive, and a table fallback at compact width.
+- Flow and Signal & Risk align comparable numeric values and use explicit
+  `UNAVAILABLE` cells; missing panels never look like zero-valued evidence.
+- At `120x40`, supporting detail may sit beside the primary panel. At `80x24`,
+  the canonical action/header remains fixed while tab content scrolls or stacks.
+
 ## Non-Goals
 
 - No order placement or broker execution.
@@ -235,6 +251,8 @@ the application contract instead.
 - [ ] Add exact request mode mapping tests.
 - [ ] Add log preview/confirmation with same-object transport proof.
 - [ ] Add cancellation, last-valid-result, and partial/error behavior.
+- [ ] Apply the shared decision strip, tabs, metric/table, chart, status, and
+  responsive components; capture wide/compact visual baselines.
 - [ ] Run focused, architecture, and full tests when feasible.
 - [ ] Fill completion record from executed evidence.
 
@@ -251,6 +269,13 @@ the application contract instead.
 - [ ] Log preview and submission share the exact request object.
 - [ ] No tab/focus/selection change triggers work.
 - [ ] Back restores originating Discover state.
+- [ ] Canonical action and blockers have the strongest hierarchy and cannot be
+  visually confused with setup match, backtest evidence, or optional preview.
+- [ ] At `80x24`, the persistent decision strip and focused tab/action remain
+  visible; content does not force horizontal scrolling for primary fields.
+- [ ] Chart meaning survives compact/table fallback and monochrome rendering.
+- [ ] Section-level loading, PARTIAL, UNAVAILABLE, and ERROR states preserve
+  usable successful sections and do not collapse the layout.
 - [ ] Missing data is section-specific UNAVAILABLE, not neutral or fabricated.
 - [ ] Optional AI/sentiment is off by default and cannot alter canonical action.
 - [ ] Focused tests, architecture tests, full suite when feasible, and
@@ -284,9 +309,10 @@ the application contract instead.
 
 Run application snapshot/chart/broker/position tests; existing Swing workflow,
 setup, risk, signal, and log tests; TUI controller/presenter/headless tests at
-80x24 and 120x40; cached-only strict no-provider tests; log tests with
-disposable journals/databases; architecture guards; full suite when feasible;
-and `git diff --check`.
+80x24 and 120x40; deterministic Overview, Chart, and unavailable/error rendered-
+screen baselines; monochrome authority-separation checks; cached-only strict
+no-provider tests; log tests with disposable journals/databases; architecture
+guards; full suite when feasible; and `git diff --check`.
 
 ## Completion Record
 
@@ -299,6 +325,8 @@ and `git diff --check`.
 - Position calculation ownership proof:
 - Log exact-request proof:
 - Return-context proof:
+- Visual baseline paths/proof:
+- Responsive/monochrome proof:
 - Focused tests:
 - Architecture tests:
 - Full suite:

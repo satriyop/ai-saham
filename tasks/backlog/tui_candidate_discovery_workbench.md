@@ -140,6 +140,21 @@ Show selected row context without recomputation:
   weakening, and unchanged groups.
 - Saving names the exact current canonical projection and confirms the write.
 
+### Visual treatment
+
+- The candidate table is the visual anchor; controls are a compact toolbar,
+  not a wall of form fields.
+- Canonical rank, ticker, current status, and primary score remain visible in
+  compact mode. Lower-priority evidence moves into the preview/detail panel.
+- The selected row uses the shared selected/focus states without obscuring
+  positive/negative values. Row striping, if used, stays subtle.
+- Filter activity is summarized in one readable line; advanced controls are
+  collapsed until requested and active filters are visibly marked.
+- New, dropped, strengthening, weakening, and unchanged comparison groups use
+  headings, symbols/text, and semantic color—not color alone.
+- At `120x40`, table and preview may use master-detail. At `80x24`, preview is a
+  drill-in/overlay or stacked region that returns to the exact table state.
+
 ## Non-Goals
 
 - No provider fetch; use Milestone A Update for data refresh.
@@ -195,6 +210,8 @@ non-composition TUI modules.
 - [ ] Implement canonical-rank-preserving table/preview.
 - [ ] Implement Save confirmation/result.
 - [ ] Implement Saved/Compare tab and grouped differences.
+- [ ] Apply shared table, toolbar, filter, status, empty/error, and responsive
+  components; add wide/compact visual baselines.
 - [ ] Restore tab/filter/selection/scroll after ticker drilldown.
 - [ ] Update navigation/Help.
 - [ ] Run focused, boundary, and full tests when feasible.
@@ -216,6 +233,14 @@ non-composition TUI modules.
   application result.
 - [ ] Missing and valid-empty watchlists are distinguishable.
 - [ ] Returning from Ticker preserves Discover context.
+- [ ] At `80x24`, the focused row, ticker, canonical rank, primary status, and
+  navigation hints remain visible without horizontal corruption.
+- [ ] At `120x40`, the preview supports scanning without weakening the table as
+  the primary workspace.
+- [ ] Empty universe, no filter matches, missing watchlist, loading, and error
+  are visually distinct and use the shared state components.
+- [ ] Comparison group meaning and positive/negative values survive monochrome
+  rendering and do not rely on color alone.
 - [ ] No provider, corpus, journal, config, or tuning write is introduced.
 - [ ] Focused tests, architecture tests, full suite when feasible, and
   `git diff --check` pass.
@@ -247,8 +272,10 @@ non-composition TUI modules.
 
 Run application list/compare tests, accumulation workflow/projection tests,
 controller/presenter tests, headless Discover journeys at 80x24 and 120x40,
-state-restoration tests, write-scope tests with disposable storage,
-architecture/import guards, full suite when feasible, and `git diff --check`.
+deterministic table/preview and empty/error rendered-screen baselines,
+monochrome comparison checks, state-restoration tests, write-scope tests with
+disposable storage, architecture/import guards, full suite when feasible, and
+`git diff --check`.
 
 ## Completion Record
 
@@ -260,6 +287,8 @@ architecture/import guards, full suite when feasible, and `git diff --check`.
 - Watchlist read/save proof:
 - Compare lineage/read-count proof:
 - State restoration proof:
+- Visual baseline paths/proof:
+- Responsive/monochrome proof:
 - Focused tests:
 - Architecture tests:
 - Full suite:

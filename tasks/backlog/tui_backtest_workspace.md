@@ -175,6 +175,21 @@ Advanced detail may show the resolved path.
   strategy backtests are not commensurate.
 - No automatic winner, recommendation, or optimized parameter is generated.
 
+### Visual treatment
+
+- Setup and Strategy are visibly separate modes with shared shell styling but
+  different form groupings; do not disguise them as one generic form.
+- Inputs use compact labeled groups and stable units. Defaults, overrides,
+  validation errors, and disabled Run state are recognizable before execution.
+- Results start with request identity and authority label, then key metrics,
+  then equity/trades/regime/attribution detail.
+- Equity rendering uses labeled axes and a table fallback. Positive color must
+  not make a run appear recommended.
+- Compare uses aligned request-identity rows before aligned metrics; differing
+  inputs receive a text marker plus semantic emphasis.
+- At `120x40`, form/results or comparisons may be side-by-side. At `80x24`, use
+  staged form sections and tabbed results without hiding run identity.
+
 ## Non-Goals
 
 - No strategy authoring, YAML editor, AI creation, or formula editor.
@@ -229,6 +244,8 @@ infrastructure composition boundary. Never import the CLI runner into TUI.
 - [ ] Implement immutable session `BacktestRun` and pin/unpin.
 - [ ] Implement same-kind comparison with input identity first.
 - [ ] Add cancellation/late-result/last-valid-result handling.
+- [ ] Apply shared form, validation, metric, chart/table, comparison, status,
+  and responsive components; capture wide/compact visual baselines.
 - [ ] Add authority labels and Help.
 - [ ] Run focused, architecture, and full tests when feasible.
 - [ ] Fill completion record from evidence.
@@ -248,6 +265,14 @@ infrastructure composition boundary. Never import the CLI runner into TUI.
 - [ ] Compare shows differing inputs before metrics and blocks cross-kind runs.
 - [ ] No backtest is labeled or styled as a live verdict.
 - [ ] No winner, tuning proposal, or config change is inferred.
+- [ ] Setup and Strategy modes, defaults, overrides, errors, and disabled Run
+  state are visually distinct without depending on color.
+- [ ] Every result keeps `BACKTEST — NOT A LIVE VERDICT` and request identity
+  visible at both `80x24` and `120x40`.
+- [ ] Comparison differences remain scannable and exact in monochrome; visual
+  emphasis never implies an automatic winner.
+- [ ] Equity views have labeled terminal and tabular representations and do not
+  clip primary metrics at compact size.
 - [ ] Focused tests, architecture tests, full suite when feasible, and
   `git diff --check` pass.
 
@@ -277,9 +302,10 @@ infrastructure composition boundary. Never import the CLI runner into TUI.
 
 Run prepared-request and strategy-query tests; existing setup, SwingBacktest,
 Backtest, rules, and validation tests; TUI controller/presenter/headless tests
-at 80x24 and 120x40; exact-request and immutability tests; no-write and
-authority-negative tests; architecture guards; full suite when feasible; and
-`git diff --check`.
+at 80x24 and 120x40; deterministic form, result, comparison, and validation-
+error rendered-screen baselines; monochrome authority checks; exact-request and
+immutability tests; no-write and authority-negative tests; architecture guards;
+full suite when feasible; and `git diff --check`.
 
 ## Completion Record
 
@@ -292,6 +318,8 @@ authority-negative tests; architecture guards; full suite when feasible; and
 - BacktestRun immutability proof:
 - Comparison identity proof:
 - Authority-separation proof:
+- Visual baseline paths/proof:
+- Responsive/monochrome proof:
 - Focused tests:
 - Architecture tests:
 - Full suite:

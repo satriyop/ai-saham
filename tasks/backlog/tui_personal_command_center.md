@@ -182,6 +182,31 @@ No provider secret, token, internal path, or payload is displayed.
 - Partial success remains PARTIAL with exact failed tickers/components.
 - The prior valid Dashboard remains visible until a new briefing succeeds.
 
+### Shared visual system and shell
+
+This milestone owns the visual foundation used by every later workspace.
+Implement this option only:
+
+- one centralized semantic theme with tokens for canvas, surface, raised
+  surface, border, primary/muted text, accent/focus, positive, caution,
+  negative, unavailable, and selected row;
+- reusable application header, route navigation, workspace heading, status
+  badge, action bar, section heading, metric, data table, empty/error state,
+  confirmation, and Help/key-hint components;
+- a restrained visual style: dark neutral canvas, high-contrast text, one
+  primary accent, semantic state accents, minimal borders, and no decorative
+  gradients, blinking, or emoji-dependent icons;
+- a wide layout at `120x40` with market context and candidate summary visible
+  together; a compact `80x24` layout that stacks secondary content without
+  hiding data status, primary warning, Update, or the focused control;
+- a minimum-size guard below `80x24` that asks the user to resize rather than
+  rendering clipped controls;
+- status text/symbols that remain understandable with color disabled.
+
+Route screens consume these shared primitives. They may choose composition and
+content density, but cannot define independent palettes or incompatible focus,
+table, dialog, and status styles.
+
 ## Scope
 
 - application preview plus refresh-and-briefing workflow, configured refresh
@@ -249,6 +274,10 @@ composition function; do not call the CLI factory from a screen/controller.
 - [ ] Wire explicit Update separately from local Reload.
 - [ ] Preserve previous valid Dashboard during update/error.
 - [ ] Add partial-success, cancel, late-result, and retry behavior.
+- [ ] Implement the shared semantic theme, shell, reusable visual primitives,
+  and responsive/minimum-size behavior.
+- [ ] Capture deterministic Dashboard visual baselines at `80x24` and `120x40`
+  for READY plus at least STALE/PARTIAL/ERROR.
 - [ ] Update Help and user docs.
 - [ ] Run focused, architecture, and relevant fetch/Daily tests.
 - [ ] Fill completion record only from executed evidence.
@@ -269,6 +298,16 @@ composition function; do not call the CLI factory from a screen/controller.
 - [ ] READY, PARTIAL, NOT_READY, EMPTY, validation ERROR, and infrastructure
   ERROR are distinguishable without color.
 - [ ] Dashboard prioritizes data, market, warnings, and candidates.
+- [ ] Dashboard has a clear four-level hierarchy: shell, workspace context,
+  primary state/action, supporting detail; it is not a stack of equal boxes.
+- [ ] Shared theme/component tokens own color, focus, spacing, borders, tables,
+  dialogs, and status treatment; Dashboard code contains no private palette.
+- [ ] At `80x24` no primary status, warning, action, focused control, or key
+  hint is clipped; at `120x40` the additional space improves scanability.
+- [ ] READY, STALE, PARTIAL, UNAVAILABLE, and ERROR remain distinguishable in
+  a monochrome/color-disabled rendering.
+- [ ] Loading and error presentation preserve the last valid Dashboard without
+  layout collapse or implying that stale content is current.
 - [ ] No Research Health route/dependency returns.
 - [ ] No canonical signal/risk/setup behavior changes.
 - [ ] Focused tests, boundary tests, full suite when feasible, and
@@ -282,6 +321,9 @@ composition function; do not call the CLI factory from a screen/controller.
 - Fetch failure cannot be rendered as a successfully current Dashboard.
 - TUI screen/controller cannot import provider or SQLite implementations.
 - A display label cannot change the exact selected universe.
+- Route modules cannot introduce raw/private status colors or remove the
+  visible keyboard focus indicator.
+- A terminal below `80x24` cannot expose clipped actions as if usable.
 - Update authorization cannot authorize watchlist/journal/config writes.
 - Missing/failed data cannot become neutral evidence or usable rankings.
 
@@ -300,7 +342,9 @@ composition function; do not call the CLI factory from a screen/controller.
 Run application orchestration tests; existing fetch/Daily tests; focused TUI
 controller/presenter/headless tests at 80x24 and 120x40; TUI/general boundary
 tests; strict no-provider local Reload test; disposable-database Update test;
-full suite when feasible; and `git diff --check`.
+deterministic READY and non-happy rendered-screen baselines at both supported
+sizes; monochrome/status-text checks; full suite when feasible; and
+`git diff --check`.
 
 ## Completion Record
 
@@ -312,6 +356,8 @@ full suite when feasible; and `git diff --check`.
 - Local Reload no-provider proof:
 - Partial/cancellation proof:
 - Dashboard journey proof:
+- Visual baseline paths/proof:
+- Responsive/monochrome proof:
 - Focused tests:
 - Architecture tests:
 - Full suite:
