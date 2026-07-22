@@ -79,7 +79,7 @@ Flags modify one operation. They must not select workflows with different argume
 
 | Current command | Canonical replacement | Lifecycle | Side effects |
 |---|---|---|---|
-| `saham analyze signal-audit TICKER` | `saham analyze signal inspect TICKER` | Analysis | Read-only |
+| `saham analyze signal-inspect TICKER` (provisional; `signal-audit` removed) | `saham analyze signal inspect TICKER` | Analysis | Read-only |
 | `saham analyze signal-replay TICKER DATE` | `saham analyze signal replay TICKER DATE` | Analysis | Read-only |
 | `saham analyze signal-readiness --target TARGET` | `saham analyze signal readiness --target TARGET` | Analysis | Read-only |
 | `saham analyze signal-backfill-observations ...` | `saham learn signal backfill-observations ...` | Learning | Writes observations; may generate labels when requested |
@@ -107,7 +107,9 @@ Old paths become hidden transitional aliases. They must call the same command ha
 ### CLI-001 — Freeze corrected behavioral contracts before routing changes
 
 **Priority:** P0  
-**Depends on:** `tasks/backlog/audit_data_quality.md` DQ-011  
+**Depends on:** `tasks/backlog/audit_data_quality.md` DQ-011 (**Done 2026-07-22**)  
+**State:** Ready — DQ-011 lean freeze delivered adapter contracts for the six
+signal/accum families; CLI-001 may start routing-prep work on top of that freeze.  
 **Outcome:** Corrected and verified command behavior is captured so routing changes cannot silently alter semantics.
 
 **Accurate pointers:**
@@ -116,11 +118,12 @@ Old paths become hidden transitional aliases. They must call the same command ha
 - Root routers: `src/adapters/cli/main.py`, `src/adapters/cli/learn_commands.py`
 - Signal compatibility exports: `src/adapters/cli/analyze_signal_commands.py`
 - Focused handlers:
-  - `src/adapters/cli/analyze_signal_audit_commands.py`
+  - `src/adapters/cli/analyze_signal_inspect_commands.py` (provisional inspect; replaces removed audit module)
   - `src/adapters/cli/analyze_signal_replay_commands.py`
   - `src/adapters/cli/analyze_signal_readiness_commands.py`
   - `src/adapters/cli/analyze_signal_backfill_commands.py`
   - `src/adapters/cli/analyze_signal_label_commands.py`
+- DQ-011 freeze plan: `tasks/backlog/dq_011_lean_implementation_plan.md`
 - Sentiment handler is scoped to CLI-004 after DQ-009:
   `src/adapters/cli/analyze_sentiment_commands.py`
 - Accumulation evaluation: `src/adapters/cli/analyze_accum_commands.py`

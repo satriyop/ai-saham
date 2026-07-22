@@ -352,3 +352,79 @@ def test_adapter_delegates_hashing_to_application_resolver(monkeypatch):
     identity = captured["dependencies"]["observation_identity"]
     assert identity.observation_contract == ACCUMULATION_DISCOVERY_CONTRACT
     assert identity.semantic_compatibility_id is spy_return
+
+
+def test_invalid_dates_do_not_write_signal_tables(tmp_path):
+    """DQ-011 D11-5: validation failure before backfill must leave DB untouched."""
+    import sqlite3
+
+    from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
+        SQLiteCandidateObservationsRepository,
+    )
+    from src.infrastructure.persistence.sqlite_signal_forward_labels_repository import (
+        SQLiteSignalForwardLabelsRepository,
+    )
+
+    db_path = tmp_path / "backfill.db"
+    SQLiteCandidateObservationsRepository(db_path)
+    SQLiteSignalForwardLabelsRepository(db_path)
+
+    result = runner.invoke(
+        app,
+        [
+            "analyze",
+            "signal-backfill-observations",
+            "--universe",
+            "lq45",
+            "--start",
+            "bad-date",
+            "--end",
+            "2026-06-02",
+            "--db",
+            str(db_path),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Invalid date" in result.stderr
+    with sqlite3.connect(str(db_path)) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM candidate_observations").fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM signal_forward_labels").fetchone()[0] == 0
+
+
+def test_end_before_start_does_not_write_signal_tables(tmp_path):
+    """DQ-011 D11-5: range validation must not touch observation/label tables."""
+    import sqlite3
+
+    from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
+        SQLiteCandidateObservationsRepository,
+    )
+    from src.infrastructure.persistence.sqlite_signal_forward_labels_repository import (
+        SQLiteSignalForwardLabelsRepository,
+    )
+
+    db_path = tmp_path / "backfill.db"
+    SQLiteCandidateObservationsRepository(db_path)
+    SQLiteSignalForwardLabelsRepository(db_path)
+
+    result = runner.invoke(
+        app,
+        [
+            "analyze",
+            "signal-backfill-observations",
+            "--universe",
+            "lq45",
+            "--start",
+            "2026-06-02",
+            "--end",
+            "2026-06-01",
+            "--db",
+            str(db_path),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "--end must be on or after --start" in result.stderr
+    with sqlite3.connect(str(db_path)) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM candidate_observations").fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM signal_forward_labels").fetchone()[0] == 0

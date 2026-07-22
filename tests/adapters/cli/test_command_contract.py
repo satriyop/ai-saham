@@ -73,6 +73,7 @@ EXPECTED_COMMANDS: dict[tuple[str, ...], tuple[str, ...]] = {
         "accum-audit",
         "swing-compare",
         "signal-backfill-observations",
+        "signal-inspect",
         "signal-labels",
         "signal-readiness",
         "signal-replay",
@@ -313,6 +314,15 @@ def test_signal_labels_help_exposes_batch_generation_flags():
     assert result.exit_code == 0
     assert "--generate-all" in result.stdout
     assert "--eligible-dates" in result.stdout
+
+
+def test_signal_inspect_help_exposes_date_and_format_options():
+    result = runner.invoke(app, ["analyze", "signal-inspect", "--help"])
+
+    assert result.exit_code == 0
+    assert "--date" in result.stdout
+    assert "--format" in result.stdout
+    assert "--window-days" in result.stdout
 
 
 def test_signal_readiness_help_exposes_target_option():

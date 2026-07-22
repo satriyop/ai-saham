@@ -106,20 +106,50 @@ def test_json_mode_prints_result_to_json_dict(monkeypatch):
 
     assert res.exit_code == 0
     payload = json.loads(res.stdout)
-    assert payload == {
-        "schema_version": 1,
-        "artifact_type": "accumulation_audit",
-        "start_date": "2026-01-01",
-        "end_date": "2026-01-10",
-        "window_days": 7,
-        "total_replay_dates": 1,
-        "total_tickers": 1,
-        "total_records": 0,
-        "skipped_no_forward_data": 0,
-        "warnings": ["heads up"],
-        "group_stats": [],
-        "exit_simulations": [],
-    }
+    assert payload["schema_version"] == 2
+    assert payload["artifact_type"] == "accumulation_audit"
+    assert payload["start_date"] == "2026-01-01"
+    assert payload["end_date"] == "2026-01-10"
+    assert payload["window_days"] == 7
+    assert payload["total_replay_dates"] == 1
+    assert payload["total_tickers"] == 1
+    assert payload["total_records"] == 0
+    assert payload["skipped_no_forward_data"] == 0
+    assert payload["warnings"] == ["heads up"]
+    assert payload["group_stats"] == []
+    assert payload["exit_simulations"] == []
+    assert "skip_ledger" in payload
+    assert payload["claim_stamp"]["evaluation_role"] == "DESCRIPTIVE"
+    assert payload["claim_stamp"]["outcome_basis"] == "raw_market"
+    assert payload["claim_stamp"]["costs_modeled"] is False
+    assert payload["records_in_json"] is False
+
+
+def test_json_mode_does_not_write_signal_tables(monkeypatch, tmp_path):
+    """DQ-011 D11-6: accum-audit JSON path must not touch observation/label tables."""
+    import sqlite3
+
+    from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
+        SQLiteCandidateObservationsRepository,
+    )
+    from src.infrastructure.persistence.sqlite_signal_forward_labels_repository import (
+        SQLiteSignalForwardLabelsRepository,
+    )
+
+    db_path = tmp_path / "accum.db"
+    SQLiteCandidateObservationsRepository(db_path)
+    SQLiteSignalForwardLabelsRepository(db_path)
+    _patch_workflow(monkeypatch, _result())
+
+    res = runner.invoke(
+        analyze_app,
+        ["accum-audit", "BBCA", "--format", "json", "--db", str(db_path)],
+    )
+
+    assert res.exit_code == 0, res.output
+    with sqlite3.connect(str(db_path)) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM candidate_observations").fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM signal_forward_labels").fetchone()[0] == 0
 
 
 def test_table_mode_prints_progress_line_and_calls_display(monkeypatch):

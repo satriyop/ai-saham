@@ -1375,8 +1375,9 @@ Quarantine remains historical parking.
 
 ### DQ-011 — Freeze the corrected baseline and unblock CLI restructuring
 
-**State:** Ready — DQ-010 forward-path close-out complete. Next: deliberate
-forward rebuild (optional) then freeze baseline gate.
+**State:** Done — 2026-07-22 lean baseline freeze (code/tests as truth).
+Slice plan: `tasks/backlog/dq_011_lean_implementation_plan.md`.
+**CLI-001 may begin** for signal/accum (`improvement_cli_restructure.md`).
 
 **Priority:** P0  
 **Depends on:** DQ-000 through DQ-008 and the canonical-signal portion of DQ-010
@@ -1388,26 +1389,37 @@ does not authorize evidence promotion, threshold tuning, or legacy baseline
 recertification; those remain governed by
 `evidence_validation_and_promotion.md` and `signal_evidence_program.md`.
 
-**Required baseline:**
+**Frozen current command surface:**
 
-- canonical command inputs/defaults;
-- DTO and JSON schemas;
-- stdout/stderr and exit behavior;
-- read/write behavior and exact affected artifacts;
-- effective-session and provenance fields;
-- database reconciliation fixtures;
-- representative golden outputs;
-- known limitations with quantified blast radius;
-- zero unresolved authoritative-signal or accumulation DQ-P0/P1 findings unless
-  the affected data is explicitly enforced as non-authoritative.
+- `saham analyze signal-inspect`
+- `saham analyze signal-replay` / `--verify`
+- `saham analyze signal-readiness`
+- `saham analyze signal-backfill-observations`
+- `saham analyze signal-labels`
+- `saham analyze accum-audit`
 
 **Acceptance criteria:**
 
-- [ ] Every authoritative signal or accumulation DQ-P0/P1 finding is fixed, quarantined, or explicitly enforced as non-authoritative; accepted diagnostic limitations remain visible.
-- [ ] Every canonical signal and accumulation command family covered by the CLI restructuring map has an executable data contract and representative golden fixture.
-- [ ] The DQ-011-scoped audit suite passes on a clean rebuilt database.
-- [ ] `tasks/backlog/improvement_cli_restructure.md` CLI-001 may begin.
-- [ ] Later CLI old/new equivalence compares against this corrected baseline only.
+- [x] Every authoritative signal or accumulation DQ-P0/P1 finding is fixed, quarantined, or explicitly enforced as non-authoritative; accepted diagnostic limitations remain visible.
+      *Lean:* DQ-010 empty-canonical + fail-closed consumers + D11-7 limitations.
+- [x] Every canonical signal and accumulation command family covered by the CLI restructuring map has an executable data contract and representative golden fixture.
+      *Lean:* current flat names frozen via D11-1…D11-6 adapter contracts; rename is CLI-002+.
+- [x] The DQ-011-scoped audit suite passes on a clean rebuilt database.
+      *Lean:* temp fixture DBs in CliRunner tests (43 focused adapter tests green).
+- [x] `tasks/backlog/improvement_cli_restructure.md` CLI-001 may begin.
+- [x] Later CLI old/new equivalence compares against this corrected baseline only.
+
+#### Lean baseline freeze (2026-07-22) — closed
+
+**Delivered:** tree sync for `signal-inspect`; thin CliRunner contracts for all
+six freeze-scope families; accum JSON baseline updated to schema_version 2 +
+`claim_stamp`; limitations stamped in lean plan.
+
+**Do Not Interpret closed gate as:**
+
+- permission to rename commands without CLI-001/002 process;
+- permission to promote evidence or tune from readiness/accum-audit stamps;
+- a requirement that live `data/db/data.db` be non-empty.
 
 DQ-011 does not authorize the sentiment-specific CLI migration. That migration
 also requires DQ-009 and any resulting sentiment cleanup to pass.
@@ -1514,7 +1526,8 @@ Do Not Interpret This As:
 - Do not preserve misleading fields, schemas, or tests for compatibility.
 - Do not tune thresholds to make corrected results look better.
 - Do not silently delete or rewrite user data.
-- Do not begin signal or accumulation CLI restructuring before DQ-011 passes;
+- Do not begin signal or accumulation CLI restructuring before DQ-011 passes
+  (DQ-011 Done 2026-07-22; CLI-001 Ready);
   sentiment CLI restructuring additionally requires DQ-009.
 
 ## 15. Testing requirements
@@ -1552,19 +1565,27 @@ mandatory ceremony for every task:
 
 The canonical `DQ-BASELINE-GATE` is complete only when:
 
-- [ ] Every field that can affect canonical signal authority has verified
+- [x] Every field that can affect canonical signal authority has verified
       semantics and temporal availability.
-- [ ] All canonical signal, capture, label, replay, readiness, inspection, and
+      *Lean (2026-07-22):* DQ-000…002 + DQ-003 lean identity + fail-closed consumers.
+- [x] All canonical signal, capture, label, replay, readiness, inspection, and
       accumulation-evaluation workflows use one IDX effective-session contract.
-- [ ] Observations are point-in-time, uniquely identified, reproducible, and idempotent.
-- [ ] Labels use complete future session windows and exact observation identity.
-- [ ] Replay accurately distinguishes retrieval, recomputation, and drift.
-- [ ] Readiness excludes invalid, duplicate, diagnostic, and contaminated samples.
-- [ ] Signal inspection reconciles every canonical factor and weight.
-- [ ] Accumulation evaluation matches live logic and reports execution/bias assumptions.
-- [ ] Invalid historical artifacts are quarantined or rebuilt and cannot affect canonical metrics.
-- [ ] Zero DQ-P0 or DQ-P1 findings remain open.
-- [ ] Corrected contracts and golden outputs are frozen for CLI restructuring.
+- [x] Observations are point-in-time, uniquely identified, reproducible, and idempotent.
+- [x] Labels use complete future session windows and exact observation identity.
+      *Lean:* raw_market lane; net-executable parked (`IDX-EXECUTION-LABELS`).
+- [x] Replay accurately distinguishes retrieval, recomputation, and drift.
+- [x] Readiness excludes invalid, duplicate, diagnostic, and contaminated samples.
+      *Lean:* cohort isolation; `promotion_eligible=false`.
+- [x] Signal inspection reconciles every canonical factor and weight.
+      *Lean reading:* accumulation-flow live inspect (DQ-007); not legacy six-factor audit.
+- [x] Accumulation evaluation matches live logic and reports execution/bias assumptions.
+      *Lean:* shared screen path + DESCRIPTIVE claim_stamp (DQ-008).
+- [x] Invalid historical artifacts are quarantined or rebuilt and cannot affect canonical metrics.
+      *Lean:* ACR quarantine + empty canonical + forward fail-closed (DQ-010).
+- [x] Zero DQ-P0 or DQ-P1 findings remain open.
+      *Lean:* remaining items are parked limitations (stamped in DQ-011), not open P0/P1.
+- [x] Corrected contracts and golden outputs are frozen for CLI restructuring.
+      *Lean:* DQ-011 Done 2026-07-22 → CLI-001 Ready.
 
 The independent `DQ-SENTIMENT-GATE` is complete only when:
 

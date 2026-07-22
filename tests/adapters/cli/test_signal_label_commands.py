@@ -231,3 +231,64 @@ def test_generate_rejects_current_schema_empty_hash_observation_json_mode(tmp_pa
     assert "Traceback" not in result.output
     assert "Signal Forward Labels" not in result.output
     assert "Labels:" not in result.output
+
+
+def _count_rows(db_path: Path, table: str) -> int:
+    with sqlite3.connect(str(db_path)) as conn:
+        return int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+
+
+def test_summary_without_generate_is_read_only(tmp_path):
+    """DQ-011 D11-4: summary path must not write labels or observations."""
+    from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
+        SQLiteCandidateObservationsRepository,
+    )
+    from src.infrastructure.persistence.sqlite_signal_forward_labels_repository import (
+        SQLiteSignalForwardLabelsRepository,
+    )
+
+    db_path = tmp_path / "signal_labels.db"
+    SQLiteCandidateObservationsRepository(db_path)
+    SQLiteSignalForwardLabelsRepository(db_path)
+    before_obs = _count_rows(db_path, "candidate_observations")
+    before_labels = _count_rows(db_path, "signal_forward_labels")
+
+    result = runner.invoke(
+        app,
+        ["analyze", "signal-labels", "2026-07-01", "--db", str(db_path)],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Signal Forward Labels" in result.output
+    assert _count_rows(db_path, "candidate_observations") == before_obs
+    assert _count_rows(db_path, "signal_forward_labels") == before_labels
+
+
+def test_generate_rejection_does_not_write_labels(tmp_path):
+    """DQ-011 D11-4: incompatible generate path writes nothing."""
+    from src.infrastructure.persistence.sqlite_signal_forward_labels_repository import (
+        SQLiteSignalForwardLabelsRepository,
+    )
+
+    db_path = tmp_path / "signal_labels.db"
+    _seed_legacy_observation(db_path)
+    SQLiteSignalForwardLabelsRepository(db_path)
+    before_labels = _count_rows(db_path, "signal_forward_labels")
+
+    result = runner.invoke(
+        app,
+        [
+            "analyze",
+            "signal-labels",
+            "2026-07-01",
+            "--ticker",
+            "BBCA",
+            "--generate",
+            "--db",
+            str(db_path),
+        ],
+    )
+
+    assert result.exit_code == 1, result.output
+    assert _count_rows(db_path, "signal_forward_labels") == before_labels
+    assert _count_rows(db_path, "candidate_observations") == 1
