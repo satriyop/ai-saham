@@ -174,7 +174,7 @@ def create_live_signal_evidence_execution_context_use_case(
     Wiring only — no coverage dates or availability policy are computed
     here. Both `saham screen accum` and `saham screen compare` must build
     this through this one helper so they resolve the effective session and
-    the 14-day IHSG-backed coverage window identically.
+    the gap-free IHSG-backed coverage window identically.
     """
     return BuildLiveSignalEvidenceExecutionContextUseCase(
         session_resolver=EffectiveMarketSessionResolver(market_repository),
@@ -187,6 +187,7 @@ def create_live_signal_evidence_execution_context_use_case(
                     coverage_end=end,
                 )
         ),
+        market_data_repository=market_repository,
     )
 
 

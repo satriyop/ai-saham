@@ -81,6 +81,7 @@ def _real_workflow_uc(screen_execute, broker_repo=None):
                 context_builder=SignalEvidenceExecutionContextBuilder(
                     trading_session_calendar_loader=None
                 ),
+                market_data_repository=market_repo,
             )
         ),
         save_watchlist_use_case=None,

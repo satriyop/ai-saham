@@ -152,7 +152,11 @@ class BackfillSignalObservationsResponse:
 class BackfillSignalObservationsUseCase:
     """Create historical candidate observations before optional label generation."""
 
-    _AVAILABILITY_CALENDAR_LOOKBACK_DAYS = 14
+    # Broker SESSION_ALIGNED lag is 1; keep a few proven sessions so LATE vs
+    # CURRENT remains measurable without a 14-calendar-day window that
+    # commonly includes IDX holidays and disables the assessor.
+    _AVAILABILITY_CALENDAR_MAX_SESSIONS = 5
+    _AVAILABILITY_CALENDAR_PROBE_DAYS = 45
 
     def __init__(
         self,
@@ -399,8 +403,9 @@ class BackfillSignalObservationsUseCase:
     ) -> SignalEvidenceExecutionContext:
         """Build capture context with availability assessment when possible.
 
-        Mirrors the live screen 14-day IHSG calendar window so historical
-        coverage is not permanently UNKNOWN via AVAILABILITY_ASSESSOR_UNAVAILABLE.
+        Uses a gap-free IHSG session window (not a fixed 14-calendar-day
+        lookback) so IDX holidays inside a long calendar span do not disable
+        the availability assessor via unexplained weekday gaps.
         Identity stamps remain owned by this use case.
         """
         if self._evidence_context_builder is None:
@@ -418,9 +423,7 @@ class BackfillSignalObservationsUseCase:
             or effective_session.analysis_as_of
             or effective_session.decision_at.date()
         )
-        coverage_start = coverage_end - timedelta(
-            days=self._AVAILABILITY_CALENDAR_LOOKBACK_DAYS
-        )
+        coverage_start = self._resolve_availability_calendar_start(coverage_end)
         built = self._evidence_context_builder.build(
             effective_session=effective_session,
             coverage_start=coverage_start,
@@ -432,6 +435,26 @@ class BackfillSignalObservationsUseCase:
             semantic_compatibility_id=(
                 self._observation_identity.semantic_compatibility_id
             ),
+        )
+
+    def _resolve_availability_calendar_start(self, coverage_end: date) -> date:
+        from src.application.services.availability_calendar_window import (
+            resolve_gap_free_availability_calendar_start,
+        )
+
+        probe_start = coverage_end - timedelta(
+            days=self._AVAILABILITY_CALENDAR_PROBE_DAYS
+        )
+        candles = self._market.get_candles(
+            "IHSG",
+            start_date=probe_start,
+            end_date=coverage_end,
+        )
+        sessions = tuple(sorted({candle.date for candle in candles}))
+        return resolve_gap_free_availability_calendar_start(
+            sessions=sessions,
+            coverage_end=coverage_end,
+            max_sessions=self._AVAILABILITY_CALENDAR_MAX_SESSIONS,
         )
 
     def _has_any_ticker_candle(self, tickers: tuple[str, ...], target_date: date) -> bool:

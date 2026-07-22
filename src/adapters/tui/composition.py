@@ -492,6 +492,7 @@ def _build_research_execution() -> ResearchExecution:
                 coverage_end=end,
             )
         ),
+        market_data_repository=deps.market_repository,
     )
     accumulation = RunAccumulationScreenWorkflowUseCase(
         screen_use_case=screen,

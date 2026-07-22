@@ -695,6 +695,10 @@ def test_backfill_uses_evidence_context_builder_for_source_availability():
     )
 
     assert len(builds) == 1
+    coverage_start, coverage_end, _session = builds[0]
+    assert coverage_end == signal_date
+    # Gap-free lookback with only one IHSG session available → single-day window.
+    assert coverage_start == signal_date
     assert len(contexts) == 1
     assert contexts[0].source_availability_use_case is sentinel_uc
     assert contexts[0].observation_contract == ACCUMULATION_DISCOVERY_CONTRACT
