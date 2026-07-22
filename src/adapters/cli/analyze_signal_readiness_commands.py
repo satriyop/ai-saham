@@ -37,6 +37,16 @@ def signal_readiness(
     ],
     fmt: Annotated[str, typer.Option("--format", help="Output format: table or json")] = "table",
     db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
+    cohort: Annotated[
+        Optional[str],
+        typer.Option(
+            "--cohort",
+            help=(
+                "semantic_compatibility_id to isolate. Required when multiple "
+                "cohorts exist; otherwise defaults to the single corpus cohort."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Report read-only Phase I observation/label readiness for one target."""
     cfg = load_app_config()
@@ -49,7 +59,12 @@ def signal_readiness(
             signal_forward_labels_repository=SQLiteSignalForwardLabelsRepository(
                 resolved_db
             ),
-        ).execute(ReportSignalReadinessRequest(target=target))
+        ).execute(
+            ReportSignalReadinessRequest(
+                target=target,
+                semantic_compatibility_id=cohort,
+            )
+        )
     except ValueError as exc:
         typer.echo(f"[error] Invalid target: {exc}", err=True)
         raise typer.Exit(1)
@@ -111,22 +126,38 @@ def _display_readiness_report(report: SignalReadinessReport) -> None:
     typer.echo(f"Raw latest observation rows: {report.raw_latest_observation_count}")
     typer.echo(f"Target-filter count: {report.target_filter_count}")
     typer.echo(f"Raw target-filter rows: {report.raw_target_filter_count}")
+    typer.echo(
+        "Cohort: "
+        f"selected={report.selected_semantic_compatibility_id or 'none'}, "
+        f"available={len(report.available_semantic_compatibility_ids)}"
+    )
     if report.notes:
         typer.echo("")
         typer.echo("Notes:")
         for note in report.notes:
             typer.echo(f"  - {note}")
     typer.echo("")
-    typer.echo(f"Label count: {report.label_count}")
+    typer.echo(f"Label count (current schema): {report.label_count}")
     typer.echo(f"Unavailable label count: {report.unavailable_label_count}")
     typer.echo(f"Target label count: {report.target_label_count}")
-    typer.echo(f"Labeled target count: {report.labeled_target_count}")
+    typer.echo(f"Raw labeled target count: {report.raw_labeled_target_count}")
+    typer.echo(
+        f"Independent labeled target count: {report.labeled_target_count} "
+        f"(unique_tickers={report.unique_tickers}, "
+        f"unique_signal_dates={report.unique_signal_dates})"
+    )
+    typer.echo("")
+    typer.echo("Exclusion ledger:")
+    for reason, count in report.exclusions.to_dict().items():
+        typer.echo(f"  {reason}: {count}")
     typer.echo("")
     typer.echo(
         "IS/OOS: "
+        f"split={report.oos_split}, "
         f"IS={report.is_count}, OOS={report.oos_count}, "
         f"diagnostic_ready={report.diagnostic_ready}, "
-        f"patch_eligible={report.patch_eligible}"
+        f"calibration_floors_passed={report.patch_eligible}, "
+        f"promotion_eligible={report.promotion_eligible}"
     )
     typer.echo(
         "OOS metrics: "
@@ -135,9 +166,12 @@ def _display_readiness_report(report: SignalReadinessReport) -> None:
     )
     if report.blockers:
         typer.echo("")
-        typer.echo("Why not patch-eligible:")
+        typer.echo("Why calibration floors are not passed:")
         for blocker in report.blockers:
             typer.echo(f"  - {blocker}")
     else:
         typer.echo("")
-        typer.echo("Patch eligibility gates passed for this read-only report.")
+        typer.echo(
+            "Phase-I calibration floors passed for this read-only report "
+            "(not production/promotion authority)."
+        )

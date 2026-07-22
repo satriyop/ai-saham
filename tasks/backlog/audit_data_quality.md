@@ -887,18 +887,26 @@ If reproducibility cannot be achieved because the required code/config/source ve
 
 ### DQ-006 — Audit signal readiness counts and patch eligibility
 
-**State:** Ready — waits for independent readiness reconciliation work; DQ-003
-through DQ-005 prerequisites are complete (DQ-005 Done 2026-07-22).
+**State:** Done — lean D6-1 + D6-2 (2026-07-22). Slice plan:
+`tasks/backlog/dq_006_lean_implementation_plan.md`. Parked items
+(immutable OOS, diversity matrix, tuning wire-up) remain deferred.
 
 **Priority:** P0  
 **Depends on:** DQ-003, DQ-004, DQ-005  
-**Outcome:** Readiness reflects valid, independent, point-in-time observations and labels—not raw row volume.
+**Outcome:** Readiness reflects valid, independent, same-cohort point-in-time
+observations and labels—not raw row volume or silently pooled cohorts.
+
+**Audience:** Deterministic calibration / human trust first. Live SignalEngine
+scoring does not read this report. ML challengers may reuse the same clean
+counts later; DQ-006 is not an ML feature.
 
 **Promotion boundary:** Correct counts are necessary but insufficient for
-promotion. The current chronological 70/30 split is diagnostic only. Production
-proof additionally requires a compatible `semantic_compatibility_id`, purged
+promotion. The current chronological 70/30 split is **diagnostic only** and
+must be labeled as such. Production proof additionally requires a compatible
+`semantic_compatibility_id` discipline, purged
 `PURGED-WALKFORWARD-VALIDATION`, `INCREMENTAL-EVIDENCE-EDGE`, and a verified
-`PROMOTION-ARTIFACT-INTEGRITY` artifact.
+`PROMOTION-ARTIFACT-INTEGRITY` artifact. Readiness must never claim production
+eligibility from the ephemeral 70/30 split alone.
 
 **Accurate pointers:**
 
@@ -906,30 +914,94 @@ proof additionally requires a compatible `semantic_compatibility_id`, purged
 - Use case: `src/application/use_case/report_signal_readiness_use_case.py`
 - Target definitions/config referenced by that use case
 - Observation and label repositories listed above
+- Lean plan: `tasks/backlog/dq_006_lean_implementation_plan.md`
 
 **Audit requirements:**
 
 - Reconcile raw rows, canonical observations, valid labels, target-filter matches, labeled targets, in-sample/OOS counts, and unique dates/tickers.
-- Ensure duplicate captures do not inflate readiness.
-- Ensure one ticker/date does not count as independent samples across accidental duplicates.
-- Verify diagnostic targets are never patch-eligible.
-- Verify OOS split is time-based, immutable, and established before outcome inspection.
-- Require diversity/coverage metrics by ticker, sector, regime, liquidity tier, and time—not only total count.
-- Ensure invalid/unreproducible observations and labels are excluded with visible counts.
-- Verify every blocker and patch-eligible decision from an independent SQL reconciliation.
+- Ensure duplicate captures / multi-window rows do not inflate readiness
+  independence claims.
+- Ensure one ticker/date/horizon does not count as multiple independent samples
+  across accidental duplicates (deterministic collapse policy).
+- Verify diagnostic targets are never patch/calibration-eligible.
+- Treat ephemeral chronological 70/30 OOS as diagnostic-only; do not claim an
+  immutable pre-outcome split until a parked persisted-assignment task lands.
+- Ensure invalid/unreproducible / wrong-schema / wrong-cohort / UNAVAILABLE
+  labels are excluded with a visible exclusion ledger by reason.
+- Isolate readiness math to one `semantic_compatibility_id` cohort (fail closed
+  or require explicit cohort selection when mixed).
+- Verify every blocker and eligibility decision from an independent
+  reconciliation fixture (hand/SQL vs report).
+- Diversity dashboards (sector/regime/liquidity/time floors) are **parked**;
+  optional unique ticker/date counts only.
 
 **Clean-break rule:**
 
-Any readiness metric based on contaminated, duplicate, in-sample, or invalid data must be removed or renamed. Patch eligibility remains false until all P0 audit gates pass, regardless of row count.
+Any readiness metric based on contaminated, duplicate, mixed-cohort, in-sample,
+or invalid data must be removed or renamed. Calibration/patch floors remain
+false until lean P0 gates pass, regardless of raw row count. Do not auto-wire
+this flag into tuning or promotion without an explicit later task.
 
 **Acceptance criteria:**
 
-- [ ] Independent reconciliation matches every displayed/JSON count.
-- [ ] Invalid and excluded counts are visible by reason.
-- [ ] OOS membership cannot change after labels are observed.
-- [ ] Patch eligibility is impossible when any mandatory provenance/quality gate fails.
-- [ ] Mixed semantic compatibility identities are reported separately and cannot be pooled; ordinary provenance diversity remains visible without fragmenting compatible cohorts.
-- [ ] No readiness output claims production eligibility from the 70/30 split alone.
+- [x] Independent reconciliation matches every displayed/JSON count.
+  satisfied-notes: D6-2 tests assert raw vs independent labeled counts,
+  unique ticker/date, and ledger + raw_labeled_target reconcile to horizon
+  label total (`test_exclusion_ledger_reconciles_to_horizon_label_total`,
+  `test_duplicate_observation_versions_collapse_to_independent_sample`).
+- [x] Invalid and excluded counts are visible by reason (exclusion ledger).
+  satisfied-notes: `SignalReadinessExclusionLedger` + CLI/JSON
+  (`excluded_schema_mismatch`, `excluded_unavailable`,
+  `excluded_target_mismatch`, `excluded_wrong_cohort`,
+  `excluded_unlinked_observation`, `excluded_duplicate_collapsed`).
+- [x] OOS split is explicitly diagnostic/ephemeral (or a later persisted
+      immutable assignment exists). *Lean amendment:* do not claim immutability
+      from the current 70/30 sort; document `EPHEMERAL_CHRONOLOGICAL_70_30`.
+  satisfied-notes: report field `oos_split=EPHEMERAL_CHRONOLOGICAL_70_30`;
+  notes + CLI state diagnostic-only; immutable assignment remains parked.
+- [x] Patch/calibration eligibility is impossible when any mandatory
+      provenance/quality/cohort gate fails; diagnostic targets never eligible.
+  satisfied-notes: `patch_eligible` only when blockers empty and non-diagnostic;
+  cohort unresolved / mixed cohorts block; diagnostic targets force false.
+- [x] Mixed semantic compatibility identities are reported separately and
+      cannot be pooled into one IS/OOS bag.
+  satisfied-notes: fail-closed `mixed_semantic_cohorts` without `--cohort`;
+  explicit `semantic_compatibility_id` isolates; labels join via
+  `observation_captured_at`.
+- [x] No readiness output claims production/promotion eligibility from the
+      70/30 split alone.
+  satisfied-notes: `promotion_eligible` always false; CLI says Phase-I
+  calibration floors only, not production/promotion authority.
+
+#### Lean readiness amendment (2026-07-22)
+
+**Decision:** Implement DQ-006 as honest calibration readiness now.
+Implement this option only.
+
+**What is required now:**
+
+- Cohort isolation for readiness aggregates.
+- Exclusion ledger by reason.
+- Independent-sample collapse for labeled targets.
+- Independent count reconciliation tests.
+- Honest wording: ephemeral OOS; no production eligibility claim.
+
+**Do Not Interpret This As:**
+
+- Do not build persisted immutable OOS assignment yet.
+- Do not build full diversity/regime floors dashboards yet.
+- Do not wire `patch_eligible` into swing tuning or promotion yet.
+- Do not treat readiness as an ML training API.
+- Do not change live SignalEngine scoring via this task.
+
+**Deferral triggers:**
+
+| Trigger | Wake parked work |
+|---|---|
+| Promotion needs frozen OOS membership | Persisted immutable OOS assignment |
+| Calibration policy needs diversity floors | Diversity matrix slice |
+| Tuning should read readiness | Explicit wire-up task after D6-1/D6-2 |
+| Recall/control metrics required | `CONTROL-POPULATION` |
 
 ### DQ-007 — Audit current SignalEngine inspection accuracy
 

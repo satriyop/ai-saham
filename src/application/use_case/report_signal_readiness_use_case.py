@@ -1,9 +1,14 @@
-"""Read-only readiness report for Phase I signal calibration."""
+"""Read-only readiness report for Phase I signal calibration (DQ-006 lean).
+
+Reports valid, independent, same-cohort labeled samples with a visible
+exclusion ledger. Ephemeral 70/30 OOS is diagnostic-only —
+``promotion_eligible`` is always false.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from math import isinf
 
 from src.domain.ports.candidate_observations_repository import (
@@ -29,6 +34,7 @@ _PATCH_MIN_OOS_LABELS = 30
 _PATCH_MIN_OOS_PROFIT_FACTOR = 1.15
 _PATCH_MIN_OOS_AVERAGE_RETURN = 0.0
 _OOS_FRACTION = 0.30
+_OOS_SPLIT_MODE = "EPHEMERAL_CHRONOLOGICAL_70_30"
 
 _ACCUMULATION_SETUP_FAMILIES = frozenset({"accumulation", "foreign_bounce"})
 
@@ -78,8 +84,7 @@ class SignalReadinessTarget:
                 is_diagnostic=False,
             )
 
-        # Diagnostic target: no market-cap bucket (e.g. foreign_institutional_accumulation_SWING_10D).
-        # Requires at least profile (≥2 parts) + setup_family (1 part) = 3 parts minimum.
+        # Diagnostic target: no market-cap bucket.
         if len(parts) >= 3:
             setup_family = parts[-1]
             profile = "_".join(parts[:-1])
@@ -100,6 +105,26 @@ class SignalReadinessTarget:
 
 
 @dataclass(frozen=True)
+class SignalReadinessExclusionLedger:
+    excluded_schema_mismatch: int = 0
+    excluded_unavailable: int = 0
+    excluded_target_mismatch: int = 0
+    excluded_wrong_cohort: int = 0
+    excluded_unlinked_observation: int = 0
+    excluded_duplicate_collapsed: int = 0
+
+    def to_dict(self) -> dict[str, int]:
+        return {
+            "excluded_schema_mismatch": self.excluded_schema_mismatch,
+            "excluded_unavailable": self.excluded_unavailable,
+            "excluded_target_mismatch": self.excluded_target_mismatch,
+            "excluded_wrong_cohort": self.excluded_wrong_cohort,
+            "excluded_unlinked_observation": self.excluded_unlinked_observation,
+            "excluded_duplicate_collapsed": self.excluded_duplicate_collapsed,
+        }
+
+
+@dataclass(frozen=True)
 class SignalReadinessReport:
     target: SignalReadinessTarget
     observation_dates: tuple[date, ...]
@@ -111,6 +136,7 @@ class SignalReadinessReport:
     label_count: int
     unavailable_label_count: int
     target_label_count: int
+    raw_labeled_target_count: int
     labeled_target_count: int
     is_count: int
     oos_count: int
@@ -118,6 +144,13 @@ class SignalReadinessReport:
     oos_average_return: float | None
     diagnostic_ready: bool
     patch_eligible: bool
+    promotion_eligible: bool
+    oos_split: str
+    selected_semantic_compatibility_id: str | None
+    available_semantic_compatibility_ids: tuple[str, ...]
+    unique_tickers: int
+    unique_signal_dates: int
+    exclusions: SignalReadinessExclusionLedger
     notes: tuple[str, ...] = field(default_factory=tuple)
     blockers: tuple[str, ...] = field(default_factory=tuple)
 
@@ -144,12 +177,23 @@ class SignalReadinessReport:
             "label_count": self.label_count,
             "unavailable_label_count": self.unavailable_label_count,
             "target_label_count": self.target_label_count,
+            "raw_labeled_target_count": self.raw_labeled_target_count,
             "labeled_target_count": self.labeled_target_count,
+            "unique_tickers": self.unique_tickers,
+            "unique_signal_dates": self.unique_signal_dates,
+            "exclusions": self.exclusions.to_dict(),
+            "selected_semantic_compatibility_id": self.selected_semantic_compatibility_id,
+            "available_semantic_compatibility_ids": list(
+                self.available_semantic_compatibility_ids
+            ),
             "is_oos": {
+                "oos_split": self.oos_split,
                 "is_count": self.is_count,
                 "oos_count": self.oos_count,
                 "diagnostic_ready": self.diagnostic_ready,
                 "patch_eligible": self.patch_eligible,
+                "calibration_floors_passed": self.patch_eligible,
+                "promotion_eligible": self.promotion_eligible,
                 "oos_profit_factor": (
                     "Infinity"
                     if self.oos_profit_factor is not None
@@ -166,6 +210,7 @@ class SignalReadinessReport:
 @dataclass(frozen=True)
 class ReportSignalReadinessRequest:
     target: str
+    semantic_compatibility_id: str | None = None
 
 
 class ReportSignalReadinessUseCase:
@@ -205,47 +250,133 @@ class ReportSignalReadinessUseCase:
             if _observation_matches_target(observation, target)
         ]
 
-        # HIGH-2: schema 1 labels remain diagnostic-readable but are excluded
-        # from canonical readiness — only schema 2 (canonical) labels feed
-        # IS/OOS counts, profit factor, and patch-eligibility below.
-        labels = tuple(
+        all_canonical = _load_all_canonical_observations(
+            self._observations, observation_dates
+        )
+        observation_index = _observation_link_index(all_canonical)
+        available_cohorts = tuple(
+            sorted(
+                {
+                    str(obs.semantic_compatibility_id)
+                    for obs in all_canonical
+                    if obs.semantic_compatibility_id is not None
+                }
+            )
+        )
+        selected_cohort, cohort_blocker = _resolve_cohort(
+            available_cohorts=available_cohorts,
+            requested=request.semantic_compatibility_id,
+        )
+
+        all_horizon_labels = tuple(self._labels.list(horizon=target.horizon))
+        excluded_schema = sum(
+            1
+            for label in all_horizon_labels
+            if label.schema_version != SIGNAL_FORWARD_LABEL_SCHEMA_VERSION
+        )
+        current_schema_labels = tuple(
             label
-            for label in self._labels.list(horizon=target.horizon)
+            for label in all_horizon_labels
             if label.schema_version == SIGNAL_FORWARD_LABEL_SCHEMA_VERSION
         )
-        unavailable_count = sum(
-            1 for label in labels if label.outcome_label is SignalForwardOutcome.UNAVAILABLE
+
+        excluded_unlinked = 0
+        excluded_wrong_cohort = 0
+        excluded_unavailable = 0
+        excluded_target_mismatch = 0
+        raw_labeled_targets: list[SignalForwardLabel] = []
+
+        if selected_cohort is None:
+            # Fail closed: do not pool labels into IS/OOS when cohort is unresolved.
+            for label in current_schema_labels:
+                if label.outcome_label is SignalForwardOutcome.UNAVAILABLE:
+                    excluded_unavailable += 1
+                elif not _label_matches_target(label, target):
+                    excluded_target_mismatch += 1
+                else:
+                    # Would-be targets are withheld due to cohort gate.
+                    excluded_wrong_cohort += 1
+        else:
+            for label in current_schema_labels:
+                link_key = _label_link_key(label)
+                if link_key is None:
+                    excluded_unlinked += 1
+                    continue
+                obs_cohort = observation_index.get(link_key)
+                if obs_cohort is None:
+                    excluded_unlinked += 1
+                    continue
+                if obs_cohort != selected_cohort:
+                    excluded_wrong_cohort += 1
+                    continue
+                if label.outcome_label is SignalForwardOutcome.UNAVAILABLE:
+                    excluded_unavailable += 1
+                    continue
+                if not _label_matches_target(label, target):
+                    excluded_target_mismatch += 1
+                    continue
+                raw_labeled_targets.append(label)
+
+        independent_labeled, collapsed = _collapse_independent_labeled_targets(
+            tuple(raw_labeled_targets)
         )
-        target_labels = tuple(
-            label for label in labels if _label_matches_target(label, target)
-        )
-        labeled_target = tuple(
-            label
-            for label in target_labels
-            if label.outcome_label is not SignalForwardOutcome.UNAVAILABLE
-        )
-        is_rows, oos_rows = _split_is_oos(labeled_target)
+        # Fingerprint-matching current-schema labels (diagnostic), independent of
+        # IS/OOS eligibility. Cohort-unresolved still reports fingerprint matches.
+        if selected_cohort is None:
+            target_label_count = sum(
+                1 for label in current_schema_labels if _label_matches_target(label, target)
+            )
+        else:
+            target_label_count = 0
+            for label in current_schema_labels:
+                if not _label_matches_target(label, target):
+                    continue
+                link_key = _label_link_key(label)
+                if link_key is None:
+                    continue
+                if observation_index.get(link_key) == selected_cohort:
+                    target_label_count += 1
+
+        is_rows, oos_rows = _split_is_oos(independent_labeled)
         oos_profit_factor = _profit_factor(oos_rows)
         oos_average_return = _average_return(oos_rows)
         blockers = _blockers(
             observation_dates=observation_dates,
             target_filter_count=len(latest_target_observations),
-            label_count=len(labels),
-            labeled_target_count=len(labeled_target),
+            label_count=len(current_schema_labels),
+            labeled_target_count=len(independent_labeled),
             is_count=len(is_rows),
             oos_count=len(oos_rows),
             oos_profit_factor=oos_profit_factor,
             oos_average_return=oos_average_return,
             oos_rows=oos_rows,
+            cohort_blocker=cohort_blocker,
         )
-        diagnostic_ready = len(oos_rows) >= _DIAGNOSTIC_MIN_OOS_LABELS
-        # Diagnostic targets are never patch-eligible regardless of label counts.
-        patch_eligible = not blockers and not target.is_diagnostic
+        diagnostic_ready = (
+            selected_cohort is not None
+            and len(oos_rows) >= _DIAGNOSTIC_MIN_OOS_LABELS
+        )
+        # Phase-I calibration floors only — never production/promotion authority.
+        patch_eligible = (
+            not blockers and not target.is_diagnostic and selected_cohort is not None
+        )
+        exclusions = SignalReadinessExclusionLedger(
+            excluded_schema_mismatch=excluded_schema,
+            excluded_unavailable=excluded_unavailable,
+            excluded_target_mismatch=excluded_target_mismatch,
+            excluded_wrong_cohort=excluded_wrong_cohort,
+            excluded_unlinked_observation=excluded_unlinked,
+            excluded_duplicate_collapsed=collapsed,
+        )
         notes = _notes(
             latest_observation_count=len(latest_observations),
             raw_latest_observation_count=len(raw_latest_observations),
             is_diagnostic=target.is_diagnostic,
+            collapsed_duplicates=collapsed,
+            selected_cohort=selected_cohort,
         )
+        unique_tickers = len({label.ticker.upper() for label in independent_labeled})
+        unique_signal_dates = len({label.signal_date for label in independent_labeled})
         return SignalReadinessReport(
             target=target,
             observation_dates=observation_dates,
@@ -254,19 +385,110 @@ class ReportSignalReadinessUseCase:
             raw_latest_observation_count=len(raw_latest_observations),
             target_filter_count=len(latest_target_observations),
             raw_target_filter_count=len(raw_latest_target_observations),
-            label_count=len(labels),
-            unavailable_label_count=unavailable_count,
-            target_label_count=len(target_labels),
-            labeled_target_count=len(labeled_target),
+            label_count=len(current_schema_labels),
+            unavailable_label_count=excluded_unavailable,
+            target_label_count=target_label_count,
+            raw_labeled_target_count=len(raw_labeled_targets),
+            labeled_target_count=len(independent_labeled),
             is_count=len(is_rows),
             oos_count=len(oos_rows),
             oos_profit_factor=oos_profit_factor,
             oos_average_return=oos_average_return,
             diagnostic_ready=diagnostic_ready,
             patch_eligible=patch_eligible,
+            promotion_eligible=False,
+            oos_split=_OOS_SPLIT_MODE,
+            selected_semantic_compatibility_id=selected_cohort,
+            available_semantic_compatibility_ids=available_cohorts,
+            unique_tickers=unique_tickers,
+            unique_signal_dates=unique_signal_dates,
+            exclusions=exclusions,
             notes=tuple(notes),
             blockers=tuple(blockers),
         )
+
+
+def _load_all_canonical_observations(
+    repo: CandidateObservationsRepository,
+    observation_dates: tuple[date, ...],
+) -> list[CandidateObservation]:
+    rows: list[CandidateObservation] = []
+    for day in observation_dates:
+        rows.extend(repo.list_canonical_by_date(day))
+    return rows
+
+
+def _observation_link_index(
+    observations: list[CandidateObservation],
+) -> dict[tuple[str, date, datetime], str]:
+    index: dict[tuple[str, date, datetime], str] = {}
+    for obs in observations:
+        if obs.semantic_compatibility_id is None:
+            continue
+        key = (obs.ticker.upper(), obs.snapshot_date, obs.captured_at)
+        index[key] = str(obs.semantic_compatibility_id)
+    return index
+
+
+def _label_link_key(label: SignalForwardLabel) -> tuple[str, date, datetime] | None:
+    if label.observation_captured_at is None:
+        return None
+    return (label.ticker.upper(), label.signal_date, label.observation_captured_at)
+
+
+def _resolve_cohort(
+    *,
+    available_cohorts: tuple[str, ...],
+    requested: str | None,
+) -> tuple[str | None, str | None]:
+    if requested is not None:
+        requested = requested.strip()
+        if not requested:
+            return None, "semantic_compatibility_id is empty"
+        if requested not in available_cohorts:
+            return None, (
+                f"requested semantic_compatibility_id not found in canonical "
+                f"observations: {requested}"
+            )
+        return requested, None
+    if not available_cohorts:
+        return None, "no semantic_compatibility_id on canonical observations"
+    if len(available_cohorts) > 1:
+        return None, "mixed_semantic_cohorts"
+    return available_cohorts[0], None
+
+
+def _collapse_independent_labeled_targets(
+    labels: tuple[SignalForwardLabel, ...],
+) -> tuple[tuple[SignalForwardLabel, ...], int]:
+    """One row per (ticker, signal_date, horizon); latest observation_captured_at wins."""
+    winners: dict[tuple[str, date, str], SignalForwardLabel] = {}
+    for label in labels:
+        key = (label.ticker.upper(), label.signal_date, label.horizon.value)
+        current = winners.get(key)
+        if current is None:
+            winners[key] = label
+            continue
+        current_ts = current.observation_captured_at or datetime.min
+        candidate_ts = label.observation_captured_at or datetime.min
+        if candidate_ts > current_ts:
+            winners[key] = label
+        elif candidate_ts == current_ts and label.ticker.upper() < current.ticker.upper():
+            winners[key] = label
+    independent = tuple(
+        sorted(
+            winners.values(),
+            key=lambda row: (
+                row.signal_date,
+                row.observation_captured_at.isoformat()
+                if row.observation_captured_at
+                else "",
+                row.ticker,
+            ),
+        )
+    )
+    collapsed = max(0, len(labels) - len(independent))
+    return independent, collapsed
 
 
 def _observation_matches_target(
@@ -368,8 +590,11 @@ def _blockers(
     oos_profit_factor: float | None,
     oos_average_return: float | None,
     oos_rows: tuple[SignalForwardLabel, ...],
+    cohort_blocker: str | None,
 ) -> list[str]:
     blockers: list[str] = []
+    if cohort_blocker is not None:
+        blockers.append(cohort_blocker)
     if not observation_dates:
         blockers.append("no candidate observations saved")
     if target_filter_count == 0:
@@ -417,8 +642,15 @@ def _notes(
     latest_observation_count: int,
     raw_latest_observation_count: int,
     is_diagnostic: bool = False,
+    collapsed_duplicates: int = 0,
+    selected_cohort: str | None = None,
 ) -> list[str]:
-    result: list[str] = []
+    result: list[str] = [
+        f"oos_split={_OOS_SPLIT_MODE} (diagnostic only; not promotion-grade)",
+        "promotion_eligible=false (DQ-006 lean; calibration floors != production authority)",
+    ]
+    if selected_cohort is not None:
+        result.append(f"selected_semantic_compatibility_id={selected_cohort}")
     if is_diagnostic:
         result.append(
             "Diagnostic target: market-cap bucket not required; "
@@ -428,6 +660,11 @@ def _notes(
         result.append(
             "Multi-window observations collapsed to latest per ticker for "
             "readiness to avoid duplicate ticker/day labels."
+        )
+    if collapsed_duplicates:
+        result.append(
+            f"Collapsed {collapsed_duplicates} duplicate labeled-target row(s) to "
+            "one independent sample per (ticker, signal_date, horizon)."
         )
     return result
 
