@@ -1,0 +1,193 @@
+# TUI Phase 4 — Research Corpus Health
+
+Status: `BLOCKED_BY_PHASE_2`
+
+Roadmap: `docs/roadmap/roadmap_tui.md`
+
+Depends on: TUI Phases 0–2
+
+Blocks: TUI Phase 5
+
+## Task Metadata
+
+- Task type: Feature
+- Priority: Medium
+- Semantic classification: `NON_SEMANTIC`
+- Chosen decision: add a read-only cohort-isolated presentation of
+  `ReportSignalReadinessUseCase`. Implement this option only.
+
+## Problem Statement
+
+Readiness output is easy to overstate. Cohorts cannot be pooled, the ephemeral
+70/30 split is diagnostic, and patch eligibility is not promotion evidence. A
+TUI must make those limits more visible rather than reinterpret them.
+
+## Desired Outcome
+
+The user supplies a target and, when required, semantic compatibility ID. One
+worker call returns one `SignalReadinessReport`, displaying:
+
+- parsed target and diagnostic-target status;
+- selected/available cohorts;
+- observation, label, unique-ticker, and unique-session counts;
+- complete exclusion ledger;
+- split mode and IS/OOS counts;
+- readiness, patch eligibility, metrics, notes, blockers;
+- explicit non-promotion status.
+
+An empty corpus is honest and does not block other routes.
+
+## Non-Goals
+
+- No capture, backfill, labels, repair, replay/recompute, tuning, patch, or
+  promotion.
+- No statistical-validity chart, cohort pooling, alternate threshold/split, or AI.
+
+## Ownership And Transport
+
+```text
+target + optional cohort
+  -> ReportSignalReadinessRequest
+  -> ReportSignalReadinessUseCase
+  -> exact SignalReadinessReport
+  -> ResearchHealthPresenter
+  -> ResearchHealthScreen
+```
+
+Keep report intact to presenter. Adapter must not query repositories or
+recompute counts, exclusions, deduplication, split, metrics, readiness, or
+eligibility.
+
+Copy Phase 0 contracts:
+
+```text
+composition dependencies:
+target rules:
+multiple-cohort behavior:
+expected exceptions:
+constructor/startup side effects:
+```
+
+## State And Authority Contract
+
+- Blank target: adapter `ERROR`, zero use-case calls.
+- Invalid target: `ERROR` with exact validation message.
+- Zero observations/labels: `EMPTY`, while target/split/blockers/limitation show.
+- Valid report with blockers: `READY`, never fabricated success.
+- Multiple unresolved cohorts: visibly blocked, never pooled/silently selected.
+- `promotion_eligible` is rendered exactly, never inferred.
+- `DIAGNOSTIC ONLY — NOT PROMOTION EVIDENCE` is visible with split/eligibility.
+
+## Exact File Boundary
+
+Expected changes:
+
+- `src/adapters/tui/composition.py`
+- research-health controller/presenter/screen/minimal widgets
+- focused controller/presenter/composition/headless tests
+
+No product-layer, repository, schema, config, CLI research, or signal-program
+change is authorized.
+
+## Architecture Impact
+
+- Domain: not touched
+- Application: reuse unchanged
+- Infrastructure: no implementation change; composition wiring only
+- Adapter: readiness input/presentation
+- New dependency/determinism impact: no
+- Persistence: corpus reads only
+- Adapter-owned policy: no
+
+Layer plan:
+
+```md
+Layer plan:
+- Domain: not touched
+- Application: reuse only
+- Infrastructure: no implementation changes
+- Adapter: research-health UI path
+```
+
+## AI And Authority Declaration
+
+No AI involved. Live signal/risk/TradeSetup is unchanged. This task changes no
+authority, tuning eligibility, observation identity, label policy/schema, or
+promotion gate.
+
+## Implementation Checklist
+
+- [ ] Confirm prerequisites are `DONE`.
+- [ ] Copy exact Phase 0 contracts.
+- [ ] State one-report transport.
+- [ ] Wire only readiness use case.
+- [ ] Add target and optional cohort inputs.
+- [ ] Add generation-safe execution.
+- [ ] Render all counts/exclusions/metrics/notes/blockers.
+- [ ] Render empty and unresolved-cohort states.
+- [ ] Add permanent diagnostic/non-promotion label.
+- [ ] Add recording no-write and negative tests.
+
+## Acceptance Criteria
+
+- [ ] One submission causes one call; blank target causes zero.
+- [ ] Request preserves target/cohort exactly.
+- [ ] Exact report is sole presenter source.
+- [ ] All exclusion fields show.
+- [ ] Cohorts are never pooled/normalized.
+- [ ] Empty corpus does not disable other routes.
+- [ ] Split and diagnostic-only warning always show.
+- [ ] Diagnostic, patch, and promotion statuses remain distinct.
+- [ ] No write-capable research/tuning/promotion dependency is composed.
+- [ ] Focused, architecture, full tests when feasible, and `git diff --check` pass.
+- [ ] Status becomes `DONE`; completion record is filled.
+
+## Required Negative Tests
+
+- Blank/malformed target cannot look valid.
+- Multiple cohorts without selection cannot yield pooled metrics.
+- Diagnostic-ready or patch-eligible cannot change promotion label.
+- Presenter cannot drop exclusions/blockers.
+- Any attempted write fails.
+- Stale result cannot replace newer target/cohort.
+
+## Do Not Interpret This As
+
+- Do not add generate/capture/tuning/patch buttons.
+- Do not call repositories from adapter.
+- Do not pool/translate cohorts.
+- Do not call diagnostic metrics validation/calibration proof.
+- Do not hide blockers behind success styling.
+
+## Verification
+
+Run focused readiness UI tests, cohort/negative-authority tests, TUI/general
+architecture tests, full suite when feasible, and `git diff --check`.
+
+## Data, Persistence, And Documentation
+
+- Reads canonical observations/labels through the readiness use case only.
+- Writes nothing; no schema, config, cohort, label, or CLI contract changes.
+- In-app Help must state the split and non-promotion limitation.
+- Broader user documentation is finalized in Phase 5.
+
+## Agent Execution Protocol
+
+Before editing, confirm prerequisites, copy Phase 0 input/failure contracts,
+restate one-report transport and cohort invariants, and list files. Stop if any
+count/metric/eligibility would be recomputed in the adapter. Update completion
+only after cohort-isolation and negative-authority tests pass.
+
+## Completion Record
+
+- Completed date:
+- Implementation commit:
+- Files changed:
+- Request contract:
+- Cohort-isolation proof:
+- No-write proof:
+- Focused tests:
+- Architecture tests:
+- Full suite:
+- `git diff --check`:
+- Deferred items:
