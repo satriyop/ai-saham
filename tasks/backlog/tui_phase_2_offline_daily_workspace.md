@@ -1,6 +1,6 @@
 # TUI Phase 2 — Offline Daily Workspace
 
-Status: `BLOCKED_BY_PHASE_1`
+Status: `BACKLOG`
 
 Roadmap: `docs/roadmap/roadmap_tui.md`
 

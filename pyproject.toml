@@ -25,6 +25,9 @@ dev = [
 browser = [
     "playwright>=1.40.0",
 ]
+tui = [
+    "textual>=8.2,<9",
+]
 
 [project.scripts]
 saham = "src.adapters.cli.main:main"

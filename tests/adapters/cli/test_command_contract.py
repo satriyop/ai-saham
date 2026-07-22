@@ -22,6 +22,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 EXPECTED_COMMANDS: dict[tuple[str, ...], tuple[str, ...]] = {
     (): (
         "today",
+        "tui",
         "fetch",
         "audit",
         "screen",

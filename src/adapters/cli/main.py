@@ -15,6 +15,7 @@ Command groups:
   saham analyze    — live analysis (risk, compare, sentiment, audit, regime, chart, signal inspect)
   saham strategy   — strategy management (init, validate, list, create, backtest)
   saham trade      — paper trading workspace
+  saham tui        — optional local terminal research workspace
   saham version    — version information
 
 Layer: Adapter
@@ -33,6 +34,7 @@ from src.adapters.cli.screen_lifecycle_commands import screen_app
 from src.adapters.cli.strategy_commands import strategy_app
 from src.adapters.cli.today_commands import today
 from src.adapters.cli.trade_commands import trade_app
+from src.adapters.cli.tui_commands import tui
 from src.adapters.cli.view_commands import view_app
 
 app = typer.Typer(
@@ -45,6 +47,7 @@ app = typer.Typer(
 # ── Command groups ─────────────────────────────────────────────────────────────
 
 app.command("today")(today)
+app.command("tui")(tui)
 app.add_typer(fetch_app, name="fetch")
 app.add_typer(audit_app, name="audit")
 app.add_typer(screen_app, name="screen")

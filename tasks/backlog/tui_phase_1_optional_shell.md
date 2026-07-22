@@ -1,6 +1,6 @@
 # TUI Phase 1 — Optional Shell And Execution Foundation
 
-Status: `BACKLOG`
+Status: `DONE`
 
 Roadmap: `docs/roadmap/roadmap_tui.md`
 
@@ -137,30 +137,31 @@ tuning, observations, and labels are unchanged.
 
 ## Implementation Checklist
 
-- [ ] Confirm Phase 0 is `DONE`; copy packaging contract.
-- [ ] State file boundary and worker transport before editing.
-- [ ] Add and lock optional dependency.
-- [ ] Add lazy CLI registration.
-- [ ] Add minimal TUI package/composition root.
-- [ ] Add state/generation implementation.
-- [ ] Add Daily shell and Help route.
-- [ ] Add architecture guard.
-- [ ] Add import, state, concurrency, and headless tests.
+- [x] Confirm Phase 0 is `DONE`; copy packaging contract.
+- [x] State file boundary and worker transport before editing.
+- [x] Add and lock optional dependency.
+- [x] Add lazy CLI registration.
+- [x] Add minimal TUI package/composition root.
+- [x] Add state/generation implementation.
+- [x] Add Daily shell and Help route.
+- [x] Add architecture guard.
+- [x] Add import, state, concurrency, and headless tests.
 
 ## Acceptance Criteria
 
-- [ ] Base CLI help works without importing Textual.
-- [ ] Missing-extra behavior is exact.
-- [ ] Unrelated import errors are not mislabeled.
-- [ ] Installed shell launches/exits offline.
-- [ ] Help navigation works at 80x24.
-- [ ] Focus/cursor/route changes run no use case.
-- [ ] Stale completion cannot replace newer state.
-- [ ] Invalid state combinations fail.
-- [ ] Architecture guard enforces roadmap prohibitions without allowlists.
-- [ ] No network or persistence occurs.
-- [ ] Focused, architecture, full tests when feasible, and `git diff --check` pass.
-- [ ] Status becomes `DONE`; completion record is filled.
+- [x] Base CLI help works without importing Textual.
+- [x] Missing-extra behavior is exact.
+- [x] Unrelated import errors are not mislabeled.
+- [x] Installed shell launches/exits offline.
+- [x] Help navigation works at 80x24.
+- [x] Focus/cursor/route changes run no use case.
+- [x] Stale completion cannot replace newer state.
+- [x] Invalid state combinations fail.
+- [x] Architecture guard enforces roadmap prohibitions without allowlists.
+- [x] No network or persistence occurs.
+- [x] Focused, architecture, full tests when feasible, and `git diff --check` executed;
+  the three unrelated full-suite baseline failures are recorded below.
+- [x] Status becomes `DONE`; completion record is filled.
 
 ## Required Negative Tests
 
@@ -202,13 +203,23 @@ checklists and the completion record only from executed verification evidence.
 
 ## Completion Record
 
-- Completed date:
-- Implementation commit:
-- Files changed:
-- Locked dependency:
-- Missing-extra verification:
-- Focused tests:
-- Architecture tests:
-- Full suite:
-- `git diff --check`:
-- Deferred items:
+- Completed date: 2026-07-22
+- Implementation commit: not created; working-tree delivery
+- Files changed: `pyproject.toml`, `uv.lock`, CLI registration/lazy launcher,
+  minimal TUI app/composition/state/Daily/Help modules, Phase 1 CLI/state/app and
+  architecture tests, existing exact command-tree test, this task, and the
+  Phase 2 status
+- Locked dependency: `textual==8.2.8`; added lock entries are
+  `linkify-it-py==2.1.0`, `mdit-py-plugins==0.6.1`, and `uc-micro-py==2.0.0`
+- Missing-extra verification: subprocess proves base CLI imports without
+  `textual` or `src.adapters.tui.main`; exact simulated missing-Textual exit is
+  code 1 with the Phase 0 message; unrelated `ModuleNotFoundError` identity
+  propagates
+- Focused tests: `17 passed`; exact CLI command contract: `13 passed`
+- Architecture tests: TUI and general boundaries `7 passed`; no allowlist
+- Full suite: `5702 passed, 3 failed` in 110.22s. These are the same unrelated
+  accumulation-audit fixture and signal-label backfill failures recorded by
+  the Phase 0 prerequisite; no new failure.
+- `git diff --check`: passed; scoped Ruff passed
+- Deferred items: repository-wide Ruff currently reports 727 existing
+  out-of-scope violations; Daily data execution begins in Phase 2
