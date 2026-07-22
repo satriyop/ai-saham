@@ -4,6 +4,8 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from src.application.dto.accumulation_screen import AccumulationCandidate
 from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.services.signal_engine import SignalEngine
@@ -22,6 +24,12 @@ from tests.application.use_case.accumulation_screen_fixtures import (
     _summary,
     _weekdays,
 )
+
+
+def _empty_universe_loader() -> MagicMock:
+    loader = MagicMock()
+    loader.load_config.return_value = {"lq45": {"tickers": []}}
+    return loader
 
 
 def test_daily_briefing_rolls_back_weekends():
@@ -45,7 +53,7 @@ def test_daily_briefing_rolls_back_weekends():
         broker_repository=broker_repo,
         regime_use_case=regime_uc,
         accumulation_use_case=accum_uc,
-        universe_loader=MagicMock(),
+        universe_loader=_empty_universe_loader(),
     )
 
     # Mocking date.today() via patch of daily_briefing's imported date class
@@ -92,7 +100,7 @@ def test_daily_briefing_weekend_prefers_cached_ihsg_session_over_blind_friday():
         broker_repository=broker_repo,
         regime_use_case=regime_uc,
         accumulation_use_case=accum_uc,
-        universe_loader=MagicMock(),
+        universe_loader=_empty_universe_loader(),
     )
 
     with patch("src.application.use_case.daily_briefing_use_case.date") as mock_date:
@@ -125,7 +133,7 @@ def test_daily_briefing_normal_trading_day_date_unaffected_by_resolver_integrati
         broker_repository=broker_repo,
         regime_use_case=regime_uc,
         accumulation_use_case=accum_uc,
-        universe_loader=MagicMock(),
+        universe_loader=_empty_universe_loader(),
     )
 
     with patch("src.application.use_case.daily_briefing_use_case.date") as mock_date:
@@ -162,7 +170,7 @@ def test_daily_briefing_explicit_as_of_date_uses_deterministic_after_close_decis
         broker_repository=broker_repo,
         regime_use_case=regime_uc,
         accumulation_use_case=accum_uc,
-        universe_loader=MagicMock(),
+        universe_loader=_empty_universe_loader(),
         session_resolver=fake_resolver,
     )
 
@@ -904,3 +912,159 @@ def test_daily_briefing_without_setup_lens_impact_use_case_leaves_none(monkeypat
     )
 
     assert response.setup_lens_impact is None
+
+
+def _failure_boundary_dependencies(
+    *, universe_loader=None, setup_lens_impact_use_case=None
+):
+    market_repo = MagicMock()
+    market_repo.get_date_range.return_value = (date(2026, 6, 1), date(2026, 6, 19))
+    broker_repo = MagicMock()
+    broker_repo.get_date_range.return_value = (date(2026, 6, 1), date(2026, 6, 19))
+    regime_uc = MagicMock()
+    regime_uc.evaluate.return_value = MagicMock()
+    accum_uc = MagicMock()
+    accum_uc.execute.return_value = MagicMock(candidates=[])
+    resolver = MagicMock()
+    resolver.resolve.return_value = MagicMock(
+        latest_completed_session=date(2026, 6, 19),
+        is_eod_pending=False,
+        market_session_name="AFTER_CLOSE",
+    )
+    use_case = DailyBriefingUseCase(
+        market_repository=market_repo,
+        broker_repository=broker_repo,
+        regime_use_case=regime_uc,
+        accumulation_use_case=accum_uc,
+        universe_loader=universe_loader or _empty_universe_loader(),
+        setup_lens_impact_use_case=setup_lens_impact_use_case,
+        session_resolver=resolver,
+    )
+    return use_case, market_repo, broker_repo, regime_uc, accum_uc
+
+
+def _execute_historical(use_case, *, opening_data_dir=None):
+    request_kwargs = {"as_of_date": date(2026, 6, 19)}
+    if opening_data_dir is not None:
+        request_kwargs["opening_data_dir"] = opening_data_dir
+    return use_case.execute(DailyBriefingRequest(**request_kwargs))
+
+
+def test_daily_briefing_universe_failure_propagates_same_exception():
+    failure = ValueError("invalid universe configuration")
+    loader = _empty_universe_loader()
+    loader.load_config.side_effect = failure
+    use_case, market_repo, broker_repo, regime_uc, accum_uc = (
+        _failure_boundary_dependencies(universe_loader=loader)
+    )
+
+    with pytest.raises(ValueError) as caught:
+        _execute_historical(use_case)
+
+    assert caught.value is failure
+    market_repo.get_date_range.assert_not_called()
+    broker_repo.get_date_range.assert_not_called()
+    regime_uc.evaluate.assert_not_called()
+    accum_uc.execute.assert_not_called()
+
+
+@pytest.mark.parametrize("repository_index", [1, 2])
+def test_daily_briefing_freshness_repository_failure_propagates_same_exception(
+    monkeypatch, repository_index
+):
+    monkeypatch.setattr(
+        "src.application.use_case.daily_briefing_use_case.load_universe",
+        lambda *args, **kwargs: ["BBCA"],
+    )
+    dependencies = _failure_boundary_dependencies()
+    use_case = dependencies[0]
+    repository = dependencies[repository_index]
+    failure = RuntimeError("freshness repository failed")
+    repository.get_date_range.side_effect = failure
+
+    with pytest.raises(RuntimeError) as caught:
+        _execute_historical(use_case)
+
+    assert caught.value is failure
+
+
+def test_daily_briefing_regime_failure_propagates_same_exception(monkeypatch):
+    monkeypatch.setattr(
+        "src.application.use_case.daily_briefing_use_case.load_universe",
+        lambda *args, **kwargs: ["BBCA"],
+    )
+    use_case, _, _, regime_uc, accum_uc = _failure_boundary_dependencies()
+    failure = TypeError("regime contract violated")
+    regime_uc.evaluate.side_effect = failure
+
+    with pytest.raises(TypeError) as caught:
+        _execute_historical(use_case)
+
+    assert caught.value is failure
+    accum_uc.execute.assert_not_called()
+
+
+def test_daily_briefing_accumulation_failure_propagates_same_exception(monkeypatch):
+    monkeypatch.setattr(
+        "src.application.use_case.daily_briefing_use_case.load_universe",
+        lambda *args, **kwargs: ["BBCA"],
+    )
+    use_case, _, _, _, accum_uc = _failure_boundary_dependencies()
+    failure = RuntimeError("accumulation failed")
+    accum_uc.execute.side_effect = failure
+
+    with pytest.raises(RuntimeError) as caught:
+        _execute_historical(use_case)
+
+    assert caught.value is failure
+
+
+def test_daily_briefing_setup_lens_failure_propagates_same_exception(monkeypatch):
+    monkeypatch.setattr(
+        "src.application.use_case.daily_briefing_use_case.load_universe",
+        lambda *args, **kwargs: ["BBCA"],
+    )
+    impact_uc = MagicMock()
+    failure = ValueError("setup-lens result malformed")
+    impact_uc.execute.side_effect = failure
+    use_case, _, _, _, accum_uc = _failure_boundary_dependencies(
+        setup_lens_impact_use_case=impact_uc
+    )
+    accum_uc.execute.return_value = MagicMock(
+        candidates=[_real_accumulation_candidate("BBCA")]
+    )
+
+    with pytest.raises(ValueError) as caught:
+        _execute_historical(use_case)
+
+    assert caught.value is failure
+
+
+def test_daily_briefing_invalid_opening_json_degrades_to_warning(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "src.application.use_case.daily_briefing_use_case.load_universe",
+        lambda *args, **kwargs: ["BBCA"],
+    )
+    snapshot_dir = tmp_path / "20260619"
+    snapshot_dir.mkdir()
+    (snapshot_dir / "snapshot.json").write_text("{invalid")
+    use_case, *_ = _failure_boundary_dependencies()
+
+    response = _execute_historical(use_case, opening_data_dir=tmp_path)
+
+    assert response.opening_snapshot_date is None
+    assert any("Opening snapshot unreadable:" in warning for warning in response.warnings)
+
+
+def test_daily_briefing_malformed_opening_shape_propagates(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "src.application.use_case.daily_briefing_use_case.load_universe",
+        lambda *args, **kwargs: ["BBCA"],
+    )
+    snapshot_dir = tmp_path / "20260619"
+    snapshot_dir.mkdir()
+    (snapshot_dir / "snapshot.json").write_text("[]")
+    use_case, *_ = _failure_boundary_dependencies()
+
+    with pytest.raises(TypeError, match="opening snapshot root must be a mapping"):
+        _execute_historical(use_case, opening_data_dir=tmp_path)

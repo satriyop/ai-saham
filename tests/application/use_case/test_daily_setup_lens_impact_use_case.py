@@ -17,6 +17,9 @@ from src.application.use_case.daily_setup_lens_impact_use_case import (
 from src.application.use_case.evaluate_swing_setup_use_case import (
     AVAILABLE_SWING_SETUPS,
 )
+from src.application.use_case.swing_analysis_workflow_use_case import (
+    SwingAnalysisDataUnavailable,
+)
 
 DEFAULTS = SwingLensRequestDefaults(
     window=200,
@@ -242,11 +245,11 @@ def test_only_entry_authority_reason_survives_mixed_constraints():
     assert result.rows[0].cells[0].capped_reason == entry_reason
 
 
-def test_one_setup_exception_produces_warning_cell_others_populate():
+def test_one_setup_data_unavailable_produces_warning_cell_others_populate():
     setups = list(AVAILABLE_SWING_SETUPS)
     workflows = {
         setups[0]: FakeWorkflow(response=_response(action="WATCH")),
-        setups[1]: FakeWorkflow(exc=RuntimeError("no broker_detail cached")),
+        setups[1]: FakeWorkflow(exc=SwingAnalysisDataUnavailable("BBRI")),
         setups[2]: FakeWorkflow(response=_response(action="ENTER")),
         setups[3]: FakeWorkflow(response=_response(action="AVOID")),
     }
@@ -261,7 +264,7 @@ def test_one_setup_exception_produces_warning_cell_others_populate():
 
     by_setup = {c.setup_name: c for c in result.rows[0].cells}
     failed = by_setup[setups[1]]
-    assert failed.warning == "no broker_detail cached"
+    assert failed.warning == "No local candle data for BBRI"
     assert failed.action is None
     assert failed.signal_score is None
     assert failed.setup_match == "NO_MATCH"
@@ -269,6 +272,26 @@ def test_one_setup_exception_produces_warning_cell_others_populate():
     assert by_setup[setups[0]].action == "WATCH"
     assert by_setup[setups[2]].action == "ENTER"
     assert by_setup[setups[0]].warning is None
+
+
+@pytest.mark.parametrize("exception_type", [RuntimeError, TypeError, ValueError])
+def test_unexpected_setup_failure_propagates_same_exception(exception_type):
+    failure = exception_type("unexpected setup failure")
+    workflows = _all_workflows(response=_response())
+    workflows[AVAILABLE_SWING_SETUPS[0]] = FakeWorkflow(exc=failure)
+    uc = DailySetupLensImpactUseCase(setup_workflows=workflows, request_defaults=DEFAULTS)
+
+    with pytest.raises(exception_type) as caught:
+        uc.execute(
+            DailySetupLensImpactRequest(
+                candidates=(
+                    DailySetupLensImpactCandidate(ticker="BBRI", base_action="WATCH"),
+                ),
+                as_of_date=date(2026, 7, 1),
+            )
+        )
+
+    assert caught.value is failure
 
 
 def test_mismatched_setup_workflow_keys_raises_value_error():

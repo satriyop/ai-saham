@@ -174,15 +174,11 @@ class DailyBriefingUseCase:
 
         warnings: list[str] = []
 
-        try:
-            universe_tickers = load_universe(
-                request.universe,
-                self._universe_loader,
-                request.universe_config_path,
-            )
-        except Exception as exc:
-            universe_tickers = []
-            warnings.append(f"Universe unavailable: {exc}")
+        universe_tickers = load_universe(
+            request.universe,
+            self._universe_loader,
+            request.universe_config_path,
+        )
 
         freshness = self._data_freshness(universe_tickers, effective_session)
 
@@ -207,10 +203,7 @@ class DailyBriefingUseCase:
 
         regime = None
         if latest_completed_eod_date is not None and universe_tickers:
-            try:
-                regime = self._regime_uc.evaluate(as_of_date=latest_completed_eod_date)
-            except Exception as exc:
-                warnings.append(f"Regime unavailable: {exc}")
+            regime = self._regime_uc.evaluate(as_of_date=latest_completed_eod_date)
 
         snapshot = self._opening_snapshot(
             request=request,
@@ -266,35 +259,32 @@ class DailyBriefingUseCase:
                 )
             else:
                 if universe_tickers:
-                    try:
-                        if (
-                            effective_session is not None
-                            and latest_completed_eod_date == effective_session.latest_completed_session
-                        ):
-                            resolved_session = effective_session
-                        else:
-                            resolved_session = self._session_resolver.resolve(
-                                run_at=datetime.combine(
-                                    latest_completed_eod_date,
-                                    MARKET_CLOSE,
-                                    tzinfo=IDX_TIMEZONE,
-                                )
+                    if (
+                        effective_session is not None
+                        and latest_completed_eod_date == effective_session.latest_completed_session
+                    ):
+                        resolved_session = effective_session
+                    else:
+                        resolved_session = self._session_resolver.resolve(
+                            run_at=datetime.combine(
+                                latest_completed_eod_date,
+                                MARKET_CLOSE,
+                                tzinfo=IDX_TIMEZONE,
                             )
-                        execution_context = SignalEvidenceExecutionContext(
-                            effective_session=resolved_session,
-                            source_availability_use_case=None,
                         )
-                        response = self._accumulation_uc.execute(
-                            AccumulationScreenRequest(
-                                tickers=universe_tickers,
-                                window_days=7,
-                                as_of_date=latest_completed_eod_date,
-                            ),
-                            execution_context=execution_context,
-                        )
-                        accumulation_candidates = response.candidates[: request.top]
-                    except Exception as exc:
-                        warnings.append(f"Accumulation screen unavailable: {exc}")
+                    execution_context = SignalEvidenceExecutionContext(
+                        effective_session=resolved_session,
+                        source_availability_use_case=None,
+                    )
+                    response = self._accumulation_uc.execute(
+                        AccumulationScreenRequest(
+                            tickers=universe_tickers,
+                            window_days=7,
+                            as_of_date=latest_completed_eod_date,
+                        ),
+                        execution_context=execution_context,
+                    )
+                    accumulation_candidates = response.candidates[: request.top]
 
             projection = DailyAccumulationProjector().project(
                 candidates=accumulation_candidates,
@@ -315,20 +305,16 @@ class DailyBriefingUseCase:
                 DailySetupLensImpactCandidate(ticker=c.ticker, base_action=c.action)
                 for c in daily_accumulation_candidates[: request.top]
             )
-            try:
-                setup_lens_impact = self._setup_lens_impact_uc.execute(
-                    DailySetupLensImpactRequest(
-                        candidates=impact_candidates,
-                        as_of_date=(
-                            latest_completed_eod_date
-                            if latest_completed_eod_date is not None
-                            else live_session_date
-                        ),
-                    )
+            setup_lens_impact = self._setup_lens_impact_uc.execute(
+                DailySetupLensImpactRequest(
+                    candidates=impact_candidates,
+                    as_of_date=(
+                        latest_completed_eod_date
+                        if latest_completed_eod_date is not None
+                        else live_session_date
+                    ),
                 )
-            except Exception as exc:
-                warnings.append(f"Setup lens impact unavailable: {exc}")
-                setup_lens_impact = None
+            )
 
         return DailyBriefingResponse(
             live_session_date=live_session_date,
@@ -498,17 +484,11 @@ class DailyBriefingUseCase:
     ) -> list[BriefingDataFreshnessItem]:
         items: list[BriefingDataFreshnessItem] = []
         for ticker in tickers:
-            try:
-                market_range = self._market_repo.get_date_range(ticker)
-                candle_as_of = market_range[1] if market_range else None
-            except Exception:
-                candle_as_of = None
+            market_range = self._market_repo.get_date_range(ticker)
+            candle_as_of = market_range[1] if market_range else None
 
-            try:
-                broker_range = self._broker_repo.get_date_range(ticker)
-                broker_as_of = broker_range[1] if broker_range else None
-            except Exception:
-                broker_as_of = None
+            broker_range = self._broker_repo.get_date_range(ticker)
+            broker_as_of = broker_range[1] if broker_range else None
 
             freshness_status = compute_data_freshness(
                 candle_as_of=candle_as_of,
@@ -541,13 +521,16 @@ class DailyBriefingUseCase:
 
         try:
             data = json.loads(path.read_text())
-        except Exception as exc:
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
             warnings.append(f"Opening snapshot unreadable: {exc}")
             return OpeningBriefingSnapshot(
                 candidates=[],
                 market_wide_observations=[],
                 snapshot_date=None,
             )
+
+        if not isinstance(data, dict):
+            raise TypeError("opening snapshot root must be a mapping")
 
         snapshot_date = None
         if "captured_at" not in data:
@@ -572,7 +555,13 @@ class DailyBriefingUseCase:
         candidates = []
         market_wide_observations = []
 
-        for row in data.get("candidates", []):
+        rows = data.get("candidates", [])
+        if not isinstance(rows, list):
+            raise TypeError("opening snapshot candidates must be a list")
+
+        for row in rows:
+            if not isinstance(row, dict):
+                raise TypeError("opening snapshot candidate must be a mapping")
             ticker = row.get("ticker")
             if not ticker:
                 continue

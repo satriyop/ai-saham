@@ -1,6 +1,6 @@
 # TUI Phase 0 — Inventory And Binding Implementation Contract
 
-Status: `BLOCKED_BY_FAILURE_BOUNDARY_DECISION`
+Status: `DONE`
 
 Roadmap: `docs/roadmap/roadmap_tui.md`
 
@@ -268,7 +268,7 @@ valid fail-closed report with no pooled IS/OOS rows. Evidence:
 
 | Capability | Valid empty | Typed unavailable | Expected ERROR exceptions | Invariant/programmer failure |
 |---|---|---|---|---|
-| Daily | `DailyBriefingResponse` with `universe_count == 0`, no regime/opening/accumulation rows, and warnings. `PARTIAL`/`NOT_READY` are valid non-empty/usable business responses, not errors. | No top-level typed-unavailable result. Dataset `DataReadiness.status == "UNAVAILABLE"`, absent optional sections, and warnings remain inside a valid response. | Composition/startup: `ValueError` from malformed typed/YAML config, `RulesError` subclasses, `CorporateActionPolicyConfigError`, `sqlite3.Error`, `MarketDataRepositoryError`, `BrokerDataRepositoryError`, and `OSError`; map to `ERROR` preserving class/message. Execution best-effort failures are currently converted by broad catches in `DailyBriefingUseCase` and `DailySetupLensImpactUseCase` to warnings/unavailable sections. | Required contract: malformed response/field types and impossible states reach the central outer boundary. Current code cannot guarantee this because its broad catches also swallow contract/programmer exceptions; see blocking finding below. |
+| Daily | `DailyBriefingResponse` with `universe_count == 0`, no regime/opening/accumulation rows, and warnings. `PARTIAL`/`NOT_READY` are valid non-empty/usable business responses, not errors. | No top-level typed-unavailable result. Dataset `DataReadiness.status == "UNAVAILABLE"`, absent optional sections, and warnings remain inside a valid response. `SwingAnalysisDataUnavailable` alone becomes one setup-lens warning cell. Optional opening-snapshot `OSError`, `UnicodeError`, or `JSONDecodeError` becomes a response warning. | Composition/startup: `ValueError` from malformed typed/YAML config, `RulesError` subclasses, `CorporateActionPolicyConfigError`, `sqlite3.Error`, `MarketDataRepositoryError`, `BrokerDataRepositoryError`, and `OSError`; map to `ERROR` preserving class/message. Execution failures from universe loading, freshness repositories, regime, accumulation, and the outer setup-lens call propagate unchanged. | Malformed response/field types, malformed decoded snapshot structures, non-typed setup workflow failures, and impossible states reach the central outer boundary with original exception identity. |
 | Accumulation | Exact single projection with zero `candidates`, or exact multi projection with zero `rows`. | None; missing optional candidate/row fields are `READY` with unavailable cells. | `ScreenAccumProjectionError` for invalid sort/windows; composition/startup `ValueError`, `RulesError` subclasses, `sqlite3.Error`, `MarketDataRepositoryError`, `BrokerDataRepositoryError`, and `OSError`, preserving class/message. The fixed V1 request should make projection validation errors unreachable but still visible if they occur. | `TypeError`, non-projection `ValueError`, missing/dual projections, malformed DTOs, identity/provenance failures, and impossible canonical-window state propagate to the outer boundary. |
 | Ticker | Not applicable after a successful call: candle absence is typed unavailable; optional evidence may be absent in a `READY` response. | `SwingAnalysisDataUnavailable(ticker)` only; map to `UNAVAILABLE` and retain the ticker/reason. Signal evidence unavailability is `READY` with `verdict.signal_assessment_availability` and no fabricated action. | Composition/startup `ValueError`, `RulesError` subclasses, `CorporateActionPolicyConfigError`, `sqlite3.Error`, `MarketDataRepositoryError`, `BrokerDataRepositoryError`, and `OSError`; map to `ERROR` preserving class/message. | `TypeError`, workflow/DTO invariant `ValueError` (including selected candidate without matching evaluation result), incompatible identity/provenance, and response-assembler impossible state propagate to the outer boundary. |
 | Corpus health | A valid report with zero observations/labels; show target, split, blockers, and diagnostic-only limitation while screen status is `EMPTY`. A valid report with blockers or unresolved cohort but nonzero corpus is `READY`. | None; unresolved/missing cohorts are blocker-bearing valid reports, never pooled. | Blank target: adapter `ValueError("target must not be blank")` with zero calls. Parse failures: exact `ValueError` message from `SignalReadinessTarget.parse`. Repository/startup: `sqlite3.Error` or `OSError`; map to `ERROR` preserving class/message. | Malformed labels/observations, incompatible identity/cohort objects, type errors, and impossible report state propagate to the outer boundary. |
@@ -286,35 +286,16 @@ Exception evidence:
 Malformed canonical DTOs, incompatible identity/cohort state, and impossible
 states must not become ordinary missing data.
 
-### Blocking finding — application failure boundary
+### Resolved prerequisite — application failure boundary
 
-The required invariant above conflicts with current application behavior:
-
-- `DailyBriefingUseCase.execute` catches `Exception` around universe loading,
-  regime evaluation, accumulation execution, and setup-lens execution and turns
-  failures into warnings (`src/application/use_case/daily_briefing_use_case.py::DailyBriefingUseCase.execute`).
-- `DailyBriefingUseCase._data_freshness` catches `Exception` around repository
-  reads and turns every failure into missing dates
-  (`src/application/use_case/daily_briefing_use_case.py::DailyBriefingUseCase._data_freshness`).
-- `DailySetupLensImpactUseCase._evaluate_cell` catches `Exception` from each
-  swing workflow and fabricates a warning cell with no action/score. The current
-  characterization test explicitly preserves this for a generic `RuntimeError`
-  (`src/application/use_case/daily_setup_lens_impact_use_case.py::DailySetupLensImpactUseCase._evaluate_cell`;
-  `tests/application/use_case/test_daily_setup_lens_impact_use_case.py::test_one_setup_exception_produces_warning_cell_others_populate`).
-
-Those boundaries cannot distinguish expected operational absence from
-`TypeError`, invariant `ValueError`, malformed canonical DTOs, or programmer
-errors. Once downgraded, a TUI controller cannot retain the original exception
-class or route it to the central outer boundary. Phase 2 therefore cannot meet
-the roadmap/task failure contract without an application-layer prerequisite;
-changing that behavior is forbidden by this Phase 0 documentation-only task.
-
-Required decision: authorize a separate application task that defines typed
-operational/unavailability exceptions for Daily/setup-lens dependencies,
-narrows the catches to those exact types, and proves `TypeError`, invariant
-`ValueError`, and malformed DTOs propagate. The alternative is an explicit
-roadmap/task amendment allowing broad warning downgrade, which weakens the
-stated fail-closed invariant.
+`tasks/backlog/tui_daily_failure_boundary_prerequisite.md` is `DONE`.
+`DailyBriefingUseCase` no longer catches universe, freshness-repository,
+regime, accumulation, or outer setup-lens failures. Its optional opening
+snapshot catches only filesystem/text/JSON decoding errors; parsed shape errors
+propagate. `DailySetupLensImpactUseCase` catches only
+`SwingAnalysisDataUnavailable` per cell. Focused tests prove original exception
+identity propagates for generic `RuntimeError`, `TypeError`, and `ValueError`.
+The central TUI boundary can therefore enforce the matrix above.
 
 ### E. Packaging and launcher
 
@@ -364,22 +345,23 @@ flags mean neither is called. A call is a contract failure and must remain
 - [x] Complete producer/transport map.
 - [x] Complete dependency/side-effect inventory.
 - [x] Complete exact request defaults.
-- [ ] Complete the binding failure matrix after the application failure-boundary decision.
+- [x] Complete the binding failure matrix after the application failure-boundary decision.
 - [x] Resolve dependency and lazy-launch contract.
 - [x] Copy resolved facts and the blocker into dependent phase tasks.
 - [x] Replace every unresolved placeholder in this task.
 
 ## Acceptance Criteria
 
-- [ ] Resolution tables are binding and complete; Daily failure handling is blocked.
+- [x] Resolution tables are binding and complete; Daily failure handling is enforceable.
 - [x] Every later phase has exact request values and transport ownership.
 - [x] No second-read or reconstructed-result option remains.
-- [ ] Absence, expected exceptions, and invariants are enforceably distinguished.
+- [x] Absence, expected exceptions, and invariants are enforceably distinguished.
 - [x] Network/mutation-capable dependencies have explicit exclusions.
 - [x] Packaging and missing-extra behavior are exact.
-- [x] No product, test, config, dependency, or lock file changed.
+- [x] No config, dependency, or lock file changed; the separately authorized
+  prerequisite made only its scoped application/test changes.
 - [x] `git diff --check` passes.
-- [ ] Status becomes `DONE`; completion record is filled.
+- [x] Status becomes `DONE`; completion record is filled.
 
 ## Do Not Interpret This As
 
@@ -409,21 +391,21 @@ the completion record, and change status to `DONE`.
 
 ## Completion Record
 
-- Completed date: pending failure-boundary decision
-- Implementation commit: not created; documentation-only worktree delivery
+- Completed date: 2026-07-22
+- Implementation commit: not created; working-tree delivery
 - Verified source revision: `d7a42875804716600f676620a24c587655d5fc65`
-- Files changed: this task and TUI Phase 1–4 backlog contracts
+- Files changed: this task and TUI Phase 1–4 backlog contracts; separately
+  authorized failure-boundary prerequisite files are recorded in that task
 - Key resolved decisions: exact one-owner transports; local-only request values;
   single-window default plus explicit canonical 7/30/90 multi request; fail-closed
   network callable exclusion; product-read-only constructor caveat; cohort and
   exception behavior; Textual `>=8.2,<9` and exact lazy-launch failure
 - Commands run: required-doc/source/test inspection with `rg`/`sed`; PyPI Textual
   metadata lookup; placeholder scan; `git diff --check`
-- Verification result: documentation boundary preserved; placeholders resolved;
-  source citations present; dependent contracts copied; diff check passed; task
-  blocked because current Daily/setup-lens broad catches violate the required
-  invariant/programmer-error boundary
-- Deferred items and owner: user decision required on a separate application
-  failure-boundary prerequisite. Byte-for-byte read-only persistence would also
-  require a separately approved application/infrastructure task, but is not
-  required for V1.
+- Verification result: placeholders resolved; source citations present;
+  dependent contracts copied; failure boundary narrowed and covered; focused
+  tests `41 passed`; architecture tests `4 passed`; full suite `5682 passed, 3
+  unrelated failures`; diff check passed
+- Deferred items and owner: byte-for-byte read-only persistence would require a
+  separately approved application/infrastructure task, but is not required for
+  V1. Three unrelated full-suite failures are recorded in the prerequisite.

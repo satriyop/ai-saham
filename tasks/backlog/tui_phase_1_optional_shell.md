@@ -1,6 +1,6 @@
 # TUI Phase 1 — Optional Shell And Execution Foundation
 
-Status: `BLOCKED_BY_PHASE_0`
+Status: `BACKLOG`
 
 Roadmap: `docs/roadmap/roadmap_tui.md`
 

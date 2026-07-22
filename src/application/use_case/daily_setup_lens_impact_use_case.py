@@ -29,6 +29,7 @@ from src.application.dto.swing_analysis import (
 )
 from src.application.use_case.evaluate_swing_setup_use_case import AVAILABLE_SWING_SETUPS
 from src.application.use_case.swing_analysis_workflow_use_case import (
+    SwingAnalysisDataUnavailable,
     SwingAnalysisWorkflowUseCase,
 )
 
@@ -170,7 +171,7 @@ class DailySetupLensImpactUseCase:
         req = self._build_request(ticker=ticker, setup_name=setup_name, as_of_date=as_of_date)
         try:
             response = workflow.execute(req)
-        except Exception as exc:  # noqa: BLE001 — one cell failure must not abort the section
+        except SwingAnalysisDataUnavailable as exc:
             return DailySetupLensImpactCell(
                 setup_name=setup_name,
                 action=None,
@@ -178,7 +179,7 @@ class DailySetupLensImpactUseCase:
                 setup_match="NO_MATCH",
                 entry_authority=None,
                 capped_reason=None,
-                warning=str(exc),
+                warning=f"No local candle data for {exc.ticker}",
             )
         return self._map_response(setup_name=setup_name, response=response)
 

@@ -96,11 +96,11 @@ typed unavailable: none at screen level; dataset UNAVAILABLE and optional
   absence remain inside a valid response. Invariants propagate outward.
 ```
 
-Phase 0 blocker: current `DailyBriefingUseCase` and
-`DailySetupLensImpactUseCase` broad catches can downgrade contract/programmer
-failures to warnings. Do not implement Phase 2 until a separately approved
-application failure-boundary task narrows those catches, or the roadmap's
-fail-closed invariant is explicitly amended.
+Resolved prerequisite: `tasks/backlog/tui_daily_failure_boundary_prerequisite.md`
+is `DONE`. `DailyBriefingUseCase` propagates dependency and outer setup-lens
+failures; `DailySetupLensImpactUseCase` degrades only typed
+`SwingAnalysisDataUnavailable`; optional opening file/decode errors remain
+warnings. Phase 2 remains blocked only by Phase 1.
 
 ## State And Failure Contract
 
