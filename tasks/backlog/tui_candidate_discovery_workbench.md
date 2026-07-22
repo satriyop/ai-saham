@@ -142,18 +142,14 @@ Show selected row context without recomputation:
 
 ### Visual treatment
 
-- The candidate table is the visual anchor; controls are a compact toolbar,
-  not a wall of form fields.
-- Canonical rank, ticker, current status, and primary score remain visible in
-  compact mode. Lower-priority evidence moves into the preview/detail panel.
-- The selected row uses the shared selected/focus states without obscuring
-  positive/negative values. Row striping, if used, stays subtle.
-- Filter activity is summarized in one readable line; advanced controls are
-  collapsed until requested and active filters are visibly marked.
-- New, dropped, strengthening, weakening, and unchanged comparison groups use
-  headings, symbols/text, and semantic color—not color alone.
-- At `120x40`, table and preview may use master-detail. At `80x24`, preview is a
-  drill-in/overlay or stacked region that returns to the exact table state.
+- Consumes the central design token palette (`$canvas`, `$surface`, `$border-active`, `$text-primary`, `$status-bullish`, etc.) and shared `.tcss` component rules.
+- The candidate table is the visual anchor; filter controls form a compact toolbar, not a wall of inputs.
+- Keyboard focus ring (`border: round $border-active;`) remains clearly visible on active inputs or tables.
+- The selected row uses `$surface-raised` background + bold text + a left-edge indicator bar (`│ BBRI ...`) without masking positive/negative values.
+- Canonical rank, ticker, status badge, and primary score remain visible in compact `80x24` mode; supporting evidence collapses to the preview panel.
+- Filter activity is summarized in one readable line; active filter badges use `$text-accent`.
+- Comparison groups (New, Dropped, Strengthening, Weakening, Unchanged) combine explicit text symbols (`+`, `-`, `▲`, `▼`, `=`) with semantic status colors.
+- At `120x40`, table and preview use master-detail layout; at `80x24`, preview is an overlay or stacked panel that preserves exact table scroll/selection.
 
 ## Non-Goals
 

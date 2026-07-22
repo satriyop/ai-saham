@@ -180,19 +180,13 @@ or persistence work.
 
 ### Visual treatment
 
-- The persistent header is a compact decision strip: ticker and freshness,
-  canonical action, blockers, selected setup, and explicit Run. It remains
-  visually separate from historical, preview, and supporting evidence.
-- Tabs use consistent labels and one active indicator. Avoid placing every
-  evidence category into simultaneous bordered panels.
-- Overview uses progressive disclosure: primary decision and blockers first,
-  then the minimum supporting metrics, then deeper evidence.
-- Chart views use terminal-safe series, labeled axes/ranges, a visible cursor or
-  selected point when interactive, and a table fallback at compact width.
-- Flow and Signal & Risk align comparable numeric values and use explicit
-  `UNAVAILABLE` cells; missing panels never look like zero-valued evidence.
-- At `120x40`, supporting detail may sit beside the primary panel. At `80x24`,
-  the canonical action/header remains fixed while tab content scrolls or stacks.
+- Consumes the central design token system (`$canvas`, `$surface`, `$surface-raised`, `$border-active`, `$text-primary`, `$status-bullish`, `$status-caution`, `$status-bearish`, etc.).
+- Strict 80x24 line budget ensures the persistent decision strip (Header + Verdict + Action) occupies fixed lines 1-4, tab bar line 5, scrollable tab content lines 6-22, and action footer lines 23-24.
+- Keyboard focus ring (`border: round $border-active;`) highlights the currently active tab or input field.
+- The persistent decision strip uses high-contrast verdict tokens (`▲ ENTER` green, `◆ WATCH` amber, `▼ AVOID` red) clearly separated from preview/historical regions.
+- Chart views use unicode 8-level block characters (`  ▂ ▃ ▄ ▅ ▆ ▇ █`) for volume, smooth box drawing (`─│┌┐└┘`) for price/RSI, explicit threshold markers (`--- 70 OVERBOUGHT ---`), and tabular fallback at compact width.
+- Flow and Signal & Risk align numeric columns cleanly and use `$status-unavailable` (`— UNAVAILABLE`) for missing data; missing inputs never resemble zero values.
+- At `120x40`, supporting evidence displays in a side-by-side master-detail layout; at `80x24`, the decision strip remains fixed while tab content scrolls vertically.
 
 ## Non-Goals
 

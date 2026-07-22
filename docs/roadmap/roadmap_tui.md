@@ -188,44 +188,58 @@ internally. Advanced details may show exact identities read-only.
 
 ### Visual design language
 
-The target is a calm, information-dense analytical workstation—not a neon
-trading dashboard and not a plain dump of bordered widgets.
+The target is a calm, information-dense analytical workstation—inspired by professional terminal environments like Bloomberg Terminal, OpenBB, LazyGit, and K9s. It is not a neon gaming dashboard and not a plain dump of bordered widgets.
 
-- Milestone A owns one shared theme and component vocabulary. Route modules do
-  not introduce private palettes or raw color literals.
-- Use four hierarchy levels consistently: application chrome, workspace
-  heading/context, primary decision/result, supporting detail.
-- Use restrained borders and spacing. One strong container is preferable to
-  nested boxes around every label. Blank space separates meaning; decoration
-  does not consume rows needed for evidence.
-- Define semantic theme tokens for canvas, surface, raised surface, border,
-  primary text, muted text, accent/focus, positive, caution, negative,
-  unavailable, and selected-row states. Color reinforces status but never
-  carries status alone.
-- Every status combines a word or symbol with color: for example `READY`,
-  `STALE`, `PARTIAL`, `UNAVAILABLE`, `ERROR`; do not rely on red/green alone.
-- Numeric columns are right-aligned with stable precision; dates, tickers, and
-  status labels do not jitter between states. Positive/negative signs remain
-  visible in monochrome mode.
-- Focus, selection, hover, disabled, running, validation-error, and destructive
-  confirmation states are visually distinct. Focus is always visible.
-- Loading replaces only the affected region, preserves its dimensions where
-  practical, and keeps the last valid result visible but visibly stale.
-- At `120x40`, use master-detail or side-by-side panels when that improves
-  comparison. At `80x24`, stack or tab secondary content while retaining the
-  route, data status, primary decision, focused action, and key hints.
-- Below the supported `80x24` minimum, show a concise resize message instead of
-  clipping controls into an apparently usable screen.
-- Charts use terminal-safe lines/blocks plus axes, labels, and a tabular
-  fallback. Meaning must survive ASCII/monochrome rendering.
-- Motion is limited to useful progress indication. No decorative animation,
-  blinking status, emoji-dependent iconography, or color gradients.
+Milestone A owns the central design token system and shared `.tcss` component vocabulary. Route modules must consume these tokens and cannot introduce private palettes or raw color literals.
 
-Visual polish is part of implementation, not a later release phase. Each
-milestone must supply deterministic visual snapshots or equivalent rendered-
-screen evidence at `80x24` and `120x40`, including one non-happy state.
-Baselines are produced by the headless renderer from fixed fixtures and stored
-with tests; manually captured screenshots alone do not satisfy acceptance.
+#### Design Tokens & Theme Palette (Nord-Inspired Slate Baseline)
+
+| Category | Token Name | Value / Hex | Usage & Semantic Purpose |
+|---|---|---|---|
+| **Canvas** | `$canvas` | `#111318` | Base background; high contrast without harsh pure black |
+| **Surface** | `$surface` | `#1a1d24` | Main panel / card backgrounds (tables, detail containers) |
+| **Surface Raised** | `$surface-raised` | `#232732` | Modal dialogs, dropdowns, floating overlays |
+| **Border Subtle** | `$border-subtle` | `#2e3440` | Subtle container outlines (`border: round $border-subtle;`) |
+| **Border Active** | `$border-active` | `#88c0d0` / `#5e81ac` | High-visibility keyboard focus outline (`border: round $border-active;`) |
+| **Text Primary** | `$text-primary` | `#e5e9f0` | Tickers, key metrics, active values (`bold`) |
+| **Text Secondary** | `$text-secondary` | `#d8dee9` | Table cells, body labels |
+| **Text Muted** | `$text-muted` | `#6c7a96` | Subtitles, column headers, inactive shortcuts |
+| **Text Accent** | `$text-accent` | `#88c0d0` | Route headings, tab selection, action buttons |
+
+#### Financial Signal & Status Tokens (Text + Symbol + Color)
+
+Color reinforces status but never carries status alone. Every status display combines explicit text/symbols with semantic color to preserve 100% clarity on monochrome or colorblind terminals:
+
+| Signal / Status | Semantic Color | Symbol & Text | Context & Example |
+|---|---|---|---|
+| **Bullish / Ready** | `$status-bullish` (`#a3be8c` Green) | `▲ ENTER` / `READY` / `MATCH` | Actionable setup, ready cache, matching gate |
+| **Caution / Watch** | `$status-caution` (`#ebcb8b` Amber) | `◆ WATCH` / `PARTIAL` / `STALE` | Partial setup fit, stale data, warning gate |
+| **Bearish / Blocked** | `$status-bearish` (`#bf616a` Crimson) | `▼ AVOID` / `BLOCKED` / `ERROR` | Failed risk gate, avoid verdict, system error |
+| **Unavailable** | `$status-unavailable` (`#4c566a` Muted) | `— UNAVAILABLE` | Missing candle/flow input (never zero-filled) |
+| **Preview** | `$status-preview` (`#b48ead` Purple) | `⚡ NON-CANONICAL PREVIEW` | Backtest or non-authoritative preview |
+
+#### Interactive Component Specs
+
+- **Selected Table Row**: Uses `$surface-raised` background + bold text + a left-edge indicator bar (`│ BBRI ...`).
+- **Focus Ring**: Every active focusable widget (inputs, table, buttons, tabs) displays a prominent `$border-active` outline (`border: round $border-active;`).
+- **Modal Confirmation Cards**: Center-aligned overlay cards (`width: 64`, `border: thick $text-accent`) with explicit action badges (`[ WRITE ACTION: Cache Update ]`).
+- **Terminal Charting**: Sparklines and volume bars use unicode 8-level block characters (`  ▂ ▃ ▄ ▅ ▆ ▇ █`). Price/RSI series use smooth box-drawing lines (`─│┌┐└┘├┤┼`) with explicit horizontal threshold markers (`--- 70 OVERBOUGHT ---`).
+- **Numeric Alignment**: Numeric columns are right-aligned with fixed precision; dates, tickers, and status labels remain left/center aligned to prevent visual jitter.
+
+#### Vertical Line Budgeting for Minimum 80x24 Viewport
+
+To ensure zero clipping on the supported **80x24 minimum terminal**, screens adhere to a strict 24-line vertical allocation:
+
+```text
+Line 01    : Application Header & Status Context (Fixed)
+Line 02-04 : Decision / Verdict Strip (Fixed)
+Line 05    : Workspace Tab Bar / Navigation (Fixed)
+Line 06-22 : Scrollable Active Workspace Content (17 lines)
+Line 23-24 : Action Bar & Footer Keyboard Hints (Fixed)
+Total      : 24 lines (Zero vertical clipping)
+```
+
+Visual polish is part of implementation, not a later release phase. Each milestone must supply deterministic visual snapshots or equivalent rendered-screen evidence at `80x24` and `120x40`, including one non-happy state. Baselines are produced by the headless renderer from fixed fixtures and stored with tests; manually captured screenshots alone do not satisfy acceptance.
 
 ## Core Screen Designs
 

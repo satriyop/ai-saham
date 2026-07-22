@@ -177,26 +177,53 @@ silently hide canonical or warning content.
 
 ## Visual Language
 
-Use Textual theme variables and semantic CSS classes, not hard-coded RGB values.
+Use Textual `.tcss` variables and semantic token classes—never hard-coded RGB literals.
 
-| Role | Preferred semantic color | Required text |
-|---|---|---|
-| Ready / Open / Enter | success/green | `READY`, `OPEN`, `ENTER` |
-| Partial / Watch | warning/amber | `PARTIAL`, `WATCH` |
-| Not ready / Blocked / Error | error/red | `NOT_READY`, `BLOCKED`, `ERROR` |
-| Unavailable / Missing | muted/gray | `UNAVAILABLE` or `MISSING` |
-| Information / navigation | accent/cyan | descriptive label |
-| Non-canonical preview | secondary/magenta | `NON-CANONICAL PREVIEW` |
+### Design Tokens & Theme Palette (Nord-Inspired Slate Baseline)
 
-Rules:
+| Category | Token Name | Value / Hex | Usage & Semantic Purpose |
+|---|---|---|---|
+| **Canvas** | `$canvas` | `#111318` | Base background; high contrast without harsh pure black |
+| **Surface** | `$surface` | `#1a1d24` | Main panel / card backgrounds (tables, detail containers) |
+| **Surface Raised** | `$surface-raised` | `#232732` | Modal dialogs, dropdowns, floating overlays |
+| **Border Subtle** | `$border-subtle` | `#2e3440` | Subtle container outlines (`border: round $border-subtle;`) |
+| **Border Active** | `$border-active` | `#88c0d0` / `#5e81ac` | High-visibility keyboard focus outline (`border: round $border-active;`) |
+| **Text Primary** | `$text-primary` | `#e5e9f0` | Tickers, key metrics, active values (`bold`) |
+| **Text Secondary** | `$text-secondary` | `#d8dee9` | Table cells, body labels |
+| **Text Muted** | `$text-muted` | `#6c7a96` | Subtitles, column headers, inactive shortcuts |
+| **Text Accent** | `$text-accent` | `#88c0d0` | Route headings, tab selection, action buttons |
 
-- Color never replaces text.
-- No blinking.
-- Animation is limited to a loading indicator.
-- Section headings are concise uppercase labels.
-- Warnings wrap; they are never ellipsized into invisibility.
-- Numeric values align consistently; missing values render `—`, not zero.
-- Use borders and whitespace to show hierarchy, not decorative boxes everywhere.
+### Financial Signal & Status Tokens (Text + Symbol + Color)
+
+| Signal / Status | Semantic Color | Symbol & Required Text | Context & Example |
+|---|---|---|---|
+| **Bullish / Ready** | `$status-bullish` (`#a3be8c` Green) | `▲ ENTER` / `READY` / `MATCH` | Actionable setup, ready cache, matching gate |
+| **Caution / Watch** | `$status-caution` (`#ebcb8b` Amber) | `◆ WATCH` / `PARTIAL` / `STALE` | Partial setup fit, stale data, warning gate |
+| **Bearish / Blocked** | `$status-bearish` (`#bf616a` Crimson) | `▼ AVOID` / `BLOCKED` / `ERROR` | Failed risk gate, avoid verdict, system error |
+| **Unavailable** | `$status-unavailable` (`#4c566a` Muted) | `— UNAVAILABLE` | Missing candle/flow input (never zero-filled) |
+| **Preview** | `$status-preview` (`#b48ead` Purple) | `⚡ NON-CANONICAL PREVIEW` | Backtest or non-authoritative preview |
+
+### Component & Interactive Rules
+
+- **Focus Ring**: Keyboard focus is always explicitly highlighted (`border: round $border-active;`).
+- **Selected Table Row**: Uses `$surface-raised` background + bold text + left-edge indicator (`│ BBRI ...`).
+- **Modal Dialog Cards**: Centered overlay cards (`width: 64`, `border: thick $text-accent`) with clear action badges.
+- **Terminal Charting**: Sparklines and volume use 8-level blocks (`  ▂ ▃ ▄ ▅ ▆ ▇ █`). Line charts use smooth box drawing (`─│┌┐└┘├┤┼`) with explicit threshold lines (`--- 70 OVERBOUGHT ---`).
+- **Numeric Alignment**: Numeric values right-align with fixed precision; dates/tickers left-align to prevent visual jitter.
+- **Color Accessibility**: Color never replaces text. All status representations combine explicit text/symbols with color so meaning survives monochrome rendering.
+
+### Vertical 80x24 Viewport Budget
+
+Screens strictly allocate vertical lines on `80x24` terminals:
+
+```text
+Line 01    : Application Header & Status Context
+Line 02-04 : Decision / Verdict Strip
+Line 05    : Workspace Tab Bar / Navigation
+Line 06-22 : Scrollable Active Content Area (17 lines)
+Line 23-24 : Action Bar & Keyboard Hints Footer
+Total      : 24 lines (Zero vertical clipping)
+```
 
 ## Screen 1 — Today
 

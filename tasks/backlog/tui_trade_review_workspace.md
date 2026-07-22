@@ -169,17 +169,13 @@ reason; they are not failures or neutral results.
 
 ### Visual treatment
 
-- Review reads as a journal, not a live trading screen: period and provenance
-  first, recorded/evaluated/awaiting counts next, then outcome summaries.
-- Saved Candidates and Swing Journal use the shared tabs, tables, filters, and
-  detail treatment. Dates, tickers, horizons, sample counts, and signed returns
-  use stable alignment.
-- Awaiting data, unavailable, and evaluated states combine explicit text/symbols
-  with semantic color and cannot resemble loss, zero return, or failure.
-- Summary group headings keep horizon and sample size adjacent to every metric;
-  small samples are visually muted but not silently removed.
-- At `120x40`, journal and entry detail may use master-detail. At `80x24`, detail
-  opens without losing filters, selected row, or scroll position.
+- Consumes the central design token palette (`$canvas`, `$surface`, `$surface-raised`, `$border-active`, `$text-primary`, `$text-muted`, `$status-bullish`, `$status-caution`, etc.).
+- Review presents as a calm historical decision journal: period and provenance banner first, recorded/evaluated/awaiting counters next, then outcome tables.
+- Keyboard focus ring (`border: round $border-active;`) marks the active entry row or control button.
+- Selected journal entry row uses `$surface-raised` background + bold text + a left-edge indicator bar (`│ BBRI ...`).
+- Awaiting data (`◆ AWAITING_DATA`), unavailable (`— UNAVAILABLE`), and evaluated states combine explicit text symbols with semantic color; missing future candles never resemble 0% return or trade loss.
+- Summary metrics display sample count and horizon directly adjacent to every figure; small sample sizes use muted text (`$text-muted` `#6c7a96`) but are never hidden.
+- At `120x40`, journal list and entry detail use master-detail layout; at `80x24`, detail opens as an overlay panel while preserving exact filter state and scroll position.
 
 ## Non-Goals
 

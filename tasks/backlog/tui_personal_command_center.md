@@ -184,28 +184,23 @@ No provider secret, token, internal path, or payload is displayed.
 
 ### Shared visual system and shell
 
-This milestone owns the visual foundation used by every later workspace.
-Implement this option only:
+This milestone owns the visual foundation and centralized `.tcss` design token system used by every later workspace. Implement this option only:
 
-- one centralized semantic theme with tokens for canvas, surface, raised
-  surface, border, primary/muted text, accent/focus, positive, caution,
-  negative, unavailable, and selected row;
-- reusable application header, route navigation, workspace heading, status
-  badge, action bar, section heading, metric, data table, empty/error state,
-  confirmation, and Help/key-hint components;
-- a restrained visual style: dark neutral canvas, high-contrast text, one
-  primary accent, semantic state accents, minimal borders, and no decorative
-  gradients, blinking, or emoji-dependent icons;
-- a wide layout at `120x40` with market context and candidate summary visible
-  together; a compact `80x24` layout that stacks secondary content without
-  hiding data status, primary warning, Update, or the focused control;
-- a minimum-size guard below `80x24` that asks the user to resize rather than
-  rendering clipped controls;
-- status text/symbols that remain understandable with color disabled.
+- **Centralized Design Tokens**:
+  - Canvas & Surfaces: `$canvas` (`#111318`), `$surface` (`#1a1d24`), `$surface-raised` (`#232732`).
+  - Outlines & Focus: `$border-subtle` (`#2e3440`), `$border-active` (`#88c0d0` / `#5e81ac`). Focus ring (`border: round $border-active;`) must be visible on every active widget.
+  - Text Hierarchy: `$text-primary` (`#e5e9f0`), `$text-secondary` (`#d8dee9`), `$text-muted` (`#6c7a96`), `$text-accent` (`#88c0d0`).
+  - Financial Statuses: `$status-bullish` (`#a3be8c` `▲ ENTER` / `READY` / `MATCH`), `$status-caution` (`#ebcb8b` `◆ WATCH` / `PARTIAL` / `STALE`), `$status-bearish` (`#bf616a` `▼ AVOID` / `BLOCKED` / `ERROR`), `$status-unavailable` (`#4c566a` `— UNAVAILABLE`), `$status-preview` (`#b48ead` `⚡ PREVIEW`).
+- **Reusable Component Suite**:
+  - Application Header & Breadcrumb, Route Bar, Workspace Banner, Metric Card, Selected Table Row (left-edge indicator `│`), Modal Dialog (`width: 64`, `border: thick $text-accent`), Progress Bar, and Action Bar Footer.
+- **Responsive Layout & 80x24 Line Budgeting**:
+  - Strict 24-line vertical allocation (Header: 1 line, Verdict Strip: 3 lines, Tab Bar: 1 line, Content Area: 17 lines, Footer: 2 lines) ensuring zero clipping at `80x24`.
+  - Responsive expansion at `120x40` using master-detail or side-by-side grids.
+  - Hard minimum-size guard below `80x24` rendering a concise resize notification.
+- **Monochrome & Text Accessibility**:
+  - Every status combines explicit text/symbols with color so meaning survives monochrome rendering.
 
-Route screens consume these shared primitives. They may choose composition and
-content density, but cannot define independent palettes or incompatible focus,
-table, dialog, and status styles.
+Route screens consume these shared primitives. They may choose composition and content density, but cannot define independent palettes or incompatible focus, table, dialog, and status styles.
 
 ## Scope
 

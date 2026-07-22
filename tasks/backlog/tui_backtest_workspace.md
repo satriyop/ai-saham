@@ -177,18 +177,15 @@ Advanced detail may show the resolved path.
 
 ### Visual treatment
 
-- Setup and Strategy are visibly separate modes with shared shell styling but
-  different form groupings; do not disguise them as one generic form.
-- Inputs use compact labeled groups and stable units. Defaults, overrides,
-  validation errors, and disabled Run state are recognizable before execution.
-- Results start with request identity and authority label, then key metrics,
-  then equity/trades/regime/attribution detail.
-- Equity rendering uses labeled axes and a table fallback. Positive color must
-  not make a run appear recommended.
-- Compare uses aligned request-identity rows before aligned metrics; differing
-  inputs receive a text marker plus semantic emphasis.
-- At `120x40`, form/results or comparisons may be side-by-side. At `80x24`, use
-  staged form sections and tabbed results without hiding run identity.
+### Visual treatment
+
+- Consumes the central design token system (`$canvas`, `$surface`, `$border-active`, `$text-primary`, `$text-accent`, `$status-preview`, etc.).
+- Setup and Strategy modes remain visually distinct using shared tokens but separate form groupings; they are never combined into a loose generic form.
+- Keyboard focus ring (`border: round $border-active;`) highlights active input fields or mode buttons.
+- Every backtest result strictly displays the purple preview authority badge (`⚡ BACKTEST — NOT A LIVE VERDICT`, `$status-preview` `#b48ead`) prominently at the top to prevent mistaking historical tests for live trading verdicts.
+- Equity curve rendering uses 8-level unicode blocks (`  ▂ ▃ ▄ ▅ ▆ ▇ █`) or box drawing (`─│┌┐└┘`) with tabular fallback at compact width; positive color does not imply an automatic trading recommendation.
+- Run comparison aligns request parameters first, highlighting differing inputs with text markers (`!=`) and `$text-accent` color before showing side-by-side performance metrics.
+- At `120x40`, forms and equity/trade results display side-by-side; at `80x24`, staged form steps and tabbed results maintain complete 24-line budget without vertical clipping.
 
 ## Non-Goals
 
