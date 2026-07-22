@@ -278,12 +278,33 @@ def build_report(
             f"| decision_constraints.regime null | {dc_null} |",
             f"| join regime ≠ decision regime (when both set) | {join_vs_dc_mismatch} |",
             "",
-            "- When `decision_constraints.regime` is null, DecisionPolicy defaults "
-            "to **RISK_ON** floors at capture — even on NEUTRAL/RISK_OFF market days.",
-            "- coverage=0.0 blocks ENTER under every regime auth floor (≥0.70).",
-            "",
         ]
     )
+    cov_high = sum(
+        1
+        for r in panel
+        if r.signal_authority_coverage is not None
+        and r.signal_authority_coverage >= 0.70
+    )
+    if cov_zero == len(panel) and panel:
+        lines.extend(
+            [
+                "- coverage=0.0 on **all** rows — auth floors always bind; "
+                "score-floor tuning is not yet testable.",
+                "",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                f"- High coverage (cov≥0.70): **{cov_high}/{len(panel)}** "
+                f"({100.0 * cov_high / len(panel):.1f}%). "
+                "Score-floor and auth-floor sweeps below are meaningful on this "
+                "subset. Residual coverage=0 rows are typically LATE broker "
+                "settlement, not missing regime wiring.",
+                "",
+            ]
+        )
 
     # Regime × outcomes
     by_reg: dict[str, list[PanelRow]] = defaultdict(list)
@@ -466,12 +487,99 @@ def build_report(
     # Alt sweeps: enter threshold (ignore coverage for sensitivity — optional)
     lines.extend(
         [
-            "## Counterfactual sweeps (joined regime; **ignore coverage**)",
+            "## Counterfactual sweeps (joined regime)",
             "",
-            "Isolates score floors. Coverage remains 0.0 on this corpus and would "
-            "otherwise zero out ENTER under prod auth floors.",
+            "### Enter threshold sweep — **require cov≥0.70** (primary floor read)",
             "",
-            "### Enter threshold sweep (enter-allowed regimes only)",
+            "Only rows with authoritative coverage. Isolates score floors without "
+            "letting coverage=0 zero out ENTER.",
+            "",
+            "| Regime | Alt enter≥ | Synthetic ENTER n | Hit % | Avg % | PF |",
+            "|--------|------------|-------------------|-------|-------|----|",
+        ]
+    )
+    for regime_name in ("RISK_ON", "NEUTRAL"):
+        floor = floors.get(regime_name)
+        if floor is None or not floor.enter_allowed:
+            continue
+        for alt in (65.0, 68.0, 70.0, 72.0, 75.0):
+            matched = []
+            for r in panel:
+                if _norm_regime(r.regime) != regime_name:
+                    continue
+                if (
+                    r.signal_authority_coverage is None
+                    or r.signal_authority_coverage < 0.70
+                ):
+                    continue
+                if r.signal_score is None or r.signal_score < alt:
+                    continue
+                prelim = _preliminary(r.signal_score, r.gate_tightening)
+                if prelim != "ENTER":
+                    continue
+                fake = RegimeFloor(
+                    enter_allowed=True,
+                    enter_threshold=alt,
+                    watch_threshold=floor.watch_threshold,
+                    min_signal_authority_coverage=0.70,
+                    max_decision=floor.max_decision,
+                )
+                if (
+                    _apply_floors(
+                        prelim, r.signal_score, r.signal_authority_coverage, fake
+                    )
+                    == "ENTER"
+                ):
+                    matched.append(r)
+            lines.append(f"| {regime_name} | {alt:g} | {_fmt(_stats(matched))} |")
+    lines.append("")
+
+    # Direct 70 vs 72 delta on NEUTRAL high-coverage
+    neut_floor = floors.get("NEUTRAL")
+    if neut_floor is not None and neut_floor.enter_allowed:
+        lines.extend(
+            [
+                "### NEUTRAL 70 vs 72 — high-coverage delta",
+                "",
+                "Rows with joined NEUTRAL, cov≥0.70, preliminary ENTER (score≥70).",
+                "",
+                "| Cohort | n | Hit % | Avg % | PF |",
+                "|--------|---|-------|-------|----|",
+            ]
+        )
+        base70: list[PanelRow] = []
+        only72: list[PanelRow] = []  # score 70–71.999 → excluded by enter≥72
+        pass72: list[PanelRow] = []
+        for r in panel:
+            if _norm_regime(r.regime) != "NEUTRAL":
+                continue
+            if (
+                r.signal_authority_coverage is None
+                or r.signal_authority_coverage < 0.70
+            ):
+                continue
+            if r.signal_score is None or r.signal_score < 70:
+                continue
+            prelim = _preliminary(r.signal_score, r.gate_tightening)
+            if prelim != "ENTER":
+                continue
+            base70.append(r)
+            if r.signal_score >= 72:
+                pass72.append(r)
+            else:
+                only72.append(r)
+        lines.append(f"| enter≥70 (all score≥70) | {_fmt(_stats(base70))} |")
+        lines.append(f"| enter≥72 (score≥72 only) | {_fmt(_stats(pass72))} |")
+        lines.append(
+            f"| Marginal band score∈[70,72) cut by 72 floor | {_fmt(_stats(only72))} |"
+        )
+        lines.append("")
+
+    lines.extend(
+        [
+            "### Enter threshold sweep (ignore coverage — diagnostic only)",
+            "",
+            "Isolates score floors if coverage were never binding.",
             "",
             "| Alt enter≥ | Synthetic ENTER n | Hit % | Avg % | PF |",
             "|------------|-------------------|-------|-------|----|",
@@ -504,7 +612,7 @@ def build_report(
 
     lines.extend(
         [
-            "### Authority floor sweep (prod enter thresholds; coverage forced)",
+            "### Authority floor sweep (prod enter thresholds; actual coverage)",
             "",
             "| Auth floor | Synthetic ENTER n | Hit % | Avg % | PF |",
             "|------------|-------------------|-------|-------|----|",
@@ -525,7 +633,6 @@ def build_report(
                 min_signal_authority_coverage=auth,
                 max_decision=floor.max_decision,
             )
-            # Use actual coverage for auth>0; for 0.0 floor any coverage passes
             if (
                 _apply_floors(
                     prelim, r.signal_score, r.signal_authority_coverage, fake
@@ -571,23 +678,23 @@ def build_report(
         [
             "## Interpretation guardrails",
             "",
-            "- Realized ENTER rate can be zero even when scores clear enter floors "
-            "if authority coverage is 0 or market_context was missing at capture.",
+            "- Primary floor read is the **cov≥0.70** enter sweep + NEUTRAL "
+            "70-vs-72 delta — not the ignore-coverage diagnostic.",
+            "- Residual coverage=0 rows are usually LATE broker settlement; "
+            "they should not drive floor tuning.",
             "- `trade_setup.action` also includes RiskEngine BLOCKED_* — not pure "
             "DecisionPolicy.",
-            "- Counterfactuals that ignore coverage are diagnostic only.",
+            "- Small-n cohorts (especially RISK_ON ENTER) are directional only.",
             "- Do not edit `signal_engine.yaml` from this card alone.",
             "",
             "## Proposed config / engineering action",
             "",
             "**None automatic.** Candidate follow-ups (human review):",
-            "- Fix observation capture so `market_context` / "
-            "`decision_constraints.regime` and non-zero "
-            "`signal_authority_coverage` are persisted",
-            "- Re-run B6 after coverage is meaningful; then revisit NEUTRAL "
-            "enter 72 vs RISK_ON 70",
-            "- Next: persist risk gate outcomes for Package C, or canonical "
-            "backfill for power",
+            "- If NEUTRAL [70,72) marginal band is weak/noisy vs score≥72, "
+            "keep enter≥72; if it is strong with enough n, revisit 72→70",
+            "- RISK_ON enter≥70 needs more RISK_ON sample before trusting a change",
+            "- Next research: B2 setup-gate card with clean coverage, or Package C "
+            "risk-gate persistence",
             "",
         ]
     )
