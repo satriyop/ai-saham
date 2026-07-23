@@ -16,6 +16,9 @@ from src.application.services.accumulation_observation_fingerprint import (
     compute_accumulation_config_hash,
 )
 from src.domain.ports.candidate_observations_repository import CandidateObservation
+from src.domain.ports.observation_risk_assessment_repository import (
+    ObservationRiskAssessmentRecord,
+)
 from src.domain.value_objects.signal_semantic_contract import (
     ACCUMULATION_DISCOVERY_CONTRACT,
 )
@@ -113,7 +116,8 @@ class AccumulationCandidateObservationPersister:
             )
         captured_at = datetime.now()
         config_hash = compute_accumulation_config_hash(request)
-        observations = []
+        observations: list[CandidateObservation] = []
+        risk_records: list[ObservationRiskAssessmentRecord] = []
         for oc in observation_candidates:
             c, screen_result, flow_ev = oc.candidate, oc.screen_result, oc.flow_evidence
             # HIGH-2: reuse the exact setup family and phase resolved once
@@ -214,5 +218,33 @@ class AccumulationCandidateObservationPersister:
                     ),
                 )
             )
-        self._candidate_observations_repo.save_many(observations)
+            if c.risk_assessment is not None:
+                risk_records.append(
+                    ObservationRiskAssessmentRecord(
+                        ticker=c.ticker,
+                        snapshot_date=snapshot_date,
+                        workflow=workflow,
+                        window_sessions=request.window_days,
+                        data_as_of_date=data_as_of_date,
+                        config_hash=config_hash,
+                        assessed_at=captured_at,
+                        schema_version=1,
+                        risk_assessment_json=c.risk_assessment.to_dict(),
+                        trade_setup_json=(
+                            c.trade_setup.to_dict()
+                            if c.trade_setup is not None
+                            else None
+                        ),
+                        gate_triggered=c.risk_assessment.gate_triggered,
+                        setup_action=(
+                            c.trade_setup.action.value
+                            if c.trade_setup is not None
+                            else None
+                        ),
+                    )
+                )
+        self._candidate_observations_repo.save_many(
+            observations,
+            risk_records=risk_records or None,
+        )
         return len(observations)

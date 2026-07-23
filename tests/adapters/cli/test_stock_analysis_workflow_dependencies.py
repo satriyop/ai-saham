@@ -20,6 +20,9 @@ from src.infrastructure.config.config_backed_market_context_provider import (
 from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
     SQLiteCandidateObservationsRepository,
 )
+from src.infrastructure.persistence.sqlite_observation_risk_assessment_repository import (
+    SQLiteObservationRiskAssessmentRepository,
+)
 
 
 class TestCreateDependencies:
@@ -34,6 +37,10 @@ class TestCreateDependencies:
         assert isinstance(
             deps.candidate_observations_repository,
             SQLiteCandidateObservationsRepository,
+        )
+        assert isinstance(
+            deps.observation_risk_assessment_repository,
+            SQLiteObservationRiskAssessmentRepository,
         )
         # Verify they share the same concrete db_path
         assert deps.db_path == db_path
@@ -162,6 +169,9 @@ class TestDependencyInjectionInFactories:
             broker_repository=fake_repo,
             market_repository=fake_market,
             candidate_observations_repository=fake_obs_repo,
+            observation_risk_assessment_repository=MagicMock(
+                spec=SQLiteObservationRiskAssessmentRepository
+            ),
             stockbit_providers=fake_stockbit,
             rules_loader_factory=lambda: fake_rules_loader,
             indicator_registry_factory=lambda *args, **kwargs: fake_registry,
@@ -209,6 +219,9 @@ class TestDependencyInjectionInFactories:
             broker_repository=fake_repo,
             market_repository=fake_market,
             candidate_observations_repository=fake_obs_repo,
+            observation_risk_assessment_repository=MagicMock(
+                spec=SQLiteObservationRiskAssessmentRepository
+            ),
             stockbit_providers=fake_stockbit,
             rules_loader_factory=lambda: fake_rules_loader,
             indicator_registry_factory=lambda *args, **kwargs: fake_registry,
@@ -262,6 +275,9 @@ class TestDependencyInjectionInFactories:
             broker_repository=fake_repo,
             market_repository=fake_market,
             candidate_observations_repository=fake_obs_repo,
+            observation_risk_assessment_repository=MagicMock(
+                spec=SQLiteObservationRiskAssessmentRepository
+            ),
             stockbit_providers=fake_stockbit,
             rules_loader_factory=lambda: fake_rules_loader,
             indicator_registry_factory=lambda *args, **kwargs: fake_registry,
@@ -337,6 +353,9 @@ class TestDependencyInjectionInFactories:
             broker_repository=fake_repo,
             market_repository=fake_market,
             candidate_observations_repository=fake_obs_repo,
+            observation_risk_assessment_repository=MagicMock(
+                spec=SQLiteObservationRiskAssessmentRepository
+            ),
             stockbit_providers=fake_stockbit,
             rules_loader_factory=lambda: fake_rules_loader,
             indicator_registry_factory=lambda *args, **kwargs: fake_registry,
@@ -388,6 +407,9 @@ class TestDependencyInjectionInFactories:
             broker_repository=fake_repo,
             market_repository=fake_market,
             candidate_observations_repository=fake_obs_repo,
+            observation_risk_assessment_repository=MagicMock(
+                spec=SQLiteObservationRiskAssessmentRepository
+            ),
             stockbit_providers=fake_stockbit,
             rules_loader_factory=lambda: fake_rules_loader,
             indicator_registry_factory=lambda *args, **kwargs: fake_registry,

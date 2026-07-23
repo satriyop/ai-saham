@@ -396,12 +396,15 @@ class SpyCandidateObservationsRepository:
 
     def __init__(self):
         self.saved: list = []
+        self.risk_saved: list = []
         self.raise_on_save: Exception | None = None
 
-    def save_many(self, observations):
+    def save_many(self, observations, *, risk_records=None):
         if self.raise_on_save is not None:
             raise self.raise_on_save
         self.saved.extend(observations)
+        if risk_records:
+            self.risk_saved.extend(risk_records)
 
     def get_latest(self, ticker, snapshot_date):
         return None

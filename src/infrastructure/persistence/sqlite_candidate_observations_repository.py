@@ -10,6 +10,9 @@ from pathlib import Path
 from src.domain.ports.candidate_observations_repository import (
     CandidateObservation,
 )
+from src.domain.ports.observation_risk_assessment_repository import (
+    ObservationRiskAssessmentRecord,
+)
 from src.domain.value_objects.signal_artifact_identity import (
     SemanticCompatibilityId,
 )
@@ -19,6 +22,10 @@ from src.domain.value_objects.signal_artifact_schema import (
     validate_current_flow_component_fingerprint,
 )
 from src.infrastructure.persistence.sqlite_migration_runner import SqliteMigrationRunner
+from src.infrastructure.persistence.sqlite_observation_risk_assessment_repository import (
+    ensure_observation_risk_assessments_schema,
+    write_observation_risk_assessments,
+)
 from src.infrastructure.persistence.sqlite_signal_artifact_identity_codec import (
     decode_signal_artifact_identity,
     encode_signal_artifact_identity,
@@ -171,6 +178,7 @@ class SQLiteCandidateObservationsRepository:
     def __init__(self, db_path: str | Path) -> None:
         self._db_path = Path(db_path).expanduser()
         self._ensure_schema()
+        ensure_observation_risk_assessments_schema(self._db_path)
 
     def _ensure_schema(self) -> None:
         runner = SqliteMigrationRunner(self._db_path)
@@ -204,7 +212,12 @@ class SQLiteCandidateObservationsRepository:
         conn.row_factory = sqlite3.Row
         return conn
 
-    def save_many(self, observations: list[CandidateObservation]) -> None:
+    def save_many(
+        self,
+        observations: list[CandidateObservation],
+        *,
+        risk_records: list[ObservationRiskAssessmentRecord] | None = None,
+    ) -> None:
         """Upsert observations by canonical identity.
 
         Observations with a non-empty config_hash are canonical: a second
@@ -276,36 +289,39 @@ class SQLiteCandidateObservationsRepository:
                 )
             )
         with self._connect() as conn:
-            conn.executemany(
-                f"""
-                INSERT INTO candidate_observations
-                    (ticker, snapshot_date, captured_at, schema_version, payload_json,
-                     workflow, window_sessions, data_as_of_date, config_hash,
-                     decision_at, latest_completed_session, analysis_as_of,
-                     market_session_name, is_eod_pending, resolution_source,
-                     resolution_notes_json,
-                     artifact_id, semantic_compatibility_id, artifact_provenance_json,
-                     observation_contract)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT {_IDENTITY_CONFLICT_TARGET} WHERE config_hash != ''
-                DO UPDATE SET
-                    captured_at = excluded.captured_at,
-                    schema_version = excluded.schema_version,
-                    payload_json = excluded.payload_json,
-                    decision_at = excluded.decision_at,
-                    latest_completed_session = excluded.latest_completed_session,
-                    analysis_as_of = excluded.analysis_as_of,
-                    market_session_name = excluded.market_session_name,
-                    is_eod_pending = excluded.is_eod_pending,
-                    resolution_source = excluded.resolution_source,
-                    resolution_notes_json = excluded.resolution_notes_json,
-                    artifact_id = excluded.artifact_id,
-                    semantic_compatibility_id = excluded.semantic_compatibility_id,
-                    artifact_provenance_json = excluded.artifact_provenance_json,
-                    observation_contract = excluded.observation_contract
-                """,
-                rows,
-            )
+            if rows:
+                conn.executemany(
+                    f"""
+                    INSERT INTO candidate_observations
+                        (ticker, snapshot_date, captured_at, schema_version, payload_json,
+                         workflow, window_sessions, data_as_of_date, config_hash,
+                         decision_at, latest_completed_session, analysis_as_of,
+                         market_session_name, is_eod_pending, resolution_source,
+                         resolution_notes_json,
+                         artifact_id, semantic_compatibility_id, artifact_provenance_json,
+                         observation_contract)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT {_IDENTITY_CONFLICT_TARGET} WHERE config_hash != ''
+                    DO UPDATE SET
+                        captured_at = excluded.captured_at,
+                        schema_version = excluded.schema_version,
+                        payload_json = excluded.payload_json,
+                        decision_at = excluded.decision_at,
+                        latest_completed_session = excluded.latest_completed_session,
+                        analysis_as_of = excluded.analysis_as_of,
+                        market_session_name = excluded.market_session_name,
+                        is_eod_pending = excluded.is_eod_pending,
+                        resolution_source = excluded.resolution_source,
+                        resolution_notes_json = excluded.resolution_notes_json,
+                        artifact_id = excluded.artifact_id,
+                        semantic_compatibility_id = excluded.semantic_compatibility_id,
+                        artifact_provenance_json = excluded.artifact_provenance_json,
+                        observation_contract = excluded.observation_contract
+                    """,
+                    rows,
+                )
+            if risk_records:
+                write_observation_risk_assessments(conn, risk_records)
 
     def get_latest(self, ticker: str, snapshot_date: date) -> CandidateObservation | None:
         with self._connect() as conn:

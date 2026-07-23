@@ -11,6 +11,7 @@ Layer: Domain
 
 from dataclasses import dataclass
 from datetime import date
+from typing import Any
 
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 
@@ -51,3 +52,14 @@ class RiskAssessment:
     def confidence(self) -> int:
         """Confidence of the gate that fired (0 when no gate fired)."""
         return self.gate_confidence or 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "snapshot_date": self.snapshot_date.isoformat(),
+            "gate_triggered": self.gate_triggered,
+            "gate_is_structural": self.gate_is_structural,
+            "gate_confidence": self.gate_confidence,
+            "confidence": self.confidence,
+            "rationale": list(self.rationale),
+            "indicators": self.indicators.to_dict(),
+        }

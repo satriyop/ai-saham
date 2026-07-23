@@ -28,7 +28,7 @@ class _SpyRepo:
     def __init__(self) -> None:
         self.saved: list = []
 
-    def save_many(self, observations) -> None:
+    def save_many(self, observations, *, risk_records=None) -> None:
         self.saved.extend(observations)
 
 

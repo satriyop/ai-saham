@@ -98,7 +98,7 @@ class FakeCandidateObservationsRepository:
             )
         )
 
-    def save_many(self, observations):
+    def save_many(self, observations, *, risk_records=None):
         for observation in observations:
             self.by_date.setdefault(observation.snapshot_date, []).append(observation)
 

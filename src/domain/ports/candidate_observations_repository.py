@@ -6,6 +6,10 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Protocol
 
+from src.domain.ports.observation_risk_assessment_repository import (
+    ObservationRiskAssessmentRecord,
+)
+
 from src.domain.value_objects.signal_artifact_identity import (
     SemanticCompatibilityId,
     SignalArtifactIdentity,
@@ -55,13 +59,22 @@ class CandidateObservation:
 class CandidateObservationsRepository(Protocol):
     """Local repository for schema-versioned candidate observation payloads."""
 
-    def save_many(self, observations: list[CandidateObservation]) -> None:
+    def save_many(
+        self,
+        observations: list[CandidateObservation],
+        *,
+        risk_records: list[ObservationRiskAssessmentRecord] | None = None,
+    ) -> None:
         """Upsert observations by canonical identity for later replay.
 
         Identity is (ticker, snapshot_date, workflow, window_sessions,
         data_as_of_date, config_hash). Saving an observation that matches an
         existing identity replaces its payload/captured_at in place rather
         than appending a duplicate row.
+
+        When risk_records is provided, implementations that support child
+        persistence write observation_risk_assessments in the same transaction
+        as the parent upserts.
         """
         ...
 

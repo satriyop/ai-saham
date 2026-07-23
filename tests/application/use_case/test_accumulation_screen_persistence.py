@@ -177,7 +177,7 @@ class _CapturingObservationsRepo:
     def __init__(self) -> None:
         self.saved: list[CandidateObservation] = []
 
-    def save_many(self, observations: list[CandidateObservation]) -> None:
+    def save_many(self, observations: list[CandidateObservation], *, risk_records=None) -> None:
         self.saved.extend(observations)
 
     def get_latest(self, ticker: str, snapshot_date: date) -> CandidateObservation | None:

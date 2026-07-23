@@ -645,7 +645,7 @@ def test_persister_empty_input_returns_zero_without_raising(tmp_path):
     # A repository is present but there are no evaluated candidates -> still 0,
     # still no raise (empty input is not a failure).
     class _UnusedRepo:
-        def save_many(self, observations):  # pragma: no cover - must not be called
+        def save_many(self, observations, *, risk_records=None):  # pragma: no cover - must not be called
             raise AssertionError("save_many must not run for empty input")
 
     empty_input_persister = AccumulationCandidateObservationPersister(

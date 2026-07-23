@@ -41,7 +41,7 @@ class FakeCandidateObservationsRepository:
     def __init__(self, phases: tuple[str, ...]) -> None:
         self._phases = phases
 
-    def save_many(self, observations):
+    def save_many(self, observations, *, risk_records=None):
         raise AssertionError("not used")
 
     def get_latest(self, ticker, snapshot_date):

@@ -70,7 +70,7 @@ class FakeCandidateObservationsRepository:
             if _is_canonical(row)
         ]
 
-    def save_many(self, observations):
+    def save_many(self, observations, *, risk_records=None):
         raise AssertionError("not used")
 
     def get_latest(self, ticker, snapshot_date):

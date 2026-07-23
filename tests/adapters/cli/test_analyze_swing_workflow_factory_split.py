@@ -74,6 +74,7 @@ def _fake_dependencies(tmp_path) -> StockAnalysisWorkflowDependencies:
         broker_repository=MagicMock(spec=BrokerDataRepository),
         market_repository=MagicMock(spec=MarketDataRepository),
         candidate_observations_repository=MagicMock(spec=SQLiteCandidateObservationsRepository),
+        observation_risk_assessment_repository=MagicMock(),
         stockbit_providers=MagicMock(spec=StockbitProviders),
         rules_loader_factory=lambda: fake_rules_loader,
         indicator_registry_factory=lambda *args, **kwargs: fake_registry,

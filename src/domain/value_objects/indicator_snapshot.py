@@ -10,7 +10,7 @@ Layer: Domain
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Union
+from typing import Any, Union
 
 
 @dataclass(frozen=True)
@@ -38,6 +38,18 @@ class IndicatorSnapshot:
     ema: Decimal
     rsi: Decimal
     extras: tuple[tuple[str, Union[Decimal, str]], ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "date": self.date.isoformat(),
+            "sma": str(self.sma),
+            "ema": str(self.ema),
+            "rsi": str(self.rsi),
+            "extras": [
+                [name, str(value) if isinstance(value, Decimal) else value]
+                for name, value in self.extras
+            ],
+        }
 
     def get(self, name: str) -> Union[Decimal, str]:
         """Get indicator value by name.
