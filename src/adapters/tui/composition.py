@@ -369,36 +369,68 @@ def _build_setup_evaluator(setup_name, swing_config):
     return evaluator
 
 
+def _build_ticker_fetch_request(
+    *, ticker: str, db_path: Path, force_refresh: bool, analyze_config, broker_provider, broker_name
+):
+    """Single-ticker candles+broker fetch request for the workbench refresh.
+
+    Candles use yfinance (no Stockbit api_client required), broker uses the
+    Stockbit session when authenticated and IDX otherwise. This mirrors the
+    Milestone A data-Update path and avoids forcing Stockbit-historical candles,
+    which crashes when no Stockbit session exists.
+    """
+    from src.application.use_case.fetch_market_command_workflow_use_case import (
+        FetchMarketCommandWorkflowRequest,
+    )
+
+    return FetchMarketCommandWorkflowRequest(
+        tickers=[ticker],
+        universe=None,
+        days=max(analyze_config.market_refresh_days, analyze_config.broker_refresh_days),
+        db_path=db_path,
+        candles_provider="yfinance",
+        broker_provider=broker_provider,
+        broker_provider_name=broker_name,
+        refresh=force_refresh,
+        candles_only=False,
+        broker_only=False,
+        no_meta=True,
+        no_enrichment=True,
+        no_calendar=True,
+    )
+
+
 def _build_ticker_refresh_data(deps: _StockDependencies, analyze_config):
     """Real provider-refresh seam for the Ticker Decision Workbench.
 
-    Reuses the application-owned ``refresh_swing_data`` orchestration with
-    infrastructure fetchers, so 'Update if stale' and 'Force update' fetch exactly
-    one ticker's candles + broker flow. Only invoked when ``auto_refresh`` is set,
-    so 'Cached only' can never reach a provider through this callable.
+    'Update if stale' and 'Force update' fetch exactly one ticker's candles +
+    broker flow through the shared fetch-market workflow. Only invoked when
+    ``auto_refresh`` is set, so 'Cached only' can never reach a provider here.
     """
-    from src.application.services.swing_data_refresh import refresh_swing_data
-    from src.infrastructure.composition.broker_provider_factory import (
-        create_broker_provider,
-    )
-    from src.infrastructure.composition.fetch_market.fetch_market_broker_refresh import (
-        fetch_broker,
-    )
-    from src.infrastructure.composition.fetch_market.fetch_market_candle_refresh import (
-        fetch_candles,
+    from src.infrastructure.composition.fetch_market.fetch_market_workflow_factory import (
+        create_workflow_use_case,
     )
 
     def refresh_data(*, ticker: str, db_path: Path, force_refresh: bool):
-        return refresh_swing_data(
-            ticker=ticker,
+        sb_providers = create_readonly_stockbit_providers(db_path)
+        sb_client = sb_providers.session if sb_providers else None
+        broker_name = "stockbit" if sb_client else "none"
+        workflow = create_workflow_use_case(
             db_path=db_path,
-            force_refresh=force_refresh,
-            market_refresh_days=analyze_config.market_refresh_days,
-            broker_refresh_days=analyze_config.broker_refresh_days,
-            fetch_candles=fetch_candles,
-            create_broker_provider=create_broker_provider,
-            fetch_broker=fetch_broker,
+            broker_provider=sb_client,
+            broker_provider_name=broker_name,
         )
+        workflow.execute(
+            _build_ticker_fetch_request(
+                ticker=ticker,
+                db_path=db_path,
+                force_refresh=force_refresh,
+                analyze_config=analyze_config,
+                broker_provider=sb_client,
+                broker_name=broker_name,
+            )
+        )
+        return (f"candles+broker refreshed for {ticker} via yfinance+{broker_name}",)
 
     return refresh_data
 
