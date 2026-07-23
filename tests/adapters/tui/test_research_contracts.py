@@ -19,6 +19,7 @@ from src.adapters.tui.research_capabilities import (
     build_ticker_request,
 )
 from src.adapters.tui.state import ScreenStatus
+from src.adapters.tui.ticker_refresh_mode import TickerRefreshMode
 from src.application.services.swing_analysis_input_collector import (
     SwingAnalysisDataUnavailable,
 )
@@ -96,13 +97,18 @@ def test_accumulation_late_result_is_ignored():
 
 
 def test_ticker_unavailable_is_typed_and_other_errors_preserve_details():
-    def unavailable(ticker):
+    def unavailable(ticker, mode, setup):
         raise SwingAnalysisDataUnavailable(ticker)
 
     controller = TickerResearchController(unavailable)
     generation = controller.begin()
     controller.execute_generation(
-        generation, ticker="BBRI", dispatch=_dispatch, listener=lambda state: None
+        generation,
+        ticker="BBRI",
+        mode=TickerRefreshMode.CACHED_ONLY,
+        setup=None,
+        dispatch=_dispatch,
+        listener=lambda state: None,
     )
     assert controller.state.status is ScreenStatus.UNAVAILABLE
     assert controller.state.payload.reason == "BBRI"
@@ -111,11 +117,13 @@ def test_ticker_unavailable_is_typed_and_other_errors_preserve_details():
 def test_out_of_order_ticker_result_cannot_replace_newer_selection():
     responses = iter((ticker_response(ticker="BBRI"), ticker_response(ticker="BBCA")))
     queued = []
-    controller = TickerResearchController(lambda ticker: next(responses))
+    controller = TickerResearchController(lambda ticker, mode, setup: next(responses))
     first = controller.begin()
     controller.execute_generation(
         first,
         ticker="BBRI",
+        mode=TickerRefreshMode.CACHED_ONLY,
+        setup=None,
         dispatch=lambda callback, *args: queued.append((callback, args)),
         listener=lambda state: None,
     )
@@ -123,6 +131,8 @@ def test_out_of_order_ticker_result_cannot_replace_newer_selection():
     controller.execute_generation(
         second,
         ticker="BBCA",
+        mode=TickerRefreshMode.CACHED_ONLY,
+        setup=None,
         dispatch=lambda callback, *args: queued.append((callback, args)),
         listener=lambda state: None,
     )
@@ -134,11 +144,15 @@ def test_out_of_order_ticker_result_cannot_replace_newer_selection():
 
 
 def test_ticker_response_identity_mismatch_fails_closed():
-    controller = TickerResearchController(lambda ticker: ticker_response(ticker="BBCA"))
+    controller = TickerResearchController(
+        lambda ticker, mode, setup: ticker_response(ticker="BBCA")
+    )
     generation = controller.begin()
     controller.execute_generation(
         generation,
         ticker="BBRI",
+        mode=TickerRefreshMode.CACHED_ONLY,
+        setup=None,
         dispatch=_dispatch,
         listener=lambda state: None,
     )

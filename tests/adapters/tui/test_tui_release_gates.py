@@ -14,7 +14,7 @@ from src.adapters.tui.composition import create_tui_app
 from src.adapters.tui.screens.candidate_browser_screen import CandidateBrowserScreen
 from src.adapters.tui.screens.daily_screen import DailyScreen
 from src.adapters.tui.screens.help import HelpScreen
-from src.adapters.tui.screens.ticker_research_screen import TickerResearchScreen
+from src.adapters.tui.screens.ticker_workbench_screen import TickerWorkbenchScreen
 
 from .daily_fixtures import (
     empty_response,
@@ -48,7 +48,7 @@ class _StrictJourneyCapabilities:
         self.accumulation_calls.append(request.multi)
         return single_result()
 
-    def ticker(self, ticker: str):
+    def ticker(self, ticker: str, mode=None, setup=None):
         self.ticker_calls.append(ticker)
         return ticker_response(ticker=ticker)
 
@@ -113,19 +113,27 @@ def test_full_keyboard_journey_is_offline_read_only_and_authority_safe(size):
             assert "Risk: OPEN" in selected
             assert "Data: ALIGNED" in selected
 
+            # Enter opens the workbench; analysis must not run on mount.
             await pilot.press("enter")
+            await pilot.pause()
+            assert isinstance(app.screen, TickerWorkbenchScreen)
+            assert capabilities.ticker_calls == []
+
+            # Default mode is Cached only — an explicit Run stays offline.
+            await pilot.press("r")
             await _wait_until(
                 pilot,
                 lambda: capabilities.ticker_calls == ["BBRI"],
-                "Ticker research did not load",
+                "Ticker analysis did not load",
             )
-            assert isinstance(app.screen, TickerResearchScreen)
-            canonical = str(app.screen.query_one("#ticker-canonical", Static).content)
-            preview = str(app.screen.query_one("#ticker-preview", Static).content)
-            assert "CANONICAL_ONLY" in canonical
-            assert "PREVIEW_ONLY" not in canonical
-            assert "NON-CANONICAL PREVIEW" in preview
-            assert "PREVIEW_ONLY" in preview
+            verdict = str(app.screen.query_one("#wb-verdict", Static).content)
+            assert "CANONICAL_ONLY" in verdict
+            assert "PREVIEW_ONLY" not in verdict
+            await pilot.click("#wb-tab-signal_risk")
+            await pilot.pause()
+            body = str(app.screen.query_one("#wb-tab-body", Static).content)
+            assert "NON-CANONICAL PREVIEW" in body
+            assert "PREVIEW_ONLY" in body
 
             await pilot.press("escape", "escape")
             await pilot.pause()

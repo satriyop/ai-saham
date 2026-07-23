@@ -10,12 +10,19 @@ from dataclasses import dataclass
 
 from src.adapters.tui.controllers.daily_controller import StateListener, UiDispatcher
 from src.adapters.tui.state import ScreenState, ScreenStateTracker, ScreenStatus
+from src.adapters.tui.ticker_refresh_mode import TickerRefreshMode
 from src.application.dto.swing_analysis import SwingAnalysisWorkflowResponse
 from src.application.use_case.swing_analysis_workflow_use_case import (
     SwingAnalysisDataUnavailable,
 )
 
-TickerLoader = Callable[[str], SwingAnalysisWorkflowResponse]
+# The loader receives the exact analysis intent: which ticker, how fresh the data
+# must be (refresh mode), and which named setup to fit (or None). The controller
+# never builds provider flags itself — that mapping lives in TickerRefreshMode and
+# the composition-owned loader.
+TickerLoader = Callable[
+    [str, TickerRefreshMode, "str | None"], SwingAnalysisWorkflowResponse
+]
 
 
 @dataclass(frozen=True)
@@ -44,11 +51,13 @@ class TickerResearchController:
         generation: int,
         *,
         ticker: str,
+        mode: TickerRefreshMode,
+        setup: str | None,
         dispatch: UiDispatcher,
         listener: StateListener,
     ) -> None:
         try:
-            response = self._load_ticker(ticker)
+            response = self._load_ticker(ticker, mode, setup)
             if response.ticker != ticker:
                 raise ValueError(
                     f"ticker response identity mismatch: requested {ticker!r}, "

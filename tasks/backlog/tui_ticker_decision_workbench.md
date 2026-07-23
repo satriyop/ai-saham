@@ -237,11 +237,13 @@ Layer plan:
 
 ### Phasing (value-first vertical slices)
 
-- **C0 — Workbench shell + decision core (zero new app boundaries).** Tabbed shell
-  + persistent decision strip (verdict/blockers fixed above tabs), global `/` search
-  (cached tickers) with return-context, explicit Run with exact refresh-mode mapping.
-  Overview / Setup / Signal & Risk rendered from the existing swing response. Adds
-  `ListCachedTickersUseCase` for search autocomplete.
+- **C0 — Workbench shell + decision core (zero new app boundaries). DONE (2026-07-23).**
+  Tabbed shell + persistent decision strip (verdict/blockers fixed above tabs), global
+  `/` search (cached tickers) with return-context, explicit Run with exact refresh-mode
+  mapping. Overview / Setup / Signal & Risk rendered from the existing swing response.
+  Adds `ListCachedTickersUseCase` for search autocomplete. Real ticker refresh wired
+  (all 3 modes hit real providers via `refresh_swing_data` + new infra
+  `broker_provider_factory`); Cached only stays strictly offline.
 - **C1 — Position Plan + Log.** `CalculatePositionPlanUseCase` (standalone recompute)
   + Log preview/confirm sharing the exact request object.
 - **C2 — Chart tab.** `GetTickerChartSeriesUseCase` + unicode/box-drawing renderer

@@ -7,14 +7,17 @@ from src.adapters.tui.controllers.accumulation_controller import AccumulationCon
 from src.adapters.tui.controllers.daily_controller import DailyController
 from src.adapters.tui.controllers.discover_controller import DiscoverController
 from src.adapters.tui.controllers.ticker_research_controller import TickerResearchController
+from collections.abc import Callable
+
 from src.adapters.tui.presenters.accumulation_presenter import AccumulationPresenter
 from src.adapters.tui.presenters.daily_presenter import DailyPresenter
 from src.adapters.tui.presenters.discover_presenter import DiscoverPresenter
-from src.adapters.tui.presenters.ticker_research_presenter import TickerResearchPresenter
+from src.adapters.tui.presenters.ticker_workbench_presenter import TickerWorkbenchPresenter
 from src.adapters.tui.screens.candidate_browser_screen import CandidateBrowserScreen
 from src.adapters.tui.screens.daily_screen import DailyScreen
 from src.adapters.tui.screens.help import HelpScreen
-from src.adapters.tui.screens.ticker_research_screen import TickerResearchScreen
+from src.adapters.tui.screens.ticker_search_modal import TickerSearchModal
+from src.adapters.tui.screens.ticker_workbench_screen import TickerWorkbenchScreen
 
 
 class SahamTuiApp(App[None]):
@@ -26,6 +29,7 @@ class SahamTuiApp(App[None]):
     BINDINGS = [
         Binding("1", "show_today", "Today"),
         Binding("2", "show_candidates", "Candidates"),
+        Binding("slash", "search_ticker", "Search"),
         Binding("q", "quit", "Quit"),
     ]
     CSS = """
@@ -212,6 +216,86 @@ class SahamTuiApp(App[None]):
     .non-canonical-preview {
         color: $secondary;
     }
+
+    #workbench-shell {
+        width: 100%;
+        height: 1fr;
+        padding: 1 2;
+    }
+
+    #wb-header {
+        width: 100%;
+        text-style: bold;
+        color: $accent;
+    }
+
+    #wb-verdict {
+        width: 100%;
+        text-style: bold;
+    }
+
+    #wb-blockers, #wb-status {
+        width: 100%;
+        color: $text-muted;
+    }
+
+    #wb-controls {
+        height: 3;
+        margin: 1 0;
+        align: left middle;
+    }
+
+    #wb-controls Select {
+        width: 24;
+        margin-right: 1;
+    }
+
+    #wb-tab-bar {
+        height: 3;
+        margin-bottom: 1;
+        align: left middle;
+    }
+
+    #wb-content {
+        height: 1fr;
+        border: round $primary;
+        padding: 0 1;
+        background: $surface;
+    }
+
+    #wb-content:focus {
+        border: round $accent;
+    }
+
+    TickerSearchModal {
+        align: center middle;
+    }
+
+    #ticker-search-card {
+        width: 64;
+        height: auto;
+        max-height: 80%;
+        padding: 1 2;
+        background: $surface;
+        border: thick $accent;
+    }
+
+    #ticker-search-title {
+        text-style: bold;
+        color: $accent;
+        margin-bottom: 1;
+    }
+
+    #ticker-search-results {
+        height: auto;
+        max-height: 16;
+        margin-top: 1;
+    }
+
+    #ticker-search-status {
+        color: $text-muted;
+        margin-top: 1;
+    }
     """
 
     def __init__(
@@ -221,7 +305,9 @@ class SahamTuiApp(App[None]):
         accumulation_controller: AccumulationController | DiscoverController,
         accumulation_presenter: AccumulationPresenter | DiscoverPresenter,
         ticker_controller: TickerResearchController,
-        ticker_presenter: TickerResearchPresenter,
+        ticker_presenter: TickerWorkbenchPresenter,
+        *,
+        search_tickers: Callable[[str], tuple[str, ...]],
     ) -> None:
         super().__init__()
         self._daily_controller = daily_controller
@@ -230,6 +316,7 @@ class SahamTuiApp(App[None]):
         self._accumulation_presenter = accumulation_presenter
         self._ticker_controller = ticker_controller
         self._ticker_presenter = ticker_presenter
+        self._search_tickers = search_tickers
 
     def on_mount(self) -> None:
         self.set_route_context("Today")
@@ -254,7 +341,7 @@ class SahamTuiApp(App[None]):
         if isinstance(self.screen, HelpScreen):
             self.pop_screen()
             return
-        if isinstance(self.screen, TickerResearchScreen):
+        if isinstance(self.screen, TickerWorkbenchScreen):
             self._cancel_active_screen_work()
             self.pop_screen()
             self.call_after_refresh(self.action_show_today)
@@ -270,7 +357,7 @@ class SahamTuiApp(App[None]):
         if isinstance(self.screen, HelpScreen):
             self.pop_screen()
             return
-        if isinstance(self.screen, TickerResearchScreen):
+        if isinstance(self.screen, TickerWorkbenchScreen):
             self._cancel_active_screen_work()
             self.set_route_context("Candidates")
             self.pop_screen()
@@ -288,12 +375,25 @@ class SahamTuiApp(App[None]):
     def action_open_ticker(self, ticker: str) -> None:
         self._cancel_active_screen_work()
         self.push_screen(
-            TickerResearchScreen(
+            TickerWorkbenchScreen(
                 ticker,
                 self._ticker_controller,
                 self._ticker_presenter,
             )
         )
+
+    def action_search_ticker(self) -> None:
+        """Open the offline global ticker search. Selecting a ticker opens the
+        same workbench used by the Discover drilldown. Opening search — and typing
+        in it — never queries a provider."""
+        if isinstance(self.screen, (HelpScreen, TickerSearchModal)):
+            return
+
+        def _on_dismiss(ticker: str | None) -> None:
+            if ticker:
+                self.action_open_ticker(ticker)
+
+        self.push_screen(TickerSearchModal(self._search_tickers), _on_dismiss)
 
     def action_show_help(self) -> None:
         if not isinstance(self.screen, HelpScreen):

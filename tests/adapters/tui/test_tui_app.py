@@ -8,7 +8,7 @@ from src.adapters.tui.composition import create_tui_app
 from src.adapters.tui.screens.candidate_browser_screen import CandidateBrowserScreen
 from src.adapters.tui.screens.daily_screen import DailyScreen
 from src.adapters.tui.screens.help import HelpScreen
-from src.adapters.tui.screens.ticker_research_screen import TickerResearchScreen
+from src.adapters.tui.screens.ticker_workbench_screen import TickerWorkbenchScreen
 
 from .daily_fixtures import not_ready_response, ready_response
 from .research_fixtures import multi_result, single_result, ticker_response
@@ -143,7 +143,7 @@ def test_candidate_navigation_has_one_load_and_enter_runs_selected_ticker_once()
             accumulation_calls.append(request.multi)
             return multi_result() if request.multi else single_result()
 
-        def load_ticker(ticker):
+        def load_ticker(ticker, mode=None, setup=None):
             ticker_calls.append(ticker)
             return ticker_response()
 
@@ -167,19 +167,30 @@ def test_candidate_navigation_has_one_load_and_enter_runs_selected_ticker_once()
             assert accumulation_calls == [False]
             assert ticker_calls == []
 
+            # Enter opens the workbench but must NOT run analysis on mount.
             await pilot.press("enter")
+            await pilot.pause()
+            assert isinstance(app.screen, TickerWorkbenchScreen)
+            assert ticker_calls == []
+
+            # Analysis runs only on the explicit Run action.
+            await pilot.press("r")
             for _ in range(30):
                 await pilot.pause(0.01)
                 if ticker_calls:
                     break
-            assert isinstance(app.screen, TickerResearchScreen)
             assert ticker_calls == ["BBRI"]
-            canonical = str(app.screen.query_one("#ticker-canonical", Static).content)
-            preview = str(app.screen.query_one("#ticker-preview", Static).content)
-            assert "CANONICAL_ONLY" in canonical
-            assert "PREVIEW_ONLY" not in canonical
-            assert "NON-CANONICAL PREVIEW" in preview
-            assert "PREVIEW_ONLY" in preview
+            verdict = str(app.screen.query_one("#wb-verdict", Static).content)
+            assert "CANONICAL_ONLY" in verdict
+            assert "PREVIEW_ONLY" not in verdict
+
+            # The optional preview is isolated on the Signal & Risk tab, never in
+            # the canonical decision strip.
+            await pilot.click("#wb-tab-signal_risk")
+            await pilot.pause()
+            body = str(app.screen.query_one("#wb-tab-body", Static).content)
+            assert "NON-CANONICAL PREVIEW" in body
+            assert "PREVIEW_ONLY" in body
 
             await pilot.press("escape")
             await pilot.pause()
@@ -201,7 +212,7 @@ def test_candidate_compact_mode_keeps_canonical_action_risk_and_data_text():
         app = create_tui_app(
             daily_loader=lambda: ready_response(),
             accumulation_loader=lambda request: single_result(),
-            ticker_loader=lambda ticker: ticker_response(ticker=ticker),
+            ticker_loader=lambda ticker, mode=None, setup=None: ticker_response(ticker=ticker),
         )
         async with app.run_test(size=(80, 24)) as pilot:
             await pilot.pause(0.05)

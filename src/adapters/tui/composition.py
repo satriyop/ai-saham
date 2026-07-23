@@ -35,7 +35,7 @@ from src.adapters.tui.controllers.ticker_research_controller import (
 from src.adapters.tui.main import SahamTuiApp
 from src.adapters.tui.presenters.daily_presenter import DailyPresenter
 from src.adapters.tui.presenters.discover_presenter import DiscoverPresenter
-from src.adapters.tui.presenters.ticker_research_presenter import TickerResearchPresenter
+from src.adapters.tui.presenters.ticker_workbench_presenter import TickerWorkbenchPresenter
 from src.adapters.tui.research_capabilities import (
     ResearchExecution,
     SerializedResearchCapabilities,
@@ -83,6 +83,9 @@ from src.application.use_case.evaluate_swing_setup_use_case import (
     AVAILABLE_SWING_SETUPS,
     EvaluateSwingSetupRequest,
     EvaluateSwingSetupUseCase,
+)
+from src.application.use_case.list_cached_tickers_use_case import (
+    ListCachedTickersUseCase,
 )
 from src.application.use_case.list_screen_watchlists_use_case import (
     ListScreenWatchlistsUseCase,
@@ -366,7 +369,46 @@ def _build_setup_evaluator(setup_name, swing_config):
     return evaluator
 
 
-def _build_swing_workflow(deps: _StockDependencies, setup_name: str | None):
+def _build_ticker_refresh_data(deps: _StockDependencies, analyze_config):
+    """Real provider-refresh seam for the Ticker Decision Workbench.
+
+    Reuses the application-owned ``refresh_swing_data`` orchestration with
+    infrastructure fetchers, so 'Update if stale' and 'Force update' fetch exactly
+    one ticker's candles + broker flow. Only invoked when ``auto_refresh`` is set,
+    so 'Cached only' can never reach a provider through this callable.
+    """
+    from src.application.services.swing_data_refresh import refresh_swing_data
+    from src.infrastructure.composition.broker_provider_factory import (
+        create_broker_provider,
+    )
+    from src.infrastructure.composition.fetch_market.fetch_market_broker_refresh import (
+        fetch_broker,
+    )
+    from src.infrastructure.composition.fetch_market.fetch_market_candle_refresh import (
+        fetch_candles,
+    )
+
+    def refresh_data(*, ticker: str, db_path: Path, force_refresh: bool):
+        return refresh_swing_data(
+            ticker=ticker,
+            db_path=db_path,
+            force_refresh=force_refresh,
+            market_refresh_days=analyze_config.market_refresh_days,
+            broker_refresh_days=analyze_config.broker_refresh_days,
+            fetch_candles=fetch_candles,
+            create_broker_provider=create_broker_provider,
+            fetch_broker=fetch_broker,
+        )
+
+    return refresh_data
+
+
+def _build_swing_workflow(
+    deps: _StockDependencies,
+    setup_name: str | None,
+    *,
+    refresh_data: Any = _forbid_tui_refresh,
+):
     swing_config = load_swing_config(config=deps.app_config)
     analyze_config = load_analyze_swing_config()
     accumulation_config = load_accumulation_screener_config()
@@ -381,7 +423,7 @@ def _build_swing_workflow(deps: _StockDependencies, setup_name: str | None):
         market_repository=deps.market_repository,
         broker_repository=deps.broker_repository,
         registry=deps.indicator_registry(),
-        refresh_data=_forbid_tui_refresh,
+        refresh_data=refresh_data,
         build_data_freshness=build_swing_data_freshness,
         build_flow_detail=build_flow_detail,
         build_broker_detail=_build_broker_detail_builder(swing_config, broker_weights),
@@ -555,9 +597,20 @@ def _build_research_execution() -> ResearchExecution:
         loader=YamlUniverseConfigLoader(),
         repository=deps.broker_repository,
     )
+    # One workflow per selectable setup (plus the no-setup default). Each bakes its
+    # own setup evaluator, and all share the real provider-refresh seam so the
+    # refresh-mode selector actually fetches for Update/Force runs.
+    ticker_refresh = _build_ticker_refresh_data(deps, load_analyze_swing_config())
+    swing_workflows: dict[str | None, Any] = {
+        None: _build_swing_workflow(deps, None, refresh_data=ticker_refresh)
+    }
+    for setup_name in AVAILABLE_SWING_SETUPS:
+        swing_workflows[setup_name] = _build_swing_workflow(
+            deps, setup_name, refresh_data=ticker_refresh
+        )
     return ResearchExecution(
         accumulation,
-        _build_swing_workflow(deps, None),
+        swing_workflows,
         config,
         db_path,
         tickers,
@@ -662,6 +715,7 @@ def create_tui_app(
     daily_previewer: DailyPreviewer | None = None,
     accumulation_loader: AccumulationLoader | None = None,
     ticker_loader: TickerLoader | None = None,
+    search_tickers: Callable[[str], tuple[str, ...]] | None = None,
 ) -> SahamTuiApp:
     config = load_app_config()
     db_path = Path(config.storage.db_path)
@@ -673,6 +727,7 @@ def create_tui_app(
     research = SerializedResearchCapabilities(_build_research_execution)
     accumulation = accumulation_loader or research.load_accumulation
     ticker = ticker_loader or research.load_ticker
+    search = search_tickers or _build_cached_ticker_search(db_path)
 
     class _LazyScreenWorkflow:
         """Adapt the injected accumulation callable to the workflow port the
@@ -702,5 +757,26 @@ def create_tui_app(
         discover_controller,
         DiscoverPresenter(),
         TickerResearchController(ticker),
-        TickerResearchPresenter(),
+        TickerWorkbenchPresenter(),
+        search_tickers=search,
     )
+
+
+def _build_cached_ticker_search(db_path: Path) -> Callable[[str], tuple[str, ...]]:
+    """Offline ticker-search callable for the global `/` workbench search.
+
+    Reads only locally-cached tickers through ``ListCachedTickersUseCase`` — it
+    never constructs or touches a provider, so search is safe with no network.
+    """
+    from src.application.use_case.list_cached_tickers_use_case import (
+        ListCachedTickersRequest,
+    )
+
+    use_case = ListCachedTickersUseCase(SQLiteMarketRepository(db_path=db_path))
+
+    def search(prefix: str) -> tuple[str, ...]:
+        return use_case.execute(
+            ListCachedTickersRequest(prefix=prefix or None, limit=50)
+        ).tickers
+
+    return search

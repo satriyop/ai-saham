@@ -12,6 +12,7 @@ from pathlib import Path
 from threading import Lock
 from typing import Any
 
+from src.adapters.tui.ticker_refresh_mode import TickerRefreshMode
 from src.application.dto.swing_analysis import SwingAnalysisWorkflowRequest
 from src.application.use_case.run_accumulation_screen_workflow_use_case import (
     RunAccumulationScreenWorkflowRequest,
@@ -25,7 +26,10 @@ from src.application.use_case.swing_analysis_workflow_use_case import (
 @dataclass(frozen=True)
 class ResearchExecution:
     accumulation: RunAccumulationScreenWorkflowUseCase
-    swing: SwingAnalysisWorkflowUseCase
+    # Keyed by selected setup name; the ``None`` key is the no-setup workflow.
+    # Each workflow bakes its own ``evaluate_setup`` so setup selection routes to
+    # the matching workflow instead of mutating one shared instance.
+    swing_workflows: dict[str | None, SwingAnalysisWorkflowUseCase]
     config: Any
     db_path: Path
     tickers: list[str]
@@ -54,15 +58,25 @@ class SerializedResearchCapabilities:
                 req = _clone_request_with_tickers(request, tickers)
             return execution.accumulation.execute(req)
 
-    def load_ticker(self, ticker: str):
+    def load_ticker(
+        self,
+        ticker: str,
+        mode: TickerRefreshMode = TickerRefreshMode.CACHED_ONLY,
+        setup: str | None = None,
+    ):
         with self._lock:
             execution = self._get_execution()
-            return execution.swing.execute(
+            workflow = execution.swing_workflows.get(setup)
+            if workflow is None:
+                raise ValueError(f"No swing workflow wired for setup {setup!r}")
+            return workflow.execute(
                 build_ticker_request(
                     execution.config,
                     execution.db_path,
                     execution.flow_window,
                     ticker,
+                    mode=mode,
+                    setup=setup,
                 )
             )
 
@@ -124,13 +138,22 @@ def _clone_request_with_tickers(
 
 
 def build_ticker_request(
-    config: Any, db_path: Path, flow_window: int, ticker: str
+    config: Any,
+    db_path: Path,
+    flow_window: int,
+    ticker: str,
+    *,
+    mode: TickerRefreshMode = TickerRefreshMode.CACHED_ONLY,
+    setup: str | None = None,
 ) -> SwingAnalysisWorkflowRequest:
+    # The one place UI intent becomes provider flags. Cached only never sets
+    # auto_refresh, so it cannot reach the refresh capability at all.
+    auto_refresh, force_refresh = mode.flags
     return SwingAnalysisWorkflowRequest(
         ticker=ticker,
         today=date.today(),
         strategy_name=None,
-        setup_name=None,
+        setup_name=setup,
         window=config.swing.window,
         flow_window=flow_window,
         capital=None,
@@ -139,13 +162,13 @@ def build_ticker_request(
         atr_mult=config.swing.atr_mult,
         rr=config.swing.rr,
         include_sentiment=False,
-        include_flow_detail=False,
+        include_flow_detail=setup is not None,
         include_signal_detail=False,
         include_risk_detail=False,
         include_market_detail=False,
         sentiment_verbose=False,
-        auto_refresh=False,
-        force_refresh=False,
+        auto_refresh=auto_refresh,
+        force_refresh=force_refresh,
         with_market_context=False,
         regime_universe=config.analysis.regime_universe,
         benchmark=config.analysis.benchmark,
