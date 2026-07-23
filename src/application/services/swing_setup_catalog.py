@@ -22,7 +22,7 @@ def build_swing_setup_catalog_config(swing_config: Any) -> SwingSetupCatalogConf
     return SwingSetupCatalogConfig(
         foreign_bounce=ForeignBounceSetupConfig(
             enabled=swing_config.foreign_bounce_enabled,
-            gate_min_foreign_flow_score=swing_config.gate_min_foreign_flow_score,
+            gate_min_accum_score=swing_config.gate_min_accum_score,
             gate_min_vwap_discount_pct=swing_config.gate_min_vwap_discount_pct,
             gate_required_trend=swing_config.gate_required_trend,
             gate_min_flow_ratio_pct=swing_config.gate_min_flow_ratio_pct,
@@ -34,7 +34,7 @@ def build_swing_setup_catalog_config(swing_config: Any) -> SwingSetupCatalogConf
         ),
         coiled_spring=CoiledSpringSetupConfig(
             enabled=swing_config.coiled_spring_enabled,
-            gate_min_foreign_flow_score=swing_config.coiled_spring_gate_min_foreign_flow_score,
+            gate_min_accum_score=swing_config.coiled_spring_gate_min_accum_score,
             gate_max_bb_width_pctile=swing_config.coiled_spring_gate_max_bb_width_pctile,
             gate_min_flow_ratio_pct=swing_config.coiled_spring_gate_min_flow_ratio_pct,
             gate_max_rsi=swing_config.coiled_spring_gate_max_rsi,
@@ -45,7 +45,7 @@ def build_swing_setup_catalog_config(swing_config: Any) -> SwingSetupCatalogConf
         ),
         smart_money_confirmed=SmartMoneyConfirmedSetupConfig(
             enabled=swing_config.smart_money_confirmed_enabled,
-            gate_min_foreign_flow_score=swing_config.smart_money_confirmed_gate_min_foreign_flow_score,
+            gate_min_accum_score=swing_config.smart_money_confirmed_gate_min_accum_score,
             gate_min_smart_flow_idr=swing_config.smart_money_confirmed_gate_min_smart_flow_idr,
             gate_min_smart_share_pct=swing_config.smart_money_confirmed_gate_min_smart_share_pct,
             gate_max_noise_share_pct=swing_config.smart_money_confirmed_gate_max_noise_share_pct,
@@ -57,7 +57,7 @@ def build_swing_setup_catalog_config(swing_config: Any) -> SwingSetupCatalogConf
         ),
         pullback_continuation=PullbackContinuationSetupConfig(
             enabled=swing_config.pullback_continuation_enabled,
-            gate_min_foreign_flow_score=swing_config.pullback_continuation_gate_min_foreign_flow_score,
+            gate_min_accum_score=swing_config.pullback_continuation_gate_min_accum_score,
             gate_required_trend=swing_config.pullback_continuation_gate_required_trend,
             gate_min_flow_ratio_pct=swing_config.pullback_continuation_gate_min_flow_ratio_pct,
             gate_min_rsi=swing_config.pullback_continuation_gate_min_rsi,

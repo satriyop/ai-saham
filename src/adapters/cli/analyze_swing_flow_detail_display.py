@@ -73,7 +73,7 @@ def print_flow_detail_panel(ctx: SwingOutputDisplayContext) -> None:
         net_str = f"{accum.net_buy_days}/{accum.total_days}"
 
         flow_table.add_row(
-            f"{accum.foreign_flow_score:.1f}",
+            f"{accum.accum_score:.1f}",
             f"{accum.consecutive_streak}s",
             net_str,
             flow_str,
@@ -84,7 +84,7 @@ def print_flow_detail_panel(ctx: SwingOutputDisplayContext) -> None:
         )
         flow_group.append(flow_table)
 
-        if accum.foreign_flow_score >= config.watch_min_score and not has_current_flow_confirmation(accum):
+        if accum.accum_score >= config.watch_min_score and not has_current_flow_confirmation(accum):
             flow_group.append(Text(
                 "Note: composite score is in watch-zone, but current foreign flow is not confirming "
                 "(check Flow Ratio, Streak, and Net Days).",
@@ -99,7 +99,7 @@ def print_flow_detail_panel(ctx: SwingOutputDisplayContext) -> None:
                 style="dim red",
             ))
 
-        score_breakdown = getattr(accum, "foreign_flow_score_breakdown", None)
+        score_breakdown = getattr(accum, "accum_score_breakdown", None)
         breakdown = getattr(score_breakdown, "breakdown_dict", None) or {}
         if breakdown:
             component_labels = {
@@ -177,14 +177,14 @@ def print_flow_detail_panel(ctx: SwingOutputDisplayContext) -> None:
         elif (
             accum is not None
             and flow_detail.total_net_flow < Decimal("0")
-            and accum.foreign_flow_score >= config.watch_min_score
+            and accum.accum_score >= config.watch_min_score
             and not has_current_flow_confirmation(accum)
         ):
             flow_group.append(Text(
                 "Interpretation: longer-term flow is negative and the current signal window lacks foreign-flow confirmation.",
                 style="dim yellow",
             ))
-        elif accum is not None and flow_detail.total_net_flow > Decimal("0") and accum.foreign_flow_score < config.watch_min_score:
+        elif accum is not None and flow_detail.total_net_flow > Decimal("0") and accum.accum_score < config.watch_min_score:
             flow_group.append(Text(
                 "Interpretation: longer-term net buying exists, but the current signal window is still weak.",
                 style="dim yellow",

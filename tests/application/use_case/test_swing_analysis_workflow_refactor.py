@@ -118,7 +118,7 @@ def test_market_context_failure_returns_exact_warning():
 
 
 class _MinimalCandidate:
-    foreign_flow_score = 10.0
+    accum_score = 10.0
     bandar_detector = None
     seasonal_edge = None
     analyst_consensus = None
@@ -151,7 +151,7 @@ def _signal_response(score: float) -> AssessSignalResponse:
 
 def test_signal_assessment_failure_returns_exact_warning():
     class FailingSignalEngine:
-        def foreign_flow_quality_from_foreign_flow_score(self, score):
+        def foreign_flow_quality_from_accum_score(self, score):
             return None
 
         def bandar_max_range(self, n):
@@ -182,7 +182,7 @@ class _RescoreSignalEngine:
         self.rescore_calls = 0
         self._fail_rescore = fail_rescore
 
-    def foreign_flow_quality_from_foreign_flow_score(self, score):
+    def foreign_flow_quality_from_accum_score(self, score):
         return None
 
     def bandar_max_range(self, n):

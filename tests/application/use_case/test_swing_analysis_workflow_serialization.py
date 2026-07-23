@@ -1,4 +1,4 @@
-from src.domain.value_objects.foreign_flow_score_breakdown import (
+from src.domain.value_objects.accum_score_breakdown import (
     ForeignFlowComponentScore,
     ForeignFlowComponentStatus,
 )

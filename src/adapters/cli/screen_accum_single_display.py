@@ -32,7 +32,7 @@ from src.application.dto.accumulation_screen import (
 
 
 def _scoring_definitions_panel(display_config: AccumulationDisplayConfig):
-    p = display_config.foreign_flow_score_policy
+    p = display_config.accum_score_policy
 
     accum_table = compact_table()
     accum_table.add_column("Factor", style="bold")
@@ -218,9 +218,9 @@ def display_results(
 
     for i, c in enumerate(candidates, 1):
         # Color flow score
-        if c.foreign_flow_score >= display_config.enter_min_foreign_flow_score:
+        if c.accum_score >= display_config.enter_min_accum_score:
             score_style = "green"
-        elif c.foreign_flow_score >= display_config.watch_min_foreign_flow_score:
+        elif c.accum_score >= display_config.watch_min_accum_score:
             score_style = "yellow"
         else:
             score_style = ""
@@ -273,7 +273,7 @@ def display_results(
             format_disc_pct(c.vwap_discount_pct),
             _price_text(c.current_price),
             cmp_cell,
-            Text(f"{c.foreign_flow_score:.1f}", style=score_style),
+            Text(f"{c.accum_score:.1f}", style=score_style),
             gate_cell,
             c.trend,
             _phase_cell(c.setup_phase),

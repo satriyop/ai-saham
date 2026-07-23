@@ -61,7 +61,7 @@ row.
 | Task area | Required decisions |
 |---|---|
 | Architecture, layers, DI, composition | [003](docs/adr/ADR-003-hexagonal-ports-adapters-architecture.md), [004](docs/adr/ADR-004-pure-domain-layer.md), [021](docs/adr/ADR-021-strict-boundary-enforcement-infrastructure-decoupling-hexagonal-audit-clean-up.md), [033](docs/adr/ADR-033-workflow-composition-artifact-boundaries.md), [040](docs/adr/ADR-040-manual-dependency-injection-and-composition-roots.md) |
-| Signal scoring and evidence authority | [024](docs/adr/ADR-024-signal-engine-and-risk-engine-as-first-class-application-services.md), [025](docs/adr/ADR-025-signalengine-architecture.md), [030](docs/adr/ADR-030-accumulation-screener-evidence-split.md), [037](docs/adr/ADR-037-marketcontext-promotes-from-preview-only-to-canonical-signal-input.md), [039](docs/adr/ADR-039-foreign-flow-score-rescale-to-0-100-amends-adr-030.md), [041](docs/adr/ADR-041-canonical-signal-evidence-input-boundary.md) |
+| Signal scoring and evidence authority | [024](docs/adr/ADR-024-signal-engine-and-risk-engine-as-first-class-application-services.md), [025](docs/adr/ADR-025-signalengine-architecture.md), [030](docs/adr/ADR-030-accumulation-screener-evidence-split.md), [037](docs/adr/ADR-037-marketcontext-promotes-from-preview-only-to-canonical-signal-input.md), [039](docs/adr/ADR-039-foreign-flow-score-rescale-to-0-100-amends-adr-030.md), [041](docs/adr/ADR-041-canonical-signal-evidence-input-boundary.md), [043](docs/adr/ADR-043-score-naming-vocabulary.md) |
 | Risk and final trade action | [010](docs/adr/ADR-010-risk-gates-as-policy-layer.md), [022](docs/adr/ADR-022-idx-regular-market-price-floor-rp-50-enforcements.md), [024](docs/adr/ADR-024-signal-engine-and-risk-engine-as-first-class-application-services.md), [026](docs/adr/ADR-026-risk-plus-signal-pipeline-composition.md), [028](docs/adr/ADR-028-idx-market-microstructure-rules.md), [031](docs/adr/ADR-031-swing-setup-evaluation-boundary.md), [032](docs/adr/ADR-032-analyze-swing-verdict-boundary.md) |
 | Market context | [029](docs/adr/ADR-029-market-context-engine-mce-third-first-class-application-service.md), [037](docs/adr/ADR-037-marketcontext-promotes-from-preview-only-to-canonical-signal-input.md) |
 | Data providers, persistence, PIT/replay | [005](docs/adr/ADR-005-local-first-persistence.md), [006](docs/adr/ADR-006-market-data-provider-abstraction.md), [008](docs/adr/ADR-008-decoupled-fetch-vs-analyze-data.md), [019](docs/adr/ADR-019-unified-fetch-timestamp-fetched-at-datetime-on-cached-domain-value-objects.md), [034](docs/adr/ADR-034-date-field-semantics.md), [036](docs/adr/ADR-036-persisted-jwt-token-store-replaces-playwright-per-invocation-for-stockbit-data-fetching.md), [038](docs/adr/ADR-038-point-in-time-enrichment-and-conservative-derived-fundamentals.md) |
@@ -79,6 +79,7 @@ row.
 | ADR-024/025 six-factor signal | Current ADR-024/025 contracts | Staged evidence is canonical; retired scorer details are available in git history |
 | ADR-027 proposed `swing learn ...` CLI | Current source and live help | Use the current trade backtest/tune/review/patch/status commands |
 | ADR-030 0–120 foreign-flow scale | ADR-039 | Foreign-flow score and matching thresholds use 0–100 |
+| ADR-039 `foreign_flow_score` label | ADR-043 | Accumulation composite is `accum_score`; profile participation metric keeps `foreign_flow_score` |
 | ADR-032 MCE preview-only signal | ADR-037 | MCE can condition canonical signal; risk adjustment remains preview |
 | DQ-002J post-score availability attachment | ADR-041 | Temporary shadow prototype; the target is a shared pre-score evidence/provenance/availability boundary |
 | ADR-002/014 optional AI and rejected bypass | ADR-042 | Narrow validated local-ML evidence may enter the governed evidence lifecycle; full ML/API decision challengers remain separate shadow outputs |
@@ -144,6 +145,7 @@ row.
 | [040](docs/adr/ADR-040-manual-dependency-injection-and-composition-roots.md) | Manual dependency injection | Accepted |
 | [041](docs/adr/ADR-041-canonical-signal-evidence-input-boundary.md) | Canonical signal-evidence input | Accepted; amended 2026-07-22 (discovery ATTACHED_REQUIRED + settled bandar) |
 | [042](docs/adr/ADR-042-deterministic-champion-and-optional-model-challengers.md) | Deterministic champion, governed ML evidence, and optional decision challengers | Accepted |
+| [043](docs/adr/ADR-043-score-naming-vocabulary.md) | Score naming vocabulary | Accepted |
 
 ## Adding or changing a decision
 

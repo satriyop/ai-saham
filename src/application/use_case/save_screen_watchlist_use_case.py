@@ -50,8 +50,8 @@ class SaveScreenWatchlistUseCase:
                 window_days=request.window_days,
                 ticker=c.ticker,
                 rank=i + 1,
-                flow_score=c.foreign_flow_score,
-                composite_score=(
+                accum_score=c.accum_score,
+                signal_score=(
                     c.signal_assessment.assessment.score
                     if c.signal_assessment
                     else None

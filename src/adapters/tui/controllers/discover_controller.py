@@ -40,7 +40,7 @@ class DiscoverWorkspaceState:
     window: int = 7
     is_multi_window: bool = False
     min_streak: int = 0
-    min_foreign_flow_score: float | None = 50.0
+    min_accum_score: float | None = 50.0
     min_signal_score: float | None = None
     min_piotroski: int = 0
     squeeze_only: bool = False

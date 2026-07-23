@@ -195,7 +195,7 @@ def test_today_suppresses_accumulation_table_when_not_ready():
         vwap_discount_pct=0.5,
         rsi=50.0,
         trend="UP",
-        foreign_flow_score=80.0,
+        accum_score=80.0,
         top_brokers=None,
         institutional_flag=True,
     )
@@ -289,14 +289,14 @@ def test_today_marks_partial_accumulation_output():
         vwap_discount_pct=0.5,
         rsi=50.0,
         trend="UP",
-        foreign_flow_score=80.0,
+        accum_score=80.0,
         top_brokers=None,
         institutional_flag=True,
     )
 
     fake_projected_candidate = DailyAccumulationCandidate(
         ticker="BBCA",
-        flow_score=80.0,
+        accum_score=80.0,
         setup_phase="ACCUMULATION",
         signal_score=70,
         signal_authority_coverage=0.8,
@@ -674,7 +674,7 @@ def test_today_accumulation_screen_renders_canonical_projection():
         daily_accumulation_candidates=[
             DailyAccumulationCandidate(
                 ticker="INDF",
-                flow_score=60.6,
+                accum_score=60.6,
                 setup_phase="ACCUMULATION",
                 signal_score=72,
                 signal_authority_coverage=0.82,
@@ -735,7 +735,7 @@ def test_today_accumulation_not_ready_suppresses_projection_rows():
         daily_accumulation_candidates=[
             DailyAccumulationCandidate(
                 ticker="ZZZZ",
-                flow_score=99.0,
+                accum_score=99.0,
                 setup_phase="ACCUMULATION",
                 signal_score=90,
                 signal_authority_coverage=0.9,
@@ -1067,7 +1067,7 @@ def test_today_fallback_next_uses_first_accumulation_candidate():
         daily_accumulation_candidates=[
             DailyAccumulationCandidate(
                 ticker="BBCA",
-                flow_score=80.0,
+                accum_score=80.0,
                 setup_phase="ACCUMULATION",
                 signal_score=70,
                 signal_authority_coverage=0.8,
@@ -1166,7 +1166,7 @@ def test_daily_display():
 
     candidate = DailyAccumulationCandidate(
         ticker="BBCA",
-        flow_score=80.0,
+        accum_score=80.0,
         setup_phase="ACCUMULATION",
         signal_score=70,
         signal_authority_coverage=0.85,

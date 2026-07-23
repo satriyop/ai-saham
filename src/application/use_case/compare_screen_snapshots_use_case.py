@@ -120,7 +120,7 @@ class ScreenCompareResult:
 def compare_screen_snapshots(
     snapshot: list[ScreenSnapshotEntry],
     fresh_tickers: list[str],
-    fresh_scores: dict[str, tuple[float, float | None]],  # ticker → (flow_score, composite)
+    fresh_scores: dict[str, tuple[float, float | None]],  # ticker → (accum_score, composite)
     fresh_ranks: dict[str, int],                           # ticker → 1-based rank
     snapshot_name: str,
 ) -> ScreenCompareResult:
@@ -129,7 +129,7 @@ def compare_screen_snapshots(
     Args:
         snapshot:      Saved entries loaded from the repository.
         fresh_tickers: Ordered list of tickers in the new run (rank = index+1).
-        fresh_scores:  {ticker: (flow_score, composite_score)} for fresh results.
+        fresh_scores:  {ticker: (accum_score, signal_score)} for fresh results.
         fresh_ranks:   {ticker: rank} for fresh results.
         snapshot_name: Display label for the saved snapshot.
     """
@@ -140,8 +140,8 @@ def compare_screen_snapshots(
     dropped_tickers = [e.ticker for e in snapshot if e.ticker not in fresh_set]
 
     is_legacy_scale = any(
-        (e.flow_score is not None and e.flow_score > 100)
-        or (e.composite_score is not None and e.composite_score > 100)
+        (e.accum_score is not None and e.accum_score > 100)
+        or (e.signal_score is not None and e.signal_score > 100)
         for e in snapshot
     )
     warnings: tuple[str, ...] = ()
@@ -167,9 +167,9 @@ def compare_screen_snapshots(
             ticker=ticker,
             old_rank=saved.rank,
             new_rank=fresh_ranks.get(ticker, 999),
-            old_composite=_normalize(saved.composite_score),
+            old_composite=_normalize(saved.signal_score),
             new_composite=comp,
-            old_flow=_normalize(saved.flow_score),
+            old_flow=_normalize(saved.accum_score),
             new_flow=flow,
         ))
 

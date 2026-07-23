@@ -76,7 +76,7 @@ class OpeningBriefingCandidate:
     iev: int | None = None
     iep: int | None = None
     trend: str | None = None
-    foreign_flow_score: float | None = None
+    accum_score: float | None = None
 
 
 @dataclass(frozen=True)
@@ -572,7 +572,7 @@ class DailyBriefingUseCase:
                 iev=row.get("iev"),
                 iep=row.get("iep"),
                 trend=row.get("trend"),
-                foreign_flow_score=row.get("foreign_flow_score", row.get("accum_score")),
+                accum_score=row.get("accum_score", row.get("accum_score")),
             )
             if ticker_upper in universe_set:
                 candidates.append(candidate)

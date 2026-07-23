@@ -66,7 +66,7 @@ def test_target_classification_describes_signal_classification_threshold():
 def test_target_classification_describes_setup_gate_and_unknown_path():
     gate = TuningTargetClassification.from_path(
         _path(
-            "config/swing_setups.yaml:setups.foreign-bounce.gates.min_foreign_flow_score"
+            "config/swing_setups.yaml:setups.foreign-bounce.gates.min_accum_score"
         )
     )
     unknown = TuningTargetClassification.from_path(None)
@@ -74,7 +74,7 @@ def test_target_classification_describes_setup_gate_and_unknown_path():
     assert gate.to_dict() == {
         "target_family": "swing_setup",
         "target_kind": "gate",
-        "target_parameter": "min_foreign_flow_score",
+        "target_parameter": "min_accum_score",
     }
     assert unknown.to_dict() == {
         "target_family": "unknown",

@@ -97,7 +97,7 @@ def test_swing_backtest_opens_signal_and_exits_at_target():
     assert trade.trade_setup_action is None
     assert trade.market_context is not None
     trade_dict = trade.to_dict()
-    assert trade_dict["foreign_flow_score"] == trade.foreign_flow_score
+    assert trade_dict["accum_score"] == trade.accum_score
     assert trade_dict["setup_match"] == "MATCH"
     assert trade_dict["signal_score"] == trade.signal_score
     assert trade_dict["risk_status"] is None

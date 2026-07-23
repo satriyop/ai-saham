@@ -28,7 +28,7 @@ accumulation_screener:
     resistance_high_period: 180
     insider_lookback_days: 60
   filters:
-    min_foreign_flow_score:
+    min_accum_score:
       enabled: true
       value: 55
     min_signal_score:
@@ -40,10 +40,10 @@ accumulation_screener:
 
     loaded = load_accumulation_screener_config(config)
 
-    assert loaded.foreign_flow_score_policy.consistency.enabled is False
-    assert loaded.foreign_flow_score_policy.consistency.weight == 12.0
-    assert loaded.min_foreign_flow_score.enabled is True
-    assert loaded.min_foreign_flow_score.value == 55.0
+    assert loaded.accum_score_policy.consistency.enabled is False
+    assert loaded.accum_score_policy.consistency.weight == 12.0
+    assert loaded.min_accum_score.enabled is True
+    assert loaded.min_accum_score.value == 55.0
     assert loaded.min_signal_score.enabled is True
     assert loaded.min_signal_score.value == 60.0
     assert loaded.derived_features.rsi_period == 10
@@ -61,12 +61,12 @@ def test_bb_squeeze_disabled_by_default_in_live_config():
     """BB compression is setup-phase/trigger-readiness diagnostic, not flow
     evidence — the shipped config must not score it by default."""
     loaded = load_accumulation_screener_config()
-    assert loaded.foreign_flow_score_policy.bb_squeeze.enabled is False
+    assert loaded.accum_score_policy.bb_squeeze.enabled is False
     # Thresholds/weight are retained for possible future diagnostic/tuning use.
     # Rescaled 0-120 -> 0-100 (ADR-039).
-    assert loaded.foreign_flow_score_policy.bb_squeeze.weight == 8.3
-    assert loaded.foreign_flow_score_policy.bb_squeeze.tight_pctile == 0.20
-    assert loaded.foreign_flow_score_policy.bb_squeeze.loose_pctile == 0.40
+    assert loaded.accum_score_policy.bb_squeeze.weight == 8.3
+    assert loaded.accum_score_policy.bb_squeeze.tight_pctile == 0.20
+    assert loaded.accum_score_policy.bb_squeeze.loose_pctile == 0.40
 
 
 def test_bb_squeeze_can_be_explicitly_re_enabled_via_yaml(tmp_path: Path):
@@ -84,8 +84,8 @@ accumulation_screener:
     )
 
     loaded = load_accumulation_screener_config(config)
-    assert loaded.foreign_flow_score_policy.bb_squeeze.enabled is True
-    assert loaded.foreign_flow_score_policy.bb_squeeze.weight == 8.0
+    assert loaded.accum_score_policy.bb_squeeze.enabled is True
+    assert loaded.accum_score_policy.bb_squeeze.weight == 8.0
 
 
 def test_removed_rsi_missing_fraction_is_rejected(tmp_path: Path):
@@ -104,4 +104,21 @@ accumulation_screener:
     )
 
     with pytest.raises(ValueError, match="missing_fraction was removed"):
+        load_accumulation_screener_config(config)
+
+
+def test_removed_min_foreign_flow_score_filter_key_is_rejected(tmp_path: Path):
+    config = tmp_path / "accumulation_screener.yaml"
+    config.write_text(
+        """
+accumulation_screener:
+  filters:
+    min_foreign_flow_score:
+      enabled: true
+      value: 50.0
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="min_foreign_flow_score was renamed"):
         load_accumulation_screener_config(config)

@@ -53,7 +53,7 @@ def _candidate(**overrides) -> AccumulationCandidate:
         vwap_discount_pct=3.0,
         rsi=55.0,
         trend="SIDE",
-        foreign_flow_score=70.0,
+        accum_score=70.0,
         top_brokers=None,
         institutional_flag=False,
     )
@@ -101,10 +101,10 @@ def test_single_projection_applies_vwap_only():
 
 
 def test_single_projection_sorts_by_vwap_discount_desc():
-    shallow = _candidate(ticker="AAA", vwap_discount_pct=2.0, foreign_flow_score=90.0)
-    deep = _candidate(ticker="BBB", vwap_discount_pct=11.0, foreign_flow_score=50.0)
-    mid = _candidate(ticker="CCC", vwap_discount_pct=8.0, foreign_flow_score=70.0)
-    missing = _candidate(ticker="DDD", vwap_discount_pct=None, foreign_flow_score=99.0)
+    shallow = _candidate(ticker="AAA", vwap_discount_pct=2.0, accum_score=90.0)
+    deep = _candidate(ticker="BBB", vwap_discount_pct=11.0, accum_score=50.0)
+    mid = _candidate(ticker="CCC", vwap_discount_pct=8.0, accum_score=70.0)
+    missing = _candidate(ticker="DDD", vwap_discount_pct=None, accum_score=99.0)
 
     projection = project_single_screen_result(
         _response([shallow, deep, mid, missing]),
@@ -122,8 +122,8 @@ def test_single_projection_sorts_by_vwap_discount_desc():
 
 
 def test_single_projection_sorts_by_score_when_requested():
-    low = _candidate(ticker="LOW", foreign_flow_score=40.0, vwap_discount_pct=12.0)
-    high = _candidate(ticker="HIGH", foreign_flow_score=80.0, vwap_discount_pct=1.0)
+    low = _candidate(ticker="LOW", accum_score=40.0, vwap_discount_pct=12.0)
+    high = _candidate(ticker="HIGH", accum_score=80.0, vwap_discount_pct=1.0)
 
     projection = project_single_screen_result(
         _response([low, high]),
@@ -269,7 +269,7 @@ def test_multi_projection_applies_squeeze_only():
         top=10,
         sort_by="avg",
         squeeze_only=True,
-        coiled_spring_min_foreign_flow_score=50.0,
+        coiled_spring_min_accum_score=50.0,
         coiled_spring_bb_pctile=0.20,
         canonical_window=7,
         effective_session=_EFFECTIVE_SESSION
@@ -281,10 +281,10 @@ def test_multi_projection_applies_squeeze_only():
 
 
 def test_multi_projection_applies_sort_by_window_label():
-    a = _candidate(ticker="A", foreign_flow_score=90.0)
-    b = _candidate(ticker="B", foreign_flow_score=10.0)
-    a30 = _candidate(ticker="A", foreign_flow_score=10.0)
-    b30 = _candidate(ticker="B", foreign_flow_score=90.0)
+    a = _candidate(ticker="A", accum_score=90.0)
+    b = _candidate(ticker="B", accum_score=10.0)
+    a30 = _candidate(ticker="A", accum_score=10.0)
+    b30 = _candidate(ticker="B", accum_score=90.0)
     multi_results = {
         7: _response([a, b], window_days=7),
         30: _response([a30, b30], window_days=30),
@@ -297,7 +297,7 @@ def test_multi_projection_applies_sort_by_window_label():
         top=10,
         sort_by="30s",
         squeeze_only=False,
-        coiled_spring_min_foreign_flow_score=50.0,
+        coiled_spring_min_accum_score=50.0,
         coiled_spring_bb_pctile=0.20,
         canonical_window=7,
         effective_session=_EFFECTIVE_SESSION
@@ -307,7 +307,7 @@ def test_multi_projection_applies_sort_by_window_label():
 
 
 def test_multi_projection_applies_top():
-    candidates = [_candidate(ticker=f"T{i}", foreign_flow_score=float(i)) for i in range(5)]
+    candidates = [_candidate(ticker=f"T{i}", accum_score=float(i)) for i in range(5)]
     multi_results = {7: _response(candidates, window_days=7)}
 
     projection = project_multi_screen_result(
@@ -317,7 +317,7 @@ def test_multi_projection_applies_top():
         top=2,
         sort_by="avg",
         squeeze_only=False,
-        coiled_spring_min_foreign_flow_score=50.0,
+        coiled_spring_min_accum_score=50.0,
         coiled_spring_bb_pctile=0.20,
         canonical_window=7,
         effective_session=_EFFECTIVE_SESSION
@@ -348,7 +348,7 @@ def test_multi_projection_includes_tracked_broker_flow():
         top=10,
         sort_by="avg",
         squeeze_only=False,
-        coiled_spring_min_foreign_flow_score=50.0,
+        coiled_spring_min_accum_score=50.0,
         coiled_spring_bb_pctile=0.20,
         canonical_window=7,
         effective_session=_EFFECTIVE_SESSION
@@ -390,14 +390,14 @@ def test_avg_max_and_vwap_are_always_valid():
 
 
 def test_multi_projection_sorts_by_vwap_discount():
-    shallow = _candidate(ticker="SHALLOW", vwap_discount_pct=2.0, foreign_flow_score=90.0)
-    deep = _candidate(ticker="DEEP", vwap_discount_pct=12.0, foreign_flow_score=40.0)
+    shallow = _candidate(ticker="SHALLOW", vwap_discount_pct=2.0, accum_score=90.0)
+    deep = _candidate(ticker="DEEP", vwap_discount_pct=12.0, accum_score=40.0)
     multi = {
         7: _response([shallow, deep], window_days=7),
         30: _response(
             [
-                _candidate(ticker="SHALLOW", vwap_discount_pct=1.0, foreign_flow_score=80.0),
-                _candidate(ticker="DEEP", vwap_discount_pct=9.0, foreign_flow_score=35.0),
+                _candidate(ticker="SHALLOW", vwap_discount_pct=1.0, accum_score=80.0),
+                _candidate(ticker="DEEP", vwap_discount_pct=9.0, accum_score=35.0),
             ],
             window_days=30,
         ),
@@ -409,7 +409,7 @@ def test_multi_projection_sorts_by_vwap_discount():
         top=10,
         sort_by="vwap",
         squeeze_only=False,
-        coiled_spring_min_foreign_flow_score=50.0,
+        coiled_spring_min_accum_score=50.0,
         coiled_spring_bb_pctile=0.20,
         canonical_window=7,
         effective_session=_EFFECTIVE_SESSION,
@@ -429,7 +429,7 @@ def test_project_multi_screen_result_raises_on_invalid_sort_by():
             top=10,
             sort_by="30s",
             squeeze_only=False,
-            coiled_spring_min_foreign_flow_score=50.0,
+            coiled_spring_min_accum_score=50.0,
             coiled_spring_bb_pctile=0.20,
         canonical_window=7,
             effective_session=_EFFECTIVE_SESSION
@@ -499,7 +499,7 @@ def test_multi_projection_attaches_freshness_to_projected_window_candidates():
         top=10,
         sort_by="avg",
         squeeze_only=False,
-        coiled_spring_min_foreign_flow_score=50.0,
+        coiled_spring_min_accum_score=50.0,
         coiled_spring_bb_pctile=0.20,
         canonical_window=7,
         effective_session=_EFFECTIVE_SESSION
@@ -535,7 +535,7 @@ def test_multi_projection_does_not_attach_freshness_to_squeeze_filtered_out_cand
         top=10,
         sort_by="avg",
         squeeze_only=True,
-        coiled_spring_min_foreign_flow_score=50.0,
+        coiled_spring_min_accum_score=50.0,
         coiled_spring_bb_pctile=0.20,
         canonical_window=7,
         effective_session=_EFFECTIVE_SESSION
@@ -614,7 +614,7 @@ def _enriched_candidate(**overrides) -> AccumulationCandidate:
 
 def test_multi_projection_populates_canonical_fields_from_canonical_window():
     canonical = _enriched_candidate(ticker="A")
-    other_window = _candidate(ticker="A", foreign_flow_score=10.0)
+    other_window = _candidate(ticker="A", accum_score=10.0)
     multi_results = {
         7: _response([canonical], window_days=7),
         30: _response([other_window], window_days=30),
@@ -627,7 +627,7 @@ def test_multi_projection_populates_canonical_fields_from_canonical_window():
         top=10,
         sort_by="avg",
         squeeze_only=False,
-        coiled_spring_min_foreign_flow_score=50.0,
+        coiled_spring_min_accum_score=50.0,
         coiled_spring_bb_pctile=0.20,
         canonical_window=7,
         effective_session=_EFFECTIVE_SESSION
@@ -647,7 +647,7 @@ def test_multi_projection_populates_canonical_fields_from_canonical_window():
 def test_multi_projection_canonical_fields_none_when_ticker_missing_from_canonical_window():
     """Canonical fields must be None, not guessed from another window, when
     the ticker has no candidate in the canonical window."""
-    only_30s = _candidate(ticker="A", foreign_flow_score=10.0)
+    only_30s = _candidate(ticker="A", accum_score=10.0)
     multi_results = {
         7: _response([], window_days=7),
         30: _response([only_30s], window_days=30),
@@ -660,7 +660,7 @@ def test_multi_projection_canonical_fields_none_when_ticker_missing_from_canonic
         top=10,
         sort_by="avg",
         squeeze_only=False,
-        coiled_spring_min_foreign_flow_score=50.0,
+        coiled_spring_min_accum_score=50.0,
         coiled_spring_bb_pctile=0.20,
         canonical_window=7,
         effective_session=_EFFECTIVE_SESSION
@@ -688,7 +688,7 @@ def test_project_multi_screen_result_raises_on_invalid_canonical_window():
             top=10,
             sort_by="avg",
             squeeze_only=False,
-            coiled_spring_min_foreign_flow_score=50.0,
+            coiled_spring_min_accum_score=50.0,
             coiled_spring_bb_pctile=0.20,
             canonical_window=30,
             effective_session=_EFFECTIVE_SESSION
@@ -706,7 +706,7 @@ def test_multi_row_to_dict_includes_canonical_fields():
         top=10,
         sort_by="avg",
         squeeze_only=False,
-        coiled_spring_min_foreign_flow_score=50.0,
+        coiled_spring_min_accum_score=50.0,
         coiled_spring_bb_pctile=0.20,
         canonical_window=7,
         effective_session=_EFFECTIVE_SESSION
@@ -734,8 +734,8 @@ def test_multi_row_to_dict_includes_canonical_fields():
 
 def test_behavior_preservation():
     # Test H: Behavior Preservation
-    c_7 = _enriched_candidate(ticker="A", foreign_flow_score=80.0)
-    c_30 = _enriched_candidate(ticker="A", foreign_flow_score=90.0)
+    c_7 = _enriched_candidate(ticker="A", accum_score=80.0)
+    c_30 = _enriched_candidate(ticker="A", accum_score=90.0)
 
     multi_results = {
         7: _response([c_7], window_days=7),
@@ -749,7 +749,7 @@ def test_behavior_preservation():
         top=10,
         sort_by="avg",
         squeeze_only=False,
-        coiled_spring_min_foreign_flow_score=50.0,
+        coiled_spring_min_accum_score=50.0,
         coiled_spring_bb_pctile=0.20,
         canonical_window=7,
         effective_session=_EFFECTIVE_SESSION

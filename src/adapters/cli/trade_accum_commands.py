@@ -74,7 +74,7 @@ def run_accumulation_log_command(
     logged_at = workflow_result.logged_at
     setup_name = workflow_result.setup_name
 
-    if result.candidate_foreign_flow_score is None and entry_price is None:
+    if result.candidate_accum_score is None and entry_price is None:
         typer.echo(
             f"Warning: no accumulation data for {ticker_upper} in "
             f"the last {window} broker sessions. "
@@ -90,8 +90,8 @@ def run_accumulation_log_command(
         return
 
     score_str = (
-        f"{result.candidate_foreign_flow_score:.1f}"
-        if result.candidate_foreign_flow_score is not None
+        f"{result.candidate_accum_score:.1f}"
+        if result.candidate_accum_score is not None
         else "N/A"
     )
     pattern_str = f" | pattern: {result.pattern}" if result.pattern else ""
@@ -189,7 +189,7 @@ def accumulation_review(
         int,
         typer.Option("--horizon", help="Trading days forward for max/min window", min=1),
     ] = 10,
-    min_foreign_flow_score: Annotated[
+    min_accum_score: Annotated[
         float,
         typer.Option(
             "--min-foreign-flow-score",
@@ -245,5 +245,5 @@ def accumulation_review(
         report=report,
         journal_path=journal_path,
         horizon=horizon,
-        min_foreign_flow_score=min_foreign_flow_score,
+        min_accum_score=min_accum_score,
     )

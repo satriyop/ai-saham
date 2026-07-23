@@ -30,7 +30,7 @@ class PanelRow:
     vwap_discount_pct: float | None
     bci_label: str | None
     total_net_value: float | None
-    foreign_flow_score: float | None
+    accum_score: float | None
     outcome_label: str
     close_return: float | None
     max_forward_return: float | None
@@ -345,9 +345,9 @@ def load_swing10d_panel(
             row["child_gate_triggered"],
             row["child_setup_action"],
         ) or _risk_fields_from_payload(row["payload_json"])
-        breakdown = cand.get("foreign_flow_score_breakdown") or {}
+        breakdown = cand.get("accum_score_breakdown") or {}
         points = _component_points(breakdown)
-        total = _as_float(cand.get("foreign_flow_score"))
+        total = _as_float(cand.get("accum_score"))
         panel.append(
             PanelRow(
                 ticker=row["ticker"],
@@ -356,7 +356,7 @@ def load_swing10d_panel(
                 vwap_discount_pct=_as_float(cand.get("vwap_discount_pct")),
                 bci_label=cand.get("bci_label"),
                 total_net_value=_as_float(cand.get("total_net_value")),
-                foreign_flow_score=total,
+                accum_score=total,
                 outcome_label=row["outcome_label"],
                 close_return=_as_float(row["close_return"]),
                 max_forward_return=_as_float(row["max_forward_return"]),

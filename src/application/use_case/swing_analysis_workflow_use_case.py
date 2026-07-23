@@ -65,7 +65,7 @@ from src.application.services.swing_analysis_risk_trade_setup import (
 from src.application.services.swing_analysis_sizing_service import (
     SwingAnalysisSizingService,
 )
-from src.application.use_case.score_foreign_flow_use_case import ForeignFlowScorePolicy
+from src.application.use_case.score_accum_use_case import AccumScorePolicy
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.candidate_observations_repository import (
     CandidateObservationsRepository,
@@ -104,7 +104,7 @@ class SwingAnalysisWorkflowUseCase:
         signal_engine: "SignalEngine | None" = None,
         risk_engine: "RiskEngine | None" = None,
         candidate_observations_repository: CandidateObservationsRepository | None = None,
-        foreign_flow_score_policy: ForeignFlowScorePolicy | None = None,
+        accum_score_policy: AccumScorePolicy | None = None,
         corporate_action_risk_use_case: "AssessCorporateActionEventRiskUseCase | None" = None,
         ticker_profile_classifier_factory: Callable[[], TickerProfileClassifier] | None = None,
         institutional_accumulation_config_factory: (
@@ -137,10 +137,10 @@ class SwingAnalysisWorkflowUseCase:
         self._risk_engine = risk_engine
         self._candidate_observations_repo = candidate_observations_repository
         self._corporate_action_risk_use_case = corporate_action_risk_use_case
-        # Derive weights from the same policy ScoreForeignFlowUseCase/screener
+        # Derive weights from the same policy ScoreAccumUseCase/screener
         # use, so the two can never drift apart (see ADR-039).
         self._flow_confirmation_builder = FlowConfirmationEvidenceBuilder(
-            foreign_flow_score_policy=foreign_flow_score_policy
+            accum_score_policy=accum_score_policy
         )
         self._risk_trade_setup_composer = SwingAnalysisRiskTradeSetupComposer(
             market_repository=market_repository,

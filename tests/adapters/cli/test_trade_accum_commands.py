@@ -50,7 +50,7 @@ def base_response():
         planned_stop=Decimal("4700"),
         planned_target=Decimal("5300"),
         failed_gates=(),
-        candidate_foreign_flow_score=75.0,
+        candidate_accum_score=75.0,
     )
 
 
@@ -135,7 +135,7 @@ def test_cli_renders_duplicate_message(monkeypatch, base_response, base_policy):
         planned_stop=base_response.planned_stop,
         planned_target=base_response.planned_target,
         failed_gates=base_response.failed_gates,
-        candidate_foreign_flow_score=base_response.candidate_foreign_flow_score,
+        candidate_accum_score=base_response.candidate_accum_score,
     )
 
     def mock_factory(**kwargs):
@@ -165,7 +165,7 @@ def test_cli_renders_missing_candidate_warning(monkeypatch, base_response, base_
         planned_stop=base_response.planned_stop,
         planned_target=base_response.planned_target,
         failed_gates=base_response.failed_gates,
-        candidate_foreign_flow_score=None,
+        candidate_accum_score=None,
     )
 
     def mock_factory(**kwargs):
@@ -194,7 +194,7 @@ def test_cli_renders_failed_gates(monkeypatch, base_response, base_policy):
         planned_stop=base_response.planned_stop,
         planned_target=base_response.planned_target,
         failed_gates=("gate_rsi", "gate_trend"),
-        candidate_foreign_flow_score=base_response.candidate_foreign_flow_score,
+        candidate_accum_score=base_response.candidate_accum_score,
     )
 
     def mock_factory(**kwargs):

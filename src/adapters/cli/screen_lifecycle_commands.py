@@ -78,14 +78,14 @@ def screen_watchlist(
     typer.echo(f"\n  Watchlist: {name}  |  {len(entries)} tickers  |  saved {saved_str}")
     typer.echo(f"  {'─' * 60}")
     typer.echo(
-        f"  {'#':>3}  {'TICKER':<8}  {'CMP':>5}  {'SCORE':>6}  {'STREAK':>6}  {'NET BUY':>7}  BCI"
+        f"  {'#':>3}  {'TICKER':<8}  {'SIGNAL':>6}  {'ACCUM':>6}  {'STREAK':>6}  {'NET BUY':>7}  BCI"
     )
-    typer.echo(f"  {'─' * 3}  {'─' * 8}  {'─' * 5}  {'─' * 6}  {'─' * 6}  {'─' * 7}  {'─' * 10}")
+    typer.echo(f"  {'─' * 3}  {'─' * 8}  {'─' * 6}  {'─' * 6}  {'─' * 6}  {'─' * 7}  {'─' * 10}")
     for e in entries:
-        cmp_str = f"{e.composite_score:.0f}" if e.composite_score is not None else "  —"
+        signal_str = f"{e.signal_score:.0f}" if e.signal_score is not None else "  —"
         bci = e.bci_label or "—"
         typer.echo(
-            f"  {e.rank:>3}  {e.ticker:<8}  {cmp_str:>5}  {e.flow_score:>6.1f}"
+            f"  {e.rank:>3}  {e.ticker:<8}  {signal_str:>6}  {e.accum_score:>6.1f}"
             f"  {e.consecutive_streak:>6}  {e.net_buy_ratio:>6.0%}  {bci}"
         )
     typer.echo("")
@@ -177,7 +177,7 @@ def screen_compare(
     fresh_tickers = [c.ticker for c in fresh_candidates]
     fresh_scores = {
         c.ticker: (
-            c.foreign_flow_score,
+            c.accum_score,
             c.signal_assessment.assessment.score if c.signal_assessment else None,
         )
         for c in fresh_candidates

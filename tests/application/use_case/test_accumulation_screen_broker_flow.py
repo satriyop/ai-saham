@@ -45,7 +45,7 @@ def test_bci_cluster_when_three_or_more_tier1_codes_are_net_buyers():
 
     assert c.bci_label == BCI_CLUSTER
     assert c.bci_tier1_count == 3
-    assert c.foreign_flow_score_breakdown.breakdown_dict["inst"] == 12.5
+    assert c.accum_score_breakdown.breakdown_dict["inst"] == 12.5
     # Aggregate is net-buy in fixture summaries → absorption ratio not applicable.
     assert c.bci_tier1_net_value == Decimal("29000000")  # (100+80+60+50)*100*1000
     assert c.bci_absorption_ratio is None
@@ -74,7 +74,7 @@ def test_bci_stable_when_one_or_two_tier1_codes_are_net_buyers():
 
     assert c.bci_label == BCI_STABLE
     assert c.bci_tier1_count == 1
-    assert c.foreign_flow_score_breakdown.breakdown_dict["inst"] == 4.2
+    assert c.accum_score_breakdown.breakdown_dict["inst"] == 4.2
 
 
 def test_bci_retail_when_no_tier1_codes_are_net_buyers():
@@ -97,7 +97,7 @@ def test_bci_retail_when_no_tier1_codes_are_net_buyers():
 
     assert c.bci_label == BCI_RETAIL
     assert c.bci_tier1_count == 0
-    assert c.foreign_flow_score_breakdown.breakdown_dict["inst"] == 0.0
+    assert c.accum_score_breakdown.breakdown_dict["inst"] == 0.0
 
 
 def test_bci_none_when_no_daily_flow_data():
@@ -117,7 +117,7 @@ def test_bci_none_when_no_daily_flow_data():
     assert c.bci_label is None
     assert c.bci_tier1_count == 0
     # Missing daily-flow rows → BCI MISSING (not available zero / RETAIL-LED).
-    assert c.foreign_flow_score_breakdown.breakdown_dict["inst"] is None
+    assert c.accum_score_breakdown.breakdown_dict["inst"] is None
 
 
 def test_bci_counts_all_net_buyers_not_just_top5():
@@ -222,7 +222,7 @@ def test_bci_absorption_ratio_when_aggregate_is_net_selling():
     assert c.bci_tier1_net_value == Decimal("21000000")
     assert c.bci_absorption_ratio == 0.3
     # Zero scoring authority: CLUSTER still full points.
-    assert c.foreign_flow_score_breakdown.breakdown_dict["inst"] == 12.5
+    assert c.accum_score_breakdown.breakdown_dict["inst"] == 12.5
     payload = c.to_dict()
     assert payload["bci_tier1_net_value"] == "21000000"
     assert payload["bci_absorption_ratio"] == 0.3

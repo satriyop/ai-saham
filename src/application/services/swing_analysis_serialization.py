@@ -106,7 +106,7 @@ def risk_response_to_preview_dict(response: Any | None) -> dict[str, Any] | None
 def candidate_accumulation_to_dict(candidate: Any | None) -> dict[str, Any]:
     if candidate is None:
         return {
-            "foreign_flow_score": None,
+            "accum_score": None,
             "streak": None,
             "trend": None,
             "flow_pct": None,
@@ -127,7 +127,7 @@ def candidate_accumulation_to_dict(candidate: Any | None) -> dict[str, Any]:
             "ticker_notation": None,
         }
     return {
-        "foreign_flow_score": candidate.foreign_flow_score,
+        "accum_score": candidate.accum_score,
         "streak": candidate.consecutive_streak,
         "trend": candidate.trend,
         "flow_pct": candidate.avg_flow_ratio,

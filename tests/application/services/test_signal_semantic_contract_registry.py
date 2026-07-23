@@ -64,7 +64,7 @@ _SMALL_FAMILY_PATHS: tuple[tuple[str, tuple[str, ...]], ...] = (
         "accumulation",
         (
             "swing_setups.setups.foreign-bounce.enabled",
-            "swing_setups.setups.foreign-bounce.gates.min_foreign_flow_score",
+            "swing_setups.setups.foreign-bounce.gates.min_accum_score",
         ),
     ),
     (
@@ -140,7 +140,7 @@ def material_values() -> dict[str, object]:
 def material_values_with_family(material_values: dict[str, object]) -> dict[str, object]:
     out = dict(material_values)
     out["swing_setups.setups.foreign-bounce.enabled"] = True
-    out["swing_setups.setups.foreign-bounce.gates.min_foreign_flow_score"] = 58.3
+    out["swing_setups.setups.foreign-bounce.gates.min_accum_score"] = 58.3
     return out
 
 
@@ -2007,7 +2007,7 @@ def test_real_accumulation_display_threshold_is_non_material():
     reg = SignalSemanticContractRegistry(ACCUMULATION_DISCOVERY)
     baseline = _material_hash_for(reg, setup_family=None)
     mutated = _mutated_documents({
-        "accumulation_screener.display.enter_min_foreign_flow_score": 12.0,
+        "accumulation_screener.display.enter_min_accum_score": 12.0,
     })
     unchanged = _material_hash_for(reg, setup_family=None, documents=mutated)
     assert unchanged == baseline
@@ -2017,7 +2017,7 @@ def test_real_accumulation_sorting_is_non_material():
     reg = SignalSemanticContractRegistry(ACCUMULATION_DISCOVERY)
     baseline = _material_hash_for(reg, setup_family=None)
     mutated = _mutated_documents({
-        "accumulation_screener.sorting.primary": "foreign_flow_score",
+        "accumulation_screener.sorting.primary": "accum_score",
     })
     unchanged = _material_hash_for(reg, setup_family=None, documents=mutated)
     assert unchanged == baseline
@@ -2068,7 +2068,7 @@ def test_real_manifest_excludes_removed_paths():
         "accumulation_screener.sorting.primary",
         "accumulation_screener.sorting.secondary",
         "accumulation_screener.sorting.tertiary",
-        "accumulation_screener.display.enter_min_foreign_flow_score",
+        "accumulation_screener.display.enter_min_accum_score",
         "signal_engine.missing_data.coverage_warning_missing_factors",
         "signal_engine.enrichment.insider_lookback_days",
         "sector_context.evidence_status",
@@ -2188,13 +2188,13 @@ _NON_MATERIAL_EXACT_PATHS: dict[str, str] = {
     "accumulation_screener.sorting.tertiary": (
         "display/sort ordering only; does not affect canonical scoring or evidence"
     ),
-    "accumulation_screener.display.enter_min_foreign_flow_score": (
+    "accumulation_screener.display.enter_min_accum_score": (
         "CLI/report display threshold only; not read by canonical scoring or evidence"
     ),
-    "accumulation_screener.display.watch_min_foreign_flow_score": (
+    "accumulation_screener.display.watch_min_accum_score": (
         "CLI/report display threshold only; not read by canonical scoring or evidence"
     ),
-    "accumulation_screener.display.coiled_spring_min_foreign_flow_score": (
+    "accumulation_screener.display.coiled_spring_min_accum_score": (
         "CLI/report display threshold only; not read by canonical scoring or evidence"
     ),
     "accumulation_screener.display.coiled_spring_bb_pctile": (

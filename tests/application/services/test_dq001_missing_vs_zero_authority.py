@@ -21,12 +21,12 @@ from src.application.services.signal_engine_config import (
     SignalEngineConfig,
 )
 from src.application.services.signal_evidence_group_scorer import SignalEvidenceGroupScorer
-from src.application.use_case.score_foreign_flow_use_case import (
-    ScoreForeignFlowRequest,
-    ScoreForeignFlowUseCase,
+from src.application.use_case.score_accum_use_case import (
+    ScoreAccumRequest,
+    ScoreAccumUseCase,
 )
 from src.domain.value_objects.foreign_flow_evidence import ForeignFlowEvidence
-from src.domain.value_objects.foreign_flow_score_breakdown import (
+from src.domain.value_objects.accum_score_breakdown import (
     ForeignFlowComponentScore,
     ForeignFlowComponentStatus,
 )
@@ -59,7 +59,7 @@ def _typed_flow_from_score(**overrides):
         bci_tier1_count=3,
     )
     base.update(overrides)
-    breakdown = ScoreForeignFlowUseCase().execute(ScoreForeignFlowRequest(**base)).evidence
+    breakdown = ScoreAccumUseCase().execute(ScoreAccumRequest(**base)).evidence
     return ForeignFlowEvidence.from_score_breakdown(
         breakdown, net_buy_days=5, total_days=7
     )
@@ -221,8 +221,8 @@ def test_schema_4_observations_are_noncanonical():
 
 
 def test_all_input_present_score_vector_unchanged():
-    evidence = ScoreForeignFlowUseCase().execute(
-        ScoreForeignFlowRequest(
+    evidence = ScoreAccumUseCase().execute(
+        ScoreAccumRequest(
             ticker="BBCA",
             snapshot_date=SNAP,
             net_buy_ratio=1.0,
@@ -235,14 +235,14 @@ def test_all_input_present_score_vector_unchanged():
             bci_tier1_count=3,
         )
     ).evidence
-    assert evidence.foreign_flow_score == 94.9
+    assert evidence.accum_score == 94.9
     assert evidence.component("bb").status is ForeignFlowComponentStatus.DISABLED
 
 
 def test_invalid_bci_label_is_rejected_instead_of_becoming_available_zero():
     with pytest.raises(ValueError, match="bci_label must be"):
-        ScoreForeignFlowUseCase().execute(
-            ScoreForeignFlowRequest(
+        ScoreAccumUseCase().execute(
+            ScoreAccumRequest(
                 ticker="BBCA",
                 snapshot_date=SNAP,
                 net_buy_ratio=1.0,
@@ -356,9 +356,9 @@ def test_projection_transports_partial_flow_authority_without_changing_score():
             company_quality_context_evidence=None,
         )
         scores = SimpleNamespace(
-            setup_score=80.0,
+            setup_group_score=80.0,
             setup_present=True,
-            flow_score=flow_ev.capped_strength * 100.0,
+            flow_group_score=flow_ev.capped_strength * 100.0,
             flow_present=True,
         )
         return SignalAlphaTriggerProjection.build_score(

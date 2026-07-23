@@ -21,20 +21,20 @@ from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenResponse,
 )
-from src.domain.value_objects.foreign_flow_score_breakdown import (
+from src.domain.value_objects.accum_score_breakdown import (
     ForeignFlowComponentScore,
     ForeignFlowComponentStatus,
-    ForeignFlowScoreBreakdown,
+    AccumScoreBreakdown,
 )
 
 
 def _bb_disabled_config() -> AccumulationDisplayConfig:
     return AccumulationDisplayConfig(
-        enter_min_foreign_flow_score=70.0,
-        watch_min_foreign_flow_score=50.0,
-        coiled_spring_min_foreign_flow_score=60.0,
+        enter_min_accum_score=70.0,
+        watch_min_accum_score=50.0,
+        coiled_spring_min_accum_score=60.0,
         coiled_spring_bb_pctile=0.05,
-        foreign_flow_score_policy=SimpleNamespace(
+        accum_score_policy=SimpleNamespace(
             bb_squeeze=SimpleNamespace(
                 enabled=False,
                 weight=0,
@@ -61,7 +61,7 @@ def _candidate(**overrides) -> AccumulationCandidate:
         "vwap_discount_pct": 3.0,
         "rsi": 55.0,
         "trend": "SIDE",
-        "foreign_flow_score": 58.3,
+        "accum_score": 58.3,
         "top_brokers": None,
         "institutional_flag": False,
         "avg_flow_ratio": 5.0,
@@ -70,8 +70,8 @@ def _candidate(**overrides) -> AccumulationCandidate:
     return AccumulationCandidate(**values)
 
 
-def _breakdown_with_tight_bb() -> ForeignFlowScoreBreakdown:
-    return ForeignFlowScoreBreakdown(
+def _breakdown_with_tight_bb() -> AccumScoreBreakdown:
+    return AccumScoreBreakdown(
         ticker="BBCA",
         snapshot_date=date(2026, 6, 19),
         components=(
@@ -109,7 +109,7 @@ def _response(candidate: AccumulationCandidate) -> AccumulationScreenResponse:
 def test_bb_not_shown_as_scored_flow_points_when_disabled(capsys):
     candidate = _candidate(
         bb_width_pctile=0.05,
-        foreign_flow_score_breakdown=_breakdown_with_tight_bb(),
+        accum_score_breakdown=_breakdown_with_tight_bb(),
     )
 
     response = _response(candidate)
@@ -134,10 +134,10 @@ def test_bb_not_shown_as_scored_flow_points_when_disabled(capsys):
 def test_bb_width_pctile_remains_populated_in_json_dict():
     candidate = _candidate(
         bb_width_pctile=0.05,
-        foreign_flow_score_breakdown=_breakdown_with_tight_bb(),
+        accum_score_breakdown=_breakdown_with_tight_bb(),
     )
     d = candidate.to_dict()
-    assert d["foreign_flow_score_breakdown"]["breakdown"]["bb"] is None
+    assert d["accum_score_breakdown"]["breakdown"]["bb"] is None
     assert d["bb_width_pctile"] == 0.05
 
 

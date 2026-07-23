@@ -45,10 +45,10 @@ signal_engine:
 
   # Maps upstream workflow evidence into SignalContext fields.
   input_mapping:
-    foreign_flow_score:
-      # Rescaled 0-120 -> 0-100 in lockstep with score_foreign_flow_use_case.py's
-      # ForeignFlowScorePolicy.max_score (see ADR-039). This is the divisor used
-      # to normalize foreign_flow_score into SignalContext.foreign_flow_quality.
+    accum_score:
+      # Rescaled 0-120 -> 0-100 in lockstep with score_accum_use_case.py's
+      # AccumScorePolicy.max_score (see ADR-039). This is the divisor used
+      # to normalize accum_score into SignalContext.foreign_flow_quality.
       max_score: 100.0
       clamp: true
 

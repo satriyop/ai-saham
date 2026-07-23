@@ -56,5 +56,5 @@ class AccumulationSectorBreadthApplier:
             for m in members:
                 m.sector_breadth_pct = breadth_pct
                 if breadth_pct >= request.sector_breadth_threshold:
-                    m.foreign_flow_score += request.sector_breadth_bonus_pts
+                    m.accum_score += request.sector_breadth_bonus_pts
                     m.sector_breadth_bonus = request.sector_breadth_bonus_pts

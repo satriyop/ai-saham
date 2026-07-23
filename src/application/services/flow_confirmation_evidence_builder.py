@@ -12,7 +12,7 @@ price-action, not broker flow. Only keys: cons, streak, vwap, flow, inst.
 
 Layer: Application
 Depends on: domain VOs (FlowConfirmationEvidence, Direction, Freshness) +
-ForeignFlowScorePolicy (application-layer value object, not YAML) + stdlib.
+AccumScorePolicy (application-layer value object, not YAML) + stdlib.
 No provider/repository/CLI imports.
 """
 
@@ -22,7 +22,7 @@ from datetime import date
 from typing import Any
 
 from src.application.dto.built_evidence import BuiltFlowEvidence
-from src.application.use_case.score_foreign_flow_use_case import ForeignFlowScorePolicy
+from src.application.use_case.score_accum_use_case import AccumScorePolicy
 from src.domain.entities.broker_flow import BrokerDailyFlow, BrokerSummary
 from src.domain.value_objects.canonical_signal_evidence_input import (
     BrokerDailyFlowRowIdentity,
@@ -34,14 +34,14 @@ from src.domain.value_objects.flow_confirmation_evidence import (
     FlowConfirmationEvidence,
     FlowSubSignal,
 )
-from src.domain.value_objects.foreign_flow_score_breakdown import (
+from src.domain.value_objects.accum_score_breakdown import (
     FOREIGN_FLOW_COMPONENT_KEYS,
     ForeignFlowComponentScore,
     ForeignFlowComponentStatus,
 )
 from src.domain.value_objects.foreign_flow_evidence import ForeignFlowEvidence
 
-# Sub-signal keys extracted from the ForeignFlowScoreBreakdown.
+# Sub-signal keys extracted from the AccumScoreBreakdown.
 # BB excluded (SetupEvidence owns it). RSI excluded (price-action, not flow).
 _FLOW_SIGNAL_KEYS = ("cons", "streak", "vwap", "flow", "inst")
 
@@ -58,8 +58,8 @@ class FlowConfirmationEvidenceBuilder:
     """Builds diagnostic FlowConfirmationEvidence from prior flow/bandar results.
 
     Max weights for direction thresholding and group-strength normalization
-    are derived from the injected ForeignFlowScorePolicy — the same policy
-    ScoreForeignFlowUseCase uses to compute the breakdown this builder reads.
+    are derived from the injected AccumScorePolicy — the same policy
+    ScoreAccumUseCase uses to compute the breakdown this builder reads.
     This prevents the drift that occurred when this builder previously kept
     its own hardcoded copy of the weights (see ADR-039): a policy change (via
     config/accumulation_screener.yaml or direct construction) now propagates
@@ -68,9 +68,9 @@ class FlowConfirmationEvidenceBuilder:
 
     def __init__(
         self,
-        foreign_flow_score_policy: ForeignFlowScorePolicy | None = None,
+        accum_score_policy: AccumScorePolicy | None = None,
     ) -> None:
-        policy = foreign_flow_score_policy or ForeignFlowScorePolicy()
+        policy = accum_score_policy or AccumScorePolicy()
         self._flow_signal_weights: dict[str, float] = {
             "cons": policy.consistency.weight if policy.consistency.enabled else 0.0,
             "streak": policy.streak.weight if policy.streak.enabled else 0.0,

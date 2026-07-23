@@ -118,7 +118,7 @@ def test_expand_tuning_config_paths_expands_allowlisted_setup_wildcards(tmp_path
         "setups:\n"
         "  foreign-bounce:\n"
         "    gates:\n"
-        "      min_foreign_flow_score: 70\n"
+        "      min_accum_score: 70\n"
         "      required_trend: SIDE\n"
         "    partial_max_failed_gates: 2\n",
         encoding="utf-8",
@@ -134,7 +134,7 @@ def test_expand_tuning_config_paths_expands_allowlisted_setup_wildcards(tmp_path
     )
 
     assert gate_paths == (
-        "config/swing_setups.yaml:setups.foreign-bounce.gates.min_foreign_flow_score",
+        "config/swing_setups.yaml:setups.foreign-bounce.gates.min_accum_score",
         "config/swing_setups.yaml:setups.foreign-bounce.gates.required_trend",
     )
     assert partial_paths == (
@@ -165,7 +165,7 @@ def _write_two_setup_yaml(config_dir) -> None:
         "setups:\n"
         "  foreign-bounce:\n"
         "    gates:\n"
-        "      min_foreign_flow_score: 70\n"
+        "      min_accum_score: 70\n"
         "    partial_max_failed_gates: 2\n"
         "  coiled-spring:\n"
         "    gates:\n"
@@ -192,7 +192,7 @@ def test_active_setups_gate_filter_returns_only_matching_setup(tmp_path):
     )
 
     assert gate_paths == (
-        "config/swing_setups.yaml:setups.foreign-bounce.gates.min_foreign_flow_score",
+        "config/swing_setups.yaml:setups.foreign-bounce.gates.min_accum_score",
     )
     assert partial_paths == (
         "config/swing_setups.yaml:setups.foreign-bounce.partial_max_failed_gates",
@@ -230,7 +230,7 @@ def test_no_active_setups_preserves_all_setup_expansion(tmp_path):
     )
 
     assert (
-        "config/swing_setups.yaml:setups.foreign-bounce.gates.min_foreign_flow_score"
+        "config/swing_setups.yaml:setups.foreign-bounce.gates.min_accum_score"
         in gate_paths
     )
     assert (

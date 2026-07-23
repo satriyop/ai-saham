@@ -181,7 +181,7 @@ class CandidateBrowserScreen(Screen[None]):
             min_streak=0,
             # Filter policy is application/config-owned; the adapter does not invent
             # a minimum foreign-flow score. None means "use the configured default".
-            min_foreign_flow_score=None,
+            min_accum_score=None,
             min_signal_score=None,
             min_piotroski=0,
             strategy_name=None,
@@ -465,7 +465,7 @@ class CandidateBrowserScreen(Screen[None]):
             signal = row.signal_score if row.signal_score is not None else "-"
             disc = format_disc_pct_plain(row.vwap_discount_pct)
             lines.append(
-                f"│ {row.canonical_rank:<2}  {row.ticker:<6} {row.flow_score:5.1f}   "
+                f"│ {row.canonical_rank:<2}  {row.ticker:<6} {row.accum_score:5.1f}   "
                 f"{row.consecutive_streak:<6} {disc:<14} {row.risk_status:<6} "
                 f"{decorate_action(row.action):<11} {signal:>6}"
             )
@@ -482,7 +482,7 @@ class CandidateBrowserScreen(Screen[None]):
             "SELECTED CANDIDATE PREVIEW\n"
             f"Ticker             : {row.ticker}\n"
             f"Canonical Rank     : #{row.canonical_rank}\n"
-            f"Foreign Flow Score : {row.flow_score:.1f}\n"
+            f"Foreign Flow Score : {row.accum_score:.1f}\n"
             f"Disc% (soft VWAP)  : {disc} ({depth})\n"
             f"Consecutive Streak : {row.consecutive_streak} session(s)\n"
             f"Setup Phase        : {row.setup_phase or '-'}\n"

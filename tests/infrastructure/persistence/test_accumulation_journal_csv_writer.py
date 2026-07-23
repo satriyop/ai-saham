@@ -13,7 +13,7 @@ def _entry() -> AccumulationJournalEntry:
         ticker="BBRI",
         entry_price=Decimal("4840"),
         window_days=7,
-        foreign_flow_score=75.0,
+        accum_score=75.0,
         foreign_flow_buy_streak=6,
         flow_pct=Decimal("18"),
         vwap_disc_pct=Decimal("4.5"),
@@ -38,7 +38,7 @@ def test_append_and_read_round_trips_analysis_decision_fields(tmp_path):
 
     assert store.append([_entry()]) == 1
     header = path.read_text(encoding="utf-8").splitlines()[0].split(",")
-    assert "foreign_flow_score" in header
+    assert "accum_score" in header
     assert "score" not in header
     rows = store.read_all()
 
@@ -71,7 +71,7 @@ def test_read_all_accepts_csv_without_setup_columns(tmp_path):
     row = store.read_all()[0]
 
     assert row.ticker == "BBRI"
-    assert row.foreign_flow_score == 75.0
+    assert row.accum_score == 75.0
     assert row.setup is None
     assert row.setup_match is None
     assert row.failed_gates == ()
@@ -83,7 +83,7 @@ def test_append_and_read_preserves_none_score_and_streak(tmp_path):
     entry = AccumulationJournalEntry(
         **{
             **_entry().__dict__,
-            "foreign_flow_score": None,
+            "accum_score": None,
             "foreign_flow_buy_streak": None,
         }
     )
@@ -91,7 +91,7 @@ def test_append_and_read_preserves_none_score_and_streak(tmp_path):
     assert store.append([entry]) == 1
     row = store.read_all()[0]
 
-    assert row.foreign_flow_score is None
+    assert row.accum_score is None
     assert row.foreign_flow_buy_streak is None
 
 

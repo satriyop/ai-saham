@@ -30,14 +30,14 @@ def classify_multi_window_pattern(
         w
         for w in windows
         if candidates_by_window.get(w)
-        and candidates_by_window[w].foreign_flow_score >= coiled_spring_min_score
+        and candidates_by_window[w].accum_score >= coiled_spring_min_score
     ]
 
     for w in windows:
         c = candidates_by_window.get(w)
         if (
             c
-            and c.foreign_flow_score >= coiled_spring_min_score
+            and c.accum_score >= coiled_spring_min_score
             and c.bb_width_pctile is not None
             and c.bb_width_pctile <= coiled_spring_bb_pctile
         ):

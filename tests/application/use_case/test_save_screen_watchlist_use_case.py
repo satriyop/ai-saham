@@ -42,7 +42,7 @@ def _candidate(**overrides: Any) -> AccumulationCandidate:
         "vwap_discount_pct": 3.0,
         "rsi": 55.0,
         "trend": "SIDE",
-        "foreign_flow_score": 70.0,
+        "accum_score": 70.0,
         "top_brokers": None,
         "institutional_flag": False,
         "avg_flow_ratio": 5.0,
@@ -72,10 +72,10 @@ def test_save_creates_entries_with_correct_fields() -> None:
     use_case = SaveScreenWatchlistUseCase(repo)
 
     candidates = [
-        _candidate(ticker="BBCA", foreign_flow_score=80.0, consecutive_streak=5,
+        _candidate(ticker="BBCA", accum_score=80.0, consecutive_streak=5,
                    net_buy_ratio=0.8, bci_label="CLUSTER",
                    signal_assessment=_signal_assessment(72)),
-        _candidate(ticker="BBRI", foreign_flow_score=65.0, consecutive_streak=3,
+        _candidate(ticker="BBRI", accum_score=65.0, consecutive_streak=3,
                    net_buy_ratio=0.6, bci_label="STABLE"),
     ]
 
@@ -94,8 +94,8 @@ def test_save_creates_entries_with_correct_fields() -> None:
     assert e1.rank == 1
     assert e1.universe == "lq45"
     assert e1.window_days == 7
-    assert e1.flow_score == 80.0
-    assert e1.composite_score == 72
+    assert e1.accum_score == 80.0
+    assert e1.signal_score == 72
     assert e1.consecutive_streak == 5
     assert e1.net_buy_ratio == 0.8
     assert e1.bci_label == "CLUSTER"
@@ -103,8 +103,8 @@ def test_save_creates_entries_with_correct_fields() -> None:
     e2 = repo.saved[1]
     assert e2.ticker == "BBRI"
     assert e2.rank == 2
-    assert e2.flow_score == 65.0
-    assert e2.composite_score is None
+    assert e2.accum_score == 65.0
+    assert e2.signal_score is None
 
 
 def test_save_rank_starts_at_one() -> None:
@@ -144,7 +144,7 @@ def test_save_returns_saved_count_and_name() -> None:
     assert result.name == "my-watch"
 
 
-def test_composite_score_none_when_no_signal_assessment() -> None:
+def test_signal_score_none_when_no_signal_assessment() -> None:
     repo = FakeWatchlistRepository()
     use_case = SaveScreenWatchlistUseCase(repo)
 
@@ -159,4 +159,4 @@ def test_composite_score_none_when_no_signal_assessment() -> None:
         window_days=7,
     ))
 
-    assert repo.saved[0].composite_score is None
+    assert repo.saved[0].signal_score is None

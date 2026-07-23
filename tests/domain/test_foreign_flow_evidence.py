@@ -1,10 +1,10 @@
 from datetime import date
 
 from src.domain.value_objects.foreign_flow_evidence import ForeignFlowEvidence
-from src.domain.value_objects.foreign_flow_score_breakdown import (
+from src.domain.value_objects.accum_score_breakdown import (
     ForeignFlowComponentScore,
     ForeignFlowComponentStatus,
-    ForeignFlowScoreBreakdown,
+    AccumScoreBreakdown,
 )
 
 
@@ -17,7 +17,7 @@ def _comp(key: str, points: float | None, max_points: float, status: ForeignFlow
     )
 
 
-def _foreign_flow_score_breakdown(
+def _accum_score_breakdown(
     *,
     score: float,
     streak: int,
@@ -25,7 +25,7 @@ def _foreign_flow_score_breakdown(
     vwap_discount_pct: float | None,
     bb_width_pctile: float | None,
     components: tuple[ForeignFlowComponentScore, ...] = (),
-) -> ForeignFlowScoreBreakdown:
+) -> AccumScoreBreakdown:
     max_by_key = {
         "cons": 33.3,
         "streak": 25.0,
@@ -64,7 +64,7 @@ def _foreign_flow_score_breakdown(
             )
     if round(max(remaining, 0.0), 1) != 0.0:
         raise AssertionError("test fixture cannot represent requested score")
-    return ForeignFlowScoreBreakdown(
+    return AccumScoreBreakdown(
         ticker="BBCA",
         snapshot_date=date(2026, 6, 29),
         max_score=100.0,
@@ -79,7 +79,7 @@ def _foreign_flow_score_breakdown(
 
 def test_foreign_flow_evidence_classifies_positive_confirmed_flow():
     evidence = ForeignFlowEvidence.from_score_breakdown(
-        _foreign_flow_score_breakdown(
+        _accum_score_breakdown(
             score=72.0,
             streak=4,
             avg_flow_ratio=8.5,
@@ -91,7 +91,7 @@ def test_foreign_flow_evidence_classifies_positive_confirmed_flow():
         vwap_pct=-1.1,
     )
 
-    assert evidence.composite_score == 72.0
+    assert evidence.accum_score == 72.0
     assert evidence.score_family == "composite_foreign_flow"
     assert evidence.flow_direction == "POSITIVE"
     assert evidence.confirmation_status == "CONFIRMED"
@@ -101,7 +101,7 @@ def test_foreign_flow_evidence_classifies_positive_confirmed_flow():
 
 def test_foreign_flow_evidence_keeps_watch_zone_separate_from_negative_flow():
     evidence = ForeignFlowEvidence.from_score_breakdown(
-        _foreign_flow_score_breakdown(
+        _accum_score_breakdown(
             score=43.0,
             streak=2,
             avg_flow_ratio=-6.0,
@@ -119,7 +119,7 @@ def test_foreign_flow_evidence_keeps_watch_zone_separate_from_negative_flow():
 
 def test_foreign_flow_evidence_weak_when_score_below_watch_zone():
     evidence = ForeignFlowEvidence.from_score_breakdown(
-        _foreign_flow_score_breakdown(
+        _accum_score_breakdown(
             score=28.0,
             streak=0,
             avg_flow_ratio=None,
@@ -137,7 +137,7 @@ def test_foreign_flow_evidence_weak_when_score_below_watch_zone():
 
 def test_foreign_flow_evidence_longer_term_context_is_hashable_and_serializes_as_dict():
     evidence = ForeignFlowEvidence.from_score_breakdown(
-        _foreign_flow_score_breakdown(
+        _accum_score_breakdown(
             score=72.0,
             streak=4,
             avg_flow_ratio=8.5,
@@ -169,7 +169,7 @@ def test_foreign_flow_evidence_longer_term_context_is_hashable_and_serializes_as
 
 def test_missing_and_zero_components_remain_distinct_in_evidence():
     missing = ForeignFlowEvidence.from_score_breakdown(
-        _foreign_flow_score_breakdown(
+        _accum_score_breakdown(
             score=33.3,
             streak=0,
             avg_flow_ratio=None,
@@ -180,7 +180,7 @@ def test_missing_and_zero_components_remain_distinct_in_evidence():
         total_days=7,
     )
     zero = ForeignFlowEvidence.from_score_breakdown(
-        _foreign_flow_score_breakdown(
+        _accum_score_breakdown(
             score=33.3,
             streak=0,
             avg_flow_ratio=0.0,

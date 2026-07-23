@@ -56,13 +56,13 @@ def test_loads_broker_weights_from_yaml(tmp_path):
 def test_loads_gate_thresholds_from_yaml(tmp_path):
     cfg = _write_yaml(tmp_path / "s.yaml", {
         "foreign_bounce": {
-            "gates": {"min_foreign_flow_score": 65, "max_rsi": 55, "min_vwap_discount_pct": 2.0,
+            "gates": {"min_accum_score": 65, "max_rsi": 55, "min_vwap_discount_pct": 2.0,
                       "required_trend": "UP", "min_flow_ratio_pct": 3.0},
             "partial_max_failed_gates": 1,
         },
     })
     result = _load_swing_config(cfg)
-    assert result.gate_min_foreign_flow_score == 65.0
+    assert result.gate_min_accum_score == 65.0
     assert result.gate_max_rsi == 55.0
     assert result.gate_required_trend == "UP"
     assert result.partial_max_failed_gates == 1
@@ -73,7 +73,7 @@ def test_loads_setup_catalog_thresholds_from_yaml(tmp_path):
         "setups": {
             "coiled-spring": {
                 "enabled": False,
-                "gates": {"min_foreign_flow_score": 61, "max_bb_width_pctile": 0.15},
+                "gates": {"min_accum_score": 61, "max_bb_width_pctile": 0.15},
                 "partial_max_failed_gates": 1,
             },
             "smart-money-confirmed": {
@@ -92,7 +92,7 @@ def test_loads_setup_catalog_thresholds_from_yaml(tmp_path):
     result = _load_swing_config(cfg)
 
     assert result.coiled_spring_enabled is False
-    assert result.coiled_spring_gate_min_foreign_flow_score == 61.0
+    assert result.coiled_spring_gate_min_accum_score == 61.0
     assert result.coiled_spring_gate_max_bb_width_pctile == 0.15
     assert result.coiled_spring_partial_max_failed_gates == 1
     assert result.smart_money_confirmed_gate_min_smart_flow_idr == Decimal("1000000.0")
@@ -229,7 +229,7 @@ def test_partial_yaml_uses_defaults_for_missing_sections(tmp_path):
     result = _load_swing_config(cfg)
     assert result.enter_min_score == 75.0
     assert result.smart_money_brokers == _SwingConfig().smart_money_brokers
-    assert result.gate_min_foreign_flow_score == _SwingConfig().gate_min_foreign_flow_score
+    assert result.gate_min_accum_score == _SwingConfig().gate_min_accum_score
 
 
 def test_live_config_loads_without_error():
@@ -237,7 +237,7 @@ def test_live_config_loads_without_error():
     result = _load_swing_config()
     assert len(result.smart_money_brokers) > 0
     assert len(result.noise_brokers) > 0
-    assert result.gate_min_foreign_flow_score == 58.3
+    assert result.gate_min_accum_score == 58.3
     assert result.enter_min_score == 58.3
     assert result.watch_min_score == 33.3
     assert result.strong_min_streak == 8

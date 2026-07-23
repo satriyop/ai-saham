@@ -249,7 +249,7 @@ def _observation_candidate(
         vwap_discount_pct=None,
         rsi=None,
         trend="SIDE",
-        foreign_flow_score=0.0,
+        accum_score=0.0,
         top_brokers=None,
         institutional_flag=False,
     )
@@ -455,7 +455,7 @@ def test_backfill_processes_eligible_dates_and_passes_as_of_date():
     assert screen.requests[0].sector_breadth_threshold == 0.7
     assert screen.requests[0].sector_breadth_bonus_pts == 8.0
     assert screen.requests[0].sector_breadth_min_tickers == 5
-    assert screen.requests[0].min_foreign_flow_score_enabled is False
+    assert screen.requests[0].min_accum_score_enabled is False
     assert screen.requests[0].min_signal_score_enabled is False
 
 
@@ -1021,8 +1021,8 @@ def test_backfill_with_screen_rejected_control_is_eligible():
 def _request_builder() -> BuildSignalObservationScreenRequest:
     return BuildSignalObservationScreenRequest(
         min_net_buy_days=1,
-        min_foreign_flow_score=0.0,
-        min_foreign_flow_score_enabled=False,
+        min_accum_score=0.0,
+        min_accum_score_enabled=False,
         min_signal_score=0.0,
         min_signal_score_enabled=False,
         min_piotroski=6,

@@ -242,7 +242,7 @@ def test_swing_backtest_attribution_summary_golden_contract():
         },
         {
             "dimension": "setup_gate",
-            "bucket": "foreign_flow_score:PASS",
+            "bucket": "accum_score:PASS",
             "trade_count": 1,
             "win_rate_pct": 100.0,
             "avg_return_pct": 5.0,

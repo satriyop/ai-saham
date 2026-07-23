@@ -340,16 +340,16 @@ def build_report(
         ]
     )
     if eligible:
-        scores = [r.foreign_flow_score for r in eligible if r.foreign_flow_score is not None]
+        scores = [r.accum_score for r in eligible if r.accum_score is not None]
         if len(scores) >= 10:
             med = median(scores)
-            high = [r for r in eligible if (r.foreign_flow_score or 0) >= med]
-            low = [r for r in eligible if (r.foreign_flow_score or 0) < med]
+            high = [r for r in eligible if (r.accum_score or 0) >= med]
+            low = [r for r in eligible if (r.accum_score or 0) < med]
             lines.append(f"| Eligible full-score high | {_fmt(_stats(high))} |")
             lines.append(f"| Eligible full-score low | {_fmt(_stats(low))} |")
             adj = []
             for r in eligible:
-                if r.foreign_flow_score is None:
+                if r.accum_score is None:
                     continue
                 # Prefer exact persisted bonus when available
                 pts = (
@@ -357,7 +357,7 @@ def build_report(
                     if r.sector_breadth_bonus is not None and r.sector_breadth_bonus > 0
                     else bonus_pts
                 )
-                adj.append((r, r.foreign_flow_score - pts))
+                adj.append((r, r.accum_score - pts))
             med_adj = median([s for _, s in adj])
             high_adj = [r for r, s in adj if s >= med_adj]
             low_adj = [r for r, s in adj if s < med_adj]

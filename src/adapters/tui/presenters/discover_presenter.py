@@ -23,7 +23,7 @@ from src.domain.value_objects.screen_snapshot import ScreenSnapshotEntry
 class DiscoverCandidateRowView:
     canonical_rank: int
     ticker: str
-    flow_score: float
+    accum_score: float
     consecutive_streak: int
     net_buy_ratio: float
     bci_label: str | None
@@ -92,16 +92,16 @@ class DiscoverPresenter:
                 w7 = getattr(multi_row, "w7", None)
                 w30 = getattr(multi_row, "w30", None)
                 w90 = getattr(multi_row, "w90", None)
-                flow7 = getattr(w7, "foreign_flow_score", 0.0) if w7 else 0.0
-                flow30 = getattr(w30, "foreign_flow_score", 0.0) if w30 else 0.0
-                flow90 = getattr(w90, "foreign_flow_score", 0.0) if w90 else 0.0
+                flow7 = getattr(w7, "accum_score", 0.0) if w7 else 0.0
+                flow30 = getattr(w30, "accum_score", 0.0) if w30 else 0.0
+                flow90 = getattr(w90, "accum_score", 0.0) if w90 else 0.0
                 shape = f"7s:{flow7:.0f} 30s:{flow30:.0f} 90s:{flow90:.0f}"
                 disc, depth = self._vwap_fields(c)
                 rows.append(
                     DiscoverCandidateRowView(
                         canonical_rank=rank,
                         ticker=c.ticker,
-                        flow_score=getattr(c, "foreign_flow_score", 0.0),
+                        accum_score=getattr(c, "accum_score", 0.0),
                         consecutive_streak=getattr(c, "consecutive_streak", 0),
                         net_buy_ratio=getattr(c, "net_buy_ratio", 0.0),
                         bci_label=getattr(c, "bci_label", None),
@@ -145,7 +145,7 @@ class DiscoverPresenter:
                     DiscoverCandidateRowView(
                         canonical_rank=rank,
                         ticker=c.ticker,
-                        flow_score=float(getattr(c, "foreign_flow_score", 0.0)),
+                        accum_score=float(getattr(c, "accum_score", 0.0)),
                         consecutive_streak=int(getattr(c, "consecutive_streak", 0)),
                         net_buy_ratio=float(getattr(c, "net_buy_ratio", 0.0)),
                         bci_label=getattr(c, "bci_label", None),

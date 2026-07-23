@@ -7,17 +7,17 @@ import pytest
 from src.application.services.flow_confirmation_evidence_builder import (
     FlowConfirmationEvidenceBuilder,
 )
-from src.application.use_case.score_foreign_flow_use_case import (
+from src.application.use_case.score_accum_use_case import (
     BciEvidencePolicy,
     EvidenceComponentPolicy,
-    ForeignFlowScorePolicy,
+    AccumScorePolicy,
     LinearSaturationPolicy,
     StreakEvidencePolicy,
 )
 from src.domain.entities.broker_flow import BrokerDailyFlow, BrokerSummary
 from src.domain.value_objects.factor_evidence import Direction, Freshness
 from src.domain.value_objects.foreign_flow_evidence import ForeignFlowEvidence
-from src.domain.value_objects.foreign_flow_score_breakdown import (
+from src.domain.value_objects.accum_score_breakdown import (
     ForeignFlowComponentScore,
     ForeignFlowComponentStatus,
 )
@@ -461,7 +461,7 @@ def test_flow_direction_extracted_from_evidence():
     assert missing.flow_direction == "UNKNOWN"
 
 
-def test_default_policy_weights_match_score_foreign_flow_use_case_defaults():
+def test_default_policy_weights_match_score_accum_use_case_defaults():
     builder = FlowConfirmationEvidenceBuilder()
     candidate = _candidate(flow_evidence=_flow_evidence(_FULL_COMPONENTS))
 
@@ -493,8 +493,8 @@ def test_default_policy_proportional_strength_matches_known_example():
     assert abs(evidence.uncapped_strength - 0.904) < 0.001
 
 
-def _custom_policy() -> ForeignFlowScorePolicy:
-    return ForeignFlowScorePolicy(
+def _custom_policy() -> AccumScorePolicy:
+    return AccumScorePolicy(
         consistency=EvidenceComponentPolicy(enabled=True, weight=50.0),
         streak=StreakEvidencePolicy(enabled=True, weight=20.0),
         vwap_discount=LinearSaturationPolicy(enabled=True, weight=10.0),
@@ -504,7 +504,7 @@ def _custom_policy() -> ForeignFlowScorePolicy:
 
 
 def test_custom_policy_sub_signal_weights_reflect_policy():
-    builder = FlowConfirmationEvidenceBuilder(foreign_flow_score_policy=_custom_policy())
+    builder = FlowConfirmationEvidenceBuilder(accum_score_policy=_custom_policy())
     # Components carry their own max_points from scoring; builder uses those.
     custom_components = (
         _comp("cons", 33.3, 50.0),
@@ -530,7 +530,7 @@ def test_custom_policy_sub_signal_weights_reflect_policy():
 
 
 def test_custom_policy_strength_uses_available_weights():
-    builder = FlowConfirmationEvidenceBuilder(foreign_flow_score_policy=_custom_policy())
+    builder = FlowConfirmationEvidenceBuilder(accum_score_policy=_custom_policy())
     custom_components = (
         _comp("cons", 33.3, 50.0),
         _comp("streak", 15.8, 20.0),
@@ -550,10 +550,10 @@ def test_custom_policy_strength_uses_available_weights():
 
 
 def test_disabled_component_excluded_from_flow_group():
-    policy = ForeignFlowScorePolicy(
+    policy = AccumScorePolicy(
         foreign_flow_ratio=LinearSaturationPolicy(enabled=False, weight=8.3),
     )
-    builder = FlowConfirmationEvidenceBuilder(foreign_flow_score_policy=policy)
+    builder = FlowConfirmationEvidenceBuilder(accum_score_policy=policy)
     components = (
         _comp("cons", 33.3, 33.3),
         _comp("streak", 15.8, 25.0),
@@ -573,14 +573,14 @@ def test_disabled_component_excluded_from_flow_group():
 
 
 def test_all_disabled_flow_strength_is_zero_without_bandar():
-    policy = ForeignFlowScorePolicy(
+    policy = AccumScorePolicy(
         consistency=EvidenceComponentPolicy(enabled=False, weight=33.3),
         streak=StreakEvidencePolicy(enabled=False, weight=25.0),
         vwap_discount=LinearSaturationPolicy(enabled=False, weight=16.7),
         foreign_flow_ratio=LinearSaturationPolicy(enabled=False, weight=8.3),
         bci=BciEvidencePolicy(enabled=False, cluster_points=12.5, stable_points=4.2),
     )
-    builder = FlowConfirmationEvidenceBuilder(foreign_flow_score_policy=policy)
+    builder = FlowConfirmationEvidenceBuilder(accum_score_policy=policy)
     disabled_components = tuple(
         _comp(k, None, weight, ForeignFlowComponentStatus.DISABLED)
         for k, weight in {
@@ -605,14 +605,14 @@ def test_all_disabled_flow_strength_is_zero_without_bandar():
 
 
 def test_all_disabled_bandar_strength_still_works():
-    policy = ForeignFlowScorePolicy(
+    policy = AccumScorePolicy(
         consistency=EvidenceComponentPolicy(enabled=False, weight=33.3),
         streak=StreakEvidencePolicy(enabled=False, weight=25.0),
         vwap_discount=LinearSaturationPolicy(enabled=False, weight=16.7),
         foreign_flow_ratio=LinearSaturationPolicy(enabled=False, weight=8.3),
         bci=BciEvidencePolicy(enabled=False, cluster_points=12.5, stable_points=4.2),
     )
-    builder = FlowConfirmationEvidenceBuilder(foreign_flow_score_policy=policy)
+    builder = FlowConfirmationEvidenceBuilder(accum_score_policy=policy)
     disabled_components = tuple(
         _comp(k, None, weight, ForeignFlowComponentStatus.DISABLED)
         for k, weight in {

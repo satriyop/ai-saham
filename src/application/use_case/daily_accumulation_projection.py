@@ -21,7 +21,7 @@ _BLOCKED_ACTIONS = {"BLOCKED_EXECUTION", "BLOCKED_STRUCTURAL"}
 @dataclass(frozen=True)
 class DailyAccumulationCandidate:
     ticker: str
-    flow_score: float
+    accum_score: float
     setup_phase: str | None
     signal_score: int | None
     signal_authority_coverage: float | None
@@ -116,7 +116,7 @@ class DailyAccumulationProjector:
 
         return DailyAccumulationCandidate(
             ticker=candidate.ticker,
-            flow_score=candidate.foreign_flow_score,
+            accum_score=candidate.accum_score,
             setup_phase=setup_phase,
             signal_score=signal_score,
             signal_authority_coverage=signal_authority_coverage,

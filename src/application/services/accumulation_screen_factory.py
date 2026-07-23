@@ -27,8 +27,8 @@ from src.application.use_case.accumulation_screen_use_case import AccumulationSc
 from src.application.use_case.record_accumulation_observations_use_case import (
     RecordAccumulationObservationsUseCase,
 )
-from src.application.use_case.score_foreign_flow_use_case import (
-    ScoreForeignFlowUseCase,
+from src.application.use_case.score_accum_use_case import (
+    ScoreAccumUseCase,
 )
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
@@ -44,7 +44,7 @@ def create_accumulation_screen_use_case(
     risk_use_case: Any | None = None,
     signal_engine: SignalEngine,
     candidate_observations_repository: Any | None = None,
-    foreign_flow_score_policy: Any | None = None,
+    accum_score_policy: Any | None = None,
     derived_feature_policy: Any | None = None,
     idx_groups: dict[str, list[str]] | None = None,
     swing_setup_catalog: Any | None = None,
@@ -60,8 +60,8 @@ def create_accumulation_screen_use_case(
     strategy-evidence lookups keep working when request.strategy_name is set.
     """
     score_use_case = (
-        ScoreForeignFlowUseCase(foreign_flow_score_policy)
-        if foreign_flow_score_policy is not None
+        ScoreAccumUseCase(accum_score_policy)
+        if accum_score_policy is not None
         else None
     )
     return AccumulationScreenUseCase(
@@ -81,7 +81,7 @@ def create_accumulation_screen_use_case(
         risk_use_case=risk_use_case,
         signal_engine=signal_engine,
         candidate_observations_repository=candidate_observations_repository,
-        foreign_flow_score_use_case=score_use_case,
+        accum_score_use_case=score_use_case,
         derived_feature_policy=derived_feature_policy,
         swing_setup_catalog=swing_setup_catalog,
         rules_loader=rules_loader,
@@ -122,7 +122,7 @@ def create_accumulation_screen_use_case_bundle(
     risk_use_case: Any | None = None,
     signal_engine: SignalEngine,
     candidate_observations_repository: Any | None = None,
-    foreign_flow_score_policy: Any | None = None,
+    accum_score_policy: Any | None = None,
     derived_feature_policy: Any | None = None,
     idx_groups: dict[str, list[str]] | None = None,
     swing_setup_catalog: Any | None = None,
@@ -156,7 +156,7 @@ def create_accumulation_screen_use_case_bundle(
         risk_use_case=risk_use_case,
         signal_engine=signal_engine,
         candidate_observations_repository=candidate_observations_repository,
-        foreign_flow_score_policy=foreign_flow_score_policy,
+        accum_score_policy=accum_score_policy,
         derived_feature_policy=derived_feature_policy,
         idx_groups=idx_groups,
         swing_setup_catalog=swing_setup_catalog,

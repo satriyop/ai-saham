@@ -47,15 +47,15 @@ class SignalClassificationConfig:
 # ── Phase 2: input mapping config ──────────────────────────────────────────────
 
 @dataclass(frozen=True)
-class ForeignFlowScoreMappingConfig:
+class AccumScoreMappingConfig:
     max_score: float = 100.0
     clamp: bool = True
 
 
 @dataclass(frozen=True)
 class SignalInputMappingConfig:
-    foreign_flow_score: ForeignFlowScoreMappingConfig = field(
-        default_factory=ForeignFlowScoreMappingConfig
+    accum_score: AccumScoreMappingConfig = field(
+        default_factory=AccumScoreMappingConfig
     )
 
 
@@ -371,7 +371,7 @@ __all__ = [
     "ForwardPeScoringConfig",
     # New configs
     "SignalClassificationConfig",
-    "ForeignFlowScoreMappingConfig",
+    "AccumScoreMappingConfig",
     "SignalInputMappingConfig",
     "SignalEnrichmentConfig",
     "EvidenceGroupConfig",

@@ -22,8 +22,8 @@ def _entry(ticker: str, rank: int, flow: float = 80.0, comp: float | None = 65.0
         window_days=7,
         ticker=ticker,
         rank=rank,
-        flow_score=flow,
-        composite_score=comp,
+        accum_score=flow,
+        signal_score=comp,
         consecutive_streak=3,
         net_buy_ratio=0.71,
         bci_label="CLUSTER",
@@ -84,19 +84,19 @@ def test_list_snapshots_counts_latest_run_only(repo):
         ScreenSnapshotEntry(
             name="multi-run", saved_at=datetime(2026, 7, 1, 9, 0),
             universe="lq45", window_days=7,
-            ticker="BBCA", rank=1, flow_score=70.0, composite_score=65.0,
+            ticker="BBCA", rank=1, accum_score=70.0, signal_score=65.0,
             consecutive_streak=3, net_buy_ratio=0.5, bci_label="CLUSTER",
         ),
         ScreenSnapshotEntry(
             name="multi-run", saved_at=datetime(2026, 7, 1, 9, 0),
             universe="lq45", window_days=7,
-            ticker="BBRI", rank=2, flow_score=60.0, composite_score=55.0,
+            ticker="BBRI", rank=2, accum_score=60.0, signal_score=55.0,
             consecutive_streak=2, net_buy_ratio=0.4, bci_label="CLUSTER",
         ),
         ScreenSnapshotEntry(
             name="multi-run", saved_at=datetime(2026, 7, 1, 9, 0),
             universe="lq45", window_days=7,
-            ticker="BMRI", rank=3, flow_score=50.0, composite_score=45.0,
+            ticker="BMRI", rank=3, accum_score=50.0, signal_score=45.0,
             consecutive_streak=1, net_buy_ratio=0.3, bci_label="CLUSTER",
         ),
     ]
@@ -104,13 +104,13 @@ def test_list_snapshots_counts_latest_run_only(repo):
         ScreenSnapshotEntry(
             name="multi-run", saved_at=datetime(2026, 7, 2, 9, 0),
             universe="idx80", window_days=30,
-            ticker="BBCA", rank=1, flow_score=80.0, composite_score=70.0,
+            ticker="BBCA", rank=1, accum_score=80.0, signal_score=70.0,
             consecutive_streak=4, net_buy_ratio=0.6, bci_label="SMART",
         ),
         ScreenSnapshotEntry(
             name="multi-run", saved_at=datetime(2026, 7, 2, 9, 0),
             universe="idx80", window_days=30,
-            ticker="BBRI", rank=2, flow_score=75.0, composite_score=65.0,
+            ticker="BBRI", rank=2, accum_score=75.0, signal_score=65.0,
             consecutive_streak=3, net_buy_ratio=0.5, bci_label="SMART",
         ),
     ]
@@ -118,25 +118,25 @@ def test_list_snapshots_counts_latest_run_only(repo):
         ScreenSnapshotEntry(
             name="multi-run", saved_at=datetime(2026, 7, 3, 9, 0),
             universe="custom", window_days=90,
-            ticker="BBCA", rank=1, flow_score=90.0, composite_score=80.0,
+            ticker="BBCA", rank=1, accum_score=90.0, signal_score=80.0,
             consecutive_streak=5, net_buy_ratio=0.7, bci_label="SMART",
         ),
         ScreenSnapshotEntry(
             name="multi-run", saved_at=datetime(2026, 7, 3, 9, 0),
             universe="custom", window_days=90,
-            ticker="BBRI", rank=2, flow_score=85.0, composite_score=75.0,
+            ticker="BBRI", rank=2, accum_score=85.0, signal_score=75.0,
             consecutive_streak=4, net_buy_ratio=0.6, bci_label="SMART",
         ),
         ScreenSnapshotEntry(
             name="multi-run", saved_at=datetime(2026, 7, 3, 9, 0),
             universe="custom", window_days=90,
-            ticker="BMRI", rank=3, flow_score=80.0, composite_score=70.0,
+            ticker="BMRI", rank=3, accum_score=80.0, signal_score=70.0,
             consecutive_streak=3, net_buy_ratio=0.5, bci_label="SMART",
         ),
         ScreenSnapshotEntry(
             name="multi-run", saved_at=datetime(2026, 7, 3, 9, 0),
             universe="custom", window_days=90,
-            ticker="GOTO", rank=4, flow_score=75.0, composite_score=65.0,
+            ticker="GOTO", rank=4, accum_score=75.0, signal_score=65.0,
             consecutive_streak=2, net_buy_ratio=0.4, bci_label="NOISE",
         ),
     ]
@@ -156,7 +156,7 @@ def test_list_snapshots_uses_latest_universe_and_window_days(repo):
         ScreenSnapshotEntry(
             name="morning-watch", saved_at=datetime(2026, 7, 1, 9, 0),
             universe="lq45", window_days=7,
-            ticker="BBCA", rank=1, flow_score=70.0, composite_score=65.0,
+            ticker="BBCA", rank=1, accum_score=70.0, signal_score=65.0,
             consecutive_streak=3, net_buy_ratio=0.5, bci_label="CLUSTER",
         ),
     ]
@@ -164,7 +164,7 @@ def test_list_snapshots_uses_latest_universe_and_window_days(repo):
         ScreenSnapshotEntry(
             name="morning-watch", saved_at=datetime(2026, 7, 3, 9, 0),
             universe="custom", window_days=90,
-            ticker="BBCA", rank=1, flow_score=90.0, composite_score=80.0,
+            ticker="BBCA", rank=1, accum_score=90.0, signal_score=80.0,
             consecutive_streak=5, net_buy_ratio=0.7, bci_label="SMART",
         ),
     ]
@@ -183,7 +183,7 @@ def test_list_snapshots_orders_by_latest_saved_at_desc(repo):
         ScreenSnapshotEntry(
             name="alpha", saved_at=datetime(2026, 7, 1, 9, 0),
             universe="lq45", window_days=7,
-            ticker="BBCA", rank=1, flow_score=70.0, composite_score=65.0,
+            ticker="BBCA", rank=1, accum_score=70.0, signal_score=65.0,
             consecutive_streak=3, net_buy_ratio=0.5, bci_label="CLUSTER",
         ),
     ]
@@ -191,7 +191,7 @@ def test_list_snapshots_orders_by_latest_saved_at_desc(repo):
         ScreenSnapshotEntry(
             name="beta", saved_at=datetime(2026, 7, 3, 9, 0),
             universe="lq45", window_days=7,
-            ticker="BBCA", rank=1, flow_score=90.0, composite_score=80.0,
+            ticker="BBCA", rank=1, accum_score=90.0, signal_score=80.0,
             consecutive_streak=5, net_buy_ratio=0.7, bci_label="SMART",
         ),
     ]
@@ -215,11 +215,69 @@ def test_save_empty_is_noop(repo):
     assert repo.get_latest_snapshot("test") == []
 
 
-def test_composite_score_none_persisted(repo):
+def test_signal_score_none_persisted(repo):
     entries = [_entry("GOTO", 1, comp=None)]
     repo.save_snapshot(entries)
     result = repo.get_latest_snapshot("test")
-    assert result[0].composite_score is None
+    assert result[0].signal_score is None
+
+
+def test_legacy_flow_score_columns_dual_read(tmp_path):
+    """ADR-043: rows written before accum_score/signal_score columns remain readable."""
+    db_path = tmp_path / "legacy_watchlist.db"
+    # Build a pre-ADR-043 schema directly (old column names only).
+    import sqlite3
+
+    with sqlite3.connect(str(db_path)) as conn:
+        conn.execute(
+            """
+            CREATE TABLE screen_snapshots (
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                name              TEXT    NOT NULL,
+                saved_at          TEXT    NOT NULL,
+                universe          TEXT    NOT NULL DEFAULT '',
+                window_days       INTEGER NOT NULL DEFAULT 7,
+                ticker            TEXT    NOT NULL,
+                rank              INTEGER NOT NULL,
+                flow_score        REAL    NOT NULL,
+                composite_score   REAL,
+                consecutive_streak INTEGER NOT NULL DEFAULT 0,
+                net_buy_ratio     REAL    NOT NULL DEFAULT 0,
+                bci_label         TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO screen_snapshots
+                (name, saved_at, universe, window_days, ticker, rank,
+                 flow_score, composite_score, consecutive_streak, net_buy_ratio, bci_label)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "legacy",
+                "2026-06-01T09:00:00",
+                "lq45",
+                7,
+                "BBCA",
+                1,
+                77.5,
+                62.0,
+                4,
+                0.55,
+                "CLUSTER",
+            ),
+        )
+
+    from src.infrastructure.persistence.sqlite_watchlist_repository import (
+        SQLiteWatchlistRepository,
+    )
+
+    repo = SQLiteWatchlistRepository(db_path=db_path)
+    result = repo.get_latest_snapshot("legacy")
+    assert len(result) == 1
+    assert result[0].accum_score == 77.5
+    assert result[0].signal_score == 62.0
 
 
 # ── compare_screen_snapshots ──────────────────────────────────────────────────

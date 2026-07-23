@@ -55,8 +55,8 @@ def _evidence_factor_rows(
     display_config: AccumulationDisplayConfig
 ) -> list[tuple[str, ...]]:
     bd = (
-        candidate.foreign_flow_score_breakdown.breakdown_dict
-        if candidate.foreign_flow_score_breakdown else {}
+        candidate.accum_score_breakdown.breakdown_dict
+        if candidate.accum_score_breakdown else {}
     )
     rsi = f"{candidate.rsi:.1f}" if candidate.rsi is not None else "-"
     flow = f"{candidate.avg_flow_ratio:+.1f}%" if candidate.avg_flow_ratio is not None else "-"
@@ -65,7 +65,7 @@ def _evidence_factor_rows(
         f"{candidate.bb_width_pctile * 100:.0f}%"
         if candidate.bb_width_pctile is not None else "-"
     )
-    bb_scored = display_config.foreign_flow_score_policy.bb_squeeze.enabled
+    bb_scored = display_config.accum_score_policy.bb_squeeze.enabled
 
     def _pts(key: str) -> str:
         value = bd.get(key)

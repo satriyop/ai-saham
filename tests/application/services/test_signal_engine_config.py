@@ -47,7 +47,7 @@ def test_resolve_signal_config_reads_policy_blocks():
                 "insider_lookback_days": 120,
             },
             "input_mapping": {
-                "foreign_flow_score": {
+                "accum_score": {
                     "max_score": 150.0,
                     "clamp": False,
                 },
@@ -138,8 +138,8 @@ def test_resolve_signal_config_reads_policy_blocks():
     assert resolved.classification.strong_min_score == 80
     assert resolved.classification.moderate_min_score == 55
     assert resolved.enrichment.insider_lookback_days == 120
-    assert resolved.input_mapping.foreign_flow_score.max_score == 150.0
-    assert resolved.input_mapping.foreign_flow_score.clamp is False
+    assert resolved.input_mapping.accum_score.max_score == 150.0
+    assert resolved.input_mapping.accum_score.clamp is False
     assert resolved.scoring.bandar.mandatory_signal_count == 4
     assert resolved.scoring.bandar.signal_score_unit == 3
     assert resolved.scoring.bandar.default_max_range == 12

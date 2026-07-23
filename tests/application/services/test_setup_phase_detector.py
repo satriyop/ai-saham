@@ -71,7 +71,7 @@ def _candles(*, breakout: bool = False, zero_volume: bool = False) -> list[Candl
 
 def _setup_eval(*, flow=True, bb=True) -> SetupEvaluation:
     gates = (
-        SetupGate("foreign_flow_score", flow, "70", ">= 60"),
+        SetupGate("accum_score", flow, "70", ">= 60"),
         SetupGate("flow_pct", flow, "5%", ">= 2%"),
         SetupGate("bb_width_pctile", bb, "0.15", "<= 0.20"),
     )

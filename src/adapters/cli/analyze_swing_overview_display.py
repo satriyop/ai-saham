@@ -96,11 +96,11 @@ def _accumulation_label(accum: Any | None, config: SwingDisplayConfig) -> tuple[
     if accum is None:
         return "missing", "red", "no accumulation candidate"
     label = signal_label(accum, config)
-    style = "bold green" if accum.foreign_flow_score >= config.enter_min_score else (
-        "yellow" if accum.foreign_flow_score >= config.watch_min_score else "red"
+    style = "bold green" if accum.accum_score >= config.enter_min_score else (
+        "yellow" if accum.accum_score >= config.watch_min_score else "red"
     )
     detail = (
-        f"foreign-flow score {accum.foreign_flow_score:.1f}; streak {accum.consecutive_streak}s; "
+        f"foreign-flow score {accum.accum_score:.1f}; streak {accum.consecutive_streak}s; "
         f"net {accum.net_buy_days}/{accum.total_days}; flow {fmt_pct(accum.avg_flow_ratio, True)}"
     )
     return label.upper(), style, detail

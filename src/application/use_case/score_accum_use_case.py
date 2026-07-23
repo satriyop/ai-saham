@@ -1,5 +1,5 @@
 """
-ScoreForeignFlowUseCase.
+ScoreAccumUseCase.
 
 Application-layer deterministic scoring of foreign broker-flow evidence.
 """
@@ -10,10 +10,10 @@ import math
 from dataclasses import dataclass, field
 from datetime import date
 
-from src.domain.value_objects.foreign_flow_score_breakdown import (
+from src.domain.value_objects.accum_score_breakdown import (
     ForeignFlowComponentScore,
     ForeignFlowComponentStatus,
-    ForeignFlowScoreBreakdown,
+    AccumScoreBreakdown,
 )
 
 
@@ -54,7 +54,7 @@ class BciEvidencePolicy:
 
 
 @dataclass(frozen=True)
-class ForeignFlowScorePolicy:
+class AccumScorePolicy:
     max_score: float = 100.0
     consistency: EvidenceComponentPolicy = field(
         default_factory=lambda: EvidenceComponentPolicy(weight=33.3)
@@ -78,7 +78,7 @@ class ForeignFlowScorePolicy:
 
 
 @dataclass(frozen=True)
-class ScoreForeignFlowRequest:
+class ScoreAccumRequest:
     ticker: str
     snapshot_date: date
     net_buy_ratio: float
@@ -92,18 +92,18 @@ class ScoreForeignFlowRequest:
 
 
 @dataclass(frozen=True)
-class ScoreForeignFlowResponse:
-    evidence: ForeignFlowScoreBreakdown
+class ScoreAccumResponse:
+    evidence: AccumScoreBreakdown
 
 
-class ScoreForeignFlowUseCase:
+class ScoreAccumUseCase:
     """Score foreign broker-flow evidence from already-computed ticker facts."""
 
-    def __init__(self, policy: ForeignFlowScorePolicy | None = None) -> None:
-        self._policy = policy or ForeignFlowScorePolicy()
+    def __init__(self, policy: AccumScorePolicy | None = None) -> None:
+        self._policy = policy or AccumScorePolicy()
 
     @property
-    def policy(self) -> ForeignFlowScorePolicy:
+    def policy(self) -> AccumScorePolicy:
         """Expose the active policy so other services (e.g.
         FlowConfirmationEvidenceBuilder) can derive weights from the same
         source of truth instead of maintaining a separate copy."""
@@ -111,8 +111,8 @@ class ScoreForeignFlowUseCase:
 
     def execute(
         self,
-        request: ScoreForeignFlowRequest,
-    ) -> ScoreForeignFlowResponse:
+        request: ScoreAccumRequest,
+    ) -> ScoreAccumResponse:
         p = self._policy
         components: list[ForeignFlowComponentScore] = [
             self._score_consistency(request.net_buy_ratio, p.consistency),
@@ -144,8 +144,8 @@ class ScoreForeignFlowUseCase:
             for c in components
         )
 
-        return ScoreForeignFlowResponse(
-            evidence=ForeignFlowScoreBreakdown(
+        return ScoreAccumResponse(
+            evidence=AccumScoreBreakdown(
                 ticker=request.ticker,
                 snapshot_date=request.snapshot_date,
                 max_score=p.max_score,

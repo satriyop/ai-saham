@@ -34,7 +34,7 @@ COMPONENTS: list[tuple[str, str, str, str]] = [
     ("vwap_discount_pct", "vwap_discount_pct", "points_vwap", "score_without_vwap"),
     ("rsi_headroom (rsi)", "rsi", "points_rsi", "score_without_rsi"),
     ("flow% (avg_flow_ratio)", "avg_flow_ratio", "points_flow", "score_without_flow"),
-    ("bci / inst (label→points)", "foreign_flow_score", "points_inst", "score_without_inst"),
+    ("bci / inst (label→points)", "accum_score", "points_inst", "score_without_inst"),
 ]
 
 
@@ -133,8 +133,8 @@ def build_report(panel: list[PanelRow], db_path: Path) -> str:
         f"(horizon=`SWING_10D`)",
         f"- Rows: {len(panel)}",
         f"- Snapshot span: {date_span}",
-        "- Component points from `foreign_flow_score_breakdown.breakdown`",
-        "- Leave-one-out proxy: `foreign_flow_score − component_points` "
+        "- Component points from `accum_score_breakdown.breakdown`",
+        "- Leave-one-out proxy: `accum_score − component_points` "
         "(additive reconstruction; ignores renormalization edge cases)",
         "",
         "## Hypothesis",
@@ -225,7 +225,7 @@ def build_report(panel: list[PanelRow], db_path: Path) -> str:
         ]
     )
 
-    full_high, _, _ = _high_low(panel, "foreign_flow_score")
+    full_high, _, _ = _high_low(panel, "accum_score")
     full_stats = _stats(full_high)
     full_avg = full_stats["avg_ret"]
 

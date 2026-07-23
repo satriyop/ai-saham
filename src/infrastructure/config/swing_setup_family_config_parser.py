@@ -34,8 +34,8 @@ def parse_setup_family_fields(
         "foreign_bounce_enabled": bool_or_default(
             fb, "enabled", defaults.foreign_bounce_enabled
         ),
-        "gate_min_foreign_flow_score": float_or_default(
-            fb_gates, "min_foreign_flow_score", defaults.gate_min_foreign_flow_score
+        "gate_min_accum_score": float_or_default(
+            fb_gates, "min_accum_score", defaults.gate_min_accum_score
         ),
         "gate_min_vwap_discount_pct": float_or_default(
             fb_gates, "min_vwap_discount_pct", defaults.gate_min_vwap_discount_pct
@@ -62,10 +62,10 @@ def parse_setup_family_fields(
         "coiled_spring_enabled": bool_or_default(
             cs, "enabled", defaults.coiled_spring_enabled
         ),
-        "coiled_spring_gate_min_foreign_flow_score": float_or_default(
+        "coiled_spring_gate_min_accum_score": float_or_default(
             cs_gates,
-            "min_foreign_flow_score",
-            defaults.coiled_spring_gate_min_foreign_flow_score,
+            "min_accum_score",
+            defaults.coiled_spring_gate_min_accum_score,
         ),
         "coiled_spring_gate_max_bb_width_pctile": float_or_default(
             cs_gates, "max_bb_width_pctile", defaults.coiled_spring_gate_max_bb_width_pctile
@@ -91,10 +91,10 @@ def parse_setup_family_fields(
         "smart_money_confirmed_enabled": bool_or_default(
             smc, "enabled", defaults.smart_money_confirmed_enabled
         ),
-        "smart_money_confirmed_gate_min_foreign_flow_score": float_or_default(
+        "smart_money_confirmed_gate_min_accum_score": float_or_default(
             smc_gates,
-            "min_foreign_flow_score",
-            defaults.smart_money_confirmed_gate_min_foreign_flow_score,
+            "min_accum_score",
+            defaults.smart_money_confirmed_gate_min_accum_score,
         ),
         "smart_money_confirmed_gate_min_smart_flow_idr": Decimal(
             str(float_or_default(
@@ -130,9 +130,9 @@ def parse_setup_family_fields(
         "pullback_continuation_enabled": bool_or_default(
             pc, "enabled", defaults.pullback_continuation_enabled
         ),
-        "pullback_continuation_gate_min_foreign_flow_score": float_or_default(
-            pc_gates, "min_foreign_flow_score",
-            defaults.pullback_continuation_gate_min_foreign_flow_score
+        "pullback_continuation_gate_min_accum_score": float_or_default(
+            pc_gates, "min_accum_score",
+            defaults.pullback_continuation_gate_min_accum_score
         ),
         "pullback_continuation_gate_required_trend": str_or_default(
             pc_gates, "required_trend",

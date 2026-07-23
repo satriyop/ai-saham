@@ -80,7 +80,7 @@ class SwingBacktestTrade:
     pnl: Decimal
     holding_days: int
     exit_reason: str
-    foreign_flow_score: float
+    accum_score: float
     flow_pct: float | None
     vwap_disc_pct: float | None
     rsi: float | None
@@ -114,7 +114,7 @@ class SwingBacktestTrade:
             "pnl": str(self.pnl),
             "holding_days": self.holding_days,
             "exit_reason": self.exit_reason,
-            "foreign_flow_score": self.foreign_flow_score,
+            "accum_score": self.accum_score,
             "flow_pct": self.flow_pct,
             "vwap_disc_pct": self.vwap_disc_pct,
             "rsi": self.rsi,

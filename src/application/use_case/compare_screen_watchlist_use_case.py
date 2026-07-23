@@ -95,7 +95,7 @@ class CompareScreenWatchlistUseCase:
                 if c.signal_assessment
                 else None
             )
-            fresh_scores[c.ticker] = (c.foreign_flow_score, composite)
+            fresh_scores[c.ticker] = (c.accum_score, composite)
             fresh_ranks[c.ticker] = rank
 
         comparison = compare_screen_snapshots(

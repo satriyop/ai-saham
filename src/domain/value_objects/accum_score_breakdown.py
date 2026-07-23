@@ -1,5 +1,5 @@
 """
-ForeignFlowScoreBreakdown value object.
+AccumScoreBreakdown value object.
 
 Layer: Domain
 """
@@ -94,7 +94,7 @@ class ForeignFlowComponentScore:
 
 
 @dataclass(frozen=True)
-class ForeignFlowScoreBreakdown:
+class AccumScoreBreakdown:
     """Deterministic score components for foreign broker-flow evidence."""
 
     ticker: str
@@ -112,17 +112,17 @@ class ForeignFlowScoreBreakdown:
 
     def __post_init__(self) -> None:
         if self.max_score <= 0:
-            raise ValueError("ForeignFlowScoreBreakdown max_score must be positive")
+            raise ValueError("AccumScoreBreakdown max_score must be positive")
         keys = [c.key for c in self.components]
         if len(keys) != len(set(keys)):
             raise ValueError(
-                f"ForeignFlowScoreBreakdown component keys must be unique, got {keys}"
+                f"AccumScoreBreakdown component keys must be unique, got {keys}"
             )
         if set(keys) != FOREIGN_FLOW_COMPONENT_KEYS:
             missing = sorted(FOREIGN_FLOW_COMPONENT_KEYS - set(keys))
             unexpected = sorted(set(keys) - FOREIGN_FLOW_COMPONENT_KEYS)
             raise ValueError(
-                "ForeignFlowScoreBreakdown requires exactly the canonical component "
+                "AccumScoreBreakdown requires exactly the canonical component "
                 f"keys; missing={missing}, unexpected={unexpected}"
             )
         if self.component("cons").status is ForeignFlowComponentStatus.MISSING:
@@ -136,8 +136,8 @@ class ForeignFlowScoreBreakdown:
         _validate_optional_component(self.component("inst"), self.bci_label)
 
     @property
-    def foreign_flow_score(self) -> float:
-        """Canonical score derived from the typed component records."""
+    def accum_score(self) -> float:
+        """Canonical accumulation score derived from typed component records."""
         return round(
             min(
                 sum(
@@ -201,7 +201,7 @@ class ForeignFlowScoreBreakdown:
         return {
             "ticker": self.ticker,
             "snapshot_date": self.snapshot_date.isoformat(),
-            "foreign_flow_score": self.foreign_flow_score,
+            "accum_score": self.accum_score,
             "max_score": self.max_score,
             "score_unit": "points_0_100",
             "component_coverage": round(self.component_coverage, 4),

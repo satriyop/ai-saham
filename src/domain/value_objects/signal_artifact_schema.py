@@ -37,7 +37,7 @@ from src.domain.value_objects.alpha_trigger_score import (
     REMOVED_MARKET_CONTEXT_EVIDENCE_NAME,
     SECTOR_CONTEXT_EVIDENCE_NAME,
 )
-from src.domain.value_objects.foreign_flow_score_breakdown import (
+from src.domain.value_objects.accum_score_breakdown import (
     INSTITUTIONAL_FLOW_COMPONENT_KEYS,
 )
 

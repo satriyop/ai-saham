@@ -246,7 +246,7 @@ class SetupPhaseDetector:
             return SetupPhaseState.COMPRESSION, min(1.0, 0.55 + (match_strength / 250.0))
 
         accumulation_gates = (
-            passed_gates.get("foreign_flow_score", False),
+            passed_gates.get("accum_score", False),
             passed_gates.get("flow_pct", False),
             flow_status in {"CONFIRMED", "WATCH_ZONE"},
         )

@@ -104,7 +104,7 @@ class SwingBacktestExitEngine:
             pnl=pnl,
             holding_days=self._holding_days(position.ticker, position.entry_date, exit_date),
             exit_reason=reason,
-            foreign_flow_score=position.foreign_flow_score,
+            accum_score=position.accum_score,
             flow_pct=position.flow_pct,
             vwap_disc_pct=position.vwap_disc_pct,
             rsi=position.rsi,

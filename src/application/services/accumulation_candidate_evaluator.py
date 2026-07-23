@@ -275,7 +275,7 @@ class AccumulationCandidateEvaluator:
             vwap_discount_pct=vwap_discount_pct,
             rsi=rsi,
             trend=trend,
-            foreign_flow_score=0.0,  # populated later by ScoreForeignFlowUseCase
+            accum_score=0.0,  # populated later by ScoreAccumUseCase
             top_brokers=top_brokers,
             institutional_flag=institutional_flag,
             bci_label=bci_label,

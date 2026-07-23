@@ -20,7 +20,7 @@ from src.domain.value_objects.accumulation_journal_entry import AccumulationJour
 
 
 @dataclass
-class ForeignFlowScoreBucketStat:
+class AccumScoreBucketStat:
     bucket: str
     n: int
     avg_return_5d: float | None
@@ -64,7 +64,7 @@ class SignalDelta:
 class AccumulationJournalReport:
     total_entries: int
     enriched_entries: int
-    foreign_flow_score_buckets: list[ForeignFlowScoreBucketStat] = field(default_factory=list)
+    accum_score_buckets: list[AccumScoreBucketStat] = field(default_factory=list)
     by_decision: list[DecisionStat] = field(default_factory=list)
     by_pattern: list[PatternStat] = field(default_factory=list)
     signal_deltas: list[SignalDelta] = field(default_factory=list)
@@ -132,7 +132,7 @@ class AccumulationJournalService:
             ticker=ticker,
             entry_price=entry_price,
             window_days=window_days,
-            foreign_flow_score=candidate.foreign_flow_score if candidate else None,
+            accum_score=candidate.accum_score if candidate else None,
             foreign_flow_buy_streak=candidate.consecutive_streak if candidate else None,
             flow_pct=_d(candidate.avg_flow_ratio) if candidate else None,
             vwap_disc_pct=_d(candidate.vwap_discount_pct) if candidate else None,
@@ -184,7 +184,7 @@ class AccumulationJournalService:
         return AccumulationJournalReport(
             total_entries=len(all_entries),
             enriched_entries=len(with_data),
-            foreign_flow_score_buckets=self._foreign_flow_score_buckets(with_data),
+            accum_score_buckets=self._accum_score_buckets(with_data),
             by_decision=self._decision_stats(with_data),
             by_pattern=self._pattern_stats(with_data),
             signal_deltas=self._signal_deltas(with_data),
@@ -226,7 +226,7 @@ class AccumulationJournalService:
             ticker=entry.ticker,
             entry_price=entry.entry_price,
             window_days=entry.window_days,
-            foreign_flow_score=entry.foreign_flow_score,
+            accum_score=entry.accum_score,
             foreign_flow_buy_streak=entry.foreign_flow_buy_streak,
             flow_pct=entry.flow_pct,
             vwap_disc_pct=entry.vwap_disc_pct,
@@ -251,18 +251,18 @@ class AccumulationJournalService:
 
     # ── statistics ──────────────────────────────────────────────────────────
 
-    def _foreign_flow_score_buckets(
+    def _accum_score_buckets(
         self, entries: list[AccumulationJournalEntry]
-    ) -> list[ForeignFlowScoreBucketStat]:
-        # Edges are on the live 0-100 foreign_flow_score scale (see ADR-039).
+    ) -> list[AccumScoreBucketStat]:
+        # Edges are on the live 0-100 accum_score scale (see ADR-039).
         # Entries logged before the rescale carry their era's raw score value
         # with no stored max_score, so a pre-rescale entry may report a
         # different bucket label than when it was originally logged. This is
         # an accepted, documented limitation — labels only, no data change.
         buckets = [
-            ("58.3+", lambda e: e.foreign_flow_score is not None and e.foreign_flow_score >= 58.3),
-            ("33.3–58.2", lambda e: e.foreign_flow_score is not None and 33.3 <= e.foreign_flow_score < 58.3),
-            ("0–33.2", lambda e: e.foreign_flow_score is not None and e.foreign_flow_score < 33.3),
+            ("58.3+", lambda e: e.accum_score is not None and e.accum_score >= 58.3),
+            ("33.3–58.2", lambda e: e.accum_score is not None and 33.3 <= e.accum_score < 58.3),
+            ("0–33.2", lambda e: e.accum_score is not None and e.accum_score < 33.3),
         ]
         result = []
         for label, pred in buckets:
@@ -273,7 +273,7 @@ class AccumulationJournalService:
                 if e.actual_close_5d is not None and e.entry_price != 0
             ]
             returns_10d = [e.return_10d_pct for e in group if e.return_10d_pct is not None]
-            result.append(ForeignFlowScoreBucketStat(
+            result.append(AccumScoreBucketStat(
                 bucket=label,
                 n=len(group),
                 avg_return_5d=_avg(returns_5d),

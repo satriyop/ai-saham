@@ -43,8 +43,8 @@ def build_signal_context_from_candidate(
     return SignalContext(
         ticker=ticker,
         snapshot_date=snapshot_date,
-        foreign_flow_quality=signal_engine.foreign_flow_quality_from_foreign_flow_score(
-            candidate.foreign_flow_score
+        foreign_flow_quality=signal_engine.foreign_flow_quality_from_accum_score(
+            candidate.accum_score
         ),
         bandar_broad_score=bd.broad_score if bd else None,
         bandar_max_range=signal_engine.bandar_max_range(num_optional)

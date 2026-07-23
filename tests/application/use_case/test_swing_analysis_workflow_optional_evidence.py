@@ -33,7 +33,7 @@ def test_swing_analysis_workflow_can_emit_breakout_confirmation_with_local_volum
         name="foreign-bounce",
         match=SetupMatch.MATCH,
         gates=(
-            SetupGate("foreign_flow_score", True, "75", ">= 70"),
+            SetupGate("accum_score", True, "75", ">= 70"),
             SetupGate("flow_pct", True, "5%", ">= 5%"),
             SetupGate("fvwap%", True, "3%", ">= 3%"),
         ),

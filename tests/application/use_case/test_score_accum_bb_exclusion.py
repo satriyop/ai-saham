@@ -1,18 +1,18 @@
 from datetime import date
 
-from src.application.use_case.score_foreign_flow_use_case import (
+from src.application.use_case.score_accum_use_case import (
     BollingerSqueezePolicy,
-    ForeignFlowScorePolicy,
-    ScoreForeignFlowRequest,
-    ScoreForeignFlowUseCase,
+    AccumScorePolicy,
+    ScoreAccumRequest,
+    ScoreAccumUseCase,
 )
-from src.domain.value_objects.foreign_flow_score_breakdown import (
+from src.domain.value_objects.accum_score_breakdown import (
     ForeignFlowComponentStatus,
 )
 
 
 def _request(bb_width_pctile):
-    return ScoreForeignFlowRequest(
+    return ScoreAccumRequest(
         ticker="BBCA",
         snapshot_date=date(2026, 6, 25),
         net_buy_ratio=1.0,
@@ -27,43 +27,43 @@ def _request(bb_width_pctile):
 
 
 def test_bb_disabled_by_default_is_not_zero_points():
-    uc = ScoreForeignFlowUseCase()
+    uc = ScoreAccumUseCase()
     resp = uc.execute(_request(0.0))
     assert resp.evidence.component("bb").status is ForeignFlowComponentStatus.DISABLED
     assert resp.evidence.breakdown_dict["bb"] is None
 
 
 def test_bb_disabled_at_moderate_squeeze():
-    uc = ScoreForeignFlowUseCase()
+    uc = ScoreAccumUseCase()
     resp = uc.execute(_request(0.15))
     assert resp.evidence.breakdown_dict["bb"] is None
 
 
 def test_bb_disabled_at_loose():
-    uc = ScoreForeignFlowUseCase()
+    uc = ScoreAccumUseCase()
     resp = uc.execute(_request(0.50))
     assert resp.evidence.breakdown_dict["bb"] is None
 
 
 def test_bb_key_still_in_breakdown_as_disabled():
-    uc = ScoreForeignFlowUseCase()
+    uc = ScoreAccumUseCase()
     resp = uc.execute(_request(0.0))
     assert "bb" in resp.evidence.breakdown_dict
     assert resp.evidence.component("bb").status is ForeignFlowComponentStatus.DISABLED
 
 
 def test_total_score_excludes_bb_contribution():
-    uc = ScoreForeignFlowUseCase()
-    tight = uc.execute(_request(0.0)).evidence.foreign_flow_score
-    loose = uc.execute(_request(0.99)).evidence.foreign_flow_score
+    uc = ScoreAccumUseCase()
+    tight = uc.execute(_request(0.0)).evidence.accum_score
+    loose = uc.execute(_request(0.99)).evidence.accum_score
     assert tight == loose
 
 
 def test_bb_can_be_re_enabled_via_explicit_policy():
-    policy = ForeignFlowScorePolicy(
+    policy = AccumScorePolicy(
         bb_squeeze=BollingerSqueezePolicy(enabled=True, weight=10.0),
     )
-    uc = ScoreForeignFlowUseCase(policy)
+    uc = ScoreAccumUseCase(policy)
     resp = uc.execute(_request(0.0))
     assert resp.evidence.component("bb").status is ForeignFlowComponentStatus.AVAILABLE
     assert resp.evidence.breakdown_dict["bb"] > 0.0
@@ -77,8 +77,8 @@ def test_bb_disabled_with_live_loaded_config_at_maximum_squeeze():
         load_accumulation_screener_config,
     )
 
-    loaded_policy = load_accumulation_screener_config().foreign_flow_score_policy
-    uc = ScoreForeignFlowUseCase(loaded_policy)
+    loaded_policy = load_accumulation_screener_config().accum_score_policy
+    uc = ScoreAccumUseCase(loaded_policy)
     resp = uc.execute(_request(0.0))
 
     assert resp.evidence.component("bb").status is ForeignFlowComponentStatus.DISABLED

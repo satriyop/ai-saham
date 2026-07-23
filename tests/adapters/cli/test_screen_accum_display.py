@@ -193,7 +193,7 @@ def test_display_results_renders_blocked_risk_diagnostics(capsys):
 def test_display_multi_renders_rich_accumulation_panel(capsys):
     results = {
         7: AccumulationScreenResponse(
-            candidates=[_candidate(foreign_flow_score=72.0, window_days=7)],
+            candidates=[_candidate(accum_score=72.0, window_days=7)],
             screened_at=date(2026, 6, 19),
             window_days=7,
             total_tickers_checked=1,
@@ -201,7 +201,7 @@ def test_display_multi_renders_rich_accumulation_panel(capsys):
             provider="stockbit",
         ),
         30: AccumulationScreenResponse(
-            candidates=[_candidate(foreign_flow_score=55.0, window_days=30)],
+            candidates=[_candidate(accum_score=55.0, window_days=30)],
             screened_at=date(2026, 6, 19),
             window_days=30,
             total_tickers_checked=1,
@@ -217,7 +217,7 @@ def test_display_multi_renders_rich_accumulation_panel(capsys):
         top=10,
         sort_by="avg",
         squeeze_only=False,
-        coiled_spring_min_foreign_flow_score=_CFG.coiled_spring_min_foreign_flow_score,
+        coiled_spring_min_accum_score=_CFG.coiled_spring_min_accum_score,
         coiled_spring_bb_pctile=_CFG.coiled_spring_bb_pctile,
         canonical_window=7,
         effective_session=_FAKE_EFFECTIVE_SESSION
@@ -303,7 +303,7 @@ def test_display_multi_renders_canonical_signal_risk_phase_data_next(capsys):
         top=10,
         sort_by="avg",
         squeeze_only=False,
-        coiled_spring_min_foreign_flow_score=_CFG.coiled_spring_min_foreign_flow_score,
+        coiled_spring_min_accum_score=_CFG.coiled_spring_min_accum_score,
         coiled_spring_bb_pctile=_CFG.coiled_spring_bb_pctile,
         canonical_window=7,
         effective_session=_FAKE_EFFECTIVE_SESSION
@@ -398,12 +398,12 @@ def test_display_multi_with_explanation_signal_auth(capsys):
 
     row = ScreenAccumMultiRow(
         ticker="BBCA",
-        candidates_by_window={7: _candidate(foreign_flow_score=72.0, window_days=7)},
+        candidates_by_window={7: _candidate(accum_score=72.0, window_days=7)},
         pattern="sustained",
         trend="UP",
         tracked_broker_flow=None,
         canonical_window=7,
-        canonical_candidate=_candidate(foreign_flow_score=72.0, window_days=7),
+        canonical_candidate=_candidate(accum_score=72.0, window_days=7),
         signal_score=72.0,
         signal_authority_coverage=0.83,
         risk_status="OPEN",

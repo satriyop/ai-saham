@@ -2,7 +2,7 @@
 AccumulationScreenUseCase — multi-stock foreign accumulation screener.
 
 Scans a list of tickers for sustained foreign investor accumulation patterns.
-Foreign-flow scoring is delegated to ScoreForeignFlowUseCase;
+Foreign-flow scoring is delegated to ScoreAccumUseCase;
 this use case owns orchestration, filtering, enrichment, and sorting.
 
 Intraday vs Swing usage:
@@ -27,8 +27,8 @@ from src.application.services.accumulation_candidate_evidence_builder import (
     AccumulationCandidateEvidenceBuilder,
 )
 from src.application.services.accumulation_risk_funnel import AccumulationRiskFunnel
-from src.application.use_case.score_foreign_flow_use_case import (
-    ScoreForeignFlowUseCase,
+from src.application.use_case.score_accum_use_case import (
+    ScoreAccumUseCase,
 )
 from src.domain.ports.analyst_consensus_provider import AnalystConsensusProvider
 from src.domain.ports.bandar_detector_provider import BandarDetectorProvider
@@ -140,7 +140,7 @@ def _screen_sort_key(
     return (
         float(_trade_action_rank(candidate)),
         float(candidate.signal_assessment.assessment.score if candidate.signal_assessment else 0),
-        candidate.foreign_flow_score,
+        candidate.accum_score,
         candidate.seasonal_edge.score if candidate.seasonal_edge else 0.0,
     )
 
@@ -169,7 +169,7 @@ class AccumulationScreenUseCase:
         idx_groups: "dict[str, list[str]] | None" = None,
         risk_use_case: "AssessRiskUseCase | None" = None,
         candidate_observations_repository: "CandidateObservationsRepository | None" = None,
-        foreign_flow_score_use_case: ScoreForeignFlowUseCase | None = None,
+        accum_score_use_case: ScoreAccumUseCase | None = None,
         derived_feature_policy: accumulation_dto.AccumulationDerivedFeaturePolicy | None = None,
         swing_setup_catalog: "SwingSetupCatalogConfig | None" = None,
         primary_setup_family_resolver: "PrimarySetupFamilyResolver | None" = None,
@@ -202,7 +202,7 @@ class AccumulationScreenUseCase:
         self._risk_use_case = risk_use_case
         self._signal_engine = signal_engine
         self._candidate_observations_repo = candidate_observations_repository
-        self._foreign_flow_score_uc = foreign_flow_score_use_case or ScoreForeignFlowUseCase()
+        self._accum_score_uc = accum_score_use_case or ScoreAccumUseCase()
         self._derived_features = (
             derived_feature_policy or accumulation_dto.AccumulationDerivedFeaturePolicy()
         )
@@ -212,10 +212,10 @@ class AccumulationScreenUseCase:
             benchmark_excess_return_calculator or _BenchmarkExcessReturnCalculator()
         )
         self._indicator_registry = indicator_registry
-        # Derive weights from the same policy ScoreForeignFlowUseCase uses, so
+        # Derive weights from the same policy ScoreAccumUseCase uses, so
         # the two can never drift apart (see ADR-039).
         self._flow_confirmation_builder = FlowConfirmationEvidenceBuilder(
-            foreign_flow_score_policy=self._foreign_flow_score_uc.policy
+            accum_score_policy=self._accum_score_uc.policy
         )
         self._candidate_evidence_builder = AccumulationCandidateEvidenceBuilder(
             market_repository=self._market_repo,
@@ -284,7 +284,7 @@ class AccumulationScreenUseCase:
             signal_engine=self._signal_engine,
             flow_confirmation_builder=self._flow_confirmation_builder,
             candidate_evidence_builder=self._candidate_evidence_builder,
-            foreign_flow_score_uc=self._foreign_flow_score_uc,
+            accum_score_uc=self._accum_score_uc,
         )
 
     def execute(

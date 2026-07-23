@@ -65,7 +65,7 @@ class RunAccumulationAuditWorkflowRequest:
     start: str
     end: str | None
     window: int | None
-    min_foreign_flow_score: float | None
+    min_accum_score: float | None
     min_net_buy_days: int | None
     min_vwap_disc: float | None
     trend: str | None
@@ -89,7 +89,7 @@ class RunAccumulationAuditWorkflowResult:
     start_date: date
     end_date: date
     window: int
-    min_foreign_flow_score: float
+    min_accum_score: float
     filter_label: str
     resolved_tickers: tuple[str, ...]
 
@@ -161,9 +161,9 @@ class RunAccumulationAuditWorkflowUseCase:
             request.window if request.window is not None
             else int(setup_values.get("window", _DEFAULT_WINDOW))
         )
-        min_foreign_flow_score = (
-            request.min_foreign_flow_score if request.min_foreign_flow_score is not None
-            else float(setup_values.get("min_foreign_flow_score", _DEFAULT_MIN_FOREIGN_FLOW_SCORE))
+        min_accum_score = (
+            request.min_accum_score if request.min_accum_score is not None
+            else float(setup_values.get("min_accum_score", _DEFAULT_MIN_FOREIGN_FLOW_SCORE))
         )
         min_net_buy_days = (
             request.min_net_buy_days if request.min_net_buy_days is not None
@@ -248,7 +248,7 @@ class RunAccumulationAuditWorkflowUseCase:
                 end_date=end_date,
                 window_days=window,
                 min_net_buy_days=min_net_buy_days,
-                min_foreign_flow_score=min_foreign_flow_score,
+                min_accum_score=min_accum_score,
                 horizon_days=resolved_horizon,
                 min_vwap_disc_pct=min_vwap_disc,
                 trend=trend_filter,
@@ -272,7 +272,7 @@ class RunAccumulationAuditWorkflowUseCase:
             start_date=start_date,
             end_date=end_date,
             window=window,
-            min_foreign_flow_score=min_foreign_flow_score,
+            min_accum_score=min_accum_score,
             filter_label=filter_label,
             resolved_tickers=tuple(ticker_list),
         )

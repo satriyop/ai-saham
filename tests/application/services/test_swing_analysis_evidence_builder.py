@@ -93,7 +93,7 @@ class _RecordingCompanyQualityBuilder:
 
 
 class _FakeSignalEngine:
-    def foreign_flow_quality_from_foreign_flow_score(self, score):
+    def foreign_flow_quality_from_accum_score(self, score):
         return "MODERATE"
 
     def bandar_max_range(self, num_optional):
@@ -137,7 +137,7 @@ def _candidate(**overrides) -> AccumulationCandidate:
         vwap_discount_pct=0.0,
         rsi=50.0,
         trend="UP",
-        foreign_flow_score=50.0,
+        accum_score=50.0,
         top_brokers=None,
         institutional_flag=False,
     )

@@ -87,7 +87,7 @@ class LogSwingCandidateResponse:
     planned_stop: Decimal | None
     planned_target: Decimal | None
     failed_gates: tuple[str, ...]
-    candidate_foreign_flow_score: float | None  # None when ticker had no accumulation data
+    candidate_accum_score: float | None  # None when ticker had no accumulation data
 
 
 class LogSwingCandidateUseCase:
@@ -113,8 +113,8 @@ class LogSwingCandidateUseCase:
         screen_req = AccumulationScreenRequest(
             tickers=[ticker],
             window_days=request.window_days,
-            min_foreign_flow_score=0.0,
-            min_foreign_flow_score_enabled=True,
+            min_accum_score=0.0,
+            min_accum_score_enabled=True,
             min_net_buy_days=0,
             tier1_broker_codes=request.tier1_broker_codes,
             sector_breadth_enabled=request.sector_breadth_enabled,
@@ -147,8 +147,8 @@ class LogSwingCandidateUseCase:
                     AccumulationScreenRequest(
                         tickers=[ticker],
                         window_days=w,
-                        min_foreign_flow_score=0.0,
-                        min_foreign_flow_score_enabled=True,
+                        min_accum_score=0.0,
+                        min_accum_score_enabled=True,
                         min_net_buy_days=0,
                         tier1_broker_codes=request.tier1_broker_codes,
                         sector_breadth_enabled=request.sector_breadth_enabled,
@@ -276,7 +276,7 @@ class LogSwingCandidateUseCase:
             planned_stop=planned_stop,
             planned_target=planned_target,
             failed_gates=failed_gates,
-            candidate_foreign_flow_score=candidate.foreign_flow_score if candidate else None,
+            candidate_accum_score=candidate.accum_score if candidate else None,
         )
 
     @staticmethod
@@ -314,7 +314,7 @@ class LogSwingCandidateUseCase:
             "stop_pct": None,
             "entry_price": _f(entry_price),
             "window_days": window_days,
-            "foreign_flow_score": candidate.foreign_flow_score if candidate else None,
+            "accum_score": candidate.accum_score if candidate else None,
             "foreign_flow_buy_streak": candidate.consecutive_streak if candidate else None,
             "flow_pct": float(candidate.avg_flow_ratio)
             if candidate and candidate.avg_flow_ratio is not None

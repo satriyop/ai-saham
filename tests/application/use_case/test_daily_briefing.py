@@ -704,7 +704,7 @@ def _real_accumulation_candidate(ticker: str = "BBCA") -> AccumulationCandidate:
         vwap_discount_pct=0.5,
         rsi=50.0,
         trend="UP",
-        foreign_flow_score=60.6,
+        accum_score=60.6,
         top_brokers=None,
         institutional_flag=True,
     )
@@ -746,7 +746,7 @@ def test_daily_briefing_projects_accumulation_candidates(monkeypatch):
     assert response.accumulation_summary.unclassified_count == 1
     assert len(response.daily_accumulation_candidates) == 1
     assert response.daily_accumulation_candidates[0].ticker == "BBCA"
-    assert response.daily_accumulation_candidates[0].flow_score == 60.6
+    assert response.daily_accumulation_candidates[0].accum_score == 60.6
     assert response.daily_accumulation_candidates[0].action is None
 
 

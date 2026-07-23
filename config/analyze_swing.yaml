@@ -16,4 +16,4 @@ analyze_swing:
     # Internal candidate construction for single-ticker analysis. Keep permissive
     # by default so SignalEngine/RiskEngine decide the final assessment.
     min_net_buy_days: 0
-    min_foreign_flow_score: 0.0
+    min_accum_score: 0.0

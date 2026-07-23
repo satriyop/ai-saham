@@ -19,7 +19,7 @@
 swing:
   capital: 10000000      # IDR — your total swing trading capital
   risk_pct: 1.0          # % of capital to risk per trade (1 = 1%)
-  min_foreign_flow_score: 58.3        # minimum composite foreign-flow score for swing screen (0-100)
+  min_accum_score: 58.3               # minimum accum score for swing screen (0-100; ADR-043)
 
 # trading:
 #   capital: 100_000_000  # IDR — initial capital for backtests / simulations

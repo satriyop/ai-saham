@@ -277,7 +277,7 @@ def _display_retrieval(payload: dict, identity: StoredObservationIdentity) -> No
         typer.echo(f"Warning: {signal['coverage_warning']}")
     typer.echo(
         "Flow:    "
-        f"{candidate.get('foreign_flow_score', '—')}  "
+        f"{candidate.get('accum_score', '—')}  "
         f"trend={candidate.get('trend', '—')}  "
         f"streak={candidate.get('consecutive_streak', '—')}"
     )

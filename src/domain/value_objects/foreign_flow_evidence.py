@@ -9,11 +9,11 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
-from src.domain.value_objects.foreign_flow_score_breakdown import (
+from src.domain.value_objects.accum_score_breakdown import (
     FOREIGN_FLOW_COMPONENT_KEYS,
     ForeignFlowComponentScore,
     ForeignFlowComponentStatus,
-    ForeignFlowScoreBreakdown,
+    AccumScoreBreakdown,
 )
 
 
@@ -81,7 +81,7 @@ class ForeignFlowEvidence:
             )
 
     @property
-    def composite_score(self) -> float:
+    def accum_score(self) -> float:
         return round(
             min(
                 sum(
@@ -139,7 +139,7 @@ class ForeignFlowEvidence:
     @classmethod
     def from_score_breakdown(
         cls,
-        breakdown: ForeignFlowScoreBreakdown,
+        breakdown: AccumScoreBreakdown,
         *,
         net_buy_days: int,
         total_days: int,
@@ -153,7 +153,7 @@ class ForeignFlowEvidence:
             score_family=COMPOSITE_FOREIGN_FLOW,
             flow_direction=flow_direction,
             confirmation_status=classify_confirmation_status(
-                composite_score=breakdown.foreign_flow_score,
+                accum_score=breakdown.accum_score,
                 max_score=breakdown.max_score,
                 flow_direction=flow_direction,
             ),
@@ -175,7 +175,7 @@ class ForeignFlowEvidence:
 
     def to_dict(self) -> dict:
         return {
-            "composite_score": self.composite_score,
+            "accum_score": self.accum_score,
             "max_score": self.max_score,
             "score_family": self.score_family,
             "flow_direction": self.flow_direction,
@@ -240,11 +240,11 @@ def _thaw_context_value(value: object) -> object:
 
 def classify_confirmation_status(
     *,
-    composite_score: float,
+    accum_score: float,
     max_score: float,
     flow_direction: str,
 ) -> str:
-    score_ratio = composite_score / max_score
+    score_ratio = accum_score / max_score
     if flow_direction == "POSITIVE" and score_ratio >= (58.3 / 100.0):
         return "CONFIRMED"
     if score_ratio >= (33.3 / 100.0):

@@ -130,7 +130,7 @@ def project_single_screen_result(
     else:
         candidates = sorted(
             candidates,
-            key=lambda c: c.foreign_flow_score,
+            key=lambda c: c.accum_score,
             reverse=True,
         )
 
@@ -332,7 +332,7 @@ def project_multi_screen_result(
     top: int,
     sort_by: str,
     squeeze_only: bool,
-    coiled_spring_min_foreign_flow_score: float,
+    coiled_spring_min_accum_score: float,
     coiled_spring_bb_pctile: float,
     canonical_window: int,
     effective_session: EffectiveMarketSession,
@@ -373,7 +373,7 @@ def project_multi_screen_result(
                 if c is not None and c.vwap_discount_pct is not None
             ]
             return max(discounts) if discounts else float("-inf")
-        scores = [c.foreign_flow_score for c in pw.values() if c is not None]
+        scores = [c.accum_score for c in pw.values() if c is not None]
         if not scores:
             return 0.0
         if sort_by == "avg":
@@ -382,7 +382,7 @@ def project_multi_screen_result(
             return max(scores)
         window = _normalize_sort_by_window(sort_by)
         c = pw.get(window) if window is not None else None
-        return c.foreign_flow_score if c else 0.0
+        return c.accum_score if c else 0.0
 
     sorted_items = sorted(by_ticker.items(), key=sort_key, reverse=True)[:top]
 
@@ -410,7 +410,7 @@ def project_multi_screen_result(
                 pattern=classify_multi_window_pattern(
                     resolved_windows,
                     pw,
-                    coiled_spring_min_foreign_flow_score,
+                    coiled_spring_min_accum_score,
                     coiled_spring_bb_pctile,
                 ),
                 trend=next(

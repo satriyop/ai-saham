@@ -49,7 +49,7 @@ def _base_request(**overrides) -> RunAccumulationAuditWorkflowRequest:
         start="2026-01-01",
         end="2026-01-10",
         window=None,
-        min_foreign_flow_score=None,
+        min_accum_score=None,
         min_net_buy_days=None,
         min_vwap_disc=None,
         trend=None,
@@ -87,24 +87,24 @@ def _make_workflow(audit_use_case=None, audit_setups=None, resolve_tickers=None)
 
 def test_setup_preset_fills_missing_values():
     workflow = _make_workflow(
-        audit_setups={"foreign-bounce": {"window": 12, "min_foreign_flow_score": 55.0}},
+        audit_setups={"foreign-bounce": {"window": 12, "min_accum_score": 55.0}},
     )
     result = workflow.execute(_base_request(setup="foreign-bounce"))
 
     assert result.window == 12
-    assert result.min_foreign_flow_score == 55.0
+    assert result.min_accum_score == 55.0
 
 
 def test_explicit_cli_values_override_setup_preset():
     workflow = _make_workflow(
-        audit_setups={"foreign-bounce": {"window": 12, "min_foreign_flow_score": 55.0}},
+        audit_setups={"foreign-bounce": {"window": 12, "min_accum_score": 55.0}},
     )
     result = workflow.execute(
-        _base_request(setup="foreign-bounce", window=3, min_foreign_flow_score=20.0)
+        _base_request(setup="foreign-bounce", window=3, min_accum_score=20.0)
     )
 
     assert result.window == 3
-    assert result.min_foreign_flow_score == 20.0
+    assert result.min_accum_score == 20.0
 
 
 def test_unknown_setup_raises_with_current_message():
@@ -166,7 +166,7 @@ def test_calls_audit_use_case_with_expected_request():
     assert sent.start_date == date(2026, 1, 1)
     assert sent.end_date == date(2026, 1, 10)
     assert sent.window_days == 7
-    assert sent.min_foreign_flow_score == 40.0
+    assert sent.min_accum_score == 40.0
     assert sent.min_net_buy_days == 2
     assert sent.take_profit_pcts == (4.0, 5.0, 6.0)
     assert sent.stop_loss_pcts == (3.0, 5.0, 7.0)

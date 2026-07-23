@@ -17,8 +17,8 @@ class BuildSignalObservationScreenRequest:
     """Build accumulation screen requests for live and historical observations."""
 
     min_net_buy_days: int
-    min_foreign_flow_score: float
-    min_foreign_flow_score_enabled: bool
+    min_accum_score: float
+    min_accum_score_enabled: bool
     min_signal_score: float
     min_signal_score_enabled: bool
     min_piotroski: int
@@ -42,26 +42,26 @@ class BuildSignalObservationScreenRequest:
         swing_config: Any,
         accumulation_screener_config: Any,
         min_net_buy_days: int,
-        min_foreign_flow_score: float | None = None,
+        min_accum_score: float | None = None,
         min_signal_score: float | None = None,
         min_piotroski: int = 0,
         strategy_name: str | None = None,
         disable_score_filters: bool = False,
     ) -> "BuildSignalObservationScreenRequest":
         if disable_score_filters:
-            foreign_flow_score = 0.0
+            accum_score = 0.0
             foreign_flow_enabled = False
             signal_score = 0.0
             signal_score_enabled = False
         else:
-            foreign_filter = accumulation_screener_config.min_foreign_flow_score
+            foreign_filter = accumulation_screener_config.min_accum_score
             signal_filter = accumulation_screener_config.min_signal_score
             foreign_flow_enabled = bool(foreign_filter.enabled)
             signal_score_enabled = bool(signal_filter.enabled)
-            if min_foreign_flow_score is None:
-                foreign_flow_score = float(foreign_filter.value)
+            if min_accum_score is None:
+                accum_score = float(foreign_filter.value)
             else:
-                foreign_flow_score = float(min_foreign_flow_score)
+                accum_score = float(min_accum_score)
                 foreign_flow_enabled = True
             if min_signal_score is None:
                 signal_score = float(signal_filter.value)
@@ -71,8 +71,8 @@ class BuildSignalObservationScreenRequest:
 
         return cls(
             min_net_buy_days=max(1, int(min_net_buy_days)),
-            min_foreign_flow_score=foreign_flow_score,
-            min_foreign_flow_score_enabled=foreign_flow_enabled,
+            min_accum_score=accum_score,
+            min_accum_score_enabled=foreign_flow_enabled,
             min_signal_score=signal_score,
             min_signal_score_enabled=signal_score_enabled,
             min_piotroski=int(min_piotroski),
@@ -93,8 +93,8 @@ class BuildSignalObservationScreenRequest:
     def with_score_filters_disabled(self) -> "BuildSignalObservationScreenRequest":
         return replace(
             self,
-            min_foreign_flow_score=0.0,
-            min_foreign_flow_score_enabled=False,
+            min_accum_score=0.0,
+            min_accum_score_enabled=False,
             min_signal_score=0.0,
             min_signal_score_enabled=False,
         )
@@ -111,8 +111,8 @@ class BuildSignalObservationScreenRequest:
             tickers=tickers,
             window_days=int(window_days),
             min_net_buy_days=self.min_net_buy_days,
-            min_foreign_flow_score=self.min_foreign_flow_score,
-            min_foreign_flow_score_enabled=self.min_foreign_flow_score_enabled,
+            min_accum_score=self.min_accum_score,
+            min_accum_score_enabled=self.min_accum_score_enabled,
             min_signal_score=self.min_signal_score,
             min_signal_score_enabled=self.min_signal_score_enabled,
             min_piotroski=self.min_piotroski,

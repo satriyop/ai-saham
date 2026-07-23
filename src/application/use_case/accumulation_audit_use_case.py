@@ -105,7 +105,7 @@ class AccumulationAuditUseCase:
         derived_feature_policy: AccumulationDerivedFeaturePolicy | None = None,
         *,
         screen_use_case: AccumulationScreenUseCase | None = None,
-        foreign_flow_score_policy: Any | None = None,
+        accum_score_policy: Any | None = None,
     ) -> None:
         self._broker_repo = broker_repository
         self._market_repo = market_repository
@@ -117,7 +117,7 @@ class AccumulationAuditUseCase:
             indicator_registry=indicator_registry,
             rules_loader=rules_loader,
             signal_engine=signal_engine,
-            foreign_flow_score_policy=foreign_flow_score_policy,
+            accum_score_policy=accum_score_policy,
             derived_feature_policy=self._derived_features,
             # Historical lean: no live Stockbit enricher / risk funnel.
             stockbit_providers=None,
@@ -166,8 +166,8 @@ class AccumulationAuditUseCase:
                     tickers=tickers,
                     window_days=request.window_days,
                     min_net_buy_days=request.min_net_buy_days,
-                    min_foreign_flow_score=request.min_foreign_flow_score,
-                    min_foreign_flow_score_enabled=True,
+                    min_accum_score=request.min_accum_score,
+                    min_accum_score_enabled=True,
                     rsi_period=self._derived_features.rsi_period,
                     sma_period=self._derived_features.trend_sma_period,
                     as_of_date=signal_date,

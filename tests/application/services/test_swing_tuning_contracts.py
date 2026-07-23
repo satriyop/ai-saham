@@ -450,7 +450,7 @@ def test_tuning_config_diff_draft_can_loosen_setup_thresholds(tmp_path):
         "setups:\n"
         "  foreign-bounce:\n"
         "    gates:\n"
-        "      min_foreign_flow_score: 70\n"
+        "      min_accum_score: 70\n"
         "      max_rsi: 60\n"
         "      required_trend: SIDE\n"
         "    partial_max_failed_gates: 2\n",
@@ -472,7 +472,7 @@ def test_tuning_config_diff_draft_can_loosen_setup_thresholds(tmp_path):
 
     assert draft.status == "PROPOSED_VALUES_DRY_RUN"
     assert by_path[
-        "config/swing_setups.yaml:setups.foreign-bounce.gates.min_foreign_flow_score"
+        "config/swing_setups.yaml:setups.foreign-bounce.gates.min_accum_score"
     ].proposed_value == 69
     assert by_path[
         "config/swing_setups.yaml:setups.foreign-bounce.gates.max_rsi"
@@ -484,14 +484,14 @@ def test_tuning_config_diff_draft_can_loosen_setup_thresholds(tmp_path):
         "config/swing_setups.yaml:setups.foreign-bounce.gates.required_trend"
     ].proposed_value is None
     assert by_path[
-        "config/swing_setups.yaml:setups.foreign-bounce.gates.min_foreign_flow_score"
+        "config/swing_setups.yaml:setups.foreign-bounce.gates.min_accum_score"
     ].value_selection_policy == "DETERMINISTIC_VALUE_SELECTED"
     assert by_path[
-        "config/swing_setups.yaml:setups.foreign-bounce.gates.min_foreign_flow_score"
+        "config/swing_setups.yaml:setups.foreign-bounce.gates.min_accum_score"
     ].to_dict()["target_classification"] == {
         "target_family": "swing_setup",
         "target_kind": "gate",
-        "target_parameter": "min_foreign_flow_score",
+        "target_parameter": "min_accum_score",
     }
     assert by_path[
         "config/swing_setups.yaml:setups.foreign-bounce.partial_max_failed_gates"

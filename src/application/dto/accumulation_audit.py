@@ -10,7 +10,7 @@ from datetime import date
 from decimal import Decimal
 
 DEFAULT_AUDIT_GROUP_DIMENSIONS = (
-    "foreign_flow_score",
+    "accum_score",
     "streak",
     "flow_pct",
     "vwap_disc_pct",
@@ -25,11 +25,11 @@ DEFAULT_AUDIT_GROUP_DIMENSIONS = (
 class AuditBucketPolicy:
     """Bucket boundaries used by accumulation-audit learning summaries."""
 
-    # Edges are on the live 0-100 foreign_flow_score scale. Audit replay always
-    # recomputes scores fresh via ScoreForeignFlowUseCase, so all records in a
+    # Edges are on the live 0-100 accum_score scale. Audit replay always
+    # recomputes scores fresh via ScoreAccumUseCase, so all records in a
     # run share the current scale; previously-exported audit JSON/CSV artifacts
     # are on their era's scale and must not be re-bucketed with these edges.
-    foreign_flow_score: tuple[float, ...] = (33.3, 58.3)
+    accum_score: tuple[float, ...] = (33.3, 58.3)
     streak: tuple[int, ...] = (3, 5)
     flow_pct: tuple[float, ...] = (5.0, 15.0)
     vwap_disc_pct: tuple[float, ...] = (0.0, 5.0)
@@ -56,7 +56,7 @@ class AuditRecord:
 
     signal_date: date
     ticker: str
-    foreign_flow_score: float
+    accum_score: float
     streak: int
     net_buy_ratio: float
     total_net_value: Decimal
@@ -82,7 +82,7 @@ class AuditRecord:
         return {
             "signal_date": self.signal_date.isoformat(),
             "ticker": self.ticker,
-            "foreign_flow_score": self.foreign_flow_score,
+            "accum_score": self.accum_score,
             "signal_score": self.signal_score,
             "signal_authority_coverage": self.signal_authority_coverage,
             "streak": self.streak,
@@ -276,7 +276,7 @@ class AccumulationAuditRequest:
     end_date: date
     window_days: int = 7
     min_net_buy_days: int = 2
-    min_foreign_flow_score: float = 0.0
+    min_accum_score: float = 0.0
     horizon_days: int = 20
     min_vwap_disc_pct: float | None = None
     trend: str | None = None

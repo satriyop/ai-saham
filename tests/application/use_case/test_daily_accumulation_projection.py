@@ -11,7 +11,7 @@ from src.domain.value_objects.setup_phase import SetupPhaseState
 from src.domain.value_objects.trade_setup import SetupAction
 
 
-def _make_candidate(ticker: str, foreign_flow_score: float = 50.0) -> AccumulationCandidate:
+def _make_candidate(ticker: str, accum_score: float = 50.0) -> AccumulationCandidate:
     return AccumulationCandidate(
         ticker=ticker,
         window_days=7,
@@ -25,7 +25,7 @@ def _make_candidate(ticker: str, foreign_flow_score: float = 50.0) -> Accumulati
         vwap_discount_pct=0.5,
         rsi=50.0,
         trend="UP",
-        foreign_flow_score=foreign_flow_score,
+        accum_score=accum_score,
         top_brokers=None,
         institutional_flag=True,
     )
@@ -109,7 +109,7 @@ def test_summary_counts_enter_watch_blocked_unclassified():
 
 
 def test_projection_carries_signal_risk_and_phase_fields():
-    candidate = _make_candidate("GOTO", foreign_flow_score=77.3)
+    candidate = _make_candidate("GOTO", accum_score=77.3)
     candidate = _with_signal(candidate, score=61, signal_authority_coverage=0.64)
     candidate = _with_risk(candidate, gate_triggered="liquidity_gate")
     candidate = _with_setup_phase(candidate, SetupPhaseState.EXHAUSTION)
@@ -120,7 +120,7 @@ def test_projection_carries_signal_risk_and_phase_fields():
     )
 
     projected = projection.candidates[0]
-    assert projected.flow_score == 77.3
+    assert projected.accum_score == 77.3
     assert projected.signal_score == 61
     assert projected.signal_authority_coverage == 0.64
     assert projected.risk_status == "BLOCK"

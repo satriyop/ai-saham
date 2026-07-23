@@ -213,7 +213,7 @@ def test_no_gate_active_fundamentals_fetched_in_enrichment_pass():
 
 
 def test_screen_persists_rejected_candidates_with_filter_outcome():
-    """Candidates rejected by min_foreign_flow_score are still persisted as
+    """Candidates rejected by min_accum_score are still persisted as
     negative samples for future tuning."""
     session_dates = _weekdays(date(2026, 1, 1), 7)
     as_of = session_dates[-1]
@@ -239,8 +239,8 @@ def test_screen_persists_rejected_candidates_with_filter_outcome():
             window_days=7,
             min_net_buy_days=1,
             as_of_date=as_of,
-            min_foreign_flow_score=9999.0,  # impossible threshold — all rejected
-            min_foreign_flow_score_enabled=True,
+            min_accum_score=9999.0,  # impossible threshold — all rejected
+            min_accum_score_enabled=True,
         ),
     )
 

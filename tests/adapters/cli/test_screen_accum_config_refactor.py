@@ -37,11 +37,11 @@ def test_screen_accum_commands_loads_config_once_and_passes_display_config():
 
 def test_fmt_score_uses_explicit_thresholds():
     display_config = AccumulationDisplayConfig(
-        enter_min_foreign_flow_score=70.0,
-        watch_min_foreign_flow_score=50.0,
-        coiled_spring_min_foreign_flow_score=60.0,
+        enter_min_accum_score=70.0,
+        watch_min_accum_score=50.0,
+        coiled_spring_min_accum_score=60.0,
         coiled_spring_bb_pctile=0.2,
-        foreign_flow_score_policy=None
+        accum_score_policy=None
     )
 
     # 71 is >= enter_min (70) -> should be green (contains ansi sequence / style for green)
@@ -59,18 +59,18 @@ def test_fmt_score_uses_explicit_thresholds():
 
 def test_classify_pattern_uses_explicit_thresholds():
     display_config = AccumulationDisplayConfig(
-        enter_min_foreign_flow_score=70.0,
-        watch_min_foreign_flow_score=50.0,
-        coiled_spring_min_foreign_flow_score=60.0,
+        enter_min_accum_score=70.0,
+        watch_min_accum_score=50.0,
+        coiled_spring_min_accum_score=60.0,
         coiled_spring_bb_pctile=0.15,
-        foreign_flow_score_policy=None
+        accum_score_policy=None
     )
 
     from src.application.dto.accumulation_screen import AccumulationCandidate
 
     # Create candidates
     c_strong = MagicMock(spec=AccumulationCandidate)
-    c_strong.foreign_flow_score = 65.0  # above coiled_spring_min_foreign_flow_score (60.0)
+    c_strong.accum_score = 65.0  # above coiled_spring_min_accum_score (60.0)
     c_strong.bb_width_pctile = 0.10     # below coiled_spring_bb_pctile (0.15)
 
     # Should classify as coiled spring

@@ -28,7 +28,7 @@ class SwingBacktestOpenPosition:
     shares: int
     entry_value: Decimal
     entry_cost: Decimal
-    foreign_flow_score: float
+    accum_score: float
     flow_pct: float | None
     vwap_disc_pct: float | None
     rsi: float | None
@@ -104,7 +104,7 @@ class SwingBacktestPositionBuilder:
             shares=shares,
             entry_value=entry_value,
             entry_cost=entry_cost,
-            foreign_flow_score=candidate.foreign_flow_score,
+            accum_score=candidate.accum_score,
             flow_pct=candidate.avg_flow_ratio,
             vwap_disc_pct=candidate.vwap_discount_pct,
             rsi=candidate.rsi,

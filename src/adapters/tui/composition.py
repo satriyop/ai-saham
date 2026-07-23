@@ -273,7 +273,7 @@ def _build_accumulation_use_case(deps: _StockDependencies, *, risk_use_case=None
         risk_use_case=risk_use_case,
         signal_engine=deps.signal_engine(),
         candidate_observations_repository=deps.observations_repository,
-        foreign_flow_score_policy=accumulation_config.foreign_flow_score_policy,
+        accum_score_policy=accumulation_config.accum_score_policy,
         derived_feature_policy=accumulation_config.derived_features,
         swing_setup_catalog=build_swing_setup_catalog_config(
             load_swing_config(config=deps.app_config)
@@ -296,7 +296,7 @@ def _build_candidate_builder(
             rules_loader=RulesYamlLoader(),
             stockbit_providers=deps.stockbit_providers,
             signal_engine=signal_engine,
-            foreign_flow_score_policy=accumulation_config.foreign_flow_score_policy,
+            accum_score_policy=accumulation_config.accum_score_policy,
             derived_feature_policy=accumulation_config.derived_features,
             ticker_profile_classifier_factory=deps.ticker_profile_classifier,
             institutional_accumulation_config_factory=deps.institutional_config,
@@ -309,8 +309,8 @@ def _build_candidate_builder(
                 as_of_date=as_of_date,
                 window_days=window,
                 min_net_buy_days=analyze_config.candidate_min_net_buy_days,
-                min_foreign_flow_score=analyze_config.candidate_min_foreign_flow_score,
-                min_foreign_flow_score_enabled=True,
+                min_accum_score=analyze_config.candidate_min_accum_score,
+                min_accum_score_enabled=True,
                 tier1_broker_codes=swing_config.tier1_broker_codes,
                 bci_cluster_min_count=swing_config.bci_cluster_min_count,
                 bci_stable_min_count=swing_config.bci_stable_min_count,
@@ -450,7 +450,7 @@ def _build_swing_workflow(
         signal_engine=signal_engine,
         risk_engine=deps.risk_engine(),
         candidate_observations_repository=deps.observations_repository,
-        foreign_flow_score_policy=accumulation_config.foreign_flow_score_policy,
+        accum_score_policy=accumulation_config.accum_score_policy,
         corporate_action_risk_use_case=AssessCorporateActionEventRiskUseCase(
             repository=SQLiteCorporateActionCalendarRepository(deps.db_path),
             policy=load_corporate_action_policy_config(),

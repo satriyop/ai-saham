@@ -56,12 +56,12 @@ _SWING_CFG = SimpleNamespace(
 )
 
 _ASC_CFG = SimpleNamespace(
-    min_foreign_flow_score=SimpleNamespace(enabled=True, value=30.0),
+    min_accum_score=SimpleNamespace(enabled=True, value=30.0),
     min_signal_score=SimpleNamespace(enabled=False, value=0.0),
-    foreign_flow_score_policy=None,
+    accum_score_policy=None,
     derived_features=None,
     display=SimpleNamespace(
-        coiled_spring_min_foreign_flow_score=50.0,
+        coiled_spring_min_accum_score=50.0,
         coiled_spring_bb_pctile=0.20,
     ),
 )
@@ -81,7 +81,7 @@ def _candidate(**overrides) -> AccumulationCandidate:
         vwap_discount_pct=3.0,
         rsi=55.0,
         trend="SIDE",
-        foreign_flow_score=70.0,
+        accum_score=70.0,
         top_brokers=None,
         institutional_flag=False,
         avg_flow_ratio=5.0,
@@ -156,7 +156,7 @@ def _single_request(**overrides) -> RunAccumulationScreenWorkflowRequest:
         universe_name="lq45",
         window=7,
         min_streak=0,
-        min_foreign_flow_score=None,
+        min_accum_score=None,
         min_signal_score=None,
         min_piotroski=0,
         strategy_name=None,
@@ -178,7 +178,7 @@ def _multi_request(**overrides) -> RunAccumulationScreenWorkflowRequest:
         universe_name="lq45",
         window=7,
         min_streak=0,
-        min_foreign_flow_score=None,
+        min_accum_score=None,
         min_signal_score=None,
         min_piotroski=0,
         strategy_name=None,
@@ -325,8 +325,8 @@ def test_multi_mode_score_filters_disabled():
     uc.execute(_multi_request(windows=[7]))
 
     req = screen_mock.execute.call_args[0][0]
-    assert req.min_foreign_flow_score == 0.0
-    assert req.min_foreign_flow_score_enabled is False
+    assert req.min_accum_score == 0.0
+    assert req.min_accum_score_enabled is False
     assert req.min_signal_score == 0.0
     assert req.min_signal_score_enabled is False
 
@@ -735,7 +735,7 @@ def test_multi_mode_context_lineage_preserves_object_identity(monkeypatch):
         top,
         sort_by,
         squeeze_only,
-        coiled_spring_min_foreign_flow_score,
+        coiled_spring_min_accum_score,
         coiled_spring_bb_pctile,
         canonical_window,
         effective_session,
@@ -748,7 +748,7 @@ def test_multi_mode_context_lineage_preserves_object_identity(monkeypatch):
             top=top,
             sort_by=sort_by,
             squeeze_only=squeeze_only,
-            coiled_spring_min_foreign_flow_score=coiled_spring_min_foreign_flow_score,
+            coiled_spring_min_accum_score=coiled_spring_min_accum_score,
             coiled_spring_bb_pctile=coiled_spring_bb_pctile,
             canonical_window=canonical_window,
             effective_session=effective_session,

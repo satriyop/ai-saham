@@ -98,7 +98,7 @@ def test_parse_setup_family_fields():
                 "entry_authority": False,
                 "can_enter_from_phases": ["accumulation"],
                 "gates": {
-                    "min_foreign_flow_score": 50.0,
+                    "min_accum_score": 50.0,
                 }
             }
         }
@@ -108,7 +108,7 @@ def test_parse_setup_family_fields():
     assert fields["foreign_bounce_family"] == "bounce"
     assert fields["foreign_bounce_entry_authority"] is False
     assert fields["foreign_bounce_can_enter_from_phases"] == ("ACCUMULATION",)
-    assert fields["gate_min_foreign_flow_score"] == 50.0
+    assert fields["gate_min_accum_score"] == 50.0
 
 
 def test_read_single_swing_config_non_existent():

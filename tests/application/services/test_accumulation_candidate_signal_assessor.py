@@ -25,10 +25,10 @@ from src.domain.value_objects.flow_confirmation_evidence import (
     FlowConfirmationEvidence,
     FlowSubSignal,
 )
-from src.domain.value_objects.foreign_flow_score_breakdown import (
+from src.domain.value_objects.accum_score_breakdown import (
     ForeignFlowComponentScore,
     ForeignFlowComponentStatus,
-    ForeignFlowScoreBreakdown,
+    AccumScoreBreakdown,
 )
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
 
@@ -101,7 +101,7 @@ def _built_flow_evidence():
     return BuiltFlowEvidence(evidence=evidence, provenance=provenance)
 
 
-def _foreign_flow_breakdown(score: float) -> ForeignFlowScoreBreakdown:
+def _foreign_flow_breakdown(score: float) -> AccumScoreBreakdown:
     """Build a complete typed breakdown whose canonical derived score is *score*."""
     max_points = {
         "cons": 33.3,
@@ -134,7 +134,7 @@ def _foreign_flow_breakdown(score: float) -> ForeignFlowScoreBreakdown:
             status=ForeignFlowComponentStatus.DISABLED,
         )
     )
-    return ForeignFlowScoreBreakdown(
+    return AccumScoreBreakdown(
         ticker="BBCA",
         snapshot_date=date.today(),
         max_score=100.0,
@@ -154,7 +154,7 @@ def _make_assessor(
     flow_builder_raises: bool = False,
     signal_score: int = 60,
     setup_phase: object = None,
-    foreign_flow_score: float = 50.0,
+    accum_score: float = 50.0,
 ):
     """Build an AccumulationCandidateSignalAssessor with mocked dependencies."""
     from src.application.services.accumulation_candidate_signal_assessor import (
@@ -172,20 +172,20 @@ def _make_assessor(
     evidence_builder = MagicMock()
     evidence_builder.detect_candidate_setup_phase.return_value = setup_phase
 
-    foreign_flow_score_uc = MagicMock()
-    foreign_flow_score_uc.execute.return_value.evidence = _foreign_flow_breakdown(
-        foreign_flow_score
+    accum_score_uc = MagicMock()
+    accum_score_uc.execute.return_value.evidence = _foreign_flow_breakdown(
+        accum_score
     )
 
     return AccumulationCandidateSignalAssessor(
         signal_engine=signal_engine,
         flow_confirmation_builder=flow_builder,
         candidate_evidence_builder=evidence_builder,
-        foreign_flow_score_uc=foreign_flow_score_uc,
+        accum_score_uc=accum_score_uc,
     )
 
 
-def _candidate(foreign_flow_score: float = 50.0) -> AccumulationCandidate:
+def _candidate(accum_score: float = 50.0) -> AccumulationCandidate:
     return AccumulationCandidate(
         ticker="BBCA",
         window_days=7,
@@ -199,15 +199,15 @@ def _candidate(foreign_flow_score: float = 50.0) -> AccumulationCandidate:
         vwap_discount_pct=0.0,
         rsi=50.0,
         trend="UP",
-        foreign_flow_score=foreign_flow_score,
+        accum_score=accum_score,
         top_brokers=None,
         institutional_flag=False,
     )
 
 
 def _request(
-    min_foreign_flow_score: float = 30.0,
-    min_foreign_flow_score_enabled: bool = True,
+    min_accum_score: float = 30.0,
+    min_accum_score_enabled: bool = True,
     min_signal_score: float = 40.0,
     min_signal_score_enabled: bool = True,
     market_context=None,
@@ -216,8 +216,8 @@ def _request(
         tickers=["BBCA"],
         window_days=7,
         min_net_buy_days=1,
-        min_foreign_flow_score=min_foreign_flow_score,
-        min_foreign_flow_score_enabled=min_foreign_flow_score_enabled,
+        min_accum_score=min_accum_score,
+        min_accum_score_enabled=min_accum_score_enabled,
         min_signal_score=min_signal_score,
         min_signal_score_enabled=min_signal_score_enabled,
         market_context=market_context,
@@ -225,9 +225,9 @@ def _request(
 
 
 def test_foreign_flow_score_fields_set_by_assessor():
-    """Assessor sets foreign_flow_score_breakdown, foreign_flow_score, and
+    """Assessor sets accum_score_breakdown, accum_score, and
     foreign_flow_evidence on the candidate from the foreign-flow score use case."""
-    assessor = _make_assessor(foreign_flow_score=42.0)
+    assessor = _make_assessor(accum_score=42.0)
 
     result = assessor.assess(
         _candidate(),
@@ -239,8 +239,8 @@ def test_foreign_flow_score_fields_set_by_assessor():
         source_availability_use_case=_source_availability_use_case(),
     )
 
-    assert result.candidate.foreign_flow_score_breakdown is not None
-    assert result.candidate.foreign_flow_score == 42.0
+    assert result.candidate.accum_score_breakdown is not None
+    assert result.candidate.accum_score == 42.0
     assert result.candidate.foreign_flow_evidence is not None
 
 
@@ -265,12 +265,12 @@ def test_flow_evidence_builder_exception_returns_none():
 
 def test_foreign_flow_threshold_rejected_before_signal():
     """Foreign-flow threshold rejection takes precedence over signal rejection."""
-    assessor = _make_assessor(signal_score=60, foreign_flow_score=20.0)
+    assessor = _make_assessor(signal_score=60, accum_score=20.0)
 
     result = assessor.assess(
         _candidate(),
         request=_request(
-            min_foreign_flow_score=30.0,
+            min_accum_score=30.0,
             min_signal_score=40.0,
         ),
         as_of_date=date.today(),
@@ -286,12 +286,12 @@ def test_foreign_flow_threshold_rejected_before_signal():
 
 def test_signal_threshold_rejected_when_flow_passes():
     """Signal threshold rejection returns rejected_signal when flow passes."""
-    assessor = _make_assessor(signal_score=30, foreign_flow_score=80.0)
+    assessor = _make_assessor(signal_score=30, accum_score=80.0)
 
     result = assessor.assess(
         _candidate(),
         request=_request(
-            min_foreign_flow_score=30.0,
+            min_accum_score=30.0,
             min_signal_score=50.0,
         ),
         as_of_date=date.today(),
@@ -307,12 +307,12 @@ def test_signal_threshold_rejected_when_flow_passes():
 
 def test_passing_candidate_returns_pass():
     """Candidate that passes both thresholds returns pass."""
-    assessor = _make_assessor(signal_score=60, foreign_flow_score=80.0)
+    assessor = _make_assessor(signal_score=60, accum_score=80.0)
 
     result = assessor.assess(
         _candidate(),
         request=_request(
-            min_foreign_flow_score=30.0,
+            min_accum_score=30.0,
             min_signal_score=40.0,
         ),
         as_of_date=date.today(),
@@ -330,7 +330,7 @@ def test_setup_phase_assigned_once():
     """Setup phase is assigned to the candidate by the assessor."""
     phase_mock = MagicMock()
     phase_mock.value = "ACCUMULATION"
-    assessor = _make_assessor(setup_phase=phase_mock, foreign_flow_score=80.0)
+    assessor = _make_assessor(setup_phase=phase_mock, accum_score=80.0)
 
     result = assessor.assess(
         _candidate(),
@@ -352,7 +352,7 @@ def test_setup_phase_assigned_once():
 def _make_assessor_real_engine(
     flow_builder_raises: bool = False,
     setup_phase: object = None,
-    foreign_flow_score: float = 50.0,
+    accum_score: float = 50.0,
 ):
     from src.application.services.signal_engine import SignalEngine
     from src.application.services.accumulation_candidate_signal_assessor import (
@@ -369,16 +369,16 @@ def _make_assessor_real_engine(
     evidence_builder = MagicMock()
     evidence_builder.detect_candidate_setup_phase.return_value = setup_phase
 
-    foreign_flow_score_uc = MagicMock()
-    foreign_flow_score_uc.execute.return_value.evidence = _foreign_flow_breakdown(
-        foreign_flow_score
+    accum_score_uc = MagicMock()
+    accum_score_uc.execute.return_value.evidence = _foreign_flow_breakdown(
+        accum_score
     )
 
     return AccumulationCandidateSignalAssessor(
         signal_engine=signal_engine,
         flow_confirmation_builder=flow_builder,
         candidate_evidence_builder=evidence_builder,
-        foreign_flow_score_uc=foreign_flow_score_uc,
+        accum_score_uc=accum_score_uc,
     )
 
 
@@ -557,8 +557,8 @@ def test_family_resolved_once_and_phase_detected_once_before_signal_engine():
     from src.application.services.accumulation_candidate_signal_assessor import (
         AccumulationCandidateSignalAssessor,
     )
-    from src.domain.value_objects.foreign_flow_score_breakdown import (
-        ForeignFlowScoreBreakdown,
+    from src.domain.value_objects.accum_score_breakdown import (
+        AccumScoreBreakdown,
     )
 
     call_order: list[str] = []
@@ -597,17 +597,17 @@ def test_family_resolved_once_and_phase_detected_once_before_signal_engine():
     flow_builder = MagicMock()
     flow_builder.build.return_value = _built_flow_evidence()
 
-    foreign_flow_score_uc = MagicMock()
-    foreign_flow_score_uc.execute.return_value.evidence = _foreign_flow_breakdown(80.0)
+    accum_score_uc = MagicMock()
+    accum_score_uc.execute.return_value.evidence = _foreign_flow_breakdown(80.0)
 
     assessor = AccumulationCandidateSignalAssessor(
         signal_engine=signal_engine,
         flow_confirmation_builder=flow_builder,
         candidate_evidence_builder=evidence_builder,
-        foreign_flow_score_uc=foreign_flow_score_uc,
+        accum_score_uc=accum_score_uc,
     )
 
-    candidate = _candidate(foreign_flow_score=80.0)
+    candidate = _candidate(accum_score=80.0)
     assessor.assess(
         candidate,
         request=_request(),
@@ -644,7 +644,7 @@ def test_known_family_with_absent_setup_evidence_cannot_enter():
         phase_input_coverage=1.0,
         sequence_valid=True,
     )
-    assessor = _make_assessor_real_engine(setup_phase=phase, foreign_flow_score=90.0)
+    assessor = _make_assessor_real_engine(setup_phase=phase, accum_score=90.0)
     assessor._candidate_evidence_builder.resolve_preliminary_setup_family_result.return_value = (
         PrimarySetupFamilyResult(
             matched_setup_families=("foreign_bounce",),
@@ -654,7 +654,7 @@ def test_known_family_with_absent_setup_evidence_cannot_enter():
     )
 
     result = assessor.assess(
-        _candidate(foreign_flow_score=90.0),
+        _candidate(accum_score=90.0),
         request=_request(min_signal_score=0.0),
         as_of_date=date.today(),
         consumed_broker_summaries=(),
@@ -677,7 +677,7 @@ def test_unknown_family_returns_readiness_none_and_does_not_fabricate_family():
         PrimarySetupFamilyResult,
     )
 
-    assessor = _make_assessor_real_engine(foreign_flow_score=80.0)
+    assessor = _make_assessor_real_engine(accum_score=80.0)
     assessor._candidate_evidence_builder.resolve_preliminary_setup_family_result.return_value = (
         PrimarySetupFamilyResult(
             matched_setup_families=(),
@@ -687,7 +687,7 @@ def test_unknown_family_returns_readiness_none_and_does_not_fabricate_family():
     )
 
     result = assessor.assess(
-        _candidate(foreign_flow_score=80.0),
+        _candidate(accum_score=80.0),
         request=_request(),
         as_of_date=date.today(),
         consumed_broker_summaries=(),
@@ -767,7 +767,7 @@ def test_unknown_family_flow_only_attached_required_can_clear_authority_floor():
     )
     built_flow = BuiltFlowEvidence(evidence=strong_flow_evidence, provenance=provenance)
 
-    assessor = _make_assessor_real_engine(foreign_flow_score=90.0)
+    assessor = _make_assessor_real_engine(accum_score=90.0)
     assessor._flow_confirmation_builder.build.return_value = built_flow
     assessor._candidate_evidence_builder.resolve_preliminary_setup_family_result.return_value = (
         PrimarySetupFamilyResult(
@@ -778,7 +778,7 @@ def test_unknown_family_flow_only_attached_required_can_clear_authority_floor():
     )
 
     result = assessor.assess(
-        _candidate(foreign_flow_score=90.0),
+        _candidate(accum_score=90.0),
         request=_request(min_signal_score=0.0),
         as_of_date=day,
         consumed_broker_summaries=(),

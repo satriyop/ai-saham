@@ -164,11 +164,11 @@ class SignalEngine:
             )
         )
 
-    def foreign_flow_quality_from_foreign_flow_score(self, foreign_flow_score: float) -> float:
-        cfg = self._config.input_mapping.foreign_flow_score
+    def foreign_flow_quality_from_accum_score(self, accum_score: float) -> float:
+        cfg = self._config.input_mapping.accum_score
         if cfg.max_score <= 0:
             return 0.0
-        score = foreign_flow_score
+        score = accum_score
         if cfg.clamp:
             score = max(0.0, min(score, cfg.max_score))
         return score / cfg.max_score

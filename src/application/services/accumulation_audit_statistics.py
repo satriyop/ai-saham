@@ -24,9 +24,9 @@ class AccumulationAuditStatisticsBuilder:
         policy: AccumulationAuditPolicy,
     ) -> list[AuditGroupStat]:
         dimensions: dict[str, Callable[[AuditRecord], str]] = {
-            "foreign_flow_score": lambda r: _range_bucket(
-                r.foreign_flow_score,
-                policy.buckets.foreign_flow_score,
+            "accum_score": lambda r: _range_bucket(
+                r.accum_score,
+                policy.buckets.accum_score,
             ),
             "streak": lambda r: _range_bucket(float(r.streak), policy.buckets.streak),
             "flow_pct": lambda r: _nullable_range_bucket(

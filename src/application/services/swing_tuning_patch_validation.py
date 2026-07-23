@@ -72,7 +72,7 @@ _PARAMETER_BOUNDS: tuple[tuple[str, float, float, float | None, float], ...] = (
     ("setups.*.gates.min_rsi", 15, 60, 1, 5),
     ("setups.*.gates.min_flow_ratio_pct", 0.5, 25.0, 0.5, 2.0),
     # Rescaled 0-120 -> 0-100 (ADR-039): 30-90 -> 25-75.
-    ("setups.*.gates.min_foreign_flow_score", 25.0, 75.0, 1.0, 4.0),
+    ("setups.*.gates.min_accum_score", 25.0, 75.0, 1.0, 4.0),
     ("setups.*.gates.min_vwap_discount_pct", -5.0, 15.0, 0.5, 1.5),
     ("setups.*.gates.min_smart_flow_idr", 0.0, 1e12, 1e9, 5e10),
     ("setups.*.gates.min_smart_share_pct", 0.0, 100.0, 1.0, 10.0),

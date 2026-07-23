@@ -18,8 +18,8 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class LegacyRegimeConditioningResult:
-    setup_score: float
-    flow_score: float
+    setup_group_score: float
+    flow_group_score: float
     notes: tuple[str, ...]
     legacy_conditioned_score: int
 
@@ -27,9 +27,9 @@ class LegacyRegimeConditioningResult:
 class SignalLegacyRegimeConditioning:
     @staticmethod
     def condition(
-        setup_score: float,
+        setup_group_score: float,
         setup_present: bool,
-        flow_score: float,
+        flow_group_score: float,
         flow_present: bool,
         market_context: MarketContext | None,
         config: SignalEngineConfig,
@@ -37,9 +37,9 @@ class SignalLegacyRegimeConditioning:
     ) -> LegacyRegimeConditioningResult:
         setup_score_conditioned, flow_score_conditioned, regime_notes = (
             SignalLegacyRegimeConditioning._condition_group_scores(
-                setup_score,
+                setup_group_score,
                 setup_present,
-                flow_score,
+                flow_group_score,
                 flow_present,
                 market_context,
                 config,
@@ -57,23 +57,23 @@ class SignalLegacyRegimeConditioning:
         legacy_conditioned_score = max(0, min(100, round(base_score_conditioned) + flag_adjustment))
 
         return LegacyRegimeConditioningResult(
-            setup_score=setup_score_conditioned,
-            flow_score=flow_score_conditioned,
+            setup_group_score=setup_score_conditioned,
+            flow_group_score=flow_score_conditioned,
             notes=tuple(regime_notes),
             legacy_conditioned_score=legacy_conditioned_score,
         )
 
     @staticmethod
     def _condition_group_scores(
-        setup_score: float,
+        setup_group_score: float,
         setup_present: bool,
-        flow_score: float,
+        flow_group_score: float,
         flow_present: bool,
         market_context: MarketContext | None,
         config: SignalEngineConfig,
     ) -> tuple[float, float, list[str]]:
         if market_context is None:
-            return setup_score, flow_score, []
+            return setup_group_score, flow_group_score, []
 
         regime = market_context.regime.value
         cfg = config.regime_conditioning
@@ -81,37 +81,37 @@ class SignalLegacyRegimeConditioning:
 
         if regime == "RISK_OFF" and setup_present:
             rc = cfg.risk_off
-            if setup_score < rc.weak_setup_threshold:
-                old = setup_score
-                setup_score = setup_score * rc.weak_setup_discount
+            if setup_group_score < rc.weak_setup_threshold:
+                old = setup_group_score
+                setup_group_score = setup_group_score * rc.weak_setup_discount
                 notes.append(
-                    f"RISK_OFF: setup {old:.0f}→{setup_score:.0f} "
+                    f"RISK_OFF: setup {old:.0f}→{setup_group_score:.0f} "
                     f"(×{rc.weak_setup_discount:.2f}, below MATCH threshold)"
                 )
 
         elif regime == "NEUTRAL" and flow_present:
             rc = cfg.neutral
-            if flow_score < rc.weak_flow_threshold:
-                old = flow_score
-                flow_score = flow_score * rc.weak_flow_discount
+            if flow_group_score < rc.weak_flow_threshold:
+                old = flow_group_score
+                flow_group_score = flow_group_score * rc.weak_flow_discount
                 notes.append(
-                    f"NEUTRAL: flow {old:.0f}→{flow_score:.0f} "
+                    f"NEUTRAL: flow {old:.0f}→{flow_group_score:.0f} "
                     f"(×{rc.weak_flow_discount:.2f}, below confirmation threshold)"
                 )
 
         elif regime == "VOLATILE":
             rc = cfg.volatile
             if setup_present:
-                old_s = setup_score
-                setup_score = setup_score * rc.setup_discount
+                old_s = setup_group_score
+                setup_group_score = setup_group_score * rc.setup_discount
                 notes.append(
-                    f"VOLATILE: setup {old_s:.0f}→{setup_score:.0f} (×{rc.setup_discount:.2f})"
+                    f"VOLATILE: setup {old_s:.0f}→{setup_group_score:.0f} (×{rc.setup_discount:.2f})"
                 )
             if flow_present:
-                old_f = flow_score
-                flow_score = flow_score * rc.flow_discount
+                old_f = flow_group_score
+                flow_group_score = flow_group_score * rc.flow_discount
                 notes.append(
-                    f"VOLATILE: flow {old_f:.0f}→{flow_score:.0f} (×{rc.flow_discount:.2f})"
+                    f"VOLATILE: flow {old_f:.0f}→{flow_group_score:.0f} (×{rc.flow_discount:.2f})"
                 )
 
-        return setup_score, flow_score, notes
+        return setup_group_score, flow_group_score, notes

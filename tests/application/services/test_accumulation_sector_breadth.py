@@ -36,7 +36,7 @@ def _candidate(ticker: str, net_buy_ratio: float) -> AccumulationCandidate:
         vwap_discount_pct=None,
         rsi=None,
         trend="SIDE",
-        foreign_flow_score=50.0,
+        accum_score=50.0,
         top_brokers=[],
         institutional_flag=False,
         bci_label="STABLE",
@@ -76,7 +76,7 @@ def test_applier_persists_breadth_pct_and_bonus_in_to_dict():
     for c in candidates:
         assert c.sector_breadth_pct == pytest.approx(2 / 3)
         assert c.sector_breadth_bonus == 10.0
-        assert c.foreign_flow_score == 60.0
+        assert c.accum_score == 60.0
         payload = c.to_dict()
         assert payload["sector_breadth_pct"] == round(2 / 3, 4)
         assert payload["sector_breadth_bonus"] == 10.0
@@ -105,7 +105,7 @@ def test_applier_sets_breadth_without_bonus_when_below_threshold():
     for c in candidates:
         assert c.sector_breadth_pct == pytest.approx(1 / 3)
         assert c.sector_breadth_bonus == 0.0
-        assert c.foreign_flow_score == 50.0
+        assert c.accum_score == 50.0
         payload = c.to_dict()
         assert payload["sector_breadth_pct"] == round(1 / 3, 4)
         assert payload["sector_breadth_bonus"] == 0.0

@@ -44,7 +44,7 @@ def _candidate(**kwargs) -> AccumulationCandidate:
         vwap_discount_pct=4.0,
         rsi=45.0,
         trend="SIDE",
-        foreign_flow_score=80.0,
+        accum_score=80.0,
         top_brokers=["AK", "BK"],
         institutional_flag=True,
         avg_flow_ratio=6.0,
@@ -84,7 +84,7 @@ def test_strategy_evidence_wins_over_conflicting_detected_family():
     # Candidate MATCHes coiled-spring (family "breakout") via loose gates; the
     # remaining swing setups are disabled so only coiled-spring can match.
     candidate = _candidate(
-        foreign_flow_score=62.0,
+        accum_score=62.0,
         bb_width_pctile=0.12,
         avg_flow_ratio=3.5,
         rsi=58.0,
@@ -126,7 +126,7 @@ def test_multiple_detected_families_select_deterministic_primary_via_priority():
     # pullback-continuation (family "pullback"). foreign-bounce and
     # smart-money-confirmed are disabled so they cannot also match.
     candidate = _candidate(
-        foreign_flow_score=70.0,
+        accum_score=70.0,
         bb_width_pctile=0.12,
         avg_flow_ratio=6.0,
         rsi=55.0,
@@ -194,7 +194,7 @@ def test_detected_family_outside_priority_tuple_is_unranked():
     resolver = PrimarySetupFamilyResolver(priority=())
 
     candidate = _candidate(
-        foreign_flow_score=62.0,
+        accum_score=62.0,
         bb_width_pctile=0.12,
         avg_flow_ratio=3.5,
         rsi=58.0,

@@ -70,7 +70,7 @@ from src.application.services.swing_analysis_workflow_state import (
 from src.application.use_case.assess_source_availability_use_case import (
     AssessSourceAvailabilityUseCase,
 )
-from src.application.use_case.score_foreign_flow_use_case import ScoreForeignFlowUseCase
+from src.application.use_case.score_accum_use_case import ScoreAccumUseCase
 from src.domain.entities.candle import Candle
 from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
 from src.domain.value_objects.benchmark_excess_return import (
@@ -116,7 +116,7 @@ def _candidate(**overrides) -> AccumulationCandidate:
         vwap_discount_pct=0.0,
         rsi=50.0,
         trend="UP",
-        foreign_flow_score=50.0,
+        accum_score=50.0,
         top_brokers=None,
         institutional_flag=False,
         latest_candle_date=SNAP,
@@ -378,7 +378,7 @@ class _CanonicalInputRecordingSignalEngine:
     def __init__(self) -> None:
         self.calls: list[dict] = []
 
-    def foreign_flow_quality_from_foreign_flow_score(self, score):
+    def foreign_flow_quality_from_accum_score(self, score):
         return "MODERATE"
 
     def bandar_max_range(self, num_optional):
@@ -604,13 +604,13 @@ def parity_boundaries() -> _ParityBoundaryResult:
         signal_engine=screen_signal_engine,
         flow_confirmation_builder=flow_builder,
         candidate_evidence_builder=recording_candidate_evidence_builder,
-        foreign_flow_score_uc=ScoreForeignFlowUseCase(),
+        accum_score_uc=ScoreAccumUseCase(),
     )
     request = AccumulationScreenRequest(
         tickers=[TICKER],
         window_days=7,
         min_net_buy_days=1,
-        min_foreign_flow_score_enabled=False,
+        min_accum_score_enabled=False,
         min_signal_score_enabled=False,
     )
     screen_result = assessor.assess(

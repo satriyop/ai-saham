@@ -217,7 +217,7 @@ def test_accumulation_audit_replays_signal_and_forward_returns_without_ai():
             end_date=base + timedelta(days=20),
             window_days=7,
             min_net_buy_days=1,
-            min_foreign_flow_score=0,
+            min_accum_score=0,
             horizon_days=5,
         )
     )
@@ -229,7 +229,7 @@ def test_accumulation_audit_replays_signal_and_forward_returns_without_ai():
     assert record.current_price == Decimal("120")
     assert record.return_5d_pct == 4.1667
     record_dict = record.to_dict()
-    assert record_dict["foreign_flow_score"] == record.foreign_flow_score
+    assert record_dict["accum_score"] == record.accum_score
     assert "score" not in record_dict
     assert response.group_stats
     assert response.claim_stamp.evaluation_role == "DESCRIPTIVE"
@@ -271,7 +271,7 @@ def test_accumulation_audit_does_not_use_future_candle_as_signal_price():
             end_date=signal_date,
             window_days=7,
             min_net_buy_days=1,
-            min_foreign_flow_score=0,
+            min_accum_score=0,
             horizon_days=5,
         )
     )
@@ -314,7 +314,7 @@ def test_accumulation_audit_strict_filters_keep_only_matching_candidates():
             end_date=signal_date,
             window_days=7,
             min_net_buy_days=1,
-            min_foreign_flow_score=0,
+            min_accum_score=0,
             horizon_days=5,
             min_vwap_disc_pct=5,
             trend="SIDE",
@@ -398,7 +398,7 @@ def test_accumulation_audit_groups_outcomes_by_broker_quality():
             end_date=signal_date,
             window_days=7,
             min_net_buy_days=1,
-            min_foreign_flow_score=0,
+            min_accum_score=0,
             horizon_days=5,
         )
     )
@@ -454,7 +454,7 @@ def test_accumulation_audit_exit_simulation_reports_target_and_max_hold_stats():
             end_date=signal_date,
             window_days=7,
             min_net_buy_days=1,
-            min_foreign_flow_score=0,
+            min_accum_score=0,
             horizon_days=5,
             simulate_exits=True,
             take_profit_pcts=(5, 20),
@@ -511,7 +511,7 @@ def test_accumulation_audit_exit_simulation_can_prioritize_target_on_same_day():
             end_date=signal_date,
             window_days=7,
             min_net_buy_days=1,
-            min_foreign_flow_score=0,
+            min_accum_score=0,
             horizon_days=5,
             simulate_exits=True,
             take_profit_pcts=(5,),
@@ -568,7 +568,7 @@ def test_accumulation_audit_uses_injected_screen_and_preserves_signal_score():
     )
     candidate = MagicMock()
     candidate.ticker = "BBCA"
-    candidate.foreign_flow_score = 60.0
+    candidate.accum_score = 60.0
     candidate.consecutive_streak = 3
     candidate.net_buy_ratio = 0.5
     candidate.total_net_value = Decimal("1000000")
@@ -608,7 +608,7 @@ def test_accumulation_audit_uses_injected_screen_and_preserves_signal_score():
             end_date=signal_date,
             window_days=7,
             min_net_buy_days=1,
-            min_foreign_flow_score=0,
+            min_accum_score=0,
             horizon_days=5,
         )
     )

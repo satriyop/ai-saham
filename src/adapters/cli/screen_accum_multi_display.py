@@ -79,14 +79,14 @@ def display_multi(
             if candidate is None:
                 score_cells.append(Text("—", style="bright_black"))
                 continue
-            style = "green" if candidate.foreign_flow_score >= (
-                display_config.enter_min_foreign_flow_score
+            style = "green" if candidate.accum_score >= (
+                display_config.enter_min_accum_score
             ) else (
-                "yellow" if candidate.foreign_flow_score >= (
-                    display_config.watch_min_foreign_flow_score
+                "yellow" if candidate.accum_score >= (
+                    display_config.watch_min_accum_score
                 ) else ""
             )
-            score_cells.append(Text(f"{candidate.foreign_flow_score:.0f}", style=style))
+            score_cells.append(Text(f"{candidate.accum_score:.0f}", style=style))
 
         if row.signal_score is not None and row.signal_authority_coverage is not None:
             signal_cell = f"{row.signal_score:.0f}/{row.signal_authority_coverage:.2f}"
@@ -154,8 +154,8 @@ def display_multi(
         "score / signal authority coverage from the canonical window"
     )
 
-    enter_score = display_config.enter_min_foreign_flow_score
-    watch_score = display_config.watch_min_foreign_flow_score
+    enter_score = display_config.enter_min_accum_score
+    watch_score = display_config.watch_min_accum_score
     meta_table.add_row(
         "Scores",
         f"Accum ≥{enter_score:g} green | ≥{watch_score:g} yellow | <{watch_score:g} white"

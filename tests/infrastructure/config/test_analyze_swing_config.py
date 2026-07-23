@@ -18,7 +18,7 @@ analyze_swing:
     flow_detail_window_sessions: 20
   candidate:
     min_net_buy_days: 1
-    min_foreign_flow_score: 35
+    min_accum_score: 35
 """,
         encoding="utf-8",
     )
@@ -31,4 +31,4 @@ analyze_swing:
     assert loaded.sentiment_days == 5
     assert loaded.flow_detail_window_sessions == 20
     assert loaded.candidate_min_net_buy_days == 1
-    assert loaded.candidate_min_foreign_flow_score == 35.0
+    assert loaded.candidate_min_accum_score == 35.0

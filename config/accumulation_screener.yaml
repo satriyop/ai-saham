@@ -96,7 +96,7 @@ accumulation_screener:
     insider_lookback_days: 90
 
   filters:
-    min_foreign_flow_score:
+    min_accum_score:
       enabled: true
       value: 0.0
     min_signal_score:
@@ -106,10 +106,10 @@ accumulation_screener:
   sorting:
     primary: trade_setup
     secondary: signal_score
-    tertiary: foreign_flow_score
+    tertiary: accum_score
 
   display:
-    enter_min_foreign_flow_score: 58.3
-    watch_min_foreign_flow_score: 33.3
-    coiled_spring_min_foreign_flow_score: 50.0
+    enter_min_accum_score: 58.3
+    watch_min_accum_score: 33.3
+    coiled_spring_min_accum_score: 50.0
     coiled_spring_bb_pctile: 0.20

@@ -5,7 +5,7 @@ import pytest
 from src.application.services.signal_engine import SignalEngine
 from src.application.services.signal_engine_config import (
     BandarScoringConfig,
-    ForeignFlowScoreMappingConfig,
+    AccumScoreMappingConfig,
     SignalEngineConfig,
     SignalInputMappingConfig,
     SignalScoringConfig,
@@ -100,7 +100,7 @@ class RecordingSeasonalityProvider(SeasonalityProviderWithShortHistory):
 def test_signal_engine_input_mapping_helpers_use_config():
     engine = SignalEngine(config=SignalEngineConfig(
         input_mapping=SignalInputMappingConfig(
-            foreign_flow_score=ForeignFlowScoreMappingConfig(
+            accum_score=AccumScoreMappingConfig(
                 max_score=150.0,
                 clamp=True,
             )
@@ -114,8 +114,8 @@ def test_signal_engine_input_mapping_helpers_use_config():
         ),
     ))
 
-    assert engine.foreign_flow_quality_from_foreign_flow_score(75.0) == 0.5
-    assert engine.foreign_flow_quality_from_foreign_flow_score(200.0) == 1.0
+    assert engine.foreign_flow_quality_from_accum_score(75.0) == 0.5
+    assert engine.foreign_flow_quality_from_accum_score(200.0) == 1.0
     assert engine.bandar_max_range(2) == 18
 
 

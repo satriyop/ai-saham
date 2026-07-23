@@ -140,14 +140,14 @@ def test_screen_attaches_ticker_notation_without_changing_score():
 
     assert enriched.candidates[0].ticker_notation is not None
     assert enriched.candidates[0].ticker_notation.notations[0].code == "X"
-    assert enriched.candidates[0].foreign_flow_score == base.candidates[0].foreign_flow_score
+    assert enriched.candidates[0].accum_score == base.candidates[0].accum_score
     assert enriched.candidates[0].foreign_flow_evidence is not None
     assert (
-        enriched.candidates[0].foreign_flow_evidence.composite_score
-        == enriched.candidates[0].foreign_flow_score
+        enriched.candidates[0].foreign_flow_evidence.signal_score
+        == enriched.candidates[0].accum_score
     )
     candidate_dict = enriched.candidates[0].to_dict()
-    assert candidate_dict["foreign_flow_score"] == enriched.candidates[0].foreign_flow_score
+    assert candidate_dict["accum_score"] == enriched.candidates[0].accum_score
     assert "composite_foreign_flow_score" not in candidate_dict
     assert candidate_dict["ticker_notation"]["notations"][0]["code"] == "X"
 
@@ -293,8 +293,8 @@ def test_screener_populates_signal_assessment():
             tickers=["BBCA"],
             window_days=7,
             min_net_buy_days=0,
-            min_foreign_flow_score=0.0,
-            min_foreign_flow_score_enabled=True,
+            min_accum_score=0.0,
+            min_accum_score_enabled=True,
             as_of_date=as_of,
         ),
         execution_context=make_signal_evidence_execution_context(as_of),
@@ -327,8 +327,8 @@ def test_candidate_to_dict_emits_canonical_signal_authority_coverage():
             tickers=["BBCA"],
             window_days=7,
             min_net_buy_days=0,
-            min_foreign_flow_score=0.0,
-            min_foreign_flow_score_enabled=True,
+            min_accum_score=0.0,
+            min_accum_score_enabled=True,
             as_of_date=as_of,
         ),
         execution_context=make_signal_evidence_execution_context(as_of),

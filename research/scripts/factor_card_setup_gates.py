@@ -40,7 +40,7 @@ DEFAULT_ACCUM = ROOT / "config" / "accumulation_screener.yaml"
 
 # Gate labels used for foreign-bounce per-gate tables (prod EvaluateSwingSetup).
 _FB_GATE_LABELS = (
-    "foreign_flow_score",
+    "accum_score",
     "fvwap%",
     "trend",
     "flow_pct",
@@ -182,16 +182,16 @@ def _load_broker_lists(path: Path) -> tuple[frozenset[str], frozenset[str]]:
 
 
 def eval_foreign_bounce(row: PanelRow, gates_cfg: dict, partial_max: int) -> SetupEval:
-    score_min = float(gates_cfg.get("min_foreign_flow_score", 58.3))
+    score_min = float(gates_cfg.get("min_accum_score", 58.3))
     vwap_min = float(gates_cfg.get("min_vwap_discount_pct", 3.0))
     trend_req = str(gates_cfg.get("required_trend", "SIDE")).upper()
     flow_min = float(gates_cfg.get("min_flow_ratio_pct", 5.0))
     rsi_max = float(gates_cfg.get("max_rsi", 60.0))
     gates = [
         GateResult(
-            "foreign_flow_score",
-            row.foreign_flow_score is not None
-            and row.foreign_flow_score >= score_min,
+            "accum_score",
+            row.accum_score is not None
+            and row.accum_score >= score_min,
         ),
         GateResult(
             "fvwap%",
@@ -215,15 +215,15 @@ def eval_foreign_bounce(row: PanelRow, gates_cfg: dict, partial_max: int) -> Set
 
 
 def eval_coiled_spring(row: PanelRow, gates_cfg: dict, partial_max: int) -> SetupEval:
-    score_min = float(gates_cfg.get("min_foreign_flow_score", 50.0))
+    score_min = float(gates_cfg.get("min_accum_score", 50.0))
     bb_max = float(gates_cfg.get("max_bb_width_pctile", 0.20))
     flow_min = float(gates_cfg.get("min_flow_ratio_pct", 3.0))
     rsi_max = float(gates_cfg.get("max_rsi", 65.0))
     gates = [
         GateResult(
-            "foreign_flow_score",
-            row.foreign_flow_score is not None
-            and row.foreign_flow_score >= score_min,
+            "accum_score",
+            row.accum_score is not None
+            and row.accum_score >= score_min,
         ),
         GateResult(
             "bb_width_pctile",
@@ -240,7 +240,7 @@ def eval_coiled_spring(row: PanelRow, gates_cfg: dict, partial_max: int) -> Setu
 
 
 def eval_pullback(row: PanelRow, gates_cfg: dict, partial_max: int) -> SetupEval:
-    score_min = float(gates_cfg.get("min_foreign_flow_score", 45.8))
+    score_min = float(gates_cfg.get("min_accum_score", 45.8))
     trend_req = str(gates_cfg.get("required_trend", "UP")).upper()
     flow_min = float(gates_cfg.get("min_flow_ratio_pct", 2.0))
     rsi_min = float(gates_cfg.get("min_rsi", 40.0))
@@ -248,9 +248,9 @@ def eval_pullback(row: PanelRow, gates_cfg: dict, partial_max: int) -> SetupEval
     vwap_min = float(gates_cfg.get("min_vwap_discount_pct", -2.0))
     gates = [
         GateResult(
-            "foreign_flow_score",
-            row.foreign_flow_score is not None
-            and row.foreign_flow_score >= score_min,
+            "accum_score",
+            row.accum_score is not None
+            and row.accum_score >= score_min,
         ),
         GateResult(
             "trend",
@@ -348,16 +348,16 @@ def eval_smart_money(
     noise_share: float | None,
     smart_flow: float | None,
 ) -> SetupEval:
-    score_min = float(gates_cfg.get("min_foreign_flow_score", 50.0))
+    score_min = float(gates_cfg.get("min_accum_score", 50.0))
     smart_min = float(gates_cfg.get("min_smart_share_pct", 30.0))
     noise_max = float(gates_cfg.get("max_noise_share_pct", 60.0))
     min_smart_flow = float(gates_cfg.get("min_smart_flow_idr", 0.0))
     reject_sell = bool(gates_cfg.get("reject_smart_net_selling", True))
     gates = [
         GateResult(
-            "foreign_flow_score",
-            row.foreign_flow_score is not None
-            and row.foreign_flow_score >= score_min,
+            "accum_score",
+            row.accum_score is not None
+            and row.accum_score >= score_min,
         ),
         GateResult(
             "smart_flow",
@@ -458,7 +458,7 @@ def build_report(
             "",
             "| Field | n non-null |",
             "|-------|------------|",
-            f"| foreign_flow_score | {sum(1 for r in panel if r.foreign_flow_score is not None)} |",
+            f"| accum_score | {sum(1 for r in panel if r.accum_score is not None)} |",
             f"| vwap_discount_pct | {sum(1 for r in panel if r.vwap_discount_pct is not None)} |",
             f"| rsi | {sum(1 for r in panel if r.rsi is not None)} |",
             f"| trend | {sum(1 for r in panel if r.trend is not None)} |",
@@ -562,7 +562,7 @@ def build_report(
     # Score sweep
     lines.extend(
         [
-            "### Score gate (`min_foreign_flow_score`), others at prod",
+            "### Score gate (`min_accum_score`), others at prod",
             "",
             "| Threshold | MATCH n | Hit % | Avg % | PF |",
             "|-----------|---------|-------|-------|----|",
@@ -570,7 +570,7 @@ def build_report(
     )
     for thr in (45.0, 50.0, 55.0, 58.3, 65.0, 70.0):
         cfg = dict(fb_gates)
-        cfg["min_foreign_flow_score"] = thr
+        cfg["min_accum_score"] = thr
         matched = [
             r
             for r in panel

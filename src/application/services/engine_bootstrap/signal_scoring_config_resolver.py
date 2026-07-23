@@ -30,7 +30,7 @@ from src.application.services.signal_engine_config import (
     BandarScoringConfig,
     EvidenceGroupConfig,
     EvidenceGroupsConfig,
-    ForeignFlowScoreMappingConfig,
+    AccumScoreMappingConfig,
     InsiderSellingFlagConfig,
     NeutralRegimeConfig,
     RegimeConditioningConfig,
@@ -105,7 +105,12 @@ def resolve_signal_engine_config(cfg: dict) -> SignalEngineConfig:
             )
     enrichment = root.get("enrichment", {})
     input_mapping = root.get("input_mapping", {})
-    foreign_flow_score_mapping = input_mapping.get("foreign_flow_score", {})
+    if "foreign_flow_score" in input_mapping:
+        raise ValueError(
+            "signal_engine.input_mapping.foreign_flow_score was renamed to "
+            "input_mapping.accum_score (ADR-043). Update config/signal_engine.yaml."
+        )
+    accum_score_mapping = input_mapping.get("accum_score", {})
     bandar = scoring.get("bandar", {})
     evidence_groups = root.get("evidence_groups", {})
     flags = root.get("flags", {})
@@ -160,9 +165,9 @@ def resolve_signal_engine_config(cfg: dict) -> SignalEngineConfig:
             ),
         ),
         input_mapping=SignalInputMappingConfig(
-            foreign_flow_score=ForeignFlowScoreMappingConfig(
-                max_score=foreign_flow_score_mapping.get("max_score", 100.0),
-                clamp=foreign_flow_score_mapping.get("clamp", True),
+            accum_score=AccumScoreMappingConfig(
+                max_score=accum_score_mapping.get("max_score", 100.0),
+                clamp=accum_score_mapping.get("clamp", True),
             ),
         ),
         enrichment=SignalEnrichmentConfig(

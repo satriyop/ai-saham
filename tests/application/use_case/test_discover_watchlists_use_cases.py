@@ -50,8 +50,8 @@ def test_list_screen_watchlists_use_case() -> None:
             window_days=7,
             ticker="BBRI",
             rank=1,
-            flow_score=80.0,
-            composite_score=75.0,
+            accum_score=80.0,
+            signal_score=75.0,
             consecutive_streak=3,
             net_buy_ratio=0.15,
             bci_label="ACCUMULATION",
@@ -79,8 +79,8 @@ def test_compare_screen_watchlist_use_case_success() -> None:
             window_days=7,
             ticker="BBRI",
             rank=1,
-            flow_score=80.0,
-            composite_score=75.0,
+            accum_score=80.0,
+            signal_score=75.0,
             consecutive_streak=3,
             net_buy_ratio=0.15,
             bci_label="ACCUMULATION",
@@ -92,8 +92,8 @@ def test_compare_screen_watchlist_use_case_success() -> None:
             window_days=7,
             ticker="BMRI",
             rank=2,
-            flow_score=70.0,
-            composite_score=65.0,
+            accum_score=70.0,
+            signal_score=65.0,
             consecutive_streak=2,
             net_buy_ratio=0.10,
             bci_label="ACCUMULATION",
@@ -102,12 +102,12 @@ def test_compare_screen_watchlist_use_case_success() -> None:
 
     cand1 = MagicMock(spec=AccumulationCandidate)
     cand1.ticker = "BBRI"
-    cand1.foreign_flow_score = 85.0
+    cand1.accum_score = 85.0
     cand1.signal_assessment = None
 
     cand2 = MagicMock(spec=AccumulationCandidate)
     cand2.ticker = "BBNI"  # New candidate!
-    cand2.foreign_flow_score = 65.0
+    cand2.accum_score = 65.0
     cand2.signal_assessment = None
 
     fresh_proj = MagicMock(spec=ScreenAccumSingleProjection)

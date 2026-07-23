@@ -34,7 +34,7 @@ from src.domain.value_objects.screen_snapshot import ScreenSnapshotEntry
 def test_discover_presenter_formats_single_projection() -> None:
     cand = MagicMock(spec=AccumulationCandidate)
     cand.ticker = "BBRI"
-    cand.foreign_flow_score = 80.0
+    cand.accum_score = 80.0
     cand.consecutive_streak = 5
     cand.net_buy_ratio = 0.20
     cand.bci_label = "ACCUMULATION"
@@ -56,7 +56,7 @@ def test_discover_presenter_formats_single_projection() -> None:
     row = view.candidate_rows[0]
     assert row.ticker == "BBRI"
     assert row.canonical_rank == 1
-    assert row.flow_score == 80.0
+    assert row.accum_score == 80.0
     assert row.action == "ENTER"
     assert row.vwap_discount_pct == 9.5
     assert row.vwap_depth_label == "deep"
@@ -227,7 +227,7 @@ def test_save_uses_actual_screened_universe_and_window_not_hardcoded() -> None:
 
     screen._last_request = RunAccumulationScreenWorkflowRequest(
         tickers=[], universe_label="idx30", universe_name="idx30", window=30,
-        min_streak=0, min_foreign_flow_score=None, min_signal_score=None,
+        min_streak=0, min_accum_score=None, min_signal_score=None,
         min_piotroski=0, strategy_name=None, include_strategy_overlay=False,
         multi=False, windows=[], top=50, save_name=None, save_enabled=False,
     )

@@ -18,20 +18,20 @@ from src.application.dto.accumulation_screen import AccumulationCandidate
 
 @dataclass(frozen=True)
 class AccumulationDisplayConfig:
-    enter_min_foreign_flow_score: float
-    watch_min_foreign_flow_score: float
-    coiled_spring_min_foreign_flow_score: float
+    enter_min_accum_score: float
+    watch_min_accum_score: float
+    coiled_spring_min_accum_score: float
     coiled_spring_bb_pctile: float
-    foreign_flow_score_policy: Any
+    accum_score_policy: Any
 
 
 def accumulation_display_config_from_screener(config) -> AccumulationDisplayConfig:
     return AccumulationDisplayConfig(
-        enter_min_foreign_flow_score=config.display.enter_min_foreign_flow_score,
-        watch_min_foreign_flow_score=config.display.watch_min_foreign_flow_score,
-        coiled_spring_min_foreign_flow_score=config.display.coiled_spring_min_foreign_flow_score,
+        enter_min_accum_score=config.display.enter_min_accum_score,
+        watch_min_accum_score=config.display.watch_min_accum_score,
+        coiled_spring_min_accum_score=config.display.coiled_spring_min_accum_score,
         coiled_spring_bb_pctile=config.display.coiled_spring_bb_pctile,
-        foreign_flow_score_policy=config.foreign_flow_score_policy,
+        accum_score_policy=config.accum_score_policy,
     )
 
 
@@ -76,9 +76,9 @@ def fmt_score(s: float | None, display_config: AccumulationDisplayConfig) -> str
     """Format a score with color for table cells."""
     if s is None:
         return typer.style("   —  ", fg=typer.colors.BRIGHT_BLACK)
-    if s >= display_config.enter_min_foreign_flow_score:
+    if s >= display_config.enter_min_accum_score:
         return typer.style(f"{s:>6.1f}", fg=typer.colors.GREEN)
-    if s >= display_config.watch_min_foreign_flow_score:
+    if s >= display_config.watch_min_accum_score:
         return typer.style(f"{s:>6.1f}", fg=typer.colors.YELLOW)
     return typer.style(f"{s:>6.1f}", fg=typer.colors.WHITE)
 
@@ -140,10 +140,10 @@ def classify_pattern(
     display_config: AccumulationDisplayConfig,
 ) -> str:
     """Label the multi-window pattern for a ticker."""
-    threshold = display_config.coiled_spring_min_foreign_flow_score
+    threshold = display_config.coiled_spring_min_accum_score
     hot = [
         w for w in windows
-        if candidates_by_window.get(w) and candidates_by_window[w].foreign_flow_score >= threshold
+        if candidates_by_window.get(w) and candidates_by_window[w].accum_score >= threshold
     ]
 
     # Coiled spring: any window with squeeze + strong score
@@ -151,7 +151,7 @@ def classify_pattern(
         c = candidates_by_window.get(w)
         if (
             c
-            and c.foreign_flow_score >= threshold
+            and c.accum_score >= threshold
             and c.bb_width_pctile is not None
             and c.bb_width_pctile <= display_config.coiled_spring_bb_pctile
         ):

@@ -1,5 +1,5 @@
 """
-Boundary-case regression tests for the 0-120 -> 0-100 foreign_flow_score
+Boundary-case regression tests for the 0-120 -> 0-100 accum_score
 rescale (ADR-039).
 
 Proportional-preserve conversion (÷1.2) keeps pass/fail behavior identical
@@ -41,7 +41,7 @@ def _candidate(**overrides) -> AccumulationCandidate:
         vwap_discount_pct=3.0,
         rsi=45.0,
         trend="SIDE",
-        foreign_flow_score=70.0,
+        accum_score=70.0,
         top_brokers=["AK", "BK"],
         institutional_flag=True,
         avg_flow_ratio=6.0,
@@ -62,7 +62,7 @@ def _evaluate(setup_name: str, candidate: AccumulationCandidate, **broker_kwargs
 
 
 def test_foreign_bounce_gate_passes_at_new_boundary_58_3():
-    evaluation = _evaluate(FOREIGN_BOUNCE_SETUP, _candidate(foreign_flow_score=58.3))
+    evaluation = _evaluate(FOREIGN_BOUNCE_SETUP, _candidate(accum_score=58.3))
     assert evaluation.match == SetupMatch.MATCH
 
 
@@ -70,7 +70,7 @@ def test_foreign_bounce_gate_fails_score_just_below_new_boundary():
     evaluation = _evaluate(
         FOREIGN_BOUNCE_SETUP,
         _candidate(
-            foreign_flow_score=58.2,
+            accum_score=58.2,
             rsi=75.0,
             trend="UP",
             avg_flow_ratio=1.0,
@@ -83,7 +83,7 @@ def test_foreign_bounce_gate_fails_score_just_below_new_boundary():
 def test_coiled_spring_gate_passes_at_new_boundary_50_0():
     evaluation = _evaluate(
         COILED_SPRING_SETUP,
-        _candidate(foreign_flow_score=50.0, bb_width_pctile=0.12, avg_flow_ratio=3.5, rsi=58.0),
+        _candidate(accum_score=50.0, bb_width_pctile=0.12, avg_flow_ratio=3.5, rsi=58.0),
     )
     assert evaluation.match == SetupMatch.MATCH
 
@@ -92,7 +92,7 @@ def test_pullback_continuation_gate_passes_at_new_boundary_45_8():
     evaluation = _evaluate(
         PULLBACK_CONTINUATION_SETUP,
         _candidate(
-            foreign_flow_score=45.8,
+            accum_score=45.8,
             trend="UP",
             avg_flow_ratio=3.0,
             rsi=50.0,
@@ -113,7 +113,7 @@ def test_smart_money_confirmed_gate_passes_at_new_boundary_50_0():
     )
     evaluation = _evaluate(
         SMART_MONEY_CONFIRMED_SETUP,
-        _candidate(foreign_flow_score=50.0),
+        _candidate(accum_score=50.0),
         broker_detail=broker_detail,
     )
     assert evaluation.match == SetupMatch.MATCH
@@ -121,8 +121,8 @@ def test_smart_money_confirmed_gate_passes_at_new_boundary_50_0():
 
 def test_audit_bucket_edges_partition_at_33_3_and_58_3():
     policy = AuditBucketPolicy()
-    assert policy.foreign_flow_score == (33.3, 58.3)
-    assert _range_bucket(25.0, policy.foreign_flow_score) == "<33.3"
-    assert _range_bucket(33.3, policy.foreign_flow_score) == "33.3-58.3"
-    assert _range_bucket(58.3, policy.foreign_flow_score) == "58.3+"
-    assert _range_bucket(75.0, policy.foreign_flow_score) == "58.3+"
+    assert policy.accum_score == (33.3, 58.3)
+    assert _range_bucket(25.0, policy.accum_score) == "<33.3"
+    assert _range_bucket(33.3, policy.accum_score) == "33.3-58.3"
+    assert _range_bucket(58.3, policy.accum_score) == "58.3+"
+    assert _range_bucket(75.0, policy.accum_score) == "58.3+"

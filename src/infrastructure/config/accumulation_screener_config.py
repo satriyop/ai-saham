@@ -13,11 +13,11 @@ from typing import Any
 import yaml
 
 from src.application.dto.accumulation_screen import AccumulationDerivedFeaturePolicy
-from src.application.use_case.score_foreign_flow_use_case import (
+from src.application.use_case.score_accum_use_case import (
     BciEvidencePolicy,
     BollingerSqueezePolicy,
     EvidenceComponentPolicy,
-    ForeignFlowScorePolicy,
+    AccumScorePolicy,
     LinearSaturationPolicy,
     RsiEvidencePolicy,
     StreakEvidencePolicy,
@@ -38,21 +38,21 @@ class ScoreFilterConfig:
 
 @dataclass(frozen=True)
 class AccumulationDisplayConfig:
-    enter_min_foreign_flow_score: float = 58.3
-    watch_min_foreign_flow_score: float = 33.3
-    coiled_spring_min_foreign_flow_score: float = 50.0
+    enter_min_accum_score: float = 58.3
+    watch_min_accum_score: float = 33.3
+    coiled_spring_min_accum_score: float = 50.0
     coiled_spring_bb_pctile: float = 0.20
 
 
 @dataclass(frozen=True)
 class AccumulationScreenerConfig:
-    foreign_flow_score_policy: ForeignFlowScorePolicy = field(
-        default_factory=ForeignFlowScorePolicy
+    accum_score_policy: AccumScorePolicy = field(
+        default_factory=AccumScorePolicy
     )
     derived_features: AccumulationDerivedFeaturePolicy = field(
         default_factory=AccumulationDerivedFeaturePolicy
     )
-    min_foreign_flow_score: ScoreFilterConfig = field(
+    min_accum_score: ScoreFilterConfig = field(
         default_factory=lambda: ScoreFilterConfig(enabled=True, value=58.3)
     )
     min_signal_score: ScoreFilterConfig = field(
@@ -61,7 +61,36 @@ class AccumulationScreenerConfig:
     display: AccumulationDisplayConfig = field(default_factory=AccumulationDisplayConfig)
     sort_primary: str = "trade_setup"
     sort_secondary: str = "signal_score"
-    sort_tertiary: str = "foreign_flow_score"
+    sort_tertiary: str = "accum_score"
+
+
+def _reject_removed_accumulation_screener_keys(root: dict[str, Any]) -> None:
+    removed = {
+        "min_foreign_flow_score": "filters.min_accum_score",
+        "foreign_flow_score_policy": "accum_score_policy (YAML evidence section)",
+    }
+    for key, replacement in removed.items():
+        if key in root:
+            raise ValueError(
+                f"accumulation_screener.{key} was renamed (ADR-043); use {replacement} instead."
+            )
+    filters = root.get("filters") or {}
+    if "min_foreign_flow_score" in filters:
+        raise ValueError(
+            "accumulation_screener.filters.min_foreign_flow_score was renamed to "
+            "filters.min_accum_score (ADR-043)."
+        )
+    display = root.get("display") or {}
+    for old_key in (
+        "enter_min_foreign_flow_score",
+        "watch_min_foreign_flow_score",
+        "coiled_spring_min_foreign_flow_score",
+    ):
+        if old_key in display:
+            raise ValueError(
+                f"accumulation_screener.display.{old_key} was renamed (ADR-043); "
+                "use the min_accum_score variant instead."
+            )
 
 
 def load_accumulation_screener_config(
@@ -77,6 +106,7 @@ def load_accumulation_screener_config(
 
     try:
         root = raw.get("accumulation_screener") or raw
+        _reject_removed_accumulation_screener_keys(root)
         evidence = root.get("evidence") or {}
         components = evidence.get("components") or {}
         derived_features = root.get("derived_features") or {}
@@ -84,36 +114,36 @@ def load_accumulation_screener_config(
         display = root.get("display") or {}
         sorting = root.get("sorting") or {}
 
-        policy = _build_foreign_flow_score_policy(
+        policy = _build_accum_score_policy(
             evidence,
             components,
-            defaults.foreign_flow_score_policy,
+            defaults.accum_score_policy,
         )
         return AccumulationScreenerConfig(
-            foreign_flow_score_policy=policy,
+            accum_score_policy=policy,
             derived_features=_build_derived_feature_policy(
                 derived_features,
                 defaults.derived_features,
             ),
-            min_foreign_flow_score=_filter(
-                filters.get("min_foreign_flow_score"),
-                defaults.min_foreign_flow_score,
+            min_accum_score=_filter(
+                filters.get("min_accum_score"),
+                defaults.min_accum_score,
             ),
             min_signal_score=_filter(
                 filters.get("min_signal_score"),
                 defaults.min_signal_score,
             ),
             display=AccumulationDisplayConfig(
-                enter_min_foreign_flow_score=_f(
-                    display, "enter_min_foreign_flow_score", defaults.display.enter_min_foreign_flow_score
+                enter_min_accum_score=_f(
+                    display, "enter_min_accum_score", defaults.display.enter_min_accum_score
                 ),
-                watch_min_foreign_flow_score=_f(
-                    display, "watch_min_foreign_flow_score", defaults.display.watch_min_foreign_flow_score
+                watch_min_accum_score=_f(
+                    display, "watch_min_accum_score", defaults.display.watch_min_accum_score
                 ),
-                coiled_spring_min_foreign_flow_score=_f(
+                coiled_spring_min_accum_score=_f(
                     display,
-                    "coiled_spring_min_foreign_flow_score",
-                    defaults.display.coiled_spring_min_foreign_flow_score,
+                    "coiled_spring_min_accum_score",
+                    defaults.display.coiled_spring_min_accum_score,
                 ),
                 coiled_spring_bb_pctile=_f(
                     display, "coiled_spring_bb_pctile", defaults.display.coiled_spring_bb_pctile
@@ -171,11 +201,11 @@ def _component(
     )
 
 
-def _build_foreign_flow_score_policy(
+def _build_accum_score_policy(
     evidence: dict[str, Any],
     components: dict[str, Any],
-    default: ForeignFlowScorePolicy,
-) -> ForeignFlowScorePolicy:
+    default: AccumScorePolicy,
+) -> AccumScorePolicy:
     consistency = _component(components.get("consistency"), default.consistency)
 
     streak_raw = components.get("streak") or {}
@@ -228,7 +258,7 @@ def _build_foreign_flow_score_policy(
         stable_points=_f(bci_raw, "stable_points", default.bci.stable_points),
     )
 
-    return ForeignFlowScorePolicy(
+    return AccumScorePolicy(
         max_score=_f(evidence, "max_score", default.max_score),
         consistency=consistency,
         streak=streak,

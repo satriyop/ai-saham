@@ -1,13 +1,13 @@
 from datetime import date
 
-from src.application.use_case.score_foreign_flow_use_case import (
+from src.application.use_case.score_accum_use_case import (
     BollingerSqueezePolicy,
     EvidenceComponentPolicy,
-    ForeignFlowScorePolicy,
-    ScoreForeignFlowRequest,
-    ScoreForeignFlowUseCase,
+    AccumScorePolicy,
+    ScoreAccumRequest,
+    ScoreAccumUseCase,
 )
-from src.domain.value_objects.foreign_flow_score_breakdown import (
+from src.domain.value_objects.accum_score_breakdown import (
     ForeignFlowComponentStatus,
 )
 
@@ -26,17 +26,17 @@ def _full_request(**overrides):
         bci_tier1_count=3,
     )
     base.update(overrides)
-    return ScoreForeignFlowRequest(**base)
+    return ScoreAccumRequest(**base)
 
 
-def test_score_foreign_flow_matches_legacy_breakdown_shape():
-    uc = ScoreForeignFlowUseCase()
+def test_score_accum_matches_legacy_breakdown_shape():
+    uc = ScoreAccumUseCase()
 
     resp = uc.execute(_full_request())
 
     evidence = resp.evidence
     # Rescaled 0-120 -> 0-100 (ADR-039). bb_squeeze is disabled by default.
-    assert evidence.foreign_flow_score == 94.9
+    assert evidence.accum_score == 94.9
     assert evidence.breakdown_dict == {
         "cons": 33.3,
         "streak": 15.8,
@@ -51,11 +51,11 @@ def test_score_foreign_flow_matches_legacy_breakdown_shape():
     assert evidence.missing_components == ()
 
 
-def test_score_foreign_flow_can_disable_component():
-    policy = ForeignFlowScorePolicy(
+def test_score_accum_can_disable_component():
+    policy = AccumScorePolicy(
         consistency=EvidenceComponentPolicy(enabled=False, weight=33.3),
     )
-    uc = ScoreForeignFlowUseCase(policy)
+    uc = ScoreAccumUseCase(policy)
 
     resp = uc.execute(
         _full_request(
@@ -72,13 +72,13 @@ def test_score_foreign_flow_can_disable_component():
     assert resp.evidence.breakdown_dict["cons"] is None
     # streak 0 available, vwap 0 available, rsi missing, flow 0 available,
     # bb disabled, inst missing → score = 0.0
-    assert resp.evidence.foreign_flow_score == 0.0
+    assert resp.evidence.accum_score == 0.0
     assert "rsi" in resp.evidence.missing_components
     assert "inst" in resp.evidence.missing_components
 
 
 def test_missing_vwap_and_real_zero_vwap_serialize_differently():
-    uc = ScoreForeignFlowUseCase()
+    uc = ScoreAccumUseCase()
     missing = uc.execute(_full_request(vwap_discount_pct=None)).evidence
     zero = uc.execute(_full_request(vwap_discount_pct=0.0)).evidence
 
@@ -87,12 +87,12 @@ def test_missing_vwap_and_real_zero_vwap_serialize_differently():
     assert zero.component("vwap").status is ForeignFlowComponentStatus.AVAILABLE
     assert zero.breakdown_dict["vwap"] == 0.0
     assert missing.to_dict()["components"] != zero.to_dict()["components"]
-    assert missing.foreign_flow_score < zero.foreign_flow_score + 16.7  # missing contributes 0
-    assert missing.foreign_flow_score == round(zero.foreign_flow_score - 0.0, 1)
+    assert missing.accum_score < zero.accum_score + 16.7  # missing contributes 0
+    assert missing.accum_score == round(zero.accum_score - 0.0, 1)
 
 
 def test_missing_flow_ratio_and_real_zero_flow_ratio_serialize_differently():
-    uc = ScoreForeignFlowUseCase()
+    uc = ScoreAccumUseCase()
     missing = uc.execute(_full_request(avg_flow_ratio=None)).evidence
     zero = uc.execute(_full_request(avg_flow_ratio=0.0)).evidence
 
@@ -105,20 +105,20 @@ def test_missing_flow_ratio_and_real_zero_flow_ratio_serialize_differently():
 
 
 def test_missing_rsi_receives_no_points():
-    uc = ScoreForeignFlowUseCase()
+    uc = ScoreAccumUseCase()
     present = uc.execute(_full_request(rsi=40.0)).evidence
     missing = uc.execute(_full_request(rsi=None)).evidence
 
     assert present.breakdown_dict["rsi"] == 8.3
     assert missing.breakdown_dict["rsi"] is None
     assert missing.component("rsi").status is ForeignFlowComponentStatus.MISSING
-    assert missing.foreign_flow_score == round(present.foreign_flow_score - 8.3, 1)
+    assert missing.accum_score == round(present.accum_score - 8.3, 1)
 
 
 def test_disabled_bb_is_distinct_from_missing_bb():
-    disabled_uc = ScoreForeignFlowUseCase()  # default bb disabled
-    enabled_uc = ScoreForeignFlowUseCase(
-        ForeignFlowScorePolicy(
+    disabled_uc = ScoreAccumUseCase()  # default bb disabled
+    enabled_uc = ScoreAccumUseCase(
+        AccumScorePolicy(
             bb_squeeze=BollingerSqueezePolicy(enabled=True, weight=8.3),
         )
     )
@@ -134,7 +134,7 @@ def test_disabled_bb_is_distinct_from_missing_bb():
 
 
 def test_missing_bci_is_distinct_from_retail_led():
-    uc = ScoreForeignFlowUseCase()
+    uc = ScoreAccumUseCase()
     missing = uc.execute(_full_request(bci_label=None)).evidence
     retail = uc.execute(_full_request(bci_label="RETAIL-LED", bci_tier1_count=0)).evidence
 
@@ -142,14 +142,14 @@ def test_missing_bci_is_distinct_from_retail_led():
     assert missing.breakdown_dict["inst"] is None
     assert retail.component("inst").status is ForeignFlowComponentStatus.AVAILABLE
     assert retail.breakdown_dict["inst"] == 0.0
-    assert missing.foreign_flow_score == retail.foreign_flow_score  # both 0 points
+    assert missing.accum_score == retail.accum_score  # both 0 points
     assert missing.to_dict()["components"] != retail.to_dict()["components"]
 
 
 def test_all_input_present_known_score_vector_unchanged():
-    uc = ScoreForeignFlowUseCase()
+    uc = ScoreAccumUseCase()
     evidence = uc.execute(_full_request()).evidence
-    assert evidence.foreign_flow_score == 94.9
+    assert evidence.accum_score == 94.9
     assert {
         k: v
         for k, v in evidence.breakdown_dict.items()

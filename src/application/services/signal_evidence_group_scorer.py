@@ -58,9 +58,9 @@ class _GroupAuthorityFacts:
 
 @dataclass(frozen=True)
 class SignalEvidenceGroupScores:
-    setup_score: float
+    setup_group_score: float
     setup_present: bool
-    flow_score: float
+    flow_group_score: float
     flow_present: bool
     base_score: float
     # Canonical production-authority coverage (HIGH-2): weighted fraction of
@@ -84,15 +84,15 @@ class SignalEvidenceGroupScorer:
         request: AssessSignalEvidenceRequest,
         config: SignalEngineConfig,
     ) -> SignalEvidenceGroupScores:
-        setup_score, setup_present = SignalEvidenceGroupScorer._score_setup_group(
+        setup_group_score, setup_present = SignalEvidenceGroupScorer._score_setup_group(
             request.setup_evidence
         )
-        flow_score, flow_present = SignalEvidenceGroupScorer._score_flow_group(
+        flow_group_score, flow_present = SignalEvidenceGroupScorer._score_flow_group(
             request.flow_confirmation_evidence
         )
 
         base_score, _presence_ratio = SignalEvidenceGroupScorer.renormalize(
-            setup_score, setup_present, flow_score, flow_present, config
+            setup_group_score, setup_present, flow_group_score, flow_present, config
         )
 
         group_authority_facts = SignalEvidenceGroupScorer._group_authority_facts(
@@ -125,9 +125,9 @@ class SignalEvidenceGroupScorer:
         )
 
         return SignalEvidenceGroupScores(
-            setup_score=setup_score,
+            setup_group_score=setup_group_score,
             setup_present=setup_present,
-            flow_score=flow_score,
+            flow_group_score=flow_group_score,
             flow_present=flow_present,
             base_score=base_score,
             signal_authority_coverage=signal_authority_coverage,
@@ -156,9 +156,9 @@ class SignalEvidenceGroupScorer:
 
     @staticmethod
     def renormalize(
-        setup_score: float,
+        setup_group_score: float,
         setup_present: bool,
-        flow_score: float,
+        flow_group_score: float,
         flow_present: bool,
         config: SignalEngineConfig,
     ) -> tuple[float, float]:
@@ -180,9 +180,9 @@ class SignalEvidenceGroupScorer:
 
         active: list[tuple[float, float]] = []  # (score, weight)
         if setup_present:
-            active.append((setup_score, g.setup_quality.weight))
+            active.append((setup_group_score, g.setup_quality.weight))
         if flow_present:
-            active.append((flow_score, g.flow_confirmation.weight))
+            active.append((flow_group_score, g.flow_confirmation.weight))
 
         if not active:
             return 50.0, 0.0

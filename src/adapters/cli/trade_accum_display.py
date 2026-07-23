@@ -19,7 +19,7 @@ def display_journal_review(
     report: Any,
     journal_path: Path,
     horizon: int,
-    min_foreign_flow_score: float,
+    min_accum_score: float,
 ) -> None:
     # 1. Info Header
     info_table = compact_table(show_header=False)
@@ -32,7 +32,7 @@ def display_journal_review(
     )
     info_table.add_row(
         "Horizon",
-        f"{horizon} trading days | min foreign-flow score filter: {min_foreign_flow_score}"
+        f"{horizon} trading days | min foreign-flow score filter: {min_accum_score}"
     )
 
     console().print("")
@@ -74,8 +74,8 @@ def display_journal_review(
     bucket_table.add_column("Avg 10D", justify="right")
     bucket_table.add_column("Win Rate 10D", justify="right")
 
-    for stat in report.foreign_flow_score_buckets:
-        if stat.n == 0 and min_foreign_flow_score > 0:
+    for stat in report.accum_score_buckets:
+        if stat.n == 0 and min_accum_score > 0:
             continue
         bucket_table.add_row(
             stat.bucket,

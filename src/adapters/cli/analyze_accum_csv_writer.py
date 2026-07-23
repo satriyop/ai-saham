@@ -10,7 +10,7 @@ from pathlib import Path
 from src.application.use_case.accumulation_audit_use_case import AccumulationAuditResponse
 
 _FALLBACK_FIELDNAMES = [
-    "signal_date", "ticker", "foreign_flow_score", "signal_score",
+    "signal_date", "ticker", "accum_score", "signal_score",
     "signal_authority_coverage", "streak", "net_buy_ratio",
     "total_net_value", "flow_pct", "vwap_disc_pct", "rsi", "bb_pctile",
     "trend", "broker_quality", "current_price", "return_5d_pct", "return_10d_pct",

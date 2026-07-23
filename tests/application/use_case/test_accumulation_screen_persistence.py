@@ -371,7 +371,7 @@ class TestIaCnfbDivergenceWithPlausibleFlowData:
             AccumulationScreenRequest(
                 tickers=["BBCA"],
                 as_of_date=snapshot_date,
-                min_foreign_flow_score=0.0,
+                min_accum_score=0.0,
                 min_net_buy_days=1,
                 resistance_gate_enabled=False,
             )
@@ -457,7 +457,7 @@ class TestScFingerprintWithPeerCandles:
             AccumulationScreenRequest(
                 tickers=["BBCA"],
                 as_of_date=snapshot_date,
-                min_foreign_flow_score=0.0,
+                min_accum_score=0.0,
                 min_net_buy_days=1,
                 resistance_gate_enabled=False,
             )
@@ -543,7 +543,7 @@ class TestFingerprintKeysExistWhenInputsUnavailable:
             AccumulationScreenRequest(
                 tickers=["BBCA"],
                 as_of_date=snapshot_date,
-                min_foreign_flow_score=0.0,
+                min_accum_score=0.0,
                 min_net_buy_days=1,
                 resistance_gate_enabled=False,
             )

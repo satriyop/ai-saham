@@ -38,7 +38,7 @@ def _minimal_request(**overrides):
         tickers=["BBCA"],
         window_days=7,
         min_net_buy_days=2,
-        min_foreign_flow_score=0.0,
+        min_accum_score=0.0,
         min_signal_score=0.0,
         market_context=None,
     )
@@ -60,7 +60,7 @@ def _minimal_candidate(**overrides):
         vwap_discount_pct=0.0,
         rsi=55.0,
         trend="UP",
-        foreign_flow_score=70.0,
+        accum_score=70.0,
         top_brokers=None,
         institutional_flag=False,
         avg_flow_ratio=5.0,
@@ -121,7 +121,7 @@ class TestTopLevelKeysPreserved:
         request = _minimal_request(
             window_days=30,
             min_net_buy_days=3,
-            min_foreign_flow_score=40.0,
+            min_accum_score=40.0,
             min_signal_score=0.0,
         )
         payload = build_candidate_observation_payload(
@@ -136,7 +136,7 @@ class TestTopLevelKeysPreserved:
         req = payload["request"]
         assert req["window_days"] == 30
         assert req["min_net_buy_days"] == 3
-        assert req["min_foreign_flow_score"] == 40.0
+        assert req["min_accum_score"] == 40.0
 
     def test_candidate_dict_in_payload(self):
         candidate = _minimal_candidate()

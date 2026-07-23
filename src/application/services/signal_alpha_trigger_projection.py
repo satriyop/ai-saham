@@ -57,7 +57,7 @@ class SignalAlphaTriggerProjection:
                 groups=(
                     AlphaTriggerGroupInput(
                         group="setup_quality",
-                        score=group_scores.setup_score,
+                        score=group_scores.setup_group_score,
                         configured_weight=config.alpha_trigger.group_weights.get(
                             "setup_quality", 0.0
                         ),
@@ -69,7 +69,7 @@ class SignalAlphaTriggerProjection:
                     ),
                     AlphaTriggerGroupInput(
                         group="institutional_flow",
-                        score=group_scores.flow_score,
+                        score=group_scores.flow_group_score,
                         configured_weight=config.alpha_trigger.group_weights.get(
                             "institutional_flow", 0.0
                         ),

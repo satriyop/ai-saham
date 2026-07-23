@@ -72,7 +72,7 @@ def accumulation_run(
         int,
         typer.Option("--min-streak", help="Minimum consecutive buy days required", min=0),
     ] = 0,
-    min_foreign_flow_score: Annotated[
+    min_accum_score: Annotated[
         Optional[float],
         typer.Option(
             "--min-foreign-flow-score",
@@ -278,7 +278,7 @@ def accumulation_run(
                 universe_name=universe,
                 window=window,
                 min_streak=min_streak,
-                min_foreign_flow_score=min_foreign_flow_score,
+                min_accum_score=min_accum_score,
                 min_signal_score=min_signal_score,
                 min_piotroski=min_piotroski,
                 strategy_name=strategy,

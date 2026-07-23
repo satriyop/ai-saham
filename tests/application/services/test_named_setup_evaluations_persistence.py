@@ -46,7 +46,7 @@ def _candidate(**kwargs) -> AccumulationCandidate:
         vwap_discount_pct=4.0,
         rsi=45.0,
         trend="SIDE",
-        foreign_flow_score=80.0,
+        accum_score=80.0,
         top_brokers=["AK", "BK"],
         institutional_flag=True,
         avg_flow_ratio=6.0,
@@ -110,7 +110,7 @@ def test_fingerprint_serializes_named_setup_evaluations_lean_dict():
         vwap_discount_pct=0.0,
         rsi=55.0,
         trend="UP",
-        foreign_flow_score=70.0,
+        accum_score=70.0,
         top_brokers=None,
         institutional_flag=False,
         avg_flow_ratio=5.0,
@@ -126,7 +126,7 @@ def test_fingerprint_serializes_named_setup_evaluations_lean_dict():
         tickers=["BBCA"],
         window_days=7,
         min_net_buy_days=2,
-        min_foreign_flow_score=0.0,
+        min_accum_score=0.0,
         min_signal_score=0.0,
         market_context=None,
     )
@@ -187,7 +187,7 @@ def test_evaluate_all_available_setups_covers_catalog():
     """Screen path evaluates every AVAILABLE_SWING_SETUPS entry once."""
     catalog = _catalog_match_coiled()
     candidate = _candidate(
-        foreign_flow_score=62.0,
+        accum_score=62.0,
         bb_width_pctile=0.12,
         avg_flow_ratio=3.5,
         rsi=58.0,

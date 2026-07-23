@@ -54,7 +54,7 @@ class RunAccumulationScreenWorkflowRequest:
     universe_name: str | None
     window: int
     min_streak: int
-    min_foreign_flow_score: float | None
+    min_accum_score: float | None
     min_signal_score: float | None
     min_piotroski: int
     strategy_name: str | None
@@ -131,7 +131,7 @@ class RunAccumulationScreenWorkflowUseCase:
             swing_config=self._swing_config,
             accumulation_screener_config=self._accumulation_screener_config,
             min_net_buy_days=_BASELINE_MIN_NET_BUY_DAYS,
-            min_foreign_flow_score=request.min_foreign_flow_score,
+            min_accum_score=request.min_accum_score,
             min_signal_score=request.min_signal_score,
             min_piotroski=request.min_piotroski,
             strategy_name=request.strategy_name,
@@ -280,7 +280,7 @@ class RunAccumulationScreenWorkflowUseCase:
             top=request.top,
             sort_by=request.sort_by,
             squeeze_only=request.squeeze_only,
-            coiled_spring_min_foreign_flow_score=display_cfg.coiled_spring_min_foreign_flow_score,
+            coiled_spring_min_accum_score=display_cfg.coiled_spring_min_accum_score,
             coiled_spring_bb_pctile=display_cfg.coiled_spring_bb_pctile,
             canonical_window=canonical_window,
             effective_session=execution_context.effective_session,

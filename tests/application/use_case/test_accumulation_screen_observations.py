@@ -338,7 +338,7 @@ def test_screen_persists_setup_family_fingerprint_when_swing_setup_catalog_match
     swing_setup_catalog = SwingSetupCatalogConfig(
         foreign_bounce=ForeignBounceSetupConfig(enabled=False, family="foreign_bounce"),
         coiled_spring=CoiledSpringSetupConfig(
-            gate_min_foreign_flow_score=0.0,
+            gate_min_accum_score=0.0,
             gate_max_bb_width_pctile=1.0,
             gate_min_flow_ratio_pct=-100.0,
             gate_max_rsi=100.0,

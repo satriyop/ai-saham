@@ -215,7 +215,7 @@ def _candidate(ticker: str = "BBCA") -> AccumulationCandidate:
         vwap_discount_pct=0.0,
         rsi=50.0,
         trend="UP",
-        foreign_flow_score=50.0,
+        accum_score=50.0,
         top_brokers=None,
         institutional_flag=False,
     )

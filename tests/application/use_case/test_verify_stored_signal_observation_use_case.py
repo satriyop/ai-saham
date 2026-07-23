@@ -341,7 +341,7 @@ def _candidate_for_recompute(*, score: int, coverage: float, phase: str):
         setup_family_result=None,
         # Fields used by build_candidate_observation_payload / candidate.to_dict paths
         to_dict=lambda: {"ticker": "BBCA"},
-        foreign_flow_score=1.0,
+        accum_score=1.0,
         trend="UP",
         consecutive_streak=2,
         latest_broker_date=date(2026, 7, 3),

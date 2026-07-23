@@ -35,9 +35,9 @@ class SignalEvidenceResponseBuilder:
         setup_readiness: "SetupPhaseReadiness | None" = None,
     ) -> AssessSignalResponse:
         breakdown = SignalEvidenceResponseBuilder._build_breakdown(
-            setup_score=group_scores.setup_score,
+            setup_group_score=group_scores.setup_group_score,
             setup_present=group_scores.setup_present,
-            flow_score=group_scores.flow_score,
+            flow_group_score=group_scores.flow_group_score,
             flow_present=group_scores.flow_present,
             signal_authority_coverage=group_scores.signal_authority_coverage,
             active_flags=group_scores.active_flags,
@@ -91,9 +91,9 @@ class SignalEvidenceResponseBuilder:
 
     @staticmethod
     def _build_breakdown(
-        setup_score: float,
+        setup_group_score: float,
         setup_present: bool,
-        flow_score: float,
+        flow_group_score: float,
         flow_present: bool,
         signal_authority_coverage: float,
         active_flags: tuple[str, ...],
@@ -103,9 +103,9 @@ class SignalEvidenceResponseBuilder:
     ) -> tuple[tuple[str, float], ...]:
         entries: list[tuple[str, float]] = []
         if setup_present:
-            entries.append(("setup_quality_group", round(setup_score, 2)))
+            entries.append(("setup_quality_group", round(setup_group_score, 2)))
         if flow_present:
-            entries.append(("flow_confirmation_group", round(flow_score, 2)))
+            entries.append(("flow_confirmation_group", round(flow_group_score, 2)))
         entries.append(("signal_authority_coverage", round(signal_authority_coverage * 100.0, 2)))
         if flag_adj != 0:
             entries.append(("flag_adjustment", float(flag_adj)))

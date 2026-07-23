@@ -28,7 +28,7 @@ def test_builder_maps_swing_and_accumulation_config_to_screen_request():
         ex_date_warning_days=14,
     )
     accumulation_config = AccumulationScreenerConfig(
-        min_foreign_flow_score=ScoreFilterConfig(enabled=True, value=55.0),
+        min_accum_score=ScoreFilterConfig(enabled=True, value=55.0),
         min_signal_score=ScoreFilterConfig(enabled=False, value=42.0),
     )
 
@@ -43,8 +43,8 @@ def test_builder_maps_swing_and_accumulation_config_to_screen_request():
     assert request.tickers == ["BBCA"]
     assert request.window_days == 30
     assert request.min_net_buy_days == 3
-    assert request.min_foreign_flow_score == 55.0
-    assert request.min_foreign_flow_score_enabled is True
+    assert request.min_accum_score == 55.0
+    assert request.min_accum_score_enabled is True
     assert request.min_signal_score == 42.0
     assert request.min_signal_score_enabled is False
     assert request.min_piotroski == 6
@@ -66,7 +66,7 @@ def test_builder_can_disable_score_filters_for_multi_observation_capture():
     builder = BuildSignalObservationScreenRequest.from_configs(
         swing_config=SwingConfig(),
         accumulation_screener_config=AccumulationScreenerConfig(
-            min_foreign_flow_score=ScoreFilterConfig(enabled=True, value=70.0),
+            min_accum_score=ScoreFilterConfig(enabled=True, value=70.0),
             min_signal_score=ScoreFilterConfig(enabled=True, value=45.0),
         ),
         min_net_buy_days=1,
@@ -77,8 +77,8 @@ def test_builder_can_disable_score_filters_for_multi_observation_capture():
         window_days=7,
     )
 
-    assert request.min_foreign_flow_score == 0.0
-    assert request.min_foreign_flow_score_enabled is False
+    assert request.min_accum_score == 0.0
+    assert request.min_accum_score_enabled is False
     assert request.min_signal_score == 0.0
     assert request.min_signal_score_enabled is False
 
@@ -87,7 +87,7 @@ def test_builder_passes_market_context_through_by_identity():
     builder = BuildSignalObservationScreenRequest.from_configs(
         swing_config=SwingConfig(),
         accumulation_screener_config=AccumulationScreenerConfig(
-            min_foreign_flow_score=ScoreFilterConfig(enabled=True, value=70.0),
+            min_accum_score=ScoreFilterConfig(enabled=True, value=70.0),
             min_signal_score=ScoreFilterConfig(enabled=True, value=45.0),
         ),
         min_net_buy_days=1,
@@ -119,7 +119,7 @@ def test_builder_defaults_market_context_to_none_when_not_supplied():
     builder = BuildSignalObservationScreenRequest.from_configs(
         swing_config=SwingConfig(),
         accumulation_screener_config=AccumulationScreenerConfig(
-            min_foreign_flow_score=ScoreFilterConfig(enabled=True, value=70.0),
+            min_accum_score=ScoreFilterConfig(enabled=True, value=70.0),
             min_signal_score=ScoreFilterConfig(enabled=True, value=45.0),
         ),
         min_net_buy_days=1,

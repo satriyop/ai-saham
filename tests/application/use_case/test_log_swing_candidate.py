@@ -162,7 +162,7 @@ def _make_candidate(
         vwap_discount_pct=vwap_discount_pct,
         rsi=rsi,
         trend=trend,
-        foreign_flow_score=score,
+        accum_score=score,
         top_brokers=None,
         institutional_flag=False,
         avg_flow_ratio=avg_flow_ratio,
@@ -195,7 +195,7 @@ def _make_request(
         sector_breadth_min_tickers=3,
         setup_config=SwingSetupCatalogConfig(
             foreign_bounce=ForeignBounceSetupConfig(
-                gate_min_foreign_flow_score=60.0,
+                gate_min_accum_score=60.0,
                 gate_min_vwap_discount_pct=2.0,
                 gate_required_trend="UP",
                 gate_min_flow_ratio_pct=5.0,
@@ -230,7 +230,7 @@ def test_logs_candidate_and_returns_written_true():
 
     assert result.written is True
     assert result.setup_match == "MATCH"
-    assert result.candidate_foreign_flow_score == pytest.approx(70.0)
+    assert result.candidate_accum_score == pytest.approx(70.0)
     assert len(journal.calls) == 1
     assert len(trade_store.records) == 1
 
@@ -304,7 +304,7 @@ def test_no_candidate_found_produces_no_match_and_zero_score():
     )
     result = uc.execute(_make_request())
 
-    assert result.candidate_foreign_flow_score is None
+    assert result.candidate_accum_score is None
     assert result.setup_match == "NO_MATCH"
     assert "No accumulation/broker-flow candidate available" in result.failed_gates
     assert result.entry_price == Decimal("0")

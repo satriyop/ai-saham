@@ -141,7 +141,7 @@ def test_screen_persists_benchmark_excess_return_as_diagnostic_evidence():
     swing_setup_catalog = SwingSetupCatalogConfig(
         foreign_bounce=ForeignBounceSetupConfig(enabled=False, family="foreign_bounce"),
         coiled_spring=CoiledSpringSetupConfig(
-            gate_min_foreign_flow_score=0.0,
+            gate_min_accum_score=0.0,
             gate_max_bb_width_pctile=1.0,
             gate_min_flow_ratio_pct=-100.0,
             gate_max_rsi=100.0,
@@ -343,7 +343,7 @@ def test_volatility_context_fingerprint_never_leaks_into_scoring():
     the volatility-context fingerprint) must not affect scoring/verdict.
     Running the exact same screen twice — once with FakeATRRegistry (ATR=5)
     and once with EmptyATRRegistry (no ATR) — must produce an IDENTICAL
-    signal_assessment (score/strength/entry_quality), foreign_flow_score, and
+    signal_assessment (score/strength/entry_quality), accum_score, and
     trade_setup for the same candidate. Only the volatility fields inside
     sub_signal_fingerprint may differ between the two persisted observations.
     """
@@ -402,7 +402,7 @@ def test_volatility_context_fingerprint_never_leaks_into_scoring():
     candidate_a = response_a.candidates[0]
     candidate_b = response_b.candidates[0]
 
-    assert candidate_a.foreign_flow_score == candidate_b.foreign_flow_score
+    assert candidate_a.accum_score == candidate_b.accum_score
     assert candidate_a.signal_assessment is not None
     assert candidate_b.signal_assessment is not None
     assert (

@@ -19,10 +19,10 @@ from src.application.dto.swing_analysis import (
     SignalAssessmentUnavailableReason,
 )
 from src.application.services.swing_data_freshness import SwingDataFreshness
-from src.domain.value_objects.foreign_flow_score_breakdown import (
+from src.domain.value_objects.accum_score_breakdown import (
     ForeignFlowComponentScore,
     ForeignFlowComponentStatus,
-    ForeignFlowScoreBreakdown,
+    AccumScoreBreakdown,
 )
 from src.domain.value_objects.setup_evaluation import (
     SetupEvaluation,
@@ -279,7 +279,7 @@ def test_swing_flow_detail_calls_out_conflicted_negative_flow(capsys):
         net_buy_days=3,
         total_days=7,
         avg_flow_ratio=-9.0,
-        foreign_flow_score_breakdown=ForeignFlowScoreBreakdown(
+        accum_score_breakdown=AccumScoreBreakdown(
             ticker="ASII",
             snapshot_date=date(2026, 6, 27),
             max_score=100.0,

@@ -16,7 +16,7 @@ class _FakeAuditConfig:
 
 class _FakeScreenerConfig:
     derived_features = object()
-    foreign_flow_score_policy = None
+    accum_score_policy = None
 
 
 class _FakeAuditUseCase:

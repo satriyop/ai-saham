@@ -34,7 +34,7 @@ def _make_candidate(
         vwap_discount_pct=vwap,
         rsi=rsi,
         trend=trend,
-        foreign_flow_score=score,
+        accum_score=score,
         top_brokers=None,
         institutional_flag=False,
         avg_flow_ratio=flow,
@@ -45,7 +45,7 @@ def _make_candidate(
 def _make_entry(
     ticker="BBRI",
     logged_at=date(2026, 5, 1),
-    foreign_flow_score=75.0,
+    accum_score=75.0,
     foreign_flow_buy_streak=6,
     window_days=7,
     pattern="building",
@@ -65,7 +65,7 @@ def _make_entry(
         ticker=ticker,
         entry_price=entry_price,
         window_days=window_days,
-        foreign_flow_score=foreign_flow_score,
+        accum_score=accum_score,
         foreign_flow_buy_streak=foreign_flow_buy_streak,
         flow_pct=flow_pct,
         vwap_disc_pct=vwap_disc_pct,
@@ -126,7 +126,7 @@ class TestLogCandidate:
         assert count == 1
         stored_entry: AccumulationJournalEntry = store.append.call_args[0][0][0]
         assert stored_entry.ticker == "BBRI"
-        assert stored_entry.foreign_flow_score == 75.0
+        assert stored_entry.accum_score == 75.0
         assert stored_entry.foreign_flow_buy_streak == 6
         assert stored_entry.trend == "SIDE"
         assert stored_entry.pattern == "building"
@@ -147,7 +147,7 @@ class TestLogCandidate:
         )
 
         entry: AccumulationJournalEntry = store.append.call_args[0][0][0]
-        assert entry.foreign_flow_score is None
+        assert entry.accum_score is None
         assert entry.foreign_flow_buy_streak is None
         assert entry.flow_pct is None
         assert entry.vwap_disc_pct is None
@@ -266,7 +266,7 @@ class TestReviewEmptyAndShortCircuit:
 
         assert report.total_entries == 0
         assert report.enriched_entries == 0
-        assert report.foreign_flow_score_buckets == []
+        assert report.accum_score_buckets == []
         repo.get_candles.assert_not_called()
 
     def test_review_skips_enrichment_for_already_enriched_entries(self):
@@ -457,20 +457,20 @@ class TestReviewScoreBuckets:
         repo.get_candles.return_value = []  # no new enrichment needed
         return _make_service(store, repo)
 
-    def test_foreign_flow_score_buckets_partition_at_58_3_and_33_3(self):
+    def test_accum_score_buckets_partition_at_58_3_and_33_3(self):
         # Rescaled 0-120 -> 0-100 (ADR-039): bucket edges are now 33.3/58.3.
         entries = [
-            _make_entry(foreign_flow_score=25.0, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840")),
-            _make_entry(foreign_flow_score=33.3, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840"), ticker="A"),
-            _make_entry(foreign_flow_score=58.2, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840"), ticker="B"),
-            _make_entry(foreign_flow_score=58.3, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840"), ticker="C"),
-            _make_entry(foreign_flow_score=75.0, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840"), ticker="D"),
+            _make_entry(accum_score=25.0, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840")),
+            _make_entry(accum_score=33.3, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840"), ticker="A"),
+            _make_entry(accum_score=58.2, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840"), ticker="B"),
+            _make_entry(accum_score=58.3, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840"), ticker="C"),
+            _make_entry(accum_score=75.0, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840"), ticker="D"),
         ]
         service = self._service_with_enriched_entries(entries)
 
         report = service.review()
 
-        by_bucket = {s.bucket: s for s in report.foreign_flow_score_buckets}
+        by_bucket = {s.bucket: s for s in report.accum_score_buckets}
         assert by_bucket["58.3+"].n == 2         # 58.3 and 75.0
         assert by_bucket["33.3–58.2"].n == 2      # 33.3 and 58.2
         assert by_bucket["0–33.2"].n == 1         # 25.0
@@ -478,40 +478,40 @@ class TestReviewScoreBuckets:
     def test_foreign_flow_score_bucket_win_rate_uses_strict_positive_return(self):
         """A return of exactly 0% counts as a loss."""
         entries = [
-            _make_entry(foreign_flow_score=80.0, actual_close_10d=Decimal("4840"), entry_price=Decimal("4840"), ticker="A"),  # 0% return
-            _make_entry(foreign_flow_score=80.0, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840"), ticker="B"),  # positive
+            _make_entry(accum_score=80.0, actual_close_10d=Decimal("4840"), entry_price=Decimal("4840"), ticker="A"),  # 0% return
+            _make_entry(accum_score=80.0, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840"), ticker="B"),  # positive
         ]
         service = self._service_with_enriched_entries(entries)
 
         report = service.review()
 
-        by_bucket = {s.bucket: s for s in report.foreign_flow_score_buckets}
+        by_bucket = {s.bucket: s for s in report.accum_score_buckets}
         # 1 winner out of 2 → 50%
         assert by_bucket["58.3+"].win_rate_10d == 50.0
 
     def test_foreign_flow_score_bucket_with_no_entries_returns_none_for_metrics(self):
         entries = [
-            _make_entry(foreign_flow_score=80.0, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840")),
+            _make_entry(accum_score=80.0, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840")),
         ]
         service = self._service_with_enriched_entries(entries)
 
         report = service.review()
 
-        by_bucket = {s.bucket: s for s in report.foreign_flow_score_buckets}
+        by_bucket = {s.bucket: s for s in report.accum_score_buckets}
         assert by_bucket["0–33.2"].n == 0
         assert by_bucket["0–33.2"].avg_return_10d is None
         assert by_bucket["0–33.2"].win_rate_10d is None
 
     def test_foreign_flow_score_bucket_excludes_none_scores(self):
         entries = [
-            _make_entry(foreign_flow_score=None, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840")),
-            _make_entry(foreign_flow_score=30.0, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840"), ticker="A"),
+            _make_entry(accum_score=None, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840")),
+            _make_entry(accum_score=30.0, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840"), ticker="A"),
         ]
         service = self._service_with_enriched_entries(entries)
 
         report = service.review()
 
-        by_bucket = {s.bucket: s for s in report.foreign_flow_score_buckets}
+        by_bucket = {s.bucket: s for s in report.accum_score_buckets}
         assert by_bucket["0–33.2"].n == 1
 
 

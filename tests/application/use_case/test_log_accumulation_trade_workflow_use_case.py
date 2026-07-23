@@ -47,7 +47,7 @@ def dummy_response():
         planned_stop=Decimal("4750"),
         planned_target=Decimal("5250"),
         failed_gates=(),
-        candidate_foreign_flow_score=75.0,
+        candidate_accum_score=75.0,
     )
 
 

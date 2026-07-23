@@ -246,8 +246,8 @@ class SwingBacktestUseCase:
                 tickers=tickers,
                 window_days=request.window_days,
                 min_net_buy_days=request.min_net_buy_days,
-                min_foreign_flow_score=0.0,
-                min_foreign_flow_score_enabled=True,
+                min_accum_score=0.0,
+                min_accum_score_enabled=True,
                 rsi_period=self._derived_features.rsi_period,
                 sma_period=self._derived_features.trend_sma_period,
                 as_of_date=signal_date,
@@ -271,7 +271,7 @@ class SwingBacktestUseCase:
         return sorted(
             candidates,
             key=lambda signal: (
-                signal.candidate.foreign_flow_score,
+                signal.candidate.accum_score,
                 signal.candidate.avg_flow_ratio or 0.0,
                 signal.candidate.vwap_discount_pct or 0.0,
             ),

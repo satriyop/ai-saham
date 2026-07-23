@@ -62,8 +62,8 @@ if TYPE_CHECKING:
 # reruns after a config change get a distinct canonical observation.
 _CONFIG_HASH_FIELDS = (
     "min_net_buy_days",
-    "min_foreign_flow_score",
-    "min_foreign_flow_score_enabled",
+    "min_accum_score",
+    "min_accum_score_enabled",
     "min_signal_score",
     "min_signal_score_enabled",
     "rsi_period",
@@ -176,7 +176,7 @@ def build_candidate_observation_payload(
         "request": {
             "window_days": request.window_days,
             "min_net_buy_days": request.min_net_buy_days,
-            "min_foreign_flow_score": request.min_foreign_flow_score,
+            "min_accum_score": request.min_accum_score,
             "min_signal_score": request.min_signal_score,
         },
         "sub_signal_fingerprint": sub_signal_fingerprint,

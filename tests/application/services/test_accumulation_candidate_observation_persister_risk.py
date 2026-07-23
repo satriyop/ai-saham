@@ -135,8 +135,8 @@ def test_rejected_candidate_without_risk_writes_no_child_row(tmp_path: Path) -> 
         window_days=7,
         min_net_buy_days=1,
         as_of_date=as_of,
-        min_foreign_flow_score=9999.0,
-        min_foreign_flow_score_enabled=True,
+        min_accum_score=9999.0,
+        min_accum_score_enabled=True,
     )
     context = make_signal_evidence_execution_context(as_of)
     result = bundle.record_observations_use_case.execute(request, execution_context=context)

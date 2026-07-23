@@ -121,7 +121,7 @@ def test_analyze_swing_table_and_json_contracts(temp_workspace, monkeypatch):
     assert "status" not in risk
     assert "level" not in risk
     accumulation = payload["evidence"]["accumulation"]
-    assert "foreign_flow_score" in accumulation
+    assert "accum_score" in accumulation
     assert "score" not in accumulation
     assert "composite_foreign_flow_score" not in accumulation
     assert accumulation["foreign_flow_evidence"]["score_family"] == "composite_foreign_flow"
@@ -144,7 +144,7 @@ def test_screen_accum_table_multi_and_json_contracts(temp_workspace, monkeypatch
     payload = _json_stdout(js)
     assert payload["artifact_type"] == "accumulation_screen"
     assert payload["schema_version"] == 1
-    assert payload["candidates"][0]["foreign_flow_score"] is not None
+    assert payload["candidates"][0]["accum_score"] is not None
     assert "composite_foreign_flow_score" not in payload["candidates"][0]
     assert "risk_level" not in payload["candidates"][0]
     assert payload["candidates"][0]["foreign_flow_evidence"]["score_family"] == "composite_foreign_flow"

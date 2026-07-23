@@ -50,12 +50,12 @@ def _real_workflow_uc(screen_execute, broker_repo=None):
         noise_brokers=("YP", "XC"),
     )
     accum_config = SimpleNamespace(
-        min_foreign_flow_score=SimpleNamespace(enabled=False, value=0.0),
+        min_accum_score=SimpleNamespace(enabled=False, value=0.0),
         min_signal_score=SimpleNamespace(enabled=False, value=0.0),
-        foreign_flow_score_policy=None,
+        accum_score_policy=None,
         derived_features=None,
         display=SimpleNamespace(
-            coiled_spring_min_foreign_flow_score=50.0,
+            coiled_spring_min_accum_score=50.0,
             coiled_spring_bb_pctile=0.20,
         ),
     )
@@ -187,7 +187,7 @@ def test_screen_accum_save_calls_use_case(monkeypatch):
         uc.execute = lambda req: _fake_workflow_result(
             response=AccumulationScreenResponse(
                 candidates=[_candidate(
-                    ticker="BBCA", foreign_flow_score=80.0, bci_label="CLUSTER",
+                    ticker="BBCA", accum_score=80.0, bci_label="CLUSTER",
                 )],
                 screened_at=date(2026, 6, 28),
                 window_days=getattr(req, "window", 7),
@@ -340,9 +340,9 @@ def test_screen_accum_single_json_matches_table_candidates_under_vwap_only(monke
 def test_screen_accum_multi_json_matches_table_rows_under_top_sort_squeeze(monkeypatch):
     """S2: --multi --top --sort-by --squeeze-only must produce the same row
     set in JSON as in the table — not every candidate from every window."""
-    tight_hot = _candidate(ticker="A", foreign_flow_score=90.0, bb_width_pctile=0.10)
-    loose_hot = _candidate(ticker="B", foreign_flow_score=95.0, bb_width_pctile=0.80)
-    tight_cold = _candidate(ticker="C", foreign_flow_score=20.0, bb_width_pctile=0.10)
+    tight_hot = _candidate(ticker="A", accum_score=90.0, bb_width_pctile=0.10)
+    loose_hot = _candidate(ticker="B", accum_score=95.0, bb_width_pctile=0.80)
+    tight_cold = _candidate(ticker="C", accum_score=20.0, bb_width_pctile=0.10)
 
     def screen_execute(req, *, execution_context):
         assert execution_context is not None

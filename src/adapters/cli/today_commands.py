@@ -115,7 +115,7 @@ def _accumulation_screen_table(candidates: list[DailyAccumulationCandidate]):
     table.add_column("Risk")
     table.add_column("Action")
     for candidate in candidates:
-        flow_text = f"{candidate.flow_score:.1f}"
+        flow_text = f"{candidate.accum_score:.1f}"
         phase_text = candidate.setup_phase or "-"
         signal_text = str(candidate.signal_score) if candidate.signal_score is not None else "-"
         coverage_text = (

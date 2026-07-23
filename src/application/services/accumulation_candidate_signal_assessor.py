@@ -22,9 +22,9 @@ from src.application.services.evidence_source_availability_assembler import (
 from src.application.services.signal_context_builder import (
     build_signal_context_from_candidate,
 )
-from src.application.use_case.score_foreign_flow_use_case import (
-    ScoreForeignFlowRequest,
-    ScoreForeignFlowUseCase,
+from src.application.use_case.score_accum_use_case import (
+    ScoreAccumRequest,
+    ScoreAccumUseCase,
 )
 from src.domain.value_objects.canonical_signal_evidence_input import (
     CanonicalSignalEvidenceInput,
@@ -93,13 +93,13 @@ class AccumulationCandidateSignalAssessor:
         signal_engine: SignalEngine,
         flow_confirmation_builder: FlowConfirmationEvidenceBuilder,
         candidate_evidence_builder: AccumulationCandidateEvidenceBuilder,
-        foreign_flow_score_uc: ScoreForeignFlowUseCase | None = None,
+        accum_score_uc: ScoreAccumUseCase | None = None,
     ) -> None:
         self._signal_engine = signal_engine
         self._flow_confirmation_builder = flow_confirmation_builder
         self._candidate_evidence_builder = candidate_evidence_builder
-        self._foreign_flow_score_uc = (
-            foreign_flow_score_uc or ScoreForeignFlowUseCase()
+        self._accum_score_uc = (
+            accum_score_uc or ScoreAccumUseCase()
         )
 
     def score_canonical_flow(
@@ -120,8 +120,8 @@ class AccumulationCandidateSignalAssessor:
         DecisionPolicy uses that regime; otherwise it defaults to RISK_ON.
         """
         # Phase 2.1: foreign-flow score assignment
-        evidence_resp = self._foreign_flow_score_uc.execute(
-            ScoreForeignFlowRequest(
+        evidence_resp = self._accum_score_uc.execute(
+            ScoreAccumRequest(
                 ticker=candidate.ticker,
                 snapshot_date=as_of_date,
                 net_buy_ratio=candidate.net_buy_ratio,
@@ -134,8 +134,8 @@ class AccumulationCandidateSignalAssessor:
                 bci_tier1_count=candidate.bci_tier1_count,
             )
         )
-        candidate.foreign_flow_score_breakdown = evidence_resp.evidence
-        candidate.foreign_flow_score = evidence_resp.evidence.foreign_flow_score
+        candidate.accum_score_breakdown = evidence_resp.evidence
+        candidate.accum_score = evidence_resp.evidence.accum_score
         candidate.foreign_flow_evidence = ForeignFlowEvidence.from_score_breakdown(
             evidence_resp.evidence,
             net_buy_days=candidate.net_buy_days,
@@ -261,8 +261,8 @@ class AccumulationCandidateSignalAssessor:
 
         # Classification: first-match-wins (preserved order)
         if (
-            request.min_foreign_flow_score_enabled
-            and candidate.foreign_flow_score < request.min_foreign_flow_score
+            request.min_accum_score_enabled
+            and candidate.accum_score < request.min_accum_score
         ):
             return CandidateSignalAssessmentResult(
                 candidate, flow_ev, "rejected_flow", False

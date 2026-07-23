@@ -4,6 +4,9 @@ SQLiteWatchlistRepository — persist and retrieve named screener snapshots.
 Schema: screen_snapshots table, one row per ticker per snapshot run.
 Multiple snapshots with the same name form a time-series (latest = most recent saved_at).
 
+Legacy columns flow_score / composite_score are read via COALESCE when present;
+new rows write only accum_score / signal_score.
+
 Layer: Infrastructure
 """
 
@@ -33,6 +36,10 @@ class SQLiteWatchlistRepository:
         conn.row_factory = sqlite3.Row
         return conn
 
+    def _table_columns(self, conn: sqlite3.Connection) -> set[str]:
+        rows = conn.execute("PRAGMA table_info(screen_snapshots)").fetchall()
+        return {str(row[1]) for row in rows}
+
     def _ensure_schema(self) -> None:
         with self._get_conn() as conn:
             conn.execute("""
@@ -44,13 +51,20 @@ class SQLiteWatchlistRepository:
                     window_days       INTEGER NOT NULL DEFAULT 7,
                     ticker            TEXT    NOT NULL,
                     rank              INTEGER NOT NULL,
-                    flow_score        REAL    NOT NULL,
-                    composite_score   REAL,
+                    accum_score       REAL,
+                    signal_score      REAL,
                     consecutive_streak INTEGER NOT NULL DEFAULT 0,
                     net_buy_ratio     REAL    NOT NULL DEFAULT 0,
                     bci_label         TEXT
                 )
             """)
+            columns = self._table_columns(conn)
+            # Migrate legacy tables (flow_score/composite_score only) by adding
+            # the ADR-043 columns. Do not create legacy columns on new DBs.
+            if "accum_score" not in columns:
+                conn.execute("ALTER TABLE screen_snapshots ADD COLUMN accum_score REAL")
+            if "signal_score" not in columns:
+                conn.execute("ALTER TABLE screen_snapshots ADD COLUMN signal_score REAL")
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_snapshots_name_saved
                 ON screen_snapshots(name, saved_at DESC)
@@ -67,7 +81,7 @@ class SQLiteWatchlistRepository:
                 """
                 INSERT INTO screen_snapshots
                     (name, saved_at, universe, window_days, ticker, rank,
-                     flow_score, composite_score, consecutive_streak, net_buy_ratio, bci_label)
+                     accum_score, signal_score, consecutive_streak, net_buy_ratio, bci_label)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
@@ -78,8 +92,8 @@ class SQLiteWatchlistRepository:
                         e.window_days,
                         e.ticker,
                         e.rank,
-                        e.flow_score,
-                        e.composite_score,
+                        e.accum_score,
+                        e.signal_score,
                         e.consecutive_streak,
                         e.net_buy_ratio,
                         e.bci_label,
@@ -147,7 +161,22 @@ class SQLiteWatchlistRepository:
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _coalesce_row(row: sqlite3.Row, new_key: str, old_key: str) -> float | None:
+        keys = row.keys()
+        if new_key in keys and row[new_key] is not None:
+            return row[new_key]
+        if old_key in keys:
+            return row[old_key]
+        return None
+
     def _row_to_entry(self, row: sqlite3.Row) -> ScreenSnapshotEntry:
+        accum = self._coalesce_row(row, "accum_score", "flow_score")
+        signal = self._coalesce_row(row, "signal_score", "composite_score")
+        if accum is None:
+            raise ValueError(
+                f"screen_snapshots row for {row['ticker']!r} missing accum_score/flow_score"
+            )
         return ScreenSnapshotEntry(
             name=row["name"],
             saved_at=datetime.fromisoformat(row["saved_at"]),
@@ -155,8 +184,8 @@ class SQLiteWatchlistRepository:
             window_days=row["window_days"],
             ticker=row["ticker"],
             rank=row["rank"],
-            flow_score=row["flow_score"],
-            composite_score=row["composite_score"],
+            accum_score=float(accum),
+            signal_score=float(signal) if signal is not None else None,
             consecutive_streak=row["consecutive_streak"],
             net_buy_ratio=row["net_buy_ratio"],
             bci_label=row["bci_label"],

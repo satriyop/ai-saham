@@ -177,7 +177,7 @@ def test_risk_on_no_conditioning_fires():
 
 
 def test_neutral_weak_flow_is_discounted():
-    """NEUTRAL + flow_score < 50 → flow multiplied by 0.80."""
+    """NEUTRAL + flow_group_score < 50 → flow multiplied by 0.80."""
     r = UC.execute(
         _req(
             flow_confirmation_evidence=_flow(0.40),  # score = 40.0 < 50
@@ -193,7 +193,7 @@ def test_neutral_weak_flow_is_discounted():
 
 
 def test_neutral_strong_flow_unchanged():
-    """NEUTRAL + flow_score >= 50 → no conditioning fires."""
+    """NEUTRAL + flow_group_score >= 50 → no conditioning fires."""
     r = UC.execute(
         _req(
             flow_confirmation_evidence=_flow(0.60),  # score = 60.0 >= 50
@@ -224,7 +224,7 @@ def test_neutral_only_discounts_flow_not_setup():
 
 
 def test_risk_off_weak_setup_is_discounted():
-    """RISK_OFF + setup_score < 60 → setup multiplied by 0.50."""
+    """RISK_OFF + setup_group_score < 60 → setup multiplied by 0.50."""
     r = UC.execute(
         _req(
             setup_evidence=_setup("NO_MATCH"),  # score=20.0 < 60
@@ -240,7 +240,7 @@ def test_risk_off_weak_setup_is_discounted():
 
 
 def test_risk_off_strong_setup_unchanged():
-    """RISK_OFF + setup_score >= 60 (MATCH quality) → no conditioning fires."""
+    """RISK_OFF + setup_group_score >= 60 (MATCH quality) → no conditioning fires."""
     r = UC.execute(
         _req(
             setup_evidence=_setup("MATCH"),  # score = 100 >= 60
@@ -253,7 +253,7 @@ def test_risk_off_strong_setup_unchanged():
 
 
 def test_risk_off_partial_setup_unchanged():
-    """RISK_OFF + setup_score == 60 (PARTIAL boundary) → NOT discounted (< 60 required)."""
+    """RISK_OFF + setup_group_score == 60 (PARTIAL boundary) → NOT discounted (< 60 required)."""
     r = UC.execute(
         _req(
             setup_evidence=_setup("PARTIAL"),  # score = 60.0 — boundary, NOT < 60

@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from src.domain.value_objects.foreign_flow_evidence import ForeignFlowEvidence
-from src.domain.value_objects.foreign_flow_score_breakdown import ForeignFlowScoreBreakdown
+from src.domain.value_objects.accum_score_breakdown import AccumScoreBreakdown
 
 if TYPE_CHECKING:
     from src.application.dto.assess_signal import AssessSignalResponse
@@ -45,8 +45,8 @@ class AccumulationScreenRequest:
     tickers: list[str]
     window_days: int = 7  # latest broker sessions: 7, 30, or 90
     min_net_buy_days: int = 2  # skip tickers with fewer qualifying days
-    min_foreign_flow_score: float = 0.0  # filter: only include composite foreign-flow score >= this
-    min_foreign_flow_score_enabled: bool = True
+    min_accum_score: float = 0.0  # filter: only include accum_score >= this
+    min_accum_score_enabled: bool = True
     min_signal_score: float = 0.0  # optional SignalEngine score filter
     min_signal_score_enabled: bool = False
     rsi_period: int | None = None
@@ -85,8 +85,8 @@ class AccumulationScreenRequest:
         tickers: list[str],
         window_days: int = 7,
         min_net_buy_days: int = 2,
-        min_foreign_flow_score: float = 0.0,
-        min_foreign_flow_score_enabled: bool = True,
+        min_accum_score: float = 0.0,
+        min_accum_score_enabled: bool = True,
         min_signal_score: float = 0.0,
         min_signal_score_enabled: bool = False,
         rsi_period: int | None = None,
@@ -114,8 +114,8 @@ class AccumulationScreenRequest:
         self.tickers = tickers
         self.window_days = window_days
         self.min_net_buy_days = min_net_buy_days
-        self.min_foreign_flow_score = min_foreign_flow_score
-        self.min_foreign_flow_score_enabled = min_foreign_flow_score_enabled
+        self.min_accum_score = min_accum_score
+        self.min_accum_score_enabled = min_accum_score_enabled
         self.min_signal_score = min_signal_score
         self.min_signal_score_enabled = min_signal_score_enabled
         self.rsi_period = rsi_period
@@ -170,12 +170,12 @@ class AccumulationCandidate:
     # positive = foreigners are underwater
     rsi: float | None
     trend: str  # "UP" | "DOWN" | "SIDE"
-    foreign_flow_score: float  # 0-100 composite foreign-flow score
+    accum_score: float  # 0-100 accumulation evidence score (ADR-043)
     top_brokers: list[str] | None  # per-broker codes (Stockbit only)
     institutional_flag: bool  # True if major institutional broker present
     # Improvement #1: flow ratio signal
     avg_flow_ratio: float | None = None  # avg % of daily turnover that's foreign
-    foreign_flow_score_breakdown: ForeignFlowScoreBreakdown | None = None
+    accum_score_breakdown: AccumScoreBreakdown | None = None
     foreign_flow_evidence: ForeignFlowEvidence | None = None
     # Improvement #3: BB squeeze
     bb_width: float | None = None  # current BB Width %
@@ -265,7 +265,7 @@ class AccumulationCandidate:
             else None,
             "rsi": round(self.rsi, 2) if self.rsi is not None else None,
             "trend": self.trend,
-            "foreign_flow_score": self.foreign_flow_score,
+            "accum_score": self.accum_score,
             "top_brokers": self.top_brokers,
             "institutional_flag": self.institutional_flag,
             "bci_label": self.bci_label,
@@ -284,9 +284,9 @@ class AccumulationCandidate:
             "avg_flow_ratio": round(self.avg_flow_ratio, 2)
             if self.avg_flow_ratio is not None
             else None,
-            "foreign_flow_score_breakdown": (
-                self.foreign_flow_score_breakdown.to_dict()
-                if self.foreign_flow_score_breakdown is not None
+            "accum_score_breakdown": (
+                self.accum_score_breakdown.to_dict()
+                if self.accum_score_breakdown is not None
                 else None
             ),
             "foreign_flow_evidence": (

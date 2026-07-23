@@ -72,7 +72,7 @@ class DailyOpeningView:
     iev: int | None
     iep: int | None
     trend: str | None
-    foreign_flow_score: float | None
+    accum_score: float | None
 
 
 @dataclass(frozen=True)
@@ -89,7 +89,7 @@ class DailyAccumulationSummaryView:
 @dataclass(frozen=True)
 class DailyAccumulationCandidateView:
     ticker: str
-    flow_score: float
+    accum_score: float
     setup_phase: str | None
     signal_score: int | None
     signal_authority_coverage: float | None
@@ -207,7 +207,7 @@ class DailyPresenter:
                 else tuple(
                     DailyAccumulationCandidateView(
                         ticker=candidate.ticker,
-                        flow_score=candidate.flow_score,
+                        accum_score=candidate.accum_score,
                         setup_phase=candidate.setup_phase,
                         signal_score=candidate.signal_score,
                         signal_authority_coverage=(candidate.signal_authority_coverage),
@@ -234,7 +234,7 @@ class DailyPresenter:
             iev=candidate.iev,
             iep=candidate.iep,
             trend=candidate.trend,
-            foreign_flow_score=candidate.foreign_flow_score,
+            accum_score=candidate.accum_score,
         )
 
     @staticmethod

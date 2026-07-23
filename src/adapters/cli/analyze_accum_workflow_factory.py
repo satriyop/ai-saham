@@ -61,7 +61,7 @@ def create_run_accumulation_audit_workflow(
         indicator_registry=indicator_registry,
         rules_loader=rules_loader,
         signal_engine=signal_engine,
-        foreign_flow_score_policy=cfg_screen.foreign_flow_score_policy,
+        accum_score_policy=cfg_screen.accum_score_policy,
         derived_feature_policy=cfg_screen.derived_features,
         stockbit_providers=None,
         risk_use_case=None,
@@ -75,7 +75,7 @@ def create_run_accumulation_audit_workflow(
         signal_engine=signal_engine,
         derived_feature_policy=cfg_screen.derived_features,
         screen_use_case=screen_use_case,
-        foreign_flow_score_policy=cfg_screen.foreign_flow_score_policy,
+        accum_score_policy=cfg_screen.accum_score_policy,
     )
 
     def _resolve_tickers(*, universe: str | None, explicit: list[str]) -> list[str]:

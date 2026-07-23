@@ -42,7 +42,7 @@ def _result(response=None, **overrides) -> RunAccumulationAuditWorkflowResult:
         start_date=response.start_date,
         end_date=response.end_date,
         window=response.window_days,
-        min_foreign_flow_score=40.0,
+        min_accum_score=40.0,
         filter_label="",
         resolved_tickers=("BBCA",),
     )
@@ -95,7 +95,7 @@ def test_request_dto_contains_raw_cli_intent_not_resolved_setup_values(monkeypat
     assert sent.setup == "foreign-bounce"
     assert sent.tickers == ["BBCA"]
     assert sent.window is None
-    assert sent.min_foreign_flow_score is None
+    assert sent.min_accum_score is None
 
 
 def test_json_mode_prints_result_to_json_dict(monkeypatch):

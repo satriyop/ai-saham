@@ -60,7 +60,7 @@ def accumulation_audit(
         Optional[int],
         typer.Option("--window", "-w", help="Accumulation window in broker sessions", min=3),
     ] = None,
-    min_foreign_flow_score: Annotated[
+    min_accum_score: Annotated[
         Optional[float],
         typer.Option(
             "--min-foreign-flow-score",
@@ -165,7 +165,7 @@ def accumulation_audit(
         start=start,
         end=end,
         window=window,
-        min_foreign_flow_score=min_foreign_flow_score,
+        min_accum_score=min_accum_score,
         min_net_buy_days=min_net_buy_days,
         min_vwap_disc=min_vwap_disc,
         trend=trend,
@@ -198,7 +198,7 @@ def accumulation_audit(
             f"Auditing {result.ticker_count} tickers | "
             f"{result.start_date} to {result.end_date} | "
             f"{result.window} sessions | min foreign-flow score "
-            f"{result.min_foreign_flow_score:g}{result.filter_label}..."
+            f"{result.min_accum_score:g}{result.filter_label}..."
         )
 
     if output_path is not None:

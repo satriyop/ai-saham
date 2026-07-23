@@ -16,7 +16,7 @@ from src.application.use_case.accumulation_screen_use_case import AccumulationSc
 from src.application.use_case.record_accumulation_observations_use_case import (
     RecordAccumulationObservationsUseCase,
 )
-from src.application.use_case.score_foreign_flow_use_case import ForeignFlowScorePolicy
+from src.application.use_case.score_accum_use_case import AccumScorePolicy
 from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from tests.application.use_case.accumulation_screen_fixtures import (
     FakeRulesLoader,
@@ -55,7 +55,7 @@ def test_create_accumulation_screen_use_case_wires_stockbit_providers():
         stockbit_providers=providers,
         risk_use_case=risk_use_case,
         signal_engine=signal_engine,
-        foreign_flow_score_policy=ForeignFlowScorePolicy(),
+        accum_score_policy=AccumScorePolicy(),
     )
 
     assert use_case._broker_repo is broker_repo

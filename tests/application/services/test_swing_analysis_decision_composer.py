@@ -203,7 +203,7 @@ class _RecordingSignalEngine:
         self.calls: list[dict] = []
         self._response_score = response_score
 
-    def foreign_flow_quality_from_foreign_flow_score(self, score):
+    def foreign_flow_quality_from_accum_score(self, score):
         return None
 
     def bandar_max_range(self, num_optional):
@@ -235,7 +235,7 @@ def _state(
         analyst_consensus=None,
         forward_estimates=None,
         current_price=None,
-        foreign_flow_score=0.0,
+        accum_score=0.0,
         insider_net_buy_ratio=None,
     )
     state = SwingAnalysisWorkflowState()
@@ -552,7 +552,7 @@ def test_recompose_after_evidence_forwards_market_context_to_signal_engine():
 
 def test_recompose_after_evidence_failure_clears_pre_existing_trade_setup():
     class FailingSignalEngine:
-        def foreign_flow_quality_from_foreign_flow_score(self, score):
+        def foreign_flow_quality_from_accum_score(self, score):
             return None
         def bandar_max_range(self, n):
             return 0

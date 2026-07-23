@@ -118,16 +118,16 @@ def signal_label(candidate: Any, config: SwingDisplayConfig) -> str:
     if (
         candidate.bb_width_pctile is not None
         and candidate.bb_width_pctile <= config.coiled_spring_bb_pctile
-        and candidate.foreign_flow_score >= config.coiled_spring_min_score
+        and candidate.accum_score >= config.coiled_spring_min_score
     ):
         return "coiled spring"
-    if candidate.foreign_flow_score >= config.strong_min_score and candidate.consecutive_streak >= config.strong_min_streak:
+    if candidate.accum_score >= config.strong_min_score and candidate.consecutive_streak >= config.strong_min_streak:
         return "strong"
-    if candidate.foreign_flow_score >= config.building_min_score and candidate.consecutive_streak >= config.building_min_streak:
+    if candidate.accum_score >= config.building_min_score and candidate.consecutive_streak >= config.building_min_streak:
         return "building"
-    if candidate.foreign_flow_score >= config.enter_min_score:
+    if candidate.accum_score >= config.enter_min_score:
         return "high score"
-    if candidate.foreign_flow_score >= config.watch_min_score:
+    if candidate.accum_score >= config.watch_min_score:
         return "moderate"
     return "weak"
 
@@ -137,9 +137,9 @@ def foreign_flow_evidence_label(candidate: Any, config: SwingDisplayConfig) -> s
     status = getattr(foreign_flow_evidence, "confirmation_status", None)
     if status:
         return str(status).lower().replace("_", "-")
-    if candidate.foreign_flow_score >= config.enter_min_score:
+    if candidate.accum_score >= config.enter_min_score:
         return "enter-zone"
-    if candidate.foreign_flow_score >= config.watch_min_score:
+    if candidate.accum_score >= config.watch_min_score:
         return "watch-zone"
     return "weak"
 
@@ -199,7 +199,7 @@ def swing_summary_parts(
 ) -> list[str]:
     parts = []
     if accum:
-        parts.append(f"Foreign Flow Score {accum.foreign_flow_score:.1f}")
+        parts.append(f"Foreign Flow Score {accum.accum_score:.1f}")
     if risk_resp and risk_resp.assessment.gate_triggered:
         parts.append(f"gate: BLOCKED ({risk_resp.assessment.gate_triggered})")
     if backtest_result and backtest_result.trade_count > 0:
