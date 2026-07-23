@@ -283,13 +283,16 @@ Primary DB: `data/db/data.db` (approx counts as of 2026-07-22 inventory).
 
 ### Gaps that block “prove everything”
 
-1. **No persisted RiskAssessment time-series** (only partial gate fields in TradeSetup payload).
+1. **RiskAssessment child table exists** (`observation_risk_assessments`) but historical
+   schema-8 rows may still rely on lean `candidate.risk_*` until re-backfill.
 2. **Single workflow cohort** (`screen_accum`); named swing-setup captures parked.
 3. **Only SWING_10D labels** generated (TACTICAL_3D / ACCUM_20D defined but empty).
 4. **No screen-rejected control population** (`contains_control_population=false`).
 5. **Raw-market labels only** (no net-executable IDX costs/limits/fills).
-6. **Short date span** for canonical panel (~2026-06-02 → 2026-07-03) — thin for walk-forward.
+6. **Short date span** for canonical panel — thin for walk-forward.
 7. Bandar / BCI / VWAP proving often needs **recompute from broker_daily_flow** when fingerprint lacks the exact gate input.
+8. **C2 missingness / per-gate outcomes** not yet on the risk child (short-circuit first gate only).
+9. **C3 regime overlay** not applied on accumulation risk capture path.
 
 ---
 
@@ -369,9 +372,9 @@ Organize work as **proving packages**, not as one mega-model.
 
 | ID | Factor family | Prove what | Labels | Gap |
 |----|---------------|------------|--------|-----|
-| C1 | Fundamental / liquidity / free-float / bandar gates | Do blocked names underperform would-be entries? | Need counterfactual captures | **Persist gate evaluations** |
-| C2 | Fail-open vs fail-closed | Cost of skip-on-missing | Need missingness flags in panel | Capture GateContext completeness |
-| C3 | Regime risk overlay | Does regime block save capital in RISK_OFF? | regime + labels | Ensure MCE passed into risk path |
+| C1 | Fundamental / liquidity / free-float / bandar gates | Do blocked names underperform would-be entries? | SWING_10D + lean `candidate.risk_*` / risk child | Card: `factor_card_risk_gates.py` (payload lean works; child preferred) |
+| C2 | Fail-open vs fail-closed | Cost of skip-on-missing | Need missingness flags in panel | Capture GateContext completeness + per-gate outcomes |
+| C3 | Regime risk overlay | Does regime block save capital in RISK_OFF? | regime + labels | C3-lite in card via `regime_observations`; full `regime:*` overlay not on accumulation path |
 
 **ML tools:** survival / drawdown analysis, policy value estimation; less “predict SUCCESS,” more “avoid disasters.”
 
@@ -416,8 +419,8 @@ Given current DB + income use-case:
 1. **A1–A2** (flow components + BCI direction) — highest scoring honesty, data mostly ready  
 2. **D1–D3** (MCE calibration on regime_observations) — small N but clean daily panel  
 3. **B2 / B6** (setup gates + regime policy), with VWAP as regime-stratified study — not blind 3→10  
-4. **C1–C2** after persisting risk gate outcomes  
-5. **E\*** only as challengers  
+4. **C1** via `factor_card_risk_gates.py` (lean payload now; child preferred); **C2/C3 full** after GateContext + regime-overlay capture
+5. **E\*** only as challengers
 6. Expand canonical observation date range + multi-horizon labels before trusting any weight optimization
 
 ---

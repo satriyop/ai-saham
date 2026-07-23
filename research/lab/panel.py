@@ -72,6 +72,12 @@ class PanelRow:
     signal_authority_coverage: float | None = None
     gate_tightening: bool | None = None
     decision_regime: str | None = None
+    # RiskEngine inputs (Package C) — lean payload always; child table preferred
+    risk_status: str | None = None
+    risk_gate: str | None = None
+    risk_confidence: int | None = None
+    gate_is_structural: bool | None = None
+    risk_source: str | None = None  # "child_table" | "payload" | None
 
 
 def resolve_db_path(db_path: Path | None = None) -> Path:
@@ -119,6 +125,81 @@ def _decision_fields(payload_json: str) -> dict[str, Any]:
     }
 
 
+def _risk_fields_from_payload(payload_json: str) -> dict[str, Any]:
+    """Lean risk summary from parent observation payload (always available on v8)."""
+    cand = _candidate_fields(payload_json)
+    trade_setup = json.loads(payload_json).get("trade_setup") or {}
+    if not isinstance(trade_setup, dict):
+        trade_setup = {}
+    gate = cand.get("risk_gate")
+    if gate is None:
+        gate = trade_setup.get("gate_triggered")
+    status = cand.get("risk_status")
+    if status is None and trade_setup.get("action"):
+        action = str(trade_setup.get("action")).upper()
+        if action.startswith("BLOCKED"):
+            status = "BLOCKED"
+        elif action in {"ENTER", "WATCH", "AVOID"}:
+            status = "OPEN"
+    structural: bool | None = None
+    action = _as_upper(trade_setup.get("action"))
+    if action == "BLOCKED_STRUCTURAL":
+        structural = True
+    elif action == "BLOCKED_EXECUTION":
+        structural = False
+    return {
+        "risk_status": _as_upper(status),
+        "risk_gate": str(gate).strip() if gate else None,
+        "risk_confidence": _as_int(cand.get("risk_confidence")),
+        "gate_is_structural": structural,
+        "risk_source": "payload" if status is not None or gate is not None else None,
+    }
+
+
+def _risk_fields_from_child(
+    risk_assessment_json: str | None,
+    gate_triggered: str | None,
+    setup_action: str | None,
+) -> dict[str, Any] | None:
+    """Prefer authoritative child-table RiskAssessment when present."""
+    if not risk_assessment_json:
+        return None
+    try:
+        data = json.loads(risk_assessment_json)
+    except (TypeError, json.JSONDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    gate = data.get("gate_triggered")
+    if gate is None:
+        gate = gate_triggered
+    status = "BLOCKED" if gate else "OPEN"
+    structural = data.get("gate_is_structural")
+    if structural is None and setup_action:
+        action = str(setup_action).upper()
+        if action == "BLOCKED_STRUCTURAL":
+            structural = True
+        elif action == "BLOCKED_EXECUTION":
+            structural = False
+    return {
+        "risk_status": status,
+        "risk_gate": str(gate).strip() if gate else None,
+        "risk_confidence": _as_int(data.get("gate_confidence", data.get("confidence"))),
+        "gate_is_structural": _as_bool(structural) if structural is not None else None,
+        "risk_source": "child_table",
+    }
+
+
+def _observation_risk_table_exists(conn: sqlite3.Connection) -> bool:
+    row = conn.execute(
+        """
+        SELECT 1 FROM sqlite_master
+        WHERE type = 'table' AND name = 'observation_risk_assessments'
+        """
+    ).fetchone()
+    return row is not None
+
+
 def resolve_default_regime_cohort_id(
     *,
     universe_name: str = "lq45",
@@ -135,6 +216,88 @@ def resolve_default_regime_cohort_id(
     return identity.cohort_id
 
 
+def _regime_has_cohort_column(conn: sqlite3.Connection) -> bool:
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='regime_observations'"
+    ).fetchone()
+    if row is None:
+        return False
+    return "semantic_compatibility_id" in (row[0] or "")
+
+
+def _fetch_swing10d_rows(
+    conn: sqlite3.Connection,
+    *,
+    cohort_id: str,
+    has_risk_child: bool,
+    regime_has_cohort: bool,
+) -> list[sqlite3.Row]:
+    risk_select = (
+        """
+                  ora.risk_assessment_json AS risk_assessment_json,
+                  ora.gate_triggered AS child_gate_triggered,
+                  ora.setup_action AS child_setup_action
+        """
+        if has_risk_child
+        else """
+                  NULL AS risk_assessment_json,
+                  NULL AS child_gate_triggered,
+                  NULL AS child_setup_action
+        """
+    )
+    risk_join = (
+        """
+                LEFT JOIN observation_risk_assessments ora
+                  ON c.ticker = ora.ticker
+                 AND date(c.snapshot_date) = date(ora.snapshot_date)
+                 AND c.workflow = ora.workflow
+                 AND c.window_sessions = ora.window_sessions
+                 AND date(c.data_as_of_date) = date(ora.data_as_of_date)
+                 AND c.config_hash = ora.config_hash
+        """
+        if has_risk_child
+        else ""
+    )
+    if regime_has_cohort:
+        regime_join = """
+                LEFT JOIN regime_observations r
+                  ON date(c.snapshot_date) = date(r.observation_date)
+                 AND r.semantic_compatibility_id = ?
+        """
+        params: tuple[object, ...] = (cohort_id, CANDIDATE_OBSERVATION_SCHEMA_VERSION)
+    else:
+        # Pre-cohort DB: date-only join (one regime row per day).
+        regime_join = """
+                LEFT JOIN regime_observations r
+                  ON date(c.snapshot_date) = date(r.observation_date)
+        """
+        params = (CANDIDATE_OBSERVATION_SCHEMA_VERSION,)
+
+    sql = f"""
+            SELECT
+              c.ticker,
+              c.snapshot_date,
+              c.payload_json,
+              l.outcome_label,
+              l.close_return,
+              l.max_forward_return,
+              l.max_adverse_excursion,
+              r.regime,
+              {risk_select}
+            FROM candidate_observations c
+            JOIN signal_forward_labels l
+              ON c.ticker = l.ticker
+             AND date(c.snapshot_date) = date(l.signal_date)
+             AND c.captured_at = l.observation_captured_at
+            {regime_join}
+            {risk_join}
+            WHERE l.horizon = 'SWING_10D'
+              AND c.schema_version = ?
+            ORDER BY c.snapshot_date, c.ticker
+            """
+    return conn.execute(sql, params).fetchall()
+
+
 def load_swing10d_panel(
     db_path: Path | None = None,
     *,
@@ -142,10 +305,11 @@ def load_swing10d_panel(
 ) -> list[PanelRow]:
     """Load canonical screen_accum panel joined to SWING_10D labels + regime.
 
-    Regime rows are joined on ``semantic_compatibility_id``. By default the current
-    MCE cohort is resolved from ``market_context_engine.yaml`` with universe
-    ``lq45`` and benchmark ``IHSG``. Pass ``regime_cohort_id=""`` to join legacy
-    rows that were persisted before cohort tagging.
+    Regime rows are joined on ``semantic_compatibility_id`` when that column
+    exists. By default the current MCE cohort is resolved from
+    ``market_context_engine.yaml`` with universe ``lq45`` and benchmark
+    ``IHSG``. Pass ``regime_cohort_id=""`` to join legacy tagged rows.
+    Pre-cohort databases fall back to a date-only regime join.
     """
     path = resolve_db_path(db_path)
     if not path.exists():
@@ -160,31 +324,12 @@ def load_swing10d_panel(
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
     try:
-        rows = conn.execute(
-            """
-            SELECT
-              c.ticker,
-              c.snapshot_date,
-              c.payload_json,
-              l.outcome_label,
-              l.close_return,
-              l.max_forward_return,
-              l.max_adverse_excursion,
-              r.regime
-            FROM candidate_observations c
-            JOIN signal_forward_labels l
-              ON c.ticker = l.ticker
-             AND date(c.snapshot_date) = date(l.signal_date)
-             AND c.captured_at = l.observation_captured_at
-            LEFT JOIN regime_observations r
-              ON date(c.snapshot_date) = date(r.observation_date)
-             AND r.semantic_compatibility_id = ?
-            WHERE l.horizon = 'SWING_10D'
-              AND c.schema_version = ?
-            ORDER BY c.snapshot_date, c.ticker
-            """,
-            (cohort_id, CANDIDATE_OBSERVATION_SCHEMA_VERSION),
-        ).fetchall()
+        rows = _fetch_swing10d_rows(
+            conn,
+            cohort_id=cohort_id,
+            has_risk_child=_observation_risk_table_exists(conn),
+            regime_has_cohort=_regime_has_cohort_column(conn),
+        )
     finally:
         conn.close()
 
@@ -193,6 +338,11 @@ def load_swing10d_panel(
         cand = _candidate_fields(row["payload_json"])
         decision = _decision_fields(row["payload_json"])
         named = _named_setup_evaluations(row["payload_json"])
+        risk = _risk_fields_from_child(
+            row["risk_assessment_json"],
+            row["child_gate_triggered"],
+            row["child_setup_action"],
+        ) or _risk_fields_from_payload(row["payload_json"])
         breakdown = cand.get("foreign_flow_score_breakdown") or {}
         points = _component_points(breakdown)
         total = _as_float(cand.get("foreign_flow_score"))
@@ -242,6 +392,11 @@ def load_swing10d_panel(
                 ),
                 gate_tightening=_as_bool(decision.get("gate_tightening")),
                 decision_regime=_as_upper(decision.get("decision_regime")),
+                risk_status=risk.get("risk_status"),
+                risk_gate=risk.get("risk_gate"),
+                risk_confidence=risk.get("risk_confidence"),
+                gate_is_structural=risk.get("gate_is_structural"),
+                risk_source=risk.get("risk_source"),
             )
         )
     return panel
