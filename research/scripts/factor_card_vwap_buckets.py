@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""Factor card: foreign VWAP discount buckets vs SWING_10D outcomes.
+"""Factor card: foreign VWAP discount × market regime (Package A / B follow-up).
 
-Package A (Accum feeder) — research only, authority NONE.
+Research only — authority NONE.
+
+Answers whether deep foreign VWAP edge is regime-conditional (esp. RISK_OFF /
+soft markets) vs a global foreign-bounce gate hike.
 
 Usage (from repo root):
   .venv/bin/python research/scripts/factor_card_vwap_buckets.py
-  .venv/bin/python research/scripts/factor_card_vwap_buckets.py --db data/db/data.db
+  .venv/bin/python research/scripts/factor_card_vwap_buckets.py --out research/artifacts/factor_card_vwap_regime_schema7.md
 """
 
 from __future__ import annotations
@@ -40,6 +43,14 @@ GATES: list[tuple[str, float]] = [
     (">= 10%", 10.0),
 ]
 
+REGIME_ORDER = ("RISK_ON", "NEUTRAL", "RISK_OFF", "VOLATILE", "UNKNOWN")
+
+
+def _norm_regime(regime: str | None) -> str:
+    if not regime:
+        return "UNKNOWN"
+    return str(regime).upper()
+
 
 def _in_bucket(vwap: float, low: float | None, high: float | None) -> bool:
     if low is not None and vwap < low:
@@ -58,13 +69,11 @@ def _stats(rows: list[PanelRow]) -> dict[str, float | int | None]:
     avg_ret = mean(returns) if returns else None
     wins = [x for x in returns if x is not None and x > 0]
     losses = [x for x in returns if x is not None and x < 0]
-    gross_win = sum(wins)
     gross_loss = abs(sum(losses))
-    pf = (gross_win / gross_loss) if gross_loss > 0 else None
+    pf = (sum(wins) / gross_loss) if gross_loss > 0 else None
     return {
         "n": n,
         "hit_pct": 100.0 * successes / n,
-        # close_return is already stored as percent points (e.g. 1.55 = +1.55%).
         "avg_ret": avg_ret,
         "pf": pf,
     }
@@ -73,14 +82,11 @@ def _stats(rows: list[PanelRow]) -> dict[str, float | int | None]:
 def _fmt(stats: dict[str, float | int | None]) -> str:
     n = stats["n"]
     if not n:
-        return "| 0 | — | — | — |"
-    hit = stats["hit_pct"]
-    avg = stats["avg_ret"]
-    pf = stats["pf"]
-    hit_s = f"{hit:.1f}" if hit is not None else "—"
-    avg_s = f"{avg:+.2f}" if avg is not None else "—"
-    pf_s = f"{pf:.2f}" if pf is not None else "—"
-    return f"| {n} | {hit_s} | {avg_s} | {pf_s} |"
+        return "0 | — | — | —"
+    hit = f"{stats['hit_pct']:.1f}" if stats["hit_pct"] is not None else "—"
+    avg = f"{stats['avg_ret']:+.2f}" if stats["avg_ret"] is not None else "—"
+    pf = f"{stats['pf']:.2f}" if stats["pf"] is not None else "—"
+    return f"{n} | {hit} | {avg} | {pf}"
 
 
 def build_report(panel: list[PanelRow], db_path: Path) -> str:
@@ -89,100 +95,203 @@ def build_report(panel: list[PanelRow], db_path: Path) -> str:
     dates = sorted({r.snapshot_date for r in panel})
     date_span = f"{dates[0]} → {dates[-1]}" if dates else "n/a"
 
+    by_regime: dict[str, list[PanelRow]] = defaultdict(list)
+    for r in with_vwap:
+        by_regime[_norm_regime(r.regime)].append(r)
+
     lines: list[str] = [
-        "# Factor Card — VWAP Discount Buckets",
+        "# Factor Card — VWAP Discount × Regime",
         "",
         "**Authority: NONE** — research card only; not a production config change.",
         "",
         f"- Generated: {date.today().isoformat()}",
         f"- Database: `{db_path}`",
-        f"- Panel: canonical `candidate_observations` ⋈ `signal_forward_labels` "
-        f"(horizon=`SWING_10D`)",
+        f"- Panel: canonical obs ⋈ SWING_10D labels",
         f"- Rows: {len(panel)} total; {len(with_vwap)} with `vwap_discount_pct`; "
         f"{missing} missing VWAP",
         f"- Snapshot span: {date_span}",
         "",
         "## Hypothesis",
         "",
-        "Deeper foreign VWAP discount (price below foreign VWAP) improves "
-        "SWING_10D hit rate / average close return versus shallow discounts.",
-        "Current foreign-bounce gate uses `min_vwap_discount_pct = 3.0`.",
+        "Deeper foreign VWAP discount improves SWING_10D outcomes **only in "
+        "some regimes** (esp. RISK_OFF / soft markets). A global foreign-bounce "
+        "VWAP hike (3→8/10) is the wrong promotion if RISK_ON deep-VWAP is weak.",
         "",
-        "## Bucket view",
+        "## Baseline by regime (all VWAP present)",
         "",
-        "| Bucket | n | Hit % (SUCCESS) | Avg close ret % | Profit factor |",
-        "|--------|---|-----------------|-----------------|---------------|",
+        "| Regime | n | Hit % | Avg close ret % | PF |",
+        "|--------|---|-------|-----------------|----|",
     ]
+    for regime in REGIME_ORDER:
+        rows = by_regime.get(regime, [])
+        if not rows:
+            continue
+        lines.append(f"| {regime} | {_fmt(_stats(rows))} |")
+    lines.append(f"| All with VWAP | {_fmt(_stats(with_vwap))} |")
+    lines.append("")
 
+    # Primary: gate × regime matrix
+    lines.extend(
+        [
+            "## Primary: VWAP gate × regime",
+            "",
+            "Each cell = rows with `vwap_discount_pct ≥ threshold` in that regime.",
+            "",
+        ]
+    )
+    for thr_label, thr in GATES:
+        lines.extend(
+            [
+                f"### {thr_label}",
+                "",
+                "| Regime | n | Hit % | Avg % | PF |",
+                "|--------|---|-------|-------|----|",
+            ]
+        )
+        for regime in REGIME_ORDER:
+            rows = [
+                r
+                for r in by_regime.get(regime, [])
+                if (r.vwap_discount_pct or 0.0) >= thr
+            ]
+            if not rows and regime not in by_regime:
+                continue
+            lines.append(f"| {regime} | {_fmt(_stats(rows))} |")
+        all_thr = [r for r in with_vwap if (r.vwap_discount_pct or 0.0) >= thr]
+        lines.append(f"| All | {_fmt(_stats(all_thr))} |")
+        lines.append("")
+
+    # Deep vs shallow within regime
+    lines.extend(
+        [
+            "## Deep vs shallow within regime",
+            "",
+            "Deep = VWAP ≥ 8%. Shallow = VWAP < 3% (includes over-VWAP).",
+            "",
+            "| Regime | Deep n | Deep hit% | Deep avg% | Shallow n | "
+            "Shallow hit% | Shallow avg% | Δ hit pp |",
+            "|--------|--------|-----------|-----------|-----------|"
+            "--------------|--------------|----------|",
+        ]
+    )
+    for regime in REGIME_ORDER:
+        rows = by_regime.get(regime, [])
+        if not rows:
+            continue
+        deep = [r for r in rows if (r.vwap_discount_pct or 0.0) >= 8.0]
+        shallow = [r for r in rows if (r.vwap_discount_pct or 0.0) < 3.0]
+        ds, ss = _stats(deep), _stats(shallow)
+        d_hit = ds["hit_pct"]
+        s_hit = ss["hit_pct"]
+        delta = None
+        if d_hit is not None and s_hit is not None:
+            delta = float(d_hit) - float(s_hit)
+        d_avg = (
+            f"{ds['avg_ret']:+.2f}" if ds["avg_ret"] is not None else "—"
+        )
+        s_avg = (
+            f"{ss['avg_ret']:+.2f}" if ss["avg_ret"] is not None else "—"
+        )
+        d_hit_s = f"{d_hit:.1f}" if d_hit is not None else "—"
+        s_hit_s = f"{s_hit:.1f}" if s_hit is not None else "—"
+        delta_s = f"{delta:+.1f}" if delta is not None else "—"
+        lines.append(
+            f"| {regime} | {ds['n']} | {d_hit_s} | {d_avg} | {ss['n']} | "
+            f"{s_hit_s} | {s_avg} | {delta_s} |"
+        )
+    lines.append("")
+
+    # Global buckets (context)
+    lines.extend(
+        [
+            "## Global bucket view (all regimes pooled)",
+            "",
+            "| Bucket | n | Hit % | Avg close ret % | PF |",
+            "|--------|---|-------|-----------------|----|",
+        ]
+    )
     for label, low, high in BUCKETS:
         subset = [
             r
             for r in with_vwap
             if _in_bucket(r.vwap_discount_pct or 0.0, low, high)
         ]
-        lines.append(f"| {label} {_fmt(_stats(subset))}")
+        lines.append(f"| {label} | {_fmt(_stats(subset))} |")
+    lines.append("")
 
-    lines.extend(
-        [
-            "",
-            "## Cumulative gate sweep",
-            "",
-            "| Gate | n | Hit % | Avg close ret % | Profit factor |",
-            "|------|---|-------|-----------------|---------------|",
-        ]
-    )
-    for label, thr in GATES:
-        subset = [r for r in with_vwap if (r.vwap_discount_pct or 0.0) >= thr]
-        lines.append(f"| {label} {_fmt(_stats(subset))}")
-
-    # Regime-stratified for >=8% and >=10%
-    lines.extend(
-        [
-            "",
-            "## Regime-stratified (deep VWAP)",
-            "",
-            "Regime from `regime_observations` on snapshot date "
-            "(missing regime counted as `UNKNOWN`).",
-            "",
-        ]
-    )
-    for thr_label, thr in ((">= 8%", 8.0), (">= 10%", 10.0)):
-        lines.append(f"### VWAP {thr_label}")
-        lines.append("")
-        lines.append(
-            "| Regime | n | Hit % | Avg close ret % | Profit factor |"
+    # Buckets within NEUTRAL / RISK_OFF (main mass)
+    for regime in ("NEUTRAL", "RISK_OFF", "RISK_ON"):
+        rows = by_regime.get(regime, [])
+        if not rows:
+            continue
+        lines.extend(
+            [
+                f"## Bucket view — {regime} only",
+                "",
+                "| Bucket | n | Hit % | Avg % | PF |",
+                "|--------|---|-------|-------|----|",
+            ]
         )
-        lines.append("|--------|---|-------|-----------------|---------------|")
-        by_regime: dict[str, list[PanelRow]] = defaultdict(list)
-        for r in with_vwap:
-            if (r.vwap_discount_pct or 0.0) >= thr:
-                by_regime[r.regime or "UNKNOWN"].append(r)
-        for regime in sorted(by_regime):
-            lines.append(f"| {regime} {_fmt(_stats(by_regime[regime]))}")
+        for label, low, high in BUCKETS:
+            subset = [
+                r
+                for r in rows
+                if _in_bucket(r.vwap_discount_pct or 0.0, low, high)
+            ]
+            lines.append(f"| {label} | {_fmt(_stats(subset))} |")
         lines.append("")
 
-    baseline = _stats(panel)
+    # Optional high-coverage overlay for deep VWAP
+    high_cov = [
+        r
+        for r in with_vwap
+        if r.signal_authority_coverage is not None
+        and r.signal_authority_coverage >= 0.70
+    ]
     lines.extend(
         [
-            "## Baseline (all panel rows)",
+            "## Overlay: deep VWAP (≥8%) with cov≥0.70",
             "",
-            "| Cohort | n | Hit % | Avg close ret % | Profit factor |",
-            "|--------|---|-------|-----------------|---------------|",
-            f"| All SWING_10D {_fmt(baseline)}",
+            f"High-coverage rows with VWAP: {len(high_cov)} / {len(with_vwap)}.",
             "",
+            "| Regime | n | Hit % | Avg % | PF |",
+            "|--------|---|-------|-------|----|",
+        ]
+    )
+    for regime in REGIME_ORDER:
+        rows = [
+            r
+            for r in high_cov
+            if _norm_regime(r.regime) == regime
+            and (r.vwap_discount_pct or 0.0) >= 8.0
+        ]
+        if not rows and regime not in by_regime:
+            continue
+        lines.append(f"| {regime} | {_fmt(_stats(rows))} |")
+    lines.append(
+        f"| All high-cov ≥8% | {_fmt(_stats([r for r in high_cov if (r.vwap_discount_pct or 0.0) >= 8.0]))} |"
+    )
+    lines.append("")
+
+    lines.extend(
+        [
             "## Interpretation guardrails",
             "",
-            "- Canonical panel only; quarantine tables excluded.",
-            "- Labels are raw-market (`outcome_basis` contract), not net-executable.",
-            "- Short snapshot span → treat as hypothesis generation, not promotion proof.",
-            "- Prefer regime-conditional conclusions over a global gate hike.",
-            "- Next: Package A2 BCI×flow-sign card; Package D MCE factor card.",
+            "- Canonical panel only; quarantine excluded. Authority NONE.",
+            "- Synthetic soft filter ≠ foreign-bounce MATCH (B2 showed MATCH is weak).",
+            "- Short span → hypothesis generation, not promotion proof.",
+            "- Prefer regime-conditional use over a global 3→10 gate hike.",
+            "- RISK_ON deep-VWAP with negative avg return argues **against** "
+            "all-regime tightening.",
             "",
-            "## Proposed config action",
+            "## Proposed config / product action",
             "",
-            "**None automatic.** If deep VWAP looks better only in RISK_OFF, propose a "
-            "`decision_policy` / setup-regime conditional rule — do not silently edit "
-            "`config/swing_setups.yaml`.",
+            "**None automatic.** Candidate follow-ups (human review):",
+            "- If NEUTRAL/RISK_OFF deep VWAP stays strong and RISK_ON stays weak: "
+            "soft Disc% filter or regime-conditioned screen sort — not YAML MATCH hike",
+            "- Do not change `swing_setups.yaml` foreign-bounce `min_vwap_discount_pct` "
+            "from this card alone",
+            "- Next: soft VWAP UX on screen, or Package C risk-gate persistence",
             "",
         ]
     )
@@ -191,18 +300,8 @@ def build_report(panel: list[PanelRow], db_path: Path) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--db",
-        type=Path,
-        default=None,
-        help="Path to data.db (default: data/db/data.db)",
-    )
-    parser.add_argument(
-        "--out",
-        type=Path,
-        default=None,
-        help="Output markdown path (default: research/artifacts/factor_card_vwap_*.md)",
-    )
+    parser.add_argument("--db", type=Path, default=None)
+    parser.add_argument("--out", type=Path, default=None)
     args = parser.parse_args()
 
     db_path = resolve_db_path(args.db)
@@ -211,7 +310,12 @@ def main() -> int:
 
     out = args.out
     if out is None:
-        out = ROOT / "research" / "artifacts" / f"factor_card_vwap_{date.today().isoformat()}.md"
+        out = (
+            ROOT
+            / "research"
+            / "artifacts"
+            / f"factor_card_vwap_regime_{date.today().isoformat()}.md"
+        )
     else:
         out = out.expanduser()
         if not out.is_absolute():
