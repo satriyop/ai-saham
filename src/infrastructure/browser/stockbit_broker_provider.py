@@ -15,7 +15,6 @@ Depends on: StockbitApiClient, BrokerDataProvider port
 from __future__ import annotations
 
 import logging
-import time
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -87,15 +86,20 @@ class StockbitBrokerProvider(BrokerDataProvider):
         return self._api_client
 
     def is_authenticated(self) -> bool:
-        """True if a persistent profile exists and its login marker is < 72h old."""
-        marker = self._profile_dir / ".logged_in_at"
-        if not (self._profile_dir.exists() and marker.exists()):
+        """True when a persistent browser profile can supply/refresh Exodus tokens.
+
+        Login-marker age is informational only (see ``StockbitSessionStatus`` and
+        ADR-036) and must never gate authorization. Token validity is proven at
+        API time by ``StockbitApiClient`` via lazy refresh on 401.
+        """
+        if not self._profile_dir.exists():
             return False
-        try:
-            age_hours = (time.time() - float(marker.read_text())) / 3600
-            return age_hours < 72
-        except Exception:
-            return False
+        # Any of these indicate a refresh-capable session from a prior login.
+        if (self._profile_dir / ".logged_in_at").exists():
+            return True
+        if (self._profile_dir / "token.json").exists():
+            return True
+        return (self._profile_dir / "Default").exists()
 
     def fetch_broker_summary(
         self,

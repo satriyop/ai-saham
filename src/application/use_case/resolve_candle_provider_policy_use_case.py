@@ -20,7 +20,7 @@ from src.domain.value_objects.ticker_classifier import is_non_idx_ticker
 
 STOCKBIT_SESSION_REQUIRED_ERROR = (
     "Stockbit session is required to fetch IDX tickers to ensure correct exchange volumes. "
-    "Please run 'saham login' first."
+    "Please run 'saham fetch stockbit login' first."
 )
 
 
