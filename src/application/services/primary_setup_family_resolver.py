@@ -106,13 +106,14 @@ class PrimarySetupFamilyResolver:
         setup_phase: Any | None = None,
         flow_confirmation_evidence: Any | None = None,
         swing_setup_catalog: "SwingSetupCatalogConfig | None" = None,
+        named_setup_evaluations: dict[str, Any] | None = None,
     ) -> PrimarySetupFamilyResult:
         # flow_confirmation_evidence is accepted for interface parity with the
         # other screen-time evidence builders and for future family-detection
         # rules (e.g. flow-direction-gated families). It is not currently
         # authoritative for any source in the priority cascade below —
         # EvaluateSwingSetupUseCase gate matching in _from_screen_evidence
-        # consumes only candidate fields.
+        # consumes only candidate fields (or precomputed named_setup_evaluations).
         rationale: list[str] = []
         if setup_phase is not None:
             current_phase = getattr(setup_phase, "current_phase", None)
@@ -132,7 +133,12 @@ class PrimarySetupFamilyResolver:
             )
 
         proposed = self._from_strategy_evidence(strategy_evidence, rationale)
-        detected = self._from_screen_evidence(candidate, swing_setup_catalog, rationale)
+        detected = self._from_screen_evidence(
+            candidate,
+            swing_setup_catalog,
+            rationale,
+            named_setup_evaluations=named_setup_evaluations,
+        )
 
         matched: list[str] = []
         if proposed is not None:
@@ -197,20 +203,28 @@ class PrimarySetupFamilyResolver:
         candidate: Any,
         catalog: "SwingSetupCatalogConfig | None",
         rationale: list[str],
+        *,
+        named_setup_evaluations: dict[str, Any] | None = None,
     ) -> list[str]:
-        if candidate is None or catalog is None:
+        if candidate is None:
             return []
         families: list[str] = []
         for setup_name in AVAILABLE_SWING_SETUPS:
-            try:
-                evaluation = self._setup_evaluator.execute(
-                    EvaluateSwingSetupRequest(
-                        setup_name=setup_name,
-                        candidate=candidate,
-                        config=catalog,
+            evaluation = None
+            if named_setup_evaluations is not None:
+                evaluation = named_setup_evaluations.get(setup_name)
+            elif catalog is not None:
+                try:
+                    evaluation = self._setup_evaluator.execute(
+                        EvaluateSwingSetupRequest(
+                            setup_name=setup_name,
+                            candidate=candidate,
+                            config=catalog,
+                        )
                     )
-                )
-            except Exception:
+                except Exception:
+                    continue
+            if evaluation is None:
                 continue
             if evaluation.match != SetupMatch.MATCH:
                 continue

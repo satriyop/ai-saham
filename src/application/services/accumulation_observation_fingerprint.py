@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import date, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from src.application.dto import accumulation_screen as accumulation_dto
 from src.application.services.accumulation_observation_institutional_fingerprint import (
@@ -318,12 +318,54 @@ def _sub_signal_fingerprint(
         "setup_readiness_failed_requirements": (
             list(readiness.failed_requirements) if readiness is not None else []
         ),
+        "named_setup_evaluations": _named_setup_evaluations_fingerprint(
+            getattr(candidate, "named_setup_evaluations", None)
+        ),
     }
     validate_current_flow_component_fingerprint(
         schema_version=CANDIDATE_OBSERVATION_SCHEMA_VERSION,
         fingerprint=fingerprint,
     )
     return fingerprint
+
+
+# Diagnostic strength mapping mirrors SetupEvidenceBuilder — research/audit only.
+_NAMED_SETUP_MATCH_STRENGTH: dict[str, float] = {
+    "MATCH": 100.0,
+    "PARTIAL": 60.0,
+    "NO_MATCH": 20.0,
+}
+
+
+def _named_setup_evaluations_fingerprint(
+    evaluations: dict[str, Any] | None,
+) -> dict[str, dict[str, Any]]:
+    """Lean per-setup match snapshot for schema-v8 research/audit.
+
+    Does not change ENTER/authority. Keys are setup names from
+    AVAILABLE_SWING_SETUPS. failed_gates lists labels of gates that did not
+    pass (empty on MATCH).
+    """
+    if not evaluations:
+        return {}
+    out: dict[str, dict[str, Any]] = {}
+    for setup_name in sorted(evaluations):
+        evaluation = evaluations[setup_name]
+        match_value = getattr(getattr(evaluation, "match", None), "value", None)
+        if match_value is None:
+            match_value = str(getattr(evaluation, "match", "NO_MATCH"))
+        gates = getattr(evaluation, "gates", ()) or ()
+        failed_gates = [
+            gate.label for gate in gates if not getattr(gate, "passed", True)
+        ]
+        out[setup_name] = {
+            "match": match_value,
+            "failed_gates": failed_gates,
+            "match_strength": _NAMED_SETUP_MATCH_STRENGTH.get(match_value, 20.0),
+            "family": getattr(evaluation, "family", "unknown"),
+            "entry_authority": bool(getattr(evaluation, "entry_authority", True)),
+        }
+    return out
 
 
 def _benchmark_excess_return_dict(

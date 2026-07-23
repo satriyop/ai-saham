@@ -179,6 +179,10 @@ class TestSubSignalFingerprintSections:
         assert fp["volume_expansion_confirmed"] is None
         assert fp["volume_trigger_confirmed"] is None
 
+    def test_named_setup_evaluations_key_present_empty_when_absent(self):
+        fp = self._build_fingerprint()
+        assert fp["named_setup_evaluations"] == {}
+
     def test_strategy_section_keys_present(self):
         fp = self._build_fingerprint()
         assert fp["strategy_name"] is None

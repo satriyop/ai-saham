@@ -22,7 +22,11 @@ ATTACHED_REQUIRED authority denominator scope (intentionally unattached
 setup does not dilute flow-only coverage); flow source authority uses
 settled_authority_fraction so unassessed bandar blocks complete-authority
 claims without zeroing CURRENT broker settlement.
-Older schema (1-6) rows are outside the current canonical contract — they are
+v7 -> v8 (named setup match persistence): discovery observations persist
+lean per-setup MATCH/PARTIAL/NO_MATCH + failed_gates (+ match_strength,
+family, entry_authority) under sub_signal_fingerprint.named_setup_evaluations.
+Diagnostic/research only — does not change ENTER/authority scoring.
+Older schema (1-7) rows are outside the current canonical contract — they are
 never mutated, migrated, or reinterpreted here, and their raw payloads are not
 validated by the current-contract validator below.
 """
@@ -37,7 +41,7 @@ from src.domain.value_objects.foreign_flow_score_breakdown import (
     INSTITUTIONAL_FLOW_COMPONENT_KEYS,
 )
 
-CANDIDATE_OBSERVATION_SCHEMA_VERSION = 7
+CANDIDATE_OBSERVATION_SCHEMA_VERSION = 8
 SIGNAL_FORWARD_LABEL_SCHEMA_VERSION = 3
 
 

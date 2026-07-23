@@ -78,6 +78,7 @@ if TYPE_CHECKING:
         InstitutionalAccumulationEvidence,
     )
     from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
+    from src.domain.value_objects.setup_evaluation import SetupEvaluation
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
     from src.domain.value_objects.strategy_evidence import StrategyEvidence
     from src.domain.value_objects.ticker_profile_snapshot import TickerProfileSnapshot
@@ -142,6 +143,39 @@ class AccumulationCandidateEvidenceBuilder:
             _normalize_company_quality_context_factory(company_quality_context_builder_factory)
         )
 
+    def evaluate_named_setups_for_screen(
+        self, candidate: "accumulation_dto.AccumulationCandidate"
+    ) -> "dict[str, SetupEvaluation]":
+        """Evaluate every AVAILABLE_SWING_SETUPS once for discovery capture.
+
+        Screen path intentionally passes broker_detail=None — smart-money
+        gates that need broker detail remain honest NO_MATCH. Results are
+        diagnostic/research only and do not grant entry authority.
+        """
+        from src.application.use_case.evaluate_swing_setup_use_case import (
+            AVAILABLE_SWING_SETUPS,
+            EvaluateSwingSetupRequest,
+            EvaluateSwingSetupUseCase,
+        )
+
+        if self._swing_setup_catalog is None:
+            return {}
+        evaluator = EvaluateSwingSetupUseCase()
+        evaluations: dict[str, SetupEvaluation] = {}
+        for setup_name in AVAILABLE_SWING_SETUPS:
+            try:
+                evaluations[setup_name] = evaluator.execute(
+                    EvaluateSwingSetupRequest(
+                        setup_name=setup_name,
+                        candidate=candidate,
+                        config=self._swing_setup_catalog,
+                        broker_detail=None,
+                    )
+                )
+            except Exception:
+                continue
+        return evaluations
+
     def resolve_preliminary_setup_family_result(
         self, candidate: "accumulation_dto.AccumulationCandidate"
     ) -> "PrimarySetupFamilyResult":
@@ -150,10 +184,17 @@ class AccumulationCandidateEvidenceBuilder:
         HIGH-2: this is the single resolution call for the screen path — its
         result is stored on the candidate and reused verbatim by SignalEngine,
         phase detection, and persistence. Never re-resolved after scoring.
+
+        Schema v8: named setup evaluations are computed once here, stored on
+        the candidate for fingerprint persistence, and passed into the
+        resolver so MATCH-only family detection does not re-evaluate gates.
         """
+        named = self.evaluate_named_setups_for_screen(candidate)
+        candidate.named_setup_evaluations = named
         return self._setup_family_resolver.resolve(
             candidate=candidate,
             swing_setup_catalog=self._swing_setup_catalog,
+            named_setup_evaluations=named,
         )
 
     def resolve_preliminary_setup_family(

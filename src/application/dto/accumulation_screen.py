@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.risk_assessment import RiskAssessment
     from src.domain.value_objects.seasonal_edge import SeasonalEdge
+    from src.domain.value_objects.setup_evaluation import SetupEvaluation
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
     from src.domain.value_objects.shareholding_composition import ShareholdingComposition
     from src.domain.value_objects.ticker_notation import TickerNotationSnapshot
@@ -239,6 +240,11 @@ class AccumulationCandidate:
     # setup_phase detection. Persistence reuses this verbatim; it must never
     # be recomputed with strategy_evidence after scoring.
     setup_family_result: "PrimarySetupFamilyResult | None" = None
+    # Schema v8: every AVAILABLE_SWING_SETUPS evaluation at screen time
+    # (broker_detail=None on discovery). Diagnostic/research only — does not
+    # grant entry authority. Persistence serializes a lean fingerprint view;
+    # family resolution reuses these evals (MATCH-only) without re-running.
+    named_setup_evaluations: "dict[str, SetupEvaluation] | None" = None
     # Market-calendar-aware freshness/alignment (S3); None until the screen
     # accum projector computes it — table and JSON both render this field.
     freshness: "DataFreshnessStatus | None" = None
