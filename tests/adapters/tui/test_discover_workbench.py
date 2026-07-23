@@ -43,6 +43,7 @@ def test_discover_presenter_formats_single_projection() -> None:
     cand.action = "ENTER"
     cand.signal_score = 78
     cand.signal_authority_coverage = 1.0
+    cand.vwap_discount_pct = 9.5
 
     proj = MagicMock(spec=ScreenAccumSingleProjection)
     proj.candidates = [cand]
@@ -57,6 +58,8 @@ def test_discover_presenter_formats_single_projection() -> None:
     assert row.canonical_rank == 1
     assert row.flow_score == 80.0
     assert row.action == "ENTER"
+    assert row.vwap_discount_pct == 9.5
+    assert row.vwap_depth_label == "deep"
 
 
 def test_discover_controller_executes_screening_and_saves_snapshot() -> None:

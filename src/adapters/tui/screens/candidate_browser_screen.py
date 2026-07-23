@@ -31,6 +31,7 @@ from src.adapters.tui.presenters.discover_presenter import DiscoverPresenter, Di
 from src.adapters.tui.screens.save_watchlist_modal import SaveWatchlistModal
 from src.adapters.tui.state import ScreenState, ScreenStatus
 from src.adapters.tui.worker_lifecycle import dispatch_if_active
+from src.adapters.cli.screen_accum_formatters import format_disc_pct_plain
 from src.application.use_case.compare_screen_watchlist_use_case import (
     CompareScreenWatchlistRequest,
 )
@@ -457,22 +458,24 @@ class CandidateBrowserScreen(Screen[None]):
         if not view.candidate_rows:
             return "No matching candidates found."
         lines = [
-            "  #   Ticker Flow%  Streak Risk   Action      Signal   Details",
-            "───  ────── ─────  ────── ────── ─────────── ──────── ─────────────",
+            "  #   Ticker Flow%  Streak Disc%          Risk   Action      Signal",
+            "───  ────── ─────  ────── ────────────── ────── ─────────── ────────",
         ]
         for row in view.candidate_rows:
             signal = row.signal_score if row.signal_score is not None else "-"
-            detail = row.window_shape_label or row.setup_phase or ""
+            disc = format_disc_pct_plain(row.vwap_discount_pct)
             lines.append(
                 f"│ {row.canonical_rank:<2}  {row.ticker:<6} {row.flow_score:5.1f}   "
-                f"{row.consecutive_streak:<6} {row.risk_status:<6} "
-                f"{decorate_action(row.action):<11} {signal:>6}   {detail}"
+                f"{row.consecutive_streak:<6} {disc:<14} {row.risk_status:<6} "
+                f"{decorate_action(row.action):<11} {signal:>6}"
             )
         return "\n".join(lines)
 
     def _render_candidate_preview(self, row: Any) -> None:
+        disc = format_disc_pct_plain(getattr(row, "vwap_discount_pct", None))
+        depth = getattr(row, "vwap_depth_label", None) or "-"
         self.query_one("#candidate-selected", Static).update(
-            f"Selected: {row.ticker} | Action: {row.action or '-'} | "
+            f"Selected: {row.ticker} | Disc%: {disc} | Action: {row.action or '-'} | "
             f"Risk: {row.risk_status} | Data: ALIGNED"
         )
         self.query_one("#preview-content", Static).update(
@@ -480,6 +483,7 @@ class CandidateBrowserScreen(Screen[None]):
             f"Ticker             : {row.ticker}\n"
             f"Canonical Rank     : #{row.canonical_rank}\n"
             f"Foreign Flow Score : {row.flow_score:.1f}\n"
+            f"Disc% (soft VWAP)  : {disc} ({depth})\n"
             f"Consecutive Streak : {row.consecutive_streak} session(s)\n"
             f"Setup Phase        : {row.setup_phase or '-'}\n"
             f"Risk Status        : {row.risk_status}\n"

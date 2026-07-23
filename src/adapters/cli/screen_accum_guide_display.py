@@ -34,11 +34,17 @@ def print_column_guide() -> None:
 
     guide_table.add_row(
         "Disc% (F_VWAP)",
-        "≥ +10% deep\n≥ +8% strong\n≥ +3% shallow\nelse dim",
+        "≥ +8% deep (bold green)\n"
+        "≥ +3% mid (yellow)\n"
+        "≥ +0% shallow (dim)\n"
+        "< 0% over (red)",
         (
             "Foreign VWAP discount: how far price is below foreigners' avg cost.\n"
-            "Positive = foreigners underwater. Default list sort is deepest Disc% first "
-            "(--sort-by vwap). Use --sort-by score to rank by Accum score instead."
+            "Positive = foreigners underwater. Soft triage color only — not a "
+            "scoring/ENTER gate. Enrichment / TUI also show deep|mid|shallow|over.\n"
+            "Default list sort is deepest Disc% first (--sort-by vwap). "
+            "Use --sort-by score to rank by Accum score instead. "
+            "--vwap-only keeps Disc% > 0 (excludes over-VWAP)."
         ),
     )
     guide_table.add_row(

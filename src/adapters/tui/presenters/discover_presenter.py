@@ -15,6 +15,7 @@ from src.application.use_case.list_screen_watchlists_use_case import (
     ListScreenWatchlistsResult,
     ScreenWatchlistSummary,
 )
+from src.adapters.cli.screen_accum_formatters import vwap_depth_label
 from src.domain.value_objects.screen_snapshot import ScreenSnapshotEntry
 
 
@@ -32,6 +33,9 @@ class DiscoverCandidateRowView:
     signal_score: int | None
     signal_authority_coverage: float | None
     window_shape_label: str | None = None
+    # Soft VWAP triage (display-only; same bands as CLI Disc% badge).
+    vwap_discount_pct: float | None = None
+    vwap_depth_label: str | None = None
 
 
 @dataclass(frozen=True)
@@ -61,6 +65,14 @@ class DiscoverPresenter:
     ) -> DiscoverViewModel:
         return self.present_accumulation(payload, active_tab=active_tab, universe_label=universe_label)
 
+    @staticmethod
+    def _vwap_fields(candidate: Any) -> tuple[float | None, str | None]:
+        raw = getattr(candidate, "vwap_discount_pct", None)
+        if raw is None or not isinstance(raw, (int, float)):
+            return None, None
+        pct = float(raw)
+        return pct, vwap_depth_label(pct)
+
     def present_accumulation(
         self,
         projection: Any,
@@ -84,6 +96,7 @@ class DiscoverPresenter:
                 flow30 = getattr(w30, "foreign_flow_score", 0.0) if w30 else 0.0
                 flow90 = getattr(w90, "foreign_flow_score", 0.0) if w90 else 0.0
                 shape = f"7s:{flow7:.0f} 30s:{flow30:.0f} 90s:{flow90:.0f}"
+                disc, depth = self._vwap_fields(c)
                 rows.append(
                     DiscoverCandidateRowView(
                         canonical_rank=rank,
@@ -98,6 +111,8 @@ class DiscoverPresenter:
                         signal_score=getattr(getattr(c, "signal_assessment", None), "assessment", None).score if hasattr(getattr(c, "signal_assessment", None), "assessment") else getattr(c, "signal_score", None),
                         signal_authority_coverage=getattr(c, "signal_authority_coverage", None),
                         window_shape_label=shape,
+                        vwap_discount_pct=disc,
+                        vwap_depth_label=depth,
                     )
                 )
         else:
@@ -125,6 +140,7 @@ class DiscoverPresenter:
                     ass = getattr(sa, "assessment", None) if sa else None
                     raw_score = getattr(ass, "score", None) if ass else None
 
+                disc, depth = self._vwap_fields(c)
                 rows.append(
                     DiscoverCandidateRowView(
                         canonical_rank=rank,
@@ -138,6 +154,8 @@ class DiscoverPresenter:
                         action=str(raw_action) if raw_action else None,
                         signal_score=int(raw_score) if raw_score is not None and isinstance(raw_score, (int, float)) else None,
                         signal_authority_coverage=float(c.signal_authority_coverage) if getattr(c, "signal_authority_coverage", None) is not None and isinstance(c.signal_authority_coverage, (int, float)) else None,
+                        vwap_discount_pct=disc,
+                        vwap_depth_label=depth,
                     )
                 )
 

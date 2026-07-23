@@ -83,21 +83,55 @@ def fmt_score(s: float | None, display_config: AccumulationDisplayConfig) -> str
     return typer.style(f"{s:>6.1f}", fg=typer.colors.WHITE)
 
 
-def format_disc_pct(discount: float | None) -> Text:
-    """Foreign VWAP discount % with depth color tiers (display-only).
+def vwap_depth_label(discount: float | None) -> str | None:
+    """Soft VWAP depth bucket for triage UX (display-only; not scoring policy).
 
-    ≥10 deep, ≥8 strong, ≥3 shallow, else dim / missing.
+    Aligns with research soft-filter bands (schema-7 VWAP×regime card):
+    deep ≥ 8%, mid ≥ 3%, shallow ≥ 0%, over < 0%. Missing → None.
+    """
+    if discount is None:
+        return None
+    if discount >= 8.0:
+        return "deep"
+    if discount >= 3.0:
+        return "mid"
+    if discount >= 0.0:
+        return "shallow"
+    return "over"
+
+
+_VWAP_DEPTH_STYLES = {
+    "deep": "bold green",
+    "mid": "yellow",
+    "shallow": "bright_black",
+    "over": "red",
+}
+
+
+def format_disc_pct(discount: float | None) -> Text:
+    """Foreign VWAP discount % with soft depth color (display-only).
+
+    Color bands match research soft triage (d/m/s/o in --guide):
+    deep ≥8 bold green, mid ≥3 yellow, shallow ≥0 dim, over <0 red.
+    No text suffix here — keeps the 100-col multi table from truncating Phase.
+    Full-word badges live in ``format_disc_pct_plain`` (TUI / enrichment).
     """
     if discount is None:
         return Text("—", style="bright_black")
+    depth = vwap_depth_label(discount)
     label = f"{discount:+.1f}%"
-    if discount >= 10.0:
-        return Text(label, style="bold green")
-    if discount >= 8.0:
-        return Text(label, style="green")
-    if discount >= 3.0:
-        return Text(label, style="yellow")
-    return Text(label, style="bright_black")
+    return Text(label, style=_VWAP_DEPTH_STYLES.get(depth or "", "bright_black"))
+
+
+def format_disc_pct_plain(discount: float | None) -> str:
+    """Plain-text Disc% + full depth badge for TUI / enrichment surfaces."""
+    if discount is None:
+        return "—"
+    depth = vwap_depth_label(discount)
+    label = f"{discount:+.1f}%"
+    if depth is None:
+        return label
+    return f"{label} {depth}"
 
 
 def classify_pattern(

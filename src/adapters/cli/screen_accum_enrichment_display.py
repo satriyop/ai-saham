@@ -11,7 +11,11 @@ from typing import Any
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table
-from src.adapters.cli.screen_accum_formatters import AccumulationDisplayConfig, notation_detail
+from src.adapters.cli.screen_accum_formatters import (
+    AccumulationDisplayConfig,
+    format_disc_pct_plain,
+    notation_detail,
+)
 from src.application.dto.accumulation_screen import AccumulationCandidate
 from src.domain.services.trading_calendar import trading_sessions_apart
 
@@ -56,10 +60,7 @@ def _evidence_factor_rows(
     )
     rsi = f"{candidate.rsi:.1f}" if candidate.rsi is not None else "-"
     flow = f"{candidate.avg_flow_ratio:+.1f}%" if candidate.avg_flow_ratio is not None else "-"
-    vwap = (
-        f"{candidate.vwap_discount_pct:+.1f}%"
-        if candidate.vwap_discount_pct is not None else "-"
-    )
+    vwap = format_disc_pct_plain(candidate.vwap_discount_pct)
     bb = (
         f"{candidate.bb_width_pctile * 100:.0f}%"
         if candidate.bb_width_pctile is not None else "-"
@@ -92,7 +93,7 @@ def _evidence_factor_rows(
             _pts("vwap"),
             "F_VWAP%",
             vwap,
-            "Foreign avg cost vs price",
+            "Foreign avg cost vs price (soft depth badge)",
         ),
         (
             _pts("rsi"),
