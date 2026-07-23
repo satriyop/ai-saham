@@ -45,30 +45,6 @@ def test_refresh_mode_flags_map_exactly():
     assert TickerRefreshMode.FORCE_UPDATE.touches_provider is True
 
 
-def test_ticker_refresh_fetches_candles_via_yfinance_without_stockbit_session():
-    # Regression: the refresh must never force Stockbit-historical candles, which
-    # crashed with AttributeError when only the IDX broker fallback (no api_client)
-    # was available. Candles always use yfinance; broker uses the session or none.
-    from types import SimpleNamespace
-
-    from src.adapters.tui.composition import _build_ticker_fetch_request
-
-    analyze_config = SimpleNamespace(market_refresh_days=90, broker_refresh_days=30)
-    for broker_provider, broker_name in ((None, "none"), (object(), "stockbit")):
-        request = _build_ticker_fetch_request(
-            ticker="BBRI",
-            db_path=Path("x.db"),
-            force_refresh=True,
-            analyze_config=analyze_config,
-            broker_provider=broker_provider,
-            broker_name=broker_name,
-        )
-        assert request.candles_provider == "yfinance"
-        assert request.tickers == ["BBRI"]
-        assert request.refresh is True
-        assert request.broker_provider_name == broker_name
-
-
 def test_build_ticker_request_maps_mode_and_setup_exactly():
     config = AppConfig()
     cached = build_ticker_request(config, Path("x.db"), 30, "BBRI")

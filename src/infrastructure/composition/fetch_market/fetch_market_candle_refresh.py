@@ -50,6 +50,18 @@ from src.infrastructure.persistence.sqlite_market_repository import (
 _BENCHMARK_TICKER = BENCHMARK_TICKER
 
 
+def broker_provider_can_fetch_candles(broker_provider: object | None) -> bool:
+    """True only when the broker provider is a Stockbit session able to serve
+    candles — i.e. it exposes a live ``api_client``.
+
+    A plain broker provider being present is not enough: the IDX broker fallback
+    has no ``api_client``, so treating "provider present" as "Stockbit session
+    present" makes the candle policy pick STOCKBIT_HISTORICAL and then crash on
+    ``broker_provider.api_client``. This predicate keeps that decision honest.
+    """
+    return getattr(broker_provider, "api_client", None) is not None
+
+
 def _construct_provider(
     kind: CandleProviderKind,
     non_idx: set[str],
@@ -94,7 +106,7 @@ def fetch_candles(
             ticker=ticker,
             non_idx_tickers=frozenset(non_idx),
             requested_provider_name=provider_name,
-            has_broker_session=broker_provider is not None,
+            has_broker_session=broker_provider_can_fetch_candles(broker_provider),
         )
     )
     if decision.error is not None:
