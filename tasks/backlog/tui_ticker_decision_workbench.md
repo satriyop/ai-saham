@@ -220,6 +220,46 @@ Layer plan:
 - Adapter: interaction and presentation only
 ```
 
+## Confirmed Scope & Phasing (scoped 2026-07-23)
+
+### Application-contract readiness (verified against current code)
+
+| Need | Status | Work |
+|---|---|---|
+| Live analysis (verdict/setup/signal/risk) | Exists — `SwingAnalysisWorkflowUseCase`; `SwingAnalysisWorkflowRequest` already carries `auto_refresh`, `force_refresh`, `setup_name`, `include_sentiment/flow_detail/signal_detail/risk_detail/market_detail`, `capital/risk_pct/entry_price/atr_mult/rr` | Reuse; map UI modes → flags |
+| Setup catalog | Exists — `AVAILABLE_SWING_SETUPS` = foreign-bounce, coiled-spring, smart-money-confirmed, pullback-continuation | Reuse |
+| Paper-trade log | Exists — `LogAccumulationTradeWorkflowUseCase` (task-specified) | Reuse; same-object transport |
+| Position sizing math | Service exists — `SwingAnalysisSizingService` / `services/position_sizer.py` | Wrap in new `CalculatePositionPlanUseCase` |
+| Chart series | CLI-only — `analyze_chart_commands.py` computes via indicator registry + plotext | Extract new `GetTickerChartSeriesUseCase` (compute, don't plot) |
+| Ticker snapshot | CLI-only — `view_commands.py` display | Extract new `GetTickerSnapshotUseCase` (heaviest; "when available" sections) |
+| Broker top/history/distribution | Partial — `GetBrokerDataUseCase` covers daily flow; top/history/distribution are CLI display | Extract typed queries only where absent |
+| Ticker search source | Decided: cached tickers in DB | Add small `ListCachedTickersUseCase` (no provider) |
+
+### Phasing (value-first vertical slices)
+
+- **C0 — Workbench shell + decision core (zero new app boundaries).** Tabbed shell
+  + persistent decision strip (verdict/blockers fixed above tabs), global `/` search
+  (cached tickers) with return-context, explicit Run with exact refresh-mode mapping.
+  Overview / Setup / Signal & Risk rendered from the existing swing response. Adds
+  `ListCachedTickersUseCase` for search autocomplete.
+- **C1 — Position Plan + Log.** `CalculatePositionPlanUseCase` (standalone recompute)
+  + Log preview/confirm sharing the exact request object.
+- **C2 — Chart tab.** `GetTickerChartSeriesUseCase` + unicode/box-drawing renderer
+  with table fallback.
+- **C3 — Flow tab + snapshot enrichment.** `GetTickerSnapshotUseCase` + broker
+  history/top/distribution typed queries.
+- **C4 — Polish.** Stored 80x24/120x40 baselines, responsive master-detail,
+  monochrome + full negative-test matrix.
+
+### Locked decisions
+
+- Global `/` search autocompletes from cached tickers in the DB (never a provider).
+- Refresh mode mapping: Cached only = (false,false); Update if stale = (true,false);
+  Force update = (true,true).
+- Paper-trade Log reuses `LogAccumulationTradeWorkflowUseCase` with same-object transport.
+- Semantic classification `NON_SEMANTIC`; canonical `TradeSetup.action` stays the only
+  live swing action; setup MATCH/PARTIAL/NO_MATCH stays pattern-fit evidence only.
+
 ## Expected File Boundary
 
 - application DTO/use-case modules for missing boundaries plus unit tests;

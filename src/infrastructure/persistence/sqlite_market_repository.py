@@ -270,6 +270,21 @@ class SQLiteMarketRepository(MarketDataRepository):
         except sqlite3.Error as e:
             raise MarketDataRepositoryError(f"Failed to get date range: {e}") from e
 
+    def list_tickers(self) -> list[str]:
+        """Return the distinct tickers with cached candles, sorted ascending.
+
+        Implements the ``CachedTickerCatalog`` application port for offline
+        ticker-search autocomplete.
+        """
+        try:
+            with self._get_connection() as conn:
+                rows = conn.execute(
+                    "SELECT DISTINCT ticker FROM candles ORDER BY ticker ASC"
+                ).fetchall()
+            return [row["ticker"] for row in rows]
+        except sqlite3.Error as e:
+            raise MarketDataRepositoryError(f"Failed to list tickers: {e}") from e
+
     def _row_to_candle(self, row: sqlite3.Row) -> Candle:
         """Convert database row to Candle entity."""
         open_val = Decimal(row["open"])
