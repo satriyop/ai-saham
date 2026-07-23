@@ -60,6 +60,9 @@ class PanelRow:
     # Setup-gate inputs (Package B2)
     trend: str | None = None
     bb_width_pctile: float | None = None
+    # Schema v8+: lean MATCH/PARTIAL/NO_MATCH per named setup (research/audit).
+    # Empty dict when fingerprint omitted the field (should not happen on v8).
+    named_setup_evaluations: dict[str, dict[str, Any]] | None = None
     # DecisionPolicy inputs (Package B6)
     signal_score: float | None = None
     entry_quality: str | None = None
@@ -154,6 +157,7 @@ def load_swing10d_panel(db_path: Path | None = None) -> list[PanelRow]:
     for row in rows:
         cand = _candidate_fields(row["payload_json"])
         decision = _decision_fields(row["payload_json"])
+        named = _named_setup_evaluations(row["payload_json"])
         breakdown = cand.get("foreign_flow_score_breakdown") or {}
         points = _component_points(breakdown)
         total = _as_float(cand.get("foreign_flow_score"))
@@ -194,6 +198,7 @@ def load_swing10d_panel(db_path: Path | None = None) -> list[PanelRow]:
                 top_brokers=_as_broker_codes(cand.get("top_brokers")),
                 trend=_as_trend(cand.get("trend")),
                 bb_width_pctile=_as_float(cand.get("bb_width_pctile")),
+                named_setup_evaluations=named,
                 signal_score=_as_float(decision.get("signal_score")),
                 entry_quality=_as_upper(decision.get("entry_quality")),
                 trade_setup_action=_as_upper(decision.get("trade_setup_action")),
@@ -205,6 +210,22 @@ def load_swing10d_panel(db_path: Path | None = None) -> list[PanelRow]:
             )
         )
     return panel
+
+
+def _named_setup_evaluations(payload_json: str) -> dict[str, dict[str, Any]] | None:
+    """Extract schema-v8 lean named setup evals from sub_signal_fingerprint."""
+    payload = json.loads(payload_json)
+    fingerprint = payload.get("sub_signal_fingerprint") or {}
+    if not isinstance(fingerprint, dict):
+        return None
+    raw = fingerprint.get("named_setup_evaluations")
+    if not isinstance(raw, dict) or not raw:
+        return None
+    out: dict[str, dict[str, Any]] = {}
+    for setup_name, entry in raw.items():
+        if isinstance(entry, dict):
+            out[str(setup_name)] = entry
+    return out or None
 
 
 def _component_points(breakdown: dict[str, Any]) -> dict[str, float | None]:

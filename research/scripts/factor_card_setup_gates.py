@@ -3,17 +3,17 @@
 
 Research only — authority NONE.
 
-Setup MATCH / PARTIAL / failed-gate details are **not** persisted on canonical
-observations. This card recomputes named-setup gate pass/fail from candidate
-fields + `config/swing_setups.yaml`, then measures SWING_10D outcomes.
-
-Primary focus: foreign-bounce (score / VWAP / RSI / trend / flow%).
-Also reports coiled-spring and pullback-continuation synthetic match cohorts.
-Smart-money uses optional `broker_daily_flow` recompute (same gap as A4).
+Schema v8+ observations persist lean `named_setup_evaluations` on
+`sub_signal_fingerprint` (MATCH/PARTIAL/NO_MATCH + failed_gates). This card
+prefers those persisted results for match cohorts when present, and still
+recomputes gates from candidate fields + `config/swing_setups.yaml` for
+threshold sweeps (alternate cutoffs are not stored on rows).
 
 Usage (from repo root):
   .venv/bin/python research/scripts/factor_card_setup_gates.py
   .venv/bin/python research/scripts/factor_card_setup_gates.py --skip-smart-money
+  .venv/bin/python research/scripts/factor_card_setup_gates.py \\
+      --out research/artifacts/factor_card_setup_gates_schema8.md
 """
 
 from __future__ import annotations
@@ -37,6 +37,16 @@ from research.lab.panel import PanelRow, load_swing10d_panel, resolve_db_path
 
 DEFAULT_SETUPS = ROOT / "config" / "swing_setups.yaml"
 DEFAULT_ACCUM = ROOT / "config" / "accumulation_screener.yaml"
+
+# Gate labels used for foreign-bounce per-gate tables (prod EvaluateSwingSetup).
+_FB_GATE_LABELS = (
+    "foreign_flow_score",
+    "fvwap%",
+    "trend",
+    "flow_pct",
+    "RSI present",
+    "RSI",
+)
 
 
 @dataclass(frozen=True)
@@ -103,6 +113,55 @@ def _classify(gates: list[GateResult], partial_max: int) -> SetupEval:
     else:
         match = "NO_MATCH"
     return SetupEval(match=match, failed=failed, gates=tuple(gates))
+
+
+def _persisted_eval(row: PanelRow, setup_name: str) -> SetupEval | None:
+    """Build SetupEval from schema-v8 fingerprint when present."""
+    named = row.named_setup_evaluations
+    if not named:
+        return None
+    entry = named.get(setup_name)
+    if not isinstance(entry, dict):
+        return None
+    match = str(entry.get("match") or "").upper()
+    if match not in ("MATCH", "PARTIAL", "NO_MATCH"):
+        return None
+    failed_raw = entry.get("failed_gates") or ()
+    failed = tuple(str(x) for x in failed_raw)
+    # Reconstruct pass/fail for known FB gate labels; unknown setups get
+    # failed-only gate list (enough for match cohorts + fail counts).
+    if setup_name == "foreign-bounce":
+        gates = tuple(
+            GateResult(label=label, passed=label not in failed)
+            for label in _FB_GATE_LABELS
+        )
+    else:
+        gates = tuple(GateResult(label=label, passed=False) for label in failed)
+    return SetupEval(match=match, failed=failed, gates=gates)
+
+
+def _prefer_persisted_or_synthetic(
+    panel: list[PanelRow],
+    setup_name: str,
+    synthetic: list[SetupEval],
+) -> tuple[list[SetupEval], str]:
+    """Prefer persisted named_setup_evaluations; fall back to synthetic."""
+    out: list[SetupEval] = []
+    persisted_n = 0
+    for row, syn in zip(panel, synthetic):
+        persisted = _persisted_eval(row, setup_name)
+        if persisted is not None:
+            out.append(persisted)
+            persisted_n += 1
+        else:
+            out.append(syn)
+    if persisted_n == len(panel) and panel:
+        source = "persisted named_setup_evaluations (schema v8+)"
+    elif persisted_n > 0:
+        source = f"mixed ({persisted_n}/{len(panel)} persisted; rest synthetic)"
+    else:
+        source = "synthetic recompute (no named_setup_evaluations on panel)"
+    return out, source
 
 
 def _load_setups(path: Path) -> dict:
@@ -346,9 +405,19 @@ def build_report(
     pb_partial = int(pb_cfg.get("partial_max_failed_gates", 2))
     sm_partial = int(sm_cfg.get("partial_max_failed_gates", 1))
 
-    fb_evals = [eval_foreign_bounce(r, fb_gates, fb_partial) for r in panel]
-    cs_evals = [eval_coiled_spring(r, cs_gates, cs_partial) for r in panel]
-    pb_evals = [eval_pullback(r, pb_gates, pb_partial) for r in panel]
+    fb_synth = [eval_foreign_bounce(r, fb_gates, fb_partial) for r in panel]
+    cs_synth = [eval_coiled_spring(r, cs_gates, cs_partial) for r in panel]
+    pb_synth = [eval_pullback(r, pb_gates, pb_partial) for r in panel]
+    fb_evals, fb_source = _prefer_persisted_or_synthetic(
+        panel, "foreign-bounce", fb_synth
+    )
+    cs_evals, cs_source = _prefer_persisted_or_synthetic(
+        panel, "coiled-spring", cs_synth
+    )
+    pb_evals, pb_source = _prefer_persisted_or_synthetic(
+        panel, "pullback-continuation", pb_synth
+    )
+    persisted_rows = sum(1 for r in panel if r.named_setup_evaluations)
 
     lines: list[str] = [
         "# Factor Card — Setup Gate Thresholds (B2)",
@@ -358,7 +427,11 @@ def build_report(
         f"- Generated: {date.today().isoformat()}",
         f"- Database: `{db_path}`",
         f"- Panel: canonical obs ⋈ SWING_10D labels ({len(panel)} rows; {date_span})",
-        f"- Gate source: `config/swing_setups.yaml` (recomputed; MATCH not persisted)",
+        f"- Persisted setup evals on panel: {persisted_rows}/{len(panel)}",
+        f"- Match-cohort source (foreign-bounce): {fb_source}",
+        f"- Match-cohort source (coiled-spring): {cs_source}",
+        f"- Match-cohort source (pullback): {pb_source}",
+        "- Threshold sweeps still use synthetic recompute (alternate cutoffs).",
         "",
         "## Hypothesis",
         "",
@@ -366,13 +439,15 @@ def build_report(
         "should identify higher-quality SWING_10D cohorts when all gates MATCH. "
         "Threshold sweeps ask whether current cutoffs are too tight or too loose.",
         "",
-        "## Data gaps",
+        "## Data notes",
         "",
-        "- `setup_match` / `failed_gates` / `match_strength` are **not** in "
-        "observation payloads — all MATCH/PARTIAL below are **synthetic**.",
-        "- Screen capture often omits SetupEvidence; fingerprint "
-        "`matched_setup_families` is sparse.",
-        "- Smart-money shares require `broker_daily_flow` recompute (tracked subset).",
+        "- Schema v8+ stores lean `named_setup_evaluations` at capture time "
+        "(discovery uses `broker_detail=None`, so smart-money stays honest "
+        "NO_MATCH on screen without broker detail).",
+        "- Threshold sweeps intentionally recompute gates — stored MATCH is "
+        "tied to prod cutoffs only.",
+        "- Smart-money share tables may still recompute from `broker_daily_flow` "
+        "for counterfactual share gates (A4 gap).",
         "",
     ]
 
@@ -408,7 +483,7 @@ def build_report(
 
     lines.extend(
         _table(
-            "Foreign-bounce synthetic match (prod thresholds)",
+            "Foreign-bounce match (prod thresholds)",
             [
                 ("MATCH", fb_by.get("MATCH", [])),
                 ("PARTIAL", fb_by.get("PARTIAL", [])),
@@ -419,7 +494,7 @@ def build_report(
     )
     lines.extend(
         _table(
-            "Coiled-spring synthetic match (prod thresholds)",
+            "Coiled-spring match (prod thresholds)",
             [
                 ("MATCH", cs_by.get("MATCH", [])),
                 ("PARTIAL", cs_by.get("PARTIAL", [])),
@@ -429,7 +504,7 @@ def build_report(
     )
     lines.extend(
         _table(
-            "Pullback-continuation synthetic match (prod thresholds)",
+            "Pullback-continuation match (prod thresholds)",
             [
                 ("MATCH", pb_by.get("MATCH", [])),
                 ("PARTIAL", pb_by.get("PARTIAL", [])),
@@ -456,7 +531,7 @@ def build_report(
             "|------|--------|------|------|--------|------|------|----------|",
         ]
     )
-    for label in ("foreign_flow_score", "fvwap%", "trend", "flow_pct", "RSI present", "RSI"):
+    for label in _FB_GATE_LABELS:
         p = _stats(gate_pass[label])
         f = _stats(gate_fail[label])
         p_hit = f"{p['hit_pct']:.1f}" if p["hit_pct"] is not None else "—"
@@ -473,13 +548,13 @@ def build_report(
         )
     lines.append("")
 
-    # Threshold sweeps — foreign-bounce focused
+    # Threshold sweeps — foreign-bounce focused (always synthetic)
     lines.extend(
         [
-            "## Foreign-bounce threshold sweeps",
+            "## Foreign-bounce threshold sweeps (synthetic / alternate cutoffs)",
             "",
             "Each row: **other gates at prod defaults**, only the swept gate changes. "
-            "Cohort = synthetic MATCH under that variant.",
+            "Cohort = synthetic MATCH under that variant (not stored MATCH).",
             "",
         ]
     )
@@ -660,7 +735,7 @@ def build_report(
         [
             "## Interpretation guardrails",
             "",
-            "- Synthetic MATCH ≠ live ENTER; DecisionPolicy + RiskEngine still apply.",
+            "- Persisted MATCH ≠ live ENTER; DecisionPolicy + RiskEngine still apply.",
             "- Thin MATCH counts under strict gates are expected on this corpus.",
             "- Prefer regime-stratified follow-up (B6) before global threshold promotion.",
             "- Do not change `swing_setups.yaml` from this card alone.",
@@ -670,9 +745,8 @@ def build_report(
             "**None automatic.** Candidate follow-ups (human review):",
             "- If FB MATCH cohort is empty/tiny, loosen one binding gate "
             "(often `flow_pct` or `fvwap%`) and re-run",
-            "- Persist setup evaluation (`match`, `failed_gates`) on observations "
-            "to avoid recompute drift",
-            "- Next: **B6 DecisionPolicy regime floors**",
+            "- Soft VWAP UX filter (research-supported; not authority)",
+            "- Next: soft VWAP UX or B6 regime floors — not YAML promotion yet",
             "",
         ]
     )
