@@ -17,20 +17,48 @@ if TYPE_CHECKING:
 
 
 class MarketContextRepository(Protocol):
-    """Port for persisting MarketContext snapshots (one canonical record per date)."""
+    """Port for persisting MarketContext snapshots (one row per as_of_date + cohort)."""
 
-    def save(self, context: "MarketContext") -> None:
-        """Upsert a MarketContext snapshot keyed by as_of_date.
+    def save(
+        self,
+        context: "MarketContext",
+        *,
+        semantic_compatibility_id: str = "",
+        observation_contract: str = "",
+        universe_name: str = "",
+        benchmark_ticker: str = "",
+    ) -> None:
+        """Upsert a MarketContext snapshot keyed by (as_of_date, cohort).
 
-        If a record for the same date already exists it is overwritten,
-        so callers always have the latest evaluation for that date.
+        Cohort identity kwargs are persisted alongside the snapshot without
+        mutating the MarketContext value object.
         """
         ...
 
-    def get(self, as_of_date: date) -> "MarketContext | None":
-        """Return the stored snapshot for a specific date, or None."""
+    def get(
+        self,
+        as_of_date: date,
+        *,
+        semantic_compatibility_id: str | None = None,
+    ) -> "MarketContext | None":
+        """Return the stored snapshot for a date, optionally scoped to a cohort.
+
+        When semantic_compatibility_id is given, returns an exact cohort match.
+        When None, returns the sole row for that date if exactly one exists;
+        returns None when multiple cohort rows exist (ambiguous).
+        """
         ...
 
-    def get_recent(self, limit: int = 30) -> "list[MarketContext]":
-        """Return the most recent snapshots, newest first."""
+    def get_recent(
+        self,
+        limit: int = 30,
+        *,
+        semantic_compatibility_id: str | None = None,
+    ) -> "list[MarketContext]":
+        """Return the most recent snapshots, newest first.
+
+        When semantic_compatibility_id is given, results are filtered to that cohort.
+        When None, all cohorts may be mixed — callers that need a single cohort must
+        pass semantic_compatibility_id explicitly.
+        """
         ...

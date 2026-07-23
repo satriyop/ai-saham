@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from research.lab.panel import resolve_db_path
+from research.lab.panel import resolve_db_path, resolve_default_regime_cohort_id
 
 
 @dataclass(frozen=True)
@@ -40,11 +40,26 @@ class MceDayRow:
     factors: tuple[MceFactorPoint, ...]
 
 
-def load_mce_regime_panel(db_path: Path | None = None) -> list[MceDayRow]:
-    """Join market_context_snapshots to regime_observations forward IHSG labels."""
+def load_mce_regime_panel(
+    db_path: Path | None = None,
+    *,
+    regime_cohort_id: str | None = None,
+) -> list[MceDayRow]:
+    """Join market_context_snapshots to regime_observations forward IHSG labels.
+
+    Both sides are filtered by ``semantic_compatibility_id``. Defaults to the
+    current MCE cohort from ``market_context_engine.yaml`` (lq45 / IHSG).
+    Pass ``regime_cohort_id=""`` for legacy untagged rows.
+    """
     path = resolve_db_path(db_path)
     if not path.exists():
         raise FileNotFoundError(f"Database not found: {path}")
+
+    cohort_id = (
+        resolve_default_regime_cohort_id()
+        if regime_cohort_id is None
+        else regime_cohort_id
+    )
 
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
@@ -66,8 +81,11 @@ def load_mce_regime_panel(db_path: Path | None = None) -> list[MceDayRow]:
             FROM market_context_snapshots m
             LEFT JOIN regime_observations r
               ON date(m.as_of_date) = date(r.observation_date)
+             AND r.semantic_compatibility_id = ?
+            WHERE m.semantic_compatibility_id = ?
             ORDER BY m.as_of_date
-            """
+            """,
+            (cohort_id, cohort_id),
         ).fetchall()
     finally:
         conn.close()

@@ -15,6 +15,8 @@ from typing import Any
 from src.domain.value_objects.signal_artifact_schema import (
     CANDIDATE_OBSERVATION_SCHEMA_VERSION,
 )
+from src.application.services.mce_observation_identity import build_mce_observation_identity
+from src.infrastructure.config.market_context_config import default_market_context_config_path
 
 
 DEFAULT_DB = Path("data/db/data.db")
@@ -117,11 +119,43 @@ def _decision_fields(payload_json: str) -> dict[str, Any]:
     }
 
 
-def load_swing10d_panel(db_path: Path | None = None) -> list[PanelRow]:
-    """Load canonical screen_accum panel joined to SWING_10D labels + regime."""
+def resolve_default_regime_cohort_id(
+    *,
+    universe_name: str = "lq45",
+    benchmark_ticker: str = "IHSG",
+) -> str:
+    """Resolve current MCE cohort id from on-disk market_context_engine.yaml."""
+    config_path = default_market_context_config_path()
+    raw_yaml = config_path.read_text(encoding="utf-8")
+    identity = build_mce_observation_identity(
+        resolved_mce_config_canonical=raw_yaml,
+        universe_name=universe_name,
+        benchmark_ticker=benchmark_ticker,
+    )
+    return identity.cohort_id
+
+
+def load_swing10d_panel(
+    db_path: Path | None = None,
+    *,
+    regime_cohort_id: str | None = None,
+) -> list[PanelRow]:
+    """Load canonical screen_accum panel joined to SWING_10D labels + regime.
+
+    Regime rows are joined on ``semantic_compatibility_id``. By default the current
+    MCE cohort is resolved from ``market_context_engine.yaml`` with universe
+    ``lq45`` and benchmark ``IHSG``. Pass ``regime_cohort_id=""`` to join legacy
+    rows that were persisted before cohort tagging.
+    """
     path = resolve_db_path(db_path)
     if not path.exists():
         raise FileNotFoundError(f"Database not found: {path}")
+
+    cohort_id = (
+        resolve_default_regime_cohort_id()
+        if regime_cohort_id is None
+        else regime_cohort_id
+    )
 
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
@@ -144,11 +178,12 @@ def load_swing10d_panel(db_path: Path | None = None) -> list[PanelRow]:
              AND c.captured_at = l.observation_captured_at
             LEFT JOIN regime_observations r
               ON date(c.snapshot_date) = date(r.observation_date)
+             AND r.semantic_compatibility_id = ?
             WHERE l.horizon = 'SWING_10D'
               AND c.schema_version = ?
             ORDER BY c.snapshot_date, c.ticker
             """,
-            (CANDIDATE_OBSERVATION_SCHEMA_VERSION,),
+            (cohort_id, CANDIDATE_OBSERVATION_SCHEMA_VERSION),
         ).fetchall()
     finally:
         conn.close()

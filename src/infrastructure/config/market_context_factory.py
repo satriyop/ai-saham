@@ -11,10 +11,14 @@ from datetime import date
 from pathlib import Path
 
 from src.application.services.market_context_engine import MarketContextEngine
+from src.application.services.mce_observation_identity import build_mce_observation_identity
 from src.application.services.universe_loader import resolve_tickers
 from src.domain.value_objects.benchmark_symbol import canonicalize_ticker
 from src.domain.value_objects.market_context import MarketContext
-from src.infrastructure.config.market_context_config import load_market_context_config
+from src.infrastructure.config.market_context_config import (
+    default_market_context_config_path,
+    load_market_context_config,
+)
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_context_repository import (
     SQLiteMarketContextRepository,
@@ -47,6 +51,13 @@ def create_market_context_engine(
             config,
             idx_trend=dc_replace(config.idx_trend, benchmark_ticker=benchmark),
         )
+    config_path = default_market_context_config_path()
+    raw_yaml = config_path.read_text(encoding="utf-8")
+    mce_identity = build_mce_observation_identity(
+        resolved_mce_config_canonical=raw_yaml,
+        universe_name=universe,
+        benchmark_ticker=benchmark or "IHSG",
+    )
     return MarketContextEngine(
         market_repository=SQLiteMarketRepository(db_path=db_path),
         config=config,
@@ -54,6 +65,7 @@ def create_market_context_engine(
         broker_repository=SQLiteBrokerRepository(db_path=db_path),
         context_repository=SQLiteMarketContextRepository(db_path=db_path),
         regime_observation_repository=SQLiteRegimeObservationRepository(db_path=db_path),
+        mce_identity=mce_identity,
     )
 
 

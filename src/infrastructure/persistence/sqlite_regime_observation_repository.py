@@ -1,12 +1,12 @@
 """
 SQLite implementation of the RegimeObservationRepository port.
 
-Schema: regime_observations — one row per observation_date (upsert on conflict).
+Schema: regime_observations — one row per (observation_date, semantic_compatibility_id).
 Detection inputs are stored as a JSON fingerprint for deterministic replay.
 Forward label columns start NULL and are filled retroactively via
 update_forward_labels(); only NULL slots are written (idempotent fill).
 
-schema_version = 1 for all A2 observations.
+Legacy rows migrated with semantic_compatibility_id = ''.
 
 Layer: Infrastructure (Persistence)
 """
@@ -22,73 +22,127 @@ from src.domain.value_objects.regime_detection_evidence import (
     RegimeDetectionEvidence,
     RegimeStability,
 )
+from src.infrastructure.persistence.sqlite_migration_runner import SqliteMigrationRunner
 
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS regime_observations (
-    observation_date          TEXT NOT NULL PRIMARY KEY,
+    id                        INTEGER PRIMARY KEY AUTOINCREMENT,
+    observation_date          TEXT NOT NULL,
+    semantic_compatibility_id TEXT NOT NULL DEFAULT '',
+    observation_contract      TEXT NOT NULL DEFAULT '',
+    universe_name             TEXT NOT NULL DEFAULT '',
+    benchmark_ticker          TEXT NOT NULL DEFAULT '',
     schema_version            INTEGER NOT NULL DEFAULT 1,
-    -- Regime output
     regime                    TEXT NOT NULL,
     regime_score              REAL NOT NULL,
     regime_confidence         REAL NOT NULL,
     regime_stability          TEXT NOT NULL,
     days_in_regime            INTEGER,
     transition_warning        TEXT,
-    -- Detection inputs fingerprint (all raw IHSG/flow values)
     detection_inputs_json     TEXT NOT NULL,
-    -- Forward labels (initially NULL; filled retroactively when future candles available)
     forward_ihsg_return_5d    REAL,
     forward_ihsg_return_10d   REAL,
     forward_ihsg_return_20d   REAL,
-    -- Metadata
     created_at                TEXT NOT NULL,
-    updated_at                TEXT NOT NULL
+    updated_at                TEXT NOT NULL,
+    UNIQUE(observation_date, semantic_compatibility_id)
 )
+"""
+
+_REBUILD_FROM_LEGACY = """
+CREATE TABLE regime_observations_new (
+    id                        INTEGER PRIMARY KEY AUTOINCREMENT,
+    observation_date          TEXT NOT NULL,
+    semantic_compatibility_id TEXT NOT NULL DEFAULT '',
+    observation_contract      TEXT NOT NULL DEFAULT '',
+    universe_name             TEXT NOT NULL DEFAULT '',
+    benchmark_ticker          TEXT NOT NULL DEFAULT '',
+    schema_version            INTEGER NOT NULL DEFAULT 1,
+    regime                    TEXT NOT NULL,
+    regime_score              REAL NOT NULL,
+    regime_confidence         REAL NOT NULL,
+    regime_stability          TEXT NOT NULL,
+    days_in_regime            INTEGER,
+    transition_warning        TEXT,
+    detection_inputs_json     TEXT NOT NULL,
+    forward_ihsg_return_5d    REAL,
+    forward_ihsg_return_10d   REAL,
+    forward_ihsg_return_20d   REAL,
+    created_at                TEXT NOT NULL,
+    updated_at                TEXT NOT NULL,
+    UNIQUE(observation_date, semantic_compatibility_id)
+);
+INSERT INTO regime_observations_new
+    (observation_date, semantic_compatibility_id, observation_contract,
+     universe_name, benchmark_ticker, schema_version, regime, regime_score,
+     regime_confidence, regime_stability, days_in_regime, transition_warning,
+     detection_inputs_json, forward_ihsg_return_5d, forward_ihsg_return_10d,
+     forward_ihsg_return_20d, created_at, updated_at)
+SELECT
+    observation_date, '', '', '', '',
+    schema_version, regime, regime_score, regime_confidence, regime_stability,
+    days_in_regime, transition_warning, detection_inputs_json,
+    forward_ihsg_return_5d, forward_ihsg_return_10d, forward_ihsg_return_20d,
+    created_at, updated_at
+FROM regime_observations;
+DROP TABLE regime_observations;
+ALTER TABLE regime_observations_new RENAME TO regime_observations;
 """
 
 
 class SQLiteRegimeObservationRepository:
-    """Persists RegimeDetectionEvidence to SQLite, one record per observation_date."""
+    """Persists RegimeDetectionEvidence to SQLite, keyed by date + cohort."""
 
     def __init__(self, db_path: str | Path = "data.db") -> None:
         self._db_path = Path(db_path)
         self._init_db()
 
     def _init_db(self) -> None:
+        self._db_path.parent.mkdir(parents=True, exist_ok=True)
         with sqlite3.connect(self._db_path) as conn:
-            conn.execute(_CREATE_TABLE)
-            conn.commit()
+            row = conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='regime_observations'"
+            ).fetchone()
+            if row is None:
+                conn.execute(_CREATE_TABLE)
+                conn.commit()
+            elif "semantic_compatibility_id" not in (row[0] or ""):
+                conn.executescript(_REBUILD_FROM_LEGACY)
+                conn.commit()
+
+        SqliteMigrationRunner(self._db_path).run(
+            "regime_observations",
+            [(0, "SELECT 1")],
+        )
 
     # ── writes ────────────────────────────────────────────────────────────────
 
     def save(self, evidence: RegimeDetectionEvidence) -> None:
-        """Upsert a regime observation.
-
-        On conflict: non-label fields are replaced with the new values (re-evaluation
-        may produce a slightly different score if config changes), while forward label
-        columns are preserved via COALESCE so that retroactively filled labels are
-        never erased by a re-evaluation of the same date.
-        """
+        """Upsert a regime observation for its date + cohort identity."""
         now = datetime.now(UTC).isoformat()
         with sqlite3.connect(self._db_path) as conn:
             conn.execute(
                 """
                 INSERT INTO regime_observations
-                    (observation_date, schema_version, regime, regime_score,
+                    (observation_date, semantic_compatibility_id, observation_contract,
+                     universe_name, benchmark_ticker, schema_version, regime, regime_score,
                      regime_confidence, regime_stability, days_in_regime,
                      transition_warning, detection_inputs_json,
                      forward_ihsg_return_5d, forward_ihsg_return_10d,
                      forward_ihsg_return_20d, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(observation_date) DO UPDATE SET
-                    schema_version        = excluded.schema_version,
-                    regime                = excluded.regime,
-                    regime_score          = excluded.regime_score,
-                    regime_confidence     = excluded.regime_confidence,
-                    regime_stability      = excluded.regime_stability,
-                    days_in_regime        = excluded.days_in_regime,
-                    transition_warning    = excluded.transition_warning,
-                    detection_inputs_json = excluded.detection_inputs_json,
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(observation_date, semantic_compatibility_id) DO UPDATE SET
+                    observation_contract      = excluded.observation_contract,
+                    universe_name             = excluded.universe_name,
+                    benchmark_ticker          = excluded.benchmark_ticker,
+                    schema_version            = excluded.schema_version,
+                    regime                    = excluded.regime,
+                    regime_score              = excluded.regime_score,
+                    regime_confidence         = excluded.regime_confidence,
+                    regime_stability          = excluded.regime_stability,
+                    days_in_regime            = excluded.days_in_regime,
+                    transition_warning        = excluded.transition_warning,
+                    detection_inputs_json     = excluded.detection_inputs_json,
                     forward_ihsg_return_5d  = COALESCE(
                         regime_observations.forward_ihsg_return_5d,
                         excluded.forward_ihsg_return_5d
@@ -101,10 +155,14 @@ class SQLiteRegimeObservationRepository:
                         regime_observations.forward_ihsg_return_20d,
                         excluded.forward_ihsg_return_20d
                     ),
-                    updated_at            = excluded.updated_at
+                    updated_at                = excluded.updated_at
                 """,
                 (
                     evidence.observation_date.isoformat(),
+                    evidence.semantic_compatibility_id,
+                    evidence.observation_contract,
+                    evidence.universe_name,
+                    evidence.benchmark_ticker,
                     evidence.schema_version,
                     evidence.regime,
                     evidence.regime_score,
@@ -129,11 +187,9 @@ class SQLiteRegimeObservationRepository:
         forward_ihsg_return_5d: float | None = None,
         forward_ihsg_return_10d: float | None = None,
         forward_ihsg_return_20d: float | None = None,
+        semantic_compatibility_id: str = "",
     ) -> bool:
-        """Fill forward label slots that are still NULL (idempotent).
-
-        Returns True if the observation existed and at least one label was written.
-        """
+        """Fill forward label slots that are still NULL (idempotent) for one cohort."""
         updates: list[str] = []
         params: list = []
 
@@ -153,10 +209,13 @@ class SQLiteRegimeObservationRepository:
         updates.append("updated_at = ?")
         params.append(datetime.now(UTC).isoformat())
         params.append(observation_date.isoformat())
+        params.append(semantic_compatibility_id)
 
         with sqlite3.connect(self._db_path) as conn:
             cursor = conn.execute(
-                f"UPDATE regime_observations SET {', '.join(updates)} WHERE observation_date = ?",
+                "UPDATE regime_observations SET "
+                f"{', '.join(updates)} "
+                "WHERE observation_date = ? AND semantic_compatibility_id = ?",
                 params,
             )
             conn.commit()
@@ -164,22 +223,59 @@ class SQLiteRegimeObservationRepository:
 
     # ── reads ─────────────────────────────────────────────────────────────────
 
-    def get(self, observation_date: date) -> RegimeDetectionEvidence | None:
+    def get(
+        self,
+        observation_date: date,
+        *,
+        semantic_compatibility_id: str | None = None,
+    ) -> RegimeDetectionEvidence | None:
         with sqlite3.connect(self._db_path) as conn:
             conn.row_factory = sqlite3.Row
-            row = conn.execute(
+            if semantic_compatibility_id is not None:
+                row = conn.execute(
+                    """
+                    SELECT * FROM regime_observations
+                    WHERE observation_date = ? AND semantic_compatibility_id = ?
+                    """,
+                    (observation_date.isoformat(), semantic_compatibility_id),
+                ).fetchone()
+                return _row_to_evidence(row) if row else None
+
+            rows = conn.execute(
                 "SELECT * FROM regime_observations WHERE observation_date = ?",
                 (observation_date.isoformat(),),
-            ).fetchone()
-        return _row_to_evidence(row) if row else None
+            ).fetchall()
+            if len(rows) == 1:
+                return _row_to_evidence(rows[0])
+            return None
 
-    def get_recent(self, limit: int = 30) -> list[RegimeDetectionEvidence]:
+    def get_recent(
+        self,
+        limit: int = 30,
+        *,
+        semantic_compatibility_id: str | None = None,
+    ) -> list[RegimeDetectionEvidence]:
         with sqlite3.connect(self._db_path) as conn:
             conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                "SELECT * FROM regime_observations ORDER BY observation_date DESC LIMIT ?",
-                (limit,),
-            ).fetchall()
+            if semantic_compatibility_id is not None:
+                rows = conn.execute(
+                    """
+                    SELECT * FROM regime_observations
+                    WHERE semantic_compatibility_id = ?
+                    ORDER BY observation_date DESC
+                    LIMIT ?
+                    """,
+                    (semantic_compatibility_id, limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT * FROM regime_observations
+                    ORDER BY observation_date DESC
+                    LIMIT ?
+                    """,
+                    (limit,),
+                ).fetchall()
         return [_row_to_evidence(r) for r in rows]
 
 
@@ -210,4 +306,8 @@ def _row_to_evidence(row: sqlite3.Row) -> RegimeDetectionEvidence:
         forward_ihsg_return_5d=row["forward_ihsg_return_5d"],
         forward_ihsg_return_10d=row["forward_ihsg_return_10d"],
         forward_ihsg_return_20d=row["forward_ihsg_return_20d"],
+        semantic_compatibility_id=row["semantic_compatibility_id"],
+        observation_contract=row["observation_contract"],
+        universe_name=row["universe_name"],
+        benchmark_ticker=row["benchmark_ticker"],
     )

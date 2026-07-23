@@ -72,6 +72,12 @@ class RegimeDetectionEvidence:
     forward_ihsg_return_10d: float | None = None
     forward_ihsg_return_20d: float | None = None
 
+    # ── Config cohort identity (legacy rows use empty strings) ─────────────────
+    semantic_compatibility_id: str = ""
+    observation_contract: str = ""
+    universe_name: str = ""
+    benchmark_ticker: str = ""
+
     def __post_init__(self) -> None:
         if not (0.0 <= self.regime_score <= 1.0):
             raise ValueError(f"regime_score must be 0.0–1.0, got {self.regime_score}")

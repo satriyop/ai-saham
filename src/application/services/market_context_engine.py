@@ -19,6 +19,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from src.application.config.market_context_config import MarketContextConfig
+from src.application.services.mce_observation_identity import MceObservationIdentity
 from src.application.use_case.build_market_context_use_case import (
     BuildMarketContextRequest,
     BuildMarketContextUseCase,
@@ -64,6 +65,7 @@ class MarketContextEngine:
         context_repository: "MarketContextRepository | None" = None,
         regime_observation_repository: "RegimeObservationRepository | None" = None,
         banking_universe: list[str] | None = None,
+        mce_identity: MceObservationIdentity | None = None,
     ) -> None:
         self._repo = market_repository
         self._broker_repo = broker_repository
@@ -72,6 +74,7 @@ class MarketContextEngine:
         self._config = config or MarketContextConfig()
         self._universe = [t.upper() for t in (universe or [])]
         self._banking_universe = [t.upper() for t in (banking_universe or [])]
+        self._mce_identity = mce_identity
         self._use_case = BuildMarketContextUseCase()
 
     def evaluate(
@@ -181,8 +184,9 @@ class MarketContextEngine:
         """
         if self._obs_repo is None:
             return None, None
+        cohort_id = self._mce_identity.cohort_id if self._mce_identity else None
         try:
-            prior = self._obs_repo.get_recent(limit=60)
+            prior = self._obs_repo.get_recent(limit=60, semantic_compatibility_id=cohort_id)
         except Exception as exc:
             logger.debug("MarketContextEngine: failed to read prior observations: %s", exc)
             return None, None
@@ -241,6 +245,16 @@ class MarketContextEngine:
     def _persist_observation(self, evidence: RegimeDetectionEvidence) -> None:
         if self._obs_repo is None:
             return
+        if self._mce_identity is not None:
+            import dataclasses as _dc
+
+            evidence = _dc.replace(
+                evidence,
+                semantic_compatibility_id=self._mce_identity.cohort_id,
+                observation_contract=self._mce_identity.observation_contract,
+                universe_name=self._mce_identity.universe_name,
+                benchmark_ticker=self._mce_identity.benchmark_ticker,
+            )
         try:
             self._obs_repo.save(evidence)
         except Exception as exc:
@@ -254,6 +268,8 @@ class MarketContextEngine:
         """
         if self._obs_repo is None or not ihsg_candles:
             return
+
+        cohort_id = self._mce_identity.cohort_id if self._mce_identity else ""
 
         # Sort candles ascending by date; use the last candle on or before as_of as T
         sorted_candles = sorted(
@@ -286,15 +302,21 @@ class MarketContextEngine:
             try:
                 if session_offset == 5:
                     self._obs_repo.update_forward_labels(
-                        prior_candle.date, forward_ihsg_return_5d=fwd_return
+                        prior_candle.date,
+                        forward_ihsg_return_5d=fwd_return,
+                        semantic_compatibility_id=cohort_id,
                     )
                 elif session_offset == 10:
                     self._obs_repo.update_forward_labels(
-                        prior_candle.date, forward_ihsg_return_10d=fwd_return
+                        prior_candle.date,
+                        forward_ihsg_return_10d=fwd_return,
+                        semantic_compatibility_id=cohort_id,
                     )
                 else:
                     self._obs_repo.update_forward_labels(
-                        prior_candle.date, forward_ihsg_return_20d=fwd_return
+                        prior_candle.date,
+                        forward_ihsg_return_20d=fwd_return,
+                        semantic_compatibility_id=cohort_id,
                     )
             except Exception as exc:
                 logger.debug(
@@ -306,7 +328,16 @@ class MarketContextEngine:
         if self._context_repo is None:
             return
         try:
-            self._context_repo.save(context)
+            if self._mce_identity is not None:
+                self._context_repo.save(
+                    context,
+                    semantic_compatibility_id=self._mce_identity.cohort_id,
+                    observation_contract=self._mce_identity.observation_contract,
+                    universe_name=self._mce_identity.universe_name,
+                    benchmark_ticker=self._mce_identity.benchmark_ticker,
+                )
+            else:
+                self._context_repo.save(context)
         except Exception as exc:
             logger.debug("MarketContextEngine: failed to persist snapshot: %s", exc)
 

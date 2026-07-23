@@ -1,9 +1,11 @@
 """
 SQLite implementation of the MarketContextRepository port.
 
-Schema: market_context_snapshots — one row per as_of_date (upsert on conflict).
+Schema: market_context_snapshots — one row per (as_of_date, semantic_compatibility_id).
 Factors are stored as a JSON array to avoid a separate table; this snapshot is
 read-only after write (no mutations), so denormalization is acceptable.
+
+Legacy rows migrated with semantic_compatibility_id = ''.
 
 Layer: Infrastructure (Persistence)
 """
@@ -20,55 +22,143 @@ from src.domain.value_objects.market_context import (
     MarketContext,
     MarketRegime,
 )
+from src.infrastructure.persistence.sqlite_migration_runner import SqliteMigrationRunner
 
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS market_context_snapshots (
-    as_of_date        TEXT NOT NULL PRIMARY KEY,
-    regime            TEXT NOT NULL,
-    conviction        REAL NOT NULL,
-    signal_multiplier REAL NOT NULL,
-    gate_tightening   INTEGER NOT NULL,
-    factors_json      TEXT NOT NULL,
-    staleness_warning TEXT,
-    coverage_warning  TEXT,
-    created_at        TEXT NOT NULL,
-    regime_confidence REAL,
-    regime_stability  TEXT,
-    days_in_regime    INTEGER,
-    transition_warning TEXT
+    id                        INTEGER PRIMARY KEY AUTOINCREMENT,
+    as_of_date                TEXT NOT NULL,
+    semantic_compatibility_id TEXT NOT NULL DEFAULT '',
+    observation_contract      TEXT NOT NULL DEFAULT '',
+    universe_name             TEXT NOT NULL DEFAULT '',
+    benchmark_ticker          TEXT NOT NULL DEFAULT '',
+    regime                    TEXT NOT NULL,
+    conviction                REAL NOT NULL,
+    signal_multiplier         REAL NOT NULL,
+    gate_tightening           INTEGER NOT NULL,
+    factors_json              TEXT NOT NULL,
+    staleness_warning         TEXT,
+    coverage_warning          TEXT,
+    created_at                TEXT NOT NULL,
+    regime_confidence         REAL,
+    regime_stability          TEXT,
+    days_in_regime            INTEGER,
+    transition_warning        TEXT,
+    UNIQUE(as_of_date, semantic_compatibility_id)
 )
+"""
+
+_REBUILD_FROM_LEGACY = """
+CREATE TABLE market_context_snapshots_new (
+    id                        INTEGER PRIMARY KEY AUTOINCREMENT,
+    as_of_date                TEXT NOT NULL,
+    semantic_compatibility_id TEXT NOT NULL DEFAULT '',
+    observation_contract      TEXT NOT NULL DEFAULT '',
+    universe_name             TEXT NOT NULL DEFAULT '',
+    benchmark_ticker          TEXT NOT NULL DEFAULT '',
+    regime                    TEXT NOT NULL,
+    conviction                REAL NOT NULL,
+    signal_multiplier         REAL NOT NULL,
+    gate_tightening           INTEGER NOT NULL,
+    factors_json              TEXT NOT NULL,
+    staleness_warning         TEXT,
+    coverage_warning          TEXT,
+    created_at                TEXT NOT NULL,
+    regime_confidence         REAL,
+    regime_stability          TEXT,
+    days_in_regime            INTEGER,
+    transition_warning        TEXT,
+    UNIQUE(as_of_date, semantic_compatibility_id)
+);
+INSERT INTO market_context_snapshots_new
+    (as_of_date, semantic_compatibility_id, observation_contract,
+     universe_name, benchmark_ticker, regime, conviction, signal_multiplier,
+     gate_tightening, factors_json, staleness_warning, coverage_warning,
+     created_at, regime_confidence, regime_stability, days_in_regime,
+     transition_warning)
+SELECT
+    as_of_date, '', '', '', '',
+    regime, conviction, signal_multiplier, gate_tightening, factors_json,
+    staleness_warning, coverage_warning, created_at, regime_confidence,
+    regime_stability, days_in_regime, transition_warning
+FROM market_context_snapshots;
+DROP TABLE market_context_snapshots;
+ALTER TABLE market_context_snapshots_new RENAME TO market_context_snapshots;
 """
 
 
 class SQLiteMarketContextRepository:
-    """Persists MarketContext snapshots to SQLite, one record per date."""
+    """Persists MarketContext snapshots to SQLite, keyed by date + cohort."""
 
     def __init__(self, db_path: str | Path = "data.db") -> None:
         self._db_path = Path(db_path)
         self._init_db()
 
     def _init_db(self) -> None:
+        self._db_path.parent.mkdir(parents=True, exist_ok=True)
         with sqlite3.connect(self._db_path) as conn:
-            conn.execute(_CREATE_TABLE)
-            conn.commit()
+            row = conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='market_context_snapshots'"
+            ).fetchone()
+            if row is None:
+                conn.execute(_CREATE_TABLE)
+                conn.commit()
+            elif "semantic_compatibility_id" not in (row[0] or ""):
+                conn.executescript(_REBUILD_FROM_LEGACY)
+                conn.commit()
+
+        SqliteMigrationRunner(self._db_path).run(
+            "market_context_snapshots",
+            [(0, "SELECT 1")],
+        )
 
     # ── writes ────────────────────────────────────────────────────────────────
 
-    def save(self, context: MarketContext) -> None:
-        """Upsert: replaces any existing snapshot for the same date."""
+    def save(
+        self,
+        context: MarketContext,
+        *,
+        semantic_compatibility_id: str = "",
+        observation_contract: str = "",
+        universe_name: str = "",
+        benchmark_ticker: str = "",
+    ) -> None:
+        """Upsert a snapshot for its date + cohort identity."""
         factors_json = json.dumps([_factor_to_dict(f) for f in context.factors])
         with sqlite3.connect(self._db_path) as conn:
             conn.execute(
                 """
-                INSERT OR REPLACE INTO market_context_snapshots
-                    (as_of_date, regime, conviction, signal_multiplier, gate_tightening,
-                     factors_json, staleness_warning, coverage_warning,
-                     regime_confidence, regime_stability, days_in_regime, transition_warning,
-                     created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO market_context_snapshots
+                    (as_of_date, semantic_compatibility_id, observation_contract,
+                     universe_name, benchmark_ticker, regime, conviction,
+                     signal_multiplier, gate_tightening, factors_json,
+                     staleness_warning, coverage_warning,
+                     regime_confidence, regime_stability, days_in_regime,
+                     transition_warning, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(as_of_date, semantic_compatibility_id) DO UPDATE SET
+                    observation_contract = excluded.observation_contract,
+                    universe_name        = excluded.universe_name,
+                    benchmark_ticker     = excluded.benchmark_ticker,
+                    regime               = excluded.regime,
+                    conviction           = excluded.conviction,
+                    signal_multiplier    = excluded.signal_multiplier,
+                    gate_tightening      = excluded.gate_tightening,
+                    factors_json         = excluded.factors_json,
+                    staleness_warning    = excluded.staleness_warning,
+                    coverage_warning     = excluded.coverage_warning,
+                    regime_confidence    = excluded.regime_confidence,
+                    regime_stability     = excluded.regime_stability,
+                    days_in_regime       = excluded.days_in_regime,
+                    transition_warning   = excluded.transition_warning,
+                    created_at           = excluded.created_at
                 """,
                 (
                     context.as_of_date.isoformat(),
+                    semantic_compatibility_id,
+                    observation_contract,
+                    universe_name,
+                    benchmark_ticker,
                     context.regime.value,
                     context.conviction,
                     context.signal_multiplier,
@@ -87,22 +177,59 @@ class SQLiteMarketContextRepository:
 
     # ── reads ─────────────────────────────────────────────────────────────────
 
-    def get(self, as_of_date: date) -> MarketContext | None:
+    def get(
+        self,
+        as_of_date: date,
+        *,
+        semantic_compatibility_id: str | None = None,
+    ) -> MarketContext | None:
         with sqlite3.connect(self._db_path) as conn:
             conn.row_factory = sqlite3.Row
-            row = conn.execute(
+            if semantic_compatibility_id is not None:
+                row = conn.execute(
+                    """
+                    SELECT * FROM market_context_snapshots
+                    WHERE as_of_date = ? AND semantic_compatibility_id = ?
+                    """,
+                    (as_of_date.isoformat(), semantic_compatibility_id),
+                ).fetchone()
+                return _row_to_context(row) if row else None
+
+            rows = conn.execute(
                 "SELECT * FROM market_context_snapshots WHERE as_of_date = ?",
                 (as_of_date.isoformat(),),
-            ).fetchone()
-        return _row_to_context(row) if row else None
+            ).fetchall()
+            if len(rows) == 1:
+                return _row_to_context(rows[0])
+            return None
 
-    def get_recent(self, limit: int = 30) -> list[MarketContext]:
+    def get_recent(
+        self,
+        limit: int = 30,
+        *,
+        semantic_compatibility_id: str | None = None,
+    ) -> list[MarketContext]:
         with sqlite3.connect(self._db_path) as conn:
             conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                "SELECT * FROM market_context_snapshots ORDER BY as_of_date DESC LIMIT ?",
-                (limit,),
-            ).fetchall()
+            if semantic_compatibility_id is not None:
+                rows = conn.execute(
+                    """
+                    SELECT * FROM market_context_snapshots
+                    WHERE semantic_compatibility_id = ?
+                    ORDER BY as_of_date DESC
+                    LIMIT ?
+                    """,
+                    (semantic_compatibility_id, limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT * FROM market_context_snapshots
+                    ORDER BY as_of_date DESC
+                    LIMIT ?
+                    """,
+                    (limit,),
+                ).fetchall()
         return [_row_to_context(r) for r in rows]
 
 
