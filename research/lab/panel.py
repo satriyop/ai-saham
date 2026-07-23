@@ -78,6 +78,8 @@ class PanelRow:
     risk_confidence: int | None = None
     gate_is_structural: bool | None = None
     risk_source: str | None = None  # "child_table" | "payload" | None
+    # BandarGate dig input (from candidate.bandar_detector)
+    five_day_accdist: str | None = None
 
 
 def resolve_db_path(db_path: Path | None = None) -> Path:
@@ -397,9 +399,22 @@ def load_swing10d_panel(
                 risk_confidence=risk.get("risk_confidence"),
                 gate_is_structural=risk.get("gate_is_structural"),
                 risk_source=risk.get("risk_source"),
+                five_day_accdist=_five_day_accdist(row["payload_json"]),
             )
         )
     return panel
+
+
+def _five_day_accdist(payload_json: str) -> str | None:
+    cand = _candidate_fields(payload_json)
+    detector = cand.get("bandar_detector")
+    if not isinstance(detector, dict):
+        return None
+    raw = detector.get("five_day_accdist")
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    return text or None
 
 
 def _named_setup_evaluations(payload_json: str) -> dict[str, dict[str, Any]] | None:

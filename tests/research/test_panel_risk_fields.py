@@ -95,3 +95,16 @@ def test_risk_fields_from_child_open_when_no_gate() -> None:
 def test_risk_fields_from_child_none_when_empty() -> None:
     assert _risk_fields_from_child(None, None, None) is None
     assert _risk_fields_from_child("not-json", None, None) is None
+
+
+def test_five_day_accdist_from_bandar_detector() -> None:
+    from research.lab.panel import _five_day_accdist
+
+    payload = {
+        "candidate": {
+            "bandar_detector": {"five_day_accdist": "Small Dist"},
+        }
+    }
+    assert _five_day_accdist(json.dumps(payload)) == "Small Dist"
+    assert _five_day_accdist(json.dumps({"candidate": {}})) is None
+    assert _five_day_accdist(json.dumps({"candidate": {"bandar_detector": {}}})) is None

@@ -27,6 +27,7 @@ research/
     factor_card_setup_gates.py       # Package B2 — named setup gate thresholds
     factor_card_regime_policy.py     # Package B6 — DecisionPolicy regime floors
     factor_card_risk_gates.py        # Package C — RiskEngine OPEN vs BLOCKED
+    factor_card_bandar_gate.py       # Package C1 follow-up — BandarGate FP dig
     factor_card_mce_factors.py       # Package D — MCE / regime
   artifacts/                # generated reports (gitignored except .gitkeep)
 ```
@@ -88,6 +89,7 @@ A green factor card has **no** authority.
 .venv/bin/python research/scripts/factor_card_setup_gates.py
 .venv/bin/python research/scripts/factor_card_regime_policy.py
 .venv/bin/python research/scripts/factor_card_risk_gates.py
+.venv/bin/python research/scripts/factor_card_bandar_gate.py
 .venv/bin/python research/scripts/factor_card_mce_factors.py
 
 # optional richer lab deps later
