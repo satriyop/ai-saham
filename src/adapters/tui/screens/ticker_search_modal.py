@@ -27,7 +27,10 @@ class TickerSearchModal(ModalScreen[str | None]):
 
     BINDINGS = [Binding("escape", "cancel", "Cancel")]
 
-    def __init__(self, search_tickers: SearchTickers, *, limit: int = 20) -> None:
+    # Generous safety bound only: with the current universe (~300 cached tickers)
+    # every match is shown and the list scrolls. It exists so a future universe of
+    # thousands cannot render an unbounded list on a single keystroke.
+    def __init__(self, search_tickers: SearchTickers, *, limit: int = 500) -> None:
         super().__init__()
         self._search = search_tickers
         self._limit = limit
@@ -69,7 +72,8 @@ class TickerSearchModal(ModalScreen[str | None]):
         self.dismiss(None)
 
     def _refresh_results(self, prefix: str) -> None:
-        self._matches = tuple(self._search(prefix))[: self._limit]
+        available = tuple(self._search(prefix))
+        self._matches = available[: self._limit]
         results = self.query_one("#ticker-search-results", ListView)
         results.clear()
         for ticker in self._matches:
@@ -79,5 +83,9 @@ class TickerSearchModal(ModalScreen[str | None]):
         status = self.query_one("#ticker-search-status", Static)
         if not self._matches:
             status.update("No cached ticker matches.")
+        elif len(available) > len(self._matches):
+            status.update(
+                f"showing {len(self._matches)} of {len(available)} — keep typing to narrow"
+            )
         else:
             status.update(f"{len(self._matches)} match(es) — Enter opens, Esc cancels")

@@ -184,6 +184,28 @@ def test_selection_and_tab_changes_never_run_analysis():
 # --------------------------------------------------------------------------
 
 
+def test_search_shows_full_universe_not_capped():
+    # Regression: the search previously stacked a 50-item (use case) and 20-item
+    # (modal) cap, hiding most of the cached universe. All matches must be shown.
+    universe = tuple(f"BB{i:03d}" for i in range(60))
+
+    async def scenario() -> None:
+        app = create_tui_app(
+            daily_loader=lambda: ready_response(),
+            accumulation_loader=lambda request: single_result(),
+            ticker_loader=lambda ticker, mode=None, setup=None: ticker_response(ticker=ticker),
+            search_tickers=lambda prefix: universe,
+        )
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.05)
+            await pilot.press("slash")
+            await pilot.pause()
+            assert isinstance(app.screen, TickerSearchModal)
+            assert len(app.screen._matches) == 60  # not truncated to 20
+
+    asyncio.run(scenario())
+
+
 def test_global_search_is_offline_and_opens_workbench():
     search_calls = []
     ticker_calls = []

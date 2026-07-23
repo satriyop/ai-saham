@@ -788,8 +788,11 @@ def _build_cached_ticker_search(db_path: Path) -> Callable[[str], tuple[str, ...
     use_case = ListCachedTickersUseCase(SQLiteMarketRepository(db_path=db_path))
 
     def search(prefix: str) -> tuple[str, ...]:
+        # No limit: the search must expose the complete cached universe, not an
+        # arbitrary slice. The modal list scrolls, so returning every match keeps
+        # the universe fully reachable while typing narrows it.
         return use_case.execute(
-            ListCachedTickersRequest(prefix=prefix or None, limit=50)
+            ListCachedTickersRequest(prefix=prefix or None, limit=None)
         ).tickers
 
     return search
