@@ -59,6 +59,16 @@ def test_learn_group_exposes_opening_loop_commands():
     assert "tune" in result.stdout
 
 
+def test_view_group_exposes_ticker_dashboard_command():
+    result = runner.invoke(app, ["view", "--help"])
+
+    assert result.exit_code == 0
+    assert "ticker" in result.stdout
+    assert "saham view BBCA" in result.stdout
+    assert "universe" in result.stdout
+    assert "broker" in result.stdout
+
+
 def test_view_broker_group_exposes_read_only_commands():
     result = runner.invoke(app, ["view", "broker", "--help"])
 

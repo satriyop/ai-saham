@@ -40,7 +40,10 @@ class _ViewGroup(TyperGroup):
 view_app = typer.Typer(
     cls=_ViewGroup,
     name="view",
-    help="Read-only data browsing — inspect already-fetched local data.",
+    help=(
+        "Read-only data browsing — inspect already-fetched local data.\n\n"
+        "Ticker dashboard: `saham view BBCA` (shorthand) or `saham view ticker BBCA`."
+    ),
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},
 )
@@ -76,7 +79,7 @@ market_context_view_app.callback(invoke_without_command=True)(market_context_sho
 view_app.add_typer(market_context_view_app, name="market-context")
 
 
-@view_app.command("ticker", hidden=True)
+@view_app.command("ticker")
 def view_ticker(
     ticker: str = typer.Argument(..., help="Ticker symbol (e.g. BBCA)"),
     brief: Annotated[
@@ -94,7 +97,10 @@ def view_ticker(
         ),
     ] = None,
 ) -> None:
-    """Show all cached data for a ticker."""
+    """Show a read-only cached-data dashboard for one ticker.
+
+    Shorthand: `saham view BBCA` is equivalent to `saham view ticker BBCA`.
+    """
     from src.adapters.cli.view_ticker_display import show_ticker_view
 
     cfg = load_app_config()
