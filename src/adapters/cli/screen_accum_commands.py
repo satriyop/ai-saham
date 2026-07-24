@@ -32,6 +32,7 @@ from src.application.dto.screen_contract import (
     ScreenSubjectKind,
     build_screen_envelope,
     default_screen_fetch_hint,
+    related_actions_for_accum,
     resolve_accum_result_status,
 )
 from src.application.services.screen_accum_result_projector import (
@@ -357,6 +358,9 @@ def _render_multi(
             "warnings": list(result.warnings),
             "partial_result": partial_result,
             **projection.to_dict(),
+            "related_actions": related_actions_for_accum(
+                tickers=[row.ticker for row in projection.rows],
+            ),
         }
         status = resolve_accum_result_status(result_count=len(projection.rows))
         typer.echo(
@@ -409,6 +413,9 @@ def _render_single(
         return
 
     if output_format == "json":
+        saved_name = (
+            result.save_result.name if result.save_result is not None else None
+        )
         data = {
             "schema_version": 1,
             "artifact_type": "accumulation_screen",
@@ -423,6 +430,10 @@ def _render_single(
             "warnings": list(result.warnings),
             "partial_result": response.tickers_skipped > 0,
             **projection.to_dict(),
+            "related_actions": related_actions_for_accum(
+                tickers=[c.ticker for c in projection.candidates],
+                saved_watchlist_name=saved_name,
+            ),
         }
         if strategy:
             data["strategy_name"] = strategy

@@ -7,6 +7,7 @@ from src.application.dto.screen_contract import (
     ScreenSubjectKind,
     build_screen_envelope,
     missing_screen_message,
+    related_actions_for_accum,
     resolve_accum_result_status,
 )
 
@@ -61,3 +62,35 @@ def test_resolve_accum_result_status_empty_when_no_results():
 def test_resolve_accum_result_status_ok_when_results_present():
     assert resolve_accum_result_status(result_count=1) is ScreenResultStatus.OK
     assert resolve_accum_result_status(result_count=20) is ScreenResultStatus.OK
+
+
+def test_related_actions_for_accum_includes_view_analyze_and_compare():
+    actions = related_actions_for_accum(
+        tickers=["bbca", "BBRI", "bbca"],
+        saved_watchlist_name="morning-watch",
+    )
+    assert actions[0] == {
+        "verb": "view",
+        "label": "Open BBCA",
+        "command": "saham view BBCA",
+    }
+    assert actions[1] == {
+        "verb": "analyze",
+        "label": "Analyze BBCA",
+        "command": "saham analyze swing BBCA",
+    }
+    assert actions[2]["command"] == "saham view BBRI"
+    assert actions[-1] == {
+        "verb": "compare",
+        "label": "Compare watchlist morning-watch",
+        "command": "saham screen compare morning-watch",
+    }
+
+
+def test_related_actions_for_accum_caps_tickers():
+    tickers = [f"T{i:02d}" for i in range(10)]
+    actions = related_actions_for_accum(tickers=tickers, max_tickers=2)
+    # 2 tickers * (view + analyze) = 4
+    assert len(actions) == 4
+    assert actions[0]["command"] == "saham view T00"
+    assert actions[2]["command"] == "saham view T01"

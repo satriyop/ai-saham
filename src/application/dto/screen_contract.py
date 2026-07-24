@@ -9,11 +9,11 @@ Layer: Application
 
 from __future__ import annotations
 
-from dataclasses import asdict, is_dataclass
+from dataclasses import asdict, dataclass, is_dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Any
+from typing import Any, Iterable, Sequence
 
 
 class ScreenSubjectKind(str, Enum):
@@ -27,6 +27,22 @@ class ScreenResultStatus(str, Enum):
     EMPTY = "empty"
     MISSING = "missing"
     ERROR = "error"
+
+
+@dataclass(frozen=True)
+class ScreenRelatedAction:
+    """Structured next-step link for CLI agents / future TUI Discover."""
+
+    verb: str
+    label: str
+    command: str
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "verb": self.verb,
+            "label": self.label,
+            "command": self.command,
+        }
 
 
 def resolve_accum_result_status(*, result_count: int) -> ScreenResultStatus:
@@ -106,6 +122,53 @@ def default_screen_fetch_hint(*, universe: str | None = None) -> str:
     if universe:
         return f"saham fetch market --universe {universe}"
     return "saham fetch market"
+
+
+def related_actions_for_accum(
+    *,
+    tickers: Sequence[str] | Iterable[str],
+    saved_watchlist_name: str | None = None,
+    max_tickers: int = 5,
+) -> list[dict[str, str]]:
+    """Build follow-up actions for accumulation screen results.
+
+    Lives under envelope ``data.related_actions`` (not top-level) until a
+    shared top-level field is amended into ADR-046.
+    """
+    actions: list[ScreenRelatedAction] = []
+    seen: set[str] = set()
+    for raw in tickers:
+        ticker = str(raw).strip().upper()
+        if not ticker or ticker in seen:
+            continue
+        if len(seen) >= max_tickers:
+            break
+        seen.add(ticker)
+        actions.append(
+            ScreenRelatedAction(
+                verb="view",
+                label=f"Open {ticker}",
+                command=f"saham view {ticker}",
+            )
+        )
+        actions.append(
+            ScreenRelatedAction(
+                verb="analyze",
+                label=f"Analyze {ticker}",
+                command=f"saham analyze swing {ticker}",
+            )
+        )
+    if saved_watchlist_name:
+        name = saved_watchlist_name.strip()
+        if name:
+            actions.append(
+                ScreenRelatedAction(
+                    verb="compare",
+                    label=f"Compare watchlist {name}",
+                    command=f"saham screen compare {name}",
+                )
+            )
+    return [action.to_dict() for action in actions]
 
 
 def missing_screen_message(

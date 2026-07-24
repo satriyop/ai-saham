@@ -271,6 +271,50 @@ def test_screen_accum_json_save_includes_saved_watchlist(monkeypatch):
     assert req.save_name == "mywatch"
     payload = _screen_payload(json.loads(result.output))
     assert payload["saved_watchlist"] == {"name": "mywatch", "saved_count": 1}
+    assert {
+        "verb": "compare",
+        "label": "Compare watchlist mywatch",
+        "command": "saham screen compare mywatch",
+    } in payload["related_actions"]
+
+
+def test_screen_accum_json_includes_related_actions(monkeypatch):
+    def fake_uc(*, db_path, screener_config, swing_config, **kwargs):
+        uc = SimpleNamespace()
+        uc.execute = lambda req: _fake_workflow_result(
+            response=AccumulationScreenResponse(
+                candidates=[
+                    _candidate(ticker="BBCA"),
+                    _candidate(ticker="BBRI"),
+                ],
+                screened_at=date(2026, 6, 28),
+                window_days=7,
+                total_tickers_checked=2,
+                tickers_skipped=0,
+                provider="fake",
+            ),
+        )
+        return uc
+
+    monkeypatch.setattr(
+        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        fake_uc,
+    )
+
+    result = runner.invoke(app, ["screen", "accum", "BBCA", "BBRI", "--format", "json"])
+
+    assert result.exit_code == 0, result.output
+    payload = _screen_payload(json.loads(result.output))
+    assert {
+        "verb": "view",
+        "label": "Open BBCA",
+        "command": "saham view BBCA",
+    } in payload["related_actions"]
+    assert {
+        "verb": "analyze",
+        "label": "Analyze BBRI",
+        "command": "saham analyze swing BBRI",
+    } in payload["related_actions"]
 
 
 def test_screen_accum_multi_save_fails_explicitly(monkeypatch):
