@@ -1,5 +1,5 @@
 """
-Candles, seasonality, and IEV / pre-open panels for ticker dashboard.
+Candles, price structure, seasonality, and IEV / pre-open panels for ticker dashboard.
 
 Layer: Adapter
 """
@@ -10,7 +10,65 @@ from rich.console import Group
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, panel
-from src.adapters.cli.view_ticker_formatters import _fmt_vol, _not_cached
+from src.adapters.cli.view_ticker_formatters import _fmt_vol, _not_cached, _pct
+from src.adapters.cli.view_ticker_price_structure import PriceStructure
+
+
+def _change_text(value: float | None) -> Text:
+    if value is None:
+        return Text("\u2014", style="dim")
+    style = "green" if value > 0 else ("red" if value < 0 else "default")
+    return Text(f"{value:+.1f}%", style=style)
+
+
+def _price_structure_panel(
+    structure: PriceStructure | None,
+    *,
+    empty_hint: str | None = None,
+) -> object:
+    """Market structure: multi-horizon change, 52w position, volume vs avg."""
+    if structure is None:
+        return panel(_not_cached(hint=empty_hint), title="Price Structure")
+
+    lines: list[Text] = []
+    lines.append(
+        Text("  Close ", style="dim")
+        + Text(f"Rp{structure.close:,.0f}", style="bold")
+        + Text(f"   as of {structure.as_of}", style="dim")
+    )
+    lines.append(
+        Text("  Chg 1d ", style="dim")
+        + _change_text(structure.change_1d_pct)
+        + Text("   5d ", style="dim")
+        + _change_text(structure.change_5d_pct)
+        + Text("   20d ", style="dim")
+        + _change_text(structure.change_20d_pct)
+    )
+
+    if structure.low_52w is not None and structure.high_52w is not None:
+        range_txt = (
+            f"  52w  Rp{structure.low_52w:,.0f} \u2013 Rp{structure.high_52w:,.0f}"
+        )
+        if structure.range_52w_pct is not None:
+            range_txt += f"   pos {_pct(structure.range_52w_pct)}"
+        lines.append(Text(range_txt, style="default"))
+
+    if structure.volume is not None:
+        vol_line = Text("  Vol ", style="dim") + Text(
+            _fmt_vol(structure.volume), style="default"
+        )
+        if structure.avg_volume_20d is not None:
+            vol_line += Text(
+                f"   20d avg {_fmt_vol(int(structure.avg_volume_20d))}",
+                style="dim",
+            )
+        if structure.volume_vs_20d is not None:
+            vs = structure.volume_vs_20d
+            vs_style = "green" if vs >= 1.2 else ("red" if vs <= 0.8 else "default")
+            vol_line += Text(f"   {vs:.2f}x avg", style=vs_style)
+        lines.append(vol_line)
+
+    return panel(Group(*lines), title="Price Structure")
 
 
 def _candles_panel(candles: list, *, empty_hint: str | None = None) -> object:

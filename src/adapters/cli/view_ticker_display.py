@@ -40,8 +40,10 @@ from src.adapters.cli.view_ticker_identity_display import (
 from src.adapters.cli.view_ticker_market_activity_display import (
     _candles_panel,
     _iev_panel,
+    _price_structure_panel,
     _seasonality_panel,
 )
+from src.adapters.cli.view_ticker_price_structure import compute_price_structure
 from src.adapters.cli.view_ticker_status import (
     DEFAULT_TTL_DAYS,
     build_freshness_item,
@@ -177,7 +179,10 @@ def show_ticker_view(ticker: str, db_path: Path = DEFAULT_DB_PATH) -> None:
     )
     fwd = fwd_prov._read_cache(ticker)
     profile = profile_prov._read_cache(ticker)
-    candles = market_repo.get_candles(ticker, start_date=today - timedelta(14), end_date=today)
+    # Need ~20 sessions for structure + recent strip; pull a wide local window.
+    candles = market_repo.get_candles(
+        ticker, start_date=today - timedelta(days=400), end_date=today
+    )
 
     # Prefer showing events that already happened (history), not only a short
     # forward window. Merge ticker-level cache with market-wide calendar store.
@@ -227,6 +232,11 @@ def show_ticker_view(ticker: str, db_path: Path = DEFAULT_DB_PATH) -> None:
         pass
 
     latest_close = candles[-1].close if candles else None
+    price_structure = compute_price_structure(
+        candles,
+        week52_high=getattr(fund, "week52_high", None) if fund is not None else None,
+        week52_low=getattr(fund, "week52_low", None) if fund is not None else None,
+    )
     fetch_hint = default_fetch_hint(ticker)
 
     price_as_of = candles[-1].date if candles else None
@@ -352,6 +362,7 @@ def show_ticker_view(ticker: str, db_path: Path = DEFAULT_DB_PATH) -> None:
     c.print(_identity_panel(ticker, notation, empty_hint=fetch_hint))
     c.print(_freshness_panel(ticker, freshness_items, as_of=dashboard_as_of))
     c.print(_valuation_panel(fund, fwd, latest_close))
+    c.print(_price_structure_panel(price_structure, empty_hint=fetch_hint))
     c.print(_analyst_panel(analyst, empty_hint=fetch_hint))
     c.print(_earnings_panel(earnings, empty_hint=fetch_hint))
     c.print(_ownership_panel(sh, empty_hint=fetch_hint))
