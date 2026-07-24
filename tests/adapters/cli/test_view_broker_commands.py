@@ -8,7 +8,14 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from src.adapters.cli.main import app
-from src.domain.entities.broker_flow import ForeignFlowPoint, ForeignFlowSnapshot
+from src.domain.entities.broker_flow import (
+    BrokerDailyFlow,
+    BrokerSummary,
+    BrokerTransaction,
+    BrokerType,
+    ForeignFlowPoint,
+    ForeignFlowSnapshot,
+)
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 
 runner = CliRunner()
@@ -92,6 +99,133 @@ def test_view_broker_history_json_output_stays_machine_readable(tmp_path: Path):
             "avg_price": "10000",
         }
     ]
+
+
+def test_view_broker_top_falls_back_to_tracked_daily_flow(tmp_path: Path):
+    """IDX summary with empty tops should rank broker_daily_flow and label scope."""
+    db_path = tmp_path / "broker.db"
+    repo = SQLiteBrokerRepository(db_path)
+    d = date(2026, 7, 23)
+    repo.save_broker_summaries([
+        BrokerSummary(
+            ticker="BBCA",
+            date=d,
+            top_buyers=(),
+            top_sellers=(),
+            foreign_buy_value=Decimal("482513615000"),
+            foreign_sell_value=Decimal("960770270000"),
+            foreign_buy_lot=1000,
+            foreign_sell_lot=2000,
+            total_value=Decimal("5000000000000"),
+            total_lot=50000,
+            source="idx",
+        ),
+    ])
+    repo.save_broker_daily_flows([
+        BrokerDailyFlow(
+            ticker="BBCA",
+            broker_code="YP",
+            broker_name="YP",
+            date=d,
+            buy_lot=100,
+            sell_lot=10,
+            net_lot=90,
+            buy_value=Decimal("88505637500"),
+            sell_value=Decimal("16410095000"),
+            net_value=Decimal("72095542500"),
+            avg_buy_price=Decimal("0"),
+            avg_sell_price=Decimal("0"),
+            avg_price=Decimal("0"),
+            buy_pct=0.0,
+            sell_pct=0.0,
+        ),
+        BrokerDailyFlow(
+            ticker="BBCA",
+            broker_code="RX",
+            broker_name="RX",
+            date=d,
+            buy_lot=10,
+            sell_lot=200,
+            net_lot=-190,
+            buy_value=Decimal("31211220000"),
+            sell_value=Decimal("194428857500"),
+            net_value=Decimal("-163217637500"),
+            avg_buy_price=Decimal("0"),
+            avg_sell_price=Decimal("0"),
+            avg_price=Decimal("0"),
+            buy_pct=0.0,
+            sell_pct=0.0,
+        ),
+    ])
+
+    result = runner.invoke(
+        app,
+        ["view", "broker", "top", "BBCA", "--db", str(db_path)],
+    )
+
+    assert result.exit_code == 0
+    assert "Tracked brokers (not full market top)" in result.stdout
+    assert "Top Buyers (tracked brokers)" in result.stdout
+    assert "YP" in result.stdout
+    assert "RX" in result.stdout
+    # Type classified from institutional_accumulation foreign_broker_codes
+    assert "Local" in result.stdout  # YP not in foreign set
+    assert "Foreign" in result.stdout  # RX is foreign institutional
+
+
+def test_view_broker_top_uses_summary_tops_when_present(tmp_path: Path):
+    db_path = tmp_path / "broker.db"
+    repo = SQLiteBrokerRepository(db_path)
+    d = date(2026, 6, 12)
+    repo.save_broker_summaries([
+        BrokerSummary(
+            ticker="BBCA",
+            date=d,
+            top_buyers=(
+                BrokerTransaction(
+                    broker_code="ZP",
+                    broker_name="ZP",
+                    broker_type=BrokerType.FOREIGN,
+                    buy_lot=100,
+                    sell_lot=0,
+                    buy_value=Decimal("1000"),
+                    sell_value=Decimal("0"),
+                    avg_buy_price=Decimal("10"),
+                    avg_sell_price=Decimal("0"),
+                ),
+            ),
+            top_sellers=(
+                BrokerTransaction(
+                    broker_code="CC",
+                    broker_name="CC",
+                    broker_type=BrokerType.LOCAL,
+                    buy_lot=0,
+                    sell_lot=50,
+                    buy_value=Decimal("0"),
+                    sell_value=Decimal("500"),
+                    avg_buy_price=Decimal("0"),
+                    avg_sell_price=Decimal("10"),
+                ),
+            ),
+            foreign_buy_value=Decimal("1000"),
+            foreign_sell_value=Decimal("500"),
+            foreign_buy_lot=100,
+            foreign_sell_lot=50,
+            total_value=Decimal("10000"),
+            total_lot=1000,
+            source="stockbit",
+        ),
+    ])
+
+    result = runner.invoke(
+        app,
+        ["view", "broker", "top", "BBCA", "--date", "2026-06-12", "--db", str(db_path)],
+    )
+
+    assert result.exit_code == 0
+    assert "Tracked brokers" not in result.stdout
+    assert "ZP" in result.stdout
+    assert "CC" in result.stdout
 
 
 def test_view_broker_top_foreign_reads_cached_snapshots_only(tmp_path: Path):

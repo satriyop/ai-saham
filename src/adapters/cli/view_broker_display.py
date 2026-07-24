@@ -88,9 +88,40 @@ def display_broker_flow(ticker: str, summaries: list) -> None:
     console_obj.print(table)
 
 
-def display_broker_top(ticker: str, summary) -> None:
+def _broker_type_label(broker) -> str:
+    """Foreign / Local / — (unknown, e.g. tracked daily-flow rows)."""
+    from src.domain.entities.broker_flow import BrokerType
+
+    broker_type = getattr(broker, "broker_type", None)
+    if broker_type == BrokerType.UNKNOWN:
+        return "—"
+    if broker_type == BrokerType.FOREIGN:
+        return "Foreign"
+    if broker_type == BrokerType.LOCAL:
+        return "Local"
+    return "Foreign" if getattr(broker, "is_foreign", False) else "Local"
+
+
+def display_broker_top(
+    ticker: str,
+    summary,
+    *,
+    top_buyers=None,
+    top_sellers=None,
+    tops_scope_note: str | None = None,
+    display_limit: int = 5,
+) -> None:
+    """Render broker top tables.
+
+    When ``top_buyers`` / ``top_sellers`` are provided (use-case resolved lists),
+    those are shown; otherwise falls back to ``summary.top_*``.
+    ``tops_scope_note`` is shown when lists come from tracked daily flow.
+    """
     console_obj = Console()
     console_obj.print("")
+
+    buyers = list(top_buyers if top_buyers is not None else summary.top_buyers)
+    sellers = list(top_sellers if top_sellers is not None else summary.top_sellers)
 
     flow = summary.foreign_net_value
     flow_color = "green" if flow > 0 else "red"
@@ -101,6 +132,9 @@ def display_broker_top(ticker: str, summary) -> None:
     summary_text.append(" | ")
     summary_text.append("Total Value: ", style="bold")
     summary_text.append(format_value(summary.total_value))
+    if tops_scope_note:
+        summary_text.append("\n")
+        summary_text.append(tops_scope_note, style="yellow")
 
     panel_obj = Panel(
         summary_text,
@@ -111,8 +145,14 @@ def display_broker_top(ticker: str, summary) -> None:
     )
     console_obj.print(panel_obj)
 
+    buyer_title = "Top Buyers"
+    seller_title = "Top Sellers"
+    if tops_scope_note:
+        buyer_title = "Top Buyers (tracked brokers)"
+        seller_title = "Top Sellers (tracked brokers)"
+
     # Top Buyers Table
-    console_obj.print("\n[bold green]Top Buyers[/bold green]")
+    console_obj.print(f"\n[bold green]{buyer_title}[/bold green]")
     buyers_table = Table(show_header=True, header_style="bold magenta")
     buyers_table.add_column("Code", style="cyan")
     buyers_table.add_column("Name", style="white")
@@ -120,19 +160,18 @@ def display_broker_top(ticker: str, summary) -> None:
     buyers_table.add_column("Net Value", justify="right", style="green")
     buyers_table.add_column("Net Lot", justify="right")
 
-    for buyer in summary.top_buyers[:5]:
-        type_str = "Foreign" if buyer.is_foreign else "Local"
+    for buyer in buyers[:display_limit]:
         buyers_table.add_row(
             buyer.broker_code,
             buyer.broker_name[:20],
-            type_str,
+            _broker_type_label(buyer),
             format_value(buyer.net_value),
             f"{buyer.net_lot:,}",
         )
     console_obj.print(buyers_table)
 
     # Top Sellers Table
-    console_obj.print("\n[bold red]Top Sellers[/bold red]")
+    console_obj.print(f"\n[bold red]{seller_title}[/bold red]")
     sellers_table = Table(show_header=True, header_style="bold magenta")
     sellers_table.add_column("Code", style="cyan")
     sellers_table.add_column("Name", style="white")
@@ -140,12 +179,11 @@ def display_broker_top(ticker: str, summary) -> None:
     sellers_table.add_column("Net Value", justify="right", style="red")
     sellers_table.add_column("Net Lot", justify="right")
 
-    for seller in summary.top_sellers[:5]:
-        type_str = "Foreign" if seller.is_foreign else "Local"
+    for seller in sellers[:display_limit]:
         sellers_table.add_row(
             seller.broker_code,
             seller.broker_name[:20],
-            type_str,
+            _broker_type_label(seller),
             format_value(seller.net_value),
             f"{seller.net_lot:,}",
         )

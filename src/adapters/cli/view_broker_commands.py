@@ -23,7 +23,14 @@ from src.adapters.cli.view_broker_display import (
 from src.application.use_case.fetch_broker_data_use_case import (
     GetBrokerDataUseCase,
 )
+from src.application.use_case.view_broker_top_use_case import (
+    ViewBrokerTopRequest,
+    ViewBrokerTopUseCase,
+)
 from src.infrastructure.config.app_config import load_app_config
+from src.infrastructure.config.institutional_accumulation_config_loader import (
+    load_institutional_accumulation_config,
+)
 from src.infrastructure.csv import MappingLoader
 from src.infrastructure.persistence.sqlite_broker_repository import (
     SQLiteBrokerRepository,
@@ -105,32 +112,44 @@ def broker_top(
     """
     Show top brokers for a stock on a specific date.
 
+    Prefers market top lists from broker_summaries. When those are empty
+    (typical for IDX summaries), ranks tracked brokers from broker_daily_flow
+    for the same date and labels the scope clearly.
+
     Example:
         saham view broker top BBCA
         saham view broker top BBCA --date 2024-01-15
     """
     db_path = db_path or Path(load_app_config().storage.db_path)
     repository = SQLiteBrokerRepository(db_path)
+    ia_cfg = load_institutional_accumulation_config()
+    use_case = ViewBrokerTopUseCase(
+        repository,
+        foreign_broker_codes=ia_cfg.foreign_broker_codes,
+    )
 
-    if target_date:
-        query_date = date.fromisoformat(target_date)
-        summary = repository.get_broker_summary(ticker, query_date)
-    else:
-        # Get latest
-        summaries = repository.get_broker_summaries(ticker)
-        if not summaries:
+    query_date = date.fromisoformat(target_date) if target_date else None
+    result = use_case.execute(
+        ViewBrokerTopRequest(ticker=ticker, target_date=query_date)
+    )
+
+    if result is None:
+        if target_date:
+            typer.echo(typer.style("No data for that date.", fg=typer.colors.YELLOW))
+        else:
             typer.echo(
                 typer.style("No data found. ", fg=typer.colors.YELLOW)
                 + f"Run 'saham fetch broker {ticker}' first."
             )
-            raise typer.Exit(1)
-        summary = summaries[-1]
-
-    if not summary:
-        typer.echo(typer.style("No data for that date.", fg=typer.colors.YELLOW))
         raise typer.Exit(1)
 
-    display_broker_top(ticker, summary)
+    display_broker_top(
+        result.ticker,
+        result.summary,
+        top_buyers=result.top_buyers,
+        top_sellers=result.top_sellers,
+        tops_scope_note=result.tops_scope_note,
+    )
 
 
 def broker_history_view(
