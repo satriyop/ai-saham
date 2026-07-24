@@ -76,6 +76,56 @@ def test_tui_composition_has_no_removed_readiness_or_scope_inputs():
     assert "research_scopes_loader" not in parameters
 
 
+def test_create_tui_app_discover_uses_build_screen_deps(monkeypatch):
+    """Discover watchlist/save/accum wiring must come from shared screen deps."""
+    from pathlib import Path
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    from src.adapters.cli.screen_deps import ScreenDeps
+    from src.adapters.tui.composition import _ScreenDepsAccumulationRunner
+
+    sentinel_list = object()
+    sentinel_save = object()
+    sentinel_repo = object()
+    fake_deps = ScreenDeps(
+        db_path=Path("data/db/data.db"),
+        stock_dependencies=MagicMock(),
+        broker_repository=MagicMock(),
+        market_repository=MagicMock(),
+        watchlist_repository=sentinel_repo,  # type: ignore[arg-type]
+        list_watchlists=sentinel_list,  # type: ignore[arg-type]
+        save_watchlist=sentinel_save,  # type: ignore[arg-type]
+        screener_config=MagicMock(),
+        swing_config=MagicMock(),
+    )
+    monkeypatch.setattr(
+        "src.adapters.tui.composition.build_screen_deps",
+        lambda db_path=None: fake_deps,
+    )
+    monkeypatch.setattr(
+        "src.adapters.tui.composition.create_daily_capability",
+        lambda: (lambda: ready_response()),
+    )
+    monkeypatch.setattr(
+        "src.adapters.tui.composition._build_research_execution",
+        lambda: SimpleNamespace(),
+    )
+    # Avoid heavy research factory; ticker path is unused in this assertion.
+    monkeypatch.setattr(
+        "src.adapters.tui.composition.SerializedResearchCapabilities",
+        lambda factory: SimpleNamespace(load_ticker=lambda *a, **k: None),
+    )
+
+    app = create_tui_app(daily_loader=lambda: ready_response())
+    controller = app._accumulation_controller
+    assert controller._list_watchlists is sentinel_list
+    assert controller._save_watchlist is sentinel_save
+    assert isinstance(controller._run_accumulation, _ScreenDepsAccumulationRunner)
+    assert controller._run_accumulation._deps is fake_deps
+    assert controller._compare_watchlist._watchlist_repository is sentinel_repo
+
+
 @pytest.mark.parametrize("broker_name", ["stockbit", "idx"])
 def test_preview_plan_mirrors_cli_fetch_market_provider_selection(broker_name):
     """The Update confirmation modal must advertise the exact provider selection

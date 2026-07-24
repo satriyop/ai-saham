@@ -55,7 +55,7 @@ class SerializedResearchCapabilities:
                     tickers = execution.universe_resolver(uni_name)
                 if not tickers:
                     tickers = execution.tickers
-                req = _clone_request_with_tickers(request, tickers)
+                req = clone_accumulation_request(request, tickers)
             return execution.accumulation.execute(req)
 
     def load_ticker(
@@ -112,9 +112,10 @@ def build_accumulation_request(
     )
 
 
-def _clone_request_with_tickers(
+def clone_accumulation_request(
     req: RunAccumulationScreenWorkflowRequest, tickers: list[str]
 ) -> RunAccumulationScreenWorkflowRequest:
+    """Copy a screen request with an explicit ticker set (universe resolution)."""
     return RunAccumulationScreenWorkflowRequest(
         tickers=tickers,
         universe_label=req.universe_label,
@@ -134,7 +135,12 @@ def _clone_request_with_tickers(
         squeeze_only=req.squeeze_only,
         vwap_only=req.vwap_only,
         sort_by=req.sort_by,
+        as_of_date=req.as_of_date,
     )
+
+
+# Back-compat alias for older imports/tests.
+_clone_request_with_tickers = clone_accumulation_request
 
 
 def build_ticker_request(

@@ -16,6 +16,7 @@ from pathlib import Path
 from threading import Lock
 from typing import Any
 
+from src.adapters.cli.screen_deps import ScreenDeps, build_screen_deps
 from src.adapters.tui.controllers.accumulation_controller import (
     AccumulationLoader,
 )
@@ -39,6 +40,7 @@ from src.adapters.tui.presenters.ticker_workbench_presenter import TickerWorkben
 from src.adapters.tui.research_capabilities import (
     ResearchExecution,
     SerializedResearchCapabilities,
+    clone_accumulation_request,
 )
 from src.application.dto.accumulation_screen import AccumulationScreenRequest
 from src.application.services.accumulation_screen_factory import (
@@ -87,9 +89,6 @@ from src.application.use_case.evaluate_swing_setup_use_case import (
 from src.application.use_case.list_cached_tickers_use_case import (
     ListCachedTickersUseCase,
 )
-from src.application.use_case.list_screen_watchlists_use_case import (
-    ListScreenWatchlistsUseCase,
-)
 from src.application.use_case.refresh_daily_workspace_use_case import (
     DailyWorkspaceRefreshPlan,
     PreviewDailyWorkspaceRefreshUseCase,
@@ -98,10 +97,8 @@ from src.application.use_case.refresh_daily_workspace_use_case import (
     RefreshDailyWorkspaceUseCase,
 )
 from src.application.use_case.run_accumulation_screen_workflow_use_case import (
+    RunAccumulationScreenWorkflowRequest,
     RunAccumulationScreenWorkflowUseCase,
-)
-from src.application.use_case.save_screen_watchlist_use_case import (
-    SaveScreenWatchlistUseCase,
 )
 from src.application.use_case.swing_analysis_workflow_use_case import (
     SwingAnalysisWorkflowUseCase,
@@ -155,9 +152,6 @@ from src.infrastructure.persistence.sqlite_corporate_action_calendar_repository 
     SQLiteCorporateActionCalendarRepository,
 )
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
-from src.infrastructure.persistence.sqlite_watchlist_repository import (
-    SQLiteWatchlistRepository,
-)
 
 
 def _forbid_tui_refresh(**kwargs) -> None:
@@ -729,6 +723,40 @@ def _build_daily_preview_execution(
     return use_case.execute(request)
 
 
+class _ScreenDepsAccumulationRunner:
+    """Lazy Discover accumulation runner backed by shared ``build_screen_deps``.
+
+    Resolves empty ticker lists the same way CLI does (universe loader + broker
+    repo) so TUI and ``saham screen accum`` share one composition root.
+    """
+
+    def __init__(self, deps: ScreenDeps) -> None:
+        self._deps = deps
+        self._use_case: RunAccumulationScreenWorkflowUseCase | None = None
+        self._lock = Lock()
+
+    def __call__(self, request: RunAccumulationScreenWorkflowRequest) -> Any:
+        with self._lock:
+            if self._use_case is None:
+                self._use_case = self._deps.build_accum_workflow_use_case()
+            use_case = self._use_case
+
+        tickers = list(request.tickers)
+        if not tickers:
+            universe = (
+                request.universe_name or request.universe_label or "lq45"
+            ).lower()
+            tickers = resolve_tickers(
+                universe=universe,
+                explicit=[],
+                db_path=self._deps.db_path,
+                loader=YamlUniverseConfigLoader(),
+                repository=self._deps.broker_repository,
+            )
+            request = clone_accumulation_request(request, tickers)
+        return use_case.execute(request)
+
+
 def create_tui_app(
     *,
     daily_loader: DailyLoader | None = None,
@@ -740,36 +768,34 @@ def create_tui_app(
 ) -> SahamTuiApp:
     config = load_app_config()
     db_path = Path(config.storage.db_path)
-    watchlist_repo = SQLiteWatchlistRepository(db_path)
+    # Discover shares the CLI screen composition root (watchlist + accum workflow).
+    screen_deps = build_screen_deps(db_path)
 
     daily = daily_loader or create_daily_capability()
     refresher = daily_refresher or _build_daily_refresh_execution
     previewer = daily_previewer or _build_daily_preview_execution
     research = SerializedResearchCapabilities(_build_research_execution)
-    accumulation = accumulation_loader or research.load_accumulation
+    accumulation = accumulation_loader or _ScreenDepsAccumulationRunner(screen_deps)
     ticker = ticker_loader or research.load_ticker
     search = search_tickers or _build_cached_ticker_search(db_path)
 
     class _LazyScreenWorkflow:
-        """Adapt the injected accumulation callable to the workflow port the
-        compare use case expects, deferring construction to first Run."""
+        """Adapt the Discover accumulation callable for compare (one fresh run)."""
 
         def execute(self, req: Any) -> Any:
             return accumulation(req)
 
-    list_watchlists_uc = ListScreenWatchlistsUseCase(watchlist_repo)
-    save_watchlist_uc = SaveScreenWatchlistUseCase(watchlist_repo)
     compare_watchlist_uc = CompareScreenWatchlistUseCase(
-        watchlist_repository=watchlist_repo,
+        watchlist_repository=screen_deps.watchlist_repository,
         screen_workflow_use_case=_LazyScreenWorkflow(),  # type: ignore[arg-type]
     )
 
     discover_controller = DiscoverController(
         load_universe=_build_universe_view,
         run_accumulation=accumulation,
-        list_watchlists=list_watchlists_uc,
+        list_watchlists=screen_deps.list_watchlists,
         compare_watchlist=compare_watchlist_uc,
-        save_watchlist=save_watchlist_uc,
+        save_watchlist=screen_deps.save_watchlist,
     )
 
     return SahamTuiApp(
