@@ -66,6 +66,8 @@ class AccumulationRiskFunnel:
                     )
                 )
                 candidate.risk_assessment = resp.assessment
+                candidate.risk_gate_evaluations = resp.gate_evaluations
+                candidate.risk_gate_context_completeness = resp.gate_context_completeness
                 if candidate.signal_assessment is not None:
                     try:
                         trade_resp = self._trade_setup_uc.execute(

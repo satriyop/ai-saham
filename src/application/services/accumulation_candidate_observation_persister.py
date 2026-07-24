@@ -17,8 +17,10 @@ from src.application.services.accumulation_observation_fingerprint import (
 )
 from src.domain.ports.candidate_observations_repository import CandidateObservation
 from src.domain.ports.observation_risk_assessment_repository import (
+    OBSERVATION_RISK_ASSESSMENT_SCHEMA_VERSION,
     ObservationRiskAssessmentRecord,
 )
+from src.domain.value_objects.risk_gate_audit import build_risk_assessment_capture_dict
 from src.domain.value_objects.signal_semantic_contract import (
     ACCUMULATION_DISCOVERY_CONTRACT,
 )
@@ -228,8 +230,12 @@ class AccumulationCandidateObservationPersister:
                         data_as_of_date=data_as_of_date,
                         config_hash=config_hash,
                         assessed_at=captured_at,
-                        schema_version=1,
-                        risk_assessment_json=c.risk_assessment.to_dict(),
+                        schema_version=OBSERVATION_RISK_ASSESSMENT_SCHEMA_VERSION,
+                        risk_assessment_json=build_risk_assessment_capture_dict(
+                            c.risk_assessment,
+                            gate_evaluations=c.risk_gate_evaluations or (),
+                            gate_context=c.risk_gate_context_completeness,
+                        ),
                         trade_setup_json=(
                             c.trade_setup.to_dict()
                             if c.trade_setup is not None

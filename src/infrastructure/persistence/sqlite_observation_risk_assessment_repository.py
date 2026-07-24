@@ -15,13 +15,20 @@ from datetime import date, datetime
 from pathlib import Path
 
 from src.domain.ports.observation_risk_assessment_repository import (
+    OBSERVATION_RISK_ASSESSMENT_SCHEMA_VERSION,
     ObservationRiskAssessmentRecord,
 )
 from src.infrastructure.persistence.sqlite_migration_runner import SqliteMigrationRunner
 
-OBSERVATION_RISK_ASSESSMENT_SCHEMA_VERSION = 1
+# Re-export for callers that import the constant from the SQLite module.
+__all__ = [
+    "OBSERVATION_RISK_ASSESSMENT_SCHEMA_VERSION",
+    "SQLiteObservationRiskAssessmentRepository",
+    "ensure_observation_risk_assessments_schema",
+    "write_observation_risk_assessments",
+]
 
-_CREATE_TABLE = """
+_CREATE_TABLE = f"""
 CREATE TABLE IF NOT EXISTS observation_risk_assessments (
   ticker TEXT NOT NULL,
   snapshot_date TEXT NOT NULL,
@@ -30,7 +37,7 @@ CREATE TABLE IF NOT EXISTS observation_risk_assessments (
   data_as_of_date TEXT NOT NULL,
   config_hash TEXT NOT NULL,
   assessed_at TEXT NOT NULL,
-  schema_version INTEGER NOT NULL DEFAULT 1,
+  schema_version INTEGER NOT NULL DEFAULT {OBSERVATION_RISK_ASSESSMENT_SCHEMA_VERSION},
   risk_assessment_json TEXT NOT NULL,
   trade_setup_json TEXT,
   gate_triggered TEXT,

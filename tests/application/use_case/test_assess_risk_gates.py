@@ -236,7 +236,7 @@ def test_bandar_gate_does_not_fire_when_accumulating():
 # ─── Gate ordering: structural before execution ───────────────────────────────
 
 def test_structural_gate_fires_before_execution_gate():
-    """When FundamentalGate fires, BandarGate must not run (use case returns early)."""
+    """When FundamentalGate fires, verdict short-circuits; BandarGate is not_evaluated."""
     uc = _make_use_case(
         structural_gates=[FundamentalGate()],
         execution_gates=[BandarGate()],
@@ -248,6 +248,12 @@ def test_structural_gate_fires_before_execution_gate():
     resp = uc.execute(req)
     assert resp.gate_triggered == "FundamentalGate"
     assert resp.assessment.risk_level_name == "BLOCKED"
+    by_gate = {row.gate: row for row in resp.gate_evaluations}
+    assert by_gate["FundamentalGate"].outcome == "triggered"
+    assert by_gate["BandarGate"].outcome == "not_evaluated"
+    assert by_gate["BandarGate"].evaluated is False
+    assert resp.gate_context_completeness is not None
+    assert resp.gate_context_completeness.missingness["piotroski_f_score"] is False
 
 
 # ─── Gate rationale preservation ──────────────────────────────────────────────
@@ -264,3 +270,31 @@ def test_structural_gate_preserves_gate_rationale():
     assert resp.assessment.risk_level_name == "BLOCKED"
     assert len(resp.assessment.rationale) >= 1
     assert "Piotroski" in resp.assessment.rationale[0] or "F-score" in resp.assessment.rationale[0]
+
+
+def test_c2_records_skipped_outcome_when_fundamental_data_missing():
+    uc = _make_use_case(structural_gates=[FundamentalGate()])
+    req = AssessRiskRequest(
+        ticker="BBCA",
+        gate_context=_ctx(piotroski=None),
+    )
+    resp = uc.execute(req)
+    assert resp.gate_triggered is None
+    assert len(resp.gate_evaluations) == 1
+    assert resp.gate_evaluations[0].outcome == "skipped"
+    assert resp.gate_context_completeness is not None
+    assert resp.gate_context_completeness.missingness["piotroski_f_score"] is True
+
+
+def test_c2_all_gates_pass_records_pass_outcomes():
+    uc = _make_use_case(
+        structural_gates=[FundamentalGate()],
+        execution_gates=[BandarGate()],
+    )
+    req = AssessRiskRequest(
+        ticker="BBCA",
+        gate_context=_ctx(piotroski=7, five_day="Big Acc"),
+    )
+    resp = uc.execute(req)
+    assert resp.gate_triggered is None
+    assert [row.outcome for row in resp.gate_evaluations] == ["pass", "pass"]

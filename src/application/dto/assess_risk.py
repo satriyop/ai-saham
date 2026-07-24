@@ -3,12 +3,16 @@
 Layer: Application
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 
 from src.domain.rules.risk_gate import GateContext
 from src.domain.value_objects.risk_assessment import RiskAssessment
+from src.domain.value_objects.risk_gate_audit import (
+    GateContextCompleteness,
+    GateEvaluationRecord,
+)
 from src.domain.value_objects.sentiment import SentimentSnapshot
 
 
@@ -38,6 +42,9 @@ class AssessRiskResponse:
     ema_period: int
     rsi_period: int
     coverage_warning: str | None = None
+    # Package C2 audit — does not affect TradeSetup / verdict consumers.
+    gate_evaluations: tuple[GateEvaluationRecord, ...] = field(default_factory=tuple)
+    gate_context_completeness: GateContextCompleteness | None = None
 
     @property
     def gate_triggered(self) -> str | None:

@@ -19,6 +19,10 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Protocol
 
+# v1: verdict-only RiskAssessment.to_dict()
+# v2: + gate_evaluations[] + gate_context missingness (Package C2)
+OBSERVATION_RISK_ASSESSMENT_SCHEMA_VERSION = 2
+
 
 @dataclass(frozen=True)
 class ObservationRiskAssessmentRecord:

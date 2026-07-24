@@ -291,7 +291,7 @@ Primary DB: `data/db/data.db` (approx counts as of 2026-07-22 inventory).
 5. **Raw-market labels only** (no net-executable IDX costs/limits/fills).
 6. **Short date span** for canonical panel — thin for walk-forward.
 7. Bandar / BCI / VWAP proving often needs **recompute from broker_daily_flow** when fingerprint lacks the exact gate input.
-8. **C2 missingness / per-gate outcomes** not yet on the risk child (short-circuit first gate only).
+8. **C2 producer landed** (risk child schema v2); historical rows need re-backfill before skip/fail-open cards.
 9. **C3 regime overlay** not applied on accumulation risk capture path.
 
 ---
@@ -373,7 +373,7 @@ Organize work as **proving packages**, not as one mega-model.
 | ID | Factor family | Prove what | Labels | Gap |
 |----|---------------|------------|--------|-----|
 | C1 | Fundamental / liquidity / free-float / bandar gates | Do blocked names underperform would-be entries? | SWING_10D + lean `candidate.risk_*` / risk child | Card: `factor_card_risk_gates.py` (payload lean works; child preferred) |
-| C2 | Fail-open vs fail-closed | Cost of skip-on-missing | Need missingness flags in panel | Capture GateContext completeness + per-gate outcomes |
+| C2 | Fail-open vs fail-closed | Cost of skip-on-missing | Child schema v2 `gate_evaluations` + `gate_context.missingness` | Producer landed; needs re-backfill before card cohorts |
 | C3 | Regime risk overlay | Does regime block save capital in RISK_OFF? | regime + labels | C3-lite in card via `regime_observations`; full `regime:*` overlay not on accumulation path |
 
 **ML tools:** survival / drawdown analysis, policy value estimation; less “predict SUCCESS,” more “avoid disasters.”

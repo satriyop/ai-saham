@@ -23,6 +23,10 @@ if TYPE_CHECKING:
     )
     from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.risk_assessment import RiskAssessment
+    from src.domain.value_objects.risk_gate_audit import (
+        GateContextCompleteness,
+        GateEvaluationRecord,
+    )
     from src.domain.value_objects.seasonal_edge import SeasonalEdge
     from src.domain.value_objects.setup_evaluation import SetupEvaluation
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
@@ -230,6 +234,9 @@ class AccumulationCandidate:
     signal_assessment: "AssessSignalResponse | None" = None
     # Phase E: post-screening risk assessment (populated by risk funnel when configured)
     risk_assessment: "RiskAssessment | None" = None
+    # Package C2 audit attached by risk funnel — child JSON only, not lean payload
+    risk_gate_evaluations: tuple[GateEvaluationRecord, ...] | None = None
+    risk_gate_context_completeness: GateContextCompleteness | None = None
     # Unified trade action verdict — requires both signal_assessment and risk funnel
     trade_setup: "TradeSetup | None" = None
     # Accumulation-lifecycle diagnostic (ACCUMULATION/COMPRESSION/BREAKOUT_CONFIRMATION/

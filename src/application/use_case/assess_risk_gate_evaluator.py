@@ -16,6 +16,10 @@ from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.rules.risk_gate import GateContext, RiskGate
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
+from src.domain.value_objects.risk_gate_audit import (
+    GateContextCompleteness,
+    GateEvaluationRecord,
+)
 
 
 class AssessRiskGateEvaluator:
@@ -39,11 +43,8 @@ class AssessRiskGateEvaluator:
         """
         Evaluate risk for a ticker using configured structural/execution gates.
 
-        Args:
-            request: Contains ticker, indicator periods, and optional gate_context
-
-        Returns:
-            AssessRiskResponse with the risk assessment
+        Verdict short-circuit is unchanged. Package C2 also records every
+        configured gate as evaluated / not_evaluated for child-table audit.
 
         Raises:
             ValueError: If ticker invalid or insufficient data
@@ -74,24 +75,84 @@ class AssessRiskGateEvaluator:
         gate_ctx = self._build_gate_context(
             request, latest_snapshot.date, latest_snapshot
         )
+        completeness = (
+            GateContextCompleteness.from_context(gate_ctx) if gate_ctx is not None else None
+        )
+
+        firing_gate: RiskGate | None = None
+        firing_result = None
+        firing_structural: bool | None = None
+        evaluations: list[GateEvaluationRecord] = []
+        short_circuited = False
+        order = 0
 
         if gate_ctx is not None:
             for gate in self._structural_gates:
-                gate_result = gate.evaluate(gate_ctx)
-                if gate_result.triggered:
-                    return self._gate_response(
-                        agg_response, request, latest_snapshot,
-                        gate, gate_result, is_structural=True,
+                if short_circuited:
+                    evaluations.append(
+                        GateEvaluationRecord.not_evaluated(
+                            gate_name=type(gate).__name__,
+                            tier="structural",
+                            order=order,
+                        )
                     )
-            for gate in self._execution_gates:
+                    order += 1
+                    continue
                 gate_result = gate.evaluate(gate_ctx)
-                if gate_result.triggered:
-                    return self._gate_response(
-                        agg_response, request, latest_snapshot,
-                        gate, gate_result, is_structural=False,
+                evaluations.append(
+                    GateEvaluationRecord.from_result(
+                        gate_name=type(gate).__name__,
+                        tier="structural",
+                        order=order,
+                        result=gate_result,
                     )
+                )
+                order += 1
+                if gate_result.triggered:
+                    firing_gate = gate
+                    firing_result = gate_result
+                    firing_structural = True
+                    short_circuited = True
 
-        # No gate fired.
+            for gate in self._execution_gates:
+                if short_circuited:
+                    evaluations.append(
+                        GateEvaluationRecord.not_evaluated(
+                            gate_name=type(gate).__name__,
+                            tier="execution",
+                            order=order,
+                        )
+                    )
+                    order += 1
+                    continue
+                gate_result = gate.evaluate(gate_ctx)
+                evaluations.append(
+                    GateEvaluationRecord.from_result(
+                        gate_name=type(gate).__name__,
+                        tier="execution",
+                        order=order,
+                        result=gate_result,
+                    )
+                )
+                order += 1
+                if gate_result.triggered:
+                    firing_gate = gate
+                    firing_result = gate_result
+                    firing_structural = False
+                    short_circuited = True
+
+        if firing_gate is not None and firing_result is not None:
+            return self._gate_response(
+                agg_response,
+                request,
+                latest_snapshot,
+                firing_gate,
+                firing_result,
+                is_structural=bool(firing_structural),
+                gate_evaluations=tuple(evaluations),
+                gate_context_completeness=completeness,
+            )
+
         assessment = RiskAssessment(
             rationale=("all gates passed",),
             snapshot_date=latest_snapshot.date,
@@ -105,6 +166,8 @@ class AssessRiskGateEvaluator:
             ema_period=request.ema_period,
             rsi_period=request.rsi_period,
             coverage_warning=agg_response.coverage_warning,
+            gate_evaluations=tuple(evaluations),
+            gate_context_completeness=completeness,
         )
 
     def _gate_response(
@@ -115,7 +178,9 @@ class AssessRiskGateEvaluator:
         gate: RiskGate,
         gate_result,
         is_structural: bool,
-    ) -> "AssessRiskResponse":
+        gate_evaluations: tuple[GateEvaluationRecord, ...] = (),
+        gate_context_completeness: GateContextCompleteness | None = None,
+    ) -> AssessRiskResponse:
         assessment = RiskAssessment(
             rationale=(gate_result.reason,),
             snapshot_date=latest_snapshot.date,
@@ -131,6 +196,8 @@ class AssessRiskGateEvaluator:
             ema_period=request.ema_period,
             rsi_period=request.rsi_period,
             coverage_warning=agg_response.coverage_warning,
+            gate_evaluations=gate_evaluations,
+            gate_context_completeness=gate_context_completeness,
         )
 
     def _build_gate_context(

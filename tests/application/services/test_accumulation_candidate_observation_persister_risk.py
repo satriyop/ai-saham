@@ -19,6 +19,9 @@ from src.domain.value_objects.signal_artifact_schema import (
 from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
     SQLiteCandidateObservationsRepository,
 )
+from src.domain.ports.observation_risk_assessment_repository import (
+    OBSERVATION_RISK_ASSESSMENT_SCHEMA_VERSION,
+)
 from src.infrastructure.persistence.sqlite_observation_risk_assessment_repository import (
     SQLiteObservationRiskAssessmentRepository,
 )
@@ -106,10 +109,17 @@ def test_survivor_with_risk_writes_child_row(tmp_path: Path) -> None:
         config_hash=parent.config_hash,
     )
     assert child is not None
+    assert child.schema_version == OBSERVATION_RISK_ASSESSMENT_SCHEMA_VERSION
     assert child.risk_assessment_json["gate_triggered"] == (
         result.response.candidates[0].risk_assessment.gate_triggered
     )
     assert child.risk_assessment_json["indicators"]["sma"] is not None
+    assert "gate_evaluations" in child.risk_assessment_json
+    assert isinstance(child.risk_assessment_json["gate_evaluations"], list)
+    assert len(child.risk_assessment_json["gate_evaluations"]) >= 1
+    assert "gate_context" in child.risk_assessment_json
+    assert child.risk_assessment_json["gate_context"] is not None
+    assert "missingness" in child.risk_assessment_json["gate_context"]
 
 
 def test_rejected_candidate_without_risk_writes_no_child_row(tmp_path: Path) -> None:
