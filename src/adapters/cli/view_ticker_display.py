@@ -10,6 +10,7 @@ Layer: Adapter
 
 from __future__ import annotations
 
+import json
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -43,8 +44,9 @@ from src.adapters.cli.view_ticker_market_activity_display import (
     _price_structure_panel,
     _seasonality_panel,
 )
-from src.adapters.cli.view_ticker_price_structure import compute_price_structure
+from src.adapters.cli.view_ticker_json import build_ticker_dashboard_json
 from src.adapters.cli.view_ticker_layout import should_render_panel
+from src.adapters.cli.view_ticker_price_structure import compute_price_structure
 from src.adapters.cli.view_ticker_status import (
     DEFAULT_TTL_DAYS,
     build_freshness_item,
@@ -68,6 +70,7 @@ def show_ticker_view(
     db_path: Path = DEFAULT_DB_PATH,
     *,
     brief: bool = False,
+    output_format: str = "table",
 ) -> None:
     """Render a read-only dashboard of all cached data for ticker.
 
@@ -75,6 +78,7 @@ def show_ticker_view(
         ticker: IDX ticker symbol.
         db_path: SQLite database path.
         brief: When True, render only decision-relevant panels.
+        output_format: ``table`` (Rich panels) or ``json``.
     """
     from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
     from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
@@ -368,6 +372,37 @@ def show_ticker_view(
         ),
     ]
     dashboard_as_of = price_as_of or flow_as_of or today
+    fmt = (output_format or "table").lower()
+    if fmt not in {"table", "json"}:
+        raise ValueError(f"Unsupported output format: {output_format!r}")
+
+    if fmt == "json":
+        payload = build_ticker_dashboard_json(
+            ticker=ticker,
+            brief=brief,
+            as_of=dashboard_as_of,
+            freshness_items=freshness_items,
+            notation=notation,
+            fund=fund,
+            fwd=fwd,
+            price_structure=price_structure,
+            analyst=analyst,
+            earnings=earnings,
+            ownership=sh,
+            bandar=bandar,
+            foreign_flow_points=foreign_flow_points,
+            foreign_flow_source=foreign_flow_source,
+            corp_actions=corp_actions,
+            insider_txns=insider_txns,
+            insider_last_known=insider_last_known,
+            seasonality=seasonality,
+            iev_rows=iev_rows,
+            sentiment_logs=sentiment_logs,
+            profile=profile,
+            candles=candles,
+        )
+        print(json.dumps(payload, indent=2, default=str))
+        return
 
     def _show(panel_key: str) -> bool:
         return should_render_panel(panel_key, brief=brief)

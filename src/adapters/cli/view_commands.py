@@ -86,14 +86,28 @@ def view_ticker(
             help="Show a compact decision-relevant subset of panels.",
         ),
     ] = False,
+    output_format: Annotated[
+        Optional[str],
+        typer.Option(
+            "--format",
+            help="Output format: table (default) or json.",
+        ),
+    ] = None,
 ) -> None:
     """Show all cached data for a ticker."""
     from src.adapters.cli.view_ticker_display import show_ticker_view
 
+    cfg = load_app_config()
+    fmt = (output_format or "table").lower()
+    if fmt not in {"table", "json"}:
+        typer.echo("Invalid --format. Choose from: table, json", err=True)
+        raise typer.Exit(1)
+
     show_ticker_view(
         ticker.upper(),
-        db_path=Path(load_app_config().storage.db_path),
+        db_path=Path(cfg.storage.db_path),
         brief=brief,
+        output_format=fmt,
     )
 
 
