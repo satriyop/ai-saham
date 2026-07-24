@@ -120,9 +120,9 @@ class RefreshDailyWorkspaceUseCase:
         briefing_response = self._daily_briefing_use_case.execute(briefing_request)
 
         warnings: list[str] = []
-        if refresh_result.response.failed_count > 0:
+        if refresh_result.response.fail_count > 0:
             warnings.append(
-                f"{refresh_result.response.failed_count} ticker(s) failed during refresh."
+                f"{refresh_result.response.fail_count} ticker(s) failed during refresh."
             )
 
         return RefreshDailyWorkspaceResult(

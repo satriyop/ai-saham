@@ -117,16 +117,20 @@ class DailyController:
                     },
                 )
 
-        def on_ticker(ticker: str, index: int, total: int, status: Any) -> None:
+        def on_ticker(result: Any, index: int, total: int) -> None:
+            # Matches the fetch-market workflow contract exactly:
+            # on_ticker_complete(result: FetchMarketTickerResult, index, total).
+            # The per-ticker result is a typed DTO, not a (ticker, status) pair;
+            # derive the ticker from it and carry the whole result as status.
             if progress_callback:
                 dispatch(
                     progress_callback,
                     {
                         "type": "ticker",
-                        "ticker": ticker,
+                        "ticker": getattr(result, "ticker", None),
                         "index": index,
                         "total": total,
-                        "status": status,
+                        "status": result,
                     },
                 )
 
