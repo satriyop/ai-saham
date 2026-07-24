@@ -4,21 +4,52 @@ Lifecycle-oriented candidate discovery commands.
 Layer: Adapter
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
 
 from src.adapters.cli.screen_accum_commands import accumulation_run
+from src.adapters.cli.screen_contract_cli import (
+    echo_json,
+    exit_missing_screen_data,
+    resolve_output_format,
+)
+from src.adapters.cli.screen_deps import build_screen_deps
 from src.adapters.cli.screen_pre_open_commands import pre_open
+from src.application.dto.screen_contract import (
+    ScreenResultStatus,
+    ScreenSubjectKind,
+    build_screen_envelope,
+    default_screen_fetch_hint,
+)
 from src.application.use_case.compare_screen_snapshots_use_case import (
     ScreenCompareResult,
 )
+from src.application.use_case.compare_screen_watchlist_use_case import (
+    CompareScreenWatchlistRequest,
+    WatchlistNotFoundError,
+)
+from src.application.use_case.list_screen_watchlists_use_case import (
+    ListScreenWatchlistsRequest,
+)
+from src.application.use_case.run_accumulation_screen_workflow_use_case import (
+    RunAccumulationScreenWorkflowRequest,
+)
+from src.application.services.universe_loader import resolve_tickers
 from src.infrastructure.config.app_config import load_app_config
+from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 
 screen_app = typer.Typer(
     name="screen",
-    help="Candidate discovery — pre-open movers and accumulation screens.",
+    help=(
+        "Candidate discovery — pre-open movers and accumulation screens.\n\n"
+        "Discover: `pre-open`, `accum`.\n"
+        "Lifecycle: `watchlist`, `compare`.\n"
+        "Inspect a hit next: `saham view BBCA`."
+    ),
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},
 )
@@ -37,6 +68,10 @@ def screen_watchlist(
         Optional[Path],
         typer.Option("--db", help="SQLite database path"),
     ] = None,
+    fmt: Annotated[
+        Optional[str],
+        typer.Option("--format", help="Output format: table or json"),
+    ] = None,
 ) -> None:
     """
     List saved screener snapshots or show tickers in a named watchlist.
@@ -44,35 +79,107 @@ def screen_watchlist(
     Examples:
         saham screen watchlist               # list all saved watchlists
         saham screen watchlist morning-watch  # show tickers in 'morning-watch'
+        saham screen watchlist --format json
     """
-    from src.infrastructure.persistence.sqlite_watchlist_repository import SQLiteWatchlistRepository
-
     cfg = load_app_config()
-    resolved_db = db_path or Path(cfg.storage.db_path)
-    repo = SQLiteWatchlistRepository(resolved_db)
+    output_format = resolve_output_format(fmt or "table")
+    deps = build_screen_deps(db_path or Path(cfg.storage.db_path))
+    result = deps.list_watchlists.execute(ListScreenWatchlistsRequest(name=name))
 
     if name is None:
-        summaries = repo.list_snapshots()
-        if not summaries:
-            typer.echo("No saved watchlists. Use 'saham screen accum --save NAME' to create one.")
+        if not result.summaries:
+            if output_format == "json":
+                echo_json(
+                    build_screen_envelope(
+                        verb="watchlist",
+                        status=ScreenResultStatus.EMPTY,
+                        subject_kind=ScreenSubjectKind.SCREEN,
+                        subject_id="watchlist",
+                        source="screen_snapshots",
+                        fetch_hint="saham screen accum --universe lq45 --save NAME",
+                        data={"summaries": []},
+                    )
+                )
+                return
+            typer.echo(
+                "No saved watchlists. Use 'saham screen accum --save NAME' to create one."
+            )
             return
+
+        if output_format == "json":
+            echo_json(
+                build_screen_envelope(
+                    verb="watchlist",
+                    status=ScreenResultStatus.OK,
+                    subject_kind=ScreenSubjectKind.SCREEN,
+                    subject_id="watchlist",
+                    source="screen_snapshots",
+                    data={
+                        "summaries": [
+                            {
+                                "name": s.name,
+                                "latest_saved_at": s.latest_saved_at.isoformat(),
+                                "universe": s.universe,
+                                "window_days": s.window_days,
+                                "ticker_count": s.ticker_count,
+                            }
+                            for s in result.summaries
+                        ]
+                    },
+                )
+            )
+            return
+
         typer.echo(f"\n  {'NAME':<24} {'TICKERS':>7}  {'WINDOW':>6}  SAVED AT")
         typer.echo(f"  {'─' * 24}  {'─' * 7}  {'─' * 6}  {'─' * 20}")
-        for s in summaries:
-            saved_str = s["latest_saved_at"][:16].replace("T", " ")
+        for s in result.summaries:
+            saved_str = s.latest_saved_at.isoformat()[:16].replace("T", " ")
             typer.echo(
-                f"  {s['name']:<24} {s['ticker_count']:>7}  {s['window_days']:>5}s  {saved_str}"
+                f"  {s.name:<24} {s.ticker_count:>7}  {s.window_days:>5}s  {saved_str}"
             )
         typer.echo("")
         return
 
-    entries = repo.get_latest_snapshot(name)
-    if not entries:
-        typer.echo(
-            typer.style(f"No watchlist named '{name}' found.", fg=typer.colors.YELLOW)
-            + " Use 'saham screen accum --save NAME'."
+    if not result.selected_entries:
+        exit_missing_screen_data(
+            what="watchlist",
+            name=name,
+            source="screen_snapshots",
+            fetch_hint="saham screen accum --save NAME",
         )
-        raise typer.Exit(1)
+
+    entries = result.selected_entries
+    if output_format == "json":
+        echo_json(
+            build_screen_envelope(
+                verb="watchlist",
+                status=ScreenResultStatus.OK,
+                subject_kind=ScreenSubjectKind.WATCHLIST,
+                subject_id=name,
+                as_of=entries[0].saved_at,
+                source="screen_snapshots",
+                window_days=entries[0].window_days,
+                data={
+                    "name": name,
+                    "saved_at": entries[0].saved_at.isoformat(),
+                    "universe": entries[0].universe,
+                    "window_days": entries[0].window_days,
+                    "entries": [
+                        {
+                            "rank": e.rank,
+                            "ticker": e.ticker,
+                            "signal_score": e.signal_score,
+                            "accum_score": e.accum_score,
+                            "consecutive_streak": e.consecutive_streak,
+                            "net_buy_ratio": e.net_buy_ratio,
+                            "bci_label": e.bci_label,
+                        }
+                        for e in entries
+                    ],
+                },
+            )
+        )
+        return
 
     saved_str = entries[0].saved_at.strftime("%Y-%m-%d %H:%M")
     typer.echo(f"\n  Watchlist: {name}  |  {len(entries)} tickers  |  saved {saved_str}")
@@ -88,6 +195,8 @@ def screen_watchlist(
             f"  {e.rank:>3}  {e.ticker:<8}  {signal_str:>6}  {e.accum_score:>6.1f}"
             f"  {e.consecutive_streak:>6}  {e.net_buy_ratio:>6.0%}  {bci}"
         )
+    typer.echo("")
+    typer.echo("  Next: saham view <TICKER>  ·  saham screen compare " + name)
     typer.echo("")
 
 
@@ -113,6 +222,10 @@ def screen_compare(
         Optional[Path],
         typer.Option("--db", help="SQLite database path"),
     ] = None,
+    fmt: Annotated[
+        Optional[str],
+        typer.Option("--format", help="Output format: table or json"),
+    ] = None,
 ) -> None:
     """
     Compare a saved watchlist against a fresh screener run.
@@ -122,77 +235,150 @@ def screen_compare(
     Examples:
         saham screen compare morning-watch
         saham screen compare morning-watch --universe lq45 --top 30
+        saham screen compare morning-watch --format json
     """
-    from src.application.use_case.compare_screen_snapshots_use_case import compare_screen_snapshots
-    from src.infrastructure.persistence.sqlite_watchlist_repository import SQLiteWatchlistRepository
-
     cfg = load_app_config()
-    resolved_db = db_path or Path(cfg.storage.db_path)
-    repo = SQLiteWatchlistRepository(resolved_db)
-    snapshot = repo.get_latest_snapshot(name)
+    output_format = resolve_output_format(fmt or "table")
+    deps = build_screen_deps(db_path or Path(cfg.storage.db_path))
 
-    if not snapshot:
-        typer.echo(
-            typer.style(f"No saved watchlist named '{name}'.", fg=typer.colors.YELLOW)
-            + " Use 'saham screen accum --save NAME' first."
+    # Peek snapshot for universe default before full compare workflow.
+    peek = deps.list_watchlists.execute(ListScreenWatchlistsRequest(name=name))
+    if not peek.selected_entries:
+        exit_missing_screen_data(
+            what="watchlist",
+            name=name,
+            source="screen_snapshots",
+            fetch_hint="saham screen accum --save NAME",
         )
-        raise typer.Exit(1)
 
-    saved_universe = snapshot[0].universe if snapshot else universe or "cached"
+    saved_universe = peek.selected_entries[0].universe
     run_universe = universe or saved_universe or "cached"
-    saved_at_str = snapshot[0].saved_at.strftime("%Y-%m-%d %H:%M")
+    saved_at_str = peek.selected_entries[0].saved_at.strftime("%Y-%m-%d %H:%M")
 
-    typer.echo(
-        f"\n  Comparing '{name}' (saved {saved_at_str}) against fresh screen on '{run_universe}'..."
-    )
+    if output_format != "json":
+        typer.echo(
+            f"\n  Comparing '{name}' (saved {saved_at_str}) against fresh screen on '{run_universe}'..."
+        )
 
-    # Run a fresh screen inline (reuse accumulation_run logic via use case)
-    from src.adapters.cli.screen_accum_compare_factory import (
-        run_fresh_accumulation_screen_for_compare,
-    )
-    from src.infrastructure.config.accumulation_screener_config import (
-        load_accumulation_screener_config,
-    )
-    from src.infrastructure.config.swing_config import load_swing_config
+    try:
+        ticker_list = resolve_tickers(
+            universe=run_universe,
+            explicit=[],
+            db_path=deps.db_path,
+            loader=YamlUniverseConfigLoader(),
+            repository=deps.broker_repository,
+        )
+    except Exception as exc:
+        typer.echo(typer.style(f"  {exc}", fg=typer.colors.RED), err=True)
+        raise typer.Exit(1) from exc
 
-    swing_config = load_swing_config()
-    screener_config = load_accumulation_screener_config(
-        Path(cfg.config_paths.accumulation_screener)
-    )
-
-    fresh_result = run_fresh_accumulation_screen_for_compare(
-        universe=run_universe,
-        window=window,
-        top=top,
-        db_path=resolved_db,
-        screener_config=screener_config,
-        swing_config=swing_config,
-    )
-
-    if not fresh_result.ok:
-        typer.echo(typer.style(f"  {fresh_result.error}", fg=typer.colors.RED))
+    if not ticker_list:
+        typer.echo(
+            typer.style(
+                f"  No tickers resolved for universe '{run_universe}'.",
+                fg=typer.colors.RED,
+            ),
+            err=True,
+        )
         raise typer.Exit(1)
 
-    fresh_candidates = fresh_result.candidates
-    fresh_tickers = [c.ticker for c in fresh_candidates]
-    fresh_scores = {
-        c.ticker: (
-            c.accum_score,
-            c.signal_assessment.assessment.score if c.signal_assessment else None,
-        )
-        for c in fresh_candidates
-    }
-    fresh_ranks = {c.ticker: i + 1 for i, c in enumerate(fresh_candidates)}
-
-    result = compare_screen_snapshots(
-        snapshot=snapshot,
-        fresh_tickers=fresh_tickers,
-        fresh_scores=fresh_scores,
-        fresh_ranks=fresh_ranks,
-        snapshot_name=name,
+    screen_request = RunAccumulationScreenWorkflowRequest(
+        tickers=list(ticker_list),
+        universe_label=run_universe,
+        universe_name=run_universe,
+        window=window,
+        min_streak=0,
+        min_accum_score=None,
+        min_signal_score=None,
+        min_piotroski=0,
+        strategy_name=None,
+        include_strategy_overlay=False,
+        multi=False,
+        windows=[],
+        top=top,
+        save_name=None,
+        save_enabled=False,
+        vwap_only=False,
+        squeeze_only=False,
+        sort_by="score",
+        as_of_date=None,
     )
 
-    _display_compare_result(result)
+    try:
+        compare_result = deps.build_compare_watchlist_use_case().execute(
+            CompareScreenWatchlistRequest(name=name, screen_request=screen_request)
+        )
+    except WatchlistNotFoundError:
+        exit_missing_screen_data(
+            what="watchlist",
+            name=name,
+            source="screen_snapshots",
+            fetch_hint="saham screen accum --save NAME",
+        )
+    except Exception as exc:
+        typer.echo(
+            typer.style(
+                f"  Fresh accumulation screen failed: {type(exc).__name__}: {exc}",
+                fg=typer.colors.RED,
+            ),
+            err=True,
+        )
+        raise typer.Exit(1) from exc
+
+    if output_format == "json":
+        comparison = compare_result.comparison
+        echo_json(
+            build_screen_envelope(
+                verb="compare",
+                status=ScreenResultStatus.OK,
+                subject_kind=ScreenSubjectKind.WATCHLIST,
+                subject_id=name,
+                as_of=compare_result.saved_summary.latest_saved_at,
+                source="screen_snapshots+accumulation_screen",
+                scope=run_universe,
+                window_days=window,
+                fetch_hint=default_screen_fetch_hint(universe=run_universe),
+                data={
+                    "snapshot_name": comparison.snapshot_name,
+                    "snapshot_count": comparison.snapshot_count,
+                    "fresh_count": comparison.fresh_count,
+                    "new_tickers": list(comparison.new_tickers),
+                    "dropped_tickers": list(comparison.dropped_tickers),
+                    "warnings": list(comparison.warnings),
+                    "strengthening": [
+                        {
+                            "ticker": c.ticker,
+                            "old_rank": c.old_rank,
+                            "new_rank": c.new_rank,
+                            "flow_delta": c.flow_delta,
+                            "composite_delta": c.composite_delta,
+                        }
+                        for c in comparison.strengthening
+                    ],
+                    "weakening": [
+                        {
+                            "ticker": c.ticker,
+                            "old_rank": c.old_rank,
+                            "new_rank": c.new_rank,
+                            "flow_delta": c.flow_delta,
+                            "composite_delta": c.composite_delta,
+                        }
+                        for c in comparison.weakening
+                    ],
+                    "unchanged": [
+                        {
+                            "ticker": c.ticker,
+                            "old_rank": c.old_rank,
+                            "new_rank": c.new_rank,
+                        }
+                        for c in comparison.unchanged
+                    ],
+                },
+            )
+        )
+        return
+
+    _display_compare_result(compare_result.comparison)
 
 
 def _signal_change_row(c) -> str:
@@ -266,4 +452,5 @@ def _display_compare_result(result: ScreenCompareResult) -> None:
             )
         )
 
+    typer.echo("\n  Next: saham view <TICKER>  ·  saham analyze swing <TICKER>")
     typer.echo("")

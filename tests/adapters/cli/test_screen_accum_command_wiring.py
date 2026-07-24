@@ -7,6 +7,15 @@ from types import SimpleNamespace
 from src.adapters.cli import screen_accum_commands as accum_cli
 from src.adapters.cli.main import app
 from src.application.dto.accumulation_screen import AccumulationScreenResponse
+
+
+def _screen_payload(raw: dict) -> dict:
+    """Clean-break envelope: artifact lives under data."""
+    if "verb" in raw and "data" in raw and isinstance(raw["data"], dict):
+        return raw["data"]
+    return raw
+
+
 from tests.adapters.cli.screen_accum_test_fixtures import (
     _candidate,
     _fake_workflow_result,
@@ -36,15 +45,14 @@ def test_screen_accum_delegates_workflow_construction_to_builder(monkeypatch):
         return uc
 
     monkeypatch.setattr(
-        accum_cli,
-        "create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_workflow_uc,
     )
 
     result = runner.invoke(app, ["screen", "accum", "BBCA", "--format", "json"])
 
     assert result.exit_code == 0
-    payload = json.loads(result.output)
+    payload = _screen_payload(json.loads(result.output))
     assert payload["artifact_type"] == "accumulation_screen"
     req = captured["request"]
     assert req.tickers == ["BBCA"]
@@ -73,8 +81,7 @@ def test_screen_accum_single_table_mode_sets_strategy_overlay(monkeypatch):
         return uc
 
     monkeypatch.setattr(
-        accum_cli,
-        "create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 
@@ -98,8 +105,7 @@ def test_screen_accum_strategy_with_json_fails_explicitly(monkeypatch):
         raise AssertionError("workflow use case must not run for a rejected combo")
 
     monkeypatch.setattr(
-        accum_cli,
-        "create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 
@@ -121,8 +127,7 @@ def test_screen_accum_strategy_with_multi_fails_explicitly(monkeypatch):
         raise AssertionError("workflow use case must not run for a rejected combo")
 
     monkeypatch.setattr(
-        accum_cli,
-        "create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 
@@ -159,8 +164,7 @@ def test_screen_accum_single_table_mode_sets_save_enabled(monkeypatch):
         return uc
 
     monkeypatch.setattr(
-        accum_cli,
-        "create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 
@@ -208,8 +212,7 @@ def test_screen_accum_multi_sets_correct_request_fields(monkeypatch):
         return uc
 
     monkeypatch.setattr(
-        accum_cli,
-        "create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_workflow_uc,
     )
 
@@ -259,8 +262,7 @@ def test_screen_accum_threads_as_of_date_to_workflow_request(monkeypatch):
         return uc
 
     monkeypatch.setattr(
-        accum_cli,
-        "create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_workflow_uc,
     )
 
@@ -278,8 +280,7 @@ def test_screen_accum_rejects_invalid_as_of(monkeypatch):
         raise AssertionError("workflow must not run when --as-of is invalid")
 
     monkeypatch.setattr(
-        accum_cli,
-        "create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_workflow_uc,
     )
 
@@ -308,8 +309,7 @@ def test_screen_accum_json_includes_effective_session(monkeypatch):
         return uc
 
     monkeypatch.setattr(
-        accum_cli,
-        "create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_workflow_uc,
     )
 
@@ -319,7 +319,7 @@ def test_screen_accum_json_includes_effective_session(monkeypatch):
     )
 
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
+    payload = _screen_payload(json.loads(result.output))
     assert payload["effective_session"]["analysis_as_of"] == "2026-06-28"
     assert payload["effective_session"]["is_eod_pending"] is False
 

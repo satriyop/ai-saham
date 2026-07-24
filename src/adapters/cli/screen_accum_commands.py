@@ -26,8 +26,13 @@ from src.adapters.cli.screen_accum_formatters import (
     AccumulationDisplayConfig,
     accumulation_display_config_from_screener,
 )
-from src.adapters.cli.screen_accum_workflow_factory import (
-    create_run_accumulation_screen_workflow_use_case,
+from src.adapters.cli.screen_contract_cli import resolve_output_format
+from src.adapters.cli.screen_deps import build_screen_deps
+from src.application.dto.screen_contract import (
+    ScreenResultStatus,
+    ScreenSubjectKind,
+    build_screen_envelope,
+    default_screen_fetch_hint,
 )
 from src.application.services.screen_accum_result_projector import (
     ScreenAccumProjectionError,
@@ -39,13 +44,8 @@ from src.application.services.universe_loader import (
 from src.application.use_case.run_accumulation_screen_workflow_use_case import (
     RunAccumulationScreenWorkflowRequest,
 )
-from src.infrastructure.config.accumulation_screener_config import (
-    load_accumulation_screener_config as _load_accumulation_screener_config,
-)
 from src.infrastructure.config.app_config import load_app_config
-from src.infrastructure.config.swing_config import load_swing_config as _load_swing_config
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
-from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 
 FOREIGN_BOUNCE_SETUP = "foreign-bounce"
 
@@ -214,12 +214,11 @@ def accumulation_run(
 
     cfg = load_app_config()
     resolved_db = db_path or Path(cfg.storage.db_path)
-    output_format = output_format or cfg.analysis.format
+    output_format = resolve_output_format(output_format or cfg.analysis.format)
+    deps = build_screen_deps(resolved_db)
 
-    swing_config = _load_swing_config()
-    accumulation_config = _load_accumulation_screener_config(
-        Path(cfg.config_paths.accumulation_screener)
-    )
+    swing_config = deps.swing_config
+    accumulation_config = deps.screener_config
     display_config = accumulation_display_config_from_screener(accumulation_config)
 
     try:
@@ -228,7 +227,7 @@ def accumulation_run(
             explicit=list(tickers) if tickers else [],
             db_path=resolved_db,
             loader=YamlUniverseConfigLoader(),
-            repository=SQLiteBrokerRepository(resolved_db),
+            repository=deps.broker_repository,
         )
     except UniverseNotFoundError as e:
         typer.echo(f"Error: {e}", err=True)
@@ -276,11 +275,7 @@ def accumulation_run(
         if output_format != "json":
             typer.echo(f"Screening {len(ticker_list)} tickers | {window} sessions...")
 
-    workflow_uc = create_run_accumulation_screen_workflow_use_case(
-        db_path=resolved_db,
-        screener_config=accumulation_config,
-        swing_config=swing_config,
-    )
+    workflow_uc = deps.build_accum_workflow_use_case()
 
     try:
         result = workflow_uc.execute(
@@ -356,23 +351,32 @@ def _render_multi(
         partial_result = any(
             resp.tickers_skipped > 0 for resp in result.multi_results.values()
         )
+        payload = {
+            "schema_version": 1,
+            "artifact_type": "accumulation_screen_multi",
+            "mode": "multi",
+            "universe": universe_label,
+            "windows": [f"{w}_sessions" for w in projection.resolved_windows],
+            "screened_at": str(projection.screened_at),
+            "effective_session": effective_session_to_json(result.effective_session),
+            "tickers": tickers_payload,
+            "warnings": list(result.warnings),
+            "partial_result": partial_result,
+            **projection.to_dict(),
+        }
         typer.echo(
             json.dumps(
-                {
-                    "schema_version": 1,
-                    "artifact_type": "accumulation_screen_multi",
-                    "mode": "multi",
-                    "universe": universe_label,
-                    "windows": [f"{w}_sessions" for w in projection.resolved_windows],
-                    "screened_at": str(projection.screened_at),
-                    "effective_session": effective_session_to_json(
-                        result.effective_session
-                    ),
-                    "tickers": tickers_payload,
-                    "warnings": list(result.warnings),
-                    "partial_result": partial_result,
-                    **projection.to_dict(),
-                },
+                build_screen_envelope(
+                    verb="accum",
+                    status=ScreenResultStatus.OK,
+                    subject_kind=ScreenSubjectKind.UNIVERSE,
+                    subject_id=universe_label,
+                    as_of=projection.screened_at,
+                    source="accumulation_screen",
+                    scope="multi",
+                    fetch_hint=default_screen_fetch_hint(universe=universe_label),
+                    data=payload,
+                ),
                 indent=2,
                 default=str,
             )
@@ -425,7 +429,24 @@ def _render_single(
             "partial_result": response.tickers_skipped > 0,
             **projection.to_dict(),
         }
-        typer.echo(json.dumps(data, indent=2, default=str))
+        typer.echo(
+            json.dumps(
+                build_screen_envelope(
+                    verb="accum",
+                    status=ScreenResultStatus.OK,
+                    subject_kind=ScreenSubjectKind.UNIVERSE,
+                    subject_id=universe_label,
+                    as_of=response.screened_at,
+                    source="accumulation_screen",
+                    scope="single",
+                    window_days=response.window_days,
+                    fetch_hint=default_screen_fetch_hint(universe=universe_label),
+                    data=data,
+                ),
+                indent=2,
+                default=str,
+            )
+        )
         return
 
     display_results(

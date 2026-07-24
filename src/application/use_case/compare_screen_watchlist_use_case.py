@@ -24,6 +24,7 @@ from src.application.use_case.list_screen_watchlists_use_case import (
 )
 from src.application.use_case.run_accumulation_screen_workflow_use_case import (
     RunAccumulationScreenWorkflowRequest,
+    RunAccumulationScreenWorkflowResult,
     RunAccumulationScreenWorkflowUseCase,
 )
 from src.domain.value_objects.screen_snapshot import ScreenSnapshotEntry
@@ -77,7 +78,21 @@ class CompareScreenWatchlistUseCase:
             ticker_count=len(snapshot_entries),
         )
 
-        fresh_projection = self._screen_workflow_use_case.execute(request.screen_request)
+        workflow_result = self._screen_workflow_use_case.execute(request.screen_request)
+        # Accept either a projector DTO (tests/legacy) or the full workflow result.
+        if isinstance(workflow_result, RunAccumulationScreenWorkflowResult):
+            if workflow_result.multi_projection is not None:
+                fresh_projection: ScreenAccumSingleProjection | ScreenAccumMultiProjection = (
+                    workflow_result.multi_projection
+                )
+            elif workflow_result.single_projection is not None:
+                fresh_projection = workflow_result.single_projection
+            else:
+                raise ValueError(
+                    "Accumulation screen workflow returned no projection for compare."
+                )
+        else:
+            fresh_projection = workflow_result
 
         fresh_tickers: list[str] = []
         fresh_scores: dict[str, tuple[float, float | None]] = {}

@@ -21,6 +21,15 @@ from src.application.use_case.build_live_signal_evidence_execution_context_use_c
 from src.application.use_case.run_accumulation_screen_workflow_use_case import (
     RunAccumulationScreenWorkflowUseCase,
 )
+
+
+def _screen_payload(raw: dict) -> dict:
+    """Clean-break envelope: artifact lives under data."""
+    if "verb" in raw and "data" in raw and isinstance(raw["data"], dict):
+        return raw["data"]
+    return raw
+
+
 from tests.adapters.cli.screen_accum_test_fixtures import (
     _candidate,
     _fake_workflow_result,
@@ -100,7 +109,7 @@ def test_screen_accum_json_includes_setup_phase(monkeypatch):
         sequence_valid=True,
     )
 
-    def fake_uc(*, db_path, screener_config, swing_config):
+    def fake_uc(*, db_path, screener_config, swing_config, **kwargs):
         uc = SimpleNamespace()
         uc.execute = lambda req: _fake_workflow_result(
             response=AccumulationScreenResponse(
@@ -115,15 +124,14 @@ def test_screen_accum_json_includes_setup_phase(monkeypatch):
         return uc
 
     monkeypatch.setattr(
-        accum_cli,
-        "create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 
     result = runner.invoke(app, ["screen", "accum", "INDF", "--format", "json"])
 
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
+    payload = _screen_payload(json.loads(result.output))
     candidate_json = payload["candidates"][0]
     assert "setup_phase" in candidate_json
     assert candidate_json["setup_phase"]["current_phase"] == "COMPRESSION"
@@ -134,7 +142,7 @@ def test_screen_accum_json_includes_typed_freshness(monkeypatch):
     """S3: JSON must carry typed freshness fields, no bare "OK" state, and
     it must come from the same DataFreshnessStatus the table renders."""
 
-    def fake_uc(*, db_path, screener_config, swing_config):
+    def fake_uc(*, db_path, screener_config, swing_config, **kwargs):
         uc = SimpleNamespace()
         uc.execute = lambda req: _fake_workflow_result(
             response=AccumulationScreenResponse(
@@ -154,15 +162,14 @@ def test_screen_accum_json_includes_typed_freshness(monkeypatch):
         return uc
 
     monkeypatch.setattr(
-        accum_cli,
-        "create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 
     result = runner.invoke(app, ["screen", "accum", "INDF", "--format", "json"])
 
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
+    payload = _screen_payload(json.loads(result.output))
     freshness = payload["candidates"][0]["freshness"]
 
     assert freshness["candle_as_of"] == "2026-06-26"
@@ -182,7 +189,7 @@ def test_screen_accum_save_calls_use_case(monkeypatch):
         SaveScreenWatchlistResult,
     )
 
-    def fake_uc(*, db_path, screener_config, swing_config):
+    def fake_uc(*, db_path, screener_config, swing_config, **kwargs):
         uc = SimpleNamespace()
         uc.execute = lambda req: _fake_workflow_result(
             response=AccumulationScreenResponse(
@@ -202,8 +209,7 @@ def test_screen_accum_save_calls_use_case(monkeypatch):
         return uc
 
     monkeypatch.setattr(
-        accum_cli,
-        "create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 
@@ -223,12 +229,11 @@ def test_screen_accum_json_save_fails_explicitly(monkeypatch):
     """S2: --save with --format json is an unsupported combo — must fail
     clearly, not silently drop the save (not just warn-and-skip either)."""
 
-    def fake_uc(*, db_path, screener_config, swing_config):
+    def fake_uc(*, db_path, screener_config, swing_config, **kwargs):
         raise AssertionError("workflow use case must not run for a rejected combo")
 
     monkeypatch.setattr(
-        accum_cli,
-        "create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 
@@ -246,12 +251,11 @@ def test_screen_accum_multi_save_fails_explicitly(monkeypatch):
     """S2: --save with --multi is an unsupported combo — must fail clearly,
     not silently drop the save (not just warn-and-skip either)."""
 
-    def fake_uc(*, db_path, screener_config, swing_config):
+    def fake_uc(*, db_path, screener_config, swing_config, **kwargs):
         raise AssertionError("workflow use case must not run for a rejected combo")
 
     monkeypatch.setattr(
-        accum_cli,
-        "create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 
@@ -284,9 +288,8 @@ def test_screen_accum_single_json_matches_table_candidates_under_vwap_only(monke
 
     workflow_uc = _real_workflow_uc(screen_execute)
     monkeypatch.setattr(
-        accum_cli,
-        "create_run_accumulation_screen_workflow_use_case",
-        lambda *, db_path, screener_config, swing_config: workflow_uc,
+        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        lambda *, db_path, screener_config, swing_config, **kwargs: workflow_uc,
     )
 
     captured_table_candidates = {}
@@ -328,7 +331,7 @@ def test_screen_accum_single_json_matches_table_candidates_under_vwap_only(monke
         app, ["screen", "accum", "A", "B", "--vwap-only", "--format", "json"]
     )
     assert json_result.exit_code == 0, json_result.output
-    payload = json.loads(json_result.output)
+    payload = _screen_payload(json.loads(json_result.output))
     json_tickers = [c["ticker"] for c in payload["candidates"]]
 
     assert json_tickers == ["A"]
@@ -359,9 +362,8 @@ def test_screen_accum_multi_json_matches_table_rows_under_top_sort_squeeze(monke
 
     workflow_uc = _real_workflow_uc(screen_execute)
     monkeypatch.setattr(
-        accum_cli,
-        "create_run_accumulation_screen_workflow_use_case",
-        lambda *, db_path, screener_config, swing_config: workflow_uc,
+        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        lambda *, db_path, screener_config, swing_config, **kwargs: workflow_uc,
     )
 
     captured_table_rows = {}
@@ -412,7 +414,7 @@ def test_screen_accum_multi_json_matches_table_rows_under_top_sort_squeeze(monke
         ],
     )
     assert json_result.exit_code == 0, json_result.output
-    payload = json.loads(json_result.output)
+    payload = _screen_payload(json.loads(json_result.output))
     json_tickers = list(payload["tickers"].keys())
 
     assert json_tickers == ["A"]
@@ -466,9 +468,8 @@ def test_screen_accum_multi_renders_tracked_broker_flow_not_broker_quality(monke
 
     workflow_uc = _real_workflow_uc(screen_execute, broker_repo=broker_repo)
     monkeypatch.setattr(
-        accum_cli,
-        "create_run_accumulation_screen_workflow_use_case",
-        lambda *, db_path, screener_config, swing_config: workflow_uc,
+        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        lambda *, db_path, screener_config, swing_config, **kwargs: workflow_uc,
     )
 
     table_result = runner.invoke(app, ["screen", "accum", "A", "--multi"])
@@ -482,7 +483,7 @@ def test_screen_accum_multi_renders_tracked_broker_flow_not_broker_quality(monke
         app, ["screen", "accum", "A", "--multi", "--format", "json"]
     )
     assert json_result.exit_code == 0, json_result.output
-    payload = json.loads(json_result.output)
+    payload = _screen_payload(json.loads(json_result.output))
     entry = payload["tickers"]["A"]
 
     assert "tracked_broker_flow" in entry
@@ -513,9 +514,8 @@ def test_screen_accum_multi_json_includes_typed_freshness_per_window(monkeypatch
 
     workflow_uc = _real_workflow_uc(screen_execute)
     monkeypatch.setattr(
-        accum_cli,
-        "create_run_accumulation_screen_workflow_use_case",
-        lambda *, db_path, screener_config, swing_config: workflow_uc,
+        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        lambda *, db_path, screener_config, swing_config, **kwargs: workflow_uc,
     )
 
     result = runner.invoke(
@@ -524,7 +524,7 @@ def test_screen_accum_multi_json_includes_typed_freshness_per_window(monkeypatch
     )
 
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
+    payload = _screen_payload(json.loads(result.output))
     entry = payload["tickers"]["A"]
 
     checked_any = False
@@ -557,9 +557,8 @@ def test_screen_accum_multi_duplicate_windows_fails_clearly(monkeypatch):
 
     workflow_uc = _real_workflow_uc(screen_execute)
     monkeypatch.setattr(
-        accum_cli,
-        "create_run_accumulation_screen_workflow_use_case",
-        lambda *, db_path, screener_config, swing_config: workflow_uc,
+        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        lambda *, db_path, screener_config, swing_config, **kwargs: workflow_uc,
     )
 
     result = runner.invoke(
@@ -584,9 +583,8 @@ def test_screen_accum_invalid_sort_by_fails_clearly(monkeypatch):
 
     workflow_uc = _real_workflow_uc(screen_execute)
     monkeypatch.setattr(
-        accum_cli,
-        "create_run_accumulation_screen_workflow_use_case",
-        lambda *, db_path, screener_config, swing_config: workflow_uc,
+        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        lambda *, db_path, screener_config, swing_config, **kwargs: workflow_uc,
     )
 
     result = runner.invoke(
@@ -598,7 +596,7 @@ def test_screen_accum_invalid_sort_by_fails_clearly(monkeypatch):
 
 
 def test_screen_accum_single_json_includes_universe_warnings_partial_result(monkeypatch):
-    def fake_uc(*, db_path, screener_config, swing_config):
+    def fake_uc(*, db_path, screener_config, swing_config, **kwargs):
         uc = SimpleNamespace()
         uc.execute = lambda req: _fake_workflow_result(
             response=AccumulationScreenResponse(
@@ -614,8 +612,7 @@ def test_screen_accum_single_json_includes_universe_warnings_partial_result(monk
         return uc
 
     monkeypatch.setattr(
-        accum_cli,
-        "create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 
@@ -624,14 +621,14 @@ def test_screen_accum_single_json_includes_universe_warnings_partial_result(monk
     )
 
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.output[result.output.index("{"):])
+    payload = _screen_payload(json.loads(result.output[result.output.index("{"):]))
     assert payload["universe"] == "lq45"
     assert payload["warnings"] == ["some warning"]
     assert payload["partial_result"] is True
 
 
 def test_screen_accum_single_json_partial_result_false_when_nothing_skipped(monkeypatch):
-    def fake_uc(*, db_path, screener_config, swing_config):
+    def fake_uc(*, db_path, screener_config, swing_config, **kwargs):
         uc = SimpleNamespace()
         uc.execute = lambda req: _fake_workflow_result(
             response=AccumulationScreenResponse(
@@ -646,21 +643,20 @@ def test_screen_accum_single_json_partial_result_false_when_nothing_skipped(monk
         return uc
 
     monkeypatch.setattr(
-        accum_cli,
-        "create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 
     result = runner.invoke(app, ["screen", "accum", "BBCA", "--format", "json"])
 
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
+    payload = _screen_payload(json.loads(result.output))
     assert payload["warnings"] == []
     assert payload["partial_result"] is False
 
 
 def test_screen_accum_multi_json_includes_universe_warnings_partial_result(monkeypatch):
-    def fake_uc(*, db_path, screener_config, swing_config):
+    def fake_uc(*, db_path, screener_config, swing_config, **kwargs):
         uc = SimpleNamespace()
         uc.execute = lambda req: _fake_workflow_result(
             multi_results={
@@ -678,8 +674,7 @@ def test_screen_accum_multi_json_includes_universe_warnings_partial_result(monke
         return uc
 
     monkeypatch.setattr(
-        accum_cli,
-        "create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 
@@ -689,14 +684,14 @@ def test_screen_accum_multi_json_includes_universe_warnings_partial_result(monke
     )
 
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.output[result.output.index("{"):])
+    payload = _screen_payload(json.loads(result.output[result.output.index("{"):]))
     assert payload["universe"] == "lq45"
     assert payload["warnings"] == ["multi warning"]
     assert payload["partial_result"] is True
 
 
 def test_screen_accum_multi_json_partial_result_false_when_nothing_skipped(monkeypatch):
-    def fake_uc(*, db_path, screener_config, swing_config):
+    def fake_uc(*, db_path, screener_config, swing_config, **kwargs):
         uc = SimpleNamespace()
         uc.execute = lambda req: _fake_workflow_result(
             multi_results={
@@ -713,8 +708,7 @@ def test_screen_accum_multi_json_partial_result_false_when_nothing_skipped(monke
         return uc
 
     monkeypatch.setattr(
-        accum_cli,
-        "create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 
@@ -723,7 +717,7 @@ def test_screen_accum_multi_json_partial_result_false_when_nothing_skipped(monke
     )
 
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
+    payload = _screen_payload(json.loads(result.output))
     assert payload["warnings"] == []
     assert payload["partial_result"] is False
 
@@ -754,7 +748,7 @@ def test_screen_accum_multi_cli_json_contract(monkeypatch):
         setup_readiness=None,
     )
 
-    def fake_uc(*, db_path, screener_config, swing_config):
+    def fake_uc(*, db_path, screener_config, swing_config, **kwargs):
         uc = SimpleNamespace()
         uc.execute = lambda req: _fake_workflow_result(
             multi_results={
@@ -771,8 +765,7 @@ def test_screen_accum_multi_cli_json_contract(monkeypatch):
         return uc
 
     monkeypatch.setattr(
-        accum_cli,
-        "create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 
@@ -781,7 +774,7 @@ def test_screen_accum_multi_cli_json_contract(monkeypatch):
     )
 
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
+    payload = _screen_payload(json.loads(result.output))
 
     # Parse the emitted JSON and find the ticker object in tickers
     tickers = payload.get("tickers", {})

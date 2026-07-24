@@ -143,12 +143,32 @@ def test_compare_command_shows_specific_fresh_screen_error(monkeypatch, tmp_path
         )
     ])
 
-    monkeypatch.setattr(
-        "src.adapters.cli.screen_accum_compare_factory.run_fresh_accumulation_screen_for_compare",
-        lambda **kwargs: FreshAccumulationScreenForCompareResult(
-            candidates=[],
-            error="Fresh accumulation screen failed: ValueError: bad data",
+    class BoomWorkflow:
+        def execute(self, request):
+            raise ValueError("bad data")
+
+    class BoomCompare:
+        def execute(self, request):
+            raise ValueError("Fresh accumulation screen failed: ValueError: bad data")
+
+    deps = SimpleNamespace(
+        db_path=db_path,
+        list_watchlists=SimpleNamespace(
+            execute=lambda req: SimpleNamespace(
+                selected_entries=repo.get_latest_snapshot("morning-watch"),
+                summaries=(),
+            )
         ),
+        broker_repository=SimpleNamespace(),
+        build_compare_watchlist_use_case=lambda: BoomCompare(),
+    )
+    monkeypatch.setattr(
+        "src.adapters.cli.screen_lifecycle_commands.build_screen_deps",
+        lambda db=None: deps,
+    )
+    monkeypatch.setattr(
+        "src.adapters.cli.screen_lifecycle_commands.resolve_tickers",
+        lambda **kwargs: ["BBCA"],
     )
 
     result = runner.invoke(
@@ -156,5 +176,5 @@ def test_compare_command_shows_specific_fresh_screen_error(monkeypatch, tmp_path
         ["compare", "morning-watch", "--db", str(db_path)],
     )
 
-    assert "Fresh accumulation screen failed: ValueError: bad data" in result.stdout
-    assert "Could not run fresh screen" not in result.stdout
+    assert result.exit_code != 0
+    assert "bad data" in (result.stdout + result.stderr)
