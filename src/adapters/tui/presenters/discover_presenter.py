@@ -8,6 +8,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from src.adapters.shared.vwap_depth_display import vwap_depth_label
+from src.application.dto.screen_contract import (
+    ScreenResultStatus,
+    related_actions_for_accum,
+    resolve_accum_result_status,
+)
 from src.application.use_case.compare_screen_watchlist_use_case import (
     CompareScreenWatchlistResult,
 )
@@ -15,7 +21,6 @@ from src.application.use_case.list_screen_watchlists_use_case import (
     ListScreenWatchlistsResult,
     ScreenWatchlistSummary,
 )
-from src.adapters.shared.vwap_depth_display import vwap_depth_label
 from src.domain.value_objects.screen_snapshot import ScreenSnapshotEntry
 
 
@@ -47,6 +52,13 @@ class DiscoverComparisonGroupView:
 
 
 @dataclass(frozen=True)
+class DiscoverRelatedActionView:
+    verb: str
+    label: str
+    command: str
+
+
+@dataclass(frozen=True)
 class DiscoverViewModel:
     active_tab: str
     universe_label: str
@@ -55,6 +67,8 @@ class DiscoverViewModel:
     selected_snapshot_entries: tuple[ScreenSnapshotEntry, ...]
     comparison_result: CompareScreenWatchlistResult | None
     warnings: tuple[str, ...]
+    result_status: str = ScreenResultStatus.OK.value
+    related_actions: tuple[DiscoverRelatedActionView, ...] = ()
 
 
 class DiscoverPresenter:
@@ -80,6 +94,13 @@ class DiscoverPresenter:
         active_tab: str = "ACCUMULATION",
         universe_label: str = "lq45",
     ) -> DiscoverViewModel:
+        source = projection
+        warnings = tuple(getattr(source, "warnings", ()) or ())
+        saved_name = None
+        save_result = getattr(source, "save_result", None)
+        if save_result is not None:
+            saved_name = getattr(save_result, "name", None)
+
         if hasattr(projection, "multi_projection") and projection.multi_projection is not None:
             projection = projection.multi_projection
         elif hasattr(projection, "single_projection") and projection.single_projection is not None:
@@ -159,6 +180,18 @@ class DiscoverPresenter:
                     )
                 )
 
+        result_status = resolve_accum_result_status(result_count=len(rows)).value
+        related = tuple(
+            DiscoverRelatedActionView(
+                verb=item["verb"],
+                label=item["label"],
+                command=item["command"],
+            )
+            for item in related_actions_for_accum(
+                tickers=[row.ticker for row in rows],
+                saved_watchlist_name=saved_name,
+            )
+        )
         return DiscoverViewModel(
             active_tab=active_tab,
             universe_label=universe_label,
@@ -166,7 +199,9 @@ class DiscoverPresenter:
             watchlist_summaries=(),
             selected_snapshot_entries=(),
             comparison_result=None,
-            warnings=(),
+            warnings=warnings,
+            result_status=result_status,
+            related_actions=related,
         )
 
     def present_watchlists(

@@ -60,6 +60,20 @@ def test_discover_presenter_formats_single_projection() -> None:
     assert row.action == "ENTER"
     assert row.vwap_discount_pct == 9.5
     assert row.vwap_depth_label == "deep"
+    assert view.result_status == "ok"
+    assert any(a.command == "saham view BBRI" for a in view.related_actions)
+    assert any(a.command == "saham analyze swing BBRI" for a in view.related_actions)
+
+
+def test_discover_presenter_empty_status_and_no_related_actions() -> None:
+    proj = MagicMock(spec=ScreenAccumSingleProjection)
+    proj.candidates = []
+
+    view = DiscoverPresenter().present_accumulation(proj)
+
+    assert view.result_status == "empty"
+    assert view.candidate_rows == ()
+    assert view.related_actions == ()
 
 
 def test_discover_controller_executes_screening_and_saves_snapshot() -> None:

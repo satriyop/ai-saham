@@ -90,6 +90,7 @@ class CandidateBrowserScreen(Screen[None]):
         self._candidate_rows: tuple[Any, ...] = ()
         self._universe_rows: tuple[Any, ...] = ()
         self._watchlist_summaries: tuple[Any, ...] = ()
+        self._related_actions: tuple[Any, ...] = ()
         self._current_projection: Any = None
         self._last_request: RunAccumulationScreenWorkflowRequest | None = None
         self._selected_index = 0
@@ -438,7 +439,12 @@ class CandidateBrowserScreen(Screen[None]):
         self._current_projection = payload
         view = self._presenter.present_accumulation(payload)
         self._candidate_rows = view.candidate_rows
-        if not view.candidate_rows or status is ScreenStatus.EMPTY:
+        self._related_actions = view.related_actions
+        if (
+            not view.candidate_rows
+            or status is ScreenStatus.EMPTY
+            or view.result_status == "empty"
+        ):
             self._set_status("EMPTY — 0 candidates found", "semantic-info")
         else:
             self._set_status(
@@ -452,6 +458,9 @@ class CandidateBrowserScreen(Screen[None]):
         else:
             self.query_one("#candidate-selected", Static).update(
                 "Action: - | Risk: UNKNOWN | Data: EMPTY"
+            )
+            self.query_one("#preview-content", Static).update(
+                "No matching candidates found."
             )
 
     def _accumulation_table(self, view: DiscoverViewModel) -> str:
@@ -478,6 +487,18 @@ class CandidateBrowserScreen(Screen[None]):
             f"Selected: {row.ticker} | Disc%: {disc} | Action: {row.action or '-'} | "
             f"Risk: {row.risk_status} | Data: ALIGNED"
         )
+        ticker = str(getattr(row, "ticker", "")).upper()
+        related = getattr(self, "_related_actions", ()) or ()
+        ticker_actions = [
+            action.command
+            for action in related
+            if ticker and ticker in action.command
+        ]
+        next_steps = (
+            "\n".join(f"  {cmd}" for cmd in ticker_actions)
+            if ticker_actions
+            else "  -"
+        )
         self.query_one("#preview-content", Static).update(
             "SELECTED CANDIDATE PREVIEW\n"
             f"Ticker             : {row.ticker}\n"
@@ -488,7 +509,8 @@ class CandidateBrowserScreen(Screen[None]):
             f"Setup Phase        : {row.setup_phase or '-'}\n"
             f"Risk Status        : {row.risk_status}\n"
             f"Canonical Action   : {row.action or '-'}\n"
-            f"Signal Coverage    : {row.signal_authority_coverage or '-'}"
+            f"Signal Coverage    : {row.signal_authority_coverage or '-'}\n"
+            f"Next steps:\n{next_steps}"
         )
 
     # -- universe -------------------------------------------------------------
