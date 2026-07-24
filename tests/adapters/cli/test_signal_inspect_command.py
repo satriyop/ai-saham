@@ -82,7 +82,7 @@ def test_signal_inspect_rejects_invalid_date(tmp_path):
             "signal",
             "inspect",
             "BBCA",
-            "--date",
+            "--as-of",
             "not-a-date",
             "--db",
             str(db_path),
@@ -90,7 +90,7 @@ def test_signal_inspect_rejects_invalid_date(tmp_path):
     )
 
     assert result.exit_code == 1
-    assert "Invalid --date" in result.stderr
+    assert "Invalid --as-of" in result.stderr
     assert _count_rows(db_path, "candidate_observations") == before_obs
     assert _count_rows(db_path, "signal_forward_labels") == before_labels
 
@@ -119,7 +119,7 @@ def test_signal_inspect_json_ok_is_read_only(monkeypatch, tmp_path):
             "signal",
             "inspect",
             "BBCA",
-            "--date",
+            "--as-of",
             day.isoformat(),
             "--format",
             "json",
@@ -160,7 +160,7 @@ def test_signal_inspect_unavailable_prints_json_then_exits_one(monkeypatch, tmp_
             "signal",
             "inspect",
             "BBCA",
-            "--date",
+            "--as-of",
             day.isoformat(),
             "--format",
             "json",

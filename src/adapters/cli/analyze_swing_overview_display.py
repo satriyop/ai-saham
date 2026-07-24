@@ -28,6 +28,7 @@ from src.adapters.cli.analyze_swing_formatters import (
     fmt_pct,
     signal_label,
 )
+from src.adapters.cli.effective_session_display import format_effective_session_label
 from src.adapters.cli.analyze_swing_overview_panels import (
     _build_data_panel,
     _build_market_context_panel,
@@ -377,6 +378,7 @@ def print_swing_rich_overview(
     market_context_trade_setup_preview=None,
     with_technical_gate: bool = False,
     sector_context_evidence: "SectorContextEvidence | None" = None,
+    effective_session=None,
 ) -> None:
     if not isinstance(signal_assessment_availability, SignalAssessmentAvailability):
         raise TypeError("signal_assessment_availability must be a SignalAssessmentAvailability")
@@ -441,10 +443,17 @@ def print_swing_rich_overview(
         _build_data_panel(data_freshness, broker_detail, broker_quality_note, accum),
     ]
 
+    if effective_session is not None:
+        subtitle = (
+            f"{today.isoformat()} · {format_effective_session_label(effective_session)}"
+        )
+    else:
+        subtitle = today.isoformat()
+
     console().print(
         panel(
             Group(*sections),
             title=f"Swing Analysis - {ticker}",
-            subtitle=today.isoformat(),
+            subtitle=subtitle,
         )
     )

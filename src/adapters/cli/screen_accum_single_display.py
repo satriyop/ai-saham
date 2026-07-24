@@ -9,6 +9,7 @@ from __future__ import annotations
 from rich.console import Group
 from rich.text import Text
 
+from src.adapters.cli.effective_session_display import format_effective_session_label
 from src.adapters.cli.rich_display import compact_table, console, panel
 from src.adapters.cli.screen_accum_enrichment_display import (
     _evidence_factor_rows,
@@ -29,6 +30,21 @@ from src.adapters.cli.screen_accum_formatters import (
 from src.application.dto.accumulation_screen import (
     AccumulationScreenResponse,
 )
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSession,
+)
+
+
+def _panel_subtitle(
+    *,
+    window_days: int,
+    screened_at,
+    effective_session: EffectiveMarketSession | None,
+) -> str:
+    base = f"{window_days} sessions / {screened_at}"
+    if effective_session is None:
+        return base
+    return f"{base} · {format_effective_session_label(effective_session)}"
 
 
 def _scoring_definitions_panel(display_config: AccumulationDisplayConfig):
@@ -137,6 +153,7 @@ def display_results(
     include_explanation: bool = False,
     strategy_signals: dict[str, str] | None = None,
     strategy_name: str | None = None,
+    effective_session: EffectiveMarketSession | None = None,
 ) -> None:
     """Render accumulation screener results as terminal table.
 
@@ -159,7 +176,11 @@ def display_results(
             panel(
                 empty,
                 title=f"Foreign Accumulation - {universe_label.upper()}",
-                subtitle=f"{response.window_days} sessions / {response.screened_at}",
+                subtitle=_panel_subtitle(
+                    window_days=response.window_days,
+                    screened_at=response.screened_at,
+                    effective_session=effective_session,
+                ),
             )
         )
         return
@@ -411,7 +432,11 @@ def display_results(
         panel(
             Group(*sections),
             title=f"Foreign Accumulation - {universe_label.upper()}",
-            subtitle=f"{response.window_days} sessions / {response.screened_at}",
+            subtitle=_panel_subtitle(
+                window_days=response.window_days,
+                screened_at=response.screened_at,
+                effective_session=effective_session,
+            ),
         )
     )
 
@@ -422,6 +447,12 @@ def display_results(
     meta_table = compact_table(show_header=False)
     meta_table.add_column("Key", style="bold cyan")
     meta_table.add_column("Value")
+
+    if effective_session is not None:
+        meta_table.add_row(
+            "Effective session",
+            format_effective_session_label(effective_session),
+        )
 
     meta_table.add_row(
         "Stats",

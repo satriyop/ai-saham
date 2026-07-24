@@ -304,6 +304,7 @@ def test_screen_accum_single_json_matches_table_candidates_under_vwap_only(monke
         include_explanation=False,
         strategy_signals=None,
         strategy_name=None,
+        effective_session=None,
     ):
         captured_table_candidates["tickers"] = [c.ticker for c in candidates]
         return original_display_results(
@@ -315,6 +316,7 @@ def test_screen_accum_single_json_matches_table_candidates_under_vwap_only(monke
             include_explanation=include_explanation,
             strategy_signals=strategy_signals,
             strategy_name=strategy_name,
+            effective_session=effective_session,
         )
 
     monkeypatch.setattr(accum_cli, "display_results", spy_display_results)
@@ -378,6 +380,7 @@ def test_screen_accum_multi_json_matches_table_rows_under_top_sort_squeeze(monke
         provider="",
         include_explanation=False,
         canonical_window=7,
+        effective_session=None,
     ):
         captured_table_rows["tickers"] = [r.ticker for r in rows]
         return original_display_multi(
@@ -390,6 +393,7 @@ def test_screen_accum_multi_json_matches_table_rows_under_top_sort_squeeze(monke
             provider=provider,
             include_explanation=include_explanation,
             canonical_window=canonical_window,
+            effective_session=effective_session,
         )
 
     monkeypatch.setattr(accum_cli, "display_multi", spy_display_multi)

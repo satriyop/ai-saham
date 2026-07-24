@@ -89,4 +89,5 @@ class SwingAnalysisResponseAssembler:
                 "technical_gate": request.with_technical_gate,
             },
             warnings=tuple(state.warnings),
+            effective_session=state.effective_session,
         )

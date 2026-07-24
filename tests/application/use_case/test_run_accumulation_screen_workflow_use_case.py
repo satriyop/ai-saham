@@ -24,7 +24,7 @@ from src.application.use_case.run_accumulation_screen_workflow_use_case import (
     RunAccumulationScreenWorkflowRequest,
     RunAccumulationScreenWorkflowUseCase,
 )
-from src.domain.value_objects.idx_market import IDX_TIMEZONE
+from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
 from tests.application.use_case.accumulation_screen_fixtures import (
     FakeRulesLoader,
     MockBrokerRepository,
@@ -225,6 +225,44 @@ def test_single_mode_resolves_effective_session_once():
     uc.execute(_single_request())
 
     assert len(live_context_uc.run_at_values) == 1
+
+
+def test_pinned_as_of_uses_market_close_run_at_and_threads_screen_as_of():
+    """Pinned --as-of must pin run_at to MARKET_CLOSE and keep screen PIT
+    consistent with the resolved analysis_as_of."""
+    screen_mock = MagicMock()
+    screen_mock.execute.return_value = _screen_response()
+    session = _fake_effective_session()
+    live_context_uc = RecordingLiveContextUseCase(
+        _fake_execution_context(effective_session=session)
+    )
+    uc = _make_uc(screen_use_case=screen_mock, live_context_use_case=live_context_uc)
+    pinned = date(2026, 7, 13)
+
+    result = uc.execute(_single_request(as_of_date=pinned))
+
+    assert len(live_context_uc.run_at_values) == 1
+    assert live_context_uc.run_at_values[0] == datetime.combine(
+        pinned, MARKET_CLOSE, tzinfo=IDX_TIMEZONE
+    )
+    screen_request = screen_mock.execute.call_args[0][0]
+    assert screen_request.as_of_date == session.analysis_as_of
+    assert result.effective_session is session
+
+
+def test_default_as_of_does_not_pin_screen_request_as_of_date():
+    """Omitting as_of keeps live run_at and leaves AccumulationScreenRequest.as_of_date unset."""
+    screen_mock = MagicMock()
+    screen_mock.execute.return_value = _screen_response()
+    live_context_uc = RecordingLiveContextUseCase(_fake_execution_context())
+    uc = _make_uc(screen_use_case=screen_mock, live_context_use_case=live_context_uc)
+
+    result = uc.execute(_single_request())
+
+    assert live_context_uc.run_at_values[0].tzinfo is not None
+    screen_request = screen_mock.execute.call_args[0][0]
+    assert screen_request.as_of_date is None
+    assert result.effective_session is not None
 
 
 def test_single_mode_applies_min_streak_filter():

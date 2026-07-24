@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
+from typing import Any
 
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.value_objects.benchmark_symbol import BenchmarkTickerAliases
@@ -48,6 +49,26 @@ class EffectiveMarketSession:
     is_eod_pending: bool
     resolution_source: str
     notes: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "run_at": self.run_at.isoformat(),
+            "decision_at": self.decision_at.isoformat(),
+            "latest_completed_session": (
+                self.latest_completed_session.isoformat()
+                if self.latest_completed_session is not None
+                else None
+            ),
+            "analysis_as_of": (
+                self.analysis_as_of.isoformat()
+                if self.analysis_as_of is not None
+                else None
+            ),
+            "market_session_name": self.market_session_name,
+            "is_eod_pending": self.is_eod_pending,
+            "resolution_source": self.resolution_source,
+            "notes": list(self.notes),
+        }
 
 
 class EffectiveMarketSessionResolver:

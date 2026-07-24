@@ -255,6 +255,7 @@ def print_swing_output(ctx: SwingOutputDisplayContext) -> None:
         with_technical_gate=ctx.options.with_technical_gate,
         sector_context_evidence=ctx.evidence.sector_context_evidence,
         signal_assessment_availability=ctx.verdict.signal_assessment_availability,
+        effective_session=ctx.effective_session,
     )
 
     print_market_context_preview_panel(ctx)

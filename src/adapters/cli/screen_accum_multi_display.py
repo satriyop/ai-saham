@@ -10,8 +10,12 @@ from datetime import date
 
 from rich.text import Text
 
+from src.adapters.cli.effective_session_display import format_effective_session_label
 from src.adapters.cli.rich_display import compact_table, console, panel
 from src.adapters.cli.screen_accum_formatters import AccumulationDisplayConfig, format_disc_pct
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSession,
+)
 from src.application.services.screen_accum_result_projector import ScreenAccumMultiRow
 from src.application.services.tracked_broker_flow import TrackedBrokerFlowSnapshot
 
@@ -25,6 +29,17 @@ def _tracked_broker_flow_cell(tracked_broker_flow: TrackedBrokerFlowSnapshot | N
     return f"{tracked_broker_flow.label} tracked/{tracked_broker_flow.sessions}s"
 
 
+def _multi_subtitle(
+    *,
+    screened_at: date,
+    effective_session: EffectiveMarketSession | None,
+) -> str:
+    base = f"multi-window / {screened_at}"
+    if effective_session is None:
+        return base
+    return f"{base} · {format_effective_session_label(effective_session)}"
+
+
 def display_multi(
     rows: list[ScreenAccumMultiRow],
     universe_label: str,
@@ -35,6 +50,7 @@ def display_multi(
     provider: str = "",
     include_explanation: bool = False,
     canonical_window: int = 7,
+    effective_session: EffectiveMarketSession | None = None,
 ) -> None:
     """Render multi-window side-by-side table.
 
@@ -51,7 +67,10 @@ def display_multi(
             panel(
                 empty,
                 title=f"Foreign Accumulation - {universe_label.upper()}",
-                subtitle=f"multi-window / {screened_at}",
+                subtitle=_multi_subtitle(
+                    screened_at=screened_at,
+                    effective_session=effective_session,
+                ),
             )
         )
         return
@@ -130,7 +149,10 @@ def display_multi(
         panel(
             table,
             title=f"Foreign Accumulation - {universe_label.upper()}",
-            subtitle=f"multi-window / {screened_at}",
+            subtitle=_multi_subtitle(
+                screened_at=screened_at,
+                effective_session=effective_session,
+            ),
         )
     )
 
@@ -141,6 +163,12 @@ def display_multi(
     meta_table = compact_table(show_header=False)
     meta_table.add_column("Key", style="bold cyan")
     meta_table.add_column("Value")
+
+    if effective_session is not None:
+        meta_table.add_row(
+            "Effective session",
+            format_effective_session_label(effective_session),
+        )
 
     meta_table.add_row(
         "Stats",

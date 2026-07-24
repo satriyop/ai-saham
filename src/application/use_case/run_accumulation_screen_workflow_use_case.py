@@ -12,10 +12,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import TYPE_CHECKING
 
 from src.application.dto.accumulation_screen import AccumulationScreenResponse
+
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSession,
+)
 
 if TYPE_CHECKING:
     from src.application.dto.signal_evidence_execution_context import (
@@ -35,7 +39,7 @@ from src.application.services.screen_accum_result_projector import (
     project_single_screen_result,
     validate_multi_window_request,
 )
-from src.domain.value_objects.idx_market import IDX_TIMEZONE
+from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
 from src.application.services.signal_observation_request_builder import (
     BuildSignalObservationScreenRequest,
 )
@@ -67,6 +71,7 @@ class RunAccumulationScreenWorkflowRequest:
     vwap_only: bool = False
     squeeze_only: bool = False
     sort_by: str = "vwap"
+    as_of_date: date | None = None
 
 
 @dataclass(frozen=True)
@@ -79,6 +84,7 @@ class RunAccumulationScreenWorkflowResult:
     strategy_signals: dict[str, str] = field(default_factory=dict)
     save_result: SaveScreenWatchlistResult | None = None
     warnings: tuple[str, ...] = ()
+    effective_session: EffectiveMarketSession | None = None
 
 
 # Baseline broker-data-availability floor for the raw screen request. This is
@@ -137,14 +143,33 @@ class RunAccumulationScreenWorkflowUseCase:
             strategy_name=request.strategy_name,
         )
 
-        execution_context = self._live_signal_evidence_context_uc.execute(
-            run_at=datetime.now(IDX_TIMEZONE),
-        )
+        if request.as_of_date is not None:
+            run_at = datetime.combine(
+                request.as_of_date, MARKET_CLOSE, tzinfo=IDX_TIMEZONE
+            )
+        else:
+            run_at = datetime.now(IDX_TIMEZONE)
+        execution_context = self._live_signal_evidence_context_uc.execute(run_at=run_at)
 
         if request.multi:
             return self._execute_multi(request, request_builder, warnings, execution_context)
 
         return self._execute_single(request, request_builder, warnings, execution_context)
+
+    @staticmethod
+    def _screen_as_of_date(
+        request: RunAccumulationScreenWorkflowRequest,
+        execution_context: SignalEvidenceExecutionContext,
+    ) -> date | None:
+        """Pin screen PIT date only when CLI/workflow requested an explicit as-of.
+
+        Default (live) path keeps ``request.as_of_date`` unset so screening
+        behavior stays unchanged; pinned runs stay consistent with the
+        resolved effective session (same analysis_as_of as inspect).
+        """
+        if request.as_of_date is None:
+            return None
+        return execution_context.effective_session.analysis_as_of
 
     def _execute_single(
         self,
@@ -156,6 +181,7 @@ class RunAccumulationScreenWorkflowUseCase:
         screen_request = request_builder.build(
             tickers=request.tickers,
             window_days=request.window,
+            as_of_date=self._screen_as_of_date(request, execution_context),
         )
         response = self._screen_use_case.execute(
             screen_request,
@@ -226,6 +252,7 @@ class RunAccumulationScreenWorkflowUseCase:
             strategy_signals=strategy_signals,
             save_result=save_result,
             warnings=tuple(warnings),
+            effective_session=execution_context.effective_session,
         )
 
     def _execute_multi(
@@ -247,12 +274,14 @@ class RunAccumulationScreenWorkflowUseCase:
         # surfaced to the user (project_multi_screen_result), so this
         # redundant work is wasted CPU, not wrong output.
         multi_builder = request_builder.with_score_filters_disabled()
+        pit_as_of = self._screen_as_of_date(request, execution_context)
         multi_results: dict[int, AccumulationScreenResponse] = {}
         for w in request.windows:
             multi_results[w] = self._screen_use_case.execute(
                 multi_builder.build(
                     tickers=request.tickers,
                     window_days=w,
+                    as_of_date=pit_as_of,
                 ),
                 execution_context=execution_context,
             )
@@ -291,4 +320,5 @@ class RunAccumulationScreenWorkflowUseCase:
             multi_projection=multi_projection,
             tracked_broker_flow=tracked_broker_flow,
             warnings=tuple(warnings),
+            effective_session=execution_context.effective_session,
         )

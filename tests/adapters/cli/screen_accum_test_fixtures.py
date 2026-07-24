@@ -133,6 +133,7 @@ def _fake_workflow_result(**overrides):
         strategy_signals={},
         save_result=None,
         warnings=(),
+        effective_session=_FAKE_EFFECTIVE_SESSION,
     )
     params.update(overrides)
 

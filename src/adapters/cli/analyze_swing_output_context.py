@@ -22,6 +22,9 @@ from typing import Any
 
 from src.adapters.cli.analyze_swing_formatters import SwingDisplayConfig
 from src.application.dto.swing_analysis import SwingDiagnostics, SwingEvidence, SwingVerdict
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSession,
+)
 
 
 def default_swing_display_config() -> SwingDisplayConfig:
@@ -73,3 +76,4 @@ class SwingOutputDisplayContext:
     sizing: Any = None
     setup_sizing: Any = None
     capital: "int | None" = None
+    effective_session: EffectiveMarketSession | None = None

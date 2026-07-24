@@ -340,11 +340,12 @@ def test_signal_labels_help_exposes_batch_generation_flags():
     assert "--eligible-dates" in result.stdout
 
 
-def test_signal_inspect_help_exposes_date_and_format_options():
+def test_signal_inspect_help_exposes_as_of_and_format_options():
     result = runner.invoke(app, ["analyze", "signal", "inspect", "--help"])
 
     assert result.exit_code == 0
-    assert "--date" in result.stdout
+    assert "--as-of" in result.stdout
+    assert "--date" not in result.stdout
     assert "--format" in result.stdout
     assert "--window-days" in result.stdout
 

@@ -40,6 +40,9 @@ class SignalAssessmentAvailability:
             if self.unavailable_reason is None:
                 raise ValueError("UNAVAILABLE requires a reason.")
 
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSession,
+)
 from src.application.services.position_sizer import PercentSizingResult, SizingResult
 from src.application.services.swing_analysis_serialization import (
     candidate_accumulation_to_dict,
@@ -330,6 +333,7 @@ class SwingAnalysisWorkflowResponse:
     diagnostics: SwingDiagnostics | None = None
     modules: dict[str, bool] | None = None
     warnings: tuple[str, ...] = ()
+    effective_session: EffectiveMarketSession | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.signal_assessment_availability, SignalAssessmentAvailability):
@@ -411,6 +415,11 @@ class SwingAnalysisWorkflowResponse:
             },
             "ticker": self.ticker,
             "date": str(self.today),
+            "effective_session": (
+                self.effective_session.to_dict()
+                if self.effective_session is not None
+                else None
+            ),
             "modules": self.modules or {},
             "verdict": verdict.to_dict(),
             "evidence": evidence_out,

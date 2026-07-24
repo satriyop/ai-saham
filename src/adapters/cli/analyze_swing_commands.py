@@ -25,6 +25,7 @@ from src.adapters.cli.analyze_swing_display import (
     SwingOutputDisplayOptions,
     print_swing_output,
 )
+from src.adapters.cli.effective_session_display import parse_as_of_option
 from src.adapters.cli.analyze_swing_optional_fetchers import (
     fetch_swing_sentiment as _fetch_swing_sentiment_with_config,
 )
@@ -215,6 +216,13 @@ def swing(
         Optional[str],
         typer.Option("--format", help="Output format: table or json"),
     ] = None,
+    as_of: Annotated[
+        Optional[str],
+        typer.Option(
+            "--as-of",
+            help="Point-in-time as-of date YYYY-MM-DD (pins effective session; default: live today).",
+        ),
+    ] = None,
     db_path: Annotated[
         Optional[Path],
         typer.Option("--db", help="SQLite database path"),
@@ -249,7 +257,7 @@ def swing(
     benchmark = benchmark or app_cfg.analysis.benchmark
     output_format = output_format or app_cfg.analysis.format
     ticker_upper = ticker.upper()
-    today = date.today()
+    today = parse_as_of_option(as_of) or date.today()
 
     cfg = load_analyze_swing_command_config()
 
@@ -387,6 +395,7 @@ def swing(
         config=display_config,
         atr_value=atr_value,
         sizing=sizing,
+        effective_session=workflow_response.effective_session,
         setup_sizing=setup_sizing,
         capital=capital,
     )

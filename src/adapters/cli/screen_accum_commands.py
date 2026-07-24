@@ -13,6 +13,10 @@ from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.cli.effective_session_display import (
+    effective_session_to_json,
+    parse_as_of_option,
+)
 from src.adapters.cli.screen_accum_display import (
     display_multi,
     display_results,
@@ -173,6 +177,13 @@ def accumulation_run(
             "--save", help="Save results to watchlist under this name (e.g. morning-watch)"
         ),
     ] = None,
+    as_of: Annotated[
+        Optional[str],
+        typer.Option(
+            "--as-of",
+            help="Point-in-time as-of date YYYY-MM-DD (pins effective session; default: live).",
+        ),
+    ] = None,
 ) -> None:
     """
     Screen stocks for foreign accumulation patterns.
@@ -251,6 +262,7 @@ def accumulation_run(
         typer.echo("Error: --save is not supported with --multi.", err=True)
         raise typer.Exit(1)
     save_enabled = bool(save_name)
+    as_of_date = parse_as_of_option(as_of)
 
     if multi:
         window_list = [int(w.strip()) for w in (windows or "7,30,90").split(",")]
@@ -291,6 +303,7 @@ def accumulation_run(
                 vwap_only=vwap_only,
                 squeeze_only=squeeze_only,
                 sort_by=sort_by,
+                as_of_date=as_of_date,
             )
         )
     except ScreenAccumProjectionError as e:
@@ -352,6 +365,9 @@ def _render_multi(
                     "universe": universe_label,
                     "windows": [f"{w}_sessions" for w in projection.resolved_windows],
                     "screened_at": str(projection.screened_at),
+                    "effective_session": effective_session_to_json(
+                        result.effective_session
+                    ),
                     "tickers": tickers_payload,
                     "warnings": list(result.warnings),
                     "partial_result": partial_result,
@@ -374,6 +390,7 @@ def _render_multi(
         provider=sample_resp.provider if sample_resp else "",
         include_explanation=explain,
         canonical_window=projection.canonical_window,
+        effective_session=result.effective_session,
     )
 
 
@@ -402,6 +419,7 @@ def _render_single(
             "total_checked": response.total_tickers_checked,
             "skipped": response.tickers_skipped,
             "provider": response.provider,
+            "effective_session": effective_session_to_json(result.effective_session),
             "candidates": [c.to_dict() for c in projection.candidates],
             "warnings": list(result.warnings),
             "partial_result": response.tickers_skipped > 0,
@@ -419,6 +437,7 @@ def _render_single(
         include_explanation=explain,
         strategy_signals=result.strategy_signals or None,
         strategy_name=strategy,
+        effective_session=result.effective_session,
     )
 
     if result.save_result:

@@ -236,3 +236,96 @@ def test_screen_accum_multi_sets_correct_request_fields(monkeypatch):
     assert req.include_strategy_overlay is False
     assert req.save_enabled is False
     assert req.min_piotroski == 5
+
+
+def test_screen_accum_threads_as_of_date_to_workflow_request(monkeypatch):
+    captured = {}
+
+    def fake_workflow_uc(**kwargs):
+        uc = SimpleNamespace()
+        uc.execute = lambda req: (
+            captured.update(request=req)
+            or _fake_workflow_result(
+                response=AccumulationScreenResponse(
+                    candidates=[_candidate()],
+                    screened_at=date(2026, 6, 28),
+                    window_days=getattr(req, "window", 7),
+                    total_tickers_checked=len(req.tickers),
+                    tickers_skipped=0,
+                    provider="fake",
+                )
+            )
+        )
+        return uc
+
+    monkeypatch.setattr(
+        accum_cli,
+        "create_run_accumulation_screen_workflow_use_case",
+        fake_workflow_uc,
+    )
+
+    result = runner.invoke(
+        app,
+        ["screen", "accum", "BBCA", "--as-of", "2026-07-23", "--format", "json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["request"].as_of_date == date(2026, 7, 23)
+
+
+def test_screen_accum_rejects_invalid_as_of(monkeypatch):
+    def fake_workflow_uc(**kwargs):
+        raise AssertionError("workflow must not run when --as-of is invalid")
+
+    monkeypatch.setattr(
+        accum_cli,
+        "create_run_accumulation_screen_workflow_use_case",
+        fake_workflow_uc,
+    )
+
+    result = runner.invoke(
+        app,
+        ["screen", "accum", "BBCA", "--as-of", "not-a-date"],
+    )
+
+    assert result.exit_code == 1
+    assert "Invalid --as-of" in result.stderr
+
+
+def test_screen_accum_json_includes_effective_session(monkeypatch):
+    def fake_workflow_uc(**kwargs):
+        uc = SimpleNamespace()
+        uc.execute = lambda req: _fake_workflow_result(
+            response=AccumulationScreenResponse(
+                candidates=[_candidate()],
+                screened_at=date(2026, 6, 28),
+                window_days=getattr(req, "window", 7),
+                total_tickers_checked=len(req.tickers),
+                tickers_skipped=0,
+                provider="fake",
+            )
+        )
+        return uc
+
+    monkeypatch.setattr(
+        accum_cli,
+        "create_run_accumulation_screen_workflow_use_case",
+        fake_workflow_uc,
+    )
+
+    result = runner.invoke(
+        app,
+        ["screen", "accum", "BBCA", "--format", "json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["effective_session"]["analysis_as_of"] == "2026-06-28"
+    assert payload["effective_session"]["is_eod_pending"] is False
+
+
+def test_screen_accum_help_exposes_as_of():
+    result = runner.invoke(app, ["screen", "accum", "--help"])
+
+    assert result.exit_code == 0
+    assert "--as-of" in result.stdout

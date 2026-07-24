@@ -10,12 +10,15 @@ Layer: Adapter (parse, wire, format, map errors). No PIT/score policy.
 from __future__ import annotations
 
 import json
-from datetime import date
 from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.cli.effective_session_display import (
+    format_effective_session_line,
+    parse_as_of_option,
+)
 from src.adapters.cli.screen_accum_workflow_factory import (
     create_accumulation_screen_workflow_bundle,
 )
@@ -45,7 +48,7 @@ def signal_inspect(
     as_of_date: Annotated[
         Optional[str],
         typer.Option(
-            "--date",
+            "--as-of",
             help="Point-in-time as-of date YYYY-MM-DD (defaults to today).",
         ),
     ] = None,
@@ -68,16 +71,7 @@ def signal_inspect(
     resolved_db = db_path or Path(cfg.storage.db_path)
     ticker_u = ticker.upper()
 
-    day: date | None = None
-    if as_of_date is not None:
-        try:
-            day = date.fromisoformat(as_of_date)
-        except ValueError:
-            typer.echo(
-                f"[error] Invalid --date: {as_of_date} (expected YYYY-MM-DD)",
-                err=True,
-            )
-            raise typer.Exit(1)
+    day = parse_as_of_option(as_of_date)
 
     try:
         swing_cfg = load_swing_config()
@@ -124,13 +118,7 @@ def _display(response) -> None:
     typer.echo(f"Status: {response.status.value}")
     typer.echo(f"As-of: {response.as_of_date.isoformat()}")
     if response.effective_session is not None:
-        session = response.effective_session
-        typer.echo(
-            "Effective session: "
-            f"analysis_as_of={session.analysis_as_of.isoformat()}, "
-            f"name={session.market_session_name}, "
-            f"source={session.resolution_source}"
-        )
+        typer.echo(format_effective_session_line(response.effective_session))
     if response.screen_result is not None:
         typer.echo(f"Screen result: {response.screen_result}")
     if response.assessment is not None:
