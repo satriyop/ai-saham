@@ -1,16 +1,99 @@
 """
-Broker/bandar and insider activity panels for ticker dashboard.
+Broker/bandar, foreign-flow, and insider activity panels for ticker dashboard.
 
 Layer: Adapter
 """
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from rich.console import Group
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, panel
-from src.adapters.cli.view_ticker_formatters import _not_cached
+from src.adapters.cli.view_ticker_formatters import _fmt_idr, _fmt_vol, _not_cached
+from src.domain.entities.broker_flow import ForeignFlowPoint
+
+# Prefer a single source so multi-day nets are not mixed across providers.
+FOREIGN_FLOW_SOURCE_PREFERENCE = ("stockbit", "idx")
+FOREIGN_FLOW_WINDOWS = (5, 20)
+FOREIGN_FLOW_PANEL_TITLE = "Foreign Flow"
+
+
+def _select_foreign_flow_points(
+    points_by_source: dict[str, list[ForeignFlowPoint]],
+) -> tuple[list[ForeignFlowPoint], str | None]:
+    """Pick the preferred non-empty foreign-flow series for the dashboard."""
+    for source in FOREIGN_FLOW_SOURCE_PREFERENCE:
+        points = points_by_source.get(source) or []
+        if points:
+            return points, source
+    for source, points in points_by_source.items():
+        if points:
+            return points, source
+    return [], None
+
+
+def _window_net(points: list[ForeignFlowPoint], days: int) -> Decimal | None:
+    if not points or days <= 0:
+        return None
+    window = points[-days:]
+    return sum((p.net_val for p in window), Decimal("0"))
+
+
+def _window_buy_sell_days(points: list[ForeignFlowPoint], days: int) -> tuple[int, int]:
+    if not points or days <= 0:
+        return 0, 0
+    window = points[-days:]
+    buy_days = sum(1 for p in window if p.net_val > 0)
+    sell_days = len(window) - buy_days
+    return buy_days, sell_days
+
+
+def _fmt_signed_lot(net_lot: int) -> str:
+    prefix = "-" if net_lot < 0 else ""
+    return f"{prefix}{_fmt_vol(abs(net_lot))}"
+
+
+def _net_style(value: Decimal) -> str:
+    if value > 0:
+        return "green"
+    if value < 0:
+        return "red"
+    return "default"
+
+
+def _foreign_flow_panel(points: list[ForeignFlowPoint], *, source: str | None = None) -> object:
+    """Compact latest + 5d/20d foreign net flow from cached time series."""
+    title = FOREIGN_FLOW_PANEL_TITLE if not source else f"{FOREIGN_FLOW_PANEL_TITLE} ({source})"
+    if not points:
+        return panel(_not_cached(), title=title)
+
+    latest = points[-1]
+    lines: list[Text] = []
+    latest_style = _net_style(latest.net_val)
+    lines.append(
+        Text("  Latest ", style="dim")
+        + Text(str(latest.date), style="default")
+        + Text("   Net ", style="dim")
+        + Text(_fmt_idr(latest.net_val), style=f"bold {latest_style}")
+        + Text(f"   {_fmt_signed_lot(latest.net_lot)} lot", style="default")
+    )
+
+    for days in FOREIGN_FLOW_WINDOWS:
+        net = _window_net(points, days)
+        if net is None:
+            continue
+        buy_days, sell_days = _window_buy_sell_days(points, days)
+        style = _net_style(net)
+        lines.append(
+            Text(f"  {days}d net ", style="dim")
+            + Text(_fmt_idr(net), style=f"bold {style}")
+            + Text(f"   {buy_days} buy / {sell_days} sell days", style="default")
+        )
+
+    return panel(Group(*lines), title=title)
 
 
 def _bandar_panel(snap) -> object:
