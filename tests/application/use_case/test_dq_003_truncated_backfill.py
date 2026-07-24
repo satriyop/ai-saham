@@ -224,7 +224,7 @@ def _fundamentals(ticker: str, *, market_cap_idr: int, fetched_at: datetime) -> 
 def _run_capture(db_path: Path):
     """Run the REAL production composition against `db_path`.
 
-    Mirrors adapters/cli/analyze_signal_backfill_commands.py exactly, minus the
+    Mirrors adapters/cli/research_signal_backfill_commands.py exactly, minus the
     optional market-context evaluator and label generation (both irrelevant to
     the capture invariants under test; passing them would only add non-capture
     machinery). The screen, recorder, persister, repositories, and offline

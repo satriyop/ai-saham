@@ -3,7 +3,7 @@
 Test-only slice (NON_SEMANTIC). It proves three independent invariants against
 the REAL production composition used by
 ``saham analyze signal-backfill-observations`` (mirrors
-``analyze_signal_backfill_commands.py``); nothing about the engine, scorer,
+``research_signal_backfill_commands.py``); nothing about the engine, scorer,
 persister, session resolver, or repositories is stubbed. The only fakes are the
 seeded rows and, for the persistence-failure probe, a monkeypatched
 ``save_many`` that raises.
@@ -228,7 +228,7 @@ def _seed_db(db_path: Path, *, with_forward: bool, ihsg_latest: date | None = No
 
 
 # --------------------------------------------------------------------------- #
-# Production-faithful capture run (mirrors analyze_signal_backfill_commands.py)
+# Production-faithful capture run (mirrors research_signal_backfill_commands.py)
 # --------------------------------------------------------------------------- #
 
 def _run_capture(

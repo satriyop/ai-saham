@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 from typer.testing import CliRunner
 
-from src.adapters.cli import analyze_signal_backfill_commands as backfill_cmd
+from src.adapters.cli import research_signal_backfill_commands as backfill_cmd
 from src.adapters.cli.main import app
 from src.application.use_case.backfill_signal_observations_use_case import (
     BackfillSignalObservationsResponse,
@@ -227,7 +227,7 @@ def test_analyze_signal_inspect_still_read_only_after_capture_mount(tmp_path):
             "signal",
             "inspect",
             "BBCA",
-            "--date",
+            "--as-of",
             "not-a-date",
             "--db",
             str(db_path),

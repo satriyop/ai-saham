@@ -430,7 +430,7 @@ def test_fingerprint_digest_is_stable():
 
 def test_adapter_does_not_own_compare_policy_symbols():
     """Architecture boundary: compare status enums live in application, not adapter."""
-    import src.adapters.cli.analyze_signal_replay_commands as cli
+    import src.adapters.cli.research_signal_replay_commands as cli
 
     source = open(cli.__file__, encoding="utf-8").read()
     assert "ObservationFieldDifference" not in source

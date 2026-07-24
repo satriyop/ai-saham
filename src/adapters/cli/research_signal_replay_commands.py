@@ -13,7 +13,7 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.analyze_signal_backfill_commands import (
+from src.adapters.cli.research_signal_backfill_commands import (
     _read_scoring_config_canonical,
 )
 from src.adapters.cli.screen_accum_workflow_factory import (

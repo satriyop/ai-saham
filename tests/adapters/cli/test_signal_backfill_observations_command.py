@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 from typer.testing import CliRunner
 
-from src.adapters.cli import analyze_signal_backfill_commands as analyze_signal_commands
+from src.adapters.cli import research_signal_backfill_commands as backfill_cmd
 from src.adapters.cli.main import app
 from src.application.use_case.backfill_signal_observations_use_case import (
     BackfillSignalObservationsResponse,
@@ -122,7 +122,7 @@ def test_signal_backfill_observations_wires_evaluate_market_context(monkeypatch)
 
     _patch_command_dependencies(monkeypatch, FakeBackfillUseCase)
     monkeypatch.setattr(
-        analyze_signal_commands,
+        backfill_cmd,
         "evaluate_market_context",
         fake_evaluate_market_context,
     )
@@ -231,46 +231,46 @@ def _patch_command_dependencies(monkeypatch, backfill_cls=None):
             )
 
     monkeypatch.setattr(
-        analyze_signal_commands,
+        backfill_cmd,
         "resolve_tickers",
         lambda universe, explicit, db_path, **kwargs: ["BBCA"],
     )
     monkeypatch.setattr(
-        analyze_signal_commands,
+        backfill_cmd,
         "load_accumulation_screener_config",
         lambda: object(),
     )
-    monkeypatch.setattr(analyze_signal_commands, "load_swing_config", lambda: object())
+    monkeypatch.setattr(backfill_cmd, "load_swing_config", lambda: object())
     monkeypatch.setattr(
-        analyze_signal_commands,
+        backfill_cmd,
         "BuildSignalObservationScreenRequest",
         DummyRequestBuilder,
     )
     monkeypatch.setattr(
-        analyze_signal_commands,
+        backfill_cmd,
         "create_accumulation_screen_workflow_bundle",
         lambda **kwargs: SimpleNamespace(
             screen_use_case=object(), record_observations_use_case=object()
         ),
     )
     monkeypatch.setattr(
-        analyze_signal_commands,
+        backfill_cmd,
         "SQLiteCandidateObservationsRepository",
         DummyRepository,
     )
-    monkeypatch.setattr(analyze_signal_commands, "SQLiteMarketRepository", DummyRepository)
+    monkeypatch.setattr(backfill_cmd, "SQLiteMarketRepository", DummyRepository)
     monkeypatch.setattr(
-        analyze_signal_commands,
+        backfill_cmd,
         "SQLiteSignalForwardLabelsRepository",
         DummyRepository,
     )
     monkeypatch.setattr(
-        analyze_signal_commands,
+        backfill_cmd,
         "GenerateSignalForwardLabelsUseCase",
         DummyLabelUseCase,
     )
     monkeypatch.setattr(
-        analyze_signal_commands,
+        backfill_cmd,
         "BackfillSignalObservationsUseCase",
         backfill_cls or DefaultBackfillUseCase,
     )
@@ -280,7 +280,7 @@ def test_read_scoring_config_canonical_reads_full_scoring_set():
     """The adapter helper reads the full scoring config set into a
     deterministic, content-bearing string (no hashing)."""
     cfg = load_app_config()
-    canonical = analyze_signal_commands._read_scoring_config_canonical(cfg.config_paths)
+    canonical = backfill_cmd._read_scoring_config_canonical(cfg.config_paths)
     assert isinstance(canonical, str)
     for rel_path in (
         cfg.config_paths.accumulation_screener,
@@ -327,7 +327,7 @@ def test_adapter_delegates_hashing_to_application_resolver(monkeypatch):
 
     _patch_command_dependencies(monkeypatch, CapturingBackfillUseCase)
     monkeypatch.setattr(
-        analyze_signal_commands,
+        backfill_cmd,
         "resolve_lean_semantic_compatibility_id",
         _spy_resolver,
     )

@@ -102,7 +102,7 @@ cohort-isolation, exclusion-ledger, and diagnostic-only semantics.
 
 - `src/application/use_case/report_signal_readiness_use_case.py`
 - `tests/application/use_case/test_report_signal_readiness_use_case.py`
-- `src/adapters/cli/analyze_signal_readiness_commands.py`
+- `src/adapters/cli/research_signal_readiness_commands.py`
 - `tests/adapters/cli/test_signal_readiness_command.py`
 - `saham research signal readiness` command registration
 - signal capture, labels, replay, backfill, cohort identity, and persistence

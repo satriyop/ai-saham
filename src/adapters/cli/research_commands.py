@@ -13,11 +13,11 @@ from __future__ import annotations
 import typer
 
 from src.adapters.cli.analyze_accum_commands import accumulation_audit
-from src.adapters.cli.analyze_signal_backfill_commands import signal_backfill_observations
-from src.adapters.cli.analyze_signal_capture_commands import signal_capture_observations
-from src.adapters.cli.analyze_signal_label_commands import signal_labels
-from src.adapters.cli.analyze_signal_readiness_commands import signal_readiness
-from src.adapters.cli.analyze_signal_replay_commands import signal_replay
+from src.adapters.cli.research_signal_backfill_commands import signal_backfill_observations
+from src.adapters.cli.research_signal_capture_commands import signal_capture_observations
+from src.adapters.cli.research_signal_label_commands import signal_labels
+from src.adapters.cli.research_signal_readiness_commands import signal_readiness
+from src.adapters.cli.research_signal_replay_commands import signal_replay
 
 research_app = typer.Typer(
     name="research",
