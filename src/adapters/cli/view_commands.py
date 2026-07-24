@@ -2,6 +2,11 @@
 Read-only data browsing commands.
 
 Layer: Adapter
+
+Taxonomy (clean break):
+  view <TICKER>              → ticker show (dashboard shorthand)
+  view ticker <verb> <TICKER>  stock deep-dives
+  view broker <verb> …         desk / universe / meta
 """
 
 from datetime import date
@@ -11,29 +16,23 @@ from typing import Annotated, Optional
 import typer
 from typer.core import TyperGroup
 
-from src.adapters.cli.view_broker_commands import (
-    broker_flow,
-    broker_history_view,
-    broker_mappings,
-    broker_top,
-    broker_top_foreign_view,
-)
-from src.adapters.cli.view_broker_distribution_commands import broker_distribution_view
-from src.adapters.cli.view_broker_status_commands import broker_status
+from src.adapters.cli.view_broker_commands import broker_view_app
 from src.adapters.cli.view_market_context_commands import market_context_show
+from src.adapters.cli.view_ticker_commands import ticker_view_app
 from src.infrastructure.config.app_config import load_app_config
 
 
 class _ViewGroup(TyperGroup):
-    """TyperGroup subclass that routes unknown first-arg to the 'ticker' command.
+    """Route bare tickers to `ticker show` while preserving fixed subgroups.
 
-    Allows `saham view BBCA` to work identically to `saham view ticker BBCA`
-    while preserving normal subcommand routing for `saham view broker ...`.
+    `saham view BBCA` → `saham view ticker show BBCA`
+    `saham view ticker top-brokers BBCA` is unchanged (first token is `ticker`).
     """
 
     def parse_args(self, ctx: typer.Context, args: list) -> list:
         if args and not args[0].startswith("-") and args[0] not in self.commands:
-            args = ["ticker"] + list(args)
+            # Bare subject → stock dashboard
+            args = ["ticker", "show"] + list(args)
         return super().parse_args(ctx, args)
 
 
@@ -42,27 +41,16 @@ view_app = typer.Typer(
     name="view",
     help=(
         "Read-only data browsing — inspect already-fetched local data.\n\n"
-        "Ticker dashboard: `saham view BBCA` (shorthand) or `saham view ticker BBCA`."
+        "Stock overview: `saham view BBCA` or `saham view ticker show BBCA`.\n"
+        "Stock deep-dives: `saham view ticker <verb> <TICKER>` "
+        "(top-brokers | flow | foreign-history | distribution).\n"
+        "Desk / universe: `saham view broker <verb> …`."
     ),
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},
 )
 
-broker_view_app = typer.Typer(
-    name="broker",
-    help="Browse cached broker and foreign-flow data.",
-    no_args_is_help=True,
-    context_settings={"help_option_names": ["-h", "--help"]},
-)
-
-broker_view_app.command("status")(broker_status)
-broker_view_app.command("flow")(broker_flow)
-broker_view_app.command("top")(broker_top)
-broker_view_app.command("history")(broker_history_view)
-broker_view_app.command("top-foreign")(broker_top_foreign_view)
-broker_view_app.command("distribution")(broker_distribution_view)
-broker_view_app.command("mappings")(broker_mappings)
-
+view_app.add_typer(ticker_view_app, name="ticker")
 view_app.add_typer(broker_view_app, name="broker")
 
 # ── Market Context sub-group (3-word exception — documented in ADR-029) ───────
@@ -77,44 +65,6 @@ market_context_view_app.command("show", hidden=True)(market_context_show)
 market_context_view_app.callback(invoke_without_command=True)(market_context_show)
 
 view_app.add_typer(market_context_view_app, name="market-context")
-
-
-@view_app.command("ticker")
-def view_ticker(
-    ticker: str = typer.Argument(..., help="Ticker symbol (e.g. BBCA)"),
-    brief: Annotated[
-        bool,
-        typer.Option(
-            "--brief",
-            help="Show a compact decision-relevant subset of panels.",
-        ),
-    ] = False,
-    output_format: Annotated[
-        Optional[str],
-        typer.Option(
-            "--format",
-            help="Output format: table (default) or json.",
-        ),
-    ] = None,
-) -> None:
-    """Show a read-only cached-data dashboard for one ticker.
-
-    Shorthand: `saham view BBCA` is equivalent to `saham view ticker BBCA`.
-    """
-    from src.adapters.cli.view_ticker_display import show_ticker_view
-
-    cfg = load_app_config()
-    fmt = (output_format or "table").lower()
-    if fmt not in {"table", "json"}:
-        typer.echo("Invalid --format. Choose from: table, json", err=True)
-        raise typer.Exit(1)
-
-    show_ticker_view(
-        ticker.upper(),
-        db_path=Path(cfg.storage.db_path),
-        brief=brief,
-        output_format=fmt,
-    )
 
 
 @view_app.command("universe")

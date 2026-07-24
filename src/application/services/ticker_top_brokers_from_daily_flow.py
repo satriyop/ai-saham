@@ -1,5 +1,5 @@
 """
-Rank tracked-broker daily flow rows into top buyers / sellers.
+Rank tracked-broker daily flow rows into top buyers / sellers for a stock.
 
 `broker_daily_flow` only covers configured tracked broker codes — not full-market
 top composition. Callers must surface that scope when displaying results.

@@ -237,6 +237,22 @@ class BrokerDataRepository(ABC):
         """
         return None
 
+    def get_broker_daily_flows_by_code(
+        self,
+        broker_code: str,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        ticker: str | None = None,
+        source: str | None = None,
+    ) -> list[BrokerDailyFlow]:
+        """
+        Retrieve per-day flow rows for one tracked broker across tickers.
+
+        desk-centric read of broker_daily_flow. Results sorted by
+        (date ASC, ticker ASC). Empty list when none cached.
+        """
+        return []
+
     def save_foreign_flow_snapshots(
         self,
         snapshots: list[ForeignFlowSnapshot],

@@ -171,7 +171,7 @@ def print_column_guide() -> None:
     tips_text = Text(
         "  • Run --multi first for the daily overview — one command, three windows.\n"
         "  • Use --squeeze-only to surface 'coiled spring' setups.\n"
-        "  • Deep-dive: saham view broker flow <TICKER> --days 30\n"
+        "  • Deep-dive: saham view ticker flow <TICKER> --days 30\n"
         "               saham analyze risk <TICKER> --with-sentiment",
         style="cyan"
     )

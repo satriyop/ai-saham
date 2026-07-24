@@ -73,7 +73,16 @@ def test_view_broker_group_exposes_read_only_commands():
     result = runner.invoke(app, ["view", "broker", "--help"])
 
     assert result.exit_code == 0
-    for cmd in ("status", "flow", "top", "history", "top-foreign", "distribution", "mappings"):
+    for cmd in (
+    "show",
+    "top-stocks",
+    "flow",
+    "history",
+    "status",
+    "top-foreign",
+    "mappings",
+    "list",
+):
         assert cmd in result.stdout
 
 

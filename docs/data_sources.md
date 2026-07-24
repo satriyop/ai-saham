@@ -135,7 +135,7 @@ saham fetch stockbit login
 **Usage:**
 ```bash
 saham fetch broker BBCA --provider stockbit   # Richer per-broker detail
-saham view broker top BBCA --date 2024-01-15
+saham view ticker top-brokers BBCA --date 2024-01-15
 ```
 
 ### CSV Import
@@ -252,8 +252,8 @@ ORDER BY date;
 | `saham screen accum` (via `AccumulationScreenUseCase`) | `get_broker_summaries(ticker)` with `source=None` → dedup to 1 row per date, prefers IDX (`MIN(source)` = `"idx"`) | `foreign_buy_value`, `foreign_sell_value` → **foreign_net_value** (for streak, ratio, VWAP); `foreign_buy_lot` → VWAP denom; `total_value` → flow ratio; `date` → window filter |
 | `saham analyze swing TICKER` (via `build_flow_detail`) | `get_broker_summaries(ticker, end_date=as_of)` | `foreign_net_value` → total net flow, buy/sell session count, streak; `foreign_flow_ratio` → avg ratio |
 | `saham analyze swing TICKER` (via `build_broker_detail`, **fallback**) | `get_broker_summaries(ticker)` if `broker_daily_flow` empty | `top_buyers_json`, `top_sellers_json` → deserialized to `BrokerTransaction[]` for per-broker attribution |
-| `saham view broker flow TICKER` (via `GetBrokerDataUseCase`) | `get_broker_summaries(ticker, ...)` | All columns → display |
-| `saham view broker top TICKER` | `get_broker_summary(ticker, target_date)` | `top_buyers_json`, `top_sellers_json` → top buyers/sellers list |
+| `saham view ticker flow TICKER` (via `GetBrokerDataUseCase`) | `get_broker_summaries(ticker, ...)` | All columns → display |
+| `saham view ticker top-brokers TICKER` | `get_broker_summary(ticker, target_date)` | `top_buyers_json`, `top_sellers_json` → top buyers/sellers list |
 | `saham analyze regime` (via `MarketRegimeUseCase._foreign_flow_breadth`) | `get_broker_summaries(ticker)` for each universe ticker | Only `summaries[-1].foreign_net_value` (latest date only) for foreign flow breadth % |
 | `saham screen pre-open` (via `PreOpenScreenUseCase._assess_broker_signals`) | `get_broker_summaries(ticker, start=cutoff)` | `is_foreign_accumulating` → buy day count & streak tag; `foreign_buy_value` + `foreign_buy_lot` → Foreign VWAP |
 
@@ -331,7 +331,7 @@ The provider queries `/order-trade/broker/activity/historical` once per tracked 
 When called via standalone `saham fetch broker TICKER --provider stockbit`, the derived path (A) writes with source=`"stockbit"` (drawn from `StockbitPlaywrightBrokerProvider.provider_name`).
 
 **Reads from this table:**
-- `saham view broker history TICKER` — the **only** reader. Displays cached flow time-series.
+- `saham view ticker foreign-history TICKER` — the **only** reader of `foreign_flow_points`. Displays foreign net time-series.
 - `RefreshBrokerDataUseCase` — reads it only for status reporting (count rows before/after).
 
 **No analysis/screening command directly reads `foreign_flow_points`.** All accumulation, swing, regime, and pre-open analysis reads from `broker_summaries` instead.
@@ -369,9 +369,9 @@ When called via standalone `saham fetch broker TICKER --provider stockbit`, the 
 | `saham trade backtest-swing` | **CORE** (via AccumulationScreenUseCase) | **BCI** (via AccumulationScreenUseCase) | — | — |
 | `saham analyze swing-compare` | (via SwingBacktestUseCase) | (via SwingBacktestUseCase) | — | — |
 | `saham research accumulation evaluate` | (via AccumulationAuditUseCase) | — | — | — |
-| `saham view broker flow` | **YES** — display | — | — | — |
+| `saham view ticker flow` | **YES** — display | — | — | — |
 | `saham view broker top` | **YES** — display top_buyers/sellers | — | — | — |
-| `saham view broker history` | — | — | **YES** — display | — |
+| `saham view ticker foreign-history` | — | — | **YES** — display | — |
 | `saham view broker top-foreign` | — | — | — | **YES** — display |
 
 ### Source Preference When Reading

@@ -41,7 +41,7 @@ BACKTEST
 | Tampilkan definisi run | `saham screen accum --universe lq45 --explain` |
 | Analisis setup | `saham analyze swing TICKER --setup foreign-bounce` |
 | Flow detail | `saham analyze swing TICKER --with-flow-detail --explain` |
-| Broker flow harian | `saham view broker flow TICKER --days 30` |
+| Broker flow harian | `saham view ticker flow TICKER --days 30` |
 | Sizing standalone | `saham trade size TICKER --capital 10000000` |
 | Audit accumulation | `saham research accumulation evaluate --universe lq45` |
 
@@ -123,7 +123,7 @@ upgrade. Broker code adalah evidence, bukan bukti beneficial-owner identity.
 
 ```bash
 saham fetch broker TICKER --days 90
-saham view broker flow TICKER --days 7
+saham view ticker flow TICKER --days 7
 ```
 
 Pastikan candle dan broker data tersedia/fresh serta window memiliki cukup sesi.
@@ -142,7 +142,7 @@ price confirmation, dan risk gates. Skor tidak mengoverride policy.
 Recent flow dapat melemah walau histori panjang tinggi:
 
 ```bash
-saham view broker flow TICKER --days 30
+saham view ticker flow TICKER --days 30
 ```
 
 Skip jika recent sessions menunjukkan distribution atau struktur rusak.

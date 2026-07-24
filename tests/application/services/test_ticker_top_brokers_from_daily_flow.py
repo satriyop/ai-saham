@@ -5,7 +5,7 @@ from decimal import Decimal
 
 import pytest
 
-from src.application.services.broker_top_from_daily_flow import (
+from src.application.services.ticker_top_brokers_from_daily_flow import (
     TRACKED_TOPS_NOTE,
     daily_flow_to_transaction,
     rank_top_brokers_from_daily_flows,

@@ -1,5 +1,5 @@
 """
-CLI command for viewing broker distribution (cross-broker counterparty flow).
+CLI: view ticker distribution — cross-broker counterparty matrix for a stock.
 
 Layer: Adapter
 """
@@ -11,16 +11,16 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.view_broker_distribution_display import (
+from src.adapters.cli.view_ticker_distribution_display import (
     display_broker_distribution,
 )
-from src.adapters.cli.view_broker_provider_factory import (
+from src.adapters.cli.view_ticker_distribution_provider_factory import (
     create_broker_distribution_provider,
 )
 from src.infrastructure.config.app_config import load_app_config
 
 
-def broker_distribution_view(
+def ticker_distribution(
     ticker: Annotated[str, typer.Argument(help="Ticker symbol (e.g. BBCA)")],
     db_path: Annotated[
         Optional[Path],
@@ -30,12 +30,11 @@ def broker_distribution_view(
     """
     Show cross-broker counterparty distribution for a ticker.
 
-    Reveals which brokers bought FROM whom and sold TO whom today,
-    exposing institutional rotation and smart-money accumulation patterns.
+    Reveals which brokers bought FROM whom and sold TO whom today.
 
     Examples:
-        saham view broker distribution BBCA
-        saham view broker distribution GOTO --db /path/to/data.db
+        saham view ticker distribution BBCA
+        saham view ticker distribution GOTO --db /path/to/data.db
     """
     db_path = db_path or Path(load_app_config().storage.db_path)
     provider = create_broker_distribution_provider(db_path)

@@ -1,17 +1,17 @@
-"""Tests for ViewBrokerTopUseCase summary tops + tracked daily-flow fallback."""
+"""Tests for ViewTickerTopBrokersUseCase summary tops + tracked daily-flow fallback."""
 
 from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock
 
-from src.application.services.broker_top_from_daily_flow import (
+from src.application.services.ticker_top_brokers_from_daily_flow import (
     TRACKED_TOPS_NOTE,
     TRACKED_TOPS_SCOPE,
     TRACKED_TOPS_SOURCE,
 )
-from src.application.use_case.view_broker_top_use_case import (
-    ViewBrokerTopRequest,
-    ViewBrokerTopUseCase,
+from src.application.use_case.view_ticker_top_brokers_use_case import (
+    ViewTickerTopBrokersRequest,
+    ViewTickerTopBrokersUseCase,
 )
 from src.domain.entities.broker_flow import (
     BrokerDailyFlow,
@@ -92,7 +92,7 @@ def test_prefers_summary_tops_when_present():
     )
     repo.get_broker_summaries.return_value = [summary]
 
-    result = ViewBrokerTopUseCase(repo).execute(ViewBrokerTopRequest(ticker="bbca"))
+    result = ViewTickerTopBrokersUseCase(repo).execute(ViewTickerTopBrokersRequest(ticker="bbca"))
 
     assert result is not None
     assert result.tops_source == "summary"
@@ -115,10 +115,10 @@ def test_falls_back_to_tracked_daily_flow_when_summary_tops_empty():
     ]
     foreign = frozenset({"RX", "AK"})
 
-    result = ViewBrokerTopUseCase(
+    result = ViewTickerTopBrokersUseCase(
         repo,
         foreign_broker_codes=foreign,
-    ).execute(ViewBrokerTopRequest(ticker="BBCA"))
+    ).execute(ViewTickerTopBrokersRequest(ticker="BBCA"))
 
     assert result is not None
     assert result.tops_source == TRACKED_TOPS_SOURCE
@@ -140,7 +140,7 @@ def test_empty_tops_and_no_daily_flow_returns_empty_lists_without_tracked_label(
     repo.get_broker_summaries.return_value = [_summary()]
     repo.get_broker_daily_flows.return_value = []
 
-    result = ViewBrokerTopUseCase(repo).execute(ViewBrokerTopRequest(ticker="BBCA"))
+    result = ViewTickerTopBrokersUseCase(repo).execute(ViewTickerTopBrokersRequest(ticker="BBCA"))
 
     assert result is not None
     assert result.top_buyers == ()
@@ -155,8 +155,8 @@ def test_target_date_uses_get_broker_summary():
     summary = _summary(d=d, top_buyers=(_tx("ZP", "10"),))
     repo.get_broker_summary.return_value = summary
 
-    result = ViewBrokerTopUseCase(repo).execute(
-        ViewBrokerTopRequest(ticker="BBCA", target_date=d)
+    result = ViewTickerTopBrokersUseCase(repo).execute(
+        ViewTickerTopBrokersRequest(ticker="BBCA", target_date=d)
     )
 
     assert result is not None
@@ -169,6 +169,6 @@ def test_returns_none_when_no_summary():
     repo = MagicMock()
     repo.get_broker_summaries.return_value = []
 
-    result = ViewBrokerTopUseCase(repo).execute(ViewBrokerTopRequest(ticker="BBCA"))
+    result = ViewTickerTopBrokersUseCase(repo).execute(ViewTickerTopBrokersRequest(ticker="BBCA"))
 
     assert result is None

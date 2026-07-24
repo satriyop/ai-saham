@@ -144,7 +144,7 @@ Invalidation reason:
 
   ```bash
   saham screen accum TICKER1 TICKER2 --multi
-  saham view broker flow TICKER --days 5
+  saham view ticker flow TICKER --days 5
   ```
 
 - [ ] Jika flow berbalik distribution atau setup invalid, evaluasi exit awal.

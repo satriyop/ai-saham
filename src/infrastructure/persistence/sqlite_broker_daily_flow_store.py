@@ -145,3 +145,36 @@ class SQLiteBrokerDailyFlowStore:
             raise BrokerDataRepositoryError(
                 f"Failed to get broker daily flow date range: {e}"
             ) from e
+
+    def get_broker_daily_flows_by_code(
+        self,
+        broker_code: str,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        ticker: str | None = None,
+        source: str | None = None,
+    ) -> list[BrokerDailyFlow]:
+        """Retrieve rows for one broker_code across tickers (desk-centric)."""
+        try:
+            with self._get_connection() as conn:
+                query = "SELECT * FROM broker_daily_flow WHERE broker_code = ?"
+                params: list = [broker_code.upper()]
+                if start_date:
+                    query += " AND date >= ?"
+                    params.append(start_date.isoformat())
+                if end_date:
+                    query += " AND date <= ?"
+                    params.append(end_date.isoformat())
+                if ticker:
+                    query += " AND ticker = ?"
+                    params.append(ticker.upper())
+                if source:
+                    query += " AND source = ?"
+                    params.append(source)
+                query += " ORDER BY date ASC, ticker ASC"
+                rows = conn.execute(query, params).fetchall()
+            return [row_to_broker_daily_flow(r) for r in rows]
+        except sqlite3.Error as e:
+            raise BrokerDataRepositoryError(
+                f"Failed to get broker daily flows by code: {e}"
+            ) from e

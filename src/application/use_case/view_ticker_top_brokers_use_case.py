@@ -1,5 +1,5 @@
 """
-View broker top buyers/sellers from cached data only.
+View top broker desks for a stock from cached data only.
 
 Prefers market top lists on ``broker_summaries``. When those lists are empty
 (common for IDX-sourced summaries), falls back to ranking
@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
-from src.application.services.broker_top_from_daily_flow import (
+from src.application.services.ticker_top_brokers_from_daily_flow import (
     TRACKED_TOPS_NOTE,
     TRACKED_TOPS_SCOPE,
     TRACKED_TOPS_SOURCE,
@@ -25,14 +25,14 @@ from src.domain.ports.broker_data_repository import BrokerDataRepository
 
 
 @dataclass(frozen=True)
-class ViewBrokerTopRequest:
+class ViewTickerTopBrokersRequest:
     ticker: str
     target_date: date | None = None  # None = latest summary date
     limit: int = 10
 
 
 @dataclass(frozen=True)
-class ViewBrokerTopResult:
+class ViewTickerTopBrokersResult:
     """Resolved top-broker view for one ticker/date."""
 
     ticker: str
@@ -46,7 +46,7 @@ class ViewBrokerTopResult:
     tops_scope_note: str | None
 
 
-class ViewBrokerTopUseCase:
+class ViewTickerTopBrokersUseCase:
     """Read-only use case: summary tops with optional tracked-flow fallback."""
 
     def __init__(
@@ -65,14 +65,16 @@ class ViewBrokerTopUseCase:
         self._repository = repository
         self._foreign_broker_codes = foreign_broker_codes
 
-    def execute(self, request: ViewBrokerTopRequest) -> ViewBrokerTopResult | None:
+    def execute(
+        self, request: ViewTickerTopBrokersRequest
+    ) -> ViewTickerTopBrokersResult | None:
         ticker = request.ticker.upper()
         summary = self._resolve_summary(ticker, request.target_date)
         if summary is None:
             return None
 
         if summary.top_buyers or summary.top_sellers:
-            return ViewBrokerTopResult(
+            return ViewTickerTopBrokersResult(
                 ticker=ticker,
                 date=summary.date,
                 summary=summary,
@@ -94,8 +96,7 @@ class ViewBrokerTopUseCase:
             foreign_broker_codes=self._foreign_broker_codes,
         )
         if not buyers and not sellers:
-            # Summary exists but no tops and no tracked rows for that date.
-            return ViewBrokerTopResult(
+            return ViewTickerTopBrokersResult(
                 ticker=ticker,
                 date=summary.date,
                 summary=summary,
@@ -106,7 +107,7 @@ class ViewBrokerTopUseCase:
                 tops_scope_note=None,
             )
 
-        return ViewBrokerTopResult(
+        return ViewTickerTopBrokersResult(
             ticker=ticker,
             date=summary.date,
             summary=summary,

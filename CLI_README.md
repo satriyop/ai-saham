@@ -660,10 +660,10 @@ saham fetch stockbit test
 
 ```bash
 # Show foreign flow summary
-saham view broker flow BBCA
+saham view ticker flow BBCA
 
 # Last 20 trading days
-saham view broker flow BBRI --days 20
+saham view ticker flow BBRI --days 20
 ```
 
 **Output Example:**
@@ -692,10 +692,10 @@ Date         Net Flow       Ratio  Top Buyer  Top Seller
 
 ```bash
 # Top brokers for latest date
-saham view broker top BBCA
+saham view ticker top-brokers BBCA
 
 # Top brokers for specific date
-saham view broker top BBRI --date 2025-01-15
+saham view ticker top-brokers BBRI --date 2025-01-15
 ```
 
 **Output Example:**
@@ -726,8 +726,8 @@ DB     Deutsche Bank        Foreign      -3.80B     -380,000
 Shows how brokers trade against each other — which brokers are buying from which sellers (counterparty matrix). Requires cached Stockbit data (fetched as part of `saham fetch market` enrichment cycle).
 
 ```bash
-saham view broker distribution BBCA
-saham view broker distribution GOTO
+saham view ticker distribution BBCA
+saham view ticker distribution GOTO
 ```
 
 The matrix reveals counterparty flows (e.g., foreign broker buying from local broker) and can highlight coordinated accumulation or distribution patterns.
@@ -901,7 +901,7 @@ saham fetch stockbit login
 saham fetch broker BBCA --days 90
 
 # 3. View the flow
-saham view broker flow BBCA
+saham view ticker flow BBCA
 
 # 4. Use in backtest (requires broker data pre-loaded)
 saham strategy backtest BBCA --strategy foreign-accumulation
@@ -2721,12 +2721,12 @@ saham fetch broker BBRI --days 90
 saham fetch broker BMRI --days 90
 
 # Step 2: Analyze foreign flow patterns
-saham view broker flow BBCA --days 20
-saham view broker flow BBRI --days 20
+saham view ticker flow BBCA --days 20
+saham view ticker flow BBRI --days 20
 
 # Step 3: Check top brokers (requires Stockbit session provider)
 saham fetch broker BBCA --provider stockbit --days 30
-saham view broker top BBCA --date 2025-01-27
+saham view ticker top-brokers BBCA --date 2025-01-27
 
 # Step 4: Fetch price data for backtesting
 saham fetch market BBCA --days 365
@@ -2776,11 +2776,11 @@ saham strategy backtest BBCA --strategy my_flow_strategy
 | `saham fetch broker-history TICKER` | Fetch foreign flow history (Stockbit) | `--days` |
 | `saham fetch broker-top-foreign` | Universe scan for top foreign flow stocks | — |
 | `saham fetch iev` | Capture pre-open IEV mover rankings | `--top-n`, `--no-headless` |
-| `saham view broker flow TICKER` | View foreign flow summary | `--days` |
-| `saham view broker top TICKER` | View top brokers | `--date` |
-| `saham view broker history TICKER` | View foreign flow time-series | `--days`, `--source` |
+| `saham view ticker flow TICKER` | View foreign flow summary | `--days` |
+| `saham view ticker top-brokers TICKER` | View top brokers | `--date` |
+| `saham view ticker foreign-history TICKER` | View foreign flow time-series | `--days`, `--source` |
 | `saham view market-context` | Cross-market regime context (VIX, EIDO, USD/IDR) | — |
-| `saham view broker distribution TICKER` | Cross-broker counterparty matrix | — |
+| `saham view ticker distribution TICKER` | Cross-broker counterparty matrix | — |
 | `saham view broker top-foreign` | View top foreign flow stocks by period | `--days`, `--date`, `--limit` |
 | `saham fetch broker-import FILE` | Import broker data from CSV | `--preview`, `--mapping`, `--on-error` |
 | `saham view broker mappings` | List available CSV mappings | — |
@@ -3044,7 +3044,7 @@ No data found. Run 'saham fetch broker BBCA' first.
 **Solution:** Fetch broker data before viewing:
 ```bash
 saham fetch broker BBCA --days 30
-saham view broker flow BBCA
+saham view ticker flow BBCA
 ```
 
 ---

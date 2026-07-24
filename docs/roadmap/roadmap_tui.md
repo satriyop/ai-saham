@@ -73,7 +73,7 @@ earn TUI placement; the user job and interaction benefit must be clear.
 | `screen watchlist`, `screen compare` | Preserve a shortlist and see new/dropped/strengthening names | High | Saved screens and comparison view |
 | `analyze swing` | Decide whether one ticker/setup is actionable and why | Essential | Core Ticker Workbench |
 | `analyze chart price/rsi/volume` | Confirm price structure, momentum, and participation | High | Ticker tabs/panels |
-| `view broker flow/top/history/distribution` | Inspect institutional behavior behind a candidate | High | Ticker Flow tab |
+| `view ticker flow/top-brokers/foreign-history/distribution` | Inspect institutional behavior behind a candidate | High | Ticker Flow tab |
 | `view TICKER`, `analyze risk`, `analyze signal inspect` | Inspect cached context, risk gates, and canonical signal evidence | High | Progressive ticker evidence |
 | `trade size` | Convert an entry idea into stop, target, capital risk, and lots | Essential | Position Plan panel |
 | `trade backtest-swing`, `analyze swing-compare` | Test a named setup and compare variants/regimes | Essential | Setup Backtest |

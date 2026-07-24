@@ -387,7 +387,7 @@ saham screen accum BBRI --window 7 --explain
 saham screen accum BBRI --window 30 --explain
 
 # What does the daily flow look like?
-saham view broker flow BBRI --days 30
+saham view ticker flow BBRI --days 30
 
 # Swing decision and risk/signal context
 saham analyze swing BBRI --with-risk-detail --with-signal-detail

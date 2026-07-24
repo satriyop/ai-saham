@@ -53,9 +53,9 @@
  ---
  Phase 4 — Broker & Foreign Flow Analysis
 
- saham view broker flow BBCA --days 30    # Daily foreign net flow table
- saham view broker top BBCA               # Top 5 buyers + sellers today
- saham view broker top BBCA --date 2024-01-15  # Historical snapshot
+ saham view ticker flow BBCA --days 30    # Daily foreign net flow table
+ saham view ticker top-brokers BBCA               # Top 5 buyers + sellers today
+ saham view ticker top-brokers BBCA --date 2024-01-15  # Historical snapshot
 
  ---
  Phase 5 — Sentiment

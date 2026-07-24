@@ -146,3 +146,15 @@ class SQLiteBrokerRepository(BrokerDataRepository):
         source: str | None = None,
     ) -> tuple[date, date] | None:
         return self._daily_flow.get_broker_daily_flow_date_range(ticker, source)
+
+    def get_broker_daily_flows_by_code(
+        self,
+        broker_code: str,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        ticker: str | None = None,
+        source: str | None = None,
+    ) -> list[BrokerDailyFlow]:
+        return self._daily_flow.get_broker_daily_flows_by_code(
+            broker_code, start_date, end_date, ticker, source
+        )
