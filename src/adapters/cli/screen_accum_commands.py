@@ -7,16 +7,12 @@ Public command registration lives in lifecycle routers:
 Layer: Adapter
 """
 
-import json
 from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.effective_session_display import (
-    effective_session_to_json,
-    parse_as_of_option,
-)
+from src.adapters.cli.effective_session_display import parse_as_of_option
 from src.adapters.cli.screen_accum_display import (
     display_multi,
     display_results,
@@ -26,14 +22,11 @@ from src.adapters.cli.screen_accum_formatters import (
     AccumulationDisplayConfig,
     accumulation_display_config_from_screener,
 )
-from src.adapters.cli.screen_contract_cli import resolve_output_format
+from src.adapters.cli.screen_contract_cli import echo_json, resolve_output_format
 from src.adapters.cli.screen_deps import build_screen_deps
-from src.application.dto.screen_contract import (
-    ScreenSubjectKind,
-    build_screen_envelope,
-    default_screen_fetch_hint,
-    related_actions_for_accum,
-    resolve_accum_result_status,
+from src.application.dto.screen_accum_payload import (
+    build_accum_multi_envelope,
+    build_accum_single_envelope,
 )
 from src.application.services.screen_accum_result_projector import (
     ScreenAccumProjectionError,
@@ -337,47 +330,13 @@ def _render_multi(
         return
 
     if output_format == "json":
-        tickers_payload: dict = {}
-        for row in projection.rows:
-            entry = row.to_dict()
-            entry.update(entry.pop("windows"))
-            entry.pop("ticker", None)
-            tickers_payload[row.ticker] = entry
-        partial_result = any(
-            resp.tickers_skipped > 0 for resp in result.multi_results.values()
-        )
-        payload = {
-            "schema_version": 1,
-            "artifact_type": "accumulation_screen_multi",
-            "mode": "multi",
-            "universe": universe_label,
-            "windows": [f"{w}_sessions" for w in projection.resolved_windows],
-            "screened_at": str(projection.screened_at),
-            "effective_session": effective_session_to_json(result.effective_session),
-            "tickers": tickers_payload,
-            "warnings": list(result.warnings),
-            "partial_result": partial_result,
-            **projection.to_dict(),
-            "related_actions": related_actions_for_accum(
-                tickers=[row.ticker for row in projection.rows],
-            ),
-        }
-        status = resolve_accum_result_status(result_count=len(projection.rows))
-        typer.echo(
-            json.dumps(
-                build_screen_envelope(
-                    verb="accum",
-                    status=status,
-                    subject_kind=ScreenSubjectKind.UNIVERSE,
-                    subject_id=universe_label,
-                    as_of=projection.screened_at,
-                    source="accumulation_screen",
-                    scope="multi",
-                    fetch_hint=default_screen_fetch_hint(universe=universe_label),
-                    data=payload,
-                ),
-                indent=2,
-                default=str,
+        echo_json(
+            build_accum_multi_envelope(
+                universe_label=universe_label,
+                projection=projection,
+                multi_results=result.multi_results,
+                effective_session=result.effective_session,
+                warnings=result.warnings,
             )
         )
         return
@@ -413,53 +372,16 @@ def _render_single(
         return
 
     if output_format == "json":
-        saved_name = (
-            result.save_result.name if result.save_result is not None else None
-        )
-        data = {
-            "schema_version": 1,
-            "artifact_type": "accumulation_screen",
-            "universe": universe_label,
-            "screened_at": str(response.screened_at),
-            "window_days": response.window_days,
-            "total_checked": response.total_tickers_checked,
-            "skipped": response.tickers_skipped,
-            "provider": response.provider,
-            "effective_session": effective_session_to_json(result.effective_session),
-            "candidates": [c.to_dict() for c in projection.candidates],
-            "warnings": list(result.warnings),
-            "partial_result": response.tickers_skipped > 0,
-            **projection.to_dict(),
-            "related_actions": related_actions_for_accum(
-                tickers=[c.ticker for c in projection.candidates],
-                saved_watchlist_name=saved_name,
-            ),
-        }
-        if strategy:
-            data["strategy_name"] = strategy
-            data["strategy_signals"] = dict(result.strategy_signals or {})
-        if result.save_result is not None:
-            data["saved_watchlist"] = {
-                "name": result.save_result.name,
-                "saved_count": result.save_result.saved_count,
-            }
-        status = resolve_accum_result_status(result_count=len(projection.candidates))
-        typer.echo(
-            json.dumps(
-                build_screen_envelope(
-                    verb="accum",
-                    status=status,
-                    subject_kind=ScreenSubjectKind.UNIVERSE,
-                    subject_id=universe_label,
-                    as_of=response.screened_at,
-                    source="accumulation_screen",
-                    scope="single",
-                    window_days=response.window_days,
-                    fetch_hint=default_screen_fetch_hint(universe=universe_label),
-                    data=data,
-                ),
-                indent=2,
-                default=str,
+        echo_json(
+            build_accum_single_envelope(
+                universe_label=universe_label,
+                response=response,
+                projection=projection,
+                effective_session=result.effective_session,
+                warnings=result.warnings,
+                strategy_name=strategy,
+                strategy_signals=result.strategy_signals,
+                save_result=result.save_result,
             )
         )
         return
