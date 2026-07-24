@@ -1,7 +1,7 @@
 """
 Shared response contract for `saham screen` discovery commands.
 
-Mirrors the view-ticker envelope vocabulary so CLI and future TUI Discover
+Mirrors the view-ticker envelope vocabulary so CLI and TUI Screen workspace
 share one metadata language.
 
 Layer: Application
@@ -31,7 +31,7 @@ class ScreenResultStatus(str, Enum):
 
 @dataclass(frozen=True)
 class ScreenRelatedAction:
-    """Structured next-step link for CLI agents / future TUI Discover."""
+    """Structured next-step link for CLI agents / TUI Screen workspace."""
 
     verb: str
     label: str

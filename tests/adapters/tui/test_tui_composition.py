@@ -76,8 +76,8 @@ def test_tui_composition_has_no_removed_readiness_or_scope_inputs():
     assert "research_scopes_loader" not in parameters
 
 
-def test_create_tui_app_discover_uses_build_screen_deps(monkeypatch):
-    """Discover watchlist/save/accum wiring must come from shared screen deps."""
+def test_create_tui_app_screen_uses_build_screen_deps(monkeypatch):
+    """Screen workspace watchlist/save/accum wiring must come from shared screen deps."""
     from pathlib import Path
     from types import SimpleNamespace
     from unittest.mock import MagicMock

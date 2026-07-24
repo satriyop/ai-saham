@@ -5,7 +5,7 @@ import asyncio
 from textual.widgets import Static
 
 from src.adapters.tui.composition import create_tui_app
-from src.adapters.tui.screens.candidate_browser_screen import CandidateBrowserScreen
+from src.adapters.tui.screens.screen_workspace_screen import ScreenWorkspaceScreen
 from src.adapters.tui.screens.daily_screen import DailyScreen
 from src.adapters.tui.screens.help import HelpScreen
 from src.adapters.tui.screens.ticker_workbench_screen import TickerWorkbenchScreen
@@ -159,7 +159,7 @@ def test_candidate_navigation_has_one_load_and_enter_runs_selected_ticker_once()
                 await pilot.pause(0.01)
                 if accumulation_calls == [False]:
                     break
-            assert isinstance(app.screen, CandidateBrowserScreen)
+            assert isinstance(app.screen, ScreenWorkspaceScreen)
             assert accumulation_calls == [False]
 
             await pilot.press("j", "k", "down", "up")
@@ -194,7 +194,7 @@ def test_candidate_navigation_has_one_load_and_enter_runs_selected_ticker_once()
 
             await pilot.press("escape")
             await pilot.pause()
-            assert isinstance(app.screen, CandidateBrowserScreen)
+            assert isinstance(app.screen, ScreenWorkspaceScreen)
             assert accumulation_calls == [False]
 
             await pilot.press("m")
@@ -219,7 +219,7 @@ def test_candidate_compact_mode_keeps_canonical_action_risk_and_data_text():
             await pilot.press("2")
             for _ in range(30):
                 await pilot.pause(0.01)
-                if isinstance(app.screen, CandidateBrowserScreen):
+                if isinstance(app.screen, ScreenWorkspaceScreen):
                     table = app.screen.query_one("#candidate-table")
                     if table.row_count > 0 and "BBRI" in table.get_row_at(0):
                         break

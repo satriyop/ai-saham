@@ -26,8 +26,8 @@ from src.adapters.tui.controllers.daily_controller import (
     DailyPreviewer,
     DailyRefresher,
 )
-from src.adapters.tui.controllers.discover_controller import (
-    DiscoverController,
+from src.adapters.tui.controllers.screen_controller import (
+    ScreenController,
 )
 from src.adapters.tui.controllers.ticker_research_controller import (
     TickerLoader,
@@ -35,7 +35,7 @@ from src.adapters.tui.controllers.ticker_research_controller import (
 )
 from src.adapters.tui.main import SahamTuiApp
 from src.adapters.tui.presenters.daily_presenter import DailyPresenter
-from src.adapters.tui.presenters.discover_presenter import DiscoverPresenter
+from src.adapters.tui.presenters.screen_presenter import ScreenPresenter
 from src.adapters.tui.presenters.ticker_workbench_presenter import TickerWorkbenchPresenter
 from src.adapters.tui.research_capabilities import (
     ResearchExecution,
@@ -539,7 +539,7 @@ def _resolve_universe_tickers(universe_name: str) -> list[str]:
 
 
 def _build_universe_view(universe_name: str):
-    """Load the locally-cached universe summary view for the Discover Universe tab.
+    """Load the locally-cached universe summary view for the Screen Universe tab.
 
     Reuses the same `build_universe_view` application boundary the CLI `view
     universe` command uses; no provider fetch, offline-only.
@@ -724,7 +724,7 @@ def _build_daily_preview_execution(
 
 
 class _ScreenDepsAccumulationRunner:
-    """Lazy Discover accumulation runner backed by shared ``build_screen_deps``.
+    """Lazy Screen accumulation runner backed by shared ``build_screen_deps``.
 
     Resolves empty ticker lists the same way CLI does (universe loader + broker
     repo) so TUI and ``saham screen accum`` share one composition root.
@@ -768,7 +768,7 @@ def create_tui_app(
 ) -> SahamTuiApp:
     config = load_app_config()
     db_path = Path(config.storage.db_path)
-    # Discover shares the CLI screen composition root (watchlist + accum workflow).
+    # Screen workspace shares the CLI screen composition root (watchlist + accum workflow).
     screen_deps = build_screen_deps(db_path)
 
     daily = daily_loader or create_daily_capability()
@@ -780,7 +780,7 @@ def create_tui_app(
     search = search_tickers or _build_cached_ticker_search(db_path)
 
     class _LazyScreenWorkflow:
-        """Adapt the Discover accumulation callable for compare (one fresh run)."""
+        """Adapt the Screen accumulation callable for compare (one fresh run)."""
 
         def execute(self, req: Any) -> Any:
             return accumulation(req)
@@ -790,7 +790,7 @@ def create_tui_app(
         screen_workflow_use_case=_LazyScreenWorkflow(),  # type: ignore[arg-type]
     )
 
-    discover_controller = DiscoverController(
+    screen_controller = ScreenController(
         load_universe=_build_universe_view,
         run_accumulation=accumulation,
         list_watchlists=screen_deps.list_watchlists,
@@ -801,8 +801,8 @@ def create_tui_app(
     return SahamTuiApp(
         DailyController(daily, refresh_daily=refresher, preview_daily=previewer),
         DailyPresenter(),
-        discover_controller,
-        DiscoverPresenter(),
+        screen_controller,
+        ScreenPresenter(),
         TickerResearchController(ticker),
         TickerWorkbenchPresenter(),
         search_tickers=search,

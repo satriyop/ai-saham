@@ -5,15 +5,15 @@ from textual.binding import Binding
 
 from src.adapters.tui.controllers.accumulation_controller import AccumulationController
 from src.adapters.tui.controllers.daily_controller import DailyController
-from src.adapters.tui.controllers.discover_controller import DiscoverController
+from src.adapters.tui.controllers.screen_controller import ScreenController
 from src.adapters.tui.controllers.ticker_research_controller import TickerResearchController
 from collections.abc import Callable
 
 from src.adapters.tui.presenters.accumulation_presenter import AccumulationPresenter
 from src.adapters.tui.presenters.daily_presenter import DailyPresenter
-from src.adapters.tui.presenters.discover_presenter import DiscoverPresenter
+from src.adapters.tui.presenters.screen_presenter import ScreenPresenter
 from src.adapters.tui.presenters.ticker_workbench_presenter import TickerWorkbenchPresenter
-from src.adapters.tui.screens.candidate_browser_screen import CandidateBrowserScreen
+from src.adapters.tui.screens.screen_workspace_screen import ScreenWorkspaceScreen
 from src.adapters.tui.screens.daily_screen import DailyScreen
 from src.adapters.tui.screens.help import HelpScreen
 from src.adapters.tui.screens.ticker_search_modal import TickerSearchModal
@@ -28,7 +28,7 @@ class SahamTuiApp(App[None]):
     SCREENS = {"help": HelpScreen}
     BINDINGS = [
         Binding("1", "show_today", "Today"),
-        Binding("2", "show_candidates", "Candidates"),
+        Binding("2", "show_screen", "Screen"),
         Binding("slash", "search_ticker", "Search"),
         Binding("q", "quit", "Quit"),
     ]
@@ -135,7 +135,7 @@ class SahamTuiApp(App[None]):
         layout: vertical;
     }
 
-    CandidateBrowserScreen.wide #candidate-workspace {
+    ScreenWorkspaceScreen.wide #candidate-workspace {
         layout: horizontal;
     }
 
@@ -163,15 +163,15 @@ class SahamTuiApp(App[None]):
         background: $surface-darken-1;
     }
 
-    CandidateBrowserScreen.wide #candidate-table {
+    ScreenWorkspaceScreen.wide #candidate-table {
         width: 2fr;
     }
 
-    CandidateBrowserScreen.wide #candidate-preview {
+    ScreenWorkspaceScreen.wide #candidate-preview {
         width: 1fr;
     }
 
-    CandidateBrowserScreen.compact #candidate-preview {
+    ScreenWorkspaceScreen.compact #candidate-preview {
         display: none;
     }
 
@@ -308,8 +308,8 @@ class SahamTuiApp(App[None]):
         self,
         daily_controller: DailyController,
         daily_presenter: DailyPresenter,
-        accumulation_controller: AccumulationController | DiscoverController,
-        accumulation_presenter: AccumulationPresenter | DiscoverPresenter,
+        accumulation_controller: AccumulationController | ScreenController,
+        accumulation_presenter: AccumulationPresenter | ScreenPresenter,
         ticker_controller: TickerResearchController,
         ticker_presenter: TickerWorkbenchPresenter,
         *,
@@ -352,31 +352,31 @@ class SahamTuiApp(App[None]):
             self.pop_screen()
             self.call_after_refresh(self.action_show_today)
             return
-        if isinstance(self.screen, CandidateBrowserScreen):
+        if isinstance(self.screen, ScreenWorkspaceScreen):
             self._cancel_active_screen_work()
             self.set_route_context("Today")
             self.pop_screen()
             return
         self.set_route_context("Today")
 
-    def action_show_candidates(self) -> None:
+    def action_show_screen(self) -> None:
         if isinstance(self.screen, HelpScreen):
             self.pop_screen()
             return
         if isinstance(self.screen, TickerWorkbenchScreen):
             self._cancel_active_screen_work()
-            self.set_route_context("Candidates")
+            self.set_route_context("Screen")
             self.pop_screen()
             return
-        if not isinstance(self.screen, CandidateBrowserScreen):
+        if not isinstance(self.screen, ScreenWorkspaceScreen):
             self._cancel_active_screen_work()
             self.push_screen(
-                CandidateBrowserScreen(
+                ScreenWorkspaceScreen(
                     self._accumulation_controller,
                     self._accumulation_presenter,
                 )
             )
-        self.set_route_context("Candidates")
+        self.set_route_context("Screen")
 
     def action_open_ticker(self, ticker: str) -> None:
         self._cancel_active_screen_work()
@@ -390,7 +390,7 @@ class SahamTuiApp(App[None]):
 
     def action_search_ticker(self) -> None:
         """Open the offline global ticker search. Selecting a ticker opens the
-        same workbench used by the Discover drilldown. Opening search — and typing
+        same workbench used by the Screen drilldown. Opening search — and typing
         in it — never queries a provider."""
         if isinstance(self.screen, (HelpScreen, TickerSearchModal)):
             return

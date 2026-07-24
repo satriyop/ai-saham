@@ -1,4 +1,4 @@
-"""Immutable presenter mapping Discover candidates, projections, and comparisons for Textual.
+"""Immutable presenter mapping Screen candidates, projections, and comparisons for Textual.
 
 Layer: Adapter
 """
@@ -25,7 +25,7 @@ from src.domain.value_objects.screen_snapshot import ScreenSnapshotEntry
 
 
 @dataclass(frozen=True)
-class DiscoverCandidateRowView:
+class ScreenCandidateRowView:
     canonical_rank: int
     ticker: str
     accum_score: float
@@ -44,7 +44,7 @@ class DiscoverCandidateRowView:
 
 
 @dataclass(frozen=True)
-class DiscoverComparisonGroupView:
+class ScreenComparisonGroupView:
     heading: str
     symbol: str
     status_class: str
@@ -52,31 +52,31 @@ class DiscoverComparisonGroupView:
 
 
 @dataclass(frozen=True)
-class DiscoverRelatedActionView:
+class ScreenRelatedActionView:
     verb: str
     label: str
     command: str
 
 
 @dataclass(frozen=True)
-class DiscoverViewModel:
+class ScreenViewModel:
     active_tab: str
     universe_label: str
-    candidate_rows: tuple[DiscoverCandidateRowView, ...]
+    candidate_rows: tuple[ScreenCandidateRowView, ...]
     watchlist_summaries: tuple[ScreenWatchlistSummary, ...]
     selected_snapshot_entries: tuple[ScreenSnapshotEntry, ...]
     comparison_result: CompareScreenWatchlistResult | None
     warnings: tuple[str, ...]
     result_status: str = ScreenResultStatus.OK.value
-    related_actions: tuple[DiscoverRelatedActionView, ...] = ()
+    related_actions: tuple[ScreenRelatedActionView, ...] = ()
 
 
-class DiscoverPresenter:
-    """Format Discover workflow outputs into immutable UI display structures."""
+class ScreenPresenter:
+    """Format Screen workflow outputs into immutable UI display structures."""
 
     def present(
         self, payload: Any, *, active_tab: str = "ACCUMULATION", universe_label: str = "lq45"
-    ) -> DiscoverViewModel:
+    ) -> ScreenViewModel:
         return self.present_accumulation(payload, active_tab=active_tab, universe_label=universe_label)
 
     @staticmethod
@@ -137,7 +137,7 @@ class DiscoverPresenter:
         *,
         active_tab: str = "ACCUMULATION",
         universe_label: str = "lq45",
-    ) -> DiscoverViewModel:
+    ) -> ScreenViewModel:
         source = projection
         warnings = tuple(getattr(source, "warnings", ()) or ())
         saved_name = None
@@ -150,7 +150,7 @@ class DiscoverPresenter:
         elif hasattr(projection, "single_projection") and projection.single_projection is not None:
             projection = projection.single_projection
 
-        rows: list[DiscoverCandidateRowView] = []
+        rows: list[ScreenCandidateRowView] = []
         if hasattr(projection, "rows") or type(projection).__name__ == "ScreenAccumMultiProjection":
             for rank, multi_row in enumerate(projection.rows, 1):
                 c = getattr(multi_row, "canonical_candidate", getattr(multi_row, "candidate", multi_row))
@@ -164,7 +164,7 @@ class DiscoverPresenter:
                 disc, depth = self._vwap_fields(c)
                 sig_score, sig_cov = self._signal_fields(c, row=multi_row)
                 rows.append(
-                    DiscoverCandidateRowView(
+                    ScreenCandidateRowView(
                         canonical_rank=rank,
                         ticker=c.ticker,
                         accum_score=getattr(c, "accum_score", 0.0),
@@ -203,7 +203,7 @@ class DiscoverPresenter:
                 disc, depth = self._vwap_fields(c)
                 sig_score, sig_cov = self._signal_fields(c)
                 rows.append(
-                    DiscoverCandidateRowView(
+                    ScreenCandidateRowView(
                         canonical_rank=rank,
                         ticker=c.ticker,
                         accum_score=float(getattr(c, "accum_score", 0.0)),
@@ -222,7 +222,7 @@ class DiscoverPresenter:
 
         result_status = resolve_accum_result_status(result_count=len(rows)).value
         related = tuple(
-            DiscoverRelatedActionView(
+            ScreenRelatedActionView(
                 verb=item["verb"],
                 label=item["label"],
                 command=item["command"],
@@ -232,7 +232,7 @@ class DiscoverPresenter:
                 saved_watchlist_name=saved_name,
             )
         )
-        return DiscoverViewModel(
+        return ScreenViewModel(
             active_tab=active_tab,
             universe_label=universe_label,
             candidate_rows=tuple(rows),
@@ -249,8 +249,8 @@ class DiscoverPresenter:
         list_result: ListScreenWatchlistsResult,
         *,
         active_tab: str = "SAVED_COMPARE",
-    ) -> DiscoverViewModel:
-        return DiscoverViewModel(
+    ) -> ScreenViewModel:
+        return ScreenViewModel(
             active_tab=active_tab,
             universe_label="",
             candidate_rows=(),
@@ -265,10 +265,10 @@ class DiscoverPresenter:
         compare_result: CompareScreenWatchlistResult,
         *,
         active_tab: str = "SAVED_COMPARE",
-    ) -> DiscoverViewModel:
+    ) -> ScreenViewModel:
         comp = compare_result.comparison
         warnings = tuple(comp.warnings)
-        return DiscoverViewModel(
+        return ScreenViewModel(
             active_tab=active_tab,
             universe_label=compare_result.saved_summary.universe,
             candidate_rows=(),

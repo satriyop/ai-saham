@@ -11,7 +11,7 @@ from textual.containers import VerticalScroll
 from textual.widgets import Static
 
 from src.adapters.tui.composition import create_tui_app
-from src.adapters.tui.screens.candidate_browser_screen import CandidateBrowserScreen
+from src.adapters.tui.screens.screen_workspace_screen import ScreenWorkspaceScreen
 from src.adapters.tui.screens.daily_screen import DailyScreen
 from src.adapters.tui.screens.help import HelpScreen
 from src.adapters.tui.screens.ticker_workbench_screen import TickerWorkbenchScreen
@@ -107,7 +107,7 @@ def test_full_keyboard_journey_is_offline_read_only_and_authority_safe(size):
                 lambda: capabilities.accumulation_calls == [False],
                 "Candidates did not load",
             )
-            assert isinstance(app.screen, CandidateBrowserScreen)
+            assert isinstance(app.screen, ScreenWorkspaceScreen)
             selected = str(app.screen.query_one("#candidate-selected", Static).content)
             assert "Action: WATCH" in selected
             assert "Risk: OPEN" in selected
@@ -183,7 +183,7 @@ def test_80x24_warnings_are_keyboard_reachable_and_large_layout_is_wide():
             await _wait_until(
                 pilot,
                 lambda: (
-                    isinstance(app.screen, CandidateBrowserScreen) and app.screen.has_class("wide")
+                    isinstance(app.screen, ScreenWorkspaceScreen) and app.screen.has_class("wide")
                 ),
                 "Candidate browser did not enter wide layout",
             )
@@ -216,7 +216,7 @@ def test_empty_daily_and_candidate_states_keep_navigation_available():
             await _wait_until(
                 pilot,
                 lambda: (
-                    isinstance(app.screen, CandidateBrowserScreen)
+                    isinstance(app.screen, ScreenWorkspaceScreen)
                     and "EMPTY" in str(app.screen.query_one("#candidate-status", Static).content)
                 ),
                 "Candidate EMPTY did not render",
@@ -286,13 +286,13 @@ def test_route_switch_cancels_late_result_before_hidden_ui_mutation():
             await pilot.press("2")
             await _wait_until(
                 pilot,
-                lambda: isinstance(app.screen, CandidateBrowserScreen),
+                lambda: isinstance(app.screen, ScreenWorkspaceScreen),
                 "Candidate route did not open",
             )
             assert "cancelled" in str(daily_screen.query_one("#daily-status", Static).content)
             release.set()
             await pilot.pause(0.1)
-            assert isinstance(app.screen, CandidateBrowserScreen)
+            assert isinstance(app.screen, ScreenWorkspaceScreen)
             assert "authority READY" not in str(
                 daily_screen.query_one("#daily-status", Static).content
             )

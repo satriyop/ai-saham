@@ -1,4 +1,4 @@
-"""Policy-free projection presenter for Candidate Browser.
+"""Policy-free projection presenter (legacy; Screen workspace uses ScreenPresenter).
 
 Layer: Adapter
 """

@@ -141,7 +141,7 @@ investment candidate. Signal-dataset research remains in the CLI.
 ### Navigation
 
 - Top-level destinations are always visible in a compact top bar or footer.
-- `1` Dashboard, `2` Discover, `3` Backtest, `4` Review.
+- `1` Dashboard, `2` Screen (CLI: saham screen), `3` Backtest, `4` Review.
 - `/` opens ticker search from anywhere.
 - `Enter` opens or executes the explicitly focused action.
 - `Esc` returns to the previous context without losing the current result.
@@ -263,10 +263,13 @@ Visual polish is part of implementation, not a later release phase. Each milesto
 The dashboard is a launchpad. It does not dump every DailyBriefing field into
 one scrolling page. Details open in the owning workspace.
 
-### Discover
+### Screen (CLI: `saham screen`)
+
+Maps 1:1 to the CLI screen family. Nav key `2` / route label: **Screen**.
+Code: `ScreenWorkspaceScreen`, `ScreenController`, `ScreenPresenter`.
 
 ```text
- DISCOVER  [Universe] [Accumulation] [Saved / Compare]
+ SCREEN  [Universe] [Accumulation] [Saved / Compare]
  Universe [LQ45]  Windows [7,30,90]  Min score [50]
  [ ] Squeeze  [ ] Foreign underwater  Sort [Canonical]       [Run]
  -----------------------------------------------------------------------

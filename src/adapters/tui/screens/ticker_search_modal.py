@@ -3,7 +3,7 @@
 Opening this modal never queries a provider; results come only from the injected
 offline search callable (backed by ``ListCachedTickersUseCase``). A valid
 selection returns the chosen ticker to the app, which opens the same workbench
-used by the Discover drilldown.
+used by the Screen drilldown.
 
 Layer: Adapter
 """

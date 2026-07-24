@@ -1,4 +1,4 @@
-"""Tests for Candidate Discovery Workbench controller, presenter, and screen.
+"""Tests for Screen workspace controller, presenter, and screen.
 
 Layer: Adapter
 """
@@ -10,18 +10,18 @@ from unittest.mock import MagicMock
 from textual.widgets import Checkbox, Select, Static
 
 from src.adapters.tui.composition import create_tui_app
-from src.adapters.tui.controllers.discover_controller import (
-    DiscoverController,
-    DiscoverWorkspaceState,
+from src.adapters.tui.controllers.screen_controller import (
+    ScreenController,
+    ScreenWorkspaceState,
 )
-from src.adapters.tui.screens.candidate_browser_screen import CandidateBrowserScreen
+from src.adapters.tui.screens.screen_workspace_screen import ScreenWorkspaceScreen
 
 from .daily_fixtures import ready_response
 from .research_fixtures import single_result
-from src.adapters.tui.presenters.discover_presenter import (
-    DiscoverCandidateRowView,
-    DiscoverPresenter,
-    DiscoverViewModel,
+from src.adapters.tui.presenters.screen_presenter import (
+    ScreenCandidateRowView,
+    ScreenPresenter,
+    ScreenViewModel,
 )
 from src.adapters.tui.state import ScreenStatus
 from src.application.dto.accumulation_screen import AccumulationCandidate
@@ -32,7 +32,7 @@ from src.application.services.screen_accum_result_projector import (
 from src.domain.value_objects.screen_snapshot import ScreenSnapshotEntry
 
 
-def test_discover_presenter_formats_single_projection() -> None:
+def test_screen_presenter_formats_single_projection() -> None:
     cand = MagicMock(spec=AccumulationCandidate)
     cand.ticker = "BBRI"
     cand.accum_score = 80.0
@@ -52,10 +52,10 @@ def test_discover_presenter_formats_single_projection() -> None:
     proj = MagicMock(spec=ScreenAccumSingleProjection)
     proj.candidates = [cand]
 
-    presenter = DiscoverPresenter()
+    presenter = ScreenPresenter()
     view = presenter.present_accumulation(proj, universe_label="lq45")
 
-    assert isinstance(view, DiscoverViewModel)
+    assert isinstance(view, ScreenViewModel)
     assert len(view.candidate_rows) == 1
     row = view.candidate_rows[0]
     assert row.ticker == "BBRI"
@@ -71,18 +71,18 @@ def test_discover_presenter_formats_single_projection() -> None:
     assert any(a.command == "saham analyze swing BBRI" for a in view.related_actions)
 
 
-def test_discover_presenter_empty_status_and_no_related_actions() -> None:
+def test_screen_presenter_empty_status_and_no_related_actions() -> None:
     proj = MagicMock(spec=ScreenAccumSingleProjection)
     proj.candidates = []
 
-    view = DiscoverPresenter().present_accumulation(proj)
+    view = ScreenPresenter().present_accumulation(proj)
 
     assert view.result_status == "empty"
     assert view.candidate_rows == ()
     assert view.related_actions == ()
 
 
-def test_discover_controller_executes_screening_and_saves_snapshot() -> None:
+def test_screen_controller_executes_screening_and_saves_snapshot() -> None:
     fake_run = MagicMock()
     fake_run.return_value = MagicMock(spec=ScreenAccumSingleProjection)
 
@@ -92,7 +92,7 @@ def test_discover_controller_executes_screening_and_saves_snapshot() -> None:
     mock_save_res.name = "test_list"
     fake_save.execute.return_value = mock_save_res
 
-    controller = DiscoverController(
+    controller = ScreenController(
         load_universe=lambda u: [],
         run_accumulation=fake_run,
         save_watchlist=fake_save,
@@ -127,7 +127,7 @@ def test_discover_controller_executes_screening_and_saves_snapshot() -> None:
 async def _wait_for_candidate_screen(pilot, app) -> None:
     for _ in range(50):
         await pilot.pause(0.01)
-        if isinstance(app.screen, CandidateBrowserScreen):
+        if isinstance(app.screen, ScreenWorkspaceScreen):
             return
     raise AssertionError("Candidate screen did not open")
 
@@ -237,11 +237,11 @@ def test_datatable_selection_updates_preview_and_enter_opens_ticker() -> None:
         def action_open_ticker(self, ticker: str) -> None:
             opened.append(ticker)
 
-    controller = DiscoverController(
+    controller = ScreenController(
         load_universe=lambda u: [],
         run_accumulation=lambda req: single_result(),
     )
-    screen = CandidateBrowserScreen(controller, DiscoverPresenter())
+    screen = ScreenWorkspaceScreen(controller, ScreenPresenter())
 
     async def scenario() -> None:
         async with _OpenHost(screen).run_test(size=(120, 40)) as pilot:
@@ -270,14 +270,14 @@ def test_save_uses_actual_screened_universe_and_window_not_hardcoded() -> None:
     fake_save = MagicMock()
     fake_save.execute.return_value = MagicMock(saved_count=2, name="idx30_list")
 
-    controller = DiscoverController(
+    controller = ScreenController(
         load_universe=lambda u: [],
         run_accumulation=MagicMock(),
         save_watchlist=fake_save,
     )
 
-    presenter = DiscoverPresenter()
-    screen = CandidateBrowserScreen(controller, presenter)
+    presenter = ScreenPresenter()
+    screen = ScreenWorkspaceScreen(controller, presenter)
 
     cand = MagicMock(spec=AccumulationCandidate)
     cand.ticker = "BMRI"
@@ -364,11 +364,11 @@ def test_universe_tab_loads_view_on_explicit_run() -> None:
         universe_calls.append(name)
         return _universe_result()
 
-    controller = DiscoverController(
+    controller = ScreenController(
         load_universe=load_universe,
         run_accumulation=lambda req: single_result(),
     )
-    screen = CandidateBrowserScreen(controller, DiscoverPresenter())
+    screen = ScreenWorkspaceScreen(controller, ScreenPresenter())
 
     async def scenario() -> None:
         async with _Host(screen).run_test(size=(120, 40)) as pilot:
@@ -418,13 +418,13 @@ def test_saved_tab_lists_then_compares_selected_snapshot() -> None:
         ),
     )
 
-    controller = DiscoverController(
+    controller = ScreenController(
         load_universe=lambda n: _universe_result(),
         run_accumulation=lambda req: single_result(),
         list_watchlists=list_uc,
         compare_watchlist=compare_uc,
     )
-    screen = CandidateBrowserScreen(controller, DiscoverPresenter())
+    screen = ScreenWorkspaceScreen(controller, ScreenPresenter())
 
     async def scenario() -> None:
         async with _Host(screen).run_test(size=(120, 40)) as pilot:

@@ -1,7 +1,7 @@
 """
 Shared composition root for `saham screen` discovery use cases.
 
-CLI and future TUI Discover construct deps from here so wiring stays one place.
+CLI and TUI Screen workspace construct deps from here so wiring stays one place.
 
 Layer: Adapter (composition / wiring only)
 """

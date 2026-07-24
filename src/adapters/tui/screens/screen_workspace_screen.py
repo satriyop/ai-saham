@@ -1,4 +1,4 @@
-"""Stateful Discover Candidate Discovery Workbench Screen.
+"""Stateful Screen workspace (maps to CLI `saham screen`).
 
 Layer: Adapter
 
@@ -32,10 +32,10 @@ from textual.widgets import Button, Checkbox, DataTable, Footer, Header, Select,
 from src.adapters.shared.score_display_labels import ACCUM, SIGNAL
 from src.adapters.shared.vwap_depth_display import format_disc_pct_plain
 from src.adapters.tui.action_display import decorate_action
-from src.adapters.tui.controllers.discover_controller import DiscoverController
-from src.adapters.tui.presenters.discover_presenter import (
-    DiscoverPresenter,
-    DiscoverViewModel,
+from src.adapters.tui.controllers.screen_controller import ScreenController
+from src.adapters.tui.presenters.screen_presenter import (
+    ScreenPresenter,
+    ScreenViewModel,
 )
 from src.adapters.tui.screens.save_watchlist_modal import SaveWatchlistModal
 from src.adapters.tui.state import ScreenState, ScreenStatus
@@ -63,12 +63,12 @@ _OP_COMPARE = "COMPARE"
 _DOUBLE_CLICK_S = 0.35
 
 
-class CandidateBrowserScreen(Screen[None]):
-    """Render the Discover workspace: Universe, Accumulation, and Saved/Compare."""
+class ScreenWorkspaceScreen(Screen[None]):
+    """Render the Screen workspace: Universe, Accumulation, and Saved/Compare."""
 
     BINDINGS = [
         Binding("1", "app.show_today", "Today"),
-        Binding("2", "app.show_candidates", "Candidates"),
+        Binding("2", "app.show_screen", "Screen"),
         Binding("r", "run", "Run"),
         Binding("c", "compare", "Compare saved"),
         Binding("s", "save_shortlist", "Save shortlist"),
@@ -87,8 +87,8 @@ class CandidateBrowserScreen(Screen[None]):
 
     def __init__(
         self,
-        controller: DiscoverController,
-        presenter: DiscoverPresenter,
+        controller: ScreenController,
+        presenter: ScreenPresenter,
     ) -> None:
         super().__init__()
         self._controller = controller
@@ -111,7 +111,7 @@ class CandidateBrowserScreen(Screen[None]):
     def compose(self) -> ComposeResult:
         yield Header()
         with Vertical(id="candidate-shell"):
-            yield Static("Candidates", id="candidate-title")
+            yield Static("Screen", id="candidate-title")
             with Horizontal(id="discover-tab-bar"):
                 yield Button("Universe", id="tab-universe", classes="tab-btn")
                 yield Button("Accumulation", id="tab-accum", classes="tab-btn active-tab")
@@ -612,7 +612,7 @@ class CandidateBrowserScreen(Screen[None]):
         self._select_index(0)
         self._sync_cursor_to_selected_index()
 
-    def _populate_accumulation_table(self, view: DiscoverViewModel) -> None:
+    def _populate_accumulation_table(self, view: ScreenViewModel) -> None:
         table = self._table()
         self._suppress_row_selected_open = True
         try:

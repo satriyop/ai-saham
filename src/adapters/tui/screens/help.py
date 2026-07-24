@@ -18,7 +18,7 @@ class HelpScreen(Screen[None]):
         with Vertical(id="help-shell"):
             yield Static("Help", id="help-title")
             yield Static("1       Today", classes="help-line")
-            yield Static("2       Candidates", classes="help-line")
+            yield Static("2       Screen", classes="help-line")
             yield Static("? / h   Open this help", classes="help-line")
             yield Static("Esc / d Return to Daily", classes="help-line")
             yield Static("r       Reload by local recomputation", classes="help-line")

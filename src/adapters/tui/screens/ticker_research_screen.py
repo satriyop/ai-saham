@@ -25,7 +25,7 @@ from src.adapters.tui.worker_lifecycle import dispatch_if_active
 class TickerResearchScreen(Screen[None]):
     BINDINGS = [
         Binding("r", "reload", "Refresh"),
-        Binding("escape", "app.show_candidates", "Back"),
+        Binding("escape", "app.show_screen", "Back"),
         Binding("?", "app.show_help", "Help"),
     ]
 
@@ -54,7 +54,7 @@ class TickerResearchScreen(Screen[None]):
         yield Footer()
 
     def on_mount(self) -> None:
-        self.app.set_route_context(f"Candidates / {self._ticker}")
+        self.app.set_route_context(f"Screen / {self._ticker}")
         self.action_reload()
 
     def action_reload(self) -> None:

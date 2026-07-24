@@ -1,4 +1,4 @@
-"""Generation-safe controller for stateful Discover candidate workbench capabilities.
+"""Generation-safe controller for stateful Screen workspace capabilities.
 
 Layer: Adapter
 """
@@ -34,7 +34,7 @@ UiDispatcher = Callable[..., object]
 
 
 @dataclass
-class DiscoverWorkspaceState:
+class ScreenWorkspaceState:
     active_tab: str = "ACCUMULATION"
     universe_label: str = "lq45"
     window: int = 7
@@ -51,8 +51,8 @@ class DiscoverWorkspaceState:
     saved_watchlist_name: str | None = None
 
 
-class DiscoverController:
-    """Orchestrate stateful Discover tabs: Universe, Accumulation, and Saved/Compare."""
+class ScreenController:
+    """Orchestrate stateful Screen tabs (CLI: saham screen): Universe, Accumulation, and Saved/Compare."""
 
     def __init__(
         self,
@@ -68,7 +68,7 @@ class DiscoverController:
         self._compare_watchlist = compare_watchlist
         self._save_watchlist = save_watchlist
         self._tracker = ScreenStateTracker()
-        self.workspace = DiscoverWorkspaceState()
+        self.workspace = ScreenWorkspaceState()
 
     @property
     def state(self) -> ScreenState:
