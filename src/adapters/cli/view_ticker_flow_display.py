@@ -50,9 +50,18 @@ def _bandar_panel(snap) -> object:
     return panel(Group(*lines), title="Broker / Bandar Signal")
 
 
+# Dashboard shows recent insider history, not only a short 90d window that
+# often renders empty for large-cap names with sparse filings.
+INSIDER_LOOKBACK_DAYS = 365
+INSIDER_PANEL_TITLE = "Insider Activity (12m)"
+
+
 def _insider_panel(txns: list) -> object:
     if not txns:
-        return panel(_not_cached(), title="Insider Activity")
+        return panel(
+            Text("  none in last 12 months", style="dim"),
+            title=INSIDER_PANEL_TITLE,
+        )
 
     tbl = compact_table()
     tbl.add_column("Date", style="dim", min_width=11)
@@ -76,4 +85,4 @@ def _insider_panel(txns: list) -> object:
             f"Rp{t.price:,.0f}" if t.price > 0 else "\u2014",
         )
 
-    return panel(tbl, title="Insider Activity (90d)")
+    return panel(tbl, title=INSIDER_PANEL_TITLE)

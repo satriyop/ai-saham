@@ -16,8 +16,19 @@ from pathlib import Path
 from rich.text import Text
 
 from src.adapters.cli.rich_display import console
-from src.adapters.cli.view_ticker_events_display import _corp_action_panel, _sentiment_panel
-from src.adapters.cli.view_ticker_flow_display import _bandar_panel, _insider_panel
+from src.adapters.cli.view_ticker_events_display import (
+    CORP_ACTION_LOOKAHEAD_DAYS,
+    CORP_ACTION_LOOKBACK_DAYS,
+    _calendar_event_to_display,
+    _corp_action_panel,
+    _merge_corp_action_events,
+    _sentiment_panel,
+)
+from src.adapters.cli.view_ticker_flow_display import (
+    INSIDER_LOOKBACK_DAYS,
+    _bandar_panel,
+    _insider_panel,
+)
 from src.adapters.cli.view_ticker_identity_display import _identity_panel, _profile_panel
 from src.adapters.cli.view_ticker_market_activity_display import (
     _candles_panel,
@@ -52,6 +63,9 @@ def show_ticker_view(ticker: str, db_path: Path = DEFAULT_DB_PATH) -> None:
     )
     from src.infrastructure.browser.stockbit_ticker_notation import StockbitTickerNotationProvider
     from src.infrastructure.persistence.sentiment_repository import SQLiteSentimentRepository
+    from src.infrastructure.persistence.sqlite_corporate_action_calendar_repository import (
+        SQLiteCorporateActionCalendarRepository,
+    )
     from src.infrastructure.persistence.sqlite_iev_repository import SQLiteIEVRepository
     from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
@@ -120,10 +134,14 @@ def show_ticker_view(ticker: str, db_path: Path = DEFAULT_DB_PATH) -> None:
         stockbit_config=stockbit_config,
     )
     market_repo = SQLiteMarketRepository(db)
+    calendar_repo = SQLiteCorporateActionCalendarRepository(db)
     iev_repo = SQLiteIEVRepository(db)
     sentiment_repo = SQLiteSentimentRepository(db)
 
     today = date.today()
+    corp_from = today - timedelta(CORP_ACTION_LOOKBACK_DAYS)
+    corp_to = today + timedelta(CORP_ACTION_LOOKAHEAD_DAYS)
+    insider_from = today - timedelta(INSIDER_LOOKBACK_DAYS)
 
     notation = notation_prov._read_cache(ticker)
     fund = fund_prov._read_cache(ticker)
@@ -135,10 +153,21 @@ def show_ticker_view(ticker: str, db_path: Path = DEFAULT_DB_PATH) -> None:
     fwd = fwd_prov._read_cache(ticker)
     profile = profile_prov._read_cache(ticker)
     candles = market_repo.get_candles(ticker, start_date=today - timedelta(14), end_date=today)
-    corp_actions = corp_action_repo._read_cache(
-        ticker, today - timedelta(180), today + timedelta(180)
+
+    # Prefer showing events that already happened (history), not only a short
+    # forward window. Merge ticker-level cache with market-wide calendar store.
+    ticker_corp_actions = corp_action_repo._read_cache(ticker, corp_from, corp_to)
+    calendar_corp_actions = [
+        _calendar_event_to_display(event)
+        for event in calendar_repo.get_events_for_ticker(ticker, corp_from, corp_to)
+    ]
+    corp_actions = _merge_corp_action_events(ticker_corp_actions, calendar_corp_actions)
+
+    # Insider cache is owned by StockbitInsiderCache; use the port method
+    # (api_client=None keeps this cache-only / no network).
+    insider_txns = insider_prov.get_insider_transactions(
+        ticker, insider_from, today, "ALL"
     )
-    insider_txns = insider_prov._read_cache(ticker, today - timedelta(90), today, "ALL")
     seasonality = seasonality_prov._read_cache(ticker, today.year, today.month)
 
     # IEV: retrieve using repository
