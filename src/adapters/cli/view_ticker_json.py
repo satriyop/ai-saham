@@ -10,12 +10,12 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from src.adapters.cli.view_ticker_layout import panel_keys_for_mode
-from src.adapters.cli.view_ticker_price_structure import (
+from src.application.services.ticker_dashboard_layout import panel_keys_for_mode
+from src.application.services.ticker_dashboard_price_structure import (
     PriceStructure,
     price_structure_to_dict,
 )
-from src.adapters.cli.view_ticker_status import CacheStatus, FreshnessItem
+from src.application.services.ticker_dashboard_status import CacheStatus, FreshnessItem
 
 
 def _json_safe(value: Any) -> Any:
@@ -77,16 +77,16 @@ def _flow_points_summary(points: list, *, source: str | None) -> dict[str, Any] 
     if not points:
         return None
     latest = points[-1]
-    from src.adapters.cli.view_ticker_flow_display import (
+    from src.application.services.ticker_dashboard_flow import (
         FOREIGN_FLOW_WINDOWS,
-        _window_buy_sell_days,
-        _window_net,
+        window_buy_sell_days,
+        window_net,
     )
 
     windows = {}
     for days in FOREIGN_FLOW_WINDOWS:
-        net = _window_net(points, days)
-        buy_days, sell_days = _window_buy_sell_days(points, days)
+        net = window_net(points, days)
+        buy_days, sell_days = window_buy_sell_days(points, days)
         windows[f"{days}d"] = {
             "net_val": str(net) if net is not None else None,
             "buy_days": buy_days,

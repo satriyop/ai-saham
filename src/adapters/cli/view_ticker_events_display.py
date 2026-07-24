@@ -6,83 +6,34 @@ Layer: Adapter
 
 from __future__ import annotations
 
-from datetime import date
-
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, panel
 from src.adapters.cli.view_ticker_formatters import _empty_state_text, _not_cached
 from src.adapters.cli.view_ticker_status import CacheStatus
-from src.domain.value_objects.corporate_action_calendar import (
-    CorporateActionCalendarEvent,
-    CorporateActionDateRole,
+from src.application.services.ticker_dashboard_corp_actions import (
+    calendar_event_to_display as _calendar_event_to_display,
 )
-from src.domain.value_objects.corporate_action_event import CorporateActionEvent
+from src.application.services.ticker_dashboard_corp_actions import (
+    merge_corp_action_events as _merge_corp_action_events,
+)
+from src.application.use_case.get_ticker_dashboard_use_case import (
+    CORP_ACTION_LOOKAHEAD_DAYS,
+    CORP_ACTION_LOOKBACK_DAYS,
+)
 
-# Dashboard shows recent history + near-term upcoming, not only "next 180d".
-CORP_ACTION_LOOKBACK_DAYS = 365
-CORP_ACTION_LOOKAHEAD_DAYS = 180
 CORP_ACTION_PANEL_TITLE = "Corporate Actions (12m)"
 
-
-def _calendar_event_to_display(event: CorporateActionCalendarEvent) -> CorporateActionEvent:
-    """Map market-wide calendar event into the ticker-dashboard display shape."""
-    by_role = {d.date_role: d.event_date for d in event.dates}
-
-    detail = ""
-    if event.amount_value:
-        if event.amount_currency and "IDR" in event.amount_currency.upper():
-            detail = f"Rp {event.amount_value}"
-        else:
-            detail = str(event.amount_value)
-    elif event.ratio_old and event.ratio_new:
-        detail = f"{event.ratio_old}:{event.ratio_new}"
-    if event.event_note:
-        detail = f"{detail} · {event.event_note}".strip(" ·") if detail else event.event_note
-
-    return CorporateActionEvent(
-        ticker=event.ticker,
-        event_type=event.event_type.value,
-        ex_date=by_role.get(CorporateActionDateRole.EX_DATE),
-        cum_date=by_role.get(CorporateActionDateRole.CUM_DATE),
-        record_date=by_role.get(CorporateActionDateRole.RECORDING_DATE),
-        payment_date=by_role.get(CorporateActionDateRole.PAYMENT_DATE),
-        announcement_date=None,
-        detail=detail,
-        status="active" if event.active else "completed",
-    )
-
-
-def _merge_corp_action_events(
-    *event_lists: list[CorporateActionEvent],
-) -> list[CorporateActionEvent]:
-    """Dedupe ticker-cache + calendar events for display (newest first)."""
-    seen: set[tuple] = set()
-    merged: list[CorporateActionEvent] = []
-    for events in event_lists:
-        for event in events:
-            if event.event_type == "__NONE__":
-                continue
-            key = (
-                event.event_type.upper(),
-                event.ex_date,
-                event.cum_date,
-                event.record_date,
-                event.payment_date,
-                (event.detail or "").strip(),
-            )
-            if key in seen:
-                continue
-            seen.add(key)
-            merged.append(event)
-
-    return sorted(
-        merged,
-        key=lambda e: (
-            e.ex_date or e.cum_date or e.record_date or e.announcement_date or date.min
-        ),
-        reverse=True,
-    )
+# Re-export for older tests/callers.
+__all__ = [
+    "CORP_ACTION_LOOKAHEAD_DAYS",
+    "CORP_ACTION_LOOKBACK_DAYS",
+    "CORP_ACTION_PANEL_TITLE",
+    "_calendar_event_to_display",
+    "_corp_action_panel",
+    "_merge_corp_action_events",
+    "_sentiment_panel",
+]
 
 
 def _corp_action_panel(
