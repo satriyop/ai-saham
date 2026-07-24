@@ -29,10 +29,10 @@ from src.adapters.cli.screen_accum_formatters import (
 from src.adapters.cli.screen_contract_cli import resolve_output_format
 from src.adapters.cli.screen_deps import build_screen_deps
 from src.application.dto.screen_contract import (
-    ScreenResultStatus,
     ScreenSubjectKind,
     build_screen_envelope,
     default_screen_fetch_hint,
+    resolve_accum_result_status,
 )
 from src.application.services.screen_accum_result_projector import (
     ScreenAccumProjectionError,
@@ -364,11 +364,12 @@ def _render_multi(
             "partial_result": partial_result,
             **projection.to_dict(),
         }
+        status = resolve_accum_result_status(result_count=len(projection.rows))
         typer.echo(
             json.dumps(
                 build_screen_envelope(
                     verb="accum",
-                    status=ScreenResultStatus.OK,
+                    status=status,
                     subject_kind=ScreenSubjectKind.UNIVERSE,
                     subject_id=universe_label,
                     as_of=projection.screened_at,
@@ -429,11 +430,12 @@ def _render_single(
             "partial_result": response.tickers_skipped > 0,
             **projection.to_dict(),
         }
+        status = resolve_accum_result_status(result_count=len(projection.candidates))
         typer.echo(
             json.dumps(
                 build_screen_envelope(
                     verb="accum",
-                    status=ScreenResultStatus.OK,
+                    status=status,
                     subject_kind=ScreenSubjectKind.UNIVERSE,
                     subject_id=universe_label,
                     as_of=response.screened_at,

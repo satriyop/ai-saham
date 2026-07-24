@@ -29,6 +29,18 @@ class ScreenResultStatus(str, Enum):
     ERROR = "error"
 
 
+def resolve_accum_result_status(*, result_count: int) -> ScreenResultStatus:
+    """Coarse envelope status for a completed accumulation screen run.
+
+    A successful run with zero projected candidates is ``empty``. Partial
+    universe coverage stays ``ok`` when any candidates remain; callers still
+    surface ``partial_result`` inside ``data``.
+    """
+    if result_count <= 0:
+        return ScreenResultStatus.EMPTY
+    return ScreenResultStatus.OK
+
+
 def _json_safe(value: Any) -> Any:
     if value is None or isinstance(value, (str, int, float, bool)):
         return value

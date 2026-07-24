@@ -7,6 +7,7 @@ from src.application.dto.screen_contract import (
     ScreenSubjectKind,
     build_screen_envelope,
     missing_screen_message,
+    resolve_accum_result_status,
 )
 
 
@@ -51,3 +52,12 @@ def test_missing_screen_message():
     assert "No cached watchlist 'morning'." in msg
     assert "Source: screen_snapshots" in msg
     assert "Run: saham screen accum --save NAME" in msg
+
+
+def test_resolve_accum_result_status_empty_when_no_results():
+    assert resolve_accum_result_status(result_count=0) is ScreenResultStatus.EMPTY
+
+
+def test_resolve_accum_result_status_ok_when_results_present():
+    assert resolve_accum_result_status(result_count=1) is ScreenResultStatus.OK
+    assert resolve_accum_result_status(result_count=20) is ScreenResultStatus.OK

@@ -621,10 +621,42 @@ def test_screen_accum_single_json_includes_universe_warnings_partial_result(monk
     )
 
     assert result.exit_code == 0, result.output
-    payload = _screen_payload(json.loads(result.output[result.output.index("{"):]))
+    raw = json.loads(result.output[result.output.index("{"):])
+    assert raw["status"] == "ok"
+    payload = _screen_payload(raw)
     assert payload["universe"] == "lq45"
     assert payload["warnings"] == ["some warning"]
     assert payload["partial_result"] is True
+
+
+def test_screen_accum_single_json_status_empty_when_no_candidates(monkeypatch):
+    def fake_uc(*, db_path, screener_config, swing_config, **kwargs):
+        uc = SimpleNamespace()
+        uc.execute = lambda req: _fake_workflow_result(
+            response=AccumulationScreenResponse(
+                candidates=[],
+                screened_at=date(2026, 6, 28),
+                window_days=7,
+                total_tickers_checked=3,
+                tickers_skipped=0,
+                provider="fake",
+            ),
+        )
+        return uc
+
+    monkeypatch.setattr(
+        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        fake_uc,
+    )
+
+    result = runner.invoke(app, ["screen", "accum", "BBCA", "--format", "json"])
+
+    assert result.exit_code == 0, result.output
+    raw = json.loads(result.output)
+    assert raw["status"] == "empty"
+    payload = _screen_payload(raw)
+    assert payload["candidates"] == []
+    assert payload["partial_result"] is False
 
 
 def test_screen_accum_single_json_partial_result_false_when_nothing_skipped(monkeypatch):
@@ -717,8 +749,44 @@ def test_screen_accum_multi_json_partial_result_false_when_nothing_skipped(monke
     )
 
     assert result.exit_code == 0, result.output
-    payload = _screen_payload(json.loads(result.output))
+    raw = json.loads(result.output)
+    assert raw["status"] == "ok"
+    payload = _screen_payload(raw)
     assert payload["warnings"] == []
+    assert payload["partial_result"] is False
+
+
+def test_screen_accum_multi_json_status_empty_when_no_rows(monkeypatch):
+    def fake_uc(*, db_path, screener_config, swing_config, **kwargs):
+        uc = SimpleNamespace()
+        uc.execute = lambda req: _fake_workflow_result(
+            multi_results={
+                7: AccumulationScreenResponse(
+                    candidates=[],
+                    screened_at=date(2026, 6, 28),
+                    window_days=7,
+                    total_tickers_checked=2,
+                    tickers_skipped=0,
+                    provider="fake",
+                ),
+            },
+        )
+        return uc
+
+    monkeypatch.setattr(
+        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        fake_uc,
+    )
+
+    result = runner.invoke(
+        app, ["screen", "accum", "BBCA", "--multi", "--format", "json"]
+    )
+
+    assert result.exit_code == 0, result.output
+    raw = json.loads(result.output)
+    assert raw["status"] == "empty"
+    payload = _screen_payload(raw)
+    assert payload["tickers"] == {}
     assert payload["partial_result"] is False
 
 
