@@ -26,8 +26,7 @@ from src.adapters.cli.view_ticker_identity_display import (
     _identity_panel,
     _profile_panel,
 )
-from src.adapters.cli.view_ticker_json import build_ticker_dashboard_json
-from src.adapters.cli.view_ticker_layout import should_render_panel
+from src.adapters.cli.view_ticker_json import ticker_dashboard_to_json_dict
 from src.adapters.cli.view_ticker_market_activity_display import (
     _candles_panel,
     _iev_panel,
@@ -80,44 +79,23 @@ def render_ticker_dashboard(
         raise ValueError(f"Unsupported output format: {output_format!r}")
 
     if fmt == "json":
-        payload = build_ticker_dashboard_json(
-            ticker=dashboard.ticker,
-            brief=dashboard.mode == "brief",
-            as_of=dashboard.as_of,
-            freshness_items=list(dashboard.freshness),
-            notation=dashboard.notation,
-            fund=dashboard.fundamentals,
-            fwd=dashboard.forward_estimates,
-            price_structure=dashboard.price_structure,
-            analyst=dashboard.analyst,
-            earnings=list(dashboard.earnings),
-            ownership=dashboard.ownership,
-            bandar=dashboard.bandar,
-            foreign_flow_points=list(dashboard.foreign_flow_points),
-            foreign_flow_source=dashboard.foreign_flow_source,
-            corp_actions=list(dashboard.corp_actions),
-            insider_txns=list(dashboard.insider_txns),
-            insider_last_known=dashboard.insider_last_known,
-            seasonality=dashboard.seasonality,
-            iev_rows=list(dashboard.iev_rows),
-            sentiment_logs=list(dashboard.sentiment_logs),
-            profile=dashboard.profile,
-            candles=list(dashboard.candles),
-        )
-        print(json.dumps(payload, indent=2, default=str))
+        print(json.dumps(ticker_dashboard_to_json_dict(dashboard), indent=2, default=str))
         return
 
-    brief = dashboard.mode == "brief"
-    fetch_hint = dashboard.fetch_hint
+    _render_ticker_dashboard_table(dashboard)
 
-    def _show(panel_key: str) -> bool:
-        return should_render_panel(panel_key, brief=brief)
+
+def _render_ticker_dashboard_table(dashboard: TickerDashboard) -> None:
+    """Pure table renderer over an assembled TickerDashboard DTO."""
+    panels = set(dashboard.panel_keys)
+    fetch_hint = dashboard.fetch_hint
+    brief = dashboard.mode == "brief"
 
     c = console()
     c.print()
-    if _show("identity"):
+    if "identity" in panels:
         c.print(_identity_panel(dashboard.ticker, dashboard.notation, empty_hint=fetch_hint))
-    if _show("freshness"):
+    if "freshness" in panels:
         c.print(
             _freshness_panel(
                 dashboard.ticker,
@@ -125,7 +103,7 @@ def render_ticker_dashboard(
                 as_of=dashboard.as_of,
             )
         )
-    if _show("valuation"):
+    if "valuation" in panels:
         c.print(
             _valuation_panel(
                 dashboard.fundamentals,
@@ -133,17 +111,17 @@ def render_ticker_dashboard(
                 dashboard.latest_close,
             )
         )
-    if _show("price_structure"):
+    if "price_structure" in panels:
         c.print(_price_structure_panel(dashboard.price_structure, empty_hint=fetch_hint))
-    if _show("analyst"):
+    if "analyst" in panels:
         c.print(_analyst_panel(dashboard.analyst, empty_hint=fetch_hint))
-    if _show("earnings"):
+    if "earnings" in panels:
         c.print(_earnings_panel(list(dashboard.earnings), empty_hint=fetch_hint))
-    if _show("ownership"):
+    if "ownership" in panels:
         c.print(_ownership_panel(dashboard.ownership, empty_hint=fetch_hint))
-    if _show("bandar"):
+    if "bandar" in panels:
         c.print(_bandar_panel(dashboard.bandar, empty_hint=fetch_hint))
-    if _show("foreign_flow"):
+    if "foreign_flow" in panels:
         c.print(
             _foreign_flow_panel(
                 list(dashboard.foreign_flow_points),
@@ -151,7 +129,7 @@ def render_ticker_dashboard(
                 empty_hint=fetch_hint,
             )
         )
-    if _show("corp_actions"):
+    if "corp_actions" in panels:
         c.print(
             _corp_action_panel(
                 list(dashboard.corp_actions),
@@ -159,7 +137,7 @@ def render_ticker_dashboard(
                 empty_hint=fetch_hint,
             )
         )
-    if _show("insider"):
+    if "insider" in panels:
         c.print(
             _insider_panel(
                 list(dashboard.insider_txns),
@@ -168,7 +146,7 @@ def render_ticker_dashboard(
                 empty_hint=fetch_hint,
             )
         )
-    if _show("seasonality"):
+    if "seasonality" in panels:
         c.print(
             _seasonality_panel(
                 dashboard.seasonality,
@@ -176,13 +154,13 @@ def render_ticker_dashboard(
                 empty_hint=fetch_hint,
             )
         )
-    if _show("iev"):
+    if "iev" in panels:
         c.print(_iev_panel(list(dashboard.iev_rows), empty_hint=fetch_hint))
-    if _show("sentiment"):
+    if "sentiment" in panels:
         c.print(_sentiment_panel(list(dashboard.sentiment_logs), empty_hint=fetch_hint))
-    if _show("profile"):
+    if "profile" in panels:
         c.print(_profile_panel(dashboard.profile, empty_hint=fetch_hint))
-    if _show("candles"):
+    if "candles" in panels:
         c.print(_candles_panel(list(dashboard.candles), empty_hint=fetch_hint))
     mode_note = "brief mode · " if brief else ""
     c.print(
