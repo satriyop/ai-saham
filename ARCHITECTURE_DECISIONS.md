@@ -66,8 +66,10 @@ row.
 | Market context | [029](docs/adr/ADR-029-market-context-engine-mce-third-first-class-application-service.md), [037](docs/adr/ADR-037-marketcontext-promotes-from-preview-only-to-canonical-signal-input.md) |
 | Data providers, persistence, PIT/replay | [005](docs/adr/ADR-005-local-first-persistence.md), [006](docs/adr/ADR-006-market-data-provider-abstraction.md), [008](docs/adr/ADR-008-decoupled-fetch-vs-analyze-data.md), [019](docs/adr/ADR-019-unified-fetch-timestamp-fetched-at-datetime-on-cached-domain-value-objects.md), [034](docs/adr/ADR-034-date-field-semantics.md), [036](docs/adr/ADR-036-persisted-jwt-token-store-replaces-playwright-per-invocation-for-stockbit-data-fetching.md), [038](docs/adr/ADR-038-point-in-time-enrichment-and-conservative-derived-fundamentals.md) |
 | Indicators, strategies, plugins | [007](docs/adr/ADR-007-indicator-initialization-warm-up-policy.md), [009](docs/adr/ADR-009-config-driven-behavior.md), [012](docs/adr/ADR-012-oss-encapsulation-rule.md), [016](docs/adr/ADR-016-formula-dsl-domain-specific-language-for-indicators.md), [017](docs/adr/ADR-017-plugin-based-indicator-registration.md) |
-| CLI and file organization | [011](docs/adr/ADR-011-offline-capable-cli-as-primary-interface.md), [018](docs/adr/ADR-018-cli-command-depth-saham-view-broker-exception.md), [020](docs/adr/ADR-020-cli-adapter-file-naming-convention.md), [023](docs/adr/ADR-023-codebase-directory-and-use-case-file-naming-standards.md), [044](docs/adr/ADR-044-view-subject-taxonomy-ticker-vs-desk.md), [045](docs/adr/ADR-045-view-browse-parity-cli-tui-json-table.md) |
-| View browse (stock vs desk, JSON/table, TUI parity) | [044](docs/adr/ADR-044-view-subject-taxonomy-ticker-vs-desk.md), [045](docs/adr/ADR-045-view-browse-parity-cli-tui-json-table.md), [018](docs/adr/ADR-018-cli-command-depth-saham-view-broker-exception.md) |
+| CLI and file organization | [011](docs/adr/ADR-011-offline-capable-cli-as-primary-interface.md), [018](docs/adr/ADR-018-cli-command-depth-saham-view-broker-exception.md), [020](docs/adr/ADR-020-cli-adapter-file-naming-convention.md), [023](docs/adr/ADR-023-codebase-directory-and-use-case-file-naming-standards.md), [044](docs/adr/ADR-044-view-subject-taxonomy-ticker-vs-desk.md), [045](docs/adr/ADR-045-view-browse-parity-cli-tui-json-table.md), [046](docs/adr/ADR-046-cli-response-envelope.md) |
+| View browse (stock vs desk, JSON/table, TUI parity) | [044](docs/adr/ADR-044-view-subject-taxonomy-ticker-vs-desk.md), [045](docs/adr/ADR-045-view-browse-parity-cli-tui-json-table.md), [046](docs/adr/ADR-046-cli-response-envelope.md), [018](docs/adr/ADR-018-cli-command-depth-saham-view-broker-exception.md) |
+| CLI/TUI machine JSON and response envelope | [046](docs/adr/ADR-046-cli-response-envelope.md), [045](docs/adr/ADR-045-view-browse-parity-cli-tui-json-table.md), [011](docs/adr/ADR-011-offline-capable-cli-as-primary-interface.md), [040](docs/adr/ADR-040-manual-dependency-injection-and-composition-roots.md) |
+| Screen discovery JSON / watchlist export | [046](docs/adr/ADR-046-cli-response-envelope.md), [030](docs/adr/ADR-030-accumulation-screener-evidence-split.md), [043](docs/adr/ADR-043-score-naming-vocabulary.md), [040](docs/adr/ADR-040-manual-dependency-injection-and-composition-roots.md) |
 | AI and sentiment | [002](docs/adr/ADR-002-rule-first-ai-optional-design.md), [013](docs/adr/ADR-013-ai-agent-governance.md), [014](docs/adr/ADR-014-full-ai-mode-explicit-bypass-mode-rejected.md), [015](docs/adr/ADR-015-sentiment-analysis-classification.md), [042](docs/adr/ADR-042-deterministic-champion-and-optional-model-challengers.md) |
 | Learning, tuning, evaluation, ML preparation | [027](docs/adr/ADR-027-risk-signal-learning-loop.md), [033](docs/adr/ADR-033-workflow-composition-artifact-boundaries.md), [038](docs/adr/ADR-038-point-in-time-enrichment-and-conservative-derived-fundamentals.md), [041](docs/adr/ADR-041-canonical-signal-evidence-input-boundary.md), [042](docs/adr/ADR-042-deterministic-champion-and-optional-model-challengers.md) |
 
@@ -82,6 +84,7 @@ row.
 | ADR-030 0–120 foreign-flow scale | ADR-039 | Foreign-flow score and matching thresholds use 0–100 |
 | ADR-039 `foreign_flow_score` label | ADR-043 | Accumulation composite is `accum_score`; profile participation metric keeps `foreign_flow_score` |
 | ADR-018 `view broker` depth + old ticker-centric verbs | ADR-044, ADR-045 | Three-level `view ticker` and `view broker` allowed; stock deep-dives under ticker; desk under broker CODE; table/json + use-case parity in 045 |
+| ADR-045 view-only JSON envelope | ADR-046 | Envelope top-level keys are CLI-wide; view keeps ticker/desk specialization and browse parity; other families adopt clean-break on touch |
 | ADR-032 MCE preview-only signal | ADR-037 | MCE can condition canonical signal; risk adjustment remains preview |
 | DQ-002J post-score availability attachment | ADR-041 | Temporary shadow prototype; the target is a shared pre-score evidence/provenance/availability boundary |
 | ADR-002/014 optional AI and rejected bypass | ADR-042 | Narrow validated local-ML evidence may enter the governed evidence lifecycle; full ML/API decision challengers remain separate shadow outputs |
@@ -91,6 +94,8 @@ row.
 | Decision area | Current source |
 |---|---|
 | CLI surface | `src/adapters/cli/main.py` |
+| CLI response envelope (view) | `src/application/dto/view_ticker_contract.py` |
+| CLI response envelope (screen) | `src/application/dto/screen_contract.py` |
 | Engine construction | `src/application/services/engine_bootstrap/` |
 | Signal facade and scorer | `src/application/services/signal_engine.py`, `src/application/use_case/assess_signal_evidence_use_case.py` |
 | Risk facade | `src/application/services/risk_engine.py` |
@@ -150,7 +155,8 @@ row.
 | [042](docs/adr/ADR-042-deterministic-champion-and-optional-model-challengers.md) | Deterministic champion, governed ML evidence, and optional decision challengers | Accepted |
 | [043](docs/adr/ADR-043-score-naming-vocabulary.md) | Score naming vocabulary | Accepted |
 | [044](docs/adr/ADR-044-view-subject-taxonomy-ticker-vs-desk.md) | View subject taxonomy (ticker vs desk) | Accepted; amends ADR-018 |
-| [045](docs/adr/ADR-045-view-browse-parity-cli-tui-json-table.md) | View browse parity (CLI/TUI, table/json) | Accepted; depends on ADR-044 |
+| [045](docs/adr/ADR-045-view-browse-parity-cli-tui-json-table.md) | View browse parity (CLI/TUI, table/json) | Accepted; depends on ADR-044; envelope keys generalized by ADR-046 |
+| [046](docs/adr/ADR-046-cli-response-envelope.md) | Shared CLI response envelope | Accepted; generalizes envelope beyond view; adopt-on-touch for other families |
 
 ## Adding or changing a decision
 

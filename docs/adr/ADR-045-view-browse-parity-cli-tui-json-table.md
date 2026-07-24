@@ -5,7 +5,7 @@
 **Status:** Accepted  
 **Date:** 2026-07-24  
 **Depends on:** [ADR-044](ADR-044-view-subject-taxonomy-ticker-vs-desk.md)  
-**Related:** [ADR-003](ADR-003-hexagonal-ports-adapters-architecture.md), [ADR-011](ADR-011-offline-capable-cli-as-primary-interface.md), [ADR-020](ADR-020-cli-adapter-file-naming-convention.md), [ADR-040](ADR-040-manual-dependency-injection-and-composition-roots.md)  
+**Related:** [ADR-003](ADR-003-hexagonal-ports-adapters-architecture.md), [ADR-011](ADR-011-offline-capable-cli-as-primary-interface.md), [ADR-020](ADR-020-cli-adapter-file-naming-convention.md), [ADR-040](ADR-040-manual-dependency-injection-and-composition-roots.md), [ADR-046](ADR-046-cli-response-envelope.md)  
 **Current implementation:** CLI table/json and application use cases for stock/desk browse are implemented; TUI screens may lag UI but must not invent parallel policy when added.
 
 ### Context
@@ -64,9 +64,10 @@ Rules:
 * Missing/empty cache → non-success exit (typically **1**) and a human message in table mode; JSON SHOULD use envelope `status` of `missing` or `empty` when structured (stock axis already uses shared helpers; desk axis follows the same envelope on success paths).
 * Default format remains **table** for interactive use.
 
-#### 4. Shared JSON envelope
+#### 4. Shared JSON envelope (view specialization of ADR-046)
 
-Machine output uses a single envelope concept (stock and desk):
+Machine output uses the CLI-wide envelope in [ADR-046](ADR-046-cli-response-envelope.md).
+View stock/desk specialization:
 
 ```text
 subject:   { kind: "ticker" | "desk", id: string }
@@ -85,7 +86,7 @@ data:      object | array  # verb-specific payload
 * Numeric money fields in `data` SHOULD be strings when sourced from `Decimal` to avoid float drift.
 * Envelope builders live in **application** (or a thin application DTO module); CLI only dumps JSON.
 
-Versioning: additive fields in `data` are allowed without a new ADR; **removing/renaming envelope top-level keys** requires amending this ADR.
+Versioning: additive fields in `data` are allowed without a new ADR; **removing/renaming envelope top-level keys** is owned by ADR-046 (amend that ADR). View-only `subject.kind` / verb glossary changes stay here or in ADR-044.
 
 #### 5. Adapter file ownership (with ADR-020)
 
@@ -136,6 +137,7 @@ Before merging a new ADR-044 verb or material change:
 ```text
 View browse policy lives in application use cases.
 CLI and TUI only compose and render.
-CLI browse verbs support --format table|json with the shared subject/verb envelope (ADR-045).
+CLI browse verbs support --format table|json with the shared subject/verb envelope
+(view: ADR-045; CLI-wide envelope authority: ADR-046).
 Command meanings: ADR-044.
 ```
