@@ -177,14 +177,14 @@ def test_tab_switch_prompts_for_explicit_run_and_does_not_run() -> None:
             # Switching tabs must never start work — only prompt for explicit Run.
             app.screen.query_one("#tab-universe").press()
             await pilot.pause(0.05)
-            table = str(app.screen.query_one("#candidate-table-content", Static).content)
-            assert "Run" in table and "universe" in table.lower()
+            msg = str(app.screen.query_one("#candidate-table-message", Static).content)
+            assert "Run" in msg and "universe" in msg.lower()
             assert len(requests) == 1  # no accumulation run started
 
             app.screen.query_one("#tab-saved").press()
             await pilot.pause(0.05)
-            table = str(app.screen.query_one("#candidate-table-content", Static).content)
-            assert "Run" in table
+            msg = str(app.screen.query_one("#candidate-table-message", Static).content)
+            assert "Run" in msg
             assert len(requests) == 1
 
     asyncio.run(scenario())
@@ -212,6 +212,50 @@ def test_explicit_run_button_and_multi_toggle_execute_typed_requests() -> None:
                 if len(requests) == 3:
                     break
             assert requests[-1].multi is True
+
+    asyncio.run(scenario())
+
+
+def test_datatable_selection_updates_preview_and_enter_opens_ticker() -> None:
+    """Selectable list: highlight updates preview; open action uses selected row."""
+    opened: list[str] = []
+
+    class _OpenHost(App):
+        def __init__(self, screen) -> None:
+            super().__init__()
+            self._screen = screen
+
+        def on_mount(self) -> None:
+            self.push_screen(self._screen)
+
+        def action_open_ticker(self, ticker: str) -> None:
+            opened.append(ticker)
+
+    controller = DiscoverController(
+        load_universe=lambda u: [],
+        run_accumulation=lambda req: single_result(),
+    )
+    screen = CandidateBrowserScreen(controller, DiscoverPresenter())
+
+    async def scenario() -> None:
+        async with _OpenHost(screen).run_test(size=(120, 40)) as pilot:
+            for _ in range(40):
+                await pilot.pause(0.01)
+                if screen._candidate_rows:
+                    break
+            assert len(screen._candidate_rows) == 2
+            assert screen._candidate_rows[0].ticker == "BBRI"
+
+            # Move selection to second row and open.
+            screen.action_next_row()
+            await pilot.pause(0.02)
+            selected = str(screen.query_one("#candidate-selected", Static).content)
+            assert "BBCA" in selected
+            preview = str(screen.query_one("#preview-content", Static).content)
+            assert "BBCA" in preview
+
+            screen.action_open_selected_ticker()
+            assert opened == ["BBCA"]
 
     asyncio.run(scenario())
 
@@ -332,9 +376,12 @@ def test_universe_tab_loads_view_on_explicit_run() -> None:
                 if universe_calls:
                     break
             assert universe_calls == ["lq45"]
-            table = str(screen.query_one("#candidate-table-content", Static).content)
-            assert "BBRI" in table
-            assert "4,840" in table
+            table = screen.query_one("#candidate-table")
+            # DataTable row contents: ticker and formatted close.
+            assert table.row_count == 1
+            row = table.get_row_at(0)
+            assert "BBRI" in row
+            assert any("4,840" in str(cell) for cell in row)
 
     asyncio.run(scenario())
 
@@ -383,8 +430,9 @@ def test_saved_tab_lists_then_compares_selected_snapshot() -> None:
                 await pilot.pause(0.01)
                 if list_uc.execute.called:
                     break
-            table = str(screen.query_one("#candidate-table-content", Static).content)
-            assert "my_list" in table
+            table = screen.query_one("#candidate-table")
+            assert table.row_count == 1
+            assert "my_list" in table.get_row_at(0)
 
             await pilot.press("c")  # explicit compare selected
             for _ in range(30):
@@ -392,8 +440,13 @@ def test_saved_tab_lists_then_compares_selected_snapshot() -> None:
                 if compare_uc.execute.called:
                     break
             assert compare_uc.execute.called
-            groups = str(screen.query_one("#candidate-table-content", Static).content)
-            assert "New" in groups and "BBNI" in groups
-            assert "Dropped" in groups and "BMRI" in groups
+            table = screen.query_one("#candidate-table")
+            # Compare groups rendered as DataTable rows.
+            flat = " ".join(
+                " ".join(str(cell) for cell in table.get_row_at(i))
+                for i in range(table.row_count)
+            )
+            assert "New" in flat and "BBNI" in flat
+            assert "Dropped" in flat and "BMRI" in flat
 
     asyncio.run(scenario())

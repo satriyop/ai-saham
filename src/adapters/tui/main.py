@@ -139,15 +139,21 @@ class SahamTuiApp(App[None]):
         layout: horizontal;
     }
 
-    #candidate-list {
+    #candidate-table {
         width: 100%;
+        height: 1fr;
         border: round $primary;
-        padding: 0 1;
         background: $surface;
     }
 
-    #candidate-list:focus {
+    #candidate-table:focus {
         border: round $accent;
+    }
+
+    #candidate-table-message {
+        width: 100%;
+        color: $text-muted;
+        padding: 0 1;
     }
 
     #candidate-preview {
@@ -157,7 +163,7 @@ class SahamTuiApp(App[None]):
         background: $surface-darken-1;
     }
 
-    CandidateBrowserScreen.wide #candidate-list {
+    CandidateBrowserScreen.wide #candidate-table {
         width: 2fr;
     }
 

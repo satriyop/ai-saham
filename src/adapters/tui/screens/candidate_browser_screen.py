@@ -12,26 +12,33 @@ Interaction contract (roadmap `docs/roadmap/roadmap_tui.md`):
 - Selection, focus, sorting, and tab changes never start work.
 - Only explicit actions (Run button / ``r`` / ``m`` toggle / ``c`` compare)
   execute a screen, universe load, or comparison.
+- List is a selectable DataTable: click/highlight updates preview; Enter or
+  double-click opens Ticker Workbench (Accumulation / Universe only).
 """
 
 from __future__ import annotations
 
+from time import monotonic
 from typing import Any
 
-from textual import work
+from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.events import Click
 from textual.screen import Screen
-from textual.widgets import Button, Checkbox, Footer, Header, Select, Static
+from textual.widgets import Button, Checkbox, DataTable, Footer, Header, Select, Static
 
+from src.adapters.shared.vwap_depth_display import format_disc_pct_plain
 from src.adapters.tui.action_display import decorate_action
 from src.adapters.tui.controllers.discover_controller import DiscoverController
-from src.adapters.tui.presenters.discover_presenter import DiscoverPresenter, DiscoverViewModel
+from src.adapters.tui.presenters.discover_presenter import (
+    DiscoverPresenter,
+    DiscoverViewModel,
+)
 from src.adapters.tui.screens.save_watchlist_modal import SaveWatchlistModal
 from src.adapters.tui.state import ScreenState, ScreenStatus
 from src.adapters.tui.worker_lifecycle import dispatch_if_active
-from src.adapters.shared.vwap_depth_display import format_disc_pct_plain
 from src.application.use_case.compare_screen_watchlist_use_case import (
     CompareScreenWatchlistRequest,
 )
@@ -51,6 +58,8 @@ _OP_UNIVERSE = "UNIVERSE"
 _OP_ACCUM = "ACCUM"
 _OP_LIST = "LIST"
 _OP_COMPARE = "COMPARE"
+
+_DOUBLE_CLICK_S = 0.35
 
 
 class CandidateBrowserScreen(Screen[None]):
@@ -94,6 +103,9 @@ class CandidateBrowserScreen(Screen[None]):
         self._current_projection: Any = None
         self._last_request: RunAccumulationScreenWorkflowRequest | None = None
         self._selected_index = 0
+        self._last_click_index: int | None = None
+        self._last_click_at = 0.0
+        self._suppress_row_selected_open = False
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -135,10 +147,14 @@ class CandidateBrowserScreen(Screen[None]):
 
             yield Static("IDLE — OFFLINE", id="candidate-status", classes="semantic-info")
             yield Static("", id="candidate-selected")
+            yield Static("", id="candidate-table-message")
 
             with Horizontal(id="candidate-workspace"):
-                with VerticalScroll(id="candidate-list"):
-                    yield Static("Loading candidates...", id="candidate-table-content")
+                yield DataTable(
+                    id="candidate-table",
+                    cursor_type="row",
+                    zebra_stripes=True,
+                )
                 with VerticalScroll(id="candidate-preview"):
                     yield Static(
                         "Select a candidate to view preview detail.", id="preview-content"
@@ -156,12 +172,34 @@ class CandidateBrowserScreen(Screen[None]):
             self.remove_class("wide")
 
     def on_mount(self) -> None:
-        self.query_one("#candidate-list", VerticalScroll).focus()
+        table = self._table()
+        table.cursor_type = "row"
+        table.focus()
         # Loading the default Accumulation view once on open is local, deterministic
         # compute (not a provider fetch); no control change triggers a rerun.
         self.action_run()
 
     # ------------------------------------------------------------------ helpers
+
+    def _table(self) -> DataTable[Any]:
+        return self.query_one("#candidate-table", DataTable)
+
+    def _set_table_message(self, message: str = "") -> None:
+        self.query_one("#candidate-table-message", Static).update(message)
+
+    def _clear_table(self) -> None:
+        table = self._table()
+        self._suppress_row_selected_open = True
+        try:
+            table.clear(columns=True)
+        finally:
+            self._suppress_row_selected_open = False
+
+    def _focus_table(self) -> None:
+        try:
+            self._table().focus()
+        except Exception:
+            pass
 
     def _build_request(self) -> RunAccumulationScreenWorkflowRequest:
         uni_select = self.query_one("#universe-select", Select)
@@ -207,6 +245,30 @@ class CandidateBrowserScreen(Screen[None]):
             return self._watchlist_summaries
         return self._candidate_rows
 
+    def _sync_cursor_to_selected_index(self) -> None:
+        rows = self._active_rows()
+        if not rows:
+            return
+        idx = min(max(self._selected_index, 0), len(rows) - 1)
+        self._selected_index = idx
+        table = self._table()
+        if table.row_count == 0:
+            return
+        self._suppress_row_selected_open = True
+        try:
+            table.move_cursor(row=idx, column=0, animate=False)
+        finally:
+            self._suppress_row_selected_open = False
+
+    def _select_index(self, index: int, *, update_preview: bool = True) -> None:
+        rows = self._active_rows()
+        if not rows:
+            return
+        idx = min(max(index, 0), len(rows) - 1)
+        self._selected_index = idx
+        if update_preview:
+            self._render_selection(rows[idx])
+
     # ------------------------------------------------------------------ actions
 
     def action_run(self) -> None:
@@ -244,7 +306,10 @@ class CandidateBrowserScreen(Screen[None]):
         if not rows or self._active_tab == _TAB_SAVED:
             return
         idx = min(self._selected_index, len(rows) - 1)
-        self.app.action_open_ticker(rows[idx].ticker)
+        ticker = getattr(rows[idx], "ticker", None)
+        if not ticker:
+            return
+        self.app.action_open_ticker(str(ticker))
 
     def action_pop_screen(self) -> None:
         self.app.action_show_today()
@@ -253,15 +318,15 @@ class CandidateBrowserScreen(Screen[None]):
         rows = self._active_rows()
         if not rows:
             return
-        self._selected_index = min(self._selected_index + 1, len(rows) - 1)
-        self._render_selection(rows[self._selected_index])
+        self._select_index(self._selected_index + 1)
+        self._sync_cursor_to_selected_index()
 
     def action_prev_row(self) -> None:
         rows = self._active_rows()
         if not rows:
             return
-        self._selected_index = max(self._selected_index - 1, 0)
-        self._render_selection(rows[self._selected_index])
+        self._select_index(self._selected_index - 1)
+        self._sync_cursor_to_selected_index()
 
     def action_next_tab(self) -> None:
         order = [_TAB_UNIVERSE, _TAB_ACCUMULATION, _TAB_SAVED]
@@ -305,10 +370,86 @@ class CandidateBrowserScreen(Screen[None]):
         projection = self._current_projection
         if projection is None:
             return []
+        # Prefer unwrapped projections from the workflow result.
+        single = getattr(projection, "single_projection", None)
+        if single is not None:
+            return list(getattr(single, "candidates", []) or [])
+        multi = getattr(projection, "multi_projection", None)
+        if multi is not None:
+            out: list[Any] = []
+            for row in getattr(multi, "rows", []) or []:
+                cand = getattr(row, "canonical_candidate", None) or getattr(
+                    row, "candidate", None
+                )
+                if cand is not None:
+                    out.append(cand)
+            return out
         candidates = list(getattr(projection, "candidates", []) or [])
-        if not candidates and hasattr(projection, "rows"):
-            candidates = [row.candidate for row in projection.rows]
-        return candidates
+        if candidates:
+            return candidates
+        if hasattr(projection, "rows"):
+            out = []
+            for row in projection.rows:
+                cand = getattr(row, "canonical_candidate", None) or getattr(
+                    row, "candidate", None
+                )
+                if cand is not None:
+                    out.append(cand)
+            return out
+        return []
+
+    # ------------------------------------------------------------------ table events
+
+    @on(DataTable.RowHighlighted, "#candidate-table")
+    def _on_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        """Click / cursor move updates selection + preview only (never runs work)."""
+        if event.row_key is None:
+            return
+        try:
+            idx = int(str(event.row_key.value))
+        except (TypeError, ValueError):
+            return
+        self._select_index(idx, update_preview=True)
+
+    @on(DataTable.RowSelected, "#candidate-table")
+    def _on_row_selected(self, event: DataTable.RowSelected) -> None:
+        """Enter / select-cursor opens the ticker workbench (not Saved tab)."""
+        if self._suppress_row_selected_open:
+            return
+        if event.row_key is None:
+            return
+        try:
+            idx = int(str(event.row_key.value))
+        except (TypeError, ValueError):
+            return
+        self._select_index(idx, update_preview=True)
+        if self._active_tab != _TAB_SAVED:
+            self.action_open_selected_ticker()
+
+    def on_click(self, event: Click) -> None:
+        """Double-click a data row opens workbench; single click is highlight-only."""
+        if self._active_tab == _TAB_SAVED:
+            return
+        widget = event.widget
+        if widget is None:
+            return
+        table = self._table()
+        node: Any = widget
+        on_table = False
+        while node is not None:
+            if node is table:
+                on_table = True
+                break
+            node = getattr(node, "parent", None)
+        if not on_table:
+            return
+        if event.chain < 2:
+            self._last_click_index = self._selected_index
+            self._last_click_at = monotonic()
+            return
+        self.action_open_selected_ticker()
+        self._last_click_at = monotonic()
+        self._last_click_index = self._selected_index
 
     # ------------------------------------------------------------------ tabs
 
@@ -334,7 +475,8 @@ class CandidateBrowserScreen(Screen[None]):
             _TAB_ACCUMULATION: "Press r / Run to screen for accumulation candidates.",
             _TAB_SAVED: "Press r / Run to list saved shortlists, then c to compare.",
         }[tab]
-        self.query_one("#candidate-table-content", Static).update(prompt)
+        self._clear_table()
+        self._set_table_message(prompt)
         self.query_one("#preview-content", Static).update(prompt)
         self.query_one("#candidate-selected", Static).update("")
 
@@ -409,9 +551,8 @@ class CandidateBrowserScreen(Screen[None]):
             return
         if state.status is ScreenStatus.ERROR:
             self._set_status("ERROR — retry with r", "semantic-error")
-            self.query_one("#candidate-table-content", Static).update(
-                f"{state.error_type}: {state.error_message}"
-            )
+            self._clear_table()
+            self._set_table_message(f"{state.error_type}: {state.error_message}")
             return
         if state.status not in {ScreenStatus.READY, ScreenStatus.EMPTY}:
             return
@@ -426,12 +567,19 @@ class CandidateBrowserScreen(Screen[None]):
         else:
             self._render_accumulation(state.payload, state.status)
         self._has_rendered_result = True
+        self._focus_table()
 
     def _render_selection(self, row: Any) -> None:
         if self._active_tab == _TAB_UNIVERSE:
             self._render_universe_preview(row)
         elif self._active_tab == _TAB_ACCUMULATION:
             self._render_candidate_preview(row)
+        elif self._active_tab == _TAB_SAVED:
+            name = getattr(row, "name", None)
+            if name:
+                self.query_one("#candidate-selected", Static).update(
+                    f"Selected: {name} — press c to compare vs a fresh screen run"
+                )
 
     # -- accumulation ---------------------------------------------------------
 
@@ -446,39 +594,46 @@ class CandidateBrowserScreen(Screen[None]):
             or view.result_status == "empty"
         ):
             self._set_status("EMPTY — 0 candidates found", "semantic-info")
-        else:
-            self._set_status(
-                f"READY — {len(view.candidate_rows)} candidate(s)", "semantic-ready"
-            )
-        self.query_one("#candidate-table-content", Static).update(
-            self._accumulation_table(view)
-        )
-        if view.candidate_rows:
-            self._render_candidate_preview(view.candidate_rows[0])
-        else:
+            self._clear_table()
+            self._set_table_message("No matching candidates found.")
             self.query_one("#candidate-selected", Static).update(
                 "Action: - | Risk: UNKNOWN | Data: EMPTY"
             )
             self.query_one("#preview-content", Static).update(
                 "No matching candidates found."
             )
+            return
 
-    def _accumulation_table(self, view: DiscoverViewModel) -> str:
-        if not view.candidate_rows:
-            return "No matching candidates found."
-        lines = [
-            "  #   Ticker Flow%  Streak Disc%          Risk   Action      Signal",
-            "───  ────── ─────  ────── ────────────── ────── ─────────── ────────",
-        ]
-        for row in view.candidate_rows:
-            signal = row.signal_score if row.signal_score is not None else "-"
-            disc = format_disc_pct_plain(row.vwap_discount_pct)
-            lines.append(
-                f"│ {row.canonical_rank:<2}  {row.ticker:<6} {row.accum_score:5.1f}   "
-                f"{row.consecutive_streak:<6} {disc:<14} {row.risk_status:<6} "
-                f"{decorate_action(row.action):<11} {signal:>6}"
-            )
-        return "\n".join(lines)
+        self._set_status(
+            f"READY — {len(view.candidate_rows)} candidate(s)", "semantic-ready"
+        )
+        self._populate_accumulation_table(view)
+        self._select_index(0)
+        self._sync_cursor_to_selected_index()
+
+    def _populate_accumulation_table(self, view: DiscoverViewModel) -> None:
+        table = self._table()
+        self._suppress_row_selected_open = True
+        try:
+            table.clear(columns=True)
+            table.add_columns("#", "Ticker", "Flow%", "Streak", "Disc%", "Risk", "Action", "Signal")
+            for row in view.candidate_rows:
+                signal = row.signal_score if row.signal_score is not None else "-"
+                disc = format_disc_pct_plain(row.vwap_discount_pct)
+                table.add_row(
+                    str(row.canonical_rank),
+                    row.ticker,
+                    f"{row.accum_score:5.1f}",
+                    str(row.consecutive_streak),
+                    disc,
+                    str(row.risk_status),
+                    decorate_action(row.action),
+                    str(signal),
+                    key=str(row.canonical_rank - 1),
+                )
+            self._set_table_message("")
+        finally:
+            self._suppress_row_selected_open = False
 
     def _render_candidate_preview(self, row: Any) -> None:
         disc = format_disc_pct_plain(getattr(row, "vwap_discount_pct", None))
@@ -510,7 +665,8 @@ class CandidateBrowserScreen(Screen[None]):
             f"Risk Status        : {row.risk_status}\n"
             f"Canonical Action   : {row.action or '-'}\n"
             f"Signal Coverage    : {row.signal_authority_coverage or '-'}\n"
-            f"Next steps:\n{next_steps}"
+            f"Next steps:\n{next_steps}\n"
+            "\nKeys: click/j/k select · Enter or double-click open workbench"
         )
 
     # -- universe -------------------------------------------------------------
@@ -523,7 +679,8 @@ class CandidateBrowserScreen(Screen[None]):
                 f"EMPTY — no cached data for {getattr(result, 'universe_name', '')}",
                 "semantic-info",
             )
-            self.query_one("#candidate-table-content", Static).update(
+            self._clear_table()
+            self._set_table_message(
                 "No locally cached universe data.\n"
                 "Update market data first (CLI: saham fetch market)."
             )
@@ -535,26 +692,34 @@ class CandidateBrowserScreen(Screen[None]):
             f"| missing flow {getattr(result, 'missing_flow', 0)}",
             "semantic-ready",
         )
-        self.query_one("#candidate-table-content", Static).update(self._universe_table(rows))
-        self._render_universe_preview(rows[0])
+        self._populate_universe_table(rows)
+        self._select_index(0)
+        self._sync_cursor_to_selected_index()
 
-    def _universe_table(self, rows: tuple[Any, ...]) -> str:
-        lines = [
-            "Ticker  Close      Chg%    Volume        FgnNet         FgnRatio",
-            "──────  ─────────  ──────  ────────────  ─────────────  ────────",
-        ]
-        for r in rows:
-            close = f"{r.last_close:,.0f}" if r.last_close is not None else "—"
-            chg = f"{r.change_pct:+.2f}" if r.change_pct is not None else "—"
-            vol = f"{r.volume:,}" if r.volume is not None else "—"
-            fnet = f"{r.foreign_net_value:,.0f}" if r.foreign_net_value is not None else "—"
-            fratio = (
-                f"{r.foreign_flow_ratio:+.2f}" if r.foreign_flow_ratio is not None else "—"
-            )
-            lines.append(
-                f"{r.ticker:<6}  {close:>9}  {chg:>6}  {vol:>12}  {fnet:>13}  {fratio:>8}"
-            )
-        return "\n".join(lines)
+    def _populate_universe_table(self, rows: tuple[Any, ...]) -> None:
+        table = self._table()
+        self._suppress_row_selected_open = True
+        try:
+            table.clear(columns=True)
+            table.add_columns("Ticker", "Close", "Chg%", "Volume", "FgnNet", "FgnRatio")
+            for i, r in enumerate(rows):
+                close = f"{r.last_close:,.0f}" if r.last_close is not None else "—"
+                chg = f"{r.change_pct:+.2f}" if r.change_pct is not None else "—"
+                vol = f"{r.volume:,}" if r.volume is not None else "—"
+                fnet = (
+                    f"{r.foreign_net_value:,.0f}"
+                    if r.foreign_net_value is not None
+                    else "—"
+                )
+                fratio = (
+                    f"{r.foreign_flow_ratio:+.2f}"
+                    if r.foreign_flow_ratio is not None
+                    else "—"
+                )
+                table.add_row(r.ticker, close, chg, vol, fnet, fratio, key=str(i))
+            self._set_table_message("")
+        finally:
+            self._suppress_row_selected_open = False
 
     def _render_universe_preview(self, row: Any) -> None:
         # Missing inputs render as explicit "— unavailable" (never zero-filled).
@@ -581,7 +746,8 @@ class CandidateBrowserScreen(Screen[None]):
             f"Volume        : {vol}\n"
             f"Foreign Net   : {fnet}\n"
             f"Foreign Ratio : {fratio}\n"
-            f"Latest Date   : {row.latest_date or na}"
+            f"Latest Date   : {row.latest_date or na}\n"
+            "\nKeys: click/j/k select · Enter or double-click open workbench"
         )
 
     # -- saved / compare ------------------------------------------------------
@@ -592,30 +758,37 @@ class CandidateBrowserScreen(Screen[None]):
         self._watchlist_summaries = summaries
         if not summaries:
             self._set_status("EMPTY — no saved shortlists", "semantic-info")
-            self.query_one("#candidate-table-content", Static).update(
+            self._clear_table()
+            self._set_table_message(
                 "No saved shortlists yet. Screen candidates on the Accumulation tab and Save one."
             )
             self.query_one("#candidate-selected", Static).update("")
             self.query_one("#preview-content", Static).update("")
             return
         self._set_status(f"READY — {len(summaries)} saved shortlist(s)", "semantic-ready")
-        lines = [
-            "Name                 Saved              Universe  Window  Tickers",
-            "───────────────────  ─────────────────  ────────  ──────  ───────",
-        ]
-        for s in summaries:
-            saved = s.latest_saved_at.strftime("%Y-%m-%d %H:%M")
-            lines.append(
-                f"{s.name:<20.20} {saved:<18} {s.universe:<8.8}  {s.window_days:>5}d  "
-                f"{s.ticker_count:>6}"
-            )
-        self.query_one("#candidate-table-content", Static).update("\n".join(lines))
-        self.query_one("#candidate-selected", Static).update(
-            f"Selected: {summaries[0].name} — press c to compare vs a fresh screen run"
-        )
+        table = self._table()
+        self._suppress_row_selected_open = True
+        try:
+            table.clear(columns=True)
+            table.add_columns("Name", "Saved", "Universe", "Window", "Tickers")
+            for i, s in enumerate(summaries):
+                saved = s.latest_saved_at.strftime("%Y-%m-%d %H:%M")
+                table.add_row(
+                    s.name,
+                    saved,
+                    s.universe,
+                    f"{s.window_days}d",
+                    str(s.ticker_count),
+                    key=str(i),
+                )
+            self._set_table_message("")
+        finally:
+            self._suppress_row_selected_open = False
+        self._select_index(0)
+        self._sync_cursor_to_selected_index()
         self.query_one("#preview-content", Static).update(
             "SAVED SHORTLIST\n"
-            "Select a shortlist (j/k) and press c to compare it against a fresh\n"
+            "Select a shortlist (click / j/k) and press c to compare it against a fresh\n"
             "accumulation screen using the current filter controls."
         )
 
@@ -634,17 +807,23 @@ class CandidateBrowserScreen(Screen[None]):
             ("▼ Weakening", [c.ticker for c in comp.weakening]),
             ("= Unchanged", [c.ticker for c in comp.unchanged]),
         ]
-        lines: list[str] = []
-        for label, tickers in groups:
-            names = ", ".join(tickers) if tickers else "—"
-            lines.append(f"{label:<16} ({len(tickers):>2}): {names}")
-        for warning in view.warnings:
-            lines.append(f"! {warning}")
-        self.query_one("#candidate-table-content", Static).update("\n".join(lines))
+        table = self._table()
+        self._suppress_row_selected_open = True
+        try:
+            table.clear(columns=True)
+            table.add_columns("Group", "Count", "Tickers")
+            for i, (label, tickers) in enumerate(groups):
+                names = ", ".join(tickers) if tickers else "—"
+                table.add_row(label, str(len(tickers)), names, key=str(i))
+            self._set_table_message("")
+        finally:
+            self._suppress_row_selected_open = False
+        warning_lines = "\n".join(f"! {w}" for w in view.warnings)
         self.query_one("#preview-content", Static).update(
             "COMPARISON GROUPS\n"
             "+ new    - dropped    ▲ strengthening    ▼ weakening    = unchanged\n"
             "Symbols and text carry meaning without relying on color."
+            + (f"\n{warning_lines}" if warning_lines else "")
         )
         self.query_one("#candidate-selected", Static).update(
             f"Compared '{comp.snapshot_name}' against one fresh screen run."

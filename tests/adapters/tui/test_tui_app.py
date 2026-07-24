@@ -220,8 +220,8 @@ def test_candidate_compact_mode_keeps_canonical_action_risk_and_data_text():
             for _ in range(30):
                 await pilot.pause(0.01)
                 if isinstance(app.screen, CandidateBrowserScreen):
-                    content = str(app.screen.query_one("#candidate-list").render())
-                    if "BBRI" in content:
+                    table = app.screen.query_one("#candidate-table")
+                    if table.row_count > 0 and "BBRI" in table.get_row_at(0):
                         break
             assert app.screen.has_class("compact")
             selected = str(app.screen.query_one("#candidate-selected", Static).content)
