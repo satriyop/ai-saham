@@ -1,5 +1,5 @@
 """
-Valuation, analyst consensus, and ownership panels for ticker dashboard.
+Valuation, analyst consensus, earnings, and ownership panels for ticker dashboard.
 
 Layer: Adapter
 """
@@ -13,6 +13,10 @@ from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, panel
 from src.adapters.cli.view_ticker_formatters import _f, _fmt_idr, _not_cached, _pct
+from src.domain.value_objects.earnings_record import EarningsRecord
+
+EARNINGS_QUARTERS = 4
+EARNINGS_PANEL_TITLE = "Earnings (last 4Q)"
 
 
 def _valuation_panel(fund, fwd, latest_close: Decimal | None) -> object:
@@ -109,6 +113,45 @@ def _analyst_panel(ac) -> object:
         lines.append(Text("  " + "  \u00b7  ".join(meta), style="dim"))
 
     return panel(Group(*lines), title="Analyst Consensus")
+
+
+def _earnings_surprise_cell(record: EarningsRecord) -> Text:
+    if record.eps_surprise_pct is None:
+        return Text("\u2014", style="dim")
+    label = "BEAT" if record.beat else "MISS"
+    style = "green" if record.beat else "red"
+    return Text(f"{label} {record.eps_surprise_pct:+.1f}%", style=style)
+
+
+def _earnings_yoy_cell(record: EarningsRecord) -> Text:
+    yoy = record.yoy_growth_pct
+    if yoy is None:
+        return Text("\u2014", style="dim")
+    style = "green" if yoy > 0 else ("red" if yoy < 0 else "default")
+    return Text(f"{yoy:+.1f}%", style=style)
+
+
+def _earnings_panel(records: list[EarningsRecord]) -> object:
+    """Show the most recent quarterly EPS history from cache."""
+    if not records:
+        return panel(_not_cached(), title=EARNINGS_PANEL_TITLE)
+
+    tbl = compact_table()
+    tbl.add_column("Period", style="dim", min_width=9)
+    tbl.add_column("EPS", justify="right", min_width=7)
+    tbl.add_column("YoY", justify="right", min_width=7)
+    tbl.add_column("vs Est", justify="right", min_width=12)
+
+    for record in records[:EARNINGS_QUARTERS]:
+        eps = f"{record.eps_actual:.1f}" if record.eps_actual is not None else "\u2014"
+        tbl.add_row(
+            record.period_label,
+            eps,
+            _earnings_yoy_cell(record),
+            _earnings_surprise_cell(record),
+        )
+
+    return panel(tbl, title=EARNINGS_PANEL_TITLE)
 
 
 def _ownership_panel(sh) -> object:

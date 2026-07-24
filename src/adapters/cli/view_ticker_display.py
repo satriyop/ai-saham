@@ -39,7 +39,9 @@ from src.adapters.cli.view_ticker_market_activity_display import (
     _seasonality_panel,
 )
 from src.adapters.cli.view_ticker_valuation_display import (
+    EARNINGS_QUARTERS,
     _analyst_panel,
+    _earnings_panel,
     _ownership_panel,
     _valuation_panel,
 )
@@ -54,6 +56,7 @@ def show_ticker_view(ticker: str, db_path: Path = DEFAULT_DB_PATH) -> None:
     from src.infrastructure.browser.stockbit_company_profile import StockbitCompanyProfileProvider
     from src.infrastructure.browser.stockbit_config_bundle import load_stockbit_provider_config
     from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
+    from src.infrastructure.browser.stockbit_earnings import StockbitEarningsProvider
     from src.infrastructure.browser.stockbit_forward_estimates import (
         StockbitForwardEstimatesProvider,
     )
@@ -137,6 +140,12 @@ def show_ticker_view(ticker: str, db_path: Path = DEFAULT_DB_PATH) -> None:
         connection_provider=connection_provider,
         stockbit_config=stockbit_config,
     )
+    earnings_prov = StockbitEarningsProvider(
+        api_client=None,
+        db_path=db,
+        connection_provider=connection_provider,
+        stockbit_config=stockbit_config,
+    )
     market_repo = SQLiteMarketRepository(db)
     broker_repo = SQLiteBrokerRepository(db)
     calendar_repo = SQLiteCorporateActionCalendarRepository(db)
@@ -182,6 +191,9 @@ def show_ticker_view(ticker: str, db_path: Path = DEFAULT_DB_PATH) -> None:
     }
     foreign_flow_points, foreign_flow_source = _select_foreign_flow_points(flow_by_source)
 
+    # Earnings: port method with api_client=None stays cache-only.
+    earnings = earnings_prov.get_earnings_history(ticker, quarters=EARNINGS_QUARTERS)
+
     # IEV: retrieve using repository
     iev_rows: list = []
     try:
@@ -203,6 +215,7 @@ def show_ticker_view(ticker: str, db_path: Path = DEFAULT_DB_PATH) -> None:
     c.print(_identity_panel(ticker, notation))
     c.print(_valuation_panel(fund, fwd, latest_close))
     c.print(_analyst_panel(analyst))
+    c.print(_earnings_panel(earnings))
     c.print(_ownership_panel(sh))
     c.print(_bandar_panel(bandar))
     c.print(_foreign_flow_panel(foreign_flow_points, source=foreign_flow_source))
