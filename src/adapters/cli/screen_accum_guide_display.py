@@ -10,6 +10,15 @@ from rich.console import Group
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, console, panel
+from src.adapters.shared.score_display_labels import (
+    ACCUM,
+    ACCUM_DEFINITION,
+    FLOW_GRP,
+    FLOW_RATIO_PCT,
+    SETUP_GRP,
+    SIGNAL,
+    SIGNAL_DEFINITION,
+)
 
 
 def print_column_guide() -> None:
@@ -22,13 +31,15 @@ def print_column_guide() -> None:
         "not a calibrated prediction. Use the learning/grade workflow\n"
         "after enough observations are collected to measure local\n"
         "resolution rates. This is a swing trade watchlist (5–20 day\n"
-        "horizon).\n",
+        "horizon).\n\n"
+        f"Vocabulary (ADR-043): {ACCUM} ≠ {SIGNAL}. "
+        f"{FLOW_RATIO_PCT} is an Accum component; {FLOW_GRP} is a Signal group.\n",
         style="italic"
     )
 
     # Aligned Guide Table
     guide_table = compact_table()
-    guide_table.add_column("Signal / Metric", style="bold yellow", width=22)
+    guide_table.add_column("Metric", style="bold yellow", width=22)
     guide_table.add_column("Value / Bench", style="cyan", width=20)
     guide_table.add_column("Details & Mechanics")
 
@@ -43,21 +54,31 @@ def print_column_guide() -> None:
             "Positive = foreigners underwater. Soft triage color only — not a "
             "scoring/ENTER gate. Enrichment / TUI also show deep|mid|shallow|over.\n"
             "Default list sort is deepest Disc% first (--sort-by vwap). "
-            "Use --sort-by score to rank by Accum score instead. "
+            f"Use --sort-by score to rank by {ACCUM} instead. "
             "--vwap-only keeps Disc% > 0 (excludes over-VWAP)."
         ),
     )
     guide_table.add_row(
-        "SCORE (0–100)",
+        f"{ACCUM} (0–100)",
         "≥ 58 (green)\n33-57 (yellow)\n< 33 (white)",
         (
-            "Composite signal strength. Combines net days, streak, VWAP, RSI, "
-            "flow, and BCI into a single score. BB%ile is shown as setup/phase "
-            "diagnostic — it does not contribute to foreign-flow score by default.\n"
-            "- Green: Strong signal, worth research.\n"
-            "- Yellow: Moderate watch, wait for confirmation.\n"
-            "- White: Weak, likely noise, skip."
+            f"{ACCUM_DEFINITION}\n"
+            "Combines net days, streak, VWAP, RSI, flow-ratio component, and BCI. "
+            "BB%ile is setup/phase diagnostic — not in default Accum by default.\n"
+            f"- Green: Strong {ACCUM}, worth research.\n"
+            f"- Yellow: Moderate watch.\n"
+            "- White: Weak, likely noise, skip.\n"
+            f"Do not compare {ACCUM} directly to {SIGNAL}."
         )
+    )
+    guide_table.add_row(
+        f"{SIGNAL} (0–100)",
+        "STRONG / MODERATE / WEAK",
+        (
+            f"{SIGNAL_DEFINITION}\n"
+            f"Under Signal panel: {SETUP_GRP} and {FLOW_GRP} are group "
+            "contributions, not Accum."
+        ),
     )
     guide_table.add_row(
         "STREAK",
@@ -89,12 +110,13 @@ def print_column_guide() -> None:
         )
     )
     guide_table.add_row(
-        "FLOW%",
+        FLOW_RATIO_PCT,
         "0-5%\n5-15%\n15-30%\n30%+",
         (
-            "Average net foreign % of total daily turnover.\n"
-            "A mid-cap at 35% FLOW% is a stronger signal than a large-cap at 3%.\n"
-            "Scoring: up to 8.3 pts, saturates at 20% flow ratio."
+            f"Average net foreign % of total daily turnover ({ACCUM} component).\n"
+            f"Not the same as {ACCUM} total and not {FLOW_GRP} under {SIGNAL}.\n"
+            "A mid-cap at 35% FlowRatio is stronger participation than a large-cap at 3%.\n"
+            "Scoring: up to 8.3 pts toward Accum, saturates at 20% flow ratio."
         )
     )
     guide_table.add_row(
@@ -125,7 +147,7 @@ def print_column_guide() -> None:
             "Bollinger Band width percentile vs last 60 days.\n"
             "- ≤ 20%: Squeeze (coiled spring, volatility compressed, "
             "ready to break).\n"
-            "Not scored in default foreign-flow score (setup/structure evidence only)."
+            f"Not scored in default {ACCUM} (setup/structure evidence only)."
         )
     )
     guide_table.add_row(

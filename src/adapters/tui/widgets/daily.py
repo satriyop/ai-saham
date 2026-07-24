@@ -77,7 +77,7 @@ def render_accumulation(view: DailyViewModel) -> str:
     for idx, item in enumerate(view.accumulation_candidates, 1):
         action_symbol = decorate_action(item.action)
         lines.append(
-            f"│ {idx:<2} {item.ticker:<5} | flow {item.accum_score:5.1f} | "
+            f"│ {idx:<2} {item.ticker:<5} | accum {item.accum_score:5.1f} | "
             f"signal {item.signal_score if item.signal_score is not None else '-':>3} | "
             f"risk {item.risk_status:<6} | {action_symbol}"
         )

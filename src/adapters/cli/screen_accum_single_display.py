@@ -11,6 +11,16 @@ from rich.text import Text
 
 from src.adapters.cli.effective_session_display import format_effective_session_label
 from src.adapters.cli.rich_display import compact_table, console, panel
+from src.adapters.shared.score_display_labels import (
+    ACCUM,
+    ACCUM_DEFINITION,
+    FLOW_GRP,
+    FLOW_GRP_DEFINITION,
+    FLOW_RATIO_PCT,
+    SETUP_GRP,
+    SIGNAL,
+    SIGNAL_DEFINITION,
+)
 from src.adapters.cli.screen_accum_enrichment_display import (
     _evidence_factor_rows,
     build_enrichment_details_table,
@@ -78,9 +88,10 @@ def _scoring_definitions_panel(display_config: AccumulationDisplayConfig):
         ),
     )
     accum_table.add_row(
-        "Flow%",
+        FLOW_RATIO_PCT,
         f"{p.foreign_flow_ratio.weight:g}",
-        f"net foreign turnover share; linear to {p.foreign_flow_ratio.saturate_at:g}%",
+        f"net foreign turnover share; linear to {p.foreign_flow_ratio.saturate_at:g}% "
+        f"(Accum component only — not {ACCUM} total, not {FLOW_GRP})",
     )
     _bb_scored = p.bb_squeeze.enabled
     accum_table.add_row(
@@ -108,14 +119,14 @@ def _scoring_definitions_panel(display_config: AccumulationDisplayConfig):
     signal_table = compact_table(show_header=False)
     signal_table.add_column("Key", style="bold cyan")
     signal_table.add_column("Definition")
+    signal_table.add_row(SIGNAL, SIGNAL_DEFINITION)
     signal_table.add_row(
-        "Signal score",
+        f"{SETUP_GRP} / {FLOW_GRP}",
         (
-            "SignalEngine attractiveness score (0-100). "
-            "Setup = setup-quality group (0-100). "
-            "Flow = flow-confirmation group (0-100). "
-            "Conf% = evidence confidence (how much weight is covered). "
-            "Flags = active do-no-harm penalties (VAL/ANL/INS)."
+            f"{SETUP_GRP} = setup-quality group (0–100). "
+            f"{FLOW_GRP} = flow-confirmation group (0–100). "
+            f"Neither is {ACCUM}. Conf% = evidence coverage. "
+            "Flags = do-no-harm penalties (VAL/ANL/INS)."
         ),
     )
     signal_table.add_row(
@@ -135,12 +146,15 @@ def _scoring_definitions_panel(display_config: AccumulationDisplayConfig):
 
     return panel(
         Group(
-            Text("Foreign-flow score components", style="bold cyan"),
+            Text(f"{ACCUM} score components (foreign accumulation)", style="bold cyan"),
+            Text(ACCUM_DEFINITION, style="dim"),
             accum_table,
-            Text("\nSignal / risk definitions", style="bold cyan"),
+            Text(f"\n{SIGNAL} / risk definitions", style="bold cyan"),
+            Text(SIGNAL_DEFINITION, style="dim"),
+            Text(FLOW_GRP_DEFINITION, style="dim"),
             signal_table,
         ),
-        title="Scoring Definitions",
+        title="Scoring Definitions (ADR-043)",
     )
 
 
@@ -191,8 +205,8 @@ def display_results(
     action_table.add_column("Ticker", style="bold")
     action_table.add_column("Disc%", justify="right")
     action_table.add_column("Price", justify="right")
-    action_table.add_column("Signal", justify="right")
-    action_table.add_column("Accum", justify="right")
+    action_table.add_column(SIGNAL, justify="right")
+    action_table.add_column(ACCUM, justify="right")
     action_table.add_column("Gate")
     action_table.add_column("Trend")
     action_table.add_column("Phase")
@@ -208,12 +222,12 @@ def display_results(
     evidence_table.add_column("Means")
 
     signal_table = compact_table()
-    signal_table.add_column("Signal")
+    signal_table.add_column("Strength")
     if show_context_ticker:
         signal_table.add_column("Ticker", style="bold")
-    signal_table.add_column("Score", justify="right")
-    signal_table.add_column("Setup", justify="right")
-    signal_table.add_column("Flow", justify="right")
+    signal_table.add_column(SIGNAL, justify="right")
+    signal_table.add_column(SETUP_GRP, justify="right")
+    signal_table.add_column(FLOW_GRP, justify="right")
     signal_table.add_column("Conf%", justify="right")
     signal_table.add_column("Max")
     signal_table.add_column("Flags")
@@ -401,8 +415,11 @@ def display_results(
             ),
             title="Candidate Actions",
         ),
-        panel(evidence_table, title="Foreign Flow Score"),
-        panel(signal_table, title="Signal"),
+        panel(evidence_table, title=f"{ACCUM} score components"),
+        panel(
+            signal_table,
+            title=f"{SIGNAL} (SignalEngine — not {ACCUM})",
+        ),
         panel(
             Group(
                 risk_table,
@@ -480,16 +497,21 @@ def display_results(
     explain_lines = [
         "Candidate Actions is the screen summary. Context panels explain why.",
         (
-            "ACCUM is deterministic foreign-flow evidence (0-100). "
-            "SIGNAL is SignalEngine attractiveness (0-100)."
+            f"{ACCUM} = foreign-accumulation composite (0–100). "
+            f"{SIGNAL} = SignalEngine total (0–100). Different engines — "
+            "they can disagree without either being 'wrong'."
+        ),
+        (
+            f"{SETUP_GRP}/{FLOW_GRP} live only under {SIGNAL} (group contributions). "
+            f"{FLOW_RATIO_PCT} is an Accum component (turnover share), not {FLOW_GRP}."
         ),
         (
             "GATE OPEN means no structural/execution risk gate fired; "
             "it does not mean the ticker is risk-free."
         ),
         (
-            "FLOW% = avg net foreign % of turnover. "
-            "F_VWAP% positive = price below foreign average buy cost. "
+            f"{FLOW_RATIO_PCT} = avg net foreign % of turnover. "
+            "F_VWAP%/Disc% positive = price below foreign average buy cost. "
             "BB%ILE lower = tighter squeeze."
         ),
     ]

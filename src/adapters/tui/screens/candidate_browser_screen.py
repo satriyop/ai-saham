@@ -29,6 +29,7 @@ from textual.events import Click
 from textual.screen import Screen
 from textual.widgets import Button, Checkbox, DataTable, Footer, Header, Select, Static
 
+from src.adapters.shared.score_display_labels import ACCUM, SIGNAL
 from src.adapters.shared.vwap_depth_display import format_disc_pct_plain
 from src.adapters.tui.action_display import decorate_action
 from src.adapters.tui.controllers.discover_controller import DiscoverController
@@ -616,7 +617,11 @@ class CandidateBrowserScreen(Screen[None]):
         self._suppress_row_selected_open = True
         try:
             table.clear(columns=True)
-            table.add_columns("#", "Ticker", "Flow%", "Streak", "Disc%", "Risk", "Action", "Signal")
+            # ADR-043: Accum = foreign-accumulation composite; Signal = SignalEngine total.
+            # Never label Accum as Flow% (that name is reserved for FlowRatio% component).
+            table.add_columns(
+                "#", "Ticker", ACCUM, "Streak", "Disc%", "Risk", "Action", SIGNAL
+            )
             for row in view.candidate_rows:
                 signal = row.signal_score if row.signal_score is not None else "-"
                 disc = format_disc_pct_plain(row.vwap_discount_pct)
@@ -654,19 +659,27 @@ class CandidateBrowserScreen(Screen[None]):
             if ticker_actions
             else "  -"
         )
+        sig = row.signal_score if row.signal_score is not None else "-"
+        cov = (
+            f"{row.signal_authority_coverage:.0%}"
+            if isinstance(row.signal_authority_coverage, float)
+            else (row.signal_authority_coverage or "-")
+        )
         self.query_one("#preview-content", Static).update(
             "SELECTED CANDIDATE PREVIEW\n"
             f"Ticker             : {row.ticker}\n"
             f"Canonical Rank     : #{row.canonical_rank}\n"
-            f"Foreign Flow Score : {row.accum_score:.1f}\n"
+            f"{ACCUM} score (0–100) : {row.accum_score:.1f}  [foreign accumulation]\n"
+            f"{SIGNAL} score (0–100): {sig}  [SignalEngine total; different engine]\n"
+            f"{SIGNAL} coverage     : {cov}\n"
             f"Disc% (soft VWAP)  : {disc} ({depth})\n"
             f"Consecutive Streak : {row.consecutive_streak} session(s)\n"
             f"Setup Phase        : {row.setup_phase or '-'}\n"
             f"Risk Status        : {row.risk_status}\n"
             f"Canonical Action   : {row.action or '-'}\n"
-            f"Signal Coverage    : {row.signal_authority_coverage or '-'}\n"
             f"Next steps:\n{next_steps}\n"
-            "\nKeys: click/j/k select · Enter or double-click open workbench"
+            f"\nNote: {ACCUM} ≠ {SIGNAL}. Workbench recomputes Signal on open.\n"
+            "Keys: click/j/k select · Enter or double-click open workbench"
         )
 
     # -- universe -------------------------------------------------------------

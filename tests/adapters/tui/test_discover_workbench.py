@@ -4,6 +4,7 @@ Layer: Adapter
 """
 
 import asyncio
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from textual.widgets import Checkbox, Select, Static
@@ -41,8 +42,11 @@ def test_discover_presenter_formats_single_projection() -> None:
     cand.setup_phase = "coiled spring"
     cand.risk_status = "OPEN"
     cand.action = "ENTER"
-    cand.signal_score = 78
-    cand.signal_authority_coverage = 1.0
+    cand.signal_score = None  # real candidates use signal_assessment
+    cand.signal_assessment = SimpleNamespace(
+        assessment=SimpleNamespace(score=78, signal_authority_coverage=0.91)
+    )
+    cand.signal_authority_coverage = None
     cand.vwap_discount_pct = 9.5
 
     proj = MagicMock(spec=ScreenAccumSingleProjection)
@@ -57,6 +61,8 @@ def test_discover_presenter_formats_single_projection() -> None:
     assert row.ticker == "BBRI"
     assert row.canonical_rank == 1
     assert row.accum_score == 80.0
+    assert row.signal_score == 78  # unwrapped from signal_assessment
+    assert row.signal_authority_coverage == 0.91
     assert row.action == "ENTER"
     assert row.vwap_discount_pct == 9.5
     assert row.vwap_depth_label == "deep"

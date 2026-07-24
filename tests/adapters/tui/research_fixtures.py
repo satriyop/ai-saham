@@ -27,6 +27,11 @@ def _candidate(ticker: str, action: str):
     )
     return SimpleNamespace(
         ticker=ticker,
+        accum_score=70.0,
+        consecutive_streak=3,
+        net_buy_ratio=0.5,
+        bci_label=None,
+        vwap_discount_pct=2.0,
         signal_assessment=signal,
         risk_assessment=SimpleNamespace(risk_level_name="OPEN"),
         setup_phase=SimpleNamespace(current_phase=SimpleNamespace(value="ACCUMULATION")),

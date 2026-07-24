@@ -87,6 +87,50 @@ class DiscoverPresenter:
         pct = float(raw)
         return pct, vwap_depth_label(pct)
 
+    @staticmethod
+    def _signal_fields(
+        candidate: Any, *, row: Any | None = None
+    ) -> tuple[int | None, float | None]:
+        """Extract SignalEngine total + coverage (ADR-043 signal_score).
+
+        Prefer ``signal_assessment.assessment``; fall back to multi-row
+        ``signal_score`` fields. Never confuse with ``accum_score``.
+        """
+        score: int | float | None = None
+        coverage: float | None = None
+
+        sa = getattr(candidate, "signal_assessment", None)
+        if sa is not None:
+            assessment = getattr(sa, "assessment", None)
+            if assessment is not None:
+                raw = getattr(assessment, "score", None)
+                if isinstance(raw, (int, float)):
+                    score = raw
+                cov = getattr(assessment, "signal_authority_coverage", None)
+                if isinstance(cov, (int, float)):
+                    coverage = float(cov)
+
+        if score is None and row is not None:
+            raw = getattr(row, "signal_score", None)
+            if isinstance(raw, (int, float)):
+                score = raw
+            cov = getattr(row, "signal_authority_coverage", None)
+            if coverage is None and isinstance(cov, (int, float)):
+                coverage = float(cov)
+
+        if score is None:
+            raw = getattr(candidate, "signal_score", None)
+            if isinstance(raw, (int, float)):
+                score = raw
+
+        if coverage is None:
+            cov = getattr(candidate, "signal_authority_coverage", None)
+            if isinstance(cov, (int, float)):
+                coverage = float(cov)
+
+        score_int = int(score) if isinstance(score, (int, float)) else None
+        return score_int, coverage
+
     def present_accumulation(
         self,
         projection: Any,
@@ -118,6 +162,7 @@ class DiscoverPresenter:
                 flow90 = getattr(w90, "accum_score", 0.0) if w90 else 0.0
                 shape = f"7s:{flow7:.0f} 30s:{flow30:.0f} 90s:{flow90:.0f}"
                 disc, depth = self._vwap_fields(c)
+                sig_score, sig_cov = self._signal_fields(c, row=multi_row)
                 rows.append(
                     DiscoverCandidateRowView(
                         canonical_rank=rank,
@@ -129,8 +174,8 @@ class DiscoverPresenter:
                         setup_phase=getattr(c.setup_phase, "current_phase", None).value if hasattr(getattr(c, "setup_phase", None), "current_phase") else getattr(c, "setup_phase", None),
                         risk_status=getattr(c.risk_assessment, "risk_level_name", str(getattr(c, "risk_status", "OPEN"))),
                         action=getattr(getattr(c, "trade_setup", None), "action", None).value if hasattr(getattr(c, "trade_setup", None), "action") else getattr(c, "action", None),
-                        signal_score=getattr(getattr(c, "signal_assessment", None), "assessment", None).score if hasattr(getattr(c, "signal_assessment", None), "assessment") else getattr(c, "signal_score", None),
-                        signal_authority_coverage=getattr(c, "signal_authority_coverage", None),
+                        signal_score=sig_score,
+                        signal_authority_coverage=sig_cov,
                         window_shape_label=shape,
                         vwap_discount_pct=disc,
                         vwap_depth_label=depth,
@@ -155,13 +200,8 @@ class DiscoverPresenter:
                     cp = getattr(raw_phase, "current_phase", None)
                     raw_phase = getattr(cp, "value", str(cp)) if cp else None
 
-                raw_score = getattr(c, "signal_score", None)
-                if not isinstance(raw_score, (int, float)) and raw_score is not None:
-                    sa = getattr(c, "signal_assessment", None)
-                    ass = getattr(sa, "assessment", None) if sa else None
-                    raw_score = getattr(ass, "score", None) if ass else None
-
                 disc, depth = self._vwap_fields(c)
+                sig_score, sig_cov = self._signal_fields(c)
                 rows.append(
                     DiscoverCandidateRowView(
                         canonical_rank=rank,
@@ -173,8 +213,8 @@ class DiscoverPresenter:
                         setup_phase=str(raw_phase) if raw_phase else None,
                         risk_status=str(raw_risk) if raw_risk else "OPEN",
                         action=str(raw_action) if raw_action else None,
-                        signal_score=int(raw_score) if raw_score is not None and isinstance(raw_score, (int, float)) else None,
-                        signal_authority_coverage=float(c.signal_authority_coverage) if getattr(c, "signal_authority_coverage", None) is not None and isinstance(c.signal_authority_coverage, (int, float)) else None,
+                        signal_score=sig_score,
+                        signal_authority_coverage=sig_cov,
                         vwap_discount_pct=disc,
                         vwap_depth_label=depth,
                     )

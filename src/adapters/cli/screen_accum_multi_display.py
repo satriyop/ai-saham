@@ -79,10 +79,11 @@ def display_multi(
     table.add_column("#", justify="right")
     table.add_column("Ticker", style="bold")
     table.add_column("Disc%", justify="right")
+    # Window columns (7s/30s/90s) are Accum scores for that session window.
     for w in windows:
         table.add_column(f"{w}s", justify="right")
     table.add_column("Pattern")
-    table.add_column("Sig/Auth")
+    table.add_column("Signal")
     table.add_column("Risk")
     table.add_column("Phase")
     table.add_column("Data")
@@ -178,15 +179,17 @@ def display_multi(
     )
 
     meta_table.add_row(
-        "Signal/Auth",
-        "score / signal authority coverage from the canonical window"
+        "Signal",
+        "SignalEngine total score (and optional coverage) from the canonical "
+        "window — not Accum. Window columns 7s/30s/90s are Accum scores."
     )
 
     enter_score = display_config.enter_min_accum_score
     watch_score = display_config.watch_min_accum_score
     meta_table.add_row(
-        "Scores",
-        f"Accum ≥{enter_score:g} green | ≥{watch_score:g} yellow | <{watch_score:g} white"
+        "Accum scores",
+        f"window cells ≥{enter_score:g} green | ≥{watch_score:g} yellow | "
+        f"<{watch_score:g} white (foreign-accumulation composite)"
     )
 
     meta_table.add_row(
@@ -204,7 +207,7 @@ def display_multi(
     meta_table.add_row(
         "Canonical Window",
         f"{canonical_window} sessions — Signal/Risk/Phase/Data/Next come "
-        "from the canonical window only; other windows are flow context."
+        "from the canonical window only; other windows are Accum context."
     )
 
     meta_table.add_row(

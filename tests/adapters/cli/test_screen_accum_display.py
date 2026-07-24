@@ -319,7 +319,7 @@ def test_display_multi_renders_canonical_signal_risk_phase_data_next(capsys):
     )
 
     out = capsys.readouterr().out
-    assert "Sig/Auth" in out
+    assert "Signal" in out
     assert "Risk" in out
     assert "Phase" in out
     assert "Data" in out
@@ -423,9 +423,8 @@ def test_display_multi_with_explanation_signal_auth(capsys):
     )
 
     out = capsys.readouterr().out
-    # Table header is shortened to Sig/Auth; Run Context keeps Signal/Auth label.
-    assert "Sig/Auth" in out
-    assert "Signal/Auth" in out  # Run Context key
+    # Table + Run Context both use Signal for SignalEngine total.
+    assert "Signal" in out
     assert "72/0.83" in out
-    assert "score / signal authority coverage" in out
+    assert "SignalEngine total score" in out
     assert "canonical window" in out
