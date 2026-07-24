@@ -1,20 +1,42 @@
-# ADR-018: CLI Command Depth — `saham view broker` Exception
+# ADR-018: CLI Command Depth — `view` Sub-Group Exceptions
 
 [Architecture decision index](../../ARCHITECTURE_DECISIONS.md)
 
-**Status:** Accepted
-**Date:** Not recorded (legacy decision)
-**Current implementation:** Implemented — saham view broker remains the documented command-depth exception; live help is authoritative.
-**Decision**
-The CLI follows a "max 2 levels" depth rule (`saham <group> <command>`). The `saham view broker` sub-group is an explicit, documented exception at 3 levels (`saham view broker <subcommand>`).
+**Status:** Accepted (amended)  
+**Date:** Not recorded (legacy decision); amended 2026-07-24  
+**Amended by:** [ADR-044](ADR-044-view-subject-taxonomy-ticker-vs-desk.md)  
+**Related:** [ADR-045](ADR-045-view-browse-parity-cli-tui-json-table.md)  
+**Current implementation:** Implemented — `view ticker …` and `view broker …` are the approved three-level trees under `view`; live help is authoritative for verbs.
 
-**Affected commands**
-`saham view broker status|flow|top|history|top-foreign|mappings`
+### Decision
 
-**Rationale**
-Broker data has multiple distinct display modes (flow, top buyers/sellers, history, foreign activity, mappings) that are all conceptually under one data source. Flattening these to `saham view flow`, `saham view top`, etc. would pollute the `view` namespace and lose the broker grouping signal. The `broker` sub-group is the right structural cut; the depth cost is accepted.
+The CLI follows a "max 2 levels" depth rule (`saham <group> <command>`).
 
-**Implications**
-* No other `view` sub-groups may be introduced without a new ADR.
-* New broker display commands are added under `view broker`, not at `view` level.
-* All other `saham` command groups remain at max 2 levels.
+**Approved exceptions at 3 levels under `view`:**
+
+```text
+saham view ticker <verb> …
+saham view broker <verb> …
+```
+
+These sub-groups exist because browse modes are numerous and must stay grouped by **subject** (stock vs desk/meta), not flattened into a polluted `view` top-level namespace.
+
+**Subject meanings, verb glossary, and clean-break command list:** see **ADR-044**.  
+Do not use this ADR as a command catalog.
+
+### Legacy note (superseded command list)
+
+Earlier text listed stock-centric paths such as `view broker flow|top|history|distribution <TICKER>`.  
+Those paths are **retired**. Stock deep-dives live under `view ticker …`. Desk deep-dives use `view broker <verb> <CODE>` (plus meta verbs without a stock ticker).
+
+### Rationale
+
+Broker/stock browse data has many display modes. Flattening to `saham view flow`, `saham view top`, etc. would pollute `view` and lose subject grouping. A single `broker` bag that also took tickers was ambiguous; ADR-044 splits subjects while keeping three-level depth for both axes.
+
+### Implications
+
+* No additional `view` sub-groups beyond `ticker` and `broker` without a new ADR.
+* New stock browse commands are added under `view ticker`, not at bare `view` level (except the dashboard shorthand `view <TICKER>` → `ticker show`).
+* New desk browse commands are added under `view broker`.
+* All other `saham` command groups remain at max 2 levels unless a separate ADR grants an exception.
+* Adapter/JSON/TUI parity for these commands: **ADR-045**.
