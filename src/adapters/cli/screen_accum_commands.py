@@ -248,15 +248,9 @@ def accumulation_run(
     if strategy and multi:
         typer.echo("Error: --strategy is not supported with --multi.", err=True)
         raise typer.Exit(1)
-    if strategy and output_format == "json":
-        typer.echo("Error: --strategy is not supported with --format json.", err=True)
-        raise typer.Exit(1)
 
     include_strategy_overlay = bool(strategy)
 
-    if save_name and output_format == "json":
-        typer.echo("Error: --save is not supported with --format json.", err=True)
-        raise typer.Exit(1)
     if save_name and multi:
         typer.echo("Error: --save is not supported with --multi.", err=True)
         raise typer.Exit(1)
@@ -430,6 +424,14 @@ def _render_single(
             "partial_result": response.tickers_skipped > 0,
             **projection.to_dict(),
         }
+        if strategy:
+            data["strategy_name"] = strategy
+            data["strategy_signals"] = dict(result.strategy_signals or {})
+        if result.save_result is not None:
+            data["saved_watchlist"] = {
+                "name": result.save_result.name,
+                "saved_count": result.save_result.saved_count,
+            }
         status = resolve_accum_result_status(result_count=len(projection.candidates))
         typer.echo(
             json.dumps(

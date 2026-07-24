@@ -97,12 +97,29 @@ def test_screen_accum_single_table_mode_sets_strategy_overlay(monkeypatch):
     assert req.save_enabled is False
 
 
-def test_screen_accum_strategy_with_json_fails_explicitly(monkeypatch):
-    """--strategy --format json is an unsupported combo — must fail clearly,
-    not silently drop the strategy overlay (S2)."""
+def test_screen_accum_strategy_with_json_includes_overlay(monkeypatch):
+    """--strategy --format json runs the overlay and emits strategy fields."""
+    captured: dict = {}
 
     def fake_uc(**kwargs):
-        raise AssertionError("workflow use case must not run for a rejected combo")
+        uc = SimpleNamespace()
+
+        def execute(req):
+            captured["request"] = req
+            return _fake_workflow_result(
+                response=AccumulationScreenResponse(
+                    candidates=[_candidate(ticker="BBCA")],
+                    screened_at=date(2026, 6, 28),
+                    window_days=getattr(req, "window", 7),
+                    total_tickers_checked=len(req.tickers),
+                    tickers_skipped=0,
+                    provider="fake",
+                ),
+                strategy_signals={"BBCA": "OPEN"},
+            )
+
+        uc.execute = execute
+        return uc
 
     monkeypatch.setattr(
         "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
@@ -114,9 +131,13 @@ def test_screen_accum_strategy_with_json_fails_explicitly(monkeypatch):
         ["screen", "accum", "BBCA", "--strategy", "test-strat", "--format", "json"],
     )
 
-    assert result.exit_code != 0
-    assert "--strategy" in result.output
-    assert "--format json" in result.output
+    assert result.exit_code == 0, result.output
+    req = captured["request"]
+    assert req.include_strategy_overlay is True
+    assert req.strategy_name == "test-strat"
+    payload = _screen_payload(json.loads(result.output))
+    assert payload["strategy_name"] == "test-strat"
+    assert payload["strategy_signals"] == {"BBCA": "OPEN"}
 
 
 def test_screen_accum_strategy_with_multi_fails_explicitly(monkeypatch):

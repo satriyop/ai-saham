@@ -225,12 +225,35 @@ def test_screen_accum_save_calls_use_case(monkeypatch):
     assert "mywatch" in result.output
 
 
-def test_screen_accum_json_save_fails_explicitly(monkeypatch):
-    """S2: --save with --format json is an unsupported combo — must fail
-    clearly, not silently drop the save (not just warn-and-skip either)."""
+def test_screen_accum_json_save_includes_saved_watchlist(monkeypatch):
+    """--save with --format json runs the workflow and reports save metadata."""
+    from src.application.use_case.save_screen_watchlist_use_case import (
+        SaveScreenWatchlistResult,
+    )
+
+    captured: dict = {}
 
     def fake_uc(*, db_path, screener_config, swing_config, **kwargs):
-        raise AssertionError("workflow use case must not run for a rejected combo")
+        uc = SimpleNamespace()
+
+        def execute(req):
+            captured["request"] = req
+            return _fake_workflow_result(
+                response=AccumulationScreenResponse(
+                    candidates=[_candidate(ticker="BBCA", accum_score=80.0)],
+                    screened_at=date(2026, 6, 28),
+                    window_days=getattr(req, "window", 7),
+                    total_tickers_checked=len(req.tickers),
+                    tickers_skipped=0,
+                    provider="fake",
+                ),
+                save_result=SaveScreenWatchlistResult(
+                    saved_count=1, name="mywatch"
+                ),
+            )
+
+        uc.execute = execute
+        return uc
 
     monkeypatch.setattr(
         "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
@@ -242,9 +265,12 @@ def test_screen_accum_json_save_fails_explicitly(monkeypatch):
         ["screen", "accum", "BBCA", "--format", "json", "--save", "mywatch"],
     )
 
-    assert result.exit_code != 0
-    assert "--save" in result.output
-    assert "--format json" in result.output
+    assert result.exit_code == 0, result.output
+    req = captured["request"]
+    assert req.save_enabled is True
+    assert req.save_name == "mywatch"
+    payload = _screen_payload(json.loads(result.output))
+    assert payload["saved_watchlist"] == {"name": "mywatch", "saved_count": 1}
 
 
 def test_screen_accum_multi_save_fails_explicitly(monkeypatch):
