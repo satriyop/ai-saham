@@ -79,10 +79,22 @@ view_app.add_typer(market_context_view_app, name="market-context")
 @view_app.command("ticker", hidden=True)
 def view_ticker(
     ticker: str = typer.Argument(..., help="Ticker symbol (e.g. BBCA)"),
+    brief: Annotated[
+        bool,
+        typer.Option(
+            "--brief",
+            help="Show a compact decision-relevant subset of panels.",
+        ),
+    ] = False,
 ) -> None:
     """Show all cached data for a ticker."""
     from src.adapters.cli.view_ticker_display import show_ticker_view
-    show_ticker_view(ticker.upper(), db_path=Path(load_app_config().storage.db_path))
+
+    show_ticker_view(
+        ticker.upper(),
+        db_path=Path(load_app_config().storage.db_path),
+        brief=brief,
+    )
 
 
 @view_app.command("universe")

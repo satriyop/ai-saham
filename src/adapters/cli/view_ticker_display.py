@@ -44,6 +44,7 @@ from src.adapters.cli.view_ticker_market_activity_display import (
     _seasonality_panel,
 )
 from src.adapters.cli.view_ticker_price_structure import compute_price_structure
+from src.adapters.cli.view_ticker_layout import should_render_panel
 from src.adapters.cli.view_ticker_status import (
     DEFAULT_TTL_DAYS,
     build_freshness_item,
@@ -62,8 +63,19 @@ from src.adapters.cli.view_ticker_valuation_display import (
 DEFAULT_DB_PATH = Path("data.db")
 
 
-def show_ticker_view(ticker: str, db_path: Path = DEFAULT_DB_PATH) -> None:
-    """Render a read-only dashboard of all cached data for ticker."""
+def show_ticker_view(
+    ticker: str,
+    db_path: Path = DEFAULT_DB_PATH,
+    *,
+    brief: bool = False,
+) -> None:
+    """Render a read-only dashboard of all cached data for ticker.
+
+    Args:
+        ticker: IDX ticker symbol.
+        db_path: SQLite database path.
+        brief: When True, render only decision-relevant panels.
+    """
     from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
     from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
     from src.infrastructure.browser.stockbit_company_profile import StockbitCompanyProfileProvider
@@ -357,42 +369,65 @@ def show_ticker_view(ticker: str, db_path: Path = DEFAULT_DB_PATH) -> None:
     ]
     dashboard_as_of = price_as_of or flow_as_of or today
 
+    def _show(panel_key: str) -> bool:
+        return should_render_panel(panel_key, brief=brief)
+
     c = console()
     c.print()
-    c.print(_identity_panel(ticker, notation, empty_hint=fetch_hint))
-    c.print(_freshness_panel(ticker, freshness_items, as_of=dashboard_as_of))
-    c.print(_valuation_panel(fund, fwd, latest_close))
-    c.print(_price_structure_panel(price_structure, empty_hint=fetch_hint))
-    c.print(_analyst_panel(analyst, empty_hint=fetch_hint))
-    c.print(_earnings_panel(earnings, empty_hint=fetch_hint))
-    c.print(_ownership_panel(sh, empty_hint=fetch_hint))
-    c.print(_bandar_panel(bandar, empty_hint=fetch_hint))
-    c.print(
-        _foreign_flow_panel(
-            foreign_flow_points, source=foreign_flow_source, empty_hint=fetch_hint
+    if _show("identity"):
+        c.print(_identity_panel(ticker, notation, empty_hint=fetch_hint))
+    if _show("freshness"):
+        c.print(_freshness_panel(ticker, freshness_items, as_of=dashboard_as_of))
+    if _show("valuation"):
+        c.print(_valuation_panel(fund, fwd, latest_close))
+    if _show("price_structure"):
+        c.print(_price_structure_panel(price_structure, empty_hint=fetch_hint))
+    if _show("analyst"):
+        c.print(_analyst_panel(analyst, empty_hint=fetch_hint))
+    if _show("earnings"):
+        c.print(_earnings_panel(earnings, empty_hint=fetch_hint))
+    if _show("ownership"):
+        c.print(_ownership_panel(sh, empty_hint=fetch_hint))
+    if _show("bandar"):
+        c.print(_bandar_panel(bandar, empty_hint=fetch_hint))
+    if _show("foreign_flow"):
+        c.print(
+            _foreign_flow_panel(
+                foreign_flow_points, source=foreign_flow_source, empty_hint=fetch_hint
+            )
         )
-    )
-    c.print(
-        _corp_action_panel(
-            corp_actions,
-            status=corp_status,
-            empty_hint=fetch_hint,
+    if _show("corp_actions"):
+        c.print(
+            _corp_action_panel(
+                corp_actions,
+                status=corp_status,
+                empty_hint=fetch_hint,
+            )
         )
-    )
-    c.print(
-        _insider_panel(
-            insider_txns,
-            status=insider_status,
-            last_known=insider_last_known,
-            empty_hint=fetch_hint,
+    if _show("insider"):
+        c.print(
+            _insider_panel(
+                insider_txns,
+                status=insider_status,
+                last_known=insider_last_known,
+                empty_hint=fetch_hint,
+            )
         )
-    )
-    c.print(_seasonality_panel(seasonality, today.month, empty_hint=fetch_hint))
-    c.print(_iev_panel(iev_rows, empty_hint=fetch_hint))
-    c.print(_sentiment_panel(sentiment_logs, empty_hint=fetch_hint))
-    c.print(_profile_panel(profile, empty_hint=fetch_hint))
-    c.print(_candles_panel(candles, empty_hint=fetch_hint))
+    if _show("seasonality"):
+        c.print(_seasonality_panel(seasonality, today.month, empty_hint=fetch_hint))
+    if _show("iev"):
+        c.print(_iev_panel(iev_rows, empty_hint=fetch_hint))
+    if _show("sentiment"):
+        c.print(_sentiment_panel(sentiment_logs, empty_hint=fetch_hint))
+    if _show("profile"):
+        c.print(_profile_panel(profile, empty_hint=fetch_hint))
+    if _show("candles"):
+        c.print(_candles_panel(candles, empty_hint=fetch_hint))
+    mode_note = "brief mode · " if brief else ""
     c.print(
-        Text(f"  Run `{fetch_hint}` to refresh stale or missing data.", style="dim")
+        Text(
+            f"  {mode_note}Run `{fetch_hint}` to refresh stale or missing data.",
+            style="dim",
+        )
     )
     c.print()
