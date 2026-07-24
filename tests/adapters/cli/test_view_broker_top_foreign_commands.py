@@ -94,7 +94,10 @@ def test_view_broker_top_foreign_json_output_stays_machine_readable(tmp_path: Pa
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload == [
+    assert payload["subject"] == {"kind": "desk", "id": "UNIVERSE"}
+    assert payload["verb"] == "top-foreign"
+    assert payload["status"] == "ok"
+    assert payload["data"]["snapshots"] == [
         {
             "ticker": "BBCA",
             "snapshot_date": "2024-01-16",
