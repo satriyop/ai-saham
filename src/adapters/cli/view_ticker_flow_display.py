@@ -12,7 +12,8 @@ from rich.console import Group
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, panel
-from src.adapters.cli.view_ticker_formatters import _fmt_idr, _fmt_vol, _not_cached
+from src.adapters.cli.view_ticker_formatters import _empty_state_text, _fmt_idr, _fmt_vol, _not_cached
+from src.adapters.cli.view_ticker_status import CacheStatus
 from src.domain.entities.broker_flow import ForeignFlowPoint
 
 # Prefer a single source so multi-day nets are not mixed across providers.
@@ -64,11 +65,16 @@ def _net_style(value: Decimal) -> str:
     return "default"
 
 
-def _foreign_flow_panel(points: list[ForeignFlowPoint], *, source: str | None = None) -> object:
+def _foreign_flow_panel(
+    points: list[ForeignFlowPoint],
+    *,
+    source: str | None = None,
+    empty_hint: str | None = None,
+) -> object:
     """Compact latest + 5d/20d foreign net flow from cached time series."""
     title = FOREIGN_FLOW_PANEL_TITLE if not source else f"{FOREIGN_FLOW_PANEL_TITLE} ({source})"
     if not points:
-        return panel(_not_cached(), title=title)
+        return panel(_not_cached(hint=empty_hint), title=title)
 
     latest = points[-1]
     lines: list[Text] = []
@@ -96,9 +102,9 @@ def _foreign_flow_panel(points: list[ForeignFlowPoint], *, source: str | None = 
     return panel(Group(*lines), title=title)
 
 
-def _bandar_panel(snap) -> object:
+def _bandar_panel(snap, *, empty_hint: str | None = None) -> object:
     if snap is None:
-        return panel(_not_cached(), title="Broker / Bandar Signal")
+        return panel(_not_cached(hint=empty_hint), title="Broker / Bandar Signal")
 
     acc_color = "green" if snap.is_accumulating else ("red" if snap.is_distributing else "yellow")
 
@@ -139,10 +145,21 @@ INSIDER_LOOKBACK_DAYS = 365
 INSIDER_PANEL_TITLE = "Insider Activity (12m)"
 
 
-def _insider_panel(txns: list) -> object:
+def _insider_panel(
+    txns: list,
+    *,
+    status: CacheStatus = CacheStatus.EMPTY,
+    last_known=None,
+    empty_hint: str | None = None,
+) -> object:
     if not txns:
         return panel(
-            Text("  none in last 12 months", style="dim"),
+            _empty_state_text(
+                status,
+                window_label="last 12 months",
+                last_known=last_known,
+                hint=empty_hint,
+            ),
             title=INSIDER_PANEL_TITLE,
         )
 

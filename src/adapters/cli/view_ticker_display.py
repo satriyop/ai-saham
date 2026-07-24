@@ -32,11 +32,22 @@ from src.adapters.cli.view_ticker_flow_display import (
     _insider_panel,
     _select_foreign_flow_points,
 )
-from src.adapters.cli.view_ticker_identity_display import _identity_panel, _profile_panel
+from src.adapters.cli.view_ticker_identity_display import (
+    _freshness_panel,
+    _identity_panel,
+    _profile_panel,
+)
 from src.adapters.cli.view_ticker_market_activity_display import (
     _candles_panel,
     _iev_panel,
     _seasonality_panel,
+)
+from src.adapters.cli.view_ticker_status import (
+    DEFAULT_TTL_DAYS,
+    build_freshness_item,
+    classify_optional,
+    classify_sequence,
+    default_fetch_hint,
 )
 from src.adapters.cli.view_ticker_valuation_display import (
     EARNINGS_QUARTERS,
@@ -182,6 +193,13 @@ def show_ticker_view(ticker: str, db_path: Path = DEFAULT_DB_PATH) -> None:
     insider_txns = insider_prov.get_insider_transactions(
         ticker, insider_from, today, "ALL"
     )
+    insider_last_known = None
+    if not insider_txns:
+        older_insider = insider_prov.get_insider_transactions(
+            ticker, today - timedelta(days=3650), insider_from - timedelta(days=1), "ALL"
+        )
+        if older_insider:
+            insider_last_known = older_insider[0].transaction_date
     seasonality = seasonality_prov._read_cache(ticker, today.year, today.month)
 
     # Foreign flow: prefer a single source so multi-day nets stay coherent.
@@ -209,24 +227,161 @@ def show_ticker_view(ticker: str, db_path: Path = DEFAULT_DB_PATH) -> None:
         pass
 
     latest_close = candles[-1].close if candles else None
+    fetch_hint = default_fetch_hint(ticker)
+
+    price_as_of = candles[-1].date if candles else None
+    flow_as_of = foreign_flow_points[-1].date if foreign_flow_points else None
+    bandar_as_of = getattr(bandar, "session_date", None) if bandar is not None else None
+    fund_as_of = getattr(fund, "fetched_at", None) if fund is not None else None
+    analyst_as_of = getattr(analyst, "fetched_at", None) if analyst is not None else None
+    earnings_as_of = earnings[0].fetched_at if earnings else None
+    ownership_as_of = getattr(sh, "fetched_at", None) if sh is not None else None
+    iev_as_of = iev_rows[0].date if iev_rows else None
+    # Event-history panels are OK/EMPTY/MISSING only — old event dates are not
+    # "stale cache", they are historical facts still worth showing.
+    insider_status = classify_sequence(
+        insider_txns,
+        ever_fetched=insider_last_known is not None,
+        last_known=insider_last_known,
+    )
+    corp_status = classify_sequence(
+        corp_actions,
+        ever_fetched=bool(ticker_corp_actions) or bool(calendar_corp_actions),
+    )
+    # If calendar/ticker raw produced nothing but a ticker __NONE__ may still mean fetched.
+    if not corp_actions:
+        try:
+            if corp_action_repo._is_cache_fresh(ticker):
+                corp_status = classify_sequence([], ever_fetched=True)
+        except Exception:
+            pass
+
+    freshness_items = [
+        build_freshness_item(
+            "price",
+            "Price",
+            classify_sequence(candles, as_of=price_as_of, today=today, ttl_days=DEFAULT_TTL_DAYS["price"]),
+            as_of=price_as_of,
+            today=today,
+        ),
+        build_freshness_item(
+            "flow",
+            "Flow",
+            classify_sequence(
+                foreign_flow_points,
+                as_of=flow_as_of,
+                today=today,
+                ttl_days=DEFAULT_TTL_DAYS["flow"],
+            ),
+            as_of=flow_as_of,
+            today=today,
+        ),
+        build_freshness_item(
+            "bandar",
+            "Bandar",
+            classify_optional(
+                bandar, as_of=bandar_as_of, today=today, ttl_days=DEFAULT_TTL_DAYS["bandar"]
+            ),
+            as_of=bandar_as_of,
+            today=today,
+        ),
+        build_freshness_item(
+            "earnings",
+            "Earnings",
+            classify_sequence(
+                earnings,
+                as_of=earnings_as_of,
+                today=today,
+                ttl_days=DEFAULT_TTL_DAYS["earnings"],
+            ),
+            as_of=earnings_as_of,
+            today=today,
+        ),
+        build_freshness_item(
+            "analyst",
+            "Analyst",
+            classify_optional(
+                analyst, as_of=analyst_as_of, today=today, ttl_days=DEFAULT_TTL_DAYS["analyst"]
+            ),
+            as_of=analyst_as_of,
+            today=today,
+        ),
+        build_freshness_item(
+            "fundamentals",
+            "Fundamentals",
+            classify_optional(
+                fund, as_of=fund_as_of, today=today, ttl_days=DEFAULT_TTL_DAYS["fundamentals"]
+            ),
+            as_of=fund_as_of,
+            today=today,
+        ),
+        build_freshness_item(
+            "ownership",
+            "Ownership",
+            classify_optional(
+                sh, as_of=ownership_as_of, today=today, ttl_days=DEFAULT_TTL_DAYS["ownership"]
+            ),
+            as_of=ownership_as_of,
+            today=today,
+        ),
+        build_freshness_item(
+            "insider",
+            "Insider",
+            insider_status,
+            as_of=insider_txns[0].transaction_date if insider_txns else insider_last_known,
+            today=today,
+        ),
+        build_freshness_item(
+            "corp",
+            "Corp",
+            corp_status,
+            today=today,
+        ),
+        build_freshness_item(
+            "iev",
+            "IEV",
+            classify_sequence(iev_rows, as_of=iev_as_of, today=today, ttl_days=DEFAULT_TTL_DAYS["iev"]),
+            as_of=iev_as_of,
+            today=today,
+        ),
+    ]
+    dashboard_as_of = price_as_of or flow_as_of or today
 
     c = console()
     c.print()
-    c.print(_identity_panel(ticker, notation))
+    c.print(_identity_panel(ticker, notation, empty_hint=fetch_hint))
+    c.print(_freshness_panel(ticker, freshness_items, as_of=dashboard_as_of))
     c.print(_valuation_panel(fund, fwd, latest_close))
-    c.print(_analyst_panel(analyst))
-    c.print(_earnings_panel(earnings))
-    c.print(_ownership_panel(sh))
-    c.print(_bandar_panel(bandar))
-    c.print(_foreign_flow_panel(foreign_flow_points, source=foreign_flow_source))
-    c.print(_corp_action_panel(corp_actions))
-    c.print(_insider_panel(insider_txns))
-    c.print(_seasonality_panel(seasonality, today.month))
-    c.print(_iev_panel(iev_rows))
-    c.print(_sentiment_panel(sentiment_logs))
-    c.print(_profile_panel(profile))
-    c.print(_candles_panel(candles))
+    c.print(_analyst_panel(analyst, empty_hint=fetch_hint))
+    c.print(_earnings_panel(earnings, empty_hint=fetch_hint))
+    c.print(_ownership_panel(sh, empty_hint=fetch_hint))
+    c.print(_bandar_panel(bandar, empty_hint=fetch_hint))
     c.print(
-        Text(f"  Run `saham fetch market {ticker}` to refresh stale or missing data.", style="dim")
+        _foreign_flow_panel(
+            foreign_flow_points, source=foreign_flow_source, empty_hint=fetch_hint
+        )
+    )
+    c.print(
+        _corp_action_panel(
+            corp_actions,
+            status=corp_status,
+            empty_hint=fetch_hint,
+        )
+    )
+    c.print(
+        _insider_panel(
+            insider_txns,
+            status=insider_status,
+            last_known=insider_last_known,
+            empty_hint=fetch_hint,
+        )
+    )
+    c.print(_seasonality_panel(seasonality, today.month, empty_hint=fetch_hint))
+    c.print(_iev_panel(iev_rows, empty_hint=fetch_hint))
+    c.print(_sentiment_panel(sentiment_logs, empty_hint=fetch_hint))
+    c.print(_profile_panel(profile, empty_hint=fetch_hint))
+    c.print(_candles_panel(candles, empty_hint=fetch_hint))
+    c.print(
+        Text(f"  Run `{fetch_hint}` to refresh stale or missing data.", style="dim")
     )
     c.print()

@@ -13,6 +13,7 @@ from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, panel
 from src.adapters.cli.view_ticker_formatters import _f, _fmt_idr, _not_cached, _pct
+from src.adapters.cli.view_ticker_status import CacheStatus, empty_state_message
 from src.domain.value_objects.earnings_record import EarningsRecord
 
 EARNINGS_QUARTERS = 4
@@ -31,7 +32,14 @@ def _valuation_panel(fund, fwd, latest_close: Decimal | None) -> object:
     close_str = f"Rp{latest_close:,.0f}" if latest_close else "\u2014"
 
     if fund is None:
-        tbl.add_row("Close", close_str, "Fundamentals", "not cached", "", "")
+        tbl.add_row(
+            "Close",
+            close_str,
+            "Fundamentals",
+            empty_state_message(CacheStatus.MISSING),
+            "",
+            "",
+        )
     else:
         tbl.add_row(
             "Close",
@@ -79,9 +87,9 @@ def _valuation_panel(fund, fwd, latest_close: Decimal | None) -> object:
     return panel(tbl, title="Price & Valuation")
 
 
-def _analyst_panel(ac) -> object:
+def _analyst_panel(ac, *, empty_hint: str | None = None) -> object:
     if ac is None:
-        return panel(_not_cached(), title="Analyst Consensus")
+        return panel(_not_cached(hint=empty_hint), title="Analyst Consensus")
 
     lines: list[Text] = []
 
@@ -131,10 +139,14 @@ def _earnings_yoy_cell(record: EarningsRecord) -> Text:
     return Text(f"{yoy:+.1f}%", style=style)
 
 
-def _earnings_panel(records: list[EarningsRecord]) -> object:
+def _earnings_panel(
+    records: list[EarningsRecord],
+    *,
+    empty_hint: str | None = None,
+) -> object:
     """Show the most recent quarterly EPS history from cache."""
     if not records:
-        return panel(_not_cached(), title=EARNINGS_PANEL_TITLE)
+        return panel(_not_cached(hint=empty_hint), title=EARNINGS_PANEL_TITLE)
 
     tbl = compact_table()
     tbl.add_column("Period", style="dim", min_width=9)
@@ -154,9 +166,9 @@ def _earnings_panel(records: list[EarningsRecord]) -> object:
     return panel(tbl, title=EARNINGS_PANEL_TITLE)
 
 
-def _ownership_panel(sh) -> object:
+def _ownership_panel(sh, *, empty_hint: str | None = None) -> object:
     if sh is None:
-        return panel(_not_cached(), title="Ownership")
+        return panel(_not_cached(hint=empty_hint), title="Ownership")
 
     tbl = compact_table(show_header=False)
     tbl.add_column("label", style="dim", min_width=16)

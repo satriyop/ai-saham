@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from rich.text import Text
 
+from src.adapters.cli.view_ticker_status import CacheStatus, empty_state_message
+
 
 def _fmt_idr(value: float | int | None, *, suffix: bool = True) -> str:
     if value is None:
@@ -45,5 +47,26 @@ def _f(value: float | None, decimals: int = 1) -> str:
     return f"{value:.{decimals}f}"
 
 
-def _not_cached() -> Text:
-    return Text("  not cached", style="dim")
+def _empty_state_text(
+    status: CacheStatus = CacheStatus.MISSING,
+    *,
+    window_label: str | None = None,
+    last_known=None,
+    hint: str | None = None,
+) -> Text:
+    """Dim panel body for missing/empty cache states."""
+    return Text(
+        "  "
+        + empty_state_message(
+            status,
+            window_label=window_label,
+            last_known=last_known,
+            hint=hint,
+        ),
+        style="dim",
+    )
+
+
+def _not_cached(*, hint: str | None = None) -> Text:
+    """Backward-compatible missing-cache body."""
+    return _empty_state_text(CacheStatus.MISSING, hint=hint)

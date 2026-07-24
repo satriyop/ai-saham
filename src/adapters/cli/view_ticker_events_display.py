@@ -11,7 +11,8 @@ from datetime import date
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, panel
-from src.adapters.cli.view_ticker_formatters import _not_cached
+from src.adapters.cli.view_ticker_formatters import _empty_state_text, _not_cached
+from src.adapters.cli.view_ticker_status import CacheStatus
 from src.domain.value_objects.corporate_action_calendar import (
     CorporateActionCalendarEvent,
     CorporateActionDateRole,
@@ -84,11 +85,22 @@ def _merge_corp_action_events(
     )
 
 
-def _corp_action_panel(events: list) -> object:
+def _corp_action_panel(
+    events: list,
+    *,
+    status: CacheStatus = CacheStatus.EMPTY,
+    last_known=None,
+    empty_hint: str | None = None,
+) -> object:
     events_sorted = [e for e in events if getattr(e, "event_type", None) != "__NONE__"]
     if not events_sorted:
         return panel(
-            Text("  none in last 12 months", style="dim"),
+            _empty_state_text(
+                status,
+                window_label="last 12 months",
+                last_known=last_known,
+                hint=empty_hint,
+            ),
             title=CORP_ACTION_PANEL_TITLE,
         )
 
@@ -112,9 +124,9 @@ def _corp_action_panel(events: list) -> object:
     return panel(tbl, title=CORP_ACTION_PANEL_TITLE)
 
 
-def _sentiment_panel(logs: list) -> object:
+def _sentiment_panel(logs: list, *, empty_hint: str | None = None) -> object:
     if not logs:
-        return panel(_not_cached(), title="News Sentiment")
+        return panel(_not_cached(hint=empty_hint), title="News Sentiment")
 
     tbl = compact_table()
     tbl.add_column("Date", style="dim", min_width=11)

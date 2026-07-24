@@ -1,21 +1,24 @@
 """
-Identity and company profile panels for ticker dashboard.
+Identity, freshness, and company profile panels for ticker dashboard.
 
 Layer: Adapter
 """
 
 from __future__ import annotations
 
+from datetime import date
+
 from rich.console import Group
 from rich.text import Text
 
 from src.adapters.cli.rich_display import panel
 from src.adapters.cli.view_ticker_formatters import _not_cached
+from src.adapters.cli.view_ticker_status import FreshnessItem, format_freshness_lines
 
 
-def _identity_panel(ticker: str, notation) -> object:
+def _identity_panel(ticker: str, notation, *, empty_hint: str | None = None) -> object:
     if notation is None:
-        return panel(_not_cached(), title=f"[bold]{ticker}[/bold]")
+        return panel(_not_cached(hint=empty_hint), title=f"[bold]{ticker}[/bold]")
 
     parts: list[str] = []
     if notation.listing_board:
@@ -45,9 +48,21 @@ def _identity_panel(ticker: str, notation) -> object:
     return panel(Group(*lines), title=title)
 
 
-def _profile_panel(prof) -> object:
+def _freshness_panel(
+    ticker: str,
+    items: list[FreshnessItem],
+    *,
+    as_of: date | None = None,
+) -> object:
+    """Compact cache-completeness strip for the dashboard header."""
+    lines = format_freshness_lines(ticker, items, as_of=as_of)
+    body = Group(*[Text(f"  {line}", style="dim" if i else "default") for i, line in enumerate(lines)])
+    return panel(body, title="Data Freshness")
+
+
+def _profile_panel(prof, *, empty_hint: str | None = None) -> object:
     if prof is None:
-        return panel(_not_cached(), title="Company Profile")
+        return panel(_not_cached(hint=empty_hint), title="Company Profile")
 
     lines: list[Text] = []
 

@@ -13,9 +13,9 @@ from src.adapters.cli.rich_display import compact_table, panel
 from src.adapters.cli.view_ticker_formatters import _fmt_vol, _not_cached
 
 
-def _candles_panel(candles: list) -> object:
+def _candles_panel(candles: list, *, empty_hint: str | None = None) -> object:
     if not candles:
-        return panel(_not_cached(), title="Recent Candles")
+        return panel(_not_cached(hint=empty_hint), title="Recent Candles")
 
     recent = sorted(candles, key=lambda c: c.date, reverse=True)[:5]
 
@@ -40,7 +40,7 @@ def _candles_panel(candles: list) -> object:
     return panel(tbl, title="Recent Candles")
 
 
-def _seasonality_panel(edge, month: int) -> object:
+def _seasonality_panel(edge, month: int, *, empty_hint: str | None = None) -> object:
     _MONTH_NAMES = {
         1: "Jan",
         2: "Feb",
@@ -58,7 +58,10 @@ def _seasonality_panel(edge, month: int) -> object:
     month_name = _MONTH_NAMES.get(month, str(month))
 
     if edge is None:
-        return panel(_not_cached(), title=f"Seasonality \u2014 {month_name}")
+        return panel(
+            _not_cached(hint=empty_hint),
+            title=f"Seasonality \u2014 {month_name}",
+        )
 
     if edge.is_tailwind:
         edge_label, edge_style = "Tailwind", "green"
@@ -80,9 +83,9 @@ def _seasonality_panel(edge, month: int) -> object:
     return panel(Group(*lines), title=f"Seasonality \u2014 {month_name}")
 
 
-def _iev_panel(iev_rows: list) -> object:
+def _iev_panel(iev_rows: list, *, empty_hint: str | None = None) -> object:
     if not iev_rows:
-        return panel(_not_cached(), title="IEV / Pre-open")
+        return panel(_not_cached(hint=empty_hint), title="IEV / Pre-open")
 
     tbl = compact_table()
     tbl.add_column("Date", style="dim", min_width=11)
