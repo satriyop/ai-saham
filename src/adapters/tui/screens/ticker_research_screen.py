@@ -24,7 +24,7 @@ from src.adapters.tui.worker_lifecycle import dispatch_if_active
 
 class TickerResearchScreen(Screen[None]):
     BINDINGS = [
-        Binding("r", "reload", "Reload local"),
+        Binding("r", "reload", "Refresh"),
         Binding("escape", "app.show_candidates", "Back"),
         Binding("?", "app.show_help", "Help"),
     ]

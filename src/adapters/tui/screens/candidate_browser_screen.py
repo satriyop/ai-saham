@@ -31,7 +31,7 @@ from src.adapters.tui.presenters.discover_presenter import DiscoverPresenter, Di
 from src.adapters.tui.screens.save_watchlist_modal import SaveWatchlistModal
 from src.adapters.tui.state import ScreenState, ScreenStatus
 from src.adapters.tui.worker_lifecycle import dispatch_if_active
-from src.adapters.cli.screen_accum_formatters import format_disc_pct_plain
+from src.adapters.shared.vwap_depth_display import format_disc_pct_plain
 from src.application.use_case.compare_screen_watchlist_use_case import (
     CompareScreenWatchlistRequest,
 )

@@ -41,7 +41,7 @@ class DailyScreen(Screen[None]):
 
     BINDINGS = [
         Binding("u", "update_data", "Update data"),
-        Binding("r", "reload", "Reload local"),
+        Binding("r", "reload", "Refresh"),
         Binding("?", "app.show_help", "Help"),
         Binding("h", "app.show_help", "Help", show=False),
     ]
@@ -66,7 +66,7 @@ class DailyScreen(Screen[None]):
                     "IDLE — OFFLINE", id="daily-status", classes="semantic-info"
                 )
                 yield Button("Update Data", id="update-btn", variant="primary")
-                yield Button("Reload Local", id="reload-btn", variant="default")
+                yield Button("Refresh", id="reload-btn", variant="default")
             yield ProgressBar(id="daily-progress", show_percentage=True, show_eta=True)
             with VerticalScroll(id="daily-content"):
                 yield Static("", id="daily-warnings", classes="daily-section")
@@ -168,7 +168,7 @@ class DailyScreen(Screen[None]):
 
         progress.display = False
         if state.status is ScreenStatus.ERROR:
-            status.update("ERROR — retry with Reload or Update")
+            status.update("ERROR — retry with Refresh or Update")
             status.set_classes("semantic-error")
             self._clear_sections(
                 f"{state.error_type}: {state.error_message}",

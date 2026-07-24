@@ -631,14 +631,19 @@ def _build_daily_refresh_execution(
 ) -> RefreshDailyWorkspaceResult:
     config = load_app_config()
     db_path = Path(config.storage.db_path)
-    # A live Stockbit broker provider when authenticated, else None. (The old
-    # `create_readonly_stockbit_providers(...).session` read a non-existent
-    # attribute and crashed the moment data Update ran.)
+    # Mirror `saham fetch market` exactly: auto-detect the broker provider
+    # (authenticated Stockbit session when present, else the always-available IDX
+    # public-API fallback) and resolve the candle source from config rather than
+    # hardcoding a provider. Using `create_broker_provider(None)` — not the
+    # stockbit-or-none variant — keeps the TUI's Update path source-identical to
+    # the CLI, so a sessionless Update still fetches IDX broker flow.
     from src.infrastructure.composition.broker_provider_factory import (
-        create_stockbit_broker_or_none,
+        create_broker_provider,
     )
+    from src.infrastructure.config.data_sources_config import candle_source
 
-    sb_client = create_stockbit_broker_or_none()
+    broker_provider_obj, broker_provider_name = create_broker_provider(None)
+    candles_provider = candle_source()
 
     # Milestone A data-Update wiring. The fetch-market workflow factory lives in
     # the shared infrastructure composition root, so both the CLI and TUI
@@ -649,8 +654,8 @@ def _build_daily_refresh_execution(
 
     workflow_use_case = create_workflow_use_case(
         db_path=db_path,
-        broker_provider=sb_client,
-        broker_provider_name="stockbit" if sb_client else "none",
+        broker_provider=broker_provider_obj,
+        broker_provider_name=broker_provider_name,
     )
 
     from src.application.use_case.fetch_market_command_workflow_use_case import (
@@ -665,9 +670,9 @@ def _build_daily_refresh_execution(
         universe=request.universe if not request.tickers else None,
         days=request.days,
         db_path=db_path,
-        candles_provider="yfinance",
-        broker_provider=sb_client,
-        broker_provider_name="stockbit" if sb_client else "none",
+        candles_provider=candles_provider,
+        broker_provider=broker_provider_obj,
+        broker_provider_name=broker_provider_name,
         refresh=request.force_refresh,
         candles_only=candles_only,
         broker_only=broker_only,
@@ -700,12 +705,15 @@ def _build_daily_preview_execution(
 ) -> DailyWorkspaceRefreshPlan:
     config = load_app_config()
     db_path = Path(config.storage.db_path)
+    # Preview the exact provider selection the Update path will use, so the
+    # confirmation modal's Candles/Broker labels match `saham fetch market`.
     from src.infrastructure.composition.broker_provider_factory import (
-        create_stockbit_broker_or_none,
+        create_broker_provider,
     )
+    from src.infrastructure.config.data_sources_config import candle_source
 
-    sb_client = create_stockbit_broker_or_none()
-    broker_name = "stockbit" if sb_client else "none"
+    _, broker_name = create_broker_provider(None)
+    candles_label = candle_source()
 
     def resolver_capability(req: RefreshDailyWorkspaceRequest):
         tickers = resolve_tickers(
@@ -715,7 +723,7 @@ def _build_daily_preview_execution(
             loader=YamlUniverseConfigLoader(),
             repository=SQLiteBrokerRepository(db_path),
         )
-        return (len(tickers), "yfinance", broker_name, ())
+        return (len(tickers), candles_label, broker_name, ())
 
     use_case = PreviewDailyWorkspaceRefreshUseCase(resolver_capability)
     return use_case.execute(request)

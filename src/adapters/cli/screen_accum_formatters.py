@@ -13,6 +13,10 @@ from typing import Any
 import typer
 from rich.text import Text
 
+from src.adapters.shared.vwap_depth_display import (
+    format_disc_pct_plain,
+    vwap_depth_label,
+)
 from src.application.dto.accumulation_screen import AccumulationCandidate
 
 
@@ -83,23 +87,6 @@ def fmt_score(s: float | None, display_config: AccumulationDisplayConfig) -> str
     return typer.style(f"{s:>6.1f}", fg=typer.colors.WHITE)
 
 
-def vwap_depth_label(discount: float | None) -> str | None:
-    """Soft VWAP depth bucket for triage UX (display-only; not scoring policy).
-
-    Aligns with research soft-filter bands (schema-7 VWAP×regime card):
-    deep ≥ 8%, mid ≥ 3%, shallow ≥ 0%, over < 0%. Missing → None.
-    """
-    if discount is None:
-        return None
-    if discount >= 8.0:
-        return "deep"
-    if discount >= 3.0:
-        return "mid"
-    if discount >= 0.0:
-        return "shallow"
-    return "over"
-
-
 _VWAP_DEPTH_STYLES = {
     "deep": "bold green",
     "mid": "yellow",
@@ -121,17 +108,6 @@ def format_disc_pct(discount: float | None) -> Text:
     depth = vwap_depth_label(discount)
     label = f"{discount:+.1f}%"
     return Text(label, style=_VWAP_DEPTH_STYLES.get(depth or "", "bright_black"))
-
-
-def format_disc_pct_plain(discount: float | None) -> str:
-    """Plain-text Disc% + full depth badge for TUI / enrichment surfaces."""
-    if discount is None:
-        return "—"
-    depth = vwap_depth_label(discount)
-    label = f"{discount:+.1f}%"
-    if depth is None:
-        return label
-    return f"{label} {depth}"
 
 
 def classify_pattern(

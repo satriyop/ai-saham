@@ -15,7 +15,7 @@ from src.application.use_case.list_screen_watchlists_use_case import (
     ListScreenWatchlistsResult,
     ScreenWatchlistSummary,
 )
-from src.adapters.cli.screen_accum_formatters import vwap_depth_label
+from src.adapters.shared.vwap_depth_display import vwap_depth_label
 from src.domain.value_objects.screen_snapshot import ScreenSnapshotEntry
 
 
