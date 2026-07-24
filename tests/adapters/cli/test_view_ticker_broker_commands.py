@@ -81,7 +81,11 @@ def test_view_ticker_foreign_history_json_output(tmp_path: Path):
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload == [
+    assert payload["subject"] == {"kind": "ticker", "id": "BBCA"}
+    assert payload["verb"] == "foreign-history"
+    assert payload["status"] == "ok"
+    assert payload["source"] == "stockbit"
+    assert payload["data"]["points"] == [
         {
             "ticker": "BBCA",
             "date": "2024-01-15",
@@ -91,6 +95,18 @@ def test_view_ticker_foreign_history_json_output(tmp_path: Path):
             "avg_price": "10000",
         }
     ]
+
+
+def test_view_ticker_deep_dives_reject_invalid_format(tmp_path: Path):
+    result = runner.invoke(
+        app,
+        [
+            "view", "ticker", "foreign-history", "BBCA",
+            "--format", "xml", "--db", str(tmp_path / "x.db"),
+        ],
+    )
+    assert result.exit_code == 2
+    assert "Invalid --format" in result.stdout or "Invalid --format" in result.stderr
 
 
 def test_view_ticker_top_brokers_falls_back_to_tracked_daily_flow(tmp_path: Path):
@@ -238,4 +254,52 @@ def test_view_ticker_distribution_empty(monkeypatch, tmp_path: Path):
         ["view", "ticker", "distribution", "BBCA", "--db", str(tmp_path / "x.db")],
     )
     assert result.exit_code == 1
-    assert "No broker distribution data cached for BBCA" in result.stdout
+    assert "No cached broker distribution for BBCA" in result.stdout
+    assert "Run: saham fetch market BBCA" in result.stdout
+
+
+def test_view_ticker_top_brokers_json_envelope(tmp_path: Path):
+    db_path = tmp_path / "broker.db"
+    repo = SQLiteBrokerRepository(db_path)
+    d = date(2026, 6, 12)
+    repo.save_broker_summaries([
+        BrokerSummary(
+            ticker="BBCA",
+            date=d,
+            top_buyers=(
+                BrokerTransaction(
+                    broker_code="ZP",
+                    broker_name="ZP",
+                    broker_type=BrokerType.FOREIGN,
+                    buy_lot=100,
+                    sell_lot=0,
+                    buy_value=Decimal("1000"),
+                    sell_value=Decimal("0"),
+                    avg_buy_price=Decimal("10"),
+                    avg_sell_price=Decimal("0"),
+                ),
+            ),
+            top_sellers=(),
+            foreign_buy_value=Decimal("1000"),
+            foreign_sell_value=Decimal("0"),
+            foreign_buy_lot=100,
+            foreign_sell_lot=0,
+            total_value=Decimal("10000"),
+            total_lot=1000,
+            source="stockbit",
+        ),
+    ])
+    result = runner.invoke(
+        app,
+        [
+            "view", "ticker", "top-brokers", "BBCA",
+            "--date", "2026-06-12", "--format", "json", "--db", str(db_path),
+        ],
+    )
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["verb"] == "top-brokers"
+    assert payload["status"] == "ok"
+    assert payload["source"] == "summary"
+    assert payload["scope"] == "full"
+    assert payload["data"]["top_buyers"][0]["broker_code"] == "ZP"

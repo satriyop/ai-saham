@@ -12,7 +12,17 @@ from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.cli.view_ticker_contract_cli import (
+    echo_json,
+    exit_missing_ticker_data,
+    resolve_output_format,
+)
 from src.adapters.cli.view_ticker_top_brokers_display import display_ticker_top_brokers
+from src.application.dto.view_ticker_contract import (
+    ViewResultStatus,
+    build_view_envelope,
+    default_ticker_fetch_hint,
+)
 from src.application.use_case.view_ticker_top_brokers_use_case import (
     ViewTickerTopBrokersRequest,
     ViewTickerTopBrokersUseCase,
@@ -39,6 +49,10 @@ def ticker_top_brokers(
         Optional[Path],
         typer.Option("--db", help="Database path"),
     ] = None,
+    fmt: Annotated[
+        Optional[str],
+        typer.Option("--format", help="Output format: table or json"),
+    ] = None,
 ) -> None:
     """
     Show top broker desks for a stock on a specific date.
@@ -50,7 +64,9 @@ def ticker_top_brokers(
     Examples:
         saham view ticker top-brokers BBCA
         saham view ticker top-brokers BBCA --date 2024-01-15
+        saham view ticker top-brokers BBCA --format json
     """
+    output_format = resolve_output_format(fmt or "table")
     db_path = db_path or Path(load_app_config().storage.db_path)
     repository = SQLiteBrokerRepository(db_path)
     ia_cfg = load_institutional_accumulation_config()
@@ -65,14 +81,35 @@ def ticker_top_brokers(
     )
 
     if result is None:
-        if target_date:
-            typer.echo(typer.style("No data for that date.", fg=typer.colors.YELLOW))
-        else:
-            typer.echo(
-                typer.style("No data found. ", fg=typer.colors.YELLOW)
-                + f"Run 'saham fetch broker {ticker}' or 'saham fetch market' first."
+        exit_missing_ticker_data(
+            ticker=ticker,
+            what="top brokers",
+            source="broker_summaries",
+            fetch_hint=default_ticker_fetch_hint(ticker),
+            for_date=target_date,
+        )
+
+    if output_format == "json":
+        echo_json(
+            build_view_envelope(
+                subject_id=result.ticker,
+                verb="top-brokers",
+                status=ViewResultStatus.OK,
+                as_of=result.date,
+                source=result.tops_source,
+                scope=result.tops_scope or "full",
+                scope_note=result.tops_scope_note,
+                fetch_hint=default_ticker_fetch_hint(result.ticker),
+                data={
+                    "summary": result.summary.to_dict(),
+                    "top_buyers": [b.to_dict() for b in result.top_buyers],
+                    "top_sellers": [s.to_dict() for s in result.top_sellers],
+                    "tops_source": result.tops_source,
+                    "tops_scope": result.tops_scope,
+                },
             )
-        raise typer.Exit(1)
+        )
+        return
 
     display_ticker_top_brokers(
         result.ticker,

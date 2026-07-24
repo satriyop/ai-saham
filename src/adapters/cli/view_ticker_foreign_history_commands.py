@@ -11,8 +11,22 @@ from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.cli.view_ticker_contract_cli import (
+    echo_json,
+    exit_missing_ticker_data,
+    resolve_output_format,
+)
 from src.adapters.cli.view_ticker_foreign_history_display import (
     display_ticker_foreign_history,
+)
+from src.application.dto.view_ticker_contract import (
+    ViewResultStatus,
+    ViewWindow,
+    build_view_envelope,
+)
+from src.application.use_case.view_ticker_foreign_history_use_case import (
+    ViewTickerForeignHistoryRequest,
+    ViewTickerForeignHistoryUseCase,
 )
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.persistence.sqlite_broker_repository import (
@@ -51,42 +65,60 @@ def ticker_foreign_history(
     """
     cfg = load_app_config()
     db_path = db_path or Path(cfg.storage.db_path)
-    fmt = fmt or cfg.analysis.format
-    selected_source = None if source == "auto" else source
+    output_format = resolve_output_format(fmt or cfg.analysis.format)
+
     if source not in {"auto", "stockbit", "idx"}:
         typer.echo(
-            typer.style("Unknown source. Use: auto, stockbit, or idx", fg=typer.colors.RED)
+            typer.style("Unknown source. Use: auto, stockbit, or idx", fg=typer.colors.RED),
+            err=True,
         )
-        raise typer.Exit(1)
+        raise typer.Exit(2)
 
     repo = SQLiteBrokerRepository(db_path)
-    points = repo.get_foreign_flow_points(ticker, source=selected_source)
-    if not points:
-        typer.echo(
-            typer.style("No cached history found. ", fg=typer.colors.YELLOW)
-            + f"Run 'saham fetch broker-history {ticker.upper()}' first."
+    try:
+        result = ViewTickerForeignHistoryUseCase(repo).execute(
+            ViewTickerForeignHistoryRequest(ticker=ticker, days=days, source=source)
         )
-        raise typer.Exit(1)
+    except ValueError as exc:
+        typer.echo(typer.style(str(exc), fg=typer.colors.RED), err=True)
+        raise typer.Exit(2) from exc
 
-    points = points[-days:]
-    if fmt == "json":
-        import json as _json
+    if result is None:
+        exit_missing_ticker_data(
+            ticker=ticker,
+            what="foreign flow history",
+            source="foreign_flow_points",
+            fetch_hint=f"saham fetch broker-history {ticker.upper()}",
+        )
 
-        payload = [
-            {
-                "ticker": p.ticker,
-                "date": p.date.isoformat(),
-                "source": p.source,
-                "net_val": str(p.net_val),
-                "net_lot": p.net_lot,
-                "avg_price": str(p.avg_price),
-            }
-            for p in points
-        ]
-        typer.echo(_json.dumps(payload, indent=2))
+    if output_format == "json":
+        echo_json(
+            build_view_envelope(
+                subject_id=result.ticker,
+                verb="foreign-history",
+                status=ViewResultStatus.OK,
+                as_of=result.as_of,
+                window=ViewWindow(days=result.days),
+                source=result.resolved_source,
+                scope="full",
+                fetch_hint=result.fetch_hint,
+                data={
+                    "requested_source": result.requested_source,
+                    "resolved_source": result.resolved_source,
+                    "points": [
+                        {
+                            "ticker": p.ticker,
+                            "date": p.date.isoformat(),
+                            "source": p.source,
+                            "net_val": str(p.net_val),
+                            "net_lot": p.net_lot,
+                            "avg_price": str(p.avg_price),
+                        }
+                        for p in result.points
+                    ],
+                },
+            )
+        )
         return
-    if fmt != "table":
-        typer.echo(typer.style("Unknown format. Use: table or json", fg=typer.colors.RED))
-        raise typer.Exit(1)
 
-    display_ticker_foreign_history(ticker, points)
+    display_ticker_foreign_history(result.ticker, list(result.points))

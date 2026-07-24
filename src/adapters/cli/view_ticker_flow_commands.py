@@ -6,14 +6,26 @@ Layer: Adapter
 
 from __future__ import annotations
 
-from datetime import date, timedelta
 from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.cli.view_ticker_contract_cli import (
+    echo_json,
+    exit_missing_ticker_data,
+    resolve_output_format,
+)
 from src.adapters.cli.view_ticker_flow_table_display import display_ticker_flow_table
-from src.application.use_case.fetch_broker_data_use_case import GetBrokerDataUseCase
+from src.application.dto.view_ticker_contract import (
+    ViewResultStatus,
+    ViewWindow,
+    build_view_envelope,
+)
+from src.application.use_case.view_ticker_flow_use_case import (
+    ViewTickerFlowRequest,
+    ViewTickerFlowUseCase,
+)
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.persistence.sqlite_broker_repository import (
     SQLiteBrokerRepository,
@@ -47,28 +59,44 @@ def ticker_flow(
     """
     cfg = load_app_config()
     db_path = db_path or Path(cfg.storage.db_path)
-    fmt = fmt or cfg.analysis.format
+    output_format = resolve_output_format(fmt or cfg.analysis.format)
+
     repository = SQLiteBrokerRepository(db_path)
-    use_case = GetBrokerDataUseCase(repository)
+    result = ViewTickerFlowUseCase(repository).execute(
+        ViewTickerFlowRequest(ticker=ticker, days=days)
+    )
 
-    end_date = date.today()
-    start_date = end_date - timedelta(days=days + 10)
-
-    summaries = use_case.execute(ticker, start_date, end_date)
-
-    if not summaries:
-        typer.echo(
-            typer.style("No data found. ", fg=typer.colors.YELLOW)
-            + f"Run 'saham fetch broker {ticker}' or 'saham fetch market' first."
+    if result is None:
+        exit_missing_ticker_data(
+            ticker=ticker,
+            what="foreign flow summaries",
+            source="broker_summaries",
+            fetch_hint=f"saham fetch market {ticker.upper()}",
         )
-        raise typer.Exit(1)
 
-    summaries = summaries[-days:]
-
-    if fmt == "json":
-        import json as _json
-
-        typer.echo(_json.dumps([s.to_dict() for s in summaries], indent=2, default=str))
+    if output_format == "json":
+        echo_json(
+            build_view_envelope(
+                subject_id=result.ticker,
+                verb="flow",
+                status=ViewResultStatus.OK,
+                as_of=result.as_of,
+                window=ViewWindow(
+                    days=result.days,
+                    from_date=result.summaries[0].date if result.summaries else None,
+                    to_date=result.as_of,
+                ),
+                source=result.source,
+                scope="full",
+                fetch_hint=result.fetch_hint,
+                data={
+                    "total_net_value": str(result.total_net_value),
+                    "buy_days": result.buy_days,
+                    "sell_days": result.sell_days,
+                    "summaries": [s.to_dict() for s in result.summaries],
+                },
+            )
+        )
         return
 
-    display_ticker_flow_table(ticker, summaries)
+    display_ticker_flow_table(result.ticker, list(result.summaries))
