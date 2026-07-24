@@ -1,8 +1,10 @@
 """Tests for pre-open screen CLI helpers."""
 
+import json
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 
 from typer.testing import CliRunner
 
@@ -191,6 +193,106 @@ def test_pre_open_snapshot_state_visibly_labeled(capsys):
     out = capsys.readouterr().out
     assert "SNAPSHOT" in out
     assert "data/iev/20260714/iev.json" in out
+
+
+def test_pre_open_format_json_emits_envelope(monkeypatch):
+    class _FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 6, 12, 8, 50, tzinfo=tz)
+
+    monkeypatch.setattr(
+        "src.adapters.cli.screen_pre_open_commands.datetime", _FixedDatetime
+    )
+    monkeypatch.setattr(
+        "src.adapters.cli.screen_pre_open_commands.resolve_pre_open_market_status",
+        lambda: _BYPASS_GUARD_STATUS,
+    )
+    monkeypatch.setattr(
+        "src.adapters.cli.screen_pre_open_commands.resolve_pre_open_browser_plan",
+        lambda **kwargs: PreOpenBrowserPlan(
+            provider=object(), autonomous=True, session_missing=False
+        ),
+    )
+
+    response = PreOpenWorkflowResponse(
+        result=PreOpenScreenResult(
+            screened_date=date(2026, 6, 12),
+            iev_min=100_000,
+            total_movers_seen=1,
+            candidates=[_candidate("BBCA")],
+        ),
+        warnings=[],
+        raw_movers=[],
+        data_freshness=PreOpenDataFreshness(
+            analysis_date=date(2026, 6, 12),
+            candle_end=date(2026, 6, 11),
+            broker_end=date(2026, 6, 10),
+        ),
+        source_status=PreOpenSourceStatus.LIVE_SUCCESS,
+    )
+    workflow = SimpleNamespace(execute=lambda req: response)
+    monkeypatch.setattr(
+        "src.adapters.cli.screen_pre_open_commands.create_pre_open_cli_workflow",
+        lambda **kwargs: PreOpenCliWorkflow(
+            workflow=workflow,
+            market_repository=None,
+            broker_repository=None,
+            ai_warnings=[],
+        ),
+    )
+    monkeypatch.setattr(
+        "src.adapters.cli.screen_pre_open_commands.write_pre_open_sidecar",
+        lambda **kwargs: None,
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "screen",
+            "pre-open",
+            "--movers-json",
+            '[{"ticker":"BBCA","iev":150000}]',
+            "--fast",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["verb"] == "pre-open"
+    assert payload["status"] == "ok"
+    assert payload["data"]["candidates"][0]["ticker"] == "BBCA"
+    assert "Pre-Open Screener" not in result.output
+
+
+def test_pre_open_missing_session_json_status_missing(monkeypatch):
+    class _FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 6, 12, 8, 50, tzinfo=tz)
+
+    monkeypatch.setattr(
+        "src.adapters.cli.screen_pre_open_commands.datetime", _FixedDatetime
+    )
+    monkeypatch.setattr(
+        "src.adapters.cli.screen_pre_open_commands.resolve_pre_open_market_status",
+        lambda: _BYPASS_GUARD_STATUS,
+    )
+    monkeypatch.setattr(
+        "src.adapters.cli.screen_pre_open_commands.resolve_pre_open_browser_plan",
+        lambda **kwargs: PreOpenBrowserPlan(
+            provider=None, autonomous=False, session_missing=True
+        ),
+    )
+
+    result = runner.invoke(app, ["screen", "pre-open", "--format", "json"])
+
+    assert result.exit_code == 1
+    payload = json.loads(result.output)
+    assert payload["status"] == "missing"
+    assert payload["fetch_hint"] == "saham fetch stockbit login"
 
 
 def test_pre_open_invalid_movers_json_exits_1(monkeypatch):
