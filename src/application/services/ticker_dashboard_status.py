@@ -20,6 +20,7 @@ class CacheStatus(str, Enum):
     MISSING = "missing"
     EMPTY = "empty"
     STALE = "stale"
+    ERROR = "error"
 
 
 @dataclass(frozen=True)
@@ -150,6 +151,8 @@ def format_freshness_mark(status: CacheStatus) -> str:
         return "~"
     if status is CacheStatus.EMPTY:
         return "·"
+    if status is CacheStatus.ERROR:
+        return "!"
     return "✗"
 
 
@@ -171,6 +174,7 @@ def format_freshness_lines(
         for i in items
         if i.status is CacheStatus.STALE
     ]
+    errors = [i.label for i in items if i.status is CacheStatus.ERROR]
 
     lines = [header, marks]
     if missing:
@@ -179,7 +183,9 @@ def format_freshness_lines(
         lines.append("Empty: " + ", ".join(empty))
     if stale:
         lines.append("Stale: " + ", ".join(stale))
-    if not missing and not empty and not stale:
+    if errors:
+        lines.append("Error: " + ", ".join(errors))
+    if not missing and not empty and not stale and not errors:
         lines.append("All key panels present")
     return lines
 

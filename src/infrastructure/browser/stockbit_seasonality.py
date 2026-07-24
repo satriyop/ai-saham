@@ -184,6 +184,16 @@ class StockbitSeasonalityProvider(SeasonalityProvider, StockbitCachingProvider):
         except Exception:
             return False
 
+    def read_cached(
+        self,
+        ticker: str,
+        year: int,
+        month: int,
+        as_of_date: date | None = None,
+    ) -> SeasonalEdge | None:
+        """Public cache-only read. Never fetches from network."""
+        return self._read_cache(ticker, year, month, as_of_date=as_of_date)
+
     def _read_cache(
         self,
         ticker: str,

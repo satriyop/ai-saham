@@ -223,6 +223,10 @@ class StockbitCorporateActionRepository(CorporateActionRepository, StockbitCachi
 
     # ── Cache ─────────────────────────────────────────────────────────────────
 
+    def is_cache_fresh(self, ticker: str) -> bool:
+        """Public freshness check for cache-only consumers."""
+        return self._is_cache_fresh(ticker)
+
     def _is_cache_fresh(self, ticker: str) -> bool:
         today_str = date.today().isoformat()
         try:
@@ -234,6 +238,12 @@ class StockbitCorporateActionRepository(CorporateActionRepository, StockbitCachi
             return row is not None
         except Exception:
             return False
+
+    def read_cached(
+        self, ticker: str, from_date: date, to_date: date
+    ) -> list[CorporateActionEvent]:
+        """Public cache-only read. Never fetches from network."""
+        return self._read_cache(ticker, from_date, to_date)
 
     def _read_cache(
         self, ticker: str, from_date: date, to_date: date

@@ -243,11 +243,11 @@ def test_old_view_broker_top_ticker_path_is_gone():
 
 
 def test_view_ticker_distribution_empty(monkeypatch, tmp_path: Path):
-    provider = MagicMock()
-    provider.get_distribution.return_value = None
+    deps = MagicMock()
+    deps.distribution.execute.return_value = None
     monkeypatch.setattr(
-        "src.adapters.cli.view_ticker_distribution_commands.create_broker_distribution_provider",
-        lambda db_path: provider,
+        "src.adapters.cli.view_ticker_distribution_commands.build_view_ticker_deps",
+        lambda db_path: deps,
     )
     result = runner.invoke(
         app,

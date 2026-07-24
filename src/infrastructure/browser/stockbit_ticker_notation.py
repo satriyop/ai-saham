@@ -243,6 +243,14 @@ class StockbitTickerNotationProvider(
         except Exception as e:
             logger.debug("ticker_notation_cache write error for %s: %s", snapshot.ticker, e)
 
+    def read_cached(
+        self,
+        ticker: str,
+        as_of_date: date | None = None,
+    ) -> TickerNotationSnapshot | None:
+        """Public cache-only read. Never fetches from network."""
+        return self._read_cache(ticker, as_of_date=as_of_date)
+
     def _read_cache(
         self,
         ticker: str,

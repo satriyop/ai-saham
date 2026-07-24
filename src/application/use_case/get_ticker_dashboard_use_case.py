@@ -2,16 +2,24 @@
 GetTickerDashboardUseCase — assemble a cache-only ticker dashboard snapshot.
 
 Owns windows, source preference, corp-action merge, freshness classification,
-and brief/full panel selection. Does not render UI or touch the network.
+brief/full panel selection, related deep-dive actions, and per-panel isolation.
+Does not render UI or touch the network.
 
 Layer: Application
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import date, timedelta
+from typing import Any, TypeVar
 
-from src.application.dto.ticker_dashboard import GetTickerDashboardRequest, TickerDashboard
+from src.application.dto.ticker_dashboard import (
+    GetTickerDashboardRequest,
+    PanelLoadError,
+    TickerDashboard,
+    ViewRelatedAction,
+)
 from src.application.ports.ticker_dashboard_source import TickerDashboardSource
 from src.application.services.ticker_dashboard_corp_actions import (
     calendar_event_to_display,
@@ -25,6 +33,7 @@ from src.application.services.ticker_dashboard_layout import panel_keys_for_mode
 from src.application.services.ticker_dashboard_price_structure import compute_price_structure
 from src.application.services.ticker_dashboard_status import (
     DEFAULT_TTL_DAYS,
+    CacheStatus,
     build_freshness_item,
     classify_optional,
     classify_sequence,
@@ -41,6 +50,34 @@ EARNINGS_QUARTERS = 4
 IEV_HISTORY_LIMIT = 5
 SENTIMENT_LOG_LIMIT = 8
 
+T = TypeVar("T")
+
+
+def _related_actions_for(ticker: str) -> tuple[ViewRelatedAction, ...]:
+    t = ticker.upper()
+    return (
+        ViewRelatedAction(
+            verb="flow",
+            label="Foreign flow table",
+            command=f"saham view ticker flow {t}",
+        ),
+        ViewRelatedAction(
+            verb="top-brokers",
+            label="Top broker desks",
+            command=f"saham view ticker top-brokers {t}",
+        ),
+        ViewRelatedAction(
+            verb="foreign-history",
+            label="Foreign flow history",
+            command=f"saham view ticker foreign-history {t}",
+        ),
+        ViewRelatedAction(
+            verb="distribution",
+            label="Broker distribution",
+            command=f"saham view ticker distribution {t}",
+        ),
+    )
+
 
 class GetTickerDashboardUseCase:
     """Build a read-only local-cache dashboard for one ticker."""
@@ -52,55 +89,104 @@ class GetTickerDashboardUseCase:
         ticker = request.ticker.upper()
         today = request.today or date.today()
         brief = bool(request.brief)
+        errors: list[PanelLoadError] = []
+
+        def safe(key: str, default: T, fn: Callable[[], T]) -> T:
+            try:
+                return fn()
+            except Exception as exc:  # isolate panel failures for CLI/TUI resilience
+                errors.append(PanelLoadError(key=key, message=str(exc) or exc.__class__.__name__))
+                return default
 
         corp_from = today - timedelta(days=CORP_ACTION_LOOKBACK_DAYS)
         corp_to = today + timedelta(days=CORP_ACTION_LOOKAHEAD_DAYS)
         insider_from = today - timedelta(days=INSIDER_LOOKBACK_DAYS)
         candle_from = today - timedelta(days=CANDLE_LOOKBACK_DAYS)
 
-        notation = self._source.get_notation(ticker)
-        fund = self._source.get_fundamentals(ticker)
-        analyst = self._source.get_analyst(ticker)
-        ownership = self._source.get_ownership(ticker)
-        bandar = self._source.get_bandar(ticker, today) or self._source.get_bandar(
-            ticker, today - timedelta(days=1)
+        notation = safe("identity", None, lambda: self._source.get_notation(ticker))
+        fund = safe("fundamentals", None, lambda: self._source.get_fundamentals(ticker))
+        analyst = safe("analyst", None, lambda: self._source.get_analyst(ticker))
+        ownership = safe("ownership", None, lambda: self._source.get_ownership(ticker))
+        bandar = safe(
+            "bandar",
+            None,
+            lambda: self._source.get_bandar(ticker, today)
+            or self._source.get_bandar(ticker, today - timedelta(days=1)),
         )
-        fwd = self._source.get_forward_estimates(ticker)
-        profile = self._source.get_profile(ticker)
-        candles = self._source.get_candles(ticker, candle_from, today)
+        fwd = safe("forward_estimates", None, lambda: self._source.get_forward_estimates(ticker))
+        profile = safe("profile", None, lambda: self._source.get_profile(ticker))
+        candles = safe(
+            "price",
+            [],
+            lambda: self._source.get_candles(ticker, candle_from, today),
+        )
 
-        ticker_corp_actions = self._source.get_ticker_corp_actions(ticker, corp_from, corp_to)
-        calendar_corp_actions = [
-            calendar_event_to_display(event)
-            for event in self._source.get_calendar_corp_actions(ticker, corp_from, corp_to)
-        ]
+        ticker_corp_actions = safe(
+            "corp",
+            [],
+            lambda: self._source.get_ticker_corp_actions(ticker, corp_from, corp_to),
+        )
+        calendar_raw = safe(
+            "corp",
+            [],
+            lambda: self._source.get_calendar_corp_actions(ticker, corp_from, corp_to),
+        )
+        calendar_corp_actions = [calendar_event_to_display(event) for event in calendar_raw]
         corp_actions = merge_corp_action_events(ticker_corp_actions, calendar_corp_actions)
 
-        insider_txns = self._source.get_insider_transactions(
-            ticker, insider_from, today, "ALL"
+        insider_txns = safe(
+            "insider",
+            [],
+            lambda: self._source.get_insider_transactions(
+                ticker, insider_from, today, "ALL"
+            ),
         )
         insider_last_known = None
-        if not insider_txns:
-            older = self._source.get_insider_transactions(
-                ticker,
-                today - timedelta(days=INSIDER_HISTORY_LOOKBACK_DAYS),
-                insider_from - timedelta(days=1),
-                "ALL",
+        if not insider_txns and not any(e.key == "insider" for e in errors):
+            older = safe(
+                "insider",
+                [],
+                lambda: self._source.get_insider_transactions(
+                    ticker,
+                    today - timedelta(days=INSIDER_HISTORY_LOOKBACK_DAYS),
+                    insider_from - timedelta(days=1),
+                    "ALL",
+                ),
             )
             if older:
                 insider_last_known = older[0].transaction_date
 
-        seasonality = self._source.get_seasonality(ticker, today.year, today.month)
+        seasonality = safe(
+            "seasonality",
+            None,
+            lambda: self._source.get_seasonality(ticker, today.year, today.month),
+        )
 
-        flow_by_source = {
-            source: self._source.get_foreign_flow_points(ticker, source)
-            for source in FOREIGN_FLOW_SOURCE_PREFERENCE
-        }
+        flow_by_source = safe(
+            "flow",
+            {},
+            lambda: {
+                source: self._source.get_foreign_flow_points(ticker, source)
+                for source in FOREIGN_FLOW_SOURCE_PREFERENCE
+            },
+        )
         foreign_flow_points, foreign_flow_source = select_foreign_flow_points(flow_by_source)
 
-        earnings = self._source.get_earnings_history(ticker, EARNINGS_QUARTERS)
-        iev_rows = self._source.get_iev_history(ticker, IEV_HISTORY_LIMIT)
-        sentiment_logs = self._source.get_sentiment_logs(ticker, SENTIMENT_LOG_LIMIT)
+        earnings = safe(
+            "earnings",
+            [],
+            lambda: self._source.get_earnings_history(ticker, EARNINGS_QUARTERS),
+        )
+        iev_rows = safe(
+            "iev",
+            [],
+            lambda: self._source.get_iev_history(ticker, IEV_HISTORY_LIMIT),
+        )
+        sentiment_logs = safe(
+            "sentiment",
+            [],
+            lambda: self._source.get_sentiment_logs(ticker, SENTIMENT_LOG_LIMIT),
+        )
 
         latest_close = candles[-1].close if candles else None
         price_structure = compute_price_structure(
@@ -118,25 +204,42 @@ class GetTickerDashboardUseCase:
         ownership_as_of = getattr(ownership, "fetched_at", None) if ownership is not None else None
         iev_as_of = iev_rows[0].date if iev_rows else None
 
-        # Event-history panels are OK/EMPTY/MISSING only.
-        insider_status = classify_sequence(
-            insider_txns,
-            ever_fetched=insider_last_known is not None,
-            last_known=insider_last_known,
+        error_keys = {e.key for e in errors}
+
+        def with_error(key: str, status: CacheStatus) -> CacheStatus:
+            return CacheStatus.ERROR if key in error_keys else status
+
+        insider_status = with_error(
+            "insider",
+            classify_sequence(
+                insider_txns,
+                ever_fetched=insider_last_known is not None,
+                last_known=insider_last_known,
+            ),
         )
-        corp_status = classify_sequence(
-            corp_actions,
-            ever_fetched=bool(ticker_corp_actions) or bool(calendar_corp_actions),
+        corp_status = with_error(
+            "corp",
+            classify_sequence(
+                corp_actions,
+                ever_fetched=bool(ticker_corp_actions) or bool(calendar_corp_actions),
+            ),
         )
-        if not corp_actions and self._source.is_ticker_corp_cache_fresh(ticker):
+        if (
+            corp_status is not CacheStatus.ERROR
+            and not corp_actions
+            and safe("corp", False, lambda: self._source.is_ticker_corp_cache_fresh(ticker))
+        ):
             corp_status = classify_sequence([], ever_fetched=True)
 
         freshness = (
             build_freshness_item(
                 "price",
                 "Price",
-                classify_sequence(
-                    candles, as_of=price_as_of, today=today, ttl_days=DEFAULT_TTL_DAYS["price"]
+                with_error(
+                    "price",
+                    classify_sequence(
+                        candles, as_of=price_as_of, today=today, ttl_days=DEFAULT_TTL_DAYS["price"]
+                    ),
                 ),
                 as_of=price_as_of,
                 today=today,
@@ -144,11 +247,14 @@ class GetTickerDashboardUseCase:
             build_freshness_item(
                 "flow",
                 "Flow",
-                classify_sequence(
-                    foreign_flow_points,
-                    as_of=flow_as_of,
-                    today=today,
-                    ttl_days=DEFAULT_TTL_DAYS["flow"],
+                with_error(
+                    "flow",
+                    classify_sequence(
+                        foreign_flow_points,
+                        as_of=flow_as_of,
+                        today=today,
+                        ttl_days=DEFAULT_TTL_DAYS["flow"],
+                    ),
                 ),
                 as_of=flow_as_of,
                 today=today,
@@ -156,8 +262,11 @@ class GetTickerDashboardUseCase:
             build_freshness_item(
                 "bandar",
                 "Bandar",
-                classify_optional(
-                    bandar, as_of=bandar_as_of, today=today, ttl_days=DEFAULT_TTL_DAYS["bandar"]
+                with_error(
+                    "bandar",
+                    classify_optional(
+                        bandar, as_of=bandar_as_of, today=today, ttl_days=DEFAULT_TTL_DAYS["bandar"]
+                    ),
                 ),
                 as_of=bandar_as_of,
                 today=today,
@@ -165,11 +274,14 @@ class GetTickerDashboardUseCase:
             build_freshness_item(
                 "earnings",
                 "Earnings",
-                classify_sequence(
-                    earnings,
-                    as_of=earnings_as_of,
-                    today=today,
-                    ttl_days=DEFAULT_TTL_DAYS["earnings"],
+                with_error(
+                    "earnings",
+                    classify_sequence(
+                        earnings,
+                        as_of=earnings_as_of,
+                        today=today,
+                        ttl_days=DEFAULT_TTL_DAYS["earnings"],
+                    ),
                 ),
                 as_of=earnings_as_of,
                 today=today,
@@ -177,11 +289,14 @@ class GetTickerDashboardUseCase:
             build_freshness_item(
                 "analyst",
                 "Analyst",
-                classify_optional(
-                    analyst,
-                    as_of=analyst_as_of,
-                    today=today,
-                    ttl_days=DEFAULT_TTL_DAYS["analyst"],
+                with_error(
+                    "analyst",
+                    classify_optional(
+                        analyst,
+                        as_of=analyst_as_of,
+                        today=today,
+                        ttl_days=DEFAULT_TTL_DAYS["analyst"],
+                    ),
                 ),
                 as_of=analyst_as_of,
                 today=today,
@@ -189,11 +304,14 @@ class GetTickerDashboardUseCase:
             build_freshness_item(
                 "fundamentals",
                 "Fundamentals",
-                classify_optional(
-                    fund,
-                    as_of=fund_as_of,
-                    today=today,
-                    ttl_days=DEFAULT_TTL_DAYS["fundamentals"],
+                with_error(
+                    "fundamentals",
+                    classify_optional(
+                        fund,
+                        as_of=fund_as_of,
+                        today=today,
+                        ttl_days=DEFAULT_TTL_DAYS["fundamentals"],
+                    ),
                 ),
                 as_of=fund_as_of,
                 today=today,
@@ -201,11 +319,14 @@ class GetTickerDashboardUseCase:
             build_freshness_item(
                 "ownership",
                 "Ownership",
-                classify_optional(
-                    ownership,
-                    as_of=ownership_as_of,
-                    today=today,
-                    ttl_days=DEFAULT_TTL_DAYS["ownership"],
+                with_error(
+                    "ownership",
+                    classify_optional(
+                        ownership,
+                        as_of=ownership_as_of,
+                        today=today,
+                        ttl_days=DEFAULT_TTL_DAYS["ownership"],
+                    ),
                 ),
                 as_of=ownership_as_of,
                 today=today,
@@ -226,8 +347,11 @@ class GetTickerDashboardUseCase:
             build_freshness_item(
                 "iev",
                 "IEV",
-                classify_sequence(
-                    iev_rows, as_of=iev_as_of, today=today, ttl_days=DEFAULT_TTL_DAYS["iev"]
+                with_error(
+                    "iev",
+                    classify_sequence(
+                        iev_rows, as_of=iev_as_of, today=today, ttl_days=DEFAULT_TTL_DAYS["iev"]
+                    ),
                 ),
                 as_of=iev_as_of,
                 today=today,
@@ -235,6 +359,15 @@ class GetTickerDashboardUseCase:
         )
 
         as_of = price_as_of or flow_as_of or today
+        # Dedupe panel errors by key (keep first message).
+        deduped_errors: list[PanelLoadError] = []
+        seen_err: set[str] = set()
+        for err in errors:
+            if err.key in seen_err:
+                continue
+            seen_err.add(err.key)
+            deduped_errors.append(err)
+
         return TickerDashboard(
             ticker=ticker,
             mode="brief" if brief else "full",
@@ -243,6 +376,8 @@ class GetTickerDashboardUseCase:
             fetch_hint=default_fetch_hint(ticker),
             panel_keys=panel_keys_for_mode(brief=brief),
             freshness=freshness,
+            related_actions=_related_actions_for(ticker),
+            panel_errors=tuple(deduped_errors),
             notation=notation,
             fundamentals=fund,
             forward_estimates=fwd,

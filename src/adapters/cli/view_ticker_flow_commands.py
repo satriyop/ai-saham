@@ -22,14 +22,9 @@ from src.application.dto.view_ticker_contract import (
     ViewWindow,
     build_view_envelope,
 )
-from src.application.use_case.view_ticker_flow_use_case import (
-    ViewTickerFlowRequest,
-    ViewTickerFlowUseCase,
-)
+from src.application.use_case.view_ticker_flow_use_case import ViewTickerFlowRequest
+from src.infrastructure.composition.view_ticker_deps import build_view_ticker_deps
 from src.infrastructure.config.app_config import load_app_config
-from src.infrastructure.persistence.sqlite_broker_repository import (
-    SQLiteBrokerRepository,
-)
 
 
 def ticker_flow(
@@ -61,10 +56,8 @@ def ticker_flow(
     db_path = db_path or Path(cfg.storage.db_path)
     output_format = resolve_output_format(fmt or cfg.analysis.format)
 
-    repository = SQLiteBrokerRepository(db_path)
-    result = ViewTickerFlowUseCase(repository).execute(
-        ViewTickerFlowRequest(ticker=ticker, days=days)
-    )
+    deps = build_view_ticker_deps(db_path)
+    result = deps.flow.execute(ViewTickerFlowRequest(ticker=ticker, days=days))
 
     if result is None:
         exit_missing_ticker_data(

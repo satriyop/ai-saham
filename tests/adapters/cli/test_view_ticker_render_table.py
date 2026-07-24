@@ -21,6 +21,8 @@ def _empty_dashboard(*, brief: bool) -> TickerDashboard:
             FreshnessItem("price", "Price", CacheStatus.MISSING),
             FreshnessItem("flow", "Flow", CacheStatus.MISSING),
         ),
+        related_actions=(),
+        panel_errors=(),
         notation=None,
         fundamentals=None,
         forward_estimates=None,

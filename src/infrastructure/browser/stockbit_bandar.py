@@ -224,6 +224,15 @@ class StockbitBandarDetectorProvider(BandarDetectorProvider, StockbitCachingProv
             self._write_cache(result)
         return result
 
+    def read_cached(
+        self,
+        ticker: str,
+        target_date: date,
+        allow_previous: bool = False,
+    ) -> BandarDetectorSnapshot | None:
+        """Public cache-only read. Never fetches from network."""
+        return self._read_cache(ticker, target_date, allow_previous=allow_previous)
+
     def _read_cache(
         self,
         ticker: str,

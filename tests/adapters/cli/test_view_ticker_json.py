@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from src.adapters.cli.view_ticker_json import ticker_dashboard_to_json_dict
-from src.application.dto.ticker_dashboard import TickerDashboard
+from src.application.dto.ticker_dashboard import TickerDashboard, ViewRelatedAction
 from src.application.services.ticker_dashboard_layout import panel_keys_for_mode
 from src.application.services.ticker_dashboard_price_structure import PriceStructure
 from src.application.services.ticker_dashboard_status import CacheStatus, FreshnessItem
@@ -84,6 +84,14 @@ def _dashboard(*, brief: bool) -> TickerDashboard:
         fetch_hint="saham fetch market BBCA",
         panel_keys=panel_keys_for_mode(brief=brief),
         freshness=freshness,
+        related_actions=(
+            ViewRelatedAction(
+                verb="flow",
+                label="Foreign flow table",
+                command="saham view ticker flow BBCA",
+            ),
+        ),
+        panel_errors=(),
         notation=None,
         fundamentals=None,
         forward_estimates=None,
@@ -110,18 +118,26 @@ def _dashboard(*, brief: bool) -> TickerDashboard:
 
 def test_ticker_dashboard_to_json_dict_full_and_brief():
     full = ticker_dashboard_to_json_dict(_dashboard(brief=False))
-    assert full["ticker"] == "BBCA"
-    assert full["mode"] == "full"
-    assert "profile" in full["panels"]
+    # Shared envelope vocabulary with deep-dives.
+    assert full["subject"] == {"kind": "ticker", "id": "BBCA"}
+    assert full["verb"] == "show"
+    assert full["status"] == "ok"
+    assert full["source"] == "ticker_dashboard"
+    assert full["scope"] == "full"
+    assert full["fetch_hint"] == "saham fetch market BBCA"
+    assert full["data"]["mode"] == "full"
+    assert "profile" in full["data"]["panels"]
     assert full["data"]["price_structure"]["close"] == "6275"
     assert full["data"]["foreign_flow"]["source"] == "stockbit"
     assert full["data"]["foreign_flow"]["latest"]["net_val"] == "-50"
     assert full["data"]["earnings"][0]["period_label"] == "Q1 2026"
     assert full["data"]["insider"]["last_known_outside_window"] == "2026-03-25"
     assert len(full["data"]["candles"]) == 3
+    assert full["data"]["related_actions"][0]["verb"] == "flow"
 
     brief = ticker_dashboard_to_json_dict(_dashboard(brief=True))
-    assert brief["mode"] == "brief"
+    assert brief["scope"] == "brief"
+    assert brief["data"]["mode"] == "brief"
     assert "price_structure" in brief["data"]
     assert "foreign_flow" in brief["data"]
     assert "profile" not in brief["data"]

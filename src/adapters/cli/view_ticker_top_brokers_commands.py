@@ -25,15 +25,9 @@ from src.application.dto.view_ticker_contract import (
 )
 from src.application.use_case.view_ticker_top_brokers_use_case import (
     ViewTickerTopBrokersRequest,
-    ViewTickerTopBrokersUseCase,
 )
+from src.infrastructure.composition.view_ticker_deps import build_view_ticker_deps
 from src.infrastructure.config.app_config import load_app_config
-from src.infrastructure.config.institutional_accumulation_config_loader import (
-    load_institutional_accumulation_config,
-)
-from src.infrastructure.persistence.sqlite_broker_repository import (
-    SQLiteBrokerRepository,
-)
 
 
 def ticker_top_brokers(
@@ -68,15 +62,10 @@ def ticker_top_brokers(
     """
     output_format = resolve_output_format(fmt or "table")
     db_path = db_path or Path(load_app_config().storage.db_path)
-    repository = SQLiteBrokerRepository(db_path)
-    ia_cfg = load_institutional_accumulation_config()
-    use_case = ViewTickerTopBrokersUseCase(
-        repository,
-        foreign_broker_codes=ia_cfg.foreign_broker_codes,
-    )
+    deps = build_view_ticker_deps(db_path)
 
     query_date = date.fromisoformat(target_date) if target_date else None
-    result = use_case.execute(
+    result = deps.top_brokers.execute(
         ViewTickerTopBrokersRequest(ticker=ticker, target_date=query_date)
     )
 

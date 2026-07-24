@@ -189,6 +189,10 @@ def test_use_case_assembles_full_dashboard_with_policy():
     assert "profile" in dash.panel_keys
     assert dash.fetch_hint == "saham fetch market BBCA"
     assert any(i.key == "price" and i.status is CacheStatus.OK for i in dash.freshness)
+    assert dash.panel_errors == ()
+    verbs = {a.verb for a in dash.related_actions}
+    assert verbs == {"flow", "top-brokers", "foreign-history", "distribution"}
+    assert all(dash.ticker in a.command for a in dash.related_actions)
 
 
 def test_use_case_brief_mode_filters_panel_keys():
@@ -202,3 +206,22 @@ def test_use_case_brief_mode_filters_panel_keys():
     assert "foreign_flow" in dash.panel_keys
     assert "profile" not in dash.panel_keys
     assert "candles" not in dash.panel_keys
+
+
+def test_use_case_isolates_panel_errors():
+    source = FakeTickerDashboardSource()
+
+    def boom(_ticker: str):
+        raise RuntimeError("analyst cache exploded")
+
+    source.get_analyst = boom  # type: ignore[method-assign]
+    uc = GetTickerDashboardUseCase(source)
+    dash = uc.execute(
+        GetTickerDashboardRequest(ticker="BBCA", brief=False, today=date(2026, 7, 24))
+    )
+    assert dash.analyst is None
+    assert any(e.key == "analyst" for e in dash.panel_errors)
+    assert any(i.key == "analyst" and i.status is CacheStatus.ERROR for i in dash.freshness)
+    # Other panels still load.
+    assert dash.earnings
+    assert dash.foreign_flow_points

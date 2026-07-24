@@ -99,6 +99,12 @@ class StockbitFundamentalsProvider(FundamentalsProvider, StockbitCachingProvider
             self._write_cache(result)
         return result
 
+    def read_cached(
+        self, ticker: str, as_of_date: date | None = None
+    ) -> CompanyFundamentals | None:
+        """Public cache-only read. Never fetches from network."""
+        return self._read_cache(ticker, as_of_date=as_of_date)
+
     def _read_cache(
         self, ticker: str, as_of_date: date | None = None
     ) -> CompanyFundamentals | None:

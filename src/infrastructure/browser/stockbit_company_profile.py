@@ -159,6 +159,17 @@ class StockbitCompanyProfileProvider(CompanyProfileProvider, StockbitCachingProv
             self._write_cache(result)
         return result
 
+    def read_cached(
+        self,
+        ticker: str,
+        as_of_date: date | None = None,
+        require_fresh: bool = True,
+    ) -> CompanyProfile | None:
+        """Public cache-only read. Never fetches from network."""
+        return self._read_cache(
+            ticker, as_of_date=as_of_date, require_fresh=require_fresh
+        )
+
     def _read_cache(
         self,
         ticker: str,

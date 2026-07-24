@@ -83,25 +83,25 @@ class SQLiteTickerDashboardSource(TickerDashboardSource):
         self._sentiment = SQLiteSentimentRepository(db)
 
     def get_notation(self, ticker: str) -> Any | None:
-        return self._notation._read_cache(ticker)
+        return self._notation.read_cached(ticker)
 
     def get_fundamentals(self, ticker: str) -> Any | None:
-        return self._fund._read_cache(ticker)
+        return self._fund.read_cached(ticker)
 
     def get_analyst(self, ticker: str) -> Any | None:
-        return self._analyst._read_cache(ticker)
+        return self._analyst.read_cached(ticker)
 
     def get_ownership(self, ticker: str) -> Any | None:
-        return self._ownership._read_cache(ticker)
+        return self._ownership.read_cached(ticker)
 
     def get_bandar(self, ticker: str, session_date: date) -> Any | None:
-        return self._bandar._read_cache(ticker, session_date)
+        return self._bandar.read_cached(ticker, session_date)
 
     def get_forward_estimates(self, ticker: str) -> Any | None:
-        return self._fwd._read_cache(ticker)
+        return self._fwd.read_cached(ticker)
 
     def get_profile(self, ticker: str) -> Any | None:
-        return self._profile._read_cache(ticker)
+        return self._profile.read_cached(ticker)
 
     def get_candles(self, ticker: str, start_date: date, end_date: date) -> list[Candle]:
         return self._market.get_candles(ticker, start_date=start_date, end_date=end_date)
@@ -109,7 +109,7 @@ class SQLiteTickerDashboardSource(TickerDashboardSource):
     def get_ticker_corp_actions(
         self, ticker: str, from_date: date, to_date: date
     ) -> list[CorporateActionEvent]:
-        return self._corp._read_cache(ticker, from_date, to_date)
+        return self._corp.read_cached(ticker, from_date, to_date)
 
     def get_calendar_corp_actions(
         self, ticker: str, from_date: date, to_date: date
@@ -118,7 +118,7 @@ class SQLiteTickerDashboardSource(TickerDashboardSource):
 
     def is_ticker_corp_cache_fresh(self, ticker: str) -> bool:
         try:
-            return bool(self._corp._is_cache_fresh(ticker))
+            return bool(self._corp.is_cache_fresh(ticker))
         except Exception:
             return False
 
@@ -129,10 +129,11 @@ class SQLiteTickerDashboardSource(TickerDashboardSource):
         to_date: date,
         action_type: str = "ALL",
     ) -> list[InsiderTransaction]:
+        # Port method is already cache-capable when api_client=None.
         return self._insider.get_insider_transactions(ticker, from_date, to_date, action_type)
 
     def get_seasonality(self, ticker: str, year: int, month: int) -> Any | None:
-        return self._seasonality._read_cache(ticker, year, month)
+        return self._seasonality.read_cached(ticker, year, month)
 
     def get_foreign_flow_points(self, ticker: str, source: str) -> list[ForeignFlowPoint]:
         return self._broker.get_foreign_flow_points(ticker, source=source)

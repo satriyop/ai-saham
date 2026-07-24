@@ -19,17 +19,14 @@ from src.adapters.cli.view_ticker_contract_cli import (
 from src.adapters.cli.view_ticker_distribution_display import (
     display_broker_distribution,
 )
-from src.adapters.cli.view_ticker_distribution_provider_factory import (
-    create_broker_distribution_provider,
-)
 from src.application.dto.view_ticker_contract import (
     ViewResultStatus,
     build_view_envelope,
 )
 from src.application.use_case.view_ticker_distribution_use_case import (
     ViewTickerDistributionRequest,
-    ViewTickerDistributionUseCase,
 )
+from src.infrastructure.composition.view_ticker_deps import build_view_ticker_deps
 from src.infrastructure.config.app_config import load_app_config
 
 
@@ -57,10 +54,8 @@ def ticker_distribution(
     db_path = db_path or Path(cfg.storage.db_path)
     output_format = resolve_output_format(fmt or "table")
 
-    provider = create_broker_distribution_provider(db_path)
-    result = ViewTickerDistributionUseCase(provider).execute(
-        ViewTickerDistributionRequest(ticker=ticker)
-    )
+    deps = build_view_ticker_deps(db_path)
+    result = deps.distribution.execute(ViewTickerDistributionRequest(ticker=ticker))
 
     if result is None:
         exit_missing_ticker_data(

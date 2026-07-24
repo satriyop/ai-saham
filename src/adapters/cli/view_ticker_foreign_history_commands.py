@@ -26,12 +26,9 @@ from src.application.dto.view_ticker_contract import (
 )
 from src.application.use_case.view_ticker_foreign_history_use_case import (
     ViewTickerForeignHistoryRequest,
-    ViewTickerForeignHistoryUseCase,
 )
+from src.infrastructure.composition.view_ticker_deps import build_view_ticker_deps
 from src.infrastructure.config.app_config import load_app_config
-from src.infrastructure.persistence.sqlite_broker_repository import (
-    SQLiteBrokerRepository,
-)
 
 
 def ticker_foreign_history(
@@ -74,9 +71,9 @@ def ticker_foreign_history(
         )
         raise typer.Exit(2)
 
-    repo = SQLiteBrokerRepository(db_path)
+    deps = build_view_ticker_deps(db_path)
     try:
-        result = ViewTickerForeignHistoryUseCase(repo).execute(
+        result = deps.foreign_history.execute(
             ViewTickerForeignHistoryRequest(ticker=ticker, days=days, source=source)
         )
     except ValueError as exc:

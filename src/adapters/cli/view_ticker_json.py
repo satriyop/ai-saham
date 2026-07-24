@@ -1,6 +1,9 @@
 """
 JSON serialization for the ticker dashboard DTO.
 
+Aligns overview metadata with stock deep-dive envelope vocabulary so CLI and
+future TUI share one status/source language.
+
 Layer: Adapter
 """
 
@@ -11,6 +14,10 @@ from decimal import Decimal
 from typing import Any
 
 from src.application.dto.ticker_dashboard import TickerDashboard
+from src.application.dto.view_ticker_contract import (
+    ViewResultStatus,
+    build_view_envelope,
+)
 from src.application.services.ticker_dashboard_flow import (
     FOREIGN_FLOW_WINDOWS,
     window_buy_sell_days,
@@ -95,27 +102,30 @@ def _flow_points_summary(points: list | tuple, *, source: str | None) -> dict[st
     }
 
 
-def ticker_dashboard_to_json_dict(dashboard: TickerDashboard) -> dict[str, Any]:
-    """Serialize a TickerDashboard DTO into a JSON-ready dict."""
+def _dashboard_data(dashboard: TickerDashboard) -> dict[str, Any]:
     panels = set(dashboard.panel_keys)
-    payload: dict[str, Any] = {
-        "ticker": dashboard.ticker,
+    data: dict[str, Any] = {
         "mode": dashboard.mode,
-        "as_of": dashboard.as_of.isoformat() if dashboard.as_of else None,
         "panels": list(dashboard.panel_keys),
-        "data": {},
+        "freshness": _freshness_to_dict(dashboard.freshness),
+        "related_actions": [
+            {"verb": a.verb, "label": a.label, "command": a.command}
+            for a in dashboard.related_actions
+        ],
+        "panel_errors": [
+            {"key": e.key, "message": e.message} for e in dashboard.panel_errors
+        ],
     }
-    data = payload["data"]
 
     if "identity" in panels:
         data["identity"] = _optional_to_dict(dashboard.notation)
-    if "freshness" in panels:
-        data["freshness"] = _freshness_to_dict(dashboard.freshness)
     if "valuation" in panels:
         data["valuation"] = {
             "fundamentals": _optional_to_dict(dashboard.fundamentals),
             "forward_estimates": _optional_to_dict(dashboard.forward_estimates),
-            "latest_close": str(dashboard.latest_close) if dashboard.latest_close is not None else None,
+            "latest_close": (
+                str(dashboard.latest_close) if dashboard.latest_close is not None else None
+            ),
         }
     if "price_structure" in panels:
         data["price_structure"] = price_structure_to_dict(dashboard.price_structure)
@@ -155,7 +165,26 @@ def ticker_dashboard_to_json_dict(dashboard: TickerDashboard) -> dict[str, Any]:
     if "candles" in panels:
         data["candles"] = _candles_to_list(dashboard.candles, limit=5)
 
-    return payload
+    return data
 
 
-
+def ticker_dashboard_to_json_dict(dashboard: TickerDashboard) -> dict[str, Any]:
+    """Serialize dashboard using the shared view envelope vocabulary."""
+    status = (
+        ViewResultStatus.OK
+        if not dashboard.panel_errors
+        else ViewResultStatus.OK  # partial success still ok; errors live in data
+    )
+    # If everything critical is missing, still return ok with empty panels — CLI
+    # show is multi-panel and rarely fully missing.
+    envelope = build_view_envelope(
+        subject_id=dashboard.ticker,
+        verb="show",
+        status=status,
+        as_of=dashboard.as_of,
+        source="ticker_dashboard",
+        scope="brief" if dashboard.mode == "brief" else "full",
+        fetch_hint=dashboard.fetch_hint,
+        data=_dashboard_data(dashboard),
+    )
+    return envelope

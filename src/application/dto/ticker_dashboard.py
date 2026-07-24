@@ -30,6 +30,23 @@ class GetTickerDashboardRequest:
 
 
 @dataclass(frozen=True)
+class ViewRelatedAction:
+    """Structured deep-dive link for CLI footer / future TUI tabs."""
+
+    verb: str
+    label: str
+    command: str
+
+
+@dataclass(frozen=True)
+class PanelLoadError:
+    """Isolated panel failure that should not abort the whole dashboard."""
+
+    key: str
+    message: str
+
+
+@dataclass(frozen=True)
 class TickerDashboard:
     """Assembled local-cache dashboard for one ticker.
 
@@ -44,6 +61,8 @@ class TickerDashboard:
     fetch_hint: str
     panel_keys: tuple[str, ...]
     freshness: tuple[FreshnessItem, ...]
+    related_actions: tuple[ViewRelatedAction, ...]
+    panel_errors: tuple[PanelLoadError, ...]
 
     notation: Any | None
     fundamentals: Any | None

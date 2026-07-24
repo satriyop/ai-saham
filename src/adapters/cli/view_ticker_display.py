@@ -40,17 +40,8 @@ from src.adapters.cli.view_ticker_valuation_display import (
     _valuation_panel,
 )
 from src.application.dto.ticker_dashboard import GetTickerDashboardRequest, TickerDashboard
-from src.application.use_case.get_ticker_dashboard_use_case import GetTickerDashboardUseCase
 
 DEFAULT_DB_PATH = Path("data.db")
-
-
-def _build_use_case(db_path: Path) -> GetTickerDashboardUseCase:
-    from src.infrastructure.persistence.sqlite_ticker_dashboard_source import (
-        SQLiteTickerDashboardSource,
-    )
-
-    return GetTickerDashboardUseCase(SQLiteTickerDashboardSource(db_path))
 
 
 def show_ticker_view(
@@ -61,8 +52,10 @@ def show_ticker_view(
     output_format: str = "table",
 ) -> None:
     """Render a read-only dashboard of all cached data for ticker."""
-    use_case = _build_use_case(Path(db_path))
-    dashboard = use_case.execute(
+    from src.infrastructure.composition.view_ticker_deps import build_view_ticker_deps
+
+    deps = build_view_ticker_deps(Path(db_path))
+    dashboard = deps.dashboard.execute(
         GetTickerDashboardRequest(ticker=ticker.upper(), brief=brief)
     )
     render_ticker_dashboard(dashboard, output_format=output_format)
@@ -169,4 +162,8 @@ def _render_ticker_dashboard_table(dashboard: TickerDashboard) -> None:
             style="dim",
         )
     )
+    if dashboard.related_actions:
+        c.print(Text("  Deep-dives:", style="dim"))
+        for action in dashboard.related_actions:
+            c.print(Text(f"    {action.command}", style="dim"))
     c.print()
