@@ -74,11 +74,9 @@ def _parse_date(value: str | None) -> date | None:
         raise typer.Exit(1)
 
 
-# TradeSetup actions that count as opening watchlist (ADR-026)
-_ACTIONABLE_OPENING_ACTIONS = frozenset({"ENTER", "WATCH"})
-
-
 def _opening_table(candidates: list[OpeningBriefingCandidate]):
+    from src.domain.value_objects.trade_setup import SetupAction
+
     table = compact_table()
     table.add_column("Ticker", style="bold")
     table.add_column("Action")
@@ -89,17 +87,18 @@ def _opening_table(candidates: list[OpeningBriefingCandidate]):
         iev = f"{candidate.iev:,}" if candidate.iev is not None else "-"
         iep = f"{candidate.iep:,}" if candidate.iep is not None else "-"
 
-        # TradeSetup.action label from ops_session export (not PRIME heuristic)
-        action = str(candidate.opening_setup or "?").upper()
-        if action == "ENTER":
+        # TradeSetup.action from ops_session export
+        action = SetupAction.from_value(candidate.opening_setup)
+        if action is SetupAction.ENTER:
             setup_style = "green"
-        elif action == "WATCH":
+        elif action is SetupAction.WATCH:
             setup_style = "yellow"
-        elif action.startswith("BLOCK"):
+        elif action is not None and action.is_blocked:
             setup_style = "red"
         else:
             setup_style = "dim"
-        setup_text = f"[{setup_style}]{action}[/{setup_style}]"
+        label = action.value if action is not None else str(candidate.opening_setup or "?")
+        setup_text = f"[{setup_style}]{label}[/{setup_style}]"
 
         trend_map = {"UP": "green", "DOWN": "red", "SIDE": "yellow"}
         trend_style = trend_map.get(str(candidate.trend).upper(), "white")
@@ -415,7 +414,10 @@ def today(
     actionable_rows = []
     observation_rows = []
     for candidate in response.opening_candidates:
-        if str(candidate.opening_setup).upper() in _ACTIONABLE_OPENING_ACTIONS:
+        from src.domain.value_objects.trade_setup import SetupAction
+
+        action = SetupAction.from_value(candidate.opening_setup)
+        if action is not None and action.is_open_watchlist:
             actionable_rows.append(candidate)
         else:
             observation_rows.append(candidate)

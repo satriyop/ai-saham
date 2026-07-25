@@ -96,6 +96,7 @@ def test_pre_open_results_render_rich_summary_panel(capsys):
     assert "PRE-OPEN CANDIDATES" in out
     assert "TradeSetup" in out
     assert "★ PRIME" not in out
+    assert "Broker Backing" not in out
     assert "Action" in out or "ACTION" in out
     assert "VERDICT:" not in out
     assert "BBCA" in out

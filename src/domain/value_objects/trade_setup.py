@@ -40,12 +40,42 @@ class SetupAction(Enum):
 
     @property
     def is_actionable(self) -> bool:
+        """True when conditions support taking a new entry (ENTER only)."""
         return self == SetupAction.ENTER
+
+    @property
+    def is_open_watchlist(self) -> bool:
+        """True when the name belongs on pre-open track/confirm lists.
+
+        ENTER = act; WATCH = monitor into the open. Distinct from
+        ``is_actionable`` (ENTER only) so adapters do not invent parallel sets.
+        """
+        return self in (SetupAction.ENTER, SetupAction.WATCH)
+
+    @property
+    def display_sort_rank(self) -> int:
+        """Lower rank first in discovery tables (ENTER → … → BLOCKED).
+
+        Operator priority for screening, not severity order.
+        """
+        return _DISPLAY_SORT_RANK[self]
 
     @property
     def short(self) -> str:
         """Compact display label."""
         return _SHORT_LABELS[self]
+
+    @classmethod
+    def from_value(cls, value: "SetupAction | str | None") -> "SetupAction | None":
+        """Parse enum member or string value; unknown → None."""
+        if value is None:
+            return None
+        if isinstance(value, SetupAction):
+            return value
+        try:
+            return cls(str(value).strip().upper())
+        except ValueError:
+            return None
 
 
 _SHORT_LABELS: dict[SetupAction, str] = {
@@ -54,6 +84,15 @@ _SHORT_LABELS: dict[SetupAction, str] = {
     SetupAction.AVOID:              "AVOID",
     SetupAction.BLOCKED_EXECUTION:  "BLOCKED(exec)",
     SetupAction.BLOCKED_STRUCTURAL: "BLOCKED(struct)",
+}
+
+# Discovery-table priority (not severity hierarchy in the class docstring)
+_DISPLAY_SORT_RANK: dict[SetupAction, int] = {
+    SetupAction.ENTER: 0,
+    SetupAction.WATCH: 1,
+    SetupAction.AVOID: 2,
+    SetupAction.BLOCKED_EXECUTION: 3,
+    SetupAction.BLOCKED_STRUCTURAL: 4,
 }
 
 

@@ -24,6 +24,7 @@ from src.application.use_case.pre_open_screen_use_case import PreOpenScreenConfi
 from src.application.use_case.pre_open_workflow_use_case import PreOpenDataFreshness
 from src.domain.value_objects.pre_open_source_status import PreOpenSourceStatus
 from src.domain.value_objects.screener_result import ScreenerCandidate
+from src.domain.value_objects.trade_setup import SetupAction
 
 
 SOURCE_STATUS_LABEL: dict[PreOpenSourceStatus, str] = {
@@ -137,59 +138,29 @@ def display_raw_movers(raw_movers: list, top_n: int | None, iev_min: int) -> Non
     )
 
 
-# TradeSetup action sort (ADR-026 sole production action authority)
-ACTION_ORDER = {
-    "ENTER": 0,
-    "WATCH": 1,
-    "AVOID": 2,
-    "BLOCKED_EXECUTION": 3,
-    "BLOCKED_STRUCTURAL": 4,
-}
-_ACTIONABLE_ACTIONS = frozenset({"ENTER", "WATCH"})
-
-
 def _trade_setup_action(
     ticker: str,
     trade_setup_by_ticker: dict | None,
-) -> str | None:
+) -> SetupAction | None:
+    """Resolve canonical SetupAction from workflow TradeSetup map."""
     if not trade_setup_by_ticker:
         return None
     setup = trade_setup_by_ticker.get(ticker)
     if setup is None:
         return None
-    action = getattr(setup, "action", None)
-    if action is None:
-        return None
-    return action.value if hasattr(action, "value") else str(action)
+    return SetupAction.from_value(getattr(setup, "action", None))
 
 
-def _format_action_text(action: str | None) -> str:
+def _format_action_text(action: SetupAction | None) -> str:
     if action is None:
         return "[dim]—[/]"
-    if action == "ENTER":
+    if action is SetupAction.ENTER:
         return "[green]ENTER[/]"
-    if action == "WATCH":
+    if action is SetupAction.WATCH:
         return "[yellow]WATCH[/]"
-    if action.startswith("BLOCKED"):
-        return f"[red]{action}[/]"
-    return f"[dim]{action}[/]"
-
-
-def backing_col(candidate: ScreenerCandidate) -> str:
-    """Compact broker-backing tag + FVWAP into one diagnostics string."""
-    parts: list[str] = []
-    if candidate.opening_broker_backing_tag is not None:
-        tag = candidate.opening_broker_backing_tag[:8]
-        streak = f"×{candidate.opening_broker_buy_streak}d" if candidate.opening_broker_buy_streak else ""
-        parts.append(f"{tag}{streak}")
-    if candidate.fvwap_discount_pct is not None:
-        note = " floor" if candidate.fvwap_discount_pct > 0 else (
-            " sell" if candidate.fvwap_discount_pct < -3 else ""
-        )
-        parts.append(f"{candidate.fvwap_discount_pct:+.1f}%{note}")
-    if candidate.prev_high:
-        parts.append(f"PH:{candidate.prev_high:,.0f}")
-    return "  ".join(parts) if parts else "-"
+    if action.is_blocked:
+        return f"[red]{action.value}[/]"
+    return f"[dim]{action.value}[/]"
 
 
 def print_browser_plan(config: PreOpenScreenConfig) -> None:
@@ -248,13 +219,15 @@ def display_pre_open_summary_panel(
 ) -> None:
     def _sort_key(c: ScreenerCandidate):
         action = _trade_setup_action(c.ticker, trade_setup_by_ticker)
-        return (ACTION_ORDER.get(action or "", 99), -c.iev)
+        rank = action.display_sort_rank if action is not None else 99
+        return (rank, -c.iev)
 
     sorted_candidates = sorted(candidates, key=_sort_key)
     actionable = [
         c
         for c in sorted_candidates
-        if _trade_setup_action(c.ticker, trade_setup_by_ticker) in _ACTIONABLE_ACTIONS
+        if (a := _trade_setup_action(c.ticker, trade_setup_by_ticker)) is not None
+        and a.is_open_watchlist
     ]
     non_actionable = [c for c in sorted_candidates if c not in actionable]
 
@@ -381,7 +354,8 @@ def display_results(
 
     def _sort_key(c: ScreenerCandidate):
         action = _trade_setup_action(c.ticker, trade_setup_by_ticker)
-        return (ACTION_ORDER.get(action or "", 99), -c.iev)
+        rank = action.display_sort_rank if action is not None else 99
+        return (rank, -c.iev)
 
     sorted_candidates = sorted(candidates, key=_sort_key)
 
@@ -400,7 +374,6 @@ def display_results(
     results_table.add_column("Entry Range", justify="right")
     results_table.add_column("Stop%", justify="right")
     results_table.add_column("RSI", justify="right")
-    results_table.add_column("Broker Backing")
     if show_notation:
         results_table.add_column("Note")
     if risk_by_ticker is not None:
@@ -415,7 +388,6 @@ def display_results(
         rng = candidate.entry_range_label
         stop_pct = candidate.risk_reward_label
         rsi_str = f"{float(candidate.rsi):.0f}" if candidate.rsi else "-"
-        backing = backing_col(candidate)
 
         action = _trade_setup_action(candidate.ticker, trade_setup_by_ticker)
         action_text = _format_action_text(action)
@@ -437,7 +409,6 @@ def display_results(
             rng,
             stop_pct,
             rsi_str,
-            backing,
         ])
 
         if show_notation:
@@ -484,11 +455,12 @@ def display_results(
             )
         )
 
-    # 4. Next Action Panel — TradeSetup ENTER/WATCH only (no PRIME heuristic)
+    # 4. Next Action Panel — SetupAction.is_open_watchlist (ENTER/WATCH)
     watchlist = [
         c
         for c in sorted_candidates
-        if _trade_setup_action(c.ticker, trade_setup_by_ticker) in _ACTIONABLE_ACTIONS
+        if (a := _trade_setup_action(c.ticker, trade_setup_by_ticker)) is not None
+        and a.is_open_watchlist
     ]
     skipped = [c for c in sorted_candidates if c not in watchlist]
 
@@ -497,13 +469,13 @@ def display_results(
         watch_labels = []
         for candidate in watchlist:
             action = _trade_setup_action(candidate.ticker, trade_setup_by_ticker)
-            prefix = "★" if action == "ENTER" else "◉"
+            prefix = "★" if action is SetupAction.ENTER else "◉"
             watch_labels.append(f"{prefix} {candidate.ticker}")
         skip_labels = "  ".join(c.ticker for c in skipped) or "—"
 
-        footer_elements.append(Text("ACTIONABLE (ENTER/WATCH)", style="bold green"))
+        footer_elements.append(Text("OPEN WATCHLIST (ENTER/WATCH)", style="bold green"))
         footer_elements.append(Text("  " + "  ".join(watch_labels), style="green"))
-        footer_elements.append(Text("\nNON-ACTIONABLE", style="bold dim"))
+        footer_elements.append(Text("\nNON-WATCHLIST", style="bold dim"))
         footer_elements.append(Text("  " + skip_labels, style="dim"))
 
         tickers_json = ",".join(f'"{c.ticker}":___' for c in watchlist)
@@ -529,11 +501,7 @@ def display_results(
     legends = [
         Text(
             "ACTION: TradeSetup (ADR-026) sole production action | "
-            "Sig = auction cascade score 0-100 (ADR-048)",
-            style="dim",
-        ),
-        Text(
-            "BROKER BACKING: diagnostic only (tag x streak | FVWAP% | PH=Prev High) — not action authority",
+            "Sig = auction_ncp cascade 0-100 + open_viability veto (ADR-048)",
             style="dim",
         ),
         Text("STOP%: max loss from entry (ATR-based, capped -7%)", style="dim"),

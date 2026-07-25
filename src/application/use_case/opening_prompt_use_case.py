@@ -63,8 +63,8 @@ def build_prompt(run_date: date | None = None) -> str:
         "",
         "## Pre-Open Decisions (capture at NCP)",
         "",
-        "| Ticker | IEV | IEP | Entry Range | Trend | Sig | TradeSetup | Broker Backing |",
-        "|---|---|---|---|---|---|---|---|",
+        "| Ticker | IEV | IEP | Entry Range | Trend | Sig | TradeSetup |",
+        "|---|---|---|---|---|---|---|",
     ]
 
     for c in snapshot.get("candidates", []):
@@ -75,8 +75,7 @@ def build_prompt(run_date: date | None = None) -> str:
             f"| {c.get('entry_range_low','?')}–{c.get('entry_range_high','?')} "
             f"| {c.get('trend','?')} "
             f"| {c.get('signal_score','?')} "
-            f"| **{c.get('trade_setup_action') or c.get('opening_setup') or '?'}** "
-            f"| {c.get('opening_broker_backing_tag','?')} |"
+            f"| **{c.get('trade_setup_action') or c.get('opening_setup') or '?'}** |"
         )
 
     if grade:
