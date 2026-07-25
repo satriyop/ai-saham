@@ -2757,66 +2757,26 @@ saham strategy backtest BBCA --strategy my_flow_strategy
 |---------|---------|-------------|
 | `saham version` | Show version | — |
 | `saham today` | Read-only daily briefing | `--universe`, `--top`, `--date` |
+| `saham tui` | Launch terminal research workspace | — |
+| `saham audit data manifest` | DQ baseline manifest (db/config/code identity) | `--format` |
+| `saham audit data source-contracts` | DQ-001A source-field contract audit | `--format` |
+| `saham audit data reconcile-sources` | DQ-001B source reconciliation (OHLC invariants) | `--format` |
+| `saham audit data contract-gate` | DQ-CONTRACT-GATE (combined pass/fail) | `--format` |
+| `saham audit data seasonality-cleanup-plan` | DQ-001G dry-run cleanup plan (seasonality_cache) | `--format` |
+| `saham audit data candidate-observation-identity` | DQ-001I identity audit (candidate_observations) | `--format` |
+| `saham audit data repair-seasonality-cache` | DQ-001H quarantine invalid seasonality rows | `--apply`, `--db`, `--format` |
+| `saham audit data repair-candidate-observations` | DQ-001J quarantine legacy candidate_observations | `--apply`, `--db`, `--format` |
+| `saham audit data repair-signal-forward-labels` | DQ-001L quarantine orphan signal_forward_labels | `--apply`, `--db`, `--format` |
 | `saham fetch market` | Batch data update (candles + broker) | `--universe`, `--days`, `--provider`, `--broker-provider`, `--no-meta`, `--no-enrichment`, `--refresh` |
-| `saham indicator compute SMA TICKER` | Simple Moving Average | `--period`, `--field`, `--days` |
-| `saham indicator compute EMA TICKER` | Exponential Moving Average | `--period`, `--field`, `--days` |
-| `saham indicator compute RSI TICKER` | Relative Strength Index | `--period`, `--days` |
-| `saham indicator compute INDICATOR TICKER` | Compute any indicator | `--period`, `--days`, `--tail`, `--db` |
-| `saham indicator snapshot TICKER` | All indicators combined | `--sma`, `--ema`, `--rsi`, `--days`, `--format` |
-| `saham analyze compare TICKER TICKER...` | Side-by-side risk comparison | `--sma`, `--rsi` |
-| `saham analyze risk TICKER` | Risk assessment | `--all`, `--rules-file`, `--explain`, `--with-sentiment`, `--trend`, `--format` |
-| `saham analyze sentiment TICKER` | News sentiment | `--days`, `--max`, `--ai-classify`, `--news-provider`, `--no-ai` |
-| `saham analyze audit` | Audit sentiment accuracy | — |
-| `saham view TICKER` | Read-only ticker data dashboard (all cached data) | — |
-| `saham view universe` | List all universes with ticker counts | — |
-| `saham view universe NAME` | Market-wide overview (price, flow, sector) | `--sort`, `--top`, `--date` |
-| `saham view broker status` | Check all provider status | — |
-| `saham fetch audit` | Local data quality audit | `--db` |
+| `saham fetch enrichment-history` | Point-in-time enrichment snapshot for replay | `--universe` |
 | `saham fetch broker TICKER` | Fetch broker summary data | `--days`, `--start`, `--end`, `--refresh`, `--provider` |
 | `saham fetch broker-history TICKER` | Fetch foreign flow history (Stockbit) | `--days` |
 | `saham fetch broker-top-foreign` | Universe scan for top foreign flow stocks | — |
-| `saham fetch iev` | Capture pre-open IEV mover rankings | `--top-n`, `--no-headless` |
-| `saham view ticker flow TICKER` | View foreign flow summary | `--days` |
-| `saham view ticker top-brokers TICKER` | View top brokers | `--date` |
-| `saham view ticker foreign-history TICKER` | View foreign flow time-series | `--days`, `--source` |
-| `saham view market-context` | Cross-market regime context (VIX, EIDO, USD/IDR) | — |
-| `saham view ticker distribution TICKER` | Cross-broker counterparty matrix | — |
-| `saham view broker top-foreign` | View top foreign flow stocks by period | `--days`, `--date`, `--limit` |
 | `saham fetch broker-import FILE` | Import broker data from CSV | `--preview`, `--mapping`, `--on-error` |
-| `saham view broker mappings` | List available CSV mappings | — |
-| `saham strategy init NAME` | Create strategy package | `--dir`, `--force` |
-| `saham strategy create INTENT` | Create strategy from natural language | `--name`, `--provider`, `--save/--no-save` |
-| `saham strategy validate NAME` | Validate strategy (auto-generates SKILL.md) | `--strict` |
-| `saham strategy list` | List available strategies | `--verbose`, `--all` |
-| `saham strategy skill generate NAME` | Generate SKILL.md for an artifact | `--type` (strategy/indicator/formula) |
-| `saham strategy skill check` | Report stale/missing SKILL.md files | — |
-| `saham strategy skill index` | Rebuild SKILLS_INDEX.md catalog | — |
-| `saham strategy backtest TICKER` | Strategy backtesting | `--strategy`/`--rules-file`, `--start`, `--end`, `--capital`, `--verbose`, `--format` |
-| `saham indicator create` | Create formula from natural language | `--name`, `--provider`, `--save/--no-save` |
-| `saham indicator list` | List all indicators | `--formulas` |
-| `saham indicator show NAME` | Show formula details | — |
-| `saham indicator delete NAME` | Delete custom formula | `--force` |
-| `saham screen accum` | Foreign accumulation screener (SignalAssessment 0–100) | `--universe`, `--window`, `--multi`, `--top-broker`, `--min-foreign-flow-score`, `--min-signal-score`, `--min-piotroski`, `--vwap-only`, `--squeeze-only`, `--save`, `--format`, `--guide`, `--explain`, `--db` |
-| `saham screen watchlist` | List saved watchlists / show tickers in a named one | — |
-| `saham screen compare NAME` | Diff saved watchlist against fresh screener run | `--universe`, `--top` |
-| `saham research signal capture` | Session observation capture (`candidate_observations`) | `--contract`, `--universe`, `--session`, `--format`, `--db` |
-| `saham research accumulation evaluate` | Historical accumulation audit | `--universe`, `--setup`, `--simulate-exits` |
-| `saham screen pre-open` | Pre-open market screener | `--movers-json`, `--fast`, `--top` |
-| `saham trade confirm` | Confirm at opening auction | `--opening-json` |
-| `saham trade log --type TYPE` | Log a paper-trade decision | `--type` (swing or intraday) |
-| `saham trade review intraday` | Review intraday confirmation journal | `--journal`, `--db` |
-| `saham trade review swing` | Review accumulation trade journal | `--horizon`, `--min-score`, `--journal`, `--db` |
-| `saham trade migrate-journal` | One-time CSV journal migration to JSONL | — |
-| `saham trade outcome` | Record actual trade outcome | `--entry`, `--exit`, `--result` |
-| `saham analyze swing TICKER` | Unified swing analysis with optional market context preview | `--capital`, `--setup`, `--strategy`, `--with-sentiment`, `--with-flow-detail`, `--with-signal-detail`, `--with-risk-detail`, `--with-market-detail`, `--with-market-context`, `--with-technical-gate`, `--explain`, `--full`, `--risk-strategy`, `--format`, `--db` |
-| `saham trade backtest-swing` | Portfolio walk-forward swing backtest | `--universe`, `--setup`, `--capital`, `--allow-regimes` |
-| `saham trade backtest-intraday` | Walk-forward intraday pre-open backtest | `--universe`, `--start`, `--end` |
-| `saham analyze swing-compare` | Compare regime variants | `--universe`, `--variants` |
-| `saham trade size TICKER` | ATR position sizing | `--capital`, `--risk-pct`, `--entry` |
-| `saham analyze regime` | Market regime context | `--universe`, `--benchmark`, `--as-of`, `--verbose`, `--format`, `--db` |
-| `saham analyze chart price TICKER` | Price chart with overlays | `--sma`, `--ema`, `--days`, `--width` |
-| `saham analyze chart rsi TICKER` | RSI chart | `--period`, `--days` |
-| `saham analyze chart volume TICKER` | Volume bar chart | `--days` |
+| `saham fetch calendar` | Fetch market-wide corporate action calendar | `--days` |
+| `saham fetch iev` | Capture pre-open IEV mover rankings | `--top-n`, `--no-headless` |
+| `saham fetch status` | Health check for all data providers and tables | — |
+| `saham fetch audit` | Local data quality audit | `--db` |
 | `saham fetch universe list` | List configured universes w/ ticker counts | — |
 | `saham fetch universe update` | Refresh universe from Stockbit Exodus API | `--universe`, `--discover` |
 | `saham fetch universe inspect` | Explore Stockbit sectors/subsectors | `--sector`, `--subsector` |
@@ -2827,6 +2787,80 @@ saham strategy backtest BBCA --strategy my_flow_strategy
 | `saham fetch stockbit test` | Smoke-test adapter | `--ticker`, `--no-headless` |
 | `saham fetch stockbit browse` | Open headed browser with saved session | — |
 | `saham fetch stockbit fetch-top5` | Top IEV movers + orderbook snapshots | `--top`, `--no-headless` |
+| `saham indicator compute SMA TICKER` | Simple Moving Average | `--period`, `--field`, `--days` |
+| `saham indicator compute EMA TICKER` | Exponential Moving Average | `--period`, `--field`, `--days` |
+| `saham indicator compute RSI TICKER` | Relative Strength Index | `--period`, `--days` |
+| `saham indicator compute INDICATOR TICKER` | Compute any indicator | `--period`, `--days`, `--tail`, `--db` |
+| `saham indicator snapshot TICKER` | All indicators combined | `--sma`, `--ema`, `--rsi`, `--days`, `--format` |
+| `saham indicator create INTENT` | Create formula from natural language | `--name`, `--provider`, `--save/--no-save` |
+| `saham indicator list` | List all indicators | `--formulas` |
+| `saham indicator show NAME` | Show formula details | — |
+| `saham indicator delete NAME` | Delete custom formula | `--force` |
+| `saham analyze risk TICKER` | Risk assessment | `--all`, `--rules-file`, `--explain`, `--with-sentiment`, `--trend`, `--format` |
+| `saham analyze compare TICKER TICKER...` | Side-by-side risk comparison | `--sma`, `--rsi` |
+| `saham analyze sentiment TICKER` | News sentiment | `--days`, `--max`, `--ai-classify`, `--news-provider`, `--no-ai` |
+| `saham analyze audit` | Audit sentiment accuracy | — |
+| `saham analyze regime` | Market regime context | `--universe`, `--benchmark`, `--as-of`, `--verbose`, `--format`, `--db` |
+| `saham analyze swing TICKER` | Unified swing analysis with optional market context preview | `--capital`, `--setup`, `--strategy`, `--with-sentiment`, `--with-flow-detail`, `--with-signal-detail`, `--with-risk-detail`, `--with-market-detail`, `--with-market-context`, `--with-technical-gate`, `--explain`, `--full`, `--risk-strategy`, `--format`, `--db` |
+| `saham analyze swing-compare` | Compare regime variants | `--universe`, `--variants` |
+| `saham analyze signal inspect TICKER` | Live read-only SignalEngine inspection | `--format`, `--db` |
+| `saham analyze chart price TICKER` | Price chart with overlays | `--sma`, `--ema`, `--days`, `--width` |
+| `saham analyze chart rsi TICKER` | RSI chart | `--period`, `--days` |
+| `saham analyze chart volume TICKER` | Volume bar chart | `--days` |
+| `saham view TICKER` | Read-only ticker data dashboard (all cached data) | — |
+| `saham view ticker show TICKER` | Explicit dashboard view (same as `view TICKER`) | — |
+| `saham view ticker flow TICKER` | View foreign flow summary | `--days` |
+| `saham view ticker top-brokers TICKER` | View top brokers | `--date` |
+| `saham view ticker foreign-history TICKER` | View foreign flow time-series | `--days`, `--source` |
+| `saham view ticker distribution TICKER` | Cross-broker counterparty matrix | — |
+| `saham view universe` | List all universes with ticker counts | — |
+| `saham view universe NAME` | Market-wide overview (price, flow, sector) | `--sort`, `--top`, `--date` |
+| `saham view market-context` | Cross-market regime context (VIX, EIDO, USD/IDR) | `--date`, `--universe`, `--verbose`, `--format` |
+| `saham view broker show CODE` | Broker desk info | — |
+| `saham view broker top-stocks CODE` | Top stocks for a broker desk | `--limit` |
+| `saham view broker flow CODE` | Broker flow timeline | `--days` |
+| `saham view broker history CODE` | Broker activity history | `--days` |
+| `saham view broker status` | Check all provider status | — |
+| `saham view broker top-foreign` | View top foreign flow stocks by period | `--days`, `--date`, `--limit` |
+| `saham view broker mappings` | List available CSV mappings | — |
+| `saham view broker list` | List all tracked brokers | — |
+| `saham strategy init NAME` | Create strategy package | `--dir`, `--force` |
+| `saham strategy create INTENT` | Create strategy from natural language | `--name`, `--provider`, `--save/--no-save` |
+| `saham strategy validate NAME` | Validate strategy (auto-generates SKILL.md) | `--strict` |
+| `saham strategy list` | List available strategies | `--verbose`, `--all` |
+| `saham strategy skill generate NAME` | Generate SKILL.md for an artifact | `--type` (strategy/indicator/formula) |
+| `saham strategy skill check` | Report stale/missing SKILL.md files | — |
+| `saham strategy skill index` | Rebuild SKILLS_INDEX.md catalog | — |
+| `saham strategy backtest TICKER` | Strategy backtesting | `--strategy`/`--rules-file`, `--start`, `--end`, `--capital`, `--verbose`, `--format` |
+| `saham screen accum` | Foreign accumulation screener (SignalAssessment 0–100) | `--universe`, `--window`, `--multi`, `--top-broker`, `--min-foreign-flow-score`, `--min-signal-score`, `--min-piotroski`, `--vwap-only`, `--squeeze-only`, `--save`, `--format`, `--guide`, `--explain`, `--db` |
+| `saham screen pre-open` | Pre-open market screener | `--movers-json`, `--fast`, `--top` |
+| `saham screen watchlist` | List saved watchlists / show tickers in a named one | — |
+| `saham screen compare NAME` | Diff saved watchlist against fresh screener run | `--universe`, `--top` |
+| `saham learn snapshot` | NCP-locked pre-open capture at 08:57 WIB | `--force`, `--date` |
+| `saham learn track` | 5-min orderbook loop 09:00–09:30 WIB | `--force`, `--broker-confirm` |
+| `saham learn grade` | Deterministic accuracy report | `--date` |
+| `saham learn tune` | AI config recommendations via DeepSeek | `--allow-invalid-snapshot`, `--api-key` |
+| `saham learn prompt` | Generate AI prompt | `--print` |
+| `saham research signal capture` | Session observation capture (`candidate_observations`) | `--contract`, `--universe`, `--session`, `--format`, `--db` |
+| `saham research signal backfill` | Backfill signal observations | `--contract`, `--universe`, `--db` |
+| `saham research signal labels` | Generate forward labels | `--session`, `--db` |
+| `saham research signal replay` | Replay signal assessment historically | `--contract`, `--universe`, `--db` |
+| `saham research signal readiness` | Signal readiness diagnostics | `--db` |
+| `saham research accumulation evaluate` | Historical accumulation audit | `--universe`, `--setup`, `--simulate-exits` |
+| `saham trade confirm` | Confirm at opening auction | `--opening-json`, `--track-file` |
+| `saham trade log --type TYPE` | Log a paper-trade decision | `--type` (swing or intraday) |
+| `saham trade review intraday` | Review intraday confirmation journal | `--journal`, `--db` |
+| `saham trade review swing` | Review accumulation trade journal | `--horizon`, `--min-score`, `--journal`, `--db` |
+| `saham trade outcome` | Record actual trade outcome | `--entry`, `--exit`, `--result` |
+| `saham trade size TICKER` | ATR position sizing | `--capital`, `--risk-pct`, `--entry` |
+| `saham trade backtest-swing` | Portfolio walk-forward swing backtest | `--universe`, `--setup`, `--capital`, `--allow-regimes` |
+| `saham trade backtest-intraday` | Walk-forward intraday pre-open backtest | `--universe`, `--start`, `--end` |
+| `saham trade tune-swing` | Swing tuning review from backtest attribution | `--universe`, `--setup`, `--start`, `--end` |
+| `saham trade tuning-status` | Read-only swing tuning loop status | — |
+| `saham trade review-tuning-swing` | Review saved swing tuning runs | `--limit` |
+| `saham trade validate-tuning-patch` | Validate exported swing tuning patch JSON | `--file` |
+| `saham trade apply-tuning-patch` | Dry-run or apply exported tuning patch changes | `--file`, `--apply`, `--dry-run` |
+| `saham trade migrate-journal` | One-time CSV journal migration to JSONL | — |
 
 ---
 
