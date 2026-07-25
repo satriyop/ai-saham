@@ -338,6 +338,14 @@ class ScreenWorkspaceScreen(Screen[None]):
         self._switch_tab(order[(order.index(self._active_tab) - 1) % len(order)])
 
     def action_save_shortlist(self) -> None:
+        # Parity with CLI: `saham screen accum --save` is single-window only.
+        if self._last_request is not None and self._last_request.multi:
+            self._set_status(
+                "Save shortlist is not supported in multi-window mode "
+                "(match CLI: --save cannot combine with --multi).",
+                "semantic-warning",
+            )
+            return
         if not self._current_candidates():
             return
 
@@ -354,8 +362,10 @@ class ScreenWorkspaceScreen(Screen[None]):
         """Persist exactly the current canonical projection under ``name``.
 
         The saved universe/window come from the request that produced the shown
-        projection — never a hardcoded default.
+        projection — never a hardcoded default. Multi-window is refused (CLI parity).
         """
+        if self._last_request is not None and self._last_request.multi:
+            return None
         candidates = self._current_candidates()
         if not name or not candidates:
             return None

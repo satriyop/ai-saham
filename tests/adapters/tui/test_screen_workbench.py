@@ -82,6 +82,105 @@ def test_screen_presenter_empty_status_and_no_related_actions() -> None:
     assert view.related_actions == ()
 
 
+def test_screen_presenter_multi_survives_null_canonical_candidate() -> None:
+    """B2: canonical_candidate may be None when only non-canonical windows hit."""
+    from datetime import date
+
+    from src.application.services.screen_accum_result_projector import (
+        MultiScreenAppliedFilters,
+        ScreenAccumMultiProjection,
+        ScreenAccumMultiRow,
+    )
+    from src.application.use_case.run_accumulation_screen_workflow_use_case import (
+        RunAccumulationScreenWorkflowResult,
+    )
+
+    only_30 = SimpleNamespace(
+        ticker="TLKM",
+        accum_score=55.0,
+        consecutive_streak=2,
+        net_buy_ratio=0.4,
+        bci_label=None,
+        vwap_discount_pct=1.0,
+        signal_assessment=None,
+        risk_assessment=None,
+        setup_phase=None,
+        trade_setup=None,
+    )
+    multi_row = ScreenAccumMultiRow(
+        ticker="TLKM",
+        candidates_by_window={7: None, 30: only_30, 90: None},
+        pattern="building",
+        trend="UP",
+        tracked_broker_flow=None,
+        canonical_window=7,
+        canonical_candidate=None,
+        signal_score=None,
+        signal_authority_coverage=None,
+        risk_status="OPEN",
+        setup_phase=None,
+        data_status=None,
+        next_action="WATCH",
+    )
+    multi = ScreenAccumMultiProjection(
+        rows=[multi_row],
+        applied_filters=MultiScreenAppliedFilters(False, 20, "vwap"),
+        requested_windows=[7, 30, 90],
+        resolved_windows=[7, 30, 90],
+        raw_ticker_count=1,
+        projected_row_count=1,
+        screened_at=date(2026, 7, 22),
+        canonical_window=7,
+    )
+
+    view = ScreenPresenter().present_accumulation(
+        RunAccumulationScreenWorkflowResult(multi_projection=multi, multi_results={})
+    )
+
+    assert len(view.candidate_rows) == 1
+    row = view.candidate_rows[0]
+    assert row.ticker == "TLKM"
+    assert row.accum_score == 55.0
+    assert row.action == "WATCH"
+    assert "30s:55" in (row.window_shape_label or "")
+
+
+def test_screen_save_shortlist_refuses_multi_window() -> None:
+    """B1: multi+save is forbidden (CLI parity), not a partial/crash path."""
+    from src.application.use_case.run_accumulation_screen_workflow_use_case import (
+        RunAccumulationScreenWorkflowRequest,
+    )
+
+    fake_save = MagicMock()
+    controller = ScreenController(
+        load_universe=lambda u: [],
+        run_accumulation=MagicMock(),
+        save_watchlist=fake_save,
+    )
+    screen = ScreenWorkspaceScreen(controller, ScreenPresenter())
+    screen._last_request = RunAccumulationScreenWorkflowRequest(
+        tickers=["BBCA"],
+        universe_label="lq45",
+        universe_name="lq45",
+        window=7,
+        min_streak=0,
+        min_accum_score=None,
+        min_signal_score=None,
+        min_piotroski=0,
+        strategy_name=None,
+        include_strategy_overlay=False,
+        multi=True,
+        windows=[7, 30, 90],
+        top=20,
+        save_name=None,
+        save_enabled=False,
+    )
+    screen._current_projection = single_result()
+
+    assert screen._perform_save("should-not-save") is None
+    fake_save.execute.assert_not_called()
+
+
 def test_screen_controller_executes_screening_and_saves_snapshot() -> None:
     fake_run = MagicMock()
     fake_run.return_value = MagicMock(spec=ScreenAccumSingleProjection)

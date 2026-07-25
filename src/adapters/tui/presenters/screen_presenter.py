@@ -81,11 +81,26 @@ class ScreenPresenter:
 
     @staticmethod
     def _vwap_fields(candidate: Any) -> tuple[float | None, str | None]:
+        if candidate is None:
+            return None, None
         raw = getattr(candidate, "vwap_discount_pct", None)
         if raw is None or not isinstance(raw, (int, float)):
             return None, None
         pct = float(raw)
         return pct, vwap_depth_label(pct)
+
+    @staticmethod
+    def _multi_window_shape_label(by_window: dict[Any, Any] | None) -> str:
+        """Build 7s/30s/90s Accum shape from candidates_by_window (not w7 attrs)."""
+        windows = by_window or {}
+
+        def score_at(days: int) -> float:
+            cand = windows.get(days)
+            if cand is None:
+                return 0.0
+            return float(getattr(cand, "accum_score", 0.0) or 0.0)
+
+        return f"7s:{score_at(7):.0f} 30s:{score_at(30):.0f} 90s:{score_at(90):.0f}"
 
     @staticmethod
     def _signal_fields(
@@ -99,7 +114,7 @@ class ScreenPresenter:
         score: int | float | None = None
         coverage: float | None = None
 
-        sa = getattr(candidate, "signal_assessment", None)
+        sa = getattr(candidate, "signal_assessment", None) if candidate is not None else None
         if sa is not None:
             assessment = getattr(sa, "assessment", None)
             if assessment is not None:
@@ -118,12 +133,12 @@ class ScreenPresenter:
             if coverage is None and isinstance(cov, (int, float)):
                 coverage = float(cov)
 
-        if score is None:
+        if score is None and candidate is not None:
             raw = getattr(candidate, "signal_score", None)
             if isinstance(raw, (int, float)):
                 score = raw
 
-        if coverage is None:
+        if coverage is None and candidate is not None:
             cov = getattr(candidate, "signal_authority_coverage", None)
             if isinstance(cov, (int, float)):
                 coverage = float(cov)
@@ -153,34 +168,89 @@ class ScreenPresenter:
         rows: list[ScreenCandidateRowView] = []
         if hasattr(projection, "rows") or type(projection).__name__ == "ScreenAccumMultiProjection":
             for rank, multi_row in enumerate(projection.rows, 1):
-                c = getattr(multi_row, "canonical_candidate", getattr(multi_row, "candidate", multi_row))
-                w7 = getattr(multi_row, "w7", None)
-                w30 = getattr(multi_row, "w30", None)
-                w90 = getattr(multi_row, "w90", None)
-                flow7 = getattr(w7, "accum_score", 0.0) if w7 else 0.0
-                flow30 = getattr(w30, "accum_score", 0.0) if w30 else 0.0
-                flow90 = getattr(w90, "accum_score", 0.0) if w90 else 0.0
-                shape = f"7s:{flow7:.0f} 30s:{flow30:.0f} 90s:{flow90:.0f}"
-                disc, depth = self._vwap_fields(c)
-                sig_score, sig_cov = self._signal_fields(c, row=multi_row)
-                rows.append(
-                    ScreenCandidateRowView(
-                        canonical_rank=rank,
-                        ticker=c.ticker,
-                        accum_score=getattr(c, "accum_score", 0.0),
-                        consecutive_streak=getattr(c, "consecutive_streak", 0),
-                        net_buy_ratio=getattr(c, "net_buy_ratio", 0.0),
-                        bci_label=getattr(c, "bci_label", None),
-                        setup_phase=getattr(c.setup_phase, "current_phase", None).value if hasattr(getattr(c, "setup_phase", None), "current_phase") else getattr(c, "setup_phase", None),
-                        risk_status=getattr(c.risk_assessment, "risk_level_name", str(getattr(c, "risk_status", "OPEN"))),
-                        action=getattr(getattr(c, "trade_setup", None), "action", None).value if hasattr(getattr(c, "trade_setup", None), "action") else getattr(c, "action", None),
-                        signal_score=sig_score,
-                        signal_authority_coverage=sig_cov,
-                        window_shape_label=shape,
-                        vwap_discount_pct=disc,
-                        vwap_depth_label=depth,
+                # canonical_candidate may exist and be None — never treat that as
+                # "missing attribute" (getattr default would not run).
+                c = getattr(multi_row, "canonical_candidate", None)
+                if c is None:
+                    c = getattr(multi_row, "candidate", None)
+
+                by_window = getattr(multi_row, "candidates_by_window", None) or {}
+                shape = self._multi_window_shape_label(by_window)
+
+                if c is not None:
+                    disc, depth = self._vwap_fields(c)
+                    sig_score, sig_cov = self._signal_fields(c, row=multi_row)
+                    phase = getattr(c, "setup_phase", None)
+                    if not isinstance(phase, str) and phase is not None:
+                        cp = getattr(phase, "current_phase", None)
+                        phase = getattr(cp, "value", str(cp)) if cp else None
+                    risk = getattr(c, "risk_assessment", None)
+                    risk_status = (
+                        getattr(risk, "risk_level_name", None)
+                        if risk is not None
+                        else getattr(c, "risk_status", None)
                     )
-                )
+                    action = getattr(getattr(c, "trade_setup", None), "action", None)
+                    if action is not None and not isinstance(action, str):
+                        action = getattr(action, "value", str(action))
+                    elif action is None:
+                        action = getattr(c, "action", None) or getattr(
+                            multi_row, "next_action", None
+                        )
+                    rows.append(
+                        ScreenCandidateRowView(
+                            canonical_rank=rank,
+                            ticker=str(getattr(c, "ticker", multi_row.ticker)),
+                            accum_score=float(getattr(c, "accum_score", 0.0) or 0.0),
+                            consecutive_streak=int(
+                                getattr(c, "consecutive_streak", 0) or 0
+                            ),
+                            net_buy_ratio=float(getattr(c, "net_buy_ratio", 0.0) or 0.0),
+                            bci_label=getattr(c, "bci_label", None),
+                            setup_phase=str(phase) if phase else getattr(
+                                multi_row, "setup_phase", None
+                            ),
+                            risk_status=str(
+                                risk_status
+                                or getattr(multi_row, "risk_status", None)
+                                or "OPEN"
+                            ),
+                            action=str(action) if action else None,
+                            signal_score=sig_score,
+                            signal_authority_coverage=sig_cov,
+                            window_shape_label=shape,
+                            vwap_discount_pct=disc,
+                            vwap_depth_label=depth,
+                        )
+                    )
+                else:
+                    # Row present only on non-canonical windows: still list ticker.
+                    sig_score, sig_cov = self._signal_fields(None, row=multi_row)
+                    scores = [
+                        float(cand.accum_score)
+                        for cand in by_window.values()
+                        if cand is not None
+                    ]
+                    rows.append(
+                        ScreenCandidateRowView(
+                            canonical_rank=rank,
+                            ticker=str(multi_row.ticker),
+                            accum_score=max(scores) if scores else 0.0,
+                            consecutive_streak=0,
+                            net_buy_ratio=0.0,
+                            bci_label=None,
+                            setup_phase=getattr(multi_row, "setup_phase", None),
+                            risk_status=str(
+                                getattr(multi_row, "risk_status", None) or "OPEN"
+                            ),
+                            action=getattr(multi_row, "next_action", None),
+                            signal_score=sig_score,
+                            signal_authority_coverage=sig_cov,
+                            window_shape_label=shape,
+                            vwap_discount_pct=None,
+                            vwap_depth_label=None,
+                        )
+                    )
         else:
             candidates = getattr(projection, "candidates", [])
             for rank, c in enumerate(candidates, 1):
