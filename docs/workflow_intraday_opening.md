@@ -286,7 +286,7 @@ thresholds:
 
 | Command | Timing | Purpose | Output file |
 |---------|--------|---------|-------------|
-| `saham research pre-open capture` | 08:57 | Pre-open predictions | `snapshot.json` |
+| `saham research pre-open capture` | ~08:58 | Sole decision write | DB observations + `ops_session.json` |
 | `saham learn track` | 09:00–09:30 | 5-min full-depth orderbook + foreign net + opt-in broker attribution | `track_HHMM.json` |
 | `saham learn grade` | 09:30+ | Accuracy report (incl. bid pressure momentum + institutional absorption) | `grade.json` |
 | `saham learn prompt` | anytime | AI prompt | `prompt.md` |

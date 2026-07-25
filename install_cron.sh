@@ -66,31 +66,39 @@ echo "Logs    : $LOG_DIR"
 echo ""
 
 # ── Cron entries (host local time; expected host timezone: Asia/Jakarta) ─────
-# IDX pre-open session: 08:45–09:00 WIB
-# Opening session ends: 09:30 WIB
-# Swing EOD: fetch market is on by default. Capture/labels stay commented until
-# an always-on research corpus is wanted (readiness / future ML).
+# Pre-open product shape (ADR-048 + command families):
+#   screen = live only (optional keyboard loop; not in cron)
+#   multi-tick fetch iev = ΔIEV + NCP stamp (perishable; SQLite history)
+#   research pre-open capture = sole decision write (DB + ops_session + sidecar)
+#   learn track / grade / tune = same-day ops
+#   research pre-open labels = open_30m outcomes (day-file)
+# Playwright: ticks are ≥3 minutes apart so slow Stockbit runs rarely overlap.
+# Swing EOD: fetch market on by default. Swing research capture/labels stay
+# commented until an always-on multi-day corpus is wanted.
 read -r -d '' SAHAM_CRON << ENTRIES || true
 # --- saham-cron-begin ---
-# IEV collector — 08:55 WIB
-55 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham fetch iev' >> $LOG_DIR/iev-collector.log 2>&1
-# Opening learning loop — NCP-locked snapshot 08:57 WIB
-57 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham learn snapshot' >> $LOG_DIR/opening-snapshot.log 2>&1
-# Opening learning loop — orderbook tracker 09:00–09:30 WIB
+# Multi-tick IEV (pre-NCP) — enables get_iev_delta / ΔIEV (need ≥2 same-day rows)
+47 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham fetch iev' >> $LOG_DIR/iev-collector.log 2>&1
+50 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham fetch iev' >> $LOG_DIR/iev-collector.log 2>&1
+53 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham fetch iev' >> $LOG_DIR/iev-collector.log 2>&1
+# IEV NCP-locked tick — inside [08:56, 09:00) so is_ncp_locked=1
+57 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham fetch iev' >> $LOG_DIR/iev-collector.log 2>&1
+# Sole decision write — after NCP IEV; writes candidate_observations + ops_session + confirm sidecar
+58 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham research pre-open capture' >> $LOG_DIR/pre-open-capture.log 2>&1
+# Same-day ops — orderbook tracker 09:00–09:30 (tickers from saved observations)
 0 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && PYTHONUNBUFFERED=1 saham learn track --broker-confirm' >> $LOG_DIR/opening-track.log 2>&1
-# Opening learning loop — auto trade confirm & log 09:31 WIB
+# Optional paper confirm from first track file (sidecar also written by capture)
 31 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham trade confirm --track-file data/opening/\$(date +\%Y\%m\%d)/track_0900.json && saham trade log intraday' >> $LOG_DIR/trade-confirm-log.log 2>&1
-# Opening learning loop — accuracy grade 09:35 WIB
+# Session scorecard over saved observations + tracks (fail closed without capture)
 35 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham learn grade' >> $LOG_DIR/opening-grade.log 2>&1
-# Opening learning loop — AI tuning 09:40 WIB
+# open_30m corpus outcomes (day-file; needs capture + tracks)
+36 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham research pre-open labels' >> $LOG_DIR/pre-open-labels.log 2>&1
+# Non-authoritative AI tune from grade (optional)
 40 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham learn tune' >> $LOG_DIR/opening-tune.log 2>&1
 # Swing EOD — refresh LQ45 candles after EOD data should be available 18:30 WIB
 30 18 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham fetch market --universe lq45' >> $LOG_DIR/swing-fetch-market.log 2>&1
-# Optional research corpus growth (not required for live screen/analyze).
-# Uncomment when building an always-on labeled dataset for readiness / future ML.
-# Swing EOD — capture LQ45 accumulation-discovery observations 19:15 WIB
+# Optional multi-day research corpus (not pre-open). Uncomment when wanted.
 #15 19 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham research signal capture --contract accumulation-discovery --universe lq45 --session $(date +\%Y-\%m-\%d) --format json' >> $LOG_DIR/swing-observe-lq45.log 2>&1
-# Swing EOD — idempotent SWING_10D label generation for eligible saved dates 19:45 WIB
 #45 19 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham research signal labels --eligible-dates --horizon SWING_10D --generate-all --format json' >> $LOG_DIR/swing-labels.log 2>&1
 # --- saham-cron-end ---
 ENTRIES
@@ -107,7 +115,7 @@ CLEANED=$(echo "$EXISTING" | awk '
     /# --- saham-cron-end ---/   { skip=0; next }
     skip                         { next }
     /saham (fetch|learn|trade|screen|analyze|research)/  { next }
-    /# (IEV collector|Opening.*learning|Opening learning|Swing EOD)/  { next }
+    /# (Multi-tick IEV|IEV NCP|IEV collector|Sole decision|Same-day ops|open_30m|Opening.*learning|Opening learning|Optional paper|Session scorecard|Non-authoritative|Swing EOD|Optional multi-day|Optional research)/  { next }
     { print }
 ')
 
