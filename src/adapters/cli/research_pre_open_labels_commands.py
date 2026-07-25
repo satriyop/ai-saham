@@ -13,7 +13,7 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.learn_command_paths import parse_learn_date
+from src.adapters.cli.research_pre_open_paths import parse_session_date
 from src.infrastructure.config.app_config import load_app_config
 
 
@@ -38,7 +38,7 @@ def pre_open_labels(
         saham research pre-open labels
         saham research pre-open labels --date 2026-06-18
     """
-    run_date = parse_learn_date(date_str)
+    run_date = parse_session_date(date_str)
     cfg = load_app_config()
     resolved_db = db_path or Path(cfg.storage.db_path)
 

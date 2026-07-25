@@ -20,7 +20,7 @@ def opening_day_dir(run_date: date | None = None) -> Path:
     return opening_data_dir / d.strftime("%Y%m%d")
 
 
-def parse_learn_date(s: str | None) -> date | None:
+def parse_session_date(s: str | None) -> date | None:
     if not s:
         return None
     try:

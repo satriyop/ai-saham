@@ -14,8 +14,9 @@ def test_root_help_shows_lifecycle_groups():
     assert "today" in result.stdout
     assert "fetch" in result.stdout
     assert "screen" in result.stdout
-    assert "learn" in result.stdout
+    assert "research" in result.stdout
     assert "view" in result.stdout
+    assert "learn" not in result.stdout
     assert "│ data" not in result.stdout
     assert "│ skill" not in result.stdout
 
@@ -48,31 +49,22 @@ def test_removed_legacy_data_group_is_not_callable():
     assert result.exit_code != 0
 
 
-def test_learn_group_exposes_opening_loop_commands():
+def test_learn_group_removed_clean_break():
     result = runner.invoke(app, ["learn", "--help"])
 
-    assert result.exit_code == 0
-    assert "snapshot" in result.stdout
-    assert "track" in result.stdout
-    assert "grade" in result.stdout
-    assert "prompt" in result.stdout
-    assert "tune" in result.stdout
-    # Clean break: no learn labels command (help may still mention research path)
-    assert "  labels" not in result.stdout  # not a registered subcommand row
+    assert result.exit_code != 0
 
 
-def test_research_pre_open_exposes_capture_and_labels():
+def test_research_pre_open_exposes_session_and_corpus_commands():
     result = runner.invoke(app, ["research", "pre-open", "--help"])
 
     assert result.exit_code == 0
     assert "capture" in result.stdout
     assert "labels" in result.stdout
-
-
-def test_learn_labels_removed_clean_break():
-    result = runner.invoke(app, ["learn", "labels", "--help"])
-
-    assert result.exit_code != 0
+    assert "track" in result.stdout
+    assert "grade" in result.stdout
+    assert "prompt" in result.stdout
+    assert "tune" in result.stdout
 
 
 def test_view_group_exposes_ticker_dashboard_command():

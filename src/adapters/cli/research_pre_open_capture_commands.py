@@ -17,7 +17,7 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.learn_command_paths import opening_day_dir, parse_learn_date
+from src.adapters.cli.research_pre_open_paths import opening_day_dir, parse_session_date
 from src.adapters.cli.pre_open_sidecar_writer import write_pre_open_sidecar
 from src.adapters.cli.screen_pre_open_workflow_factory import (
     create_pre_open_cli_workflow,
@@ -101,7 +101,7 @@ def pre_open_capture(
     cfg = load_app_config()
     resolved_db = db_path or Path(cfg.storage.db_path)
     resolved_config = config_path or Path(cfg.config_paths.pre_open_screener)
-    run_date = parse_learn_date(session)
+    run_date = parse_session_date(session)
 
     overrides: dict = {
         "top_n": top,

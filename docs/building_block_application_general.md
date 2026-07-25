@@ -571,7 +571,7 @@ Each Big block decomposes into Medium modules:
 | Data Fetch (market) | `cli/fetch_market_commands.py` | Implementation of market data fetch |
 | IEV Capture | `cli/fetch_iev_commands.py` | Implementation of IEV snapshot capture |
 | View Router | `cli/view_commands.py` | `saham view broker [flow, top, history, top-foreign, distribution, mappings, status]` plus `saham view TICKER` (shorthand: `saham view BBCA`), `saham view universe` |
-| Research pre-open session | `cli/research_commands.py` + `learn_*_commands.py` modules | `research pre-open` capture/track/grade/labels/prompt/tune |
+| Research pre-open session | `cli/research_pre_open_*_commands.py` | `research pre-open` capture/track/grade/labels/prompt/tune |
 | Today Briefing | `cli/today_commands.py` | `saham today` daily briefing |
 | Status Impl | `cli/fetch_status_commands.py` | `saham fetch status` |
 | Indicator Router| `cli/indicator_commands.py` | `saham indicator [compute, snapshot, create, list, show, delete]` |

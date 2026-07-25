@@ -19,10 +19,10 @@ from __future__ import annotations
 import typer
 
 from src.adapters.cli.analyze_accum_commands import accumulation_audit
-from src.adapters.cli.learn_grade_commands import grade
-from src.adapters.cli.learn_prompt_commands import prompt
-from src.adapters.cli.learn_track_commands import track
-from src.adapters.cli.learn_tune_commands import tune
+from src.adapters.cli.research_pre_open_grade_commands import grade
+from src.adapters.cli.research_pre_open_prompt_commands import prompt
+from src.adapters.cli.research_pre_open_track_commands import track
+from src.adapters.cli.research_pre_open_tune_commands import tune
 from src.adapters.cli.research_pre_open_capture_commands import pre_open_capture
 from src.adapters.cli.research_pre_open_labels_commands import pre_open_labels
 from src.adapters.cli.research_signal_backfill_commands import signal_backfill_observations

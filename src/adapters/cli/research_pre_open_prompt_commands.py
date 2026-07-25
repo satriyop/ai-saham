@@ -10,9 +10,9 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.learn_command_paths import (
+from src.adapters.cli.research_pre_open_paths import (
     opening_day_dir,
-    parse_learn_date,
+    parse_session_date,
 )
 
 
@@ -32,7 +32,7 @@ def prompt(
         saham research pre-open prompt
         saham research pre-open prompt --print | pbcopy   # copy to clipboard (macOS)
     """
-    run_date = parse_learn_date(date_str)
+    run_date = parse_session_date(date_str)
 
     try:
         from src.application.use_case.opening_prompt_use_case import build_prompt

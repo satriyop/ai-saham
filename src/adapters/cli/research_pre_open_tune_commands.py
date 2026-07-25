@@ -11,9 +11,9 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.learn_command_paths import (
+from src.adapters.cli.research_pre_open_paths import (
     opening_day_dir,
-    parse_learn_date,
+    parse_session_date,
 )
 
 
@@ -42,7 +42,7 @@ def tune(
         saham research pre-open tune
         saham research pre-open tune --date 2026-06-17
     """
-    run_date = parse_learn_date(date_str)
+    run_date = parse_session_date(date_str)
     resolved_key = api_key or os.environ.get("DEEPSEEK_API_KEY")
 
     if not resolved_key:

@@ -12,9 +12,9 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.learn_command_paths import (
+from src.adapters.cli.research_pre_open_paths import (
     opening_day_dir,
-    parse_learn_date,
+    parse_session_date,
 )
 from src.infrastructure.config.app_config import load_app_config
 
@@ -52,7 +52,7 @@ def track(
         saham research pre-open track --broker-confirm              # with broker attribution
     """
     cfg = load_app_config()
-    run_date = parse_learn_date(date_str)
+    run_date = parse_session_date(date_str)
     db_path = Path(cfg.storage.db_path)
 
     if tickers:

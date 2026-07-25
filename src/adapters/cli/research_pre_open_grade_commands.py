@@ -12,9 +12,9 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.learn_command_paths import (
+from src.adapters.cli.research_pre_open_paths import (
     opening_day_dir,
-    parse_learn_date,
+    parse_session_date,
 )
 from src.infrastructure.config.app_config import load_app_config
 
@@ -33,7 +33,7 @@ def grade(
         saham research pre-open grade
         saham research pre-open grade --date 2026-06-17
     """
-    run_date = parse_learn_date(date_str)
+    run_date = parse_session_date(date_str)
     cfg = load_app_config()
     resolved_db = db_path or Path(cfg.storage.db_path)
 
