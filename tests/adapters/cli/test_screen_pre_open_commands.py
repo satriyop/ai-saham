@@ -93,10 +93,11 @@ def test_pre_open_results_render_rich_summary_panel(capsys):
     out = capsys.readouterr().out
     assert "Pre-Open Screener" in out
     assert "Session Summary" in out
-    assert "PRE-OPEN OPENING SETUP" in out
-    assert "SETUP" in out  # legend: legacy SETUP or ACTION TradeSetup
+    assert "PRE-OPEN CANDIDATES" in out
+    assert "TradeSetup" in out
+    assert "★ PRIME" not in out
+    assert "Action" in out or "ACTION" in out
     assert "VERDICT:" not in out
-    assert "Watchlist" in out
     assert "BBCA" in out
     assert "manual smoke warning" in out
     assert "Candles through" in out

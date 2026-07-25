@@ -398,7 +398,7 @@ def test_today_renders_market_wide_pre_open_observations_separately():
         opening_candidates=[
             OpeningBriefingCandidate(
                 ticker="A",
-                opening_setup="PRIME",
+                opening_setup="ENTER",
                 iev=1000,
                 iep=1050,
                 trend="UP",
@@ -453,7 +453,7 @@ def test_today_does_not_render_market_wide_ticker_in_universe_pre_open_table():
         opening_candidates=[
             OpeningBriefingCandidate(
                 ticker="A",
-                opening_setup="PRIME",
+                opening_setup="ENTER",
                 iev=1000,
                 iep=1050,
                 trend="UP",
@@ -513,7 +513,7 @@ def test_today_pre_open_assessment_shows_no_actionable_when_only_skip():
         opening_candidates=[
             OpeningBriefingCandidate(
                 ticker="BBCA",
-                opening_setup="SKIP",
+                opening_setup="AVOID",
                 iev=10000,
                 iep=10050,
                 trend="UP",
@@ -559,8 +559,8 @@ def test_today_pre_open_assessment_shows_actionable_rows_first():
         overall_authority="READY",
         regime=None,
         opening_candidates=[
-            OpeningBriefingCandidate(ticker="BBCA", opening_setup="PRIME"),
-            OpeningBriefingCandidate(ticker="BBRI", opening_setup="SKIP"),
+            OpeningBriefingCandidate(ticker="BBCA", opening_setup="ENTER"),
+            OpeningBriefingCandidate(ticker="BBRI", opening_setup="AVOID"),
         ],
         market_wide_opening_observations=[],
         accumulation_candidates=[],
@@ -609,7 +609,7 @@ def test_today_pre_open_assessment_keeps_market_wide_separate():
         overall_authority="READY",
         regime=None,
         opening_candidates=[
-            OpeningBriefingCandidate(ticker="A", opening_setup="PRIME"),
+            OpeningBriefingCandidate(ticker="A", opening_setup="ENTER"),
         ],
         market_wide_opening_observations=[
             OpeningBriefingCandidate(ticker="C", opening_setup="WATCH"),

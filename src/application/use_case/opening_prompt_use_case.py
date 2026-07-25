@@ -54,16 +54,17 @@ def build_prompt(run_date: date | None = None) -> str:
         "- Which stocks to watch at the 09:00 WIB opening auction",
         "- Entry price ranges based on ATR (Average True Range)",
         "- Trend direction (BULLISH/BEARISH/GAP_OUT/NEUTRAL)",
-        "- Opening Setup: PRIME (highest conviction) / WATCH / SKIP",
+        "- Action authority: TradeSetup.action (ENTER / WATCH / AVOID / BLOCKED)",
+        "- Signal score: auction cascade 0–100 (not IEV rank)",
         "",
         "**1R = entry_price - atr_stop** (risk unit). clean_trade = 1R available without stop being hit first.",
         "",
         "---",
         "",
-        "## Pre-Open Screener Predictions (08:57 WIB, NCP-locked)",
+        "## Pre-Open Decisions (capture at NCP)",
         "",
-        "| Ticker | IEV | IEP | Entry Range | Trend | RSI | Accum | IEV Intensity | Opening Setup |",
-        "|---|---|---|---|---|---|---|---|---|",
+        "| Ticker | IEV | IEP | Entry Range | Trend | Sig | TradeSetup | Broker Backing |",
+        "|---|---|---|---|---|---|---|---|",
     ]
 
     for c in snapshot.get("candidates", []):
@@ -73,10 +74,9 @@ def build_prompt(run_date: date | None = None) -> str:
             f"| {c.get('iep','?')} "
             f"| {c.get('entry_range_low','?')}–{c.get('entry_range_high','?')} "
             f"| {c.get('trend','?')} "
-            f"| {c.get('rsi','?')} "
-            f"| {c.get('opening_broker_backing_tag','?')} "
-            f"| {c.get('iev_intensity','?')} "
-            f"| **{c.get('opening_setup','?')}** |"
+            f"| {c.get('signal_score','?')} "
+            f"| **{c.get('trade_setup_action') or c.get('opening_setup') or '?'}** "
+            f"| {c.get('opening_broker_backing_tag','?')} |"
         )
 
     if grade:
@@ -86,20 +86,22 @@ def build_prompt(run_date: date | None = None) -> str:
             "",
             "## Actual Opening Session Outcomes (09:00–09:30 WIB)",
             "",
-            "| Ticker | Opening Setup | Opening Price | Entry Range Hit | 1R Available | Stop Hit | Clean Trade | Trend T+5 | Trend T+30 |",
-            "|---|---|---|---|---|---|---|---|---|",
+            "| Ticker | TradeSetup | Sig | Opening Price | Entry Range Hit | Clean Trade | Trend T+5 | Trend T+30 |",
+            "|---|---|---|---|---|---|---|---|",
         ]
         for t in grade.get("per_ticker", []):
             if t.get("no_track_data"):
-                lines.append(f"| {t['ticker']} | {t.get('opening_setup','?')} | NO DATA | — | — | — | — | — | — |")
+                lines.append(
+                    f"| {t['ticker']} | {t.get('trade_setup_action') or '?'} | "
+                    f"{t.get('signal_score','?')} | NO DATA | — | — | — | — |"
+                )
             else:
                 lines.append(
                     f"| {t.get('ticker')} "
-                    f"| {t.get('opening_setup','?')} "
+                    f"| {t.get('trade_setup_action') or t.get('opening_setup') or '?'} "
+                    f"| {t.get('signal_score','?')} "
                     f"| {t.get('opening_price','?')} "
                     f"| {'✓' if t.get('entry_range_hit') else '✗'} "
-                    f"| {'✓' if t.get('one_r_available') else ('✗' if t.get('one_r_available') is False else '—')} "
-                    f"| {'✓' if t.get('stop_hit') else ('✗' if t.get('stop_hit') is False else '—')} "
                     f"| {'✓' if t.get('clean_trade') else ('✗' if t.get('clean_trade') is False else '—')} "
                     f"| {'✓' if t.get('trend_T5') else ('✗' if t.get('trend_T5') is False else '—')} "
                     f"| {'✓' if t.get('trend_T30') else ('✗' if t.get('trend_T30') is False else '—')} |"
@@ -116,12 +118,25 @@ def build_prompt(run_date: date | None = None) -> str:
             f"- Clean trade rate:     **{_pct(grade.get('clean_trade_rate'))}**",
             f"- IEP mean error:       **{grade.get('iep_accuracy',{}).get('mean_error_pct','N/A')}%**",
             "",
-            "**By opening setup:**",
+            "**By TradeSetup action (champion):**",
         ]
-        for opening_setup in ("PRIME", "WATCH", "SKIP"):
-            v = grade.get("by_opening_setup", {}).get(opening_setup, {})
+        for action in ("ENTER", "WATCH", "AVOID", "BLOCKED_EXECUTION", "BLOCKED_STRUCTURAL"):
+            v = grade.get("by_trade_setup_action", {}).get(action, {})
+            if not v.get("count"):
+                continue
             lines.append(
-                f"- {opening_setup}: count={v.get('count',0)} | "
+                f"- {action}: count={v.get('count',0)} | "
+                f"entry_hit={_pct(v.get('entry_range_hit_rate'))} | "
+                f"clean_trade={_pct(v.get('clean_trade_rate'))}"
+            )
+        lines.append("")
+        lines.append("**By signal band (champion):**")
+        for band in ("strong", "moderate", "weak"):
+            v = grade.get("by_signal_band", {}).get(band, {})
+            if not v.get("count"):
+                continue
+            lines.append(
+                f"- {band}: count={v.get('count',0)} | "
                 f"entry_hit={_pct(v.get('entry_range_hit_rate'))} | "
                 f"clean_trade={_pct(v.get('clean_trade_rate'))}"
             )

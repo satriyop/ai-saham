@@ -570,9 +570,15 @@ class DailyBriefingUseCase:
             if not ticker:
                 continue
             ticker_upper = str(ticker).upper()
+            # Prefer TradeSetup.action from ops export; never invent PRIME.
+            action_label = (
+                row.get("trade_setup_action")
+                or row.get("action")
+                or "?"
+            )
             candidate = OpeningBriefingCandidate(
                 ticker=ticker_upper,
-                opening_setup=str(row.get("opening_setup", "?")),
+                opening_setup=str(action_label),
                 iev=row.get("iev"),
                 iep=row.get("iep"),
                 trend=row.get("trend"),

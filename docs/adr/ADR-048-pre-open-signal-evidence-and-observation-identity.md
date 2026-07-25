@@ -209,11 +209,10 @@ KPI.
 
 #### 8. UI
 
-When signal + TradeSetup are ready:
-
-* **Replace** PRIME/WATCH/SKIP as the authoritative setup column with
-  **signal score / quality** and **TradeSetup.action**.
-* PRIME must not survive as a parallel production authority.
+* Production pre-open UI uses **TradeSetup.action** + **signal score** only
+  (`screen pre-open` display, `today` opening table, ops export labels).
+* PRIME/WATCH/SKIP plan heuristics are **retired from production display**
+  (not a parallel authority column, not watchlist membership).
 
 #### 9. Adoption and non-dual-path
 

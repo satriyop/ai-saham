@@ -27,7 +27,7 @@ specific, evidence-based changes to the configuration parameters.
 
 Rules:
 - Ground EVERY recommendation in specific numbers from the report. No generic advice.
-- If clean_trade_rate for PRIME > WATCH, the selection logic works — focus on positioning.
+- If clean_trade_rate for ENTER > WATCH, the TradeSetup selection logic works — focus on positioning.
 - If entry_range_hit_rate is low, focus on ATR cap parameters.
 - If trend accuracy drops significantly from T5→T30, note momentum sustainability issues.
 - "1R" = one risk unit = entry_price - atr_stop. clean_trade = 1R reached before stop.
@@ -151,7 +151,9 @@ def _build_user_prompt(grade: dict) -> str:
         if t.get("no_track_data"):
             continue
         per_ticker_summary.append(
-            f"  {t['ticker']:8s} opening_setup={t.get('opening_setup','?'):5s} "
+            f"  {t['ticker']:8s} "
+            f"action={t.get('trade_setup_action') or '?':8s} "
+            f"sig={t.get('signal_score','?'):>3} "
             f"trend={t.get('trend','?'):8s} "
             f"entry_hit={str(t.get('entry_range_hit','?')):5s} "
             f"clean={str(t.get('clean_trade','?')):5s} "
@@ -163,12 +165,14 @@ def _build_user_prompt(grade: dict) -> str:
         )
 
     config = grade.get("config_snapshot", {})
-    by_opening_setup = grade.get("by_opening_setup", {})
+    by_action = grade.get("by_trade_setup_action", {})
+    by_band = grade.get("by_signal_band", {})
 
     return f"""DATE: {grade.get('date')}
 
 SESSION SUMMARY:
   Tickers screened: {grade.get('tickers_screened')} | Tracked: {grade.get('tickers_tracked')}
+  Decision source: {grade.get('decision_source', 'N/A')}
   Entry range hit rate:   {grade.get('entry_range_hit_rate', 'N/A')}
   Trend accuracy T+5min:  {grade.get('trend_accuracy_T5', 'N/A')}
   Trend accuracy T+15min: {grade.get('trend_accuracy_T15', 'N/A')}
@@ -176,10 +180,15 @@ SESSION SUMMARY:
   Clean trade rate:       {grade.get('clean_trade_rate', 'N/A')}
   IEP mean error:         {grade.get('iep_accuracy', {}).get('mean_error_pct', 'N/A')}%
 
-BY OPENING SETUP:
-  PRIME: count={by_opening_setup.get('PRIME',{}).get('count',0)} clean_trade={by_opening_setup.get('PRIME',{}).get('clean_trade_rate','N/A')} entry_hit={by_opening_setup.get('PRIME',{}).get('entry_range_hit_rate','N/A')}
-  WATCH: count={by_opening_setup.get('WATCH',{}).get('count',0)} clean_trade={by_opening_setup.get('WATCH',{}).get('clean_trade_rate','N/A')} entry_hit={by_opening_setup.get('WATCH',{}).get('entry_range_hit_rate','N/A')}
-  SKIP:  count={by_opening_setup.get('SKIP',{}).get('count',0)} clean_trade={by_opening_setup.get('SKIP',{}).get('clean_trade_rate','N/A')}
+BY TRADESETUP ACTION (champion):
+  ENTER: count={by_action.get('ENTER',{}).get('count',0)} clean_trade={by_action.get('ENTER',{}).get('clean_trade_rate','N/A')} entry_hit={by_action.get('ENTER',{}).get('entry_range_hit_rate','N/A')}
+  WATCH: count={by_action.get('WATCH',{}).get('count',0)} clean_trade={by_action.get('WATCH',{}).get('clean_trade_rate','N/A')} entry_hit={by_action.get('WATCH',{}).get('entry_range_hit_rate','N/A')}
+  AVOID: count={by_action.get('AVOID',{}).get('count',0)} clean_trade={by_action.get('AVOID',{}).get('clean_trade_rate','N/A')}
+
+BY SIGNAL BAND (champion):
+  strong: count={by_band.get('strong',{}).get('count',0)} clean_trade={by_band.get('strong',{}).get('clean_trade_rate','N/A')}
+  moderate: count={by_band.get('moderate',{}).get('count',0)} clean_trade={by_band.get('moderate',{}).get('clean_trade_rate','N/A')}
+  weak: count={by_band.get('weak',{}).get('count',0)} clean_trade={by_band.get('weak',{}).get('clean_trade_rate','N/A')}
 
 PER TICKER:
 {chr(10).join(per_ticker_summary)}

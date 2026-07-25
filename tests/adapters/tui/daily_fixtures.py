@@ -77,7 +77,7 @@ def ready_response() -> DailyBriefingResponse:
         readiness_items=[DataReadiness("candles", as_of, 1, 1, "READY")],
         overall_authority="READY",
         regime=regime,
-        opening_candidates=[OpeningBriefingCandidate("BBCA", "PRIME", 100, 9000, "UP", 77.0)],
+        opening_candidates=[OpeningBriefingCandidate("BBCA", "ENTER", 100, 9000, "UP", 77.0)],
         accumulation_summary=DailyAccumulationSummary(1, 1, 1, 1, 0, 0, 0),
         daily_accumulation_candidates=[
             DailyAccumulationCandidate("BBCA", 77.0, "ACCUMULATION", 81, 1.0, "OPEN", "ENTER")

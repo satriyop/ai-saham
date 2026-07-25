@@ -350,7 +350,7 @@ def test_daily_briefing_opening_snapshot(tmp_path, monkeypatch):
     snapshot_data = {
         "captured_at": "2026-06-19T09:05:00+07:00",
         "candidates": [
-            {"ticker": "BBCA", "opening_setup": "PRIME", "iev": 10000, "iep": 10050, "trend": "UP"}
+            {"ticker": "BBCA", "trade_setup_action": "ENTER", "iev": 10000, "iep": 10050, "trend": "UP"}
         ]
     }
     snapshot_file.write_text(json.dumps(snapshot_data))
@@ -547,7 +547,7 @@ def test_daily_briefing_ready_when_all_critical_sources_ready(tmp_path, monkeypa
     snapshot_file = date_dir / "ops_session.json"
     snapshot_data = {
         "captured_at": "2026-06-19T09:05:00+07:00",
-        "candidates": [{"ticker": "T1", "opening_setup": "PRIME"}]
+        "candidates": [{"ticker": "T1", "trade_setup_action": "ENTER"}]
     }
     snapshot_file.write_text(json.dumps(snapshot_data))
 
@@ -592,8 +592,8 @@ def test_daily_briefing_splits_opening_snapshot_by_universe_scope(tmp_path, monk
     snapshot_data = {
         "captured_at": "2026-06-19T09:05:00+07:00",
         "candidates": [
-            {"ticker": "a", "opening_setup": "PRIME"},
-            {"ticker": "c", "opening_setup": "WATCH"}
+            {"ticker": "a", "trade_setup_action": "ENTER"},
+            {"ticker": "c", "trade_setup_action": "WATCH"}
         ]
     }
     snapshot_file.write_text(json.dumps(snapshot_data))
@@ -632,7 +632,7 @@ def test_daily_briefing_splits_opening_snapshot_by_universe_scope(tmp_path, monk
     assert response.opening_snapshot_date == date(2026, 6, 19)
     assert len(response.opening_candidates) == 1
     assert response.opening_candidates[0].ticker == "A"
-    assert response.opening_candidates[0].opening_setup == "PRIME"
+    assert response.opening_candidates[0].opening_setup == "ENTER"
 
     assert len(response.market_wide_opening_observations) == 1
     assert response.market_wide_opening_observations[0].ticker == "C"
@@ -649,7 +649,7 @@ def test_daily_briefing_empty_universe_treats_opening_rows_as_market_wide(tmp_pa
     snapshot_data = {
         "captured_at": "2026-06-19T09:05:00+07:00",
         "candidates": [
-            {"ticker": "A", "opening_setup": "PRIME"}
+            {"ticker": "A", "trade_setup_action": "ENTER"}
         ]
     }
     snapshot_file.write_text(json.dumps(snapshot_data))

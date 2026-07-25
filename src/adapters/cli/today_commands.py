@@ -74,13 +74,14 @@ def _parse_date(value: str | None) -> date | None:
         raise typer.Exit(1)
 
 
-_ACTIONABLE_OPENING_SETUPS = {"PRIME", "WATCH"}
+# TradeSetup actions that count as opening watchlist (ADR-026)
+_ACTIONABLE_OPENING_ACTIONS = frozenset({"ENTER", "WATCH"})
 
 
 def _opening_table(candidates: list[OpeningBriefingCandidate]):
     table = compact_table()
     table.add_column("Ticker", style="bold")
-    table.add_column("Opening Setup")
+    table.add_column("Action")
     table.add_column("IEV", justify="right")
     table.add_column("IEP", justify="right")
     table.add_column("Trend")
@@ -88,11 +89,17 @@ def _opening_table(candidates: list[OpeningBriefingCandidate]):
         iev = f"{candidate.iev:,}" if candidate.iev is not None else "-"
         iep = f"{candidate.iep:,}" if candidate.iep is not None else "-"
 
-        # Color the opening-session setup label.
-        setup_style = "green" if candidate.opening_setup == "PRIME" else (
-            "yellow" if candidate.opening_setup == "WATCH" else "red"
-        )
-        setup_text = f"[{setup_style}]{candidate.opening_setup}[/{setup_style}]"
+        # TradeSetup.action label from ops_session export (not PRIME heuristic)
+        action = str(candidate.opening_setup or "?").upper()
+        if action == "ENTER":
+            setup_style = "green"
+        elif action == "WATCH":
+            setup_style = "yellow"
+        elif action.startswith("BLOCK"):
+            setup_style = "red"
+        else:
+            setup_style = "dim"
+        setup_text = f"[{setup_style}]{action}[/{setup_style}]"
 
         trend_map = {"UP": "green", "DOWN": "red", "SIDE": "yellow"}
         trend_style = trend_map.get(str(candidate.trend).upper(), "white")
@@ -408,7 +415,7 @@ def today(
     actionable_rows = []
     observation_rows = []
     for candidate in response.opening_candidates:
-        if str(candidate.opening_setup).upper() in _ACTIONABLE_OPENING_SETUPS:
+        if str(candidate.opening_setup).upper() in _ACTIONABLE_OPENING_ACTIONS:
             actionable_rows.append(candidate)
         else:
             observation_rows.append(candidate)
