@@ -226,17 +226,44 @@ each phase gate.
 * Envelope/JSON fields under ADR-046 adopt-on-touch as needed.
 * *Checkpoint:* CLI/TUI/display tests; no production PRIME authority. **Review stop.**
 
-### Phase 4 — `learn grade` evolution
+### Phase 4 — `learn grade` evolution (session scorecard only)
 
-* Keep command; extend metrics over frozen observations + tracks
-  (plan + signal bands + `screen_result` slices).
-* Demote PRIME strata from champion KPI.
-* *Checkpoint:* grade tests with fixtures; tune/prompt consumers still feed or are
-  updated deliberately. **Final gate.**
+**Status:** Phases 1–3 landed in code; Phase 4 is the remaining gate for this task.
+
+**Locked scope (do not expand without a new task):**
+
+* **Keep** the `saham learn grade` command and day-report UX (`grade.json` /
+  `grade.md` for `learn tune` / `prompt` compatibility; bump schema/version
+  notes if fields change).
+* **Prefer NCP-frozen DB observations** (`workflow=screen_pre_open`,
+  `observation_contract=pre-open-open-30m`) joined to `learn track` files when
+  observations exist for that date; fall back to `snapshot.json` plan fields
+  when no DB rows (graceful, documented).
+* **Champion metrics:** plan (entry range hit, IEP error, stop path) + **signal
+  score bands** + `screen_result` / TradeSetup action slices.
+* **Demote PRIME / `opening_setup` strata** to legacy/secondary only — not the
+  champion KPI.
+* Deterministic, offline; no grade-time recompute of signal (read freeze only).
+
+**Explicit non-goals for Phase 4 (follow-up tasks):**
+
+* Do **not** implement `research signal labels` / readiness for
+  `pre-open-open-30m` here (that is the accum-style **corpus label** path —
+  closest architectural twin, separate product surface).
+* Do **not** retire `learn grade` or fold it into `research signal`.
+* Do **not** change swing label horizons or accumulation-discovery contracts.
+
+**Analogy (for implementers):** accum’s long-term equivalent of “outcomes on
+frozen decisions” is `saham research signal labels` + `readiness` on
+`candidate_observations`. Pre-open Phase 4 is only the **opening session
+scorecard** over freezes + tracks — not full research-corpus parity.
+
+* *Checkpoint:* grade tests with fixtures (DB freeze present / absent fallback);
+  PRIME not champion KPI; tune/prompt still consumable. **Final gate.**
 
 ## Frozen execution contract (do not re-litigate)
 
-From ADR-048 acceptance discussion:
+From ADR-048 acceptance discussion + Phase 4 scope lock:
 
 | Topic | Value |
 |-------|--------|
@@ -247,10 +274,11 @@ From ADR-048 acceptance discussion:
 | Confirmation-only score | Forbidden |
 | TradeSetup | On when signal exists |
 | Risk | Annotate (non-blocking) |
-| Observations | DB, all names, funnel `screen_result` |
+| Observations | DB, all screened candidates, funnel `screen_result` (Phase 2) |
 | Capture | NCP freeze champion |
-| PRIME | Remove as authority at UI cutover |
-| learn grade | Unchanged until signal; then evolve, do not retire |
+| PRIME | Remove as authority at UI cutover (Phase 3) |
+| learn grade (Phase 4) | **Evolve session scorecard** over freeze + tracks; keep command; PRIME secondary |
+| research open labels | **Out of this task** — future research-family work |
 | Adoption | `ScreenAssessmentPipeline` only |
 
 ## Final Gate
