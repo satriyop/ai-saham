@@ -43,23 +43,39 @@ app = typer.Typer(
 )
 
 # ── Command groups ─────────────────────────────────────────────────────────────
+#
+# Two grammars, git-style. Verb-first commands act on the *one* subject (market
+# data and its analysis), like `git commit` / `git fetch`. Noun-first commands
+# manage *collections* of named artifacts you author, like `git remote` /
+# `git branch`. The help panels below make that split visible instead of showing
+# one flat list — mirroring how `git help` groups commands into sections.
 
-app.command("today")(today)
-app.command("tui")(tui)
-app.add_typer(fetch_app, name="fetch")
-app.add_typer(audit_app, name="audit")
-app.add_typer(screen_app, name="screen")
-app.add_typer(research_app, name="research")
-app.add_typer(view_app, name="view")
-app.add_typer(indicator_app, name="indicator")
-app.add_typer(analyze_app, name="analyze")
-app.add_typer(strategy_app, name="strategy")
-app.add_typer(trade_app, name="trade")
+_PANEL_DATA = "Data"  # sync market data — git: collaborate (fetch/push)
+_PANEL_ANALYSIS = "Analysis"  # transform the subject — git: grow history (commit/merge)
+_PANEL_INSPECT = "Inspect"  # examine current state — git: examine state (log/status/show)
+_PANEL_ARTIFACTS = "Artifacts"  # manage named collections — git: remote/branch/tag
+_PANEL_GENERAL = "General"  # meta / entry points
+
+# Ordered in data-pipeline reading order: Data → Analysis → Inspect → Artifacts
+# → General. Note: Typer renders flat-command panels (today/tui/version) ahead of
+# sub-group panels regardless of this order, so the on-screen panel sequence is
+# only approximately this. The grouping — not the exact sequence — is the point.
+app.add_typer(fetch_app, name="fetch", rich_help_panel=_PANEL_DATA)
+app.command("today", rich_help_panel=_PANEL_ANALYSIS)(today)
+app.add_typer(screen_app, name="screen", rich_help_panel=_PANEL_ANALYSIS)
+app.add_typer(analyze_app, name="analyze", rich_help_panel=_PANEL_ANALYSIS)
+app.add_typer(research_app, name="research", rich_help_panel=_PANEL_ANALYSIS)
+app.add_typer(trade_app, name="trade", rich_help_panel=_PANEL_ANALYSIS)
+app.add_typer(view_app, name="view", rich_help_panel=_PANEL_INSPECT)
+app.add_typer(audit_app, name="audit", rich_help_panel=_PANEL_INSPECT)
+app.add_typer(indicator_app, name="indicator", rich_help_panel=_PANEL_ARTIFACTS)
+app.add_typer(strategy_app, name="strategy", rich_help_panel=_PANEL_ARTIFACTS)
+app.command("tui", rich_help_panel=_PANEL_GENERAL)(tui)
 
 
 # ── Flat commands ──────────────────────────────────────────────────────────────
 
-@app.command()
+@app.command(rich_help_panel=_PANEL_GENERAL)
 def version() -> None:
     """Show version and build information."""
     typer.echo(f"saham v{__version__}")
