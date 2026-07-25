@@ -23,6 +23,7 @@ from src.adapters.shared.score_display_labels import (
 )
 from src.adapters.cli.screen_accum_enrichment_display import (
     _evidence_factor_rows,
+    _signal_flow_factor_rows,
     build_enrichment_details_table,
 )
 from src.adapters.cli.screen_accum_formatters import (
@@ -232,6 +233,15 @@ def display_results(
     signal_table.add_column("Max")
     signal_table.add_column("Flags")
 
+    # Accum-style factor dump for FlowGrp (Option 1: always-on second panel).
+    flow_grp_table = compact_table()
+    flow_grp_table.add_column("Pts", justify="right")
+    if show_context_ticker:
+        flow_grp_table.add_column("Ticker", style="bold")
+    flow_grp_table.add_column("Factor")
+    flow_grp_table.add_column("Value", justify="right")
+    flow_grp_table.add_column("Means")
+
     risk_table = compact_table()
     risk_table.add_column("Status")
     if show_context_ticker:
@@ -361,6 +371,12 @@ def display_results(
             else:
                 signal_table.add_row(*signal_row)
 
+        for flow_row in _signal_flow_factor_rows(c):
+            if show_context_ticker:
+                flow_grp_table.add_row(flow_row[0], c.ticker, *flow_row[1:])
+            else:
+                flow_grp_table.add_row(*flow_row)
+
         risk_row = [
             gate_status,
             _risk_tier(c.risk_assessment),
@@ -418,7 +434,19 @@ def display_results(
         panel(evidence_table, title=f"{ACCUM} score components"),
         panel(
             signal_table,
-            title=f"{SIGNAL} (SignalEngine — not {ACCUM})",
+            title=f"{SIGNAL} summary (SignalEngine — not {ACCUM})",
+        ),
+        panel(
+            Group(
+                flow_grp_table,
+                Text(
+                    f"\n{FLOW_GRP} detail mirrors Accum factors (Pts/Factor/Value/Means). "
+                    "RSI/BB are not in FlowGrp. Bandar blends when present; "
+                    "group_cap ceilings correlated broker evidence.",
+                    style="dim",
+                ),
+            ),
+            title=f"{SIGNAL} · {FLOW_GRP} components",
         ),
         panel(
             Group(

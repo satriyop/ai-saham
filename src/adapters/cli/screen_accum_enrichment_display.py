@@ -131,6 +131,123 @@ def _format_bci_status(candidate: AccumulationCandidate) -> str:
     return f"{label} (abs={ratio:.2f})"
 
 
+# Human labels for FlowGrp sub-signals (ADR-043: not Accum panel names alone).
+_FLOW_GRP_FACTOR_META: dict[str, tuple[str, str]] = {
+    "cons": ("cons (net days)", "Foreign buy consistency → FlowGrp"),
+    "streak": ("streak", "Consecutive foreign net-buy days → FlowGrp"),
+    "vwap": ("vwap (F_VWAP%)", "Foreign VWAP discount → FlowGrp"),
+    "flow": ("flow (FlowRatio%)", "Foreign share of turnover → FlowGrp"),
+    "inst": ("inst (BCI)", "Tier-1 broker concentration → FlowGrp"),
+}
+
+
+def _signal_flow_factor_rows(
+    candidate: AccumulationCandidate,
+) -> list[tuple[str, ...]]:
+    """Accum-style factor rows for Signal FlowGrp (format-only; no rescoring).
+
+    Shape matches ``_evidence_factor_rows``: (Pts, Factor, Value, Means).
+
+    Components come from the candidate's foreign-flow evidence + bandar
+    snapshot (same inputs FlowConfirmationEvidenceBuilder uses). The total
+    FlowGrp comes from Signal breakdown when assessment is attached.
+    """
+    from src.domain.value_objects.accum_score_breakdown import (
+        ForeignFlowComponentStatus,
+    )
+
+    sa = candidate.signal_assessment
+    ffe = getattr(candidate, "foreign_flow_evidence", None)
+    components = ffe.components_by_key if ffe is not None else {}
+
+    flow_grp = None
+    if sa is not None and getattr(sa, "assessment", None) is not None:
+        flow_grp = sa.assessment.breakdown_dict.get("flow_confirmation_group")
+
+    if ffe is None and flow_grp is None:
+        return [
+            (
+                "—",
+                "FlowGrp",
+                "MISSING",
+                "No flow evidence / Signal assessment on this candidate",
+            )
+        ]
+
+    def _value_for(key: str) -> str:
+        if key == "cons":
+            return f"{candidate.net_buy_days}/{candidate.total_days}"
+        if key == "streak":
+            return f"{candidate.consecutive_streak}s"
+        if key == "vwap":
+            return format_disc_pct_plain(candidate.vwap_discount_pct)
+        if key == "flow":
+            return (
+                f"{candidate.avg_flow_ratio:+.1f}%"
+                if candidate.avg_flow_ratio is not None
+                else "-"
+            )
+        if key == "inst":
+            return _format_bci_status(candidate)
+        return "-"
+
+    rows: list[tuple[str, ...]] = []
+    for key in ("cons", "streak", "vwap", "flow", "inst"):
+        factor, means = _FLOW_GRP_FACTOR_META[key]
+        component = components.get(key)
+        if component is None:
+            rows.append(("—", factor, "—", f"{means} (not on candidate)"))
+            continue
+        if component.status is ForeignFlowComponentStatus.DISABLED:
+            rows.append(("—", factor, "DISABLED", f"{means} (policy off)"))
+            continue
+        if component.status is ForeignFlowComponentStatus.MISSING:
+            rows.append(("—", factor, "MISSING", f"{means} (MISSING)"))
+            continue
+        pts_val = component.score_points
+        pts = f"{float(pts_val):.1f}" if pts_val is not None else "—"
+        rows.append((pts, factor, _value_for(key), means))
+
+    bandar = getattr(candidate, "bandar_detector", None)
+    broad = getattr(bandar, "broad_score", None) if bandar is not None else None
+    if broad is None:
+        rows.append(
+            (
+                "—",
+                "bandar",
+                "MISSING",
+                "Operator snapshot (Stockbit); blended into FlowGrp when present",
+            )
+        )
+    else:
+        rows.append(
+            (
+                str(int(broad)),
+                "bandar",
+                f"{int(broad):+d} (−12…+12)",
+                "Operator broad score → blended with flow strength in FlowGrp",
+            )
+        )
+
+    rows.append(
+        (
+            "—",
+            "group_cap",
+            "0.80",
+            "Default FlowGrp ceiling on combined strength (anti double-count)",
+        )
+    )
+    rows.append(
+        (
+            f"{float(flow_grp):.0f}" if flow_grp is not None else "—",
+            "FlowGrp total",
+            f"{float(flow_grp):.0f}" if flow_grp is not None else "—",
+            "Signal panel FlowGrp = capped_strength × 100 (not Accum)",
+        )
+    )
+    return rows
+
+
 def build_enrichment_details_table(
     candidates: list[AccumulationCandidate],
     show_context_ticker: bool,

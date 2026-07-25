@@ -61,6 +61,9 @@ def test_display_results_renders_rich_accumulation_panel(capsys):
     assert "TechnicalGate is not evaluated by screen accum" in out
     assert "Scoring Definitions" not in out
     assert "Run Context" not in out
+    # Option 1: Signal summary + FlowGrp component panel always present
+    assert "FlowGrp" in out or "flow confirmation" in out.lower()
+    assert "Signal" in out
 
 
 def test_display_results_never_shows_fresh_ok_and_splits_align_from_ready(capsys):
