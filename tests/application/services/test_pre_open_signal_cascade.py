@@ -30,6 +30,7 @@ def _auction(
     gap: float | None = 1.0,
     bid_pressure: float | None = 0.65,
     spread: float | None = 0.3,
+    delta_iev: int | None = None,
 ) -> AuctionNcpEvidence:
     return AuctionNcpEvidence(
         ticker="BBCA",
@@ -44,6 +45,7 @@ def _auction(
             capture_phase="NCP_LOCKED",
             trade_date=date(2026, 6, 18),
         ),
+        delta_iev=delta_iev,
     )
 
 
@@ -125,6 +127,65 @@ def test_viability_does_not_boost_score_above_auction():
     )
     assert resp is not None
     assert resp.score == auction_only
+
+
+def test_delta_iev_missing_is_neutral_not_penalty():
+    base = _auction(delta_iev=None)
+    with_flat = _auction(delta_iev=0)
+    assert score_auction_ncp(base) == score_auction_ncp(with_flat)
+
+
+def test_delta_iev_build_boosts_fade_penalizes():
+    # Mid-range base so ±contrib is visible (not already clamped at 100)
+    missing = score_auction_ncp(
+        _auction(iev=150_000, gap=3.0, bid_pressure=0.5, spread=0.8, delta_iev=None)
+    )
+    build = score_auction_ncp(
+        _auction(iev=150_000, gap=3.0, bid_pressure=0.5, spread=0.8, delta_iev=40_000)
+    )
+    fade = score_auction_ncp(
+        _auction(iev=150_000, gap=3.0, bid_pressure=0.5, spread=0.8, delta_iev=-40_000)
+    )
+    assert build > missing
+    assert fade < missing
+
+
+def test_cascade_rationale_mentions_delta_iev():
+    auction = _auction(delta_iev=40_000)
+    resp = evaluate_pre_open_signal_cascade(
+        PreOpenSignalEvidenceBundle(auction_ncp=auction, open_viability=None),
+        snapshot_date=date(2026, 6, 18),
+    )
+    assert resp is not None
+    assert any("delta_iev=" in r for r in resp.assessment.rationale)
+
+
+def test_builder_passes_delta_iev():
+    candidate = SimpleNamespace(
+        ticker="BBRI",
+        iev=250_000,
+        prev_close=Decimal("5000"),
+        gap_pct=Decimal("1.2"),
+        bid_offer_imbalance=0.62,
+        spread_pct=Decimal("0.4"),
+        trend_signal="BULLISH",
+        unusual_volume=False,
+        iev_intensity=2.0,
+        atr=Decimal("50"),
+        rsi=Decimal("55"),
+    )
+    builder = PreOpenSignalInputsBuilder()
+    without = builder.evaluate(candidate, trade_date=date(2026, 6, 18), delta_iev=None)
+    with_delta = builder.evaluate(
+        candidate, trade_date=date(2026, 6, 18), delta_iev=80_000
+    )
+    assert without is not None and with_delta is not None
+    assert with_delta.score >= without.score
+    bundle = builder.build_bundle(
+        candidate, trade_date=date(2026, 6, 18), delta_iev=12_345
+    )
+    assert bundle.auction_ncp is not None
+    assert bundle.auction_ncp.delta_iev == 12_345
 
 
 def test_builder_from_candidate_and_evaluate():

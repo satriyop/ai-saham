@@ -32,7 +32,12 @@ from src.domain.value_objects.signal_assessment import (
 
 
 def score_auction_ncp(auction: AuctionNcpEvidence) -> int:
-    """Deterministic 0–100 auction quality from NCP-linked fields."""
+    """Deterministic 0–100 auction quality from NCP-linked fields.
+
+    ``delta_iev`` is MISSING-safe: when None (no multi-tick history), the score
+    uses gap/book/IEV only with no penalty and no fabrication. When present,
+    relative build-into-lock adjusts the score (appetite factor).
+    """
     score = 55.0  # baseline when IEV+prev_close present
 
     # Gap: prefer moderate absolute gap (interest without explosion)
@@ -72,7 +77,47 @@ def score_auction_ncp(auction: AuctionNcpEvidence) -> int:
     elif auction.iev >= 200_000:
         score += 4.0
 
+    # ΔIEV appetite (build into lock) — present only when multi-tick history exists
+    score += _delta_iev_contribution(auction)
+
     return int(max(0, min(100, round(score))))
+
+
+def _delta_iev_contribution(auction: AuctionNcpEvidence) -> float:
+    """Return additive score delta from build-into-lock; 0.0 when MISSING.
+
+    Relative change = delta_iev / max(iev, 1). Positive = interest built toward NCP.
+    """
+    if auction.delta_iev is None:
+        return 0.0
+    base = max(int(auction.iev), 1)
+    rel = float(auction.delta_iev) / float(base)
+    # Strong build
+    if rel >= 0.20:
+        return 12.0
+    if rel >= 0.08:
+        return 7.0
+    if rel >= 0.03:
+        return 3.0
+    # Flat
+    if rel > -0.03:
+        return 0.0
+    # Fade
+    if rel > -0.08:
+        return -3.0
+    if rel > -0.20:
+        return -7.0
+    return -12.0
+
+
+def delta_iev_rationale(auction: AuctionNcpEvidence) -> str:
+    """Human-readable rationale token for cascade reasons."""
+    if auction.delta_iev is None:
+        return "delta_iev=MISSING"
+    contrib = _delta_iev_contribution(auction)
+    base = max(int(auction.iev), 1)
+    rel = float(auction.delta_iev) / float(base)
+    return f"delta_iev={auction.delta_iev}(rel={rel:+.3f},contrib={contrib:+.0f})"
 
 
 def _strength_from_score(score: int, *, cfg: PreOpenSignalConfig) -> SignalStrength:
@@ -136,7 +181,10 @@ def evaluate_pre_open_signal_cascade(
         strength = SignalStrength.MODERATE
 
     entry_quality = _entry_quality(strength)
-    reasons: list[str] = [f"auction_score={auction_score}"]
+    reasons: list[str] = [
+        f"auction_score={auction_score}",
+        delta_iev_rationale(auction),
+    ]
     constraint_reasons: list[str] = []
     max_decision = entry_quality.value
 
@@ -345,6 +393,7 @@ class PreOpenSignalInputsBuilder:
         decision_at=None,
         capture_phase: str = "UNKNOWN",
         snapshot_ref: str | None = None,
+        delta_iev: int | None = None,
     ) -> PreOpenSignalEvidenceBundle:
         from src.application.services.pre_open_signal_evidence_builder import (
             build_pre_open_signal_evidence,
@@ -357,6 +406,7 @@ class PreOpenSignalInputsBuilder:
             capture_phase=capture_phase,
             snapshot_ref=snapshot_ref,
             config=self._config,
+            delta_iev=delta_iev,
         )
 
     def evaluate(
@@ -367,6 +417,7 @@ class PreOpenSignalInputsBuilder:
         decision_at=None,
         capture_phase: str = "UNKNOWN",
         snapshot_ref: str | None = None,
+        delta_iev: int | None = None,
     ) -> AssessSignalResponse | None:
         bundle = self.build_bundle(
             candidate,
@@ -374,6 +425,7 @@ class PreOpenSignalInputsBuilder:
             decision_at=decision_at,
             capture_phase=capture_phase,
             snapshot_ref=snapshot_ref,
+            delta_iev=delta_iev,
         )
         return evaluate_pre_open_signal_cascade(
             bundle, snapshot_date=trade_date, config=self._config

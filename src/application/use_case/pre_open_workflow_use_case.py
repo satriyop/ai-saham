@@ -10,11 +10,11 @@ Engine adoption (ADR-047 / ADR-048):
   TradeSetup composed when signal + risk assessments both exist.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 from src.application.dto.assess_signal import AssessSignalResponse
 from src.application.services.pre_open_risk_inputs_builder import PreOpenRiskInputsBuilder
@@ -52,6 +52,13 @@ from src.domain.value_objects.trade_setup import TradeSetup
 if TYPE_CHECKING:
     from src.application.services.risk_engine import RiskEngine
     from src.domain.value_objects.market_context import MarketContext
+
+
+class IevDeltaProvider(Protocol):
+    """Narrow port: multi-tick ΔIEV map for one session date (MISSING-safe)."""
+
+    def get_iev_delta(self, snapshot_date: date) -> Mapping[str, int]:
+        ...
 
 
 @dataclass(frozen=True)
@@ -162,12 +169,14 @@ class PreOpenWorkflowUseCase:
         run_snapshot_screen: (
             Callable[[PreOpenScreenConfig, date], PreOpenSnapshotScreenResult | None] | None
         ) = None,
+        iev_delta_provider: IevDeltaProvider | None = None,
     ) -> None:
         self._screen_use_case = screen_use_case
         self._market_repo = market_repository
         self._broker_repo = broker_repository
         self._evaluate_market_context = evaluate_market_context
         self._run_snapshot_screen = run_snapshot_screen
+        self._iev_delta_provider = iev_delta_provider
         self._assessment_pipeline = assessment_pipeline or ScreenAssessmentPipeline(
             policy=ScreenPolicy.pre_open(),
             risk_engine=risk_engine,
@@ -282,6 +291,15 @@ class PreOpenWorkflowUseCase:
             capture_phase = request.capture_phase
             if source_status is PreOpenSourceStatus.SNAPSHOT_SUCCESS:
                 capture_phase = "NCP_LOCKED"
+            iev_deltas: Mapping[str, int] = {}
+            if self._iev_delta_provider is not None:
+                try:
+                    iev_deltas = dict(
+                        self._iev_delta_provider.get_iev_delta(result.screened_date)
+                    )
+                except Exception as exc:
+                    warnings.append(f"IEV delta unavailable (MISSING-safe): {exc}")
+                    iev_deltas = {}
             for candidate in result.candidates:
                 try:
                     sig = self._signal_builder.evaluate(
@@ -290,6 +308,7 @@ class PreOpenWorkflowUseCase:
                         capture_phase=capture_phase,
                         snapshot_ref=request.decision_snapshot_ref
                         or source_snapshot_ref,
+                        delta_iev=iev_deltas.get(candidate.ticker),
                     )
                 except Exception as exc:
                     warnings.append(

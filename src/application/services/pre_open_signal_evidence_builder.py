@@ -29,13 +29,26 @@ def build_pre_open_signal_evidence(
     capture_phase: str = "UNKNOWN",
     snapshot_ref: str | None = None,
     config: PreOpenSignalConfig | None = None,
+    delta_iev: int | None = None,
 ) -> PreOpenSignalEvidenceBundle:
-    """Build evidence bundle from a duck-typed pre-open candidate."""
+    """Build evidence bundle from a duck-typed pre-open candidate.
+
+    ``delta_iev`` may be passed explicitly (from multi-tick history) or read from
+    ``candidate.delta_iev`` when present. None = MISSING (do not fabricate).
+    """
     cfg = config or PreOpenSignalConfig()
     ticker = str(getattr(candidate, "ticker", "") or "")
     iev = int(getattr(candidate, "iev", 0) or 0)
     prev_close = getattr(candidate, "prev_close", None)
     gap_pct = getattr(candidate, "gap_pct", None)
+    resolved_delta: int | None = delta_iev
+    if resolved_delta is None and hasattr(candidate, "delta_iev"):
+        raw = getattr(candidate, "delta_iev", None)
+        if raw is not None:
+            try:
+                resolved_delta = int(raw)
+            except (TypeError, ValueError):
+                resolved_delta = None
 
     auction: AuctionNcpEvidence | None = None
     # Minimal auction presence: positive IEV + prior close (auction map anchor).
@@ -58,6 +71,7 @@ def build_pre_open_signal_evidence(
                 snapshot_ref=snapshot_ref,
                 trade_date=trade_date,
             ),
+            delta_iev=resolved_delta,
         )
 
     viability: OpenViabilityEvidence | None = None

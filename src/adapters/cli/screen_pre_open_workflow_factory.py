@@ -252,6 +252,9 @@ def create_pre_open_cli_workflow(
     )
     signal_config = PreOpenSignalConfig()
     signal_builder = PreOpenSignalInputsBuilder(signal_config)
+    from src.infrastructure.persistence.sqlite_iev_repository import SQLiteIEVRepository
+
+    iev_repo = SQLiteIEVRepository(resolved_db)
     workflow = PreOpenWorkflowUseCase(
         screen_use_case=screen_use_case,
         market_repository=market_repository,
@@ -261,6 +264,7 @@ def create_pre_open_cli_workflow(
         assessment_pipeline=assessment_pipeline,
         signal_builder=signal_builder,
         run_snapshot_screen=run_snapshot_screen,
+        iev_delta_provider=iev_repo,
     )
     observations_repo = SQLiteCandidateObservationsRepository(resolved_db)
     record_observations = RecordPreOpenObservationsUseCase(

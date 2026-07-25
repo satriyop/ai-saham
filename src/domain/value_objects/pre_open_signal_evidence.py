@@ -45,6 +45,9 @@ class AuctionNcpEvidence:
     spread_pct: Decimal | None
     prev_close: Decimal | None
     provenance: AuctionNcpProvenance
+    # Build-into-lock appetite: last_iev − first_iev same day (multi-tick history).
+    # None = MISSING (not enough ticks) — never fabricate; scorer must not fail closed.
+    delta_iev: int | None = None
 
     def __post_init__(self) -> None:
         if self.iev < 0:
