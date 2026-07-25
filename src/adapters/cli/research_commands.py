@@ -25,7 +25,9 @@ from src.adapters.cli.research_signal_replay_commands import signal_replay
 research_app = typer.Typer(
     name="research",
     help=(
-        "Research corpus and offline study — may persist observations/labels. "
+        "Research corpus and offline study. "
+        "capture = save decisions; labels = outcomes. "
+        "Live screens do not write (use screen for display only). "
         "CSV export only when explicitly requested."
     ),
     no_args_is_help=True,

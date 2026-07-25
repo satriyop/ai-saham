@@ -319,11 +319,23 @@ Snapshot confidence drives behavior:
 
 ## Integration with Other Workflows
 
+### Command-family consistency
+
+| Family | Role |
+|--------|------|
+| `screen pre-open` | **Live** display — no observation corpus write |
+| `research pre-open capture` | **Save decisions** to `candidate_observations` |
+| `research pre-open labels` | **Outcomes** (`open_30m`) from saved decisions + tracks |
+| `learn` (ops) | **Same-day ritual** only — snapshot / track / grade / prompt / tune |
+
+Do not put open_30m corpus labeling under `learn`. Do not auto-write observations
+from live `screen`.
+
 ### → `saham trade`
 
-The opening snapshot uses the same screener under the hood. Results are
-independent: `screen pre-open` for manual decision-making, `learn` for
-automated learning loop.
+The opening snapshot uses the same screener under the hood. Paths stay separate:
+`screen pre-open` for live decision-making, `research pre-open capture` for
+corpus decisions, `learn` for the same-day ops ritual.
 
 ### → `data/opening/` + Journals
 

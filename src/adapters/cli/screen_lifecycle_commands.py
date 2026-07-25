@@ -45,7 +45,8 @@ from src.infrastructure.config.universe_config_loader import YamlUniverseConfigL
 screen_app = typer.Typer(
     name="screen",
     help=(
-        "Candidate discovery — pre-open movers and accumulation screens.\n\n"
+        "Live candidate discovery — pre-open movers and accumulation screens. "
+        "Does not write research observations (use research * capture).\n\n"
         "Discover: `pre-open`, `accum`.\n"
         "Lifecycle: `watchlist`, `compare`.\n"
         "Inspect a hit next: `saham view BBCA`."

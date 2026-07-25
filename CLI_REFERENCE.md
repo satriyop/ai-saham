@@ -5,6 +5,29 @@ Compact, agent-optimized command reference. One `##` block per command.
 Tutorial & workflows → `CLI_GUIDE.md`
 Troubleshooting → `CLI_TROUBLESHOOTING.md`
 
+## Command-family consistency
+
+Same shape for every screen scenario (pre-open, accum, …):
+
+| Family | Role | Writes research corpus? |
+|--------|------|-------------------------|
+| **`screen`** | **Live** discovery / operator display | **No** observation rows |
+| **`research <scenario> capture`** | **Save decisions** into `candidate_observations` | **Yes** (explicit corpus write) |
+| **`research <scenario> labels`** | **Outcomes** joined to saved decisions | Labels/artifacts only |
+| **ops** (today: `learn`) | **Same-day ritual** only — snapshot / track / session grade / prompt / tune | Day files under `data/opening/`; not multi-day corpus |
+
+Examples:
+
+- Live open: `saham screen pre-open` → no DB observation write  
+- Corpus decisions: `saham research pre-open capture`  
+- Corpus outcomes: `saham research pre-open labels` (horizon `open_30m`)  
+- Same-day ops: `saham learn snapshot|track|grade|…`  
+- Live accum: `saham screen accum` → no observation write  
+- Accum corpus: `saham research signal capture` → `… labels`
+
+Do **not** put multi-day / open_30m corpus label generation under ops (`learn`).
+Do **not** auto-write observations from live `screen`.
+
 ---
 
 ## saham version
@@ -1021,7 +1044,9 @@ saham view broker list
 
 ## saham screen accum
 
-Foreign accumulation screener — rank stocks by institutional accumulation evidence (SignalAssessment 0–100).
+**Live** foreign accumulation screener — rank stocks by institutional accumulation
+evidence (SignalAssessment 0–100). **Does not** write research observations —
+use `research signal capture` for corpus decisions (`--save` is watchlist only).
 
 ```
 saham screen accum [OPTIONS]
@@ -1056,11 +1081,11 @@ saham screen accum --universe lq45 --save morning-watch
 
 ## saham screen pre-open
 
-Pre-market movers screener with opening auction confirmation workflow.
+**Live** pre-market movers screener (opening auction workflow). **Does not** write
+`candidate_observations` — save decisions with `research pre-open capture`.
 
 Regime context and default-gate risk annotation are **always-on** (non-blocking).
-Signal is intentionally not applicable (no canonical setup/flow evidence). Use
-`--no-regime` / `--no-risk` to opt out.
+Use `--no-regime` / `--no-risk` to opt out.
 
 ```
 saham screen pre-open [OPTIONS]
@@ -1158,11 +1183,12 @@ saham learn track --force BBCA BBRI  # manual dry-run
 
 ## saham learn grade
 
-Deterministic opening-session scorecard (ADR-048 Phase 4). Joins **saved DB
-observations** (`screen_pre_open`) when present, else `snapshot.json`, to
+**Same-day ops** session scorecard (not multi-day corpus labels). Joins **saved
+DB observations** (`screen_pre_open`) when present, else `snapshot.json`, to
 `track_*.json` prices. Champion metrics: plan (range/IEP/clean trade) + signal
 bands + screen_result / TradeSetup slices. PRIME strata are **legacy secondary**.
 Does not recompute signal scores. Writes `grade.json` + `grade.md` for tune/prompt.
+For `open_30m` corpus outcomes use `research pre-open labels`.
 
 ```
 saham learn grade [OPTIONS]
@@ -1177,9 +1203,10 @@ saham learn grade [OPTIONS]
 
 ## saham research pre-open capture
 
-Save pre-open decisions into `candidate_observations` (workflow `screen_pre_open`,
+**Save decisions** into `candidate_observations` (workflow `screen_pre_open`,
 contract `pre-open-open-30m`). Symmetric to `research signal capture` for
-accumulation-discovery.
+accumulation-discovery. Family rule: screen = live; research capture = save;
+research labels = outcomes; learn = same-day ops only.
 
 **Live `screen pre-open` does not write observations.**
 
@@ -1252,7 +1279,8 @@ saham learn prompt | pbcopy
 
 ## saham research signal capture
 
-Persist canonical candidate observations for one trading session. Used for building the research corpus.
+**Save decisions** — persist canonical candidate observations for one trading
+session (accum research corpus). Live `screen accum` does not write observations.
 
 ```
 saham research signal capture [OPTIONS]
@@ -1287,7 +1315,7 @@ saham research signal backfill [OPTIONS]
 
 ## saham research signal labels
 
-Generate forward labels for captured observations.
+**Outcomes** — generate forward labels for saved decisions (observations).
 
 ```
 saham research signal labels [OPTIONS]

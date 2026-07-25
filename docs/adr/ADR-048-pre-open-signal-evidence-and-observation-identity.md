@@ -262,7 +262,9 @@ veto-only; hard guard if auction missing; no confirmation-only. v1 MAY render an
 ordinal gate cascade; weighted composite + weights (0.65/0.35, auction_min 50) are
 PROVISIONAL/unvalidated v2, not locked. SignalAssessment only for
 score/quality; TradeSetup owns action as soon as signal exists; risk annotate.
-Save observations at NCP decision_at (champion); no silent grade-time recompute.
-Replace PRIME UI when ready; keep learn grade until signal then evolve. Adoption
-only via ScreenAssessmentPipeline (ADR-047) + ADR-026 composition.
+CLI families: screen=live; research pre-open capture=save decisions;
+research pre-open labels=outcomes; learn=same-day ops only. Save observations at
+NCP decision_at (champion); no silent grade-time recompute. Replace PRIME UI when
+ready; keep learn grade until signal then evolve. Adoption only via
+ScreenAssessmentPipeline (ADR-047) + ADR-026 composition.
 ```

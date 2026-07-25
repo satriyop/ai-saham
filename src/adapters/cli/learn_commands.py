@@ -1,10 +1,13 @@
 """
-CLI commands for the opening session learning loop (same-day ops only).
+CLI commands for the opening session ops loop (same-day ritual only).
+
+Family rule: screen = live; research * capture = save decisions;
+research * labels = outcomes; learn = same-day ops only.
 
 Commands (all under `saham learn`):
-  snapshot  — 08:57 WIB: NCP-locked pre-open screener capture
+  snapshot  — 08:57 WIB: NCP-locked pre-open day-file snapshot
   track     — 09:00–09:30 WIB: 5-min orderbook loop for all screened tickers
-  grade     — 09:35+ WIB: deterministic accuracy report (no network)
+  grade     — 09:35+ WIB: deterministic session scorecard (no network)
   tune      — 09:40+ WIB: DeepSeek AI config recommendations
   prompt    — on-demand: copy-paste AI prompt for any AI assistant
 
@@ -28,8 +31,9 @@ from src.adapters.cli.learn_tune_commands import tune
 learn_app = typer.Typer(
     name="learn",
     help=(
-        "Opening-session ops loop — snapshot, track, grade, prompt, and tune. "
-        "For open_30m corpus labels use: saham research pre-open labels."
+        "Opening-session ops — same-day ritual only (snapshot, track, grade, "
+        "prompt, tune). Not multi-day corpus. "
+        "Save decisions: research pre-open capture; outcomes: research pre-open labels."
     ),
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},
