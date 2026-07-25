@@ -108,7 +108,7 @@ def build_accumulation_request(
         save_enabled=False,
         vwap_only=False,
         squeeze_only=False,
-        sort_by="vwap",
+        sort_by="signal",
     )
 
 

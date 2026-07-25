@@ -139,8 +139,36 @@ def test_single_projection_sorts_by_score_when_requested():
     assert [c.ticker for c in projection.candidates] == ["HIGH", "LOW"]
 
 
+def test_single_projection_sorts_by_signal_desc():
+    from types import SimpleNamespace
+
+    low = _candidate(ticker="LOW", accum_score=90.0, vwap_discount_pct=12.0)
+    high = _candidate(ticker="HIGH", accum_score=40.0, vwap_discount_pct=1.0)
+    none = _candidate(ticker="NONE", accum_score=99.0, vwap_discount_pct=20.0)
+    low.signal_assessment = SimpleNamespace(
+        assessment=SimpleNamespace(score=30, signal_authority_coverage=0.5)
+    )
+    high.signal_assessment = SimpleNamespace(
+        assessment=SimpleNamespace(score=80, signal_authority_coverage=0.9)
+    )
+    none.signal_assessment = None
+
+    projection = project_single_screen_result(
+        _response([low, none, high]),
+        vwap_only=False,
+        squeeze_only=False,
+        top=20,
+        min_streak=0,
+        coiled_spring_bb_pctile=0.20,
+        effective_session=_EFFECTIVE_SESSION,
+        sort_by="signal",
+    )
+    assert [c.ticker for c in projection.candidates] == ["HIGH", "LOW", "NONE"]
+    assert projection.applied_filters.sort_by == "signal"
+
+
 def test_single_projection_rejects_invalid_sort_by():
-    with pytest.raises(ScreenAccumProjectionError, match="score or vwap"):
+    with pytest.raises(ScreenAccumProjectionError, match="signal, score, or vwap"):
         project_single_screen_result(
             _response([_candidate()]),
             vwap_only=False,
@@ -361,6 +389,36 @@ def test_multi_projection_includes_tracked_broker_flow():
 # ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------
+
+
+def test_multi_projection_sorts_by_signal_on_canonical_window():
+    from types import SimpleNamespace
+
+    low = _candidate(ticker="LOW", accum_score=90.0)
+    high = _candidate(ticker="HIGH", accum_score=40.0)
+    low.signal_assessment = SimpleNamespace(
+        assessment=SimpleNamespace(score=25, signal_authority_coverage=0.5)
+    )
+    high.signal_assessment = SimpleNamespace(
+        assessment=SimpleNamespace(score=90, signal_authority_coverage=0.9)
+    )
+    multi_results = {
+        7: _response([low, high], window_days=7),
+        30: _response([low, high], window_days=30),
+    }
+    projection = project_multi_screen_result(
+        multi_results,
+        tracked_broker_flow={},
+        windows=[7, 30],
+        top=10,
+        sort_by="signal",
+        squeeze_only=False,
+        coiled_spring_min_accum_score=50.0,
+        coiled_spring_bb_pctile=0.20,
+        canonical_window=7,
+        effective_session=_EFFECTIVE_SESSION,
+    )
+    assert [r.ticker for r in projection.rows] == ["HIGH", "LOW"]
 
 
 def test_invalid_sort_by_fails():

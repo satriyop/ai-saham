@@ -53,8 +53,8 @@ def print_column_guide() -> None:
             "Foreign VWAP discount: how far price is below foreigners' avg cost.\n"
             "Positive = foreigners underwater. Soft triage color only — not a "
             "scoring/ENTER gate. Enrichment / TUI also show deep|mid|shallow|over.\n"
-            "Default list sort is deepest Disc% first (--sort-by vwap). "
-            f"Use --sort-by score to rank by {ACCUM} instead. "
+            f"Default list sort is {SIGNAL} high→low (--sort-by signal). "
+            f"Use --sort-by score for {ACCUM}, or --sort-by vwap for deepest Disc% first. "
             "--vwap-only keeps Disc% > 0 (excludes over-VWAP)."
         ),
     )

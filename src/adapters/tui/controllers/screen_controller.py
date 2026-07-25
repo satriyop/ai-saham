@@ -45,7 +45,7 @@ class ScreenWorkspaceState:
     min_piotroski: int = 0
     squeeze_only: bool = False
     vwap_only: bool = False
-    sort_by: str = "canonical"
+    sort_by: str = "signal"
     selected_ticker: str | None = None
     selected_index: int = 0
     saved_watchlist_name: str | None = None

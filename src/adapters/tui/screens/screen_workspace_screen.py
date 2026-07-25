@@ -234,6 +234,7 @@ class ScreenWorkspaceScreen(Screen[None]):
             save_enabled=False,
             squeeze_only=bool(squeeze),
             vwap_only=bool(vwap),
+            sort_by="signal",
         )
 
     def _selected_universe(self) -> str:
@@ -740,7 +741,7 @@ class ScreenWorkspaceScreen(Screen[None]):
         self.query_one("#preview-content", Static).update(
             "SELECTED CANDIDATE PREVIEW\n"
             f"Ticker             : {row.ticker}\n"
-            f"Canonical Rank     : #{row.canonical_rank}\n"
+            f"#                   : {row.canonical_rank}\n"
             f"{multi_block}"
             f"{ACCUM} (canonical)  : {row.accum_score:.1f}  [foreign accumulation]\n"
             f"{SIGNAL} score (0–100): {sig}  [SignalEngine total; different engine]\n"

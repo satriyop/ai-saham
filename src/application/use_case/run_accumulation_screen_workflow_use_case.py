@@ -70,7 +70,7 @@ class RunAccumulationScreenWorkflowRequest:
     save_enabled: bool
     vwap_only: bool = False
     squeeze_only: bool = False
-    sort_by: str = "vwap"
+    sort_by: str = "signal"
     as_of_date: date | None = None
 
 

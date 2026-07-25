@@ -71,24 +71,33 @@ class ScreenAccumSingleProjection:
         }
 
 
-_SINGLE_SORT_BY = frozenset({"score", "vwap"})
+_SINGLE_SORT_BY = frozenset({"score", "vwap", "signal"})
 
 
 def validate_single_sort_by(sort_by: str) -> str:
-    """Normalize single-window sort. Accepts score|vwap; maps avg→score for compat."""
+    """Normalize single-window sort. Accepts score|vwap|signal; maps avg→score."""
     if sort_by in ("avg", "max"):
         return "score"
     if sort_by in _SINGLE_SORT_BY:
         return sort_by
     raise ScreenAccumProjectionError(
         f"Invalid --sort-by value {sort_by!r} for single-window screen. "
-        "Must be score or vwap."
+        "Must be signal, score, or vwap."
     )
 
 
 def _vwap_sort_key(discount: float | None) -> float:
     """Missing discount sorts last when reverse=True."""
     return discount if discount is not None else float("-inf")
+
+
+def _signal_sort_key(candidate: AccumulationCandidate) -> float:
+    """SignalEngine total; missing assessment sorts last when reverse=True."""
+    sa = candidate.signal_assessment
+    if sa is None or sa.assessment is None:
+        return float("-inf")
+    score = sa.assessment.score
+    return float(score) if score is not None else float("-inf")
 
 
 def project_single_screen_result(
@@ -100,11 +109,12 @@ def project_single_screen_result(
     min_streak: int,
     coiled_spring_bb_pctile: float,
     effective_session: EffectiveMarketSession,
-    sort_by: str = "vwap",
+    sort_by: str = "signal",
 ) -> ScreenAccumSingleProjection:
-    """Apply filters, sort (score|vwap), then top.
+    """Apply filters, sort (signal|score|vwap), then top.
 
     `raw_candidate_count` reflects the screen response before these filters.
+    Default sort is Signal high→low (ADR-043 signal_score).
     """
     resolved_sort = validate_single_sort_by(sort_by)
     candidates = list(response.candidates)
@@ -125,6 +135,12 @@ def project_single_screen_result(
         candidates = sorted(
             candidates,
             key=lambda c: _vwap_sort_key(c.vwap_discount_pct),
+            reverse=True,
+        )
+    elif resolved_sort == "signal":
+        candidates = sorted(
+            candidates,
+            key=_signal_sort_key,
             reverse=True,
         )
     else:
@@ -308,7 +324,7 @@ def validate_multi_window_request(windows: list[int], sort_by: str) -> None:
             f"Duplicate windows requested: {', '.join(str(w) for w in dupes)}."
         )
 
-    if sort_by in ("avg", "max", "vwap"):
+    if sort_by in ("avg", "max", "vwap", "signal", "score"):
         return
 
     window = _normalize_sort_by_window(sort_by)
@@ -316,7 +332,7 @@ def validate_multi_window_request(windows: list[int], sort_by: str) -> None:
     if window is None:
         raise ScreenAccumProjectionError(
             f"Invalid --sort-by value {sort_by!r}. "
-            f"Must be avg, max, vwap, or one of: {valid_labels}."
+            f"Must be signal, score, avg, max, vwap, or one of: {valid_labels}."
         )
     if window not in windows:
         raise ScreenAccumProjectionError(
@@ -373,12 +389,24 @@ def project_multi_screen_result(
                 if c is not None and c.vwap_discount_pct is not None
             ]
             return max(discounts) if discounts else float("-inf")
+        if sort_by == "signal":
+            # Prefer Signal on the canonical window; else best available window.
+            primary = pw.get(canonical_window)
+            if primary is not None:
+                return _signal_sort_key(primary)
+            signals = [
+                _signal_sort_key(c)
+                for c in pw.values()
+                if c is not None
+            ]
+            return max(signals) if signals else float("-inf")
         scores = [c.accum_score for c in pw.values() if c is not None]
         if not scores:
             return 0.0
-        if sort_by == "avg":
+        if sort_by in ("avg",):
             return sum(scores) / len(scores)
-        if sort_by == "max":
+        if sort_by in ("max", "score"):
+            # score = Accum composite (max across windows for multi shortlist).
             return max(scores)
         window = _normalize_sort_by_window(sort_by)
         c = pw.get(window) if window is not None else None

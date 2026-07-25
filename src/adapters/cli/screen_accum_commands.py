@@ -132,12 +132,13 @@ def accumulation_run(
         typer.Option(
             "--sort-by",
             help=(
-                "Sort order: vwap|score (single); "
-                "vwap|avg|max|7s|30s|90s (multi; legacy 7d/30d/90d accepted). "
-                "Default: vwap (deepest foreign VWAP discount first)"
+                "Sort order: signal|score|vwap (single); "
+                "signal|score|vwap|avg|max|7s|30s|90s (multi; legacy 7d/30d/90d accepted). "
+                "Default: signal (SignalEngine total high→low). "
+                "score = Accum composite; vwap = deepest Disc% first."
             ),
         ),
-    ] = "vwap",
+    ] = "signal",
     output_format: Annotated[
         Optional[str],
         typer.Option("--format", help="Output format: table or json"),
