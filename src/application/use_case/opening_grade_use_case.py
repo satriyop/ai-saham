@@ -4,10 +4,10 @@ opening_grade — deterministic accuracy analysis for the opening session learni
 Joins NCP decisions with track_*.json prices and computes session metrics.
 
 Decision source preference (ADR-048 Phase 4):
-  1. Frozen DB observations (workflow=screen_pre_open) when present
+  1. Saved DB observations (workflow=screen_pre_open) when present
   2. Fallback: data/opening/.../snapshot.json plan fields
 
-Does not recompute signal scores (capture-time freeze champion).
+Does not recompute signal scores; uses decisions saved at capture time.
 Keeps grade.json / grade.md for learn tune/prompt.
 
 Layer: Application
@@ -23,7 +23,7 @@ from typing import Any, Protocol
 from src.application.services.pre_open_observation_payload import PRE_OPEN_WORKFLOW
 
 OPENING_DATA_DIR = Path("data/opening")
-GRADE_SCHEMA_VERSION = 2  # Phase 4: freeze-aware + signal/TradeSetup slices
+GRADE_SCHEMA_VERSION = 2  # Phase 4: prefers saved observations + signal/TradeSetup slices
 
 
 class _ObservationsReader(Protocol):
@@ -69,7 +69,7 @@ def compute_grade(
     if not candidates:
         raise FileNotFoundError(
             f"No pre-open decisions for {today}. "
-            "Run `saham screen pre-open` (DB freeze) or `saham learn snapshot` first."
+            "Run `saham research pre-open capture` (or screen + capture) or `saham learn snapshot` first."
         )
 
     per_ticker: list[dict] = []
@@ -126,7 +126,7 @@ def _load_decision_candidates(
             normalized = [
                 _candidate_from_observation(row) for row in by_ticker.values()
             ]
-            return "db_freeze", normalized
+            return "saved_observations", normalized
 
     snap_cands = snapshot.get("candidates") or []
     if snap_cands:
@@ -166,7 +166,7 @@ def _candidate_from_observation(row: Any) -> dict:
         "signal_entry_quality": signal.get("entry_quality"),
         "trade_setup_action": trade_setup.get("action"),
         "risk_level_name": risk.get("risk_level_name"),
-        "decision_source": "db_freeze",
+        "decision_source": "saved_observations",
         "capture_phase": payload.get("capture_phase"),
     }
 

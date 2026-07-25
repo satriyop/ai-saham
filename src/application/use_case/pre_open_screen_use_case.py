@@ -65,7 +65,7 @@ class PreOpenScreenRequest:
 
 @dataclass(frozen=True)
 class PreOpenFilterReject:
-    """Hard-filter reject for observation freezes (ADR-048 follow-up)."""
+    """Hard-filter reject for observation records (ADR-048 follow-up)."""
 
     ticker: str
     screen_result: str  # e.g. rejected_filter_speculative, rejected_filter_floor

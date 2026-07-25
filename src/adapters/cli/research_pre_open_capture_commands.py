@@ -1,7 +1,7 @@
 """
 CLI: saham research pre-open capture
 
-Explicit corpus freeze for pre-open decisions (ADR-048).
+Save pre-open decisions into the observation database (ADR-048).
 Symmetric to research signal capture for accumulation-discovery:
 live ``screen pre-open`` does NOT write observations.
 
@@ -85,7 +85,7 @@ def pre_open_capture(
     ] = "table",
 ) -> None:
     """
-    Freeze pre-open decisions into candidate_observations (screen_pre_open).
+    Save pre-open decisions into candidate_observations (screen_pre_open).
 
     Explicit corpus write — same idea as ``research signal capture``.
     Does not generate open_30m labels (use ``research pre-open labels``).

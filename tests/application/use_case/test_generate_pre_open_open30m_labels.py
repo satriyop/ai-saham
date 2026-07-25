@@ -14,7 +14,7 @@ from src.application.use_case.generate_pre_open_open30m_labels_use_case import (
 )
 
 
-def test_open30m_labels_from_freeze_and_tracks(tmp_path: Path):
+def test_open30m_labels_from_saved_observations_and_tracks(tmp_path: Path):
     day = tmp_path / "20260618"
     day.mkdir()
     (day / "track_0900.json").write_text(
@@ -72,7 +72,7 @@ def test_open30m_labels_from_freeze_and_tracks(tmp_path: Path):
         persist=True,
     )
 
-    assert result.decision_source == "db_freeze"
+    assert result.decision_source == "saved_observations"
     assert result.labeled_count == 1
     assert result.labels[0].outcome == "SUCCESS"
     assert result.labels[0].participated is True

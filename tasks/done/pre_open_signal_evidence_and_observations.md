@@ -12,7 +12,7 @@ Tier-1 regime + annotate risk; `signal_applicable=False` today).
 
 ## 1. Task Metadata
 
-**Task Title:** Land pre-open canonical signal (NCP auction + open viability), compose TradeSetup, freeze DB observations at NCP, cut over UI and grade.
+**Task Title:** Land pre-open canonical signal (NCP auction + open viability), compose TradeSetup, save DB observations at NCP, cut over UI and grade.
 
 **Task Type:** Feature (phased) + persistence.
 
@@ -24,7 +24,7 @@ Pre-open discovers names via IEV and builds an auction entry plan, but has no
 production signal evidence channel and no TradeSetup. Display labels (PRIME /
 WATCH / SKIP) and `learn grade` strata on `opening_setup` act as a shadow
 verdict language outside ADR-026. Opening learning lives in day files under
-`data/opening/` without DB observation identity, NCP freeze semantics, or
+`data/opening/` without DB observation identity, capture-at-NCP semantics, or
 joinable `open_30m` labels. Without a governed path, implementers will treat IEV
 as score, PRIME as ENTER, multi-day flow as 30m confirmation, or recompute
 history at grade time.
@@ -48,10 +48,10 @@ history at grade time.
   action only via **TradeSetup** (ADR-026).
 * **DB observations** for all evaluated names (pass + reject), identity =
   ticker + trade_date + NCP `decision_at` + horizon `open_30m` + contract versions;
-  **capture-time freeze** is champion (no silent grade-time recompute).
+  **capture-time saved observations** are champion (no silent grade-time recompute).
 * UI replaces PRIME authority with **signal score/quality + TradeSetup.action**.
 * **`learn grade` stays as-is until signal ships**, then evolves metrics over
-  frozen decisions + tracks (capability not retired).
+  saved decisions + tracks (capability not retired).
 
 Out of scope for this task: automated execution/trading; accum schema rewrite;
 fundamental screen; multi-day flow as pre-open signal authority.
@@ -86,13 +86,13 @@ fundamental screen; multi-day flow as pre-open signal authority.
     fields as needed; no engine subclass).
   * Application — **Yes** (pre-open `SignalInputsBuilder`, group scorers or
     mapping into existing assess path, policy flip, observation write use case,
-    NCP freeze orchestration).
+    NCP capture orchestration).
   * Infrastructure — **Yes** (DB schema/repo for open observations; snapshot
     wiring if needed).
   * Adapter — **Yes, thin** (CLI/TUI display cutover; learn snapshot/grade wiring;
     factories only).
 * New dependency? No (unless an existing migration tool pattern requires none).
-* Affects determinism? No when frozen inputs + config are fixed; scoring is
+* Affects determinism? No when saved inputs + config are fixed; scoring is
   deterministic. Preflight **must** classify: at minimum **EVIDENCE_CONTRACT**
   (new groups) and **OBSERVATION_SCHEMA** (DB rows); add **SEMANTIC_ENGINE**
   and/or **CONFIG_MATERIAL** when strength bands, cascade rules, or composite
@@ -104,8 +104,8 @@ fundamental screen; multi-day flow as pre-open signal authority.
 ```md
 Layer plan:
 - Domain: pre-open canonical evidence group types; observation identity VOs if needed
-- Application: PreOpen SignalInputsBuilder; scoring wiring; ScreenPolicy.pre_open() flip; freeze + Record* observation use case; grade evolution later
-- Infrastructure: observation repository + migrations; composition roots for NCP freeze
+- Application: PreOpen SignalInputsBuilder; scoring wiring; ScreenPolicy.pre_open() flip; capture + Record* observation use case; grade evolution later
+- Infrastructure: observation repository + migrations; composition roots for NCP capture
 - Adapter: thin CLI/display/learn wiring; no policy
 ```
 
@@ -132,7 +132,7 @@ ADR-042 posture).
 
 * Reads: IEV/NCP snapshot data, candles, broker rows as needed for viability,
   existing risk/MCE paths.
-* Writes: **DB observations** at NCP freeze; optional retention of
+* Writes: **DB observations** at NCP capture; optional retention of
   `data/opening/` journals as non-authority ops artifacts.
 * Schema change? **Yes** (observation tables or extension of existing candidate
   observation patterns — prefer reuse/analogy to accum, not a one-off dump).
@@ -154,7 +154,7 @@ ADR-042 posture).
 * [ ] DB observations written for **all** evaluated names with
       `screen_result` funnel strings; identity includes NCP `decision_at` +
       `open_30m` + contract versions.
-* [ ] Capture-time freeze: re-running grade does not rewrite decision scores;
+* [ ] Capture-time save: re-running grade does not rewrite decision scores;
       rebuild is explicit new cohort only.
 * [ ] UI: no PRIME-as-authority after cutover; signal + TradeSetup shown.
 * [ ] `learn grade` unchanged until signal phase lands; post-signal evolution
@@ -171,14 +171,14 @@ ADR-042 posture).
 * Negative: confirmation-only path impossible; dual PRIME authority gone after
   cutover; dual cascade+composite production scores impossible; grade-time
   recompute not used as champion.
-* Integration: NCP freeze → DB row → join track fixture → metrics (when grade evolves).
+* Integration: NCP capture → DB row → join track fixture → metrics (when grade evolves).
 * Architecture: `tests/architecture/test_layer_boundaries.py` green.
 * All tests offline. No skips without justification.
 
 ## 11. Documentation Impact
 
 * README / CLI docs: pre-open signal + TradeSetup; PRIME removed from authority language.
-* Opening workflow docs: NCP freeze, horizon `open_30m`, observation/grade notes.
+* Opening workflow docs: NCP capture, horizon `open_30m`, observation/grade notes.
 * `learn grade` docs: evolve after signal; keep command.
 * New config: weights, auction_min, evidence contract version — document when added.
 * Limitations: multi-day flow not pre-open signal authority; risk non-blocking.
@@ -211,13 +211,13 @@ each phase gate.
   weights tests; TradeSetup only via AssessTradeSetupUseCase; layer boundaries
   green. **Review stop.**
 
-### Phase 2 — DB observations + NCP freeze
+### Phase 2 — DB observations + NCP capture
 
 * Persistence schema + repository port/impl.
-* Write observations for all loop names at NCP `decision_at` (freeze signal, risk,
+* Write observations for all loop names at NCP `decision_at` (save signal, risk,
   TradeSetup, plan, identity, contract versions).
 * Explicit rebuild path design (new cohort) — may stub but must not overwrite.
-* *Checkpoint:* identity uniqueness tests; freeze vs recompute negative test;
+* *Checkpoint:* identity uniqueness tests; save-vs-recompute negative test;
   rejects recorded. **Review stop.**
 
 ### Phase 3 — UI cutover
@@ -235,7 +235,7 @@ each phase gate.
 * **Keep** the `saham learn grade` command and day-report UX (`grade.json` /
   `grade.md` for `learn tune` / `prompt` compatibility; bump schema/version
   notes if fields change).
-* **Prefer NCP-frozen DB observations** (`workflow=screen_pre_open`,
+* **Prefer saved DB observations** (`workflow=screen_pre_open`,
   `observation_contract=pre-open-open-30m`) joined to `learn track` files when
   observations exist for that date; fall back to `snapshot.json` plan fields
   when no DB rows (graceful, documented).
@@ -243,7 +243,7 @@ each phase gate.
   score bands** + `screen_result` / TradeSetup action slices.
 * **Demote PRIME / `opening_setup` strata** to legacy/secondary only — not the
   champion KPI.
-* Deterministic, offline; no grade-time recompute of signal (read freeze only).
+* Deterministic, offline; no grade-time recompute of signal (read saved observations only).
 
 **Explicit non-goals for Phase 4 (follow-up tasks):**
 
@@ -254,14 +254,14 @@ each phase gate.
 * Do **not** change swing label horizons or accumulation-discovery contracts.
 
 **Analogy (for implementers):** accum’s long-term equivalent of “outcomes on
-frozen decisions” is `saham research signal labels` + `readiness` on
+saved decisions” is `saham research signal labels` + `readiness` on
 `candidate_observations`. Pre-open Phase 4 is only the **opening session
-scorecard** over freezes + tracks — not full research-corpus parity.
+scorecard** over saved observations + tracks — not full research-corpus parity.
 
-* *Checkpoint:* grade tests with fixtures (DB freeze present / absent fallback);
+* *Checkpoint:* grade tests with fixtures (saved observations present / absent fallback);
   PRIME not champion KPI; tune/prompt still consumable. **Final gate.**
 
-## Frozen execution contract (do not re-litigate)
+## Locked execution contract (do not re-litigate)
 
 From ADR-048 acceptance discussion + Phase 4 scope lock:
 
@@ -270,19 +270,19 @@ From ADR-048 acceptance discussion + Phase 4 scope lock:
 | Horizon | `open_30m` (flat 09:30) |
 | Groups | `auction_ncp` required; `open_viability` optional initially |
 | Hierarchy | Auction primary; `open_viability` veto-only; hard guard; MISSING ⇒ MODERATE cap |
-| Weights / rendering | v1 cascade OR composite (**XOR**, one champion); weights **provisional** CONFIG_MATERIAL (0.65/0.35, auction_min 50), not frozen |
+| Weights / rendering | v1 cascade OR composite (**XOR**, one champion); weights **provisional** CONFIG_MATERIAL (0.65/0.35, auction_min 50), not locked |
 | Confirmation-only score | Forbidden |
 | TradeSetup | On when signal exists |
 | Risk | Annotate (non-blocking) |
 | Observations | DB, all screened candidates, funnel `screen_result` (Phase 2) |
-| Capture | NCP freeze champion |
+| Capture | Save at NCP decision_at (champion) |
 | PRIME | Remove as authority at UI cutover (Phase 3) |
-| learn grade (Phase 4) | **Evolve session scorecard** over freeze + tracks; keep command; PRIME secondary |
+| learn grade (Phase 4) | **Evolve session scorecard** over saved observations + tracks; keep command; PRIME secondary |
 | research open labels | **Out of this task** — future research-family work |
 | Adoption | `ScreenAssessmentPipeline` only |
 
 ## Final Gate
 
 Definition of Done: deterministic, offline-capable, adapter-thin, ADR-041/026/047/048
-intact, no dual verdict path, NCP freeze champion, no non-goals violated.
+intact, no dual verdict path, capture-time saved observations champion, no non-goals violated.
 If a checkpoint cannot be met, stop and report rather than weaken the contract.

@@ -92,10 +92,10 @@ def test_opening_grade_marks_midpoint_as_low_confidence_fallback(tmp_path, monke
     assert result["data_quality"]["price_source_counts"]["top_of_book_midpoint"] == 1
 
 
-def test_opening_grade_prefers_db_freeze_over_snapshot(tmp_path, monkeypatch):
+def test_opening_grade_prefers_saved_observations_over_snapshot(tmp_path, monkeypatch):
     day_dir = tmp_path / "20260618"
     day_dir.mkdir()
-    # Snapshot would disagree — freeze must win
+    # Snapshot would disagree — saved observations must win
     (day_dir / "snapshot.json").write_text(json.dumps({
         "candidates": [{
             "ticker": "BBCA",
@@ -110,7 +110,7 @@ def test_opening_grade_prefers_db_freeze_over_snapshot(tmp_path, monkeypatch):
         "tickers": {"BBCA": {"opening_price": 10000, "opening_price_confidence": "HIGH"}},
     }))
 
-    freeze_payload = {
+    observation_payload = {
         "workflow": PRE_OPEN_WORKFLOW,
         "screen_result": "pass",
         "capture_phase": "NCP_LOCKED",
@@ -134,7 +134,7 @@ def test_opening_grade_prefers_db_freeze_over_snapshot(tmp_path, monkeypatch):
     fake_row = SimpleNamespace(
         ticker="BBCA",
         workflow=PRE_OPEN_WORKFLOW,
-        payload=freeze_payload,
+        payload=observation_payload,
         captured_at=datetime(2026, 6, 18, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta")),
     )
     repo = SimpleNamespace(list_all_by_date=lambda d: [fake_row])
@@ -145,7 +145,7 @@ def test_opening_grade_prefers_db_freeze_over_snapshot(tmp_path, monkeypatch):
         observations_repository=repo,
     )
 
-    assert result["decision_source"] == "db_freeze"
+    assert result["decision_source"] == "saved_observations"
     t = result["per_ticker"][0]
     assert t["signal_score"] == 75
     assert t["signal_band"] == "strong"

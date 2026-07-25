@@ -1,11 +1,11 @@
 """
-Generate open_30m outcome labels from NCP freezes + learn track files.
+Generate open_30m outcome labels from saved pre-open observations + learn track files.
 
 Session-horizon twin of research signal labels (multi-day), scoped to pre-open:
 does not extend SignalLabelHorizon (swing contracts stay untouched).
 
-Labels are deterministic, offline, and join frozen decisions to 09:00–09:30
-tracks without recomputing signal scores.
+Labels are deterministic, offline, and join decisions saved at capture to
+09:00–09:30 tracks without recomputing signal scores.
 
 Layer: Application
 """
@@ -120,7 +120,8 @@ def generate_pre_open_open30m_labels(
     if not decisions:
         raise FileNotFoundError(
             f"No pre-open decisions for {run_date}. "
-            "Run screen pre-open (freeze) or learn snapshot first."
+            "Run `saham research pre-open capture` (or screen + capture) or "
+            "`saham learn snapshot` first."
         )
 
     labels: list[PreOpenOpen30mLabel] = []
@@ -184,7 +185,7 @@ def _load_decisions(
                 by_ticker[row.ticker] = row
             return (
                 [_decision_from_observation(r) for r in by_ticker.values()],
-                "db_freeze",
+                "saved_observations",
             )
 
     snap_path = day_dir / "snapshot.json"

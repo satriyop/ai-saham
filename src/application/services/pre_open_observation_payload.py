@@ -1,7 +1,7 @@
-"""Build frozen pre-open observation payloads (ADR-048 Phase 2).
+"""Build pre-open observation payloads saved at capture time (ADR-048 Phase 2).
 
-Capture-time freeze: payload holds decision-time signal/risk/TradeSetup/plan.
-Grade-time must not rewrite these fields for production cohorts.
+Payload holds decision-time signal/risk/TradeSetup/plan as written on capture.
+Grade and labels must not rewrite these fields for production cohorts.
 
 Layer: Application
 """
@@ -131,7 +131,7 @@ def build_pre_open_observation_payload(
     horizon: str = PRE_OPEN_HORIZON,
     evidence_contract: str = PRE_OPEN_SIGNAL_EVIDENCE_CONTRACT,
 ) -> dict:
-    """Schema-versioned frozen decision payload for one pre-open name."""
+    """Schema-versioned decision payload for one pre-open name (as saved on capture)."""
     candidate_dict: dict[str, Any]
     if hasattr(candidate, "to_dict") and callable(candidate.to_dict):
         candidate_dict = _jsonable(candidate.to_dict())

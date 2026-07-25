@@ -1,8 +1,8 @@
 """
-RecordPreOpenObservationsUseCase — intentional write of NCP-frozen pre-open rows.
+RecordPreOpenObservationsUseCase — intentional write of pre-open session observations.
 
 PreOpenWorkflowUseCase remains free of required persistence. Callers that need
-canonical open_30m observations (learn snapshot path, explicit record) go through
+canonical open_30m observations (research pre-open capture) go through
 this use case.
 
 Layer: Application
@@ -31,7 +31,7 @@ class RecordPreOpenObservationsResult:
 
 
 class RecordPreOpenObservationsUseCase:
-    """Run pre-open workflow, then persist frozen decision observations."""
+    """Run pre-open workflow, then save decision observations to the database."""
 
     def __init__(
         self,
@@ -55,5 +55,5 @@ class RecordPreOpenObservationsUseCase:
         response: "PreOpenWorkflowResponse",
         request: "PreOpenWorkflowRequest",
     ) -> int:
-        """Persist an already-built workflow response (freeze path without re-run)."""
+        """Save an already-built workflow response without re-running the screen."""
         return self._persister.persist(response, request)

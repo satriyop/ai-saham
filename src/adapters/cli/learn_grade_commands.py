@@ -1,7 +1,7 @@
 """
 Grade command for the opening session learning loop.
 
-Computes deterministic accuracy report from NCP freezes (preferred) or
+Computes deterministic accuracy report from saved observations (preferred) or
 snapshot.json + track data (ADR-048 Phase 4).
 
 Layer: Adapter
@@ -26,7 +26,7 @@ def grade(
     """
     Compute deterministic accuracy report from today's decisions + track data.
 
-    Prefers frozen DB observations (screen_pre_open) when present; falls back
+    Prefers saved DB observations (screen_pre_open) when present; falls back
     to snapshot.json. Requires at least one track_*.json for the date.
 
     Examples:

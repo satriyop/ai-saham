@@ -293,7 +293,7 @@ def pre_open(
 
     try:
         # Live screen only — no observation write (consistent with screen accum).
-        # Corpus freeze: saham research pre-open capture
+        # To save decisions for learning: saham research pre-open capture
         workflow_request = PreOpenWorkflowRequest(
             config=config,
             run_date=run_guard.run_at.date(),

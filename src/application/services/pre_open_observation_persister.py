@@ -1,4 +1,4 @@
-"""Persist pre-open NCP-frozen observations to CandidateObservationsRepository.
+"""Persist pre-open session observations to CandidateObservationsRepository.
 
 Reuse shared candidate_observations store with workflow=screen_pre_open and
 observation_contract=pre-open-open-30m (ADR-048). Fail closed on write errors.
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
 
 class PreOpenObservationPersister:
-    """Write freeze payloads for every screened pre-open candidate."""
+    """Write observation payloads for every screened pre-open candidate."""
 
     def __init__(
         self,
@@ -51,7 +51,7 @@ class PreOpenObservationPersister:
         *,
         captured_at: datetime | None = None,
     ) -> int:
-        """Persist frozen observations. Returns count written. Fail closed."""
+        """Save observations for this session. Returns count written. Fail closed."""
         if self._repo is None:
             return 0
         candidates = response.result.candidates

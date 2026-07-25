@@ -3,7 +3,7 @@ CLI: research lifecycle — corpus construction and offline evaluation.
 
 Commands:
   saham research signal …           — multi-day signal corpus (capture/labels/…)
-  saham research pre-open …         — pre-open corpus (capture freezes, open_30m labels)
+  saham research pre-open …         — pre-open corpus (capture observations, open_30m labels)
   saham research accumulation …     — offline accumulation evaluation
 
 Layer: Adapter (routing only).
@@ -46,8 +46,8 @@ research_signal_app = typer.Typer(
 research_pre_open_app = typer.Typer(
     name="pre-open",
     help=(
-        "Pre-open session research corpus: capture freezes to DB, then open_30m "
-        "labels from freezes + learn track data. Live screen pre-open does not write."
+        "Pre-open session research corpus: capture saves observations to DB, then "
+        "open_30m labels from saved decisions + learn track data. Live screen pre-open does not write."
     ),
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},

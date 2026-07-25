@@ -1,4 +1,4 @@
-"""Phase 2: pre-open NCP freeze observations (ADR-048)."""
+"""Phase 2: pre-open saved observations (ADR-048)."""
 
 from __future__ import annotations
 
@@ -83,7 +83,7 @@ def test_derive_screen_result_funnel():
     )
 
 
-def test_persist_freeze_and_identity_upsert(tmp_path: Path):
+def test_persist_observations_and_identity_upsert(tmp_path: Path):
     db = tmp_path / "obs.db"
     repo = SQLiteCandidateObservationsRepository(db)
     persister = PreOpenObservationPersister(repo, PreOpenSignalConfig())
@@ -163,7 +163,7 @@ def test_persist_freeze_and_identity_upsert(tmp_path: Path):
     assert n2 == 1
     rows2 = [r for r in repo.list_canonical_by_date(run_date) if r.workflow == PRE_OPEN_WORKFLOW]
     assert len(rows2) == 1
-    # Freeze: score still from payload write (same content)
+    # Capture identity: score still from payload write (same content)
     assert rows2[0].payload["signal"]["score"] == 72
 
 

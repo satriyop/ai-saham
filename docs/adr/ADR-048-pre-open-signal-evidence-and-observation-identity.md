@@ -2,11 +2,11 @@
 
 [Architecture decision index](../../ARCHITECTURE_DECISIONS.md)
 
-**Status:** Accepted (decision frozen; implementation not started)
+**Status:** Accepted (decision locked; implementation in phases)
 **Date:** 2026-07-25
 **Depends on:** [ADR-026](ADR-026-risk-plus-signal-pipeline-composition.md), [ADR-041](ADR-041-canonical-signal-evidence-input-boundary.md), [ADR-047](ADR-047-scenario-adoption-seam-for-signal-risk-mce.md), [ADR-024](ADR-024-signal-engine-and-risk-engine-as-first-class-application-services.md), [ADR-033](ADR-033-workflow-composition-artifact-boundaries.md)
 **Related:** [ADR-027](ADR-027-risk-signal-learning-loop.md), [ADR-030](ADR-030-accumulation-screener-evidence-split.md), [ADR-037](ADR-037-marketcontext-promotes-from-preview-only-to-canonical-signal-input.md), [ADR-046](ADR-046-cli-response-envelope.md)
-**Current implementation:** Not started. Pre-open today (post ADR-047 Phase 2) has always-on regime + annotate risk via `ScreenAssessmentPipeline`, with `signal_applicable=False` and `trade_setup_applicable=False`. This ADR freezes the target signal, observation, capture, and grade-evolution contract for subsequent tasks.
+**Current implementation:** Phased. Pre-open uses always-on regime + annotate risk via `ScreenAssessmentPipeline`; signal + TradeSetup + observation capture land per task. This ADR locks the target signal, observation, capture, and grade-evolution contract for subsequent work.
 
 ### Context
 
@@ -92,9 +92,9 @@ Evidence contract id (initial): **`pre_open_signal_evidence.v1`**.
 Absence of `auction_ncp` ⇒ **hard guard**: do not call the signal use case (same
 spirit as ADR-047 / no fabrication). No confirmation-only production score.
 
-#### 4. Composition hierarchy (shape frozen; weights and rendering provisional)
+#### 4. Composition hierarchy (shape locked; weights and rendering provisional)
 
-**Frozen (the rule shape — this is the decision):**
+**Locked (the rule shape — this is the decision):**
 
 ```text
 if auction_ncp MISSING or auction_strength < auction_min:
@@ -109,7 +109,7 @@ else:
         (WATCH / AVOID) regardless of a mid-range score
 ```
 
-**Not frozen (implementation choice; provisional, not decisions):**
+**Not locked (implementation choice; provisional, not decisions):**
 
 * **Rendering — composite vs cascade.** v1 MAY render strength as an **ordinal gate
   cascade** (auction-primary, viability veto-only) rather than a weighted composite.
@@ -124,7 +124,7 @@ else:
   2. auction OK but viability veto (e.g. GAP_OUT / friction) → cap `EntryQuality`;
   3. else strength from auction bands (viability does not boost).
 * **Weights — only relevant if a composite is used.** Provisional, **unvalidated**
-  starting values, *not* frozen decisions:
+  starting values, *not* locked decisions:
 
   | Knob | Provisional v1 default (unvalidated) |
   |------|--------------------------------------|
@@ -132,10 +132,10 @@ else:
   | `viability_weight` | 0.35 |
   | `auction_min` | 50 |
   | `viability_required` | false initially |
-  | confirmation-only score | **forbidden** (this one IS frozen) |
+  | confirmation-only score | **forbidden** (this one IS locked) |
 
-This ADR freezes the **hierarchy and guards** (auction-primary, viability-veto,
-hard guard, MISSING → MODERATE cap, no confirmation-only). It does **not** freeze
+This ADR locks the **hierarchy and guards** (auction-primary, viability-veto,
+hard guard, MISSING → MODERATE cap, no confirmation-only). It does **not** lock
 the specific weights or the composite-vs-cascade rendering — those are
 **CONFIG_MATERIAL** / implementation decisions, changeable via config or material
 without an ADR revision.
@@ -183,9 +183,9 @@ Labels for 09:30 outcomes join on `(ticker, trade_date, horizon, label_policy_ve
 to tracks; participation (open ∈ entry range) is part of label policy, not
 silently assumed.
 
-#### 7. Capture-time freeze is the champion (not grade-time recompute)
+#### 7. Capture-time saved observations are the champion (not grade-time recompute)
 
-**Champion path:** at NCP `decision_at`, freeze the decision:
+**Champion path:** at NCP `decision_at`, **save the decision** to the observation store:
 
 * universe inputs, canonical evidence + provenance, signal, risk, TradeSetup
   (when applicable), plan, contract versions → DB observation (and optional
@@ -193,7 +193,7 @@ silently assumed.
 
 **Post-open tracks** record prices only; they do **not** rewrite the decision.
 
-**`learn grade` / label jobs** join frozen decisions to tracks.
+**`learn grade` / label jobs** join decisions saved at capture to tracks.
 
 **Forbidden as production default:** re-running current scorer over historical
 raw snapshots and treating the result as the original decision.
@@ -219,10 +219,10 @@ When signal + TradeSetup are ready:
 
 * Pre-open signal/risk/trade_setup run only through **`ScreenAssessmentPipeline`**.
 * `learn snapshot` may capture raw movers/plan for ops, but learning authority is
-  the **frozen DB observation** once that path exists.
+  the **saved DB observation** once that path exists (`research pre-open capture`).
 * Opening snapshot use case remains raw-screen capture where already scoped;
-  assessment freeze is a named composition root when implemented (do not leave
-  dual silent paths).
+  assessment capture is a named composition root when implemented (do not leave
+  dual silent paths). Live `screen pre-open` does not write observations.
 
 ### Invariants / Consequences
 
@@ -230,7 +230,7 @@ When signal + TradeSetup are ready:
 * No production signal without `auction_ncp`.
 * No production action except via TradeSetup when `trade_setup_applicable`.
 * Risk annotate does not drop pre-open candidates.
-* NCP freeze is reproducible learning truth; recompute is rebuild-only.
+* Capture-time saved observations are reproducible learning truth; recompute is rebuild-only.
 * Observations in DB include rejects; `screen_result` ≠ action.
 * `learn grade` evolves; capability is not deleted without replacement.
 * PRIME is transitional UI only until signal+TradeSetup replace it.
@@ -247,11 +247,11 @@ When signal + TradeSetup are ready:
 
 ### Implementation sequencing (guidance, not a task checklist)
 
-1. This ADR (decision freeze).
+1. This ADR (decision locked).
 2. Evidence types + `SignalInputsBuilder` for pre-open + pipeline policy flip.
-3. DB observation write path + identity + NCP freeze.
+3. DB observation write path + identity + capture at NCP `decision_at`.
 4. UI cutover from PRIME to signal + TradeSetup.
-5. `learn grade` schema evolution over frozen observations + tracks.
+5. `learn grade` schema evolution over saved observations + tracks.
 
 ### Agent one-liner
 
@@ -260,9 +260,9 @@ Pre-open: IEV=universe, NCP=decision_at, horizon=open_30m. Canonical groups
 auction_ncp (required) + open_viability (optional). Auction PRIMARY, viability
 veto-only; hard guard if auction missing; no confirmation-only. v1 MAY render an
 ordinal gate cascade; weighted composite + weights (0.65/0.35, auction_min 50) are
-PROVISIONAL/unvalidated v2, not frozen. SignalAssessment only for
+PROVISIONAL/unvalidated v2, not locked. SignalAssessment only for
 score/quality; TradeSetup owns action as soon as signal exists; risk annotate.
-DB observations freeze at NCP (champion); no silent grade-time recompute. Replace
-PRIME UI when ready; keep learn grade until signal then evolve. Adoption only via
-ScreenAssessmentPipeline (ADR-047) + ADR-026 composition.
+Save observations at NCP decision_at (champion); no silent grade-time recompute.
+Replace PRIME UI when ready; keep learn grade until signal then evolve. Adoption
+only via ScreenAssessmentPipeline (ADR-047) + ADR-026 composition.
 ```

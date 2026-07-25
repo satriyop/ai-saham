@@ -1158,7 +1158,7 @@ saham learn track --force BBCA BBRI  # manual dry-run
 
 ## saham learn grade
 
-Deterministic opening-session scorecard (ADR-048 Phase 4). Joins **NCP-frozen DB
+Deterministic opening-session scorecard (ADR-048 Phase 4). Joins **saved DB
 observations** (`screen_pre_open`) when present, else `snapshot.json`, to
 `track_*.json` prices. Champion metrics: plan (range/IEP/clean trade) + signal
 bands + screen_result / TradeSetup slices. PRIME strata are **legacy secondary**.
@@ -1171,15 +1171,15 @@ saham learn grade [OPTIONS]
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--date` | today | Grade date (YYYY-MM-DD) |
-| `--db` | config | SQLite path for frozen observations |
+| `--db` | config | SQLite path for saved observations |
 
 ---
 
 ## saham research pre-open capture
 
-Explicit corpus freeze for pre-open decisions into `candidate_observations`
-(workflow `screen_pre_open`, contract `pre-open-open-30m`). Symmetric to
-`research signal capture` for accumulation-discovery.
+Save pre-open decisions into `candidate_observations` (workflow `screen_pre_open`,
+contract `pre-open-open-30m`). Symmetric to `research signal capture` for
+accumulation-discovery.
 
 **Live `screen pre-open` does not write observations.**
 
@@ -1200,9 +1200,10 @@ saham research pre-open capture --session 2026-06-18 --movers-json '...'
 
 ## saham research pre-open labels
 
-Generate **open_30m** outcome labels from NCP freezes + tracks (session-horizon
-twin of `research signal labels`, not multi-day swing horizons). Prefers DB
-freezes; falls back to snapshot. Writes `data/opening/YYYYMMDD/open_30m_labels.json`.
+Generate **open_30m** outcome labels from saved pre-open observations + tracks
+(session-horizon twin of `research signal labels`, not multi-day swing horizons).
+Prefers saved observations; falls back to snapshot. Writes
+`data/opening/YYYYMMDD/open_30m_labels.json`.
 
 Clean break: not under `learn` (ops only). Not `research signal labels --contract`.
 
@@ -1213,7 +1214,7 @@ saham research pre-open labels [OPTIONS]
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--date` | today | Session date (YYYY-MM-DD) |
-| `--db` | config | SQLite path for frozen observations |
+| `--db` | config | SQLite path for saved observations |
 | `--no-persist` | false | Compute only; do not write JSON |
 
 ---
