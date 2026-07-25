@@ -103,7 +103,7 @@ warnings before treating any candidate list as current.
 
 ```bash
 saham fetch iev
-saham learn snapshot
+saham research pre-open capture
 saham learn track
 saham learn grade
 ```

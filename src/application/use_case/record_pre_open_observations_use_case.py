@@ -5,13 +5,19 @@ PreOpenWorkflowUseCase remains free of required persistence. Callers that need
 canonical open_30m observations (research pre-open capture) go through
 this use case.
 
+Also writes a non-authority ops day export under data/opening/ when
+opening_data_dir is provided (same-run packaging for track/briefing/prompt).
+
 Layer: Application
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
+
+from src.application.services.pre_open_ops_day_export import write_pre_open_ops_day_export
 
 if TYPE_CHECKING:
     from src.application.services.pre_open_observation_persister import (
@@ -28,6 +34,7 @@ if TYPE_CHECKING:
 class RecordPreOpenObservationsResult:
     response: "PreOpenWorkflowResponse"
     recorded_count: int
+    ops_export_path: str | None = None
 
 
 class RecordPreOpenObservationsUseCase:
@@ -42,12 +49,29 @@ class RecordPreOpenObservationsUseCase:
         self._persister = observation_persister
 
     def execute(
-        self, request: "PreOpenWorkflowRequest"
+        self,
+        request: "PreOpenWorkflowRequest",
+        *,
+        opening_data_dir: Path | None = None,
     ) -> RecordPreOpenObservationsResult:
         response = self._workflow.execute(request)
         count = self._persister.persist(response, request)
+        ops_path: str | None = None
+        if opening_data_dir is not None:
+            day_dir = opening_data_dir / response.result.screened_date.strftime(
+                "%Y%m%d"
+            )
+            written = write_pre_open_ops_day_export(
+                response,
+                request,
+                day_dir,
+                recorded_count=count,
+            )
+            ops_path = str(written)
         return RecordPreOpenObservationsResult(
-            response=response, recorded_count=count
+            response=response,
+            recorded_count=count,
+            ops_export_path=ops_path,
         )
 
     def persist_only(

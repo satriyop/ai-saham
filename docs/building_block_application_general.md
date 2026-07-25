@@ -392,7 +392,7 @@ Each Big block decomposes into Medium modules:
 | `FetchMarketRefreshUseCase` | `use_case/fetch_market_refresh_use_case.py` | universe, days | Batch refresh |
 | `RefreshBrokerDataUseCase` | `use_case/refresh_broker_data_use_case.py` | ticker, date range | Refreshed broker data |
 | `FetchBrokerDailyFlowsUseCase` | `use_case/fetch_broker_daily_flows_use_case.py` | ticker, days | Foreign flow time-series |
-| `OpeningSnapshotUseCase` | `use_case/opening_snapshot_use_case.py` | — | NCP-locked predictions |
+| `RecordPreOpenObservationsUseCase` | `use_case/record_pre_open_observations_use_case.py` | — | Save pre-open decisions + ops export |
 | `OpeningTrackUseCase` | `use_case/opening_track_use_case.py` | — | Orderbook tracking |
 | `OpeningGradeUseCase` | `use_case/opening_grade_use_case.py` | — | Accuracy report |
 | `OpeningPromptUseCase` | `use_case/opening_prompt_use_case.py` | session | AI prompt |

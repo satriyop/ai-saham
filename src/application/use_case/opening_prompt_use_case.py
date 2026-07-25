@@ -13,6 +13,8 @@ import json
 from datetime import date
 from pathlib import Path
 
+from src.application.services.pre_open_ops_day_export import OPS_SESSION_FILENAME
+
 OPENING_DATA_DIR = Path("data/opening")
 
 
@@ -20,13 +22,16 @@ def build_prompt(run_date: date | None = None) -> str:
     today = run_date or date.today()
     day_dir = OPENING_DATA_DIR / today.strftime("%Y%m%d")
 
-    snapshot_path = day_dir / "snapshot.json"
+    ops_path = day_dir / OPS_SESSION_FILENAME
     grade_path = day_dir / "grade.json"
 
-    if not snapshot_path.exists():
-        raise FileNotFoundError(f"snapshot.json not found at {snapshot_path}")
+    if not ops_path.exists():
+        raise FileNotFoundError(
+            f"{OPS_SESSION_FILENAME} not found at {ops_path}. "
+            "Run `saham research pre-open capture` first."
+        )
 
-    with open(snapshot_path) as f:
+    with open(ops_path) as f:
         snapshot = json.load(f)
 
     grade: dict = {}

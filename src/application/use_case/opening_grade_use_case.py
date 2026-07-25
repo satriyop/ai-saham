@@ -3,9 +3,9 @@ opening_grade — deterministic accuracy analysis for the opening session learni
 
 Joins NCP decisions with track_*.json prices and computes session metrics.
 
-Decision source preference (ADR-048 Phase 4):
-  1. Saved DB observations (workflow=screen_pre_open) when present
-  2. Fallback: data/opening/.../snapshot.json plan fields
+Decision authority (clean break):
+  Saved DB observations only (workflow=screen_pre_open).
+  No snapshot.json / ops export as decision source.
 
 Does not recompute signal scores; uses decisions saved at capture time.
 Keeps grade.json / grade.md for learn tune/prompt.
@@ -20,10 +20,13 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Protocol
 
-from src.application.services.pre_open_observation_payload import PRE_OPEN_WORKFLOW
+from src.application.services.pre_open_observation_queries import (
+    list_pre_open_observations_by_ticker,
+)
+from src.application.services.pre_open_ops_day_export import OPS_SESSION_FILENAME
 
 OPENING_DATA_DIR = Path("data/opening")
-GRADE_SCHEMA_VERSION = 2  # Phase 4: prefers saved observations + signal/TradeSetup slices
+GRADE_SCHEMA_VERSION = 2  # Phase 4: saved observations + signal/TradeSetup slices
 
 
 class _ObservationsReader(Protocol):
@@ -55,31 +58,35 @@ def compute_grade(
         with open(tf) as f:
             tracks.append(json.load(f))
 
-    snapshot: dict = {}
-    snapshot_path = day_dir / "snapshot.json"
-    if snapshot_path.exists():
-        with open(snapshot_path) as f:
-            snapshot = json.load(f)
+    # Optional ops packaging for session meta only (not decision authority)
+    ops_meta: dict = {}
+    ops_path = day_dir / OPS_SESSION_FILENAME
+    if ops_path.exists():
+        try:
+            with open(ops_path) as f:
+                ops_meta = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            ops_meta = {}
 
     decision_source, candidates = _load_decision_candidates(
         today,
-        snapshot=snapshot,
         observations_repository=observations_repository,
     )
     if not candidates:
         raise FileNotFoundError(
-            f"No pre-open decisions for {today}. "
-            "Run `saham research pre-open capture` (or screen + capture) or `saham learn snapshot` first."
+            f"No saved pre-open observations for {today}. "
+            "Run `saham research pre-open capture` first "
+            "(day-file snapshot/export is not a decision source)."
         )
 
     per_ticker: list[dict] = []
     for cand in candidates:
-        per_ticker.append(_grade_one_ticker(cand, tracks, snapshot=snapshot))
+        per_ticker.append(_grade_one_ticker(cand, tracks, ops_meta=ops_meta))
 
     tracked = [t for t in per_ticker if not t.get("no_track_data")]
     grade = _build_session_grade(
         today=today,
-        snapshot=snapshot,
+        ops_meta=ops_meta,
         decision_source=decision_source,
         candidates=candidates,
         per_ticker=per_ticker,
@@ -97,43 +104,14 @@ def compute_grade(
 def _load_decision_candidates(
     today: date,
     *,
-    snapshot: dict,
     observations_repository: _ObservationsReader | None,
 ) -> tuple[str, list[dict]]:
-    """Return (source_label, normalized candidate decision dicts)."""
-    if observations_repository is not None:
-        try:
-            rows = observations_repository.list_all_by_date(today)
-        except Exception:
-            rows = []
-        pre_open = [
-            r
-            for r in rows
-            if getattr(r, "workflow", None) == PRE_OPEN_WORKFLOW
-            or (
-                isinstance(getattr(r, "payload", None), dict)
-                and r.payload.get("workflow") == PRE_OPEN_WORKFLOW
-            )
-        ]
-        if pre_open:
-            # Prefer latest capture per ticker
-            by_ticker: dict[str, Any] = {}
-            for row in sorted(
-                pre_open,
-                key=lambda r: getattr(r, "captured_at", None) or date.min,
-            ):
-                by_ticker[row.ticker] = row
-            normalized = [
-                _candidate_from_observation(row) for row in by_ticker.values()
-            ]
-            return "saved_observations", normalized
-
-    snap_cands = snapshot.get("candidates") or []
-    if snap_cands:
-        return "snapshot_json", [
-            _candidate_from_snapshot(c) for c in snap_cands if c.get("ticker")
-        ]
-    return "none", []
+    """Return (source_label, normalized candidate decision dicts). Fail closed."""
+    by_ticker = list_pre_open_observations_by_ticker(observations_repository, today)
+    if not by_ticker:
+        return "none", []
+    normalized = [_candidate_from_observation(row) for row in by_ticker.values()]
+    return "saved_observations", normalized
 
 
 def _candidate_from_observation(row: Any) -> dict:
@@ -171,27 +149,6 @@ def _candidate_from_observation(row: Any) -> dict:
     }
 
 
-def _candidate_from_snapshot(cand: dict) -> dict:
-    return {
-        "ticker": cand["ticker"],
-        "opening_setup": cand.get("opening_setup", "SKIP"),
-        "trend": cand.get("trend"),
-        "iep": cand.get("iep"),
-        "entry_range_low": cand.get("entry_range_low"),
-        "entry_range_high": cand.get("entry_range_high"),
-        "one_r": cand.get("one_r"),
-        "bid_pressure_preopen": cand.get("bid_pressure_preopen"),
-        "screen_result": None,
-        "signal_score": cand.get("signal_score"),
-        "signal_strength": cand.get("signal_strength"),
-        "signal_entry_quality": cand.get("signal_entry_quality"),
-        "trade_setup_action": cand.get("trade_setup_action"),
-        "risk_level_name": cand.get("risk_level_name"),
-        "decision_source": "snapshot_json",
-        "capture_phase": None,
-    }
-
-
 def _num(v: Any) -> float | None:
     if v is None:
         return None
@@ -201,7 +158,7 @@ def _num(v: Any) -> float | None:
         return None
 
 
-def _grade_one_ticker(cand: dict, tracks: list[dict], *, snapshot: dict) -> dict:
+def _grade_one_ticker(cand: dict, tracks: list[dict], *, ops_meta: dict) -> dict:
     ticker = cand["ticker"]
     one_r = cand.get("one_r")
     entry_low = cand.get("entry_range_low")
@@ -316,7 +273,7 @@ def _grade_one_ticker(cand: dict, tracks: list[dict], *, snapshot: dict) -> dict
     fnet_T0 = ob_series[0].get("fnet_intraday") if ob_series else None
     fnet_latest = ob_series[-1].get("fnet_intraday") if ob_series else None
 
-    capture_phase = cand.get("capture_phase") or snapshot.get("capture_phase")
+    capture_phase = cand.get("capture_phase") or ops_meta.get("capture_phase")
 
     return {
         **base_meta,
@@ -372,7 +329,7 @@ def _signal_band(score: Any) -> str | None:
 def _build_session_grade(
     *,
     today: date,
-    snapshot: dict,
+    ops_meta: dict,
     decision_source: str,
     candidates: list[dict],
     per_ticker: list[dict],
@@ -424,7 +381,16 @@ def _build_session_grade(
         return out
 
     iep_errors = [t["iep_error_pct"] for t in tracked if t.get("iep_error_pct") is not None]
-    data_quality = _compute_data_quality(snapshot, tracked)
+    session_meta = {
+        "capture_phase": ops_meta.get("capture_phase")
+        or (candidates[0].get("capture_phase") if candidates else None),
+        "capture_valid_for_opening_prediction": ops_meta.get(
+            "capture_valid_for_opening_prediction"
+        ),
+        "capture_confidence": ops_meta.get("capture_confidence"),
+        "is_ncp_locked": ops_meta.get("is_ncp_locked"),
+    }
+    data_quality = _compute_data_quality(session_meta, tracked)
     data_quality["decision_source"] = decision_source
 
     # Champion slices (ADR-048 Phase 4)
@@ -479,11 +445,11 @@ def _build_session_grade(
         "schema_version": GRADE_SCHEMA_VERSION,
         "date": str(today),
         "decision_source": decision_source,
-        "capture_phase": snapshot.get("capture_phase"),
-        "capture_valid_for_opening_prediction": snapshot.get(
+        "capture_phase": session_meta.get("capture_phase"),
+        "capture_valid_for_opening_prediction": session_meta.get(
             "capture_valid_for_opening_prediction"
         ),
-        "capture_confidence": snapshot.get("capture_confidence"),
+        "capture_confidence": session_meta.get("capture_confidence"),
         "data_quality": data_quality,
         "tickers_screened": len(candidates),
         "tickers_tracked": len(tracked),

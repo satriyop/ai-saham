@@ -78,7 +78,7 @@ def test_today_renders_rich_dashboard_with_lifecycle_next_steps(tmp_path: Path):
     assert "Data & Regime" in result.stdout
     assert "PRE-OPEN ASSESSMENT" in result.stdout
     assert "ACCUMULATION SCREEN" in result.stdout
-    assert "Run: saham learn snapshot --force" in result.stdout
+    assert "Run: saham research pre-open capture" in result.stdout
 
 
 def test_today_uses_loaded_config_and_not_global(tmp_path: Path):

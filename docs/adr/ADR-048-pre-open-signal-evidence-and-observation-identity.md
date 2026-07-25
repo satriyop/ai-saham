@@ -22,7 +22,7 @@ broker tags) and, after ADR-047 Phase 2, attaches **non-blocking** regime + defa
 gate risk. It does **not** run `SignalEngine` and does **not** compose `TradeSetup`.
 Display labels such as PRIME/WATCH/SKIP are heuristics, not ADR-026 actions.
 
-The opening learning loop (`learn snapshot` / `track` / `grade`) joins NCP snapshot
+The opening learning loop (`research pre-open capture` + `learn track` / `grade`) joins NCP
 files to 09:00–09:30 tracks and reports plan/trend accuracy, including strata by
 `opening_setup` (PRIME/WATCH/SKIP). That loop must not remain the long-term
 authority model once a real signal exists.
@@ -218,8 +218,8 @@ When signal + TradeSetup are ready:
 #### 9. Adoption and non-dual-path
 
 * Pre-open signal/risk/trade_setup run only through **`ScreenAssessmentPipeline`**.
-* `learn snapshot` may capture raw movers/plan for ops, but learning authority is
-  the **saved DB observation** once that path exists (`research pre-open capture`).
+* Learning authority is the **saved DB observation** from `research pre-open capture` only.
+  Day-file ops export is packaging, not a second decision source.
 * Opening snapshot use case remains raw-screen capture where already scoped;
   assessment capture is a named composition root when implemented (do not leave
   dual silent paths). Live `screen pre-open` does not write observations.

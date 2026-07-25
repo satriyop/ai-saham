@@ -31,8 +31,8 @@ def pre_open_labels(
     """
     Generate open_30m outcome labels for a pre-open session date.
 
-    Prefers saved screen_pre_open observations; falls back to snapshot.json.
-    Requires learn track files. Writes data/opening/YYYYMMDD/open_30m_labels.json.
+    Requires saved screen_pre_open observations (research pre-open capture)
+    and learn track files. Writes data/opening/YYYYMMDD/open_30m_labels.json.
 
     Examples:
         saham research pre-open labels

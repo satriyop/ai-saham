@@ -532,7 +532,7 @@ every 5 minutes 09:00–09:30, grade accuracy, tune thresholds via AI.
 
 ```bash
 # Step 1: Capture snapshot
-saham learn snapshot
+saham research pre-open capture
 
 # Step 2: Track every 5 minutes
 saham learn track

@@ -6,7 +6,6 @@ Tracks orderbook every 5 minutes from 09:00–09:30 WIB for all screened tickers
 Layer: Adapter
 """
 
-import json
 import os
 from pathlib import Path
 from typing import Annotated, Optional
@@ -25,7 +24,8 @@ def track(
         bool, typer.Option("--force", help="Run single snapshot immediately (bypass window)")
     ] = False,
     tickers: Annotated[
-        Optional[list[str]], typer.Argument(help="Explicit tickers (overrides snapshot)")
+        Optional[list[str]],
+        typer.Argument(help="Explicit tickers (overrides saved observations)"),
     ] = None,
     date_str: Annotated[Optional[str], typer.Option("--date")] = None,
     headless: Annotated[bool, typer.Option("--headless/--no-headless")] = True,
@@ -40,8 +40,8 @@ def track(
     """
     Track orderbook every 5 minutes from 09:00–09:30 WIB for all screened tickers.
 
-    Reads tickers from today's snapshot.json. Saves track_HHMM.json per interval.
-    Full order book depth (bid_pressure_ratio, fnet_intraday) is always captured.
+    Reads tickers from saved pre-open observations (research pre-open capture).
+    Saves track_HHMM.json per interval. Full order book depth is always captured.
 
     Use --force with explicit tickers for manual dry-runs outside market hours.
     Use --broker-confirm to embed institutional broker absorption data per tick interval.
@@ -53,19 +53,27 @@ def track(
     """
     cfg = load_app_config()
     run_date = parse_learn_date(date_str)
+    db_path = Path(cfg.storage.db_path)
 
     if tickers:
         resolved_tickers = list(tickers)
     else:
-        snap_path = opening_day_dir(run_date) / "snapshot.json"
-        if not snap_path.exists():
+        from src.application.services.pre_open_observation_queries import (
+            list_pre_open_tickers,
+        )
+        from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
+            SQLiteCandidateObservationsRepository,
+        )
+
+        repo = SQLiteCandidateObservationsRepository(db_path)
+        resolved_tickers = list_pre_open_tickers(repo, run_date)
+        if not resolved_tickers:
             typer.echo(
-                f"No snapshot found at {snap_path}. Run `saham learn snapshot` first.", err=True
+                f"No saved pre-open observations for {run_date}. "
+                "Run `saham research pre-open capture` first.",
+                err=True,
             )
             raise typer.Exit(1)
-        with open(snap_path) as f:
-            snap = json.load(f)
-        resolved_tickers = [c["ticker"] for c in snap.get("candidates", [])]
 
     if not resolved_tickers:
         typer.echo("No tickers to track.", err=True)

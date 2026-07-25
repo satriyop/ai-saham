@@ -17,13 +17,15 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.learn_command_paths import parse_learn_date
+from src.adapters.cli.learn_command_paths import opening_day_dir, parse_learn_date
+from src.adapters.cli.pre_open_sidecar_writer import write_pre_open_sidecar
 from src.adapters.cli.screen_pre_open_workflow_factory import (
     create_pre_open_cli_workflow,
     resolve_pre_open_browser_plan,
     resolve_pre_open_market_status,
 )
 from src.application.services.pre_open_run_guard import build_pre_open_run_guard
+from src.application.use_case.opening_grade_use_case import OPENING_DATA_DIR
 from src.application.use_case.pre_open_workflow_use_case import PreOpenWorkflowRequest
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.infrastructure.browser.stockbit_browser_provider import ManualBrowserDataProvider
@@ -87,8 +89,10 @@ def pre_open_capture(
     """
     Save pre-open decisions into candidate_observations (screen_pre_open).
 
-    Explicit corpus write — same idea as ``research signal capture``.
-    Does not generate open_30m labels (use ``research pre-open labels``).
+    Sole decision authority write for the opening learning loop (clean break).
+    Also writes same-run ops packaging: data/opening/YYYYMMDD/ops_session.json
+    and trade-confirm sidecar. Does not generate open_30m labels
+    (use ``research pre-open labels``).
 
     Examples:
         saham research pre-open capture --session 2026-06-18 --movers-json '...'
@@ -175,11 +179,27 @@ def pre_open_capture(
     )
 
     try:
-        result = cli_workflow.record_observations_use_case.execute(workflow_request)
+        result = cli_workflow.record_observations_use_case.execute(
+            workflow_request,
+            opening_data_dir=OPENING_DATA_DIR,
+        )
     except Exception as e:
         typer.echo(f"Capture failed: {e}", err=True)
         raise typer.Exit(1)
 
+    # Same-run trade-confirm sidecar (ops packaging; not decision authority)
+    try:
+        sidecar_path = Path(cfg.storage.intraday_sidecar)
+        write_pre_open_sidecar(
+            candidates=list(result.response.result.candidates),
+            screened_date=result.response.result.screened_date,
+            sidecar_path=sidecar_path,
+            market_regime=result.response.market_regime,
+        )
+    except Exception as e:
+        typer.echo(f"Warning: trade-confirm sidecar not written: {e}", err=True)
+
+    day = opening_day_dir(run_date)
     payload = {
         "artifact_type": "pre_open_observation_capture",
         "session": run_date.isoformat(),
@@ -189,6 +209,8 @@ def pre_open_capture(
         "source_status": result.response.source_status.value,
         "workflow": "screen_pre_open",
         "observation_contract": "pre-open-open-30m",
+        "ops_export_path": result.ops_export_path,
+        "ops_day_dir": str(day),
     }
     if fmt == "json":
         typer.echo(json.dumps(payload, indent=2))
@@ -201,4 +223,6 @@ def pre_open_capture(
     typer.echo(f"  filter_rejects:    {payload['filter_reject_count']}")
     typer.echo(f"  source_status:     {payload['source_status']}")
     typer.echo("  contract:          pre-open-open-30m")
+    if result.ops_export_path:
+        typer.echo(f"  ops export:        {result.ops_export_path}")
     typer.echo("  Next: learn track → learn grade | research pre-open labels")

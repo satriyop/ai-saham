@@ -1,8 +1,8 @@
 """
 Grade command for the opening session learning loop.
 
-Computes deterministic accuracy report from saved observations (preferred) or
-snapshot.json + track data (ADR-048 Phase 4).
+Computes deterministic accuracy report from saved observations + track data
+(ADR-048). Fail closed without research pre-open capture.
 
 Layer: Adapter
 """
@@ -26,8 +26,8 @@ def grade(
     """
     Compute deterministic accuracy report from today's decisions + track data.
 
-    Prefers saved DB observations (screen_pre_open) when present; falls back
-    to snapshot.json. Requires at least one track_*.json for the date.
+    Requires saved DB observations from research pre-open capture and at least
+    one track_*.json for the date.
 
     Examples:
         saham learn grade
@@ -49,15 +49,18 @@ def grade(
         typer.echo(f"Import error: {e}", err=True)
         raise typer.Exit(1)
 
-    observations_repo = None
-    if resolved_db.exists():
-        try:
-            observations_repo = SQLiteCandidateObservationsRepository(resolved_db)
-        except Exception as e:
-            typer.echo(
-                f"Warning: could not open observations DB ({e}); using snapshot only.",
-                err=True,
-            )
+    if not resolved_db.exists():
+        typer.echo(
+            f"Error: observations database not found at {resolved_db}. "
+            "Run `saham research pre-open capture` first.",
+            err=True,
+        )
+        raise typer.Exit(1)
+    try:
+        observations_repo = SQLiteCandidateObservationsRepository(resolved_db)
+    except Exception as e:
+        typer.echo(f"Error: could not open observations DB ({e})", err=True)
+        raise typer.Exit(1)
 
     try:
         config_snapshot = load_pre_open_grade_config_snapshot()

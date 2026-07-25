@@ -19,13 +19,18 @@ This workflow captures the feedback loop: predict → track → measure → tune
 ```
 data/opening/
 └── YYYYMMDD/
-    ├── snapshot.json         # Step 1: predictions at 08:57
-    ├── track_HHMM.json       # Step 2: orderbook snapshots
-    ├── grade.json            # Step 3: accuracy report
-    ├── prompt.md             # Step 4: AI prompt
-    ├── tune.json             # Step 5: structured AI recommendations
-    └── tune.md               # Step 5: human-readable AI recommendations
+    ├── ops_session.json      # Same-run ops export from research pre-open capture
+    ├── track_HHMM.json       # Orderbook snapshots (learn track)
+    ├── grade.json            # Session scorecard (learn grade; DB decisions)
+    ├── open_30m_labels.json  # Corpus outcomes (research pre-open labels)
+    ├── prompt.md             # AI prompt (learn prompt)
+    ├── tune.json             # AI recommendations (learn tune)
+    └── tune.md
 ```
+
+**Decision authority:** SQLite `candidate_observations` via
+`saham research pre-open capture` only. Day files are packaging / outcomes /
+scorecards — not a second scorer.
 
 ### Snapshot Format
 
@@ -147,26 +152,23 @@ It captures real-time institutional absorption from Stockbit's running trade API
 
 ## Step-by-Step
 
-### Step 1: Snapshot (08:57 WIB)
+### Step 1: Capture decisions (08:57 WIB)
 
-Captures pre-open predictions after NCP locks:
+Sole decision write for the opening learning loop:
 
 ```bash
-saham learn snapshot
+saham research pre-open capture
 ```
 
 **What happens:**
-1. Runs the pre-open screener with movers from IDX/Stockbit
-2. Computes gap %, entry range, ATR-based stop for each candidate
-3. Classifies trend (BULLISH/NEUTRAL/BEARISH)
-4. Classifies capture phase (PRE_NCP / NCP_LOCKED / OPEN / POST_OPEN / OUT_OF_SESSION)
-5. Assigns capture confidence (HIGH if NCP-locked, MEDIUM if pre-NCP, LOW otherwise)
-6. Saves deterministic verdict with reason codes
-7. Writes to `data/opening/YYYYMMDD/snapshot.json`
+1. Runs the full pre-open workflow (screen + signal/risk/TradeSetup pipeline)
+2. **Saves decisions** to SQLite `candidate_observations` (learning authority)
+3. Writes same-run ops packaging: `data/opening/YYYYMMDD/ops_session.json`
+4. Writes trade-confirm sidecar for `saham trade confirm`
 
 **Manual run with historical date:**
 ```bash
-saham learn snapshot --force --date 2026-06-17
+saham research pre-open capture --session 2026-06-17 --movers-json '...'
 ```
 
 ### Step 2: Track (09:00–09:30 WIB)
@@ -284,7 +286,7 @@ thresholds:
 
 | Command | Timing | Purpose | Output file |
 |---------|--------|---------|-------------|
-| `saham learn snapshot` | 08:57 | Pre-open predictions | `snapshot.json` |
+| `saham research pre-open capture` | 08:57 | Pre-open predictions | `snapshot.json` |
 | `saham learn track` | 09:00–09:30 | 5-min full-depth orderbook + foreign net + opt-in broker attribution | `track_HHMM.json` |
 | `saham learn grade` | 09:30+ | Accuracy report (incl. bid pressure momentum + institutional absorption) | `grade.json` |
 | `saham learn prompt` | anytime | AI prompt | `prompt.md` |
@@ -324,18 +326,17 @@ Snapshot confidence drives behavior:
 | Family | Role |
 |--------|------|
 | `screen pre-open` | **Live** display — no observation corpus write |
-| `research pre-open capture` | **Save decisions** to `candidate_observations` |
+| `research pre-open capture` | **Sole save-decisions write** + ops_session export |
 | `research pre-open labels` | **Outcomes** (`open_30m`) from saved decisions + tracks |
-| `learn` (ops) | **Same-day ritual** only — snapshot / track / grade / prompt / tune |
+| `learn` (ops) | **Same-day ritual** only — track / grade / prompt / tune |
 
 Do not put open_30m corpus labeling under `learn`. Do not auto-write observations
-from live `screen`.
+from live `screen`. There is no `learn snapshot`.
 
 ### → `saham trade`
 
-The opening snapshot uses the same screener under the hood. Paths stay separate:
-`screen pre-open` for live decision-making, `research pre-open capture` for
-corpus decisions, `learn` for the same-day ops ritual.
+Paths stay separate: `screen pre-open` for live display, `research pre-open capture`
+for decisions (and confirm sidecar), `learn` for the same-day ops ritual.
 
 ### → `data/opening/` + Journals
 

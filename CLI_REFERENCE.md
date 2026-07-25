@@ -14,19 +14,20 @@ Same shape for every screen scenario (pre-open, accum, …):
 | **`screen`** | **Live** discovery / operator display | **No** observation rows |
 | **`research <scenario> capture`** | **Save decisions** into `candidate_observations` | **Yes** (explicit corpus write) |
 | **`research <scenario> labels`** | **Outcomes** joined to saved decisions | Labels/artifacts only |
-| **ops** (today: `learn`) | **Same-day ritual** only — snapshot / track / session grade / prompt / tune | Day files under `data/opening/`; not multi-day corpus |
+| **ops** (today: `learn`) | **Same-day ritual** only — track / session grade / prompt / tune | Day files under `data/opening/`; not multi-day corpus |
 
 Examples:
 
 - Live open: `saham screen pre-open` → no DB observation write  
-- Corpus decisions: `saham research pre-open capture`  
+- **Save decisions (sole authority):** `saham research pre-open capture`  
 - Corpus outcomes: `saham research pre-open labels` (horizon `open_30m`)  
-- Same-day ops: `saham learn snapshot|track|grade|…`  
+- Same-day ops: `saham learn track|grade|prompt|tune` (after capture)  
 - Live accum: `saham screen accum` → no observation write  
 - Accum corpus: `saham research signal capture` → `… labels`
 
 Do **not** put multi-day / open_30m corpus label generation under ops (`learn`).
 Do **not** auto-write observations from live `screen`.
+Do **not** use day-file exports as a second decision source for grade/labels.
 
 ---
 
@@ -1141,30 +1142,36 @@ saham screen compare morning-watch --universe lq45 --top 30
 
 ---
 
-## saham learn snapshot
+## saham research pre-open capture
 
-Capture NCP-locked pre-open screener signals at 08:57 WIB. Saves to `data/opening/YYYYMMDD/snapshot.json`.
+**Sole decision write** for the opening learning loop. Saves into
+`candidate_observations` (workflow `screen_pre_open`, contract `pre-open-open-30m`)
+and same-run ops packaging (`data/opening/YYYYMMDD/ops_session.json` + trade-confirm
+sidecar). Symmetric to `research signal capture` for accumulation-discovery.
+
+**Live `screen pre-open` does not write observations.** There is no `learn snapshot`.
 
 ```
-saham learn snapshot [OPTIONS]
-saham learn snapshot               # live at 08:57 WIB
-saham learn snapshot --force       # manual dry-run
-saham learn snapshot --date 2026-06-18 --force
+saham research pre-open capture [OPTIONS]
+saham research pre-open capture --session 2026-06-18 --movers-json '...'
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--force` | false | Run outside 08:55–09:00 window |
-| `--date` | today | Date for retrospective capture |
-| `--db` | ./data.db | SQLite database path |
-| `--config` | — | Config path |
-| `--headless/--no-headless` | headless | Browser visibility |
+| `--session` | today | Session date YYYY-MM-DD |
+| `--movers-json` | — | Pre-fetched movers (offline capture) |
+| `--fast` | false | Skip order books |
+| `--db` | config | SQLite path |
+| `--format` | table | table or json |
 
 ---
 
 ## saham learn track
 
-Track orderbook prices every 5 minutes from 09:00–09:30 WIB. Saves to `data/opening/YYYYMMDD/track_HHMM.json`.
+Track orderbook prices every 5 minutes from 09:00–09:30 WIB for tickers from
+**saved pre-open observations**. Saves `data/opening/YYYYMMDD/track_HHMM.json`.
+
+Requires prior `research pre-open capture` (or explicit tickers with `--force`).
 
 ```
 saham learn track [OPTIONS]
@@ -1184,10 +1191,10 @@ saham learn track --force BBCA BBRI  # manual dry-run
 ## saham learn grade
 
 **Same-day ops** session scorecard (not multi-day corpus labels). Joins **saved
-DB observations** (`screen_pre_open`) when present, else `snapshot.json`, to
-`track_*.json` prices. Champion metrics: plan (range/IEP/clean trade) + signal
-bands + screen_result / TradeSetup slices. PRIME strata are **legacy secondary**.
-Does not recompute signal scores. Writes `grade.json` + `grade.md` for tune/prompt.
+DB observations only** (`screen_pre_open`) to `track_*.json` prices. Fail closed
+without capture. Champion metrics: plan + signal bands + screen_result / TradeSetup
+slices. PRIME strata are **legacy secondary**. Does not recompute signal scores.
+Writes `grade.json` + `grade.md` for tune/prompt.
 For `open_30m` corpus outcomes use `research pre-open labels`.
 
 ```
@@ -1201,36 +1208,11 @@ saham learn grade [OPTIONS]
 
 ---
 
-## saham research pre-open capture
-
-**Save decisions** into `candidate_observations` (workflow `screen_pre_open`,
-contract `pre-open-open-30m`). Symmetric to `research signal capture` for
-accumulation-discovery. Family rule: screen = live; research capture = save;
-research labels = outcomes; learn = same-day ops only.
-
-**Live `screen pre-open` does not write observations.**
-
-```
-saham research pre-open capture [OPTIONS]
-saham research pre-open capture --session 2026-06-18 --movers-json '...'
-```
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--session` | today | Session date YYYY-MM-DD |
-| `--movers-json` | — | Pre-fetched movers (offline capture) |
-| `--fast` | false | Skip order books |
-| `--db` | config | SQLite path |
-| `--format` | table | table or json |
-
----
-
 ## saham research pre-open labels
 
-Generate **open_30m** outcome labels from saved pre-open observations + tracks
-(session-horizon twin of `research signal labels`, not multi-day swing horizons).
-Prefers saved observations; falls back to snapshot. Writes
-`data/opening/YYYYMMDD/open_30m_labels.json`.
+Generate **open_30m** outcome labels from **saved** pre-open observations + tracks
+(session-horizon twin of `research signal labels`). Fail closed without capture.
+Writes `data/opening/YYYYMMDD/open_30m_labels.json`.
 
 Clean break: not under `learn` (ops only). Not `research signal labels --contract`.
 

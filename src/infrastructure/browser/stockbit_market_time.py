@@ -357,7 +357,7 @@ def get_current_market_status() -> MarketStatus:
       2. Stockbit live (token already cached in-process from earlier in the same command)
       3. Local clock
 
-    Use this in commands that already use Stockbit (pre-open, learn snapshot)
+    Use this in commands that already use Stockbit (pre-open, research capture)
     where the token acquisition cost is already paid.
     """
     cached = read_cached_market_status()

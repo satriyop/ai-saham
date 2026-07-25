@@ -510,9 +510,13 @@ class DailyBriefingUseCase:
         universe_tickers: list[str],
         warnings: list[str],
     ) -> OpeningBriefingSnapshot:
-        path = request.opening_data_dir / live_session_date.strftime("%Y%m%d") / "snapshot.json"
+        day_dir = request.opening_data_dir / live_session_date.strftime("%Y%m%d")
+        path = day_dir / "ops_session.json"
         if not path.exists():
-            warnings.append(f"No opening snapshot at {path}")
+            warnings.append(
+                f"No opening ops session at {path} "
+                "(run: saham research pre-open capture)"
+            )
             return OpeningBriefingSnapshot(
                 candidates=[],
                 market_wide_observations=[],

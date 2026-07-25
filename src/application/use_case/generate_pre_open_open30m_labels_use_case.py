@@ -18,7 +18,6 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Protocol
 
-from src.application.services.pre_open_observation_payload import PRE_OPEN_WORKFLOW
 from src.application.use_case.opening_grade_use_case import (
     OPENING_DATA_DIR,
     _extract_observed_price,
@@ -115,13 +114,13 @@ def generate_pre_open_open30m_labels(
             tracks.append(json.load(f))
 
     decisions, decision_source = _load_decisions(
-        run_date, day_dir, observations_repository
+        run_date, observations_repository
     )
     if not decisions:
         raise FileNotFoundError(
-            f"No pre-open decisions for {run_date}. "
-            "Run `saham research pre-open capture` (or screen + capture) or "
-            "`saham learn snapshot` first."
+            f"No saved pre-open observations for {run_date}. "
+            "Run `saham research pre-open capture` first "
+            "(day-file snapshot/export is not a decision source)."
         )
 
     labels: list[PreOpenOpen30mLabel] = []
@@ -160,43 +159,22 @@ def generate_pre_open_open30m_labels(
 
 def _load_decisions(
     run_date: date,
-    day_dir: Path,
     observations_repository: _ObservationsReader | None,
 ) -> tuple[list[dict], str]:
-    if observations_repository is not None:
-        try:
-            rows = observations_repository.list_all_by_date(run_date)
-        except Exception:
-            rows = []
-        pre = [
-            r
-            for r in rows
-            if getattr(r, "workflow", None) == PRE_OPEN_WORKFLOW
-            or (
-                isinstance(getattr(r, "payload", None), dict)
-                and r.payload.get("workflow") == PRE_OPEN_WORKFLOW
-            )
-        ]
-        if pre:
-            by_ticker: dict[str, Any] = {}
-            for row in sorted(
-                pre, key=lambda r: getattr(r, "captured_at", None) or date.min
-            ):
-                by_ticker[row.ticker] = row
-            return (
-                [_decision_from_observation(r) for r in by_ticker.values()],
-                "saved_observations",
-            )
+    """Load decisions from saved observations only (fail closed)."""
+    from src.application.services.pre_open_observation_queries import (
+        list_pre_open_observations_by_ticker,
+    )
 
-    snap_path = day_dir / "snapshot.json"
-    if snap_path.exists():
-        snap = json.loads(snap_path.read_text())
-        cands = snap.get("candidates") or []
-        return (
-            [_decision_from_snapshot(c) for c in cands if c.get("ticker")],
-            "snapshot_json",
-        )
-    return [], "none"
+    by_ticker = list_pre_open_observations_by_ticker(
+        observations_repository, run_date
+    )
+    if not by_ticker:
+        return [], "none"
+    return (
+        [_decision_from_observation(r) for r in by_ticker.values()],
+        "saved_observations",
+    )
 
 
 def _decision_from_observation(row: Any) -> dict:
@@ -213,19 +191,6 @@ def _decision_from_observation(row: Any) -> dict:
         "screen_result": payload.get("screen_result"),
         "signal_score": signal.get("score"),
         "trade_setup_action": trade.get("action"),
-    }
-
-
-def _decision_from_snapshot(cand: dict) -> dict:
-    return {
-        "ticker": cand["ticker"],
-        "entry_range_low": _f(cand.get("entry_range_low")),
-        "entry_range_high": _f(cand.get("entry_range_high")),
-        "entry_price": _f(cand.get("suggested_entry") or cand.get("entry_price")),
-        "stop_loss_price": _f(cand.get("atr_stop") or cand.get("stop_loss_price")),
-        "screen_result": cand.get("screen_result"),
-        "signal_score": cand.get("signal_score"),
-        "trade_setup_action": cand.get("trade_setup_action"),
     }
 
 

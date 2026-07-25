@@ -422,7 +422,7 @@ def today(
     if no_snapshot and no_opening and no_market:
         pre_open_elements.extend([
             Text("No saved opening snapshot"),
-            Text("Run: saham learn snapshot --force"),
+            Text("Run: saham research pre-open capture"),
         ])
     else:
         if not response.opening_candidates:

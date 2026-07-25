@@ -346,7 +346,7 @@ def test_daily_briefing_opening_snapshot(tmp_path, monkeypatch):
     date_dir = opening_dir / "20260619"
     date_dir.mkdir(parents=True)
 
-    snapshot_file = date_dir / "snapshot.json"
+    snapshot_file = date_dir / "ops_session.json"
     snapshot_data = {
         "captured_at": "2026-06-19T09:05:00+07:00",
         "candidates": [
@@ -544,7 +544,7 @@ def test_daily_briefing_ready_when_all_critical_sources_ready(tmp_path, monkeypa
     opening_dir = tmp_path / "opening"
     date_dir = opening_dir / "20260619"
     date_dir.mkdir(parents=True)
-    snapshot_file = date_dir / "snapshot.json"
+    snapshot_file = date_dir / "ops_session.json"
     snapshot_data = {
         "captured_at": "2026-06-19T09:05:00+07:00",
         "candidates": [{"ticker": "T1", "opening_setup": "PRIME"}]
@@ -588,7 +588,7 @@ def test_daily_briefing_splits_opening_snapshot_by_universe_scope(tmp_path, monk
     date_dir = opening_dir / "20260619"
     date_dir.mkdir(parents=True)
 
-    snapshot_file = date_dir / "snapshot.json"
+    snapshot_file = date_dir / "ops_session.json"
     snapshot_data = {
         "captured_at": "2026-06-19T09:05:00+07:00",
         "candidates": [
@@ -645,7 +645,7 @@ def test_daily_briefing_empty_universe_treats_opening_rows_as_market_wide(tmp_pa
     date_dir = opening_dir / "20260619"
     date_dir.mkdir(parents=True)
 
-    snapshot_file = date_dir / "snapshot.json"
+    snapshot_file = date_dir / "ops_session.json"
     snapshot_data = {
         "captured_at": "2026-06-19T09:05:00+07:00",
         "candidates": [
@@ -1047,7 +1047,7 @@ def test_daily_briefing_invalid_opening_json_degrades_to_warning(tmp_path, monke
     )
     snapshot_dir = tmp_path / "20260619"
     snapshot_dir.mkdir()
-    (snapshot_dir / "snapshot.json").write_text("{invalid")
+    (snapshot_dir / "ops_session.json").write_text("{invalid")
     use_case, *_ = _failure_boundary_dependencies()
 
     response = _execute_historical(use_case, opening_data_dir=tmp_path)
@@ -1063,7 +1063,7 @@ def test_daily_briefing_malformed_opening_shape_propagates(tmp_path, monkeypatch
     )
     snapshot_dir = tmp_path / "20260619"
     snapshot_dir.mkdir()
-    (snapshot_dir / "snapshot.json").write_text("[]")
+    (snapshot_dir / "ops_session.json").write_text("[]")
     use_case, *_ = _failure_boundary_dependencies()
 
     with pytest.raises(TypeError, match="opening snapshot root must be a mapping"):
