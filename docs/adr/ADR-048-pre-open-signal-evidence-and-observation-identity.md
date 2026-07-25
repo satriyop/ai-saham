@@ -67,7 +67,7 @@ Evidence contract id (initial): **`pre_open_signal_evidence.v1`**.
 | Group id | Role | Production rule |
 |----------|------|-----------------|
 | **`auction_ncp`** | NCP-locked auction quality | **Required** for production signal |
-| **`open_viability`** | 30m trap / friction / chaos quality | **Optional** initially (see weights) |
+| **`open_viability`** | 30m trap / friction / chaos quality | **Optional** initially (see §4) |
 
 **`auction_ncp` (illustrative field set for the contract; scoring math is later work):**
 
@@ -92,30 +92,53 @@ Evidence contract id (initial): **`pre_open_signal_evidence.v1`**.
 Absence of `auction_ncp` ⇒ **hard guard**: do not call the signal use case (same
 spirit as ADR-047 / no fabrication). No confirmation-only production score.
 
-#### 4. Composite weights and hierarchy
+#### 4. Composition hierarchy (shape frozen; weights and rendering provisional)
+
+**Frozen (the rule shape — this is the decision):**
 
 ```text
-if auction_ncp MISSING or auction_score < auction_min:
-    → no production signal
+if auction_ncp MISSING or auction_strength < auction_min:
+    → no production signal            # hard guard
 else:
-    composite = 0.65 * auction_score + 0.35 * viability_score
+    auction_ncp is the PRIMARY driver; open_viability is do-no-harm (veto/penalty) ONLY
     if open_viability MISSING (allowed initially):
-        composite = auction_score
-        coverage reflects missing group
+        score on auction alone
+        coverage reflects the missing group
         cap strength at MODERATE (do not claim full two-group authority)
+    decision constraints (gap-out, friction fail, ...) may force EntryQuality caps
+        (WATCH / AVOID) regardless of a mid-range score
 ```
 
-| Knob | Frozen default |
-|------|----------------|
-| `auction_weight` | **0.65** |
-| `viability_weight` | **0.35** |
-| `auction_min` | **50** (config; material when scoring ships) |
-| `viability_required` | **false** initially |
-| confirmation-only score | **forbidden** |
+**Not frozen (implementation choice; provisional, not decisions):**
 
-Decision constraints (gap-out, friction fail, etc.) may force `EntryQuality` caps
-(WATCH/AVOID) even when the weighted composite is mid-range. Weights and floors
-are **CONFIG_MATERIAL** when implemented; this ADR freezes the **rule shape**.
+* **Rendering — composite vs cascade.** v1 MAY render strength as an **ordinal gate
+  cascade** (auction-primary, viability veto-only) rather than a weighted composite.
+  This is deliberate: the existing pre-open heuristic is already a weightless cascade,
+  and continuous weights cannot be justified until the forward-only corpus can fit
+  them against the `clean_trade` / `open_30m` outcome. A **weighted composite is the
+  v2 form**, valid once tuning is possible. Production config activates **exactly
+  one** champion rendering (cascade **XOR** composite) — never dual-path scores.
+
+  Illustrative v1 cascade (intent, not exclusive factor list):
+  1. `auction_ncp` MISSING or below floor → no production signal;
+  2. auction OK but viability veto (e.g. GAP_OUT / friction) → cap `EntryQuality`;
+  3. else strength from auction bands (viability does not boost).
+* **Weights — only relevant if a composite is used.** Provisional, **unvalidated**
+  starting values, *not* frozen decisions:
+
+  | Knob | Provisional v1 default (unvalidated) |
+  |------|--------------------------------------|
+  | `auction_weight` | 0.65 |
+  | `viability_weight` | 0.35 |
+  | `auction_min` | 50 |
+  | `viability_required` | false initially |
+  | confirmation-only score | **forbidden** (this one IS frozen) |
+
+This ADR freezes the **hierarchy and guards** (auction-primary, viability-veto,
+hard guard, MISSING → MODERATE cap, no confirmation-only). It does **not** freeze
+the specific weights or the composite-vs-cascade rendering — those are
+**CONFIG_MATERIAL** / implementation decisions, changeable via config or material
+without an ADR revision.
 
 Optional setup family string when needed: `open_call_participation`.
 
@@ -234,8 +257,10 @@ When signal + TradeSetup are ready:
 
 ```text
 Pre-open: IEV=universe, NCP=decision_at, horizon=open_30m. Canonical groups
-auction_ncp (required) + open_viability (optional); weights 0.65/0.35; auction_min=50;
-no confirmation-only; hard guard if auction missing. SignalAssessment only for
+auction_ncp (required) + open_viability (optional). Auction PRIMARY, viability
+veto-only; hard guard if auction missing; no confirmation-only. v1 MAY render an
+ordinal gate cascade; weighted composite + weights (0.65/0.35, auction_min 50) are
+PROVISIONAL/unvalidated v2, not frozen. SignalAssessment only for
 score/quality; TradeSetup owns action as soon as signal exists; risk annotate.
 DB observations freeze at NCP (champion); no silent grade-time recompute. Replace
 PRIME UI when ready; keep learn grade until signal then evolve. Adoption only via

@@ -34,8 +34,16 @@ history at grade time.
 * Pre-open supplies canonical groups **`auction_ncp`** (required) and
   **`open_viability`** (optional) under contract `pre_open_signal_evidence.v1`.
 * Signal runs only through **`ScreenAssessmentPipeline`** with hard guard when
-  auction evidence is absent; composite uses **0.65 / 0.35** hierarchy rules from
-  ADR-048.
+  auction evidence is absent; **auction is the primary driver and `open_viability`
+  is veto-only** per ADR-048 §4. v1 MAY render an ordinal gate cascade; a weighted
+  composite (weights `0.65 / 0.35` **provisional/unvalidated**, config-driven) is the
+  v2 form, not required here. **Exactly one champion rendering** is active in
+  production config (cascade **XOR** composite) — never both dual-path scores.
+* Illustrative **v1 cascade** (not the only legal factor set; documents intent):
+  1. `auction_ncp` MISSING or below floor → **no production signal** (hard guard);
+  2. auction OK but `open_viability` veto (e.g. GAP_OUT / friction fail) → signal
+     may exist but **cap** `EntryQuality` ≤ WATCH or AVOID via constraints;
+  3. else strength/quality from **auction bands** (viability does not boost score).
 * When signal exists: **`trade_setup_applicable=True`**, **`risk_mode=annotate`**;
   action only via **TradeSetup** (ADR-026).
 * **DB observations** for all evaluated names (pass + reject), identity =
@@ -69,6 +77,7 @@ fundamental screen; multi-day flow as pre-open signal authority.
 * Do not use grade-time recompute as the production learning path.
 * Do not store observations only for PRIME/UI survivors.
 * Do not reintroduce `--with-regime` / strategy-YAML risk as the Tier-1 model.
+* Do not run cascade and weighted composite as parallel production scores.
 
 ## 5. Architecture Impact Assessment
 
@@ -84,8 +93,10 @@ fundamental screen; multi-day flow as pre-open signal authority.
     factories only).
 * New dependency? No (unless an existing migration tool pattern requires none).
 * Affects determinism? No when frozen inputs + config are fixed; scoring is
-  deterministic. **SEMANTIC_ENGINE** / **EVIDENCE_CONTRACT** / **OBSERVATION_SCHEMA**
-  bumps apply when signal and observation contracts land (classify in preflight).
+  deterministic. Preflight **must** classify: at minimum **EVIDENCE_CONTRACT**
+  (new groups) and **OBSERVATION_SCHEMA** (DB rows); add **SEMANTIC_ENGINE**
+  and/or **CONFIG_MATERIAL** when strength bands, cascade rules, or composite
+  weights can change canonical signal output.
 * Persistence changes? **Yes** — DB observation store for pre-open decisions.
 * Warm-up data? No new indicator family required beyond existing ATR/RSI candles.
 * Orchestration/policy inside an adapter? **No.**
@@ -133,7 +144,10 @@ ADR-042 posture).
 
 * [ ] ADR-048 invariants held in code and tests.
 * [ ] `auction_ncp` missing ⇒ signal use case **never** called; no fabricated evidence.
-* [ ] Weights/hierarchy: 0.65/0.35; auction_min default 50; no confirmation-only score.
+* [ ] Hierarchy: auction primary, `open_viability` veto-only, hard guard, MISSING ⇒
+      MODERATE cap; no confirmation-only score. Production uses **exactly one**
+      rendering (cascade XOR composite). If a composite is used, weights are
+      config-driven **provisional** defaults (0.65/0.35, auction_min 50), never hardcoded.
 * [ ] When signal present: pipeline sets `trade_setup_applicable=True`,
       `risk_mode=annotate`; TradeSetup composed via `AssessTradeSetupUseCase` only.
 * [ ] Risk never drops pre-open candidates (annotate).
@@ -150,11 +164,13 @@ ADR-042 posture).
 
 ## 10. Testing Expectations
 
-* Unit: evidence builders; hard guard; weight/hierarchy edge cases (viability
-  missing ⇒ auction-only + MODERATE cap); TradeSetup composition with annotate risk.
+* Unit: evidence builders; hard guard; hierarchy/veto edge cases (viability
+  missing ⇒ auction-only + MODERATE cap; veto caps quality); TradeSetup with
+  annotate risk. If composite exists: config weights not hardcoded.
 * Unit: observation identity uniqueness; reject paths still recorded.
-* Negative: confirmation-only path impossible; dual PRIME authority gone after cutover;
-  grade-time recompute not used as champion.
+* Negative: confirmation-only path impossible; dual PRIME authority gone after
+  cutover; dual cascade+composite production scores impossible; grade-time
+  recompute not used as champion.
 * Integration: NCP freeze → DB row → join track fixture → metrics (when grade evolves).
 * Architecture: `tests/architecture/test_layer_boundaries.py` green.
 * All tests offline. No skips without justification.
@@ -186,10 +202,14 @@ each phase gate.
 * Pre-open `SignalInputsBuilder` feeding `ScreenAssessmentPipeline`.
 * Flip `ScreenPolicy.pre_open()`: `signal_applicable=True` when builder can
   supply auction; **`trade_setup_applicable=True` when signal runs**; risk annotate.
-* Group scoring sufficient for a deterministic composite (formula may start simple
-  but must be config-driven and tested).
-* *Checkpoint:* hard-guard tests; weights tests; TradeSetup composed only via
-  AssessTradeSetupUseCase; layer boundaries green. **Review stop.**
+* Group scoring: deterministic and config-driven. v1 MAY be an ordinal gate cascade
+  (auction-primary, `open_viability` veto-only — see Desired Outcome example); a
+  weighted composite with provisional weights is an acceptable alternative but
+  **not required**. Champion path is singular (cascade XOR composite).
+* *Checkpoint:* hard-guard + hierarchy/veto tests (auction-only / MODERATE cap;
+  veto caps EntryQuality); if composite path is implemented, config-driven
+  weights tests; TradeSetup only via AssessTradeSetupUseCase; layer boundaries
+  green. **Review stop.**
 
 ### Phase 2 — DB observations + NCP freeze
 
@@ -222,7 +242,8 @@ From ADR-048 acceptance discussion:
 |-------|--------|
 | Horizon | `open_30m` (flat 09:30) |
 | Groups | `auction_ncp` required; `open_viability` optional initially |
-| Weights | 0.65 / 0.35; `auction_min` default 50 |
+| Hierarchy | Auction primary; `open_viability` veto-only; hard guard; MISSING ⇒ MODERATE cap |
+| Weights / rendering | v1 cascade OR composite (**XOR**, one champion); weights **provisional** CONFIG_MATERIAL (0.65/0.35, auction_min 50), not frozen |
 | Confirmation-only score | Forbidden |
 | TradeSetup | On when signal exists |
 | Risk | Annotate (non-blocking) |
