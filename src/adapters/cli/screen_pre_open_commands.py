@@ -292,20 +292,32 @@ def pre_open(
             typer.echo(warning, err=True)
 
     try:
-        response = cli_workflow.workflow.execute(
-            PreOpenWorkflowRequest(
-                config=config,
-                run_date=run_guard.run_at.date(),
-                guard_warnings=run_guard.warnings,
-                regime_enabled=not no_regime,
-                risk_enabled=not no_risk,
-                regime_universe=regime_universe,
-                benchmark=benchmark,
-                db_path=resolved_db,
-                outside_window=skip_live_fetch,
-            )
+        workflow_request = PreOpenWorkflowRequest(
+            config=config,
+            run_date=run_guard.run_at.date(),
+            guard_warnings=run_guard.warnings,
+            regime_enabled=not no_regime,
+            risk_enabled=not no_risk,
+            regime_universe=regime_universe,
+            benchmark=benchmark,
+            db_path=resolved_db,
+            outside_window=skip_live_fetch,
+            capture_phase="NCP_LOCKED" if skip_live_fetch else "UNKNOWN",
         )
+        response = cli_workflow.workflow.execute(workflow_request)
         result = response.result
+
+        # ADR-048 Phase 2: freeze decision observations (fail closed → surface error)
+        recorded = 0
+        if cli_workflow.record_observations_use_case is not None:
+            recorded = cli_workflow.record_observations_use_case.persist_only(
+                response, workflow_request
+            )
+            if not quiet and recorded:
+                typer.echo(
+                    f"Recorded {recorded} pre-open observation(s) (NCP freeze).",
+                    err=True,
+                )
 
         if quiet:
             echo_json(build_pre_open_envelope(response=response))

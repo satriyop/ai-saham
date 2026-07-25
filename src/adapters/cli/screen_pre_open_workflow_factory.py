@@ -16,8 +16,13 @@ from pathlib import Path
 from typing import Any
 
 from src.adapters.cli.risk_engine_helper import create_configured_risk_engine
+from src.application.services.pre_open_observation_persister import (
+    PreOpenObservationPersister,
+)
 from src.application.services.pre_open_risk_inputs_builder import PreOpenRiskInputsBuilder
 from src.application.services.pre_open_run_guard import PreOpenRunGuard
+from src.application.services.pre_open_signal_cascade import PreOpenSignalInputsBuilder
+from src.application.services.pre_open_signal_config import PreOpenSignalConfig
 from src.application.services.screen_assessment_pipeline import ScreenAssessmentPipeline
 from src.application.services.screen_policy import ScreenPolicy
 from src.application.use_case.pre_open_screen_use_case import (
@@ -28,6 +33,9 @@ from src.application.use_case.pre_open_screen_use_case import (
 from src.application.use_case.pre_open_workflow_use_case import (
     PreOpenSnapshotScreenResult,
     PreOpenWorkflowUseCase,
+)
+from src.application.use_case.record_pre_open_observations_use_case import (
+    RecordPreOpenObservationsUseCase,
 )
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.browser_data_provider import BrowserDataProvider
@@ -44,6 +52,9 @@ from src.infrastructure.composition.indicator_registry_factory import create_ind
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.market_context_factory import evaluate_market_context
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
+from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
+    SQLiteCandidateObservationsRepository,
+)
 from src.infrastructure.persistence.sqlite_iev_repository import SQLiteIEVRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
@@ -138,6 +149,7 @@ class PreOpenCliWorkflow:
     market_repository: MarketDataRepository
     broker_repository: BrokerDataRepository
     ai_warnings: list[str] = field(default_factory=list)
+    record_observations_use_case: RecordPreOpenObservationsUseCase | None = None
 
 
 def _build_run_snapshot_screen(
@@ -238,6 +250,8 @@ def create_pre_open_cli_workflow(
         risk_inputs_builder=PreOpenRiskInputsBuilder(),
         evaluate_market_context=evaluate_market_context,
     )
+    signal_config = PreOpenSignalConfig()
+    signal_builder = PreOpenSignalInputsBuilder(signal_config)
     workflow = PreOpenWorkflowUseCase(
         screen_use_case=screen_use_case,
         market_repository=market_repository,
@@ -245,7 +259,15 @@ def create_pre_open_cli_workflow(
         evaluate_market_context=evaluate_market_context,
         risk_engine=risk_engine,
         assessment_pipeline=assessment_pipeline,
+        signal_builder=signal_builder,
         run_snapshot_screen=run_snapshot_screen,
+    )
+    observations_repo = SQLiteCandidateObservationsRepository(resolved_db)
+    record_observations = RecordPreOpenObservationsUseCase(
+        workflow_use_case=workflow,
+        observation_persister=PreOpenObservationPersister(
+            observations_repo, signal_config=signal_config
+        ),
     )
 
     return PreOpenCliWorkflow(
@@ -253,6 +275,7 @@ def create_pre_open_cli_workflow(
         market_repository=market_repository,
         broker_repository=broker_repository,
         ai_warnings=ai_warnings,
+        record_observations_use_case=record_observations,
     )
 
 

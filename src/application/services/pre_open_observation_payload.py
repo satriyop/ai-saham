@@ -1,0 +1,163 @@
+"""Build frozen pre-open observation payloads (ADR-048 Phase 2).
+
+Capture-time freeze: payload holds decision-time signal/risk/TradeSetup/plan.
+Grade-time must not rewrite these fields for production cohorts.
+
+Layer: Application
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from dataclasses import asdict, is_dataclass
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Any
+
+from src.application.services.pre_open_signal_config import PreOpenSignalConfig
+from src.domain.value_objects.pre_open_signal_evidence import (
+    PRE_OPEN_HORIZON,
+    PRE_OPEN_SIGNAL_EVIDENCE_CONTRACT,
+)
+from src.domain.value_objects.signal_artifact_identity import SemanticCompatibilityId
+from src.domain.value_objects.signal_artifact_schema import (
+    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+)
+
+PRE_OPEN_OBSERVATION_CONTRACT = "pre-open-open-30m"
+PRE_OPEN_WORKFLOW = "screen_pre_open"
+
+
+def compute_pre_open_config_hash(
+    *,
+    signal_config: PreOpenSignalConfig,
+    iev_min: int,
+    top_n: int | None,
+    evidence_contract: str = PRE_OPEN_SIGNAL_EVIDENCE_CONTRACT,
+) -> str:
+    """Short material config hash for observation identity (not full sha256 id)."""
+    material = {
+        "evidence_contract": evidence_contract,
+        "horizon": PRE_OPEN_HORIZON,
+        "rendering": signal_config.rendering,
+        "auction_min": signal_config.auction_min,
+        "strong_min": signal_config.strong_min,
+        "moderate_min": signal_config.moderate_min,
+        "gap_out_abs_pct": str(signal_config.gap_out_abs_pct),
+        "max_spread_pct": str(signal_config.max_spread_pct),
+        "rsi_extension_threshold": str(signal_config.rsi_extension_threshold),
+        "auction_weight": signal_config.auction_weight,
+        "viability_weight": signal_config.viability_weight,
+        "iev_min": iev_min,
+        "top_n": top_n,
+    }
+    canonical = json.dumps(material, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
+
+
+def compute_pre_open_semantic_compatibility_id(
+    *,
+    signal_config: PreOpenSignalConfig,
+    iev_min: int,
+    top_n: int | None,
+) -> SemanticCompatibilityId:
+    material = {
+        "config_hash": compute_pre_open_config_hash(
+            signal_config=signal_config, iev_min=iev_min, top_n=top_n
+        ),
+        "contract": PRE_OPEN_OBSERVATION_CONTRACT,
+        "evidence": PRE_OPEN_SIGNAL_EVIDENCE_CONTRACT,
+    }
+    digest = hashlib.sha256(
+        json.dumps(material, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return SemanticCompatibilityId(f"sha256:{digest}")
+
+
+def derive_pre_open_screen_result(
+    *,
+    has_entry_range: bool,
+    signal_summary: Any | None,
+    trade_setup: Any | None,
+) -> str:
+    """Funnel label (not SetupAction)."""
+    if not has_entry_range:
+        return "rejected_plan"
+    if signal_summary is None:
+        return "rejected_auction_missing"
+    eq = getattr(signal_summary, "entry_quality", None)
+    if eq == "AVOID":
+        return "rejected_signal"
+    if trade_setup is not None:
+        action = getattr(getattr(trade_setup, "action", None), "value", None)
+        if action and str(action).startswith("BLOCKED"):
+            return "rejected_risk"
+    return "pass"
+
+
+def _jsonable(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    if is_dataclass(value) and not isinstance(value, type):
+        return {k: _jsonable(v) for k, v in asdict(value).items()}
+    if hasattr(value, "to_dict"):
+        return _jsonable(value.to_dict())
+    if isinstance(value, dict):
+        return {str(k): _jsonable(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(v) for v in value]
+    return str(value)
+
+
+def build_pre_open_observation_payload(
+    *,
+    ticker: str,
+    snapshot_date: date,
+    captured_at: datetime,
+    screen_result: str,
+    candidate: Any,
+    signal_summary: Any | None,
+    risk_summary: Any | None,
+    trade_setup: Any | None,
+    capture_phase: str,
+    source_status: str | None,
+    source_snapshot_ref: str | None,
+    iev_min: int,
+    horizon: str = PRE_OPEN_HORIZON,
+    evidence_contract: str = PRE_OPEN_SIGNAL_EVIDENCE_CONTRACT,
+) -> dict:
+    """Schema-versioned frozen decision payload for one pre-open name."""
+    candidate_dict: dict[str, Any]
+    if hasattr(candidate, "to_dict") and callable(candidate.to_dict):
+        candidate_dict = _jsonable(candidate.to_dict())
+    elif is_dataclass(candidate) and not isinstance(candidate, type):
+        # ScreenerCandidate is a plain dataclass (no to_dict)
+        candidate_dict = _jsonable(asdict(candidate))
+    else:
+        candidate_dict = {"ticker": ticker}
+
+    return {
+        "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+        "artifact_type": "pre_open_candidate_observation",
+        "observation_contract": PRE_OPEN_OBSERVATION_CONTRACT,
+        "evidence_contract_version": evidence_contract,
+        "horizon": horizon,
+        "ticker": ticker,
+        "snapshot_date": snapshot_date.isoformat(),
+        "captured_at": captured_at.isoformat(),
+        "workflow": PRE_OPEN_WORKFLOW,
+        "screen_result": screen_result,
+        "capture_phase": capture_phase,
+        "source_status": source_status,
+        "source_snapshot_ref": source_snapshot_ref,
+        "request": {"iev_min": iev_min},
+        "candidate": candidate_dict,
+        "signal": _jsonable(signal_summary.to_dict()) if signal_summary is not None else None,
+        "risk": _jsonable(risk_summary.to_dict()) if risk_summary is not None else None,
+        "trade_setup": _jsonable(trade_setup.to_dict()) if trade_setup is not None else None,
+    }
