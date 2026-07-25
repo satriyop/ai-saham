@@ -70,7 +70,7 @@ any engine-internal or scoring change; a fundamental screen.
 ```md
 Layer plan:
 - Domain: not touched
-- Application: ScreenAssessmentPipeline; SignalInputsBuilder / RiskInputsPolicy / ScreenPolicy interfaces; generalize build_signal_context_from_candidate; accum seam impls (refactor existing wrappers); pre-open Tier-1 seam impl + workflow wiring
+- Application: ScreenAssessmentPipeline; SignalInputsBuilder / RiskInputsBuilder (Protocol) / ScreenPolicy interfaces; generalize build_signal_context_from_candidate; accum seam impls (refactor existing wrappers); pre-open Tier-1 seam impl + workflow wiring
 - Infrastructure: reuse existing signal/risk/MCE factories; thin composition wiring for pre-open pipeline if needed
 - Adapter: pre-open CLI wires the new use-case path and renders regime/risk; no policy added
 ```
@@ -155,29 +155,72 @@ Per AGENT_QUICKSTART "split foundational contracts from broad integration":
 each phase is independently reviewable; do not start a later phase until the
 prior checkpoint passes.
 
-* **Phase 0 — Generalize the enrichment builder + fix stale docstrings.**
-  Make `build_signal_context_from_candidate` `accum_score`-optional. Also correct
-  `SignalContext`'s stale per-field docstrings (legacy "drives the score" language)
-  to the current two-group reality — authority is `canonical_evidence`; this bundle
-  feeds penalty flags / company-quality sub-scores / presence. Keep the name
-  `SignalContext` (no rename).
+* **Phase 0 — Generalize the enrichment builder + opportunistic docstring hygiene.**
+  Make `build_signal_context_from_candidate` `accum_score`-optional. The
+  `SignalContext` value-object docstrings were already corrected (retired
+  "drives the score" / RiskLevel-Profile language); the remaining stale bit is
+  `signal_context_builder.py` ("accumulation-style candidate"), which this
+  generalization makes inaccurate anyway — fix it opportunistically, not a
+  rewrite. Keep the name `SignalContext` (no rename).
   *Checkpoint:* accum output byte-identical; builder unit tests (with/without
   `accum_score`) pass.
 * **Phase 1 — Extract the seam + refactor accum in (clean break).**
-  Add `ScreenAssessmentPipeline` + `SignalInputsBuilder` / risk-input choice /
-  `ScreenPolicy`. Move `AccumulationCandidateSignalAssessor` /
-  `AccumulationRiskFunnel` logic into accum seam implementations. No dual path.
-  *Checkpoint:* accum regression fixture + read-count test green; grep confirms no
-  parallel adoption route; layer-boundary tests green. **Stop for review here
-  before Phase 2.**
+  **First:** move ADR-047 to Accepted and add it to `ARCHITECTURE_DECISIONS.md`
+  index + matrix rows (this phase lands the structural signal/risk composition
+  change — acceptance gates the merge). Then add `ScreenAssessmentPipeline` +
+  `SignalInputsBuilder` + `RiskInputsBuilder` (Protocol: `candidate -> GateContext
+  | None`; `None` ⇒ self-fetch) + `ScreenPolicy`. Move
+  `AccumulationCandidateSignalAssessor` / `AccumulationRiskFunnel` logic into accum
+  seam implementations. No dual path.
+  *Checkpoint:* ADR-047 Accepted + indexed; accum regression fixture + read-count
+  test green; grep confirms no parallel adoption route; layer-boundary tests green.
+  **Stop for review here before Phase 2.**
 * **Phase 2 — Route pre-open through the seam at Tier-1.**
-  Pre-open workflow builds regime (always-on) + risk (self-fetch, non-blocking)
-  via the pipeline; `signal_applicable = False`. Update CLI wiring + envelope +
-  docs.
-  *Checkpoint:* pre-open parity tests; flags no longer required; risk non-blocking;
-  CLI/display tests; manual output inspection.
+  `PreOpenWorkflowUseCase._finish` invokes the pipeline: regime (always-on) + risk
+  (self-fetch, annotate/non-blocking), `signal_applicable = False`,
+  `trade_setup_applicable = False`. Update CLI wiring + envelope + docs. See the
+  **Phase 2 execution contract** below for the exact risk/flag/failure/root
+  decisions.
+  *Checkpoint:* pre-open shows regime+risk with no opt-in flags; risk never drops a
+  candidate; failures soft-warn; CLI/display + envelope tests; manual inspection.
 * **Phase 3 — (Future, separate task)** fundamental scenario + any pre-open
   canonical-evidence source. Not in this task.
+
+### Phase 2 execution contract
+
+Resolved decisions (do not re-litigate at implementation time):
+
+- **Risk default:** `RiskEngine.assess(ticker, as_of, market_context)` runs the
+  engine's default structural+execution gate pipeline (no strategy YAML). Same
+  canonical gates as `analyze risk` / accum.
+- **Risk output:** the pipeline produces a full `RiskAssessment`; the pre-open
+  workflow **projects it to a compact per-ticker summary** (`risk_level_name`,
+  triggered gate, `is_structural`, confidence) on `PreOpenWorkflowResponse`,
+  replacing today's `strategy_risk_statuses: dict[str,str]`. Do **not** mutate
+  `ScreenerCandidate` (stays a pure domain VO); do **not** transport the full DTO
+  per candidate.
+- **`--risk-strategy`:** removed (clean break). The always-on default-gate
+  assessment supersedes the YAML overlay. A deliberate `--risk-rules` override may
+  be added later as a separate task if needed.
+- **Flags:** remove opt-in `--with-regime`; add opt-out `--no-regime` / `--no-risk`
+  (default on), matching the existing `--fast/--no-fast` convention. Opt-out is
+  required because `MCE.evaluate` needs market data and pre-open must stay
+  offline-capable.
+- **Failure semantics:** soft. Regime failure ⇒ warning + `None` regime; per-ticker
+  risk failure ⇒ warning + `None`/`?` for that ticker. **Candidates are never
+  dropped** by risk/regime in pre-open (`ScreenPolicy = annotate`, not `block`).
+- **`trade_setup_applicable = False`:** ADR-026 composes TradeSetup from Signal +
+  Risk; with no `SignalAssessment` there is nothing to compose. Do not invoke
+  `AssessTradeSetupUseCase` for pre-open.
+- **Composition roots (adopt):** `PreOpenWorkflowUseCase._finish` (covers live and
+  snapshot-fallback display — both route through `_finish`) and the `screen
+  pre-open` CLI wiring (`create_pre_open_cli_workflow` /
+  `screen_pre_open_commands.py`).
+- **Composition roots (explicitly out of scope):** `opening_snapshot_use_case`
+  (NCP 08:57 capture of *raw* screen candidates — risk/regime are applied at
+  display time when a snapshot is replayed through `_finish`, so no seam there);
+  `AccumulationScreenUseCase` (that is Phase 1). Verify no other production path
+  renders pre-open candidates directly.
 
 ## Final Gate
 

@@ -6,7 +6,7 @@
 **Date:** 2026-07-25
 **Depends on:** [ADR-024](ADR-024-signal-engine-and-risk-engine-as-first-class-application-services.md), [ADR-029](ADR-029-market-context-engine-mce-third-first-class-application-service.md), [ADR-040](ADR-040-manual-dependency-injection-and-composition-roots.md), [ADR-003](ADR-003-hexagonal-ports-adapters-architecture.md)
 **Related:** [ADR-025](ADR-025-signalengine-architecture.md), [ADR-026](ADR-026-risk-plus-signal-pipeline-composition.md), [ADR-030](ADR-030-accumulation-screener-evidence-split.md), [ADR-037](ADR-037-marketcontext-promotes-from-preview-only-to-canonical-signal-input.md), [ADR-041](ADR-041-canonical-signal-evidence-input-boundary.md), [ADR-033](ADR-033-workflow-composition-artifact-boundaries.md)
-**Current implementation:** Not yet implemented. This ADR records the target design; landing is phased (see task `tasks/backlog/scenario_adoption_seam.md`). On acceptance, add the index row and the "Signal scoring" / "Risk" / "Market context" matrix references in `ARCHITECTURE_DECISIONS.md`.
+**Current implementation:** Not yet implemented. This ADR records the target design; landing is phased (see task `tasks/backlog/scenario_adoption_seam.md`). **Acceptance gates Phase 1:** this ADR must move to Accepted and be added to the `ARCHITECTURE_DECISIONS.md` index + the "Signal scoring" / "Risk" / "Market context" matrix rows **before the Phase 1 seam change merges** (it lands the structural signal/risk composition change). Phase 0 (builder generalization + docstring hygiene) is pure refactor and may precede acceptance.
 
 ### Context
 
@@ -111,11 +111,14 @@ Each scenario supplies:
   "no setup/flow evidence available for this scenario." The pipeline reads that as
   a signal-not-applicable outcome and skips the signal use case (which would
   otherwise raise) — never a fabricated input.
-* **Risk input choice** — either a pre-built `GateContext` (screener N+1
-  avoidance via `RiskEngine.assess_with_context`, as accum does today) **or**
-  self-fetch (`RiskEngine.assess`, for scenarios that do not pre-load
-  fundamentals). This choice is **application policy**, selected per scenario,
-  never decided in an adapter.
+* **`RiskInputsBuilder`** (Protocol, parallel to `SignalInputsBuilder`) —
+  `candidate -> GateContext | None`. Returning a `GateContext` selects the
+  pre-built path (`RiskEngine.assess_with_context`, screener N+1 avoidance, as
+  accum does today); returning `None` selects self-fetch (`RiskEngine.assess`,
+  for scenarios like pre-open that do not pre-load fundamentals). A Protocol, not
+  an enum, because the pre-built path needs candidate-specific `GateContext`
+  construction. This choice is **application policy**, per scenario, never in an
+  adapter.
 * **`ScreenPolicy`** — thresholds and interpretation: `signal_applicable`,
   `trade_setup_applicable`, block-vs-annotate for risk, and any min-score gates.
 
@@ -157,7 +160,14 @@ current two-group reality as part of Phase 0 — a docstring fix, not a rename;
 (not behind flags), risk **non-blocking / annotation** by policy, and
 `signal_applicable = False`. For pre-open, `signal_applicable = False` is
 **mandatory, not a preference**: it carries no setup/flow canonical evidence, so
-invoking the signal use case would raise. A pre-open-native canonical evidence
+invoking the signal use case would raise. `trade_setup_applicable = False`
+follows necessarily — ADR-026 composes TradeSetup from Signal + Risk, and with no
+`SignalAssessment` there is nothing to compose. Pre-open's `ScreenPolicy` is
+**annotate, never block**: risk/regime attach as context, failures are soft
+warnings, and candidates are never dropped by the seam. Concrete risk default,
+output shape, flag lifecycle, failure semantics, and composition roots are fixed
+in the task's *Phase 2 execution contract*
+(`tasks/backlog/scenario_adoption_seam.md`). A pre-open-native canonical evidence
 source is a separate future decision, not part of this ADR.
 
 #### 7. Clean break for accum
