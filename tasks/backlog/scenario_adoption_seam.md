@@ -4,7 +4,7 @@ Governing decision: [ADR-047](../../docs/adr/ADR-047-scenario-adoption-seam-for-
 
 ## 1. Task Metadata
 
-**Task Title:** Unify engine adoption across screen scenarios via a shared enrichment pipeline + per-scenario seam.
+**Task Title:** Unify engine adoption across screen scenarios via a shared assessment pipeline + per-scenario seam.
 
 **Task Type:** Refactor (Phases 0–1) + Feature (Phase 2).
 
@@ -22,7 +22,7 @@ risk/regime context. This drifts parity and duplicates plumbing as scenarios gro
 
 ## 3. Desired Outcome
 
-* One shared `ScreenEnrichmentPipeline` orchestrates `regime -> signal -> risk ->
+* One shared `ScreenAssessmentPipeline` orchestrates `regime -> signal -> risk ->
   trade_setup` for any screen.
 * Each scenario plugs in via three thin interfaces: `SignalInputsBuilder`, a
   risk-input choice (pre-built `GateContext` **or** self-fetch), and a
@@ -70,7 +70,7 @@ any engine-internal or scoring change; a fundamental screen.
 ```md
 Layer plan:
 - Domain: not touched
-- Application: ScreenEnrichmentPipeline; SignalInputsBuilder / RiskInputsPolicy / ScreenPolicy interfaces; generalize build_signal_context_from_candidate; accum seam impls (refactor existing wrappers); pre-open Tier-1 seam impl + workflow wiring
+- Application: ScreenAssessmentPipeline; SignalInputsBuilder / RiskInputsPolicy / ScreenPolicy interfaces; generalize build_signal_context_from_candidate; accum seam impls (refactor existing wrappers); pre-open Tier-1 seam impl + workflow wiring
 - Infrastructure: reuse existing signal/risk/MCE factories; thin composition wiring for pre-open pipeline if needed
 - Adapter: pre-open CLI wires the new use-case path and renders regime/risk; no policy added
 ```
@@ -108,7 +108,7 @@ disabled.
 ## 9. Acceptance Criteria
 
 * [ ] `screen accum` output is byte-identical before/after (regression fixture).
-* [ ] accum runs entirely through `ScreenEnrichmentPipeline`; the two old wrappers
+* [ ] accum runs entirely through `ScreenAssessmentPipeline`; the two old wrappers
       exist only as seam implementations — grep confirms no parallel adoption path.
 * [ ] `screen pre-open` shows regime + risk **without** `--with-regime` /
       `--risk-strategy` flags; risk is non-blocking; `signal_applicable = False`.
@@ -126,7 +126,7 @@ disabled.
 
 ## 10. Testing Expectations
 
-* Unit: `ScreenEnrichmentPipeline` orchestration order; `ScreenPolicy`
+* Unit: `ScreenAssessmentPipeline` orchestration order; `ScreenPolicy`
   block-vs-annotate and applicability flags; generalized enrichment builder
   (with and without `accum_score`).
 * Negative: canonical evidence `None` ⇒ signal use case **not invoked** (hard
@@ -164,7 +164,7 @@ prior checkpoint passes.
   *Checkpoint:* accum output byte-identical; builder unit tests (with/without
   `accum_score`) pass.
 * **Phase 1 — Extract the seam + refactor accum in (clean break).**
-  Add `ScreenEnrichmentPipeline` + `SignalInputsBuilder` / risk-input choice /
+  Add `ScreenAssessmentPipeline` + `SignalInputsBuilder` / risk-input choice /
   `ScreenPolicy`. Move `AccumulationCandidateSignalAssessor` /
   `AccumulationRiskFunnel` logic into accum seam implementations. No dual path.
   *Checkpoint:* accum regression fixture + read-count test green; grep confirms no

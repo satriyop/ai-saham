@@ -82,9 +82,9 @@ There is exactly one `SignalEngine`, one `RiskEngine`, and one
 `MarketContextEngine`. No scenario introduces an engine subclass or variant.
 Scenario differences live only in a small, uniform adoption seam.
 
-#### 2. A shared `ScreenEnrichmentPipeline` owns engine orchestration
+#### 2. A shared `ScreenAssessmentPipeline` owns engine orchestration
 
-Introduce an application service `ScreenEnrichmentPipeline` that holds the three
+Introduce an application service `ScreenAssessmentPipeline` that holds the three
 engines plus `AssessTradeSetupUseCase` and orchestrates, per candidate:
 
 ```text
@@ -94,6 +94,13 @@ market_context (once per run)  ->  signal (if applicable)  ->  risk  ->  trade_s
 It owns the *order and composition*, not the scenario-specific input shapes.
 `AssessTradeSetupUseCase` remains the single Signal+Risk composition point
 (ADR-026).
+
+Named **Assessment**, not Enrichment: in this codebase "enrichment" already means
+attaching provider *input* data to candidates (`AccumulationCandidateEnricher`,
+`RefreshStockbitEnrichmentUseCase`, ADR-038 point-in-time enrichment). This
+pipeline *consumes* that enrichment and runs the assessment engines to produce
+`SignalAssessment` / `RiskAssessment` / trade-setup outputs — do not rename it
+back toward "enrichment."
 
 #### 3. Scenarios provide inputs through three seam interfaces
 
@@ -217,7 +224,7 @@ clean-break policy).
 
 ```text
 Engines are already single + generic; unify their ADOPTION, not the engines.
-Shared ScreenEnrichmentPipeline (regime->signal->risk->trade_setup) + per-scenario
+Shared ScreenAssessmentPipeline (regime->signal->risk->trade_setup) + per-scenario
 SignalInputsBuilder / risk-input choice / ScreenPolicy. Two channels: the weighted
 score is 100% canonical_evidence (setup 0.60 + flow 0.40, ADR-041, never fabricated,
 may be None); SignalContext is a non-authoritative enrichment bundle (feeds
