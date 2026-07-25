@@ -527,11 +527,12 @@ saham trade outcome BBCA --entry 9000 --exit 9500 --result target
 
 ## 15. Opening Session Learning Loop
 
-Daily learning loop for opening scalping: snapshot at 08:57, track orderbook
-every 5 minutes 09:00–09:30, grade accuracy, tune thresholds via AI.
+Same-day ops loop for opening scalping. Decisions are saved to the observation
+DB via `research pre-open capture`; then `learn track`/`grade`/`tune`/`prompt`
+run the same-day accuracy and tuning ritual.
 
 ```bash
-# Step 1: Capture snapshot
+# Step 1: Save pre-open decisions to observation DB
 saham research pre-open capture
 
 # Step 2: Track every 5 minutes

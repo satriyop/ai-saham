@@ -66,7 +66,7 @@ saham
 ├── analyze             — live analysis (risk, sentiment, regime, swing, chart)
 ├── view                — read-only local data browsing
 ├── screen              — candidate discovery (accumulation, pre-open)
-├── learn               — opening session journal (snapshot, track, grade, tune)
+├── learn               — opening session ops (track, grade, tune, prompt)
 ├── research            — research corpus and offline evaluation
 ├── strategy            — strategy management (init, validate, backtest)
 └── trade               — paper trading workspace
