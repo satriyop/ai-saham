@@ -12,20 +12,19 @@ Interaction contract (roadmap `docs/roadmap/roadmap_tui.md`):
 - Selection, focus, sorting, and tab changes never start work.
 - Only explicit actions (Run button / ``r`` / ``m`` toggle / ``c`` compare)
   execute a screen, universe load, or comparison.
-- List is a selectable DataTable: click/highlight updates preview; Enter or
-  double-click opens Ticker Workbench (Accumulation / Universe only).
+- List is a selectable DataTable: click / j/k / arrows update preview only;
+  Enter opens Ticker Workbench (Accumulation / Universe only). Re-click of
+  the current row must not open (Textual posts RowSelected on re-click).
 """
 
 from __future__ import annotations
 
-from time import monotonic
 from typing import Any
 
 from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.events import Click
 from textual.screen import Screen
 from textual.widgets import Button, Checkbox, DataTable, Footer, Header, Select, Static
 
@@ -60,8 +59,6 @@ _OP_ACCUM = "ACCUM"
 _OP_LIST = "LIST"
 _OP_COMPARE = "COMPARE"
 
-_DOUBLE_CLICK_S = 0.35
-
 
 class ScreenWorkspaceScreen(Screen[None]):
     """Render the Screen workspace: Universe, Accumulation, and Saved/Compare."""
@@ -73,7 +70,9 @@ class ScreenWorkspaceScreen(Screen[None]):
         Binding("c", "compare", "Compare saved"),
         Binding("s", "save_shortlist", "Save shortlist"),
         Binding("m", "toggle_multi", "Toggle multi-window"),
-        Binding("enter", "open_selected_ticker", "Open research"),
+        # priority=True: DataTable also binds enter→select_cursor (RowSelected).
+        # Without priority the focused table swallows Enter and open never runs.
+        Binding("enter", "open_selected_ticker", "Open workbench", priority=True),
         Binding("escape", "pop_screen", "Back", show=False),
         Binding("j", "next_row", "Next", show=False),
         Binding("k", "prev_row", "Previous", show=False),
@@ -104,9 +103,8 @@ class ScreenWorkspaceScreen(Screen[None]):
         self._current_projection: Any = None
         self._last_request: RunAccumulationScreenWorkflowRequest | None = None
         self._selected_index = 0
-        self._last_click_index: int | None = None
-        self._last_click_at = 0.0
-        self._suppress_row_selected_open = False
+        # Skip highlight/select side effects while clearing/rebuilding the table.
+        self._suppress_table_selection = False
         self._accum_view_is_multi = False
 
     def compose(self) -> ComposeResult:
@@ -191,11 +189,11 @@ class ScreenWorkspaceScreen(Screen[None]):
 
     def _clear_table(self) -> None:
         table = self._table()
-        self._suppress_row_selected_open = True
+        self._suppress_table_selection = True
         try:
             table.clear(columns=True)
         finally:
-            self._suppress_row_selected_open = False
+            self._suppress_table_selection = False
 
     def _focus_table(self) -> None:
         try:
@@ -257,11 +255,11 @@ class ScreenWorkspaceScreen(Screen[None]):
         table = self._table()
         if table.row_count == 0:
             return
-        self._suppress_row_selected_open = True
+        self._suppress_table_selection = True
         try:
             table.move_cursor(row=idx, column=0, animate=False)
         finally:
-            self._suppress_row_selected_open = False
+            self._suppress_table_selection = False
 
     def _select_index(self, index: int, *, update_preview: bool = True) -> None:
         rows = self._active_rows()
@@ -413,56 +411,29 @@ class ScreenWorkspaceScreen(Screen[None]):
 
     # ------------------------------------------------------------------ table events
 
-    @on(DataTable.RowHighlighted, "#candidate-table")
-    def _on_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
-        """Click / cursor move updates selection + preview only (never runs work)."""
-        if event.row_key is None:
+    def _apply_table_row_key(self, row_key: Any) -> None:
+        """Map DataTable row key → selected index + preview (never opens workbench)."""
+        if self._suppress_table_selection or row_key is None:
             return
         try:
-            idx = int(str(event.row_key.value))
+            idx = int(str(row_key.value if hasattr(row_key, "value") else row_key))
         except (TypeError, ValueError):
             return
         self._select_index(idx, update_preview=True)
+
+    @on(DataTable.RowHighlighted, "#candidate-table")
+    def _on_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        """Cursor move / first click: preview only."""
+        self._apply_table_row_key(event.row_key)
 
     @on(DataTable.RowSelected, "#candidate-table")
     def _on_row_selected(self, event: DataTable.RowSelected) -> None:
-        """Enter / select-cursor opens the ticker workbench (not Saved tab)."""
-        if self._suppress_row_selected_open:
-            return
-        if event.row_key is None:
-            return
-        try:
-            idx = int(str(event.row_key.value))
-        except (TypeError, ValueError):
-            return
-        self._select_index(idx, update_preview=True)
-        if self._active_tab != _TAB_SAVED:
-            self.action_open_selected_ticker()
+        """Re-click of current row still preview only.
 
-    def on_click(self, event: Click) -> None:
-        """Double-click a data row opens workbench; single click is highlight-only."""
-        if self._active_tab == _TAB_SAVED:
-            return
-        widget = event.widget
-        if widget is None:
-            return
-        table = self._table()
-        node: Any = widget
-        on_table = False
-        while node is not None:
-            if node is table:
-                on_table = True
-                break
-            node = getattr(node, "parent", None)
-        if not on_table:
-            return
-        if event.chain < 2:
-            self._last_click_index = self._selected_index
-            self._last_click_at = monotonic()
-            return
-        self.action_open_selected_ticker()
-        self._last_click_at = monotonic()
-        self._last_click_index = self._selected_index
+        Textual posts RowSelected when the user clicks the already-cursor row.
+        Open workbench only via Enter → action_open_selected_ticker.
+        """
+        self._apply_table_row_key(event.row_key)
 
     # ------------------------------------------------------------------ tabs
 
@@ -637,7 +608,7 @@ class ScreenWorkspaceScreen(Screen[None]):
 
     def _populate_accumulation_table(self, view: ScreenViewModel) -> None:
         table = self._table()
-        self._suppress_row_selected_open = True
+        self._suppress_table_selection = True
         try:
             table.clear(columns=True)
             # ADR-043: Accum = foreign-accumulation composite; Signal = SignalEngine total.
@@ -693,7 +664,7 @@ class ScreenWorkspaceScreen(Screen[None]):
                     )
             self._set_table_message("")
         finally:
-            self._suppress_row_selected_open = False
+            self._suppress_table_selection = False
 
     def _render_candidate_preview(self, row: Any) -> None:
         disc = format_disc_pct_plain(getattr(row, "vwap_discount_pct", None))
@@ -756,7 +727,7 @@ class ScreenWorkspaceScreen(Screen[None]):
             f"Next steps:\n{next_steps}\n"
             f"\nNote: {ACCUM} ≠ {SIGNAL}. Window cells are {ACCUM}, not {SIGNAL}.\n"
             "Workbench recomputes Signal on open.\n"
-            "Keys: click/j/k select · Enter or double-click open workbench"
+            "Keys: click/j/k select · Enter open workbench"
         )
 
     # -- universe -------------------------------------------------------------
@@ -788,7 +759,7 @@ class ScreenWorkspaceScreen(Screen[None]):
 
     def _populate_universe_table(self, rows: tuple[Any, ...]) -> None:
         table = self._table()
-        self._suppress_row_selected_open = True
+        self._suppress_table_selection = True
         try:
             table.clear(columns=True)
             table.add_columns("Ticker", "Close", "Chg%", "Volume", "FgnNet", "FgnRatio")
@@ -809,7 +780,7 @@ class ScreenWorkspaceScreen(Screen[None]):
                 table.add_row(r.ticker, close, chg, vol, fnet, fratio, key=str(i))
             self._set_table_message("")
         finally:
-            self._suppress_row_selected_open = False
+            self._suppress_table_selection = False
 
     def _render_universe_preview(self, row: Any) -> None:
         # Missing inputs render as explicit "— unavailable" (never zero-filled).
@@ -837,7 +808,7 @@ class ScreenWorkspaceScreen(Screen[None]):
             f"Foreign Net   : {fnet}\n"
             f"Foreign Ratio : {fratio}\n"
             f"Latest Date   : {row.latest_date or na}\n"
-            "\nKeys: click/j/k select · Enter or double-click open workbench"
+            "\nKeys: click/j/k select · Enter open workbench"
         )
 
     # -- saved / compare ------------------------------------------------------
@@ -857,7 +828,7 @@ class ScreenWorkspaceScreen(Screen[None]):
             return
         self._set_status(f"READY — {len(summaries)} saved shortlist(s)", "semantic-ready")
         table = self._table()
-        self._suppress_row_selected_open = True
+        self._suppress_table_selection = True
         try:
             table.clear(columns=True)
             table.add_columns("Name", "Saved", "Universe", "Window", "Tickers")
@@ -873,7 +844,7 @@ class ScreenWorkspaceScreen(Screen[None]):
                 )
             self._set_table_message("")
         finally:
-            self._suppress_row_selected_open = False
+            self._suppress_table_selection = False
         self._select_index(0)
         self._sync_cursor_to_selected_index()
         self.query_one("#preview-content", Static).update(
@@ -898,7 +869,7 @@ class ScreenWorkspaceScreen(Screen[None]):
             ("= Unchanged", [c.ticker for c in comp.unchanged]),
         ]
         table = self._table()
-        self._suppress_row_selected_open = True
+        self._suppress_table_selection = True
         try:
             table.clear(columns=True)
             table.add_columns("Group", "Count", "Tickers")
@@ -907,7 +878,7 @@ class ScreenWorkspaceScreen(Screen[None]):
                 table.add_row(label, str(len(tickers)), names, key=str(i))
             self._set_table_message("")
         finally:
-            self._suppress_row_selected_open = False
+            self._suppress_table_selection = False
         warning_lines = "\n".join(f"! {w}" for w in view.warnings)
         self.query_one("#preview-content", Static).update(
             "COMPARISON GROUPS\n"

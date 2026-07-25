@@ -481,6 +481,93 @@ def test_datatable_selection_updates_preview_and_enter_opens_ticker() -> None:
     asyncio.run(scenario())
 
 
+def test_row_selected_does_not_open_workbench() -> None:
+    """C1 Phase 1: Textual re-click posts RowSelected; must not open workbench."""
+    opened: list[str] = []
+
+    class _OpenHost(App):
+        def __init__(self, screen) -> None:
+            super().__init__()
+            self._screen = screen
+
+        def on_mount(self) -> None:
+            self.push_screen(self._screen)
+
+        def action_open_ticker(self, ticker: str) -> None:
+            opened.append(ticker)
+
+    controller = ScreenController(
+        load_universe=lambda u: [],
+        run_accumulation=lambda req: single_result(),
+    )
+    screen = ScreenWorkspaceScreen(controller, ScreenPresenter())
+
+    async def scenario() -> None:
+        async with _OpenHost(screen).run_test(size=(120, 40)) as pilot:
+            for _ in range(40):
+                await pilot.pause(0.01)
+                if screen._candidate_rows:
+                    break
+            assert len(screen._candidate_rows) >= 1
+            from textual.widgets import DataTable
+
+            table = screen.query_one("#candidate-table", DataTable)
+            row_key = table.coordinate_to_cell_key(table.cursor_coordinate)[0]
+            screen._on_row_selected(
+                DataTable.RowSelected(table, table.cursor_row, row_key)
+            )
+            await pilot.pause(0.02)
+            assert opened == []
+            assert isinstance(screen.app.screen, ScreenWorkspaceScreen)
+
+            screen.action_open_selected_ticker()
+            assert opened == [screen._candidate_rows[screen._selected_index].ticker]
+
+    asyncio.run(scenario())
+
+
+def test_enter_key_opens_workbench_while_table_focused() -> None:
+    """Enter must open even when DataTable has focus (it also binds enter)."""
+    opened: list[str] = []
+
+    class _OpenHost(App):
+        def __init__(self, screen) -> None:
+            super().__init__()
+            self._screen = screen
+
+        def on_mount(self) -> None:
+            self.push_screen(self._screen)
+
+        def action_open_ticker(self, ticker: str) -> None:
+            opened.append(ticker)
+
+    controller = ScreenController(
+        load_universe=lambda u: [],
+        run_accumulation=lambda req: single_result(),
+    )
+    screen = ScreenWorkspaceScreen(controller, ScreenPresenter())
+
+    async def scenario() -> None:
+        async with _OpenHost(screen).run_test(size=(120, 40)) as pilot:
+            for _ in range(40):
+                await pilot.pause(0.01)
+                if screen._candidate_rows:
+                    break
+            assert len(screen._candidate_rows) >= 1
+            from textual.widgets import DataTable
+
+            table = screen.query_one("#candidate-table", DataTable)
+            table.focus()
+            await pilot.pause(0.02)
+            assert table.has_focus
+
+            await pilot.press("enter")
+            await pilot.pause(0.05)
+            assert opened == [screen._candidate_rows[screen._selected_index].ticker]
+
+    asyncio.run(scenario())
+
+
 def test_save_uses_actual_screened_universe_and_window_not_hardcoded() -> None:
     fake_save = MagicMock()
     fake_save.execute.return_value = MagicMock(saved_count=2, name="idx30_list")
