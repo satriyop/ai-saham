@@ -27,6 +27,7 @@ from src.application.use_case.assess_trade_setup_use_case import (
     AssessTradeSetupUseCase,
 )
 from src.application.use_case.pre_open_screen_use_case import (
+    PreOpenFilterReject,
     PreOpenScreenConfig,
     PreOpenScreenRequest,
     PreOpenScreenResponse,
@@ -136,6 +137,7 @@ class PreOpenWorkflowResponse:
     risk_by_ticker: dict[str, PreOpenRiskSummary | None] | None = None
     signal_by_ticker: dict[str, PreOpenSignalSummary | None] | None = None
     trade_setup_by_ticker: dict[str, TradeSetup | None] | None = None
+    filter_rejects: tuple[PreOpenFilterReject, ...] = ()
     regime_enabled: bool = True
     risk_enabled: bool = True
     signal_enabled: bool = True
@@ -329,6 +331,8 @@ class PreOpenWorkflowUseCase:
                 for ticker in signal_by_ticker:
                     trade_setup_by_ticker.setdefault(ticker, None)
 
+        rejects = tuple(screen_response.filter_rejects or ())
+
         return PreOpenWorkflowResponse(
             result=result,
             warnings=warnings,
@@ -338,6 +342,7 @@ class PreOpenWorkflowUseCase:
             risk_by_ticker=risk_by_ticker,
             signal_by_ticker=signal_by_ticker,
             trade_setup_by_ticker=trade_setup_by_ticker,
+            filter_rejects=rejects,
             regime_enabled=request.regime_enabled,
             risk_enabled=request.risk_enabled,
             signal_enabled=request.signal_enabled,

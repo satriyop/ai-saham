@@ -196,3 +196,27 @@ def test_confirmation_only_impossible_without_auction():
         )
         is None
     )
+
+
+def test_composite_rendering_requires_auction_and_uses_weights():
+    cfg = PreOpenSignalConfig(rendering="composite", auction_weight=0.65, viability_weight=0.35)
+    auction = _auction(gap=1.0)
+    viability = OpenViabilityEvidence(
+        ticker="BBCA",
+        gap_out=False,
+        friction_fail=False,
+        unusual_volume=False,
+        rsi_extension=False,
+        trend_signal="BULLISH",
+        iev_intensity=1.0,
+        atr=None,
+        gap_pct=Decimal("1"),
+    )
+    resp = evaluate_pre_open_signal_cascade(
+        PreOpenSignalEvidenceBundle(auction_ncp=auction, open_viability=viability),
+        snapshot_date=date(2026, 6, 18),
+        config=cfg,
+    )
+    assert resp is not None
+    assert 0 <= resp.score <= 100
+    assert "composite=" in " ".join(resp.assessment.rationale)

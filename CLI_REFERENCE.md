@@ -1175,6 +1175,24 @@ saham learn grade [OPTIONS]
 
 ---
 
+## saham learn labels
+
+Generate **open_30m** outcome labels from NCP freezes + tracks (session-horizon
+twin of `research signal labels`, not multi-day swing horizons). Prefers DB
+freezes; falls back to snapshot. Writes `data/opening/YYYYMMDD/open_30m_labels.json`.
+
+```
+saham learn labels [OPTIONS]
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--date` | today | Session date (YYYY-MM-DD) |
+| `--db` | config | SQLite path for frozen observations |
+| `--no-persist` | false | Compute only; do not write JSON |
+
+---
+
 ## saham learn tune
 
 Generate AI config tuning recommendations from today's grade via DeepSeek.

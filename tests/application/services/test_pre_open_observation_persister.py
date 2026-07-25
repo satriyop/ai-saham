@@ -188,3 +188,48 @@ def test_persist_noop_without_repository():
         run_date=run_date,
     )
     assert persister.persist(response, request) == 0
+
+
+def test_persist_includes_hard_filter_rejects(tmp_path: Path):
+    from src.application.use_case.pre_open_screen_use_case import PreOpenFilterReject
+
+    db = tmp_path / "obs.db"
+    repo = SQLiteCandidateObservationsRepository(db)
+    persister = PreOpenObservationPersister(repo, PreOpenSignalConfig())
+    run_date = date(2026, 6, 18)
+    response = PreOpenWorkflowResponse(
+        result=PreOpenScreenResult(
+            screened_date=run_date,
+            iev_min=100_000,
+            total_movers_seen=2,
+            candidates=[],
+        ),
+        warnings=["XYZ: SKIP_SPECULATIVE"],
+        raw_movers=[],
+        data_freshness=PreOpenDataFreshness(
+            analysis_date=run_date, candle_end=None, broker_end=None
+        ),
+        filter_rejects=(
+            PreOpenFilterReject(
+                ticker="XYZ",
+                screen_result="rejected_filter_speculative",
+                reason="suffix",
+                iev=150_000,
+            ),
+        ),
+        source_status=PreOpenSourceStatus.LIVE_SUCCESS,
+    )
+    request = PreOpenWorkflowRequest(
+        config=PreOpenScreenConfig(iev_min=100_000, fast_mode=True),
+        run_date=run_date,
+        capture_phase="NCP_LOCKED",
+    )
+    n = persister.persist(
+        response,
+        request,
+        captured_at=datetime(2026, 6, 18, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta")),
+    )
+    assert n == 1
+    rows = [r for r in repo.list_canonical_by_date(run_date) if r.workflow == PRE_OPEN_WORKFLOW]
+    assert len(rows) == 1
+    assert rows[0].payload["screen_result"] == "rejected_filter_speculative"

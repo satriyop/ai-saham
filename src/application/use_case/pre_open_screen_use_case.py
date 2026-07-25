@@ -63,11 +63,22 @@ class PreOpenScreenRequest:
     run_date: date | None = None
 
 
+@dataclass(frozen=True)
+class PreOpenFilterReject:
+    """Hard-filter reject for observation freezes (ADR-048 follow-up)."""
+
+    ticker: str
+    screen_result: str  # e.g. rejected_filter_speculative, rejected_filter_floor
+    reason: str
+    iev: int | None = None
+
+
 @dataclass
 class PreOpenScreenResponse:
     result: PreOpenScreenResult
     warnings: list[str]
     raw_movers: "list"
+    filter_rejects: list[PreOpenFilterReject] | None = None
 
 
 class PreOpenScreenUseCase:
@@ -120,6 +131,7 @@ class PreOpenScreenUseCase:
                 )
 
         candidates: list[ScreenerCandidate] = []
+        filter_rejects: list[PreOpenFilterReject] = []
 
         for mover in movers:
             ticker = mover.ticker
@@ -128,7 +140,16 @@ class PreOpenScreenUseCase:
             if config.exclude_suffix_pattern and re.search(
                 config.exclude_suffix_pattern, ticker, re.IGNORECASE
             ):
-                warnings.append(f"{ticker}: SKIP_SPECULATIVE — matches excluded suffix pattern")
+                reason = f"{ticker}: SKIP_SPECULATIVE — matches excluded suffix pattern"
+                warnings.append(reason)
+                filter_rejects.append(
+                    PreOpenFilterReject(
+                        ticker=ticker,
+                        screen_result="rejected_filter_speculative",
+                        reason=reason,
+                        iev=getattr(mover, "iev", None),
+                    )
+                )
                 continue
 
             # Step 4: Technical context - ATR, RSI, SMA, prev OHLC + candles
@@ -154,19 +175,46 @@ class PreOpenScreenUseCase:
 
             # Floor-price filter: skip if previous close or IEP is at or below IDX floor price (50)
             if prev_close is not None and prev_close <= 50:
-                warnings.append(
+                reason = (
                     f"{ticker}: SKIP_FLOOR — previous close is at the IDX floor price (50)"
+                )
+                warnings.append(reason)
+                filter_rejects.append(
+                    PreOpenFilterReject(
+                        ticker=ticker,
+                        screen_result="rejected_filter_floor",
+                        reason=reason,
+                        iev=getattr(mover, "iev", None),
+                    )
                 )
                 continue
             if mover.iep is not None and mover.iep <= 50:
-                warnings.append(f"{ticker}: SKIP_FLOOR — IEP is at the IDX floor price (50)")
+                reason = f"{ticker}: SKIP_FLOOR — IEP is at the IDX floor price (50)"
+                warnings.append(reason)
+                filter_rejects.append(
+                    PreOpenFilterReject(
+                        ticker=ticker,
+                        screen_result="rejected_filter_floor",
+                        reason=reason,
+                        iev=getattr(mover, "iev", None),
+                    )
+                )
                 continue
 
             # Speculative symbol filter: skip stocks with insufficient history for ATR/RSI
             if len(candles) < config.min_history_days:
-                warnings.append(
+                reason = (
                     f"{ticker}: SKIP_SPECULATIVE — only {len(candles)} days history"
                     f" (min {config.min_history_days})"
+                )
+                warnings.append(reason)
+                filter_rejects.append(
+                    PreOpenFilterReject(
+                        ticker=ticker,
+                        screen_result="rejected_filter_history",
+                        reason=reason,
+                        iev=getattr(mover, "iev", None),
+                    )
                 )
                 continue
 
@@ -218,8 +266,17 @@ class PreOpenScreenUseCase:
                 and stop_loss_price is not None
                 and entry_price <= stop_loss_price
             ):
-                warnings.append(
+                reason = (
                     f"{ticker}: SKIP_FLOOR — entry <= stop (one_r=0, at price floor)"
+                )
+                warnings.append(reason)
+                filter_rejects.append(
+                    PreOpenFilterReject(
+                        ticker=ticker,
+                        screen_result="rejected_filter_floor",
+                        reason=reason,
+                        iev=getattr(mover, "iev", None),
+                    )
                 )
                 continue
 
@@ -309,6 +366,7 @@ class PreOpenScreenUseCase:
             ),
             warnings=warnings,
             raw_movers=raw_movers,
+            filter_rejects=filter_rejects,
         )
 
     # ── Private helpers ────────────────────────────────────────────────────

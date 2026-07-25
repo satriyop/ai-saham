@@ -55,7 +55,8 @@ class PreOpenObservationPersister:
         if self._repo is None:
             return 0
         candidates = response.result.candidates
-        if not candidates:
+        filter_rejects = list(response.filter_rejects or ())
+        if not candidates and not filter_rejects:
             return 0
 
         if self._signal_config.rendering not in ("cascade", "composite"):
@@ -86,23 +87,25 @@ class PreOpenObservationPersister:
         )
 
         observations: list[CandidateObservation] = []
-        for candidate in candidates:
-            ticker = candidate.ticker
-            sig = None
-            if response.signal_by_ticker is not None:
-                sig = response.signal_by_ticker.get(ticker)
-            risk = None
-            if response.risk_by_ticker is not None:
-                risk = response.risk_by_ticker.get(ticker)
-            trade = None
-            if response.trade_setup_by_ticker is not None:
-                trade = response.trade_setup_by_ticker.get(ticker)
-
-            screen_result = derive_pre_open_screen_result(
-                has_entry_range=candidate.entry_range_low is not None,
-                signal_summary=sig,
-                trade_setup=trade,
+        capture_phase = (
+            request.capture_phase
+            if request.capture_phase != "UNKNOWN"
+            else (
+                "NCP_LOCKED"
+                if response.source_status.value == "SNAPSHOT_SUCCESS"
+                else "UNKNOWN"
             )
+        )
+
+        def _row(
+            *,
+            ticker: str,
+            screen_result: str,
+            candidate: object,
+            sig: object | None,
+            risk: object | None,
+            trade: object | None,
+        ) -> CandidateObservation:
             payload = build_pre_open_observation_payload(
                 ticker=ticker,
                 snapshot_date=response.result.screened_date,
@@ -112,33 +115,76 @@ class PreOpenObservationPersister:
                 signal_summary=sig,
                 risk_summary=risk,
                 trade_setup=trade,
-                capture_phase=request.capture_phase
-                if request.capture_phase != "UNKNOWN"
-                else (
-                    "NCP_LOCKED"
-                    if response.source_status.value == "SNAPSHOT_SUCCESS"
-                    else "UNKNOWN"
-                ),
+                capture_phase=capture_phase,
                 source_status=response.source_status.value,
                 source_snapshot_ref=response.source_snapshot_ref,
                 iev_min=response.result.iev_min,
             )
+            return CandidateObservation(
+                ticker=ticker,
+                snapshot_date=response.result.screened_date,
+                captured_at=now,
+                payload=payload,
+                workflow=PRE_OPEN_WORKFLOW,
+                window_sessions=0,
+                data_as_of_date=response.result.screened_date,
+                config_hash=config_hash,
+                decision_at=decision_at,
+                latest_completed_session=response.result.screened_date,
+                analysis_as_of=response.result.screened_date,
+                market_session_name="pre_open",
+                observation_contract=PRE_OPEN_OBSERVATION_CONTRACT,
+                semantic_compatibility_id=compat,
+            )
+
+        for candidate in candidates:
+            ticker = candidate.ticker
+            sig = (
+                response.signal_by_ticker.get(ticker)
+                if response.signal_by_ticker is not None
+                else None
+            )
+            risk = (
+                response.risk_by_ticker.get(ticker)
+                if response.risk_by_ticker is not None
+                else None
+            )
+            trade = (
+                response.trade_setup_by_ticker.get(ticker)
+                if response.trade_setup_by_ticker is not None
+                else None
+            )
+            screen_result = derive_pre_open_screen_result(
+                has_entry_range=candidate.entry_range_low is not None,
+                signal_summary=sig,
+                trade_setup=trade,
+            )
             observations.append(
-                CandidateObservation(
+                _row(
                     ticker=ticker,
-                    snapshot_date=response.result.screened_date,
-                    captured_at=now,
-                    payload=payload,
-                    workflow=PRE_OPEN_WORKFLOW,
-                    window_sessions=0,
-                    data_as_of_date=response.result.screened_date,
-                    config_hash=config_hash,
-                    decision_at=decision_at,
-                    latest_completed_session=response.result.screened_date,
-                    analysis_as_of=response.result.screened_date,
-                    market_session_name="pre_open",
-                    observation_contract=PRE_OPEN_OBSERVATION_CONTRACT,
-                    semantic_compatibility_id=compat,
+                    screen_result=screen_result,
+                    candidate=candidate,
+                    sig=sig,
+                    risk=risk,
+                    trade=trade,
+                )
+            )
+
+        # Hard-filter rejects (negative samples; no signal/risk)
+        for rej in filter_rejects:
+            stub = {
+                "ticker": rej.ticker,
+                "iev": rej.iev,
+                "filter_reason": rej.reason,
+            }
+            observations.append(
+                _row(
+                    ticker=rej.ticker,
+                    screen_result=rej.screen_result,
+                    candidate=stub,
+                    sig=None,
+                    risk=None,
+                    trade=None,
                 )
             )
 

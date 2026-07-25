@@ -104,11 +104,19 @@ def evaluate_pre_open_signal_cascade(
     snapshot_date: date,
     config: PreOpenSignalConfig | None = None,
 ) -> AssessSignalResponse | None:
-    """Evaluate pre-open signal via v1 cascade. None ⇒ no production signal."""
+    """Evaluate pre-open signal (cascade or composite). None ⇒ no production signal.
+
+    Production config must choose exactly one rendering (XOR). Composite is
+    provisional/unvalidated (ADR-048).
+    """
     cfg = config or PreOpenSignalConfig()
+    if cfg.rendering == "composite":
+        return _evaluate_composite(
+            bundle, snapshot_date=snapshot_date, config=cfg
+        )
     if cfg.rendering != "cascade":
         raise ValueError(
-            "evaluate_pre_open_signal_cascade requires rendering='cascade'; "
+            "rendering must be 'cascade' or 'composite', "
             f"got {cfg.rendering!r}"
         )
 
@@ -213,8 +221,110 @@ def evaluate_pre_open_signal_cascade(
     )
 
 
+def _evaluate_composite(
+    bundle: PreOpenSignalEvidenceBundle,
+    *,
+    snapshot_date: date,
+    config: PreOpenSignalConfig,
+) -> AssessSignalResponse | None:
+    """Provisional weighted composite (v2 form). Auction still hard-required."""
+    auction = bundle.auction_ncp
+    if auction is None:
+        return None
+    auction_score = score_auction_ncp(auction)
+    if auction_score < config.auction_min:
+        return None
+
+    viability = bundle.open_viability
+    if viability is None:
+        # Same as cascade: auction-only + MODERATE cap
+        score = auction_score
+        strength = _strength_from_score(score, cfg=config)
+        if strength is SignalStrength.STRONG:
+            strength = SignalStrength.MODERATE
+        coverage = 0.5
+        breakdown = (("auction_ncp", float(auction_score)),)
+        reasons = (f"auction_score={auction_score}", "viability_missing:cap_MODERATE")
+        constraints = DecisionConstraints(
+            max_decision=_entry_quality(strength).value,
+            regime=None,
+            regime_enter_allowed=True,
+            regime_size_multiplier=1.0,
+            setup_family=PRE_OPEN_SETUP_FAMILY,
+            setup_regime_action=None,
+            effective_size_multiplier=1.0,
+            constraint_reasons=("viability_missing",),
+        )
+    else:
+        # Viability as 0–100 quality inverted by veto flags (not a boost of auction)
+        v_score = 100.0
+        if viability.gap_out:
+            v_score = 0.0
+        else:
+            if viability.friction_fail:
+                v_score -= 40.0
+            if viability.rsi_extension:
+                v_score -= 25.0
+            if viability.unusual_volume:
+                v_score -= 20.0
+        v_score = max(0.0, min(100.0, v_score))
+        score = int(
+            round(
+                config.auction_weight * auction_score
+                + config.viability_weight * v_score
+            )
+        )
+        strength = _strength_from_score(score, cfg=config)
+        coverage = 1.0
+        breakdown = (
+            ("auction_ncp", float(auction_score)),
+            ("open_viability", float(v_score)),
+        )
+        reasons = (
+            f"auction_score={auction_score}",
+            f"viability_score={v_score}",
+            f"composite={score}",
+        )
+        constraints = None
+        if viability.gap_out:
+            strength = SignalStrength.WEAK
+            constraints = DecisionConstraints(
+                max_decision="AVOID",
+                regime=None,
+                regime_enter_allowed=True,
+                regime_size_multiplier=1.0,
+                setup_family=PRE_OPEN_SETUP_FAMILY,
+                setup_regime_action=None,
+                effective_size_multiplier=1.0,
+                constraint_reasons=("viability_veto:gap_out",),
+            )
+
+    entry_quality = _entry_quality(strength)
+    if constraints is not None and constraints.max_decision == "AVOID":
+        entry_quality = EntryQuality.AVOID
+
+    assessment = SignalAssessment(
+        ticker=auction.ticker,
+        score=score,
+        strength=strength,
+        entry_quality=entry_quality,
+        breakdown=breakdown,
+        rationale=reasons,
+        snapshot_date=snapshot_date,
+        signal_authority_coverage=coverage,
+        decision_constraints=constraints,
+        raw_exact_score=float(score),
+    )
+    return AssessSignalResponse(
+        ticker=auction.ticker,
+        assessment=assessment,
+        signal_score_raw=score,
+        signal_authority_coverage=coverage,
+    )
+
+
 class PreOpenSignalInputsBuilder:
-    """Build pre-open evidence and evaluate cascade (scenario seam adapter).
+    """Build pre-open evidence and evaluate cascade/composite (scenario seam).
 
     Does not use SignalEngine setup/flow path; produces AssessSignalResponse
     for TradeSetup composition (ADR-026) via the shared assessment policy.
