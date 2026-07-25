@@ -49,6 +49,7 @@ canonical observations
 | Risk | `RiskEngine` owns deterministic structural/execution gates and emits OPEN/BLOCKED assessments |
 | Market context | `MarketContextEngine` is a canonical signal-conditioning input when requested; regime-adjusted risk remains a preview |
 | Final action | `AssessTradeSetupUseCase` is the single Signal + Risk composition point |
+| Screen adoption | `ScreenAssessmentPipeline` + per-scenario seam (`SignalInputs` / `RiskInputsBuilder` / `ScreenPolicy`); engines stay single (ADR-047) |
 | Evidence promotion | Diagnostic evidence cannot gain production authority without out-of-sample proof and validator support |
 | Persistence | Local SQLite at `data/db/data.db`, plus purpose-specific journals/artifacts; historical claims require point-in-time provenance |
 | CLI authority | `src/adapters/cli/main.py` and live `saham --help`; adapters wire and render but do not own policy |
@@ -61,9 +62,10 @@ row.
 | Task area | Required decisions |
 |---|---|
 | Architecture, layers, DI, composition | [003](docs/adr/ADR-003-hexagonal-ports-adapters-architecture.md), [004](docs/adr/ADR-004-pure-domain-layer.md), [021](docs/adr/ADR-021-strict-boundary-enforcement-infrastructure-decoupling-hexagonal-audit-clean-up.md), [033](docs/adr/ADR-033-workflow-composition-artifact-boundaries.md), [040](docs/adr/ADR-040-manual-dependency-injection-and-composition-roots.md) |
-| Signal scoring and evidence authority | [024](docs/adr/ADR-024-signal-engine-and-risk-engine-as-first-class-application-services.md), [025](docs/adr/ADR-025-signalengine-architecture.md), [030](docs/adr/ADR-030-accumulation-screener-evidence-split.md), [037](docs/adr/ADR-037-marketcontext-promotes-from-preview-only-to-canonical-signal-input.md), [039](docs/adr/ADR-039-foreign-flow-score-rescale-to-0-100-amends-adr-030.md), [041](docs/adr/ADR-041-canonical-signal-evidence-input-boundary.md), [043](docs/adr/ADR-043-score-naming-vocabulary.md) |
-| Risk and final trade action | [010](docs/adr/ADR-010-risk-gates-as-policy-layer.md), [022](docs/adr/ADR-022-idx-regular-market-price-floor-rp-50-enforcements.md), [024](docs/adr/ADR-024-signal-engine-and-risk-engine-as-first-class-application-services.md), [026](docs/adr/ADR-026-risk-plus-signal-pipeline-composition.md), [028](docs/adr/ADR-028-idx-market-microstructure-rules.md), [031](docs/adr/ADR-031-swing-setup-evaluation-boundary.md), [032](docs/adr/ADR-032-analyze-swing-verdict-boundary.md) |
-| Market context | [029](docs/adr/ADR-029-market-context-engine-mce-third-first-class-application-service.md), [037](docs/adr/ADR-037-marketcontext-promotes-from-preview-only-to-canonical-signal-input.md) |
+| Signal scoring and evidence authority | [024](docs/adr/ADR-024-signal-engine-and-risk-engine-as-first-class-application-services.md), [025](docs/adr/ADR-025-signalengine-architecture.md), [030](docs/adr/ADR-030-accumulation-screener-evidence-split.md), [037](docs/adr/ADR-037-marketcontext-promotes-from-preview-only-to-canonical-signal-input.md), [039](docs/adr/ADR-039-foreign-flow-score-rescale-to-0-100-amends-adr-030.md), [041](docs/adr/ADR-041-canonical-signal-evidence-input-boundary.md), [043](docs/adr/ADR-043-score-naming-vocabulary.md), [047](docs/adr/ADR-047-scenario-adoption-seam-for-signal-risk-mce.md) |
+| Risk and final trade action | [010](docs/adr/ADR-010-risk-gates-as-policy-layer.md), [022](docs/adr/ADR-022-idx-regular-market-price-floor-rp-50-enforcements.md), [024](docs/adr/ADR-024-signal-engine-and-risk-engine-as-first-class-application-services.md), [026](docs/adr/ADR-026-risk-plus-signal-pipeline-composition.md), [028](docs/adr/ADR-028-idx-market-microstructure-rules.md), [031](docs/adr/ADR-031-swing-setup-evaluation-boundary.md), [032](docs/adr/ADR-032-analyze-swing-verdict-boundary.md), [047](docs/adr/ADR-047-scenario-adoption-seam-for-signal-risk-mce.md) |
+| Market context | [029](docs/adr/ADR-029-market-context-engine-mce-third-first-class-application-service.md), [037](docs/adr/ADR-037-marketcontext-promotes-from-preview-only-to-canonical-signal-input.md), [047](docs/adr/ADR-047-scenario-adoption-seam-for-signal-risk-mce.md) |
+| Screen scenario engine adoption | [047](docs/adr/ADR-047-scenario-adoption-seam-for-signal-risk-mce.md), [024](docs/adr/ADR-024-signal-engine-and-risk-engine-as-first-class-application-services.md), [026](docs/adr/ADR-026-risk-plus-signal-pipeline-composition.md), [029](docs/adr/ADR-029-market-context-engine-mce-third-first-class-application-service.md), [041](docs/adr/ADR-041-canonical-signal-evidence-input-boundary.md) |
 | Data providers, persistence, PIT/replay | [005](docs/adr/ADR-005-local-first-persistence.md), [006](docs/adr/ADR-006-market-data-provider-abstraction.md), [008](docs/adr/ADR-008-decoupled-fetch-vs-analyze-data.md), [019](docs/adr/ADR-019-unified-fetch-timestamp-fetched-at-datetime-on-cached-domain-value-objects.md), [034](docs/adr/ADR-034-date-field-semantics.md), [036](docs/adr/ADR-036-persisted-jwt-token-store-replaces-playwright-per-invocation-for-stockbit-data-fetching.md), [038](docs/adr/ADR-038-point-in-time-enrichment-and-conservative-derived-fundamentals.md) |
 | Indicators, strategies, plugins | [007](docs/adr/ADR-007-indicator-initialization-warm-up-policy.md), [009](docs/adr/ADR-009-config-driven-behavior.md), [012](docs/adr/ADR-012-oss-encapsulation-rule.md), [016](docs/adr/ADR-016-formula-dsl-domain-specific-language-for-indicators.md), [017](docs/adr/ADR-017-plugin-based-indicator-registration.md) |
 | CLI and file organization | [011](docs/adr/ADR-011-offline-capable-cli-as-primary-interface.md), [018](docs/adr/ADR-018-cli-command-depth-saham-view-broker-exception.md), [020](docs/adr/ADR-020-cli-adapter-file-naming-convention.md), [023](docs/adr/ADR-023-codebase-directory-and-use-case-file-naming-standards.md), [044](docs/adr/ADR-044-view-subject-taxonomy-ticker-vs-desk.md), [045](docs/adr/ADR-045-view-browse-parity-cli-tui-json-table.md), [046](docs/adr/ADR-046-cli-response-envelope.md) |
@@ -100,6 +102,7 @@ row.
 | Signal facade and scorer | `src/application/services/signal_engine.py`, `src/application/use_case/assess_signal_evidence_use_case.py` |
 | Risk facade | `src/application/services/risk_engine.py` |
 | Trade setup composition | `src/application/use_case/assess_trade_setup_use_case.py` |
+| Screen assessment adoption seam | `src/application/services/screen_assessment_pipeline.py` |
 | Market context | `src/application/services/market_context_engine.py` |
 | Swing tuning guardrails | `src/application/services/swing_tuning_patch_validation.py` and adjacent `swing_tuning_*` services |
 | Layer enforcement | `tests/architecture/test_layer_boundaries.py` |
@@ -157,6 +160,7 @@ row.
 | [044](docs/adr/ADR-044-view-subject-taxonomy-ticker-vs-desk.md) | View subject taxonomy (ticker vs desk) | Accepted; amends ADR-018 |
 | [045](docs/adr/ADR-045-view-browse-parity-cli-tui-json-table.md) | View browse parity (CLI/TUI, table/json) | Accepted; depends on ADR-044; envelope keys generalized by ADR-046 |
 | [046](docs/adr/ADR-046-cli-response-envelope.md) | Shared CLI response envelope | Accepted; generalizes envelope beyond view; adopt-on-touch for other families |
+| [047](docs/adr/ADR-047-scenario-adoption-seam-for-signal-risk-mce.md) | Scenario-adoption seam for Signal / Risk / MCE | Accepted; engines single; `ScreenAssessmentPipeline` + per-scenario builders/policy |
 
 ## Adding or changing a decision
 

@@ -245,7 +245,12 @@ def test_foreign_flow_score_fields_set_by_assessor():
 
 
 def test_flow_evidence_builder_exception_returns_none():
-    """Exception in flow evidence builder does not crash; flow_evidence is None."""
+    """Operational flow-builder failure: no evidence, hard-guard skips signal.
+
+    ADR-047: absent canonical evidence must not invoke the signal engine
+    (would raise NoProductionSignalEvidenceError). With min_signal_score
+    enabled the candidate is rejected_signal rather than a fabricated pass.
+    """
     assessor = _make_assessor(flow_builder_raises=True)
 
     result = assessor.assess(
@@ -259,8 +264,10 @@ def test_flow_evidence_builder_exception_returns_none():
     )
 
     assert result.flow_evidence is None
-    assert result.passes is True
-    assert result.screen_result == "pass"
+    assert result.candidate.signal_assessment is None
+    assert result.passes is False
+    assert result.screen_result == "rejected_signal"
+    assessor._signal_engine.evaluate_with_context.assert_not_called()
 
 
 def test_foreign_flow_threshold_rejected_before_signal():
@@ -504,7 +511,9 @@ def test_current_and_unknown_availability_produce_identical_directional_score_in
 
 
 def test_flow_builder_operational_failure_results_in_missing_flow_evidence():
-    # 16. Flow builder operational failure still results in missing flow evidence, preserving existing best-effort behavior.
+    # 16. Flow builder operational failure → missing evidence; pipeline hard
+    # guard skips signal (ADR-047) instead of calling evaluate_with_context
+    # with canonical_evidence=None (which would raise).
     assessor = _make_assessor(flow_builder_raises=True)
 
     result = assessor.assess(
@@ -518,11 +527,9 @@ def test_flow_builder_operational_failure_results_in_missing_flow_evidence():
     )
 
     assert result.flow_evidence is None
-    assert result.screen_result == "pass"
-
-    assessor._signal_engine.evaluate_with_context.assert_called_once()
-    kwargs = assessor._signal_engine.evaluate_with_context.call_args[1]
-    assert kwargs.get("canonical_evidence") is None
+    assert result.candidate.signal_assessment is None
+    assert result.screen_result == "rejected_signal"
+    assessor._signal_engine.evaluate_with_context.assert_not_called()
 
 
 def test_flow_builder_value_error_propagates():

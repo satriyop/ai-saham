@@ -26,7 +26,10 @@ from src.application.ports.rules_loader import RulesLoader
 from src.application.services.accumulation_candidate_evidence_builder import (
     AccumulationCandidateEvidenceBuilder,
 )
+from src.application.services.accum_risk_inputs_builder import AccumRiskInputsBuilder
 from src.application.services.accumulation_risk_funnel import AccumulationRiskFunnel
+from src.application.services.screen_assessment_pipeline import ScreenAssessmentPipeline
+from src.application.services.screen_policy import ScreenPolicy
 from src.application.use_case.score_accum_use_case import (
     ScoreAccumUseCase,
 )
@@ -232,8 +235,21 @@ class AccumulationScreenUseCase:
             sector_context_builder_factory=sector_context_builder_factory,
             company_quality_context_builder_factory=company_quality_context_builder_factory,
         )
+        self._assessment_pipeline = ScreenAssessmentPipeline(
+            policy=ScreenPolicy.accumulation(),
+            signal_engine=self._signal_engine,
+            risk_use_case=self._risk_use_case,
+            risk_inputs_builder=(
+                AccumRiskInputsBuilder() if self._risk_use_case is not None else None
+            ),
+        )
         self._risk_funnel = (
-            AccumulationRiskFunnel(self._risk_use_case) if self._risk_use_case is not None else None
+            AccumulationRiskFunnel(
+                self._risk_use_case,
+                pipeline=self._assessment_pipeline,
+            )
+            if self._risk_use_case is not None
+            else None
         )
         self._ticker_to_group: dict[str, str] = {}
         if idx_groups:
@@ -285,6 +301,7 @@ class AccumulationScreenUseCase:
             flow_confirmation_builder=self._flow_confirmation_builder,
             candidate_evidence_builder=self._candidate_evidence_builder,
             accum_score_uc=self._accum_score_uc,
+            pipeline=self._assessment_pipeline,
         )
 
     def execute(

@@ -2,11 +2,11 @@
 
 [Architecture decision index](../../ARCHITECTURE_DECISIONS.md)
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-07-25
 **Depends on:** [ADR-024](ADR-024-signal-engine-and-risk-engine-as-first-class-application-services.md), [ADR-029](ADR-029-market-context-engine-mce-third-first-class-application-service.md), [ADR-040](ADR-040-manual-dependency-injection-and-composition-roots.md), [ADR-003](ADR-003-hexagonal-ports-adapters-architecture.md)
 **Related:** [ADR-025](ADR-025-signalengine-architecture.md), [ADR-026](ADR-026-risk-plus-signal-pipeline-composition.md), [ADR-030](ADR-030-accumulation-screener-evidence-split.md), [ADR-037](ADR-037-marketcontext-promotes-from-preview-only-to-canonical-signal-input.md), [ADR-041](ADR-041-canonical-signal-evidence-input-boundary.md), [ADR-033](ADR-033-workflow-composition-artifact-boundaries.md)
-**Current implementation:** Not yet implemented. This ADR records the target design; landing is phased (see task `tasks/backlog/scenario_adoption_seam.md`). **Acceptance gates Phase 1:** this ADR must move to Accepted and be added to the `ARCHITECTURE_DECISIONS.md` index + the "Signal scoring" / "Risk" / "Market context" matrix rows **before the Phase 1 seam change merges** (it lands the structural signal/risk composition change). Phase 0 (builder generalization + docstring hygiene) is pure refactor and may precede acceptance.
+**Current implementation:** `ScreenAssessmentPipeline` + per-scenario seam (`SignalInputs` / `RiskInputsBuilder` / `ScreenPolicy`). Accum adopts via `AccumulationCandidateSignalAssessor` + `AccumulationRiskFunnel` seam adapters (Phase 1). Pre-open Tier-1 adoption is Phase 2 of `tasks/backlog/scenario_adoption_seam.md`.
 
 ### Context
 

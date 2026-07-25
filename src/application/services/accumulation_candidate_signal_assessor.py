@@ -19,9 +19,12 @@ from src.application.dto import accumulation_screen as accumulation_dto
 from src.application.services.evidence_source_availability_assembler import (
     EvidenceSourceAvailabilityAssembler,
 )
+from src.application.services.screen_assessment_pipeline import ScreenAssessmentPipeline
+from src.application.services.screen_policy import ScreenPolicy
 from src.application.services.signal_context_builder import (
     build_signal_context_from_candidate,
 )
+from src.application.services.signal_inputs import SignalInputs
 from src.application.use_case.score_accum_use_case import (
     ScoreAccumRequest,
     ScoreAccumUseCase,
@@ -79,13 +82,14 @@ class CanonicalFlowScoreResult:
 
 
 class AccumulationCandidateSignalAssessor:
-    """Score foreign flow, assess signal, build flow evidence, detect setup
-    phase, and classify.
+    """Accum seam: score flow, build SignalInputs, evaluate via pipeline, classify.
 
     Classification order (preserved from original use case):
     1. Foreign-flow threshold rejection -> ``rejected_flow``
     2. Signal-score threshold rejection -> ``rejected_signal``
     3. Survivor -> ``pass``
+
+    Signal engine calls go only through ScreenAssessmentPipeline (ADR-047).
     """
 
     def __init__(
@@ -94,12 +98,18 @@ class AccumulationCandidateSignalAssessor:
         flow_confirmation_builder: FlowConfirmationEvidenceBuilder,
         candidate_evidence_builder: AccumulationCandidateEvidenceBuilder,
         accum_score_uc: ScoreAccumUseCase | None = None,
+        *,
+        pipeline: ScreenAssessmentPipeline | None = None,
     ) -> None:
         self._signal_engine = signal_engine
         self._flow_confirmation_builder = flow_confirmation_builder
         self._candidate_evidence_builder = candidate_evidence_builder
         self._accum_score_uc = (
             accum_score_uc or ScoreAccumUseCase()
+        )
+        self._pipeline = pipeline or ScreenAssessmentPipeline(
+            policy=ScreenPolicy.accumulation(),
+            signal_engine=signal_engine,
         )
 
     def score_canonical_flow(
@@ -221,14 +231,19 @@ class AccumulationCandidateSignalAssessor:
                 ),
             )
 
-        candidate.signal_assessment = self._signal_engine.evaluate_with_context(
-            candidate.ticker,
-            signal_ctx,
-            market_context=market_context,
+        # Signal evaluation only through ScreenAssessmentPipeline (hard guard:
+        # canonical_evidence None => skip, never fabricate).
+        signal_inputs = SignalInputs(
+            signal_context=signal_ctx,
             canonical_evidence=canonical_evidence,
             setup_family=setup_family,
             setup_phase=candidate.setup_phase,
             authority_denominator_scope=AuthorityDenominatorScope.ATTACHED_REQUIRED,
+        )
+        candidate.signal_assessment = self._pipeline.evaluate_signal(
+            ticker=candidate.ticker,
+            inputs=signal_inputs,
+            market_context=market_context,
         )
         return CanonicalFlowScoreResult(
             candidate=candidate,
