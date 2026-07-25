@@ -43,6 +43,29 @@ Read this before every task. This is the mandatory entry point for agents. The l
 6. Pick focused verification before changing files.
 7. Check `git status --short` before edits or git operations, and treat unrelated dirty files as user/other-agent work.
 
+## Fix Stale Docstrings In Files You Touch
+
+When you edit a file, correct any docstring or comment in the code you touch that
+contradicts the current implementation. Docs lag code (see "Trust current code");
+leaving a stale claim next to a change you just made propagates the drift. This
+is opportunistic hygiene, not a mandate to audit the whole repo.
+
+Bounded rules:
+
+- Scope to the file(s) you are already changing and the module/class/function you
+  touched or closely read. Do not fan out into unrelated files or run a repo-wide
+  docstring sweep as a side effect — a broad docstring audit is its own task.
+- Verify the corrected claim against the implementation before writing it. Do not
+  replace one wrong claim with another guessed one. If a statement is
+  unverifiable, or you have not traced every consumer, delete or soften it rather
+  than asserting a new specific behavior.
+- Prefer pointing to the authoritative source (the function/scorer/gate that owns
+  the behavior) over restating volatile detail that will re-drift.
+- Treat it as `NON_SEMANTIC`: comments only, no behavior or contract change. Keep
+  it in the same commit as the work that touched the file; verify with
+  `git diff --check` (no test run needed for comment-only edits).
+- Do not edit docstrings in unrelated user/other-agent uncommitted files.
+
 ## Semantic Change Classification
 
 Before changing signal, setup, regime, risk, execution, evidence, observation,

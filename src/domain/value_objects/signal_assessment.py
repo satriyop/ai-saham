@@ -4,10 +4,14 @@ Signal assessment value objects.
 Defines the output contract for the SignalEngine: enums, SignalContext (pre-loaded
 input data), and SignalAssessment (immutable result).
 
-Mirrors the risk assessment layer:
-  GateContext      → SignalContext
+Mirrors the risk assessment layer structurally (pre-loaded input bundle + result):
+  GateContext      → SignalContext    (structural parallel only — SignalContext is
+                                        non-authoritative enrichment, NOT the
+                                        weighted-score source; that is
+                                        CanonicalSignalEvidenceInput)
   RiskAssessment   → SignalAssessment
-  RiskLevel/Profile → SignalStrength/EntryQuality
+  (risk has no RiskLevel/Profile enum — display-only OPEN/BLOCKED verdict via
+   RiskAssessment.risk_level_name; signal classifies via SignalStrength/EntryQuality)
 
 Layer: Domain
 Depends on: stdlib only
@@ -44,13 +48,27 @@ class EntryQuality(Enum):
 @dataclass(frozen=True)
 class SignalContext:
     """
-    Pre-loaded enrichment data passed to AssessSignalEvidenceUseCase.
+    Pre-loaded, non-authoritative enrichment inputs for signal evaluation.
 
-    The application layer (SignalEngine._build_signal_context) is responsible
-    for populating this from provider calls. The use case receives only plain
-    Python values — no providers, no IO, no lazy loading.
+    NOT the source of the weighted composite score. That score is produced from
+    the Setup + Flow evidence groups carried by CanonicalSignalEvidenceInput
+    (see AssessSignalEvidenceUseCase / SignalEvidenceGroupScorer). The fields
+    here are consumed only as non-authoritative side inputs:
+      - penalty flags — SignalEvidenceGroupScorer._evaluate_flags reads
+        forward_pe / analyst_buy_pct / insider_net_buy_ratio to apply
+        "do-no-harm" score penalties (never a positive contribution);
+      - company-quality sub-scores — company_quality_scoring /
+        company_quality_context_evidence_builder;
+      - factor-presence checks — signal_presence.
 
-    Parallel to GateContext in domain/rules/risk_gate.py.
+    The application layer (SignalEngine._build_signal_context) populates this
+    from provider calls. The use case receives only plain Python values — no
+    providers, no IO, no lazy loading.
+
+    Structurally parallel to GateContext (domain/rules/risk_gate.py) as a
+    pre-loaded input bundle, but asymmetric in authority: GateContext drives
+    risk-gate decisions, whereas SignalContext never drives the weighted signal
+    score.
 
     For screener loops, callers build this once per candidate from pre-loaded
     data and pass it via SignalEngine.evaluate_with_context() to avoid N+1
@@ -73,13 +91,15 @@ class SignalContext:
 
     # ── Insider activity ──────────────────────────────────────────────────────
     # Net insider buy direction: -1.0 (full selling) → 0.0 (neutral) → +1.0 (full buying).
-    # None until an insider data provider is wired; gracefully defaults to neutral 50.0.
-    # Replaces piotroski_f_score which belonged in GateContext (RiskEngine path only).
+    # Consumed as a penalty flag (INSIDER_SELLING when below threshold) and by
+    # company-quality scoring; None means it is simply not evaluated (no
+    # neutral-fill). Lives here, not in GateContext (that is the RiskEngine path).
     insider_net_buy_ratio: float | None = None  # -1.0 to +1.0
 
     # ── Seasonality (monthly, from SeasonalEdge) ──────────────────────────────
-    # Both fields needed: win_rate_pct drives the score;
-    # avg_return_pct determines tailwind/headwind/neutral direction.
+    # Feeds seasonality factor-presence (signal_presence) and company-quality
+    # context — NOT the weighted Setup/Flow score. win_rate_pct is the primary
+    # value; avg_return_pct gives tailwind/headwind/neutral direction.
     seasonality_win_rate: float | None = None       # 0.0–100.0
     seasonality_avg_return_pct: float | None = None # e.g. +2.1 = +2.1%, -1.0 = -1.0%
 
