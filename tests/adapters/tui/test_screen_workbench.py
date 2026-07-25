@@ -142,7 +142,123 @@ def test_screen_presenter_multi_survives_null_canonical_candidate() -> None:
     assert row.ticker == "TLKM"
     assert row.accum_score == 55.0
     assert row.action == "WATCH"
+    assert view.is_multi is True
+    assert view.resolved_windows == (7, 30, 90)
+    assert row.pattern == "building"
+    assert dict(row.window_accum) == {7: None, 30: 55.0, 90: None}
     assert "30s:55" in (row.window_shape_label or "")
+    assert "7s:—" in (row.window_shape_label or "")
+
+
+def test_screen_multi_table_shows_window_columns_and_pattern() -> None:
+    """Option A: multi layout exposes 7s/30s/90s Accum + Pattern (not single layout)."""
+    from datetime import date
+
+    from src.application.services.screen_accum_result_projector import (
+        MultiScreenAppliedFilters,
+        ScreenAccumMultiProjection,
+        ScreenAccumMultiRow,
+    )
+    from src.application.use_case.run_accumulation_screen_workflow_use_case import (
+        RunAccumulationScreenWorkflowResult,
+    )
+
+    c7 = SimpleNamespace(
+        ticker="BBRI",
+        accum_score=74.0,
+        consecutive_streak=4,
+        net_buy_ratio=0.6,
+        bci_label="CLUSTER",
+        vwap_discount_pct=5.0,
+        signal_assessment=SimpleNamespace(
+            assessment=SimpleNamespace(score=70, signal_authority_coverage=0.8)
+        ),
+        risk_assessment=SimpleNamespace(risk_level_name="OPEN"),
+        setup_phase=None,
+        trade_setup=SimpleNamespace(action=SimpleNamespace(value="WATCH")),
+    )
+    c30 = SimpleNamespace(
+        ticker="BBRI",
+        accum_score=68.0,
+        consecutive_streak=3,
+        net_buy_ratio=0.5,
+        bci_label=None,
+        vwap_discount_pct=4.0,
+        signal_assessment=None,
+        risk_assessment=None,
+        setup_phase=None,
+        trade_setup=None,
+    )
+    multi_row = ScreenAccumMultiRow(
+        ticker="BBRI",
+        candidates_by_window={7: c7, 30: c30, 90: None},
+        pattern="building",
+        trend="UP",
+        tracked_broker_flow=None,
+        canonical_window=7,
+        canonical_candidate=c7,
+        signal_score=70.0,
+        signal_authority_coverage=0.8,
+        risk_status="OPEN",
+        setup_phase=None,
+        data_status=None,
+        next_action="WATCH",
+    )
+    multi = ScreenAccumMultiProjection(
+        rows=[multi_row],
+        applied_filters=MultiScreenAppliedFilters(False, 20, "vwap"),
+        requested_windows=[7, 30, 90],
+        resolved_windows=[7, 30, 90],
+        raw_ticker_count=1,
+        projected_row_count=1,
+        screened_at=date(2026, 7, 22),
+        canonical_window=7,
+    )
+    payload = RunAccumulationScreenWorkflowResult(
+        multi_projection=multi, multi_results={}
+    )
+
+    controller = ScreenController(
+        load_universe=lambda u: [],
+        run_accumulation=lambda req: payload,
+    )
+    screen = ScreenWorkspaceScreen(controller, ScreenPresenter())
+
+    async def scenario() -> None:
+        async with _Host(screen).run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.05)
+            # Force multi render path with known payload
+            from src.adapters.tui.state import ScreenState, ScreenStatus
+
+            screen._operation = "ACCUM"
+            screen._render_state(
+                ScreenState(
+                    status=ScreenStatus.READY,
+                    payload=payload,
+                    generation=1,
+                )
+            )
+            await pilot.pause(0.05)
+            status = str(screen.query_one("#candidate-status", Static).content)
+            assert "MULTI" in status
+            assert "7/30/90" in status
+            table = screen.query_one("#candidate-table")
+            # columns: # Ticker Disc% 7s 30s 90s Pattern Signal Risk Action
+            assert table.row_count == 1
+            row = table.get_row_at(0)
+            flat = " ".join(str(c) for c in row)
+            assert "BBRI" in flat
+            assert "74" in flat  # 7s Accum
+            assert "68" in flat  # 30s Accum
+            assert "—" in flat or "-" in flat  # missing 90s
+            assert "building" in flat
+            preview = str(screen.query_one("#preview-content", Static).content)
+            assert "MULTI" in preview
+            assert "7s:74" in preview
+            assert "building" in preview
+            assert "CLUSTER" in preview
+
+    asyncio.run(scenario())
 
 
 def test_screen_save_shortlist_refuses_multi_window() -> None:

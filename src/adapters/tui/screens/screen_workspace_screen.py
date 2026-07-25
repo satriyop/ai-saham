@@ -107,6 +107,7 @@ class ScreenWorkspaceScreen(Screen[None]):
         self._last_click_index: int | None = None
         self._last_click_at = 0.0
         self._suppress_row_selected_open = False
+        self._accum_view_is_multi = False
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -599,12 +600,14 @@ class ScreenWorkspaceScreen(Screen[None]):
         view = self._presenter.present_accumulation(payload)
         self._candidate_rows = view.candidate_rows
         self._related_actions = view.related_actions
+        self._accum_view_is_multi = view.is_multi
         if (
             not view.candidate_rows
             or status is ScreenStatus.EMPTY
             or view.result_status == "empty"
         ):
-            self._set_status("EMPTY — 0 candidates found", "semantic-info")
+            mode = "MULTI · " if view.is_multi else ""
+            self._set_status(f"EMPTY — {mode}0 candidates found", "semantic-info")
             self._clear_table()
             self._set_table_message("No matching candidates found.")
             self.query_one("#candidate-selected", Static).update(
@@ -615,9 +618,18 @@ class ScreenWorkspaceScreen(Screen[None]):
             )
             return
 
-        self._set_status(
-            f"READY — {len(view.candidate_rows)} candidate(s)", "semantic-ready"
-        )
+        n = len(view.candidate_rows)
+        if view.is_multi:
+            wins = "/".join(str(w) for w in (view.resolved_windows or (7, 30, 90)))
+            self._set_status(
+                f"READY — MULTI · {wins} · {n} candidate(s)  "
+                f"[{ACCUM} per window; Pattern from multi]",
+                "semantic-ready",
+            )
+        else:
+            self._set_status(
+                f"READY — SINGLE · {n} candidate(s)", "semantic-ready"
+            )
         self._populate_accumulation_table(view)
         self._select_index(0)
         self._sync_cursor_to_selected_index()
@@ -628,24 +640,56 @@ class ScreenWorkspaceScreen(Screen[None]):
         try:
             table.clear(columns=True)
             # ADR-043: Accum = foreign-accumulation composite; Signal = SignalEngine total.
-            # Never label Accum as Flow% (that name is reserved for FlowRatio% component).
-            table.add_columns(
-                "#", "Ticker", ACCUM, "Streak", "Disc%", "Risk", "Action", SIGNAL
-            )
-            for row in view.candidate_rows:
-                signal = row.signal_score if row.signal_score is not None else "-"
-                disc = format_disc_pct_plain(row.vwap_discount_pct)
-                table.add_row(
-                    str(row.canonical_rank),
-                    row.ticker,
-                    f"{row.accum_score:5.1f}",
-                    str(row.consecutive_streak),
-                    disc,
-                    str(row.risk_status),
-                    decorate_action(row.action),
-                    str(signal),
-                    key=str(row.canonical_rank - 1),
+            if view.is_multi:
+                windows = view.resolved_windows or (7, 30, 90)
+                # CLI multi parity: Disc% + per-window Accum + Pattern + Signal/Risk/Action
+                col_names = ["#", "Ticker", "Disc%"]
+                col_names.extend(f"{w}s" for w in windows)
+                col_names.extend(["Pattern", SIGNAL, "Risk", "Action"])
+                table.add_columns(*col_names)
+                for row in view.candidate_rows:
+                    signal = (
+                        row.signal_score if row.signal_score is not None else "-"
+                    )
+                    disc = format_disc_pct_plain(row.vwap_discount_pct)
+                    by_w = dict(row.window_accum)
+                    cells: list[Any] = [
+                        str(row.canonical_rank),
+                        row.ticker,
+                        disc,
+                    ]
+                    for w in windows:
+                        score = by_w.get(w)
+                        cells.append(f"{score:.0f}" if score is not None else "—")
+                    cells.extend(
+                        [
+                            row.pattern or "—",
+                            str(signal),
+                            str(row.risk_status),
+                            decorate_action(row.action),
+                        ]
+                    )
+                    table.add_row(*cells, key=str(row.canonical_rank - 1))
+            else:
+                table.add_columns(
+                    "#", "Ticker", ACCUM, "Streak", "Disc%", "Risk", "Action", SIGNAL
                 )
+                for row in view.candidate_rows:
+                    signal = (
+                        row.signal_score if row.signal_score is not None else "-"
+                    )
+                    disc = format_disc_pct_plain(row.vwap_discount_pct)
+                    table.add_row(
+                        str(row.canonical_rank),
+                        row.ticker,
+                        f"{row.accum_score:5.1f}",
+                        str(row.consecutive_streak),
+                        disc,
+                        str(row.risk_status),
+                        decorate_action(row.action),
+                        str(signal),
+                        key=str(row.canonical_rank - 1),
+                    )
             self._set_table_message("")
         finally:
             self._suppress_row_selected_open = False
@@ -653,9 +697,11 @@ class ScreenWorkspaceScreen(Screen[None]):
     def _render_candidate_preview(self, row: Any) -> None:
         disc = format_disc_pct_plain(getattr(row, "vwap_discount_pct", None))
         depth = getattr(row, "vwap_depth_label", None) or "-"
+        is_multi = bool(getattr(row, "window_accum", ()) or getattr(row, "pattern", None))
+        mode = "MULTI" if is_multi else "SINGLE"
         self.query_one("#candidate-selected", Static).update(
-            f"Selected: {row.ticker} | Disc%: {disc} | Action: {row.action or '-'} | "
-            f"Risk: {row.risk_status} | Data: ALIGNED"
+            f"Selected: {row.ticker} | {mode} | Disc%: {disc} | "
+            f"Action: {row.action or '-'} | Risk: {row.risk_status}"
         )
         ticker = str(getattr(row, "ticker", "")).upper()
         related = getattr(self, "_related_actions", ()) or ()
@@ -675,20 +721,40 @@ class ScreenWorkspaceScreen(Screen[None]):
             if isinstance(row.signal_authority_coverage, float)
             else (row.signal_authority_coverage or "-")
         )
+        net_buy = getattr(row, "net_buy_ratio", None)
+        net_buy_s = f"{float(net_buy):.0%}" if isinstance(net_buy, (int, float)) else "-"
+        bci = getattr(row, "bci_label", None) or "-"
+        shape = getattr(row, "window_shape_label", None) or "-"
+        pattern = getattr(row, "pattern", None) or "-"
+
+        multi_block = ""
+        if is_multi:
+            multi_block = (
+                f"Mode               : MULTI (per-window {ACCUM})\n"
+                f"Windows (Accum)    : {shape}\n"
+                f"Pattern            : {pattern}\n"
+            )
+        else:
+            multi_block = f"Mode               : SINGLE\n"
+
         self.query_one("#preview-content", Static).update(
             "SELECTED CANDIDATE PREVIEW\n"
             f"Ticker             : {row.ticker}\n"
             f"Canonical Rank     : #{row.canonical_rank}\n"
-            f"{ACCUM} score (0–100) : {row.accum_score:.1f}  [foreign accumulation]\n"
+            f"{multi_block}"
+            f"{ACCUM} (canonical)  : {row.accum_score:.1f}  [foreign accumulation]\n"
             f"{SIGNAL} score (0–100): {sig}  [SignalEngine total; different engine]\n"
             f"{SIGNAL} coverage     : {cov}\n"
             f"Disc% (soft VWAP)  : {disc} ({depth})\n"
             f"Consecutive Streak : {row.consecutive_streak} session(s)\n"
+            f"Net buy ratio      : {net_buy_s}\n"
+            f"BCI                : {bci}\n"
             f"Setup Phase        : {row.setup_phase or '-'}\n"
             f"Risk Status        : {row.risk_status}\n"
             f"Canonical Action   : {row.action or '-'}\n"
             f"Next steps:\n{next_steps}\n"
-            f"\nNote: {ACCUM} ≠ {SIGNAL}. Workbench recomputes Signal on open.\n"
+            f"\nNote: {ACCUM} ≠ {SIGNAL}. Window cells are {ACCUM}, not {SIGNAL}.\n"
+            "Workbench recomputes Signal on open.\n"
             "Keys: click/j/k select · Enter or double-click open workbench"
         )
 

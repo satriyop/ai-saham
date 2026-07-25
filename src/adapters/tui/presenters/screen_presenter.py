@@ -41,6 +41,9 @@ class ScreenCandidateRowView:
     # Soft VWAP triage (display-only; same bands as CLI Disc% badge).
     vwap_discount_pct: float | None = None
     vwap_depth_label: str | None = None
+    # Multi-window Accum scores by session window (CLI multi parity).
+    window_accum: tuple[tuple[int, float | None], ...] = ()
+    pattern: str | None = None
 
 
 @dataclass(frozen=True)
@@ -69,6 +72,9 @@ class ScreenViewModel:
     warnings: tuple[str, ...]
     result_status: str = ScreenResultStatus.OK.value
     related_actions: tuple[ScreenRelatedActionView, ...] = ()
+    # True when payload is multi-window accumulation (CLI --multi).
+    is_multi: bool = False
+    resolved_windows: tuple[int, ...] = ()
 
 
 class ScreenPresenter:
@@ -90,17 +96,33 @@ class ScreenPresenter:
         return pct, vwap_depth_label(pct)
 
     @staticmethod
-    def _multi_window_shape_label(by_window: dict[Any, Any] | None) -> str:
-        """Build 7s/30s/90s Accum shape from candidates_by_window (not w7 attrs)."""
+    def _window_accum_pairs(
+        by_window: dict[Any, Any] | None,
+        resolved_windows: tuple[int, ...] | list[int],
+    ) -> tuple[tuple[int, float | None], ...]:
+        """Per-window Accum scores (None = no candidate in that window)."""
         windows = by_window or {}
-
-        def score_at(days: int) -> float:
+        pairs: list[tuple[int, float | None]] = []
+        for days in resolved_windows:
             cand = windows.get(days)
             if cand is None:
-                return 0.0
-            return float(getattr(cand, "accum_score", 0.0) or 0.0)
+                pairs.append((int(days), None))
+            else:
+                pairs.append((int(days), float(getattr(cand, "accum_score", 0.0) or 0.0)))
+        return tuple(pairs)
 
-        return f"7s:{score_at(7):.0f} 30s:{score_at(30):.0f} 90s:{score_at(90):.0f}"
+    @staticmethod
+    def _multi_window_shape_label(
+        window_accum: tuple[tuple[int, float | None], ...],
+    ) -> str:
+        """Compact 7s:… 30s:… label for preview / status."""
+        parts: list[str] = []
+        for days, score in window_accum:
+            if score is None:
+                parts.append(f"{days}s:—")
+            else:
+                parts.append(f"{days}s:{score:.0f}")
+        return " ".join(parts)
 
     @staticmethod
     def _signal_fields(
@@ -160,13 +182,20 @@ class ScreenPresenter:
         if save_result is not None:
             saved_name = getattr(save_result, "name", None)
 
+        is_multi = False
+        resolved_windows: tuple[int, ...] = ()
+
         if hasattr(projection, "multi_projection") and projection.multi_projection is not None:
             projection = projection.multi_projection
+            is_multi = True
         elif hasattr(projection, "single_projection") and projection.single_projection is not None:
             projection = projection.single_projection
 
         rows: list[ScreenCandidateRowView] = []
         if hasattr(projection, "rows") or type(projection).__name__ == "ScreenAccumMultiProjection":
+            is_multi = True
+            raw_windows = getattr(projection, "resolved_windows", None) or (7, 30, 90)
+            resolved_windows = tuple(int(w) for w in raw_windows)
             for rank, multi_row in enumerate(projection.rows, 1):
                 # canonical_candidate may exist and be None — never treat that as
                 # "missing attribute" (getattr default would not run).
@@ -175,7 +204,9 @@ class ScreenPresenter:
                     c = getattr(multi_row, "candidate", None)
 
                 by_window = getattr(multi_row, "candidates_by_window", None) or {}
-                shape = self._multi_window_shape_label(by_window)
+                window_accum = self._window_accum_pairs(by_window, resolved_windows)
+                shape = self._multi_window_shape_label(window_accum)
+                pattern = getattr(multi_row, "pattern", None)
 
                 if c is not None:
                     disc, depth = self._vwap_fields(c)
@@ -221,16 +252,22 @@ class ScreenPresenter:
                             window_shape_label=shape,
                             vwap_discount_pct=disc,
                             vwap_depth_label=depth,
+                            window_accum=window_accum,
+                            pattern=str(pattern) if pattern else None,
                         )
                     )
                 else:
                     # Row present only on non-canonical windows: still list ticker.
                     sig_score, sig_cov = self._signal_fields(None, row=multi_row)
-                    scores = [
-                        float(cand.accum_score)
-                        for cand in by_window.values()
-                        if cand is not None
-                    ]
+                    scores = [s for _, s in window_accum if s is not None]
+                    # Prefer Disc% from any available window candidate.
+                    disc, depth = None, None
+                    for days, _ in window_accum:
+                        cand = by_window.get(days)
+                        if cand is not None:
+                            disc, depth = self._vwap_fields(cand)
+                            if disc is not None:
+                                break
                     rows.append(
                         ScreenCandidateRowView(
                             canonical_rank=rank,
@@ -247,8 +284,10 @@ class ScreenPresenter:
                             signal_score=sig_score,
                             signal_authority_coverage=sig_cov,
                             window_shape_label=shape,
-                            vwap_discount_pct=None,
-                            vwap_depth_label=None,
+                            vwap_discount_pct=disc,
+                            vwap_depth_label=depth,
+                            window_accum=window_accum,
+                            pattern=str(pattern) if pattern else None,
                         )
                     )
         else:
@@ -312,6 +351,8 @@ class ScreenPresenter:
             warnings=warnings,
             result_status=result_status,
             related_actions=related,
+            is_multi=is_multi,
+            resolved_windows=resolved_windows,
         )
 
     def present_watchlists(
