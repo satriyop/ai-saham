@@ -1,11 +1,13 @@
 """
 Grade command for the opening session learning loop.
 
-Computes deterministic accuracy report from snapshot + track data.
+Computes deterministic accuracy report from NCP freezes (preferred) or
+snapshot.json + track data (ADR-048 Phase 4).
 
 Layer: Adapter
 """
 
+from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
@@ -14,51 +16,107 @@ from src.adapters.cli.learn_command_paths import (
     opening_day_dir,
     parse_learn_date,
 )
+from src.infrastructure.config.app_config import load_app_config
 
 
 def grade(
     date_str: Annotated[Optional[str], typer.Option("--date")] = None,
+    db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
 ) -> None:
     """
-    Compute deterministic accuracy report from today's snapshot + track data.
+    Compute deterministic accuracy report from today's decisions + track data.
 
-    Requires: snapshot.json and at least one track_*.json from today.
+    Prefers frozen DB observations (screen_pre_open) when present; falls back
+    to snapshot.json. Requires at least one track_*.json for the date.
 
     Examples:
         saham learn grade
         saham learn grade --date 2026-06-17
     """
     run_date = parse_learn_date(date_str)
+    cfg = load_app_config()
+    resolved_db = db_path or Path(cfg.storage.db_path)
 
     try:
         from src.application.use_case.opening_grade_use_case import compute_grade
         from src.infrastructure.config.pre_open_grade_config_loader import (
             load_pre_open_grade_config_snapshot,
         )
+        from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
+            SQLiteCandidateObservationsRepository,
+        )
     except ImportError as e:
         typer.echo(f"Import error: {e}", err=True)
         raise typer.Exit(1)
 
+    observations_repo = None
+    if resolved_db.exists():
+        try:
+            observations_repo = SQLiteCandidateObservationsRepository(resolved_db)
+        except Exception as e:
+            typer.echo(
+                f"Warning: could not open observations DB ({e}); using snapshot only.",
+                err=True,
+            )
+
     try:
         config_snapshot = load_pre_open_grade_config_snapshot()
-        result = compute_grade(run_date, config_snapshot=config_snapshot)
+        result = compute_grade(
+            run_date,
+            config_snapshot=config_snapshot,
+            observations_repository=observations_repo,
+        )
     except FileNotFoundError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
 
     out_dir = opening_day_dir(run_date)
     typer.echo(f"Grade saved → {out_dir}/grade.json + grade.md")
+    typer.echo(f"  Decision source:        {result.get('decision_source', 'n/a')}")
     typer.echo("")
     typer.echo(f"  Entry range hit rate:   {_pct(result.get('entry_range_hit_rate'))}")
     typer.echo(f"  Trend accuracy T+5m:    {_pct(result.get('trend_accuracy_T5'))}")
     typer.echo(f"  Trend accuracy T+30m:   {_pct(result.get('trend_accuracy_T30'))}")
     typer.echo(f"  Clean trade rate:       {_pct(result.get('clean_trade_rate'))}")
-    typer.echo("")
+
+    # Champion slices
+    bands = result.get("by_signal_band") or {}
+    if any((bands.get(b) or {}).get("count", 0) for b in ("strong", "moderate", "weak")):
+        typer.echo("")
+        typer.echo("  By signal band (champion):")
+        for band in ("strong", "moderate", "weak"):
+            v = bands.get(band) or {}
+            if v.get("count", 0) > 0:
+                typer.echo(
+                    f"    {band:8s}  n={v['count']}  "
+                    f"entry_hit={_pct(v.get('entry_range_hit_rate'))}  "
+                    f"clean={_pct(v.get('clean_trade_rate'))}"
+                )
+
+    actions = result.get("by_trade_setup_action") or {}
+    if any((actions.get(a) or {}).get("count", 0) for a in actions):
+        typer.echo("")
+        typer.echo("  By TradeSetup action:")
+        for action, v in actions.items():
+            if action.startswith("_") or not v.get("count", 0):
+                continue
+            typer.echo(
+                f"    {action:20s}  n={v['count']}  "
+                f"entry_hit={_pct(v.get('entry_range_hit_rate'))}  "
+                f"clean={_pct(v.get('clean_trade_rate'))}"
+            )
+
+    # Legacy secondary
+    legacy_shown = False
     for opening_setup in ("PRIME", "WATCH", "SKIP"):
         v = result.get("by_opening_setup", {}).get(opening_setup, {})
         if v.get("count", 0) > 0:
+            if not legacy_shown:
+                typer.echo("")
+                typer.echo("  By opening_setup (legacy secondary):")
+                legacy_shown = True
             typer.echo(
-                f"  {opening_setup:5s}  n={v['count']}  "
+                f"    {opening_setup:5s}  n={v['count']}  "
                 f"entry_hit={_pct(v.get('entry_range_hit_rate'))}  "
                 f"clean={_pct(v.get('clean_trade_rate'))}"
             )

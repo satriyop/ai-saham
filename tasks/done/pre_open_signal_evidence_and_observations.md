@@ -228,7 +228,7 @@ each phase gate.
 
 ### Phase 4 — `learn grade` evolution (session scorecard only)
 
-**Status:** Phases 1–3 landed in code; Phase 4 is the remaining gate for this task.
+**Status:** Phases 1–4 landed in code (see git history).
 
 **Locked scope (do not expand without a new task):**
 

@@ -1158,7 +1158,11 @@ saham learn track --force BBCA BBRI  # manual dry-run
 
 ## saham learn grade
 
-Deterministic accuracy report for a past snapshot. Grades entry range hit-rate, gap band accuracy, stop distance, trend classification.
+Deterministic opening-session scorecard (ADR-048 Phase 4). Joins **NCP-frozen DB
+observations** (`screen_pre_open`) when present, else `snapshot.json`, to
+`track_*.json` prices. Champion metrics: plan (range/IEP/clean trade) + signal
+bands + screen_result / TradeSetup slices. PRIME strata are **legacy secondary**.
+Does not recompute signal scores. Writes `grade.json` + `grade.md` for tune/prompt.
 
 ```
 saham learn grade [OPTIONS]
@@ -1167,6 +1171,7 @@ saham learn grade [OPTIONS]
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--date` | today | Grade date (YYYY-MM-DD) |
+| `--db` | config | SQLite path for frozen observations |
 
 ---
 
