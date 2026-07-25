@@ -3,18 +3,20 @@ Application workflow coordinator for `saham screen pre-open`.
 
 Layer: Application
 AI usage: Optional, only when caller injects an AI-enabled PreOpenScreenUseCase.
+
+Tier-1 engine adoption (ADR-047): regime + default-gate risk always-on via
+ScreenAssessmentPipeline (annotate, signal/trade_setup not applicable).
 """
 
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from src.application.ports.rules_loader import RulesLoader
-from src.application.services.indicator_registry import IndicatorRegistry
-from src.application.services.strategy_loader import StrategyLoader, StrategyNotFoundError
-from src.application.use_case.assess_risk_use_case import AssessRiskRequest, AssessRiskUseCase
+from src.application.services.pre_open_risk_inputs_builder import PreOpenRiskInputsBuilder
+from src.application.services.screen_assessment_pipeline import ScreenAssessmentPipeline
+from src.application.services.screen_policy import ScreenPolicy
 from src.application.use_case.pre_open_screen_use_case import (
     PreOpenScreenConfig,
     PreOpenScreenRequest,
@@ -37,6 +39,7 @@ from src.domain.value_objects.screener_result import (
 )
 
 if TYPE_CHECKING:
+    from src.application.services.risk_engine import RiskEngine
     from src.domain.value_objects.market_context import MarketContext
 
 
@@ -51,15 +54,34 @@ class PreOpenDataFreshness:
 
 
 @dataclass(frozen=True)
+class PreOpenRiskSummary:
+    """Compact per-ticker risk projection for pre-open (not full AssessRiskResponse)."""
+
+    risk_level_name: str
+    gate_triggered: str | None = None
+    gate_is_structural: bool | None = None
+    confidence: int | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "risk_level_name": self.risk_level_name,
+            "gate_triggered": self.gate_triggered,
+            "gate_is_structural": self.gate_is_structural,
+            "confidence": self.confidence,
+        }
+
+
+@dataclass(frozen=True)
 class PreOpenWorkflowRequest:
     config: PreOpenScreenConfig
     run_date: date
     guard_warnings: tuple[str, ...] = ()
-    with_regime: bool = False
+    # Defaults ON (Tier-1). CLI exposes --no-regime / --no-risk opt-out.
+    regime_enabled: bool = True
+    risk_enabled: bool = True
     regime_universe: str = "idx80"
     benchmark: str = "IHSG"
     db_path: Path = Path("data.db")
-    risk_strategy: str | None = None
     outside_window: bool = False
 
 
@@ -78,8 +100,9 @@ class PreOpenWorkflowResponse:
     raw_movers: list
     data_freshness: PreOpenDataFreshness
     market_regime: "MarketContext | None" = None
-    strategy_risk_statuses: dict[str, str] | None = None
-    risk_strategy_name: str | None = None
+    risk_by_ticker: dict[str, PreOpenRiskSummary | None] | None = None
+    regime_enabled: bool = True
+    risk_enabled: bool = True
     source_status: PreOpenSourceStatus = PreOpenSourceStatus.LIVE_SUCCESS
     source_message: str | None = None
     source_snapshot_ref: str | None = None
@@ -93,9 +116,9 @@ class PreOpenWorkflowUseCase:
         screen_use_case: PreOpenScreenUseCase,
         market_repository: MarketDataRepository,
         broker_repository: BrokerDataRepository,
-        registry: IndicatorRegistry,
         evaluate_market_context: Callable[..., "MarketContext"] | None = None,
-        rules_loader: RulesLoader | None = None,
+        risk_engine: "RiskEngine | None" = None,
+        assessment_pipeline: ScreenAssessmentPipeline | None = None,
         run_snapshot_screen: (
             Callable[[PreOpenScreenConfig, date], PreOpenSnapshotScreenResult | None] | None
         ) = None,
@@ -103,10 +126,14 @@ class PreOpenWorkflowUseCase:
         self._screen_use_case = screen_use_case
         self._market_repo = market_repository
         self._broker_repo = broker_repository
-        self._registry = registry
         self._evaluate_market_context = evaluate_market_context
-        self._rules_loader = rules_loader
         self._run_snapshot_screen = run_snapshot_screen
+        self._assessment_pipeline = assessment_pipeline or ScreenAssessmentPipeline(
+            policy=ScreenPolicy.pre_open(),
+            risk_engine=risk_engine,
+            risk_inputs_builder=PreOpenRiskInputsBuilder() if risk_engine is not None else None,
+            evaluate_market_context=evaluate_market_context,
+        )
 
     def execute(self, request: PreOpenWorkflowRequest) -> PreOpenWorkflowResponse:
         if request.outside_window:
@@ -159,14 +186,7 @@ class PreOpenWorkflowUseCase:
         source_snapshot_ref: str | None = None,
     ) -> PreOpenWorkflowResponse:
         result = screen_response.result
-
         warnings = list(screen_response.warnings) + list(request.guard_warnings)
-        strategy_risk_statuses, strategy_warning = self._build_strategy_risk_statuses(
-            risk_strategy_name=request.risk_strategy,
-            candidates=result.candidates,
-        )
-        if strategy_warning:
-            warnings.append(strategy_warning)
 
         data_freshness = self._build_data_freshness(
             candidates=result.candidates,
@@ -174,11 +194,9 @@ class PreOpenWorkflowUseCase:
         )
 
         market_regime = None
-        if request.with_regime:
+        if request.regime_enabled and self._evaluate_market_context is not None:
             try:
-                if self._evaluate_market_context is None:
-                    raise RuntimeError("Market context evaluator is not configured.")
-                market_regime = self._evaluate_market_context(
+                market_regime = self._assessment_pipeline.evaluate_regime(
                     db_path=request.db_path,
                     as_of_date=result.screened_date,
                     universe=request.regime_universe,
@@ -186,6 +204,24 @@ class PreOpenWorkflowUseCase:
                 )
             except Exception as exc:
                 warnings.append(f"Market regime unavailable: {exc}")
+        # If regime_enabled but evaluator not injected (partial DI / unit tests),
+        # leave market_regime=None without warning. Production CLI always wires MCE.
+
+        risk_by_ticker: dict[str, PreOpenRiskSummary | None] | None = None
+        if request.risk_enabled:
+            has_risk_path = self._assessment_pipeline._risk_inputs_builder is not None and (
+                self._assessment_pipeline._risk_engine is not None
+                or self._assessment_pipeline._risk_use_case is not None
+            )
+            if has_risk_path:
+                risk_by_ticker, risk_warnings = self._build_risk_summaries(
+                    candidates=result.candidates,
+                    as_of_date=result.screened_date,
+                    market_context=market_regime,
+                )
+                warnings.extend(risk_warnings)
+            # else: composition root did not wire risk (partial DI / unit tests).
+            # Production CLI factory always injects RiskEngine — no warning spam.
 
         return PreOpenWorkflowResponse(
             result=result,
@@ -193,12 +229,61 @@ class PreOpenWorkflowUseCase:
             raw_movers=screen_response.raw_movers,
             data_freshness=data_freshness,
             market_regime=market_regime,
-            strategy_risk_statuses=strategy_risk_statuses,
-            risk_strategy_name=request.risk_strategy,
+            risk_by_ticker=risk_by_ticker,
+            regime_enabled=request.regime_enabled,
+            risk_enabled=request.risk_enabled,
             source_status=source_status,
             source_message=source_message,
             source_snapshot_ref=source_snapshot_ref,
         )
+
+    def _build_risk_summaries(
+        self,
+        candidates: list[ScreenerCandidate],
+        as_of_date: date,
+        market_context: "MarketContext | None",
+    ) -> tuple[dict[str, PreOpenRiskSummary | None], list[str]]:
+        """Assess default-gate risk via pipeline; project compact summaries.
+
+        Soft per-ticker failures → None entry + aggregate warning. Never drops
+        candidates (annotate policy).
+        """
+        summaries: dict[str, PreOpenRiskSummary | None] = {}
+        failures = 0
+        sample_error: str | None = None
+
+        for candidate in candidates:
+            try:
+                resp = self._assessment_pipeline.assess_risk(
+                    candidate,
+                    as_of_date=as_of_date,
+                    market_context=market_context,
+                )
+                if resp is None:
+                    summaries[candidate.ticker] = None
+                    failures += 1
+                    continue
+                assessment = resp.assessment
+                summaries[candidate.ticker] = PreOpenRiskSummary(
+                    risk_level_name=assessment.risk_level_name,
+                    gate_triggered=assessment.gate_triggered,
+                    gate_is_structural=assessment.gate_is_structural,
+                    confidence=assessment.gate_confidence,
+                )
+            except Exception as exc:
+                summaries[candidate.ticker] = None
+                failures += 1
+                if sample_error is None:
+                    sample_error = str(exc)
+
+        warnings: list[str] = []
+        if failures:
+            total = len(candidates)
+            msg = f"Risk unavailable for {failures}/{total} candidates"
+            if sample_error:
+                msg = f"{msg} (e.g. {sample_error})"
+            warnings.append(msg)
+        return summaries, warnings
 
     def _outside_window_response(
         self, request: PreOpenWorkflowRequest
@@ -213,6 +298,8 @@ class PreOpenWorkflowUseCase:
             warnings=list(request.guard_warnings),
             raw_movers=[],
             data_freshness=self._empty_data_freshness(request.run_date),
+            regime_enabled=request.regime_enabled,
+            risk_enabled=request.risk_enabled,
             source_status=PreOpenSourceStatus.OUTSIDE_WINDOW,
             source_message=message,
         )
@@ -225,6 +312,8 @@ class PreOpenWorkflowUseCase:
             warnings=list(request.guard_warnings),
             raw_movers=[],
             data_freshness=self._empty_data_freshness(request.run_date),
+            regime_enabled=request.regime_enabled,
+            risk_enabled=request.risk_enabled,
             source_status=PreOpenSourceStatus.UNAVAILABLE,
             source_message=str(exc),
         )
@@ -245,43 +334,6 @@ class PreOpenWorkflowUseCase:
             candle_end=None,
             broker_end=None,
         )
-
-    def _build_strategy_risk_statuses(
-        self,
-        risk_strategy_name: str | None,
-        candidates: list[ScreenerCandidate],
-    ) -> tuple[dict[str, str] | None, str | None]:
-        if not risk_strategy_name:
-            return None, None
-        if self._rules_loader is None:
-            return {}, "rules_loader is required when risk_strategy is provided"
-
-        try:
-            strategy_loader = StrategyLoader(
-                rules_loader=self._rules_loader, registry=self._registry
-            )
-            rules_path = strategy_loader.resolve(risk_strategy_name)
-        except StrategyNotFoundError as exc:
-            return {}, f"Strategy '{risk_strategy_name}' not found: {exc}"
-
-        risk_use_case = AssessRiskUseCase(
-            repository=self._market_repo,
-            registry=self._registry,
-            rules_loader=self._rules_loader,
-        )
-        statuses: dict[str, str] = {}
-        for candidate in candidates:
-            try:
-                response = risk_use_case.execute(
-                    AssessRiskRequest(
-                        ticker=candidate.ticker,
-                        rules_file=rules_path,
-                    )
-                )
-                statuses[candidate.ticker] = response.assessment.risk_level_name
-            except Exception:
-                statuses[candidate.ticker] = "?"
-        return statuses, None
 
     def _build_data_freshness(
         self,
@@ -333,6 +385,7 @@ class PreOpenWorkflowUseCase:
             broker_end=broker_end,
             warnings=tuple(warnings),
         )
+
 
 def _min_latest_date(dates: list[date]) -> date | None:
     if not dates:

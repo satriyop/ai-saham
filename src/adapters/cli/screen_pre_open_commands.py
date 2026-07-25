@@ -102,9 +102,19 @@ def pre_open(
         bool,
         typer.Option("--with-ai", help="Enable AI research"),
     ] = False,
-    with_regime: Annotated[
+    no_regime: Annotated[
         bool,
-        typer.Option("--with-regime", help="Add market regime context"),
+        typer.Option(
+            "--no-regime",
+            help="Skip always-on market regime context (default: regime on)",
+        ),
+    ] = False,
+    no_risk: Annotated[
+        bool,
+        typer.Option(
+            "--no-risk",
+            help="Skip always-on default-gate risk annotation (default: risk on)",
+        ),
     ] = False,
     regime_universe: Annotated[
         Optional[str],
@@ -126,13 +136,6 @@ def pre_open(
             help="Allow weekend/non-trading-day dry-runs",
         ),
     ] = False,
-    risk_strategy: Annotated[
-        Optional[str],
-        typer.Option(
-            "--risk-strategy",
-            help="Strategy/rules name to show as an extra risk-status column",
-        ),
-    ] = None,
     output_format: Annotated[
         Optional[str],
         typer.Option("--format", help="Output format: table or json"),
@@ -144,6 +147,10 @@ def pre_open(
     Outputs conditional entry ranges (not fixed prices) aligned to the IDX
     call auction mechanism. Enter at open only if opening price falls within
     the displayed range.
+
+    Regime and default-gate risk annotations are always-on (Tier-1). Use
+    --no-regime / --no-risk to opt out. Signal is intentionally not applicable
+    (no canonical setup/flow evidence for pre-open).
     """
     cfg = load_app_config()
     resolved_config = config_path or Path(cfg.config_paths.pre_open_screener)
@@ -290,11 +297,11 @@ def pre_open(
                 config=config,
                 run_date=run_guard.run_at.date(),
                 guard_warnings=run_guard.warnings,
-                with_regime=with_regime,
+                regime_enabled=not no_regime,
+                risk_enabled=not no_risk,
                 regime_universe=regime_universe,
                 benchmark=benchmark,
                 db_path=resolved_db,
-                risk_strategy=risk_strategy,
                 outside_window=skip_live_fetch,
             )
         )
@@ -314,8 +321,7 @@ def pre_open(
                 warnings=response.warnings,
                 data_freshness=response.data_freshness,
                 market_regime=response.market_regime,
-                strategy_risk_statuses=response.strategy_risk_statuses,
-                risk_strategy_name=response.risk_strategy_name,
+                risk_by_ticker=response.risk_by_ticker,
                 source_status=response.source_status,
                 source_message=response.source_message,
                 source_snapshot_ref=response.source_snapshot_ref,

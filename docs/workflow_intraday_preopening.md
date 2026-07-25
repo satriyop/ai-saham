@@ -229,7 +229,7 @@ Durasi: ~20–30 detik.
 ### Cara B — Dengan Market Regime Context
 
 ```bash
-saham screen pre-open --top 5 --with-regime
+saham screen pre-open --top 5
 ```
 
 Baris `REGIME` memakai logic yang sama dengan `saham analyze regime`: benchmark 20d, breadth di atas SMA20, dan foreign-flow breadth.
@@ -320,7 +320,7 @@ Data IEV diambil manual dari Stockbit web: Movers overlay → tab **IEP/IEV** �
 | `--fast` | off | Tidak ada data orderbook |
 | `--allow-non-trading-day` | off | Dry-run/backfill di weekend atau hari non-bursa |
 | `--config PATH` | `config/pre_open_screener.yaml` | Pakai policy screener lain |
-| `--with-regime` | off | Tampilkan konteks market regime deterministik |
+| (regime + risk) | **always-on** | Konteks market regime + default-gate risk (non-blocking); opt-out: `--no-regime` / `--no-risk` |
 | `--regime-universe NAME` | `idx80` | Universe untuk breadth regime |
 | `--benchmark TICKER` | `^JKSE` | Benchmark regime, biasanya IHSG |
 
@@ -679,7 +679,7 @@ Potong dan tempel di terminal kamu.
 ├──────────────────────────────────────────────────────────────┤
 │  08:47  Pre-open screener                                    │
 │    saham screen pre-open --top 5          ← default  │
-│    saham screen pre-open --with-regime     ← regime  │
+│    saham screen pre-open                   ← regime+risk always-on │
 │    saham screen pre-open --signal-strategy NAME      │
 │    saham screen pre-open --iep-min 50     ← anti penny│
 ├──────────────────────────────────────────────────────────────┤

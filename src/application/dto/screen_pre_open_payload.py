@@ -86,8 +86,6 @@ def _freshness_payload(
 def build_pre_open_data(
     *,
     response: PreOpenWorkflowResponse,
-    strategy_risk_statuses: Mapping[str, str] | None = None,
-    risk_strategy_name: str | None = None,
 ) -> dict[str, Any]:
     result = response.result
     candidates = list(result.candidates)
@@ -104,29 +102,27 @@ def build_pre_open_data(
         "source_message": response.source_message,
         "source_snapshot_ref": response.source_snapshot_ref,
         "data_freshness": _freshness_payload(response.data_freshness),
+        "regime_enabled": response.regime_enabled,
+        "risk_enabled": response.risk_enabled,
         "related_actions": related_actions_for_accum(
             tickers=[c.ticker for c in candidates],
         ),
     }
-    name = risk_strategy_name if risk_strategy_name is not None else response.risk_strategy_name
-    statuses = (
-        strategy_risk_statuses
-        if strategy_risk_statuses is not None
-        else response.strategy_risk_statuses
-    )
-    if name:
-        data["risk_strategy_name"] = name
-        data["strategy_risk_statuses"] = dict(statuses or {})
+    if response.risk_enabled:
+        risk_payload: dict[str, Any] = {}
+        for ticker, summary in (response.risk_by_ticker or {}).items():
+            risk_payload[ticker] = summary.to_dict() if summary is not None else None
+        data["risk_by_ticker"] = risk_payload
     if response.market_regime is not None and hasattr(response.market_regime, "to_dict"):
         data["market_regime"] = response.market_regime.to_dict()
+    elif response.regime_enabled:
+        data["market_regime"] = None
     return data
 
 
 def build_pre_open_envelope(
     *,
     response: PreOpenWorkflowResponse,
-    strategy_risk_statuses: Mapping[str, str] | None = None,
-    risk_strategy_name: str | None = None,
 ) -> dict[str, Any]:
     """Full ADR-046 envelope for ``screen pre-open`` machine output."""
     result = response.result
@@ -135,11 +131,7 @@ def build_pre_open_envelope(
         source_status=response.source_status,
         candidate_count=candidate_count,
     )
-    data = build_pre_open_data(
-        response=response,
-        strategy_risk_statuses=strategy_risk_statuses,
-        risk_strategy_name=risk_strategy_name,
-    )
+    data = build_pre_open_data(response=response)
     scope_note = response.source_message
     if response.source_snapshot_ref and not scope_note:
         scope_note = f"Snapshot: {response.source_snapshot_ref}"

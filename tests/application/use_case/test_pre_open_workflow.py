@@ -98,7 +98,6 @@ def test_pre_open_workflow_executes_screen_and_builds_freshness():
         screen_use_case=screen,
         market_repository=FakeMarketRepository({"BBCA": (date(2026, 1, 1), run_date)}),
         broker_repository=FakeBrokerRepository({"BBCA": (date(2026, 1, 1), run_date)}),
-        registry=object(),
     )
 
     response = workflow.execute(
@@ -125,7 +124,6 @@ def test_pre_open_workflow_propagates_warnings_and_stale_data_notes():
         screen_use_case=screen,
         market_repository=FakeMarketRepository({"BBCA": (date(2026, 1, 1), date(2026, 6, 17))}),
         broker_repository=FakeBrokerRepository({"BBCA": None}),
-        registry=object(),
     )
 
     response = workflow.execute(
@@ -163,7 +161,6 @@ def test_pre_open_workflow_uses_oldest_latest_date_across_candidates():
                 "BUMI": (date(2026, 1, 1), date(2026, 6, 11)),
             }
         ),
-        registry=object(),
     )
 
     response = workflow.execute(
@@ -188,7 +185,6 @@ def test_pre_open_workflow_reports_market_regime_failure_as_warning():
         screen_use_case=screen,
         market_repository=FakeMarketRepository({"BBCA": (date(2026, 1, 1), run_date)}),
         broker_repository=FakeBrokerRepository({"BBCA": (date(2026, 1, 1), run_date)}),
-        registry=object(),
         evaluate_market_context=lambda **kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
@@ -196,7 +192,7 @@ def test_pre_open_workflow_reports_market_regime_failure_as_warning():
         PreOpenWorkflowRequest(
             config=PreOpenScreenConfig(fast_mode=True),
             run_date=run_date,
-            with_regime=True,
+            regime_enabled=True,
             regime_universe="missing",
             db_path=Path("/tmp/does-not-exist.db"),
         )
@@ -215,7 +211,6 @@ def test_pre_open_workflow_uses_injected_market_context_evaluator():
         screen_use_case=screen,
         market_repository=FakeMarketRepository({"BBCA": (date(2026, 1, 1), run_date)}),
         broker_repository=FakeBrokerRepository({"BBCA": (date(2026, 1, 1), run_date)}),
-        registry=object(),
         evaluate_market_context=lambda **kwargs: calls.append(kwargs) or expected_context,
     )
 
@@ -223,7 +218,7 @@ def test_pre_open_workflow_uses_injected_market_context_evaluator():
         PreOpenWorkflowRequest(
             config=PreOpenScreenConfig(fast_mode=True),
             run_date=run_date,
-            with_regime=True,
+            regime_enabled=True,
             regime_universe="idx80",
             benchmark="^JKSE",
             db_path=Path("/tmp/test.db"),
@@ -248,7 +243,6 @@ def test_pre_open_workflow_reports_live_success_when_movers_seen():
         screen_use_case=screen,
         market_repository=FakeMarketRepository({"BBCA": (date(2026, 1, 1), run_date)}),
         broker_repository=FakeBrokerRepository({"BBCA": (date(2026, 1, 1), run_date)}),
-        registry=object(),
     )
 
     response = workflow.execute(
@@ -276,7 +270,6 @@ def test_pre_open_workflow_reports_empty_confirmed_when_zero_movers_seen():
         screen_use_case=screen,
         market_repository=FakeMarketRepository({}),
         broker_repository=FakeBrokerRepository({}),
-        registry=object(),
     )
 
     response = workflow.execute(
@@ -306,7 +299,6 @@ def test_pre_open_workflow_does_not_treat_filtered_zero_candidates_as_empty_conf
         screen_use_case=screen,
         market_repository=FakeMarketRepository({}),
         broker_repository=FakeBrokerRepository({}),
-        registry=object(),
     )
 
     response = workflow.execute(
@@ -323,7 +315,6 @@ def test_pre_open_workflow_reports_unavailable_on_provider_error():
         screen_use_case=screen,
         market_repository=FakeMarketRepository({}),
         broker_repository=FakeBrokerRepository({}),
-        registry=object(),
     )
 
     response = workflow.execute(
@@ -344,7 +335,6 @@ def test_pre_open_workflow_reraises_browser_interaction_required():
         screen_use_case=screen,
         market_repository=FakeMarketRepository({}),
         broker_repository=FakeBrokerRepository({}),
-        registry=object(),
     )
 
     with pytest.raises(BrowserInteractionRequired):
@@ -360,7 +350,6 @@ def test_pre_open_workflow_outside_window_skips_live_fetch():
         screen_use_case=screen,
         market_repository=FakeMarketRepository({}),
         broker_repository=FakeBrokerRepository({}),
-        registry=object(),
     )
 
     response = workflow.execute(
@@ -395,7 +384,6 @@ def test_pre_open_workflow_outside_window_with_snapshot_returns_snapshot_success
         screen_use_case=live_screen,
         market_repository=FakeMarketRepository({"BUMI": (date(2026, 1, 1), snapshot_date)}),
         broker_repository=FakeBrokerRepository({"BUMI": (date(2026, 1, 1), snapshot_date)}),
-        registry=object(),
         run_snapshot_screen=_run_snapshot_screen,
     )
 
@@ -430,7 +418,6 @@ def test_pre_open_workflow_outside_window_no_snapshot_falls_back_to_outside_wind
         screen_use_case=live_screen,
         market_repository=FakeMarketRepository({}),
         broker_repository=FakeBrokerRepository({}),
-        registry=object(),
         run_snapshot_screen=_run_snapshot_screen,
     )
 
@@ -445,3 +432,104 @@ def test_pre_open_workflow_outside_window_no_snapshot_falls_back_to_outside_wind
     assert live_screen.requests == []
     assert response.source_status == PreOpenSourceStatus.OUTSIDE_WINDOW
     assert response.result.candidates == []
+
+
+def test_pre_open_workflow_always_on_risk_projects_compact_summary():
+    """Default-gate risk via pipeline; candidates never dropped."""
+    from unittest.mock import MagicMock
+
+    from src.application.services.pre_open_risk_inputs_builder import (
+        PreOpenRiskInputsBuilder,
+    )
+    from src.application.services.screen_assessment_pipeline import (
+        ScreenAssessmentPipeline,
+    )
+    from src.application.services.screen_policy import ScreenPolicy
+
+    run_date = date(2026, 6, 18)
+    candidates = [_candidate("BBCA"), _candidate("BBRI")]
+    screen = FakeScreenUseCase(_screen_response(run_date, candidates=candidates))
+
+    assessment_stub = MagicMock()
+    assessment_stub.risk_level_name = "LOW_RISK"
+    assessment_stub.gate_triggered = None
+    assessment_stub.gate_is_structural = None
+    assessment_stub.gate_confidence = 80
+
+    risk_resp = MagicMock()
+    risk_resp.assessment = assessment_stub
+    risk_engine = MagicMock()
+    risk_engine.assess.return_value = risk_resp
+
+    pipeline = ScreenAssessmentPipeline(
+        policy=ScreenPolicy.pre_open(),
+        risk_engine=risk_engine,
+        risk_inputs_builder=PreOpenRiskInputsBuilder(),
+    )
+    workflow = PreOpenWorkflowUseCase(
+        screen_use_case=screen,
+        market_repository=FakeMarketRepository(
+            {t: (date(2026, 1, 1), run_date) for t in ("BBCA", "BBRI")}
+        ),
+        broker_repository=FakeBrokerRepository(
+            {t: (date(2026, 1, 1), run_date) for t in ("BBCA", "BBRI")}
+        ),
+        assessment_pipeline=pipeline,
+        risk_engine=risk_engine,
+    )
+
+    response = workflow.execute(
+        PreOpenWorkflowRequest(
+            config=PreOpenScreenConfig(fast_mode=True),
+            run_date=run_date,
+            regime_enabled=False,
+            risk_enabled=True,
+        )
+    )
+
+    assert len(response.result.candidates) == 2
+    assert response.risk_by_ticker is not None
+    assert set(response.risk_by_ticker) == {"BBCA", "BBRI"}
+    assert response.risk_by_ticker["BBCA"] is not None
+    assert response.risk_by_ticker["BBCA"].risk_level_name == "LOW_RISK"
+    assert risk_engine.assess.call_count == 2
+
+
+def test_pre_open_workflow_no_risk_skips_assessment():
+    from unittest.mock import MagicMock
+
+    run_date = date(2026, 6, 18)
+    risk_engine = MagicMock()
+    from src.application.services.pre_open_risk_inputs_builder import (
+        PreOpenRiskInputsBuilder,
+    )
+    from src.application.services.screen_assessment_pipeline import (
+        ScreenAssessmentPipeline,
+    )
+    from src.application.services.screen_policy import ScreenPolicy
+
+    pipeline = ScreenAssessmentPipeline(
+        policy=ScreenPolicy.pre_open(),
+        risk_engine=risk_engine,
+        risk_inputs_builder=PreOpenRiskInputsBuilder(),
+    )
+    screen = FakeScreenUseCase(_screen_response(run_date))
+    workflow = PreOpenWorkflowUseCase(
+        screen_use_case=screen,
+        market_repository=FakeMarketRepository({"BBCA": (date(2026, 1, 1), run_date)}),
+        broker_repository=FakeBrokerRepository({"BBCA": (date(2026, 1, 1), run_date)}),
+        assessment_pipeline=pipeline,
+        risk_engine=risk_engine,
+    )
+
+    response = workflow.execute(
+        PreOpenWorkflowRequest(
+            config=PreOpenScreenConfig(fast_mode=True),
+            run_date=run_date,
+            regime_enabled=False,
+            risk_enabled=False,
+        )
+    )
+
+    assert response.risk_by_ticker is None
+    risk_engine.assess.assert_not_called()

@@ -29,7 +29,7 @@ belum tentu menjadi clearing price.
 | Cek status auth lokal | `saham fetch stockbit status` |
 | Simpan snapshot IEV | `saham fetch iev` |
 | Screen pre-open autonomous | `saham screen pre-open --top 5` |
-| Tambah regime context | `saham screen pre-open --top 5 --with-regime` |
+| Regime + risk (always-on; opt-out with flags) | `saham screen pre-open --top 5` |
 | Fast mode manual | `saham screen pre-open --movers-json '…' --fast` |
 | Konfirmasi harga pembukaan | `saham trade confirm --opening-json '{"BBCA":5175}'` |
 | Log confirmation | `saham trade log intraday` |

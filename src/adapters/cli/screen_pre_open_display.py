@@ -314,8 +314,7 @@ def display_results(
     warnings: list[str],
     data_freshness: PreOpenDataFreshness | None = None,
     market_regime: MarketContext | None = None,
-    strategy_risk_statuses: dict[str, str] | None = None,
-    risk_strategy_name: str | None = None,
+    risk_by_ticker: dict | None = None,
     source_status: PreOpenSourceStatus = PreOpenSourceStatus.LIVE_SUCCESS,
     source_message: str | None = None,
     source_snapshot_ref: str | None = None,
@@ -368,7 +367,7 @@ def display_results(
     results_table.add_column("Broker Backing")
     if show_notation:
         results_table.add_column("Note")
-    if strategy_risk_statuses is not None:
+    if risk_by_ticker is not None:
         results_table.add_column("Risk", justify="right")
 
     for candidate in sorted_candidates:
@@ -414,14 +413,18 @@ def display_results(
         if show_notation:
             row_cells.append(notation_label(candidate.ticker_notation))
 
-        if strategy_risk_statuses is not None:
-            raw = strategy_risk_statuses.get(candidate.ticker, "?")
-            if raw == "LOW_RISK":
-                strat_text = "[green]↑[/]"
-            elif raw == "HIGH_RISK":
-                strat_text = "[red]↓[/]"
+        if risk_by_ticker is not None:
+            summary = risk_by_ticker.get(candidate.ticker)
+            if summary is None:
+                strat_text = "[dim]?[/]"
             else:
-                strat_text = "[dim]~[/]"
+                level = getattr(summary, "risk_level_name", None) or "?"
+                if level == "LOW_RISK":
+                    strat_text = "[green]↑[/]"
+                elif level == "HIGH_RISK":
+                    strat_text = "[red]↓[/]"
+                else:
+                    strat_text = "[dim]~[/]"
             row_cells.append(strat_text)
 
         results_table.add_row(*row_cells)
@@ -489,9 +492,12 @@ def display_results(
         Text("BROKER BACKING: tag × streak | FVWAP% (floor=asing underwater, sell=asing profit) | PH=Prev High", style="dim"),
         Text("STOP%: max loss from entry (ATR-based, capped -7%)", style="dim"),
     ]
-    if strategy_risk_statuses is not None:
+    if risk_by_ticker is not None:
         legends.append(
-            Text(f"RISK STRATEGY ({risk_strategy_name}): ↑ = LOW_RISK | ~ = MODERATE | ↓ = HIGH_RISK", style="dim")
+            Text(
+                "RISK (default gates, non-blocking): ↑ = LOW_RISK | ~ = MODERATE | ↓ = HIGH_RISK | ? = unavailable",
+                style="dim",
+            )
         )
     legends.append(Text("\nDISCLAIMER: Analysis only. Not trading advice.", style="dim italic"))
 

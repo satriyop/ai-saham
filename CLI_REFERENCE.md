@@ -1058,6 +1058,10 @@ saham screen accum --universe lq45 --save morning-watch
 
 Pre-market movers screener with opening auction confirmation workflow.
 
+Regime context and default-gate risk annotation are **always-on** (non-blocking).
+Signal is intentionally not applicable (no canonical setup/flow evidence). Use
+`--no-regime` / `--no-risk` to opt out.
+
 ```
 saham screen pre-open [OPTIONS]
 saham screen pre-open --movers-json '[{"ticker":"BBCA","iev":150000}]'
@@ -1069,6 +1073,10 @@ saham screen pre-open --movers-json '[{"ticker":"BBCA","iev":150000}]'
 | `--fast` | false | Fast mode (no order book, ~15s) |
 | `--order-books-json` | — | JSON map of order book data |
 | `--top` | 10 | Top N candidates |
+| `--no-regime` | false | Skip always-on market regime context |
+| `--no-risk` | false | Skip always-on default-gate risk annotation |
+| `--regime-universe` | from config | Universe for regime breadth |
+| `--benchmark` | from config | Benchmark ticker for regime |
 
 ---
 

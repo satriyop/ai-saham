@@ -58,7 +58,7 @@ config saat ini adalah sumber kebenaran jika dokumentasi drift.
 - [ ] Tambahkan context bila diperlukan:
 
   ```bash
-  saham screen pre-open --top 5 --with-regime
+  saham screen pre-open --top 5
   saham screen pre-open --top 5 --signal-strategy williams-r-bounce
   saham screen pre-open --top 5 --iep-min 50
   ```

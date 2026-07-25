@@ -15,7 +15,11 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+from src.adapters.cli.risk_engine_helper import create_configured_risk_engine
+from src.application.services.pre_open_risk_inputs_builder import PreOpenRiskInputsBuilder
 from src.application.services.pre_open_run_guard import PreOpenRunGuard
+from src.application.services.screen_assessment_pipeline import ScreenAssessmentPipeline
+from src.application.services.screen_policy import ScreenPolicy
 from src.application.use_case.pre_open_screen_use_case import (
     PreOpenScreenConfig,
     PreOpenScreenRequest,
@@ -39,7 +43,6 @@ from src.infrastructure.browser.stockbit_ticker_notation import StockbitTickerNo
 from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.market_context_factory import evaluate_market_context
-from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_iev_repository import SQLiteIEVRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
@@ -225,13 +228,23 @@ def create_pre_open_cli_workflow(
         ai_explainer=ai_explainer,
         notation_provider=notation_provider,
     )
+    risk_engine = create_configured_risk_engine(
+        db_path=resolved_db,
+        with_enrichment=True,
+    )
+    assessment_pipeline = ScreenAssessmentPipeline(
+        policy=ScreenPolicy.pre_open(),
+        risk_engine=risk_engine,
+        risk_inputs_builder=PreOpenRiskInputsBuilder(),
+        evaluate_market_context=evaluate_market_context,
+    )
     workflow = PreOpenWorkflowUseCase(
         screen_use_case=screen_use_case,
         market_repository=market_repository,
         broker_repository=broker_repository,
-        registry=registry,
         evaluate_market_context=evaluate_market_context,
-        rules_loader=RulesYamlLoader(),
+        risk_engine=risk_engine,
+        assessment_pipeline=assessment_pipeline,
         run_snapshot_screen=run_snapshot_screen,
     )
 
