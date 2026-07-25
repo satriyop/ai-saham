@@ -50,6 +50,7 @@ canonical observations
 | Market context | `MarketContextEngine` is a canonical signal-conditioning input when requested; regime-adjusted risk remains a preview |
 | Final action | `AssessTradeSetupUseCase` is the single Signal + Risk composition point |
 | Screen adoption | `ScreenAssessmentPipeline` + per-scenario seam (`SignalInputs` / `RiskInputsBuilder` / `ScreenPolicy`); engines stay single (ADR-047) |
+| Pre-open signal (target) | IEV=universe; NCP freeze; groups `auction_ncp`+`open_viability`; TradeSetup owns action; DB observations (ADR-048) — not fully implemented |
 | Evidence promotion | Diagnostic evidence cannot gain production authority without out-of-sample proof and validator support |
 | Persistence | Local SQLite at `data/db/data.db`, plus purpose-specific journals/artifacts; historical claims require point-in-time provenance |
 | CLI authority | `src/adapters/cli/main.py` and live `saham --help`; adapters wire and render but do not own policy |
@@ -66,6 +67,7 @@ row.
 | Risk and final trade action | [010](docs/adr/ADR-010-risk-gates-as-policy-layer.md), [022](docs/adr/ADR-022-idx-regular-market-price-floor-rp-50-enforcements.md), [024](docs/adr/ADR-024-signal-engine-and-risk-engine-as-first-class-application-services.md), [026](docs/adr/ADR-026-risk-plus-signal-pipeline-composition.md), [028](docs/adr/ADR-028-idx-market-microstructure-rules.md), [031](docs/adr/ADR-031-swing-setup-evaluation-boundary.md), [032](docs/adr/ADR-032-analyze-swing-verdict-boundary.md), [047](docs/adr/ADR-047-scenario-adoption-seam-for-signal-risk-mce.md) |
 | Market context | [029](docs/adr/ADR-029-market-context-engine-mce-third-first-class-application-service.md), [037](docs/adr/ADR-037-marketcontext-promotes-from-preview-only-to-canonical-signal-input.md), [047](docs/adr/ADR-047-scenario-adoption-seam-for-signal-risk-mce.md) |
 | Screen scenario engine adoption | [047](docs/adr/ADR-047-scenario-adoption-seam-for-signal-risk-mce.md), [024](docs/adr/ADR-024-signal-engine-and-risk-engine-as-first-class-application-services.md), [026](docs/adr/ADR-026-risk-plus-signal-pipeline-composition.md), [029](docs/adr/ADR-029-market-context-engine-mce-third-first-class-application-service.md), [041](docs/adr/ADR-041-canonical-signal-evidence-input-boundary.md) |
+| Pre-open signal evidence, open observations, NCP freeze | [048](docs/adr/ADR-048-pre-open-signal-evidence-and-observation-identity.md), [047](docs/adr/ADR-047-scenario-adoption-seam-for-signal-risk-mce.md), [041](docs/adr/ADR-041-canonical-signal-evidence-input-boundary.md), [026](docs/adr/ADR-026-risk-plus-signal-pipeline-composition.md), [027](docs/adr/ADR-027-risk-signal-learning-loop.md) |
 | Data providers, persistence, PIT/replay | [005](docs/adr/ADR-005-local-first-persistence.md), [006](docs/adr/ADR-006-market-data-provider-abstraction.md), [008](docs/adr/ADR-008-decoupled-fetch-vs-analyze-data.md), [019](docs/adr/ADR-019-unified-fetch-timestamp-fetched-at-datetime-on-cached-domain-value-objects.md), [034](docs/adr/ADR-034-date-field-semantics.md), [036](docs/adr/ADR-036-persisted-jwt-token-store-replaces-playwright-per-invocation-for-stockbit-data-fetching.md), [038](docs/adr/ADR-038-point-in-time-enrichment-and-conservative-derived-fundamentals.md) |
 | Indicators, strategies, plugins | [007](docs/adr/ADR-007-indicator-initialization-warm-up-policy.md), [009](docs/adr/ADR-009-config-driven-behavior.md), [012](docs/adr/ADR-012-oss-encapsulation-rule.md), [016](docs/adr/ADR-016-formula-dsl-domain-specific-language-for-indicators.md), [017](docs/adr/ADR-017-plugin-based-indicator-registration.md) |
 | CLI and file organization | [011](docs/adr/ADR-011-offline-capable-cli-as-primary-interface.md), [018](docs/adr/ADR-018-cli-command-depth-saham-view-broker-exception.md), [020](docs/adr/ADR-020-cli-adapter-file-naming-convention.md), [023](docs/adr/ADR-023-codebase-directory-and-use-case-file-naming-standards.md), [044](docs/adr/ADR-044-view-subject-taxonomy-ticker-vs-desk.md), [045](docs/adr/ADR-045-view-browse-parity-cli-tui-json-table.md), [046](docs/adr/ADR-046-cli-response-envelope.md) |
@@ -103,7 +105,8 @@ row.
 | Risk facade | `src/application/services/risk_engine.py` |
 | Trade setup composition | `src/application/use_case/assess_trade_setup_use_case.py` |
 | Screen assessment adoption seam | `src/application/services/screen_assessment_pipeline.py` |
-| Market context | `src/application/services/market_context_engine.py` |
+| Pre-open learning loop (current files) | `src/application/use_case/opening_grade_use_case.py`, `learn snapshot/track/grade` CLI |
+| Market context | `src/application/services/market_context_engine.py`
 | Swing tuning guardrails | `src/application/services/swing_tuning_patch_validation.py` and adjacent `swing_tuning_*` services |
 | Layer enforcement | `tests/architecture/test_layer_boundaries.py` |
 | Signal-evidence parked residuals | `tasks/backlog/parked_*.md` |
@@ -161,6 +164,7 @@ row.
 | [045](docs/adr/ADR-045-view-browse-parity-cli-tui-json-table.md) | View browse parity (CLI/TUI, table/json) | Accepted; depends on ADR-044; envelope keys generalized by ADR-046 |
 | [046](docs/adr/ADR-046-cli-response-envelope.md) | Shared CLI response envelope | Accepted; generalizes envelope beyond view; adopt-on-touch for other families |
 | [047](docs/adr/ADR-047-scenario-adoption-seam-for-signal-risk-mce.md) | Scenario-adoption seam for Signal / Risk / MCE | Accepted; engines single; `ScreenAssessmentPipeline` + per-scenario builders/policy |
+| [048](docs/adr/ADR-048-pre-open-signal-evidence-and-observation-identity.md) | Pre-open signal evidence + observation identity | Accepted (decision freeze); NCP freeze champion; not yet implemented |
 
 ## Adding or changing a decision
 
