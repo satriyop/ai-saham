@@ -57,6 +57,21 @@ def test_learn_group_exposes_opening_loop_commands():
     assert "grade" in result.stdout
     assert "prompt" in result.stdout
     assert "tune" in result.stdout
+    # Clean break: no learn labels command (help may still mention research path)
+    assert "  labels" not in result.stdout  # not a registered subcommand row
+
+
+def test_research_pre_open_exposes_labels_only():
+    result = runner.invoke(app, ["research", "pre-open", "--help"])
+
+    assert result.exit_code == 0
+    assert "labels" in result.stdout
+
+
+def test_learn_labels_removed_clean_break():
+    result = runner.invoke(app, ["learn", "labels", "--help"])
+
+    assert result.exit_code != 0
 
 
 def test_view_group_exposes_ticker_dashboard_command():

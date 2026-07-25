@@ -1,7 +1,9 @@
 """
-Generate open_30m labels from NCP freezes + track data.
+CLI: saham research pre-open labels
 
-Session-horizon twin of research signal labels (multi-day).
+Generate open_30m outcome labels from NCP freezes + learn track data.
+Session-horizon twin of research signal labels (multi-day); separate command
+so agents never mix open_30m into SignalLabelHorizon pipelines.
 
 Layer: Adapter
 """
@@ -15,23 +17,26 @@ from src.adapters.cli.learn_command_paths import parse_learn_date
 from src.infrastructure.config.app_config import load_app_config
 
 
-def labels(
+def pre_open_labels(
     date_str: Annotated[Optional[str], typer.Option("--date")] = None,
     db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
     no_persist: Annotated[
         bool,
-        typer.Option("--no-persist", help="Compute only; do not write open_30m_labels.json"),
+        typer.Option(
+            "--no-persist",
+            help="Compute only; do not write open_30m_labels.json",
+        ),
     ] = False,
 ) -> None:
     """
-    Generate open_30m outcome labels for a session date.
+    Generate open_30m outcome labels for a pre-open session date.
 
     Prefers frozen screen_pre_open observations; falls back to snapshot.json.
     Requires learn track files. Writes data/opening/YYYYMMDD/open_30m_labels.json.
 
     Examples:
-        saham learn labels
-        saham learn labels --date 2026-06-18
+        saham research pre-open labels
+        saham research pre-open labels --date 2026-06-18
     """
     run_date = parse_learn_date(date_str)
     cfg = load_app_config()
@@ -76,9 +81,10 @@ def labels(
     if result.output_path:
         typer.echo(f"Saved → {result.output_path}")
 
-    # Compact outcome histogram
     hist: dict[str, int] = {}
     for lb in result.labels:
         hist[lb.outcome] = hist.get(lb.outcome, 0) + 1
     if hist:
-        typer.echo("  Outcomes: " + "  ".join(f"{k}={v}" for k, v in sorted(hist.items())))
+        typer.echo(
+            "  Outcomes: " + "  ".join(f"{k}={v}" for k, v in sorted(hist.items()))
+        )

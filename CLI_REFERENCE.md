@@ -1175,14 +1175,16 @@ saham learn grade [OPTIONS]
 
 ---
 
-## saham learn labels
+## saham research pre-open labels
 
 Generate **open_30m** outcome labels from NCP freezes + tracks (session-horizon
 twin of `research signal labels`, not multi-day swing horizons). Prefers DB
 freezes; falls back to snapshot. Writes `data/opening/YYYYMMDD/open_30m_labels.json`.
 
+Clean break: not under `learn` (ops only). Not `research signal labels --contract`.
+
 ```
-saham learn labels [OPTIONS]
+saham research pre-open labels [OPTIONS]
 ```
 
 | Option | Default | Description |
