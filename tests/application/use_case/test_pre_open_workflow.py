@@ -533,3 +533,110 @@ def test_pre_open_workflow_no_risk_skips_assessment():
 
     assert response.risk_by_ticker is None
     risk_engine.assess.assert_not_called()
+
+
+def test_pre_open_workflow_signal_cascade_and_trade_setup_when_risk_present():
+    """ADR-048: auction evidence → signal; signal+risk → TradeSetup (ADR-026)."""
+    from decimal import Decimal
+    from unittest.mock import MagicMock
+
+    from src.application.services.pre_open_risk_inputs_builder import (
+        PreOpenRiskInputsBuilder,
+    )
+    from src.application.services.screen_assessment_pipeline import (
+        ScreenAssessmentPipeline,
+    )
+    from src.application.services.screen_policy import ScreenPolicy
+    from src.domain.value_objects.screener_result import ScreenerCandidate
+    from src.domain.value_objects.trade_setup import SetupAction
+
+    run_date = date(2026, 6, 18)
+    candidate = ScreenerCandidate(
+        ticker="BBCA",
+        iev=250_000,
+        entry_price=Decimal("10050"),
+        stop_loss_price=Decimal("9800"),
+        capital=Decimal("3000000"),
+        trend_signal="BULLISH",
+        prev_close=Decimal("10000"),
+        gap_pct=Decimal("1.0"),
+        bid_offer_imbalance=0.65,
+        spread_pct=Decimal("0.3"),
+        entry_range_low=Decimal("9900"),
+        entry_range_high=Decimal("10100"),
+        rsi=Decimal("50"),
+    )
+    screen = FakeScreenUseCase(
+        _screen_response(run_date, candidates=[candidate])
+    )
+
+    assessment_stub = MagicMock()
+    assessment_stub.risk_level_name = "LOW_RISK"
+    assessment_stub.gate_triggered = None
+    assessment_stub.gate_is_structural = None
+    assessment_stub.gate_confidence = 80
+    risk_resp = MagicMock()
+    risk_resp.assessment = assessment_stub
+    risk_engine = MagicMock()
+    risk_engine.assess.return_value = risk_resp
+
+    pipeline = ScreenAssessmentPipeline(
+        policy=ScreenPolicy.pre_open(),
+        risk_engine=risk_engine,
+        risk_inputs_builder=PreOpenRiskInputsBuilder(),
+    )
+    workflow = PreOpenWorkflowUseCase(
+        screen_use_case=screen,
+        market_repository=FakeMarketRepository(
+            {"BBCA": (date(2026, 1, 1), run_date)}
+        ),
+        broker_repository=FakeBrokerRepository(
+            {"BBCA": (date(2026, 1, 1), run_date)}
+        ),
+        assessment_pipeline=pipeline,
+        risk_engine=risk_engine,
+    )
+
+    response = workflow.execute(
+        PreOpenWorkflowRequest(
+            config=PreOpenScreenConfig(fast_mode=True),
+            run_date=run_date,
+            regime_enabled=False,
+            risk_enabled=True,
+            signal_enabled=True,
+        )
+    )
+
+    assert response.signal_by_ticker is not None
+    assert response.signal_by_ticker["BBCA"] is not None
+    assert response.signal_by_ticker["BBCA"].score >= 50
+    assert response.trade_setup_by_ticker is not None
+    assert response.trade_setup_by_ticker["BBCA"] is not None
+    assert response.trade_setup_by_ticker["BBCA"].action in {
+        SetupAction.ENTER,
+        SetupAction.WATCH,
+        SetupAction.AVOID,
+    }
+    # Annotate risk: candidate list not filtered
+    assert len(response.result.candidates) == 1
+
+
+def test_pre_open_workflow_signal_disabled_skips_cascade():
+    run_date = date(2026, 6, 18)
+    screen = FakeScreenUseCase(_screen_response(run_date))
+    workflow = PreOpenWorkflowUseCase(
+        screen_use_case=screen,
+        market_repository=FakeMarketRepository({"BBCA": (date(2026, 1, 1), run_date)}),
+        broker_repository=FakeBrokerRepository({"BBCA": (date(2026, 1, 1), run_date)}),
+    )
+    response = workflow.execute(
+        PreOpenWorkflowRequest(
+            config=PreOpenScreenConfig(fast_mode=True),
+            run_date=run_date,
+            regime_enabled=False,
+            risk_enabled=False,
+            signal_enabled=False,
+        )
+    )
+    assert response.signal_by_ticker is None
+    assert response.trade_setup_by_ticker is None

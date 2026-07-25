@@ -4,8 +4,10 @@ Application workflow coordinator for `saham screen pre-open`.
 Layer: Application
 AI usage: Optional, only when caller injects an AI-enabled PreOpenScreenUseCase.
 
-Tier-1 engine adoption (ADR-047): regime + default-gate risk always-on via
-ScreenAssessmentPipeline (annotate, signal/trade_setup not applicable).
+Engine adoption (ADR-047 / ADR-048):
+  regime + risk (annotate) always-on via ScreenAssessmentPipeline;
+  pre-open v1 signal cascade when auction_ncp evidence is present;
+  TradeSetup composed when signal + risk assessments both exist.
 """
 
 from collections.abc import Callable
@@ -14,9 +16,16 @@ from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from src.application.dto.assess_signal import AssessSignalResponse
 from src.application.services.pre_open_risk_inputs_builder import PreOpenRiskInputsBuilder
+from src.application.services.pre_open_signal_cascade import PreOpenSignalInputsBuilder
+from src.application.services.pre_open_signal_config import PreOpenSignalConfig
 from src.application.services.screen_assessment_pipeline import ScreenAssessmentPipeline
 from src.application.services.screen_policy import ScreenPolicy
+from src.application.use_case.assess_risk_use_case import AssessRiskResponse
+from src.application.use_case.assess_trade_setup_use_case import (
+    AssessTradeSetupUseCase,
+)
 from src.application.use_case.pre_open_screen_use_case import (
     PreOpenScreenConfig,
     PreOpenScreenRequest,
@@ -37,6 +46,7 @@ from src.domain.value_objects.screener_result import (
     PreOpenScreenResult,
     ScreenerCandidate,
 )
+from src.domain.value_objects.trade_setup import TradeSetup
 
 if TYPE_CHECKING:
     from src.application.services.risk_engine import RiskEngine
@@ -79,10 +89,15 @@ class PreOpenWorkflowRequest:
     # Defaults ON (Tier-1). CLI exposes --no-regime / --no-risk opt-out.
     regime_enabled: bool = True
     risk_enabled: bool = True
+    # ADR-048 signal cascade (default on; hard-guards per ticker without auction).
+    signal_enabled: bool = True
     regime_universe: str = "idx80"
     benchmark: str = "IHSG"
     db_path: Path = Path("data.db")
     outside_window: bool = False
+    # NCP capture metadata for evidence provenance (optional).
+    capture_phase: str = "UNKNOWN"
+    decision_snapshot_ref: str | None = None
 
 
 @dataclass(frozen=True)
@@ -94,6 +109,24 @@ class PreOpenSnapshotScreenResult:
 
 
 @dataclass(frozen=True)
+class PreOpenSignalSummary:
+    """Compact signal projection for envelope/display (not TradeSetup)."""
+
+    score: int
+    strength: str
+    entry_quality: str
+    signal_authority_coverage: float | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "score": self.score,
+            "strength": self.strength,
+            "entry_quality": self.entry_quality,
+            "signal_authority_coverage": self.signal_authority_coverage,
+        }
+
+
+@dataclass(frozen=True)
 class PreOpenWorkflowResponse:
     result: PreOpenScreenResult
     warnings: list[str]
@@ -101,8 +134,11 @@ class PreOpenWorkflowResponse:
     data_freshness: PreOpenDataFreshness
     market_regime: "MarketContext | None" = None
     risk_by_ticker: dict[str, PreOpenRiskSummary | None] | None = None
+    signal_by_ticker: dict[str, PreOpenSignalSummary | None] | None = None
+    trade_setup_by_ticker: dict[str, TradeSetup | None] | None = None
     regime_enabled: bool = True
     risk_enabled: bool = True
+    signal_enabled: bool = True
     source_status: PreOpenSourceStatus = PreOpenSourceStatus.LIVE_SUCCESS
     source_message: str | None = None
     source_snapshot_ref: str | None = None
@@ -119,6 +155,8 @@ class PreOpenWorkflowUseCase:
         evaluate_market_context: Callable[..., "MarketContext"] | None = None,
         risk_engine: "RiskEngine | None" = None,
         assessment_pipeline: ScreenAssessmentPipeline | None = None,
+        signal_builder: PreOpenSignalInputsBuilder | None = None,
+        trade_setup_uc: AssessTradeSetupUseCase | None = None,
         run_snapshot_screen: (
             Callable[[PreOpenScreenConfig, date], PreOpenSnapshotScreenResult | None] | None
         ) = None,
@@ -134,6 +172,10 @@ class PreOpenWorkflowUseCase:
             risk_inputs_builder=PreOpenRiskInputsBuilder() if risk_engine is not None else None,
             evaluate_market_context=evaluate_market_context,
         )
+        self._signal_builder = signal_builder or PreOpenSignalInputsBuilder(
+            PreOpenSignalConfig()
+        )
+        self._trade_setup_uc = trade_setup_uc or AssessTradeSetupUseCase()
 
     def execute(self, request: PreOpenWorkflowRequest) -> PreOpenWorkflowResponse:
         if request.outside_window:
@@ -208,13 +250,14 @@ class PreOpenWorkflowUseCase:
         # leave market_regime=None without warning. Production CLI always wires MCE.
 
         risk_by_ticker: dict[str, PreOpenRiskSummary | None] | None = None
+        risk_responses: dict[str, AssessRiskResponse] = {}
         if request.risk_enabled:
             has_risk_path = self._assessment_pipeline._risk_inputs_builder is not None and (
                 self._assessment_pipeline._risk_engine is not None
                 or self._assessment_pipeline._risk_use_case is not None
             )
             if has_risk_path:
-                risk_by_ticker, risk_warnings = self._build_risk_summaries(
+                risk_by_ticker, risk_responses, risk_warnings = self._build_risk_summaries(
                     candidates=result.candidates,
                     as_of_date=result.screened_date,
                     market_context=market_regime,
@@ -223,6 +266,69 @@ class PreOpenWorkflowUseCase:
             # else: composition root did not wire risk (partial DI / unit tests).
             # Production CLI factory always injects RiskEngine — no warning spam.
 
+        signal_by_ticker: dict[str, PreOpenSignalSummary | None] | None = None
+        signal_responses: dict[str, AssessSignalResponse] = {}
+        trade_setup_by_ticker: dict[str, TradeSetup | None] | None = None
+        policy = self._assessment_pipeline.policy
+
+        if (
+            request.signal_enabled
+            and policy.signal_applicable
+            and result.candidates
+        ):
+            signal_by_ticker = {}
+            capture_phase = request.capture_phase
+            if source_status is PreOpenSourceStatus.SNAPSHOT_SUCCESS:
+                capture_phase = "NCP_LOCKED"
+            for candidate in result.candidates:
+                try:
+                    sig = self._signal_builder.evaluate(
+                        candidate,
+                        trade_date=result.screened_date,
+                        capture_phase=capture_phase,
+                        snapshot_ref=request.decision_snapshot_ref
+                        or source_snapshot_ref,
+                    )
+                except Exception as exc:
+                    warnings.append(
+                        f"Signal unavailable for {candidate.ticker}: {exc}"
+                    )
+                    signal_by_ticker[candidate.ticker] = None
+                    continue
+                if sig is None:
+                    signal_by_ticker[candidate.ticker] = None
+                    continue
+                signal_responses[candidate.ticker] = sig
+                signal_by_ticker[candidate.ticker] = PreOpenSignalSummary(
+                    score=sig.score,
+                    strength=sig.assessment.strength.value,
+                    entry_quality=sig.assessment.entry_quality.value,
+                    signal_authority_coverage=sig.signal_authority_coverage,
+                )
+
+            if policy.trade_setup_applicable and signal_responses:
+                trade_setup_by_ticker = {}
+                for ticker, sig in signal_responses.items():
+                    risk_resp = risk_responses.get(ticker)
+                    if risk_resp is None:
+                        trade_setup_by_ticker[ticker] = None
+                        continue
+                    try:
+                        setup = self._assessment_pipeline.compose_trade_setup(
+                            ticker=ticker,
+                            as_of_date=result.screened_date,
+                            signal_response=sig,
+                            risk_response=risk_resp,
+                            market_context=market_regime,
+                        )
+                        trade_setup_by_ticker[ticker] = setup
+                    except Exception as exc:
+                        warnings.append(f"TradeSetup unavailable for {ticker}: {exc}")
+                        trade_setup_by_ticker[ticker] = None
+                # Ensure keys for signal-null tickers absent from trade map
+                for ticker in signal_by_ticker:
+                    trade_setup_by_ticker.setdefault(ticker, None)
+
         return PreOpenWorkflowResponse(
             result=result,
             warnings=warnings,
@@ -230,8 +336,11 @@ class PreOpenWorkflowUseCase:
             data_freshness=data_freshness,
             market_regime=market_regime,
             risk_by_ticker=risk_by_ticker,
+            signal_by_ticker=signal_by_ticker,
+            trade_setup_by_ticker=trade_setup_by_ticker,
             regime_enabled=request.regime_enabled,
             risk_enabled=request.risk_enabled,
+            signal_enabled=request.signal_enabled,
             source_status=source_status,
             source_message=source_message,
             source_snapshot_ref=source_snapshot_ref,
@@ -242,13 +351,18 @@ class PreOpenWorkflowUseCase:
         candidates: list[ScreenerCandidate],
         as_of_date: date,
         market_context: "MarketContext | None",
-    ) -> tuple[dict[str, PreOpenRiskSummary | None], list[str]]:
+    ) -> tuple[
+        dict[str, PreOpenRiskSummary | None],
+        dict[str, AssessRiskResponse],
+        list[str],
+    ]:
         """Assess default-gate risk via pipeline; project compact summaries.
 
         Soft per-ticker failures → None entry + aggregate warning. Never drops
-        candidates (annotate policy).
+        candidates (annotate policy). Returns full responses for TradeSetup.
         """
         summaries: dict[str, PreOpenRiskSummary | None] = {}
+        full: dict[str, AssessRiskResponse] = {}
         failures = 0
         sample_error: str | None = None
 
@@ -263,6 +377,7 @@ class PreOpenWorkflowUseCase:
                     summaries[candidate.ticker] = None
                     failures += 1
                     continue
+                full[candidate.ticker] = resp
                 assessment = resp.assessment
                 summaries[candidate.ticker] = PreOpenRiskSummary(
                     risk_level_name=assessment.risk_level_name,
@@ -276,14 +391,14 @@ class PreOpenWorkflowUseCase:
                 if sample_error is None:
                     sample_error = str(exc)
 
-        warnings: list[str] = []
+        warn_list: list[str] = []
         if failures:
             total = len(candidates)
             msg = f"Risk unavailable for {failures}/{total} candidates"
             if sample_error:
                 msg = f"{msg} (e.g. {sample_error})"
-            warnings.append(msg)
-        return summaries, warnings
+            warn_list.append(msg)
+        return summaries, full, warn_list
 
     def _outside_window_response(
         self, request: PreOpenWorkflowRequest

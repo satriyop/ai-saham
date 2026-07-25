@@ -32,7 +32,7 @@ def _signal_inputs(*, with_evidence: bool) -> SignalInputs:
 def test_evaluate_signal_skipped_when_signal_not_applicable():
     engine = MagicMock()
     pipeline = ScreenAssessmentPipeline(
-        policy=ScreenPolicy.pre_open(),
+        policy=ScreenPolicy.pre_open_tier1_only(),
         signal_engine=engine,
     )
 
@@ -82,7 +82,7 @@ def test_evaluate_signal_invokes_engine_when_applicable_and_evidence_present():
 def test_compose_trade_setup_skipped_when_not_applicable():
     trade_uc = MagicMock()
     pipeline = ScreenAssessmentPipeline(
-        policy=ScreenPolicy.pre_open(),
+        policy=ScreenPolicy.pre_open_tier1_only(),
         trade_setup_uc=trade_uc,
     )
 
@@ -127,7 +127,7 @@ def test_assess_risk_self_fetch_when_builder_returns_none():
     builder.build.return_value = None
 
     pipeline = ScreenAssessmentPipeline(
-        policy=ScreenPolicy.pre_open(),
+        policy=ScreenPolicy.pre_open_tier1_only(),
         risk_engine=risk_engine,
         risk_inputs_builder=builder,
     )

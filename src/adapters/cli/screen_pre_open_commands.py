@@ -322,6 +322,8 @@ def pre_open(
                 data_freshness=response.data_freshness,
                 market_regime=response.market_regime,
                 risk_by_ticker=response.risk_by_ticker,
+                signal_by_ticker=response.signal_by_ticker,
+                trade_setup_by_ticker=response.trade_setup_by_ticker,
                 source_status=response.source_status,
                 source_message=response.source_message,
                 source_snapshot_ref=response.source_snapshot_ref,

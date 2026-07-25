@@ -41,6 +41,20 @@ class ScreenPolicy:
 
     @staticmethod
     def pre_open() -> "ScreenPolicy":
+        """Pre-open when signal path is enabled (ADR-048).
+
+        Risk remains annotate (non-blocking for the candidate list).
+        TradeSetup applies whenever signal is produced for a ticker.
+        """
+        return ScreenPolicy(
+            signal_applicable=True,
+            trade_setup_applicable=True,
+            risk_mode=RiskMode.ANNOTATE,
+        )
+
+    @staticmethod
+    def pre_open_tier1_only() -> "ScreenPolicy":
+        """Regime/risk-only (no signal) — tests or explicit opt-out of signal."""
         return ScreenPolicy(
             signal_applicable=False,
             trade_setup_applicable=False,

@@ -104,6 +104,7 @@ def build_pre_open_data(
         "data_freshness": _freshness_payload(response.data_freshness),
         "regime_enabled": response.regime_enabled,
         "risk_enabled": response.risk_enabled,
+        "signal_enabled": response.signal_enabled,
         "related_actions": related_actions_for_accum(
             tickers=[c.ticker for c in candidates],
         ),
@@ -113,6 +114,27 @@ def build_pre_open_data(
         for ticker, summary in (response.risk_by_ticker or {}).items():
             risk_payload[ticker] = summary.to_dict() if summary is not None else None
         data["risk_by_ticker"] = risk_payload
+    if response.signal_enabled and response.signal_by_ticker is not None:
+        sig_payload: dict[str, Any] = {}
+        for ticker, summary in response.signal_by_ticker.items():
+            sig_payload[ticker] = summary.to_dict() if summary is not None else None
+        data["signal_by_ticker"] = sig_payload
+    if response.trade_setup_by_ticker is not None:
+        ts_payload: dict[str, Any] = {}
+        for ticker, setup in response.trade_setup_by_ticker.items():
+            if setup is None:
+                ts_payload[ticker] = None
+            elif hasattr(setup, "to_dict"):
+                ts_payload[ticker] = setup.to_dict()
+            else:
+                ts_payload[ticker] = {
+                    "action": setup.action.value,
+                    "signal_score": setup.signal_score,
+                    "signal_strength": setup.signal_strength.value
+                    if hasattr(setup.signal_strength, "value")
+                    else str(setup.signal_strength),
+                }
+        data["trade_setup_by_ticker"] = ts_payload
     if response.market_regime is not None and hasattr(response.market_regime, "to_dict"):
         data["market_regime"] = response.market_regime.to_dict()
     elif response.regime_enabled:
