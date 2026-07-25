@@ -2,6 +2,11 @@
 SignalContext builder helpers.
 
 Layer: Application
+
+Builds the non-authoritative SignalContext enrichment bundle from a
+duck-typed candidate (any object exposing the optional enrichment fields).
+Does not supply canonical setup/flow evidence — that remains scenario-owned
+(ADR-041 / ADR-047).
 """
 
 from __future__ import annotations
@@ -19,7 +24,13 @@ def build_signal_context_from_candidate(
     candidate: Any,
     signal_engine: Any,
 ) -> SignalContext:
-    """Build the canonical SignalContext from an accumulation-style candidate."""
+    """Build SignalContext from a candidate's optional enrichment fields.
+
+    Scenario-agnostic: every field is read via getattr / optional nested
+    objects. Absent ``accum_score`` yields ``foreign_flow_quality=None``
+    (no fabrication). Authority for the weighted Setup/Flow score remains
+    ``canonical_evidence``, not this bundle.
+    """
     bd = getattr(candidate, "bandar_detector", None)
     se = getattr(candidate, "seasonal_edge", None)
     ac = getattr(candidate, "analyst_consensus", None)
@@ -40,12 +51,17 @@ def build_signal_context_from_candidate(
     if forward_pe is None and fe is not None and current_price is not None and current_price > 0:
         forward_pe = fe.with_current_price(float(current_price)).forward_pe
 
+    accum_score = getattr(candidate, "accum_score", None)
+    foreign_flow_quality = (
+        signal_engine.foreign_flow_quality_from_accum_score(accum_score)
+        if accum_score is not None
+        else None
+    )
+
     return SignalContext(
         ticker=ticker,
         snapshot_date=snapshot_date,
-        foreign_flow_quality=signal_engine.foreign_flow_quality_from_accum_score(
-            candidate.accum_score
-        ),
+        foreign_flow_quality=foreign_flow_quality,
         bandar_broad_score=bd.broad_score if bd else None,
         bandar_max_range=signal_engine.bandar_max_range(num_optional)
         if bd
