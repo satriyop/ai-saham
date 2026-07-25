@@ -12,7 +12,7 @@ The intraday trade feature is an **end-to-end pre-open trading workflow** that s
 | `saham trade confirm` | 2 | Confirm ENTER/WAIT/SKIP after opening auction clears |
 | `saham trade log intraday` | 3 | Log confirmation decisions to CSV journal |
 | `saham trade review intraday` | 5 | Review confirmation buckets by decision + context |
-| `saham learn grade` | 5 | Review pre-open prediction accuracy from the learning loop |
+| `saham research pre-open grade` | 5 | Review pre-open prediction accuracy from the learning loop |
 | `saham trade outcome` | 4 | Record actual trade result (target/stop/manual) |
 | `saham trade backtest-intraday` | 6 | Walk-forward backtest of the pre-open workflow |
 | `saham fetch stockbit login` | — | Login & save Stockbit browser session (prerequisite for `saham screen pre-open`) |
@@ -26,7 +26,7 @@ The intraday trade feature is an **end-to-end pre-open trading workflow** that s
 │                         CLI LAYER (trade_intraday_commands.py + intraday_workflow_commands.py)        │
 │                                                                           │
 │  pre-open  │  confirm  │  log intraday  │  review intraday              │
-│  outcome   │  backtest-intraday  │  learn grade                       │
+│  outcome   │  backtest-intraday  │  research pre-open grade                       │
 │                                                                           │
 │  Display: _display_results, _display_confirmations, _display_review       │
 │           _display_intraday_backtest, _display_raw_movers, etc.           │
@@ -251,7 +251,7 @@ CLI: saham trade outcome BBCA --entry 9050 --exit 9200 --result target
 ### Phase 5: Review
 
 ```
-CLI: saham learn grade
+CLI: saham research pre-open grade
  │
  └─ OpeningGradeUseCase
       ├── Reads opening snapshots and tracking files

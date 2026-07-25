@@ -33,14 +33,14 @@ def tune(
     """
     Call DeepSeek AI with today's accuracy grade and save config recommendations.
 
-    Requires: grade.json from today (run `saham learn grade` first).
+    Requires: grade.json from today (run `saham research pre-open grade` first).
     Reads DEEPSEEK_API_KEY from environment if --api-key not provided.
 
     Saves: data/opening/YYYYMMDD/tune.json + tune.md
 
     Examples:
-        saham learn tune
-        saham learn tune --date 2026-06-17
+        saham research pre-open tune
+        saham research pre-open tune --date 2026-06-17
     """
     run_date = parse_learn_date(date_str)
     resolved_key = api_key or os.environ.get("DEEPSEEK_API_KEY")

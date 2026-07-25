@@ -624,7 +624,7 @@ saham trade outcome BBRI \
 
 ```bash
 # Akurasi prediksi pre-open
-saham learn grade
+saham research pre-open grade
 
 # Akurasi keputusan (win rate per decision type)
 saham trade review intraday

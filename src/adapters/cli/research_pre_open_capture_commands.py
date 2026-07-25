@@ -225,4 +225,4 @@ def pre_open_capture(
     typer.echo("  contract:          pre-open-open-30m")
     if result.ops_export_path:
         typer.echo(f"  ops export:        {result.ops_export_path}")
-    typer.echo("  Next: learn track → learn grade | research pre-open labels")
+    typer.echo("  Next: research pre-open track → research pre-open grade | research pre-open labels")

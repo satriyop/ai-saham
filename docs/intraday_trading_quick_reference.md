@@ -35,7 +35,7 @@ belum tentu menjadi clearing price.
 | Log confirmation | `saham trade log intraday` |
 | Catat outcome aktual | `saham trade outcome BBCA --entry 5200 --exit 5375` |
 | Review journal | `saham trade review intraday` |
-| Grade prediksi | `saham learn grade` |
+| Grade prediksi | `saham research pre-open grade` |
 | Backtest intraday | `saham trade backtest-intraday --universe lq45` |
 
 Gunakan `saham COMMAND --help` untuk option dan default yang berlaku saat ini.

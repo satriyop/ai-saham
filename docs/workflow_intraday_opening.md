@@ -20,11 +20,11 @@ This workflow captures the feedback loop: predict → track → measure → tune
 data/opening/
 └── YYYYMMDD/
     ├── ops_session.json      # Same-run ops export from research pre-open capture
-    ├── track_HHMM.json       # Orderbook snapshots (learn track)
-    ├── grade.json            # Session scorecard (learn grade; DB decisions)
+    ├── track_HHMM.json       # Orderbook snapshots (research pre-open track)
+    ├── grade.json            # Session scorecard (research pre-open grade; DB decisions)
     ├── open_30m_labels.json  # Corpus outcomes (research pre-open labels)
-    ├── prompt.md             # AI prompt (learn prompt)
-    ├── tune.json             # AI recommendations (learn tune)
+    ├── prompt.md             # AI prompt (research pre-open prompt)
+    ├── tune.json             # AI recommendations (research pre-open tune)
     └── tune.md
 ```
 
@@ -176,7 +176,7 @@ saham research pre-open capture --session 2026-06-17 --movers-json '...'
 Checks full-orderbook depth every 5 minutes after opening auction:
 
 ```bash
-saham learn track
+saham research pre-open track
 ```
 
 **What happens:**
@@ -193,14 +193,14 @@ not just top-of-book — institutional bids often sit 2–3 ticks below last pri
 
 **With broker attribution (requires Stockbit login):**
 ```bash
-saham learn track --broker-confirm
+saham research pre-open track --broker-confirm
 ```
 Embeds institutional absorption ratio, dominant side, and net lot per ticker
 from Stockbit's running trade API. Data appears as `broker_signal` in track JSON.
 
 **Manual run with specific tickers:**
 ```bash
-saham learn track --force BBCA BBRI BMRI
+saham research pre-open track --force BBCA BBRI BMRI
 ```
 
 ### Step 3: Grade (09:30+ WIB)
@@ -208,7 +208,7 @@ saham learn track --force BBCA BBRI BMRI
 Produces deterministic accuracy report from snapshot + track data:
 
 ```bash
-saham learn grade
+saham research pre-open grade
 ```
 
 **Metrics computed:**
@@ -240,10 +240,10 @@ Generates an AI prompt from the session data:
 
 ```bash
 # Save to file
-saham learn prompt
+saham research pre-open prompt
 
 # Print to stdout (pipe to clipboard)
-saham learn prompt --print | pbcopy
+saham research pre-open prompt --print | pbcopy
 ```
 
 The prompt includes:
@@ -260,10 +260,10 @@ Calls DeepSeek with the grade + config to get actionable tuning recommendations:
 
 ```bash
 # Uses DEEPSEEK_API_KEY from environment
-saham learn tune
+saham research pre-open tune
 
 # Explicit key
-saham learn tune --api-key sk-...
+saham research pre-open tune --api-key sk-...
 ```
 
 **What you get back:**
@@ -287,10 +287,10 @@ thresholds:
 | Command | Timing | Purpose | Output file |
 |---------|--------|---------|-------------|
 | `saham research pre-open capture` | ~08:58 | Sole decision write | DB observations + `ops_session.json` |
-| `saham learn track` | 09:00–09:30 | 5-min full-depth orderbook + foreign net + opt-in broker attribution | `track_HHMM.json` |
-| `saham learn grade` | 09:30+ | Accuracy report (incl. bid pressure momentum + institutional absorption) | `grade.json` |
-| `saham learn prompt` | anytime | AI prompt | `prompt.md` |
-| `saham learn tune` | anytime | Config recommendations | `tune.json` + `tune.md` |
+| `saham research pre-open track` | 09:00–09:30 | 5-min full-depth orderbook + foreign net + opt-in broker attribution | `track_HHMM.json` |
+| `saham research pre-open grade` | 09:30+ | Accuracy report (incl. bid pressure momentum + institutional absorption) | `grade.json` |
+| `saham research pre-open prompt` | anytime | AI prompt | `prompt.md` |
+| `saham research pre-open tune` | anytime | Config recommendations | `tune.json` + `tune.md` |
 
 | Flag | Applies to | Effect |
 |------|-----------|--------|
@@ -327,16 +327,15 @@ Snapshot confidence drives behavior:
 |--------|------|
 | `screen pre-open` | **Live** display — no observation corpus write |
 | `research pre-open capture` | **Sole save-decisions write** + ops_session export |
+| `research pre-open track` / `grade` / `prompt` / `tune` | **Same-day ritual** after capture |
 | `research pre-open labels` | **Outcomes** (`open_30m`) from saved decisions + tracks |
-| `learn` (ops) | **Same-day ritual** only — track / grade / prompt / tune |
 
-Do not put open_30m corpus labeling under `learn`. Do not auto-write observations
-from live `screen`. There is no `learn snapshot`.
+Do not auto-write observations from live `screen`. There is no top-level `learn` group.
 
 ### → `saham trade`
 
-Paths stay separate: `screen pre-open` for live display, `research pre-open capture`
-for decisions (and confirm sidecar), `learn` for the same-day ops ritual.
+Paths stay separate: `screen pre-open` for live display; `research pre-open capture`
+for decisions (and confirm sidecar); track/grade under `research pre-open`.
 
 ### → `data/opening/` + Journals
 

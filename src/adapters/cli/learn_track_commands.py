@@ -1,7 +1,7 @@
 """
-Track command for the opening session learning loop.
+CLI: saham research pre-open track
 
-Tracks orderbook every 5 minutes from 09:00–09:30 WIB for all screened tickers.
+Tracks orderbook every 5 minutes from 09:00–09:30 WIB for captured tickers.
 
 Layer: Adapter
 """
@@ -47,9 +47,9 @@ def track(
     Use --broker-confirm to embed institutional broker absorption data per tick interval.
 
     Examples:
-        saham learn track                               # live 09:00–09:30 loop
-        saham learn track --force BBCA BBRI BMRI       # manual dry-run
-        saham learn track --broker-confirm              # with broker attribution
+        saham research pre-open track                               # live 09:00–09:30 loop
+        saham research pre-open track --force BBCA BBRI BMRI       # manual dry-run
+        saham research pre-open track --broker-confirm              # with broker attribution
     """
     cfg = load_app_config()
     run_date = parse_learn_date(date_str)
@@ -177,7 +177,7 @@ def track(
         try:
             pid = int(lock_file.read_text().strip())
             os.kill(pid, 0)
-            typer.echo(f"saham learn track already running (PID {pid}). Exiting.")
+            typer.echo(f"saham research pre-open track already running (PID {pid}). Exiting.")
             raise typer.Exit()
         except (ProcessLookupError, PermissionError):
             lock_file.unlink(missing_ok=True)

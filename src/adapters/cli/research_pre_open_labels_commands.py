@@ -1,7 +1,7 @@
 """
 CLI: saham research pre-open labels
 
-Generate open_30m outcome labels from saved pre-open observations + learn track data.
+Generate open_30m outcome labels from saved pre-open observations + research pre-open track data.
 Session-horizon twin of research signal labels (multi-day); separate command
 so agents never mix open_30m into SignalLabelHorizon pipelines.
 
@@ -32,7 +32,7 @@ def pre_open_labels(
     Generate open_30m outcome labels for a pre-open session date.
 
     Requires saved screen_pre_open observations (research pre-open capture)
-    and learn track files. Writes data/opening/YYYYMMDD/open_30m_labels.json.
+    and research pre-open track files. Writes data/opening/YYYYMMDD/open_30m_labels.json.
 
     Examples:
         saham research pre-open labels

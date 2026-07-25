@@ -105,7 +105,7 @@ row.
 | Risk facade | `src/application/services/risk_engine.py` |
 | Trade setup composition | `src/application/use_case/assess_trade_setup_use_case.py` |
 | Screen assessment adoption seam | `src/application/services/screen_assessment_pipeline.py` |
-| Pre-open learning loop (current files) | `src/application/use_case/opening_grade_use_case.py`, `research pre-open capture + learn track/grade` CLI |
+| Pre-open learning loop (current files) | `src/application/use_case/opening_grade_use_case.py`, `research pre-open capture + research pre-open track/grade` CLI |
 | Market context | `src/application/services/market_context_engine.py`
 | Swing tuning guardrails | `src/application/services/swing_tuning_patch_validation.py` and adjacent `swing_tuning_*` services |
 | Layer enforcement | `tests/architecture/test_layer_boundaries.py` |

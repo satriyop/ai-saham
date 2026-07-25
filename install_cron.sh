@@ -70,7 +70,7 @@ echo ""
 #   screen = live only (optional keyboard loop; not in cron)
 #   multi-tick fetch iev = ΔIEV + NCP stamp (perishable; SQLite history)
 #   research pre-open capture = sole decision write (DB + ops_session + sidecar)
-#   learn track / grade / tune = same-day ops
+#   research pre-open track / grade / tune = same-day ops
 #   research pre-open labels = open_30m outcomes (day-file)
 # Playwright: ticks are ≥3 minutes apart so slow Stockbit runs rarely overlap.
 # Swing EOD: fetch market on by default. Swing research capture/labels stay
@@ -86,15 +86,15 @@ read -r -d '' SAHAM_CRON << ENTRIES || true
 # Sole decision write — after NCP IEV; writes candidate_observations + ops_session + confirm sidecar
 58 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham research pre-open capture' >> $LOG_DIR/pre-open-capture.log 2>&1
 # Same-day ops — orderbook tracker 09:00–09:30 (tickers from saved observations)
-0 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && PYTHONUNBUFFERED=1 saham learn track --broker-confirm' >> $LOG_DIR/opening-track.log 2>&1
+0 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && PYTHONUNBUFFERED=1 saham research pre-open track --broker-confirm' >> $LOG_DIR/opening-track.log 2>&1
 # Optional paper confirm from first track file (sidecar also written by capture)
 31 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham trade confirm --track-file data/opening/\$(date +\%Y\%m\%d)/track_0900.json && saham trade log intraday' >> $LOG_DIR/trade-confirm-log.log 2>&1
 # Session scorecard over saved observations + tracks (fail closed without capture)
-35 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham learn grade' >> $LOG_DIR/opening-grade.log 2>&1
+35 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham research pre-open grade' >> $LOG_DIR/opening-grade.log 2>&1
 # open_30m corpus outcomes (day-file; needs capture + tracks)
 36 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham research pre-open labels' >> $LOG_DIR/pre-open-labels.log 2>&1
 # Non-authoritative AI tune from grade (optional)
-40 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham learn tune' >> $LOG_DIR/opening-tune.log 2>&1
+40 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham research pre-open tune' >> $LOG_DIR/opening-tune.log 2>&1
 # Swing EOD — refresh LQ45 candles after EOD data should be available 18:30 WIB
 30 18 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham fetch market --universe lq45' >> $LOG_DIR/swing-fetch-market.log 2>&1
 # Optional multi-day research corpus (not pre-open). Uncomment when wanted.

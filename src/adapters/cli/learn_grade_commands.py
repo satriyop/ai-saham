@@ -1,5 +1,5 @@
 """
-Grade command for the opening session learning loop.
+CLI: saham research pre-open grade
 
 Computes deterministic accuracy report from saved observations + track data
 (ADR-048). Fail closed without research pre-open capture.
@@ -30,8 +30,8 @@ def grade(
     one track_*.json for the date.
 
     Examples:
-        saham learn grade
-        saham learn grade --date 2026-06-17
+        saham research pre-open grade
+        saham research pre-open grade --date 2026-06-17
     """
     run_date = parse_learn_date(date_str)
     cfg = load_app_config()

@@ -4,8 +4,8 @@
 # Crontab (./install_cron.sh) owns the unattended pre-open learning path:
 #   08:47 / 08:50 / 08:53 / 08:57  fetch iev   (multi-tick ΔIEV + NCP stamp)
 #   08:58                          research pre-open capture  (sole decision write)
-#   09:00–09:30                    learn track
-#   09:35 / 09:36 / 09:40          learn grade / research pre-open labels / learn tune
+#   09:00–09:30                    research pre-open track
+#   09:35 / 09:36 / 09:40          research pre-open grade / research pre-open labels / research pre-open tune
 #
 # This script is live display + confirm only (screen = live; no observation write):
 #   08:45–08:46 → optional early screen pre-open rounds (Playwright)
@@ -50,7 +50,7 @@ echo "  Waiting for market open (09:00)..." | tee -a "$LOGDIR/timeline.log"
 
 # ── Phase 2: Confirm gate (09:00 → 09:05 WIB) ────────────────────────
 # No Playwright — trade confirm reads sidecar written by research pre-open capture.
-# learn track (cron, 09:00–09:30) holds Playwright during this window.
+# research pre-open track (cron, 09:00–09:30) holds Playwright during this window.
 echo "" | tee -a "$LOGDIR/timeline.log"
 echo "─── Phase 2: Opening Auction Confirm Gate (no Playwright) ───" | tee -a "$LOGDIR/timeline.log"
 
@@ -71,4 +71,4 @@ done
 echo "" | tee -a "$LOGDIR/timeline.log"
 echo "─── Done at $(TZ=Asia/Jakarta date '+%H:%M:%S WIB') ───" | tee -a "$LOGDIR/timeline.log"
 echo "All logs saved to: $LOGDIR"
-echo "Unattended path: multi-tick iev → research pre-open capture → learn track → grade/labels (see install_cron.sh)"
+echo "Unattended path: multi-tick iev → research pre-open capture → research pre-open track → grade/labels (see install_cron.sh)"

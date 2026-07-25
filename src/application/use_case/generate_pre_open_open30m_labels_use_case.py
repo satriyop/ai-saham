@@ -1,5 +1,5 @@
 """
-Generate open_30m outcome labels from saved pre-open observations + learn track files.
+Generate open_30m outcome labels from saved pre-open observations + research pre-open track files.
 
 Session-horizon twin of research signal labels (multi-day), scoped to pre-open:
 does not extend SignalLabelHorizon (swing contracts stay untouched).
@@ -106,7 +106,7 @@ def generate_pre_open_open30m_labels(
     track_files = sorted(day_dir.glob("track_*.json"))
     if not track_files:
         raise FileNotFoundError(
-            f"No track files in {day_dir}. Run `saham learn track` first."
+            f"No track files in {day_dir}. Run `saham research pre-open track` first."
         )
     tracks: list[dict] = []
     for tf in track_files:

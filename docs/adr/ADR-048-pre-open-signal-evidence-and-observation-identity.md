@@ -22,7 +22,7 @@ broker tags) and, after ADR-047 Phase 2, attaches **non-blocking** regime + defa
 gate risk. It does **not** run `SignalEngine` and does **not** compose `TradeSetup`.
 Display labels such as PRIME/WATCH/SKIP are heuristics, not ADR-026 actions.
 
-The opening learning loop (`research pre-open capture` + `learn track` / `grade`) joins NCP
+The opening learning loop (`research pre-open capture` + `track` / `grade`) joins NCP
 files to 09:00–09:30 tracks and reports plan/trend accuracy, including strata by
 `opening_setup` (PRIME/WATCH/SKIP). That loop must not remain the long-term
 authority model once a real signal exists.
@@ -193,7 +193,7 @@ silently assumed.
 
 **Post-open tracks** record prices only; they do **not** rewrite the decision.
 
-**`learn grade` / label jobs** join decisions saved at capture to tracks.
+**`research pre-open grade` / label jobs** join decisions saved at capture to tracks.
 
 **Forbidden as production default:** re-running current scorer over historical
 raw snapshots and treating the result as the original decision.
@@ -262,8 +262,8 @@ ordinal gate cascade; weighted composite + weights (0.65/0.35, auction_min 50) a
 PROVISIONAL/unvalidated v2, not locked. SignalAssessment only for
 score/quality; TradeSetup owns action as soon as signal exists; risk annotate.
 CLI families: screen=live; research pre-open capture=save decisions;
-research pre-open labels=outcomes; learn=same-day ops only. Save observations at
-NCP decision_at (champion); no silent grade-time recompute. Replace PRIME UI when
-ready; keep learn grade until signal then evolve. Adoption only via
-ScreenAssessmentPipeline (ADR-047) + ADR-026 composition.
+research pre-open labels=outcomes; research pre-open track|grade=same-day.
+Save observations at NCP decision_at (champion); no silent grade-time recompute.
+Replace PRIME UI when ready; keep session grade under research pre-open.
+Adoption only via ScreenAssessmentPipeline (ADR-047) + ADR-026 composition.
 ```

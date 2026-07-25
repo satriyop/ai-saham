@@ -528,7 +528,7 @@ saham trade outcome BBCA --entry 9000 --exit 9500 --result target
 ## 15. Opening Session Learning Loop
 
 Same-day ops loop for opening scalping. Decisions are saved to the observation
-DB via `research pre-open capture`; then `learn track`/`grade`/`tune`/`prompt`
+DB via `research pre-open capture`; then `research pre-open track`/`grade`/`tune`/`prompt`
 run the same-day accuracy and tuning ritual.
 
 ```bash
@@ -536,16 +536,16 @@ run the same-day accuracy and tuning ritual.
 saham research pre-open capture
 
 # Step 2: Track every 5 minutes
-saham learn track
+saham research pre-open track
 
 # Step 3: Grade accuracy
-saham learn grade
+saham research pre-open grade
 
 # Step 4: Generate AI prompt
-saham learn prompt | pbcopy
+saham research pre-open prompt | pbcopy
 
 # Step 5: Tune via AI
-saham learn tune
+saham research pre-open tune
 ```
 
 ---

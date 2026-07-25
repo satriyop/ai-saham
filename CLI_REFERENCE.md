@@ -14,20 +14,20 @@ Same shape for every screen scenario (pre-open, accum, …):
 | **`screen`** | **Live** discovery / operator display | **No** observation rows |
 | **`research <scenario> capture`** | **Save decisions** into `candidate_observations` | **Yes** (explicit corpus write) |
 | **`research <scenario> labels`** | **Outcomes** joined to saved decisions | Labels/artifacts only |
-| **ops** (today: `learn`) | **Same-day ritual** only — track / session grade / prompt / tune | Day files under `data/opening/`; not multi-day corpus |
+| **`research pre-open` same-day** | **track / grade / prompt / tune** after capture | Day files under `data/opening/` (not multi-day corpus) |
 
 Examples:
 
 - Live open: `saham screen pre-open` → no DB observation write  
-- **Save decisions (sole authority):** `saham research pre-open capture`  
-- Corpus outcomes: `saham research pre-open labels` (horizon `open_30m`)  
-- Same-day ops: `saham learn track|grade|prompt|tune` (after capture)  
+- **Save decisions:** `saham research pre-open capture`  
+- Same-day follow-through: `saham research pre-open track|grade|prompt|tune`  
+- Session outcomes: `saham research pre-open labels` (`open_30m`)  
 - Live accum: `saham screen accum` → no observation write  
 - Accum corpus: `saham research signal capture` → `… labels`
 
-Do **not** put multi-day / open_30m corpus label generation under ops (`learn`).
-Do **not** auto-write observations from live `screen`.
-Do **not** use day-file exports as a second decision source for grade/labels.
+Do **not** auto-write observations from live `screen`.  
+Do **not** use day-file exports as a second decision source for grade/labels.  
+There is **no** top-level `learn` group.
 
 ---
 
@@ -1149,7 +1149,7 @@ saham screen compare morning-watch --universe lq45 --top 30
 and same-run ops packaging (`data/opening/YYYYMMDD/ops_session.json` + trade-confirm
 sidecar). Symmetric to `research signal capture` for accumulation-discovery.
 
-**Live `screen pre-open` does not write observations.** There is no `learn snapshot`.
+**Live `screen pre-open` does not write observations.** There is no top-level `learn` group.
 
 ```
 saham research pre-open capture [OPTIONS]
@@ -1166,7 +1166,7 @@ saham research pre-open capture --session 2026-06-18 --movers-json '...'
 
 ---
 
-## saham learn track
+## saham research pre-open track
 
 Track orderbook prices every 5 minutes from 09:00–09:30 WIB for tickers from
 **saved pre-open observations**. Saves `data/opening/YYYYMMDD/track_HHMM.json`.
@@ -1174,9 +1174,9 @@ Track orderbook prices every 5 minutes from 09:00–09:30 WIB for tickers from
 Requires prior `research pre-open capture` (or explicit tickers with `--force`).
 
 ```
-saham learn track [OPTIONS]
-saham learn track --broker-confirm   # include institutional tick data
-saham learn track --force BBCA BBRI  # manual dry-run
+saham research pre-open track [OPTIONS]
+saham research pre-open track --broker-confirm   # include institutional tick data
+saham research pre-open track --force BBCA BBRI  # manual dry-run
 ```
 
 | Option | Default | Description |
@@ -1188,7 +1188,7 @@ saham learn track --force BBCA BBRI  # manual dry-run
 
 ---
 
-## saham learn grade
+## saham research pre-open grade
 
 **Same-day ops** session scorecard (not multi-day corpus labels). Joins **saved
 DB observations only** (`screen_pre_open`) to `track_*.json` prices. Fail closed
@@ -1198,7 +1198,7 @@ Writes `grade.json` + `grade.md` for tune/prompt.
 For `open_30m` corpus outcomes use `research pre-open labels`.
 
 ```
-saham learn grade [OPTIONS]
+saham research pre-open grade [OPTIONS]
 ```
 
 | Option | Default | Description |
@@ -1214,7 +1214,7 @@ Generate **open_30m** outcome labels from **saved** pre-open observations + trac
 (session-horizon twin of `research signal labels`). Fail closed without capture.
 Writes `data/opening/YYYYMMDD/open_30m_labels.json`.
 
-Clean break: not under `learn` (ops only). Not `research signal labels --contract`.
+Not `research signal labels` (multi-day horizons only).
 
 ```
 saham research pre-open labels [OPTIONS]
@@ -1228,13 +1228,13 @@ saham research pre-open labels [OPTIONS]
 
 ---
 
-## saham learn tune
+## saham research pre-open tune
 
 Generate AI config tuning recommendations from today's grade via DeepSeek.
 
 ```
-saham learn tune [OPTIONS]
-saham learn tune --allow-invalid-snapshot
+saham research pre-open tune [OPTIONS]
+saham research pre-open tune --allow-invalid-snapshot
 ```
 
 | Option | Default | Description |
@@ -1244,13 +1244,13 @@ saham learn tune --allow-invalid-snapshot
 
 ---
 
-## saham learn prompt
+## saham research pre-open prompt
 
 Generate a structured AI prompt from today's predictions and accuracy metrics. Pipe to clipboard or save.
 
 ```
-saham learn prompt [OPTIONS]
-saham learn prompt | pbcopy
+saham research pre-open prompt [OPTIONS]
+saham research pre-open prompt | pbcopy
 ```
 
 | Option | Default | Description |

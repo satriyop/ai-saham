@@ -52,7 +52,7 @@ The same layers with their actual components visible:
 │  fetch_market_commands.py (market data fetch impl)                  │
 │  fetch_iev_commands.py (IEV snapshot capture impl)                  │
 │  view_commands.py (read-only broker views)                          │
-│  learn_commands.py (opening learning loop impl)                     │
+│  research_commands.py (pre-open track/grade under research)           │
 │  today_commands.py (daily briefing)                                  │
 │  fetch_status_commands.py (data health check)                        │
 │  indicator_commands.py (compute, snapshot, create, list)            │
@@ -571,7 +571,7 @@ Each Big block decomposes into Medium modules:
 | Data Fetch (market) | `cli/fetch_market_commands.py` | Implementation of market data fetch |
 | IEV Capture | `cli/fetch_iev_commands.py` | Implementation of IEV snapshot capture |
 | View Router | `cli/view_commands.py` | `saham view broker [flow, top, history, top-foreign, distribution, mappings, status]` plus `saham view TICKER` (shorthand: `saham view BBCA`), `saham view universe` |
-| Learn (opening) | `cli/learn_commands.py` | Implementation of opening learning loop commands (`snapshot`, `track`, `grade`, `prompt`, `tune`) |
+| Research pre-open session | `cli/research_commands.py` + `learn_*_commands.py` modules | `research pre-open` capture/track/grade/labels/prompt/tune |
 | Today Briefing | `cli/today_commands.py` | `saham today` daily briefing |
 | Status Impl | `cli/fetch_status_commands.py` | `saham fetch status` |
 | Indicator Router| `cli/indicator_commands.py` | `saham indicator [compute, snapshot, create, list, show, delete]` |

@@ -29,8 +29,8 @@ def prompt(
     Saves: data/opening/YYYYMMDD/prompt.md
 
     Examples:
-        saham learn prompt
-        saham learn prompt --print | pbcopy   # copy to clipboard (macOS)
+        saham research pre-open prompt
+        saham research pre-open prompt --print | pbcopy   # copy to clipboard (macOS)
     """
     run_date = parse_learn_date(date_str)
 

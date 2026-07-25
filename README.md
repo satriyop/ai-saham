@@ -104,12 +104,12 @@ warnings before treating any candidate list as current.
 ```bash
 saham fetch iev
 saham research pre-open capture
-saham learn track
-saham learn grade
+saham research pre-open track
+saham research pre-open grade
 ```
 
 The pre-open workflow is session-specific: it snapshots indicative equilibrium
-data, tracks the opening, and grades the prediction. Treat `saham learn tune` as
+data, tracks the opening, and grades the prediction. Treat `saham research pre-open tune` as
 an optional, non-authoritative assistant; inspect its output before changing any
 configuration.
 
@@ -199,7 +199,7 @@ The live top-level groups are registered in `src/adapters/cli/main.py`:
 | `saham today` | Read-only daily orientation | freshness, regime, saved pre-open, accumulation candidates |
 | `saham fetch` | Ingestion and data health | market, broker, IEV, calendar, enrichment history, status, audit, Stockbit, universes |
 | `saham screen` | Candidate discovery | pre-open, accumulation, watchlists, comparisons |
-| `saham learn` | Opening-session feedback loop | snapshot, track, grade, prompt, tune |
+| `saham research pre-open` | Pre-open research + same-day ritual | capture, track, grade, labels, prompt, tune |
 | `saham view` | Cached-data inspection | ticker, universe, broker, market context |
 | `saham indicator` | Indicator/formula operations | compute, snapshot, create, list, show, delete |
 | `saham analyze` | Deeper deterministic analysis | risk, swing, regime, replay/audit/readiness, sentiment, charts |

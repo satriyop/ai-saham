@@ -147,7 +147,7 @@ saham screen pre-open \
 Setelah minimal sekitar 20 sesi paper trade:
 
 ```bash
-saham learn grade
+saham research pre-open grade
 saham trade review intraday
 ```
 

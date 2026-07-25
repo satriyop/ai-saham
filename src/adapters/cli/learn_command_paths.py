@@ -1,5 +1,5 @@
 """
-Shared path and date helpers for learn commands.
+Shared path and date helpers for research pre-open session commands.
 
 Layer: Adapter
 """

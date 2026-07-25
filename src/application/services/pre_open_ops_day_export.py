@@ -4,8 +4,8 @@ Ops day files are **not** decision authority. Learning truth is only
 ``candidate_observations`` written by research pre-open capture (ADR-048).
 
 The export supports:
-- learn track ticker discovery when DB is unavailable offline is not required
-  (track loads tickers from DB); this file feeds today briefing + learn prompt.
+- research pre-open track ticker discovery when DB is unavailable offline is not required
+  (track loads tickers from DB); this file feeds today briefing + research pre-open prompt.
 - human-readable session journal under data/opening/YYYYMMDD/
 
 Layer: Application

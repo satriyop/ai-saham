@@ -7,9 +7,8 @@ Command groups:
   saham today      — read-only daily briefing
   saham fetch      — data ingestion lifecycle commands
   saham audit      — read-only audits (data-quality baseline manifest, source-field contracts)
-  saham screen     — candidate discovery
-  saham learn      — opening session journal (snapshot/track/grade)
-  saham research   — research corpus and offline evaluation (may persist)
+  saham screen     — candidate discovery (live only)
+  saham research   — research corpus + offline study (incl. pre-open track/grade)
   saham view       — read-only local data browsing
   saham indicator  — technical indicators (compute, snapshot, create, list, show, delete)
   saham analyze    — live analysis (risk, compare, sentiment, audit, regime, chart, signal inspect)
@@ -28,7 +27,6 @@ from src.adapters.cli.analyze_commands import analyze_app
 from src.adapters.cli.audit_commands import audit_app
 from src.adapters.cli.fetch_commands import fetch_app
 from src.adapters.cli.indicator_commands import indicator_app
-from src.adapters.cli.learn_commands import learn_app
 from src.adapters.cli.research_commands import research_app
 from src.adapters.cli.screen_lifecycle_commands import screen_app
 from src.adapters.cli.strategy_commands import strategy_app
@@ -51,7 +49,6 @@ app.command("tui")(tui)
 app.add_typer(fetch_app, name="fetch")
 app.add_typer(audit_app, name="audit")
 app.add_typer(screen_app, name="screen")
-app.add_typer(learn_app, name="learn")
 app.add_typer(research_app, name="research")
 app.add_typer(view_app, name="view")
 app.add_typer(indicator_app, name="indicator")

@@ -8,7 +8,7 @@ Decision authority (clean break):
   No snapshot.json / ops export as decision source.
 
 Does not recompute signal scores; uses decisions saved at capture time.
-Keeps grade.json / grade.md for learn tune/prompt.
+Keeps grade.json / grade.md for research pre-open tune/prompt.
 
 Layer: Application
 """
@@ -50,7 +50,7 @@ def compute_grade(
     track_files = sorted(day_dir.glob("track_*.json"))
     if not track_files:
         raise FileNotFoundError(
-            f"No track files found in {day_dir}. Run `saham learn track` first."
+            f"No track files found in {day_dir}. Run `saham research pre-open track` first."
         )
 
     tracks: list[dict] = []
