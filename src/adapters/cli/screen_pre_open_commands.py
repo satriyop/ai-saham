@@ -292,6 +292,8 @@ def pre_open(
             typer.echo(warning, err=True)
 
     try:
+        # Live screen only — no observation write (consistent with screen accum).
+        # Corpus freeze: saham research pre-open capture
         workflow_request = PreOpenWorkflowRequest(
             config=config,
             run_date=run_guard.run_at.date(),
@@ -306,18 +308,6 @@ def pre_open(
         )
         response = cli_workflow.workflow.execute(workflow_request)
         result = response.result
-
-        # ADR-048 Phase 2: freeze decision observations (fail closed → surface error)
-        recorded = 0
-        if cli_workflow.record_observations_use_case is not None:
-            recorded = cli_workflow.record_observations_use_case.persist_only(
-                response, workflow_request
-            )
-            if not quiet and recorded:
-                typer.echo(
-                    f"Recorded {recorded} pre-open observation(s) (NCP freeze).",
-                    err=True,
-                )
 
         if quiet:
             echo_json(build_pre_open_envelope(response=response))

@@ -61,10 +61,11 @@ def test_learn_group_exposes_opening_loop_commands():
     assert "  labels" not in result.stdout  # not a registered subcommand row
 
 
-def test_research_pre_open_exposes_labels_only():
+def test_research_pre_open_exposes_capture_and_labels():
     result = runner.invoke(app, ["research", "pre-open", "--help"])
 
     assert result.exit_code == 0
+    assert "capture" in result.stdout
     assert "labels" in result.stdout
 
 

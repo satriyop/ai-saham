@@ -1175,6 +1175,29 @@ saham learn grade [OPTIONS]
 
 ---
 
+## saham research pre-open capture
+
+Explicit corpus freeze for pre-open decisions into `candidate_observations`
+(workflow `screen_pre_open`, contract `pre-open-open-30m`). Symmetric to
+`research signal capture` for accumulation-discovery.
+
+**Live `screen pre-open` does not write observations.**
+
+```
+saham research pre-open capture [OPTIONS]
+saham research pre-open capture --session 2026-06-18 --movers-json '...'
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--session` | today | Session date YYYY-MM-DD |
+| `--movers-json` | — | Pre-fetched movers (offline capture) |
+| `--fast` | false | Skip order books |
+| `--db` | config | SQLite path |
+| `--format` | table | table or json |
+
+---
+
 ## saham research pre-open labels
 
 Generate **open_30m** outcome labels from NCP freezes + tracks (session-horizon

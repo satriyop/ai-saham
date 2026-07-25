@@ -3,7 +3,7 @@ CLI: research lifecycle — corpus construction and offline evaluation.
 
 Commands:
   saham research signal …           — multi-day signal corpus (capture/labels/…)
-  saham research pre-open …         — pre-open session corpus (open_30m labels)
+  saham research pre-open …         — pre-open corpus (capture freezes, open_30m labels)
   saham research accumulation …     — offline accumulation evaluation
 
 Layer: Adapter (routing only).
@@ -14,6 +14,7 @@ from __future__ import annotations
 import typer
 
 from src.adapters.cli.analyze_accum_commands import accumulation_audit
+from src.adapters.cli.research_pre_open_capture_commands import pre_open_capture
 from src.adapters.cli.research_pre_open_labels_commands import pre_open_labels
 from src.adapters.cli.research_signal_backfill_commands import signal_backfill_observations
 from src.adapters.cli.research_signal_capture_commands import signal_capture_observations
@@ -45,8 +46,8 @@ research_signal_app = typer.Typer(
 research_pre_open_app = typer.Typer(
     name="pre-open",
     help=(
-        "Pre-open session research corpus: open_30m outcome labels from NCP "
-        "freezes + learn track data. Not multi-day signal labels."
+        "Pre-open session research corpus: capture freezes to DB, then open_30m "
+        "labels from freezes + learn track data. Live screen pre-open does not write."
     ),
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},
@@ -68,6 +69,7 @@ research_signal_app.command("labels")(signal_labels)
 research_signal_app.command("replay")(signal_replay)
 research_signal_app.command("readiness")(signal_readiness)
 
+research_pre_open_app.command("capture")(pre_open_capture)
 research_pre_open_app.command("labels")(pre_open_labels)
 
 research_accumulation_app.command("evaluate")(accumulation_audit)

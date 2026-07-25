@@ -1,0 +1,204 @@
+"""
+CLI: saham research pre-open capture
+
+Explicit corpus freeze for pre-open decisions (ADR-048).
+Symmetric to research signal capture for accumulation-discovery:
+live ``screen pre-open`` does NOT write observations.
+
+Layer: Adapter
+"""
+
+from __future__ import annotations
+
+import json
+from datetime import datetime
+from pathlib import Path
+from typing import Annotated, Optional
+
+import typer
+
+from src.adapters.cli.learn_command_paths import parse_learn_date
+from src.adapters.cli.screen_pre_open_workflow_factory import (
+    create_pre_open_cli_workflow,
+    resolve_pre_open_browser_plan,
+    resolve_pre_open_market_status,
+)
+from src.application.services.pre_open_run_guard import build_pre_open_run_guard
+from src.application.use_case.pre_open_workflow_use_case import PreOpenWorkflowRequest
+from src.domain.value_objects.idx_market import IDX_TIMEZONE
+from src.infrastructure.browser.stockbit_browser_provider import ManualBrowserDataProvider
+from src.infrastructure.config.app_config import load_app_config
+from src.infrastructure.config.pre_open_config import load_pre_open_screen_config
+
+
+def pre_open_capture(
+    session: Annotated[
+        Optional[str],
+        typer.Option(
+            "--session",
+            help="Session date YYYY-MM-DD (default: today)",
+        ),
+    ] = None,
+    movers_json: Annotated[
+        Optional[str],
+        typer.Option("--movers-json", help="Pre-fetched movers JSON array"),
+    ] = None,
+    order_books_json: Annotated[
+        Optional[str],
+        typer.Option("--order-books-json", help="Pre-fetched order books JSON object"),
+    ] = None,
+    top: Annotated[
+        Optional[int],
+        typer.Option("--top", help="Process only top N movers by IEV"),
+    ] = None,
+    fast: Annotated[
+        bool,
+        typer.Option("--fast/--no-fast", help="Skip order book fetches"),
+    ] = False,
+    config_path: Annotated[
+        Optional[Path],
+        typer.Option("--config", "-c", help="Pre-open screener config YAML"),
+    ] = None,
+    db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
+    headless: Annotated[
+        bool,
+        typer.Option("--headless/--no-headless"),
+    ] = True,
+    allow_non_trading_day: Annotated[
+        bool,
+        typer.Option(
+            "--allow-non-trading-day",
+            help="Allow weekend/non-trading-day capture",
+        ),
+    ] = False,
+    no_regime: Annotated[
+        bool,
+        typer.Option("--no-regime", help="Skip regime evaluation"),
+    ] = False,
+    no_risk: Annotated[
+        bool,
+        typer.Option("--no-risk", help="Skip risk assessment"),
+    ] = False,
+    fmt: Annotated[
+        str,
+        typer.Option("--format", help="Output format: table or json"),
+    ] = "table",
+) -> None:
+    """
+    Freeze pre-open decisions into candidate_observations (screen_pre_open).
+
+    Explicit corpus write — same idea as ``research signal capture``.
+    Does not generate open_30m labels (use ``research pre-open labels``).
+
+    Examples:
+        saham research pre-open capture --session 2026-06-18 --movers-json '...'
+        saham research pre-open capture --fast --allow-non-trading-day
+    """
+    cfg = load_app_config()
+    resolved_db = db_path or Path(cfg.storage.db_path)
+    resolved_config = config_path or Path(cfg.config_paths.pre_open_screener)
+    run_date = parse_learn_date(session)
+
+    overrides: dict = {
+        "top_n": top,
+        "fast_mode": fast or None,
+    }
+    config = load_pre_open_screen_config(resolved_config, overrides)
+
+    run_guard = build_pre_open_run_guard(
+        run_at=datetime.now(IDX_TIMEZONE),
+        market_status=resolve_pre_open_market_status(),
+        allow_non_trading_day=allow_non_trading_day,
+    )
+    if run_guard.error:
+        typer.echo(f"Pre-open guard: {run_guard.error}", err=True)
+        raise typer.Exit(1)
+
+    movers_raw: list | None = None
+    order_books_raw: dict | None = None
+    if movers_json:
+        try:
+            movers_raw = json.loads(movers_json)
+            if not isinstance(movers_raw, list):
+                typer.echo("Error: --movers-json must be a JSON array.", err=True)
+                raise typer.Exit(1)
+        except json.JSONDecodeError as e:
+            typer.echo(f"Error: Invalid JSON in --movers-json: {e}", err=True)
+            raise typer.Exit(1)
+        if order_books_json:
+            try:
+                order_books_raw = json.loads(order_books_json)
+            except json.JSONDecodeError as e:
+                typer.echo(f"Error: Invalid JSON in --order-books-json: {e}", err=True)
+                raise typer.Exit(1)
+
+    browser_plan = resolve_pre_open_browser_plan(
+        movers_raw=movers_raw,
+        order_books_raw=order_books_raw,
+        headless=headless,
+    )
+    skip_live_fetch = run_guard.outside_window and movers_raw is None
+    if browser_plan.provider is None and not skip_live_fetch:
+        typer.echo(
+            "Browser/session plan required for capture (or pass --movers-json / "
+            "run inside window with snapshot fallback).",
+            err=True,
+        )
+        if browser_plan.session_missing:
+            typer.echo("Run: saham fetch stockbit login", err=True)
+        raise typer.Exit(1)
+
+    browser_provider = browser_plan.provider or ManualBrowserDataProvider(movers=[])
+    cli_workflow = create_pre_open_cli_workflow(
+        resolved_db=resolved_db,
+        browser_provider=browser_provider,
+        with_ai=False,
+        ai_provider=None,
+    )
+    if cli_workflow.record_observations_use_case is None:
+        typer.echo("Error: observation recorder not wired.", err=True)
+        raise typer.Exit(1)
+
+    workflow_request = PreOpenWorkflowRequest(
+        config=config,
+        run_date=run_date,
+        guard_warnings=run_guard.warnings,
+        regime_enabled=not no_regime,
+        risk_enabled=not no_risk,
+        signal_enabled=True,
+        regime_universe=cfg.analysis.regime_universe,
+        benchmark=cfg.analysis.benchmark,
+        db_path=resolved_db,
+        outside_window=skip_live_fetch,
+        capture_phase="NCP_LOCKED",
+        decision_snapshot_ref=run_date.isoformat(),
+    )
+
+    try:
+        result = cli_workflow.record_observations_use_case.execute(workflow_request)
+    except Exception as e:
+        typer.echo(f"Capture failed: {e}", err=True)
+        raise typer.Exit(1)
+
+    payload = {
+        "artifact_type": "pre_open_observation_capture",
+        "session": run_date.isoformat(),
+        "recorded_count": result.recorded_count,
+        "candidate_count": len(result.response.result.candidates),
+        "filter_reject_count": len(result.response.filter_rejects),
+        "source_status": result.response.source_status.value,
+        "workflow": "screen_pre_open",
+        "observation_contract": "pre-open-open-30m",
+    }
+    if fmt == "json":
+        typer.echo(json.dumps(payload, indent=2))
+        return
+
+    typer.echo("Pre-open observation capture")
+    typer.echo(f"  session:           {payload['session']}")
+    typer.echo(f"  recorded:          {payload['recorded_count']}")
+    typer.echo(f"  candidates:        {payload['candidate_count']}")
+    typer.echo(f"  filter_rejects:    {payload['filter_reject_count']}")
+    typer.echo(f"  source_status:     {payload['source_status']}")
+    typer.echo("  contract:          pre-open-open-30m")
+    typer.echo("  Next: learn track → learn grade | research pre-open labels")
