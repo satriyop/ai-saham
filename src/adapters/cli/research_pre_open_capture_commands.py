@@ -2,7 +2,7 @@
 CLI: saham research pre-open capture
 
 Save pre-open decisions into the observation database (ADR-048).
-Symmetric to research signal capture for accumulation-discovery:
+Symmetric to research signal capture for accumulation-discovery.v1:
 live ``screen pre-open`` does NOT write observations.
 
 Layer: Adapter

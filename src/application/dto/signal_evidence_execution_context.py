@@ -23,6 +23,6 @@ class SignalEvidenceExecutionContext:
     # paths leave them None and never persist, so None is acceptable there.
     # The persister fail-closes on a canonical write with a None
     # semantic_compatibility_id and rejects any observation_contract other than
-    # "accumulation-discovery".
+    # "accumulation-discovery.v1".
     observation_contract: str | None = None
     semantic_compatibility_id: SemanticCompatibilityId | None = None

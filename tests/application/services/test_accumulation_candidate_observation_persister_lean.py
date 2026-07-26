@@ -55,6 +55,18 @@ def test_persist_rejects_non_accumulation_discovery_contract() -> None:
         )
 
 
+def test_persist_rejects_removed_unversioned_contract() -> None:
+    persister = _persister(_SpyRepo())
+    with pytest.raises(ValueError, match="observation_contract"):
+        persister.persist(
+            [object()],
+            date(2026, 7, 16),
+            object(),
+            observation_contract="accumulation-discovery",
+            semantic_compatibility_id=_VALID_ID,
+        )
+
+
 def test_persist_rejects_none_contract() -> None:
     persister = _persister(_SpyRepo())
     with pytest.raises(ValueError, match="observation_contract"):

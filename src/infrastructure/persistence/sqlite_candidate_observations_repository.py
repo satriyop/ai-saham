@@ -16,6 +16,10 @@ from src.domain.ports.observation_risk_assessment_repository import (
 from src.domain.value_objects.signal_artifact_identity import (
     SemanticCompatibilityId,
 )
+from src.domain.value_objects.signal_observation_contracts import (
+    ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT,
+    PRE_OPEN_OBSERVATION_CONTRACT,
+)
 from src.domain.value_objects.signal_artifact_schema import (
     CANDIDATE_OBSERVATION_SCHEMA_VERSION,
     validate_current_alpha_trigger_identity,
@@ -138,7 +142,7 @@ ALTER TABLE candidate_observations ADD COLUMN artifact_provenance_json TEXT NOT 
 """
 
 # Lean observation identity (DQ-003 Slice A). observation_contract labels the
-# canonical contract ("accumulation-discovery"); the whole-config-hash
+# observation contract ("accumulation-discovery.v1"); the whole-config-hash
 # semantic_compatibility_id reuses the ARTIFACT-IDENTITY column above but is
 # written directly from CandidateObservation.semantic_compatibility_id, NOT via
 # the all-three-or-none artifact-identity codec. Legacy/default rows have '',
@@ -168,9 +172,13 @@ _CANONICAL_PROVENANCE_PREDICATES = (
     "AND analysis_as_of != '' "
     "AND data_as_of_date != '' "
     # DQ-003 Slice A: a canonical row must carry an explicit observation_contract.
-    # A row written without one is not a canonical accumulation-discovery
+    # A row written without one is not an authoritative accumulation-discovery.v1
     # observation, regardless of config_hash/schema/provenance.
-    "AND observation_contract != ''"
+    "AND observation_contract != '' "
+    f"AND (workflow != 'screen_accum' OR observation_contract = "
+    f"'{ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT}') "
+    f"AND (workflow != 'screen_pre_open' OR observation_contract = "
+    f"'{PRE_OPEN_OBSERVATION_CONTRACT}')"
 )
 
 
@@ -233,6 +241,21 @@ class SQLiteCandidateObservationsRepository:
         for obs in observations:
             payload = dict(obs.payload)
             schema_version = int(payload.get("schema_version", 1))
+            expected_contract = {
+                "screen_accum": ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT,
+                "screen_pre_open": PRE_OPEN_OBSERVATION_CONTRACT,
+            }.get(obs.workflow)
+            if (
+                obs.config_hash != ""
+                and schema_version == _CURRENT_SCHEMA_VERSION
+                and expected_contract is not None
+                and obs.observation_contract is not None
+                and obs.observation_contract != expected_contract
+            ):
+                raise ValueError(
+                    f"{obs.workflow} observation_contract must be "
+                    f"{expected_contract!r}, got {obs.observation_contract!r}"
+                )
             if obs.config_hash != "" and schema_version != _CURRENT_SCHEMA_VERSION:
                 raise ValueError(
                     "A non-empty config_hash write requires schema_version == "

@@ -14,12 +14,14 @@ from src.domain.value_objects.signal_observation_fingerprint_serialization impor
 from src.domain.value_objects.signal_artifact_schema import (
     validate_flow_component_fingerprint,
 )
+from src.domain.value_objects.signal_assessment import SignalAssessmentIdentity
 
 
 @dataclass(frozen=True)
 class SignalObservationFingerprint:
     """Raw signal-time facts persisted for later attribution."""
 
+    signal_assessment_identity: SignalAssessmentIdentity | None = None
     setup_family: str | None = None
     matched_setup_families: tuple[str, ...] = ()
     primary_setup_family: str | None = None

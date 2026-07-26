@@ -150,6 +150,10 @@ def test_signal_response_to_dict_emits_signal_authority_coverage():
 
     d = signal_response_to_dict(response)
     assert d is not None
+    assert d["identity"] == {
+        "purpose": "SWING_TRADE_SETUP",
+        "policy_contract": "swing_trade_setup.v1",
+    }
     assert "signal_authority_coverage" in d
     assert d["signal_authority_coverage"] == pytest.approx(0.85)
     assert "setup_readiness" in d

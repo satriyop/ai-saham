@@ -17,6 +17,7 @@ def signal_response_to_dict(
     if response is None:
         return None
     return {
+        "identity": response.assessment.identity.to_dict(),
         "score": response.assessment.score,
         "raw_exact_score": response.assessment.raw_exact_score,
         "strength": response.assessment.strength.value,

@@ -47,7 +47,7 @@ class CandidateObservation:
     # Lean observation identity (DQ-003 Slice A). Metadata only — never part of
     # canonical identity: two observations differing only in these fields are
     # still the same canonical observation. observation_contract is the
-    # canonical contract label ("accumulation-discovery"); semantic_compatibility_id
+    # observation contract label ("accumulation-discovery.v1"); semantic_compatibility_id
     # is the whole-config-hash cohort tag. These are the lean subset of the
     # parked SignalArtifactIdentity; they are persisted directly (the
     # semantic_compatibility_id column is written from this field, not via the

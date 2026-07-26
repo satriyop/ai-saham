@@ -341,6 +341,7 @@ class AccumulationCandidate:
             if self.forward_estimates
             else None,
             "signal_assessment": {
+                "identity": self.signal_assessment.assessment.identity.to_dict(),
                 "score": self.signal_assessment.assessment.score,
                 "strength": self.signal_assessment.assessment.strength.value,
                 "entry_quality": self.signal_assessment.assessment.entry_quality.value,

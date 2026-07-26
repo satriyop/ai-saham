@@ -27,8 +27,13 @@ from src.domain.value_objects.signal_artifact_identity import SemanticCompatibil
 from src.domain.value_objects.signal_artifact_schema import (
     CANDIDATE_OBSERVATION_SCHEMA_VERSION,
 )
+from src.domain.value_objects.signal_assessment import (
+    PRE_OPEN_AUCTION_DIRECTION_IDENTITY,
+)
+from src.domain.value_objects.signal_observation_contracts import (
+    PRE_OPEN_OBSERVATION_CONTRACT,
+)
 
-PRE_OPEN_OBSERVATION_CONTRACT = "pre-open-open-30m.v3"
 PRE_OPEN_WORKFLOW = "screen_pre_open"
 
 
@@ -42,6 +47,7 @@ def compute_pre_open_config_hash(
 ) -> str:
     """Short material config hash for observation identity (not full sha256 id)."""
     material = {
+        "signal_assessment_identity": PRE_OPEN_AUCTION_DIRECTION_IDENTITY.to_dict(),
         "evidence_contract": evidence_contract,
         "horizon": PRE_OPEN_HORIZON,
         "directional_baseline": asdict(signal_config),
@@ -61,6 +67,7 @@ def compute_pre_open_semantic_compatibility_id(
     top_n: int | None,
 ) -> SemanticCompatibilityId:
     material = {
+        "signal_assessment_identity": PRE_OPEN_AUCTION_DIRECTION_IDENTITY.to_dict(),
         "config_hash": compute_pre_open_config_hash(
             signal_config=signal_config,
             classification_config=classification_config,
@@ -148,6 +155,9 @@ def build_pre_open_observation_payload(
     return {
         "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
         "artifact_type": "pre_open_candidate_observation",
+        "signal_assessment_identity": (
+            signal_summary.identity.to_dict() if signal_summary is not None else None
+        ),
         "observation_contract": PRE_OPEN_OBSERVATION_CONTRACT,
         "evidence_contract_version": evidence_contract,
         "horizon": horizon,

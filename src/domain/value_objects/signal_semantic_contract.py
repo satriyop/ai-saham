@@ -12,13 +12,16 @@ from src.domain.value_objects.signal_artifact_schema import (
     CANDIDATE_OBSERVATION_SCHEMA_VERSION,
     SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
 )
+from src.domain.value_objects.signal_observation_contracts import (
+    ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT,
+)
 
 
 _DOTTED_PATH = re.compile(r"^[a-zA-Z][a-zA-Z0-9_-]*(\.[a-zA-Z][a-zA-Z0-9_-]*)+$")
 _LOWERCASE_SNAKE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
-ACCUMULATION_DISCOVERY_CONTRACT = "accumulation-discovery"
+ACCUMULATION_DISCOVERY_CONTRACT = ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT
 
 EVIDENCE_CONTRACT_VERSION = "1.5"
 SEMANTIC_ENGINE_VERSION = "1.4"
@@ -191,7 +194,7 @@ _COMMON_MATERIAL_CONFIG_PATHS_BASE: tuple[str, ...] = (
 # EvaluateSwingSetupUseCase._evaluation(); entry_authority and
 # can_enter_from_phases populate separate output-only fields that this
 # resolution path never consumes, so they cannot alter the
-# accumulation-discovery result.
+# accumulation-discovery.v1 result.
 # ---------------------------------------------------------------------------
 _FOREIGN_BOUNCE_SETUP_PATHS: tuple[str, ...] = (
     "swing_setups.setups.foreign-bounce.enabled",
@@ -466,7 +469,7 @@ _MATERIAL_CONFIG_PATHS_BY_SETUP_FAMILY: tuple[tuple[str, tuple[str, ...]], ...] 
 # ---------------------------------------------------------------------------
 # Material config paths by evaluated Alpha/Trigger horizon — only the
 # horizon actually evaluated (signal_engine.alpha_trigger.default_horizon,
-# since accumulation-discovery passes no horizon override) is selected.
+# since accumulation-discovery.v1 passes no horizon override) is selected.
 # ---------------------------------------------------------------------------
 _MATERIAL_CONFIG_PATHS_BY_EVALUATION_HORIZON: tuple[tuple[str, tuple[str, ...]], ...] = (
     (

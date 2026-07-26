@@ -1,7 +1,7 @@
 """
 CLI: saham research signal capture
 
-Session-scoped canonical observation capture for accumulation-discovery.
+Session-scoped authoritative observation capture for accumulation-discovery.v1.
 Writes candidate_observations; does not generate forward labels.
 
 Layer: Adapter (parse, wire, format, map errors).
@@ -56,7 +56,7 @@ def signal_capture_observations(
 ) -> None:
     """Capture canonical candidate_observations for one session (local data).
 
-    Writes ``candidate_observations`` under contract accumulation-discovery.
+    Writes ``candidate_observations`` under contract accumulation-discovery.v1.
     Does not write ``signal_forward_labels`` — use ``research signal labels``.
     """
     if contract != ACCUMULATION_DISCOVERY_CONTRACT:

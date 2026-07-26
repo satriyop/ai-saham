@@ -35,6 +35,18 @@ def test_identity_serializes_with_assessment() -> None:
     }
 
 
+def test_identity_round_trips() -> None:
+    assert (
+        SignalAssessmentIdentity.from_dict(
+            ACCUMULATION_DISCOVERY_IDENTITY.to_dict()
+        )
+        is not None
+    )
+    assert SignalAssessmentIdentity.from_dict(
+        ACCUMULATION_DISCOVERY_IDENTITY.to_dict()
+    ) == ACCUMULATION_DISCOVERY_IDENTITY
+
+
 @pytest.mark.parametrize("purpose", [None, "", "ACCUMULATION_DISCOVERY", "UNKNOWN"])
 def test_identity_rejects_missing_or_unknown_purpose(purpose) -> None:
     with pytest.raises(ValueError, match="Unknown signal assessment purpose"):
@@ -56,3 +68,20 @@ def test_identity_rejects_missing_unknown_or_mismatched_contract(policy_contract
 def test_assessment_rejects_missing_identity() -> None:
     with pytest.raises(ValueError, match="identity is required"):
         _assessment(identity=None)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        None,
+        {},
+        {"purpose": "UNKNOWN", "policy_contract": "unknown.v1"},
+        {
+            "purpose": "ACCUMULATION_DISCOVERY",
+            "policy_contract": "swing_trade_setup.v1",
+        },
+    ],
+)
+def test_identity_deserialization_rejects_invalid_values(value) -> None:
+    with pytest.raises(ValueError):
+        SignalAssessmentIdentity.from_dict(value)

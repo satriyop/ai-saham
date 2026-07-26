@@ -3,6 +3,7 @@
 from typing import TYPE_CHECKING, Any
 
 from src.domain.value_objects.benchmark_excess_return import BenchmarkExcessReturn
+from src.domain.value_objects.signal_assessment import SignalAssessmentIdentity
 
 from src.domain.value_objects.signal_fingerprint_alpha_trigger_serialization import (
     _parse_alpha_trigger_fields,
@@ -69,7 +70,13 @@ def signal_observation_fingerprint_to_dict(
     fingerprint: "SignalObservationFingerprint",
 ) -> dict[str, Any]:
     """Serialize a SignalObservationFingerprint to a flat dictionary."""
-    data = {}
+    data = {
+        "signal_assessment_identity": (
+            fingerprint.signal_assessment_identity.to_dict()
+            if fingerprint.signal_assessment_identity is not None
+            else None
+        )
+    }
     data.update(_serialize_setup_fields(fingerprint))
     data.update(_serialize_strategy_fields(fingerprint))
     data.update(_serialize_flow_fields(fingerprint))
@@ -101,7 +108,14 @@ def signal_observation_fingerprint_from_dict(
     cls, data: dict[str, Any]
 ) -> Any:
     """Reconstruct a SignalObservationFingerprint from a flat dictionary."""
-    kwargs = {}
+    identity_data = data.get("signal_assessment_identity")
+    kwargs = {
+        "signal_assessment_identity": (
+            SignalAssessmentIdentity.from_dict(identity_data)
+            if identity_data is not None
+            else None
+        )
+    }
     kwargs.update(_parse_setup_fields(data))
     kwargs.update(_parse_strategy_fields(data))
     kwargs.update(_parse_flow_fields(data))

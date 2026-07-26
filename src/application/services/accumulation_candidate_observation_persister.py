@@ -90,7 +90,7 @@ class AccumulationCandidateObservationPersister:
         resolve it upstream and pass it in.
 
         observation_contract and semantic_compatibility_id carry the lean
-        DQ-003 identity. observation_contract MUST equal "accumulation-discovery"
+        DQ-003 identity. observation_contract MUST equal "accumulation-discovery.v1"
         — any other value is a contract violation and raises immediately
         (reserving a distinct contract for the future named-swing-setup
         producer, and preventing that population from overwriting or

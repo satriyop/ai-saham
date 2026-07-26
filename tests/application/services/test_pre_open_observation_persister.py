@@ -31,6 +31,7 @@ from src.application.use_case.pre_open_workflow_use_case import (
     PreOpenWorkflowRequest,
     PreOpenWorkflowResponse,
 )
+from src.domain.value_objects.signal_assessment import PRE_OPEN_AUCTION_DIRECTION_IDENTITY
 from src.domain.value_objects.pre_open_source_status import PreOpenSourceStatus
 from src.domain.value_objects.screener_result import PreOpenScreenResult, ScreenerCandidate
 from src.domain.value_objects.signal_assessment import SignalStrength
@@ -68,6 +69,7 @@ def _signal_summary(
     entry_quality: str = "ENTER",
 ) -> PreOpenSignalSummary:
     return PreOpenSignalSummary(
+        identity=PRE_OPEN_AUCTION_DIRECTION_IDENTITY,
         contract="pre_open_directional_baseline.v1",
         direction="BULLISH",
         confidence="HIGH",
@@ -188,6 +190,11 @@ def test_persist_observations_and_identity_upsert(tmp_path: Path, monkeypatch):
     row = pre_open_rows[0]
     assert row.observation_contract == PRE_OPEN_OBSERVATION_CONTRACT
     assert row.payload["signal"]["score"] == 72
+    assert row.payload["signal"]["identity"] == {
+        "purpose": "PRE_OPEN_AUCTION_DIRECTION",
+        "policy_contract": "pre_open_auction_direction.v1",
+    }
+    assert row.payload["signal_assessment_identity"] == row.payload["signal"]["identity"]
     assert row.payload["signal"]["contract"] == "pre_open_directional_baseline.v1"
     assert row.payload["signal"]["direction"] == "BULLISH"
     assert row.payload["signal"]["confidence"] == "HIGH"

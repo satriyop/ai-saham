@@ -6,7 +6,7 @@ AI usage: Optional, only when caller injects an AI-enabled PreOpenScreenUseCase.
 
 Engine adoption (ADR-047 / ADR-048):
   regime + risk (annotate) always-on via ScreenAssessmentPipeline;
-  pre-open directional baseline through the canonical SignalEngine;
+  pre-open auction-direction policy through the single SignalEngine;
   TradeSetup composed when signal + risk assessments both exist.
 """
 
@@ -59,6 +59,7 @@ from src.domain.value_objects.trade_setup import TradeSetup
 if TYPE_CHECKING:
     from src.application.services.risk_engine import RiskEngine
     from src.domain.value_objects.market_context import MarketContext
+    from src.domain.value_objects.signal_assessment import SignalAssessmentIdentity
 
 
 class LockedIevBaselineProvider(Protocol):
@@ -132,6 +133,7 @@ class PreOpenSnapshotScreenResult:
 class PreOpenSignalSummary:
     """Typed signal projection for display and canonical observation capture."""
 
+    identity: "SignalAssessmentIdentity"
     contract: str
     direction: str
     confidence: str
@@ -147,6 +149,7 @@ class PreOpenSignalSummary:
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "identity": self.identity.to_dict(),
             "contract": self.contract,
             "direction": self.direction,
             "confidence": self.confidence,
@@ -422,6 +425,7 @@ class PreOpenWorkflowUseCase:
                 baseline = evaluation.baseline
                 signal_responses[candidate.ticker] = sig
                 signal_by_ticker[candidate.ticker] = PreOpenSignalSummary(
+                    identity=sig.assessment.identity,
                     contract=baseline.contract,
                     direction=baseline.direction.value,
                     confidence=baseline.confidence.value,

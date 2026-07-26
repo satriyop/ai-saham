@@ -10,6 +10,8 @@ from __future__ import annotations
 from datetime import date, datetime
 from pathlib import Path
 
+import pytest
+
 from src.domain.ports.candidate_observations_repository import CandidateObservation
 from src.domain.value_objects.signal_artifact_identity import (
     SemanticCompatibilityId,
@@ -133,5 +135,13 @@ def test_contract_row_is_included_in_canonical_reads(tmp_path: Path):
     repo.save_many([_lean_observation()])
 
     assert len(repo.list_canonical_by_date(_DAY)) == 1
+
+
+def test_removed_unversioned_contract_is_rejected_on_write(tmp_path: Path):
+    repo = SQLiteCandidateObservationsRepository(tmp_path / "data.db")
+    with pytest.raises(ValueError, match="observation_contract"):
+        repo.save_many(
+            [_lean_observation(observation_contract="accumulation-discovery")]
+        )
     assert len(repo.list_latest_canonical_by_date(_DAY)) == 1
     assert repo.list_canonical_snapshot_dates() == [_DAY]

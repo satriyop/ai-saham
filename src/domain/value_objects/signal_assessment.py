@@ -84,6 +84,21 @@ class SignalAssessmentIdentity:
             "policy_contract": self.policy_contract,
         }
 
+    @classmethod
+    def from_dict(cls, value: object) -> "SignalAssessmentIdentity":
+        if not isinstance(value, dict):
+            raise ValueError("Signal assessment identity must be an object")
+        try:
+            purpose = SignalAssessmentPurpose(value.get("purpose"))
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"Unknown signal assessment purpose: {value.get('purpose')!r}"
+            ) from exc
+        return cls(
+            purpose=purpose,
+            policy_contract=value.get("policy_contract"),  # type: ignore[arg-type]
+        )
+
 
 PRE_OPEN_AUCTION_DIRECTION_IDENTITY = SignalAssessmentIdentity(
     purpose=SignalAssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION,

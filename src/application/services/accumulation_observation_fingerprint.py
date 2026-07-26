@@ -168,6 +168,9 @@ def build_candidate_observation_payload(
     payload = {
         "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
         "artifact_type": "candidate_observation",
+        "signal_assessment_identity": (
+            signal.assessment.identity.to_dict() if signal is not None else None
+        ),
         "ticker": candidate.ticker,
         "snapshot_date": snapshot_date.isoformat(),
         "captured_at": captured_at.isoformat(),
@@ -246,6 +249,9 @@ def _sub_signal_fingerprint(
         else constraints.get("regime")
     )
     fingerprint = {
+        "signal_assessment_identity": (
+            assessment.identity.to_dict() if assessment is not None else None
+        ),
         "setup_family": resolved_setup_family,
         "matched_setup_families": (
             list(setup_family_result.matched_setup_families)

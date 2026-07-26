@@ -20,6 +20,7 @@ from src.domain.value_objects.signal_artifact_schema import (
 TOP_LEVEL_KEYS = frozenset({
     "schema_version",
     "artifact_type",
+    "signal_assessment_identity",
     "ticker",
     "snapshot_date",
     "captured_at",
@@ -410,6 +411,8 @@ def test_real_producer_schema_4_fingerprint_parses_to_sector_context_route_only(
     # The label consumes the same fingerprint; round-trip it and confirm the
     # route identity is sector_context only.
     fingerprint = SignalObservationFingerprint.from_dict(payload["sub_signal_fingerprint"])
+    assert fingerprint.signal_assessment_identity == response.assessment.identity
+    assert payload["signal_assessment_identity"] == response.assessment.identity.to_dict()
     groups = {entry["group"] for entry in fingerprint.alpha_trigger_route_metadata}
     assert "sector_context" in groups
     assert "market_context" not in groups
