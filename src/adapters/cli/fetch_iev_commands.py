@@ -6,25 +6,22 @@ Layer: Adapter
 
 from __future__ import annotations
 
-from datetime import datetime, time
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
 
-from src.domain.value_objects.idx_market import IDX_TIMEZONE
+from src.domain.value_objects.idx_market import (
+    IDX_TIMEZONE,
+    NCP_LOCK_TIME,
+    PRE_OPEN_MATCHING_START,
+)
 from src.infrastructure.config.app_config import load_app_config
 
 
 def _current_idx_datetime() -> datetime:
     return datetime.now(IDX_TIMEZONE)
-
-
-def _get_market_status():
-    """Return current IDX market status from Stockbit if session available,
-    else from local wall-clock. Never raises."""
-    from src.infrastructure.browser.stockbit_market_time import get_current_market_status
-    return get_current_market_status()
 
 
 def collect_iev(
@@ -44,10 +41,10 @@ def collect_iev(
     """
     Capture today's IEV mover ranking from Stockbit and store it locally.
 
-    Run this at 08:50 WIB each trading day (during the pre-open auction window)
-    to build a historical IEV dataset for the intraday proxy simulation. After
-    a few months of daily collection the simulation can filter candidates by
-    IEV rank, closer to live workflow behaviour.
+    Scheduled discovery runs build historical IEV data. The 08:56 run also
+    supplies the locked-input baseline used by the 08:57 authoritative pre-open
+    decision. Runs from 08:58 onward are diagnostic matching-period snapshots
+    and cannot supply production signal evidence.
 
     Requires an active Stockbit session (saham fetch stockbit login).
 
@@ -64,21 +61,15 @@ def collect_iev(
     cfg = load_app_config()
     resolved_db = db_path or Path(cfg.storage.db_path)
 
-    now_idx = _current_idx_datetime()
-    today = now_idx.date()
-    # Prefer Stockbit market-time API for is_ncp; fall back to wall-clock 08:56 heuristic
-    _mstatus = _get_market_status()
-    is_ncp = (
-        _mstatus.is_pre_open
-        if _mstatus.source == "stockbit"
-        else now_idx.time() >= time(8, 56)
-    )
+    collection_started_at = _current_idx_datetime()
+    today = collection_started_at.date()
 
     try:
         from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
         from src.infrastructure.browser.stockbit_config_bundle import (
             load_stockbit_provider_config,
         )
+
         stockbit_config = load_stockbit_provider_config()
         api_client = create_stockbit_api_client(
             headless=not no_headless, stockbit_config=stockbit_config
@@ -104,14 +95,27 @@ def collect_iev(
         )
         raise typer.Exit(1)
 
+    collected_at = _current_idx_datetime()
+    current_time = collected_at.time()
+    is_locked_input = (
+        collection_started_at.date() == collected_at.date()
+        and NCP_LOCK_TIME <= collection_started_at.time()
+        and collection_started_at <= collected_at
+        and current_time < PRE_OPEN_MATCHING_START
+    )
     repo = SQLiteIEVRepository(resolved_db)
-    # Strip tz for naive storage; repo computes is_ncp_locked from the time component.
-    written = repo.save_snapshot(today, movers, collected_at=now_idx.replace(tzinfo=None))
+    # Strip tz for local-naive storage; the repository validates the full interval.
+    written = repo.save_snapshot(
+        today,
+        movers,
+        collected_at=collected_at.replace(tzinfo=None),
+        collection_started_at=collection_started_at.replace(tzinfo=None),
+    )
     try:
         sidecar_path = IEVJsonSidecarWriter().write_snapshot(
             today,
             movers,
-            captured_at=now_idx,
+            captured_at=collected_at,
             top_n=top_n,
         )
     except OSError as exc:
@@ -125,22 +129,27 @@ def collect_iev(
     deltas = repo.get_iev_delta(today)
 
     iep_captured = sum(1 for m in movers if m.iep is not None)
-    ncp_badge = "[NCP LOCKED]" if is_ncp else "[PRE-NCP]"
+    if is_locked_input:
+        phase_badge = "[NCP LOCKED INPUT]"
+    elif current_time >= PRE_OPEN_MATCHING_START:
+        phase_badge = "[NOT LOCKED INPUT]"
+    else:
+        phase_badge = "[PRE-NCP]"
     typer.echo(
         f"Saved {written} movers for {today.isoformat()} to {resolved_db} "
         f"(IEP captured: {iep_captured}/{written})"
     )
     if sidecar_path is not None:
         typer.echo(f"  JSON sidecar: {sidecar_path}")
-    typer.echo(f"  Captured at {now_idx.strftime('%H:%M:%S')} WIB  {ncp_badge}")
+    typer.echo(f"  Captured at {collected_at.strftime('%H:%M:%S')} WIB  {phase_badge}")
     typer.echo("")
 
     show_delta = bool(deltas)
     header = f"  {'RANK':>4}  {'TICKER':<8}  {'IEV':>12}  {'IEP':>8}"
-    sep    = f"  {'-'*4}  {'-'*8}  {'-'*12}  {'-'*8}"
+    sep = f"  {'-' * 4}  {'-' * 8}  {'-' * 12}  {'-' * 8}"
     if show_delta:
-        header += f"  {'ΔIEV':>10}"
-        sep    += f"  {'-'*10}"
+        header += f"  {'ΔIEV DAY':>10}"
+        sep += f"  {'-' * 10}"
     typer.echo(header)
     typer.echo(sep)
     for i, m in enumerate(movers[:20], 1):

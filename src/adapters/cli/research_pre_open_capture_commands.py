@@ -108,8 +108,9 @@ def pre_open_capture(
         saham research pre-open capture --fast
 
     Capture requires the direct live provider and fails closed unless its whole
-    collection stays inside the same-session NCP window. Manual mover payloads
-    and saved snapshots are not authoritative.
+    collection stays inside the same-session 08:56–08:58 locked-input window
+    and finishes before matching. Manual mover payloads and saved snapshots are
+    not authoritative.
     """
     cfg = load_app_config()
     resolved_db = db_path or Path(cfg.storage.db_path)
@@ -232,6 +233,5 @@ def pre_open_capture(
     if result.ops_export_path:
         typer.echo(f"  ops export:        {result.ops_export_path}")
     typer.echo(
-        "  Next: research pre-open track → research pre-open grade "
-        "| research pre-open labels"
+        "  Next: research pre-open track → research pre-open grade | research pre-open labels"
     )

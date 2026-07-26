@@ -25,7 +25,7 @@ from src.domain.value_objects.signal_artifact_schema import (
     CANDIDATE_OBSERVATION_SCHEMA_VERSION,
 )
 
-PRE_OPEN_OBSERVATION_CONTRACT = "pre-open-open-30m.v2"
+PRE_OPEN_OBSERVATION_CONTRACT = "pre-open-open-30m.v3"
 PRE_OPEN_WORKFLOW = "screen_pre_open"
 
 

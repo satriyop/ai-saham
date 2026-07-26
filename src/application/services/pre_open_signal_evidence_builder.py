@@ -35,7 +35,7 @@ def build_pre_open_signal_evidence(
 ) -> PreOpenSignalEvidenceBundle:
     """Build evidence bundle from a duck-typed pre-open candidate.
 
-    ``delta_iev`` may be passed explicitly (from multi-tick history) or read from
+    ``delta_iev`` may be passed explicitly (from locked-input history) or read from
     ``candidate.delta_iev`` when present. None = MISSING (do not fabricate).
     """
     cfg = config or PreOpenSignalConfig()
@@ -74,14 +74,12 @@ def build_pre_open_signal_evidence(
         auction = AuctionNcpEvidence(
             ticker=ticker,
             iev=iev,
-            gap_pct=gap_pct if isinstance(gap_pct, Decimal) else (
-                Decimal(str(gap_pct)) if gap_pct is not None else None
-            ),
+            gap_pct=gap_pct
+            if isinstance(gap_pct, Decimal)
+            else (Decimal(str(gap_pct)) if gap_pct is not None else None),
             bid_pressure=getattr(candidate, "bid_offer_imbalance", None),
             spread_pct=getattr(candidate, "spread_pct", None),
-            prev_close=prev_close if isinstance(prev_close, Decimal) else Decimal(
-                str(prev_close)
-            ),
+            prev_close=prev_close if isinstance(prev_close, Decimal) else Decimal(str(prev_close)),
             provenance=provenance,
             iep=getattr(candidate, "iep", None),
             iep_gap_pct=getattr(candidate, "iep_gap_pct", None),
@@ -95,9 +93,7 @@ def build_pre_open_signal_evidence(
         gap_for_veto = gap_pct
         if gap_for_veto is not None and not isinstance(gap_for_veto, Decimal):
             gap_for_veto = Decimal(str(gap_for_veto))
-        gap_out = bool(
-            gap_for_veto is not None and abs(gap_for_veto) > cfg.gap_out_abs_pct
-        )
+        gap_out = bool(gap_for_veto is not None and abs(gap_for_veto) > cfg.gap_out_abs_pct)
         trend = getattr(candidate, "trend_signal", None)
         if trend == "GAP_OUT":
             gap_out = True
@@ -109,9 +105,7 @@ def build_pre_open_signal_evidence(
             friction_fail = sp > cfg.max_spread_pct
 
         rsi = getattr(candidate, "rsi", None)
-        rsi_extension = bool(
-            rsi is not None and rsi > cfg.rsi_extension_threshold
-        )
+        rsi_extension = bool(rsi is not None and rsi > cfg.rsi_extension_threshold)
 
         viability = OpenViabilityEvidence(
             ticker=ticker,

@@ -7,7 +7,9 @@ Closes the feedback gap between pre-open predictions and actual market outcomes.
 
 The `saham screen pre-open` screener produces deterministic predictions
 (gap %, entry range, ATR stop) for stocks moving in the 08:45–09:00 WIB pre-open
-window (NCP snapshots taken at ~08:57 within the [08:56, 09:00) lock window). But without measuring whether those predictions were correct, thresholds
+window. The production decision uses locked-input evidence collected wholly
+inside [08:56, 08:58), before pre-opening matching begins. Without measuring
+whether those predictions were correct, thresholds
 drift and false negatives go undetected.
 
 This workflow captures the feedback loop: predict → track → measure → tune.
@@ -173,7 +175,9 @@ saham research pre-open capture
 4. Writes trade-confirm sidecar for `saham trade confirm`
 
 Capture fails closed unless the direct live provider completes its entire
-timezone-aware collection window inside the requested session's NCP interval.
+timezone-aware collection window inside [08:56, 08:58), before matching.
+The scheduled `08:56 saham fetch iev` snapshot is the locked baseline;
+capture's final live IEV supplies the second measurement for `delta_iev`.
 Manual mover payloads and saved snapshots remain discovery data and cannot be
 written as authoritative pre-open decisions.
 
@@ -292,7 +296,7 @@ thresholds:
 
 | Command | Timing | Purpose | Output file |
 |---------|--------|---------|-------------|
-| `saham research pre-open capture` | ~08:58 | Sole decision write | DB observations + `ops_session.json` |
+| `saham research pre-open capture` | 08:57; finish before 08:58 | Sole decision write | DB observations + `ops_session.json` |
 | `saham research pre-open track` | 09:00–09:30 | 5-min full-depth orderbook + foreign net + opt-in broker attribution | `track_HHMM.json` |
 | `saham research pre-open grade` | 09:30+ | Accuracy report (incl. bid pressure momentum + institutional absorption) | `grade.json` |
 | `saham research pre-open prompt` | anytime | AI prompt | `prompt.md` |
@@ -313,7 +317,8 @@ All commands auto-detect the current market phase:
 |--------------------|-------|----------|
 | Before 08:45 | OUT_OF_SESSION | "Market not open yet" |
 | 08:45–08:56 | PRE_NCP | Capture available (MEDIUM confidence) |
-| 08:56–09:00 | NCP_LOCKED | Capture with HIGH confidence |
+| 08:56–08:58 | NCP_LOCKED | Capture with HIGH confidence; must finish before matching |
+| 08:58–09:00 | PRE_OPEN_MATCHING | Outcome formation; discovery/tracking only |
 | 09:00–09:30 | OPEN | Track ready |
 | 09:30–10:00 | POST_OPEN | Grade + prompt available |
 | After 10:00 | POST_OPEN | Full cycle complete → tune available |

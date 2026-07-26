@@ -6,9 +6,10 @@ Perilaku CLI saat ini adalah sumber kebenaran jika dokumentasi drift.
 ## Waktu Sesi IDX
 
 ```text
-08:45–08:56  PRE-OPEN; fetch IEV, screen kandidat, siapkan order plan
-08:56–09:00  NON-CANCELLATION PERIOD; order lama tidak bisa amend/cancel
-09:00        call auction dan harga pembukaan
+08:45–08:56  PRE-OPEN INPUT; discovery, screen kandidat, siapkan order plan
+08:56–08:58  NCP LOCKED INPUT; baseline 08:56, keputusan final sebelum 08:58
+08:58–09:00  PRE-OPEN MATCHING; bukan window keputusan produksi
+09:00        sesi reguler dan harga pembukaan
 09:00–09:05  opening confirmation
 09:00–11:30  sesi 1
 11:30–13:30  istirahat; Jumat sampai 14:00
@@ -17,8 +18,9 @@ Perilaku CLI saat ini adalah sumber kebenaran jika dokumentasi drift.
 16:00        harga penutupan resmi
 ```
 
-Selesaikan keputusan order pre-open sebelum 08:56. Bid/offer sebelum 09:00
-belum tentu menjadi clearing price.
+Selesaikan sinyal kanonis sebelum matching pukul 08:58. Order yang sudah masuk
+setelah lock 08:56 memiliki pembatasan amend/withdraw; bid/offer tetap belum
+tentu menjadi clearing price.
 
 ## Command Quick Reference
 
@@ -123,7 +125,7 @@ max saham = 200.000 / 296 = 675 -> 6 lot
 | IEV | Intraday Expected Volume |
 | IEV Intensity | IEV dibanding estimasi volume normal per interval |
 | Lot | 100 saham IDX |
-| NCP | Non-Cancellation Period 08:56–09:00 |
+| NCP | No-amend 08:56–09:00; locked-input/no-withdraw 08:56–08:58 |
 | Opening Confirmation | Keputusan post-open dari opening price aktual |
 | Prev Close/H/L | Close, high, dan low hari sebelumnya |
 | RSI | Relative Strength Index 0–100 |

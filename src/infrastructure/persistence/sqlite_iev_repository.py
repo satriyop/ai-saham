@@ -4,14 +4,15 @@ SQLite repository for IEV/IEP snapshots.
 Stores the ranked list of IEV movers and their IEP (Indicative Equilibrium Price)
 captured during the IDX pre-open auction window (08:45–09:00 WIB) each trading day.
 
-NCP (No Cancellation Period) — per Kep-00003/BEI/04-2025, effective 2025-12-15:
-  08:56–09:00 WIB: orders in the call auction cannot be amended or withdrawn.
-  Snapshots collected inside [08:56, 09:00) carry is_ncp_locked=1 and reflect
-  committed demand. Earlier or later snapshots are not NCP-locked.
+Locked-input NCP window:
+  08:56–08:57:59 WIB: existing orders cannot be amended or withdrawn, while
+  new orders may still enter. Snapshots inside [08:56, 08:58) carry
+  is_ncp_locked=1. Pre-opening matching begins at 08:58 and is kept separate.
 
-Two daily captures (typical workflow):
-  08:45–08:55 WIB — early IEV mover signal (pre-NCP, is_ncp_locked=0)
-  08:56–09:00 WIB — committed IEV/IEP (NCP-locked, is_ncp_locked=1)
+Typical decision workflow:
+  08:45–08:55 WIB — discovery snapshots (pre-NCP, diagnostic)
+  08:56 WIB       — locked IEV baseline
+  08:57 WIB       — final live decision snapshot (owned by pre-open capture)
 
 Every run appends a row to iev_snapshot_history. The canonical iev_snapshots
 table keeps one row per (date, ticker) — always the latest — for backward
@@ -26,8 +27,11 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 
-from src.domain.value_objects.idx_market import NCP_LOCK_TIME
-from src.domain.value_objects.idx_market import REGULAR_OPEN as REGULAR_OPEN_TIME
+from src.domain.value_objects.idx_market import (
+    IDX_TIMEZONE,
+    NCP_LOCK_TIME,
+    PRE_OPEN_MATCHING_START,
+)
 from src.domain.value_objects.screener_result import MoverData
 
 
@@ -114,14 +118,17 @@ class SQLiteIEVRepository:
         snapshot_date: date,
         movers: list[MoverData],
         collected_at: datetime | None = None,
+        collection_started_at: datetime | None = None,
     ) -> int:
         """Upsert IEV+IEP movers for a date and append to history.
 
         Args:
             snapshot_date: The trading date.
             movers: List of MoverData sorted by IEV descending. rank is derived from position.
-            collected_at: Wall-clock time of collection (naive local). Defaults to now().
-                          Determines is_ncp_locked (08:56 ≤ time < 09:00 WIB = locked).
+            collected_at: Wall-clock completion time (naive local). Defaults to now().
+            collection_started_at: Optional wall-clock start time. When supplied,
+                the complete interval must stay inside [08:56, 08:58) to set
+                is_ncp_locked. Defaults to collected_at for point snapshots.
 
         Returns:
             Number of canonical rows written.
@@ -130,7 +137,18 @@ class SQLiteIEVRepository:
             return 0
 
         ts = collected_at or datetime.now()
-        is_ncp_locked = 1 if NCP_LOCK_TIME <= ts.time() < REGULAR_OPEN_TIME else 0
+        started_at = collection_started_at or ts
+        is_ncp_locked = (
+            1
+            if (
+                started_at.date() == snapshot_date
+                and ts.date() == snapshot_date
+                and NCP_LOCK_TIME <= started_at.time()
+                and started_at <= ts
+                and ts.time() < PRE_OPEN_MATCHING_START
+            )
+            else 0
+        )
         ts_str = ts.isoformat(timespec="seconds")
 
         rows = [
@@ -206,12 +224,12 @@ class SQLiteIEVRepository:
         snapshot_date: date,
         top_n: int | None = None,
     ) -> list[IEVSnapshot]:
-        """Return the latest NCP-locked history batch for snapshot_date.
+        """Return the latest locked-input history batch for snapshot_date.
 
         Strategy:
-          1. Find the latest collected_at where is_ncp_locked=1 for this date.
+          1. Find the latest [08:56, 08:58) locked-input batch for this date.
           2. Return all rows from that batch ordered by rank ASC.
-          3. If no NCP-locked history exists, fall back to get_snapshot()
+          3. If no locked-input history exists, fall back to get_snapshot()
              (handles data collected before NCP tracking was added).
 
         Args:
@@ -219,22 +237,38 @@ class SQLiteIEVRepository:
             top_n: If set, return only the top-N movers.
         """
         date_str = snapshot_date.isoformat()
+        window_start = datetime.combine(snapshot_date, NCP_LOCK_TIME).isoformat(timespec="seconds")
+        matching_start = datetime.combine(snapshot_date, PRE_OPEN_MATCHING_START).isoformat(
+            timespec="seconds"
+        )
         sql = """
             SELECT date, ticker, iev, rank, iep
             FROM iev_snapshot_history
             WHERE date = ?
               AND is_ncp_locked = 1
+              AND collected_at >= ?
+              AND collected_at < ?
               AND collected_at = (
                   SELECT MAX(collected_at)
                   FROM iev_snapshot_history
-                  WHERE date = ? AND is_ncp_locked = 1
+                  WHERE date = ?
+                    AND is_ncp_locked = 1
+                    AND collected_at >= ?
+                    AND collected_at < ?
               )
             ORDER BY rank ASC
         """
-        params: tuple = (date_str, date_str)
+        params: tuple = (
+            date_str,
+            window_start,
+            matching_start,
+            date_str,
+            window_start,
+            matching_start,
+        )
         if top_n is not None:
             sql += " LIMIT ?"
-            params = (date_str, date_str, top_n)
+            params = (*params, top_n)
 
         with self._get_connection() as conn:
             rows = conn.execute(sql, params).fetchall()
@@ -254,10 +288,12 @@ class SQLiteIEVRepository:
         ]
 
     def get_iev_delta(self, snapshot_date: date) -> dict[str, int]:
-        """Return ΔIEV per ticker for snapshot_date.
+        """Return diagnostic all-session ΔIEV per ticker for snapshot_date.
 
         ΔIEV = last_history_iev - first_history_iev (chronological order).
         Tickers with only one history row are omitted — no delta is meaningful.
+        This method is not production signal evidence because it can mix
+        pre-NCP, locked-input, and matching-period snapshots.
 
         Returns:
             Dict mapping ticker → delta (positive = IEV grew, negative = faded).
@@ -286,6 +322,61 @@ class SQLiteIEVRepository:
             rows = conn.execute(sql, (date_str,)).fetchall()
         return {r["ticker"]: r["last_iev"] - r["first_iev"] for r in rows}
 
+    def get_locked_iev_baseline(
+        self,
+        snapshot_date: date,
+        *,
+        before: datetime,
+    ) -> dict[str, int]:
+        """Return each ticker's earliest locked-input IEV before live collection.
+
+        Only rows inside [08:56, 08:58) on ``snapshot_date`` are eligible.
+        ``before`` is the authoritative workflow's collection start, so the
+        returned baseline is strictly earlier than the final live mover fetch.
+        Missing tickers remain absent; callers must not substitute pre-NCP rows.
+        """
+        if before.tzinfo is None:
+            raise ValueError("locked IEV baseline cutoff must be timezone-aware")
+        local_before = before.astimezone(IDX_TIMEZONE)
+        if local_before.date() != snapshot_date:
+            raise ValueError("locked IEV baseline cutoff must match snapshot_date")
+
+        window_start = datetime.combine(snapshot_date, NCP_LOCK_TIME)
+        matching_start = datetime.combine(snapshot_date, PRE_OPEN_MATCHING_START)
+        cutoff = min(local_before.replace(tzinfo=None), matching_start)
+        if cutoff <= window_start:
+            return {}
+
+        sql = """
+            WITH ranked AS (
+                SELECT
+                    ticker,
+                    iev,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY ticker
+                        ORDER BY collected_at ASC, id ASC
+                    ) AS rn
+                FROM iev_snapshot_history
+                WHERE date = ?
+                  AND is_ncp_locked = 1
+                  AND collected_at >= ?
+                  AND collected_at < ?
+            )
+            SELECT ticker, iev
+            FROM ranked
+            WHERE rn = 1
+        """
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                sql,
+                (
+                    snapshot_date.isoformat(),
+                    window_start.isoformat(timespec="seconds"),
+                    cutoff.isoformat(timespec="seconds"),
+                ),
+            ).fetchall()
+        return {r["ticker"]: r["iev"] for r in rows}
+
     def has_snapshot(self, snapshot_date: date) -> bool:
         """Return True if at least one row exists for this date."""
         with self._get_connection() as conn:
@@ -311,7 +402,8 @@ class SQLiteIEVRepository:
                     COUNT(DISTINCT date)                                          AS total_dates,
                     MIN(date)                                                     AS first_date,
                     MAX(date)                                                     AS last_date,
-                    COUNT(*) * 1.0 / NULLIF(COUNT(DISTINCT date), 0)            AS avg_movers_per_day,
+                    COUNT(*) * 1.0
+                        / NULLIF(COUNT(DISTINCT date), 0) AS avg_movers_per_day,
                     SUM(CASE WHEN iep IS NOT NULL THEN 1 ELSE 0 END) * 1.0
                         / NULLIF(COUNT(*), 0) * 100                              AS iep_fill_pct
                 FROM iev_snapshots

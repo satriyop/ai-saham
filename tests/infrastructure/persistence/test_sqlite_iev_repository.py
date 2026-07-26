@@ -2,6 +2,7 @@
 
 import sqlite3
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -108,15 +109,15 @@ def test_get_snapshot_dates(repo):
 def test_get_coverage_includes_iep_fill_rate(repo):
     assert repo.get_coverage()["total_dates"] == 0
 
-    repo.save_snapshot(D1, MOVERS)                             # 3 rows, all with IEP
+    repo.save_snapshot(D1, MOVERS)  # 3 rows, all with IEP
     repo.save_snapshot(D2, [MoverData("BBCA", 1, iep=None)])  # 1 row, no IEP
 
     cov = repo.get_coverage()
     assert cov["total_dates"] == 2
     assert cov["first_date"] == D1.isoformat()
     assert cov["last_date"] == D2.isoformat()
-    assert cov["avg_movers_per_day"] == 2.0   # (3 + 1) / 2
-    assert cov["iep_fill_pct"] == 75.0         # 3 of 4 rows have IEP
+    assert cov["avg_movers_per_day"] == 2.0  # (3 + 1) / 2
+    assert cov["iep_fill_pct"] == 75.0  # 3 of 4 rows have IEP
 
 
 def test_empty_movers_list_writes_zero_rows(repo):
@@ -128,7 +129,7 @@ def test_empty_movers_list_writes_zero_rows(repo):
 def test_migration_adds_iep_to_existing_table(tmp_path):
     """Repo initialised twice — second init should add iep column without error."""
     db = tmp_path / "migrate.db"
-    repo1 = SQLiteIEVRepository(db)
+    SQLiteIEVRepository(db)
     # Simulate old schema without iep column by dropping it
     with sqlite3.connect(str(db)) as conn:
         conn.execute("ALTER TABLE iev_snapshots DROP COLUMN iep")
@@ -145,8 +146,9 @@ AT_0850 = datetime(2026, 6, 10, 8, 50, 0)
 AT_0855 = datetime(2026, 6, 10, 8, 55, 59)
 AT_0856 = datetime(2026, 6, 10, 8, 56, 0)
 AT_0857 = datetime(2026, 6, 10, 8, 57, 0)
+AT_0858 = datetime(2026, 6, 10, 8, 58, 0)
 AT_0859 = datetime(2026, 6, 10, 8, 59, 0)
-AT_0905 = datetime(2026, 6, 10, 9,  5, 0)
+AT_0905 = datetime(2026, 6, 10, 9, 5, 0)
 AT_0830 = datetime(2026, 6, 10, 8, 30, 0)  # backfill / clock-fudged
 
 
@@ -199,6 +201,7 @@ def test_save_snapshot_no_collected_at_defaults_to_now(tmp_path):
 
 # ── NCP flag (Step 2) ─────────────────────────────────────────────────────────
 
+
 def test_ncp_flag_false_before_0856(tmp_path):
     repo = SQLiteIEVRepository(tmp_path / "t.db")
     repo.save_snapshot(D1, [MoverData("BBCA", 100_000)], collected_at=AT_0855)
@@ -213,6 +216,25 @@ def test_ncp_flag_true_at_0856(tmp_path):
     assert hist[0]["is_ncp_locked"] == 1
 
 
+def test_ncp_flag_false_when_matching_starts_at_0858(tmp_path):
+    repo = SQLiteIEVRepository(tmp_path / "t.db")
+    repo.save_snapshot(D1, [MoverData("BBCA", 100_000)], collected_at=AT_0858)
+    hist = _history_rows(tmp_path / "t.db", D1)
+    assert hist[0]["is_ncp_locked"] == 0
+
+
+def test_ncp_flag_requires_complete_collection_inside_locked_input(tmp_path):
+    repo = SQLiteIEVRepository(tmp_path / "t.db")
+    repo.save_snapshot(
+        D1,
+        [MoverData("BBCA", 100_000)],
+        collection_started_at=AT_0857,
+        collected_at=AT_0858,
+    )
+    hist = _history_rows(tmp_path / "t.db", D1)
+    assert hist[0]["is_ncp_locked"] == 0
+
+
 def test_ncp_flag_false_after_0900(tmp_path):
     repo = SQLiteIEVRepository(tmp_path / "t.db")
     repo.save_snapshot(D1, [MoverData("BBCA", 100_000)], collected_at=AT_0905)
@@ -225,7 +247,7 @@ def test_canonical_ncp_flag_sticky(tmp_path):
     db = tmp_path / "t.db"
     repo = SQLiteIEVRepository(db)
     repo.save_snapshot(D1, [MoverData("BBCA", 100_000)], collected_at=AT_0857)
-    repo.save_snapshot(D1, [MoverData("BBCA", 90_000)],  collected_at=AT_0830)
+    repo.save_snapshot(D1, [MoverData("BBCA", 90_000)], collected_at=AT_0830)
 
     canon = _canonical_rows(db, D1)
     assert canon[0]["is_ncp_locked"] == 1
@@ -233,7 +255,7 @@ def test_canonical_ncp_flag_sticky(tmp_path):
 
 def test_migration_adds_is_ncp_locked_to_old_db(tmp_path):
     db = tmp_path / "old.db"
-    repo1 = SQLiteIEVRepository(db)
+    SQLiteIEVRepository(db)
     with sqlite3.connect(str(db)) as conn:
         conn.execute("ALTER TABLE iev_snapshots DROP COLUMN is_ncp_locked")
     repo2 = SQLiteIEVRepository(db)
@@ -244,10 +266,15 @@ def test_migration_adds_is_ncp_locked_to_old_db(tmp_path):
 
 # ── get_iev_delta (Step 3) ───────────────────────────────────────────────────
 
+
 def test_get_iev_delta_two_runs(tmp_path):
     repo = SQLiteIEVRepository(tmp_path / "t.db")
-    repo.save_snapshot(D1, [MoverData("BBCA", 400_000), MoverData("BBRI", 300_000)], collected_at=AT_0850)
-    repo.save_snapshot(D1, [MoverData("BBCA", 450_000), MoverData("BBRI", 290_000)], collected_at=AT_0857)
+    repo.save_snapshot(
+        D1, [MoverData("BBCA", 400_000), MoverData("BBRI", 300_000)], collected_at=AT_0850
+    )
+    repo.save_snapshot(
+        D1, [MoverData("BBCA", 450_000), MoverData("BBRI", 290_000)], collected_at=AT_0857
+    )
 
     delta = repo.get_iev_delta(D1)
     assert delta == {"BBCA": 50_000, "BBRI": -10_000}
@@ -272,15 +299,64 @@ def test_get_iev_delta_ignores_other_dates(tmp_path):
     assert delta_d2 == {"BBCA": 50_000}
 
 
+def test_get_locked_iev_baseline_uses_earliest_locked_row_before_capture(tmp_path):
+    repo = SQLiteIEVRepository(tmp_path / "t.db")
+    repo.save_snapshot(D1, [MoverData("BBCA", 390_000)], collected_at=AT_0855)
+    repo.save_snapshot(D1, [MoverData("BBCA", 400_000)], collected_at=AT_0856)
+    repo.save_snapshot(D1, [MoverData("BBCA", 420_000)], collected_at=AT_0857)
+    repo.save_snapshot(D1, [MoverData("BBCA", 500_000)], collected_at=AT_0858)
+
+    result = repo.get_locked_iev_baseline(
+        D1,
+        before=datetime(2026, 6, 10, 8, 57, 30, tzinfo=ZoneInfo("Asia/Jakarta")),
+    )
+
+    assert result == {"BBCA": 400_000}
+
+
+def test_get_locked_iev_baseline_never_substitutes_pre_ncp_row(tmp_path):
+    repo = SQLiteIEVRepository(tmp_path / "t.db")
+    repo.save_snapshot(D1, [MoverData("BBCA", 390_000)], collected_at=AT_0855)
+
+    result = repo.get_locked_iev_baseline(
+        D1,
+        before=datetime(2026, 6, 10, 8, 57, 30, tzinfo=ZoneInfo("Asia/Jakarta")),
+    )
+
+    assert result == {}
+
+
+def test_get_locked_iev_baseline_rejects_legacy_matching_row_flagged_locked(
+    tmp_path,
+):
+    db = tmp_path / "t.db"
+    repo = SQLiteIEVRepository(db)
+    repo.save_snapshot(D1, [MoverData("BBCA", 500_000)], collected_at=AT_0859)
+    # Simulate the retired v2 classifier, which marked 08:59 as locked.
+    with sqlite3.connect(str(db)) as conn:
+        conn.execute(
+            "UPDATE iev_snapshot_history SET is_ncp_locked = 1 WHERE date = ?",
+            (D1.isoformat(),),
+        )
+
+    result = repo.get_locked_iev_baseline(
+        D1,
+        before=datetime(2026, 6, 10, 8, 59, 30, tzinfo=ZoneInfo("Asia/Jakarta")),
+    )
+
+    assert result == {}
+
+
 # ── get_ncp_snapshot (Step 4) ────────────────────────────────────────────────
+
 
 def test_get_ncp_snapshot_returns_locked_batch(tmp_path):
     repo = SQLiteIEVRepository(tmp_path / "t.db")
     movers_pre = [MoverData("BBRI", 300_000, 3100)]
-    movers_ncp  = [MoverData("BBCA", 450_000, 5950), MoverData("BMRI", 200_000, 4200)]
+    movers_ncp = [MoverData("BBCA", 450_000, 5950), MoverData("BMRI", 200_000, 4200)]
 
     repo.save_snapshot(D1, movers_pre, collected_at=AT_0850)
-    repo.save_snapshot(D1, movers_ncp,  collected_at=AT_0857)
+    repo.save_snapshot(D1, movers_ncp, collected_at=AT_0857)
 
     result = repo.get_ncp_snapshot(D1)
     tickers = [r.ticker for r in result]
@@ -310,7 +386,7 @@ def test_get_ncp_snapshot_picks_latest_locked(tmp_path):
     repo.save_snapshot(D1, [MoverData("BBCA", 460_000, 5960)], collected_at=AT_0859)
 
     result = repo.get_ncp_snapshot(D1)
-    assert result[0].iev == 460_000  # latest locked batch
+    assert result[0].iev == 440_000  # matching-period row is not locked input
 
 
 def test_get_ncp_snapshot_top_n(tmp_path):

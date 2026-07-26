@@ -17,7 +17,12 @@ def test_classifies_pre_ncp_window():
 
 def test_classifies_ncp_locked_only_before_regular_open():
     assert classify_opening_capture_phase(_at(8, 56)) == "NCP_LOCKED"
-    assert classify_opening_capture_phase(_at(8, 59)) == "NCP_LOCKED"
+    assert classify_opening_capture_phase(_at(8, 57)) == "NCP_LOCKED"
+
+
+def test_classifies_pre_open_matching_separately():
+    assert classify_opening_capture_phase(_at(8, 58)) == "PRE_OPEN_MATCHING"
+    assert classify_opening_capture_phase(_at(8, 59)) == "PRE_OPEN_MATCHING"
 
 
 def test_classifies_post_open_as_not_ncp_locked():
@@ -26,7 +31,4 @@ def test_classifies_post_open_as_not_ncp_locked():
 
 
 def test_non_trading_day_never_claims_ncp_phase():
-    assert (
-        classify_opening_capture_phase(_at(8, 57), is_trading_day=False)
-        == "NON_TRADING_DAY"
-    )
+    assert classify_opening_capture_phase(_at(8, 57), is_trading_day=False) == "NON_TRADING_DAY"

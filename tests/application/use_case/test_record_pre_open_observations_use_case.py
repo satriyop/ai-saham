@@ -31,43 +31,36 @@ def _request() -> PreOpenWorkflowRequest:
     ),
     [
         (
-            datetime(
-                2026, 6, 18, 8, 55, tzinfo=ZoneInfo("Asia/Jakarta")
-            ),
-            datetime(
-                2026, 6, 18, 8, 55, tzinfo=ZoneInfo("Asia/Jakarta")
-            ),
+            datetime(2026, 6, 18, 8, 55, tzinfo=ZoneInfo("Asia/Jakarta")),
+            datetime(2026, 6, 18, 8, 55, tzinfo=ZoneInfo("Asia/Jakarta")),
             "PRE_NCP",
             True,
             "test:pre-ncp",
         ),
         (
-            datetime(
-                2026, 6, 18, 8, 56, tzinfo=ZoneInfo("Asia/Jakarta")
-            ),
+            datetime(2026, 6, 18, 8, 56, tzinfo=ZoneInfo("Asia/Jakarta")),
             None,
             "NCP_LOCKED",
             True,
             "test:missing-time",
         ),
         (
-            datetime(
-                2026, 6, 19, 8, 56, tzinfo=ZoneInfo("Asia/Jakarta")
-            ),
-            datetime(
-                2026, 6, 19, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta")
-            ),
+            datetime(2026, 6, 19, 8, 56, tzinfo=ZoneInfo("Asia/Jakarta")),
+            datetime(2026, 6, 19, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta")),
             "NCP_LOCKED",
             True,
             "test:wrong-session",
         ),
         (
-            datetime(
-                2026, 6, 18, 8, 56, tzinfo=ZoneInfo("Asia/Jakarta")
-            ),
-            datetime(
-                2026, 6, 18, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta")
-            ),
+            datetime(2026, 6, 18, 8, 56, tzinfo=ZoneInfo("Asia/Jakarta")),
+            datetime(2026, 6, 18, 8, 58, tzinfo=ZoneInfo("Asia/Jakarta")),
+            "PRE_OPEN_MATCHING",
+            True,
+            "test:matching",
+        ),
+        (
+            datetime(2026, 6, 18, 8, 56, tzinfo=ZoneInfo("Asia/Jakarta")),
+            datetime(2026, 6, 18, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta")),
             "NCP_LOCKED",
             False,
             "test:manual-json",
@@ -104,12 +97,8 @@ def test_capture_rejects_unproven_ncp_before_persistence(
 def test_capture_accepts_proven_same_session_ncp():
     workflow = MagicMock()
     response = SimpleNamespace(
-        collection_started_at=datetime(
-            2026, 6, 18, 8, 56, tzinfo=ZoneInfo("Asia/Jakarta")
-        ),
-        decision_at=datetime(
-            2026, 6, 18, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta")
-        ),
+        collection_started_at=datetime(2026, 6, 18, 8, 56, tzinfo=ZoneInfo("Asia/Jakarta")),
+        decision_at=datetime(2026, 6, 18, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta")),
         capture_phase="NCP_LOCKED",
         source_is_live=True,
         decision_snapshot_ref="test:ncp",

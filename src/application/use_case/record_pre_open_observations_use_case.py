@@ -69,14 +69,13 @@ class RecordPreOpenObservationsUseCase:
             raise ValueError(
                 "Pre-open decision capture requires a verified live source, a "
                 "timezone-aware collection window wholly inside the requested "
-                "session's NCP_LOCKED phase, and a snapshot reference."
+                "session's 08:56–08:58 NCP_LOCKED input phase, and a snapshot "
+                "reference."
             )
         count = self._persister.persist(response, request)
         ops_path: str | None = None
         if opening_data_dir is not None:
-            day_dir = opening_data_dir / response.result.screened_date.strftime(
-                "%Y%m%d"
-            )
+            day_dir = opening_data_dir / response.result.screened_date.strftime("%Y%m%d")
             written = write_pre_open_ops_day_export(
                 response,
                 day_dir,

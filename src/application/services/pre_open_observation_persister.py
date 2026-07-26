@@ -1,7 +1,7 @@
 """Persist pre-open session observations to CandidateObservationsRepository.
 
 Reuse shared candidate_observations store with workflow=screen_pre_open and
-observation_contract=pre-open-open-30m.v2 (ADR-048). Fail closed on write errors.
+observation_contract=pre-open-open-30m.v3 (ADR-048). Fail closed on write errors.
 
 Layer: Application
 """
@@ -80,7 +80,7 @@ class PreOpenObservationPersister:
             raise ValueError(
                 "Pre-open observation persistence requires a verified live source "
                 "and proven collection window wholly inside the same-session "
-                "NCP_LOCKED phase."
+                "08:56–08:58 NCP_LOCKED input phase."
             )
         decision_at = response.decision_at
         collection_started_at = response.collection_started_at
@@ -153,9 +153,7 @@ class PreOpenObservationPersister:
                 else None
             )
             risk = (
-                response.risk_by_ticker.get(ticker)
-                if response.risk_by_ticker is not None
-                else None
+                response.risk_by_ticker.get(ticker) if response.risk_by_ticker is not None else None
             )
             trade = (
                 response.trade_setup_by_ticker.get(ticker)

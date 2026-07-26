@@ -19,6 +19,7 @@ from src.application.services.pre_open_signal_evidence_builder import (
     build_pre_open_signal_evidence,
 )
 from src.domain.value_objects.pre_open_signal_evidence import (
+    PRE_OPEN_SIGNAL_EVIDENCE_CONTRACT,
     AuctionNcpEvidence,
     AuctionNcpProvenance,
     OpenViabilityEvidence,
@@ -26,13 +27,13 @@ from src.domain.value_objects.pre_open_signal_evidence import (
 )
 from src.domain.value_objects.signal_assessment import EntryQuality, SignalStrength
 
-NCP_DECISION_AT = datetime(
-    2026, 6, 18, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta")
-)
-NCP_COLLECTION_STARTED_AT = datetime(
-    2026, 6, 18, 8, 56, tzinfo=ZoneInfo("Asia/Jakarta")
-)
+NCP_DECISION_AT = datetime(2026, 6, 18, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta"))
+NCP_COLLECTION_STARTED_AT = datetime(2026, 6, 18, 8, 56, tzinfo=ZoneInfo("Asia/Jakarta"))
 NCP_SNAPSHOT_REF = "test:ncp:2026-06-18T08:57:00+07:00"
+
+
+def test_pre_open_signal_evidence_contract_is_v3():
+    assert PRE_OPEN_SIGNAL_EVIDENCE_CONTRACT == "pre_open_signal_evidence.v3"
 
 
 def _ncp_kwargs() -> dict:
@@ -70,11 +71,7 @@ def _auction(
             snapshot_ref=NCP_SNAPSHOT_REF,
             trade_date=date(2026, 6, 18),
         ),
-        iep=(
-            None
-            if gap_pct is None
-            else int(Decimal("10000") * (Decimal("1") + gap_pct / 100))
-        ),
+        iep=(None if gap_pct is None else int(Decimal("10000") * (Decimal("1") + gap_pct / 100))),
         iep_gap_pct=gap_pct,
         gap_price_source="IEP" if gap_pct is not None else None,
         delta_iev=delta_iev,
@@ -170,6 +167,13 @@ def test_auction_evidence_rejects_iep_source_without_iep_fields():
         ),
         (
             NCP_COLLECTION_STARTED_AT,
+            datetime(2026, 6, 18, 8, 58, tzinfo=ZoneInfo("Asia/Jakarta")),
+            "NCP_LOCKED",
+            True,
+            "test:matching-started",
+        ),
+        (
+            NCP_COLLECTION_STARTED_AT,
             datetime(2026, 6, 18, 9, 0, tzinfo=ZoneInfo("Asia/Jakarta")),
             "NCP_LOCKED",
             True,
@@ -225,10 +229,7 @@ def test_builder_keeps_unproven_auction_discovery_only(
 
 def test_hard_guard_no_auction_returns_none():
     bundle = PreOpenSignalEvidenceBundle(auction_ncp=None, open_viability=None)
-    assert (
-        evaluate_pre_open_signal_cascade(bundle, snapshot_date=date(2026, 6, 18))
-        is None
-    )
+    assert evaluate_pre_open_signal_cascade(bundle, snapshot_date=date(2026, 6, 18)) is None
 
 
 def test_hard_guard_auction_below_min_returns_none():
@@ -238,9 +239,7 @@ def test_hard_guard_auction_below_min_returns_none():
     assert score_auction_ncp(auction) < 90
     bundle = PreOpenSignalEvidenceBundle(auction_ncp=auction, open_viability=None)
     assert (
-        evaluate_pre_open_signal_cascade(
-            bundle, snapshot_date=date(2026, 6, 18), config=cfg
-        )
+        evaluate_pre_open_signal_cascade(bundle, snapshot_date=date(2026, 6, 18), config=cfg)
         is None
     )
 
@@ -249,9 +248,7 @@ def test_viability_missing_caps_strength_moderate():
     auction = _auction()
     assert score_auction_ncp(auction) >= 70  # would be STRONG if viability present
     bundle = PreOpenSignalEvidenceBundle(auction_ncp=auction, open_viability=None)
-    resp = evaluate_pre_open_signal_cascade(
-        bundle, snapshot_date=date(2026, 6, 18)
-    )
+    resp = evaluate_pre_open_signal_cascade(bundle, snapshot_date=date(2026, 6, 18))
     assert resp is not None
     assert resp.assessment.strength is SignalStrength.MODERATE
     assert resp.signal_authority_coverage == 0.5
@@ -270,12 +267,8 @@ def test_gap_out_veto_forces_avoid():
         atr=None,
         gap_pct=Decimal("8"),
     )
-    bundle = PreOpenSignalEvidenceBundle(
-        auction_ncp=auction, open_viability=viability
-    )
-    resp = evaluate_pre_open_signal_cascade(
-        bundle, snapshot_date=date(2026, 6, 18)
-    )
+    bundle = PreOpenSignalEvidenceBundle(auction_ncp=auction, open_viability=viability)
+    resp = evaluate_pre_open_signal_cascade(bundle, snapshot_date=date(2026, 6, 18))
     assert resp is not None
     assert resp.assessment.entry_quality is EntryQuality.AVOID
     assert any("gap_out" in r for r in resp.assessment.rationale)
@@ -400,9 +393,7 @@ def test_builder_from_candidate_and_evaluate():
         rsi=Decimal("55"),
     )
     builder = PreOpenSignalInputsBuilder()
-    resp = builder.evaluate(
-        candidate, trade_date=date(2026, 6, 18), **_ncp_kwargs()
-    )
+    resp = builder.evaluate(candidate, trade_date=date(2026, 6, 18), **_ncp_kwargs())
     assert resp is not None
     assert resp.ticker == "BBRI"
     assert 0 <= resp.score <= 100
@@ -426,12 +417,7 @@ def test_builder_without_prev_close_no_auction():
         candidate, trade_date=date(2026, 6, 18), **_ncp_kwargs()
     )
     assert bundle.auction_ncp is None
-    assert (
-        evaluate_pre_open_signal_cascade(
-            bundle, snapshot_date=date(2026, 6, 18)
-        )
-        is None
-    )
+    assert evaluate_pre_open_signal_cascade(bundle, snapshot_date=date(2026, 6, 18)) is None
 
 
 def test_confirmation_only_impossible_without_auction():
@@ -447,15 +433,8 @@ def test_confirmation_only_impossible_without_auction():
         atr=None,
         gap_pct=Decimal("1"),
     )
-    bundle = PreOpenSignalEvidenceBundle(
-        auction_ncp=None, open_viability=viability
-    )
-    assert (
-        evaluate_pre_open_signal_cascade(
-            bundle, snapshot_date=date(2026, 6, 18)
-        )
-        is None
-    )
+    bundle = PreOpenSignalEvidenceBundle(auction_ncp=None, open_viability=viability)
+    assert evaluate_pre_open_signal_cascade(bundle, snapshot_date=date(2026, 6, 18)) is None
 
 
 def test_composite_rendering_requires_auction_and_uses_weights():

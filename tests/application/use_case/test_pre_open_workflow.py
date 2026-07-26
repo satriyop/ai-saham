@@ -7,6 +7,9 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from src.application.services.pre_open_signal_cascade import (
+    PreOpenSignalInputsBuilder,
+)
 from src.application.use_case.pre_open_screen_use_case import (
     PreOpenScreenConfig,
     PreOpenScreenResponse,
@@ -64,6 +67,21 @@ class FakeBrokerRepository:
         return self.ranges.get(ticker)
 
 
+class FakeLockedIevBaselineProvider:
+    def __init__(self, baselines: dict[str, int]) -> None:
+        self.baselines = baselines
+        self.calls: list[tuple[date, datetime]] = []
+
+    def get_locked_iev_baseline(
+        self,
+        snapshot_date: date,
+        *,
+        before: datetime,
+    ) -> dict[str, int]:
+        self.calls.append((snapshot_date, before))
+        return self.baselines
+
+
 def _candidate(ticker: str = "BBCA") -> ScreenerCandidate:
     return ScreenerCandidate(
         ticker=ticker,
@@ -118,15 +136,13 @@ def test_pre_open_workflow_executes_screen_and_builds_freshness():
     assert response.warnings == [
         "Pre-open candidates are discovery-only: production signal requires a "
         "verified live source, a collection window wholly inside the same-session "
-        "NCP_LOCKED phase, and a snapshot reference."
+        "08:56–08:58 NCP_LOCKED input phase, and a snapshot reference."
     ]
 
 
 def test_pre_open_workflow_propagates_warnings_and_stale_data_notes():
     run_date = date(2026, 6, 18)
-    screen = FakeScreenUseCase(
-        _screen_response(run_date, warnings=["screen warning"])
-    )
+    screen = FakeScreenUseCase(_screen_response(run_date, warnings=["screen warning"]))
     workflow = PreOpenWorkflowUseCase(
         screen_use_case=screen,
         market_repository=FakeMarketRepository({"BBCA": (date(2026, 1, 1), date(2026, 6, 17))}),
@@ -146,7 +162,7 @@ def test_pre_open_workflow_propagates_warnings_and_stale_data_notes():
         "guard warning",
         "Pre-open candidates are discovery-only: production signal requires a "
         "verified live source, a collection window wholly inside the same-session "
-        "NCP_LOCKED phase, and a snapshot reference.",
+        "08:56–08:58 NCP_LOCKED input phase, and a snapshot reference.",
     ]
     assert "Latest candle date is 2026-06-17" in response.data_freshness.warnings[0]
     assert "No cached broker-flow date" in response.data_freshness.warnings[1]
@@ -603,19 +619,17 @@ def test_pre_open_workflow_signal_cascade_and_trade_setup_when_risk_present():
         risk_engine=risk_engine,
         risk_inputs_builder=PreOpenRiskInputsBuilder(),
     )
+    locked_baselines = FakeLockedIevBaselineProvider({"BBCA": 200_000})
+    signal_builder = MagicMock(wraps=PreOpenSignalInputsBuilder())
     workflow = PreOpenWorkflowUseCase(
         screen_use_case=screen,
-        market_repository=FakeMarketRepository(
-            {"BBCA": (date(2026, 1, 1), run_date)}
-        ),
-        broker_repository=FakeBrokerRepository(
-            {"BBCA": (date(2026, 1, 1), run_date)}
-        ),
+        market_repository=FakeMarketRepository({"BBCA": (date(2026, 1, 1), run_date)}),
+        broker_repository=FakeBrokerRepository({"BBCA": (date(2026, 1, 1), run_date)}),
         assessment_pipeline=pipeline,
         risk_engine=risk_engine,
-        decision_clock=lambda: datetime(
-            2026, 6, 18, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta")
-        ),
+        signal_builder=signal_builder,
+        locked_iev_baseline_provider=locked_baselines,
+        decision_clock=lambda: datetime(2026, 6, 18, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta")),
     )
 
     response = workflow.execute(
@@ -632,6 +646,13 @@ def test_pre_open_workflow_signal_cascade_and_trade_setup_when_risk_present():
     assert response.ncp_authoritative is True
     assert response.signal_by_ticker["BBCA"] is not None
     assert response.signal_by_ticker["BBCA"].score >= 50
+    assert signal_builder.evaluate.call_args.kwargs["delta_iev"] == 50_000
+    assert locked_baselines.calls == [
+        (
+            run_date,
+            datetime(2026, 6, 18, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta")),
+        )
+    ]
     assert response.trade_setup_by_ticker is not None
     assert response.trade_setup_by_ticker["BBCA"] is not None
     assert response.trade_setup_by_ticker["BBCA"].action in {
@@ -666,15 +687,9 @@ def test_pre_open_workflow_pre_ncp_candidate_has_no_signal_or_trade_setup():
                 source_is_live=True,
             )
         ),
-        market_repository=FakeMarketRepository(
-            {"BBCA": (date(2026, 1, 1), run_date)}
-        ),
-        broker_repository=FakeBrokerRepository(
-            {"BBCA": (date(2026, 1, 1), run_date)}
-        ),
-        decision_clock=lambda: datetime(
-            2026, 6, 18, 8, 55, tzinfo=ZoneInfo("Asia/Jakarta")
-        ),
+        market_repository=FakeMarketRepository({"BBCA": (date(2026, 1, 1), run_date)}),
+        broker_repository=FakeBrokerRepository({"BBCA": (date(2026, 1, 1), run_date)}),
+        decision_clock=lambda: datetime(2026, 6, 18, 8, 55, tzinfo=ZoneInfo("Asia/Jakarta")),
     )
 
     response = workflow.execute(
@@ -722,12 +737,8 @@ def test_pre_open_workflow_scan_started_before_ncp_stays_discovery_only():
                 source_is_live=True,
             )
         ),
-        market_repository=FakeMarketRepository(
-            {"BBCA": (date(2026, 1, 1), run_date)}
-        ),
-        broker_repository=FakeBrokerRepository(
-            {"BBCA": (date(2026, 1, 1), run_date)}
-        ),
+        market_repository=FakeMarketRepository({"BBCA": (date(2026, 1, 1), run_date)}),
+        broker_repository=FakeBrokerRepository({"BBCA": (date(2026, 1, 1), run_date)}),
         signal_builder=signal_builder,
         decision_clock=lambda: next(clock_values),
     )
@@ -745,6 +756,55 @@ def test_pre_open_workflow_scan_started_before_ncp_stays_discovery_only():
     assert response.ncp_authoritative is False
     assert response.signal_by_ticker == {"BBCA": None}
     assert any("collection window wholly inside" in item for item in response.warnings)
+    signal_builder.evaluate.assert_not_called()
+
+
+def test_pre_open_workflow_crossing_into_matching_stays_discovery_only():
+    from unittest.mock import MagicMock
+
+    run_date = date(2026, 6, 18)
+    candidate = ScreenerCandidate(
+        ticker="BBCA",
+        iev=500_000,
+        entry_price=Decimal("10050"),
+        stop_loss_price=Decimal("9800"),
+        capital=Decimal("3000000"),
+        prev_close=Decimal("10000"),
+        gap_pct=Decimal("1.0"),
+    )
+    clock_values = iter(
+        (
+            datetime(2026, 6, 18, 8, 57, 30, tzinfo=ZoneInfo("Asia/Jakarta")),
+            datetime(2026, 6, 18, 8, 58, tzinfo=ZoneInfo("Asia/Jakarta")),
+        )
+    )
+    signal_builder = MagicMock()
+    workflow = PreOpenWorkflowUseCase(
+        screen_use_case=FakeScreenUseCase(
+            _screen_response(
+                run_date,
+                candidates=[candidate],
+                source_is_live=True,
+            )
+        ),
+        market_repository=FakeMarketRepository({"BBCA": (date(2026, 1, 1), run_date)}),
+        broker_repository=FakeBrokerRepository({"BBCA": (date(2026, 1, 1), run_date)}),
+        signal_builder=signal_builder,
+        decision_clock=lambda: next(clock_values),
+    )
+
+    response = workflow.execute(
+        PreOpenWorkflowRequest(
+            config=PreOpenScreenConfig(fast_mode=True),
+            run_date=run_date,
+            regime_enabled=False,
+            risk_enabled=False,
+        )
+    )
+
+    assert response.capture_phase == "CROSS_PHASE"
+    assert response.ncp_authoritative is False
+    assert response.signal_by_ticker == {"BBCA": None}
     signal_builder.evaluate.assert_not_called()
 
 

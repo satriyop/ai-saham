@@ -296,3 +296,25 @@ New authoritative pre-open evidence uses
 - Authoritative persistence independently validates the same provenance and
   records the actual decision timestamp. Older v1/unversioned rows remain
   unchanged and outside this cohort.
+
+### Locked-Input / Matching Phase Amendment (2026-07-26)
+
+New authoritative pre-open evidence uses
+`pre_open_signal_evidence.v3` and observation contract
+`pre-open-open-30m.v3`.
+
+- The exchange interval is split into `NCP_LOCKED` locked input
+  `[08:56, 08:58)` and `PRE_OPEN_MATCHING` `[08:58, 09:00)`.
+- A production decision's complete live collection window must stay inside
+  locked input and finish before matching. Crossing 08:58 is `CROSS_PHASE`;
+  starting during matching is discovery-only.
+- Production `delta_iev` is the final live candidate IEV minus the earliest
+  stored locked baseline strictly before that collection. Pre-NCP and
+  matching-period rows are forbidden substitutes.
+- With no valid locked baseline, `delta_iev` remains MISSING and contributes
+  neither reward nor penalty.
+- All-session first-to-last IEV change remains a diagnostic CLI statistic; it
+  is not signal evidence.
+- The scheduled workflow captures the baseline at 08:56 and runs the sole
+  decision write at 08:57. If the decision finishes at or after 08:58,
+  persistence fails closed.

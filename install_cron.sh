@@ -72,19 +72,21 @@ echo ""
 #   research pre-open capture = sole decision write (DB + ops_session + sidecar)
 #   research pre-open track / grade / tune = same-day ops
 #   research pre-open labels = open_30m outcomes (day-file)
-# Playwright: ticks are ≥3 minutes apart so slow Stockbit runs rarely overlap.
+# Playwright: discovery/baseline ticks are ≥3 minutes apart. The final decision
+# capture begins at 08:57 and must finish before 08:58 or it fails closed.
 # Swing EOD: fetch market on by default. Swing research capture/labels stay
 # commented until an always-on multi-day corpus is wanted.
 read -r -d '' SAHAM_CRON << ENTRIES || true
 # --- saham-cron-begin ---
-# Multi-tick IEV (pre-NCP) — enables get_iev_delta / ΔIEV (need ≥2 same-day rows)
+# Multi-tick IEV discovery (diagnostic all-session ΔIEV)
 47 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham fetch iev' >> $LOG_DIR/iev-collector.log 2>&1
 50 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham fetch iev' >> $LOG_DIR/iev-collector.log 2>&1
 53 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham fetch iev' >> $LOG_DIR/iev-collector.log 2>&1
-# IEV NCP-locked tick — inside [08:56, 09:00) so is_ncp_locked=1
-57 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham fetch iev' >> $LOG_DIR/iev-collector.log 2>&1
-# Sole decision write — after NCP IEV; writes candidate_observations + ops_session + confirm sidecar
-58 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham research pre-open capture' >> $LOG_DIR/pre-open-capture.log 2>&1
+# Locked-input IEV baseline — existing orders cannot be withdrawn/amended
+56 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham fetch iev' >> $LOG_DIR/iev-collector.log 2>&1
+# Final live decision — must finish before 08:58 matching; current IEV minus the
+# 08:56 baseline supplies locked-input delta_iev.
+57 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham research pre-open capture' >> $LOG_DIR/pre-open-capture.log 2>&1
 # Same-day ops — orderbook tracker 09:00–09:30 (tickers from saved observations)
 0 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && PYTHONUNBUFFERED=1 saham research pre-open track --broker-confirm' >> $LOG_DIR/opening-track.log 2>&1
 # Optional paper confirm from first track file (sidecar also written by capture)

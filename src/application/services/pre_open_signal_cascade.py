@@ -32,9 +32,9 @@ from src.domain.value_objects.signal_assessment import (
 def score_auction_ncp(auction: AuctionNcpEvidence) -> int:
     """Deterministic 0–100 auction quality from NCP-linked fields.
 
-    ``delta_iev`` is MISSING-safe: when None (no multi-tick history), the score
+    ``delta_iev`` is MISSING-safe: when None (no locked-input baseline), the score
     uses gap/book/IEV only with no penalty and no fabrication. When present,
-    relative build-into-lock adjusts the score (appetite factor).
+    relative growth after the 08:56 lock adjusts the score (appetite factor).
     """
     score = 55.0  # baseline when IEV+prev_close present
 
@@ -75,7 +75,7 @@ def score_auction_ncp(auction: AuctionNcpEvidence) -> int:
     elif auction.iev >= 200_000:
         score += 4.0
 
-    # ΔIEV appetite (build into lock) — present only when multi-tick history exists
+    # ΔIEV appetite after lock — present only with an earlier locked baseline
     score += _delta_iev_contribution(auction)
 
     return int(max(0, min(100, round(score))))
@@ -134,9 +134,7 @@ def _entry_quality(strength: SignalStrength) -> EntryQuality:
     return EntryQuality.AVOID
 
 
-def _cap_entry_quality(
-    quality: EntryQuality, max_quality: EntryQuality
-) -> EntryQuality:
+def _cap_entry_quality(quality: EntryQuality, max_quality: EntryQuality) -> EntryQuality:
     order = (EntryQuality.AVOID, EntryQuality.WATCH, EntryQuality.ENTER)
     return order[min(order.index(quality), order.index(max_quality))]
 
@@ -154,14 +152,9 @@ def evaluate_pre_open_signal_cascade(
     """
     cfg = config or PreOpenSignalConfig()
     if cfg.rendering == "composite":
-        return _evaluate_composite(
-            bundle, snapshot_date=snapshot_date, config=cfg
-        )
+        return _evaluate_composite(bundle, snapshot_date=snapshot_date, config=cfg)
     if cfg.rendering != "cascade":
-        raise ValueError(
-            "rendering must be 'cascade' or 'composite', "
-            f"got {cfg.rendering!r}"
-        )
+        raise ValueError(f"rendering must be 'cascade' or 'composite', got {cfg.rendering!r}")
 
     auction = bundle.auction_ncp
     if auction is None:
@@ -315,10 +308,7 @@ def _evaluate_composite(
                 v_score -= 20.0
         v_score = max(0.0, min(100.0, v_score))
         score = int(
-            round(
-                config.auction_weight * auction_score
-                + config.viability_weight * v_score
-            )
+            round(config.auction_weight * auction_score + config.viability_weight * v_score)
         )
         strength = _strength_from_score(score, cfg=config)
         coverage = 1.0

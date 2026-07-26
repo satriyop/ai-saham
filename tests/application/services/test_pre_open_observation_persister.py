@@ -60,35 +60,27 @@ def _candidate(ticker: str = "BBCA") -> ScreenerCandidate:
     )
 
 
+def test_pre_open_observation_contract_is_v3():
+    assert PRE_OPEN_OBSERVATION_CONTRACT == "pre-open-open-30m.v3"
+
+
 def test_derive_screen_result_funnel():
     assert (
-        derive_pre_open_screen_result(
-            has_entry_range=False, signal_summary=None, trade_setup=None
-        )
+        derive_pre_open_screen_result(has_entry_range=False, signal_summary=None, trade_setup=None)
         == "rejected_plan"
     )
     assert (
-        derive_pre_open_screen_result(
-            has_entry_range=True, signal_summary=None, trade_setup=None
-        )
+        derive_pre_open_screen_result(has_entry_range=True, signal_summary=None, trade_setup=None)
         == "rejected_auction_missing"
     )
-    sig = PreOpenSignalSummary(
-        score=80, strength="STRONG", entry_quality="AVOID"
-    )
+    sig = PreOpenSignalSummary(score=80, strength="STRONG", entry_quality="AVOID")
     assert (
-        derive_pre_open_screen_result(
-            has_entry_range=True, signal_summary=sig, trade_setup=None
-        )
+        derive_pre_open_screen_result(has_entry_range=True, signal_summary=sig, trade_setup=None)
         == "rejected_signal"
     )
-    sig_ok = PreOpenSignalSummary(
-        score=80, strength="STRONG", entry_quality="ENTER"
-    )
+    sig_ok = PreOpenSignalSummary(score=80, strength="STRONG", entry_quality="ENTER")
     assert (
-        derive_pre_open_screen_result(
-            has_entry_range=True, signal_summary=sig_ok, trade_setup=None
-        )
+        derive_pre_open_screen_result(has_entry_range=True, signal_summary=sig_ok, trade_setup=None)
         == "pass"
     )
 
@@ -141,12 +133,8 @@ def test_persist_observations_and_identity_upsert(tmp_path: Path, monkeypatch):
         source_snapshot_ref=None,
         source_is_live=True,
         capture_phase="NCP_LOCKED",
-        collection_started_at=datetime(
-            2026, 6, 18, 8, 56, tzinfo=ZoneInfo("Asia/Jakarta")
-        ),
-        decision_at=datetime(
-            2026, 6, 18, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta")
-        ),
+        collection_started_at=datetime(2026, 6, 18, 8, 56, tzinfo=ZoneInfo("Asia/Jakarta")),
+        decision_at=datetime(2026, 6, 18, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta")),
         decision_snapshot_ref="test:ncp",
     )
     request = PreOpenWorkflowRequest(
@@ -277,12 +265,8 @@ def test_persist_includes_hard_filter_rejects(tmp_path: Path):
         source_status=PreOpenSourceStatus.LIVE_SUCCESS,
         source_is_live=True,
         capture_phase="NCP_LOCKED",
-        collection_started_at=datetime(
-            2026, 6, 18, 8, 56, tzinfo=ZoneInfo("Asia/Jakarta")
-        ),
-        decision_at=datetime(
-            2026, 6, 18, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta")
-        ),
+        collection_started_at=datetime(2026, 6, 18, 8, 56, tzinfo=ZoneInfo("Asia/Jakarta")),
+        decision_at=datetime(2026, 6, 18, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta")),
         decision_snapshot_ref="test:ncp:reject",
     )
     request = PreOpenWorkflowRequest(

@@ -58,11 +58,15 @@ if TYPE_CHECKING:
     from src.domain.value_objects.market_context import MarketContext
 
 
-class IevDeltaProvider(Protocol):
-    """Narrow port: multi-tick ΔIEV map for one session date (MISSING-safe)."""
+class LockedIevBaselineProvider(Protocol):
+    """Narrow port for committed IEV baselines captured after the NCP lock."""
 
-    def get_iev_delta(self, snapshot_date: date) -> Mapping[str, int]:
-        ...
+    def get_locked_iev_baseline(
+        self,
+        snapshot_date: date,
+        *,
+        before: datetime,
+    ) -> Mapping[str, int]: ...
 
 
 @dataclass(frozen=True)
@@ -180,7 +184,7 @@ class PreOpenWorkflowUseCase:
         run_snapshot_screen: (
             Callable[[PreOpenScreenConfig, date], PreOpenSnapshotScreenResult | None] | None
         ) = None,
-        iev_delta_provider: IevDeltaProvider | None = None,
+        locked_iev_baseline_provider: LockedIevBaselineProvider | None = None,
         decision_clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._screen_use_case = screen_use_case
@@ -188,7 +192,7 @@ class PreOpenWorkflowUseCase:
         self._broker_repo = broker_repository
         self._evaluate_market_context = evaluate_market_context
         self._run_snapshot_screen = run_snapshot_screen
-        self._iev_delta_provider = iev_delta_provider
+        self._locked_iev_baseline_provider = locked_iev_baseline_provider
         self._decision_clock = decision_clock or (lambda: datetime.now(tz=IDX_TIMEZONE))
         self._assessment_pipeline = assessment_pipeline or ScreenAssessmentPipeline(
             policy=ScreenPolicy.pre_open(),
@@ -196,9 +200,7 @@ class PreOpenWorkflowUseCase:
             risk_inputs_builder=PreOpenRiskInputsBuilder() if risk_engine is not None else None,
             evaluate_market_context=evaluate_market_context,
         )
-        self._signal_builder = signal_builder or PreOpenSignalInputsBuilder(
-            PreOpenSignalConfig()
-        )
+        self._signal_builder = signal_builder or PreOpenSignalInputsBuilder(PreOpenSignalConfig())
         self._trade_setup_uc = trade_setup_uc or AssessTradeSetupUseCase()
 
     def execute(self, request: PreOpenWorkflowRequest) -> PreOpenWorkflowResponse:
@@ -223,9 +225,7 @@ class PreOpenWorkflowUseCase:
         try:
             collection_started_at = self._decision_clock()
             if collection_started_at.tzinfo is None:
-                raise ValueError(
-                    "pre-open decision_clock must return a timezone-aware datetime"
-                )
+                raise ValueError("pre-open decision_clock must return a timezone-aware datetime")
             screen_response = self._screen_use_case.execute(
                 PreOpenScreenRequest(
                     config=request.config,
@@ -289,9 +289,7 @@ class PreOpenWorkflowUseCase:
                 if collection_started_at is not None
                 else "UNKNOWN"
             )
-            decision_snapshot_ref = (
-                f"screen:{started}..{decision_at.isoformat()}"
-            )
+            decision_snapshot_ref = f"screen:{started}..{decision_at.isoformat()}"
         decision_provenance = AuctionNcpProvenance(
             ticker="SCREEN",
             collection_started_at=collection_started_at,
@@ -343,38 +341,39 @@ class PreOpenWorkflowUseCase:
         trade_setup_by_ticker: dict[str, TradeSetup | None] | None = None
         policy = self._assessment_pipeline.policy
 
-        if (
-            request.signal_enabled
-            and policy.signal_applicable
-            and result.candidates
-        ):
+        if request.signal_enabled and policy.signal_applicable and result.candidates:
             signal_by_ticker = {}
             snapshot_ref = decision_snapshot_ref or source_snapshot_ref
             if not decision_provenance.is_production_ncp:
                 warnings.append(
                     "Pre-open candidates are discovery-only: production signal "
                     "requires a verified live source, a collection window wholly "
-                    "inside the same-session NCP_LOCKED phase, and a snapshot reference."
+                    "inside the same-session 08:56–08:58 NCP_LOCKED input phase, "
+                    "and a snapshot reference."
                 )
-                signal_by_ticker.update(
-                    {candidate.ticker: None for candidate in result.candidates}
-                )
+                signal_by_ticker.update({candidate.ticker: None for candidate in result.candidates})
 
-            iev_deltas: Mapping[str, int] = {}
+            locked_iev_baselines: Mapping[str, int] = {}
             if (
                 decision_provenance.is_production_ncp
-                and self._iev_delta_provider is not None
+                and self._locked_iev_baseline_provider is not None
             ):
                 try:
-                    iev_deltas = dict(
-                        self._iev_delta_provider.get_iev_delta(result.screened_date)
+                    assert collection_started_at is not None
+                    locked_iev_baselines = dict(
+                        self._locked_iev_baseline_provider.get_locked_iev_baseline(
+                            result.screened_date,
+                            before=collection_started_at,
+                        )
                     )
                 except Exception as exc:
-                    warnings.append(f"IEV delta unavailable (MISSING-safe): {exc}")
-                    iev_deltas = {}
-            for candidate in (
-                result.candidates if decision_provenance.is_production_ncp else ()
-            ):
+                    warnings.append(f"Locked-input IEV baseline unavailable (MISSING-safe): {exc}")
+                    locked_iev_baselines = {}
+            for candidate in result.candidates if decision_provenance.is_production_ncp else ():
+                baseline_iev = locked_iev_baselines.get(candidate.ticker.upper())
+                locked_delta_iev = (
+                    candidate.iev - baseline_iev if baseline_iev is not None else None
+                )
                 try:
                     sig = self._signal_builder.evaluate(
                         candidate,
@@ -384,12 +383,10 @@ class PreOpenWorkflowUseCase:
                         capture_phase=capture_phase,
                         source_is_live=screen_response.source_is_live,
                         snapshot_ref=snapshot_ref,
-                        delta_iev=iev_deltas.get(candidate.ticker),
+                        delta_iev=locked_delta_iev,
                     )
                 except Exception as exc:
-                    warnings.append(
-                        f"Signal unavailable for {candidate.ticker}: {exc}"
-                    )
+                    warnings.append(f"Signal unavailable for {candidate.ticker}: {exc}")
                     signal_by_ticker[candidate.ticker] = None
                     continue
                 if sig is None:
@@ -506,9 +503,7 @@ class PreOpenWorkflowUseCase:
             warn_list.append(msg)
         return summaries, full, warn_list
 
-    def _outside_window_response(
-        self, request: PreOpenWorkflowRequest
-    ) -> PreOpenWorkflowResponse:
+    def _outside_window_response(self, request: PreOpenWorkflowRequest) -> PreOpenWorkflowResponse:
         message = (
             "Outside the pre-open live window "
             f"({PRE_OPEN_START.strftime('%H:%M')}-{PRE_OPEN_END.strftime('%H:%M')} WIB); "
@@ -582,8 +577,7 @@ class PreOpenWorkflowUseCase:
         elif candle_end < analysis_date:
             lag = (analysis_date - candle_end).days
             warnings.append(
-                f"Latest candle date is {candle_end}, "
-                f"{lag} calendar day(s) before analysis date."
+                f"Latest candle date is {candle_end}, {lag} calendar day(s) before analysis date."
             )
 
         if broker_end is None:
@@ -596,9 +590,7 @@ class PreOpenWorkflowUseCase:
             )
 
         if candle_end and broker_end and candle_end != broker_end:
-            warnings.append(
-                f"Candle and broker-flow dates differ ({candle_end} vs {broker_end})."
-            )
+            warnings.append(f"Candle and broker-flow dates differ ({candle_end} vs {broker_end}).")
 
         return PreOpenDataFreshness(
             analysis_date=analysis_date,

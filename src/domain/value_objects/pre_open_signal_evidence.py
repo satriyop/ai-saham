@@ -1,7 +1,7 @@
 """
 Pre-open signal evidence groups (ADR-048).
 
-Contract: ``pre_open_signal_evidence.v2``
+Contract: ``pre_open_signal_evidence.v3``
 
 - ``AuctionNcpEvidence`` — NCP-locked auction quality (required for production).
 - ``OpenViabilityEvidence`` — 30m trap / friction flags (veto-only in v1 cascade).
@@ -20,10 +20,10 @@ from decimal import Decimal
 from src.domain.value_objects.idx_market import (
     IDX_TIMEZONE,
     NCP_LOCK_TIME,
-    REGULAR_OPEN,
+    PRE_OPEN_MATCHING_START,
 )
 
-PRE_OPEN_SIGNAL_EVIDENCE_CONTRACT = "pre_open_signal_evidence.v2"
+PRE_OPEN_SIGNAL_EVIDENCE_CONTRACT = "pre_open_signal_evidence.v3"
 PRE_OPEN_HORIZON = "open_30m"
 PRE_OPEN_SETUP_FAMILY = "open_call_participation"
 
@@ -57,9 +57,7 @@ class AuctionNcpProvenance:
         if not self.snapshot_ref or not self.snapshot_ref.strip():
             return False
 
-        local_collection_started_at = self.collection_started_at.astimezone(
-            IDX_TIMEZONE
-        )
+        local_collection_started_at = self.collection_started_at.astimezone(IDX_TIMEZONE)
         local_decision_at = self.decision_at.astimezone(IDX_TIMEZONE)
         if (
             self.trade_date is None
@@ -70,7 +68,7 @@ class AuctionNcpProvenance:
         return (
             NCP_LOCK_TIME <= local_collection_started_at.time()
             and local_collection_started_at <= local_decision_at
-            and local_decision_at.time() < REGULAR_OPEN
+            and local_decision_at.time() < PRE_OPEN_MATCHING_START
         )
 
 
@@ -89,49 +87,38 @@ class AuctionNcpEvidence:
     iep_gap_pct: Decimal | None = None
     bid_gap_pct: Decimal | None = None
     gap_price_source: str | None = None
-    # Build-into-lock appetite: last_iev − first_iev same day (multi-tick history).
-    # None = MISSING (not enough ticks) — never fabricate; scorer must not fail closed.
+    # Locked-input appetite: final live IEV − earliest stored IEV baseline inside
+    # [08:56, current collection start), with the decision completed before 08:58.
+    # None = MISSING (no valid locked baseline) — never fabricate.
     delta_iev: int | None = None
 
     def __post_init__(self) -> None:
         if self.iev < 0:
             raise ValueError(f"iev must be >= 0, got {self.iev}")
         if self.provenance.ticker != self.ticker:
-            raise ValueError(
-                "auction_ncp provenance ticker must match evidence ticker"
-            )
+            raise ValueError("auction_ncp provenance ticker must match evidence ticker")
         if not self.provenance.is_production_ncp:
             raise ValueError(
                 "auction_ncp requires a verified live source and timezone-aware "
-                "collection window wholly inside the same-session NCP_LOCKED "
-                "phase with a snapshot_ref"
+                "collection window wholly inside the same-session 08:56–08:58 "
+                "NCP_LOCKED input phase with a snapshot_ref"
             )
         if self.gap_price_source not in (None, "IEP", "BEST_BID"):
-            raise ValueError(
-                "gap_price_source must be IEP, BEST_BID, or None"
-            )
+            raise ValueError("gap_price_source must be IEP, BEST_BID, or None")
         if self.gap_pct is not None and self.gap_price_source is None:
             raise ValueError("gap_pct requires an explicit gap_price_source")
         if self.gap_price_source == "IEP":
             if self.iep is None or self.iep_gap_pct is None:
-                raise ValueError(
-                    "IEP gap authority requires iep and iep_gap_pct"
-                )
+                raise ValueError("IEP gap authority requires iep and iep_gap_pct")
             if self.gap_pct != self.iep_gap_pct:
                 raise ValueError("gap_pct must equal iep_gap_pct for IEP authority")
         if self.gap_price_source == "BEST_BID":
             if self.bid_gap_pct is None:
-                raise ValueError(
-                    "BEST_BID gap authority requires bid_gap_pct"
-                )
+                raise ValueError("BEST_BID gap authority requires bid_gap_pct")
             if self.gap_pct != self.bid_gap_pct:
-                raise ValueError(
-                    "gap_pct must equal bid_gap_pct for BEST_BID authority"
-                )
+                raise ValueError("gap_pct must equal bid_gap_pct for BEST_BID authority")
         if self.bid_pressure is not None and not (0.0 <= self.bid_pressure <= 1.0):
-            raise ValueError(
-                f"bid_pressure must be 0.0–1.0, got {self.bid_pressure}"
-            )
+            raise ValueError(f"bid_pressure must be 0.0–1.0, got {self.bid_pressure}")
 
 
 @dataclass(frozen=True)

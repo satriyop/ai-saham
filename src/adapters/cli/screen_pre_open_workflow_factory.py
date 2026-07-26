@@ -134,9 +134,7 @@ def create_pre_open_ai_explainer(
         from src.application.services.ai_research import ClaudeTickerResearcher
 
         if provider and provider not in ("claude", None):
-            warnings.append(
-                "Warning: AI research only supports 'claude' provider. Falling back."
-            )
+            warnings.append("Warning: AI research only supports 'claude' provider. Falling back.")
         return ClaudeTickerResearcher(), warnings
     except Exception as e:
         warnings.append(f"Warning: Could not initialize AI research: {e}")
@@ -169,9 +167,7 @@ def _build_run_snapshot_screen(
     """
     iev_repository = SQLiteIEVRepository(db_path)
 
-    def _run(
-        config: PreOpenScreenConfig, as_of_date: date
-    ) -> PreOpenSnapshotScreenResult | None:
+    def _run(config: PreOpenScreenConfig, as_of_date: date) -> PreOpenSnapshotScreenResult | None:
         candidate_dates = [d for d in iev_repository.get_snapshot_dates() if d <= as_of_date]
         if not candidate_dates:
             return None
@@ -220,9 +216,7 @@ def create_pre_open_cli_workflow(
         api_client=None, db_path=resolved_db, stockbit_config=load_stockbit_provider_config()
     )
 
-    ai_explainer, ai_warnings = create_pre_open_ai_explainer(
-        with_ai=with_ai, provider=ai_provider
-    )
+    ai_explainer, ai_warnings = create_pre_open_ai_explainer(with_ai=with_ai, provider=ai_provider)
 
     screen_use_case = PreOpenScreenUseCase(
         browser=browser_provider,
@@ -264,7 +258,7 @@ def create_pre_open_cli_workflow(
         assessment_pipeline=assessment_pipeline,
         signal_builder=signal_builder,
         run_snapshot_screen=run_snapshot_screen,
-        iev_delta_provider=iev_repo,
+        locked_iev_baseline_provider=iev_repo,
     )
     observations_repo = SQLiteCandidateObservationsRepository(resolved_db)
     record_observations = RecordPreOpenObservationsUseCase(

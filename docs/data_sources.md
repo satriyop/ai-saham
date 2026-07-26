@@ -570,13 +570,20 @@ Note: `saham fetch market` and `saham fetch broker` use **different write paths*
 | Table | Type | Purpose |
 |-------|------|---------|
 | `iev_snapshots` | Upsert (canonical) | One row per (date, ticker) — always the latest snapshot. Backward-compatible reader table. |
-| `iev_snapshot_history` | Append-only log | New row inserted on every `saham fetch iev` run. Used for NCP-locked delta computation via `get_ncp_snapshot()` and intraday session deltas via `get_iev_delta()`. |
+| `iev_snapshot_history` | Append-only log | New row inserted on every `saham fetch iev` run. The earliest valid [08:56, 08:58) row supplies the locked baseline; all-session deltas remain diagnostic only. |
 
-Both tables share the same columns: `date`, `ticker`, `iev` (volume), `rank`, `iep` (price, nullable), `is_ncp_locked` (1 if captured at/after 08:56 WIB per Kep-00003/BEI/04-2025). The history table adds an auto-increment `id` and `collected_at` timestamp.
+Both tables share the same columns: `date`, `ticker`, `iev` (volume), `rank`,
+`iep` (price, nullable), `is_ncp_locked` (1 only inside the locked-input
+[08:56, 08:58) window). The history table adds an auto-increment `id` and
+`collected_at` timestamp. Matching-period rows from 08:58 onward are not locked
+input and cannot supply production `delta_iev`.
 
 **NCP sticky rule:** Once `is_ncp_locked` is set to 1 for a (date, ticker) in the canonical table, later pre-NCP runs cannot downgrade it to 0.
 
-**Write path:** `saham fetch iev` calls `collect_iev()` in `intraday_workflow_commands.py` — no application use case layer; the CLI adapter instantiates `PlaywrightStockbitProvider` (infrastructure) and `SQLiteIEVRepository` (infrastructure) directly.
+**Write path:** `saham fetch iev` calls `collect_iev()` in
+`fetch_iev_commands.py`; the CLI adapter wires `PlaywrightStockbitProvider` and
+`SQLiteIEVRepository`. The application pre-open workflow reads the locked
+baseline through its narrow provider port.
 
 ---
 

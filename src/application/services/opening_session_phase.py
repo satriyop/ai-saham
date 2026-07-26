@@ -14,6 +14,7 @@ from src.domain.value_objects.idx_market import (
     IDX_TIMEZONE,
     NCP_LOCK_TIME,
     OPEN_SESSION_END,
+    PRE_OPEN_MATCHING_START,
 )
 from src.domain.value_objects.idx_market import (
     PRE_OPEN_START as PRE_NCP_START,
@@ -35,8 +36,10 @@ def classify_opening_capture_phase(
     current = local.time()
     if PRE_NCP_START <= current < NCP_LOCK_TIME:
         return "PRE_NCP"
-    if NCP_LOCK_TIME <= current < REGULAR_OPEN_TIME:
+    if NCP_LOCK_TIME <= current < PRE_OPEN_MATCHING_START:
         return "NCP_LOCKED"
+    if PRE_OPEN_MATCHING_START <= current < REGULAR_OPEN_TIME:
+        return "PRE_OPEN_MATCHING"
     if REGULAR_OPEN_TIME <= current <= OPEN_SESSION_END:
         return "OPEN"
     if current > OPEN_SESSION_END:

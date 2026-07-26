@@ -95,6 +95,9 @@ Malam        Refresh data / gap-fill lokal                saham fetch market
 08:47        ★ JALANKAN PRE-OPEN SCREENER ★              saham screen pre-open
 08:52        Baca output, pilih kandidat
 08:55        Siapkan watchlist + mental order plan
+08:56        Capture locked-input IEV baseline             saham fetch iev
+08:57        Capture keputusan kanonis                     saham research pre-open capture
+08:58–09:00  Pre-opening matching — bukan window keputusan produksi
 09:00        Pasar buka — lihat opening price aktual
 09:00–09:05  ★ KONFIRMASI ENTRY ★                        saham trade confirm
 09:05+       Eksekusi order (di Stockbit/broker kamu)
@@ -192,11 +195,13 @@ IEV/IEP history: 47 days (2026-04-01 → 2026-06-17), avg 28 movers/day, IEP fil
 **Kapan pakai:**
 - Setiap hari trading, jalankan antara 08:45–08:50 WIB
 - Data disimpan ke `iev_snapshot_history` dengan timestamp dan flag NCP
-- Kalau sudah lewat 08:56, badge berubah jadi `[NCP LOCKED]` — data tetap valid
+- Snapshot 08:56–08:57:59 berlabel `[NCP LOCKED INPUT]`
+- Snapshot mulai 08:58 adalah matching-period diagnostic, bukan baseline sinyal
 
 **Manfaat jangka panjang:**
 - Setelah 3+ bulan, `saham trade backtest-intraday` bisa filter by IEV rank (match live behavior)
-- ΔIEV antara fetch iev pertama dan kedua menunjukkan increasing/decreasing interest
+- ΔIEV harian di output bersifat diagnostic; sinyal memakai IEV final 08:57
+  dikurangi baseline locked-input 08:56
 
 ---
 
@@ -442,11 +447,9 @@ Skenario kalau open DI BAWAH 104:
 > **Catatan:** Kamu tidak perlu hitung SUGGEST atau ATR-STOP manual lagi —
 > opening confirmation langsung menampilkan "Limit BUY X | Stop Y" setelah kamu input opening price.
 
-> **Non-Cancellation Period (08:56–09:00):** Sejak Desember 2025, BEI menerapkan
-> aturan bahwa order yang sudah masuk tidak bisa diubah/dibatalkan mulai pukul 08:56
-> (Kep-00003/BEI/04-2025). Kalau kamu lihat order plan dan ingin ubah harga setelah
-> 08:56, kamu tidak bisa — order baru tetap bisa masuk, tapi order lama tidak bisa
-> di-amend. **Selesaikan dan submit order sebelum 08:56.**
+> **Locked input 08:56–08:57:59; matching 08:58–08:59:59:** Order lama
+> dibatasi untuk amend/withdraw setelah 08:56, sementara order baru masih dapat
+> masuk. Sinyal kanonis harus selesai sebelum matching pukul 08:58.
 
 ### Hitung Position Size
 
@@ -755,13 +758,13 @@ saham fetch stockbit login   # login ulang, ~2 menit + warm-up otomatis
 
 Setelah login, tool otomatis warm-up token (navigasi headless ke orderbook page). `saham screen pre-open` langsung bisa dijalankan — tidak perlu `saham fetch stockbit spy` dulu.
 
-### Order Tidak Bisa Dibatalkan Setelah 08:56
+### Pembatasan Order Setelah 08:56
 
 Ini bukan error tool — ini aturan BEI. Non-Cancellation Period (NCP) berlaku sejak Desember 2025:
 
-1. Order yang masuk sebelum 08:56: bisa diubah/dibatalkan sampai 08:56
-2. Order yang masuk 08:56–09:00: tidak bisa diubah/dibatalkan — hanya bisa masuk order baru
-3. Order baru yang masuk setelah 08:56 tetap valid dan diproses di call auction 09:00
+1. 08:56–08:57:59: order terbuka tidak dapat amend/withdraw; order baru masih dapat masuk
+2. 08:58–08:59:59: pre-opening matching; bukan window keputusan sinyal produksi
+3. 09:00: sesi reguler dimulai
 
 **Cara menghindari masalah:**
 - Selesaikan review output pre-open sebelum 08:55
