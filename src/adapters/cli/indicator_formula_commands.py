@@ -2,6 +2,10 @@
 CLI commands for formula lifecycle management.
 
 Layer: Adapter
+
+Thin: parse args, call application use cases, format output, map errors, and
+handle user confirmation. Persistence and policy live in the use cases; infra
+wiring lives in ``indicator_formula_factory``.
 """
 
 from pathlib import Path
@@ -10,18 +14,21 @@ from typing import Annotated, Optional
 import typer
 
 from src.adapters.cli.indicator_formula_display import print_formula_list
+from src.adapters.cli.indicator_formula_factory import (
+    create_delete_formula_use_case,
+    create_formula_authoring_use_cases,
+    create_list_formulas_use_case,
+    create_show_formula_use_case,
+    resolve_formulas_path,
+)
+from src.application.ports.formula_store import FormulaStoreError
 from src.application.use_case.create_indicator_from_intent_use_case import (
     CreateIndicatorFromIntentRequest,
-    CreateIndicatorFromIntentUseCase,
 )
-from src.infrastructure.ai.formula_translator import FormulaTranslatorAdapter
-from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
-from src.infrastructure.persistence.formula_storage import (
-    FormulaStorage,
-    FormulaStorageError,
+from src.application.use_case.delete_formula_use_case import DeleteEligibility
+from src.application.use_case.persist_generated_formula_use_case import (
+    PersistGeneratedFormulaRequest,
 )
-
-DEFAULT_FORMULAS_PATH = Path("config/formulas.yaml")
 
 
 def create(
@@ -51,57 +58,52 @@ def create(
     typer.echo(f"Provider:    {provider}")
 
     try:
-        registry = create_indicator_registry()
-        available_functions = registry.get_available_indicators()
-        translator = FormulaTranslatorAdapter(provider=provider, model=model)
-        use_case = CreateIndicatorFromIntentUseCase(
-            translator=translator,
-            available_functions=available_functions,
+        authoring = create_formula_authoring_use_cases(
+            provider=provider, model=model, formulas_path=formulas_path
         )
-        response = use_case.execute(CreateIndicatorFromIntentRequest(
-            intent=intent,
-            indicator_name=name,
-        ))
+        translation = authoring.translate.execute(
+            CreateIndicatorFromIntentRequest(intent=intent, indicator_name=name)
+        )
 
-        if response.unsupported:
+        if translation.unsupported:
             typer.echo("\n[error] This intent cannot be expressed as a "
                        "formula.", err=True)
             typer.echo("        Tip:   Describe a mathematical combination "
                        "of indicators.", err=True)
             raise typer.Exit(1)
 
-        if not response.success:
-            typer.echo(f"\n[error] {response.error_message}", err=True)
+        if not translation.success:
+            typer.echo(f"\n[error] {translation.error_message}", err=True)
             raise typer.Exit(1)
 
-        typer.echo(f"\nFormula: {response.formula}")
+        typer.echo(f"\nFormula: {translation.formula}")
 
-        indicator_name = name
-        if not indicator_name:
-            formula_clean = response.formula.replace("(", "_").replace(")", "")
-            formula_clean = formula_clean.replace(",", "_").replace(" ", "")
-            indicator_name = f"CUSTOM_{formula_clean[:20]}".upper()
-            typer.echo(f"Auto-generated name: {indicator_name}")
+        result = authoring.persist.execute(PersistGeneratedFormulaRequest(
+            formula=translation.formula,
+            ast=translation.ast,
+            intent=intent,
+            requested_name=name,
+            save=save,
+        ))
 
-        indicator_name = indicator_name.upper()
+        if result.auto_generated:
+            typer.echo(f"Auto-generated name: {result.name}")
 
-        if response.ast:
-            try:
-                registry.register_formula(indicator_name, response.ast)
-                typer.echo(f"Registered: {indicator_name}")
-            except Exception as e:
-                typer.echo(f"Warning: Could not register formula in memory: {e}", err=True)
+        if result.register_attempted:
+            if result.registered:
+                typer.echo(f"Registered: {result.name}")
+            else:
+                typer.echo(f"Warning: Could not register formula in memory: "
+                           f"{result.register_error}", err=True)
 
-        if save and response.formula:
-            resolved_path = formulas_path or DEFAULT_FORMULAS_PATH
-            storage = FormulaStorage(path=resolved_path)
-            try:
-                storage.save(name=indicator_name, formula=response.formula, intent=intent)
-                typer.echo(f"Saved to:   {resolved_path}")
-            except FormulaStorageError as e:
-                typer.echo(f"Warning: Could not save formula: {e}", err=True)
+        if result.save_attempted:
+            if result.saved:
+                typer.echo(f"Saved to:   {resolve_formulas_path(formulas_path)}")
+            else:
+                typer.echo(f"Warning: Could not save formula: {result.save_error}",
+                           err=True)
 
-        typer.echo(f"\nUse it: saham indicator compute {indicator_name} TICKER")
+        typer.echo(f"\nUse it: saham indicator compute {result.name} TICKER")
 
     except typer.Exit:
         raise
@@ -131,11 +133,13 @@ def list_indicators(
         typer.Option("--formulas-file", help="Path to formulas file"),
     ] = None,
 ) -> None:
-    registry = create_indicator_registry()
-    resolved_path = formulas_path or DEFAULT_FORMULAS_PATH
-    storage = FormulaStorage(path=resolved_path)
-    stored_formulas = storage.load_all()
-    print_formula_list(registry, stored_formulas, show_formulas, resolved_path)
+    response = create_list_formulas_use_case(formulas_path).execute()
+    print_formula_list(
+        response.registry,
+        response.stored_formulas,
+        show_formulas,
+        response.formulas_path,
+    )
 
 
 def show(
@@ -145,17 +149,16 @@ def show(
         typer.Option("--formulas-file", help="Path to formulas file"),
     ] = None,
 ) -> None:
-    resolved_path = formulas_path or DEFAULT_FORMULAS_PATH
-    storage = FormulaStorage(path=resolved_path)
-    stored = storage.get(name)
+    response = create_show_formula_use_case(formulas_path).execute(name)
 
-    if stored is None:
-        typer.echo(f"[error] Formula '{name.upper()}' not found.", err=True)
+    if not response.found:
+        typer.echo(f"[error] Formula '{response.requested_name}' not found.", err=True)
         typer.echo("\nAvailable formulas:", err=True)
-        for formula_name in storage.list_names():
+        for formula_name in response.available_names:
             typer.echo(f"  {formula_name}", err=True)
         raise typer.Exit(1)
 
+    stored = response.formula
     typer.echo(f"\nName:    {stored.name}")
     typer.echo(f"Formula: {stored.formula}")
     if stored.intent:
@@ -173,38 +176,33 @@ def delete(
         typer.Option("--formulas-file", help="Path to formulas file"),
     ] = None,
 ) -> None:
-    from src.application.services.indicator_registry import BUILTIN_NAMES
+    use_case = create_delete_formula_use_case(formulas_path)
+    preview = use_case.preview(name)
 
-    name_upper = name.upper()
-
-    if name_upper in BUILTIN_NAMES:
-        typer.echo(f"[error] Cannot delete built-in indicator: {name_upper}", err=True)
+    if preview.eligibility is DeleteEligibility.BUILTIN_PROTECTED:
+        typer.echo(f"[error] Cannot delete built-in indicator: {preview.name}", err=True)
         raise typer.Exit(1)
 
-    resolved_path = formulas_path or DEFAULT_FORMULAS_PATH
-    storage = FormulaStorage(path=resolved_path)
-
-    if not storage.exists(name_upper):
-        typer.echo(f"[error] Formula '{name_upper}' not found in storage.", err=True)
+    if preview.eligibility is DeleteEligibility.NOT_FOUND:
+        typer.echo(f"[error] Formula '{preview.name}' not found in storage.", err=True)
         raise typer.Exit(1)
 
     if not force:
-        stored = storage.get(name_upper)
+        stored = preview.formula
         typer.echo("\nFormula to delete:")
         typer.echo(f"  Name:    {stored.name}")
         typer.echo(f"  Formula: {stored.formula}")
-        confirm = typer.confirm("\nDelete this formula?")
-        if not confirm:
+        if not typer.confirm("\nDelete this formula?"):
             typer.echo("Cancelled.")
             raise typer.Exit(0)
 
     try:
-        deleted = storage.delete(name_upper)
+        deleted = use_case.commit(preview.name)
         if deleted:
-            typer.echo(f"Deleted {name_upper}.")
+            typer.echo(f"Deleted {preview.name}.")
         else:
-            typer.echo(f"[error] Formula '{name_upper}' not found.", err=True)
+            typer.echo(f"[error] Formula '{preview.name}' not found.", err=True)
             raise typer.Exit(1)
-    except FormulaStorageError as e:
+    except FormulaStoreError as e:
         typer.echo(f"[error] Failed to delete formula: {e}", err=True)
         raise typer.Exit(1)

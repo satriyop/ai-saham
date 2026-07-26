@@ -10,12 +10,14 @@ Layer: Infrastructure
 """
 
 import logging
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Iterator
 
 import yaml
+
+from src.application.dto.stored_formula import StoredFormula
+from src.application.ports.formula_store import FormulaStoreError
 
 logger = logging.getLogger(__name__)
 
@@ -23,27 +25,21 @@ logger = logging.getLogger(__name__)
 DEFAULT_FORMULAS_PATH = Path("config/formulas.yaml")
 
 
-class FormulaStorageError(Exception):
-    """Raised when formula storage operations fail."""
+class FormulaStorageError(FormulaStoreError):
+    """Raised when formula storage operations fail.
+
+    Kept as a named subclass for backwards compatibility; the canonical error
+    type is the application-layer ``FormulaStoreError`` (this store's port),
+    which application use cases catch.
+    """
 
     pass
 
 
-@dataclass(frozen=True)
-class StoredFormula:
-    """A persisted formula with metadata.
-
-    Attributes:
-        name: Formula name (uppercase).
-        formula: Formula expression string.
-        intent: Original natural language intent (optional).
-        created: Creation timestamp.
-    """
-
-    name: str
-    formula: str
-    intent: str | None
-    created: datetime
+# StoredFormula is defined in the application layer (application/dto); re-exported
+# here so existing ``from ...formula_storage import StoredFormula`` imports keep
+# working.
+__all__ = ["DEFAULT_FORMULAS_PATH", "FormulaStorage", "FormulaStorageError", "StoredFormula"]
 
 
 class FormulaStorage:
