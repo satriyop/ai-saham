@@ -51,6 +51,7 @@ signal_engine:
     reliable_spread_max_pct: 1.0
     max_spread_pct: 1.5
     large_gap_caution_pct: 5.0
+    rsi_extension_threshold: 75.0
     bullish_high_score: 80
     bullish_medium_score: 70
     bullish_low_score: 55

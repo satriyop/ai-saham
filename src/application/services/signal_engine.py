@@ -113,6 +113,11 @@ class SignalEngine:
         """
         return self._build_signal_context(ticker, as_of_date=as_of_date)
 
+    @property
+    def pre_open_directional_config(self):
+        """Expose the engine-owned pre-open policy for input construction."""
+        return self._config.pre_open_directional_baseline
+
     def evaluate_with_context(
         self,
         ticker: str,

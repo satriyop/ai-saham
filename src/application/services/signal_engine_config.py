@@ -56,6 +56,7 @@ class PreOpenDirectionalBaselineConfig:
     reliable_spread_max_pct: float = 1.0
     max_spread_pct: float = 1.5
     large_gap_caution_pct: float = 5.0
+    rsi_extension_threshold: float = 75.0
     bullish_high_score: int = 80
     bullish_medium_score: int = 70
     bullish_low_score: int = 55

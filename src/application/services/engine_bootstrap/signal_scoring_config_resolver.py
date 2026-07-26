@@ -220,6 +220,7 @@ def resolve_signal_engine_config(cfg: dict) -> SignalEngineConfig:
             reliable_spread_max_pct=float(pre_open.get("reliable_spread_max_pct", 1.0)),
             max_spread_pct=float(pre_open.get("max_spread_pct", 1.5)),
             large_gap_caution_pct=float(pre_open.get("large_gap_caution_pct", 5.0)),
+            rsi_extension_threshold=float(pre_open.get("rsi_extension_threshold", 75.0)),
             bullish_high_score=int(pre_open.get("bullish_high_score", 80)),
             bullish_medium_score=int(pre_open.get("bullish_medium_score", 70)),
             bullish_low_score=int(pre_open.get("bullish_low_score", 55)),

@@ -12,7 +12,9 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from src.application.services.pre_open_signal_config import PreOpenSignalConfig
+from src.application.services.signal_engine_config import (
+    PreOpenDirectionalBaselineConfig,
+)
 from src.domain.value_objects.pre_open_signal_evidence import (
     AuctionNcpEvidence,
     AuctionNcpProvenance,
@@ -30,7 +32,7 @@ def build_pre_open_signal_evidence(
     capture_phase: str = "UNKNOWN",
     source_is_live: bool = False,
     snapshot_ref: str | None = None,
-    config: PreOpenSignalConfig | None = None,
+    config: PreOpenDirectionalBaselineConfig | None = None,
     delta_iev: int | None = None,
 ) -> PreOpenSignalEvidenceBundle:
     """Build evidence bundle from a duck-typed pre-open candidate.
@@ -38,7 +40,7 @@ def build_pre_open_signal_evidence(
     ``delta_iev`` may be passed explicitly (from locked-input history) or read from
     ``candidate.delta_iev`` when present. None = MISSING (do not fabricate).
     """
-    cfg = config or PreOpenSignalConfig()
+    cfg = config or PreOpenDirectionalBaselineConfig()
     ticker = str(getattr(candidate, "ticker", "") or "")
     iev = int(getattr(candidate, "iev", 0) or 0)
     prev_close = getattr(candidate, "prev_close", None)
@@ -93,7 +95,7 @@ def build_pre_open_signal_evidence(
         gap_for_veto = gap_pct
         if gap_for_veto is not None and not isinstance(gap_for_veto, Decimal):
             gap_for_veto = Decimal(str(gap_for_veto))
-        gap_out = bool(gap_for_veto is not None and abs(gap_for_veto) > cfg.gap_out_abs_pct)
+        gap_out = bool(gap_for_veto is not None and abs(gap_for_veto) > cfg.large_gap_caution_pct)
         trend = getattr(candidate, "trend_signal", None)
         if trend == "GAP_OUT":
             gap_out = True

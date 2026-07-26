@@ -21,8 +21,9 @@ from src.application.services.pre_open_observation_persister import (
 )
 from src.application.services.pre_open_risk_inputs_builder import PreOpenRiskInputsBuilder
 from src.application.services.pre_open_run_guard import PreOpenRunGuard
-from src.application.services.pre_open_signal_cascade import PreOpenSignalInputsBuilder
-from src.application.services.pre_open_signal_config import PreOpenSignalConfig
+from src.application.services.pre_open_signal_inputs_builder import (
+    PreOpenSignalInputsBuilder,
+)
 from src.application.services.screen_assessment_pipeline import ScreenAssessmentPipeline
 from src.application.services.screen_policy import ScreenPolicy
 from src.application.use_case.pre_open_screen_use_case import (
@@ -49,6 +50,7 @@ from src.infrastructure.browser.stockbit_config_bundle import load_stockbit_prov
 from src.infrastructure.browser.stockbit_market_time import get_current_market_status
 from src.infrastructure.browser.stockbit_ticker_notation import StockbitTickerNotationProvider
 from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
+from src.infrastructure.composition.signal_engine_factory import create_signal_engine
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.market_context_factory import evaluate_market_context
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
@@ -238,13 +240,15 @@ def create_pre_open_cli_workflow(
         db_path=resolved_db,
         with_enrichment=True,
     )
+    signal_engine = create_signal_engine(resolved_db, with_enrichment=False)
     assessment_pipeline = ScreenAssessmentPipeline(
         policy=ScreenPolicy.pre_open(),
+        signal_engine=signal_engine,
         risk_engine=risk_engine,
         risk_inputs_builder=PreOpenRiskInputsBuilder(),
         evaluate_market_context=evaluate_market_context,
     )
-    signal_config = PreOpenSignalConfig()
+    signal_config = signal_engine.pre_open_directional_config
     signal_builder = PreOpenSignalInputsBuilder(signal_config)
     from src.infrastructure.persistence.sqlite_iev_repository import SQLiteIEVRepository
 
@@ -263,9 +267,7 @@ def create_pre_open_cli_workflow(
     observations_repo = SQLiteCandidateObservationsRepository(resolved_db)
     record_observations = RecordPreOpenObservationsUseCase(
         workflow_use_case=workflow,
-        observation_persister=PreOpenObservationPersister(
-            observations_repo, signal_config=signal_config
-        ),
+        observation_persister=PreOpenObservationPersister(observations_repo),
     )
 
     return PreOpenCliWorkflow(

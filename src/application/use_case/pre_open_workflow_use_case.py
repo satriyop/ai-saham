@@ -6,7 +6,7 @@ AI usage: Optional, only when caller injects an AI-enabled PreOpenScreenUseCase.
 
 Engine adoption (ADR-047 / ADR-048):
   regime + risk (annotate) always-on via ScreenAssessmentPipeline;
-  pre-open v1 signal cascade when auction_ncp evidence is present;
+  pre-open directional baseline through the canonical SignalEngine;
   TradeSetup composed when signal + risk assessments both exist.
 """
 
@@ -21,10 +21,13 @@ from src.application.services.opening_session_phase import (
     classify_opening_capture_phase,
 )
 from src.application.services.pre_open_risk_inputs_builder import PreOpenRiskInputsBuilder
-from src.application.services.pre_open_signal_cascade import PreOpenSignalInputsBuilder
-from src.application.services.pre_open_signal_config import PreOpenSignalConfig
+from src.application.services.pre_open_signal_inputs_builder import (
+    PreOpenSignalInputsBuilder,
+)
 from src.application.services.screen_assessment_pipeline import ScreenAssessmentPipeline
 from src.application.services.screen_policy import ScreenPolicy
+from src.application.services.signal_engine import SignalEngine
+from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.use_case.assess_risk_use_case import AssessRiskResponse
 from src.application.use_case.assess_trade_setup_use_case import (
     AssessTradeSetupUseCase,
@@ -127,18 +130,34 @@ class PreOpenSnapshotScreenResult:
 
 @dataclass(frozen=True)
 class PreOpenSignalSummary:
-    """Compact signal projection for envelope/display (not TradeSetup)."""
+    """Typed signal projection for display and canonical observation capture."""
 
+    contract: str
+    direction: str
+    confidence: str
+    auction_quality: str
+    raw_score: int
     score: int
     strength: str
     entry_quality: str
+    factors: dict[str, Any]
+    rationale: tuple[str, ...]
+    quality_reasons: tuple[str, ...]
     signal_authority_coverage: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "contract": self.contract,
+            "direction": self.direction,
+            "confidence": self.confidence,
+            "auction_quality": self.auction_quality,
+            "raw_score": self.raw_score,
             "score": self.score,
             "strength": self.strength,
             "entry_quality": self.entry_quality,
+            "factors": self.factors,
+            "rationale": list(self.rationale),
+            "quality_reasons": list(self.quality_reasons),
             "signal_authority_coverage": self.signal_authority_coverage,
         }
 
@@ -194,13 +213,16 @@ class PreOpenWorkflowUseCase:
         self._run_snapshot_screen = run_snapshot_screen
         self._locked_iev_baseline_provider = locked_iev_baseline_provider
         self._decision_clock = decision_clock or (lambda: datetime.now(tz=IDX_TIMEZONE))
+        self._signal_builder = signal_builder or PreOpenSignalInputsBuilder()
         self._assessment_pipeline = assessment_pipeline or ScreenAssessmentPipeline(
             policy=ScreenPolicy.pre_open(),
+            signal_engine=SignalEngine(
+                config=SignalEngineConfig(pre_open_directional_baseline=self._signal_builder.config)
+            ),
             risk_engine=risk_engine,
             risk_inputs_builder=PreOpenRiskInputsBuilder() if risk_engine is not None else None,
             evaluate_market_context=evaluate_market_context,
         )
-        self._signal_builder = signal_builder or PreOpenSignalInputsBuilder(PreOpenSignalConfig())
         self._trade_setup_uc = trade_setup_uc or AssessTradeSetupUseCase()
 
     def execute(self, request: PreOpenWorkflowRequest) -> PreOpenWorkflowResponse:
@@ -375,7 +397,7 @@ class PreOpenWorkflowUseCase:
                     candidate.iev - baseline_iev if baseline_iev is not None else None
                 )
                 try:
-                    sig = self._signal_builder.evaluate(
+                    signal_input = self._signal_builder.build(
                         candidate,
                         trade_date=result.screened_date,
                         collection_started_at=collection_started_at,
@@ -385,18 +407,32 @@ class PreOpenWorkflowUseCase:
                         snapshot_ref=snapshot_ref,
                         delta_iev=locked_delta_iev,
                     )
+                    evaluation = self._assessment_pipeline.evaluate_pre_open_signal(
+                        signal_input,
+                        market_context=market_regime,
+                    )
                 except Exception as exc:
                     warnings.append(f"Signal unavailable for {candidate.ticker}: {exc}")
                     signal_by_ticker[candidate.ticker] = None
                     continue
-                if sig is None:
+                if evaluation is None:
                     signal_by_ticker[candidate.ticker] = None
                     continue
+                sig = evaluation.response
+                baseline = evaluation.baseline
                 signal_responses[candidate.ticker] = sig
                 signal_by_ticker[candidate.ticker] = PreOpenSignalSummary(
+                    contract=baseline.contract,
+                    direction=baseline.direction.value,
+                    confidence=baseline.confidence.value,
+                    auction_quality=baseline.auction_quality.value,
+                    raw_score=baseline.raw_score,
                     score=sig.score,
                     strength=sig.assessment.strength.value,
                     entry_quality=sig.assessment.entry_quality.value,
+                    factors=baseline.factors.to_dict(),
+                    rationale=baseline.rationale,
+                    quality_reasons=baseline.quality_reasons,
                     signal_authority_coverage=sig.signal_authority_coverage,
                 )
 

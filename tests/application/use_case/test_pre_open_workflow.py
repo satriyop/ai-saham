@@ -7,9 +7,10 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from src.application.services.pre_open_signal_cascade import (
+from src.application.services.pre_open_signal_inputs_builder import (
     PreOpenSignalInputsBuilder,
 )
+from src.application.services.signal_engine import SignalEngine
 from src.application.use_case.pre_open_screen_use_case import (
     PreOpenScreenConfig,
     PreOpenScreenResponse,
@@ -492,6 +493,7 @@ def test_pre_open_workflow_always_on_risk_projects_compact_summary():
 
     pipeline = ScreenAssessmentPipeline(
         policy=ScreenPolicy.pre_open(),
+        signal_engine=SignalEngine(),
         risk_engine=risk_engine,
         risk_inputs_builder=PreOpenRiskInputsBuilder(),
     )
@@ -539,6 +541,7 @@ def test_pre_open_workflow_no_risk_skips_assessment():
 
     pipeline = ScreenAssessmentPipeline(
         policy=ScreenPolicy.pre_open(),
+        signal_engine=SignalEngine(),
         risk_engine=risk_engine,
         risk_inputs_builder=PreOpenRiskInputsBuilder(),
     )
@@ -616,6 +619,7 @@ def test_pre_open_workflow_signal_cascade_and_trade_setup_when_risk_present():
 
     pipeline = ScreenAssessmentPipeline(
         policy=ScreenPolicy.pre_open(),
+        signal_engine=SignalEngine(),
         risk_engine=risk_engine,
         risk_inputs_builder=PreOpenRiskInputsBuilder(),
     )
@@ -646,7 +650,7 @@ def test_pre_open_workflow_signal_cascade_and_trade_setup_when_risk_present():
     assert response.ncp_authoritative is True
     assert response.signal_by_ticker["BBCA"] is not None
     assert response.signal_by_ticker["BBCA"].score >= 50
-    assert signal_builder.evaluate.call_args.kwargs["delta_iev"] == 50_000
+    assert signal_builder.build.call_args.kwargs["delta_iev"] == 50_000
     assert locked_baselines.calls == [
         (
             run_date,
@@ -756,7 +760,7 @@ def test_pre_open_workflow_scan_started_before_ncp_stays_discovery_only():
     assert response.ncp_authoritative is False
     assert response.signal_by_ticker == {"BBCA": None}
     assert any("collection window wholly inside" in item for item in response.warnings)
-    signal_builder.evaluate.assert_not_called()
+    signal_builder.build.assert_not_called()
 
 
 def test_pre_open_workflow_crossing_into_matching_stays_discovery_only():
@@ -805,7 +809,7 @@ def test_pre_open_workflow_crossing_into_matching_stays_discovery_only():
     assert response.capture_phase == "CROSS_PHASE"
     assert response.ncp_authoritative is False
     assert response.signal_by_ticker == {"BBCA": None}
-    signal_builder.evaluate.assert_not_called()
+    signal_builder.build.assert_not_called()
 
 
 def test_pre_open_workflow_signal_disabled_skips_cascade():
