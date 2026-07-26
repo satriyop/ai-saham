@@ -37,6 +37,9 @@ from src.application.services.candidate_ticker_profile_evidence_assembler import
 from src.application.services.volatility_context import build_volatility_context
 
 if TYPE_CHECKING:
+    from src.application.services.benchmark_excess_return_calculator import (
+        BenchmarkExcessReturnCalculator,
+    )
     from src.application.services.company_quality_context_evidence_builder import (
         CompanyQualityContextEvidenceBuilder,
     )
@@ -46,9 +49,6 @@ if TYPE_CHECKING:
     )
     from src.application.services.institutional_flow_config import (
         InstitutionalAccumulationConfig,
-    )
-    from src.application.services.benchmark_excess_return_calculator import (
-        BenchmarkExcessReturnCalculator,
     )
     from src.application.services.primary_setup_family_resolver import (
         PrimarySetupFamilyResolver,
@@ -66,8 +66,8 @@ if TYPE_CHECKING:
         SwingSetupCatalogConfig,
     )
     from src.domain.ports.broker_data_repository import BrokerDataRepository
-    from src.domain.ports.candidate_observations_repository import (
-        CandidateObservationsRepository,
+    from src.domain.ports.learning_artifact_repositories import (
+        LearningObservationRepository,
     )
     from src.domain.ports.market_data_repository import MarketDataRepository
     from src.domain.value_objects.company_quality_context_evidence import (
@@ -97,7 +97,7 @@ class AccumulationCandidateEvidenceBuilder:
         market_repository: "MarketDataRepository",
         broker_repository: "BrokerDataRepository",
         signal_engine: "SignalEngine | None",
-        candidate_observations_repository: "CandidateObservationsRepository | None",
+        candidate_observations_repository: "LearningObservationRepository | None",
         swing_setup_catalog: "SwingSetupCatalogConfig | None",
         primary_setup_family_resolver: "PrimarySetupFamilyResolver",
         benchmark_excess_return_calculator: "BenchmarkExcessReturnCalculator",

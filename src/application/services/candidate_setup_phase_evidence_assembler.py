@@ -34,8 +34,8 @@ if TYPE_CHECKING:
     from src.application.services.benchmark_excess_return_calculator import (
         BenchmarkExcessReturnCalculator,
     )
-    from src.domain.ports.candidate_observations_repository import (
-        CandidateObservationsRepository,
+    from src.domain.ports.learning_artifact_repositories import (
+        LearningObservationRepository,
     )
     from src.domain.ports.market_data_repository import MarketDataRepository
     from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
@@ -61,7 +61,7 @@ class CandidateSetupPhaseEvidenceAssembler:
     def __init__(
         self,
         market_repository: "MarketDataRepository",
-        candidate_observations_repository: "CandidateObservationsRepository | None",
+        candidate_observations_repository: "LearningObservationRepository | None",
     ) -> None:
         self._market_repo = market_repository
         self._candidate_observations_repo = candidate_observations_repository

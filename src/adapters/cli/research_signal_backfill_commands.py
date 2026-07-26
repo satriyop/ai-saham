@@ -33,11 +33,7 @@ from src.application.use_case.backfill_signal_observations_use_case import (
     BackfillSignalObservationsResponse,
     BackfillSignalObservationsUseCase,
 )
-from src.application.use_case.generate_signal_forward_labels_use_case import (
-    GenerateSignalForwardLabelsUseCase,
-)
 from src.domain.value_objects.market_context import MarketContext
-from src.domain.value_objects.signal_forward_label import SignalLabelHorizon
 from src.domain.value_objects.signal_semantic_contract import (
     ACCUMULATION_DISCOVERY_CONTRACT,
 )
@@ -52,16 +48,7 @@ from src.infrastructure.persistence.ihsg_trading_session_calendar_provider impor
     IHSGTradingSessionCalendarProvider,
 )
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
-from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
-    SQLiteCandidateObservationsRepository,
-)
-from src.infrastructure.persistence.sqlite_corporate_action_calendar_repository import (
-    SQLiteCorporateActionCalendarRepository,
-)
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
-from src.infrastructure.persistence.sqlite_signal_forward_labels_repository import (
-    SQLiteSignalForwardLabelsRepository,
-)
 
 # Scoring config files whose resolved content is folded into the lean
 # semantic_compatibility_id. The full scoring set: any material change to any
@@ -107,8 +94,6 @@ def run_signal_observation_corpus_write(
     start_date: date,
     end_date: date,
     resolved_db: Path,
-    horizon: SignalLabelHorizon = SignalLabelHorizon.SWING_10D,
-    generate_labels: bool = False,
 ) -> BackfillSignalObservationsResponse:
     """Compose and run observation corpus write for a date range.
 
@@ -131,9 +116,7 @@ def run_signal_observation_corpus_write(
         typer.echo(f"[error] Universe {universe!r} resolved to no tickers.", err=True)
         raise typer.Exit(1)
 
-    observations_repo = SQLiteCandidateObservationsRepository(resolved_db)
     market_repo = SQLiteMarketRepository(resolved_db)
-    labels_repo = SQLiteSignalForwardLabelsRepository(resolved_db)
     accumulation_config = load_accumulation_screener_config()
     swing_config = load_swing_config()
     screen_bundle = create_accumulation_screen_workflow_bundle(
@@ -147,16 +130,6 @@ def run_signal_observation_corpus_write(
         min_net_buy_days=1,
         disable_score_filters=True,
     )
-    label_use_case = None
-    if generate_labels:
-        label_use_case = GenerateSignalForwardLabelsUseCase(
-            candidate_observations_repository=observations_repo,
-            market_data_repository=market_repo,
-            signal_forward_labels_repository=labels_repo,
-            corporate_action_calendar_repository=SQLiteCorporateActionCalendarRepository(
-                resolved_db
-            ),
-        )
 
     def _evaluate_market_context_for_corpus(*, as_of_date: date) -> MarketContext:
         return evaluate_market_context(
@@ -179,9 +152,7 @@ def run_signal_observation_corpus_write(
         record_observations_use_case=screen_bundle.record_observations_use_case,
         screen_request_builder=screen_request_builder,
         market_data_repository=market_repo,
-        candidate_observations_repository=observations_repo,
         observation_identity=observation_identity,
-        label_generation_use_case=label_use_case,
         evaluate_market_context=_evaluate_market_context_for_corpus,
         session_resolver=EffectiveMarketSessionResolver(market_repo),
         evidence_context_builder=SignalEvidenceExecutionContextBuilder(
@@ -197,8 +168,6 @@ def run_signal_observation_corpus_write(
             tickers=tuple(tickers),
             start_date=start_date,
             end_date=end_date,
-            horizon=horizon,
-            generate_labels=generate_labels,
             # Current-universe membership identity. Historical membership is
             # unavailable; the use case turns the `@current` suffix into the
             # survivorship limitation note (adapter passes identity only).
@@ -214,18 +183,10 @@ def signal_backfill_observations(
     ],
     start: Annotated[str, typer.Option("--start", help="Start date YYYY-MM-DD")],
     end: Annotated[str, typer.Option("--end", help="End date YYYY-MM-DD")],
-    horizon: Annotated[
-        str,
-        typer.Option("--horizon", help="TACTICAL_3D, SWING_10D, or ACCUM_20D"),
-    ] = SignalLabelHorizon.SWING_10D.value,
-    generate_labels: Annotated[
-        bool,
-        typer.Option("--generate-labels", help="Generate labels for eligible saved dates"),
-    ] = False,
     fmt: Annotated[str, typer.Option("--format", help="Output format: table or json")] = "table",
     db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
 ) -> None:
-    """Backfill historical candidate observations using local data only."""
+    """Backfill historical accumulation learning observations from local data."""
     cfg = load_app_config()
     resolved_db = db_path or Path(cfg.storage.db_path)
     try:
@@ -237,19 +198,11 @@ def signal_backfill_observations(
     if end_date < start_date:
         typer.echo("[error] --end must be on or after --start", err=True)
         raise typer.Exit(1)
-    try:
-        label_horizon = SignalLabelHorizon(horizon.upper())
-    except ValueError:
-        typer.echo(f"[error] Invalid horizon: {horizon}", err=True)
-        raise typer.Exit(1)
-
     response = run_signal_observation_corpus_write(
         universe=universe,
         start_date=start_date,
         end_date=end_date,
         resolved_db=resolved_db,
-        horizon=label_horizon,
-        generate_labels=generate_labels,
     )
 
     if fmt == "json":

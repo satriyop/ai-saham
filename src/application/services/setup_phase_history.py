@@ -8,14 +8,15 @@ from __future__ import annotations
 
 from datetime import date
 
-from src.domain.ports.candidate_observations_repository import (
-    CandidateObservationsRepository,
+from src.domain.ports.learning_artifact_repositories import (
+    LearningObservationRepository,
 )
+from src.domain.value_objects.learning_artifacts import AssessmentPurpose
 from src.domain.value_objects.setup_phase import SetupPhaseState
 
 
 def load_previous_setup_phases(
-    repository: CandidateObservationsRepository | None,
+    repository: LearningObservationRepository | None,
     *,
     ticker: str,
     before_date: date,
@@ -25,21 +26,25 @@ def load_previous_setup_phases(
     """Return prior persisted phases oldest-to-newest for sequence validation."""
     if repository is None:
         return ()
-    observations = repository.list_recent(
-        ticker,
-        before_date=before_date,
-        limit=limit,
-    )
+    observations = [
+        observation
+        for observation in repository.list_observations(
+            AssessmentPurpose.ACCUMULATION_DISCOVERY
+        )
+        if observation.cutoff_at.date() < before_date
+        and _payload_ticker(observation.decision_payload) == ticker.upper()
+    ][-limit:]
     phases: list[SetupPhaseState] = []
     expected_family = _normalize_setup_family(setup_family)
     for observation in reversed(observations):
-        fingerprint = (observation.payload or {}).get("sub_signal_fingerprint") or {}
+        payload = dict(observation.decision_payload)
+        fingerprint = payload.get("sub_signal_fingerprint") or {}
         phase = _parse_phase(fingerprint.get("setup_phase_current"))
         if expected_family is not None:
             observed_family = _normalize_setup_family(fingerprint.get("setup_family"))
             if observed_family is None:
                 if not _allows_generic_screen_history(
-                    observation.payload, expected_family, phase
+                    payload, expected_family, phase
                 ):
                     continue
             elif observed_family != expected_family:
@@ -47,6 +52,13 @@ def load_previous_setup_phases(
         if phase is not None:
             phases.append(phase)
     return tuple(phases)
+
+
+def _payload_ticker(payload: object) -> str | None:
+    if not isinstance(payload, dict):
+        return None
+    ticker = payload.get("ticker")
+    return ticker.upper() if isinstance(ticker, str) else None
 
 
 def _parse_phase(value: object) -> SetupPhaseState | None:

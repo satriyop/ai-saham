@@ -43,13 +43,10 @@ from src.infrastructure.config.ticker_profile_config_loader import (
     create_ticker_profile_classifier,
 )
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
-from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
-    SQLiteCandidateObservationsRepository,
+from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
+    SQLiteLearningArtifactRepository,
 )
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
-from src.infrastructure.persistence.sqlite_observation_risk_assessment_repository import (
-    SQLiteObservationRiskAssessmentRepository,
-)
 
 if TYPE_CHECKING:
     from src.application.ports.rules_loader import RulesLoader
@@ -75,12 +72,6 @@ if TYPE_CHECKING:
     from src.infrastructure.config.config_backed_market_context_provider import (
         ConfigBackedMarketContextProvider,
     )
-    from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
-        SQLiteCandidateObservationsRepository,
-    )
-    from src.infrastructure.persistence.sqlite_observation_risk_assessment_repository import (
-        SQLiteObservationRiskAssessmentRepository,
-    )
 
 
 @dataclass(frozen=True)
@@ -95,8 +86,7 @@ class StockAnalysisWorkflowDependencies:
     db_path: Path
     broker_repository: BrokerDataRepository
     market_repository: MarketDataRepository
-    candidate_observations_repository: SQLiteCandidateObservationsRepository
-    observation_risk_assessment_repository: SQLiteObservationRiskAssessmentRepository
+    learning_artifact_repository: SQLiteLearningArtifactRepository
     stockbit_providers: StockbitProviders
     rules_loader_factory: Callable[[], RulesLoader]
     indicator_registry_factory: Callable[..., IndicatorRegistry]
@@ -124,8 +114,7 @@ def create_stock_analysis_workflow_dependencies(
     """
     broker_repo = SQLiteBrokerRepository(db_path)
     market_repo = SQLiteMarketRepository(db_path=db_path)
-    observations_repo = SQLiteCandidateObservationsRepository(db_path)
-    risk_assessment_repo = SQLiteObservationRiskAssessmentRepository(db_path)
+    learning_repository = SQLiteLearningArtifactRepository(db_path)
     stockbit_providers = create_readonly_stockbit_providers(db_path)
 
     def _make_risk_engine() -> RiskEngine:
@@ -183,8 +172,7 @@ def create_stock_analysis_workflow_dependencies(
         db_path=db_path,
         broker_repository=broker_repo,
         market_repository=market_repo,
-        candidate_observations_repository=observations_repo,
-        observation_risk_assessment_repository=risk_assessment_repo,
+        learning_artifact_repository=learning_repository,
         stockbit_providers=stockbit_providers,
         rules_loader_factory=RulesYamlLoader,
         indicator_registry_factory=create_indicator_registry,

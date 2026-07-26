@@ -23,10 +23,10 @@ from typing import TYPE_CHECKING, Any, Callable
 from src.application.dto import accumulation_screen as accumulation_dto
 from src.application.ports.corporate_action_repository import CorporateActionRepository
 from src.application.ports.rules_loader import RulesLoader
+from src.application.services.accum_risk_inputs_builder import AccumRiskInputsBuilder
 from src.application.services.accumulation_candidate_evidence_builder import (
     AccumulationCandidateEvidenceBuilder,
 )
-from src.application.services.accum_risk_inputs_builder import AccumRiskInputsBuilder
 from src.application.services.accumulation_risk_funnel import AccumulationRiskFunnel
 from src.application.services.screen_assessment_pipeline import ScreenAssessmentPipeline
 from src.application.services.screen_policy import ScreenPolicy
@@ -50,15 +50,15 @@ if TYPE_CHECKING:
     from src.application.dto.signal_evidence_execution_context import (
         SignalEvidenceExecutionContext,
     )
+    from src.application.services.benchmark_excess_return_calculator import (
+        BenchmarkExcessReturnCalculator,
+    )
     from src.application.services.company_quality_context_evidence_builder import (
         CompanyQualityContextEvidenceBuilder,
     )
     from src.application.services.indicator_registry import IndicatorRegistry
     from src.application.services.institutional_flow_config import (
         InstitutionalAccumulationConfig,
-    )
-    from src.application.services.benchmark_excess_return_calculator import (
-        BenchmarkExcessReturnCalculator,
     )
     from src.application.services.primary_setup_family_resolver import (
         PrimarySetupFamilyResolver,
@@ -74,8 +74,8 @@ if TYPE_CHECKING:
     from src.application.use_case.evaluate_swing_setup_use_case import (
         SwingSetupCatalogConfig,
     )
-    from src.domain.ports.candidate_observations_repository import (
-        CandidateObservationsRepository,
+    from src.domain.ports.learning_artifact_repositories import (
+        LearningObservationRepository,
     )
 
 # Default setup targets (1:1 R:R, regime-unaware fallback)
@@ -171,7 +171,7 @@ class AccumulationScreenUseCase:
         ticker_notation_provider: "TickerNotationProvider | None" = None,
         idx_groups: "dict[str, list[str]] | None" = None,
         risk_use_case: "AssessRiskUseCase | None" = None,
-        candidate_observations_repository: "CandidateObservationsRepository | None" = None,
+        candidate_observations_repository: "LearningObservationRepository | None" = None,
         accum_score_use_case: ScoreAccumUseCase | None = None,
         derived_feature_policy: accumulation_dto.AccumulationDerivedFeaturePolicy | None = None,
         swing_setup_catalog: "SwingSetupCatalogConfig | None" = None,
@@ -190,14 +190,14 @@ class AccumulationScreenUseCase:
             Callable[[], CompanyQualityContextEvidenceBuilder] | None
         ) = None,
     ) -> None:
+        from src.application.services.benchmark_excess_return_calculator import (
+            BenchmarkExcessReturnCalculator as _BenchmarkExcessReturnCalculator,
+        )
         from src.application.services.flow_confirmation_evidence_builder import (
             FlowConfirmationEvidenceBuilder,
         )
         from src.application.services.primary_setup_family_resolver import (
             PrimarySetupFamilyResolver as _PrimarySetupFamilyResolver,
-        )
-        from src.application.services.benchmark_excess_return_calculator import (
-            BenchmarkExcessReturnCalculator as _BenchmarkExcessReturnCalculator,
         )
 
         self._broker_repo = broker_repository

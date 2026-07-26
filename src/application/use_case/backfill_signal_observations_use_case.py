@@ -21,19 +21,11 @@ from src.application.services.signal_evidence_execution_context_builder import (
 from src.application.services.signal_observation_request_builder import (
     BuildSignalObservationScreenRequest,
 )
-from src.application.use_case.generate_signal_forward_labels_use_case import (
-    GenerateAllSignalForwardLabelsRequest,
-    GenerateSignalForwardLabelsUseCase,
-)
 from src.application.use_case.record_accumulation_observations_use_case import (
     RecordAccumulationObservationsUseCase,
 )
-from src.domain.ports.candidate_observations_repository import (
-    CandidateObservationsRepository,
-)
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
-from src.domain.value_objects.signal_forward_label import SignalLabelHorizon
 
 if TYPE_CHECKING:
     from src.domain.value_objects.market_context import MarketContext
@@ -76,8 +68,6 @@ class BackfillSignalObservationsRequest:
     tickers: tuple[str, ...]
     start_date: date
     end_date: date
-    horizon: SignalLabelHorizon = SignalLabelHorizon.SWING_10D
-    generate_labels: bool = False
     windows: tuple[int, ...] = (7, 30, 90)
     # Universe-membership identity (transport decided by the adapter). The
     # adapter sets this to e.g. "lq45@current"; the use case copies it onto the
@@ -164,9 +154,7 @@ class BackfillSignalObservationsUseCase:
         record_observations_use_case: RecordAccumulationObservationsUseCase,
         screen_request_builder: BuildSignalObservationScreenRequest,
         market_data_repository: MarketDataRepository,
-        candidate_observations_repository: CandidateObservationsRepository,
         observation_identity: LeanObservationIdentity,
-        label_generation_use_case: GenerateSignalForwardLabelsUseCase | None = None,
         evaluate_market_context: "Callable[..., MarketContext] | None" = None,
         session_resolver: EffectiveMarketSessionResolver | None = None,
         evidence_context_builder: SignalEvidenceExecutionContextBuilder | None = None,
@@ -174,12 +162,10 @@ class BackfillSignalObservationsUseCase:
         self._record = record_observations_use_case
         self._request_builder = screen_request_builder
         self._market = market_data_repository
-        self._observations = candidate_observations_repository
         # Lean DQ-003 identity resolved once by the adapter (which owns reading
         # config file contents) and stamped onto every capture context. This
         # use case never computes the hash; it only transports the resolved id.
         self._observation_identity = observation_identity
-        self._labels = label_generation_use_case
         self._evaluate_market_context = evaluate_market_context
         self._session_resolver = session_resolver or EffectiveMarketSessionResolver(
             market_data_repository
@@ -302,46 +288,6 @@ class BackfillSignalObservationsUseCase:
                             reason="source_unavailable_not_evaluated",
                         )
                     )
-
-            if request.generate_labels:
-                if self._labels is None:
-                    skipped.append(
-                        BackfillSkippedDate(
-                            date=trading_date,
-                            reason="label_generation_use_case_unavailable",
-                        )
-                    )
-                    continue
-                if not self._observations.list_canonical_by_date(trading_date):
-                    skipped.append(
-                        BackfillSkippedDate(
-                            date=trading_date,
-                            reason="no_saved_observations_for_label_generation",
-                        )
-                    )
-                    continue
-                if not self._has_complete_forward_window(
-                    trading_date,
-                    request.horizon,
-                ):
-                    skipped.append(
-                        BackfillSkippedDate(
-                            date=trading_date,
-                            reason=(
-                                "insufficient_future_candles_for_"
-                                f"{request.horizon.value}"
-                            ),
-                        )
-                    )
-                    continue
-                label_response = self._labels.execute_all(
-                    GenerateAllSignalForwardLabelsRequest(
-                        signal_date=trading_date,
-                        horizons=(request.horizon,),
-                    )
-                )
-                generated_label_count += label_response.generated_count
-                unavailable_label_count += label_response.unavailable_count
 
         # Survivorship limitation is owned by the use case, not the adapter. A
         # `@current` membership source means historical membership is
@@ -469,24 +415,6 @@ class BackfillSignalObservationsUseCase:
             )
             for ticker in tickers
         )
-
-    def _has_complete_forward_window(
-        self,
-        signal_date: date,
-        horizon: SignalLabelHorizon,
-    ) -> bool:
-        required = horizon.trading_days
-        observations = self._observations.list_canonical_by_date(signal_date)
-        for observation in observations:
-            candles = self._market.get_candles(
-                observation.ticker,
-                start_date=signal_date,
-            )
-            forward = [candle for candle in candles if candle.date > signal_date]
-            if len(forward) >= required:
-                return True
-        return False
-
 
 def _dates_from_candles(candles) -> list[date]:
     return sorted({candle.date for candle in candles})

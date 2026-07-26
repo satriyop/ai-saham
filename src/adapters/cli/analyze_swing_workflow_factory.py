@@ -123,7 +123,7 @@ def create_swing_analysis_workflow(
         execution_gates=create_execution_gates(),
         signal_engine=signal_engine,
         risk_engine=deps.create_risk_engine(),
-        candidate_observations_repository=deps.candidate_observations_repository,
+        candidate_observations_repository=deps.learning_artifact_repository,
         accum_score_policy=accumulation_config.accum_score_policy,
         corporate_action_risk_use_case=create_corporate_action_risk_use_case(db_path),
         ticker_profile_classifier_factory=deps.ticker_profile_classifier_factory,

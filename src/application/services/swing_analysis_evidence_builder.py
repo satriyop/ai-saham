@@ -67,8 +67,8 @@ if TYPE_CHECKING:
         AssessCorporateActionEventRiskUseCase,
     )
     from src.domain.ports.broker_data_repository import BrokerDataRepository
-    from src.domain.ports.candidate_observations_repository import (
-        CandidateObservationsRepository,
+    from src.domain.ports.learning_artifact_repositories import (
+        LearningObservationRepository,
     )
     from src.domain.ports.market_data_repository import MarketDataRepository
     from src.domain.value_objects.company_quality_context_evidence import (
@@ -77,12 +77,10 @@ if TYPE_CHECKING:
     from src.domain.value_objects.corporate_action_event_risk import (
         CorporateActionRiskAssessment,
     )
-    from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.institutional_accumulation_evidence import (
         InstitutionalAccumulationEvidence,
     )
     from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
-    from src.domain.value_objects.setup_evidence import SetupEvidence
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
     from src.domain.value_objects.strategy_evidence import StrategyEvidence
     from src.domain.value_objects.ticker_profile_snapshot import TickerProfileSnapshot
@@ -119,7 +117,7 @@ class SwingAnalysisEvidenceBuilder:
         registry: Any,
         rules_loader: RulesLoader,
         flow_confirmation_builder: "FlowConfirmationEvidenceBuilder",
-        candidate_observations_repository: "CandidateObservationsRepository | None",
+        candidate_observations_repository: "LearningObservationRepository | None",
         signal_engine: "SignalEngine | None",
         corporate_action_risk_use_case: "AssessCorporateActionEventRiskUseCase | None",
         ticker_profile_classifier_factory: Callable[[], TickerProfileClassifier] | None = None,

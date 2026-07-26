@@ -7,7 +7,6 @@ AI usage: Optional sentiment provider, controlled by injected fetcher.
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
@@ -26,11 +25,11 @@ if TYPE_CHECKING:
         SectorContextEvidenceBuilder,
     )
     from src.application.services.signal_engine import SignalEngine
-    from src.application.services.ticker_profile_classifier import (
-        TickerProfileClassifier,
-    )
     from src.application.services.signal_evidence_execution_context_builder import (
         SignalEvidenceExecutionContextBuilder,
+    )
+    from src.application.services.ticker_profile_classifier import (
+        TickerProfileClassifier,
     )
     from src.application.use_case.assess_corporate_action_event_risk_use_case import (
         AssessCorporateActionEventRiskUseCase,
@@ -67,8 +66,8 @@ from src.application.services.swing_analysis_sizing_service import (
 )
 from src.application.use_case.score_accum_use_case import AccumScorePolicy
 from src.domain.ports.broker_data_repository import BrokerDataRepository
-from src.domain.ports.candidate_observations_repository import (
-    CandidateObservationsRepository,
+from src.domain.ports.learning_artifact_repositories import (
+    LearningObservationRepository,
 )
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.rules.risk_gate import RiskGate
@@ -103,7 +102,7 @@ class SwingAnalysisWorkflowUseCase:
         execution_gates: list[RiskGate] | None = None,
         signal_engine: "SignalEngine | None" = None,
         risk_engine: "RiskEngine | None" = None,
-        candidate_observations_repository: CandidateObservationsRepository | None = None,
+        candidate_observations_repository: LearningObservationRepository | None = None,
         accum_score_policy: AccumScorePolicy | None = None,
         corporate_action_risk_use_case: "AssessCorporateActionEventRiskUseCase | None" = None,
         ticker_profile_classifier_factory: Callable[[], TickerProfileClassifier] | None = None,
