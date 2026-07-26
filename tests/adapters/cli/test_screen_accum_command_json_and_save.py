@@ -864,7 +864,12 @@ def test_screen_accum_multi_cli_json_contract(monkeypatch):
     # Test F: Real Multi CLI JSON
     from types import SimpleNamespace
 
+    from src.domain.value_objects.signal_assessment import (
+        ACCUMULATION_DISCOVERY_IDENTITY,
+    )
+
     assessment = SimpleNamespace(
+        identity=ACCUMULATION_DISCOVERY_IDENTITY,
         score=85.0,
         signal_authority_coverage=0.83,
         setup_readiness_status="READY",

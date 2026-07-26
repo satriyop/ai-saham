@@ -135,6 +135,8 @@ def test_contract_row_is_included_in_canonical_reads(tmp_path: Path):
     repo.save_many([_lean_observation()])
 
     assert len(repo.list_canonical_by_date(_DAY)) == 1
+    assert len(repo.list_latest_canonical_by_date(_DAY)) == 1
+    assert repo.list_canonical_snapshot_dates() == [_DAY]
 
 
 def test_removed_unversioned_contract_is_rejected_on_write(tmp_path: Path):
@@ -143,5 +145,3 @@ def test_removed_unversioned_contract_is_rejected_on_write(tmp_path: Path):
         repo.save_many(
             [_lean_observation(observation_contract="accumulation-discovery")]
         )
-    assert len(repo.list_latest_canonical_by_date(_DAY)) == 1
-    assert repo.list_canonical_snapshot_dates() == [_DAY]

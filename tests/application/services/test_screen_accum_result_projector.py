@@ -615,10 +615,14 @@ def _enriched_candidate(**overrides) -> AccumulationCandidate:
     from src.domain.value_objects.risk_assessment import RiskAssessment
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot, SetupPhaseState
     from src.domain.value_objects.trade_setup import SetupAction, TradeSetup
-    from src.domain.value_objects.signal_assessment import SignalStrength
+    from src.domain.value_objects.signal_assessment import (
+        ACCUMULATION_DISCOVERY_IDENTITY,
+        SignalStrength,
+    )
 
     signal_assessment = SimpleNamespace(
         assessment=SimpleNamespace(
+            identity=ACCUMULATION_DISCOVERY_IDENTITY,
             score=72,
             signal_authority_coverage=0.83,
             strength=SimpleNamespace(value="MODERATE"),

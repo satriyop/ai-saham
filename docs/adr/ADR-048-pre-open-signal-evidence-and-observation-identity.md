@@ -2,11 +2,13 @@
 
 [Architecture decision index](../../ARCHITECTURE_DECISIONS.md)
 
-**Status:** Accepted (decision locked; implementation in phases)
+**Status:** Accepted (implemented; contextual identity amendment)
 **Date:** 2026-07-25
 **Depends on:** [ADR-026](ADR-026-risk-plus-signal-pipeline-composition.md), [ADR-041](ADR-041-canonical-signal-evidence-input-boundary.md), [ADR-047](ADR-047-scenario-adoption-seam-for-signal-risk-mce.md), [ADR-024](ADR-024-signal-engine-and-risk-engine-as-first-class-application-services.md), [ADR-033](ADR-033-workflow-composition-artifact-boundaries.md)
 **Related:** [ADR-027](ADR-027-risk-signal-learning-loop.md), [ADR-030](ADR-030-accumulation-screener-evidence-split.md), [ADR-037](ADR-037-marketcontext-promotes-from-preview-only-to-canonical-signal-input.md), [ADR-046](ADR-046-cli-response-envelope.md)
-**Current implementation:** Phased. Pre-open uses always-on regime + annotate risk via `ScreenAssessmentPipeline`; signal + TradeSetup + observation capture land per task. This ADR locks the target signal, observation, capture, and grade-evolution contract for subsequent work.
+**Current implementation:** Pre-open uses `ScreenAssessmentPipeline`, the
+`PRE_OPEN_AUCTION_DIRECTION` signal policy, annotate risk, `TradeSetup`, and
+capture-time `pre-open-open-30m.v3` observations.
 
 ### Context
 
@@ -17,10 +19,10 @@
   equilibrium (IEP/IEV) and book state are usable as a decision snapshot.
 * Intended hold is **short**: open through at most ~30 minutes, flat by **09:30 WIB**.
 
-Today the screen builds an **entry plan** (ATR range, stop, gap, trend heuristics,
-broker tags) and, after ADR-047 Phase 2, attaches **non-blocking** regime + default
-gate risk. It does **not** run `SignalEngine` and does **not** compose `TradeSetup`.
-Display labels such as PRIME/WATCH/SKIP are heuristics, not ADR-026 actions.
+The screen builds an **entry plan** (ATR range, stop, gap, trend heuristics,
+broker tags), attaches non-blocking regime + gate risk, evaluates auction
+direction through `SignalEngine`, and composes `TradeSetup`. Historical
+PRIME/WATCH/SKIP heuristics are not ADR-026 actions.
 
 The opening learning loop (`research pre-open capture` + `track` / `grade`) joins NCP
 files to 09:00–09:30 tracks and reports plan/trend accuracy, including strata by
@@ -225,7 +227,7 @@ KPI.
 
 ### Invariants / Consequences
 
-* IEV is never the weighted signal score.
+* IEV is never the signal score.
 * No production signal without `auction_ncp`.
 * No production action except via TradeSetup when `trade_setup_applicable`.
 * Risk annotate does not drop pre-open candidates.
@@ -359,4 +361,46 @@ typed pre-open evidence
 
 The former workflow-local cascade is retired as a production authority. Pre-open
 evidence must not be disguised as setup/flow evidence merely to reuse the
-existing SignalEngine lane.
+setup/flow scorer.
+
+### Contextual Signal Assessment and Clean-Break Amendment (2026-07-26)
+
+Pre-open assessment identity is explicitly:
+
+```text
+purpose = PRE_OPEN_AUCTION_DIRECTION
+policy_contract = pre_open_auction_direction.v1
+```
+
+The production entry point is
+`SignalEngine.evaluate_pre_open_auction_direction()`. The removed generic
+`evaluate_with_context()` API has no compatibility alias, and pre-open does not
+route through accumulation/swing setup-flow evidence.
+
+`SignalAssessmentIdentity` is persisted in the pre-open observation payload and
+bound into its material config and semantic compatibility fingerprints. The
+observation contract remains `pre-open-open-30m.v3`: no v3 database observation
+existed before this amendment, so no version bump or historical
+reinterpretation is required.
+
+This amendment is an `OBSERVATION_SCHEMA` clean break, not a
+`SEMANTIC_ENGINE` change. Directional arithmetic, score, strength,
+`EntryQuality`, risk assessment, and final `TradeSetup` action are unchanged for
+equivalent inputs.
+
+The same clean break introduced
+`accumulation-discovery.v1` for accumulation observations and retired the
+unversioned `accumulation-discovery` contract. Before new capture, the local
+active corpus was cleared in one scoped transaction:
+
+- 18,630 `screen_accum` / `accumulation-discovery` observations;
+- 4,995 matching `screen_accum` risk assessments;
+- 19,440 `SWING_10D` forward labels.
+
+All 258 existing files beneath `data/opening/` were also deleted. Active
+observation, risk, label, and pre-open artifact counts were verified as zero.
+Quarantine tables remain unchanged as inactive raw audit storage and grant no
+scoring, labeling, replay, tuning, or promotion authority.
+
+As in ADR-025, `canonical` is reserved for authoritative production truth. It
+must not be used as a vague policy or lane name.
