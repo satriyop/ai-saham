@@ -211,7 +211,7 @@ def _patch_swing_backtest_command(monkeypatch):
     from unittest.mock import MagicMock
 
     from src.adapters.cli import trade_swing_backtest_runner
-    from src.adapters.cli.stock_analysis_workflow_dependencies import (
+    from src.adapters.composition.stock_analysis_workflow_dependencies import (
         StockAnalysisWorkflowDependencies,
     )
 

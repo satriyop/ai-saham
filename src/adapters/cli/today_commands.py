@@ -14,9 +14,6 @@ import typer
 from rich.console import Console, Group
 from rich.text import Text
 
-from src.adapters.cli.accumulation_risk_workflow_factory import (
-    create_accumulation_assess_risk_use_case,
-)
 from src.adapters.cli.analyze_swing_command_config import (
     load_analyze_swing_command_config,
 )
@@ -24,12 +21,15 @@ from src.adapters.cli.analyze_swing_workflow_factory import (
     create_swing_analysis_workflow,
 )
 from src.adapters.cli.rich_display import compact_table, panel
-from src.adapters.cli.stock_analysis_workflow_dependencies import (
-    create_stock_analysis_workflow_dependencies,
-)
 from src.adapters.cli.view_market_context_display import (
     context_factor_value,
     context_regime_style,
+)
+from src.adapters.composition.accumulation_risk_workflow_factory import (
+    create_accumulation_assess_risk_use_case,
+)
+from src.adapters.composition.stock_analysis_workflow_dependencies import (
+    create_stock_analysis_workflow_dependencies,
 )
 from src.application.services.market_context_engine import MarketContextEngine
 from src.application.services.universe_loader import resolve_tickers

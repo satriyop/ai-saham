@@ -19,7 +19,7 @@ from src.adapters.cli.effective_session_display import (
     format_effective_session_line,
     parse_as_of_option,
 )
-from src.adapters.cli.screen_accum_workflow_factory import (
+from src.adapters.composition.screen_accum_workflow_factory import (
     create_accumulation_screen_workflow_bundle,
 )
 from src.application.dto.inspect_canonical_signal import (
@@ -35,10 +35,10 @@ from src.application.services.signal_observation_request_builder import (
 from src.application.use_case.inspect_canonical_signal_use_case import (
     InspectCanonicalSignalUseCase,
 )
-from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
 )
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.swing_config_loader import load_swing_config
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 

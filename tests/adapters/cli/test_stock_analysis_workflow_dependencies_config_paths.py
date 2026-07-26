@@ -5,7 +5,7 @@ Layer: Test (adapter composition bundle — config path wiring only).
 
 from unittest.mock import MagicMock, patch
 
-from src.adapters.cli.stock_analysis_workflow_dependencies import (
+from src.adapters.composition.stock_analysis_workflow_dependencies import (
     create_stock_analysis_workflow_dependencies,
 )
 from src.infrastructure.config.app_config import (
@@ -37,12 +37,12 @@ class TestConfigPathsFromAppConfig:
 
         with (
             patch(
-                "src.adapters.cli.stock_analysis_workflow_dependencies"
+                "src.adapters.composition.stock_analysis_workflow_dependencies"
                 ".load_app_config",
                 return_value=app_cfg,
             ),
             patch(
-                "src.adapters.cli.stock_analysis_workflow_dependencies"
+                "src.adapters.composition.stock_analysis_workflow_dependencies"
                 ".create_ticker_profile_classifier",
                 return_value=sentinel,
             ) as mock_ctor,
@@ -64,12 +64,12 @@ class TestConfigPathsFromAppConfig:
 
         with (
             patch(
-                "src.adapters.cli.stock_analysis_workflow_dependencies"
+                "src.adapters.composition.stock_analysis_workflow_dependencies"
                 ".load_app_config",
                 return_value=app_cfg,
             ),
             patch(
-                "src.adapters.cli.stock_analysis_workflow_dependencies"
+                "src.adapters.composition.stock_analysis_workflow_dependencies"
                 ".load_institutional_accumulation_config",
                 return_value=sentinel,
             ) as mock_ctor,
@@ -88,12 +88,12 @@ class TestConfigPathsFromAppConfig:
 
         with (
             patch(
-                "src.adapters.cli.stock_analysis_workflow_dependencies"
+                "src.adapters.composition.stock_analysis_workflow_dependencies"
                 ".load_app_config",
                 return_value=app_cfg,
             ),
             patch(
-                "src.adapters.cli.stock_analysis_workflow_dependencies"
+                "src.adapters.composition.stock_analysis_workflow_dependencies"
                 ".create_sector_context_evidence_builder",
                 return_value=sentinel,
             ) as mock_ctor,
@@ -115,12 +115,12 @@ class TestConfigPathsFromAppConfig:
 
         with (
             patch(
-                "src.adapters.cli.stock_analysis_workflow_dependencies"
+                "src.adapters.composition.stock_analysis_workflow_dependencies"
                 ".load_app_config",
                 return_value=app_cfg,
             ),
             patch(
-                "src.adapters.cli.stock_analysis_workflow_dependencies"
+                "src.adapters.composition.stock_analysis_workflow_dependencies"
                 ".create_company_quality_context_evidence_builder",
                 return_value=sentinel,
             ) as mock_ctor,
@@ -145,12 +145,12 @@ class TestConfigPathsFromAppConfig:
 
         with (
             patch(
-                "src.adapters.cli.stock_analysis_workflow_dependencies"
+                "src.adapters.composition.stock_analysis_workflow_dependencies"
                 ".load_app_config",
                 return_value=app_cfg,
             ),
             patch(
-                "src.adapters.cli.stock_analysis_workflow_dependencies"
+                "src.adapters.composition.stock_analysis_workflow_dependencies"
                 ".create_ticker_profile_classifier",
                 return_value=sentinel,
             ) as mock_ctor,
@@ -174,12 +174,12 @@ class TestConfigPathsFromAppConfig:
 
         with (
             patch(
-                "src.adapters.cli.stock_analysis_workflow_dependencies"
+                "src.adapters.composition.stock_analysis_workflow_dependencies"
                 ".load_app_config",
                 return_value=app_cfg,
             ),
             patch(
-                "src.adapters.cli.stock_analysis_workflow_dependencies"
+                "src.adapters.composition.stock_analysis_workflow_dependencies"
                 ".load_institutional_accumulation_config",
                 return_value=sentinel,
             ) as mock_ctor,
@@ -199,12 +199,12 @@ class TestConfigPathsFromAppConfig:
 
         with (
             patch(
-                "src.adapters.cli.stock_analysis_workflow_dependencies"
+                "src.adapters.composition.stock_analysis_workflow_dependencies"
                 ".load_app_config",
                 return_value=app_cfg,
             ),
             patch(
-                "src.adapters.cli.stock_analysis_workflow_dependencies"
+                "src.adapters.composition.stock_analysis_workflow_dependencies"
                 ".create_company_quality_context_evidence_builder",
                 return_value=sentinel,
             ) as mock_ctor,

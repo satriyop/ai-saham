@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from src.adapters.cli.analyze_swing_workflow_factory import create_swing_analysis_workflow
-from src.adapters.cli.stock_analysis_workflow_dependencies import (
+from src.adapters.composition.stock_analysis_workflow_dependencies import (
     StockAnalysisWorkflowDependencies,
 )
 from src.domain.ports.broker_data_repository import BrokerDataRepository

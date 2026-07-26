@@ -124,7 +124,7 @@ def test_screen_accum_json_includes_setup_phase(monkeypatch):
         return uc
 
     monkeypatch.setattr(
-        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.composition.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 
@@ -162,7 +162,7 @@ def test_screen_accum_json_includes_typed_freshness(monkeypatch):
         return uc
 
     monkeypatch.setattr(
-        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.composition.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 
@@ -209,7 +209,7 @@ def test_screen_accum_save_calls_use_case(monkeypatch):
         return uc
 
     monkeypatch.setattr(
-        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.composition.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 
@@ -256,7 +256,7 @@ def test_screen_accum_json_save_includes_saved_watchlist(monkeypatch):
         return uc
 
     monkeypatch.setattr(
-        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.composition.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 
@@ -297,7 +297,7 @@ def test_screen_accum_json_includes_related_actions(monkeypatch):
         return uc
 
     monkeypatch.setattr(
-        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.composition.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 
@@ -325,7 +325,7 @@ def test_screen_accum_multi_save_fails_explicitly(monkeypatch):
         raise AssertionError("workflow use case must not run for a rejected combo")
 
     monkeypatch.setattr(
-        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.composition.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 
@@ -358,7 +358,7 @@ def test_screen_accum_single_json_matches_table_candidates_under_vwap_only(monke
 
     workflow_uc = _real_workflow_uc(screen_execute)
     monkeypatch.setattr(
-        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.composition.screen_deps.create_run_accumulation_screen_workflow_use_case",
         lambda *, db_path, screener_config, swing_config, **kwargs: workflow_uc,
     )
 
@@ -432,7 +432,7 @@ def test_screen_accum_multi_json_matches_table_rows_under_top_sort_squeeze(monke
 
     workflow_uc = _real_workflow_uc(screen_execute)
     monkeypatch.setattr(
-        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.composition.screen_deps.create_run_accumulation_screen_workflow_use_case",
         lambda *, db_path, screener_config, swing_config, **kwargs: workflow_uc,
     )
 
@@ -538,7 +538,7 @@ def test_screen_accum_multi_renders_tracked_broker_flow_not_broker_quality(monke
 
     workflow_uc = _real_workflow_uc(screen_execute, broker_repo=broker_repo)
     monkeypatch.setattr(
-        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.composition.screen_deps.create_run_accumulation_screen_workflow_use_case",
         lambda *, db_path, screener_config, swing_config, **kwargs: workflow_uc,
     )
 
@@ -584,7 +584,7 @@ def test_screen_accum_multi_json_includes_typed_freshness_per_window(monkeypatch
 
     workflow_uc = _real_workflow_uc(screen_execute)
     monkeypatch.setattr(
-        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.composition.screen_deps.create_run_accumulation_screen_workflow_use_case",
         lambda *, db_path, screener_config, swing_config, **kwargs: workflow_uc,
     )
 
@@ -627,7 +627,7 @@ def test_screen_accum_multi_duplicate_windows_fails_clearly(monkeypatch):
 
     workflow_uc = _real_workflow_uc(screen_execute)
     monkeypatch.setattr(
-        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.composition.screen_deps.create_run_accumulation_screen_workflow_use_case",
         lambda *, db_path, screener_config, swing_config, **kwargs: workflow_uc,
     )
 
@@ -653,7 +653,7 @@ def test_screen_accum_invalid_sort_by_fails_clearly(monkeypatch):
 
     workflow_uc = _real_workflow_uc(screen_execute)
     monkeypatch.setattr(
-        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.composition.screen_deps.create_run_accumulation_screen_workflow_use_case",
         lambda *, db_path, screener_config, swing_config, **kwargs: workflow_uc,
     )
 
@@ -682,7 +682,7 @@ def test_screen_accum_single_json_includes_universe_warnings_partial_result(monk
         return uc
 
     monkeypatch.setattr(
-        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.composition.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 
@@ -715,7 +715,7 @@ def test_screen_accum_single_json_status_empty_when_no_candidates(monkeypatch):
         return uc
 
     monkeypatch.setattr(
-        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.composition.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 
@@ -745,7 +745,7 @@ def test_screen_accum_single_json_partial_result_false_when_nothing_skipped(monk
         return uc
 
     monkeypatch.setattr(
-        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.composition.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 
@@ -776,7 +776,7 @@ def test_screen_accum_multi_json_includes_universe_warnings_partial_result(monke
         return uc
 
     monkeypatch.setattr(
-        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.composition.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 
@@ -810,7 +810,7 @@ def test_screen_accum_multi_json_partial_result_false_when_nothing_skipped(monke
         return uc
 
     monkeypatch.setattr(
-        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.composition.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 
@@ -844,7 +844,7 @@ def test_screen_accum_multi_json_status_empty_when_no_rows(monkeypatch):
         return uc
 
     monkeypatch.setattr(
-        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.composition.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 
@@ -903,7 +903,7 @@ def test_screen_accum_multi_cli_json_contract(monkeypatch):
         return uc
 
     monkeypatch.setattr(
-        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.composition.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 

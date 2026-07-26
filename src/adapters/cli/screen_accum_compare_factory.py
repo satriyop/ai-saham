@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from src.adapters.cli.screen_accum_workflow_factory import (
+from src.adapters.composition.screen_accum_workflow_factory import (
     create_accumulation_screen_workflow,
     create_live_signal_evidence_execution_context_use_case,
 )

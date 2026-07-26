@@ -185,3 +185,21 @@ def test_tui_source_defines_no_canonical_action_vocabulary():
             if isinstance(node, ast.Constant) and isinstance(node.value, str)
         )
     assert not (CANONICAL_ACTION_VOCABULARY & string_literals)
+
+
+COMPOSITION_ROOT = Path("src/adapters/composition")
+
+
+def test_shared_composition_does_not_depend_on_cli_adapter():
+    """The shared adapter-composition package is imported by the TUI, so it must
+    never reach back into the CLI adapter — otherwise the tui->cli boundary is
+    reintroduced *transitively*, which the direct-import scan above cannot catch.
+    This guards against parking CLI-coupled wiring behind a neutral re-export.
+    """
+    violations: list[str] = []
+    for path in sorted(COMPOSITION_ROOT.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for line, imported in _imports(tree):
+            if _matches(imported, "src.adapters.cli"):
+                violations.append(f"{path}:{line} imports {imported}")
+    assert not violations, violations

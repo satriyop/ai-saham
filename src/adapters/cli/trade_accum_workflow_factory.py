@@ -7,7 +7,7 @@ Layer: Adapter
 from pathlib import Path
 from typing import Optional
 
-from src.adapters.cli.stock_analysis_workflow_dependencies import (
+from src.adapters.composition.stock_analysis_workflow_dependencies import (
     StockAnalysisWorkflowDependencies,
     create_stock_analysis_workflow_dependencies,
 )

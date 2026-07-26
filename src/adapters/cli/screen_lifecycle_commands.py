@@ -17,14 +17,15 @@ from src.adapters.cli.screen_contract_cli import (
     exit_missing_screen_data,
     resolve_output_format,
 )
-from src.adapters.cli.screen_deps import build_screen_deps
 from src.adapters.cli.screen_pre_open_commands import pre_open
+from src.adapters.composition.screen_deps import build_screen_deps
 from src.application.dto.screen_contract import (
     ScreenResultStatus,
     ScreenSubjectKind,
     build_screen_envelope,
     default_screen_fetch_hint,
 )
+from src.application.services.universe_loader import resolve_tickers
 from src.application.use_case.compare_screen_snapshots_use_case import (
     ScreenCompareResult,
 )
@@ -38,7 +39,6 @@ from src.application.use_case.list_screen_watchlists_use_case import (
 from src.application.use_case.run_accumulation_screen_workflow_use_case import (
     RunAccumulationScreenWorkflowRequest,
 )
-from src.application.services.universe_loader import resolve_tickers
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 

@@ -11,7 +11,7 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.screen_accum_workflow_factory import (
+from src.adapters.composition.screen_accum_workflow_factory import (
     create_accumulation_screen_workflow_bundle,
 )
 from src.application.services.effective_market_session_resolver import (

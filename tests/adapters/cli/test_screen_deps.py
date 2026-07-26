@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from src.adapters.cli.screen_deps import build_screen_deps
+from src.adapters.composition.screen_deps import build_screen_deps
 
 
 def test_build_screen_deps_exposes_watchlist_and_accum_builders(tmp_path: Path):

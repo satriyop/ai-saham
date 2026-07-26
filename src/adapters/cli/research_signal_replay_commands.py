@@ -16,7 +16,7 @@ import typer
 from src.adapters.cli.research_signal_backfill_commands import (
     _read_scoring_config_canonical,
 )
-from src.adapters.cli.screen_accum_workflow_factory import (
+from src.adapters.composition.screen_accum_workflow_factory import (
     create_accumulation_screen_workflow_bundle,
 )
 from src.application.services.effective_market_session_resolver import (
@@ -39,10 +39,10 @@ from src.application.use_case.verify_stored_signal_observation_use_case import (
     VerifyStoredSignalObservationRequest,
     VerifyStoredSignalObservationUseCase,
 )
-from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
 )
+from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.swing_config_loader import load_swing_config
 from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
     SQLiteCandidateObservationsRepository,

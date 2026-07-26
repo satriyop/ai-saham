@@ -20,7 +20,7 @@ from src.adapters.cli.analyze_swing_command_config import (
     load_analyze_swing_command_config,
 )
 from src.adapters.cli.analyze_swing_display import display_swing_compare
-from src.adapters.cli.risk_engine_helper import create_configured_risk_engine
+from src.adapters.composition.risk_engine_helper import create_configured_risk_engine
 from src.application.services.universe_loader import (
     UniverseNotFoundError,
     resolve_tickers,
@@ -37,11 +37,11 @@ from src.application.use_case.swing_backtest_use_case import (
 from src.infrastructure.composition.indicator_registry_factory import (
     create_indicator_registry,
 )
+from src.infrastructure.composition.signal_engine_factory import create_signal_engine
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.config_backed_market_context_provider import (
     ConfigBackedMarketContextProvider,
 )
-from src.infrastructure.composition.signal_engine_factory import create_signal_engine
 from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository

@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from src.adapters.cli.risk_engine_helper import create_configured_risk_engine
+from src.adapters.composition.risk_engine_helper import create_configured_risk_engine
 from src.infrastructure.browser.stockbit_provider_bundle import (
     create_readonly_stockbit_providers,
 )
@@ -46,10 +46,10 @@ from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBroker
 from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
     SQLiteCandidateObservationsRepository,
 )
+from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 from src.infrastructure.persistence.sqlite_observation_risk_assessment_repository import (
     SQLiteObservationRiskAssessmentRepository,
 )
-from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 if TYPE_CHECKING:
     from src.application.ports.rules_loader import RulesLoader

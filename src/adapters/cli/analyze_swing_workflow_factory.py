@@ -31,7 +31,7 @@ from src.adapters.cli.analyze_swing_optional_fetchers import (
     auto_refresh_swing_data,
     fetch_swing_sentiment,
 )
-from src.adapters.cli.stock_analysis_workflow_dependencies import (
+from src.adapters.composition.stock_analysis_workflow_dependencies import (
     StockAnalysisWorkflowDependencies,
     create_stock_analysis_workflow_dependencies,
 )
@@ -41,9 +41,6 @@ from src.application.services.effective_market_session_resolver import (
 )
 from src.application.services.signal_evidence_execution_context_builder import (
     SignalEvidenceExecutionContextBuilder,
-)
-from src.infrastructure.persistence.ihsg_trading_session_calendar_provider import (
-    IHSGTradingSessionCalendarProvider,
 )
 from src.application.services.swing_broker_detail_builder import (
     build_broker_quality_note,
@@ -57,6 +54,9 @@ from src.infrastructure.config.accumulation_screener_config import (
 )
 from src.infrastructure.config.analyze_swing_config import AnalyzeSwingConfig
 from src.infrastructure.config.market_context_factory import evaluate_market_context
+from src.infrastructure.persistence.ihsg_trading_session_calendar_provider import (
+    IHSGTradingSessionCalendarProvider,
+)
 
 
 def create_swing_analysis_workflow(

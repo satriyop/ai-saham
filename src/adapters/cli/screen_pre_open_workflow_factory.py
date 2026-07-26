@@ -15,7 +15,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from src.adapters.cli.risk_engine_helper import create_configured_risk_engine
+from src.adapters.composition.risk_engine_helper import create_configured_risk_engine
 from src.application.services.pre_open_observation_persister import (
     PreOpenObservationPersister,
 )

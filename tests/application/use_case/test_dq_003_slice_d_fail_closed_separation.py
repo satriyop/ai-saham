@@ -37,12 +37,12 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
-from src.adapters.cli.screen_accum_workflow_factory import (
+from src.adapters.composition.screen_accum_workflow_factory import (
     AccumulationScreenWorkflow,
     create_accumulation_screen_workflow,
     create_accumulation_screen_workflow_bundle,
 )
-from src.adapters.cli.stock_analysis_workflow_dependencies import (
+from src.adapters.composition.stock_analysis_workflow_dependencies import (
     create_stock_analysis_workflow_dependencies,
 )
 from src.application.dto.signal_evidence_execution_context import (
@@ -616,10 +616,10 @@ def test_persister_empty_input_returns_zero_without_raising(tmp_path):
     """The genuine "nothing to do" path is preserved: a None repository or an
     empty candidate list returns 0 WITHOUT raising — only real failures fail
     closed, not empty input."""
+    from src.application.dto.accumulation_screen import AccumulationScreenRequest
     from src.application.services.accumulation_candidate_observation_persister import (
         AccumulationCandidateObservationPersister,
     )
-    from src.application.dto.accumulation_screen import AccumulationScreenRequest
 
     request = AccumulationScreenRequest(tickers=[], window_days=7, as_of_date=_T)
 

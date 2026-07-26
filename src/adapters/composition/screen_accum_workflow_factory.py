@@ -10,10 +10,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from src.adapters.cli.accumulation_risk_workflow_factory import (
+from src.adapters.composition.accumulation_risk_workflow_factory import (
     create_accumulation_assess_risk_use_case,
 )
-from src.adapters.cli.stock_analysis_workflow_dependencies import (
+from src.adapters.composition.stock_analysis_workflow_dependencies import (
     StockAnalysisWorkflowDependencies,
     create_stock_analysis_workflow_dependencies,
 )
@@ -27,9 +27,6 @@ from src.application.services.effective_market_session_resolver import (
 )
 from src.application.services.signal_evidence_execution_context_builder import (
     SignalEvidenceExecutionContextBuilder,
-)
-from src.infrastructure.persistence.ihsg_trading_session_calendar_provider import (
-    IHSGTradingSessionCalendarProvider,
 )
 from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
@@ -46,6 +43,9 @@ from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.infrastructure.config.accumulation_screener_config import (
     AccumulationScreenerConfig,
+)
+from src.infrastructure.persistence.ihsg_trading_session_calendar_provider import (
+    IHSGTradingSessionCalendarProvider,
 )
 from src.infrastructure.persistence.sqlite_watchlist_repository import (
     SQLiteWatchlistRepository,

@@ -10,10 +10,9 @@ the top-level workflow factory does not own use-case construction directly.
 from __future__ import annotations
 
 from datetime import date
-
 from typing import TYPE_CHECKING
 
-from src.adapters.cli.stock_analysis_workflow_dependencies import (
+from src.adapters.composition.stock_analysis_workflow_dependencies import (
     StockAnalysisWorkflowDependencies,
 )
 from src.application.dto.accumulation_screen import (

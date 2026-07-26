@@ -45,7 +45,7 @@ def test_screen_accum_delegates_workflow_construction_to_builder(monkeypatch):
         return uc
 
     monkeypatch.setattr(
-        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.composition.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_workflow_uc,
     )
 
@@ -81,7 +81,7 @@ def test_screen_accum_single_table_mode_sets_strategy_overlay(monkeypatch):
         return uc
 
     monkeypatch.setattr(
-        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.composition.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 
@@ -122,7 +122,7 @@ def test_screen_accum_strategy_with_json_includes_overlay(monkeypatch):
         return uc
 
     monkeypatch.setattr(
-        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.composition.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 
@@ -148,7 +148,7 @@ def test_screen_accum_strategy_with_multi_fails_explicitly(monkeypatch):
         raise AssertionError("workflow use case must not run for a rejected combo")
 
     monkeypatch.setattr(
-        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.composition.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 
@@ -185,7 +185,7 @@ def test_screen_accum_single_table_mode_sets_save_enabled(monkeypatch):
         return uc
 
     monkeypatch.setattr(
-        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.composition.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_uc,
     )
 
@@ -233,7 +233,7 @@ def test_screen_accum_multi_sets_correct_request_fields(monkeypatch):
         return uc
 
     monkeypatch.setattr(
-        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.composition.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_workflow_uc,
     )
 
@@ -283,7 +283,7 @@ def test_screen_accum_threads_as_of_date_to_workflow_request(monkeypatch):
         return uc
 
     monkeypatch.setattr(
-        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.composition.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_workflow_uc,
     )
 
@@ -301,7 +301,7 @@ def test_screen_accum_rejects_invalid_as_of(monkeypatch):
         raise AssertionError("workflow must not run when --as-of is invalid")
 
     monkeypatch.setattr(
-        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.composition.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_workflow_uc,
     )
 
@@ -330,7 +330,7 @@ def test_screen_accum_json_includes_effective_session(monkeypatch):
         return uc
 
     monkeypatch.setattr(
-        "src.adapters.cli.screen_deps.create_run_accumulation_screen_workflow_use_case",
+        "src.adapters.composition.screen_deps.create_run_accumulation_screen_workflow_use_case",
         fake_workflow_uc,
     )
 

@@ -13,7 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Optional
 
-from src.adapters.cli.risk_engine_helper import create_configured_risk_engine
+from src.adapters.composition.risk_engine_helper import create_configured_risk_engine
 from src.application.use_case.explain_risk_use_case import ExplainRiskUseCase
 from src.application.use_case.run_risk_analysis_workflow_use_case import (
     RunRiskAnalysisWorkflowUseCase,

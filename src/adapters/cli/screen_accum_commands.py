@@ -23,7 +23,7 @@ from src.adapters.cli.screen_accum_formatters import (
     accumulation_display_config_from_screener,
 )
 from src.adapters.cli.screen_contract_cli import echo_json, resolve_output_format
-from src.adapters.cli.screen_deps import build_screen_deps
+from src.adapters.composition.screen_deps import build_screen_deps
 from src.application.dto.screen_accum_payload import (
     build_accum_multi_envelope,
     build_accum_single_envelope,

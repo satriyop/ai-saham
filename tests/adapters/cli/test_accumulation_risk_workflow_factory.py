@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
 
-from src.adapters.cli.accumulation_risk_workflow_factory import (
+from src.adapters.composition.accumulation_risk_workflow_factory import (
     create_accumulation_assess_risk_use_case,
 )
 from src.application.use_case.assess_risk_use_case import AssessRiskUseCase

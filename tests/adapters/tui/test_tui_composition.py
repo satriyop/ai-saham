@@ -82,7 +82,7 @@ def test_create_tui_app_screen_uses_build_screen_deps(monkeypatch):
     from types import SimpleNamespace
     from unittest.mock import MagicMock
 
-    from src.adapters.cli.screen_deps import ScreenDeps
+    from src.adapters.composition.screen_deps import ScreenDeps
     from src.adapters.tui.composition import _ScreenDepsAccumulationRunner
 
     sentinel_list = object()

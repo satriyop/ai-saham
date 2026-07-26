@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from src.adapters.cli.screen_accum_compare_factory import (
     run_fresh_accumulation_screen_for_compare,
 )
-from src.adapters.cli.screen_accum_workflow_factory import (
+from src.adapters.composition.screen_accum_workflow_factory import (
     create_live_signal_evidence_execution_context_use_case,
 )
 from src.application.dto.accumulation_screen import (

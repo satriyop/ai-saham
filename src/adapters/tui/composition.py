@@ -16,7 +16,7 @@ from pathlib import Path
 from threading import Lock
 from typing import Any
 
-from src.adapters.cli.screen_deps import ScreenDeps, build_screen_deps
+from src.adapters.composition.screen_deps import ScreenDeps, build_screen_deps
 from src.adapters.tui.controllers.accumulation_controller import (
     AccumulationLoader,
 )

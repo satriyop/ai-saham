@@ -2,15 +2,15 @@ import ast
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from src.adapters.cli.screen_accum_workflow_factory import (
+from src.adapters.composition.screen_accum_workflow_factory import (
     create_accumulation_screen_workflow,
     create_accumulation_screen_workflow_bundle,
 )
 
-MODULE_PATH = "src.adapters.cli.screen_accum_workflow_factory"
+MODULE_PATH = "src.adapters.composition.screen_accum_workflow_factory"
 SOURCE_FILE = (
     Path(__file__).resolve().parents[3]
-    / "src/adapters/cli/screen_accum_workflow_factory.py"
+    / "src/adapters/composition/screen_accum_workflow_factory.py"
 )
 
 

@@ -5,7 +5,7 @@ Layer: Test (adapter composition bundle).
 
 from unittest.mock import MagicMock, patch
 
-from src.adapters.cli.stock_analysis_workflow_dependencies import (
+from src.adapters.composition.stock_analysis_workflow_dependencies import (
     StockAnalysisWorkflowDependencies,
     create_stock_analysis_workflow_dependencies,
 )
@@ -99,7 +99,7 @@ class TestCreateDependencies:
         import importlib
         import sys
 
-        mod_name = "src.adapters.cli.stock_analysis_workflow_dependencies"
+        mod_name = "src.adapters.composition.stock_analysis_workflow_dependencies"
         original = sys.modules.get(mod_name)
 
         try:
@@ -147,7 +147,7 @@ class TestDependencyInjectionInFactories:
     """Verify that factory functions use the provided deps bundle when given."""
 
     def test_create_accumulation_screen_workflow_uses_fake_deps(self, tmp_path):
-        from src.adapters.cli.screen_accum_workflow_factory import (
+        from src.adapters.composition.screen_accum_workflow_factory import (
             create_accumulation_screen_workflow,
         )
 
@@ -197,7 +197,7 @@ class TestDependencyInjectionInFactories:
     def test_create_run_accumulation_screen_workflow_use_case_threads_deps(
         self, tmp_path
     ):
-        from src.adapters.cli.screen_accum_workflow_factory import (
+        from src.adapters.composition.screen_accum_workflow_factory import (
             create_run_accumulation_screen_workflow_use_case,
         )
 
@@ -235,7 +235,7 @@ class TestDependencyInjectionInFactories:
         )
 
         with patch(
-            "src.adapters.cli.screen_accum_workflow_factory"
+            "src.adapters.composition.screen_accum_workflow_factory"
             ".RunAccumulationScreenWorkflowUseCase"
         ) as mock_uc_class:
             create_run_accumulation_screen_workflow_use_case(

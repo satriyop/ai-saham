@@ -13,14 +13,14 @@ from src.application.services.accumulation_screen_factory import (
 from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.services.signal_engine import SignalEngine
 from src.application.services.signal_engine_config import SignalEngineConfig
+from src.domain.ports.observation_risk_assessment_repository import (
+    OBSERVATION_RISK_ASSESSMENT_SCHEMA_VERSION,
+)
 from src.domain.value_objects.signal_artifact_schema import (
     CANDIDATE_OBSERVATION_SCHEMA_VERSION,
 )
 from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
     SQLiteCandidateObservationsRepository,
-)
-from src.domain.ports.observation_risk_assessment_repository import (
-    OBSERVATION_RISK_ASSESSMENT_SCHEMA_VERSION,
 )
 from src.infrastructure.persistence.sqlite_observation_risk_assessment_repository import (
     SQLiteObservationRiskAssessmentRepository,
@@ -47,7 +47,7 @@ def _build_screen_bundle(
     SQLiteObservationRiskAssessmentRepository(tmp_path / "data.db")
     risk_use_case = None
     if with_risk:
-        from src.adapters.cli.accumulation_risk_workflow_factory import (
+        from src.adapters.composition.accumulation_risk_workflow_factory import (
             create_accumulation_assess_risk_use_case,
         )
 
