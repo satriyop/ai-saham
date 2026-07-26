@@ -25,23 +25,6 @@ logger = logging.getLogger(__name__)
 DEFAULT_FORMULAS_PATH = Path("config/formulas.yaml")
 
 
-class FormulaStorageError(FormulaStoreError):
-    """Raised when formula storage operations fail.
-
-    Kept as a named subclass for backwards compatibility; the canonical error
-    type is the application-layer ``FormulaStoreError`` (this store's port),
-    which application use cases catch.
-    """
-
-    pass
-
-
-# StoredFormula is defined in the application layer (application/dto); re-exported
-# here so existing ``from ...formula_storage import StoredFormula`` imports keep
-# working.
-__all__ = ["DEFAULT_FORMULAS_PATH", "FormulaStorage", "FormulaStorageError", "StoredFormula"]
-
-
 class FormulaStorage:
     """Persist custom formulas to YAML file.
 
@@ -88,7 +71,7 @@ class FormulaStorage:
             StoredFormula with metadata.
 
         Raises:
-            FormulaStorageError: If storage operation fails.
+            FormulaStoreError: If storage operation fails.
         """
         name_upper = name.upper()
         now = datetime.now()
@@ -119,7 +102,7 @@ class FormulaStorage:
             )
 
         except Exception as e:
-            raise FormulaStorageError(f"Failed to save formula: {e}") from e
+            raise FormulaStoreError(f"Failed to save formula: {e}") from e
 
     def get(self, name: str) -> StoredFormula | None:
         """Get a single formula by name.
@@ -162,7 +145,7 @@ class FormulaStorage:
             True if formula was deleted, False if not found.
 
         Raises:
-            FormulaStorageError: If delete operation fails.
+            FormulaStoreError: If delete operation fails.
         """
         name_upper = name.upper()
 
@@ -179,7 +162,7 @@ class FormulaStorage:
             return True
 
         except Exception as e:
-            raise FormulaStorageError(f"Failed to delete formula: {e}") from e
+            raise FormulaStoreError(f"Failed to delete formula: {e}") from e
 
     def load_all(self) -> dict[str, StoredFormula]:
         """Load all formulas from storage.

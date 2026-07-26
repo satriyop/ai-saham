@@ -17,10 +17,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from src.infrastructure.persistence.formula_storage import (
-    FormulaStorage,
-    StoredFormula,
-)
+from src.application.dto.stored_formula import StoredFormula
+from src.infrastructure.persistence.formula_storage import FormulaStorage
 
 # --- Fixtures ---
 
