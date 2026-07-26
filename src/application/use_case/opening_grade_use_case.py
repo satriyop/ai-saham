@@ -16,7 +16,7 @@ Layer: Application
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -26,12 +26,13 @@ from src.application.services.pre_open_observation_queries import (
 from src.application.services.pre_open_ops_day_export import OPS_SESSION_FILENAME
 
 OPENING_DATA_DIR = Path("data/opening")
-GRADE_SCHEMA_VERSION = 2  # Phase 4: saved observations + signal/TradeSetup slices
+GRADE_SCHEMA_VERSION = 3
+DIRECTION_RETURN_DEADBAND_PCT = 0.15
+TRACK_TARGET_TOLERANCE = timedelta(minutes=3)
 
 
 class _ObservationsReader(Protocol):
-    def list_all_by_date(self, snapshot_date: date) -> list[Any]:
-        ...
+    def list_all_by_date(self, snapshot_date: date) -> list[Any]: ...
 
 
 def compute_grade(
@@ -118,6 +119,7 @@ def _candidate_from_observation(row: Any) -> dict:
     payload = getattr(row, "payload", None) or {}
     cand = payload.get("candidate") or {}
     signal = payload.get("signal") or {}
+    factors = signal.get("factors") or {}
     risk = payload.get("risk") or {}
     trade_setup = payload.get("trade_setup") or {}
 
@@ -140,6 +142,14 @@ def _candidate_from_observation(row: Any) -> dict:
         "bid_pressure_preopen": cand.get("bid_offer_imbalance"),
         "screen_result": payload.get("screen_result"),
         "signal_score": signal.get("score"),
+        "signal_contract": signal.get("contract"),
+        "signal_direction": signal.get("direction"),
+        "signal_direction_confidence": signal.get("confidence"),
+        "auction_quality": signal.get("auction_quality"),
+        "signal_raw_score": signal.get("raw_score"),
+        "signal_factors": factors,
+        "signal_rationale": signal.get("rationale") or [],
+        "signal_quality_reasons": signal.get("quality_reasons") or [],
         "signal_strength": signal.get("strength"),
         "signal_entry_quality": signal.get("entry_quality"),
         "trade_setup_action": trade_setup.get("action"),
@@ -182,6 +192,14 @@ def _grade_one_ticker(cand: dict, tracks: list[dict], *, ops_meta: dict) -> dict
         "trend": trend,
         "screen_result": cand.get("screen_result"),
         "signal_score": cand.get("signal_score"),
+        "signal_contract": cand.get("signal_contract"),
+        "signal_direction": cand.get("signal_direction"),
+        "signal_direction_confidence": cand.get("signal_direction_confidence"),
+        "auction_quality": cand.get("auction_quality"),
+        "signal_raw_score": cand.get("signal_raw_score"),
+        "signal_factors": cand.get("signal_factors") or {},
+        "signal_rationale": cand.get("signal_rationale") or [],
+        "signal_quality_reasons": cand.get("signal_quality_reasons") or [],
         "signal_strength": cand.get("signal_strength"),
         "signal_entry_quality": cand.get("signal_entry_quality"),
         "trade_setup_action": cand.get("trade_setup_action"),
@@ -207,13 +225,28 @@ def _grade_one_ticker(cand: dict, tracks: list[dict], *, ops_meta: dict) -> dict
     )
 
     iep_error_pct = (
-        round(abs(iep - opening_price) / opening_price * 100, 3)
-        if iep and opening_price
-        else None
+        round(abs(iep - opening_price) / opening_price * 100, 3) if iep and opening_price else None
     )
 
-    def price_at(n_snapshots: int) -> float | None:
-        return price_series[n_snapshots][1] if len(price_series) > n_snapshots else None
+    opening_at = _parse_timestamp(price_series[0][0])
+
+    def price_at_elapsed(minutes: int) -> float | None:
+        if opening_at is None:
+            return None
+        target = opening_at + timedelta(minutes=minutes)
+        for captured_at, price, _, _ in price_series[1:]:
+            observed_at = _parse_timestamp(captured_at)
+            if observed_at is None or observed_at < target:
+                continue
+            if observed_at - target <= TRACK_TARGET_TOLERANCE:
+                return price
+            return None
+        return None
+
+    def return_pct(price: float | None) -> float | None:
+        if price is None or not opening_price:
+            return None
+        return round((price - opening_price) / opening_price * 100.0, 4)
 
     trend_bullish = trend == "BULLISH"
 
@@ -222,9 +255,19 @@ def _grade_one_ticker(cand: dict, tracks: list[dict], *, ops_meta: dict) -> dict
             return None
         return (p > opening_price) == trend_bullish
 
-    trend_T5 = trend_correct(price_at(1))
-    trend_T15 = trend_correct(price_at(3))
-    trend_T30 = trend_correct(price_at(6))
+    price_T5 = price_at_elapsed(5)
+    price_T15 = price_at_elapsed(15)
+    price_T30 = price_at_elapsed(30)
+    return_T5_pct = return_pct(price_T5)
+    return_T15_pct = return_pct(price_T15)
+    return_T30_pct = return_pct(price_T30)
+    trend_T5 = trend_correct(price_T5)
+    trend_T15 = trend_correct(price_T15)
+    trend_T30 = trend_correct(price_T30)
+    direction = cand.get("signal_direction")
+    direction_correct_T5 = _direction_correct(direction, return_T5_pct)
+    direction_correct_T15 = _direction_correct(direction, return_T15_pct)
+    direction_correct_T30 = _direction_correct(direction, return_T30_pct)
 
     one_r_available = None
     stop_hit = None
@@ -246,9 +289,7 @@ def _grade_one_ticker(cand: dict, tracks: list[dict], *, ops_meta: dict) -> dict
     broker_dominant_side = None
     if broker_signals:
         absorptions = [
-            s["absorption_ratio"]
-            for s in broker_signals
-            if s.get("absorption_ratio") is not None
+            s["absorption_ratio"] for s in broker_signals if s.get("absorption_ratio") is not None
         ]
         institutional_absorption_rate = (
             round(sum(absorptions) / len(absorptions), 4) if absorptions else None
@@ -289,6 +330,12 @@ def _grade_one_ticker(cand: dict, tracks: list[dict], *, ops_meta: dict) -> dict
         "trend_T5": trend_T5,
         "trend_T15": trend_T15,
         "trend_T30": trend_T30,
+        "return_T5_pct": return_T5_pct,
+        "return_T15_pct": return_T15_pct,
+        "return_T30_pct": return_T30_pct,
+        "direction_correct_T5": direction_correct_T5,
+        "direction_correct_T15": direction_correct_T15,
+        "direction_correct_T30": direction_correct_T30,
         "one_r_available": one_r_available,
         "stop_hit": stop_hit,
         "clean_trade": clean_trade,
@@ -326,6 +373,55 @@ def _signal_band(score: Any) -> str | None:
     return "weak"
 
 
+def _parse_timestamp(value: Any) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _direction_correct(direction: Any, return_pct: float | None) -> bool | None:
+    if return_pct is None:
+        return None
+    if direction == "BULLISH":
+        return return_pct > DIRECTION_RETURN_DEADBAND_PCT
+    if direction == "BEARISH":
+        return return_pct < -DIRECTION_RETURN_DEADBAND_PCT
+    if direction == "NEUTRAL":
+        return abs(return_pct) <= DIRECTION_RETURN_DEADBAND_PCT
+    return None
+
+
+def _mean(items: list[dict], key: str) -> float | None:
+    values = [float(item[key]) for item in items if item.get(key) is not None]
+    return round(sum(values) / len(values), 4) if values else None
+
+
+def _by_factor_state(
+    rows: list[dict],
+    factor: str,
+    stats_builder,
+) -> dict[str, dict]:
+    tracked = [row for row in rows if not row.get("no_track_data")]
+    states = {
+        str((row.get("signal_factors") or {}).get(factor))
+        for row in tracked
+        if factor in (row.get("signal_factors") or {})
+    }
+    result = {
+        state: stats_builder(
+            [row for row in tracked if str((row.get("signal_factors") or {}).get(factor)) == state]
+        )
+        for state in sorted(states)
+    }
+    missing = [row for row in tracked if factor not in (row.get("signal_factors") or {})]
+    if missing:
+        result["_missing"] = stats_builder(missing)
+    return result
+
+
 def _build_session_grade(
     *,
     today: date,
@@ -349,33 +445,29 @@ def _build_session_grade(
             "clean_trade_rate": rate(subset, "clean_trade"),
             "trend_accuracy_T5": rate(subset, "trend_T5"),
             "trend_accuracy_T30": rate(subset, "trend_T30"),
+            "direction_accuracy_T5": rate(subset, "direction_correct_T5"),
+            "direction_accuracy_T15": rate(subset, "direction_correct_T15"),
+            "direction_accuracy_T30": rate(subset, "direction_correct_T30"),
+            "mean_return_T5_pct": _mean(subset, "return_T5_pct"),
+            "mean_return_T15_pct": _mean(subset, "return_T15_pct"),
+            "mean_return_T30_pct": _mean(subset, "return_T30_pct"),
         }
 
     def by_key(key: str, values: tuple[str, ...]) -> dict:
         out: dict[str, dict] = {}
         for v in values:
-            subset = [
-                t
-                for t in per_ticker
-                if t.get(key) == v and not t.get("no_track_data")
-            ]
+            subset = [t for t in per_ticker if t.get(key) == v and not t.get("no_track_data")]
             out[v] = slice_stats(subset)
         # unknown / missing bucket
         known = set(values)
         other = [
             t
             for t in per_ticker
-            if not t.get("no_track_data")
-            and t.get(key) not in known
-            and t.get(key) is not None
+            if not t.get("no_track_data") and t.get(key) not in known and t.get(key) is not None
         ]
         if other:
             out["_other"] = slice_stats(other)
-        missing = [
-            t
-            for t in per_ticker
-            if not t.get("no_track_data") and t.get(key) is None
-        ]
+        missing = [t for t in per_ticker if not t.get("no_track_data") and t.get(key) is None]
         if missing:
             out["_missing"] = slice_stats(missing)
         return out
@@ -415,6 +507,28 @@ def _build_session_grade(
             "BLOCKED_STRUCTURAL",
         ),
     )
+    by_direction = by_key(
+        "signal_direction",
+        ("BULLISH", "BEARISH", "NEUTRAL", "CONFLICTED", "UNKNOWN"),
+    )
+    by_direction_confidence = by_key(
+        "signal_direction_confidence",
+        ("HIGH", "MEDIUM", "LOW"),
+    )
+    by_auction_quality = by_key(
+        "auction_quality",
+        ("RELIABLE", "CAUTION", "UNRELIABLE"),
+    )
+    by_factor_state = {
+        factor: _by_factor_state(per_ticker, factor, slice_stats)
+        for factor in (
+            "iep_direction",
+            "book_pressure_state",
+            "participation_state",
+            "rsi_extension",
+            "unusual_volume",
+        )
+    }
 
     # Legacy secondary strata (not champion KPI)
     by_opening_setup = {
@@ -457,18 +571,23 @@ def _build_session_grade(
         "trend_accuracy_T5": rate(tracked, "trend_T5"),
         "trend_accuracy_T15": rate(tracked, "trend_T15"),
         "trend_accuracy_T30": rate(tracked, "trend_T30"),
+        "direction_accuracy_T5": rate(tracked, "direction_correct_T5"),
+        "direction_accuracy_T15": rate(tracked, "direction_correct_T15"),
+        "direction_accuracy_T30": rate(tracked, "direction_correct_T30"),
         "clean_trade_rate": rate(tracked, "clean_trade"),
         # Champion KPI slices
         "by_signal_band": by_signal_band,
         "by_screen_result": by_screen_result,
         "by_trade_setup_action": by_trade_setup_action,
+        "by_direction": by_direction,
+        "by_direction_confidence": by_direction_confidence,
+        "by_auction_quality": by_auction_quality,
+        "by_factor_state": by_factor_state,
         # Legacy secondary (kept for tune/prompt compatibility)
         "by_opening_setup": by_opening_setup,
         "by_opening_setup_legacy": by_opening_setup,
         "iep_accuracy": {
-            "mean_error_pct": round(sum(iep_errors) / len(iep_errors), 3)
-            if iep_errors
-            else None,
+            "mean_error_pct": round(sum(iep_errors) / len(iep_errors), 3) if iep_errors else None,
             "max_error_pct": round(max(iep_errors), 3) if iep_errors else None,
         },
         "config_snapshot": config_snapshot,
@@ -552,6 +671,9 @@ def _write_grade_md(grade: dict, path: Path) -> None:
         f"| Trend accuracy T+5m | {_pct(grade.get('trend_accuracy_T5'))} |",
         f"| Trend accuracy T+15m | {_pct(grade.get('trend_accuracy_T15'))} |",
         f"| Trend accuracy T+30m | {_pct(grade.get('trend_accuracy_T30'))} |",
+        f"| Direction accuracy T+5m | {_pct(grade.get('direction_accuracy_T5'))} |",
+        f"| Direction accuracy T+15m | {_pct(grade.get('direction_accuracy_T15'))} |",
+        f"| Direction accuracy T+30m | {_pct(grade.get('direction_accuracy_T30'))} |",
         f"| Clean trade rate | {_pct(grade.get('clean_trade_rate'))} |",
         f"| IEP mean error | {grade['iep_accuracy'].get('mean_error_pct', 'N/A')}% |",
         f"| Snapshot phase | {grade.get('data_quality', {}).get('capture_phase', 'N/A')} |",
@@ -579,6 +701,24 @@ def _write_grade_md(grade: dict, path: Path) -> None:
             f"| {_pct(v.get('clean_trade_rate'))} "
             f"| {_pct(v.get('trend_accuracy_T5'))} "
             f"| {_pct(v.get('trend_accuracy_T30'))} |"
+        )
+
+    lines += [
+        "",
+        "## By Directional Baseline",
+        "",
+        "| Direction | Count | Accuracy T+5 | Accuracy T+15 | Accuracy T+30 |",
+        "|---|---|---|---|---|",
+    ]
+    for direction in ("BULLISH", "BEARISH", "NEUTRAL", "CONFLICTED", "UNKNOWN"):
+        v = grade.get("by_direction", {}).get(direction)
+        if not v or v.get("count", 0) == 0:
+            continue
+        lines.append(
+            f"| {direction} | {v.get('count', 0)} "
+            f"| {_pct(v.get('direction_accuracy_T5'))} "
+            f"| {_pct(v.get('direction_accuracy_T15'))} "
+            f"| {_pct(v.get('direction_accuracy_T30'))} |"
         )
 
     lines += [
@@ -635,36 +775,40 @@ def _write_grade_md(grade: dict, path: Path) -> None:
         "## Per Ticker",
         "",
         (
-            "| Ticker | Sig | Action | screen_result | Trend | Opening | "
-            "Entry Range | Clean | Trend T5 |"
+            "| Ticker | Direction | Confidence | Quality | Sig | Action | "
+            "screen_result | Opening | Return T5 | Direction T5 |"
         ),
-        "|---|---|---|---|---|---|---|---|---|",
+        "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for t in grade.get("per_ticker", []):
         if t.get("no_track_data"):
             lines.append(
-                f"| {t['ticker']} | {t.get('signal_score', '—')} | "
+                f"| {t['ticker']} | {t.get('signal_direction') or '—'} | "
+                f"{t.get('signal_direction_confidence') or '—'} | "
+                f"{t.get('auction_quality') or '—'} | "
+                f"{t.get('signal_score', '—')} | "
                 f"{t.get('trade_setup_action') or '—'} | "
-                f"{t.get('screen_result') or '—'} | — | NO DATA | — | — | — |"
+                f"{t.get('screen_result') or '—'} | NO DATA | — | — |"
             )
         else:
             lines.append(
                 f"| {t['ticker']} "
+                f"| {t.get('signal_direction') or '—'} "
+                f"| {t.get('signal_direction_confidence') or '—'} "
+                f"| {t.get('auction_quality') or '—'} "
                 f"| {t.get('signal_score', '—')} "
                 f"| {t.get('trade_setup_action') or '—'} "
                 f"| {t.get('screen_result') or '—'} "
-                f"| {t.get('trend', '?')} "
                 f"| {t.get('opening_price', '?')} "
-                f"| {'✓' if t.get('entry_range_hit') else '✗'} "
-                f"| {_bool(t.get('clean_trade'))} "
-                f"| {_bool(t.get('trend_T5'))} |"
+                f"| {t.get('return_T5_pct', '—')} "
+                f"| {_bool(t.get('direction_correct_T5'))} |"
             )
 
     path.write_text("\n".join(lines))
 
 
 def _pct(v) -> str:
-    return f"{v*100:.1f}%" if v is not None else "N/A"
+    return f"{v * 100:.1f}%" if v is not None else "N/A"
 
 
 def _bool(v) -> str:
