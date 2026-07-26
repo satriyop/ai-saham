@@ -45,7 +45,7 @@ def create_signal_engine(
         db_path: Path to the SQLite database (e.g. data/db/data.db).
         with_enrichment: When True, inject all 5 Stockbit enrichment providers
             (bandar, fundamentals, seasonality, analyst, forward_estimates) using
-            the SQLite cache so evaluate_with_context() has real enrichment data
+            the SQLite cache so contextual evaluation has real enrichment data
             without a live broker session. When False (default), all providers
             are None and canonical evidence groups fed by them are MISSING —
             useful for testing the engine wiring.

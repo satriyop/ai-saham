@@ -40,7 +40,7 @@ def test_evaluate_signal_skipped_when_signal_not_applicable():
     )
 
     assert result is None
-    engine.evaluate_with_context.assert_not_called()
+    engine.evaluate_accumulation_discovery.assert_not_called()
 
 
 def test_evaluate_signal_skipped_when_canonical_evidence_absent():
@@ -56,12 +56,12 @@ def test_evaluate_signal_skipped_when_canonical_evidence_absent():
     )
 
     assert result is None
-    engine.evaluate_with_context.assert_not_called()
+    engine.evaluate_accumulation_discovery.assert_not_called()
 
 
 def test_evaluate_signal_invokes_engine_when_applicable_and_evidence_present():
     engine = MagicMock()
-    engine.evaluate_with_context.return_value = MagicMock(name="signal_response")
+    engine.evaluate_accumulation_discovery.return_value = MagicMock(name="signal_response")
     pipeline = ScreenAssessmentPipeline(
         policy=ScreenPolicy.accumulation(),
         signal_engine=engine,
@@ -70,16 +70,16 @@ def test_evaluate_signal_invokes_engine_when_applicable_and_evidence_present():
 
     result = pipeline.evaluate_signal(ticker="BBCA", inputs=inputs)
 
-    assert result is engine.evaluate_with_context.return_value
-    engine.evaluate_with_context.assert_called_once()
-    call_kwargs = engine.evaluate_with_context.call_args
+    assert result is engine.evaluate_accumulation_discovery.return_value
+    engine.evaluate_accumulation_discovery.assert_called_once()
+    call_kwargs = engine.evaluate_accumulation_discovery.call_args
     assert call_kwargs[0][0] == "BBCA"
     assert call_kwargs[1]["canonical_evidence"] is inputs.canonical_evidence
 
 
 def test_evaluate_pre_open_signal_invokes_single_engine_lane():
     engine = MagicMock()
-    engine.evaluate_pre_open_with_context.return_value = MagicMock(name="pre_open_result")
+    engine.evaluate_pre_open_auction_direction.return_value = MagicMock(name="pre_open_result")
     pipeline = ScreenAssessmentPipeline(
         policy=ScreenPolicy.pre_open(),
         signal_engine=engine,
@@ -92,8 +92,8 @@ def test_evaluate_pre_open_signal_invokes_single_engine_lane():
         market_context=market_context,
     )
 
-    assert result is engine.evaluate_pre_open_with_context.return_value
-    engine.evaluate_pre_open_with_context.assert_called_once_with(
+    assert result is engine.evaluate_pre_open_auction_direction.return_value
+    engine.evaluate_pre_open_auction_direction.assert_called_once_with(
         inputs,
         market_context=market_context,
     )

@@ -159,7 +159,7 @@ def test_signal_assessment_failure_returns_exact_warning():
         def bandar_max_range(self, n):
             return 0
 
-        def evaluate_with_context(self, ticker, signal_context, market_context=None, **kwargs):
+        def evaluate_swing_trade_setup(self, ticker, signal_context, market_context=None, **kwargs):
             raise RuntimeError("signal boom")
 
     workflow = SwingAnalysisWorkflowUseCase(
@@ -194,7 +194,7 @@ class _RescoreSignalEngine:
         # Exist solely as an explicit regression trap. Standalone evaluate should not run when candidate present.
         raise AssertionError("standalone evaluate should not run when candidate present")
 
-    def evaluate_with_context(self, ticker, signal_context, market_context=None, **kwargs):
+    def evaluate_swing_trade_setup(self, ticker, signal_context, market_context=None, **kwargs):
         self.rescore_calls += 1
         if self._fail_rescore:
             raise RuntimeError("rescore boom")
@@ -257,7 +257,7 @@ _MARKET_CONTEXT = MarketContext(
 def test_evidence_enriched_rescore_failure_returns_exact_warning():
     signal_engine = _RescoreSignalEngine(fail_rescore=True)
     # Fast path: candidate already carries a pre-computed signal_assessment,
-    # so the initial signal step reuses it without calling evaluate_with_context.
+    # so the initial signal step reuses it without calling evaluate_swing_trade_setup.
     candidate = _MinimalCandidate()
     candidate.signal_assessment = _signal_response(40.0)
 
@@ -319,10 +319,10 @@ def test_evidence_enriched_rescore_success_updates_response():
 
 class _SignalEngineMustNotAssessWithoutEvidence:
     def __init__(self) -> None:
-        self.evaluate_with_context_calls = 0
+        self.evaluate_swing_trade_setup_calls = 0
 
-    def evaluate_with_context(self, *args, **kwargs):
-        self.evaluate_with_context_calls += 1
+    def evaluate_swing_trade_setup(self, *args, **kwargs):
+        self.evaluate_swing_trade_setup_calls += 1
         raise AssertionError(
             "SignalEngine must not assess when no candidate evidence exists"
         )
@@ -341,7 +341,7 @@ def test_no_candidate_reports_typed_unavailable_without_signal_assessment():
 
     response = workflow.execute(_request())
 
-    assert signal_engine.evaluate_with_context_calls == 0
+    assert signal_engine.evaluate_swing_trade_setup_calls == 0
 
     from src.application.dto.swing_analysis import (
         SignalAssessmentStatus,

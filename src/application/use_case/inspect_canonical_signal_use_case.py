@@ -1,7 +1,7 @@
 """Read-only canonical SignalEngine inspection (DQ-007 lean).
 
 Reuses the accumulation-flow screen path (same assessor →
-``CanonicalSignalEvidenceInput`` → ``SignalEngine.evaluate_with_context``).
+``CanonicalSignalEvidenceInput`` → contextual ``SignalEngine`` policy).
 Does not persist. Does not invent a parallel scorer.
 """
 

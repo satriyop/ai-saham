@@ -199,7 +199,7 @@ def _signal_response(score: int = 72) -> AssessSignalResponse:
 
 
 class _RecordingSignalEngine:
-    """Captures the canonical_evidence passed to evaluate_with_context."""
+    """Captures the canonical_evidence passed to evaluate_swing_trade_setup."""
 
     def __init__(self, response_score: int = 91) -> None:
         self.calls: list[dict] = []
@@ -211,7 +211,7 @@ class _RecordingSignalEngine:
     def bandar_max_range(self, num_optional):
         return 6
 
-    def evaluate_with_context(self, ticker, signal_ctx, **kwargs):
+    def evaluate_swing_trade_setup(self, ticker, signal_ctx, **kwargs):
         self.calls.append(kwargs)
         resp = _signal_response(score=self._response_score)
         if kwargs.get("canonical_evidence") is not None:
@@ -558,7 +558,7 @@ def test_recompose_after_evidence_failure_clears_pre_existing_trade_setup():
             return None
         def bandar_max_range(self, n):
             return 0
-        def evaluate_with_context(self, ticker, signal_context, market_context=None, **kwargs):
+        def evaluate_swing_trade_setup(self, ticker, signal_context, market_context=None, **kwargs):
             raise RuntimeError("rescore boom")
 
     engine = FailingSignalEngine()

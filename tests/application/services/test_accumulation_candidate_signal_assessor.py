@@ -161,7 +161,7 @@ def _make_assessor(
         AccumulationCandidateSignalAssessor,
     )
     signal_engine = MagicMock()
-    signal_engine.evaluate_with_context.return_value.assessment.score = signal_score
+    signal_engine.evaluate_accumulation_discovery.return_value.assessment.score = signal_score
 
     flow_builder = MagicMock()
     if flow_builder_raises:
@@ -267,7 +267,7 @@ def test_flow_evidence_builder_exception_returns_none():
     assert result.candidate.signal_assessment is None
     assert result.passes is False
     assert result.screen_result == "rejected_signal"
-    assessor._signal_engine.evaluate_with_context.assert_not_called()
+    assessor._signal_engine.evaluate_accumulation_discovery.assert_not_called()
 
 
 def test_foreign_flow_threshold_rejected_before_signal():
@@ -403,8 +403,8 @@ def test_flow_evidence_with_missing_availability_reaches_signal_engine():
         source_availability_use_case=None,
     )
 
-    assessor._signal_engine.evaluate_with_context.assert_called_once()
-    kwargs = assessor._signal_engine.evaluate_with_context.call_args[1]
+    assessor._signal_engine.evaluate_accumulation_discovery.assert_called_once()
+    kwargs = assessor._signal_engine.evaluate_accumulation_discovery.call_args[1]
     canonical_evidence = kwargs.get("canonical_evidence")
     assert canonical_evidence is not None
     assert canonical_evidence.flow is not None
@@ -441,7 +441,7 @@ def test_assess_forwards_request_market_context_to_signal_engine():
         source_availability_use_case=None,
     )
 
-    kwargs = assessor._signal_engine.evaluate_with_context.call_args[1]
+    kwargs = assessor._signal_engine.evaluate_accumulation_discovery.call_args[1]
     assert kwargs.get("market_context") is market_context
 
 
@@ -463,8 +463,8 @@ def test_operational_availability_failure_still_passes_flow_evidence():
         source_availability_use_case=_FailingUseCase(),
     )
 
-    assessor._signal_engine.evaluate_with_context.assert_called_once()
-    kwargs = assessor._signal_engine.evaluate_with_context.call_args[1]
+    assessor._signal_engine.evaluate_accumulation_discovery.assert_called_once()
+    kwargs = assessor._signal_engine.evaluate_accumulation_discovery.call_args[1]
     canonical_evidence = kwargs.get("canonical_evidence")
     assert canonical_evidence is not None
     assert canonical_evidence.flow is not None
@@ -512,7 +512,7 @@ def test_current_and_unknown_availability_produce_identical_directional_score_in
 
 def test_flow_builder_operational_failure_results_in_missing_flow_evidence():
     # 16. Flow builder operational failure → missing evidence; pipeline hard
-    # guard skips signal (ADR-047) instead of calling evaluate_with_context
+    # guard skips signal (ADR-047) instead of calling evaluate_accumulation_discovery
     # with canonical_evidence=None (which would raise).
     assessor = _make_assessor(flow_builder_raises=True)
 
@@ -529,7 +529,7 @@ def test_flow_builder_operational_failure_results_in_missing_flow_evidence():
     assert result.flow_evidence is None
     assert result.candidate.signal_assessment is None
     assert result.screen_result == "rejected_signal"
-    assessor._signal_engine.evaluate_with_context.assert_not_called()
+    assessor._signal_engine.evaluate_accumulation_discovery.assert_not_called()
 
 
 def test_flow_builder_value_error_propagates():
@@ -556,7 +556,7 @@ def test_flow_builder_value_error_propagates():
 def test_family_resolved_once_and_phase_detected_once_before_signal_engine():
     """HIGH-2: resolve_preliminary_setup_family_result and
     detect_candidate_setup_phase are each called exactly once, both complete
-    before SignalEngine.evaluate_with_context, and SignalEngine receives the
+    before SignalEngine.evaluate_accumulation_discovery, and SignalEngine receives the
     exact same family and phase objects — not value-equivalent copies."""
     from src.application.services.primary_setup_family_resolver import (
         PrimarySetupFamilyResult,
@@ -591,7 +591,7 @@ def test_family_resolved_once_and_phase_detected_once_before_signal_engine():
 
     signal_engine = MagicMock()
 
-    def _evaluate_with_context(*args, **kwargs):
+    def _evaluate_accumulation_discovery(*args, **kwargs):
         call_order.append("signal_engine")
         assert kwargs["setup_family"] == "foreign_bounce"
         assert kwargs["setup_phase"] is phase_snapshot
@@ -599,7 +599,7 @@ def test_family_resolved_once_and_phase_detected_once_before_signal_engine():
         result.assessment.score = 60
         return result
 
-    signal_engine.evaluate_with_context.side_effect = _evaluate_with_context
+    signal_engine.evaluate_accumulation_discovery.side_effect = _evaluate_accumulation_discovery
 
     flow_builder = MagicMock()
     flow_builder.build.return_value = _built_flow_evidence()
@@ -627,7 +627,7 @@ def test_family_resolved_once_and_phase_detected_once_before_signal_engine():
 
     assert evidence_builder.resolve_preliminary_setup_family_result.call_count == 1
     assert evidence_builder.detect_candidate_setup_phase.call_count == 1
-    signal_engine.evaluate_with_context.assert_called_once()
+    signal_engine.evaluate_accumulation_discovery.assert_called_once()
     assert call_order == ["resolve_family", "detect_phase", "signal_engine"]
     assert candidate.setup_family_result is family_result
     assert candidate.setup_phase is phase_snapshot

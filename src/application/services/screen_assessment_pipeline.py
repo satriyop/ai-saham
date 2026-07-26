@@ -21,7 +21,6 @@ from src.application.use_case.assess_trade_setup_use_case import (
     AssessTradeSetupRequest,
     AssessTradeSetupUseCase,
 )
-from src.domain.value_objects.signal_assessment import ACCUMULATION_DISCOVERY_IDENTITY
 
 if TYPE_CHECKING:
     from src.application.dto.assess_signal import AssessSignalResponse
@@ -93,10 +92,9 @@ class ScreenAssessmentPipeline:
             raise RuntimeError(
                 "ScreenAssessmentPipeline: signal_engine is required when signal_applicable is True"
             )
-        return self._signal_engine.evaluate_with_context(
+        return self._signal_engine.evaluate_accumulation_discovery(
             ticker,
             inputs.signal_context,
-            identity=ACCUMULATION_DISCOVERY_IDENTITY,
             market_context=market_context,
             canonical_evidence=inputs.canonical_evidence,
             setup_family=inputs.setup_family,
@@ -118,7 +116,7 @@ class ScreenAssessmentPipeline:
                 "ScreenAssessmentPipeline: signal_engine is required when "
                 "pre-open signal is applicable"
             )
-        return self._signal_engine.evaluate_pre_open_with_context(
+        return self._signal_engine.evaluate_pre_open_auction_direction(
             evaluation_input,
             market_context=market_context,
         )

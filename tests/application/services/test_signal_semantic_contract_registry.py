@@ -2202,7 +2202,7 @@ _NON_MATERIAL_EXACT_PATHS: dict[str, str] = {
     ),
     "signal_engine.enrichment.insider_lookback_days": (
         "self-fetch-only lookback used by SignalEngine._build_signal_context(); "
-        "accumulation-discovery calls evaluate_with_context() with a prepared "
+        "accumulation-discovery calls evaluate_accumulation_discovery() with a prepared "
         "SignalContext and never triggers self-fetch"
     ),
     "sector_context.evidence_status": (

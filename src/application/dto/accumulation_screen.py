@@ -230,7 +230,7 @@ class AccumulationCandidate:
     latest_broker_daily_flow_date: date | None = None
     # Forward EPS/Revenue estimates (Stockbit analyst consensus endpoint)
     forward_estimates: "ForwardEstimates | None" = None
-    # Composite signal — all enrichment dimensions combined into 0–100 score
+    # Accumulation-discovery signal assessment
     signal_assessment: "AssessSignalResponse | None" = None
     # Phase E: post-screening risk assessment (populated by risk funnel when configured)
     risk_assessment: "RiskAssessment | None" = None
@@ -243,7 +243,7 @@ class AccumulationCandidate:
     # EXHAUSTION/DISTRIBUTION/FAILED/NONE); None when detection is unavailable or fails.
     setup_phase: "SetupPhaseSnapshot | None" = None
     # HIGH-2: resolved exactly once in AccumulationCandidateSignalAssessor —
-    # the same family passed to SignalEngine.evaluate_with_context() and to
+    # the same family passed to SignalEngine.evaluate_accumulation_discovery() and to
     # setup_phase detection. Persistence reuses this verbatim; it must never
     # be recomputed with strategy_evidence after scoring.
     setup_family_result: "PrimarySetupFamilyResult | None" = None

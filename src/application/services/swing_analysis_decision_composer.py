@@ -13,7 +13,6 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from src.application.exceptions import NoProductionSignalEvidenceError
-from src.domain.value_objects.signal_assessment import SWING_TRADE_SETUP_IDENTITY
 from src.application.dto import swing_analysis as swing_analysis_dto
 from src.application.services.evidence_source_availability_assembler import (
     EvidenceSourceAvailabilityAssembler,
@@ -176,10 +175,9 @@ class SwingAnalysisDecisionComposer:
                     candidate=state.accumulation_candidate,
                     signal_engine=self._signal_engine,
                 )
-                signal_assessment = self._signal_engine.evaluate_with_context(
+                signal_assessment = self._signal_engine.evaluate_swing_trade_setup(
                     request.ticker,
                     _evidence_ctx,
-                    identity=SWING_TRADE_SETUP_IDENTITY,
                     market_context=state.market_regime,
                     canonical_evidence=canonical_evidence,
                     setup_family=request.setup_name,

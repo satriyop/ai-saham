@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 
 class SignalStrength(Enum):
-    """Composite signal intensity derived from the weighted score."""
+    """Signal intensity derived by the selected contextual policy."""
 
     STRONG = "STRONG"
     MODERATE = "MODERATE"
@@ -104,7 +104,7 @@ class SignalContext:
     """
     Pre-loaded, non-authoritative enrichment inputs for signal evaluation.
 
-    NOT the source of the weighted composite score. That score is produced from
+    NOT the source of the setup/flow evidence score. That score is produced from
     the Setup + Flow evidence groups carried by CanonicalSignalEvidenceInput
     (see AssessSignalEvidenceUseCase / SignalEvidenceGroupScorer). The fields
     here are consumed only as non-authoritative side inputs:
@@ -125,7 +125,7 @@ class SignalContext:
     score.
 
     For screener loops, callers build this once per candidate from pre-loaded
-    data and pass it via SignalEngine.evaluate_with_context() to avoid N+1
+    data and pass it via the purpose-specific SignalEngine method to avoid N+1
     provider fetches.
     """
 
@@ -187,7 +187,7 @@ class SignalAssessment:
 
     identity: SignalAssessmentIdentity
     ticker: str
-    score: int                              # 0–100 final weighted composite
+    score: int                              # 0–100 contextual policy score
     strength: SignalStrength                # STRONG / MODERATE / WEAK
     entry_quality: EntryQuality            # ENTER / WATCH / AVOID
     breakdown: tuple[tuple[str, float], ...] # (factor_name, component_score) pairs

@@ -10,7 +10,6 @@ from src.application.services.signal_engine_config import (
     SignalInputMappingConfig,
     SignalScoringConfig,
 )
-from src.domain.value_objects.signal_assessment import ACCUMULATION_DISCOVERY_IDENTITY
 from src.domain.value_objects.forward_estimates import ForwardEstimates
 from src.domain.value_objects.seasonal_edge import SeasonalEdge
 
@@ -128,10 +127,9 @@ def test_signal_engine_empty_insider_fetch_counts_as_neutral_data():
     engine = SignalEngine(insider_activity_provider=EmptyInsiderProvider())
 
     ctx = engine.build_context("BBCA")
-    response = engine.evaluate_with_context(
+    response = engine.evaluate_accumulation_discovery(
         ticker="BBCA",
         signal_context=ctx,
-        identity=ACCUMULATION_DISCOVERY_IDENTITY,
         canonical_evidence=CanonicalSignalEvidenceInput(
             setup=None,
             flow=_wrap_flow_evidence(_flow_evidence(capped_strength=0.70))
@@ -140,6 +138,48 @@ def test_signal_engine_empty_insider_fetch_counts_as_neutral_data():
 
     # 0.0 ratio does NOT trigger INSIDER_SELLING penalty
     assert "INSIDER_SELLING" not in response.active_flags
+    assert response.assessment.identity.to_dict() == {
+        "purpose": "ACCUMULATION_DISCOVERY",
+        "policy_contract": "accumulation_discovery.v1",
+    }
+
+
+def test_accumulation_and_swing_share_arithmetic_but_not_identity():
+    from src.domain.value_objects.canonical_signal_evidence_input import (
+        CanonicalSignalEvidenceInput,
+    )
+    from tests.application.use_case.signal_evidence_fixtures import (
+        _flow_evidence,
+        _wrap_flow_evidence,
+    )
+
+    engine = SignalEngine()
+    context = engine.build_context("BBCA")
+    evidence = CanonicalSignalEvidenceInput(
+        setup=None,
+        flow=_wrap_flow_evidence(_flow_evidence(capped_strength=0.70)),
+    )
+
+    accumulation = engine.evaluate_accumulation_discovery(
+        "BBCA", context, canonical_evidence=evidence
+    )
+    swing = engine.evaluate_swing_trade_setup(
+        "BBCA", context, canonical_evidence=evidence
+    )
+
+    assert (
+        accumulation.score,
+        accumulation.strength,
+        accumulation.entry_quality,
+        accumulation.assessment.breakdown,
+    ) == (
+        swing.score,
+        swing.strength,
+        swing.entry_quality,
+        swing.assessment.breakdown,
+    )
+    assert accumulation.assessment.identity.purpose.value == "ACCUMULATION_DISCOVERY"
+    assert swing.assessment.identity.purpose.value == "SWING_TRADE_SETUP"
 
 
 def test_signal_engine_derives_forward_pe_from_latest_price_before_analyst_price():
@@ -156,10 +196,9 @@ def test_signal_engine_derives_forward_pe_from_latest_price_before_analyst_price
     )
 
     ctx = engine.build_context("BBCA")
-    response = engine.evaluate_with_context(
+    response = engine.evaluate_accumulation_discovery(
         ticker="BBCA",
         signal_context=ctx,
-        identity=ACCUMULATION_DISCOVERY_IDENTITY,
         canonical_evidence=CanonicalSignalEvidenceInput(
             setup=None,
             flow=_wrap_flow_evidence(_flow_evidence(capped_strength=0.70))
@@ -209,7 +248,10 @@ def test_flags_only_assessment_methods_are_removed():
     assert not hasattr(SignalEngine, "evaluate")
     assert not hasattr(SignalEngine, "evaluate_request")
     assert hasattr(SignalEngine, "build_context")
-    assert hasattr(SignalEngine, "evaluate_with_context")
+    assert hasattr(SignalEngine, "evaluate_pre_open_auction_direction")
+    assert hasattr(SignalEngine, "evaluate_accumulation_discovery")
+    assert hasattr(SignalEngine, "evaluate_swing_trade_setup")
+    assert not hasattr(SignalEngine, "evaluate_with_context")
 
 
 def test_signal_engine_rejects_legacy_weights_argument():

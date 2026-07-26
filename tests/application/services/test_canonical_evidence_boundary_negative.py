@@ -18,7 +18,7 @@
     `SwingAnalysisDecisionComposer.recompose_after_evidence()` (swing
     canonical/scoring) — not the same builder invoked twice in the test
     body. It captures the complete `CanonicalSignalEvidenceInput` each real
-    boundary hands to its own `SignalEngine.evaluate_with_context()` call
+    boundary hands to its own `SignalEngine.evaluate_accumulation_discovery()` call
     and asserts the two are equal, including availability, so a divergence
     in effective session, source-availability wiring, or canonical
     assembly between the two workflows would be caught here.
@@ -302,7 +302,7 @@ def test_signal_engine_rejects_loose_setup_evidence_kwarg():
     engine = SignalEngine()
     ctx = SignalContext(ticker=TICKER, snapshot_date=SNAP)
     with pytest.raises(TypeError):
-        engine.evaluate_with_context(
+        engine.evaluate_accumulation_discovery(
             TICKER, ctx, setup_evidence=_setup_evidence()  # type: ignore[call-arg]
         )
 
@@ -311,7 +311,7 @@ def test_signal_engine_rejects_loose_flow_confirmation_evidence_kwarg():
     engine = SignalEngine()
     ctx = SignalContext(ticker=TICKER, snapshot_date=SNAP)
     with pytest.raises(TypeError):
-        engine.evaluate_with_context(
+        engine.evaluate_accumulation_discovery(
             TICKER, ctx, flow_confirmation_evidence=None  # type: ignore[call-arg]
         )
 
@@ -372,7 +372,7 @@ def test_swing_evidence_builder_propagates_duplicate_row_violation_not_a_warning
 
 class _CanonicalInputRecordingSignalEngine:
     """Strict recording fake — never a MagicMock. Records the exact kwargs
-    each real boundary passes to `evaluate_with_context`, including
+    each real boundary passes to its contextual policy, including
     `canonical_evidence`, so the test can compare what screen and swing
     actually handed to SignalEngine rather than re-deriving it."""
 
@@ -385,7 +385,13 @@ class _CanonicalInputRecordingSignalEngine:
     def bandar_max_range(self, num_optional):
         return 12.0
 
-    def evaluate_with_context(self, ticker, signal_ctx, **kwargs):
+    def evaluate_accumulation_discovery(self, ticker, signal_ctx, **kwargs):
+        return self._record(ticker, signal_ctx, kwargs)
+
+    def evaluate_swing_trade_setup(self, ticker, signal_ctx, **kwargs):
+        return self._record(ticker, signal_ctx, kwargs)
+
+    def _record(self, ticker, signal_ctx, kwargs):
         self.calls.append(
             {
                 "ticker": ticker,

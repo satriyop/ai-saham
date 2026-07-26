@@ -15,7 +15,7 @@ DAY = date(2026, 7, 27)
 
 def _evaluate(bundle=None, market_context=None):
     engine = SignalEngine()
-    return engine.evaluate_pre_open_with_context(
+    return engine.evaluate_pre_open_auction_direction(
         PreOpenSignalEvaluationInput(
             ticker="BBCA",
             snapshot_date=DAY,
@@ -42,6 +42,10 @@ def test_reliable_bullish_baseline_produces_enter():
     assert result.response.score == 80
     assert result.response.assessment.entry_quality is EntryQuality.ENTER
     assert result.baseline.auction_quality is PreOpenAuctionQuality.RELIABLE
+    assert result.response.assessment.identity.to_dict() == {
+        "purpose": "PRE_OPEN_AUCTION_DIRECTION",
+        "policy_contract": "pre_open_auction_direction.v1",
+    }
 
 
 def test_caution_quality_caps_bullish_signal_at_watch():

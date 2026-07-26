@@ -1,13 +1,11 @@
 """
-SignalEngine — first-class application service for composite signal assessment.
+SignalEngine — first-class application service for contextual signal assessment.
 
-Parallel to RiskEngine. Self-sufficient: callers never instantiate SignalContext,
-build provider chains, or wire AssessSignalEvidenceUseCase. Single entry point:
+Parallel to RiskEngine. Self-sufficient: callers never build provider chains or
+wire the underlying assessment use cases. Public evaluation methods name the
+workflow purpose and bind its policy identity explicitly.
 
-  evaluate_with_context() — pipeline path; accepts pre-loaded SignalContext
-                            to avoid N+1 fetches in screener loops
-
-Phase 4: canonical path is AssessSignalEvidenceUseCase (staged evidence-first
+The accumulation and swing policies use AssessSignalEvidenceUseCase (staged evidence-first
 aggregation). SetupEvidence and FlowConfirmationEvidence are optional inputs;
 when absent, those groups are MISSING (excluded from denominator) and confidence
 is lowered. Flags from SignalContext still apply as score penalties.
@@ -37,7 +35,12 @@ from src.application.use_case.assess_signal_evidence_use_case import (
     AssessSignalEvidenceUseCase,
 )
 from src.domain.value_objects.forward_estimates import derive_forward_pe
-from src.domain.value_objects.signal_assessment import SignalContext
+from src.domain.value_objects.signal_assessment import (
+    ACCUMULATION_DISCOVERY_IDENTITY,
+    SWING_TRADE_SETUP_IDENTITY,
+    SignalAssessmentIdentity,
+    SignalContext,
+)
 
 if TYPE_CHECKING:
     from src.domain.ports.analyst_consensus_provider import AnalystConsensusProvider
@@ -58,7 +61,6 @@ if TYPE_CHECKING:
     from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
-    from src.domain.value_objects.signal_assessment import SignalAssessmentIdentity
 
 logger = logging.getLogger(__name__)
 
@@ -67,9 +69,8 @@ class SignalEngine:
     """
     Self-sufficient signal evaluation service.
 
-    Owns enrichment provider wiring. Callers never see SignalContext,
-    AssessSignalEvidenceUseCase, or provider imports — they call
-    evaluate_with_context() and get an AssessSignalResponse.
+    Owns enrichment provider wiring. Public policy methods return the shared
+    AssessSignalResponse without exposing the underlying use cases.
 
     All providers are optional:
       - bandar_provider:            BandarDetectorProvider (broad_score)
@@ -109,8 +110,8 @@ class SignalEngine:
 
         Lets callers inspect the exact enrichment inputs (bandar, insider,
         seasonality, analyst, forward estimates) without re-implementing
-        provider wiring. Not the canonical evidence source — canonical
-        scoring uses evaluate_with_context().
+        provider wiring. Not an authoritative evidence source — scoring uses a
+        purpose-specific evaluation method with provenance-bound evidence.
         """
         return self._build_signal_context(ticker, as_of_date=as_of_date)
 
@@ -124,12 +125,11 @@ class SignalEngine:
         """Expose shared score bands for artifact compatibility identity."""
         return self._config.classification
 
-    def evaluate_with_context(
+    def evaluate_accumulation_discovery(
         self,
         ticker: str,
         signal_context: SignalContext,
         *,
-        identity: "SignalAssessmentIdentity",
         market_context: "MarketContext | None" = None,
         canonical_evidence: "CanonicalSignalEvidenceInput | None" = None,
         setup_family: str | None = None,
@@ -138,6 +138,65 @@ class SignalEngine:
         sector_context_evidence: "SectorContextEvidence | None" = None,
         company_quality_context_evidence: "CompanyQualityContextEvidence | None" = None,
         authority_denominator_scope: "AuthorityDenominatorScope | None" = None,
+    ) -> AssessSignalResponse:
+        """Evaluate accumulation discovery with setup/flow evidence."""
+        return self._evaluate_setup_flow_evidence(
+            identity=ACCUMULATION_DISCOVERY_IDENTITY,
+            ticker=ticker,
+            signal_context=signal_context,
+            market_context=market_context,
+            canonical_evidence=canonical_evidence,
+            setup_family=setup_family,
+            setup_phase=setup_phase,
+            horizon=horizon,
+            sector_context_evidence=sector_context_evidence,
+            company_quality_context_evidence=company_quality_context_evidence,
+            authority_denominator_scope=authority_denominator_scope,
+        )
+
+    def evaluate_swing_trade_setup(
+        self,
+        ticker: str,
+        signal_context: SignalContext,
+        *,
+        market_context: "MarketContext | None" = None,
+        canonical_evidence: "CanonicalSignalEvidenceInput | None" = None,
+        setup_family: str | None = None,
+        setup_phase: "SetupPhaseSnapshot | None" = None,
+        horizon: str | None = None,
+        sector_context_evidence: "SectorContextEvidence | None" = None,
+        company_quality_context_evidence: "CompanyQualityContextEvidence | None" = None,
+        authority_denominator_scope: "AuthorityDenominatorScope | None" = None,
+    ) -> AssessSignalResponse:
+        """Evaluate swing trade setup with setup/flow evidence."""
+        return self._evaluate_setup_flow_evidence(
+            identity=SWING_TRADE_SETUP_IDENTITY,
+            ticker=ticker,
+            signal_context=signal_context,
+            market_context=market_context,
+            canonical_evidence=canonical_evidence,
+            setup_family=setup_family,
+            setup_phase=setup_phase,
+            horizon=horizon,
+            sector_context_evidence=sector_context_evidence,
+            company_quality_context_evidence=company_quality_context_evidence,
+            authority_denominator_scope=authority_denominator_scope,
+        )
+
+    def _evaluate_setup_flow_evidence(
+        self,
+        *,
+        identity: SignalAssessmentIdentity,
+        ticker: str,
+        signal_context: SignalContext,
+        market_context: "MarketContext | None",
+        canonical_evidence: "CanonicalSignalEvidenceInput | None",
+        setup_family: str | None,
+        setup_phase: "SetupPhaseSnapshot | None",
+        horizon: str | None,
+        sector_context_evidence: "SectorContextEvidence | None",
+        company_quality_context_evidence: "CompanyQualityContextEvidence | None",
+        authority_denominator_scope: "AuthorityDenominatorScope | None",
     ) -> AssessSignalResponse:
         """
         Pipeline path: caller supplies pre-loaded SignalContext.
@@ -182,13 +241,13 @@ class SignalEngine:
             )
         )
 
-    def evaluate_pre_open_with_context(
+    def evaluate_pre_open_auction_direction(
         self,
         evaluation_input,
         *,
         market_context: "MarketContext | None" = None,
     ):
-        """Evaluate the canonical pre-open lane without fabricating setup/flow."""
+        """Evaluate pre-open auction direction without fabricating setup/flow."""
         return self._pre_open_use_case.execute(
             evaluation_input,
             market_context=market_context,
