@@ -318,3 +318,45 @@ New authoritative pre-open evidence uses
 - The scheduled workflow captures the baseline at 08:56 and runs the sole
   decision write at 08:57. If the decision finishes at or after 08:58,
   persistence fails closed.
+
+### Directional Baseline Amendment (2026-07-26)
+
+Before the first v3 observation was captured, the production interpretation was
+finalized as `pre_open_directional_baseline.v1`. A fresh repository preflight
+confirmed zero `screen_pre_open` observations and no v3 opening artifacts, so
+the evidence and observation cohort remain
+`pre_open_signal_evidence.v3` / `pre-open-open-30m.v3`; there is no historical
+row to migrate or reinterpret.
+
+The baseline is long-only and deterministic:
+
+- IEP direction and current book pressure form an agreement cascade:
+  `UP + BUY = BULLISH`, `DOWN + SELL = BEARISH`, opposing legs are
+  `CONFLICTED`, and flat/balanced evidence is `NEUTRAL`.
+- Locked-input IEV movement changes confidence, never direction.
+- Auction quality is an ordinal action cap and never contributes directional
+  points.
+- RSI and unusual volume remain recorded context. They do not veto or
+  downgrade the baseline.
+- A large gap is `CAUTION`; invalid provenance or unusable execution evidence
+  still fails closed.
+
+This baseline is the initial deterministic champion, not a claim of validated
+alpha. It may produce ENTER from the first cohort, but its exact scoring
+identity, inputs, factor breakdown and capture-time decision are immutable.
+Later tuning creates a separately validated candidate identity; it never
+rewrites v1 observations or automatically promotes AI recommendations.
+
+Production ownership is:
+
+```text
+typed pre-open evidence
+    -> single SignalEngine
+    -> single RiskEngine + MarketContextEngine
+    -> AssessTradeSetupUseCase
+    -> capture-time observation
+```
+
+The former workflow-local cascade is retired as a production authority. Pre-open
+evidence must not be disguised as setup/flow evidence merely to reuse the
+existing SignalEngine lane.

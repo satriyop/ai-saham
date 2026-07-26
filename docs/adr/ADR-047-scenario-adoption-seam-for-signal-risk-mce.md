@@ -6,7 +6,12 @@
 **Date:** 2026-07-25
 **Depends on:** [ADR-024](ADR-024-signal-engine-and-risk-engine-as-first-class-application-services.md), [ADR-029](ADR-029-market-context-engine-mce-third-first-class-application-service.md), [ADR-040](ADR-040-manual-dependency-injection-and-composition-roots.md), [ADR-003](ADR-003-hexagonal-ports-adapters-architecture.md)
 **Related:** [ADR-025](ADR-025-signalengine-architecture.md), [ADR-026](ADR-026-risk-plus-signal-pipeline-composition.md), [ADR-030](ADR-030-accumulation-screener-evidence-split.md), [ADR-037](ADR-037-marketcontext-promotes-from-preview-only-to-canonical-signal-input.md), [ADR-041](ADR-041-canonical-signal-evidence-input-boundary.md), [ADR-033](ADR-033-workflow-composition-artifact-boundaries.md)
-**Current implementation:** `ScreenAssessmentPipeline` + per-scenario seam (`SignalInputs` / `RiskInputsBuilder` / `ScreenPolicy`). Accum adopts via seam adapters (Phase 1). Pre-open Tier-1 regime+annotate risk is live (Phase 2). Pre-open **signal** evidence and DB observations are governed by [ADR-048](ADR-048-pre-open-signal-evidence-and-observation-identity.md) (not yet implemented).
+**Current implementation:** `ScreenAssessmentPipeline` + per-scenario seam
+(`SignalInputs` / `RiskInputsBuilder` / `ScreenPolicy`). Accum adopts through
+the canonical `SignalEngine`. Pre-open regime, risk, signal-shaped output and
+DB observations are live, but its v3 signal still calls a scenario-local
+cascade instead of the single `SignalEngine`; the amendment below closes that
+remaining adoption gap.
 
 ### Context
 
@@ -245,3 +250,24 @@ regime+risk is self-fetching + universal; Tier-2 signal is evidence-gated. Pre-o
 adopts Tier-1 now (signal_applicable=False, mandatory). Accum wrappers refactored
 in, clean-break. Regime risk stays preview (ADR-037).
 ```
+
+### Pre-Open Directional Baseline Amendment (2026-07-26)
+
+Pre-open adopts the single-engine architecture as an explicit typed evaluation
+lane:
+
+- `PreOpenSignalInputsBuilder` builds typed, provenance-bound input only; it
+  cannot score or manufacture an `AssessSignalResponse`.
+- `SignalEngine` owns the deterministic
+  `pre_open_directional_baseline.v1` assessment. A pure internal use case may
+  implement the lane, but no second engine or workflow-local production scorer
+  survives.
+- `ScreenAssessmentPipeline` remains the only workflow orchestration seam.
+  Pre-open must call the SignalEngine through that seam, then use the existing
+  RiskEngine, MCE and `AssessTradeSetupUseCase`.
+- Setup/flow callers keep their existing `evaluate_with_context` contract and
+  output unchanged. Pre-open evidence is not translated into fabricated setup
+  or flow groups.
+- Auction quality is a constraint on the long-direction baseline, not a second
+  directional score. `RELIABLE` preserves the baseline action, `CAUTION` caps
+  it at WATCH, and `UNRELIABLE` forces AVOID.

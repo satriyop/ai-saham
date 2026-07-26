@@ -163,8 +163,8 @@ row.
 | [044](docs/adr/ADR-044-view-subject-taxonomy-ticker-vs-desk.md) | View subject taxonomy (ticker vs desk) | Accepted; amends ADR-018 |
 | [045](docs/adr/ADR-045-view-browse-parity-cli-tui-json-table.md) | View browse parity (CLI/TUI, table/json) | Accepted; depends on ADR-044; envelope keys generalized by ADR-046 |
 | [046](docs/adr/ADR-046-cli-response-envelope.md) | Shared CLI response envelope | Accepted; generalizes envelope beyond view; adopt-on-touch for other families |
-| [047](docs/adr/ADR-047-scenario-adoption-seam-for-signal-risk-mce.md) | Scenario-adoption seam for Signal / Risk / MCE | Accepted; engines single; `ScreenAssessmentPipeline` + per-scenario builders/policy |
-| [048](docs/adr/ADR-048-pre-open-signal-evidence-and-observation-identity.md) | Pre-open signal evidence + observation identity | Accepted (decision locked); capture-time saved observations champion; implemented in phases |
+| [047](docs/adr/ADR-047-scenario-adoption-seam-for-signal-risk-mce.md) | Scenario-adoption seam for Signal / Risk / MCE | Accepted; engines single; pre-open directional-baseline amendment mandates removal of its remaining local scorer |
+| [048](docs/adr/ADR-048-pre-open-signal-evidence-and-observation-identity.md) | Pre-open signal evidence + observation identity | Accepted; v3 is the unused first cohort and `pre_open_directional_baseline.v1` is its deterministic long-only champion |
 
 ## Adding or changing a decision
 
