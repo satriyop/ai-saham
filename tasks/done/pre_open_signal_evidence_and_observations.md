@@ -22,7 +22,7 @@ Tier-1 regime + annotate risk; `signal_applicable=False` today).
 
 Pre-open discovers names via IEV and builds an auction entry plan, but has no
 production signal evidence channel and no TradeSetup. Display labels (PRIME /
-WATCH / SKIP) and `learn grade` strata on `opening_setup` act as a shadow
+WATCH / SKIP) and legacy grade strata on `opening_setup` act as a parallel
 verdict language outside ADR-026. Opening learning lives in day files under
 `data/opening/` without DB observation identity, capture-at-NCP semantics, or
 joinable `open_30m` labels. Without a governed path, implementers will treat IEV
