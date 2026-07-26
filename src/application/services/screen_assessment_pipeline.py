@@ -90,8 +90,7 @@ class ScreenAssessmentPipeline:
             return None
         if self._signal_engine is None:
             raise RuntimeError(
-                "ScreenAssessmentPipeline: signal_engine is required when "
-                "signal_applicable is True"
+                "ScreenAssessmentPipeline: signal_engine is required when signal_applicable is True"
             )
         return self._signal_engine.evaluate_with_context(
             ticker,
@@ -101,6 +100,25 @@ class ScreenAssessmentPipeline:
             setup_family=inputs.setup_family,
             setup_phase=inputs.setup_phase,
             authority_denominator_scope=inputs.authority_denominator_scope,
+        )
+
+    def evaluate_pre_open_signal(
+        self,
+        evaluation_input,
+        *,
+        market_context: "MarketContext | None" = None,
+    ):
+        """Evaluate typed pre-open evidence through the single SignalEngine."""
+        if not self._policy.signal_applicable:
+            return None
+        if self._signal_engine is None:
+            raise RuntimeError(
+                "ScreenAssessmentPipeline: signal_engine is required when "
+                "pre-open signal is applicable"
+            )
+        return self._signal_engine.evaluate_pre_open_with_context(
+            evaluation_input,
+            market_context=market_context,
         )
 
     def assess_risk(
@@ -194,9 +212,7 @@ class ScreenAssessmentPipeline:
                 if hasattr(candidate, "risk_gate_evaluations"):
                     candidate.risk_gate_evaluations = resp.gate_evaluations
                 if hasattr(candidate, "risk_gate_context_completeness"):
-                    candidate.risk_gate_context_completeness = (
-                        resp.gate_context_completeness
-                    )
+                    candidate.risk_gate_context_completeness = resp.gate_context_completeness
 
                 if (
                     self._policy.trade_setup_applicable

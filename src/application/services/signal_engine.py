@@ -30,6 +30,9 @@ from src.application.dto.assess_signal import (
     AssessSignalResponse,
 )
 from src.application.services.signal_engine_config import SignalEngineConfig
+from src.application.use_case.assess_pre_open_directional_baseline_use_case import (
+    AssessPreOpenDirectionalBaselineUseCase,
+)
 from src.application.use_case.assess_signal_evidence_use_case import (
     AssessSignalEvidenceUseCase,
 )
@@ -91,6 +94,7 @@ class SignalEngine:
     ) -> None:
         self._config = config or SignalEngineConfig()
         self._evidence_use_case = AssessSignalEvidenceUseCase(config=self._config)
+        self._pre_open_use_case = AssessPreOpenDirectionalBaselineUseCase(config=self._config)
         self._bandar = bandar_provider
         self._fundamentals = fundamentals_provider
         self._insider = insider_activity_provider
@@ -162,6 +166,18 @@ class SignalEngine:
                     else AuthorityDenominatorScope.ALL_REQUIRED
                 ),
             )
+        )
+
+    def evaluate_pre_open_with_context(
+        self,
+        evaluation_input,
+        *,
+        market_context: "MarketContext | None" = None,
+    ):
+        """Evaluate the canonical pre-open lane without fabricating setup/flow."""
+        return self._pre_open_use_case.execute(
+            evaluation_input,
+            market_context=market_context,
         )
 
     def foreign_flow_quality_from_accum_score(self, accum_score: float) -> float:

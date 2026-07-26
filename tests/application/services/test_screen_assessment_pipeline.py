@@ -6,8 +6,6 @@ from datetime import date
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-import pytest
-
 from src.application.services.screen_assessment_pipeline import ScreenAssessmentPipeline
 from src.application.services.screen_policy import RiskMode, ScreenPolicy
 from src.application.services.signal_inputs import SignalInputs
@@ -79,6 +77,28 @@ def test_evaluate_signal_invokes_engine_when_applicable_and_evidence_present():
     assert call_kwargs[1]["canonical_evidence"] is inputs.canonical_evidence
 
 
+def test_evaluate_pre_open_signal_invokes_single_engine_lane():
+    engine = MagicMock()
+    engine.evaluate_pre_open_with_context.return_value = MagicMock(name="pre_open_result")
+    pipeline = ScreenAssessmentPipeline(
+        policy=ScreenPolicy.pre_open(),
+        signal_engine=engine,
+    )
+    inputs = MagicMock(name="pre_open_inputs")
+    market_context = MagicMock(name="market_context")
+
+    result = pipeline.evaluate_pre_open_signal(
+        inputs,
+        market_context=market_context,
+    )
+
+    assert result is engine.evaluate_pre_open_with_context.return_value
+    engine.evaluate_pre_open_with_context.assert_called_once_with(
+        inputs,
+        market_context=market_context,
+    )
+
+
 def test_compose_trade_setup_skipped_when_not_applicable():
     trade_uc = MagicMock()
     pipeline = ScreenAssessmentPipeline(
@@ -134,9 +154,7 @@ def test_assess_risk_self_fetch_when_builder_returns_none():
     candidate = SimpleNamespace(ticker="BBRI")
     mc = MagicMock(name="market_context")
 
-    resp = pipeline.assess_risk(
-        candidate, as_of_date=date(2026, 6, 27), market_context=mc
-    )
+    resp = pipeline.assess_risk(candidate, as_of_date=date(2026, 6, 27), market_context=mc)
 
     assert resp is risk_engine.assess.return_value
     risk_engine.assess.assert_called_once_with(
