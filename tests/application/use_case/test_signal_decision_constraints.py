@@ -20,7 +20,10 @@ from src.domain.value_objects.flow_confirmation_evidence import (
 from src.domain.value_objects.canonical_signal_evidence_input import CanonicalSignalEvidenceInput
 from src.domain.value_objects.market_context import MarketContext, MarketRegime
 from src.domain.value_objects.setup_evidence import SetupEvidence
-from src.domain.value_objects.signal_assessment import EntryQuality
+from src.domain.value_objects.signal_assessment import (
+    SWING_TRADE_SETUP_IDENTITY,
+    EntryQuality,
+)
 from tests.application.use_case.signal_evidence_fixtures import (
     _wrap_flow_evidence,
     _wrap_setup_evidence,
@@ -37,7 +40,10 @@ def _req(**kwargs) -> AssessSignalEvidenceRequest:
             setup=_wrap_setup_evidence(setup_evidence),
             flow=_wrap_flow_evidence(flow_confirmation_evidence),
         )
-    return AssessSignalEvidenceRequest(**kwargs)
+    return AssessSignalEvidenceRequest(
+        identity=SWING_TRADE_SETUP_IDENTITY,
+        **kwargs,
+    )
 
 
 def _excess_return(window_sessions: int, excess_return_pct: float) -> BenchmarkExcessReturn:

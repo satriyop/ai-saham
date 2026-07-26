@@ -21,6 +21,7 @@ from src.application.use_case.assess_trade_setup_use_case import (
     AssessTradeSetupRequest,
     AssessTradeSetupUseCase,
 )
+from src.domain.value_objects.signal_assessment import ACCUMULATION_DISCOVERY_IDENTITY
 
 if TYPE_CHECKING:
     from src.application.dto.assess_signal import AssessSignalResponse
@@ -95,6 +96,7 @@ class ScreenAssessmentPipeline:
         return self._signal_engine.evaluate_with_context(
             ticker,
             inputs.signal_context,
+            identity=ACCUMULATION_DISCOVERY_IDENTITY,
             market_context=market_context,
             canonical_evidence=inputs.canonical_evidence,
             setup_family=inputs.setup_family,

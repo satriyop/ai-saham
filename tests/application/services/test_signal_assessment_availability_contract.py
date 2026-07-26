@@ -11,11 +11,17 @@ from src.application.dto.swing_analysis import (
 )
 from src.application.dto.assess_signal import AssessSignalResponse
 from src.domain.value_objects.trade_setup import TradeSetup, SetupAction
-from src.domain.value_objects.signal_assessment import SignalStrength, SignalAssessment, EntryQuality
+from src.domain.value_objects.signal_assessment import (
+    SWING_TRADE_SETUP_IDENTITY,
+    EntryQuality,
+    SignalAssessment,
+    SignalStrength,
+)
 
 
 def _assess_response() -> AssessSignalResponse:
     assessment = SignalAssessment(
+        identity=SWING_TRADE_SETUP_IDENTITY,
         ticker="BBCA",
         snapshot_date=date(2026, 6, 18),
         score=75.0,

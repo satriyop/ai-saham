@@ -33,7 +33,11 @@ from src.domain.value_objects.flow_confirmation_evidence import (
     FlowSubSignal,
 )
 from src.domain.value_objects.setup_evidence import SetupEvidence
-from src.domain.value_objects.signal_assessment import EntryQuality, SignalStrength
+from src.domain.value_objects.signal_assessment import (
+    SWING_TRADE_SETUP_IDENTITY,
+    EntryQuality,
+    SignalStrength,
+)
 from tests.application.use_case.signal_evidence_fixtures import (
     _wrap_flow_evidence,
     _wrap_setup_evidence,
@@ -115,7 +119,12 @@ def _execute(**kwargs):
             setup=_wrap_setup_evidence(setup_evidence),
             flow=_wrap_flow_evidence(flow_confirmation_evidence),
         )
-    req = AssessSignalEvidenceRequest(ticker="TEST", snapshot_date=SNAP, **kwargs)
+    req = AssessSignalEvidenceRequest(
+        identity=SWING_TRADE_SETUP_IDENTITY,
+        ticker="TEST",
+        snapshot_date=SNAP,
+        **kwargs,
+    )
     return AssessSignalEvidenceUseCase().execute(req)
 
 

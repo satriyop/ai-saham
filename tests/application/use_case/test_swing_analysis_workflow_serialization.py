@@ -125,12 +125,14 @@ def test_signal_response_to_dict_emits_signal_authority_coverage():
 
     from src.application.dto.assess_signal import AssessSignalResponse
     from src.domain.value_objects.signal_assessment import (
+        SWING_TRADE_SETUP_IDENTITY,
         EntryQuality,
         SignalAssessment,
         SignalStrength,
     )
 
     assessment = SignalAssessment(
+        identity=SWING_TRADE_SETUP_IDENTITY,
         ticker="BBCA",
         snapshot_date=_date(2026, 7, 8),
         score=72,

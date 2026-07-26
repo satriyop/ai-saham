@@ -37,6 +37,7 @@ from src.domain.value_objects.company_fundamentals import CompanyFundamentals
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
 from src.domain.value_objects.signal_assessment import (
+    ACCUMULATION_DISCOVERY_IDENTITY,
     EntryQuality,
     SignalAssessment,
     SignalStrength,
@@ -188,6 +189,7 @@ def test_risk_funnel_composes_trade_setup_from_signal_and_risk():
     signal_response = AssessSignalResponse(
         ticker="BBCA",
         assessment=SignalAssessment(
+            identity=ACCUMULATION_DISCOVERY_IDENTITY,
             ticker="BBCA",
             score=76,
             strength=SignalStrength.STRONG,

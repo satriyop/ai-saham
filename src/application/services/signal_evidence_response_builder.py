@@ -61,6 +61,7 @@ class SignalEvidenceResponseBuilder:
         )
 
         assessment = SignalAssessment(
+            identity=request.identity,
             ticker=request.ticker,
             score=group_scores.final_score,
             strength=group_scores.strength,

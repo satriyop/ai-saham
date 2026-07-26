@@ -10,6 +10,7 @@ from src.application.services.signal_engine_config import (
     SignalInputMappingConfig,
     SignalScoringConfig,
 )
+from src.domain.value_objects.signal_assessment import ACCUMULATION_DISCOVERY_IDENTITY
 from src.domain.value_objects.forward_estimates import ForwardEstimates
 from src.domain.value_objects.seasonal_edge import SeasonalEdge
 
@@ -130,6 +131,7 @@ def test_signal_engine_empty_insider_fetch_counts_as_neutral_data():
     response = engine.evaluate_with_context(
         ticker="BBCA",
         signal_context=ctx,
+        identity=ACCUMULATION_DISCOVERY_IDENTITY,
         canonical_evidence=CanonicalSignalEvidenceInput(
             setup=None,
             flow=_wrap_flow_evidence(_flow_evidence(capped_strength=0.70))
@@ -157,6 +159,7 @@ def test_signal_engine_derives_forward_pe_from_latest_price_before_analyst_price
     response = engine.evaluate_with_context(
         ticker="BBCA",
         signal_context=ctx,
+        identity=ACCUMULATION_DISCOVERY_IDENTITY,
         canonical_evidence=CanonicalSignalEvidenceInput(
             setup=None,
             flow=_wrap_flow_evidence(_flow_evidence(capped_strength=0.70))

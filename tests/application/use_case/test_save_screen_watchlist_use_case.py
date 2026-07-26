@@ -12,6 +12,7 @@ from src.application.use_case.save_screen_watchlist_use_case import (
 )
 from src.domain.value_objects.screen_snapshot import ScreenSnapshotEntry
 from src.domain.value_objects.signal_assessment import (
+    ACCUMULATION_DISCOVERY_IDENTITY,
     EntryQuality,
     SignalAssessment,
     SignalStrength,
@@ -55,6 +56,7 @@ def _signal_assessment(score: int = 65) -> AssessSignalResponse:
     return AssessSignalResponse(
         ticker="BBCA",
         assessment=SignalAssessment(
+            identity=ACCUMULATION_DISCOVERY_IDENTITY,
             ticker="BBCA",
             score=score,
             strength=SignalStrength.MODERATE,

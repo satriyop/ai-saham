@@ -88,6 +88,7 @@ from src.domain.value_objects.factor_evidence import Freshness
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.domain.value_objects.setup_evidence import SetupEvidence
 from src.domain.value_objects.signal_assessment import (
+    SWING_TRADE_SETUP_IDENTITY,
     EntryQuality,
     SignalAssessment,
     SignalContext,
@@ -498,6 +499,7 @@ class _RecordingRiskTradeSetupComposer:
 
 def _signal_response(score: int = 72) -> AssessSignalResponse:
     assessment = SignalAssessment(
+        identity=SWING_TRADE_SETUP_IDENTITY,
         ticker=TICKER,
         score=score,
         strength=SignalStrength.MODERATE,

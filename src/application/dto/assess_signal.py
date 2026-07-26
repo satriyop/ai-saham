@@ -39,11 +39,15 @@ if TYPE_CHECKING:
     from src.domain.value_objects.setup_evidence import SetupEvidence
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
     from src.domain.value_objects.setup_phase_readiness import SetupPhaseReadiness
-    from src.domain.value_objects.signal_assessment import SignalContext
+    from src.domain.value_objects.signal_assessment import (
+        SignalAssessmentIdentity,
+        SignalContext,
+    )
 
 
 @dataclass
 class AssessSignalEvidenceRequest:
+    identity: SignalAssessmentIdentity
     ticker: str
     snapshot_date: date
     # ADR-041 CANONICAL-EVIDENCE-BOUNDARY: the sole setup/flow evidence input.

@@ -536,6 +536,7 @@ def test_accumulation_audit_uses_injected_screen_and_preserves_signal_score():
         SignalEvidenceExecutionContext,
     )
     from src.domain.value_objects.signal_assessment import (
+        ACCUMULATION_DISCOVERY_IDENTITY,
         EntryQuality,
         SignalAssessment,
         SignalStrength,
@@ -555,6 +556,7 @@ def test_accumulation_audit_uses_injected_screen_and_preserves_signal_score():
     assessment = AssessSignalResponse(
         ticker="BBCA",
         assessment=SignalAssessment(
+            identity=ACCUMULATION_DISCOVERY_IDENTITY,
             ticker="BBCA",
             score=77,
             strength=SignalStrength.MODERATE,

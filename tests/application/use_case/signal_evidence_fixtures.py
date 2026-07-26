@@ -36,7 +36,10 @@ from src.domain.value_objects.market_context import MarketContext, MarketRegime
 from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
 from src.domain.value_objects.setup_evidence import SetupEvidence
 from src.domain.value_objects.setup_phase import SetupPhaseSnapshot, SetupPhaseState
-from src.domain.value_objects.signal_assessment import SignalContext
+from src.domain.value_objects.signal_assessment import (
+    SWING_TRADE_SETUP_IDENTITY,
+    SignalContext,
+)
 from src.domain.value_objects.source_availability import (
     SourceAvailabilityAssessment,
     SourceAvailabilityStatus,
@@ -195,7 +198,11 @@ def _req(**kwargs) -> AssessSignalEvidenceRequest:
         if kwargs.get("canonical_evidence") is None:
             kwargs["canonical_evidence"] = None
 
-    defaults = {"ticker": "TEST", "snapshot_date": SNAP}
+    defaults = {
+        "identity": SWING_TRADE_SETUP_IDENTITY,
+        "ticker": "TEST",
+        "snapshot_date": SNAP,
+    }
     defaults.update(kwargs)
     return AssessSignalEvidenceRequest(**defaults)
 

@@ -48,6 +48,7 @@ from src.domain.value_objects.flow_confirmation_evidence import (
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.domain.value_objects.setup_evidence import SetupEvidence
 from src.domain.value_objects.signal_assessment import (
+    SWING_TRADE_SETUP_IDENTITY,
     EntryQuality,
     SignalAssessment,
     SignalStrength,
@@ -184,6 +185,7 @@ def _effective_session() -> EffectiveMarketSession:
 
 def _signal_response(score: int = 72) -> AssessSignalResponse:
     assessment = SignalAssessment(
+        identity=SWING_TRADE_SETUP_IDENTITY,
         ticker=TICKER,
         score=score,
         strength=SignalStrength.MODERATE,

@@ -45,6 +45,60 @@ class EntryQuality(Enum):
     AVOID = "AVOID"
 
 
+class SignalAssessmentPurpose(Enum):
+    """Workflow purpose governed by one explicit signal policy contract."""
+
+    PRE_OPEN_AUCTION_DIRECTION = "PRE_OPEN_AUCTION_DIRECTION"
+    ACCUMULATION_DISCOVERY = "ACCUMULATION_DISCOVERY"
+    SWING_TRADE_SETUP = "SWING_TRADE_SETUP"
+
+
+_POLICY_CONTRACT_BY_PURPOSE = {
+    SignalAssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION: "pre_open_auction_direction.v1",
+    SignalAssessmentPurpose.ACCUMULATION_DISCOVERY: "accumulation_discovery.v1",
+    SignalAssessmentPurpose.SWING_TRADE_SETUP: "swing_trade_setup.v1",
+}
+
+
+@dataclass(frozen=True)
+class SignalAssessmentIdentity:
+    """Fail-closed binding between workflow purpose and scoring policy."""
+
+    purpose: SignalAssessmentPurpose
+    policy_contract: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.purpose, SignalAssessmentPurpose):
+            raise ValueError(f"Unknown signal assessment purpose: {self.purpose!r}")
+        expected = _POLICY_CONTRACT_BY_PURPOSE[self.purpose]
+        if self.policy_contract != expected:
+            raise ValueError(
+                "Signal assessment policy contract mismatch: "
+                f"{self.purpose.value} requires {expected!r}, "
+                f"got {self.policy_contract!r}"
+            )
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "purpose": self.purpose.value,
+            "policy_contract": self.policy_contract,
+        }
+
+
+PRE_OPEN_AUCTION_DIRECTION_IDENTITY = SignalAssessmentIdentity(
+    purpose=SignalAssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION,
+    policy_contract="pre_open_auction_direction.v1",
+)
+ACCUMULATION_DISCOVERY_IDENTITY = SignalAssessmentIdentity(
+    purpose=SignalAssessmentPurpose.ACCUMULATION_DISCOVERY,
+    policy_contract="accumulation_discovery.v1",
+)
+SWING_TRADE_SETUP_IDENTITY = SignalAssessmentIdentity(
+    purpose=SignalAssessmentPurpose.SWING_TRADE_SETUP,
+    policy_contract="swing_trade_setup.v1",
+)
+
+
 @dataclass(frozen=True)
 class SignalContext:
     """
@@ -131,6 +185,7 @@ class SignalAssessment:
     hashable. Use breakdown_dict property for dict access.
     """
 
+    identity: SignalAssessmentIdentity
     ticker: str
     score: int                              # 0–100 final weighted composite
     strength: SignalStrength                # STRONG / MODERATE / WEAK
@@ -148,6 +203,8 @@ class SignalAssessment:
     alpha_trigger_score: "AlphaTriggerScore | None" = None
 
     def __post_init__(self) -> None:
+        if not isinstance(self.identity, SignalAssessmentIdentity):
+            raise ValueError("SignalAssessment identity is required")
         if not (0 <= self.score <= 100):
             raise ValueError(f"SignalAssessment score must be 0–100, got {self.score}")
         if self.legacy_conditioned_score is not None and not (0 <= self.legacy_conditioned_score <= 100):
@@ -190,6 +247,7 @@ class SignalAssessment:
 
     def to_dict(self) -> dict:
         return {
+            "identity": self.identity.to_dict(),
             "ticker": self.ticker,
             "score": self.score,
             "legacy_conditioned_score": self.legacy_conditioned_score,

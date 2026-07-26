@@ -23,6 +23,7 @@ from src.application.use_case.inspect_canonical_signal_use_case import (
 )
 from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
 from src.domain.value_objects.signal_assessment import (
+    ACCUMULATION_DISCOVERY_IDENTITY,
     EntryQuality,
     SignalAssessment,
     SignalStrength,
@@ -51,6 +52,7 @@ def _assessment(
     day: date = date(2026, 7, 7),
 ) -> AssessSignalResponse:
     assessment = SignalAssessment(
+        identity=ACCUMULATION_DISCOVERY_IDENTITY,
         ticker=ticker,
         score=score,
         strength=SignalStrength.MODERATE,

@@ -21,6 +21,7 @@ from src.application.use_case.swing_analysis_workflow_use_case import (
 )
 from src.domain.value_objects.market_context import MarketContext, MarketRegime
 from src.domain.value_objects.signal_assessment import (
+    SWING_TRADE_SETUP_IDENTITY,
     EntryQuality,
     SignalAssessment,
     SignalStrength,
@@ -136,6 +137,7 @@ def _signal_response(score: float) -> AssessSignalResponse:
     return AssessSignalResponse(
         ticker="BBCA",
         assessment=SignalAssessment(
+            identity=SWING_TRADE_SETUP_IDENTITY,
             ticker="BBCA",
             snapshot_date=date(2026, 6, 18),
             score=score,

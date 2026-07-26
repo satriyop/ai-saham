@@ -58,6 +58,7 @@ if TYPE_CHECKING:
     from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
+    from src.domain.value_objects.signal_assessment import SignalAssessmentIdentity
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +128,8 @@ class SignalEngine:
         self,
         ticker: str,
         signal_context: SignalContext,
+        *,
+        identity: "SignalAssessmentIdentity",
         market_context: "MarketContext | None" = None,
         canonical_evidence: "CanonicalSignalEvidenceInput | None" = None,
         setup_family: str | None = None,
@@ -160,6 +163,7 @@ class SignalEngine:
 
         return self._evidence_use_case.execute(
             AssessSignalEvidenceRequest(
+                identity=identity,
                 ticker=ticker,
                 snapshot_date=signal_context.snapshot_date,
                 canonical_evidence=canonical_evidence,
