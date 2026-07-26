@@ -1,5 +1,13 @@
 # Refactor: Restore Adapter Thinness In Formula Lifecycle Commands
 
+> **DONE (2026-07-26)** — commit `c7bd245`. Implemented 4 application use cases
+> (List/Show/Delete/PersistGenerated), relocated `StoredFormula` to
+> `application/dto`, added the `FormulaStore` port, and isolated infra wiring in
+> `indicator_formula_factory`. CLI behavior verified byte-for-byte against a
+> captured baseline; 17 new offline unit tests + 59 affected tests pass; ruff clean.
+> The verb-set gaps (`strategy show/delete`, `indicator validate`) remain
+> deferred per the non-goals.
+
 ## 1. Task Metadata
 
 - **Task Type:** Refactor (architecture compliance)
