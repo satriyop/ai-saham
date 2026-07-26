@@ -4,6 +4,7 @@ YAML loading and split-config composition for swing workflow calibration.
 Layer: Infrastructure
 """
 
+import logging
 from pathlib import Path
 
 from src.application.dto.swing_config import SwingConfig
@@ -30,6 +31,8 @@ from src.infrastructure.config.swing_targets_config_parser import (
     parse_setup_targets,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def load_swing_config(
     config_path: Path | None = None,
@@ -49,6 +52,9 @@ def load_swing_config(
                 swing_risk_policy_path=Path(app_cfg.config_paths.swing_risk_policy),
             )
     except Exception:
+        logger.warning(
+            "Could not read swing config; falling back to defaults", exc_info=True
+        )
         return defaults
 
     try:
@@ -124,6 +130,20 @@ def load_swing_config(
     except ValueError as exc:
         if "invalid setup phase name" in str(exc):
             raise
+        logger.warning(
+            "Swing config contains invalid values; falling back to defaults",
+            exc_info=True,
+        )
         return defaults
+    except (AttributeError, TypeError, NameError):
+        # These are programmer errors (a renamed field, a bad kwarg), never bad
+        # operator config — the *_or_default primitives already absorb bad user
+        # values. Swallowing them here silently voids the entire config file with
+        # no signal (see: accumulation_min_flow_score rename). Fail loud instead.
+        raise
     except Exception:
+        logger.warning(
+            "Unexpected error loading swing config; falling back to defaults",
+            exc_info=True,
+        )
         return defaults

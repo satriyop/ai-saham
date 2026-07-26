@@ -101,7 +101,7 @@ def parse_setup_phase_config(
             accumulation_min_accum_score=float_or_default(
                 th,
                 "accumulation_min_flow_score",
-                defaults.setup_phase_config.thresholds.accumulation_min_flow_score,
+                defaults.setup_phase_config.thresholds.accumulation_min_accum_score,
             ),
             accumulation_min_flow_ratio_pct=float_or_default(
                 th,

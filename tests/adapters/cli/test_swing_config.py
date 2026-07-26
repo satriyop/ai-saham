@@ -3,6 +3,7 @@
 from decimal import Decimal
 from pathlib import Path
 
+import pytest
 import yaml
 
 from src.adapters.cli.analyze_swing_command_config import load_analyze_swing_command_config
@@ -376,3 +377,27 @@ def test_facade_still_re_exports_everything():
     assert FacadeSwingConfig is _SwingConfig
     assert FacadeSetupTargetConfig is _SetupTargetConfig
     assert facade_load is _load_swing_config
+
+
+def test_loader_reraises_programmer_errors_instead_of_silent_default(tmp_path, monkeypatch):
+    """A code bug in a parser (e.g. a renamed attribute) must surface, not be
+    swallowed into an all-defaults config.
+
+    Regression guard: the ``accumulation_min_flow_score`` rename left a stale
+    attribute reference in a parser, whose AttributeError was caught by the
+    loader's broad ``except Exception: return defaults`` — silently voiding the
+    entire operator config. Programmer errors must now propagate.
+    """
+    cfg = _write_yaml(tmp_path / "s.yaml", {
+        "broker_quality": {"smart_money": {"brokers": ["AK"], "weight": 2.0}},
+    })
+
+    def _boom(*args, **kwargs):
+        raise AttributeError("simulated renamed-field bug")
+
+    monkeypatch.setattr(
+        "src.infrastructure.config.swing_config_loader.parse_setup_targets", _boom
+    )
+
+    with pytest.raises(AttributeError):
+        _load_swing_config(cfg)
