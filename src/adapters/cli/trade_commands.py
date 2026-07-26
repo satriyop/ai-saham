@@ -9,12 +9,7 @@ Commands (all under `saham trade`):
   saham trade review swing        — review swing accumulation journal
   saham trade outcome             — record intraday outcome
   saham trade size                — ATR-based swing position sizing
-  saham trade backtest-swing      — swing workflow walk-forward backtest
-  saham trade tune-swing          — swing tuning review from backtest attribution
-  saham trade tuning-status       — read-only swing tuning loop status
-  saham trade review-tuning-swing — review saved swing tuning runs
-  saham trade validate-tuning-patch — validate exported swing tuning patch JSON
-  saham trade apply-tuning-patch  — dry-run or explicitly apply exported tuning patch changes
+  saham trade swing ...           — database-owned swing policy learning
   saham trade backtest-intraday   — intraday workflow daily-OHLC proxy simulation
   saham trade migrate-journal     — one-time migration of CSV journals to trades.jsonl
 
@@ -32,14 +27,13 @@ from src.adapters.cli.trade_intraday_commands import (
 )
 from src.adapters.cli.trade_journal_migration_commands import trade_migrate_journal
 from src.adapters.cli.trade_log_router_commands import trade_log
-from src.adapters.cli.trade_swing_commands import size, swing_backtest, swing_tune
-from src.adapters.cli.trade_tuning_patch_commands import (
-    apply_tuning_patch,
-    validate_tuning_patch,
-)
-from src.adapters.cli.trade_tuning_status_commands import (
-    review_tuning_swing,
-    tuning_status,
+from src.adapters.cli.trade_swing_commands import size, swing_backtest
+from src.adapters.cli.trade_swing_learning_commands import (
+    swing_apply,
+    swing_review,
+    swing_status,
+    swing_tune,
+    swing_validate,
 )
 
 trade_app = typer.Typer(
@@ -58,16 +52,24 @@ trade_review_app = typer.Typer(
 trade_review_app.command("intraday")(confirm_review)
 trade_review_app.command("swing")(accumulation_review)
 
+trade_swing_app = typer.Typer(
+    name="swing",
+    help="Swing backtest and database-owned policy review lifecycle.",
+    no_args_is_help=True,
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
+trade_swing_app.command("backtest")(swing_backtest)
+trade_swing_app.command("tune")(swing_tune)
+trade_swing_app.command("review")(swing_review)
+trade_swing_app.command("validate")(swing_validate)
+trade_swing_app.command("apply")(swing_apply)
+trade_swing_app.command("status")(swing_status)
+
 trade_app.command("confirm")(confirm_open)
 trade_app.add_typer(trade_review_app, name="review")
 trade_app.command("outcome")(confirm_outcome)
 trade_app.command("size")(size)
-trade_app.command("backtest-swing")(swing_backtest)
-trade_app.command("tune-swing")(swing_tune)
+trade_app.add_typer(trade_swing_app, name="swing")
 trade_app.command("backtest-intraday")(intraday_backtest)
-trade_app.command("tuning-status")(tuning_status)
-trade_app.command("review-tuning-swing")(review_tuning_swing)
-trade_app.command("validate-tuning-patch")(validate_tuning_patch)
-trade_app.command("apply-tuning-patch")(apply_tuning_patch)
 trade_app.command("log")(trade_log)
 trade_app.command("migrate-journal")(trade_migrate_journal)
