@@ -15,8 +15,8 @@ from src.application.services.pre_open_observation_payload import (
 from src.application.services.pre_open_observation_persister import (
     PreOpenObservationPersister,
 )
-from src.application.services.pre_open_signal_config import PreOpenSignalConfig
 from src.application.services.pre_open_screen_config import PreOpenScreenConfig
+from src.application.services.pre_open_signal_config import PreOpenSignalConfig
 from src.application.use_case.pre_open_workflow_use_case import (
     PreOpenDataFreshness,
     PreOpenRiskSummary,
@@ -129,11 +129,19 @@ def test_persist_observations_and_identity_upsert(tmp_path: Path):
         trade_setup_by_ticker={"BBCA": setup},
         source_status=PreOpenSourceStatus.LIVE_SUCCESS,
         source_snapshot_ref=None,
+        source_is_live=True,
+        capture_phase="NCP_LOCKED",
+        collection_started_at=datetime(
+            2026, 6, 18, 8, 56, tzinfo=ZoneInfo("Asia/Jakarta")
+        ),
+        decision_at=datetime(
+            2026, 6, 18, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta")
+        ),
+        decision_snapshot_ref="test:ncp",
     )
     request = PreOpenWorkflowRequest(
         config=PreOpenScreenConfig(iev_min=100_000, top_n=5, fast_mode=True),
         run_date=run_date,
-        capture_phase="NCP_LOCKED",
     )
 
     n1 = persister.persist(
@@ -218,11 +226,19 @@ def test_persist_includes_hard_filter_rejects(tmp_path: Path):
             ),
         ),
         source_status=PreOpenSourceStatus.LIVE_SUCCESS,
+        source_is_live=True,
+        capture_phase="NCP_LOCKED",
+        collection_started_at=datetime(
+            2026, 6, 18, 8, 56, tzinfo=ZoneInfo("Asia/Jakarta")
+        ),
+        decision_at=datetime(
+            2026, 6, 18, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta")
+        ),
+        decision_snapshot_ref="test:ncp:reject",
     )
     request = PreOpenWorkflowRequest(
         config=PreOpenScreenConfig(iev_min=100_000, fast_mode=True),
         run_date=run_date,
-        capture_phase="NCP_LOCKED",
     )
     n = persister.persist(
         response,

@@ -281,6 +281,7 @@ def test_manual_provider_top_of_book_returns_bid_no_offer():
     movers_json = [{"ticker": "BBCA", "iev": 300_000}]
     order_books_json = {"BBCA": {"price": 5000, "volume": 200}}
     provider = ManualBrowserDataProvider.from_json(movers_json, order_books_json)
+    assert provider.provides_live_preopen_data is False
 
     tob = provider.fetch_order_book_top_of_book("BBCA")
     assert tob is not None

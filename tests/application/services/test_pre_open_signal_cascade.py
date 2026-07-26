@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from types import SimpleNamespace
+from zoneinfo import ZoneInfo
+
+import pytest
 
 from src.application.services.pre_open_signal_cascade import (
     PreOpenSignalInputsBuilder,
@@ -22,6 +25,24 @@ from src.domain.value_objects.pre_open_signal_evidence import (
     PreOpenSignalEvidenceBundle,
 )
 from src.domain.value_objects.signal_assessment import EntryQuality, SignalStrength
+
+NCP_DECISION_AT = datetime(
+    2026, 6, 18, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta")
+)
+NCP_COLLECTION_STARTED_AT = datetime(
+    2026, 6, 18, 8, 56, tzinfo=ZoneInfo("Asia/Jakarta")
+)
+NCP_SNAPSHOT_REF = "test:ncp:2026-06-18T08:57:00+07:00"
+
+
+def _ncp_kwargs() -> dict:
+    return {
+        "collection_started_at": NCP_COLLECTION_STARTED_AT,
+        "decision_at": NCP_DECISION_AT,
+        "capture_phase": "NCP_LOCKED",
+        "source_is_live": True,
+        "snapshot_ref": NCP_SNAPSHOT_REF,
+    }
 
 
 def _auction(
@@ -41,12 +62,131 @@ def _auction(
         prev_close=Decimal("10000"),
         provenance=AuctionNcpProvenance(
             ticker="BBCA",
-            decision_at=None,
+            collection_started_at=NCP_COLLECTION_STARTED_AT,
+            decision_at=NCP_DECISION_AT,
             capture_phase="NCP_LOCKED",
+            source_is_live=True,
+            snapshot_ref=NCP_SNAPSHOT_REF,
             trade_date=date(2026, 6, 18),
         ),
         delta_iev=delta_iev,
     )
+
+
+def test_auction_evidence_rejects_unproven_ncp_provenance():
+    with pytest.raises(ValueError, match="collection window wholly"):
+        AuctionNcpEvidence(
+            ticker="BBCA",
+            iev=200_000,
+            gap_pct=Decimal("1"),
+            bid_pressure=0.6,
+            spread_pct=Decimal("0.3"),
+            prev_close=Decimal("10000"),
+            provenance=AuctionNcpProvenance(
+                ticker="BBCA",
+                collection_started_at=NCP_COLLECTION_STARTED_AT,
+                decision_at=None,
+                capture_phase="NCP_LOCKED",
+                source_is_live=True,
+                snapshot_ref="claimed-ncp",
+                trade_date=date(2026, 6, 18),
+            ),
+        )
+
+
+@pytest.mark.parametrize(
+    (
+        "collection_started_at",
+        "decision_at",
+        "capture_phase",
+        "source_is_live",
+        "snapshot_ref",
+    ),
+    [
+        (
+            datetime(2026, 6, 18, 8, 55, tzinfo=ZoneInfo("Asia/Jakarta")),
+            datetime(2026, 6, 18, 8, 55, tzinfo=ZoneInfo("Asia/Jakarta")),
+            "PRE_NCP",
+            True,
+            "test:pre-ncp",
+        ),
+        (
+            NCP_COLLECTION_STARTED_AT,
+            None,
+            "NCP_LOCKED",
+            True,
+            "test:missing-time",
+        ),
+        (
+            NCP_COLLECTION_STARTED_AT,
+            NCP_DECISION_AT,
+            "UNKNOWN",
+            True,
+            "test:unknown-phase",
+        ),
+        (
+            NCP_COLLECTION_STARTED_AT,
+            NCP_DECISION_AT,
+            "NCP_LOCKED",
+            True,
+            None,
+        ),
+        (
+            datetime(2026, 6, 18, 8, 55, tzinfo=ZoneInfo("Asia/Jakarta")),
+            NCP_DECISION_AT,
+            "NCP_LOCKED",
+            True,
+            "test:started-before-ncp",
+        ),
+        (
+            NCP_COLLECTION_STARTED_AT,
+            datetime(2026, 6, 18, 9, 0, tzinfo=ZoneInfo("Asia/Jakarta")),
+            "NCP_LOCKED",
+            True,
+            "test:finished-after-ncp",
+        ),
+        (
+            NCP_COLLECTION_STARTED_AT,
+            NCP_DECISION_AT,
+            "NCP_LOCKED",
+            False,
+            "test:manual-json",
+        ),
+    ],
+)
+def test_builder_keeps_unproven_auction_discovery_only(
+    collection_started_at,
+    decision_at,
+    capture_phase,
+    source_is_live,
+    snapshot_ref,
+):
+    candidate = SimpleNamespace(
+        ticker="BBRI",
+        iev=500_000,
+        prev_close=Decimal("5000"),
+        gap_pct=Decimal("1.2"),
+        bid_offer_imbalance=0.7,
+        spread_pct=Decimal("0.3"),
+        trend_signal="BULLISH",
+        unusual_volume=False,
+        iev_intensity=2.0,
+        atr=Decimal("50"),
+        rsi=Decimal("55"),
+    )
+
+    bundle = build_pre_open_signal_evidence(
+        candidate,
+        trade_date=date(2026, 6, 18),
+        collection_started_at=collection_started_at,
+        decision_at=decision_at,
+        capture_phase=capture_phase,
+        source_is_live=source_is_live,
+        snapshot_ref=snapshot_ref,
+    )
+
+    assert bundle.auction_ncp is None
+    assert bundle.open_viability is not None
 
 
 def test_hard_guard_no_auction_returns_none():
@@ -175,14 +315,25 @@ def test_builder_passes_delta_iev():
         rsi=Decimal("55"),
     )
     builder = PreOpenSignalInputsBuilder()
-    without = builder.evaluate(candidate, trade_date=date(2026, 6, 18), delta_iev=None)
+    without = builder.evaluate(
+        candidate,
+        trade_date=date(2026, 6, 18),
+        delta_iev=None,
+        **_ncp_kwargs(),
+    )
     with_delta = builder.evaluate(
-        candidate, trade_date=date(2026, 6, 18), delta_iev=80_000
+        candidate,
+        trade_date=date(2026, 6, 18),
+        delta_iev=80_000,
+        **_ncp_kwargs(),
     )
     assert without is not None and with_delta is not None
     assert with_delta.score >= without.score
     bundle = builder.build_bundle(
-        candidate, trade_date=date(2026, 6, 18), delta_iev=12_345
+        candidate,
+        trade_date=date(2026, 6, 18),
+        delta_iev=12_345,
+        **_ncp_kwargs(),
     )
     assert bundle.auction_ncp is not None
     assert bundle.auction_ncp.delta_iev == 12_345
@@ -203,7 +354,9 @@ def test_builder_from_candidate_and_evaluate():
         rsi=Decimal("55"),
     )
     builder = PreOpenSignalInputsBuilder()
-    resp = builder.evaluate(candidate, trade_date=date(2026, 6, 18))
+    resp = builder.evaluate(
+        candidate, trade_date=date(2026, 6, 18), **_ncp_kwargs()
+    )
     assert resp is not None
     assert resp.ticker == "BBRI"
     assert 0 <= resp.score <= 100
@@ -224,7 +377,7 @@ def test_builder_without_prev_close_no_auction():
         rsi=None,
     )
     bundle = build_pre_open_signal_evidence(
-        candidate, trade_date=date(2026, 6, 18)
+        candidate, trade_date=date(2026, 6, 18), **_ncp_kwargs()
     )
     assert bundle.auction_ncp is None
     assert (

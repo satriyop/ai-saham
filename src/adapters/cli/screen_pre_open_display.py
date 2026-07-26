@@ -6,7 +6,7 @@ Layer: Adapter
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 import typer
 from rich.console import Group
@@ -19,13 +19,12 @@ from src.adapters.cli.view_market_context_display import (
     context_factor_value,
     context_warnings,
 )
-from src.domain.value_objects.market_context import MarketContext
 from src.application.use_case.pre_open_screen_use_case import PreOpenScreenConfig
 from src.application.use_case.pre_open_workflow_use_case import PreOpenDataFreshness
+from src.domain.value_objects.market_context import MarketContext
 from src.domain.value_objects.pre_open_source_status import PreOpenSourceStatus
 from src.domain.value_objects.screener_result import ScreenerCandidate
 from src.domain.value_objects.trade_setup import SetupAction
-
 
 SOURCE_STATUS_LABEL: dict[PreOpenSourceStatus, str] = {
     PreOpenSourceStatus.LIVE_SUCCESS: "LIVE",
@@ -189,10 +188,20 @@ def print_browser_plan(config: PreOpenScreenConfig) -> None:
                  "    --order-books-json '<step2_json>'", style="cyan")
         ])
     else:
-        steps.extend([
-            Text("STEP 2 — Re-run with movers data (fast mode — no order book needed)", style="bold cyan"),
-            Text("  saham screen pre-open --fast --movers-json '<step1_json>'", style="cyan")
-        ])
+        steps.extend(
+            [
+                Text(
+                    "STEP 2 — Re-run with movers data "
+                    "(fast mode — no order book needed)",
+                    style="bold cyan",
+                ),
+                Text(
+                    "  saham screen pre-open --fast "
+                    "--movers-json '<step1_json>'",
+                    style="cyan",
+                ),
+            ]
+        )
 
     console().print("")
     console().print(
@@ -216,6 +225,11 @@ def display_pre_open_summary_panel(
     source_message: str | None = None,
     source_snapshot_ref: str | None = None,
     trade_setup_by_ticker: dict | None = None,
+    capture_phase: str = "UNKNOWN",
+    source_is_live: bool = False,
+    ncp_authoritative: bool = False,
+    collection_started_at: datetime | None = None,
+    decision_at: datetime | None = None,
 ) -> None:
     def _sort_key(c: ScreenerCandidate):
         action = _trade_setup_action(c.ticker, trade_setup_by_ticker)
@@ -241,6 +255,18 @@ def display_pre_open_summary_panel(
     if source_status == PreOpenSourceStatus.SNAPSHOT_SUCCESS and source_snapshot_ref:
         status_display = f"{status_label} ({source_snapshot_ref})"
     summary.add_row("Source", f"[{status_style}]{status_display}[/]")
+    phase_display = capture_phase
+    if not ncp_authoritative:
+        phase_display = f"{capture_phase} (discovery-only)"
+    summary.add_row("Decision phase", phase_display)
+    summary.add_row(
+        "Authority source",
+        "direct live provider" if source_is_live else "discovery input",
+    )
+    if collection_started_at is not None:
+        summary.add_row("Collection started", collection_started_at.isoformat())
+    if decision_at is not None:
+        summary.add_row("Collection finished", decision_at.isoformat())
     summary.add_row("IEV threshold", f">= {iev_min:,}")
     summary.add_row("Movers evaluated", str(total_movers_seen))
     summary.add_row("Candidates", str(len(candidates)))
@@ -324,6 +350,11 @@ def display_results(
     source_status: PreOpenSourceStatus = PreOpenSourceStatus.LIVE_SUCCESS,
     source_message: str | None = None,
     source_snapshot_ref: str | None = None,
+    capture_phase: str = "UNKNOWN",
+    source_is_live: bool = False,
+    ncp_authoritative: bool = False,
+    collection_started_at: datetime | None = None,
+    decision_at: datetime | None = None,
 ) -> None:
     # 1. Summary Panel
     display_pre_open_summary_panel(
@@ -338,6 +369,11 @@ def display_results(
         source_message=source_message,
         source_snapshot_ref=source_snapshot_ref,
         trade_setup_by_ticker=trade_setup_by_ticker,
+        capture_phase=capture_phase,
+        source_is_live=source_is_live,
+        ncp_authoritative=ncp_authoritative,
+        collection_started_at=collection_started_at,
+        decision_at=decision_at,
     )
 
     if not candidates:
@@ -480,7 +516,13 @@ def display_results(
 
         tickers_json = ",".join(f'"{c.ticker}":___' for c in watchlist)
         footer_elements.append(Text("\nAt 09:00, fill opening prices and run:", style="bold"))
-        footer_elements.append(Text(f"   saham trade confirm \\\n     --opening-json '{{{tickers_json}}}'", style="cyan"))
+        footer_elements.append(
+            Text(
+                f"   saham trade confirm \\\n"
+                f"     --opening-json '{{{tickers_json}}}'",
+                style="cyan",
+            )
+        )
     else:
         footer_elements.append(
             Text("No ENTER/WATCH TradeSetup candidates today.", style="yellow")

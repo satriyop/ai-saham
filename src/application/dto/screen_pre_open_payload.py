@@ -9,7 +9,7 @@ Layer: Application
 from __future__ import annotations
 
 from dataclasses import asdict, is_dataclass
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping
 
 from src.application.dto.screen_contract import (
     ScreenResultStatus,
@@ -90,7 +90,7 @@ def build_pre_open_data(
     result = response.result
     candidates = list(result.candidates)
     data: dict[str, Any] = {
-        "schema_version": 1,
+        "schema_version": 2,
         "artifact_type": "pre_open_screen",
         "screened_date": result.screened_date.isoformat(),
         "iev_min": result.iev_min,
@@ -101,6 +101,18 @@ def build_pre_open_data(
         "source_status": response.source_status.value,
         "source_message": response.source_message,
         "source_snapshot_ref": response.source_snapshot_ref,
+        "source_is_live": response.source_is_live,
+        "ncp_authoritative": response.ncp_authoritative,
+        "capture_phase": response.capture_phase,
+        "collection_started_at": (
+            response.collection_started_at.isoformat()
+            if response.collection_started_at
+            else None
+        ),
+        "decision_at": (
+            response.decision_at.isoformat() if response.decision_at else None
+        ),
+        "decision_snapshot_ref": response.decision_snapshot_ref,
         "data_freshness": _freshness_payload(response.data_freshness),
         "regime_enabled": response.regime_enabled,
         "risk_enabled": response.risk_enabled,

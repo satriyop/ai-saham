@@ -25,7 +25,7 @@ from src.domain.value_objects.signal_artifact_schema import (
     CANDIDATE_OBSERVATION_SCHEMA_VERSION,
 )
 
-PRE_OPEN_OBSERVATION_CONTRACT = "pre-open-open-30m"
+PRE_OPEN_OBSERVATION_CONTRACT = "pre-open-open-30m.v2"
 PRE_OPEN_WORKFLOW = "screen_pre_open"
 
 
@@ -119,6 +119,9 @@ def build_pre_open_observation_payload(
     ticker: str,
     snapshot_date: date,
     captured_at: datetime,
+    collection_started_at: datetime,
+    decision_at: datetime,
+    decision_snapshot_ref: str,
     screen_result: str,
     candidate: Any,
     signal_summary: Any | None,
@@ -150,6 +153,9 @@ def build_pre_open_observation_payload(
         "ticker": ticker,
         "snapshot_date": snapshot_date.isoformat(),
         "captured_at": captured_at.isoformat(),
+        "collection_started_at": collection_started_at.isoformat(),
+        "decision_at": decision_at.isoformat(),
+        "decision_snapshot_ref": decision_snapshot_ref,
         "workflow": PRE_OPEN_WORKFLOW,
         "screen_result": screen_result,
         "capture_phase": capture_phase,

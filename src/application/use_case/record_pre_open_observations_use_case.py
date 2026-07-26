@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from src.application.services.pre_open_ops_day_export import write_pre_open_ops_day_export
+from src.domain.value_objects.pre_open_signal_evidence import AuctionNcpProvenance
 
 if TYPE_CHECKING:
     from src.application.services.pre_open_observation_persister import (
@@ -55,6 +56,21 @@ class RecordPreOpenObservationsUseCase:
         opening_data_dir: Path | None = None,
     ) -> RecordPreOpenObservationsResult:
         response = self._workflow.execute(request)
+        provenance = AuctionNcpProvenance(
+            ticker="CAPTURE",
+            collection_started_at=response.collection_started_at,
+            decision_at=response.decision_at,
+            capture_phase=response.capture_phase,
+            source_is_live=response.source_is_live,
+            snapshot_ref=response.decision_snapshot_ref,
+            trade_date=response.result.screened_date,
+        )
+        if not provenance.is_production_ncp:
+            raise ValueError(
+                "Pre-open decision capture requires a verified live source, a "
+                "timezone-aware collection window wholly inside the requested "
+                "session's NCP_LOCKED phase, and a snapshot reference."
+            )
         count = self._persister.persist(response, request)
         ops_path: str | None = None
         if opening_data_dir is not None:
@@ -63,7 +79,6 @@ class RecordPreOpenObservationsUseCase:
             )
             written = write_pre_open_ops_day_export(
                 response,
-                request,
                 day_dir,
                 recorded_count=count,
             )

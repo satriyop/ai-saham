@@ -117,6 +117,11 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
         self._api_client = api_client
         self._stockbit_config = stockbit_config or load_stockbit_config()
 
+    @property
+    def provides_live_preopen_data(self) -> bool:
+        """Direct API reads are eligible for live NCP provenance."""
+        return True
+
     def fetch_preopen_movers(self, iev_min: int) -> list[MoverData]:
         """
         Fetch IEV movers from the Exodus API via StockbitApiClient.

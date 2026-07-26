@@ -1,14 +1,14 @@
 """Persist pre-open session observations to CandidateObservationsRepository.
 
 Reuse shared candidate_observations store with workflow=screen_pre_open and
-observation_contract=pre-open-open-30m (ADR-048). Fail closed on write errors.
+observation_contract=pre-open-open-30m.v2 (ADR-048). Fail closed on write errors.
 
 Layer: Application
 """
 
 from __future__ import annotations
 
-from datetime import datetime, time
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from src.application.services.pre_open_observation_payload import (
@@ -22,6 +22,7 @@ from src.application.services.pre_open_observation_payload import (
 from src.application.services.pre_open_signal_config import PreOpenSignalConfig
 from src.domain.ports.candidate_observations_repository import CandidateObservation
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
+from src.domain.value_objects.pre_open_signal_evidence import AuctionNcpProvenance
 
 if TYPE_CHECKING:
     from src.application.use_case.pre_open_workflow_use_case import (
@@ -66,15 +67,27 @@ class PreOpenObservationPersister:
         if now.tzinfo is None:
             now = now.replace(tzinfo=IDX_TIMEZONE)
 
-        # NCP symbolic decision clock when capture is locked; else wall clock.
-        if request.capture_phase == "NCP_LOCKED" or (
-            response.source_status.value == "SNAPSHOT_SUCCESS"
-        ):
-            decision_at = datetime.combine(
-                response.result.screened_date, time(8, 57), tzinfo=IDX_TIMEZONE
+        provenance = AuctionNcpProvenance(
+            ticker="CAPTURE",
+            collection_started_at=response.collection_started_at,
+            decision_at=response.decision_at,
+            capture_phase=response.capture_phase,
+            source_is_live=response.source_is_live,
+            snapshot_ref=response.decision_snapshot_ref,
+            trade_date=response.result.screened_date,
+        )
+        if not provenance.is_production_ncp:
+            raise ValueError(
+                "Pre-open observation persistence requires a verified live source "
+                "and proven collection window wholly inside the same-session "
+                "NCP_LOCKED phase."
             )
-        else:
-            decision_at = now
+        decision_at = response.decision_at
+        collection_started_at = response.collection_started_at
+        decision_snapshot_ref = response.decision_snapshot_ref
+        assert decision_at is not None
+        assert collection_started_at is not None
+        assert decision_snapshot_ref is not None
         config_hash = compute_pre_open_config_hash(
             signal_config=self._signal_config,
             iev_min=response.result.iev_min,
@@ -87,15 +100,7 @@ class PreOpenObservationPersister:
         )
 
         observations: list[CandidateObservation] = []
-        capture_phase = (
-            request.capture_phase
-            if request.capture_phase != "UNKNOWN"
-            else (
-                "NCP_LOCKED"
-                if response.source_status.value == "SNAPSHOT_SUCCESS"
-                else "UNKNOWN"
-            )
-        )
+        capture_phase = response.capture_phase
 
         def _row(
             *,
@@ -110,6 +115,9 @@ class PreOpenObservationPersister:
                 ticker=ticker,
                 snapshot_date=response.result.screened_date,
                 captured_at=now,
+                collection_started_at=collection_started_at,
+                decision_at=decision_at,
+                decision_snapshot_ref=decision_snapshot_ref,
                 screen_result=screen_result,
                 candidate=candidate,
                 signal_summary=sig,

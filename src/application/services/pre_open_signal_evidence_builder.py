@@ -25,8 +25,10 @@ def build_pre_open_signal_evidence(
     candidate: Any,
     *,
     trade_date: date,
+    collection_started_at: datetime | None = None,
     decision_at: datetime | None = None,
     capture_phase: str = "UNKNOWN",
+    source_is_live: bool = False,
     snapshot_ref: str | None = None,
     config: PreOpenSignalConfig | None = None,
     delta_iev: int | None = None,
@@ -51,8 +53,24 @@ def build_pre_open_signal_evidence(
                 resolved_delta = None
 
     auction: AuctionNcpEvidence | None = None
-    # Minimal auction presence: positive IEV + prior close (auction map anchor).
-    if ticker and iev > 0 and prev_close is not None and prev_close > 0:
+    provenance = AuctionNcpProvenance(
+        ticker=ticker,
+        collection_started_at=collection_started_at,
+        decision_at=decision_at,
+        capture_phase=capture_phase,
+        source_is_live=source_is_live,
+        snapshot_ref=snapshot_ref,
+        trade_date=trade_date,
+    )
+    # Production auction evidence requires positive auction data plus proven,
+    # same-session NCP provenance. Pre-NCP/unknown snapshots remain discovery-only.
+    if (
+        ticker
+        and iev > 0
+        and prev_close is not None
+        and prev_close > 0
+        and provenance.is_production_ncp
+    ):
         auction = AuctionNcpEvidence(
             ticker=ticker,
             iev=iev,
@@ -64,13 +82,7 @@ def build_pre_open_signal_evidence(
             prev_close=prev_close if isinstance(prev_close, Decimal) else Decimal(
                 str(prev_close)
             ),
-            provenance=AuctionNcpProvenance(
-                ticker=ticker,
-                decision_at=decision_at,
-                capture_phase=capture_phase,
-                snapshot_ref=snapshot_ref,
-                trade_date=trade_date,
-            ),
+            provenance=provenance,
             delta_iev=resolved_delta,
         )
 

@@ -26,6 +26,7 @@ class PreOpenRunGuard:
     warnings: tuple[str, ...] = ()
     error: str | None = None
     outside_window: bool = False
+    is_trading_day: bool = True
 
 
 def build_pre_open_run_guard(
@@ -36,27 +37,38 @@ def build_pre_open_run_guard(
 ) -> PreOpenRunGuard:
     warnings: list[str] = []
     local_run_at = run_at.astimezone(IDX_TIMEZONE)
+    is_trading_day = True
 
     if market_status.source == "stockbit":
         if not market_status.is_open and not market_status.is_pre_open:
+            is_trading_day = False
             message = (
                 f"{local_run_at.date()} is a non-trading day "
                 f"({market_status.session_name} per Stockbit). "
                 "Use --allow-non-trading-day only for dry-runs/backfills."
             )
             if not allow_non_trading_day:
-                return PreOpenRunGuard(run_at=local_run_at, error=message)
+                return PreOpenRunGuard(
+                    run_at=local_run_at,
+                    error=message,
+                    is_trading_day=False,
+                )
             warnings.append(message)
     else:
         # Heuristic/wall-clock fallback
         is_weekend = local_run_at.weekday() in (5, 6)
         if is_weekend:
+            is_trading_day = False
             message = (
                 f"{local_run_at.date()} is a weekend. "
                 "Use --allow-non-trading-day only for dry-runs/backfills."
             )
             if not allow_non_trading_day:
-                return PreOpenRunGuard(run_at=local_run_at, error=message)
+                return PreOpenRunGuard(
+                    run_at=local_run_at,
+                    error=message,
+                    is_trading_day=False,
+                )
             warnings.append(message)
 
     # Pre-open window timing warning
@@ -69,5 +81,8 @@ def build_pre_open_run_guard(
         )
 
     return PreOpenRunGuard(
-        run_at=local_run_at, warnings=tuple(warnings), outside_window=outside_window
+        run_at=local_run_at,
+        warnings=tuple(warnings),
+        outside_window=outside_window,
+        is_trading_day=is_trading_day,
     )

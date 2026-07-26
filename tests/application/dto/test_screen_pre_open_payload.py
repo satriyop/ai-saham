@@ -1,7 +1,8 @@
 """Unit tests for application-owned pre-open JSON payload builders."""
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from src.application.dto.screen_contract import ScreenResultStatus
 from src.application.dto.screen_pre_open_payload import (
@@ -53,6 +54,16 @@ def _response(
         ),
         source_status=source_status,
         source_message=source_message,
+        source_is_live=True,
+        ncp_authoritative=True,
+        capture_phase="NCP_LOCKED",
+        collection_started_at=datetime(
+            2026, 6, 12, 8, 56, tzinfo=ZoneInfo("Asia/Jakarta")
+        ),
+        decision_at=datetime(
+            2026, 6, 12, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta")
+        ),
+        decision_snapshot_ref="test:ncp",
     )
 
 
@@ -97,7 +108,14 @@ def test_build_pre_open_envelope_ok():
     assert envelope["scope"] == "live"
     assert envelope["fetch_hint"] == "saham fetch iev"
     data = envelope["data"]
+    assert data["schema_version"] == 2
     assert data["artifact_type"] == "pre_open_screen"
+    assert data["source_is_live"] is True
+    assert data["ncp_authoritative"] is True
+    assert data["capture_phase"] == "NCP_LOCKED"
+    assert data["collection_started_at"] == "2026-06-12T08:56:00+07:00"
+    assert data["decision_at"] == "2026-06-12T08:57:00+07:00"
+    assert data["decision_snapshot_ref"] == "test:ncp"
     assert data["candidates"][0]["ticker"] == "BBCA"
     assert data["data_freshness"]["candle_end"] == "2026-06-11"
     assert any(a["command"] == "saham view BBCA" for a in data["related_actions"])

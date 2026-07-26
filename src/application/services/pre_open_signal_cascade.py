@@ -12,8 +12,7 @@ Layer: Application
 
 from __future__ import annotations
 
-from datetime import date
-from decimal import Decimal
+from datetime import date, datetime
 
 from src.application.dto.assess_signal import AssessSignalResponse
 from src.application.services.pre_open_signal_config import PreOpenSignalConfig
@@ -21,7 +20,6 @@ from src.domain.value_objects.decision_constraints import DecisionConstraints
 from src.domain.value_objects.pre_open_signal_evidence import (
     PRE_OPEN_SETUP_FAMILY,
     AuctionNcpEvidence,
-    OpenViabilityEvidence,
     PreOpenSignalEvidenceBundle,
 )
 from src.domain.value_objects.signal_assessment import (
@@ -390,8 +388,10 @@ class PreOpenSignalInputsBuilder:
         candidate: object,
         *,
         trade_date: date,
-        decision_at=None,
+        collection_started_at: datetime | None = None,
+        decision_at: datetime | None = None,
         capture_phase: str = "UNKNOWN",
+        source_is_live: bool = False,
         snapshot_ref: str | None = None,
         delta_iev: int | None = None,
     ) -> PreOpenSignalEvidenceBundle:
@@ -402,8 +402,10 @@ class PreOpenSignalInputsBuilder:
         return build_pre_open_signal_evidence(
             candidate,
             trade_date=trade_date,
+            collection_started_at=collection_started_at,
             decision_at=decision_at,
             capture_phase=capture_phase,
+            source_is_live=source_is_live,
             snapshot_ref=snapshot_ref,
             config=self._config,
             delta_iev=delta_iev,
@@ -414,16 +416,20 @@ class PreOpenSignalInputsBuilder:
         candidate: object,
         *,
         trade_date: date,
-        decision_at=None,
+        collection_started_at: datetime | None = None,
+        decision_at: datetime | None = None,
         capture_phase: str = "UNKNOWN",
+        source_is_live: bool = False,
         snapshot_ref: str | None = None,
         delta_iev: int | None = None,
     ) -> AssessSignalResponse | None:
         bundle = self.build_bundle(
             candidate,
             trade_date=trade_date,
+            collection_started_at=collection_started_at,
             decision_at=decision_at,
             capture_phase=capture_phase,
+            source_is_live=source_is_live,
             snapshot_ref=snapshot_ref,
             delta_iev=delta_iev,
         )

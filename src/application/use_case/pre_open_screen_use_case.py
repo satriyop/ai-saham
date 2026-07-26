@@ -79,6 +79,7 @@ class PreOpenScreenResponse:
     warnings: list[str]
     raw_movers: "list"
     filter_rejects: list[PreOpenFilterReject] | None = None
+    source_is_live: bool = False
 
 
 class PreOpenScreenUseCase:
@@ -367,6 +368,7 @@ class PreOpenScreenUseCase:
             warnings=warnings,
             raw_movers=raw_movers,
             filter_rejects=filter_rejects,
+            source_is_live=self._browser.provides_live_preopen_data,
         )
 
     # ── Private helpers ────────────────────────────────────────────────────

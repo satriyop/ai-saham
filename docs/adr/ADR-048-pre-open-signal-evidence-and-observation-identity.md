@@ -267,3 +267,25 @@ Save observations at NCP decision_at (champion); no silent grade-time recompute.
 Replace PRIME UI when ready; keep session grade under research pre-open.
 Adoption only via ScreenAssessmentPipeline (ADR-047) + ADR-026 composition.
 ```
+
+### NCP Provenance Hardening Amendment (2026-07-26)
+
+New authoritative pre-open evidence uses
+`pre_open_signal_evidence.v2` and observation contract
+`pre-open-open-30m.v2`.
+
+- The workflow brackets live collection with application-owned
+  `collection_started_at` and `decision_at` timestamps; adapters cannot grant
+  authority with a phase string.
+- `auction_ncp` requires that entire timezone-aware collection window to stay
+  inside the same trade date's NCP interval, data from the verified live
+  provider, plus
+  `capture_phase=NCP_LOCKED` and a non-empty snapshot reference.
+- PRE_NCP, unknown, manual JSON, snapshot-fallback, post-open, and
+  non-trading-day runs remain discovery-only: they may return candidates but
+  cannot produce a production signal or TradeSetup.
+- A collection spanning two phases is marked `CROSS_PHASE`; a reversed clock
+  interval is `INVALID_WINDOW`. Both remain discovery-only.
+- Authoritative persistence independently validates the same provenance and
+  records the actual decision timestamp. Older v1/unversioned rows remain
+  unchanged and outside this cohort.

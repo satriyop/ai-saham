@@ -56,6 +56,7 @@ def test_stockbit_allow_non_trading_day_returns_warning_not_error():
     )
 
     assert guard.error is None
+    assert guard.is_trading_day is False
     assert any("non-trading day" in warning for warning in guard.warnings)
 
 
@@ -80,6 +81,7 @@ def test_fallback_wall_clock_weekend_allowed_returns_warning():
     )
 
     assert guard.error is None
+    assert guard.is_trading_day is False
     assert any("weekend" in warning for warning in guard.warnings)
 
 
@@ -105,5 +107,6 @@ def test_valid_pre_open_time_has_no_timing_warning():
     )
 
     assert guard.error is None
+    assert guard.is_trading_day is True
     assert not any("outside IDX pre-open window" in warning for warning in guard.warnings)
     assert guard.outside_window is False

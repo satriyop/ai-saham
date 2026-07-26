@@ -38,6 +38,8 @@ scorecards — not a second scorer.
 {
   "date": "2026-06-17",
   "captured_at": "2026-06-17T08:57:00+07:00",
+  "collection_started_at": "2026-06-17T08:56:00+07:00",
+  "decision_at": "2026-06-17T08:57:00+07:00",
   "capture_phase": "NCP_LOCKED",
   "capture_valid_for_opening_prediction": true,
   "capture_confidence": "HIGH",
@@ -166,10 +168,10 @@ saham research pre-open capture
 3. Writes same-run ops packaging: `data/opening/YYYYMMDD/ops_session.json`
 4. Writes trade-confirm sidecar for `saham trade confirm`
 
-**Manual run with historical date:**
-```bash
-saham research pre-open capture --session 2026-06-17 --movers-json '...'
-```
+Capture fails closed unless the direct live provider completes its entire
+timezone-aware collection window inside the requested session's NCP interval.
+Manual mover payloads and saved snapshots remain discovery data and cannot be
+written as authoritative pre-open decisions.
 
 ### Step 2: Track (09:00–09:30 WIB)
 

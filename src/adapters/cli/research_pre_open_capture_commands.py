@@ -17,12 +17,15 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.research_pre_open_paths import opening_day_dir, parse_session_date
 from src.adapters.cli.pre_open_sidecar_writer import write_pre_open_sidecar
+from src.adapters.cli.research_pre_open_paths import opening_day_dir, parse_session_date
 from src.adapters.cli.screen_pre_open_workflow_factory import (
     create_pre_open_cli_workflow,
     resolve_pre_open_browser_plan,
     resolve_pre_open_market_status,
+)
+from src.application.services.pre_open_observation_payload import (
+    PRE_OPEN_OBSERVATION_CONTRACT,
 )
 from src.application.services.pre_open_run_guard import build_pre_open_run_guard
 from src.application.use_case.opening_grade_use_case import OPENING_DATA_DIR
@@ -43,11 +46,17 @@ def pre_open_capture(
     ] = None,
     movers_json: Annotated[
         Optional[str],
-        typer.Option("--movers-json", help="Pre-fetched movers JSON array"),
+        typer.Option(
+            "--movers-json",
+            help="Discovery-only manual input; rejected by authoritative capture",
+        ),
     ] = None,
     order_books_json: Annotated[
         Optional[str],
-        typer.Option("--order-books-json", help="Pre-fetched order books JSON object"),
+        typer.Option(
+            "--order-books-json",
+            help="Discovery-only manual input; rejected by authoritative capture",
+        ),
     ] = None,
     top: Annotated[
         Optional[int],
@@ -95,8 +104,12 @@ def pre_open_capture(
     (use ``research pre-open labels``).
 
     Examples:
-        saham research pre-open capture --session 2026-06-18 --movers-json '...'
-        saham research pre-open capture --fast --allow-non-trading-day
+        saham research pre-open capture
+        saham research pre-open capture --fast
+
+    Capture requires the direct live provider and fails closed unless its whole
+    collection stays inside the same-session NCP window. Manual mover payloads
+    and saved snapshots are not authoritative.
     """
     cfg = load_app_config()
     resolved_db = db_path or Path(cfg.storage.db_path)
@@ -118,23 +131,17 @@ def pre_open_capture(
         typer.echo(f"Pre-open guard: {run_guard.error}", err=True)
         raise typer.Exit(1)
 
+    if movers_json is not None or order_books_json is not None:
+        typer.echo(
+            "Capture rejected: manual JSON is discovery-only. Use "
+            "`saham screen pre-open` for manual payloads; authoritative capture "
+            "requires the direct live provider.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
     movers_raw: list | None = None
     order_books_raw: dict | None = None
-    if movers_json:
-        try:
-            movers_raw = json.loads(movers_json)
-            if not isinstance(movers_raw, list):
-                typer.echo("Error: --movers-json must be a JSON array.", err=True)
-                raise typer.Exit(1)
-        except json.JSONDecodeError as e:
-            typer.echo(f"Error: Invalid JSON in --movers-json: {e}", err=True)
-            raise typer.Exit(1)
-        if order_books_json:
-            try:
-                order_books_raw = json.loads(order_books_json)
-            except json.JSONDecodeError as e:
-                typer.echo(f"Error: Invalid JSON in --order-books-json: {e}", err=True)
-                raise typer.Exit(1)
 
     browser_plan = resolve_pre_open_browser_plan(
         movers_raw=movers_raw,
@@ -174,8 +181,7 @@ def pre_open_capture(
         benchmark=cfg.analysis.benchmark,
         db_path=resolved_db,
         outside_window=skip_live_fetch,
-        capture_phase="NCP_LOCKED",
-        decision_snapshot_ref=run_date.isoformat(),
+        is_trading_day=run_guard.is_trading_day,
     )
 
     try:
@@ -208,7 +214,7 @@ def pre_open_capture(
         "filter_reject_count": len(result.response.filter_rejects),
         "source_status": result.response.source_status.value,
         "workflow": "screen_pre_open",
-        "observation_contract": "pre-open-open-30m",
+        "observation_contract": PRE_OPEN_OBSERVATION_CONTRACT,
         "ops_export_path": result.ops_export_path,
         "ops_day_dir": str(day),
     }
@@ -222,7 +228,10 @@ def pre_open_capture(
     typer.echo(f"  candidates:        {payload['candidate_count']}")
     typer.echo(f"  filter_rejects:    {payload['filter_reject_count']}")
     typer.echo(f"  source_status:     {payload['source_status']}")
-    typer.echo("  contract:          pre-open-open-30m")
+    typer.echo(f"  contract:          {PRE_OPEN_OBSERVATION_CONTRACT}")
     if result.ops_export_path:
         typer.echo(f"  ops export:        {result.ops_export_path}")
-    typer.echo("  Next: research pre-open track → research pre-open grade | research pre-open labels")
+    typer.echo(
+        "  Next: research pre-open track → research pre-open grade "
+        "| research pre-open labels"
+    )

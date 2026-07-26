@@ -18,11 +18,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from src.application.services.pre_open_observation_payload import (
+    PRE_OPEN_OBSERVATION_CONTRACT,
+)
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
+from src.domain.value_objects.pre_open_signal_evidence import AuctionNcpProvenance
 
 if TYPE_CHECKING:
     from src.application.use_case.pre_open_workflow_use_case import (
-        PreOpenWorkflowRequest,
         PreOpenWorkflowResponse,
     )
 
@@ -31,7 +34,6 @@ OPS_SESSION_FILENAME = "ops_session.json"
 
 def write_pre_open_ops_day_export(
     response: "PreOpenWorkflowResponse",
-    request: "PreOpenWorkflowRequest",
     day_dir: Path,
     *,
     captured_at: datetime | None = None,
@@ -113,22 +115,42 @@ def write_pre_open_ops_day_export(
             }
         )
 
-    phase = request.capture_phase if request.capture_phase != "UNKNOWN" else "NCP_LOCKED"
+    phase = response.capture_phase
+    provenance = AuctionNcpProvenance(
+        ticker="OPS_EXPORT",
+        collection_started_at=response.collection_started_at,
+        decision_at=response.decision_at,
+        capture_phase=phase,
+        source_is_live=response.source_is_live,
+        snapshot_ref=response.decision_snapshot_ref,
+        trade_date=run_date,
+    )
+    capture_is_valid = provenance.is_production_ncp
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "artifact_type": "pre_open_ops_export",
         "decision_authority": "candidate_observations",
         "workflow": "screen_pre_open",
-        "observation_contract": "pre-open-open-30m",
+        "observation_contract": PRE_OPEN_OBSERVATION_CONTRACT,
         "recorded_count": recorded_count,
         "captured_at": now.isoformat(),
         "date": str(run_date),
         "capture_phase": phase,
-        "capture_valid_for_opening_prediction": phase in ("PRE_NCP", "NCP_LOCKED"),
-        "capture_confidence": (
-            "HIGH" if phase == "NCP_LOCKED" else ("MEDIUM" if phase == "PRE_NCP" else "LOW")
+        "source_is_live": response.source_is_live,
+        "collection_started_at": (
+            response.collection_started_at.isoformat()
+            if response.collection_started_at is not None
+            else None
         ),
-        "is_ncp_locked": phase == "NCP_LOCKED",
+        "decision_at": (
+            response.decision_at.isoformat()
+            if response.decision_at is not None
+            else None
+        ),
+        "decision_snapshot_ref": response.decision_snapshot_ref,
+        "capture_valid_for_opening_prediction": capture_is_valid,
+        "capture_confidence": "HIGH" if capture_is_valid else "LOW",
+        "is_ncp_locked": capture_is_valid,
         "source_status": response.source_status.value,
         "candidates": candidates_out,
         "warnings": list(response.warnings or ()),

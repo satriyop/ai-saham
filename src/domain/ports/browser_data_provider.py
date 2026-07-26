@@ -15,6 +15,14 @@ from src.domain.value_objects.screener_result import MoverData, OrderBookBid, Or
 class BrowserDataProvider(ABC):
     """Abstract interface for fetching data that requires browser interaction."""
 
+    @property
+    def provides_live_preopen_data(self) -> bool:
+        """Whether this provider directly captures the current live auction.
+
+        Manual payload and instruction providers intentionally inherit False.
+        """
+        return False
+
     @abstractmethod
     def fetch_preopen_movers(self, iev_min: int) -> list[MoverData]:
         """Fetch pre-open movers with IEV >= iev_min.

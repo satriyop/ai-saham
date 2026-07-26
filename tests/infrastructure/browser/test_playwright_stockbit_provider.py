@@ -90,6 +90,7 @@ def test_fetch_preopen_movers_ignores_profile_dir_contents(tmp_path):
 
     fake_client = _fake_movers_client()
     provider = PlaywrightStockbitProvider(api_client=fake_client)
+    assert provider.provides_live_preopen_data is True
 
     movers = provider.fetch_preopen_movers(iev_min=1)
 

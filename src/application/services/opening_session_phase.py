@@ -23,8 +23,14 @@ from src.domain.value_objects.idx_market import (
 )
 
 
-def classify_opening_capture_phase(captured_at: datetime) -> str:
+def classify_opening_capture_phase(
+    captured_at: datetime,
+    *,
+    is_trading_day: bool = True,
+) -> str:
     """Classify a capture timestamp into deterministic IDX opening phases."""
+    if not is_trading_day:
+        return "NON_TRADING_DAY"
     local = captured_at.astimezone(IDX_TIMEZONE)
     current = local.time()
     if PRE_NCP_START <= current < NCP_LOCK_TIME:

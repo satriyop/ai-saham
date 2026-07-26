@@ -148,9 +148,9 @@ def pre_open(
     call auction mechanism. Enter at open only if opening price falls within
     the displayed range.
 
-    Regime and default-gate risk annotations are always-on (Tier-1). Use
-    --no-regime / --no-risk to opt out. Signal is intentionally not applicable
-    (no canonical setup/flow evidence for pre-open).
+    Regime and default-gate risk annotations are always-on. Use --no-regime /
+    --no-risk to opt out. Before the NCP window, results are discovery-only;
+    production signal and TradeSetup require a verified NCP-locked capture.
     """
     cfg = load_app_config()
     resolved_config = config_path or Path(cfg.config_paths.pre_open_screener)
@@ -304,7 +304,7 @@ def pre_open(
             benchmark=benchmark,
             db_path=resolved_db,
             outside_window=skip_live_fetch,
-            capture_phase="NCP_LOCKED" if skip_live_fetch else "UNKNOWN",
+            is_trading_day=run_guard.is_trading_day,
         )
         response = cli_workflow.workflow.execute(workflow_request)
         result = response.result
@@ -329,6 +329,11 @@ def pre_open(
                 source_status=response.source_status,
                 source_message=response.source_message,
                 source_snapshot_ref=response.source_snapshot_ref,
+                capture_phase=response.capture_phase,
+                source_is_live=response.source_is_live,
+                ncp_authoritative=response.ncp_authoritative,
+                collection_started_at=response.collection_started_at,
+                decision_at=response.decision_at,
             )
 
         if response.source_status in _SIDECAR_ELIGIBLE_STATUSES:

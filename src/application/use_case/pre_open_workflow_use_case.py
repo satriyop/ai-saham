@@ -12,11 +12,14 @@ Engine adoption (ADR-047 / ADR-048):
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
 from src.application.dto.assess_signal import AssessSignalResponse
+from src.application.services.opening_session_phase import (
+    classify_opening_capture_phase,
+)
 from src.application.services.pre_open_risk_inputs_builder import PreOpenRiskInputsBuilder
 from src.application.services.pre_open_signal_cascade import PreOpenSignalInputsBuilder
 from src.application.services.pre_open_signal_config import PreOpenSignalConfig
@@ -40,8 +43,9 @@ from src.domain.ports.browser_data_provider import (
 )
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.value_objects.benchmark_symbol import canonicalize_ticker
-from src.domain.value_objects.idx_market import PRE_OPEN_START
+from src.domain.value_objects.idx_market import IDX_TIMEZONE, PRE_OPEN_START
 from src.domain.value_objects.idx_market import REGULAR_OPEN as PRE_OPEN_END
+from src.domain.value_objects.pre_open_signal_evidence import AuctionNcpProvenance
 from src.domain.value_objects.pre_open_source_status import PreOpenSourceStatus
 from src.domain.value_objects.screener_result import (
     PreOpenScreenResult,
@@ -103,8 +107,9 @@ class PreOpenWorkflowRequest:
     benchmark: str = "IHSG"
     db_path: Path = Path("data.db")
     outside_window: bool = False
-    # NCP capture metadata for evidence provenance (optional).
-    capture_phase: str = "UNKNOWN"
+    is_trading_day: bool = True
+    # Optional producer-owned snapshot identity. It cannot grant NCP authority;
+    # the workflow derives decision time and phase after data collection.
     decision_snapshot_ref: str | None = None
 
 
@@ -151,6 +156,12 @@ class PreOpenWorkflowResponse:
     source_status: PreOpenSourceStatus = PreOpenSourceStatus.LIVE_SUCCESS
     source_message: str | None = None
     source_snapshot_ref: str | None = None
+    capture_phase: str = "UNKNOWN"
+    source_is_live: bool = False
+    ncp_authoritative: bool = False
+    collection_started_at: datetime | None = None
+    decision_at: datetime | None = None
+    decision_snapshot_ref: str | None = None
 
 
 class PreOpenWorkflowUseCase:
@@ -170,6 +181,7 @@ class PreOpenWorkflowUseCase:
             Callable[[PreOpenScreenConfig, date], PreOpenSnapshotScreenResult | None] | None
         ) = None,
         iev_delta_provider: IevDeltaProvider | None = None,
+        decision_clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._screen_use_case = screen_use_case
         self._market_repo = market_repository
@@ -177,6 +189,7 @@ class PreOpenWorkflowUseCase:
         self._evaluate_market_context = evaluate_market_context
         self._run_snapshot_screen = run_snapshot_screen
         self._iev_delta_provider = iev_delta_provider
+        self._decision_clock = decision_clock or (lambda: datetime.now(tz=IDX_TIMEZONE))
         self._assessment_pipeline = assessment_pipeline or ScreenAssessmentPipeline(
             policy=ScreenPolicy.pre_open(),
             risk_engine=risk_engine,
@@ -193,10 +206,14 @@ class PreOpenWorkflowUseCase:
             if self._run_snapshot_screen is not None:
                 snapshot = self._run_snapshot_screen(request.config, request.run_date)
                 if snapshot is not None:
-                    message = f"Snapshot dated {snapshot.snapshot_date.isoformat()} used (outside live window)."
+                    message = (
+                        f"Snapshot dated {snapshot.snapshot_date.isoformat()} "
+                        "used (outside live window)."
+                    )
                     return self._finish(
                         request,
                         snapshot.response,
+                        collection_started_at=None,
                         source_status=PreOpenSourceStatus.SNAPSHOT_SUCCESS,
                         source_message=message,
                         source_snapshot_ref=snapshot.snapshot_date.isoformat(),
@@ -204,6 +221,11 @@ class PreOpenWorkflowUseCase:
             return self._outside_window_response(request)
 
         try:
+            collection_started_at = self._decision_clock()
+            if collection_started_at.tzinfo is None:
+                raise ValueError(
+                    "pre-open decision_clock must return a timezone-aware datetime"
+                )
             screen_response = self._screen_use_case.execute(
                 PreOpenScreenRequest(
                     config=request.config,
@@ -225,6 +247,7 @@ class PreOpenWorkflowUseCase:
         return self._finish(
             request,
             screen_response,
+            collection_started_at=collection_started_at,
             source_status=source_status,
             source_message=source_message,
         )
@@ -234,12 +257,50 @@ class PreOpenWorkflowUseCase:
         request: PreOpenWorkflowRequest,
         screen_response: PreOpenScreenResponse,
         *,
+        collection_started_at: datetime | None,
         source_status: PreOpenSourceStatus,
         source_message: str | None,
         source_snapshot_ref: str | None = None,
     ) -> PreOpenWorkflowResponse:
         result = screen_response.result
         warnings = list(screen_response.warnings) + list(request.guard_warnings)
+        decision_at = self._decision_clock()
+        if decision_at.tzinfo is None:
+            raise ValueError("pre-open decision_clock must return a timezone-aware datetime")
+        capture_phase = classify_opening_capture_phase(
+            decision_at,
+            is_trading_day=request.is_trading_day,
+        )
+        if collection_started_at is not None:
+            collection_start_phase = classify_opening_capture_phase(
+                collection_started_at,
+                is_trading_day=request.is_trading_day,
+            )
+            if collection_started_at > decision_at:
+                capture_phase = "INVALID_WINDOW"
+            elif collection_start_phase != capture_phase:
+                capture_phase = "CROSS_PHASE"
+        decision_snapshot_ref = request.decision_snapshot_ref
+        if source_status is PreOpenSourceStatus.SNAPSHOT_SUCCESS:
+            capture_phase = "SNAPSHOT"
+        elif decision_snapshot_ref is None:
+            started = (
+                collection_started_at.isoformat()
+                if collection_started_at is not None
+                else "UNKNOWN"
+            )
+            decision_snapshot_ref = (
+                f"screen:{started}..{decision_at.isoformat()}"
+            )
+        decision_provenance = AuctionNcpProvenance(
+            ticker="SCREEN",
+            collection_started_at=collection_started_at,
+            decision_at=decision_at,
+            capture_phase=capture_phase,
+            source_is_live=screen_response.source_is_live,
+            snapshot_ref=decision_snapshot_ref or source_snapshot_ref,
+            trade_date=result.screened_date,
+        )
 
         data_freshness = self._build_data_freshness(
             candidates=result.candidates,
@@ -288,11 +349,22 @@ class PreOpenWorkflowUseCase:
             and result.candidates
         ):
             signal_by_ticker = {}
-            capture_phase = request.capture_phase
-            if source_status is PreOpenSourceStatus.SNAPSHOT_SUCCESS:
-                capture_phase = "NCP_LOCKED"
+            snapshot_ref = decision_snapshot_ref or source_snapshot_ref
+            if not decision_provenance.is_production_ncp:
+                warnings.append(
+                    "Pre-open candidates are discovery-only: production signal "
+                    "requires a verified live source, a collection window wholly "
+                    "inside the same-session NCP_LOCKED phase, and a snapshot reference."
+                )
+                signal_by_ticker.update(
+                    {candidate.ticker: None for candidate in result.candidates}
+                )
+
             iev_deltas: Mapping[str, int] = {}
-            if self._iev_delta_provider is not None:
+            if (
+                decision_provenance.is_production_ncp
+                and self._iev_delta_provider is not None
+            ):
                 try:
                     iev_deltas = dict(
                         self._iev_delta_provider.get_iev_delta(result.screened_date)
@@ -300,14 +372,18 @@ class PreOpenWorkflowUseCase:
                 except Exception as exc:
                     warnings.append(f"IEV delta unavailable (MISSING-safe): {exc}")
                     iev_deltas = {}
-            for candidate in result.candidates:
+            for candidate in (
+                result.candidates if decision_provenance.is_production_ncp else ()
+            ):
                 try:
                     sig = self._signal_builder.evaluate(
                         candidate,
                         trade_date=result.screened_date,
+                        collection_started_at=collection_started_at,
+                        decision_at=decision_at,
                         capture_phase=capture_phase,
-                        snapshot_ref=request.decision_snapshot_ref
-                        or source_snapshot_ref,
+                        source_is_live=screen_response.source_is_live,
+                        snapshot_ref=snapshot_ref,
                         delta_iev=iev_deltas.get(candidate.ticker),
                     )
                 except Exception as exc:
@@ -368,6 +444,12 @@ class PreOpenWorkflowUseCase:
             source_status=source_status,
             source_message=source_message,
             source_snapshot_ref=source_snapshot_ref,
+            capture_phase=capture_phase,
+            source_is_live=screen_response.source_is_live,
+            ncp_authoritative=decision_provenance.is_production_ncp,
+            collection_started_at=collection_started_at,
+            decision_at=decision_at,
+            decision_snapshot_ref=decision_snapshot_ref,
         )
 
     def _build_risk_summaries(

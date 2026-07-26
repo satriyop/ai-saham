@@ -23,3 +23,10 @@ def test_classifies_ncp_locked_only_before_regular_open():
 def test_classifies_post_open_as_not_ncp_locked():
     assert classify_opening_capture_phase(_at(9, 0)) == "OPEN"
     assert classify_opening_capture_phase(_at(12, 56)) == "POST_OPEN"
+
+
+def test_non_trading_day_never_claims_ncp_phase():
+    assert (
+        classify_opening_capture_phase(_at(8, 57), is_trading_day=False)
+        == "NON_TRADING_DAY"
+    )
