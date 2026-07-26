@@ -593,6 +593,16 @@ class SQLiteLearningArtifactRepository:
             ).fetchone()
         return None if row is None else _load_json(row, _proposal_from_dict)
 
+    def list_proposals(self) -> Sequence[LearningPolicyProposal]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT artifact_json FROM learning_policy_proposals
+                ORDER BY created_at, proposal_id
+                """
+            ).fetchall()
+        return tuple(_load_json(row, _proposal_from_dict) for row in rows)
+
     def add_validation(self, artifact: LearningPolicyValidation) -> bool:
         validate_artifact_integrity(artifact, id_field="validation_id")
         with self._connect() as connection:
@@ -636,6 +646,16 @@ class SQLiteLearningArtifactRepository:
             ).fetchone()
         return None if row is None else _load_json(row, _validation_from_dict)
 
+    def list_validations(self) -> Sequence[LearningPolicyValidation]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT artifact_json FROM learning_policy_validations
+                ORDER BY validated_at, validation_id
+                """
+            ).fetchall()
+        return tuple(_load_json(row, _validation_from_dict) for row in rows)
+
     def add_application(self, artifact: LearningPolicyApplication) -> bool:
         validate_artifact_integrity(artifact, id_field="application_id")
         with self._connect() as connection:
@@ -678,3 +698,13 @@ class SQLiteLearningArtifactRepository:
                 (proposal_id,),
             ).fetchone()
         return None if row is None else _load_json(row, _application_from_dict)
+
+    def list_applications(self) -> Sequence[LearningPolicyApplication]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT artifact_json FROM learning_policy_applications
+                ORDER BY applied_at, application_id
+                """
+            ).fetchall()
+        return tuple(_load_json(row, _application_from_dict) for row in rows)
