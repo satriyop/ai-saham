@@ -1,8 +1,9 @@
 """
 OpeningTrackUseCase — 5-minute orderbook tracker for the opening session (09:00–09:30 WIB).
 
-For every ticker in today's snapshot, fetches bid/offer from Stockbit every 5 minutes
-and saves to data/opening/YYYYMMDD/track_HHMM.json. Loops internally until 09:31 WIB.
+For every saved pre-open observation, fetches bid/offer from Stockbit every
+5 minutes and persists an immutable database track snapshot linked to its
+observation. Loops internally until 09:31 WIB.
 
 Each tick entry always includes full order book depth (bid_pressure_ratio, depth_ratio_5,
 fnet_intraday) when order_book_provider is wired — this replaces the old naive top-of-book
@@ -16,21 +17,22 @@ Layer: Application
 
 from __future__ import annotations
 
-import json
 import time as time_module
 from dataclasses import dataclass
 from datetime import date, datetime, time
-from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Mapping
+
+from src.domain.value_objects.learning_artifacts import LearningTrackSnapshot
 
 if TYPE_CHECKING:
+    from src.domain.ports.learning_artifact_repositories import (
+        LearningTrackSnapshotRepository,
+    )
     from src.domain.ports.order_book_provider import OrderBookProvider
     from src.domain.ports.running_trade_provider import RunningTradeProvider
 
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.domain.value_objects.idx_market import REGULAR_OPEN as TRACK_START
-
-OPENING_DATA_DIR = Path("data/opening")
 
 TRACK_END = time(9, 31)
 INTERVAL_MINUTES = 5
@@ -38,7 +40,7 @@ INTERVAL_MINUTES = 5
 
 @dataclass(frozen=True)
 class OpeningTrackRequest:
-    tickers: list[str]
+    observation_ids_by_ticker: Mapping[str, str]
     run_date: date | None = None
     force: bool = False
     broker_confirm: bool = False
@@ -61,25 +63,22 @@ class OpeningTrackUseCase:
     def __init__(
         self,
         browser,
+        repository: "LearningTrackSnapshotRepository",
         running_trade_provider: "RunningTradeProvider | None" = None,
         order_book_provider: "OrderBookProvider | None" = None,
     ) -> None:
         self._browser = browser
+        self._repository = repository
         self._running_trade_provider = running_trade_provider
         self._order_book_provider = order_book_provider
 
     def execute(self, request: OpeningTrackRequest) -> list[dict]:
         now = datetime.now(IDX_TIMEZONE)
-        run_date = request.run_date or now.date()
-        out_dir = OPENING_DATA_DIR / run_date.strftime("%Y%m%d")
-        out_dir.mkdir(parents=True, exist_ok=True)
-
         snapshots: list[dict] = []
 
         if request.force:
-            snapshot = self._capture(request.tickers, request)
-            label = datetime.now(IDX_TIMEZONE).strftime("%H%M")
-            self._save(out_dir, label, snapshot)
+            snapshot = self._capture(list(request.observation_ids_by_ticker), request)
+            self._persist(snapshot, request)
             snapshots.append(snapshot)
             return snapshots
 
@@ -92,9 +91,10 @@ class OpeningTrackUseCase:
                 break
 
             if current >= TRACK_START:
-                snapshot = self._capture(request.tickers, request)
-                label = now.strftime("%H%M")
-                self._save(out_dir, label, snapshot)
+                snapshot = self._capture(
+                    list(request.observation_ids_by_ticker), request
+                )
+                self._persist(snapshot, request)
                 snapshots.append(snapshot)
 
             seconds_to_next = self._seconds_to_next_interval(now)
@@ -141,7 +141,11 @@ class OpeningTrackUseCase:
                     entry["order_book"] = None
 
             # Optional broker confirmation — RunningTradeSignal
-            if request.broker_confirm and self._running_trade_provider is not None and not entry.get("error"):
+            if (
+                request.broker_confirm
+                and self._running_trade_provider is not None
+                and not entry.get("error")
+            ):
                 try:
                     from src.application.use_case.analyze_running_trade_use_case import (
                         AnalyzeRunningTradeRequest,
@@ -164,11 +168,19 @@ class OpeningTrackUseCase:
             "tickers": ticker_data,
         }
 
-    @staticmethod
-    def _save(out_dir: Path, label: str, snapshot: dict) -> None:
-        path = out_dir / f"track_{label}.json"
-        with open(path, "w") as f:
-            json.dump(snapshot, f, indent=2)
+    def _persist(self, snapshot: dict, request: OpeningTrackRequest) -> None:
+        sampled_at = datetime.fromisoformat(snapshot["captured_at"])
+        for ticker, payload in snapshot["tickers"].items():
+            observation_id = request.observation_ids_by_ticker[ticker]
+            self._repository.add_track_snapshot(
+                LearningTrackSnapshot.create(
+                    observation_id=observation_id,
+                    sampled_at=sampled_at,
+                    source="stockbit.opening_track",
+                    snapshot_payload=payload or {"availability": "UNAVAILABLE"},
+                    captured_at=sampled_at,
+                )
+            )
 
     @staticmethod
     def _seconds_to_next_interval(now: datetime) -> int:

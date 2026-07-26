@@ -1,90 +1,98 @@
 """
 CLI: saham research pre-open labels
 
-Generate open_30m outcome labels from saved pre-open observations + research pre-open track data.
+Generate open_30m outcome labels from saved pre-open observations and tracks.
 Session-horizon twin of research signal labels (multi-day); separate command
 so agents never mix open_30m into SignalLabelHorizon pipelines.
 
 Layer: Adapter
 """
 
+import json
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.research_pre_open_paths import parse_session_date
+from src.application.use_case.database_learning_lifecycle_use_case import (
+    GenerateLearningLabelsRequest,
+    GeneratePreOpenOutcomeLabelsUseCase,
+)
+from src.domain.value_objects.idx_market import IDX_TIMEZONE
+from src.domain.value_objects.learning_artifacts import (
+    AssessmentPurpose,
+    LearningContractId,
+)
 from src.infrastructure.config.app_config import load_app_config
 
 
 def pre_open_labels(
-    date_str: Annotated[Optional[str], typer.Option("--date")] = None,
+    compatibility_id: Annotated[
+        Optional[str],
+        typer.Option("--compatibility-id", help="Exact compatible cohort identity"),
+    ] = None,
     db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
-    no_persist: Annotated[
-        bool,
-        typer.Option(
-            "--no-persist",
-            help="Compute only; do not write open_30m_labels.json",
-        ),
-    ] = False,
+    fmt: Annotated[
+        str,
+        typer.Option("--format", help="Output format: table or json"),
+    ] = "table",
 ) -> None:
     """
-    Generate open_30m outcome labels for a pre-open session date.
-
-    Requires saved screen_pre_open observations (research pre-open capture)
-    and research pre-open track files. Writes data/opening/YYYYMMDD/open_30m_labels.json.
-
-    Examples:
-        saham research pre-open labels
-        saham research pre-open labels --date 2026-06-18
+    Generate immutable open_30m labels for one compatible database cohort.
     """
-    run_date = parse_session_date(date_str)
     cfg = load_app_config()
     resolved_db = db_path or Path(cfg.storage.db_path)
 
-    try:
-        from src.application.use_case.generate_pre_open_open30m_labels_use_case import (
-            generate_pre_open_open30m_labels,
-        )
-        from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
-            SQLiteCandidateObservationsRepository,
-        )
-    except ImportError as e:
-        typer.echo(f"Import error: {e}", err=True)
-        raise typer.Exit(1)
+    from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
+        SQLiteLearningArtifactRepository,
+    )
 
-    observations_repo = None
-    if resolved_db.exists():
-        try:
-            observations_repo = SQLiteCandidateObservationsRepository(resolved_db)
-        except Exception as e:
+    repository = SQLiteLearningArtifactRepository(resolved_db)
+    observations = repository.list_observations(
+        AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION
+    )
+    compatibility_ids = sorted(
+        {observation.compatibility_id for observation in observations}
+    )
+    if compatibility_id is None:
+        if len(compatibility_ids) != 1:
             typer.echo(
-                f"Warning: observations DB unavailable ({e}); snapshot fallback.",
+                "Specify --compatibility-id; available cohorts: "
+                + (", ".join(compatibility_ids) or "none"),
                 err=True,
             )
-
-    try:
-        result = generate_pre_open_open30m_labels(
-            run_date,
-            observations_repository=observations_repo,
-            persist=not no_persist,
+            raise typer.Exit(1)
+        compatibility_id = compatibility_ids[0]
+    result = GeneratePreOpenOutcomeLabelsUseCase(
+        observations=repository,
+        tracks=repository,
+        labels=repository,
+    ).execute(
+        GenerateLearningLabelsRequest(
+            purpose=AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION,
+            compatibility_id=compatibility_id,
+            label_contract=LearningContractId.PRE_OPEN_LABEL,
+            labeled_at=datetime.now(IDX_TIMEZONE),
         )
-    except FileNotFoundError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+    )
 
+    payload = {
+        "artifact_type": "learning_label_generation",
+        "purpose": AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION.value,
+        "contract_id": LearningContractId.PRE_OPEN_LABEL.value,
+        "compatibility_id": compatibility_id,
+        "observation_count": result.observation_count,
+        "inserted_count": result.inserted_count,
+        "idempotent_count": result.idempotent_count,
+        "unavailable_count": result.unavailable_count,
+        "label_ids": [label.label_id for label in result.labels],
+    }
+    if fmt == "json":
+        typer.echo(json.dumps(payload, indent=2))
+        return
     typer.echo(
-        f"open_30m labels: source={result.decision_source}  "
-        f"n={result.observation_count}  labeled={result.labeled_count}  "
+        "open_30m labels: source=database_tracks  "
+        f"n={result.observation_count}  labeled={result.inserted_count}  "
         f"unavailable={result.unavailable_count}"
     )
-    if result.output_path:
-        typer.echo(f"Saved → {result.output_path}")
-
-    hist: dict[str, int] = {}
-    for lb in result.labels:
-        hist[lb.outcome] = hist.get(lb.outcome, 0) + 1
-    if hist:
-        typer.echo(
-            "  Outcomes: " + "  ".join(f"{k}={v}" for k, v in sorted(hist.items()))
-        )

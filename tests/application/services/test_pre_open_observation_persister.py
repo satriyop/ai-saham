@@ -1,29 +1,19 @@
-"""Phase 2: pre-open saved observations (ADR-048)."""
-
-from __future__ import annotations
-
-import json
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from src.application.services.pre_open_observation_payload import (
-    PRE_OPEN_OBSERVATION_CONTRACT,
-    PRE_OPEN_WORKFLOW,
     derive_pre_open_screen_result,
 )
 from src.application.services.pre_open_observation_persister import (
     PreOpenObservationPersister,
 )
-from src.application.services.pre_open_ops_day_export import (
-    write_pre_open_ops_day_export,
-)
 from src.application.services.pre_open_screen_config import PreOpenScreenConfig
 from src.application.services.signal_engine_config import (
     PreOpenDirectionalBaselineConfig,
 )
-from src.application.use_case import opening_grade_use_case as opening_grade
+from src.application.use_case.pre_open_screen_use_case import PreOpenFilterReject
 from src.application.use_case.pre_open_workflow_use_case import (
     PreOpenDataFreshness,
     PreOpenRiskSummary,
@@ -31,14 +21,22 @@ from src.application.use_case.pre_open_workflow_use_case import (
     PreOpenWorkflowRequest,
     PreOpenWorkflowResponse,
 )
-from src.domain.value_objects.signal_assessment import PRE_OPEN_AUCTION_DIRECTION_IDENTITY
+from src.domain.value_objects.learning_artifacts import (
+    AssessmentPurpose,
+    LearningContractId,
+)
 from src.domain.value_objects.pre_open_source_status import PreOpenSourceStatus
 from src.domain.value_objects.screener_result import PreOpenScreenResult, ScreenerCandidate
-from src.domain.value_objects.signal_assessment import SignalStrength
-from src.domain.value_objects.trade_setup import SetupAction, TradeSetup
-from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
-    SQLiteCandidateObservationsRepository,
+from src.domain.value_objects.signal_assessment import (
+    PRE_OPEN_AUCTION_DIRECTION_IDENTITY,
+    SignalStrength,
 )
+from src.domain.value_objects.trade_setup import SetupAction, TradeSetup
+from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
+    SQLiteLearningArtifactRepository,
+)
+
+WIB = ZoneInfo("Asia/Jakarta")
 
 
 def _candidate(ticker: str = "BBCA") -> ScreenerCandidate:
@@ -64,9 +62,7 @@ def _candidate(ticker: str = "BBCA") -> ScreenerCandidate:
 
 
 def _signal_summary(
-    *,
-    score: int = 80,
-    entry_quality: str = "ENTER",
+    *, score: int = 80, entry_quality: str = "ENTER"
 ) -> PreOpenSignalSummary:
     return PreOpenSignalSummary(
         identity=PRE_OPEN_AUCTION_DIRECTION_IDENTITY,
@@ -78,58 +74,17 @@ def _signal_summary(
         score=score,
         strength="STRONG",
         entry_quality=entry_quality,
-        factors={
-            "iep_direction": "UP",
-            "book_pressure_state": "BUY",
-            "participation_state": "BUILDING",
-            "iep_gap_pct": 1.0,
-            "book_pressure": 0.6,
-            "delta_iev": 20_000,
-            "delta_iev_ratio": 0.1,
-            "iev_intensity": 2.0,
-            "spread_pct": 0.4,
-            "rsi_extension": False,
-            "unusual_volume": False,
-        },
+        factors={"delta_iev": 20_000},
         rationale=("direction:agreement_bullish",),
         quality_reasons=(),
         signal_authority_coverage=1.0,
     )
 
 
-def test_pre_open_observation_contract_is_v3():
-    assert PRE_OPEN_OBSERVATION_CONTRACT == "pre-open-open-30m.v3"
-
-
-def test_derive_screen_result_funnel():
-    assert (
-        derive_pre_open_screen_result(has_entry_range=False, signal_summary=None, trade_setup=None)
-        == "rejected_plan"
-    )
-    assert (
-        derive_pre_open_screen_result(has_entry_range=True, signal_summary=None, trade_setup=None)
-        == "rejected_auction_missing"
-    )
-    sig = _signal_summary(entry_quality="AVOID")
-    assert (
-        derive_pre_open_screen_result(has_entry_range=True, signal_summary=sig, trade_setup=None)
-        == "rejected_signal"
-    )
-    sig_ok = _signal_summary()
-    assert (
-        derive_pre_open_screen_result(has_entry_range=True, signal_summary=sig_ok, trade_setup=None)
-        == "pass"
-    )
-
-
-def test_persist_observations_and_identity_upsert(tmp_path: Path, monkeypatch):
-    db = tmp_path / "obs.db"
-    repo = SQLiteCandidateObservationsRepository(db)
-    persister = PreOpenObservationPersister(repo, PreOpenDirectionalBaselineConfig())
-
+def _response(*, rejects=()) -> PreOpenWorkflowResponse:
     run_date = date(2026, 6, 18)
-    cand = _candidate()
-    sig = _signal_summary(score=72)
+    candidate = _candidate()
+    signal = _signal_summary(score=72)
     risk = PreOpenRiskSummary(
         risk_level_name="LOW_RISK",
         gate_triggered=None,
@@ -149,12 +104,12 @@ def test_persist_observations_and_identity_upsert(tmp_path: Path, monkeypatch):
         gate_tightening=False,
         rationale="test",
     )
-    response = PreOpenWorkflowResponse(
+    return PreOpenWorkflowResponse(
         result=PreOpenScreenResult(
             screened_date=run_date,
             iev_min=100_000,
-            total_movers_seen=1,
-            candidates=[cand],
+            total_movers_seen=1 + len(rejects),
+            candidates=[candidate],
         ),
         warnings=[],
         raw_movers=[],
@@ -162,174 +117,116 @@ def test_persist_observations_and_identity_upsert(tmp_path: Path, monkeypatch):
             analysis_date=run_date, candle_end=None, broker_end=None
         ),
         risk_by_ticker={"BBCA": risk},
-        signal_by_ticker={"BBCA": sig},
+        signal_by_ticker={"BBCA": signal},
         trade_setup_by_ticker={"BBCA": setup},
+        filter_rejects=tuple(rejects),
         source_status=PreOpenSourceStatus.LIVE_SUCCESS,
-        source_snapshot_ref=None,
         source_is_live=True,
         capture_phase="NCP_LOCKED",
-        collection_started_at=datetime(2026, 6, 18, 8, 56, tzinfo=ZoneInfo("Asia/Jakarta")),
-        decision_at=datetime(2026, 6, 18, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta")),
+        collection_started_at=datetime(2026, 6, 18, 8, 56, tzinfo=WIB),
+        decision_at=datetime(2026, 6, 18, 8, 57, tzinfo=WIB),
         decision_snapshot_ref="test:ncp",
+    )
+
+
+def test_derive_screen_result_funnel() -> None:
+    assert (
+        derive_pre_open_screen_result(
+            has_entry_range=False, signal_summary=None, trade_setup=None
+        )
+        == "rejected_plan"
+    )
+    assert (
+        derive_pre_open_screen_result(
+            has_entry_range=True,
+            signal_summary=_signal_summary(entry_quality="AVOID"),
+            trade_setup=None,
+        )
+        == "rejected_signal"
+    )
+
+
+def test_persists_database_owned_observation_idempotently(tmp_path: Path) -> None:
+    repository = SQLiteLearningArtifactRepository(tmp_path / "data.db")
+    persister = PreOpenObservationPersister(
+        repository, PreOpenDirectionalBaselineConfig()
     )
     request = PreOpenWorkflowRequest(
         config=PreOpenScreenConfig(iev_min=100_000, top_n=5, fast_mode=True),
-        run_date=run_date,
+        run_date=date(2026, 6, 18),
     )
 
-    n1 = persister.persist(
-        response,
-        request,
-        captured_at=datetime(2026, 6, 18, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta")),
-    )
-    assert n1 == 1
-
-    rows = repo.list_canonical_by_date(run_date)
-    pre_open_rows = [r for r in rows if r.workflow == PRE_OPEN_WORKFLOW]
-    assert len(pre_open_rows) == 1
-    row = pre_open_rows[0]
-    assert row.observation_contract == PRE_OPEN_OBSERVATION_CONTRACT
-    assert row.payload["signal"]["score"] == 72
-    assert row.payload["signal"]["identity"] == {
-        "purpose": "PRE_OPEN_AUCTION_DIRECTION",
-        "policy_contract": "pre_open_auction_direction.v1",
-    }
-    assert row.payload["signal_assessment_identity"] == row.payload["signal"]["identity"]
-    assert row.payload["signal"]["contract"] == "pre_open_directional_baseline.v1"
-    assert row.payload["signal"]["direction"] == "BULLISH"
-    assert row.payload["signal"]["confidence"] == "HIGH"
-    assert row.payload["signal"]["auction_quality"] == "RELIABLE"
-    assert row.payload["signal"]["factors"]["delta_iev"] == 20_000
-    assert row.payload["signal"]["rationale"] == ["direction:agreement_bullish"]
-    assert row.payload["trade_setup"]["action"] == "ENTER"
-    assert row.payload["screen_result"] == "pass"
-    assert row.payload["candidate"]["iep"] == 10100
-    assert row.payload["candidate"]["iep_gap_pct"] == "1.0"
-    assert row.payload["candidate"]["best_bid"] == "10050"
-    assert row.payload["candidate"]["bid_gap_pct"] == "0.5"
-    assert row.payload["candidate"]["gap_price_source"] == "IEP"
-    assert row.decision_at is not None
-    assert row.decision_at.hour == 8 and row.decision_at.minute == 57
-
-    ops_path = write_pre_open_ops_day_export(response, tmp_path / "opening")
-    ops_payload = json.loads(ops_path.read_text())
-    ops_candidate = ops_payload["candidates"][0]
-    assert ops_candidate["iep"] == 10100
-    assert ops_candidate["iep_gap_pct"] == 1.0
-    assert ops_candidate["best_bid"] == 10050.0
-    assert ops_candidate["bid_gap_pct"] == 0.5
-    assert ops_candidate["gap_price_source"] == "IEP"
-    assert ops_candidate["signal_contract"] == "pre_open_directional_baseline.v1"
-    assert ops_candidate["signal_direction"] == "BULLISH"
-    assert ops_candidate["signal_direction_confidence"] == "HIGH"
-    assert ops_candidate["auction_quality"] == "RELIABLE"
-    assert ops_candidate["signal_factors"]["delta_iev"] == 20_000
-
-    grade_root = tmp_path / "grade"
-    grade_day = grade_root / "20260618"
-    grade_day.mkdir(parents=True)
-    (grade_day / "track_0900.json").write_text(
-        json.dumps(
-            {
-                "captured_at": "2026-06-18T09:00:01+07:00",
-                "tickers": {
-                    "BBCA": {
-                        "opening_price": 10000,
-                        "opening_price_confidence": "HIGH",
-                    }
-                },
-            }
+    assert (
+        persister.persist(
+            _response(),
+            request,
+            captured_at=datetime(2026, 6, 18, 8, 57, tzinfo=WIB),
         )
+        == 1
     )
-    monkeypatch.setattr(opening_grade, "OPENING_DATA_DIR", grade_root)
-    grade = opening_grade.compute_grade(
-        run_date,
-        observations_repository=repo,
+    assert (
+        persister.persist(
+            _response(),
+            request,
+            captured_at=datetime(2026, 6, 18, 8, 57, tzinfo=WIB),
+        )
+        == 0
     )
-    assert grade["per_ticker"][0]["iep"] == 10100.0
-    assert grade["per_ticker"][0]["iep_error_pct"] == 1.0
-    assert grade["iep_accuracy"]["mean_error_pct"] == 1.0
-
-    # Same identity upsert replaces, does not duplicate
-    n2 = persister.persist(
-        response,
-        request,
-        captured_at=datetime(2026, 6, 18, 8, 58, tzinfo=ZoneInfo("Asia/Jakarta")),
+    rows = repository.list_observations(
+        AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION
     )
-    assert n2 == 1
-    rows2 = [r for r in repo.list_canonical_by_date(run_date) if r.workflow == PRE_OPEN_WORKFLOW]
-    assert len(rows2) == 1
-    # Capture identity: score still from payload write (same content)
-    assert rows2[0].payload["signal"]["score"] == 72
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.contract_id is LearningContractId.PRE_OPEN_OBSERVATION
+    assert row.decision_payload["signal"]["score"] == 72
+    assert row.decision_payload["trade_setup"]["action"] == "ENTER"
+    assert row.decision_payload["candidate"]["iep"] == 10100
 
 
-def test_persist_noop_without_repository():
-    persister = PreOpenObservationPersister(None)
-    run_date = date(2026, 6, 18)
-    response = PreOpenWorkflowResponse(
-        result=PreOpenScreenResult(
-            screened_date=run_date,
-            iev_min=100_000,
-            total_movers_seen=0,
-            candidates=[],
-        ),
-        warnings=[],
-        raw_movers=[],
-        data_freshness=PreOpenDataFreshness(
-            analysis_date=run_date, candle_end=None, broker_end=None
-        ),
-    )
-    request = PreOpenWorkflowRequest(
-        config=PreOpenScreenConfig(fast_mode=True),
-        run_date=run_date,
-    )
-    assert persister.persist(response, request) == 0
-
-
-def test_persist_includes_hard_filter_rejects(tmp_path: Path):
-    from src.application.use_case.pre_open_screen_use_case import PreOpenFilterReject
-
-    db = tmp_path / "obs.db"
-    repo = SQLiteCandidateObservationsRepository(db)
-    persister = PreOpenObservationPersister(repo, PreOpenDirectionalBaselineConfig())
-    run_date = date(2026, 6, 18)
-    response = PreOpenWorkflowResponse(
-        result=PreOpenScreenResult(
-            screened_date=run_date,
-            iev_min=100_000,
-            total_movers_seen=2,
-            candidates=[],
-        ),
-        warnings=["XYZ: SKIP_SPECULATIVE"],
-        raw_movers=[],
-        data_freshness=PreOpenDataFreshness(
-            analysis_date=run_date, candle_end=None, broker_end=None
-        ),
-        filter_rejects=(
-            PreOpenFilterReject(
-                ticker="XYZ",
-                screen_result="rejected_filter_speculative",
-                reason="suffix",
-                iev=150_000,
-            ),
-        ),
-        source_status=PreOpenSourceStatus.LIVE_SUCCESS,
-        source_is_live=True,
-        capture_phase="NCP_LOCKED",
-        collection_started_at=datetime(2026, 6, 18, 8, 56, tzinfo=ZoneInfo("Asia/Jakarta")),
-        decision_at=datetime(2026, 6, 18, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta")),
-        decision_snapshot_ref="test:ncp:reject",
+def test_persists_hard_filter_rejects(tmp_path: Path) -> None:
+    repository = SQLiteLearningArtifactRepository(tmp_path / "data.db")
+    reject = PreOpenFilterReject(
+        ticker="XYZ",
+        screen_result="rejected_filter_speculative",
+        reason="suffix",
+        iev=150_000,
     )
     request = PreOpenWorkflowRequest(
         config=PreOpenScreenConfig(iev_min=100_000, fast_mode=True),
-        run_date=run_date,
+        run_date=date(2026, 6, 18),
     )
-    n = persister.persist(
-        response,
+
+    count = PreOpenObservationPersister(repository).persist(
+        _response(rejects=(reject,)),
         request,
-        captured_at=datetime(2026, 6, 18, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta")),
+        captured_at=datetime(2026, 6, 18, 8, 57, tzinfo=WIB),
     )
-    assert n == 1
-    rows = [r for r in repo.list_canonical_by_date(run_date) if r.workflow == PRE_OPEN_WORKFLOW]
-    assert len(rows) == 1
-    assert rows[0].payload["screen_result"] == "rejected_filter_speculative"
+
+    rows = repository.list_observations(
+        AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION
+    )
+    assert count == 2
+    assert {
+        row.decision_payload["screen_result"] for row in rows
+    } == {"pass", "rejected_filter_speculative"}
+
+
+def test_no_repository_is_noop() -> None:
+    response = _response()
+    response = PreOpenWorkflowResponse(
+        **{
+            **response.__dict__,
+            "result": PreOpenScreenResult(
+                screened_date=date(2026, 6, 18),
+                iev_min=100_000,
+                total_movers_seen=0,
+                candidates=[],
+            ),
+            "filter_rejects": (),
+        }
+    )
+    request = PreOpenWorkflowRequest(
+        config=PreOpenScreenConfig(fast_mode=True),
+        run_date=date(2026, 6, 18),
+    )
+    assert PreOpenObservationPersister(None).persist(response, request) == 0

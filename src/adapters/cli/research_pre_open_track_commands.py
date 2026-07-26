@@ -6,16 +6,14 @@ Tracks orderbook every 5 minutes from 09:00–09:30 WIB for captured tickers.
 Layer: Adapter
 """
 
-import os
 from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.research_pre_open_paths import (
-    opening_day_dir,
-    parse_session_date,
-)
+from src.adapters.cli.research_pre_open_paths import parse_session_date
+from src.domain.value_objects.idx_market import IDX_TIMEZONE
+from src.domain.value_objects.learning_artifacts import AssessmentPurpose
 from src.infrastructure.config.app_config import load_app_config
 
 
@@ -41,7 +39,7 @@ def track(
     Track orderbook every 5 minutes from 09:00–09:30 WIB for all screened tickers.
 
     Reads tickers from saved pre-open observations (research pre-open capture).
-    Saves track_HHMM.json per interval. Full order book depth is always captured.
+    Persists each interval as an immutable observation-linked database snapshot.
 
     Use --force with explicit tickers for manual dry-runs outside market hours.
     Use --broker-confirm to embed institutional broker absorption data per tick interval.
@@ -58,22 +56,49 @@ def track(
     if tickers:
         resolved_tickers = list(tickers)
     else:
-        from src.application.services.pre_open_observation_queries import (
-            list_pre_open_tickers,
-        )
-        from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
-            SQLiteCandidateObservationsRepository,
-        )
+        resolved_tickers = []
 
-        repo = SQLiteCandidateObservationsRepository(db_path)
-        resolved_tickers = list_pre_open_tickers(repo, run_date)
-        if not resolved_tickers:
+    from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
+        SQLiteLearningArtifactRepository,
+    )
+
+    repository = SQLiteLearningArtifactRepository(db_path)
+    observations = [
+        observation
+        for observation in repository.list_observations(
+            AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION
+        )
+        if observation.cutoff_at.astimezone(IDX_TIMEZONE).date() == run_date
+    ]
+    observation_ids_by_ticker = {
+        str(observation.decision_payload["ticker"]).upper(): observation.observation_id
+        for observation in observations
+        if isinstance(observation.decision_payload.get("ticker"), str)
+    }
+    if resolved_tickers:
+        missing = sorted(
+            ticker.upper()
+            for ticker in resolved_tickers
+            if ticker.upper() not in observation_ids_by_ticker
+        )
+        if missing:
             typer.echo(
-                f"No saved pre-open observations for {run_date}. "
-                "Run `saham research pre-open capture` first.",
+                "No saved pre-open observation for: " + ", ".join(missing),
                 err=True,
             )
             raise typer.Exit(1)
+        observation_ids_by_ticker = {
+            ticker.upper(): observation_ids_by_ticker[ticker.upper()]
+            for ticker in resolved_tickers
+        }
+    resolved_tickers = sorted(observation_ids_by_ticker)
+    if not resolved_tickers:
+        typer.echo(
+            f"No saved pre-open observations for {run_date}. "
+            "Run `saham research pre-open capture` first.",
+            err=True,
+        )
+        raise typer.Exit(1)
 
     if not resolved_tickers:
         typer.echo("No tickers to track.", err=True)
@@ -160,6 +185,7 @@ def track(
 
     use_case = OpeningTrackUseCase(
         browser=browser,
+        repository=repository,
         running_trade_provider=running_trade_provider,
         order_book_provider=order_book_provider,
     )
@@ -170,46 +196,34 @@ def track(
     else:
         typer.echo("Live mode — looping every 5 min from 09:00–09:30 WIB")
 
-    out_dir = opening_day_dir(run_date)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    lock_file = out_dir / ".track.lock"
-    if lock_file.exists():
-        try:
-            pid = int(lock_file.read_text().strip())
-            os.kill(pid, 0)
-            typer.echo(f"saham research pre-open track already running (PID {pid}). Exiting.")
-            raise typer.Exit()
-        except (ProcessLookupError, PermissionError):
-            lock_file.unlink(missing_ok=True)
-    lock_file.write_text(str(os.getpid()))
-    try:
-        snapshots = use_case.execute(
-            OpeningTrackRequest(
-                tickers=resolved_tickers,
-                run_date=run_date,
-                force=force,
-                broker_confirm=broker_confirm and running_trade_provider is not None,
-                institutional_broker_codes=institutional_codes,
-            )
+    snapshots = use_case.execute(
+        OpeningTrackRequest(
+            observation_ids_by_ticker=observation_ids_by_ticker,
+            run_date=run_date,
+            force=force,
+            broker_confirm=broker_confirm and running_trade_provider is not None,
+            institutional_broker_codes=institutional_codes,
         )
+    )
 
-        typer.echo(f"Captured {len(snapshots)} snapshots → {out_dir}/track_*.json")
-        for snap in snapshots:
-            at = snap.get("captured_at", "?")[:19]
-            n_ok = sum(1 for v in snap.get("tickers", {}).values() if v and "error" not in v)
-            n_broker = sum(
-                1
-                for v in snap.get("tickers", {}).values()
-                if isinstance(v, dict) and v.get("broker_signal")
-            )
-            n_ob = sum(
-                1
-                for v in snap.get("tickers", {}).values()
-                if isinstance(v, dict) and v.get("order_book")
-            )
-            extras = [f"ob={n_ob}/{len(resolved_tickers)}"]
-            if broker_confirm:
-                extras.append(f"broker={n_broker}/{len(resolved_tickers)}")
-            typer.echo(f"  {at}  {n_ok}/{len(resolved_tickers)} tickers OK  " + "  ".join(extras))
-    finally:
-        lock_file.unlink(missing_ok=True)
+    typer.echo(f"Captured {len(snapshots)} database track snapshots")
+    for snap in snapshots:
+        at = snap.get("captured_at", "?")[:19]
+        n_ok = sum(1 for v in snap.get("tickers", {}).values() if v and "error" not in v)
+        n_broker = sum(
+            1
+            for v in snap.get("tickers", {}).values()
+            if isinstance(v, dict) and v.get("broker_signal")
+        )
+        n_ob = sum(
+            1
+            for v in snap.get("tickers", {}).values()
+            if isinstance(v, dict) and v.get("order_book")
+        )
+        extras = [f"ob={n_ob}/{len(resolved_tickers)}"]
+        if broker_confirm:
+            extras.append(f"broker={n_broker}/{len(resolved_tickers)}")
+        typer.echo(
+            f"  {at}  {n_ok}/{len(resolved_tickers)} tickers OK  "
+            + "  ".join(extras)
+        )

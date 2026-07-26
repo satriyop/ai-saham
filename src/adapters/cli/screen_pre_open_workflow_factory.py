@@ -54,10 +54,10 @@ from src.infrastructure.composition.signal_engine_factory import create_signal_e
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.market_context_factory import evaluate_market_context
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
-from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
-    SQLiteCandidateObservationsRepository,
-)
 from src.infrastructure.persistence.sqlite_iev_repository import SQLiteIEVRepository
+from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
+    SQLiteLearningArtifactRepository,
+)
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 
@@ -264,7 +264,7 @@ def create_pre_open_cli_workflow(
         run_snapshot_screen=run_snapshot_screen,
         locked_iev_baseline_provider=iev_repo,
     )
-    observations_repo = SQLiteCandidateObservationsRepository(resolved_db)
+    observations_repo = SQLiteLearningArtifactRepository(resolved_db)
     record_observations = RecordPreOpenObservationsUseCase(
         workflow_use_case=workflow,
         observation_persister=PreOpenObservationPersister(

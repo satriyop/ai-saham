@@ -18,7 +18,7 @@ from typing import Annotated, Optional
 import typer
 
 from src.adapters.cli.pre_open_sidecar_writer import write_pre_open_sidecar
-from src.adapters.cli.research_pre_open_paths import opening_day_dir, parse_session_date
+from src.adapters.cli.research_pre_open_paths import parse_session_date
 from src.adapters.cli.screen_pre_open_workflow_factory import (
     create_pre_open_cli_workflow,
     resolve_pre_open_browser_plan,
@@ -28,7 +28,6 @@ from src.application.services.pre_open_observation_payload import (
     PRE_OPEN_OBSERVATION_CONTRACT,
 )
 from src.application.services.pre_open_run_guard import build_pre_open_run_guard
-from src.application.use_case.opening_grade_use_case import OPENING_DATA_DIR
 from src.application.use_case.pre_open_workflow_use_case import PreOpenWorkflowRequest
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.infrastructure.browser.stockbit_browser_provider import ManualBrowserDataProvider
@@ -96,11 +95,10 @@ def pre_open_capture(
     ] = "table",
 ) -> None:
     """
-    Save pre-open decisions into candidate_observations (screen_pre_open).
+    Save pre-open decisions into database-owned learning observations.
 
     Sole decision authority write for the opening learning loop (clean break).
-    Also writes same-run ops packaging: data/opening/YYYYMMDD/ops_session.json
-    and trade-confirm sidecar. Does not generate open_30m labels
+    Also writes the unrelated trade-confirm sidecar. Does not generate open_30m labels
     (use ``research pre-open labels``).
 
     Examples:
@@ -188,7 +186,6 @@ def pre_open_capture(
     try:
         result = cli_workflow.record_observations_use_case.execute(
             workflow_request,
-            opening_data_dir=OPENING_DATA_DIR,
         )
     except Exception as e:
         typer.echo(f"Capture failed: {e}", err=True)
@@ -206,7 +203,6 @@ def pre_open_capture(
     except Exception as e:
         typer.echo(f"Warning: trade-confirm sidecar not written: {e}", err=True)
 
-    day = opening_day_dir(run_date)
     payload = {
         "artifact_type": "pre_open_observation_capture",
         "session": run_date.isoformat(),
@@ -216,8 +212,6 @@ def pre_open_capture(
         "source_status": result.response.source_status.value,
         "workflow": "screen_pre_open",
         "observation_contract": PRE_OPEN_OBSERVATION_CONTRACT,
-        "ops_export_path": result.ops_export_path,
-        "ops_day_dir": str(day),
     }
     if fmt == "json":
         typer.echo(json.dumps(payload, indent=2))
@@ -230,8 +224,6 @@ def pre_open_capture(
     typer.echo(f"  filter_rejects:    {payload['filter_reject_count']}")
     typer.echo(f"  source_status:     {payload['source_status']}")
     typer.echo(f"  contract:          {PRE_OPEN_OBSERVATION_CONTRACT}")
-    if result.ops_export_path:
-        typer.echo(f"  ops export:        {result.ops_export_path}")
     typer.echo(
-        "  Next: research pre-open track → research pre-open grade | research pre-open labels"
+        "  Next: research pre-open track → research pre-open labels → evaluate"
     )

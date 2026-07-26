@@ -12,7 +12,6 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from src.application.services.pre_open_observation_payload import (
-    PRE_OPEN_OBSERVATION_CONTRACT,
     PRE_OPEN_WORKFLOW,
     build_pre_open_observation_payload,
     compute_pre_open_config_hash,
@@ -23,8 +22,12 @@ from src.application.services.signal_engine_config import (
     PreOpenDirectionalBaselineConfig,
     SignalClassificationConfig,
 )
-from src.domain.ports.candidate_observations_repository import CandidateObservation
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
+from src.domain.value_objects.learning_artifacts import (
+    AssessmentPurpose,
+    LearningContractId,
+    LearningObservation,
+)
 from src.domain.value_objects.pre_open_signal_evidence import AuctionNcpProvenance
 
 if TYPE_CHECKING:
@@ -32,8 +35,8 @@ if TYPE_CHECKING:
         PreOpenWorkflowRequest,
         PreOpenWorkflowResponse,
     )
-    from src.domain.ports.candidate_observations_repository import (
-        CandidateObservationsRepository,
+    from src.domain.ports.learning_artifact_repositories import (
+        LearningObservationRepository,
     )
 
 
@@ -42,7 +45,7 @@ class PreOpenObservationPersister:
 
     def __init__(
         self,
-        repository: "CandidateObservationsRepository | None",
+        repository: "LearningObservationRepository | None",
         signal_config: PreOpenDirectionalBaselineConfig | None = None,
         classification_config: SignalClassificationConfig | None = None,
     ) -> None:
@@ -103,7 +106,7 @@ class PreOpenObservationPersister:
             top_n=request.config.top_n,
         )
 
-        observations: list[CandidateObservation] = []
+        observations: list[LearningObservation] = []
         capture_phase = response.capture_phase
 
         def _row(
@@ -114,7 +117,7 @@ class PreOpenObservationPersister:
             sig: object | None,
             risk: object | None,
             trade: object | None,
-        ) -> CandidateObservation:
+        ) -> LearningObservation:
             payload = build_pre_open_observation_payload(
                 ticker=ticker,
                 snapshot_date=response.result.screened_date,
@@ -132,21 +135,26 @@ class PreOpenObservationPersister:
                 source_snapshot_ref=response.source_snapshot_ref,
                 iev_min=response.result.iev_min,
             )
-            return CandidateObservation(
-                ticker=ticker,
-                snapshot_date=response.result.screened_date,
+            payload["observation_contract"] = (
+                LearningContractId.PRE_OPEN_OBSERVATION.value
+            )
+            payload["provenance"] = {
+                "workflow": PRE_OPEN_WORKFLOW,
+                "config_hash": config_hash,
+                "decision_at": decision_at.isoformat(),
+                "collection_started_at": collection_started_at.isoformat(),
+                "decision_snapshot_ref": decision_snapshot_ref,
+            }
+            return LearningObservation.create(
+                purpose=AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION,
+                policy_contract="pre_open_directional_baseline.v1",
+                horizon_contract="open_30m",
+                compatibility_id=str(compat),
+                cutoff_at=decision_at,
+                universe_id=f"iev:{response.result.screened_date.isoformat()}",
+                window_id=f"{ticker}:{response.result.screened_date.isoformat()}",
+                decision_payload=payload,
                 captured_at=now,
-                payload=payload,
-                workflow=PRE_OPEN_WORKFLOW,
-                window_sessions=0,
-                data_as_of_date=response.result.screened_date,
-                config_hash=config_hash,
-                decision_at=decision_at,
-                latest_completed_session=response.result.screened_date,
-                analysis_as_of=response.result.screened_date,
-                market_session_name="pre_open",
-                observation_contract=PRE_OPEN_OBSERVATION_CONTRACT,
-                semantic_compatibility_id=compat,
             )
 
         for candidate in candidates:
@@ -198,6 +206,4 @@ class PreOpenObservationPersister:
                 )
             )
 
-        # Fail closed: save_many errors propagate
-        self._repo.save_many(observations)
-        return len(observations)
+        return sum(self._repo.add_observation(observation) for observation in observations)
