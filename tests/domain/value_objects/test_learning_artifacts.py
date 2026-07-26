@@ -1,0 +1,117 @@
+from datetime import datetime, timezone
+
+import pytest
+
+from src.domain.value_objects.learning_artifacts import (
+    AssessmentPurpose,
+    EvaluationMethod,
+    EvaluationReadiness,
+    LabelAvailability,
+    LearningContractError,
+    LearningContractId,
+    LearningEvaluation,
+    LearningObservation,
+    LearningOutcomeLabel,
+    OutcomeBasis,
+    ValidationStatus,
+    stable_learning_id,
+)
+
+NOW = datetime(2026, 7, 27, 1, 0, tzinfo=timezone.utc)
+
+
+def _observation(*, captured_at: datetime = NOW) -> LearningObservation:
+    return LearningObservation.create(
+        purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+        policy_contract="accumulation.policy.v1",
+        horizon_contract="accum_20d",
+        compatibility_id="compat-1",
+        cutoff_at=NOW,
+        universe_id="idx30",
+        window_id="BBCA:2026-07-27",
+        decision_payload={"funnel": "PASS", "score": 72.0},
+        captured_at=captured_at,
+    )
+
+
+def test_observation_id_is_deterministic_and_excludes_captured_at() -> None:
+    later = datetime(2026, 7, 27, 2, 0, tzinfo=timezone.utc)
+
+    assert _observation().observation_id == _observation(captured_at=later).observation_id
+
+
+def test_identity_rejects_captured_at() -> None:
+    with pytest.raises(LearningContractError, match="must not participate"):
+        stable_learning_id(
+            LearningContractId.ACCUMULATION_OBSERVATION,
+            {"captured_at": NOW},
+        )
+
+
+@pytest.mark.parametrize(
+    ("enum_type", "removed"),
+    [
+        (AssessmentPurpose, "SIGNAL_COHORT"),
+        (EvaluationMethod, "SIGNAL_COHORT"),
+        (OutcomeBasis, "raw_market"),
+        (OutcomeBasis, "executable"),
+    ],
+)
+def test_removed_contract_names_are_rejected(enum_type: type, removed: str) -> None:
+    with pytest.raises(ValueError):
+        enum_type(removed)
+
+
+def test_price_path_evaluation_cannot_be_policy_review_eligible() -> None:
+    with pytest.raises(LearningContractError, match="PRICE_PATH_ONLY"):
+        LearningEvaluation.create(
+            purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+            method=EvaluationMethod.FORWARD_OUTCOME_COHORT,
+            compatibility_id="compat-1",
+            dataset_fingerprint="dataset-1",
+            split_contract="chronological.v1",
+            population={"observation_ids": [_observation().observation_id]},
+            exclusions={},
+            metrics={"average_return": 1.2},
+            outcome_basis=OutcomeBasis.PRICE_PATH_ONLY,
+            readiness=EvaluationReadiness.POLICY_REVIEW_ELIGIBLE,
+            evaluated_at=NOW,
+        )
+
+
+def test_purpose_and_evaluation_method_are_separate_and_compatible() -> None:
+    with pytest.raises(LearningContractError, match="incompatible"):
+        LearningEvaluation.create(
+            purpose=AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION,
+            method=EvaluationMethod.PORTFOLIO_WALK_FORWARD,
+            compatibility_id="compat-1",
+            dataset_fingerprint="dataset-1",
+            split_contract="chronological.v1",
+            population={"sessions": 2},
+            exclusions={},
+            metrics={},
+            outcome_basis=OutcomeBasis.PRICE_PATH_ONLY,
+            readiness=EvaluationReadiness.DESCRIPTIVE_READY,
+            evaluated_at=NOW,
+        )
+
+
+def test_available_label_requires_outcome() -> None:
+    with pytest.raises(LearningContractError, match="requires an outcome"):
+        LearningOutcomeLabel.create(
+            contract_id=LearningContractId.ACCUMULATION_LABEL,
+            observation_id=_observation().observation_id,
+            outcome_basis=OutcomeBasis.PRICE_PATH_ONLY,
+            availability=LabelAvailability.AVAILABLE,
+            outcome=None,
+            metrics={},
+            fingerprint="fingerprint",
+            labeled_at=NOW,
+        )
+
+
+def test_validation_status_values_are_strict() -> None:
+    assert ValidationStatus("PASS") is ValidationStatus.PASS
+    with pytest.raises(ValueError):
+        ValidationStatus("ELIGIBLE")
+
