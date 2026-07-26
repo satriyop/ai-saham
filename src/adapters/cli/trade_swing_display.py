@@ -2,7 +2,7 @@
 Display helpers for saham trade backtest-swing command.
 
 Facade that orchestrates backtest summary, trades, regime performance,
-and delegates attribution/tuning displays to dedicated modules.
+and delegates attribution display to its dedicated module.
 
 Layer: Adapter
 """
@@ -15,9 +15,6 @@ from rich.text import Text
 from src.adapters.cli.rich_display import compact_table, console, panel
 from src.adapters.cli.trade_swing_attribution_display import display_swing_attribution
 from src.adapters.cli.trade_swing_display_formatters import _fmt_pct
-from src.adapters.cli.trade_swing_tuning_diff_display import display_swing_tuning_config_diff
-from src.adapters.cli.trade_swing_tuning_plan_display import display_swing_tuning_plan
-from src.adapters.cli.trade_swing_tuning_proposal_display import display_swing_tuning_proposal
 from src.application.use_case.swing_backtest_use_case import SwingBacktestResponse
 
 
@@ -25,9 +22,6 @@ def display_swing_backtest(
     response: SwingBacktestResponse,
     show_trades: int,
     show_attribution: bool = False,
-    show_tuning_plan: bool = False,
-    show_tuning_proposal: bool = False,
-    show_tuning_diff: bool = False,
 ) -> None:
     # Summary panel
     summary_table = compact_table(show_header=False)
@@ -163,18 +157,6 @@ def display_swing_backtest(
     # Attribution (delegated)
     if show_attribution:
         display_swing_attribution(response)
-
-    # Tuning Plan (delegated)
-    if show_tuning_plan:
-        display_swing_tuning_plan(response)
-
-    # Tuning Proposal (delegated)
-    if show_tuning_proposal:
-        display_swing_tuning_proposal(response)
-
-    # Tuning Config Diff (delegated)
-    if show_tuning_diff:
-        display_swing_tuning_config_diff(response)
 
     # Warnings & Footnotes (Panel 4)
     warnings_list = []

@@ -1,7 +1,7 @@
 """
 Static, deterministic source-field contract catalog for DQ-001A/DQ-001C.
 
-Names concrete SQLite columns for the core market/broker/observation/label
+Names concrete SQLite columns for the core market/broker/learning-artifact
 tables (DQ-001A) and enrichment/source-context tables (DQ-001C), so this
 lives in infrastructure. Application receives the resulting
 SourceFieldContract objects through injection and never sees column names
@@ -27,8 +27,13 @@ _AUDITED_TABLES: tuple[str, ...] = (
     "candles",
     "broker_summaries",
     "broker_daily_flow",
-    "candidate_observations",
-    "signal_forward_labels",
+    "learning_observations",
+    "learning_track_snapshots",
+    "learning_outcome_labels",
+    "learning_evaluations",
+    "learning_policy_proposals",
+    "learning_policy_validations",
+    "learning_policy_applications",
     "analyst_cache",
     "insider_cache",
     "company_fundamentals",
@@ -2243,12 +2248,98 @@ _STOCK_META_FIELDS = _table_fields(
     ),
 )
 
+def _learning_artifact_fields(
+    artifact_id: str,
+    event_time: str,
+    *references: str,
+) -> tuple[SourceFieldContract, ...]:
+    specs = (
+        _FieldSpec(
+            artifact_id,
+            "Stable learning artifact identity",
+            "sha256",
+            "fail",
+            None,
+            "immutable relational identity",
+            "identity is mandatory",
+        ),
+        _FieldSpec(
+            "artifact_digest",
+            "Canonical learning artifact digest",
+            "sha256",
+            "fail",
+            None,
+            "immutable payload integrity",
+            "digest is mandatory",
+        ),
+        _FieldSpec(
+            "schema_version",
+            "Learning contract schema version",
+            "integer",
+            "fail",
+            None,
+            "contract version at insertion",
+            "schema version is mandatory",
+        ),
+        _FieldSpec(
+            event_time,
+            "Learning artifact event time",
+            "ISO timestamp",
+            "fail",
+            None,
+            "artifact lifecycle event time",
+            "event time is mandatory",
+        ),
+        *(
+            _FieldSpec(
+                reference,
+                "Learning artifact foreign-key identity",
+                "sha256",
+                "fail",
+                None,
+                "immutable parent linkage",
+                "foreign-key identity is mandatory",
+            )
+            for reference in references
+        ),
+    )
+    return _table_fields(
+        "database-owned learning lifecycle",
+        "one immutable artifact per stable identity",
+        "HISTORICAL",
+        specs,
+    )
+
+
 _CATALOG: dict[str, tuple[SourceFieldContract, ...]] = {
     "candles": _CANDLES_FIELDS,
     "broker_summaries": _BROKER_SUMMARIES_FIELDS,
     "broker_daily_flow": _BROKER_DAILY_FLOW_FIELDS,
-    "candidate_observations": _CANDIDATE_OBSERVATIONS_FIELDS,
-    "signal_forward_labels": _SIGNAL_FORWARD_LABELS_FIELDS,
+    "learning_observations": _learning_artifact_fields(
+        "observation_id", "captured_at"
+    ),
+    "learning_track_snapshots": _learning_artifact_fields(
+        "snapshot_id", "captured_at", "observation_id"
+    ),
+    "learning_outcome_labels": _learning_artifact_fields(
+        "label_id", "labeled_at", "observation_id"
+    ),
+    "learning_evaluations": _learning_artifact_fields(
+        "evaluation_id", "evaluated_at"
+    ),
+    "learning_policy_proposals": _learning_artifact_fields(
+        "proposal_id", "created_at", "source_evaluation_id"
+    ),
+    "learning_policy_validations": _learning_artifact_fields(
+        "validation_id",
+        "validated_at",
+        "proposal_id",
+        "baseline_evaluation_id",
+        "proposed_evaluation_id",
+    ),
+    "learning_policy_applications": _learning_artifact_fields(
+        "application_id", "applied_at", "proposal_id", "validation_id"
+    ),
     "analyst_cache": _ANALYST_CACHE_FIELDS,
     "insider_cache": _INSIDER_CACHE_FIELDS,
     "company_fundamentals": _COMPANY_FUNDAMENTALS_FIELDS,

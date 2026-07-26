@@ -36,16 +36,26 @@ _TABLE_CATALOG: dict[str, _TableAuditSpec] = {
     "candles": _TableAuditSpec("date", ("ticker", "date", "source")),
     "broker_summaries": _TableAuditSpec("date", ("ticker", "date", "source")),
     "broker_daily_flow": _TableAuditSpec("date", ("ticker", "date", "broker_code", "source")),
-    "candidate_observations": _TableAuditSpec(
-        "snapshot_date",
-        ("ticker", "snapshot_date", "workflow", "window_sessions", "data_as_of_date", "config_hash"),
+    "learning_observations": _TableAuditSpec(
+        "cutoff_at", ("observation_id", "artifact_digest")
     ),
-    # Task template suggests "snapshot_date"; the actual schema column is
-    # "signal_date" (sqlite_signal_forward_labels_repository.py). Using the
-    # verified column name rather than guessing a nonexistent one.
-    "signal_forward_labels": _TableAuditSpec(
-        "signal_date",
-        ("ticker", "signal_date", "horizon", "observation_captured_at"),
+    "learning_track_snapshots": _TableAuditSpec(
+        "sampled_at", ("snapshot_id", "observation_id")
+    ),
+    "learning_outcome_labels": _TableAuditSpec(
+        "labeled_at", ("label_id", "observation_id")
+    ),
+    "learning_evaluations": _TableAuditSpec(
+        "evaluated_at", ("evaluation_id", "dataset_fingerprint")
+    ),
+    "learning_policy_proposals": _TableAuditSpec(
+        "created_at", ("proposal_id", "source_evaluation_id")
+    ),
+    "learning_policy_validations": _TableAuditSpec(
+        "validated_at", ("validation_id", "proposal_id")
+    ),
+    "learning_policy_applications": _TableAuditSpec(
+        "applied_at", ("application_id", "proposal_id")
     ),
     "stock_meta": _TableAuditSpec("fetched_at", ("ticker", "fetched_at")),
     "analyst_cache": _TableAuditSpec("fetched_date", ("ticker", "fetched_date")),

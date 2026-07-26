@@ -12,6 +12,8 @@ Public command registration lives in lifecycle routers:
 Layer: Adapter
 """
 
+from __future__ import annotations
+
 import json
 from pathlib import Path
 from typing import Annotated, Optional
@@ -43,36 +45,12 @@ from src.application.use_case.build_seasonality_cleanup_plan_use_case import (
     BuildSeasonalityCleanupPlanUseCase,
     SeasonalityCleanupPlanResponse,
 )
-from src.application.use_case.audit_candidate_observation_identity_use_case import (
-    AuditCandidateObservationIdentityUseCase,
-    CandidateObservationIdentityAuditResponse,
-)
 from src.application.use_case.repair_seasonality_cache_use_case import (
     RepairSeasonalityCacheResponse,
     RepairSeasonalityCacheUseCase,
 )
-from src.application.use_case.repair_candidate_observations_use_case import (
-    RepairCandidateObservationsResponse,
-    RepairCandidateObservationsUseCase,
-)
-from src.application.use_case.repair_signal_forward_labels_use_case import (
-    RepairSignalForwardLabelsResponse,
-    RepairSignalForwardLabelsUseCase,
-)
 from src.infrastructure.persistence.sqlite_seasonality_cache_repairer import (
     SQLiteSeasonalityCacheRepairer,
-)
-from src.infrastructure.persistence.sqlite_candidate_observations_repair_reader import (
-    SQLiteCandidateObservationsRepairReader,
-)
-from src.infrastructure.persistence.sqlite_candidate_observations_repairer import (
-    SQLiteCandidateObservationsRepairer,
-)
-from src.infrastructure.persistence.sqlite_signal_forward_labels_repair_reader import (
-    SQLiteSignalForwardLabelsRepairReader,
-)
-from src.infrastructure.persistence.sqlite_signal_forward_labels_repairer import (
-    SQLiteSignalForwardLabelsRepairer,
 )
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.audit_config_identity_reader import (
@@ -99,9 +77,6 @@ from src.infrastructure.persistence.sqlite_source_field_contract_reader import (
 )
 from src.infrastructure.persistence.sqlite_seasonality_cleanup_plan_reader import (
     SQLiteSeasonalityCleanupPlanReader,
-)
-from src.infrastructure.persistence.sqlite_candidate_observation_identity_reader import (
-    SQLiteCandidateObservationIdentityReader,
 )
 from src.infrastructure.persistence.sqlite_source_reconciliation_reader import (
     SQLiteSourceReconciliationReader,
@@ -301,145 +276,12 @@ def repair_seasonality_cache(
     )
 
 
-def candidate_observation_identity(
-    db_path: Annotated[
-        Optional[Path],
-        typer.Option("--db", help="SQLite database path"),
-    ] = None,
-    output_format: Annotated[
-        str,
-        typer.Option("--format", help="Output format: table or json."),
-    ] = "json",
-) -> None:
-    """
-    Read-only DQ-001I identity audit for candidate_observations.
-
-    Reports how many rows are legacy (empty config_hash), how many are
-    canonical, whether the latest snapshot depends on legacy rows, and
-    whether duplicate identity groups exist among canonical rows.
-    Report command only — always exits 0, never mutates the database.
-    """
-    if output_format not in _VALID_FORMATS:
-        raise typer.BadParameter(
-            f"--format must be one of {_VALID_FORMATS}, got '{output_format}'."
-        )
-    _run_candidate_observation_identity(db_path=db_path, output_format=output_format)
-
-
-def repair_candidate_observations(
-    db_path: Annotated[
-        Optional[Path],
-        typer.Option("--db", help="SQLite database path"),
-    ] = None,
-    dry_run: Annotated[
-        bool,
-        typer.Option("--dry-run", help="Dry-run mode: report only, no mutation."),
-    ] = False,
-    apply: Annotated[
-        bool,
-        typer.Option("--apply", help="Apply mode: quarantine and delete legacy rows."),
-    ] = False,
-    output_format: Annotated[
-        str,
-        typer.Option("--format", help="Output format: table or json."),
-    ] = "json",
-) -> None:
-    """
-    Repair legacy candidate_observations rows by quarantining them (DQ-001J).
-
-    Legacy = config_hash IS NULL or empty after trim (or the config_hash
-    column is missing entirely, in which case every row is legacy).
-
-    Default mode is dry-run: reports legacy rows without mutating the
-    database. Dry-run may use the configured default database.
-
-    Mutation requires both --apply and an explicit --db PATH; --apply without
-    an explicit --db is rejected so the configured default database can never
-    be mutated implicitly.
-
-    Never deletes rows without quarantining them first. The quarantine
-    table preserves the full original row plus reason, repair_run_id, and
-    a timestamp.
-    """
-    if dry_run and apply:
-        raise typer.BadParameter(
-            "Cannot use both --dry-run and --apply. "
-            "Default (no flag) is dry-run."
-        )
-    _require_explicit_db_for_apply(apply=apply, db_path=db_path)
-    if output_format not in _VALID_FORMATS:
-        raise typer.BadParameter(
-            f"--format must be one of {_VALID_FORMATS}, got '{output_format}'."
-        )
-    _run_repair_candidate_observations(
-        db_path=db_path, apply=apply, output_format=output_format
-    )
-
-
-def repair_signal_forward_labels(
-    db_path: Annotated[
-        Optional[Path],
-        typer.Option("--db", help="SQLite database path"),
-    ] = None,
-    dry_run: Annotated[
-        bool,
-        typer.Option("--dry-run", help="Dry-run mode: report only, no mutation."),
-    ] = False,
-    apply: Annotated[
-        bool,
-        typer.Option("--apply", help="Apply mode: quarantine and delete orphan rows."),
-    ] = False,
-    output_format: Annotated[
-        str,
-        typer.Option("--format", help="Output format: table or json."),
-    ] = "json",
-) -> None:
-    """
-    Repair orphan signal_forward_labels rows by quarantining them (DQ-001L).
-
-    Orphan = a signal_forward_labels row whose (ticker, signal_date,
-    observation_captured_at) has no matching (ticker, snapshot_date,
-    captured_at) row in candidate_observations.
-
-    If candidate_observations is missing or lacks the required join
-    columns, no mutation is performed — a missing other side is not
-    proof of orphanhood.
-
-    Default mode is dry-run: reports orphan rows without mutating the
-    database. Dry-run may use the configured default database.
-
-    Mutation requires both --apply and an explicit --db PATH; --apply without
-    an explicit --db is rejected so the configured default database can never
-    be mutated implicitly.
-
-    Never deletes rows without quarantining them first.  The quarantine
-    table preserves the full original row plus reason, repair_run_id,
-    and a timestamp.
-    """
-    if dry_run and apply:
-        raise typer.BadParameter(
-            "Cannot use both --dry-run and --apply. "
-            "Default (no flag) is dry-run."
-        )
-    _require_explicit_db_for_apply(apply=apply, db_path=db_path)
-    if output_format not in _VALID_FORMATS:
-        raise typer.BadParameter(
-            f"--format must be one of {_VALID_FORMATS}, got '{output_format}'."
-        )
-    _run_repair_signal_forward_labels(
-        db_path=db_path, apply=apply, output_format=output_format
-    )
-
-
 data_app.command("manifest")(manifest)
 data_app.command("source-contracts")(source_contracts)
 data_app.command("reconcile-sources")(reconcile_sources)
 data_app.command("contract-gate")(contract_gate)
 data_app.command("seasonality-cleanup-plan")(seasonality_cleanup_plan)
 data_app.command("repair-seasonality-cache")(repair_seasonality_cache)
-data_app.command("candidate-observation-identity")(candidate_observation_identity)
-data_app.command("repair-candidate-observations")(repair_candidate_observations)
-data_app.command("repair-signal-forward-labels")(repair_signal_forward_labels)
 audit_app.add_typer(data_app, name="data")
 
 

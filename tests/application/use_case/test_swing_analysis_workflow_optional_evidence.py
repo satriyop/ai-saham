@@ -8,7 +8,7 @@ from src.domain.value_objects.setup_phase import SetupPhaseState
 from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from tests.application.use_case.swing_analysis_workflow_fixtures import (
     FakeBrokerRepository,
-    FakeCandidateObservationsRepository,
+    FakeLearningObservationsRepository,
     FakeMarketRepository,
     FakeRegistry,
     _breakout_candles,
@@ -60,7 +60,7 @@ def test_swing_analysis_workflow_can_emit_breakout_confirmation_with_local_volum
         resolve_setup_targets=lambda regime, config: (Decimal("5"), Decimal("5")),
         rules_loader=RulesYamlLoader(),
         signal_evidence_context_builder=_fake_signal_evidence_context_builder(),
-        candidate_observations_repository=FakeCandidateObservationsRepository(
+        candidate_observations_repository=FakeLearningObservationsRepository(
             ("ACCUMULATION", "COMPRESSION")
         ),
     )

@@ -39,13 +39,11 @@ class StorageConfig:
     db_path: str = "data/db/data.db"
     accum_journal: str = "journals/accumulation.csv"
     trade_journal: str = "journals/trades.jsonl"
-    swing_tuning_review_journal: str = "journals/swing_tuning_reviews.jsonl"
     stockbit_profile_dir: str = ".stockbit_profile"
     stockbit_session_file: str = "stockbit_session.json"
     intraday_sidecar: str = "data/session/.last-session.json"
     intraday_confirmation: str = "data/session/.last-confirmation.json"
     intraday_confirmation_journal: str = "journals/intraday_confirmations.csv"
-    opening_data_dir: str = "data/opening"
 
 
 @dataclass(frozen=True)

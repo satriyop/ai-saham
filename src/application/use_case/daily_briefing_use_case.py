@@ -5,7 +5,6 @@ Layer: Application
 AI usage: None
 """
 
-import json
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
@@ -39,11 +38,15 @@ from src.application.use_case.daily_setup_lens_impact_use_case import (
 )
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
+from src.domain.ports.learning_artifact_repositories import (
+    LearningObservationRepository,
+)
 from src.domain.value_objects.data_freshness_status import (
     DataFreshnessStatus,
     SourceFreshnessState,
 )
 from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
+from src.domain.value_objects.learning_artifacts import AssessmentPurpose
 
 if TYPE_CHECKING:
     from src.domain.value_objects.market_context import MarketContext
@@ -91,7 +94,6 @@ class DailyBriefingRequest:
     universe: str = "lq45"
     top: int = 3
     as_of_date: date | None = None
-    opening_data_dir: Path = Path("data/opening")
     universe_config_path: Path = Path("config/universes.yaml")
 
 
@@ -129,6 +131,7 @@ class DailyBriefingUseCase:
         regime_use_case,
         accumulation_use_case: AccumulationScreenUseCase,
         universe_loader: UniverseConfigLoader,
+        learning_observation_repository: LearningObservationRepository | None = None,
         setup_lens_impact_use_case: DailySetupLensImpactUseCase | None = None,
         session_resolver: EffectiveMarketSessionResolver | None = None,
     ) -> None:
@@ -137,6 +140,7 @@ class DailyBriefingUseCase:
         self._regime_uc = regime_use_case
         self._accumulation_uc = accumulation_use_case
         self._universe_loader = universe_loader
+        self._learning_observation_repository = learning_observation_repository
         self._setup_lens_impact_uc = setup_lens_impact_use_case
         self._session_resolver = session_resolver or EffectiveMarketSessionResolver(
             market_repository
@@ -510,11 +514,9 @@ class DailyBriefingUseCase:
         universe_tickers: list[str],
         warnings: list[str],
     ) -> OpeningBriefingSnapshot:
-        day_dir = request.opening_data_dir / live_session_date.strftime("%Y%m%d")
-        path = day_dir / "ops_session.json"
-        if not path.exists():
+        if self._learning_observation_repository is None:
             warnings.append(
-                f"No opening ops session at {path} "
+                "No database-owned pre-open observation repository is configured "
                 "(run: saham research pre-open capture)"
             )
             return OpeningBriefingSnapshot(
@@ -523,66 +525,41 @@ class DailyBriefingUseCase:
                 snapshot_date=None,
             )
 
-        try:
-            data = json.loads(path.read_text())
-        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-            warnings.append(f"Opening snapshot unreadable: {exc}")
-            return OpeningBriefingSnapshot(
-                candidates=[],
-                market_wide_observations=[],
-                snapshot_date=None,
+        observations = self._learning_observation_repository.list_observations(
+            AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION
+        )
+        rows = [
+            dict(observation.decision_payload)
+            for observation in observations
+            if observation.cutoff_at.date() == live_session_date
+        ]
+        if not rows:
+            warnings.append(
+                "No database-owned pre-open observations for "
+                f"{live_session_date.isoformat()} "
+                "(run: saham research pre-open capture)"
             )
-
-        if not isinstance(data, dict):
-            raise TypeError("opening snapshot root must be a mapping")
-
-        snapshot_date = None
-        if "captured_at" not in data:
-            snapshot_date = live_session_date
-        else:
-            captured_at = data["captured_at"]
-            if captured_at is None:
-                snapshot_date = live_session_date
-            else:
-                try:
-                    captured_date = datetime.fromisoformat(str(captured_at)).date()
-                    snapshot_date = captured_date
-                    if captured_date != live_session_date:
-                        warnings.append(
-                            f"Opening snapshot capture date is {captured_date.isoformat()}"
-                        )
-                except ValueError:
-                    warnings.append("Opening snapshot capture timestamp is invalid")
-                    snapshot_date = None
+            return OpeningBriefingSnapshot([], [], None)
 
         universe_set = {ticker.upper() for ticker in universe_tickers}
         candidates = []
         market_wide_observations = []
 
-        rows = data.get("candidates", [])
-        if not isinstance(rows, list):
-            raise TypeError("opening snapshot candidates must be a list")
-
         for row in rows:
-            if not isinstance(row, dict):
-                raise TypeError("opening snapshot candidate must be a mapping")
             ticker = row.get("ticker")
             if not ticker:
                 continue
             ticker_upper = str(ticker).upper()
-            # Prefer TradeSetup.action from ops export; never invent PRIME.
-            action_label = (
-                row.get("trade_setup_action")
-                or row.get("action")
-                or "?"
-            )
+            candidate_payload = row.get("candidate") or {}
+            trade_setup = row.get("trade_setup") or {}
+            action_label = trade_setup.get("action") or "?"
             candidate = OpeningBriefingCandidate(
                 ticker=ticker_upper,
                 opening_setup=str(action_label),
-                iev=row.get("iev"),
-                iep=row.get("iep"),
-                trend=row.get("trend"),
-                accum_score=row.get("accum_score", row.get("accum_score")),
+                iev=candidate_payload.get("iev"),
+                iep=candidate_payload.get("iep"),
+                trend=candidate_payload.get("trend"),
+                accum_score=candidate_payload.get("accum_score"),
             )
             if ticker_upper in universe_set:
                 candidates.append(candidate)
@@ -592,5 +569,5 @@ class DailyBriefingUseCase:
         return OpeningBriefingSnapshot(
             candidates=candidates[: request.top],
             market_wide_observations=market_wide_observations[: request.top],
-            snapshot_date=snapshot_date,
+            snapshot_date=live_session_date,
         )

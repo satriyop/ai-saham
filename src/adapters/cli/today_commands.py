@@ -62,6 +62,9 @@ from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
+from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
+    SQLiteLearningArtifactRepository,
+)
 
 
 def _parse_date(value: str | None) -> date | None:
@@ -347,6 +350,7 @@ def today(
             signal_engine=create_signal_engine(db_path=db_path, with_enrichment=True),
         ),
         universe_loader=YamlUniverseConfigLoader(),
+        learning_observation_repository=SQLiteLearningArtifactRepository(db_path),
         setup_lens_impact_use_case=_build_setup_lens_impact_use_case(
             db_path=db_path,
             cfg=cfg,

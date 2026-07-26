@@ -32,13 +32,11 @@ swing:
 #   db_path: "~/.ai-saham/data.db"  # move database to home dir
 #   accum_journal: "~/.ai-saham/journals/accumulation.csv"
 #   trade_journal: "~/.ai-saham/journals/trades.jsonl"
-#   swing_tuning_review_journal: "~/.ai-saham/journals/swing_tuning_reviews.jsonl"
 #   stockbit_profile_dir: "~/.ai-saham/.stockbit_profile"
 #   stockbit_session_file: "~/.ai-saham/stockbit_session.json"
 #   intraday_sidecar: "~/.ai-saham/journals/.last-session.json"
 #   intraday_confirmation: "~/.ai-saham/journals/.last-confirmation.json"
 #   intraday_confirmation_journal: "~/.ai-saham/journals/intraday-confirmations.csv"
-#   opening_data_dir: "~/.ai-saham/data/opening"
 
 # config_paths:
 #   pre_open_screener: "~/.ai-saham/config/pre_open_screener.yaml"

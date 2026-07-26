@@ -12,11 +12,6 @@ import typer
 
 from src.adapters.cli.trade_swing_backtest_runner import _run_swing_backtest
 from src.adapters.cli.trade_swing_display import display_swing_backtest
-from src.application.services.swing_tuning_contracts import (
-    build_tuning_config_diff_draft,
-    build_tuning_proposal_draft,
-    build_tuning_readiness_plan,
-)
 from src.application.use_case.swing_backtest_use_case import (
     FOREIGN_BOUNCE_SETUP as BACKTEST_FOREIGN_BOUNCE_SETUP,
 )
@@ -24,9 +19,6 @@ from src.application.use_case.swing_backtest_use_case import (
     SwingBacktestResponse,
 )
 from src.infrastructure.config.app_config import load_app_config
-from src.infrastructure.config.swing_tuning_document_loader import (
-    swing_tuning_document_loader,
-)
 
 
 def _swing_backtest_payload(response: SwingBacktestResponse) -> dict:
@@ -149,30 +141,6 @@ def swing_backtest(
             help="Show deterministic grouped attribution summary for tuning",
         ),
     ] = False,
-    with_tuning_plan: Annotated[
-        bool,
-        typer.Option(
-            "--with-tuning-plan",
-            help="Show deterministic tuning readiness plan; no AI or YAML changes",
-        ),
-    ] = False,
-    with_tuning_proposal: Annotated[
-        bool,
-        typer.Option(
-            "--with-tuning-proposal",
-            help="Show deterministic dry-run tuning proposal targets; no YAML diff",
-        ),
-    ] = False,
-    with_tuning_diff: Annotated[
-        bool,
-        typer.Option(
-            "--with-tuning-diff",
-            help=(
-                "Show guarded dry-run tuning config diff with current/proposed "
-                "values; no apply"
-            ),
-        ),
-    ] = False,
     output_format: Annotated[
         Optional[str],
         typer.Option("--format", help="Output format: table or json"),
@@ -244,21 +212,6 @@ def swing_backtest(
 
     if output_format == "json":
         payload = _swing_backtest_payload(response)
-        if with_tuning_plan:
-            payload["tuning_plan"] = build_tuning_readiness_plan(
-                response.attribution_summary
-            ).to_dict()
-        if with_tuning_proposal:
-            payload["tuning_proposal"] = build_tuning_proposal_draft(
-                response.attribution_summary
-            ).to_dict()
-        if with_tuning_diff:
-            active_setups_bs = frozenset({response.setup}) if response.setup else None
-            payload["tuning_config_diff"] = build_tuning_config_diff_draft(
-                response.attribution_summary,
-                document_loader=swing_tuning_document_loader(),
-                active_setups=active_setups_bs,
-            ).to_dict()
         typer.echo(json.dumps(payload, indent=2, default=str))
         return
 
@@ -266,7 +219,4 @@ def swing_backtest(
         response,
         show_trades=show_trades,
         show_attribution=with_attribution,
-        show_tuning_plan=with_tuning_plan,
-        show_tuning_proposal=with_tuning_proposal,
-        show_tuning_diff=with_tuning_diff,
     )

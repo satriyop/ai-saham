@@ -31,13 +31,11 @@ storage:
   db_path: "data/db/data.db"                         # SQLite path (relative to CWD, or absolute with ~)
   accum_journal: "journals/accumulation.csv"  # Accumulation screener results log
   trade_journal: "journals/trades.jsonl"     # Portfolio trade log (JSON Lines format)
-  swing_tuning_review_journal: "journals/swing_tuning_reviews.jsonl"  # Saved swing tuning reviews
   stockbit_profile_dir: ".stockbit_profile"   # Playwright browser profile directory
   stockbit_session_file: "stockbit_session.json"  # Session marker and credentials file
   intraday_sidecar: "data/session/.last-session.json"  # Last intraday session state sidecar
   intraday_confirmation: "data/session/.last-confirmation.json"  # Last intraday order confirmation temp file
   intraday_confirmation_journal: "journals/intraday_confirmations.csv"  # Intraday trades execution journal
-  opening_data_dir: "data/opening"           # Intraday learning loop data directory
 
 # ── Config Paths ───────────────────────────────────────────────────────────
 config_paths:

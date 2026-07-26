@@ -27,11 +27,8 @@ from src.application.services.swing_backtest_attribution_buckets import (
     candidate_attribution_buckets,
     trade_attribution_buckets,
 )
-from src.application.services.swing_tuning_target_catalog import (
-    DEFAULT_TUNING_TARGETS,  # noqa: F401  # re-export
-)
-
 MIN_TUNING_SAMPLE_SIZE = 30
+DEFAULT_TUNING_TARGETS: tuple = ()
 
 
 def _build_sample_quality(

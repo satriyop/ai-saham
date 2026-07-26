@@ -6,11 +6,7 @@ from typing import Any
 
 
 def _default_tuning_targets() -> tuple:
-    from src.application.services.swing_tuning_target_catalog import (
-        DEFAULT_TUNING_TARGETS,
-    )
-
-    return DEFAULT_TUNING_TARGETS
+    return ()
 
 
 def _default_sample_quality() -> Any:

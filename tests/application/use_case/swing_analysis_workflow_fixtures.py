@@ -9,7 +9,11 @@ from src.application.services.signal_evidence_execution_context_builder import (
 )
 from src.application.use_case.swing_analysis_workflow_use_case import SwingAnalysisWorkflowUseCase
 from src.domain.entities.candle import Candle
-from src.domain.ports.candidate_observations_repository import CandidateObservation
+from src.domain.value_objects.learning_artifacts import (
+    AssessmentPurpose,
+    LearningObservation,
+)
+from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 
 
@@ -37,30 +41,32 @@ class FakeBrokerRepository:
         return []
 
 
-class FakeCandidateObservationsRepository:
+class FakeLearningObservationsRepository:
     def __init__(self, phases: tuple[str, ...]) -> None:
         self._phases = phases
 
-    def save_many(self, observations, *, risk_records=None):
-        raise AssertionError("not used")
-
-    def get_latest(self, ticker, snapshot_date):
-        raise AssertionError("not used")
-
-    def get_at(self, ticker, snapshot_date, captured_at):
-        raise AssertionError("not used")
-
-    def list_recent(self, ticker, *, before_date=None, limit=20):
+    def list_observations(self, purpose, *, compatibility_id=None):
+        assert purpose is AssessmentPurpose.ACCUMULATION_DISCOVERY
         rows = []
         start = date(2026, 6, 1)
         for idx, phase in enumerate(self._phases):
             day = start + timedelta(days=idx)
             rows.append(
-                CandidateObservation(
-                    ticker=ticker.upper(),
-                    snapshot_date=day,
-                    captured_at=datetime(day.year, day.month, day.day, 9, 0, 0),
-                    payload={
+                LearningObservation.create(
+                    purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+                    policy_contract="test_policy.v1",
+                    horizon_contract="test_horizon",
+                    compatibility_id="test-cohort",
+                    cutoff_at=datetime(
+                        day.year, day.month, day.day, 9, 0, tzinfo=IDX_TIMEZONE
+                    ),
+                    universe_id="test",
+                    window_id=f"{idx}",
+                    captured_at=datetime(
+                        day.year, day.month, day.day, 9, 0, tzinfo=IDX_TIMEZONE
+                    ),
+                    decision_payload={
+                        "ticker": "BBCA",
                         "schema_version": 1,
                         "workflow": "screen_accum",
                         "sub_signal_fingerprint": {
@@ -70,7 +76,7 @@ class FakeCandidateObservationsRepository:
                     },
                 )
             )
-        return list(reversed(rows))[:limit]
+        return rows
 
 
 class FakeRegistry:

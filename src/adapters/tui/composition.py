@@ -145,8 +145,8 @@ from src.infrastructure.persistence.ihsg_trading_session_calendar_provider impor
     IHSGTradingSessionCalendarProvider,
 )
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
-from src.infrastructure.persistence.sqlite_candidate_observations_repository import (
-    SQLiteCandidateObservationsRepository,
+from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
+    SQLiteLearningArtifactRepository,
 )
 from src.infrastructure.persistence.sqlite_corporate_action_calendar_repository import (
     SQLiteCorporateActionCalendarRepository,
@@ -240,7 +240,6 @@ def _build_daily_request(config: AppConfig) -> DailyBriefingRequest:
         universe=config.analysis.universe,
         top=3,
         as_of_date=None,
-        opening_data_dir=Path("data/opening"),
         universe_config_path=Path("config/universes.yaml"),
     )
 
@@ -251,7 +250,7 @@ def _build_dependencies(config: AppConfig, db_path: Path) -> _StockDependencies:
         app_config=config,
         market_repository=SQLiteMarketRepository(db_path=db_path),
         broker_repository=SQLiteBrokerRepository(db_path),
-        observations_repository=SQLiteCandidateObservationsRepository(db_path),
+        observations_repository=SQLiteLearningArtifactRepository(db_path),
         stockbit_providers=create_readonly_stockbit_providers(db_path),
     )
 
@@ -519,6 +518,7 @@ def _build_daily_execution() -> _DailyExecution:
         ),
         accumulation_use_case=_build_accumulation_use_case(deps, risk_use_case=risk_use_case),
         universe_loader=YamlUniverseConfigLoader(),
+        learning_observation_repository=deps.observations_repository,
         setup_lens_impact_use_case=_build_setup_lens(deps),
         session_resolver=EffectiveMarketSessionResolver(deps.market_repository),
     )
