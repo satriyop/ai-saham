@@ -118,6 +118,11 @@ class SignalEngine:
         """Expose the engine-owned pre-open policy for input construction."""
         return self._config.pre_open_directional_baseline
 
+    @property
+    def signal_classification_config(self):
+        """Expose shared score bands for artifact compatibility identity."""
+        return self._config.classification
+
     def evaluate_with_context(
         self,
         ticker: str,

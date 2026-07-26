@@ -15,7 +15,10 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from src.application.services.pre_open_signal_config import PreOpenSignalConfig
+from src.application.services.signal_engine_config import (
+    PreOpenDirectionalBaselineConfig,
+    SignalClassificationConfig,
+)
 from src.domain.value_objects.pre_open_signal_evidence import (
     PRE_OPEN_HORIZON,
     PRE_OPEN_SIGNAL_EVIDENCE_CONTRACT,
@@ -31,7 +34,8 @@ PRE_OPEN_WORKFLOW = "screen_pre_open"
 
 def compute_pre_open_config_hash(
     *,
-    signal_config: PreOpenSignalConfig,
+    signal_config: PreOpenDirectionalBaselineConfig,
+    classification_config: SignalClassificationConfig,
     iev_min: int,
     top_n: int | None,
     evidence_contract: str = PRE_OPEN_SIGNAL_EVIDENCE_CONTRACT,
@@ -40,15 +44,8 @@ def compute_pre_open_config_hash(
     material = {
         "evidence_contract": evidence_contract,
         "horizon": PRE_OPEN_HORIZON,
-        "rendering": signal_config.rendering,
-        "auction_min": signal_config.auction_min,
-        "strong_min": signal_config.strong_min,
-        "moderate_min": signal_config.moderate_min,
-        "gap_out_abs_pct": str(signal_config.gap_out_abs_pct),
-        "max_spread_pct": str(signal_config.max_spread_pct),
-        "rsi_extension_threshold": str(signal_config.rsi_extension_threshold),
-        "auction_weight": signal_config.auction_weight,
-        "viability_weight": signal_config.viability_weight,
+        "directional_baseline": asdict(signal_config),
+        "classification": asdict(classification_config),
         "iev_min": iev_min,
         "top_n": top_n,
     }
@@ -58,13 +55,17 @@ def compute_pre_open_config_hash(
 
 def compute_pre_open_semantic_compatibility_id(
     *,
-    signal_config: PreOpenSignalConfig,
+    signal_config: PreOpenDirectionalBaselineConfig,
+    classification_config: SignalClassificationConfig,
     iev_min: int,
     top_n: int | None,
 ) -> SemanticCompatibilityId:
     material = {
         "config_hash": compute_pre_open_config_hash(
-            signal_config=signal_config, iev_min=iev_min, top_n=top_n
+            signal_config=signal_config,
+            classification_config=classification_config,
+            iev_min=iev_min,
+            top_n=top_n,
         ),
         "contract": PRE_OPEN_OBSERVATION_CONTRACT,
         "evidence": PRE_OPEN_SIGNAL_EVIDENCE_CONTRACT,

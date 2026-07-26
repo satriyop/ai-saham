@@ -20,7 +20,9 @@ from src.application.services.pre_open_ops_day_export import (
     write_pre_open_ops_day_export,
 )
 from src.application.services.pre_open_screen_config import PreOpenScreenConfig
-from src.application.services.pre_open_signal_config import PreOpenSignalConfig
+from src.application.services.signal_engine_config import (
+    PreOpenDirectionalBaselineConfig,
+)
 from src.application.use_case import opening_grade_use_case as opening_grade
 from src.application.use_case.pre_open_workflow_use_case import (
     PreOpenDataFreshness,
@@ -60,6 +62,39 @@ def _candidate(ticker: str = "BBCA") -> ScreenerCandidate:
     )
 
 
+def _signal_summary(
+    *,
+    score: int = 80,
+    entry_quality: str = "ENTER",
+) -> PreOpenSignalSummary:
+    return PreOpenSignalSummary(
+        contract="pre_open_directional_baseline.v1",
+        direction="BULLISH",
+        confidence="HIGH",
+        auction_quality="RELIABLE",
+        raw_score=score,
+        score=score,
+        strength="STRONG",
+        entry_quality=entry_quality,
+        factors={
+            "iep_direction": "UP",
+            "book_pressure_state": "BUY",
+            "participation_state": "BUILDING",
+            "iep_gap_pct": 1.0,
+            "book_pressure": 0.6,
+            "delta_iev": 20_000,
+            "delta_iev_ratio": 0.1,
+            "iev_intensity": 2.0,
+            "spread_pct": 0.4,
+            "rsi_extension": False,
+            "unusual_volume": False,
+        },
+        rationale=("direction:agreement_bullish",),
+        quality_reasons=(),
+        signal_authority_coverage=1.0,
+    )
+
+
 def test_pre_open_observation_contract_is_v3():
     assert PRE_OPEN_OBSERVATION_CONTRACT == "pre-open-open-30m.v3"
 
@@ -73,12 +108,12 @@ def test_derive_screen_result_funnel():
         derive_pre_open_screen_result(has_entry_range=True, signal_summary=None, trade_setup=None)
         == "rejected_auction_missing"
     )
-    sig = PreOpenSignalSummary(score=80, strength="STRONG", entry_quality="AVOID")
+    sig = _signal_summary(entry_quality="AVOID")
     assert (
         derive_pre_open_screen_result(has_entry_range=True, signal_summary=sig, trade_setup=None)
         == "rejected_signal"
     )
-    sig_ok = PreOpenSignalSummary(score=80, strength="STRONG", entry_quality="ENTER")
+    sig_ok = _signal_summary()
     assert (
         derive_pre_open_screen_result(has_entry_range=True, signal_summary=sig_ok, trade_setup=None)
         == "pass"
@@ -88,13 +123,11 @@ def test_derive_screen_result_funnel():
 def test_persist_observations_and_identity_upsert(tmp_path: Path, monkeypatch):
     db = tmp_path / "obs.db"
     repo = SQLiteCandidateObservationsRepository(db)
-    persister = PreOpenObservationPersister(repo, PreOpenSignalConfig())
+    persister = PreOpenObservationPersister(repo, PreOpenDirectionalBaselineConfig())
 
     run_date = date(2026, 6, 18)
     cand = _candidate()
-    sig = PreOpenSignalSummary(
-        score=72, strength="STRONG", entry_quality="ENTER", signal_authority_coverage=1.0
-    )
+    sig = _signal_summary(score=72)
     risk = PreOpenRiskSummary(
         risk_level_name="LOW_RISK",
         gate_triggered=None,
@@ -155,6 +188,12 @@ def test_persist_observations_and_identity_upsert(tmp_path: Path, monkeypatch):
     row = pre_open_rows[0]
     assert row.observation_contract == PRE_OPEN_OBSERVATION_CONTRACT
     assert row.payload["signal"]["score"] == 72
+    assert row.payload["signal"]["contract"] == "pre_open_directional_baseline.v1"
+    assert row.payload["signal"]["direction"] == "BULLISH"
+    assert row.payload["signal"]["confidence"] == "HIGH"
+    assert row.payload["signal"]["auction_quality"] == "RELIABLE"
+    assert row.payload["signal"]["factors"]["delta_iev"] == 20_000
+    assert row.payload["signal"]["rationale"] == ["direction:agreement_bullish"]
     assert row.payload["trade_setup"]["action"] == "ENTER"
     assert row.payload["screen_result"] == "pass"
     assert row.payload["candidate"]["iep"] == 10100
@@ -240,7 +279,7 @@ def test_persist_includes_hard_filter_rejects(tmp_path: Path):
 
     db = tmp_path / "obs.db"
     repo = SQLiteCandidateObservationsRepository(db)
-    persister = PreOpenObservationPersister(repo, PreOpenSignalConfig())
+    persister = PreOpenObservationPersister(repo, PreOpenDirectionalBaselineConfig())
     run_date = date(2026, 6, 18)
     response = PreOpenWorkflowResponse(
         result=PreOpenScreenResult(

@@ -19,7 +19,10 @@ from src.application.services.pre_open_observation_payload import (
     compute_pre_open_semantic_compatibility_id,
     derive_pre_open_screen_result,
 )
-from src.application.services.pre_open_signal_config import PreOpenSignalConfig
+from src.application.services.signal_engine_config import (
+    PreOpenDirectionalBaselineConfig,
+    SignalClassificationConfig,
+)
 from src.domain.ports.candidate_observations_repository import CandidateObservation
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.domain.value_objects.pre_open_signal_evidence import AuctionNcpProvenance
@@ -40,10 +43,12 @@ class PreOpenObservationPersister:
     def __init__(
         self,
         repository: "CandidateObservationsRepository | None",
-        signal_config: PreOpenSignalConfig | None = None,
+        signal_config: PreOpenDirectionalBaselineConfig | None = None,
+        classification_config: SignalClassificationConfig | None = None,
     ) -> None:
         self._repo = repository
-        self._signal_config = signal_config or PreOpenSignalConfig()
+        self._signal_config = signal_config or PreOpenDirectionalBaselineConfig()
+        self._classification_config = classification_config or SignalClassificationConfig()
 
     def persist(
         self,
@@ -59,9 +64,6 @@ class PreOpenObservationPersister:
         filter_rejects = list(response.filter_rejects or ())
         if not candidates and not filter_rejects:
             return 0
-
-        if self._signal_config.rendering not in ("cascade", "composite"):
-            raise ValueError(f"invalid signal rendering {self._signal_config.rendering!r}")
 
         now = captured_at or datetime.now(tz=IDX_TIMEZONE)
         if now.tzinfo is None:
@@ -90,11 +92,13 @@ class PreOpenObservationPersister:
         assert decision_snapshot_ref is not None
         config_hash = compute_pre_open_config_hash(
             signal_config=self._signal_config,
+            classification_config=self._classification_config,
             iev_min=response.result.iev_min,
             top_n=request.config.top_n,
         )
         compat = compute_pre_open_semantic_compatibility_id(
             signal_config=self._signal_config,
+            classification_config=self._classification_config,
             iev_min=response.result.iev_min,
             top_n=request.config.top_n,
         )

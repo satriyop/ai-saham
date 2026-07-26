@@ -650,6 +650,9 @@ def test_pre_open_workflow_signal_cascade_and_trade_setup_when_risk_present():
     assert response.ncp_authoritative is True
     assert response.signal_by_ticker["BBCA"] is not None
     assert response.signal_by_ticker["BBCA"].score >= 50
+    assert response.signal_by_ticker["BBCA"].contract == "pre_open_directional_baseline.v1"
+    assert response.signal_by_ticker["BBCA"].direction == "BULLISH"
+    assert response.signal_by_ticker["BBCA"].factors["delta_iev"] == 50_000
     assert signal_builder.build.call_args.kwargs["delta_iev"] == 50_000
     assert locked_baselines.calls == [
         (

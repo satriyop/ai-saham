@@ -267,7 +267,11 @@ def create_pre_open_cli_workflow(
     observations_repo = SQLiteCandidateObservationsRepository(resolved_db)
     record_observations = RecordPreOpenObservationsUseCase(
         workflow_use_case=workflow,
-        observation_persister=PreOpenObservationPersister(observations_repo),
+        observation_persister=PreOpenObservationPersister(
+            observations_repo,
+            signal_config=signal_config,
+            classification_config=signal_engine.signal_classification_config,
+        ),
     )
 
     return PreOpenCliWorkflow(
