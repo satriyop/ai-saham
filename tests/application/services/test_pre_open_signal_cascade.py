@@ -53,10 +53,11 @@ def _auction(
     spread: float | None = 0.3,
     delta_iev: int | None = None,
 ) -> AuctionNcpEvidence:
+    gap_pct = None if gap is None else Decimal(str(gap))
     return AuctionNcpEvidence(
         ticker="BBCA",
         iev=iev,
-        gap_pct=None if gap is None else Decimal(str(gap)),
+        gap_pct=gap_pct,
         bid_pressure=bid_pressure,
         spread_pct=None if spread is None else Decimal(str(spread)),
         prev_close=Decimal("10000"),
@@ -69,6 +70,13 @@ def _auction(
             snapshot_ref=NCP_SNAPSHOT_REF,
             trade_date=date(2026, 6, 18),
         ),
+        iep=(
+            None
+            if gap_pct is None
+            else int(Decimal("10000") * (Decimal("1") + gap_pct / 100))
+        ),
+        iep_gap_pct=gap_pct,
+        gap_price_source="IEP" if gap_pct is not None else None,
         delta_iev=delta_iev,
     )
 
@@ -91,6 +99,28 @@ def test_auction_evidence_rejects_unproven_ncp_provenance():
                 snapshot_ref="claimed-ncp",
                 trade_date=date(2026, 6, 18),
             ),
+        )
+
+
+def test_auction_evidence_rejects_iep_source_without_iep_fields():
+    with pytest.raises(ValueError, match="requires iep and iep_gap_pct"):
+        AuctionNcpEvidence(
+            ticker="BBCA",
+            iev=200_000,
+            gap_pct=Decimal("1"),
+            bid_pressure=0.6,
+            spread_pct=Decimal("0.3"),
+            prev_close=Decimal("10000"),
+            provenance=AuctionNcpProvenance(
+                ticker="BBCA",
+                collection_started_at=NCP_COLLECTION_STARTED_AT,
+                decision_at=NCP_DECISION_AT,
+                capture_phase="NCP_LOCKED",
+                source_is_live=True,
+                snapshot_ref=NCP_SNAPSHOT_REF,
+                trade_date=date(2026, 6, 18),
+            ),
+            gap_price_source="IEP",
         )
 
 
@@ -166,6 +196,10 @@ def test_builder_keeps_unproven_auction_discovery_only(
         iev=500_000,
         prev_close=Decimal("5000"),
         gap_pct=Decimal("1.2"),
+        iep=5060,
+        iep_gap_pct=Decimal("1.2"),
+        bid_gap_pct=Decimal("0.8"),
+        gap_price_source="IEP",
         bid_offer_imbalance=0.7,
         spread_pct=Decimal("0.3"),
         trend_signal="BULLISH",
@@ -306,6 +340,10 @@ def test_builder_passes_delta_iev():
         iev=250_000,
         prev_close=Decimal("5000"),
         gap_pct=Decimal("1.2"),
+        iep=5060,
+        iep_gap_pct=Decimal("1.2"),
+        bid_gap_pct=Decimal("0.8"),
+        gap_price_source="IEP",
         bid_offer_imbalance=0.62,
         spread_pct=Decimal("0.4"),
         trend_signal="BULLISH",
@@ -337,6 +375,10 @@ def test_builder_passes_delta_iev():
     )
     assert bundle.auction_ncp is not None
     assert bundle.auction_ncp.delta_iev == 12_345
+    assert bundle.auction_ncp.iep == 5060
+    assert bundle.auction_ncp.iep_gap_pct == Decimal("1.2")
+    assert bundle.auction_ncp.bid_gap_pct == Decimal("0.8")
+    assert bundle.auction_ncp.gap_price_source == "IEP"
 
 
 def test_builder_from_candidate_and_evaluate():
@@ -345,6 +387,10 @@ def test_builder_from_candidate_and_evaluate():
         iev=250_000,
         prev_close=Decimal("5000"),
         gap_pct=Decimal("1.2"),
+        iep=5060,
+        iep_gap_pct=Decimal("1.2"),
+        bid_gap_pct=Decimal("0.8"),
+        gap_price_source="IEP",
         bid_offer_imbalance=0.62,
         spread_pct=Decimal("0.4"),
         trend_signal="BULLISH",

@@ -73,7 +73,17 @@ def write_pre_open_ops_day_export(
             {
                 "ticker": ticker,
                 "iev": c.iev,
-                "iep": getattr(c, "iep", None),
+                "iep": c.iep,
+                "iep_gap_pct": (
+                    float(c.iep_gap_pct) if c.iep_gap_pct is not None else None
+                ),
+                "best_bid": (
+                    float(c.best_bid) if c.best_bid is not None else None
+                ),
+                "bid_gap_pct": (
+                    float(c.bid_gap_pct) if c.bid_gap_pct is not None else None
+                ),
+                "gap_price_source": c.gap_price_source,
                 "entry_range_low": (
                     float(c.entry_range_low) if c.entry_range_low is not None else None
                 ),

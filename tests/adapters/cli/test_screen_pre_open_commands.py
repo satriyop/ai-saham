@@ -51,6 +51,12 @@ def _candidate(ticker: str) -> ScreenerCandidate:
         entry_price=Decimal("1000"),
         stop_loss_price=Decimal("950"),
         capital=Decimal("3000000"),
+        gap_pct=Decimal("1.0"),
+        iep=1010,
+        iep_gap_pct=Decimal("1.0"),
+        best_bid=Decimal("1005"),
+        bid_gap_pct=Decimal("0.5"),
+        gap_price_source="IEP",
     )
 
 
@@ -98,6 +104,8 @@ def test_pre_open_results_render_rich_summary_panel(capsys):
     assert "★ PRIME" not in out
     assert "Broker Backing" not in out
     assert "Action" in out or "ACTION" in out
+    assert "Gap Src" in out
+    assert "IEP" in out
     assert "VERDICT:" not in out
     assert "BBCA" in out
     assert "manual smoke warning" in out
@@ -702,7 +710,11 @@ def test_pre_open_outside_window_passed_to_workflow_request_for_autonomous_run(
     )
     monkeypatch.setattr(
         "src.adapters.cli.screen_pre_open_commands.resolve_pre_open_browser_plan",
-        lambda **kwargs: PreOpenBrowserPlan(provider=object(), autonomous=True, session_missing=False),
+        lambda **kwargs: PreOpenBrowserPlan(
+            provider=object(),
+            autonomous=True,
+            session_missing=False,
+        ),
     )
 
     fake_response = PreOpenWorkflowResponse(

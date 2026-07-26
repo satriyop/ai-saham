@@ -1,6 +1,5 @@
 import json
 from datetime import date, datetime
-from pathlib import Path
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
@@ -63,7 +62,11 @@ def test_opening_grade_prefers_orderbook_lastprice_over_midpoint(tmp_path, monke
         },
     }))
 
-    repo = SimpleNamespace(list_all_by_date=lambda d: [_obs_row(entry_low="6000", entry_high="6500")])
+    repo = SimpleNamespace(
+        list_all_by_date=lambda d: [
+            _obs_row(entry_low="6000", entry_high="6500")
+        ]
+    )
     monkeypatch.setattr(opening_grade, "OPENING_DATA_DIR", tmp_path)
 
     result = opening_grade.compute_grade(
@@ -154,5 +157,8 @@ def test_opening_grade_from_saved_observations(tmp_path, monkeypatch):
     assert t["trade_setup_action"] == "ENTER"
     assert t["screen_result"] == "pass"
     assert t["entry_range_hit"] is True  # 10000 in [9900, 10100]
+    assert t["iep"] == 6400.0
+    assert t["iep_error_pct"] == 36.0
+    assert result["iep_accuracy"]["mean_error_pct"] == 36.0
     assert result["by_signal_band"]["strong"]["count"] == 1
     assert result["by_trade_setup_action"]["ENTER"]["count"] == 1

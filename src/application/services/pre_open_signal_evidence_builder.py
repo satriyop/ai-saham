@@ -83,6 +83,10 @@ def build_pre_open_signal_evidence(
                 str(prev_close)
             ),
             provenance=provenance,
+            iep=getattr(candidate, "iep", None),
+            iep_gap_pct=getattr(candidate, "iep_gap_pct", None),
+            bid_gap_pct=getattr(candidate, "bid_gap_pct", None),
+            gap_price_source=getattr(candidate, "gap_price_source", None),
             delta_iev=resolved_delta,
         )
 

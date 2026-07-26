@@ -256,8 +256,8 @@ def test_offer_none_when_not_available():
     assert c.spread_label == "—"
 
 
-def test_gap_pct_unchanged_uses_bid():
-    """gap_pct must still be computed from bid.price only, not offer."""
+def test_gap_pct_uses_bid_when_iep_missing():
+    """Best bid is an explicit fallback when auction IEP is unavailable."""
     bid = OrderBookBid(price=Decimal("5050"), volume=200)
     offer = OrderBookBid(price=Decimal("5075"), volume=100)
     tob = OrderBookTopOfBook(bid=bid, offer=offer)
@@ -269,6 +269,45 @@ def test_gap_pct_unchanged_uses_bid():
     # gap_pct = (bid - prev_close) / prev_close * 100
     # prev_close = candle close = 5050; bid = 5050 → gap = 0.00%
     assert c.gap_pct == Decimal("0.00")
+    assert c.iep is None
+    assert c.iep_gap_pct is None
+    assert c.best_bid == Decimal("5050")
+    assert c.bid_gap_pct == Decimal("0.00")
+    assert c.gap_price_source == "BEST_BID"
+
+
+def test_iep_is_canonical_gap_while_bid_is_preserved_separately():
+    bid = OrderBookBid(price=Decimal("5050"), volume=200)
+    offer = OrderBookBid(price=Decimal("5075"), volume=100)
+    tob = OrderBookTopOfBook(bid=bid, offer=offer)
+
+    uc = _make_use_case_normal_mode(
+        [MoverData("BBCA", 300_000, iep=5151)],
+        tob,
+    )
+    response = uc.execute(PreOpenScreenRequest(_normal_config()))
+
+    candidate = response.result.candidates[0]
+    assert candidate.iep == 5151
+    assert candidate.iep_gap_pct == Decimal("2.00")
+    assert candidate.best_bid == Decimal("5050")
+    assert candidate.bid_gap_pct == Decimal("0.00")
+    assert candidate.gap_pct == Decimal("2.00")
+    assert candidate.gap_price_source == "IEP"
+
+
+def test_fast_mode_preserves_iep_and_computes_auction_gap():
+    uc = _make_use_case([MoverData("BBCA", 300_000, iep=5151)])
+
+    response = uc.execute(PreOpenScreenRequest(_config()))
+
+    candidate = response.result.candidates[0]
+    assert candidate.iep == 5151
+    assert candidate.iep_gap_pct == Decimal("2.00")
+    assert candidate.best_bid is None
+    assert candidate.bid_gap_pct is None
+    assert candidate.gap_pct == Decimal("2.00")
+    assert candidate.gap_price_source == "IEP"
 
 
 # ── ManualBrowserDataProvider offer fallback ──────────────────────────────────

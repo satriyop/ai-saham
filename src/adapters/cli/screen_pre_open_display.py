@@ -405,6 +405,7 @@ def display_results(
     results_table.add_column("Ticker", style="bold")
     results_table.add_column("IEV", justify="right")
     results_table.add_column("Gap%", justify="right")
+    results_table.add_column("Gap Src")
     if show_spread:
         results_table.add_column("Spread%", justify="right")
     results_table.add_column("Entry Range", justify="right")
@@ -436,6 +437,7 @@ def display_results(
             candidate.ticker,
             f"{candidate.iev:,}",
             gap_text,
+            candidate.gap_price_source or "-",
         ]
 
         if show_spread:

@@ -21,7 +21,7 @@ class MoverData:
     Attributes:
         ticker: IDX ticker symbol (e.g., 'BBCA')
         iev: Intraday Expected Volume — proxy for institutional interest
-        iep: Indicative Equilibrium Price in IDR — expected auction clearing price (None if not captured)
+        iep: Indicative Equilibrium Price in IDR; None when not captured
     """
 
     ticker: str
@@ -96,7 +96,12 @@ class ScreenerCandidate:
         prev_close: Yesterday's closing price
         prev_high: Yesterday's high (intraday resistance reference)
         prev_low: Yesterday's low (intraday support reference)
-        gap_pct: (pre_open_bid - prev_close) / prev_close * 100; None in fast mode
+        gap_pct: Canonical auction gap; IEP preferred, best-bid fallback
+        iep: Indicative Equilibrium Price captured with the mover
+        iep_gap_pct: IEP-relative gap from previous close
+        best_bid: Best order-book bid, separate from auction equilibrium
+        bid_gap_pct: Best-bid-relative gap from previous close
+        gap_price_source: IEP or BEST_BID when gap_pct is available
         entry_range_low: prev_close * (1 - max_gap_pct) — lower bound of safe open range
         entry_range_high: prev_close * (1 + max_gap_pct) — upper bound of safe open range
     """
@@ -115,6 +120,11 @@ class ScreenerCandidate:
     prev_high: Decimal | None = None
     prev_low: Decimal | None = None
     gap_pct: Decimal | None = None
+    iep: int | None = None
+    iep_gap_pct: Decimal | None = None
+    best_bid: Decimal | None = None
+    bid_gap_pct: Decimal | None = None
+    gap_price_source: str | None = None
     entry_range_low: Decimal | None = None
     entry_range_high: Decimal | None = None
     # Improvement #1 — smart money alignment
@@ -131,8 +141,10 @@ class ScreenerCandidate:
     best_offer: Decimal | None = None          # best offer price (IDR)
     best_offer_lots: int | None = None         # lots queued at best offer
     spread_pct: Decimal | None = None          # (offer - bid) / bid * 100
-    bid_offer_imbalance: float | None = None   # bid_lots / (bid_lots + offer_lots); >0.6 = buyers dominate
-    ticker_notation: TickerNotationSnapshot | None = None  # display-only status/special notation context
+    # bid_lots / (bid_lots + offer_lots); >0.6 = buyers dominate
+    bid_offer_imbalance: float | None = None
+    # Display-only status/special notation context
+    ticker_notation: TickerNotationSnapshot | None = None
 
     @property
     def has_entry_plan(self) -> bool:

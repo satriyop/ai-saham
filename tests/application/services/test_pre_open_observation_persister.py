@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -15,8 +16,12 @@ from src.application.services.pre_open_observation_payload import (
 from src.application.services.pre_open_observation_persister import (
     PreOpenObservationPersister,
 )
+from src.application.services.pre_open_ops_day_export import (
+    write_pre_open_ops_day_export,
+)
 from src.application.services.pre_open_screen_config import PreOpenScreenConfig
 from src.application.services.pre_open_signal_config import PreOpenSignalConfig
+from src.application.use_case import opening_grade_use_case as opening_grade
 from src.application.use_case.pre_open_workflow_use_case import (
     PreOpenDataFreshness,
     PreOpenRiskSummary,
@@ -43,6 +48,11 @@ def _candidate(ticker: str = "BBCA") -> ScreenerCandidate:
         trend_signal="BULLISH",
         prev_close=Decimal("10000"),
         gap_pct=Decimal("1.0"),
+        iep=10100,
+        iep_gap_pct=Decimal("1.0"),
+        best_bid=Decimal("10050"),
+        bid_gap_pct=Decimal("0.5"),
+        gap_price_source="IEP",
         entry_range_low=Decimal("9900"),
         entry_range_high=Decimal("10100"),
         bid_offer_imbalance=0.6,
@@ -83,7 +93,7 @@ def test_derive_screen_result_funnel():
     )
 
 
-def test_persist_observations_and_identity_upsert(tmp_path: Path):
+def test_persist_observations_and_identity_upsert(tmp_path: Path, monkeypatch):
     db = tmp_path / "obs.db"
     repo = SQLiteCandidateObservationsRepository(db)
     persister = PreOpenObservationPersister(repo, PreOpenSignalConfig())
@@ -159,8 +169,47 @@ def test_persist_observations_and_identity_upsert(tmp_path: Path):
     assert row.payload["signal"]["score"] == 72
     assert row.payload["trade_setup"]["action"] == "ENTER"
     assert row.payload["screen_result"] == "pass"
+    assert row.payload["candidate"]["iep"] == 10100
+    assert row.payload["candidate"]["iep_gap_pct"] == "1.0"
+    assert row.payload["candidate"]["best_bid"] == "10050"
+    assert row.payload["candidate"]["bid_gap_pct"] == "0.5"
+    assert row.payload["candidate"]["gap_price_source"] == "IEP"
     assert row.decision_at is not None
     assert row.decision_at.hour == 8 and row.decision_at.minute == 57
+
+    ops_path = write_pre_open_ops_day_export(response, tmp_path / "opening")
+    ops_payload = json.loads(ops_path.read_text())
+    ops_candidate = ops_payload["candidates"][0]
+    assert ops_candidate["iep"] == 10100
+    assert ops_candidate["iep_gap_pct"] == 1.0
+    assert ops_candidate["best_bid"] == 10050.0
+    assert ops_candidate["bid_gap_pct"] == 0.5
+    assert ops_candidate["gap_price_source"] == "IEP"
+
+    grade_root = tmp_path / "grade"
+    grade_day = grade_root / "20260618"
+    grade_day.mkdir(parents=True)
+    (grade_day / "track_0900.json").write_text(
+        json.dumps(
+            {
+                "captured_at": "2026-06-18T09:00:01+07:00",
+                "tickers": {
+                    "BBCA": {
+                        "opening_price": 10000,
+                        "opening_price_confidence": "HIGH",
+                    }
+                },
+            }
+        )
+    )
+    monkeypatch.setattr(opening_grade, "OPENING_DATA_DIR", grade_root)
+    grade = opening_grade.compute_grade(
+        run_date,
+        observations_repository=repo,
+    )
+    assert grade["per_ticker"][0]["iep"] == 10100.0
+    assert grade["per_ticker"][0]["iep_error_pct"] == 1.0
+    assert grade["iep_accuracy"]["mean_error_pct"] == 1.0
 
     # Same identity upsert replaces, does not duplicate
     n2 = persister.persist(

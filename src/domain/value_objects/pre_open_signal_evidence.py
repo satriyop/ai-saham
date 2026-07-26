@@ -85,6 +85,10 @@ class AuctionNcpEvidence:
     spread_pct: Decimal | None
     prev_close: Decimal | None
     provenance: AuctionNcpProvenance
+    iep: int | None = None
+    iep_gap_pct: Decimal | None = None
+    bid_gap_pct: Decimal | None = None
+    gap_price_source: str | None = None
     # Build-into-lock appetite: last_iev − first_iev same day (multi-tick history).
     # None = MISSING (not enough ticks) — never fabricate; scorer must not fail closed.
     delta_iev: int | None = None
@@ -102,6 +106,28 @@ class AuctionNcpEvidence:
                 "collection window wholly inside the same-session NCP_LOCKED "
                 "phase with a snapshot_ref"
             )
+        if self.gap_price_source not in (None, "IEP", "BEST_BID"):
+            raise ValueError(
+                "gap_price_source must be IEP, BEST_BID, or None"
+            )
+        if self.gap_pct is not None and self.gap_price_source is None:
+            raise ValueError("gap_pct requires an explicit gap_price_source")
+        if self.gap_price_source == "IEP":
+            if self.iep is None or self.iep_gap_pct is None:
+                raise ValueError(
+                    "IEP gap authority requires iep and iep_gap_pct"
+                )
+            if self.gap_pct != self.iep_gap_pct:
+                raise ValueError("gap_pct must equal iep_gap_pct for IEP authority")
+        if self.gap_price_source == "BEST_BID":
+            if self.bid_gap_pct is None:
+                raise ValueError(
+                    "BEST_BID gap authority requires bid_gap_pct"
+                )
+            if self.gap_pct != self.bid_gap_pct:
+                raise ValueError(
+                    "gap_pct must equal bid_gap_pct for BEST_BID authority"
+                )
         if self.bid_pressure is not None and not (0.0 <= self.bid_pressure <= 1.0):
             raise ValueError(
                 f"bid_pressure must be 0.0–1.0, got {self.bid_pressure}"

@@ -281,6 +281,13 @@ New authoritative pre-open evidence uses
   inside the same trade date's NCP interval, data from the verified live
   provider, plus
   `capture_phase=NCP_LOCKED` and a non-empty snapshot reference.
+- Before the first v2 observation, the contract was completed to preserve IEP
+  end to end. `gap_pct` uses `iep_gap_pct` when IEP is present; `best_bid` and
+  `bid_gap_pct` remain separate book evidence. `BEST_BID` is an explicit
+  fallback only when IEP is missing, including in the signal evidence and
+  observation payload.
+- Fast mode still preserves IEP and computes `iep_gap_pct`; it only omits
+  order-book fields. Missing IEP stays `None` and is never reconstructed.
 - PRE_NCP, unknown, manual JSON, snapshot-fallback, post-open, and
   non-trading-day runs remain discovery-only: they may return candidates but
   cannot produce a production signal or TradeSetup.
