@@ -144,6 +144,19 @@ def _artifact_payload(value: Any, *, id_field: str, digest_field: str) -> dict[s
     return payload
 
 
+def validate_artifact_integrity(
+    value: Any, *, id_field: str, digest_field: str = "artifact_digest"
+) -> None:
+    """Reject a DTO whose immutable payload no longer matches its digest."""
+
+    expected = artifact_digest(
+        _artifact_payload(value, id_field=id_field, digest_field=digest_field)
+    )
+    actual = getattr(value, digest_field)
+    if actual != expected:
+        raise LearningContractError("learning artifact digest does not match its payload")
+
+
 @dataclass(frozen=True)
 class LearningObservation:
     observation_id: str
@@ -587,4 +600,3 @@ class LearningPolicyApplication:
         return cls(**{**asdict(draft), "artifact_digest": artifact_digest(
             _artifact_payload(draft, id_field="application_id", digest_field="artifact_digest")
         )})
-
