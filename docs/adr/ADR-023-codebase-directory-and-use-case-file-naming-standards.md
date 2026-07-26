@@ -2,9 +2,11 @@
 
 [Architecture decision index](../../ARCHITECTURE_DECISIONS.md)
 
-**Status:** Accepted
+**Status:** Superseded by [ADR-049](ADR-049-database-owned-learning-pipeline-clean-break.md)
 **Date:** Not recorded (legacy decision)
-**Current implementation:** Aligned — current repository layout and use-case naming follow this convention, with explicit legacy exceptions only.
+**Current implementation:** Historical. ADR-049 replaces file-owned learning
+artifacts with database-owned contracts. General naming guidance remains useful
+only where a newer ADR has not replaced it.
 **Decision**
 Establish strict layout and naming standards for the data directory structure, journals, and application use case files.
 
@@ -13,7 +15,8 @@ To separate concerns and avoid polluting the repository root:
 * Databases must live under `data/db/` (e.g., `data/db/data.db`).
 * Interactive sessions, temporary screeners, and state markers must live under `data/session/` (e.g., `data/session/.last-session.json`, `data/session/.last-confirmation.json`).
 * Miscellaneous raw payloads, spy outputs, and developer debug dumps must live under `data/debug/`.
-* Running trade/order book tracking files must be organized under `data/opening/YYYYMMDD/` for the opening session loop.
+* Running trade/order book learning tracks were historically organized under
+  `data/opening/YYYYMMDD/`; ADR-049 retires that path.
 * Journal files (e.g., `journals/intraday_confirmations.csv`, `journals/pre_open.csv`, `journals/trades.jsonl`) must be stored under the `journals/` directory and use snake_case naming.
 
 **File Naming Standards**

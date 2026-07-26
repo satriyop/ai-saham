@@ -1,7 +1,7 @@
 # ADR-033: Workflow Composition Artifact Boundaries
 
 [Architecture decision index](../../ARCHITECTURE_DECISIONS.md)
-**Status:** Accepted
+**Status:** Accepted — amended by [ADR-049](ADR-049-database-owned-learning-pipeline-clean-break.md)
 **Date:** 2026-06-28
 **Current implementation:** Workflows compose domain/application capabilities; reusable evidence and artifacts cross boundaries through typed values rather than CLI display parsing.
 
@@ -26,7 +26,7 @@ Canonical artifact ownership:
 | `saham screen accum` | Candidate discovery | `AccumulationCandidate` with optional `TradeSetup` | Ranked candidates; final action exists only when both signal and risk are present |
 | `saham screen pre-open` | Intraday pre-open planning | `PreOpenScreenResult` | Conditional pre-open candidate list and entry ranges |
 | `saham trade confirm` | Intraday post-open confirmation | `IntradayConfirmationResult` | ENTER/WAIT/SKIP decision after actual opening price is known |
-| `saham trade backtest-swing` | Historical replay | `SwingBacktestResponse` | Walk-forward performance artifact, not a live verdict |
+| `saham trade swing backtest` | Historical replay | typed learning evaluation | Walk-forward performance artifact, not a live verdict |
 | `saham trade backtest-intraday` | Historical proxy simulation | `IntradayBacktestResponse` | Daily-OHLC proxy performance artifact, not exact intraday replay |
 | `saham analyze accum-audit` | Learning/audit replay | `AccumulationAuditResponse` | Forward-return audit of foreign-flow score evidence |
 | `saham trade log --type swing` | Journal continuation | `LogSwingCandidateResponse` | Persistence outcome for a logged candidate |
@@ -42,7 +42,7 @@ Composition rules:
 * Pre-open and intraday confirmation use their own session artifacts. They must
   not reuse `TradeSetup` wording unless the full swing signal/risk contract is
   actually composed.
-* Backtest and audit commands produce learning artifacts. They may replay the
+* Backtest and audit commands produce database-owned learning artifacts. They may replay the
   same deterministic rules, but their outputs are performance observations, not
   current recommendations.
 

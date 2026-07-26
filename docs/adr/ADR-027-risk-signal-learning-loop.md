@@ -2,9 +2,10 @@
 
 [Architecture decision index](../../ARCHITECTURE_DECISIONS.md)
 
-**Status:** Accepted — implementation evolved
+**Status:** Accepted — amended by [ADR-049](ADR-049-database-owned-learning-pipeline-clean-break.md)
 **Date:** 2026-06-24
-**Current implementation:** Swing learning uses deterministic backtest, tuning review, patch validation, explicit apply, and status workflows under `saham trade`.
+**Current implementation:** Database-owned typed evaluations, proposals, paired
+OOS validations, explicit YAML application, and application audit records.
 
 ## Decision
 
@@ -15,10 +16,10 @@ point-in-time observations
   -> forward outcomes
   -> attribution / walk-forward evaluation
   -> readiness and out-of-sample checks
-  -> non-authoritative review or patch artifact
+  -> immutable database-owned policy proposal
   -> deterministic validation
   -> explicit human application
-  -> verification and audit history
+  -> reread verification and database-owned audit history
 ```
 
 ## Guardrails
@@ -37,18 +38,8 @@ point-in-time observations
 
 ## Current CLI contract
 
-Use live `saham trade --help`. The relevant commands currently include:
-
-- `backtest-swing`
-- `tune-swing`
-- `review-tuning-swing`
-- `validate-tuning-patch`
-- `apply-tuning-patch`
-- `tuning-status`
-
-The proposed `swing learn record/grade/attribute/tune` commands,
-`SwingSignalTunerUseCase`, and old journal schemas are retired and remain only
-in git history.
+Use live `saham trade swing --help`: `backtest`, `tune`, `review`, `validate`,
+`apply`, and `status`. File patch and review-journal workflows are retired.
 
 ## Related decisions
 

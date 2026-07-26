@@ -2,9 +2,13 @@
 
 [Architecture decision index](../../ARCHITECTURE_DECISIONS.md)
 
-**Status:** Accepted
+**Status:** Accepted — amended by [ADR-049](ADR-049-database-owned-learning-pipeline-clean-break.md)
 **Date:** 2026-07-17
 **Amends:** ADR-002 and ADR-014
+
+ADR-049 retires AI pre-open prompt/tuning paths and requires deterministic,
+database-owned proposal and validation artifacts. It does not promote ML or AI
+authority.
 
 ## Context
 

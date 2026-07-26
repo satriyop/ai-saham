@@ -2,13 +2,17 @@
 
 [Architecture decision index](../../ARCHITECTURE_DECISIONS.md)
 
-**Status:** Accepted (implemented; contextual identity amendment)
+**Status:** Accepted — amended by [ADR-049](ADR-049-database-owned-learning-pipeline-clean-break.md)
 **Date:** 2026-07-25
 **Depends on:** [ADR-026](ADR-026-risk-plus-signal-pipeline-composition.md), [ADR-041](ADR-041-canonical-signal-evidence-input-boundary.md), [ADR-047](ADR-047-scenario-adoption-seam-for-signal-risk-mce.md), [ADR-024](ADR-024-signal-engine-and-risk-engine-as-first-class-application-services.md), [ADR-033](ADR-033-workflow-composition-artifact-boundaries.md)
 **Related:** [ADR-027](ADR-027-risk-signal-learning-loop.md), [ADR-030](ADR-030-accumulation-screener-evidence-split.md), [ADR-037](ADR-037-marketcontext-promotes-from-preview-only-to-canonical-signal-input.md), [ADR-046](ADR-046-cli-response-envelope.md)
 **Current implementation:** Pre-open uses `ScreenAssessmentPipeline`, the
 `PRE_OPEN_AUCTION_DIRECTION` signal policy, annotate risk, `TradeSetup`, and
 capture-time `pre-open-open-30m.v3` observations.
+
+ADR-049 retains NCP-locked capture and live signal semantics while replacing
+file tracks and grade-time recomputation with database-owned track snapshots,
+one persisted `price_path.open_30m.v1` label, and label-only cohort evaluation.
 
 ### Context
 

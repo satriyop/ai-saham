@@ -1,9 +1,13 @@
 # ADR-041: Canonical Signal Evidence Input Boundary
 
 [Architecture decision index](../../ARCHITECTURE_DECISIONS.md)
-**Status:** Accepted — amended 2026-07-22 (discovery ATTACHED_REQUIRED + settled bandar)
+**Status:** Accepted — amended by [ADR-049](ADR-049-database-owned-learning-pipeline-clean-break.md)
 **Date:** 2026-07-17
 **Current implementation:** Canonical boundary is live for screen and swing. See AUTHORITY-COVERAGE-READINESS and Discovery Authority amendments below.
+
+ADR-049 preserves this live evidence boundary and stores its exact decision
+payload in immutable learning observations. Persistence does not become an
+alternate scorer or evidence-authority path.
 
 ### Context
 

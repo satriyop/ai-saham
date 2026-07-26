@@ -75,7 +75,7 @@ row.
 | CLI/TUI machine JSON and response envelope | [046](docs/adr/ADR-046-cli-response-envelope.md), [045](docs/adr/ADR-045-view-browse-parity-cli-tui-json-table.md), [011](docs/adr/ADR-011-offline-capable-cli-as-primary-interface.md), [040](docs/adr/ADR-040-manual-dependency-injection-and-composition-roots.md) |
 | Screen discovery JSON / watchlist export | [046](docs/adr/ADR-046-cli-response-envelope.md), [030](docs/adr/ADR-030-accumulation-screener-evidence-split.md), [043](docs/adr/ADR-043-score-naming-vocabulary.md), [040](docs/adr/ADR-040-manual-dependency-injection-and-composition-roots.md) |
 | AI and sentiment | [002](docs/adr/ADR-002-rule-first-ai-optional-design.md), [013](docs/adr/ADR-013-ai-agent-governance.md), [014](docs/adr/ADR-014-full-ai-mode-explicit-bypass-mode-rejected.md), [015](docs/adr/ADR-015-sentiment-analysis-classification.md), [042](docs/adr/ADR-042-deterministic-champion-and-optional-model-challengers.md) |
-| Learning, tuning, evaluation, ML preparation | [027](docs/adr/ADR-027-risk-signal-learning-loop.md), [033](docs/adr/ADR-033-workflow-composition-artifact-boundaries.md), [038](docs/adr/ADR-038-point-in-time-enrichment-and-conservative-derived-fundamentals.md), [041](docs/adr/ADR-041-canonical-signal-evidence-input-boundary.md), [042](docs/adr/ADR-042-deterministic-champion-and-optional-model-challengers.md) |
+| Learning, tuning, evaluation, ML preparation | [049](docs/adr/ADR-049-database-owned-learning-pipeline-clean-break.md), [027](docs/adr/ADR-027-risk-signal-learning-loop.md), [033](docs/adr/ADR-033-workflow-composition-artifact-boundaries.md), [038](docs/adr/ADR-038-point-in-time-enrichment-and-conservative-derived-fundamentals.md), [041](docs/adr/ADR-041-canonical-signal-evidence-input-boundary.md), [042](docs/adr/ADR-042-deterministic-champion-and-optional-model-challengers.md), [048](docs/adr/ADR-048-pre-open-signal-evidence-and-observation-identity.md) |
 
 ## Amendment and migration map
 
@@ -92,6 +92,7 @@ row.
 | ADR-032 MCE preview-only signal | ADR-037 | MCE can condition canonical signal; risk adjustment remains preview |
 | DQ-002J post-score availability attachment | ADR-041 | Temporary shadow prototype; the target is a shared pre-score evidence/provenance/availability boundary |
 | ADR-002/014 optional AI and rejected bypass | ADR-042 | Narrow validated local-ML evidence may enter the governed evidence lifecycle; full ML/API decision challengers remain separate shadow outputs |
+| ADR-023 file-owned learning paths | ADR-049 | SQLite owns all learning artifacts; opening tracks and swing patch/review files are retired without migration |
 
 ## High-value implementation entry points
 
@@ -139,7 +140,7 @@ row.
 | [020](docs/adr/ADR-020-cli-adapter-file-naming-convention.md) | CLI adapter naming | Accepted |
 | [021](docs/adr/ADR-021-strict-boundary-enforcement-infrastructure-decoupling-hexagonal-audit-clean-up.md) | Boundary enforcement | Accepted |
 | [022](docs/adr/ADR-022-idx-regular-market-price-floor-rp-50-enforcements.md) | IDX Rp50 floor | Accepted |
-| [023](docs/adr/ADR-023-codebase-directory-and-use-case-file-naming-standards.md) | Layout and naming | Accepted |
+| [023](docs/adr/ADR-023-codebase-directory-and-use-case-file-naming-standards.md) | Layout and naming | Superseded by ADR-049 |
 | [024](docs/adr/ADR-024-signal-engine-and-risk-engine-as-first-class-application-services.md) | First-class Signal/Risk engines | Accepted; Signal implementation evolved |
 | [025](docs/adr/ADR-025-signalengine-architecture.md) | SignalEngine architecture | Accepted; canonical scorer evolved |
 | [026](docs/adr/ADR-026-risk-plus-signal-pipeline-composition.md) | Signal/Risk composition | Accepted |
@@ -165,6 +166,7 @@ row.
 | [046](docs/adr/ADR-046-cli-response-envelope.md) | Shared CLI response envelope | Accepted; generalizes envelope beyond view; adopt-on-touch for other families |
 | [047](docs/adr/ADR-047-scenario-adoption-seam-for-signal-risk-mce.md) | Scenario-adoption seam for Signal / Risk / MCE | Accepted; engines single; pre-open directional-baseline amendment mandates removal of its remaining local scorer |
 | [048](docs/adr/ADR-048-pre-open-signal-evidence-and-observation-identity.md) | Pre-open signal evidence + observation identity | Accepted; v3 is the unused first cohort and `pre_open_directional_baseline.v1` is its deterministic long-only champion |
+| [049](docs/adr/ADR-049-database-owned-learning-pipeline-clean-break.md) | Database-owned learning pipeline clean break | Accepted; supersedes ADR-023 learning persistence and amends ADR-027/033/041/042/048 |
 
 ## Adding or changing a decision
 
