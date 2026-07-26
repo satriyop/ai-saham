@@ -36,7 +36,7 @@ def load_previous_setup_phases(
     ][-limit:]
     phases: list[SetupPhaseState] = []
     expected_family = _normalize_setup_family(setup_family)
-    for observation in reversed(observations):
+    for observation in observations:
         payload = dict(observation.decision_payload)
         fingerprint = payload.get("sub_signal_fingerprint") or {}
         phase = _parse_phase(fingerprint.get("setup_phase_current"))

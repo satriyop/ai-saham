@@ -179,8 +179,13 @@ def test_source_contracts_json_output_includes_dq_001e_signal_artifact_tables(tm
 
     table_names = {t["table"] for t in payload["tables"]}
     for expected in (
-        "candidate_observations",
-        "signal_forward_labels",
+        "learning_observations",
+        "learning_track_snapshots",
+        "learning_outcome_labels",
+        "learning_evaluations",
+        "learning_policy_proposals",
+        "learning_policy_validations",
+        "learning_policy_applications",
         "market_context_snapshots",
         "regime_observations",
     ):
@@ -851,9 +856,6 @@ def test_dq_contract_gate_added_exactly_one_new_command():
         "contract-gate",
         "seasonality-cleanup-plan",
         "repair-seasonality-cache",
-        "candidate-observation-identity",
-        "repair-candidate-observations",
-        "repair-signal-forward-labels",
     }
     assert "reconcile-sources" in result.output
 
@@ -1146,13 +1148,13 @@ def _build_candidate_observation_db(db_path: Path) -> None:
     conn.close()
 
 
-def test_candidate_observation_identity_command_registered():
+def _retired_candidate_observation_identity_command_registered():
     result = runner.invoke(app, ["audit", "data", "--help"])
     assert result.exit_code == 0, result.output
     assert "candidate-observation-identity" in result.output
 
 
-def test_candidate_observation_identity_json_output_follows_contract(tmp_path: Path):
+def _retired_candidate_observation_identity_json_output_follows_contract(tmp_path: Path):
     db_path = tmp_path / "co_identity.db"
     _build_candidate_observation_db(db_path)
 
@@ -1191,7 +1193,7 @@ def test_candidate_observation_identity_json_output_follows_contract(tmp_path: P
     assert isinstance(payload["findings"], list)
 
 
-def test_candidate_observation_identity_missing_db_returns_fail(tmp_path: Path):
+def _retired_candidate_observation_identity_missing_db_returns_fail(tmp_path: Path):
     missing_db = tmp_path / "does_not_exist.db"
 
     result = runner.invoke(
@@ -1209,7 +1211,7 @@ def test_candidate_observation_identity_missing_db_returns_fail(tmp_path: Path):
     assert payload["source_unavailable_reason"] == "DATABASE_MISSING"
 
 
-def test_candidate_observation_identity_missing_table_returns_fail(tmp_path: Path):
+def _retired_candidate_observation_identity_missing_table_returns_fail(tmp_path: Path):
     db_path = tmp_path / "empty.db"
     sqlite3.connect(str(db_path)).close()
 
@@ -1228,7 +1230,7 @@ def test_candidate_observation_identity_missing_table_returns_fail(tmp_path: Pat
     assert payload["source_unavailable_reason"] == "CANDIDATE_OBSERVATIONS_TABLE_MISSING"
 
 
-def test_candidate_observation_identity_table_format_shows_counts(tmp_path: Path):
+def _retired_candidate_observation_identity_table_format_shows_counts(tmp_path: Path):
     db_path = tmp_path / "co_table.db"
     _build_candidate_observation_db(db_path)
 
@@ -1248,7 +1250,7 @@ def test_candidate_observation_identity_table_format_shows_counts(tmp_path: Path
     assert "QUARANTINE_SAFE" in result.output
 
 
-def test_candidate_observation_identity_rejects_invalid_format(tmp_path: Path):
+def _retired_candidate_observation_identity_rejects_invalid_format(tmp_path: Path):
     db_path = tmp_path / "co_format.db"
     _build_candidate_observation_db(db_path)
 
@@ -1263,7 +1265,7 @@ def test_candidate_observation_identity_rejects_invalid_format(tmp_path: Path):
     assert result.exit_code != 0
 
 
-def test_candidate_observation_identity_legacy_latest_returns_fail(tmp_path: Path):
+def _retired_candidate_observation_identity_legacy_latest_returns_fail(tmp_path: Path):
     db_path = tmp_path / "co_legacy_latest.db"
     conn = sqlite3.connect(str(db_path))
     conn.execute("""

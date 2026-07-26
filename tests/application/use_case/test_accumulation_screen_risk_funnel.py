@@ -248,7 +248,7 @@ def test_screen_persists_rejected_candidates_with_filter_outcome():
     assert len(response.candidates) == 0
     # Rejected candidate still persisted as a learnable negative sample
     assert len(spy_repo.saved) == 1
-    payload = spy_repo.saved[0].payload
+    payload = spy_repo.saved[0].decision_payload
     assert payload["screen_result"] == "rejected_flow"
     assert payload["ticker"] == "BBCA"
     assert payload["schema_version"] == CANDIDATE_OBSERVATION_SCHEMA_VERSION

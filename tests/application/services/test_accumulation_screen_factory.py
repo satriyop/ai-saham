@@ -125,7 +125,7 @@ def test_bundle_factory_supplies_screen_use_case_and_working_recorder():
     )
     assert result.recorded_count == 1
     assert len(spy_repo.saved) == 1
-    assert spy_repo.saved[0].ticker == "BBCA"
+    assert spy_repo.saved[0].decision_payload["ticker"] == "BBCA"
 
 
 def test_bundle_factory_shares_one_signal_engine_instance_across_screen_and_persister():

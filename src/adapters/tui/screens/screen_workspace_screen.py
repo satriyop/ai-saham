@@ -669,11 +669,17 @@ class ScreenWorkspaceScreen(Screen[None]):
     def _render_candidate_preview(self, row: Any) -> None:
         disc = format_disc_pct_plain(getattr(row, "vwap_discount_pct", None))
         depth = getattr(row, "vwap_depth_label", None) or "-"
+        data_state = (
+            getattr(row, "data_state", None)
+            or getattr(row, "data_status", None)
+            or "-"
+        )
         is_multi = bool(getattr(row, "window_accum", ()) or getattr(row, "pattern", None))
         mode = "MULTI" if is_multi else "SINGLE"
         self.query_one("#candidate-selected", Static).update(
             f"Selected: {row.ticker} | {mode} | Disc%: {disc} | "
-            f"Action: {row.action or '-'} | Risk: {row.risk_status}"
+            f"Action: {row.action or '-'} | Risk: {row.risk_status} | "
+            f"Data: {data_state}"
         )
         ticker = str(getattr(row, "ticker", "")).upper()
         related = getattr(self, "_related_actions", ()) or ()
@@ -707,7 +713,7 @@ class ScreenWorkspaceScreen(Screen[None]):
                 f"Pattern            : {pattern}\n"
             )
         else:
-            multi_block = f"Mode               : SINGLE\n"
+            multi_block = "Mode               : SINGLE\n"
 
         self.query_one("#preview-content", Static).update(
             "SELECTED CANDIDATE PREVIEW\n"

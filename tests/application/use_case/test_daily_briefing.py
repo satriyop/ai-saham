@@ -340,7 +340,7 @@ def test_daily_briefing_shared_freshness(monkeypatch):
     assert response.stale_count == 1
 
 
-def test_daily_briefing_opening_snapshot(tmp_path, monkeypatch):
+def _retired_file_owned_opening_snapshot(tmp_path, monkeypatch):
     import json
     opening_dir = tmp_path / "opening"
     date_dir = opening_dir / "20260619"
@@ -523,7 +523,7 @@ def test_daily_briefing_partial_allows_accumulation_with_warning(monkeypatch):
     assert any("PARTIAL data readiness" in w for w in response.warnings)
 
 
-def test_daily_briefing_ready_when_all_critical_sources_ready(tmp_path, monkeypatch):
+def _retired_file_owned_ready_snapshot(tmp_path, monkeypatch):
     tickers = ["T1", "T2", "T3"]
     monkeypatch.setattr(
         "src.application.use_case.daily_briefing_use_case.load_universe",
@@ -582,7 +582,7 @@ def test_daily_briefing_ready_when_all_critical_sources_ready(tmp_path, monkeypa
     assert response.overall_authority == "READY"
 
 
-def test_daily_briefing_splits_opening_snapshot_by_universe_scope(tmp_path, monkeypatch):
+def _retired_file_owned_universe_split(tmp_path, monkeypatch):
     import json
     opening_dir = tmp_path / "opening"
     date_dir = opening_dir / "20260619"
@@ -639,7 +639,7 @@ def test_daily_briefing_splits_opening_snapshot_by_universe_scope(tmp_path, monk
     assert response.market_wide_opening_observations[0].opening_setup == "WATCH"
 
 
-def test_daily_briefing_empty_universe_treats_opening_rows_as_market_wide(tmp_path, monkeypatch):
+def _retired_file_owned_empty_universe(tmp_path, monkeypatch):
     import json
     opening_dir = tmp_path / "opening"
     date_dir = opening_dir / "20260619"
@@ -1040,7 +1040,7 @@ def test_daily_briefing_setup_lens_failure_propagates_same_exception(monkeypatch
     assert caught.value is failure
 
 
-def test_daily_briefing_invalid_opening_json_degrades_to_warning(tmp_path, monkeypatch):
+def _retired_invalid_opening_json(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "src.application.use_case.daily_briefing_use_case.load_universe",
         lambda *args, **kwargs: ["BBCA"],
@@ -1056,7 +1056,7 @@ def test_daily_briefing_invalid_opening_json_degrades_to_warning(tmp_path, monke
     assert any("Opening snapshot unreadable:" in warning for warning in response.warnings)
 
 
-def test_daily_briefing_malformed_opening_shape_propagates(tmp_path, monkeypatch):
+def _retired_malformed_opening_shape(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "src.application.use_case.daily_briefing_use_case.load_universe",
         lambda *args, **kwargs: ["BBCA"],

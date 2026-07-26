@@ -64,7 +64,7 @@ def print_column_guide() -> None:
         (
             f"{ACCUM_DEFINITION}\n"
             "Combines net days, streak, VWAP, RSI, flow-ratio component, and BCI. "
-            "BB%ile is setup/phase diagnostic — not in default Accum by default.\n"
+            "BB%ile is setup/phase diagnostic — not scored in default foreign-flow score.\n"
             f"- Green: Strong {ACCUM}, worth research.\n"
             f"- Yellow: Moderate watch.\n"
             "- White: Weak, likely noise, skip.\n"

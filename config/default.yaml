@@ -8,7 +8,7 @@
 #   - saham indicator compute / snapshot / list / show / delete
 #   - saham analyze risk / swing / swing-compare / compare / regime
 #   - saham strategy backtest
-#   - saham trade size / backtest-swing
+#   - saham trade size / swing backtest
 #
 # This file defines shipped defaults for the IDX market.
 # Override any key in config/user.yaml (gitignored) — user.yaml wins key-by-key.

@@ -6,7 +6,7 @@ from tests.adapters.cli.swing_command_fixtures import runner
 
 
 def test_swing_backtest_unknown_setup_error():
-    result = runner.invoke(app, ["trade", "backtest-swing", "--setup", "unknown"])
+    result = runner.invoke(app, ["trade", "swing", "backtest", "--setup", "unknown"])
 
     assert result.exit_code != 0
     assert "unknown swing setup" in result.output.lower()
@@ -18,7 +18,8 @@ def test_swing_backtest_rejects_invalid_allowed_regime():
         app,
         [
             "trade",
-            "backtest-swing",
+            "swing",
+            "backtest",
             "BBCA",
             "--allow-regimes",
             "CALM",

@@ -37,6 +37,7 @@ class ScreenCandidateRowView:
     action: str | None
     signal_score: int | None
     signal_authority_coverage: float | None
+    data_state: str | None = None
     window_shape_label: str | None = None
     # Soft VWAP triage (display-only; same bands as CLI Disc% badge).
     vwap_discount_pct: float | None = None
@@ -83,7 +84,11 @@ class ScreenPresenter:
     def present(
         self, payload: Any, *, active_tab: str = "ACCUMULATION", universe_label: str = "lq45"
     ) -> ScreenViewModel:
-        return self.present_accumulation(payload, active_tab=active_tab, universe_label=universe_label)
+        return self.present_accumulation(
+            payload,
+            active_tab=active_tab,
+            universe_label=universe_label,
+        )
 
     @staticmethod
     def _vwap_fields(candidate: Any) -> tuple[float | None, str | None]:
@@ -94,6 +99,17 @@ class ScreenPresenter:
             return None, None
         pct = float(raw)
         return pct, vwap_depth_label(pct)
+
+    @staticmethod
+    def _data_state(candidate: Any, row: Any | None = None) -> str | None:
+        direct = getattr(row, "data_status", None) if row is not None else None
+        if direct:
+            return str(direct)
+        freshness = getattr(candidate, "freshness", None)
+        alignment = getattr(freshness, "alignment_state", None)
+        if alignment is None:
+            return None
+        return str(getattr(alignment, "value", alignment))
 
     @staticmethod
     def _window_accum_pairs(
@@ -249,6 +265,7 @@ class ScreenPresenter:
                             action=str(action) if action else None,
                             signal_score=sig_score,
                             signal_authority_coverage=sig_cov,
+                            data_state=self._data_state(c, multi_row),
                             window_shape_label=shape,
                             vwap_discount_pct=disc,
                             vwap_depth_label=depth,
@@ -283,6 +300,7 @@ class ScreenPresenter:
                             action=getattr(multi_row, "next_action", None),
                             signal_score=sig_score,
                             signal_authority_coverage=sig_cov,
+                            data_state=getattr(multi_row, "data_status", None),
                             window_shape_label=shape,
                             vwap_discount_pct=disc,
                             vwap_depth_label=depth,
@@ -324,6 +342,7 @@ class ScreenPresenter:
                         action=str(raw_action) if raw_action else None,
                         signal_score=sig_score,
                         signal_authority_coverage=sig_cov,
+                        data_state=self._data_state(c),
                         vwap_discount_pct=disc,
                         vwap_depth_label=depth,
                     )

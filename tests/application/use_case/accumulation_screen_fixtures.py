@@ -392,24 +392,20 @@ def _make_use_case_with_all_providers(
 
 
 class SpyCandidateObservationsRepository:
-    """Records save_many calls for assertion."""
+    """Records immutable learning observation inserts for assertion."""
 
     def __init__(self):
         self.saved: list = []
         self.risk_saved: list = []
         self.raise_on_save: Exception | None = None
 
-    def save_many(self, observations, *, risk_records=None):
+    def add_observation(self, observation):
         if self.raise_on_save is not None:
             raise self.raise_on_save
-        self.saved.extend(observations)
-        if risk_records:
-            self.risk_saved.extend(risk_records)
+        self.saved.append(observation)
+        return True
 
-    def get_latest(self, ticker, snapshot_date):
-        return None
-
-    def list_recent(self, ticker, *, before_date=None, limit=20):
+    def list_observations(self, purpose, *, compatibility_id=None):
         return []
 
 
@@ -494,4 +490,3 @@ def make_signal_evidence_execution_context(
         observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
         semantic_compatibility_id=SemanticCompatibilityId("sha256:" + "0" * 64),
     )
-

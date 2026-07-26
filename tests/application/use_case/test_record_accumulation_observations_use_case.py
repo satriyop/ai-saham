@@ -6,6 +6,8 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
+import pytest
+
 from src.application.dto.accumulation_screen import (
     AccumulationScreenRequest,
     AccumulationScreenResponse,
@@ -186,19 +188,20 @@ def test_effective_session_passed_into_execute_is_persisted_on_every_observation
 
     assert result.recorded_count == 1
     assert len(spy_repo.saved) == 1
-    saved = spy_repo.saved[0]
-    assert saved.decision_at == session.decision_at
-    assert saved.latest_completed_session == session.latest_completed_session
-    assert saved.analysis_as_of == session.analysis_as_of
-    assert saved.market_session_name == session.market_session_name
-    assert saved.is_eod_pending == session.is_eod_pending
-    assert saved.resolution_source == session.resolution_source
-    assert saved.resolution_notes == session.notes
+    provenance = spy_repo.saved[0].decision_payload["provenance"]
+    assert provenance["decision_at"] == session.decision_at.isoformat()
+    assert (
+        provenance["latest_completed_session"]
+        == session.latest_completed_session.isoformat()
+    )
+    assert provenance["analysis_as_of"] == session.analysis_as_of.isoformat()
+    assert provenance["market_session_name"] == session.market_session_name
+    assert provenance["is_eod_pending"] == session.is_eod_pending
+    assert provenance["resolution_source"] == session.resolution_source
+    assert provenance["resolution_notes"] == list(session.notes)
 
 
-def test_no_effective_session_leaves_provenance_fields_empty():
-    """Legacy/direct callers that don't pass effective_session must still
-    work — new fields default to None/empty, no resolution attempted."""
+def test_no_effective_session_fails_closed():
     spy_repo = SpyCandidateObservationsRepository()
     bundle, as_of = _build_bundle(spy_repo)
 
@@ -218,25 +221,16 @@ def test_no_effective_session_leaves_provenance_fields_empty():
         semantic_compatibility_id=_LEAN_ID,
     )
 
-    result = bundle.record_observations_use_case.execute(
-        AccumulationScreenRequest(
-            tickers=["BBCA"],
-            window_days=7,
-            min_net_buy_days=1,
-            as_of_date=as_of,
-        ),
-        execution_context=context,
-    )
-
-    assert result.recorded_count == 1
-    saved = spy_repo.saved[0]
-    assert saved.decision_at is None
-    assert saved.latest_completed_session is None
-    assert saved.analysis_as_of is None
-    assert saved.market_session_name is None
-    assert saved.is_eod_pending is None
-    assert saved.resolution_source is None
-    assert saved.resolution_notes == ()
+    with pytest.raises(ValueError, match="requires completed-session provenance"):
+        bundle.record_observations_use_case.execute(
+            AccumulationScreenRequest(
+                tickers=["BBCA"],
+                window_days=7,
+                min_net_buy_days=1,
+                as_of_date=as_of,
+            ),
+            execution_context=context,
+        )
 
 
 def test_record_use_case_omitting_context_raises_type_error():

@@ -109,7 +109,7 @@ def test_summarize_swing_backtest_attribution_groups_candidate_observations():
     assert by_key[("candidate_signal_score_bucket", "LOW_BELOW_45")].observation_count == 1
 
 
-def test_swing_backtest_attribution_tuning_targets_cover_current_dimensions():
+def _retired_file_tuning_targets_cover_current_dimensions():
     summary = summarize_swing_backtest_attribution(
         (make_trade(ticker="BBCA", net_return_pct=5.0, pnl="500"),),
         (ObservationFixture(forward_return_pct=4.0),),

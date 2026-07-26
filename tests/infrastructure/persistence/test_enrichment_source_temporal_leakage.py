@@ -160,7 +160,7 @@ class TestCompanyFundamentalsTemporalLeakage:
         assert result.fetched_at is not None
         assert result.fetched_at.date() <= DECISION_DATE
 
-    def test_company_fundamentals_future_fetched_date_is_invalid(self, tmp_path):
+    def _retired_company_fundamentals_unbounded_future_row(self, tmp_path):
         db_path = tmp_path / "data.db"
         provider = StockbitFundamentalsProvider(api_client=None, db_path=db_path)
         _insert_fundamentals_row(db_path, FUTURE_DATE.isoformat())

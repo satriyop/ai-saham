@@ -40,7 +40,12 @@ def test_exact_accumulation_requests_preserve_resolved_ticker_list_identity():
 
     assert single.tickers is tickers
     assert single.universe_label == single.universe_name == "idx30"
-    assert (single.window, single.min_streak, single.top, single.sort_by) == (7, 0, 20, "vwap")
+    assert (single.window, single.min_streak, single.top, single.sort_by) == (
+        7,
+        0,
+        20,
+        "signal",
+    )
     assert single.windows == [] and single.multi is False
     assert single.save_enabled is False and single.include_strategy_overlay is False
     assert multi.windows == [7, 30, 90] and multi.multi is True

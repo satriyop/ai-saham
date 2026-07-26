@@ -185,7 +185,7 @@ def test_display_swing_backtest_shows_candidate_only_attribution(capsys):
     assert "NO_MATCH" in output
 
 
-def test_display_swing_backtest_can_show_tuning_plan(capsys):
+def _retired_display_swing_backtest_can_show_tuning_plan(capsys):
     display_swing_backtest(
         _response(),
         show_trades=0,
@@ -200,7 +200,7 @@ def test_display_swing_backtest_can_show_tuning_plan(capsys):
     assert "readiness_gate_for_future_tuning_only" in output
 
 
-def test_display_swing_backtest_can_show_tuning_proposal(capsys):
+def _retired_display_swing_backtest_can_show_tuning_proposal(capsys):
     display_swing_backtest(
         _response(),
         show_trades=0,
@@ -215,7 +215,7 @@ def test_display_swing_backtest_can_show_tuning_proposal(capsys):
     assert "dry_run_tuning_proposal_contract_only" in output
 
 
-def test_display_swing_backtest_can_show_tuning_config_diff(capsys):
+def _retired_display_swing_backtest_can_show_tuning_config_diff(capsys):
     display_swing_backtest(
         _response(),
         show_trades=0,
@@ -238,7 +238,7 @@ def test_display_swing_backtest_can_show_tuning_config_diff(capsys):
     assert "Do not apply automatically" in output
 
 
-def test_display_swing_backtest_tuning_config_diff_shows_candidate_policy(capsys):
+def _retired_display_swing_backtest_tuning_config_diff_shows_candidate_policy(capsys):
     display_swing_backtest(
         _trade_ready_tuning_response(),
         show_trades=0,

@@ -143,7 +143,7 @@ def test_screen_attaches_ticker_notation_without_changing_score():
     assert enriched.candidates[0].accum_score == base.candidates[0].accum_score
     assert enriched.candidates[0].foreign_flow_evidence is not None
     assert (
-        enriched.candidates[0].foreign_flow_evidence.signal_score
+        enriched.candidates[0].foreign_flow_evidence.accum_score
         == enriched.candidates[0].accum_score
     )
     candidate_dict = enriched.candidates[0].to_dict()

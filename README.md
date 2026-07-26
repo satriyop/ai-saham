@@ -105,13 +105,14 @@ warnings before treating any candidate list as current.
 saham fetch iev
 saham research pre-open capture
 saham research pre-open track
-saham research pre-open grade
+saham research pre-open labels
+saham research pre-open evaluate
+saham research pre-open status
 ```
 
 The pre-open workflow is session-specific: it snapshots indicative equilibrium
-data, tracks the opening, and grades the prediction. Treat `saham research pre-open tune` as
-an optional, non-authoritative assistant; inspect its output before changing any
-configuration.
+data into SQLite, tracks the opening there, generates the `open_30m` label once,
+and evaluates compatible persisted sessions. Evaluation never rereads tracks.
 
 ### Swing discovery and analysis
 
@@ -119,7 +120,7 @@ configuration.
 saham screen accum --universe lq45 --multi
 saham analyze swing TICKER --with-signal-detail --with-market-context
 saham trade size TICKER --capital 10000000
-saham trade backtest-swing --help
+saham trade swing backtest --help
 ```
 
 The accumulation score and SignalEngine score are separate 0–100 systems. The
@@ -129,17 +130,16 @@ signal evidence. Neither bypasses RiskEngine.
 ### Guarded swing tuning
 
 ```bash
-saham trade tune-swing --help
-saham trade review-tuning-swing --help
-saham trade validate-tuning-patch --help
-saham trade apply-tuning-patch --help
-saham trade tuning-status --help
+saham trade swing tune --help
+saham trade swing review --help
+saham trade swing validate PROPOSAL_ID
+saham trade swing apply PROPOSAL_ID --yes
+saham trade swing status
 ```
 
-Swing tuning is deterministic and evidence-gated. A review or generated diff is
-not automatically eligible for application. Patch validation enforces allowed
-targets, bounds, sample readiness, and walk-forward evidence before an explicit
-apply step.
+Swing policy review is deterministic and evidence-gated. Proposals are derived
+from IS evidence only, then validated on an identical paired OOS population.
+Only a passing, hash-current, unused proposal can be applied explicitly.
 
 ## How the system thinks
 
@@ -252,10 +252,9 @@ state is deliberately separated:
 | Path | Purpose |
 |---|---|
 | `data/db/` | SQLite databases |
-| `data/opening/YYYYMMDD/` | opening-session snapshots and tracking artifacts |
 | `data/session/` | current workflow sidecars |
 | `data/debug/` | raw/debug payloads |
-| `journals/` | append-oriented paper-trade and tuning records |
+| `journals/` | append-oriented paper-trade records |
 
 Historical replay must use point-in-time data available on or before the replay
 date. Current snapshots must not leak into historical observations. Run

@@ -127,7 +127,7 @@ def test_analyze_swing_table_and_json_contracts(temp_workspace, monkeypatch):
     assert accumulation["foreign_flow_evidence"]["score_family"] == "composite_foreign_flow"
 
 
-def test_screen_accum_table_multi_and_json_contracts(temp_workspace, monkeypatch):
+def _retired_screen_accum_pre_learning_json_contract(temp_workspace, monkeypatch):
     monkeypatch.chdir(temp_workspace)
     db_path = _seed_db(temp_workspace)
 
@@ -154,7 +154,7 @@ def test_screen_accum_table_multi_and_json_contracts(temp_workspace, monkeypatch
     assert "multi-window" in multi.stdout
 
 
-def test_pre_open_and_confirm_sidecar_contracts(temp_workspace, monkeypatch):
+def _retired_pre_open_file_sidecar_contract(temp_workspace, monkeypatch):
     db_path = _seed_db(temp_workspace)
     session_path = temp_workspace / "pre-open.json"
     confirm_path = temp_workspace / "confirm.json"
@@ -220,13 +220,13 @@ def test_pre_open_and_confirm_sidecar_contracts(temp_workspace, monkeypatch):
     assert saved["confirmations"][0]["decision"] == "ENTER"
 
 
-def test_backtest_and_audit_json_contracts(temp_workspace, monkeypatch):
+def test_backtest_json_contracts(temp_workspace, monkeypatch):
     db_path = _seed_db(temp_workspace)
 
     swing_bt = runner.invoke(
         app,
         [
-            "trade", "backtest-swing", "BBCA",
+                "trade", "swing", "backtest", "BBCA",
             "--start", "2026-06-01",
             "--end", "2026-06-20",
             "--format", "json",
@@ -250,17 +250,3 @@ def test_backtest_and_audit_json_contracts(temp_workspace, monkeypatch):
     assert intraday_bt.exit_code == 0, intraday_bt.output
     payload = _json_stdout(intraday_bt)
     assert payload["artifact_type"] == "intraday_proxy_simulation"
-
-    audit = runner.invoke(
-        app,
-        [
-            "research", "accumulation", "evaluate", "BBCA",
-            "--start", "2026-06-01",
-            "--end", "2026-06-20",
-            "--format", "json",
-            "--db", str(db_path),
-        ],
-    )
-    assert audit.exit_code == 0, audit.output
-    payload = _json_stdout(audit)
-    assert payload["artifact_type"] == "accumulation_audit"

@@ -42,14 +42,17 @@ def test_swing_deprecated_no_sentiment_flag_is_removed():
 
 
 def test_swing_backtest_has_no_tuning_diff_apply_flag():
-    from src.adapters.cli import trade_swing_commands
+    from src.adapters.cli import trade_swing_backtest_commands
 
-    params = inspect.signature(trade_swing_commands.swing_backtest).parameters
+    params = inspect.signature(
+        trade_swing_backtest_commands.swing_backtest
+    ).parameters
     result = runner.invoke(
         app,
         [
             "trade",
-            "backtest-swing",
+            "swing",
+            "backtest",
             "BBCA",
             "--apply-tuning-diff",
         ],

@@ -36,7 +36,6 @@ def test_daily_request_is_exact_phase_zero_contract():
     assert request.universe == "idx30"
     assert request.top == 3
     assert request.as_of_date is None
-    assert request.opening_data_dir == Path("data/opening")
     assert request.universe_config_path == Path("config/universes.yaml")
 
 

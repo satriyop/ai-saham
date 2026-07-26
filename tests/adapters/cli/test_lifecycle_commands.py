@@ -62,9 +62,11 @@ def test_research_pre_open_exposes_session_and_corpus_commands():
     assert "capture" in result.stdout
     assert "labels" in result.stdout
     assert "track" in result.stdout
-    assert "grade" in result.stdout
-    assert "prompt" in result.stdout
-    assert "tune" in result.stdout
+    assert "evaluate" in result.stdout
+    assert "status" in result.stdout
+    assert "grade" not in result.stdout
+    assert "prompt" not in result.stdout
+    assert "tune" not in result.stdout
 
 
 def test_view_group_exposes_ticker_dashboard_command():
@@ -116,7 +118,7 @@ def test_trade_group_exposes_shallow_workspace_commands():
     assert "review" in result.stdout
     assert "outcome" in result.stdout
     assert "size" in result.stdout
-    assert "backtest-swing" in result.stdout
+    assert "swing" in result.stdout
     assert "backtest-intraday" in result.stdout
     assert "Swing trading workflow" not in result.stdout
     assert "Intraday screening" not in result.stdout
@@ -124,7 +126,7 @@ def test_trade_group_exposes_shallow_workspace_commands():
 
 
 def test_removed_legacy_trade_groups_are_not_callable():
-    for group in ("swing", "intraday", "opening"):
+    for group in ("intraday", "opening"):
         result = runner.invoke(app, ["trade", group, "--help"])
 
         assert result.exit_code != 0
