@@ -66,13 +66,22 @@ saham
 ├── analyze             — live analysis (risk, sentiment, regime, swing, chart)
 ├── view                — read-only local data browsing
 ├── screen              — candidate discovery (accumulation, pre-open)
-├── learn               — opening session ops (track, grade, tune, prompt)
-├── research            — research corpus and offline evaluation
+├── research            — research corpus + pre-open ops (capture, track, grade, tune, prompt)
 ├── strategy            — strategy management (init, validate, backtest)
 └── trade               — paper trading workspace
 ```
 
 See `CLI_REFERENCE.md` for every command with syntax, options, and examples.
+
+`saham --help` groups commands by panel:
+
+| Panel | Commands |
+|-------|----------|
+| **Data** | fetch |
+| **Analysis** | today, screen, analyze, research, trade |
+| **Inspect** | view, audit |
+| **Artifacts** | indicator, strategy |
+| **General** | version, tui |
 
 ---
 
