@@ -398,9 +398,11 @@ def display_results(
     show_spread = any(c.spread_pct is not None for c in sorted_candidates)
     show_notation = any(notation_label(c.ticker_notation) != "-" for c in sorted_candidates)
 
-    # 2. Results Table — TradeSetup.action + signal score only (ADR-026 / ADR-048)
+    # 2. Results Table — action + directional baseline facts (ADR-026 / ADR-048)
     results_table = compact_table()
     results_table.add_column("Action")
+    results_table.add_column("Dir")
+    results_table.add_column("Conf/Q")
     results_table.add_column("Sig", justify="right")
     results_table.add_column("Ticker", style="bold")
     results_table.add_column("IEV", justify="right")
@@ -430,9 +432,27 @@ def display_results(
         action_text = _format_action_text(action)
         sig_sum = signal_by_ticker.get(candidate.ticker) if signal_by_ticker else None
         sig_text = f"{sig_sum.score}" if sig_sum is not None else "[dim]—[/]"
+        direction_text = (
+            {
+                "BULLISH": "[green]BULL[/]",
+                "BEARISH": "[red]BEAR[/]",
+                "CONFLICTED": "[yellow]MIXED[/]",
+                "NEUTRAL": "[dim]FLAT[/]",
+                "UNKNOWN": "[dim]?[/]",
+            }.get(getattr(sig_sum, "direction", None), "[dim]—[/]")
+            if sig_sum is not None
+            else "[dim]—[/]"
+        )
+        confidence = getattr(sig_sum, "confidence", None) if sig_sum else None
+        quality = getattr(sig_sum, "auction_quality", None) if sig_sum else None
+        confidence_quality_text = (
+            f"{confidence[:1]}/{quality[:1]}" if confidence and quality else "[dim]—[/]"
+        )
 
         row_cells: list = [
             action_text,
+            direction_text,
+            confidence_quality_text,
             sig_text,
             candidate.ticker,
             f"{candidate.iev:,}",
@@ -545,7 +565,8 @@ def display_results(
     legends = [
         Text(
             "ACTION: TradeSetup (ADR-026) sole production action | "
-            "Sig = auction_ncp cascade 0-100 + open_viability veto (ADR-048)",
+            "Dir = IEP/book agreement | Conf = locked IEV participation | "
+            "Q = auction-quality action cap | Sig = directional baseline score",
             style="dim",
         ),
         Text("STOP%: max loss from entry (ATR-based, capped -7%)", style="dim"),

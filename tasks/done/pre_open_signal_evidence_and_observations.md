@@ -286,3 +286,20 @@ From ADR-048 acceptance discussion + Phase 4 scope lock:
 Definition of Done: deterministic, offline-capable, adapter-thin, ADR-041/026/047/048
 intact, no dual verdict path, capture-time saved observations champion, no non-goals violated.
 If a checkpoint cannot be met, stop and report rather than weaken the contract.
+
+## Directional Baseline Completion Amendment (2026-07-26)
+
+The unused v3 cohort was finalized before its first row:
+
+- `pre_open_directional_baseline.v1` is the initial deterministic long-only
+  baseline.
+- The workflow-local scorer was deleted; typed pre-open evidence now runs
+  through `ScreenAssessmentPipeline` and the single `SignalEngine`.
+- IEP/book agreement determines direction, locked-input IEV determines
+  confidence, and auction quality is an ordinal action cap.
+- Canonical observations retain the baseline contract, factors, rationale and
+  quality reasons.
+- Opening grade schema 3 measures timestamp-aligned directional accuracy and
+  slices outcomes by direction, confidence, quality, and factor state.
+- AI tune output remains recommendation-only. Deterministic validation and
+  governed promotion of a separately identified successor remain future work.

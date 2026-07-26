@@ -23,7 +23,7 @@ amendment links from the selected ADRs.
 
 ## Current architecture snapshot
 
-_Content recertified against source/config/tests: 2026-07-17. Verify source when making code claims._
+_Content recertified against source/config/tests: 2026-07-26. Verify source when making code claims._
 
 ```text
 providers / SQLite
@@ -50,7 +50,7 @@ canonical observations
 | Market context | `MarketContextEngine` is a canonical signal-conditioning input when requested; regime-adjusted risk remains a preview |
 | Final action | `AssessTradeSetupUseCase` is the single Signal + Risk composition point |
 | Screen adoption | `ScreenAssessmentPipeline` + per-scenario seam (`SignalInputs` / `RiskInputsBuilder` / `ScreenPolicy`); engines stay single (ADR-047) |
-| Pre-open signal (target) | IEV=universe; NCP decision_at capture; groups `auction_ncp`+`open_viability`; TradeSetup owns action; DB observations (ADR-048) — not fully implemented |
+| Pre-open signal | `pre_open_directional_baseline.v1`: IEP/book agreement sets direction, locked-input IEV sets confidence, auction quality caps action; one `SignalEngine`; TradeSetup owns action; v3 DB observations retain factors and rationale (ADR-048) |
 | Evidence promotion | Diagnostic evidence cannot gain production authority without out-of-sample proof and validator support |
 | Persistence | Local SQLite at `data/db/data.db`, plus purpose-specific journals/artifacts; historical claims require point-in-time provenance |
 | CLI authority | `src/adapters/cli/main.py` and live `saham --help`; adapters wire and render but do not own policy |

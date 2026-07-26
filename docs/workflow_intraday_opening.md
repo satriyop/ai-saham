@@ -215,7 +215,8 @@ saham research pre-open track --force BBCA BBRI BMRI
 
 ### Step 3: Grade (09:30+ WIB)
 
-Produces deterministic accuracy report from snapshot + track data:
+Produces a deterministic accuracy report from saved capture-time observations
+and track data. It never recomputes the original signal:
 
 ```bash
 saham research pre-open grade
@@ -223,13 +224,23 @@ saham research pre-open grade
 
 **Metrics computed:**
 
-| Metric | What it measures | Grade scale |
-|--------|-----------------|-------------|
-| Entry range hit-rate | % of tickers opening inside predicted range | A (>80%) → F (<40%) |
-| Gap band accuracy | Was the ATR band correctly calibrated? | A (>80%) → F (<40%) |
-| Stop distance adequacy | Were stops wide enough to avoid false exits? | A (100%) → F (<80%) |
-| Trend classification | BULLISH/NEUTRAL/BEARISH vs actual move | A (>80%) → F (<40%) |
-| Overall | Weighted composite | A (≥90%) → F (<50%) |
+| Metric | What it measures |
+|--------|-----------------|
+| Entry range hit-rate | % of tickers opening inside the saved entry range |
+| IEP error | Absolute distance between saved IEP and observed opening price |
+| Direction accuracy T+5/T+15/T+30 | Saved directional baseline versus timestamp-aligned return; ±0.15% is neutral |
+| Return T+5/T+15/T+30 | Opening-to-horizon return using actual capture timestamps |
+| Clean trade | Whether 1R was available without the effective stop being hit |
+
+The report also slices outcomes by:
+
+- directional result (`BULLISH`, `BEARISH`, `NEUTRAL`; `CONFLICTED` and
+  `UNKNOWN` are excluded from accuracy denominators);
+- direction confidence (`HIGH`, `MEDIUM`, `LOW`);
+- auction quality (`RELIABLE`, `CAUTION`, `UNRELIABLE`);
+- IEP direction, book-pressure state, participation state, RSI-extension
+  context, and unusual-volume context;
+- final signal band, funnel result, and `TradeSetup` action.
 
 If order book data was captured (always-on), grade additionally reports:
 - `ob_bid_pressure_T0`: bid pressure ratio at first track interval
@@ -238,11 +249,8 @@ If order book data was captured (always-on), grade additionally reports:
 - `ob_fnet_T0`: foreign net at first track interval (IDR)
 - `ob_fnet_latest`: foreign net at last track interval (IDR)
 
-The per-ticker breakdown tags critical errors:
-- `FALSE_NEGATIVE`: verdict was SKIP but stock opened in entry range
-- `FALSE_POSITIVE`: verdict was ENTER/WAIT but stock opened outside range
-- `TREND_MISCLASSIFIED`: trend direction was wrong
-- `STOP_TOO_TIGHT`: price crossed stop within 5 minutes of open
+Per-ticker rows retain the saved baseline identity, complete factor values,
+rationale, quality reasons, horizon returns, and directional correctness.
 
 ### Step 4: Prompt
 

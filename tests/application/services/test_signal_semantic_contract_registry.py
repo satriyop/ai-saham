@@ -2259,6 +2259,10 @@ for _setup_name in (
 
 # Narrowly named prefix exclusions — never an entire active document root.
 _NON_MATERIAL_PREFIX_REASONS: dict[str, str] = {
+    "signal_engine.pre_open_directional_baseline.": (
+        "pre-open-only policy with its own observation compatibility hash; "
+        "it cannot affect accumulation-discovery evidence or scoring"
+    ),
     "signal_engine.regime_conditioning.": (
         "archived Stage 5 diagnostic; legacy_conditioned_score does not affect "
         "canonical assessment.score, decision_policy is the canonical regime gate"
@@ -2380,4 +2384,3 @@ def test_classification_helper_classifies_non_material_leaf_by_prefix():
         "root.archived.value", set(), {}, {"root.archived.": "archived diagnostic"},
     )
     assert result == "non_material"
-

@@ -104,6 +104,8 @@ def test_pre_open_results_render_rich_summary_panel(capsys):
     assert "★ PRIME" not in out
     assert "Broker Backing" not in out
     assert "Action" in out or "ACTION" in out
+    assert "Dir" in out
+    assert "Conf/Q" in out
     assert "Gap Src" in out
     assert "IEP" in out
     assert "VERDICT:" not in out

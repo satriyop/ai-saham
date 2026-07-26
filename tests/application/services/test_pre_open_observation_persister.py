@@ -212,6 +212,11 @@ def test_persist_observations_and_identity_upsert(tmp_path: Path, monkeypatch):
     assert ops_candidate["best_bid"] == 10050.0
     assert ops_candidate["bid_gap_pct"] == 0.5
     assert ops_candidate["gap_price_source"] == "IEP"
+    assert ops_candidate["signal_contract"] == "pre_open_directional_baseline.v1"
+    assert ops_candidate["signal_direction"] == "BULLISH"
+    assert ops_candidate["signal_direction_confidence"] == "HIGH"
+    assert ops_candidate["auction_quality"] == "RELIABLE"
+    assert ops_candidate["signal_factors"]["delta_iev"] == 20_000
 
     grade_root = tmp_path / "grade"
     grade_day = grade_root / "20260618"

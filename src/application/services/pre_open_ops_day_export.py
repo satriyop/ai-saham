@@ -111,6 +111,22 @@ def write_pre_open_ops_day_export(
                     c.ticker_notation.to_dict() if c.ticker_notation else None
                 ),
                 "signal_score": getattr(sig, "score", None) if sig else None,
+                "signal_contract": getattr(sig, "contract", None) if sig else None,
+                "signal_direction": getattr(sig, "direction", None) if sig else None,
+                "signal_direction_confidence": (
+                    getattr(sig, "confidence", None) if sig else None
+                ),
+                "auction_quality": (
+                    getattr(sig, "auction_quality", None) if sig else None
+                ),
+                "signal_raw_score": getattr(sig, "raw_score", None) if sig else None,
+                "signal_factors": getattr(sig, "factors", None) if sig else None,
+                "signal_rationale": (
+                    list(getattr(sig, "rationale", ())) if sig else None
+                ),
+                "signal_quality_reasons": (
+                    list(getattr(sig, "quality_reasons", ())) if sig else None
+                ),
                 "signal_strength": getattr(sig, "strength", None) if sig else None,
                 "signal_entry_quality": (
                     getattr(sig, "entry_quality", None) if sig else None
