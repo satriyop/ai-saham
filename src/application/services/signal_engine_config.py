@@ -38,13 +38,54 @@ _REMOVED_GROUP_MESSAGE = (
 
 # ── Phase 1: classification & missing-data config ──────────────────────────────
 
+
 @dataclass(frozen=True)
 class SignalClassificationConfig:
     strong_min_score: int = 70
     moderate_min_score: int = 45
 
 
+@dataclass(frozen=True)
+class PreOpenDirectionalBaselineConfig:
+    contract: str = "pre_open_directional_baseline.v1"
+    buy_pressure_min: float = 0.60
+    sell_pressure_max: float = 0.40
+    high_confidence_build_min: float = 0.08
+    medium_confidence_floor: float = -0.03
+    min_normalized_iev_intensity: float = 1.0
+    reliable_spread_max_pct: float = 1.0
+    max_spread_pct: float = 1.5
+    large_gap_caution_pct: float = 5.0
+    bullish_high_score: int = 80
+    bullish_medium_score: int = 70
+    bullish_low_score: int = 55
+    neutral_score: int = 45
+    conflicted_score: int = 35
+    bearish_score: int = 20
+    unknown_score: int = 0
+
+    def __post_init__(self) -> None:
+        if self.contract != "pre_open_directional_baseline.v1":
+            raise ValueError("unsupported pre-open directional baseline contract")
+        if not 0.0 <= self.sell_pressure_max < self.buy_pressure_min <= 1.0:
+            raise ValueError("pre-open book pressure thresholds must be ordered")
+        if self.max_spread_pct < self.reliable_spread_max_pct:
+            raise ValueError("max spread must be >= reliable spread")
+        scores = (
+            self.bullish_high_score,
+            self.bullish_medium_score,
+            self.bullish_low_score,
+            self.neutral_score,
+            self.conflicted_score,
+            self.bearish_score,
+            self.unknown_score,
+        )
+        if any(not 0 <= score <= 100 for score in scores):
+            raise ValueError("pre-open baseline scores must be 0-100")
+
+
 # ── Phase 2: input mapping config ──────────────────────────────────────────────
+
 
 @dataclass(frozen=True)
 class AccumScoreMappingConfig:
@@ -54,12 +95,11 @@ class AccumScoreMappingConfig:
 
 @dataclass(frozen=True)
 class SignalInputMappingConfig:
-    accum_score: AccumScoreMappingConfig = field(
-        default_factory=AccumScoreMappingConfig
-    )
+    accum_score: AccumScoreMappingConfig = field(default_factory=AccumScoreMappingConfig)
 
 
 # ── Phase 3: enrichment config ─────────────────────────────────────────────────
+
 
 @dataclass(frozen=True)
 class SignalEnrichmentConfig:
@@ -67,6 +107,7 @@ class SignalEnrichmentConfig:
 
 
 # ── Phase 4: evidence-group and flag config ─────────────────────────────────────
+
 
 @dataclass(frozen=True)
 class EvidenceGroupConfig:
@@ -121,19 +162,17 @@ class SignalFlagsConfig:
     valuation_stretched: ValuationStretchedFlagConfig = field(
         default_factory=ValuationStretchedFlagConfig
     )
-    analyst_bearish: AnalystBearishFlagConfig = field(
-        default_factory=AnalystBearishFlagConfig
-    )
-    insider_selling: InsiderSellingFlagConfig = field(
-        default_factory=InsiderSellingFlagConfig
-    )
+    analyst_bearish: AnalystBearishFlagConfig = field(default_factory=AnalystBearishFlagConfig)
+    insider_selling: InsiderSellingFlagConfig = field(default_factory=InsiderSellingFlagConfig)
 
 
 # ── Phase 5: regime-conditional group score conditioning ────────────────────────
 
+
 @dataclass(frozen=True)
 class NeutralRegimeConfig:
     """NEUTRAL regime: discount weak flow confirmation below threshold."""
+
     weak_flow_threshold: float = 50.0
     weak_flow_discount: float = 0.80
 
@@ -141,13 +180,15 @@ class NeutralRegimeConfig:
 @dataclass(frozen=True)
 class RiskOffRegimeConfig:
     """RISK_OFF regime: discount weak (non-MATCH) setup evidence."""
-    weak_setup_threshold: float = 60.0   # below this = PARTIAL or NO_MATCH
+
+    weak_setup_threshold: float = 60.0  # below this = PARTIAL or NO_MATCH
     weak_setup_discount: float = 0.50
 
 
 @dataclass(frozen=True)
 class VolatileRegimeConfig:
     """VOLATILE regime: discount both evidence groups."""
+
     setup_discount: float = 0.70
     flow_discount: float = 0.80
 
@@ -161,12 +202,14 @@ class RegimeConditioningConfig:
     RISK_OFF: weak setup discounted (only MATCH-quality setups count).
     VOLATILE: both groups discounted (higher bar in fast-moving markets).
     """
+
     neutral: NeutralRegimeConfig = field(default_factory=NeutralRegimeConfig)
     risk_off: RiskOffRegimeConfig = field(default_factory=RiskOffRegimeConfig)
     volatile: VolatileRegimeConfig = field(default_factory=VolatileRegimeConfig)
 
 
 # ── Decision Policy Config ─────────────────────────────────────────────────────
+
 
 @dataclass(frozen=True)
 class RegimeDecisionPolicyConfig:
@@ -230,17 +273,16 @@ class DecisionPolicyConfig:
             "allowed": SetupRegimeActionConfig(max_decision="ENTER"),
             "restricted_or_watch_only": SetupRegimeActionConfig(max_decision="WATCH"),
             "enter_disabled": SetupRegimeActionConfig(max_decision="WATCH"),
-            "allowed_if_flow_confirmation_strong": SetupRegimeActionConfig(
-                max_decision="ENTER"
-            ),
+            "allowed_if_flow_confirmation_strong": SetupRegimeActionConfig(max_decision="ENTER"),
         }
     )
     # A2: caps applied when regime quality metadata is available
-    regime_confidence_min_enter: float = 0.35   # cap ENTER→WATCH when confidence < this
+    regime_confidence_min_enter: float = 0.35  # cap ENTER→WATCH when confidence < this
     regime_transitioning_cap_enter: bool = True  # cap ENTER→WATCH when stability == TRANSITIONING
 
 
 # ── Alpha Trigger Config ────────────────────────────────────────────────────────
+
 
 @dataclass(frozen=True)
 class AlphaTriggerRouteFractionsConfig:
@@ -348,6 +390,7 @@ class AlphaTriggerConfig:
 
 # ── Aggregated Engine Config ────────────────────────────────────────────────────
 
+
 @dataclass(frozen=True)
 class SignalEngineConfig:
     classification: SignalClassificationConfig = field(default_factory=SignalClassificationConfig)
@@ -359,6 +402,9 @@ class SignalEngineConfig:
     regime_conditioning: RegimeConditioningConfig = field(default_factory=RegimeConditioningConfig)
     decision_policy: DecisionPolicyConfig = field(default_factory=DecisionPolicyConfig)
     alpha_trigger: AlphaTriggerConfig = field(default_factory=AlphaTriggerConfig)
+    pre_open_directional_baseline: PreOpenDirectionalBaselineConfig = field(
+        default_factory=PreOpenDirectionalBaselineConfig
+    )
 
 
 # Re-export shared scoring configs for backward-compatible imports
@@ -371,6 +417,7 @@ __all__ = [
     "ForwardPeScoringConfig",
     # New configs
     "SignalClassificationConfig",
+    "PreOpenDirectionalBaselineConfig",
     "AccumScoreMappingConfig",
     "SignalInputMappingConfig",
     "SignalEnrichmentConfig",
@@ -391,4 +438,3 @@ __all__ = [
     "AlphaTriggerConfig",
     "SignalEngineConfig",
 ]
-

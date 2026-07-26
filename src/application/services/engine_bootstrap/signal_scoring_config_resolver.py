@@ -25,14 +25,15 @@ from src.application.services.engine_bootstrap.signal_decision_policy_config_res
     resolve_decision_policy_config,
 )
 from src.application.services.signal_engine_config import (
-    AnalystBearishFlagConfig,
+    AccumScoreMappingConfig,
     AlphaTriggerConfig,
+    AnalystBearishFlagConfig,
     BandarScoringConfig,
     EvidenceGroupConfig,
     EvidenceGroupsConfig,
-    AccumScoreMappingConfig,
     InsiderSellingFlagConfig,
     NeutralRegimeConfig,
+    PreOpenDirectionalBaselineConfig,
     RegimeConditioningConfig,
     RiskOffRegimeConfig,
     SignalClassificationConfig,
@@ -124,6 +125,7 @@ def resolve_signal_engine_config(cfg: dict) -> SignalEngineConfig:
     decision_cfg = root.get("decision_policy", {})
     decision_policy = resolve_decision_policy_config(decision_cfg)
     alpha_trigger_cfg = resolve_alpha_trigger_config(root.get("alpha_trigger", {}))
+    pre_open = root.get("pre_open_directional_baseline", {})
 
     setup_quality_group = EvidenceGroupConfig(
         weight=evidence_groups.get("setup_quality", {}).get("weight", 0.60),
@@ -144,9 +146,7 @@ def resolve_signal_engine_config(cfg: dict) -> SignalEngineConfig:
         ),
     )
     _validate_evidence_group_config("setup_quality", setup_quality_group, alpha_trigger_cfg)
-    _validate_evidence_group_config(
-        "flow_confirmation", flow_confirmation_group, alpha_trigger_cfg
-    )
+    _validate_evidence_group_config("flow_confirmation", flow_confirmation_group, alpha_trigger_cfg)
 
     return SignalEngineConfig(
         classification=SignalClassificationConfig(
@@ -210,4 +210,22 @@ def resolve_signal_engine_config(cfg: dict) -> SignalEngineConfig:
         ),
         decision_policy=decision_policy,
         alpha_trigger=alpha_trigger_cfg,
+        pre_open_directional_baseline=PreOpenDirectionalBaselineConfig(
+            contract=str(pre_open.get("contract", "pre_open_directional_baseline.v1")),
+            buy_pressure_min=float(pre_open.get("buy_pressure_min", 0.60)),
+            sell_pressure_max=float(pre_open.get("sell_pressure_max", 0.40)),
+            high_confidence_build_min=float(pre_open.get("high_confidence_build_min", 0.08)),
+            medium_confidence_floor=float(pre_open.get("medium_confidence_floor", -0.03)),
+            min_normalized_iev_intensity=float(pre_open.get("min_normalized_iev_intensity", 1.0)),
+            reliable_spread_max_pct=float(pre_open.get("reliable_spread_max_pct", 1.0)),
+            max_spread_pct=float(pre_open.get("max_spread_pct", 1.5)),
+            large_gap_caution_pct=float(pre_open.get("large_gap_caution_pct", 5.0)),
+            bullish_high_score=int(pre_open.get("bullish_high_score", 80)),
+            bullish_medium_score=int(pre_open.get("bullish_medium_score", 70)),
+            bullish_low_score=int(pre_open.get("bullish_low_score", 55)),
+            neutral_score=int(pre_open.get("neutral_score", 45)),
+            conflicted_score=int(pre_open.get("conflicted_score", 35)),
+            bearish_score=int(pre_open.get("bearish_score", 20)),
+            unknown_score=int(pre_open.get("unknown_score", 0)),
+        ),
     )
