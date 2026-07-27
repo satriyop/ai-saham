@@ -168,10 +168,16 @@ def test_tui_does_not_compose_forbidden_provider_or_write_capabilities():
         assert symbol not in source
 
 
-def test_tui_has_no_removed_research_health_modules_or_route_action():
+def test_tui_has_no_retired_multi_route_research_workspace():
+    """ADR-051 clean break: no Today/Screen tabs/workbench product routes."""
     source = "\n".join(path.read_text(encoding="utf-8") for path in sorted(TUI_ROOT.rglob("*.py")))
     assert "research_health" not in source
     assert "show_research" not in source
+    assert "DailyScreen" not in source
+    assert "ScreenWorkspaceScreen" not in source
+    assert "TickerWorkbenchScreen" not in source
+    assert 'Binding("1"' not in source
+    assert 'Binding("2"' not in source
     assert 'Binding("3"' not in source
 
 

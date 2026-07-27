@@ -1,4 +1,4 @@
-"""Lazy CLI launcher for the optional Textual research workspace.
+"""Lazy CLI launcher for the optional Textual daily cockpit.
 
 This module deliberately has no top-level import from ``textual`` or
 ``src.adapters.tui`` so every base CLI command remains available without the
@@ -23,7 +23,7 @@ def _load_tui_runner() -> Callable[[], None]:
 
 
 def tui() -> None:
-    """Open the optional local terminal research workspace."""
+    """Open the optional local-first daily cockpit (OpenCode-style TUI)."""
     try:
         runner = _load_tui_runner()
     except ModuleNotFoundError as exc:

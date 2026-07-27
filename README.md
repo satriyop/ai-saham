@@ -43,20 +43,22 @@ For command options, use `saham COMMAND --help`. See [CLI_README.md](CLI_README.
 for the longer learning-oriented guide; when it conflicts with live `--help`,
 the command implementation wins.
 
-### Optional terminal workspace
+### Optional daily cockpit (TUI)
 
-Install and launch the read-only Textual workspace separately from the base CLI:
+Install and launch the OpenCode-style local-first cockpit (Textual) separately
+from the base CLI:
 
 ```bash
 pip install -e ".[tui]"
 saham tui
 ```
 
-The TUI reads cached local data and never initiates provider refresh, capture,
-label generation, tuning, configuration changes, AI calls, or trading actions.
-It performs no intentional business-data writes. Repository construction may
-initialize or migrate SQLite schemas, so this is not a byte-for-byte storage
-read-only claim.
+Design: `docs/design/tui-cockpit-opencode.md` · ADR-051 clean break.
+
+The cockpit is keyboard-first (`Ctrl+P` command palette). It defaults to local
+cache, does not auto-fetch on open, and never places broker orders. Explicit
+fetch and full screen/plan power remain available via CLI; later cockpit phases
+wire the same use cases behind the palette.
 
 Use `1` for Today, `2` for Candidates, `r` for explicit local recomputation,
 `Enter` to open the selected ticker, `Esc` to go back, `?` for Help, and `q` to

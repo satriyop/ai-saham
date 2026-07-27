@@ -74,7 +74,10 @@ saham today [OPTIONS]
 
 ## saham tui
 
-Launch the optional terminal research workspace (requires `pip install -e ".[tui]"`).
+Launch the optional OpenCode-style daily cockpit (requires `pip install -e ".[tui]"`).
+
+Keyboard-first local cockpit: `Ctrl+P` commands, layout B (main + sidebar).
+See `docs/design/tui-cockpit-opencode.md` and ADR-051.
 
 ```
 saham tui

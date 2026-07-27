@@ -11,10 +11,8 @@ from pathlib import Path
 REQUIRED_TUI_FILES = (
     "src/adapters/tui/main.py",
     "src/adapters/tui/composition.py",
-    "src/adapters/tui/screens/daily_screen.py",
-    "src/adapters/tui/screens/candidate_browser_screen.py",
-    "src/adapters/tui/screens/ticker_research_screen.py",
-    "src/adapters/tui/screens/research_health_screen.py",
+    "src/adapters/tui/state.py",
+    "src/adapters/tui/worker_lifecycle.py",
 )
 
 

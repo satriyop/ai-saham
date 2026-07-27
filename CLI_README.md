@@ -59,7 +59,7 @@ saham strategy backtest BBCA --strategy my_rsi
 saham
 ├── version
 ├── today               — read-only daily briefing
-├── tui                 — optional terminal research workspace
+├── tui                 — optional OpenCode-style daily cockpit
 ├── audit data          — DQ baseline manifest and field contracts
 ├── fetch               — data ingestion (market, broker, stockbit, universe)
 ├── indicator           — technical indicators (compute, snapshot, create, list)
