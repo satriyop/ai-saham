@@ -5,7 +5,7 @@ Owns setup-preset resolution, CLI option/default normalization, date/trend/grid
 parsing, and ticker resolution before delegating to AccumulationAuditUseCase.
 This is the workflow policy previously embedded in the accumulation CLI command.
 
-Public CLI path: `saham research accumulation evaluate`.
+Public CLI path: `saham backtest screen accum`.
 
 Layer: Application
 Depends on: AccumulationAuditUseCase, AccumulationAuditPolicy, and an injected

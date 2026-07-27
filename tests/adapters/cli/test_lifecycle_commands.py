@@ -156,8 +156,10 @@ def test_policy_group_exposes_accum_lifecycle():
     assert result.exit_code == 0
     assert "accum" in result.stdout
     assert accum.exit_code == 0
-    for verb in ("backtest", "tune", "review", "validate", "apply", "status"):
+    for verb in ("tune", "review", "validate", "apply", "status"):
         assert verb in accum.stdout
+    # Commands block must not list a backtest subcommand (sim is backtest portfolio swing).
+    assert "│ backtest" not in accum.stdout
 
 
 def test_assess_group_exposes_pre_open_post_open_assess():

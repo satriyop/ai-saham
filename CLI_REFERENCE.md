@@ -16,6 +16,7 @@ Verb dictionary (ADR-050): first token is the behavior contract.
 | **`plan`** | Live TradeSetup / trade plan (`plan swing`) | **No** | **Yes** |
 | **`assess`** | Frozen-plan confirmation (`assess pre-open`) | **No** | relative to frozen plan |
 | **`research`** | Learning corpus (capture/labels/evaluate/…) | **Yes** | no |
+| **`backtest`** | Offline historical performance sim | **No** | no live action |
 | **`trade`** | Human paper notebook | paper journal only | paper only |
 | **`policy`** | Guarded setup-config lifecycle | policy tables | no |
 | **`audit`** | Offline data quality / sentiment accuracy | audit stores may write | no |
@@ -1542,13 +1543,41 @@ saham trade accum review [OPTIONS]
 
 ---
 
+
+## saham backtest screen accum
+
+Offline historical replay of accumulation **screen filters** + forward/exit stats.
+Not corpus (`research accum evaluate`). Not portfolio book.
+
+```
+saham backtest screen accum [TICKERS...] [OPTIONS]
+saham backtest screen accum --universe lq45 --setup foreign-bounce --start 2026-01-01
+```
+
+See `config/accumulation_audit.yaml` setup presets. Fetch market data first.
+
+---
+
+## saham backtest portfolio swing
+
+Offline **portfolio** walk-forward for a named swing setup (capital, risk, slots, costs).
+Not live `plan swing`. After sim: `policy accum tune|review|validate|apply`.
+
+```
+saham backtest portfolio swing [TICKERS...] [OPTIONS]
+saham backtest portfolio swing --universe lq45 --setup foreign-bounce --start 2025-01-01
+```
+
+Retired public path: `policy accum backtest` → use this command.
+
+---
 ## saham policy accum
 
 Guarded setup-config lifecycle (not paper, not research corpus).
 
 ```
-saham policy accum backtest|tune|review|validate|apply|status
-saham policy accum backtest --universe lq45 --setup foreign-bounce
+saham policy accum tune|review|validate|apply|status
+saham backtest portfolio swing --universe lq45 --setup foreign-bounce
 saham policy accum tune --universe lq45
 saham policy accum validate PROPOSAL_ID
 saham policy accum apply PROPOSAL_ID --yes

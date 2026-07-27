@@ -19,7 +19,13 @@ from src.adapters.cli.strategy_skill_commands import skill_app
 # Create Typer sub-app for strategy commands
 strategy_app = typer.Typer(
     name="strategy",
-    help="Manage strategy packages (init, validate, list)",
+    help=(
+        "Manage strategy packages under strategies/ "
+        "(init, validate, list, create, backtest, skill). "
+        "Package YAML rule replay: `strategy backtest`. "
+        "Swing setup portfolio sim: `saham backtest portfolio swing` "
+        "(not this group)."
+    ),
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},
 )

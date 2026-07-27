@@ -10,7 +10,7 @@ from typing import Annotated, Any, Optional, Sequence
 
 import typer
 
-from src.adapters.cli.policy_accum_backtest_runner import (
+from src.adapters.cli.backtest_portfolio_runner import (
     _run_swing_backtest,
     load_swing_backtest_runner_config,
 )

@@ -83,6 +83,8 @@ saham fetch …
 saham screen pre-open|accum …
 saham inspect risk|sentiment|regime|signal accum …
 saham plan swing TICKER
+saham backtest screen accum …
+saham backtest portfolio swing …
 saham assess pre-open …
 saham research pre-open|accum …
 saham trade pre-open|accum …
@@ -297,3 +299,35 @@ When implementation lands, amend in the same PR (or immediately after):
 | `fetch broker-top-foreign` | Data job |
 | `view broker top-foreign` | Ranking table from cache |
 | ~~`inspect chart`~~ | TUI chart component later |
+
+## Amendment: top-level `backtest` (screen accum + portfolio swing)
+
+**Status:** Accepted — implemented
+
+### Decision
+
+Top-level verb **`backtest`**: offline historical performance simulation only.
+
+| Command | Simulator | Notes |
+|---------|-----------|--------|
+| `saham backtest screen accum` | Discovery-filter replay + forward/exit stats | Was orphan accumulation audit CLI; not corpus |
+| `saham backtest portfolio swing` | Constrained multi-position swing-setup sim | Was `policy accum backtest`; same SwingBacktestUseCase |
+
+### Naming
+
+- **screen accum** = no capital book; filter/discovery quality (symmetric with `screen accum`)
+- **portfolio swing** = capital book for swing line (symmetric with `plan swing`, not nested under live verb `plan`)
+
+### Policy boundary
+
+- `policy accum` retains: `tune | review | validate | apply | status`
+- Public portfolio sim: **`backtest portfolio swing` only** (`policy accum backtest` removed, clean break)
+- Lifecycle internals may still call the portfolio use case
+
+### Non-goals
+
+- Not corpus (`research`)
+- Not live TradeSetup (`plan`)
+- Not DQ audit (`audit data|sentiment`)
+- Not strategy-package backtest migration (`strategy backtest` stays under strategy)
+

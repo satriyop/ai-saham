@@ -1,8 +1,8 @@
 """
-CLI implementation for saham research accum evaluate.
+CLI: saham backtest screen accum
 
-Public command registration:
-  saham research accum evaluate
+Offline historical replay of accumulation discovery filters (+ optional exit grid).
+Not corpus evaluate (`research accum evaluate`). Not portfolio sim (`backtest portfolio swing`).
 
 Layer: Adapter
 """
@@ -13,8 +13,8 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.research_accum_audit_csv_writer import write_accumulation_audit_csv
-from src.adapters.cli.research_accum_audit_workflow_factory import (
+from src.adapters.cli.backtest_screen_accum_csv_writer import write_accumulation_audit_csv
+from src.adapters.cli.backtest_screen_accum_workflow_factory import (
     create_run_accumulation_audit_workflow,
 )
 from src.application.services.universe_loader import UniverseNotFoundError
@@ -27,11 +27,11 @@ from src.infrastructure.config.app_config import load_app_config
 
 
 def _display_audit_summary(response: AccumulationAuditResponse, top_groups: int) -> None:
-    from src.adapters.cli.research_accum_audit_display import display_audit_summary
+    from src.adapters.cli.backtest_screen_accum_display import display_audit_summary
     display_audit_summary(response=response, top_groups=top_groups)
 
 
-def accumulation_audit(
+def screen_accum(
     tickers: Annotated[
         Optional[list[str]],
         typer.Argument(help="Explicit ticker symbols (e.g. BBCA BBRI)"),
@@ -148,10 +148,10 @@ def accumulation_audit(
     ] = None,
 ) -> None:
     """
-    Replay accumulation signals historically and measure forward returns.
+    Offline accum-screen filter replay: historical hits + forward/exit stats.
 
-    This command is deterministic and offline. It uses cached local candles and
-    broker summaries only; run `saham fetch market --universe <name>` first.
+    Not corpus (`research accum evaluate`). Not portfolio book (`backtest portfolio swing`).
+    Uses local candles/broker cache only — `saham fetch market --universe <name>` first.
     """
     cfg = load_app_config()
     resolved_db = db_path or Path(cfg.storage.db_path)

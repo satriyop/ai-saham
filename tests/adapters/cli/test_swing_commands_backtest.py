@@ -6,7 +6,7 @@ from tests.adapters.cli.swing_command_fixtures import runner
 
 
 def test_swing_backtest_unknown_setup_error():
-    result = runner.invoke(app, ["policy", "accum", "backtest", "--setup", "unknown"])
+    result = runner.invoke(app, ["backtest", "portfolio", "swing", "--setup", "unknown"])
 
     assert result.exit_code != 0
     assert "unknown swing setup" in result.output.lower()
@@ -17,9 +17,9 @@ def test_swing_backtest_rejects_invalid_allowed_regime():
     result = runner.invoke(
         app,
         [
-            "policy",
-            "accum",
             "backtest",
+            "portfolio",
+            "swing",
             "BBCA",
             "--allow-regimes",
             "CALM",

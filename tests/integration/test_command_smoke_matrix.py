@@ -250,7 +250,7 @@ def test_backtest_json_contracts(temp_workspace, monkeypatch):
     swing_bt = runner.invoke(
         app,
         [
-            "policy", "accum", "backtest", "BBCA",
+            "backtest", "portfolio", "swing", "BBCA",
             "--start", "2026-06-01",
             "--end", "2026-06-20",
             "--format", "json",

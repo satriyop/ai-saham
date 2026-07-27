@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from src.adapters.cli import research_accum_audit_workflow_factory as factory
+from src.adapters.cli import backtest_screen_accum_workflow_factory as factory
 from src.application.dto.accumulation_audit import AccumulationAuditPolicy
 from src.application.use_case.run_accumulation_audit_workflow_use_case import (
     RunAccumulationAuditWorkflowUseCase,
@@ -84,8 +84,8 @@ def test_factory_module_imports_infrastructure():
 def test_no_config_loading_remains_in_cli_command_module():
     import inspect
 
-    from src.adapters.cli import research_accum_audit_commands
+    from src.adapters.cli import backtest_screen_accum_commands
 
-    source = inspect.getsource(research_accum_audit_commands)
+    source = inspect.getsource(backtest_screen_accum_commands)
     assert "load_accumulation_audit_config" not in source
     assert "load_accumulation_screener_config" not in source

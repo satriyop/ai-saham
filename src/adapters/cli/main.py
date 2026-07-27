@@ -11,11 +11,12 @@ Command groups:
   saham research   — research corpus / ML feeder (pre-open, accum)
   saham view       — read-only local data browsing
   saham indicator  — technical indicators (compute, snapshot, create, list, show, delete)
-  saham inspect    — live capability/evidence lenses (risk, sentiment, regime, signal, chart)
+  saham inspect    — live capability/evidence lenses (risk, sentiment, regime, signal accum)
   saham plan       — live trade plan composition (plan swing → TradeSetup)
   saham assess     — frozen-plan confirmation (assess pre-open)
+  saham backtest   — offline historical sim (screen accum | portfolio swing)
   saham strategy   — strategy management (init, validate, list, create, backtest)
-  saham policy     — guarded setup-config lifecycle (policy accum …)
+  saham policy     — guarded setup-config lifecycle (tune|review|validate|apply|status)
   saham trade      — paper trading notebook only (pre-open, accum)
   saham tui        — optional local terminal research workspace
   saham version    — version information
@@ -26,12 +27,13 @@ Layer: Adapter
 import typer
 
 from src import __version__
-from src.adapters.cli.inspect_commands import inspect_app
-from src.adapters.cli.plan_commands import plan_app
 from src.adapters.cli.assess_commands import assess_app
 from src.adapters.cli.audit_commands import audit_app
+from src.adapters.cli.backtest_commands import backtest_app
 from src.adapters.cli.fetch_commands import fetch_app
 from src.adapters.cli.indicator_commands import indicator_app
+from src.adapters.cli.inspect_commands import inspect_app
+from src.adapters.cli.plan_commands import plan_app
 from src.adapters.cli.policy_commands import policy_app
 from src.adapters.cli.research_commands import research_app
 from src.adapters.cli.screen_lifecycle_commands import screen_app
@@ -75,6 +77,7 @@ app.add_typer(inspect_app, name="inspect", rich_help_panel=_PANEL_ANALYSIS)
 app.add_typer(plan_app, name="plan", rich_help_panel=_PANEL_ANALYSIS)
 app.add_typer(assess_app, name="assess", rich_help_panel=_PANEL_ANALYSIS)
 app.add_typer(research_app, name="research", rich_help_panel=_PANEL_ANALYSIS)
+app.add_typer(backtest_app, name="backtest", rich_help_panel=_PANEL_ANALYSIS)
 app.add_typer(trade_app, name="trade", rich_help_panel=_PANEL_ANALYSIS)
 app.add_typer(view_app, name="view", rich_help_panel=_PANEL_BROWSE)
 app.add_typer(audit_app, name="audit", rich_help_panel=_PANEL_BROWSE)

@@ -57,26 +57,20 @@ def backtest(
     ] = None,
 ) -> None:
     """
-    Backtest a strategy against historical data.
+    Backtest a strategy *package* (strategies/…/strategy.yaml) on one ticker.
 
-    Runs a deterministic simulation using rules from a strategy package or YAML file.
-    Replays historical candles and applies rules per candle to generate signals.
+    Replays candles and applies package rules per bar. Not the swing setup
+    portfolio walk-forward — that is `saham backtest portfolio swing`.
+    Not screen-filter history — that is `saham backtest screen accum`.
 
-    Strategy Resolution:
-        --strategy resolves name as:
-          1. ./NAME/strategy.yaml
-          2. ./strategies/NAME/strategy.yaml
-
-    Signal Mapping (customizable in YAML):
-        LOW_RISK  → ENTER_LONG (buy)
-        MODERATE  → HOLD
-        HIGH_RISK → EXIT_LONG (sell)
+    Strategy resolution (--strategy name):
+      1. ./NAME/strategy.yaml
+      2. ./strategies/NAME/strategy.yaml
 
     Examples:
         saham strategy backtest BBCA --strategy momentum
         saham strategy backtest BBCA -S ./strategies/momentum/strategy.yaml
-        saham strategy backtest BBRI -S momentum --start 2024-01-01
-        saham strategy backtest TLKM -S momentum --capital 50000000 --verbose
+        saham backtest portfolio swing --universe lq45 --setup foreign-bounce
     """
     if not strategy and not rules_file:
         typer.echo("[error] Either --strategy or --rules-file is required.", err=True)

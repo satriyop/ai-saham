@@ -30,7 +30,7 @@ def test_contextual_routes_are_exposed() -> None:
     )
     assert all(
         command in policy.stdout
-        for command in ("backtest", "tune", "review", "validate", "apply", "status")
+        for command in ("tune", "review", "validate", "apply", "status")
     )
     assert trade.exit_code == 0
     assert "pre-open" in trade.stdout
@@ -142,3 +142,26 @@ def test_view_market_context_retired_use_inspect_regime() -> None:
     assert view_help.exit_code == 0
     assert "market-context" not in view_help.stdout
     assert runner.invoke(app, ["inspect", "regime", "--help"]).exit_code == 0
+
+
+def test_backtest_family_screen_accum_and_portfolio_swing() -> None:
+    bt = runner.invoke(app, ["backtest", "--help"])
+    assert bt.exit_code == 0
+    assert "screen" in bt.stdout
+    assert "portfolio" in bt.stdout
+    assert runner.invoke(app, ["backtest", "screen", "--help"]).exit_code == 0
+    assert "accum" in runner.invoke(app, ["backtest", "screen", "--help"]).stdout
+    assert runner.invoke(app, ["backtest", "screen", "accum", "--help"]).exit_code == 0
+    assert runner.invoke(app, ["backtest", "portfolio", "swing", "--help"]).exit_code == 0
+    # retired policy accum backtest public path
+    assert runner.invoke(app, ["policy", "accum", "backtest", "--help"]).exit_code != 0
+    help_port = runner.invoke(app, ["backtest", "portfolio", "swing", "--help"]).stdout.lower()
+    assert "offline" in help_port or "portfolio" in help_port or "walk-forward" in help_port
+    assert "signalengine + riskengine -> tradesetup" not in help_port.replace(" ", "")
+
+
+def test_view_market_context_token_fails_closed() -> None:
+    result = runner.invoke(app, ["view", "market-context"])
+    assert result.exit_code != 0
+    combined = (result.stdout or "") + (result.stderr or "")
+    assert "inspect regime" in combined.lower() or "retired" in combined.lower()

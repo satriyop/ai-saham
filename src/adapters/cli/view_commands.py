@@ -21,17 +21,37 @@ from src.adapters.cli.view_ticker_commands import ticker_view_app
 from src.infrastructure.config.app_config import load_app_config
 
 
+# Retired view subcommands that must not be rewritten as ticker show.
+_RETIRED_VIEW_TOKENS = frozenset(
+    {
+        "market-context",
+    }
+)
+_RETIRED_VIEW_HINTS = {
+    "market-context": "Retired. Use: saham inspect regime",
+}
+
+
 class _ViewGroup(TyperGroup):
     """Route bare tickers to `ticker show` while preserving fixed subgroups.
 
     `saham view BBCA` → `saham view ticker show BBCA`
     `saham view ticker top-brokers BBCA` is unchanged (first token is `ticker`).
+    Retired tokens (e.g. market-context) fail closed instead of ticker-show.
     """
 
     def parse_args(self, ctx: typer.Context, args: list) -> list:
-        if args and not args[0].startswith("-") and args[0] not in self.commands:
-            # Bare subject → stock dashboard
-            args = ["ticker", "show"] + list(args)
+        if args and not args[0].startswith("-"):
+            token = args[0]
+            if token in _RETIRED_VIEW_TOKENS:
+                typer.echo(
+                    _RETIRED_VIEW_HINTS.get(token, f"Retired view command: {token}"),
+                    err=True,
+                )
+                raise SystemExit(2)
+            if token not in self.commands:
+                # Bare subject → stock dashboard
+                args = ["ticker", "show"] + list(args)
         return super().parse_args(ctx, args)
 
 

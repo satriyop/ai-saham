@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
-from src.adapters.cli.policy_accum_backtest_display import display_swing_backtest
+from src.adapters.cli.backtest_portfolio_display import display_swing_backtest
 from src.application.services.swing_backtest_attribution import (
     AttributionGroupStat,
     CandidateAttributionStat,

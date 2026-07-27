@@ -1,5 +1,8 @@
 """
-CLI implementation functions for swing backtest commands.
+CLI: saham backtest portfolio swing
+
+Offline portfolio walk-forward for a named swing setup (capital, risk, slots, costs).
+Not live TradeSetup (`plan swing`). Not corpus (`research`). Not policy apply.
 
 Layer: Adapter
 """
@@ -10,8 +13,8 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.policy_accum_backtest_runner import _run_swing_backtest
-from src.adapters.cli.policy_accum_backtest_display import display_swing_backtest
+from src.adapters.cli.backtest_portfolio_runner import _run_swing_backtest
+from src.adapters.cli.backtest_portfolio_display import display_swing_backtest
 from src.application.use_case.swing_backtest_use_case import (
     FOREIGN_BOUNCE_SETUP as BACKTEST_FOREIGN_BOUNCE_SETUP,
 )
@@ -151,17 +154,18 @@ def swing_backtest(
     ] = None,
 ) -> None:
     """
-    Unified composite swing trade analysis for a single stock.
+    Offline portfolio walk-forward for a named swing setup.
 
-    Core verdict: SignalEngine + RiskEngine -> TradeSetup.
-    Market context, strategy, setup, sentiment, and detailed flow panels are opt-in evidence.
+    Simulates multi-position trading with capital, risk %, max positions, and costs.
+    Equity curve and trades — not a live `plan swing` decision.
+    After sim: policy lifecycle is `saham policy accum tune|review|validate|apply`.
     """
     cfg = load_app_config()
     start = start or cfg.backtest.start_date
     benchmark = benchmark or cfg.analysis.benchmark
     output_format = output_format or cfg.analysis.format
 
-    from src.adapters.cli.policy_accum_backtest_runner import load_swing_backtest_runner_config
+    from src.adapters.cli.backtest_portfolio_runner import load_swing_backtest_runner_config
     runner_config = load_swing_backtest_runner_config()
 
     resolved_capital = (
