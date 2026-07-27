@@ -102,8 +102,9 @@ def test_assess_family_exposes_pre_open_and_retires_analyze_pre_open() -> None:
 def test_inspect_family_and_analyze_retired() -> None:
     inspect = runner.invoke(app, ["inspect", "--help"])
     assert inspect.exit_code == 0
-    for cmd in ("risk", "sentiment", "regime", "signal", "chart"):
+    for cmd in ("risk", "sentiment", "regime", "signal"):
         assert cmd in inspect.stdout
+    assert "chart" not in inspect.stdout
     assert runner.invoke(app, ["inspect", "risk", "--help"]).exit_code == 0
     assert runner.invoke(app, ["inspect", "signal", "--help"]).exit_code == 0
     assert "accum" in runner.invoke(app, ["inspect", "signal", "--help"]).stdout
@@ -128,3 +129,16 @@ def test_inspect_signal_accum_help_names_accumulation_flow() -> None:
     lower = result.stdout.lower()
     assert "accumulation-flow" in lower or "accumulation flow" in lower or "accum" in lower
     assert "pre-open" in lower or "not pre-open" in lower or "plan swing" in lower
+
+
+def test_inspect_chart_retired() -> None:
+    assert runner.invoke(app, ["inspect", "chart", "--help"]).exit_code != 0
+    assert runner.invoke(app, ["inspect", "chart", "price", "--help"]).exit_code != 0
+
+
+def test_view_market_context_retired_use_inspect_regime() -> None:
+    # Command unmounted from view (bare token may still hit ticker-show router).
+    view_help = runner.invoke(app, ["view", "--help"])
+    assert view_help.exit_code == 0
+    assert "market-context" not in view_help.stdout
+    assert runner.invoke(app, ["inspect", "regime", "--help"]).exit_code == 0

@@ -49,7 +49,9 @@ screen_app = typer.Typer(
         "Does not write research observations (use research * capture).\n\n"
         "Discover: `pre-open`, `accum`.\n"
         "Lifecycle: `watchlist`, `compare`.\n"
-        "Inspect a hit next: `saham view BBCA`."
+        "Next: `saham plan swing TICKER` · `saham inspect signal accum TICKER` · "
+        "`saham inspect risk TICKER` · `saham research … capture` · "
+        "`saham view BBCA` (browse only)."
     ),
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},

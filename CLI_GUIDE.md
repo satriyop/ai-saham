@@ -260,8 +260,8 @@ saham inspect regime --as-of 2026-06-01 --verbose
 Cross-market regime context from local cache: VIX, EIDO, USD/IDR, IDX breadth.
 
 ```bash
-saham view market-context
-saham view market-context --date 2026-06-01 --verbose
+saham inspect regime
+saham inspect regime --date 2026-06-01 --verbose
 ```
 
 ---
@@ -594,9 +594,9 @@ saham screen compare morning-watch              # diff against fresh screen
 ASCII charts for terminal use (requires `pip install plotext`).
 
 ```bash
-saham inspect chart price BBCA --sma 20 --ema 9 --days 120
-saham inspect chart rsi BBCA --period 9 --days 120
-saham inspect chart volume BBCA --days 30
+# retired: inspect chart (TUI later)
+# retired: inspect chart (TUI later)
+# retired: inspect chart (TUI later)
 ```
 
 ---

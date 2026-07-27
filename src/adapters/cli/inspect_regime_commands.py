@@ -76,7 +76,7 @@ def regime(
     Cross-market factors (VIX, EIDO, USD/IDR) and IDX-internal factors (IHSG
     trend, breadth) are scored 0.0–1.0 and combined into a weighted regime.
 
-    For a focused context view: saham view market-context [--verbose]
+    Sole public MCE/regime CLI (ADR-050 cleanup). Not a TradeSetup decision.
     """
     app_cfg = load_app_config()
     resolved_db = db_path or Path(app_cfg.storage.db_path)

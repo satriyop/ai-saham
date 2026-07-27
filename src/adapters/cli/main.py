@@ -58,11 +58,13 @@ app = typer.Typer(
 
 _PANEL_DATA = "Data"  # sync market data — git: collaborate (fetch/push)
 _PANEL_ANALYSIS = "Analysis"  # transform the subject — git: grow history (commit/merge)
-_PANEL_INSPECT = "Inspect"  # examine current state — git: examine state (log/status/show)
+# Browse = local stored facts / offline health. Do not name this panel "Inspect"
+# (that word is the live-lens verb `saham inspect` under Analysis).
+_PANEL_BROWSE = "Browse"
 _PANEL_ARTIFACTS = "Artifacts"  # manage named collections — git: remote/branch/tag
 _PANEL_GENERAL = "General"  # meta / entry points
 
-# Ordered in data-pipeline reading order: Data → Analysis → Inspect → Artifacts
+# Ordered in data-pipeline reading order: Data → Analysis → Browse → Artifacts
 # → General. Note: Typer renders flat-command panels (today/tui/version) ahead of
 # sub-group panels regardless of this order, so the on-screen panel sequence is
 # only approximately this. The grouping — not the exact sequence — is the point.
@@ -74,8 +76,8 @@ app.add_typer(plan_app, name="plan", rich_help_panel=_PANEL_ANALYSIS)
 app.add_typer(assess_app, name="assess", rich_help_panel=_PANEL_ANALYSIS)
 app.add_typer(research_app, name="research", rich_help_panel=_PANEL_ANALYSIS)
 app.add_typer(trade_app, name="trade", rich_help_panel=_PANEL_ANALYSIS)
-app.add_typer(view_app, name="view", rich_help_panel=_PANEL_INSPECT)
-app.add_typer(audit_app, name="audit", rich_help_panel=_PANEL_INSPECT)
+app.add_typer(view_app, name="view", rich_help_panel=_PANEL_BROWSE)
+app.add_typer(audit_app, name="audit", rich_help_panel=_PANEL_BROWSE)
 app.add_typer(indicator_app, name="indicator", rich_help_panel=_PANEL_ARTIFACTS)
 app.add_typer(strategy_app, name="strategy", rich_help_panel=_PANEL_ARTIFACTS)
 app.add_typer(policy_app, name="policy", rich_help_panel=_PANEL_ARTIFACTS)

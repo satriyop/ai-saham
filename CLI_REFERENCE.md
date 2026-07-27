@@ -789,52 +789,10 @@ Retired: bare `saham inspect signal TICKER` (must name the purpose: `accum`).
 
 ---
 
-## saham inspect chart price
+## ~~saham inspect chart~~ (retired)
 
-Plot an ASCII price chart in the terminal with optional SMA/EMA overlays.
-
-```
-saham inspect chart price TICKER [OPTIONS]
-saham inspect chart price BBCA
-saham inspect chart price BBCA --sma 20 --ema 9 --days 120
-```
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--sma` | — | SMA period overlay |
-| `--ema` | — | EMA period overlay |
-| `--days` | 365 | Days of data |
-| `--width` | 80 | Chart width in characters |
-
----
-
-## saham inspect chart rsi
-
-Plot an ASCII RSI chart in the terminal with overbought/oversold bands.
-
-```
-saham inspect chart rsi TICKER [OPTIONS]
-saham inspect chart rsi BBCA --period 9 --days 120
-```
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--period` | 14 | RSI period |
-| `--days` | 365 | Days of data |
-
----
-
-## saham inspect chart volume
-
-Plot ASCII volume bars in the terminal.
-
-```
-saham inspect chart volume TICKER [OPTIONS]
-```
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--days` | 365 | Days of data |
+Terminal ASCII charts (`inspect chart price|rsi|volume`) are **removed**.
+Use `saham indicator compute|snapshot` for values. Charts belong in TUI/Web later.
 
 ---
 
@@ -935,22 +893,9 @@ saham view universe lq45 --sort flow --top 10
 
 ---
 
-## saham view market-context
+## ~~saham view market-context~~ (retired)
 
-Show cross-market regime context — VIX, EIDO, USD/IDR, IDX breadth — from local cache.
-
-```
-saham view market-context [OPTIONS]
-saham view market-context --date 2026-06-01 --verbose
-```
-
-| Option | Short | Default | Description |
-|--------|-------|---------|-------------|
-| `--date` | | today | Context date (YYYY-MM-DD) |
-| `--universe` | `-u` | (config) | Universe for breadth factor |
-| `--verbose` | `-v` | false | Show score bar and rationale |
-| `--format` | | table | Output format: table, json |
-| `--db` | | ./data.db | SQLite database path |
+Use **`saham inspect regime`** for MCE/regime (sole public command).
 
 ---
 

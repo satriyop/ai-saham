@@ -15,9 +15,9 @@ SETIAP HARI
 
 PER KANDIDAT
   saham plan swing TICKER --setup foreign-bounce --capital 10000000
-  saham inspect chart price TICKER --sma 20 --days 90
-  saham inspect chart rsi TICKER --days 90
-  saham inspect chart volume TICKER --days 30
+  # retired: inspect chart (TUI later)
+  # retired: inspect chart (TUI later)
+  # retired: inspect chart (TUI later)
 
 JOURNAL / REVIEW
   saham trade log swing --ticker TICKER --from-analysis --with-regime

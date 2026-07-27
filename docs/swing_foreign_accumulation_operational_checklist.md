@@ -95,9 +95,9 @@ saham plan swing TICKER --format json
 ### 5. Chart Confirmation
 
 ```bash
-saham inspect chart price TICKER --sma 20 --days 90
-saham inspect chart rsi TICKER --days 90
-saham inspect chart volume TICKER --days 30
+# retired: inspect chart (TUI later)
+# retired: inspect chart (TUI later)
+# retired: inspect chart (TUI later)
 ```
 
 - [ ] Struktur harga berupa base, higher low, atau pullback sehat.

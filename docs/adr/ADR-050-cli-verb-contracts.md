@@ -30,7 +30,7 @@ ADR-049 and the 2026-07-27 CLI clean break made three families predictable:
 The remaining overload is **`analyze`**, which currently means three different
 jobs depending on the second token:
 
-1. live capability lens (`risk`, `sentiment`, `regime`, `signal inspect`, `chart`)
+1. live capability lens (`risk`, `sentiment`, `regime`, `signal accum`)
 2. live authoritative `TradeSetup` composition (`swing`)
 3. frozen-plan post-open confirmation (`pre-open`)
 
@@ -81,7 +81,7 @@ view     = browse stored facts
 ```text
 saham fetch …
 saham screen pre-open|accum …
-saham inspect risk|sentiment|regime|signal accum|chart …
+saham inspect risk|sentiment|regime|signal accum …
 saham plan swing TICKER
 saham assess pre-open …
 saham research pre-open|accum …
@@ -107,7 +107,7 @@ saham version
 | `analyze sentiment` | **`inspect sentiment`** | Live capability lens |
 | `analyze regime` | **`inspect regime`** | Live capability lens |
 | `analyze signal inspect` | **`inspect signal accum`** | Accumulation-flow SignalEngine inspect only (not pre-open/swing) |
-| `analyze chart …` | **`inspect chart …`** | Visualization lens |
+| `analyze chart …` / `inspect chart …` | **retired** | Terminal charts removed; TUI owns charts later; values via `indicator` |
 | `analyze audit` | **`audit sentiment`** | Historical sentiment accuracy (see §5) |
 | `analyze swing-compare` | **retired** | Removed; no alias |
 | `analyze compare` | **retired** | Multi-ticker risk compare removed; no alias |
@@ -186,7 +186,7 @@ does not affect `plan swing` authority.
 | `inspect sentiment` | `inspect_sentiment_commands.py`, … |
 | `inspect regime` | `inspect_regime_commands.py`, … |
 | `inspect signal accum` | `inspect_signal_commands.py` (group) + `inspect_signal_accum_commands.py` |
-| `inspect chart` | `inspect_chart_commands.py` |
+| ~~`inspect chart`~~ | **retired** (no adapter) |
 | `audit sentiment` | `audit_sentiment_commands.py` (alongside existing `audit_commands.py` / data nodes) |
 
 Retired modules for removed compare surfaces are deleted, not aliased.
@@ -252,8 +252,8 @@ authority, or JSON artifact meaning changes.
    fixtures for TradeSetup outputs, delete `analyze swing` / swing-compare.
 3. **`assess pre-open`:** rename from `analyze pre-open`, keep database-id
    contract, delete old route.
-4. **`inspect *` lenses:** risk, sentiment, regime, signal, chart; delete
-   `analyze` group; move sentiment historical audit to `audit sentiment`.
+4. **`inspect *` lenses:** risk, sentiment, regime, signal accum; chart retired;
+   delete `analyze` group; move sentiment historical audit to `audit sentiment`.
 5. **Operator docs / runbooks / examples:** scrub old paths; no dual docs.
 6. Full offline suite + `git diff --check`; commit only task-owned files.
 
@@ -278,3 +278,22 @@ When implementation lands, amend in the same PR (or immediately after):
 - **ADR-049:** public CLI section adds `plan` / `inspect` / `assess`; retires
   `analyze` as a family bucket.
 - **ADR-020:** examples refreshed to `plan_*`, `inspect_*`, `assess_*`.
+
+## Amendment (CLI surface cleanup)
+
+- Help panel for `view`/`audit` is **Browse** (not "Inspect") to avoid clash with verb `inspect`.
+- **`inspect chart` retired** (hard break). Numeric path: `indicator compute|snapshot`. Charts later in TUI.
+- **`view market-context` retired** (hard break). Sole MCE/regime CLI: **`inspect regime`**.
+- **Broker-top jobs:** `fetch broker-top-foreign` writes cache; `view broker top-foreign` browses cache.
+- TUI/Web mapping (stable product surface):
+
+| CLI | TUI/Web resource |
+|-----|------------------|
+| `inspect regime` | Regime / MCE panel |
+| `inspect signal accum` | Signal explain drawer |
+| `inspect risk` | Risk explain drawer |
+| `plan swing` | Decision page |
+| `view ticker.*` / `view broker.*` | Browse tables |
+| `fetch broker-top-foreign` | Data job |
+| `view broker top-foreign` | Ranking table from cache |
+| ~~`inspect chart`~~ | TUI chart component later |

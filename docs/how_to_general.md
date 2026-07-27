@@ -129,9 +129,9 @@
  ---
  Phase 11 — Terminal Charts
 
- saham inspect chart price BBCA --sma 20 --ema 50     # Price + moving averages
- saham inspect chart rsi BBCA --period 14              # RSI with overbought/oversold
- saham inspect chart volume BBCA                       # Daily volume bars
+ # retired: inspect chart (TUI later)
+ # retired: inspect chart (TUI later)
+ # retired: inspect chart (TUI later)
 
  ---
  Phase 12 — Batch Data & Universe Management

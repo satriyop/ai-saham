@@ -35,8 +35,8 @@ research_app = typer.Typer(
     help=(
         "Research corpus / ML feeder only. "
         "capture = save decisions; labels = outcomes; evaluate = cohort study. "
-        "Live screens do not write (use screen for display only). "
-        "Paper notebook: `saham trade`. Policy apply: `saham policy accum`."
+        "Live without write: `saham screen`. Paper: `saham trade`. "
+        "Policy apply: `saham policy accum`. Not live TradeSetup (`plan`)."
     ),
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},

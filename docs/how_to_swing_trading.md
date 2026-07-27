@@ -22,7 +22,7 @@ Step 1 → Update data        saham fetch market --universe lq45
 Step 2 → Check market       saham inspect regime
 Step 3 → Find candidates    saham screen accum --universe lq45 --multi
 Step 4 → Deep-dive          saham plan swing BBRI --setup foreign-bounce --capital N
-Step 5 → Confirm chart      saham inspect chart price BBRI --sma 20 --days 90
+Step 5 → Confirm chart      # retired: inspect chart (TUI later)
 Step 6 → Size the trade     plan swing --capital  # sizing BBRI --capital N    (if not using setup)
 Step 7 → Log the decision   saham trade log swing --ticker BBRI --from-analysis --with-regime
 ──────────────────────────────────────────────────────────────────
@@ -324,9 +324,9 @@ All signals are pre-warmed by `saham fetch market --universe lq45` and served fr
 Before sizing or logging a paper entry, confirm that price structure agrees with the numeric gates. This uses existing chart commands and does not change the deterministic signal.
 
 ```bash
-saham inspect chart price BBRI --sma 20 --days 90
-saham inspect chart rsi BBRI --days 90
-saham inspect chart volume BBRI --days 30
+# retired: inspect chart (TUI later)
+# retired: inspect chart (TUI later)
+# retired: inspect chart (TUI later)
 ```
 
 | Check | Prefer | Avoid |
@@ -619,9 +619,9 @@ saham plan swing BBRI --setup foreign-bounce --capital 10000000
 # → PLAN: ENTER setup passed. Consider 4 lots at 4,840; TP 5,082; SL 4,598
 
 # 5. Confirm chart structure before paper entry
-saham inspect chart price BBRI --sma 20 --days 90
-saham inspect chart rsi BBRI --days 90
-saham inspect chart volume BBRI --days 30
+# retired: inspect chart (TUI later)
+# retired: inspect chart (TUI later)
+# retired: inspect chart (TUI later)
 # → Confirm sideways base / support, RSI room, and volume participation
 
 # 6. Check second candidate

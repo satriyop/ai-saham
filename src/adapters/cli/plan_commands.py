@@ -20,8 +20,9 @@ plan_app = typer.Typer(
     help=(
         "Live trade plan composition. "
         "`plan swing` produces authoritative TradeSetup (action + plan fields). "
-        "Evidence-only lenses: `saham inspect`. Frozen pre-open confirm: `saham assess`. "
-        "Corpus: `saham research`. Paper: `saham trade`."
+        "Evidence lenses: `saham inspect risk|regime|signal accum|sentiment`. "
+        "Paper: `saham trade accum log`. Not a research write (`research`). "
+        "Frozen pre-open: `saham assess pre-open` (not this command)."
     ),
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},

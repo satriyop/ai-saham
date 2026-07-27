@@ -128,7 +128,7 @@ This document explains the conceptual building blocks of the trading system — 
   │  saham screen accum (accum CLI)             │           │  saham inspect regime         │
   │  plan swing --capital  # sizing (position sizing)         │           │                               │
   │                                             │           │  CHART                        │
-  │  INTRADAY (minutes horizon)                 │           │  saham inspect chart          │
+  │  INTRADAY (minutes horizon)                 │           │  # retired: inspect chart (TUI later)
   │  saham screen pre-open                      │           │                               │
   │    → 10-step pipeline (IEV → entry →        │           │  VERSION                      │
   │      stop → trend → accum → AI)             │           │  saham version                │

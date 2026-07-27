@@ -54,19 +54,18 @@ def broker_top_foreign(
     ] = False,
 ) -> None:
     """
-    Show which stocks foreign brokers are most actively buying/selling.
+    Ingest foreign-broker top-stock ranking into the local cache.
 
-    Calls the broker-centric Stockbit Exodus API to scan the universe:
-    given 10 known foreign broker codes, returns the stocks they traded
-    most in the period. Useful as a complementary screening signal to IEV.
+    Writes a snapshot for later browsing. This is a data job, not the primary
+    analysis surface.
 
-    Results are automatically saved to the database for later querying.
-    Requires an active Stockbit browser session (run 'saham fetch stockbit login' first).
+    Browse cached ranking: `saham view broker top-foreign`.
+    Requires Stockbit session: `saham fetch stockbit login`.
 
     Examples:
         saham fetch broker-top-foreign
         saham fetch broker-top-foreign --days 7 --limit 20
-        saham fetch broker-top-foreign --days 365
+        saham view broker top-foreign
     """
     cfg = load_app_config()
     resolved_db = db_path or Path(cfg.storage.db_path)

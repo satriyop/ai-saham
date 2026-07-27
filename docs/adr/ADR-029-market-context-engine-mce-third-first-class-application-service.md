@@ -75,7 +75,7 @@ Neither engine is broken without `market_context` — it is always optional.
 #### 5. Fetch via existing `saham fetch market`
 Global context tickers (`^VIX`, `EIDO`, `IDR=X`) are fetched by `_fetch_global_context_tickers()` appended to `fetch_market_commands.py`. Uses `YahooFinanceProvider(market_suffix="")` — critical: the default provider appends `.JK` for IDX stocks; global tickers must bypass this. No new tables; candles go into the existing `market_data` SQLite table.
 
-#### 6. CLI: `saham view market-context` — documented 3-word exception
+#### 6. CLI: `saham inspect regime` — documented 3-word exception
 Second 3-word exception (after `saham view broker`, ADR-018). Rationale: MCE has multiple display modes (summary, verbose factor breakdown) requiring a sub-group. This exception is explicitly documented here to prevent undocumented proliferation.
 
 `saham analyze regime` is preserved and now powered by MCE (richer output).
@@ -107,4 +107,4 @@ All factor thresholds, score-label thresholds, fallback scoring policy, warning 
 ### Non-Decisions
 
 - **MarketRegimeUseCase** is kept for legacy callers (pre-open workflow, swing analysis, backtest, daily briefing). These callers migrate to MCE in a future phase; the old use case is not removed until all callers are migrated.
-- `saham view market-context` does not have a `--history` subcommand yet; `get_recent_snapshots()` is infrastructure-ready for a future `saham view market-context history` command.
+- `saham inspect regime` does not have a `--history` subcommand yet; `get_recent_snapshots()` is infrastructure-ready for a future `saham inspect regime history` command.

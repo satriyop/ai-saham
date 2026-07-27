@@ -17,7 +17,6 @@ import typer
 from typer.core import TyperGroup
 
 from src.adapters.cli.view_broker_commands import broker_view_app
-from src.adapters.cli.view_market_context_commands import market_context_show
 from src.adapters.cli.view_ticker_commands import ticker_view_app
 from src.infrastructure.config.app_config import load_app_config
 
@@ -40,11 +39,15 @@ view_app = typer.Typer(
     cls=_ViewGroup,
     name="view",
     help=(
-        "Read-only data browsing — inspect already-fetched local data.\n\n"
+        "Read-only browse of already-fetched local data (not a decision surface).\n\n"
+        "Needs data: `saham fetch …`.\n"
         "Stock overview: `saham view BBCA` or `saham view ticker show BBCA`.\n"
         "Stock deep-dives: `saham view ticker <verb> <TICKER>` "
         "(top-brokers | flow | foreign-history | distribution).\n"
-        "Desk / universe: `saham view broker <verb> …`."
+        "Desk / universe: `saham view broker <verb> …` "
+        "(top-foreign ranking cache after `fetch broker-top-foreign`).\n"
+        "Decisions: `saham plan swing` / `saham assess pre-open`. "
+        "Market regime: `saham inspect regime` (not view)."
     ),
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},
@@ -52,19 +55,6 @@ view_app = typer.Typer(
 
 view_app.add_typer(ticker_view_app, name="ticker")
 view_app.add_typer(broker_view_app, name="broker")
-
-# ── Market Context sub-group (3-word exception — documented in ADR-029) ───────
-market_context_view_app = typer.Typer(
-    name="market-context",
-    help="Show cross-market regime context (VIX, EIDO, USD/IDR, IDX breadth).",
-    no_args_is_help=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-)
-
-market_context_view_app.command("show", hidden=True)(market_context_show)
-market_context_view_app.callback(invoke_without_command=True)(market_context_show)
-
-view_app.add_typer(market_context_view_app, name="market-context")
 
 
 @view_app.command("universe")

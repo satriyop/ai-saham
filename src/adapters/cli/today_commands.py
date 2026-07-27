@@ -305,10 +305,11 @@ def today(
     ] = None,
 ) -> None:
     """
-    Show a read-only daily briefing from local cached data.
+    Read-only daily briefing dashboard from local cached data.
 
-    This command does not fetch, tune, or write data. Use `saham fetch ...` and
-    `saham screen ...` when you need to update inputs.
+    Not TradeSetup authority — use `saham plan swing TICKER` for decisions.
+    Does not fetch, tune, or write. Update inputs: `saham fetch …`, `saham screen …`.
+    Regime detail: `saham inspect regime`.
     """
     cfg = load_app_config()
     universe = universe or cfg.analysis.universe
