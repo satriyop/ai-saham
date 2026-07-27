@@ -1,5 +1,5 @@
 """
-Factory for the `saham research accumulation evaluate` workflow.
+Factory for the `saham research accum evaluate` workflow.
 
 Layer: Adapter
 

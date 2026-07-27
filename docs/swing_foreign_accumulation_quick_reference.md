@@ -21,7 +21,7 @@ PER KANDIDAT
 
 JOURNAL / REVIEW
   saham trade log swing --ticker TICKER --from-analysis --with-regime
-  saham trade review swing --horizon 10
+  saham trade accum review --horizon 10
 
 BACKTEST
   saham trade backtest-swing --universe lq45 --start 2025-01-01 --with-regime
@@ -42,8 +42,8 @@ BACKTEST
 | Analisis setup | `saham analyze swing TICKER --setup foreign-bounce` |
 | Flow detail | `saham analyze swing TICKER --with-flow-detail --explain` |
 | Broker flow harian | `saham view ticker flow TICKER --days 30` |
-| Sizing standalone | `saham trade size TICKER --capital 10000000` |
-| Audit accumulation | `saham research accumulation evaluate --universe lq45` |
+| Sizing standalone | `analyze swing --capital  # sizing TICKER --capital 10000000` |
+| Audit accumulation | `saham research accum evaluate --universe lq45` |
 
 Gunakan `--help` untuk nama option dan default yang berlaku saat ini.
 

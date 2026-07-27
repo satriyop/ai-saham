@@ -1,5 +1,5 @@
 """
-Attribution summary rendering for trade swing CLI display.
+Attribution summary rendering for policy accum CLI display.
 
 Renders TUNING READINESS + TUNING ATTRIBUTION SUMMARY panels.
 Only reads response.attribution_summary - does not call any tuning builders.
@@ -10,7 +10,7 @@ Layer: Adapter
 from __future__ import annotations
 
 from src.adapters.cli.rich_display import compact_table, console, panel
-from src.adapters.cli.trade_swing_display_formatters import (
+from src.adapters.cli.policy_accum_display_formatters import (
     _fmt_pct,
     _quality_status_text,
     _stat_avg_return,

@@ -546,7 +546,7 @@ def display_results(
         footer_elements.append(
             Text(
                 "   saham analyze pre-open --session YYYY-MM-DD\n"
-                "   saham trade log --type pre-open "
+                "   saham trade pre-open log "
                 "--observation-id … --opening-snapshot-id …",
                 style="cyan",
             )

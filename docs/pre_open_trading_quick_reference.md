@@ -20,7 +20,7 @@ Ringkasan cepat lane **pre-open**. Sumber kebenaran operator:
 |------|----------|
 | Signal / plan | `screen pre-open` (live), `research pre-open capture` (write) |
 | Learning | `track` → `labels` → `evaluate` / `status` |
-| Human (bukan learning) | `analyze pre-open`, `trade log --type pre-open` |
+| Human (bukan learning) | `analyze pre-open`, `trade pre-open log` |
 
 | Artifact | Owner |
 |----------|--------|
@@ -37,15 +37,15 @@ Ringkasan cepat lane **pre-open**. Sumber kebenaran operator:
 | Capture NCP decision | `saham research pre-open capture` |
 | Track open | `saham research pre-open track` |
 | Post-open assess | `saham analyze pre-open --session YYYY-MM-DD` |
-| Paper log | `saham trade log --type pre-open --observation-id … --opening-snapshot-id …` |
-| Paper review | `saham trade review pre-open` |
-| Outcome paper | `saham trade outcome TICKER --entry … --exit …` |
+| Paper log | `saham trade pre-open log --observation-id … --opening-snapshot-id …` |
+| Paper review | `saham trade pre-open review` |
+| Outcome paper | `saham trade pre-open outcome TICKER --entry … --exit …` |
 | Labels | `saham research pre-open labels` |
 | Evaluate cohort | `saham research pre-open evaluate` |
 | Status | `saham research pre-open status` |
 | Install cron | `./install_cron.sh` |
 
-**Retired:** `trade confirm`, `trade log --type intraday`, `research pre-open grade|prompt|tune`.
+**Retired:** `trade confirm`, `trade pre-open log (intraday type removed)`, `research pre-open grade|prompt|tune`.
 
 ## Membaca post-open assess
 

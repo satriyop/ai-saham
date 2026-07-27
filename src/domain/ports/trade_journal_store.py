@@ -1,9 +1,13 @@
 """
 TradeJournalStore port — abstract persistence for unified trade journal.
 
-Records are plain dicts with a "trade_type" discriminator ("swing" or "intraday").
-Dedup key: swing → (trade_type, logged_at, ticker, window_days)
-           intraday → (trade_type, logged_at, ticker)
+Records are plain dicts with a "trade_type" discriminator.
+Forward tokens: "accum" | "pre-open".
+Legacy raw rows may still use "swing" | "intraday" (not rewritten).
+
+Dedup key:
+  accum/swing → (trade_type, logged_at, ticker, window_days)
+  pre-open/other → (trade_type, logged_at, ticker)
 
 Layer: Domain
 """

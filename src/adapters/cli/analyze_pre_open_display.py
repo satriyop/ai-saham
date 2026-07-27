@@ -83,7 +83,7 @@ def display_analyze_pre_open(result: AnalyzePreOpenResult) -> None:
     summary.add_row("Max stop", f"{result.max_stop_pct:.2%}")
     summary.add_row(
         "Next",
-        "saham trade log --type pre-open --observation-id … --opening-snapshot-id …",
+        "saham trade pre-open log --observation-id … --opening-snapshot-id …",
     )
 
     table = compact_table()

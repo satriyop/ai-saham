@@ -13,8 +13,8 @@ from rich.console import Group
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, console, panel
-from src.adapters.cli.trade_swing_attribution_display import display_swing_attribution
-from src.adapters.cli.trade_swing_display_formatters import _fmt_pct
+from src.adapters.cli.policy_accum_attribution_display import display_swing_attribution
+from src.adapters.cli.policy_accum_display_formatters import _fmt_pct
 from src.application.use_case.swing_backtest_use_case import SwingBacktestResponse
 
 

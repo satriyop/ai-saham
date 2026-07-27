@@ -88,7 +88,7 @@
  saham research pre-open track
  saham analyze pre-open --session YYYY-MM-DD
  # Paper notebook (optional):
- # saham trade log --type pre-open --observation-id OBS --opening-snapshot-id SNAP
+ # saham trade pre-open log --observation-id OBS --opening-snapshot-id SNAP
 
  ---
  Phase 8 — Strategy / Indicator Authoring
@@ -106,7 +106,7 @@
  saham analyze swing BBCA --capital 100000000
 
  # Position sizing based on ATR
- saham trade size BBCA --capital 100000000 --risk-pct 1 --entry 8875
+ analyze swing --capital  # sizing BBCA --capital 100000000 --risk-pct 1 --entry 8875
 
  # Walk-forward backtest across universe
  saham trade backtest-swing --universe idx30 --capital 100000000 --with-regime

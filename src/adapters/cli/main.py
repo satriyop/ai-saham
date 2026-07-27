@@ -8,12 +8,13 @@ Command groups:
   saham fetch      — data ingestion lifecycle commands
   saham audit      — read-only audits (data-quality baseline manifest, source-field contracts)
   saham screen     — candidate discovery (live only)
-  saham research   — research corpus + offline study (incl. pre-open track/grade)
+  saham research   — research corpus / ML feeder (pre-open, accum)
   saham view       — read-only local data browsing
   saham indicator  — technical indicators (compute, snapshot, create, list, show, delete)
   saham analyze    — live analysis (risk, compare, sentiment, audit, regime, chart, signal inspect)
   saham strategy   — strategy management (init, validate, list, create, backtest)
-  saham trade      — paper trading workspace
+  saham policy     — guarded setup-config lifecycle (policy accum …)
+  saham trade      — paper trading notebook only (pre-open, accum)
   saham tui        — optional local terminal research workspace
   saham version    — version information
 
@@ -27,6 +28,7 @@ from src.adapters.cli.analyze_commands import analyze_app
 from src.adapters.cli.audit_commands import audit_app
 from src.adapters.cli.fetch_commands import fetch_app
 from src.adapters.cli.indicator_commands import indicator_app
+from src.adapters.cli.policy_commands import policy_app
 from src.adapters.cli.research_commands import research_app
 from src.adapters.cli.screen_lifecycle_commands import screen_app
 from src.adapters.cli.strategy_commands import strategy_app
@@ -70,6 +72,7 @@ app.add_typer(view_app, name="view", rich_help_panel=_PANEL_INSPECT)
 app.add_typer(audit_app, name="audit", rich_help_panel=_PANEL_INSPECT)
 app.add_typer(indicator_app, name="indicator", rich_help_panel=_PANEL_ARTIFACTS)
 app.add_typer(strategy_app, name="strategy", rich_help_panel=_PANEL_ARTIFACTS)
+app.add_typer(policy_app, name="policy", rich_help_panel=_PANEL_ARTIFACTS)
 app.command("tui", rich_help_panel=_PANEL_GENERAL)(tui)
 
 

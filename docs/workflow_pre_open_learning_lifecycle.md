@@ -21,7 +21,7 @@ saham fetch iev
 saham research pre-open capture
 saham research pre-open track
 saham analyze pre-open                    # post-open assess (human, not cron)
-saham trade log --type pre-open \         # paper notebook (human)
+saham trade pre-open log \         # paper notebook (human)
   --observation-id … --opening-snapshot-id …
 saham research pre-open labels
 saham research pre-open evaluate

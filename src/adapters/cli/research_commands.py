@@ -1,14 +1,11 @@
 """
-CLI: research lifecycle — corpus construction, offline evaluation, session ritual.
+CLI: research lifecycle — corpus construction and offline cohort study only.
 
 Commands:
-  saham research accumulation …     — accumulation learning lifecycle
-  saham research pre-open …         — pre-open learning lifecycle
+  saham research pre-open …   — pre-open learning corpus
+  saham research accum …      — accumulation learning corpus
 
-Pre-open subcommands (verb + scenario; no top-level learn/opening noun):
-  capture | labels     — corpus (save decisions / outcomes)
-  track                — database-owned opening-session samples
-  evaluate | status    — compatible cohort evaluation and readiness
+Not paper trading (`saham trade`). Not policy YAML apply (`saham policy`).
 
 Layer: Adapter (routing only).
 """
@@ -17,27 +14,29 @@ from __future__ import annotations
 
 import typer
 
-from src.adapters.cli.research_learning_commands import (
+from src.adapters.cli.research_accum_backfill_commands import signal_backfill_observations
+from src.adapters.cli.research_accum_capture_commands import signal_capture_observations
+from src.adapters.cli.research_accum_evaluate_commands import (
     accumulation_evaluate,
     accumulation_labels,
     accumulation_replay,
     accumulation_status,
+)
+from src.adapters.cli.research_pre_open_capture_commands import pre_open_capture
+from src.adapters.cli.research_pre_open_evaluate_commands import (
     pre_open_evaluate,
     pre_open_status,
 )
-from src.adapters.cli.research_pre_open_capture_commands import pre_open_capture
 from src.adapters.cli.research_pre_open_labels_commands import pre_open_labels
 from src.adapters.cli.research_pre_open_track_commands import track
-from src.adapters.cli.research_signal_backfill_commands import signal_backfill_observations
-from src.adapters.cli.research_signal_capture_commands import signal_capture_observations
 
 research_app = typer.Typer(
     name="research",
     help=(
-        "Research: corpus construction and offline study. "
-        "capture = save decisions; labels = outcomes. "
-        "Pre-open also hosts database-owned opening tracks. "
-        "Live screens do not write (use screen for display only)."
+        "Research corpus / ML feeder only. "
+        "capture = save decisions; labels = outcomes; evaluate = cohort study. "
+        "Live screens do not write (use screen for display only). "
+        "Paper notebook: `saham trade`. Policy apply: `saham policy accum`."
     ),
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},
@@ -46,19 +45,18 @@ research_app = typer.Typer(
 research_pre_open_app = typer.Typer(
     name="pre-open",
     help=(
-        "Pre-open scenario under research. "
-        "Capture decisions, track opening samples, label open_30m outcomes, "
-        "evaluate compatible sessions, and inspect status. "
+        "Pre-open corpus: capture decisions, track opening samples, "
+        "label open_30m outcomes, evaluate cohorts, inspect status. "
         "Live display only: screen pre-open (no observation write)."
     ),
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},
 )
 
-research_accumulation_app = typer.Typer(
-    name="accumulation",
+research_accum_app = typer.Typer(
+    name="accum",
     help=(
-        "Database-owned accumulation capture, labels, compatible-cohort "
+        "Accum corpus: capture, backfill, labels, compatible-cohort "
         "evaluation, replay inspection, and status."
     ),
     no_args_is_help=True,
@@ -71,12 +69,12 @@ research_pre_open_app.command("track")(track)
 research_pre_open_app.command("evaluate")(pre_open_evaluate)
 research_pre_open_app.command("status")(pre_open_status)
 
-research_accumulation_app.command("capture")(signal_capture_observations)
-research_accumulation_app.command("backfill")(signal_backfill_observations)
-research_accumulation_app.command("labels")(accumulation_labels)
-research_accumulation_app.command("evaluate")(accumulation_evaluate)
-research_accumulation_app.command("replay")(accumulation_replay)
-research_accumulation_app.command("status")(accumulation_status)
+research_accum_app.command("capture")(signal_capture_observations)
+research_accum_app.command("backfill")(signal_backfill_observations)
+research_accum_app.command("labels")(accumulation_labels)
+research_accum_app.command("evaluate")(accumulation_evaluate)
+research_accum_app.command("replay")(accumulation_replay)
+research_accum_app.command("status")(accumulation_status)
 
 research_app.add_typer(research_pre_open_app, name="pre-open")
-research_app.add_typer(research_accumulation_app, name="accumulation")
+research_app.add_typer(research_accum_app, name="accum")

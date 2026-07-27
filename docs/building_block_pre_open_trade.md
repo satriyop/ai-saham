@@ -12,11 +12,11 @@ End-to-end **pre-open** workflow: live screen, NCP capture, opening track, post-
 | `saham research pre-open capture` | 1b | Persist NCP observation (decision authority) |
 | `saham research pre-open track` | 1c | Persist opening track snapshots |
 | `saham analyze pre-open` | 2 | Post-open ENTER/WAIT/SKIP from observation + track (read-only) |
-| `saham trade log --type pre-open` | 3 | Paper journal from exact observation + opening snapshot IDs |
-| `saham trade review pre-open` | 5 | Review pre-open paper journal buckets by decision + context |
+| `saham trade pre-open log` | 3 | Paper journal from exact observation + opening snapshot IDs |
+| `saham trade pre-open review` | 5 | Review pre-open paper journal buckets by decision + context |
 | `saham research pre-open evaluate` | 5 | Cohort outcome evaluation (labels), not post-open assess |
-| `saham trade outcome` | 4 | Record actual trade result (target/stop/manual) |
-| `saham trade backtest-intraday` | 6 | Walk-forward backtest of the pre-open workflow |
+| `saham trade pre-open outcome` | 4 | Record actual trade result (target/stop/manual) |
+| `# retired: retired trade backtest-intraday` | 6 | Walk-forward backtest of the pre-open workflow |
 | `saham fetch stockbit login` | — | Login & save Stockbit browser session (prerequisite for `saham screen pre-open`) |
 
 ---
@@ -199,7 +199,7 @@ CLI: saham screen pre-open [--movers-json ...] [--order-books-json ...]
  │    ├── AI summaries (if --with-ai)
  │    ├── Data freshness warnings
  │    ├── Market regime context
- │    └── Action summary with opening confirmation command template
+ │    └── Action summary with analyze pre-open next-step template
  │
  └─ _write_sidecar() → journals/.last-session.json
 ```
@@ -233,7 +233,7 @@ CLI: saham analyze pre-open --session YYYY-MM-DD
 ### Phase 3: Log Confirmation to Journal
 
 ```
-CLI: saham trade log --type pre-open --observation-id … --opening-snapshot-id …
+CLI: saham trade pre-open log --observation-id … --opening-snapshot-id …
  │
  └─ PreOpenPaperJournalCsvStore.append(confirmations)
       └── Writes → journals/pre_open_paper.csv
@@ -242,7 +242,7 @@ CLI: saham trade log --type pre-open --observation-id … --opening-snapshot-id 
 ### Phase 4: Record Outcome
 
 ```
-CLI: saham trade outcome BBCA --entry 9050 --exit 9200 --result target
+CLI: saham trade pre-open outcome BBCA --entry 9050 --exit 9200 --result target
  │
  └─ PreOpenPaperJournalService.record_outcome()
       └── Matches row by (confirmed_at, ticker)
@@ -259,7 +259,7 @@ CLI: saham research pre-open labels / evaluate
       ├── Reads opening snapshots and tracking files
       └── Computes pre-open prediction accuracy
 
-CLI: saham trade review pre-open
+CLI: saham trade pre-open review
  │
  └─ PreOpenPaperJournalService.review()
       ├── Decision buckets: ENTER / WAIT / SKIP_* (count + outcome stats)
@@ -270,7 +270,7 @@ CLI: saham trade review pre-open
 ### Phase 6: Backtest (Offline Replay)
 
 ```
-CLI: saham trade backtest-intraday --universe lq45 --start 2026-01-01
+CLI: # retired: retired trade backtest-intraday --universe lq45 --start 2026-01-01
  │
  └─ IntradayBacktestUseCase.execute()
       │
@@ -283,7 +283,7 @@ CLI: saham trade backtest-intraday --universe lq45 --start 2026-01-01
            │    ├── entry_range, stop, trend via same functions as pre-open
            │    └── accum_score + FVWAP from broker signals
            │
-           ├── 2. Simulate opening confirmation using candle.open on date d
+           ├── 2. Simulate post-open gates using candle.open on date d
            │    └── Reuses PreOpenPostOpenGatesUseCase logic
            │
            ├── 3. Rank ENTER candidates by (accum_score desc, fvwap desc, stop asc)

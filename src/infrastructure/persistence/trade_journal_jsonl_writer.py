@@ -1,11 +1,14 @@
 """
 TradeJournalJsonlWriter — JSON Lines implementation of TradeJournalStore.
 
-One JSON object per line. Dedup keys:
-  swing:    (trade_type, logged_at, ticker, window_days)
-  intraday: (trade_type, logged_at, ticker)
+One JSON object per line. Dedup keys (forward tokens):
+  accum / swing (legacy): (trade_type, logged_at, ticker, window_days)
+  pre-open / other:       (trade_type, logged_at, ticker)
 
-Converters at module level are used by the CLI dual-write and migration command.
+Live dual-write uses trade_type "accum" | "pre-open".
+Legacy rows may still use "swing" | "intraday" (raw history, not rewritten).
+
+Converters remain for library/migration helpers (no product CLI).
 
 Layer: Infrastructure
 """
@@ -17,9 +20,11 @@ from pathlib import Path
 
 from src.domain.ports.trade_journal_store import TradeJournalStore
 
+_ACCUM_TYPES = frozenset({"accum", "swing"})
+
 
 def _dedup_key(r: dict) -> tuple:
-    if r.get("trade_type") == "swing":
+    if r.get("trade_type") in _ACCUM_TYPES:
         return (r["trade_type"], r["logged_at"], r["ticker"], r.get("window_days"))
     return (r["trade_type"], r["logged_at"], r["ticker"])
 
@@ -34,9 +39,9 @@ def _f(v) -> float | None:
 
 
 def accumulation_entry_to_record(entry) -> dict:
-    """Convert AccumulationJournalEntry → trade journal dict (used for migration)."""
+    """Convert AccumulationJournalEntry → trade journal dict (library helper)."""
     return {
-        "trade_type": "swing",
+        "trade_type": "accum",
         "logged_at": str(entry.logged_at),
         "ticker": entry.ticker,
         "regime": entry.regime,
@@ -72,9 +77,9 @@ def accumulation_entry_to_record(entry) -> dict:
 
 
 def intraday_entry_to_record(entry) -> dict:
-    """Convert PreOpenPaperJournalEntry → trade journal dict."""
+    """Convert PreOpenPaperJournalEntry → trade journal dict (library helper)."""
     return {
-        "trade_type": "intraday",
+        "trade_type": "pre-open",
         "logged_at": str(entry.confirmed_at),
         "ticker": entry.ticker,
         "regime": None,
@@ -116,9 +121,9 @@ def swing_candidate_to_record(
     planned_target: Decimal | None,
     max_hold_days: int | None,
 ) -> dict:
-    """Build a swing trade record from live screen data (used at log time)."""
+    """Build an accum paper trade record from live screen data (used at log time)."""
     return {
-        "trade_type": "swing",
+        "trade_type": "accum",
         "logged_at": str(logged_at),
         "ticker": ticker,
         "regime": regime,
@@ -154,46 +159,46 @@ def swing_candidate_to_record(
 
 
 class TradeJournalJsonlWriter(TradeJournalStore):
-
     def __init__(self, path: Path) -> None:
         self._path = path
 
-    def _read_raw(self) -> list[dict]:
-        if not self._path.exists():
-            return []
-        records = []
-        with open(self._path) as f:
-            for line in f:
-                line = line.strip()
-                if line:
-                    records.append(json.loads(line))
-        return records
-
     def append(self, record: dict) -> bool:
-        existing = self._read_raw()
+        existing_keys = {_dedup_key(r) for r in self.read_all()}
         key = _dedup_key(record)
-        if any(_dedup_key(r) == key for r in existing):
+        if key in existing_keys:
             return False
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self._path, "a") as f:
-            f.write(json.dumps(record) + "\n")
+        with self._path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, default=str) + "\n")
         return True
 
     def read_all(self) -> list[dict]:
-        records = self._read_raw()
-        return sorted(records, key=lambda r: (r.get("logged_at", ""), r.get("ticker", "")))
+        if not self._path.exists():
+            return []
+        rows: list[dict] = []
+        with self._path.open(encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if not line:
+                    continue
+                rows.append(json.loads(line))
+        rows.sort(key=lambda r: (r.get("logged_at", ""), r.get("ticker", "")))
+        return rows
 
     def update(self, record: dict) -> bool:
-        records = self._read_raw()
+        if not self._path.exists():
+            return False
         key = _dedup_key(record)
-        matched = False
-        for i, r in enumerate(records):
-            if _dedup_key(r) == key:
-                records[i] = record
-                matched = True
-        if matched:
-            self._path.parent.mkdir(parents=True, exist_ok=True)
-            self._path.write_text(
-                "\n".join(json.dumps(r) for r in records) + "\n"
-            )
-        return matched
+        rows = self.read_all()
+        found = False
+        for i, row in enumerate(rows):
+            if _dedup_key(row) == key:
+                rows[i] = record
+                found = True
+                break
+        if not found:
+            return False
+        with self._path.open("w", encoding="utf-8") as handle:
+            for row in rows:
+                handle.write(json.dumps(row, default=str) + "\n")
+        return True

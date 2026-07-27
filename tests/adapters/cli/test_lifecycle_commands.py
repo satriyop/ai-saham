@@ -109,44 +109,55 @@ def test_deprecated_save_session_path_is_removed():
     assert result.exit_code != 0
 
 
-def test_trade_group_exposes_shallow_workspace_commands():
+def test_trade_group_exposes_paper_notebook_only():
     result = runner.invoke(app, ["trade", "--help"])
 
     assert result.exit_code == 0
     assert "confirm" not in result.stdout  # post-open assess → analyze pre-open
-    assert "log" in result.stdout
-    assert "review" in result.stdout
-    assert "outcome" in result.stdout
-    assert "size" in result.stdout
-    assert "swing" in result.stdout
-    assert "backtest-intraday" in result.stdout
+    assert "pre-open" in result.stdout
+    assert "accum" in result.stdout
+    # Commands section must not expose retired flat verbs / groups
+    assert "backtest-intraday" not in result.stdout
+    for retired in ("size", "migrate-journal"):
+        # may appear only as cross-links in help prose; require Commands block absence
+        assert f"│ {retired}" not in result.stdout and f"  {retired} " not in result.stdout
+    # no trade swing subgroup
+    assert "trade swing" not in result.stdout
+    assert "│ swing" not in result.stdout
     assert "Swing trading workflow" not in result.stdout
     assert "Intraday screening" not in result.stdout
     assert "Opening session learning" not in result.stdout
 
 
 def test_removed_legacy_trade_groups_are_not_callable():
-    for group in ("intraday", "opening", "confirm"):
+    for group in ("intraday", "opening", "confirm", "log", "review", "outcome", "swing", "size"):
         result = runner.invoke(app, ["trade", group, "--help"])
 
         assert result.exit_code != 0
 
 
-def test_trade_log_group_keeps_journals_distinct():
-    result = runner.invoke(app, ["trade", "log", "--help"])
+def test_trade_pre_open_and_accum_journals_are_distinct():
+    pre = runner.invoke(app, ["trade", "pre-open", "--help"])
+    accum = runner.invoke(app, ["trade", "accum", "--help"])
+
+    assert pre.exit_code == 0
+    assert accum.exit_code == 0
+    assert "log" in pre.stdout
+    assert "outcome" in pre.stdout
+    assert "review" in pre.stdout
+    assert "log" in accum.stdout
+    assert "review" in accum.stdout
+
+
+def test_policy_group_exposes_accum_lifecycle():
+    result = runner.invoke(app, ["policy", "--help"])
+    accum = runner.invoke(app, ["policy", "accum", "--help"])
 
     assert result.exit_code == 0
-    assert "pre-open" in result.stdout
-    assert "swing" in result.stdout
-    assert "intraday" not in result.stdout
-
-
-def test_trade_review_group_keeps_journals_distinct():
-    result = runner.invoke(app, ["trade", "review", "--help"])
-
-    assert result.exit_code == 0
-    assert "pre-open" in result.stdout
-    assert "swing" in result.stdout
+    assert "accum" in result.stdout
+    assert accum.exit_code == 0
+    for verb in ("backtest", "tune", "review", "validate", "apply", "status"):
+        assert verb in accum.stdout
 
 
 def test_analyze_group_exposes_pre_open_post_open_assess():

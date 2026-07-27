@@ -520,10 +520,10 @@ saham analyze pre-open --session YYYY-MM-DD
 ### Step 3: Log & Review (paper notebook)
 
 ```bash
-saham trade log --type pre-open \
+saham trade pre-open log \
   --observation-id OBS --opening-snapshot-id SNAP
-saham trade review pre-open
-saham trade outcome BBCA --entry 9000 --exit 9500 --result target
+saham trade pre-open review
+saham trade pre-open outcome BBCA --entry 9000 --exit 9500 --result target
 ```
 
 ---
@@ -542,7 +542,7 @@ saham research pre-open status
 
 # Human post-open (not cron; not a learning label)
 saham analyze pre-open --session YYYY-MM-DD
-saham trade log --type pre-open --observation-id … --opening-snapshot-id …
+saham trade pre-open log --observation-id … --opening-snapshot-id …
 ```
 
 Retired: `research pre-open grade|prompt|tune`, `trade confirm`.

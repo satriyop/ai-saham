@@ -81,7 +81,7 @@ def display_pre_open_post_open_assessments(
     summary.add_row("Max stop", f"{max_stop_pct:.2%}")
     summary.add_row(
         "Next",
-        "saham trade log --type pre-open --observation-id … --opening-snapshot-id …",
+        "saham trade pre-open log --observation-id … --opening-snapshot-id …",
     )
 
     sections = [Text("Session Summary", style="bold cyan"), summary]
@@ -151,7 +151,7 @@ def display_pre_open_paper_review(report, journal_path: Path) -> None:
     if report.total_entries == 0:
         summary.add_row(
         "Next",
-        "saham trade log --type pre-open --observation-id … --opening-snapshot-id …",
+        "saham trade pre-open log --observation-id … --opening-snapshot-id …",
     )
         console().print(panel(summary, title="PRE-OPEN PAPER JOURNAL REVIEW"))
         return

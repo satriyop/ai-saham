@@ -27,7 +27,7 @@ def run_pre_open_paper_review(journal_path: Path, db_path: Path) -> None:
     if not journal_path.exists():
         typer.echo(
             f"No confirmation journal at '{journal_path}'.\n"
-            "Run `saham trade log --type pre-open` after analyze first.", err=True,
+            "Run `saham trade pre-open log` after analyze first.", err=True,
         )
         raise typer.Exit(1)
     store = PreOpenPaperJournalCsvStore(journal_path)
@@ -57,7 +57,7 @@ def run_pre_open_paper_outcome(
     if not journal_path.exists():
         typer.echo(
             f"No confirmation journal at '{journal_path}'.\n"
-            "Run `saham trade log --type pre-open` first.", err=True,
+            "Run `saham trade pre-open log` first.", err=True,
         )
         raise typer.Exit(1)
     try:

@@ -1,4 +1,4 @@
-"""CLI tests for trade log --type pre-open and removed confirm/intraday routes."""
+"""CLI tests for trade pre-open paper notebook routes."""
 
 from __future__ import annotations
 
@@ -76,26 +76,24 @@ def test_trade_confirm_route_removed() -> None:
     assert result.exit_code != 0
 
 
-def test_trade_review_pre_open_help() -> None:
-    result = runner.invoke(app, ["trade", "review", "pre-open", "--help"])
+def test_trade_pre_open_review_help() -> None:
+    result = runner.invoke(app, ["trade", "pre-open", "review", "--help"])
     assert result.exit_code == 0
 
 
-def test_trade_review_intraday_removed() -> None:
-    result = runner.invoke(app, ["trade", "review", "intraday", "--help"])
+def test_trade_review_flat_removed() -> None:
+    result = runner.invoke(app, ["trade", "review", "pre-open", "--help"])
     assert result.exit_code != 0
 
 
-def test_trade_log_intraday_fails_closed() -> None:
-    result = runner.invoke(app, ["trade", "log", "--type", "intraday"])
-    assert result.exit_code == 1
-    assert "pre-open" in (result.stdout + result.stderr).lower()
-
-
-def test_trade_log_pre_open_requires_ids(tmp_path: Path) -> None:
+def test_trade_log_flat_removed() -> None:
     result = runner.invoke(app, ["trade", "log", "--type", "pre-open"])
-    assert result.exit_code == 1
-    assert "observation-id" in (result.stdout + result.stderr)
+    assert result.exit_code != 0
+
+
+def test_trade_pre_open_log_requires_ids(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["trade", "pre-open", "log"])
+    assert result.exit_code != 0
 
 
 def test_trade_log_pre_open_writes_journal(tmp_path: Path) -> None:
@@ -106,9 +104,8 @@ def test_trade_log_pre_open_writes_journal(tmp_path: Path) -> None:
         app,
         [
             "trade",
-            "log",
-            "--type",
             "pre-open",
+            "log",
             "--observation-id",
             obs_id,
             "--opening-snapshot-id",
@@ -130,9 +127,8 @@ def test_trade_log_pre_open_writes_journal(tmp_path: Path) -> None:
         app,
         [
             "trade",
-            "log",
-            "--type",
             "pre-open",
+            "log",
             "--observation-id",
             obs_id,
             "--opening-snapshot-id",

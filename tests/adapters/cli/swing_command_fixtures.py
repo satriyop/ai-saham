@@ -210,7 +210,7 @@ def _trade_ready_backtest_response() -> SwingBacktestResponse:
 def _patch_swing_backtest_command(monkeypatch):
     from unittest.mock import MagicMock
 
-    from src.adapters.cli import trade_swing_backtest_runner
+    from src.adapters.cli import policy_accum_backtest_runner
     from src.adapters.composition.stock_analysis_workflow_dependencies import (
         StockAnalysisWorkflowDependencies,
     )
@@ -232,17 +232,17 @@ def _patch_swing_backtest_command(monkeypatch):
     fake_deps.create_market_context_provider = lambda: object()
 
     monkeypatch.setattr(
-        trade_swing_backtest_runner,
+        policy_accum_backtest_runner,
         "resolve_tickers",
         lambda universe, explicit, db_path, **kwargs: tuple(explicit) or ("BBCA",),
     )
     monkeypatch.setattr(
-        trade_swing_backtest_runner,
+        policy_accum_backtest_runner,
         "create_stock_analysis_workflow_dependencies",
         lambda db_path: fake_deps,
     )
     monkeypatch.setattr(
-        trade_swing_backtest_runner,
+        policy_accum_backtest_runner,
         "SwingBacktestUseCase",
         FakeSwingBacktestUseCase,
     )

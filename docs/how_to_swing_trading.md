@@ -23,11 +23,11 @@ Step 2 → Check market       saham analyze regime
 Step 3 → Find candidates    saham screen accum --universe lq45 --multi
 Step 4 → Deep-dive          saham analyze swing BBRI --setup foreign-bounce --capital N
 Step 5 → Confirm chart      saham analyze chart price BBRI --sma 20 --days 90
-Step 6 → Size the trade     saham trade size BBRI --capital N    (if not using setup)
+Step 6 → Size the trade     analyze swing --capital  # sizing BBRI --capital N    (if not using setup)
 Step 7 → Log the decision   saham trade log swing --ticker BBRI --from-analysis --with-regime
 ──────────────────────────────────────────────────────────────────
 After 10–20 trading days: review what the setup actually delivered
-Step 8 → Review outcomes    saham trade review swing
+Step 8 → Review outcomes    saham trade accum review
 ```
 
 Steps 3–6 collapse what previously required 6+ separate commands into one primary command (`saham analyze swing`) for each candidate, plus chart confirmation before logging or entry.
@@ -344,12 +344,12 @@ Decision rule:
 
 ## Step 6 — Size the Trade
 
-When you need position sizing independently (without the full swing view), use `saham trade size`. It uses ATR-based fixed-fractional sizing.
+When you need position sizing independently (without the full swing view), use `analyze swing --capital  # sizing`. It uses ATR-based fixed-fractional sizing.
 
 ```bash
-saham trade size BBRI --capital 10000000
-saham trade size BBRI --capital 50000000 --risk-pct 2 --entry 4825
-saham trade size BBRI --capital 10000000 --atr-mult 2.0 --rr 3.0
+analyze swing --capital  # sizing BBRI --capital 10000000
+analyze swing --capital  # sizing BBRI --capital 50000000 --risk-pct 2 --entry 4825
+analyze swing --capital  # sizing BBRI --capital 10000000 --atr-mult 2.0 --rr 3.0
 ```
 
 **Output:**
@@ -431,8 +431,8 @@ Use `--entry-price` when your planned entry differs from the latest close. Witho
 After 10+ trading days, check whether the accumulation signals actually predicted returns.
 
 ```bash
-saham trade review swing
-saham trade review swing --horizon 10 --min-score 70
+saham trade accum review
+saham trade accum review --horizon 10 --min-score 70
 ```
 
 The review fetches actual forward closes from your local database and computes four tables:
@@ -555,12 +555,12 @@ WEAK               7     -0.8%       43%      -1,200,000
 
 This tells you which market conditions the setup works best in. If WEAK regime consistently underperforms, restrict entries with `--allow-regimes SIDEWAYS,BULLISH`.
 
-### `saham research accumulation evaluate` — Validate Signal Buckets
+### `saham research accum evaluate` — Validate Signal Buckets
 
 Use audit before turning a confirmation signal into a hard rule:
 
 ```bash
-saham research accumulation evaluate --universe lq45 --setup foreign-bounce --start 2026-01-01
+saham research accum evaluate --universe lq45 --setup foreign-bounce --start 2026-01-01
 ```
 
 The grouped output includes `broker_quality` buckets (`smart+`, `noise+`, `smart-`, `noise-`, `mixed`, `no_detail`) with forward returns and win rate. Treat these rows as evidence for whether broker quality should stay a warning, become a downgrade, or become a future setup gate.
@@ -635,7 +635,7 @@ saham trade log swing --ticker BBRI --window 7 --from-analysis --with-regime
 # --- 10 trading days later ---
 
 # 7. Review outcomes
-saham trade review swing --horizon 10
+saham trade accum review --horizon 10
 ```
 
 ---
@@ -670,11 +670,11 @@ The discipline is: run `saham analyze swing TICKER --setup foreign-bounce` on ev
 | `saham analyze swing TICKER --setup foreign-bounce` | Gate-checked entry decision with structured plan |
 | `saham analyze swing TICKER --setup foreign-bounce --capital N` | Full plan + lot sizing |
 | `saham analyze swing TICKER --strategy foreign-accumulation` | Add strategy/backtest evidence without changing the TradeSetup action |
-| `saham trade size TICKER --capital N` | Standalone ATR-based position sizing |
+| `analyze swing --capital  # sizing TICKER --capital N` | Standalone ATR-based position sizing |
 | `saham trade backtest-swing --universe lq45` | Walk-forward portfolio backtest of the setup |
 | `saham analyze swing-compare --universe lq45` | Compare baseline vs regime-filtered variants |
 | `saham trade log swing --ticker BBRI --from-analysis --with-regime` | Log candidate, setup decision, failed gates, regime, and plan |
-| `saham trade review swing` | Review journal: did ENTER beat WATCH and did high-score setups deliver? |
+| `saham trade accum review` | Review journal: did ENTER beat WATCH and did high-score setups deliver? |
 
 For a reference of accumulation screener columns (`STREAK`, `VWAP_DISC`, `FLOW%`, `BB%ILE`, `PATTERN`), run:
 

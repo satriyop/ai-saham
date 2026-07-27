@@ -1,7 +1,7 @@
 """
 AccumulationJournalEntry — domain value object for accumulation trade log rows.
 
-Written by `saham trade log swing`, enriched by `saham trade review swing`.
+Written by `saham trade accum log`, enriched by `saham trade accum review`.
 
 Layer: Domain
 """

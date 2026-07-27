@@ -10,8 +10,8 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.trade_swing_backtest_runner import _run_swing_backtest
-from src.adapters.cli.trade_swing_display import display_swing_backtest
+from src.adapters.cli.policy_accum_backtest_runner import _run_swing_backtest
+from src.adapters.cli.policy_accum_backtest_display import display_swing_backtest
 from src.application.use_case.swing_backtest_use_case import (
     FOREIGN_BOUNCE_SETUP as BACKTEST_FOREIGN_BOUNCE_SETUP,
 )
@@ -161,7 +161,7 @@ def swing_backtest(
     benchmark = benchmark or cfg.analysis.benchmark
     output_format = output_format or cfg.analysis.format
 
-    from src.adapters.cli.trade_swing_backtest_runner import load_swing_backtest_runner_config
+    from src.adapters.cli.policy_accum_backtest_runner import load_swing_backtest_runner_config
     runner_config = load_swing_backtest_runner_config()
 
     resolved_capital = (

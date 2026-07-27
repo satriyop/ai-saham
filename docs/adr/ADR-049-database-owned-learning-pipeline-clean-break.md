@@ -2,21 +2,33 @@
 
 [Architecture decision index](../../ARCHITECTURE_DECISIONS.md)
 
-**Status:** Accepted — amended 2026-07-27 for post-open assess ownership
+**Status:** Accepted — amended 2026-07-27 (post-open assess; CLI family clean break)
 **Date:** 2026-07-27
 **Supersedes:** [ADR-023](ADR-023-codebase-directory-and-use-case-file-naming-standards.md)
 for learning-artifact persistence; amends ADR-027, ADR-033, ADR-041, ADR-042,
-and ADR-048.
+and ADR-048. Public CLI tree ownership for adapters remains
+[ADR-020](ADR-020-cli-adapter-file-naming-convention.md).
 
 ### Amendment (post-open assess)
 
 - Post-open assessment of an NCP pre-open plan is **`saham analyze pre-open`**
   (read-only over `learning_observations` + linked `learning_track_snapshots`).
 - It is **not** a learning outcome label and does **not** write learning tables.
-- Paper notebook: `saham trade log --type pre-open` with exact
+- Paper notebook: `saham trade pre-open log` with exact
   `--observation-id` and `--opening-snapshot-id` (same assess use case).
 - Retired: `saham trade confirm`, confirmation sidecars as assess authority,
   and `--type intraday` for this strategy path.
+
+### Amendment (CLI family clean break)
+
+- `research` = corpus / ML feeder only (`pre-open`, `accum`).
+- `trade` = human paper notebook only (`pre-open`, `accum`).
+- `policy accum` = guarded setup-config lifecycle (was under `trade swing`).
+- Clean break: no aliases for `trade log --type`, flat `trade outcome` /
+  `trade review`, `trade size`, `trade backtest-intraday`,
+  `trade migrate-journal`, or `research accumulation` (name).
+- Adapter filenames follow ADR-020 for the new tree (`trade_pre_open_*`,
+  `trade_accum_*`, `research_accum_*`, `policy_accum_*`).
 
 ## Context
 
@@ -150,15 +162,25 @@ Swing review is chronological and staged:
 Learning workflows are contextual:
 
 ```text
-saham research accumulation capture|backfill|labels|evaluate|replay|status
+saham research accum capture|backfill|labels|evaluate|replay|status
 saham research pre-open capture|track|labels|evaluate|status
-saham trade swing backtest|tune|review|validate|apply|status
+saham policy accum backtest|tune|review|validate|apply|status
+saham trade pre-open log|outcome|review
+saham trade accum log|review
 ```
 
-`research signal`, pre-open `grade|prompt|tune`, flat swing tuning commands,
-patch/journal/file arguments, `--no-persist`, `--export-patch`, and persisted
-JSON/JSONL/Markdown learning outputs are retired. `--format json` is stdout
-only.
+`research` is corpus / ML feeder only. `trade` is the human paper notebook only.
+`policy accum` is the guarded setup-config lifecycle (not paper, not corpus).
+
+Retired command paths (clean break, no aliases): `research signal`,
+`research accumulation` (use `research accum`), pre-open `grade|prompt|tune`,
+`trade log --type …`, flat `trade outcome` / `trade review`, `trade size`,
+`trade swing …`, `trade backtest-intraday`, `trade migrate-journal`, legacy
+flat swing tuning names under `trade`, patch/journal/file arguments,
+`--no-persist`, `--export-patch`, and persisted JSON/JSONL/Markdown learning
+outputs. `--format json` is stdout only.
+
+Adapter file ownership for these commands: [ADR-020](ADR-020-cli-adapter-file-naming-convention.md).
 
 ## Invariants and consequences
 

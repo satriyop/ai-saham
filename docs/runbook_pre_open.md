@@ -23,7 +23,7 @@ Governing: [ADR-048](adr/ADR-048-pre-open-signal-evidence-and-observation-identi
 | Action | Command | Writes |
 |--------|---------|--------|
 | Post-open assess of frozen plan | `saham analyze pre-open` | **Nothing** (stdout only) |
-| Paper notebook | `saham trade log --type pre-open` | CSV + `trades.jsonl` only |
+| Paper notebook | `saham trade pre-open log` | CSV + `trades.jsonl` only |
 
 ---
 
@@ -91,19 +91,19 @@ saham analyze pre-open --session YYYY-MM-DD
 # or: --observation-id … [--opening-snapshot-id …]
 # JSON: --format json
 
-saham trade log --type pre-open \
+saham trade pre-open log \
   --observation-id OBS \
   --opening-snapshot-id SNAP
 
-saham trade review pre-open
-saham trade outcome TICKER --entry … --exit … --result target|stop|manual|breakeven
+saham trade pre-open review
+saham trade pre-open outcome TICKER --entry … --exit … --result target|stop|manual|breakeven
 ```
 
 ### Retired (do not use)
 
 ```text
 trade confirm
-trade log --type intraday
+trade pre-open log (intraday type removed)
 research pre-open grade | prompt | tune
 ```
 

@@ -1,8 +1,8 @@
 """
-CLI implementation for saham research accumulation evaluate.
+CLI implementation for saham research accum evaluate.
 
 Public command registration:
-  saham research accumulation evaluate
+  saham research accum evaluate
 
 Layer: Adapter
 """

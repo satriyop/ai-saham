@@ -9,13 +9,13 @@ The swing trade feature is a **unified composite workflow** that combines accumu
 | Command | Purpose | Delegates To |
 |---------|---------|-------------|
 | `saham analyze swing TICKER` | Unified multi-section composite view | Internal orchestration |
-| `saham trade size TICKER` | ATR-based position sizing calculator | `PositionSizer` service |
+| `analyze swing --capital  # sizing TICKER` | ATR-based position sizing calculator | `PositionSizer` service |
 | `saham trade backtest-swing` | Portfolio walk-forward backtest | `SwingBacktestUseCase` |
 | `saham analyze swing-compare` | Compare variants across regimes | `SwingBacktestUseCase` × N variants |
 | `saham screen accum` | Accumulation screener (find candidates) | `AccumulationScreenUseCase` |
-| `saham research accumulation evaluate` | Audit accumulation broker data | `AccumulationAuditUseCase` |
+| `saham research accum evaluate` | Audit accumulation broker data | `AccumulationAuditUseCase` |
 | `saham trade log swing` | Log a candidate to journal | `AccumulationJournal` service |
-| `saham trade review swing` | Review journal performance | `AccumulationJournal` + SQLite |
+| `saham trade accum review` | Review journal performance | `AccumulationJournal` + SQLite |
 | `saham analyze regime` | Market regime context (standalone) | `MarketRegimeUseCase` |
 
 ---
@@ -29,9 +29,9 @@ The swing trade feature is a **unified composite workflow** that combines accumu
 │  analyze swing       trade size       trade backtest-swing                  │
 │  analyze swing-compare                                                       │
 │  screen accum       ───► accumulation_run                                   │
-│  research accumulation evaluate ───► accumulation_audit                      │
+│  research accum evaluate ───► accumulation_audit                      │
 │  trade log swing    ───► accumulation_log                                   │
-│  trade review swing ───► accumulation_review                                │
+│  trade accum review ───► accumulation_review                                │
 │                                                                          │
 │  analyze regime                                                              │
 └────────────────────────────────┬─────────────────────────────────────────┘
@@ -324,7 +324,7 @@ The single-ticker `saham analyze swing BBCA` command centers the core determinis
 
 ```
 ┌─────────────┐
-│   ENTRY     │  saham trade size BBCA --capital 10000000 --risk-pct 1
+│   ENTRY     │  analyze swing --capital  # sizing BBCA --capital 10000000 --risk-pct 1
 └──────┬──────┘
        │
        ▼

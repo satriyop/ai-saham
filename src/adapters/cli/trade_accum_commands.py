@@ -1,9 +1,7 @@
 """
-CLI implementation for saham trade log/review swing commands.
+CLI implementation for saham trade accum log/review (paper notebook).
 
-Public command registration lives in lifecycle routers:
-  saham trade log --type swing
-  saham trade review swing
+Public registration: `saham trade accum log|review` via trade_commands.
 
 Layer: Adapter
 """
@@ -166,9 +164,9 @@ def accumulation_log(
     never duplicates rows.
 
     Example:
-        saham trade log swing --ticker BBRI --window 7
-        saham trade log swing --ticker BBCA --entry-price 9450
-        saham trade log swing --ticker BBRI --from-analysis --with-regime
+        saham trade accum log --ticker BBRI --window 7
+        saham trade accum log --ticker BBCA --entry-price 9450
+        saham trade accum log --ticker BBRI --from-analysis --with-regime
     """
     run_accumulation_log_command(
         ticker=ticker,
@@ -212,8 +210,8 @@ def accumulation_review(
     what the foreign-flow score thresholds actually delivered.
 
     Example:
-        saham trade review swing
-        saham trade review swing --horizon 10 --min-foreign-flow-score 70
+        saham trade accum review
+        saham trade accum review --horizon 10 --min-foreign-flow-score 70
     """
     from src.adapters.cli.trade_accum_workflow_factory import (
         create_accumulation_journal_service,
@@ -226,7 +224,7 @@ def accumulation_review(
     if not journal_path.exists():
         typer.echo(
             f"No journal found at '{journal_path}'.\n"
-            "Run `saham trade log swing --ticker BBRI` first.",
+            "Run `saham trade accum log --ticker BBRI` first.",
             err=True,
         )
         raise typer.Exit(1)

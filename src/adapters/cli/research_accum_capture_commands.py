@@ -16,7 +16,7 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.research_signal_backfill_commands import (
+from src.adapters.cli.research_accum_backfill_commands import (
     _display_backfill_response,
     run_signal_observation_corpus_write,
 )

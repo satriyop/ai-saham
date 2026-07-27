@@ -114,7 +114,7 @@ saham research pre-open status
 
 # Human post-open assess + optional paper notebook (not learning)
 saham analyze pre-open --session YYYY-MM-DD
-saham trade log --type pre-open --observation-id … --opening-snapshot-id …
+saham trade pre-open log --observation-id … --opening-snapshot-id …
 ```
 
 The pre-open workflow is session-specific: NCP capture freezes the plan in
@@ -127,8 +127,9 @@ read-only post-open assess of the frozen plan.
 ```bash
 saham screen accum --universe lq45 --multi
 saham analyze swing TICKER --with-signal-detail --with-market-context
-saham trade size TICKER --capital 10000000
-saham trade swing backtest --help
+saham analyze swing TICKER --capital 10000000
+saham policy accum backtest --help
+saham trade accum log --ticker TICKER --from-analysis
 ```
 
 The accumulation score and SignalEngine score are separate 0–100 systems. The
@@ -138,11 +139,11 @@ signal evidence. Neither bypasses RiskEngine.
 ### Guarded swing tuning
 
 ```bash
-saham trade swing tune --help
-saham trade swing review --help
-saham trade swing validate PROPOSAL_ID
-saham trade swing apply PROPOSAL_ID --yes
-saham trade swing status
+saham policy accum tune --help
+saham policy accum review --help
+saham policy accum validate PROPOSAL_ID
+saham policy accum apply PROPOSAL_ID --yes
+saham policy accum status
 ```
 
 Swing policy review is deterministic and evidence-gated. Proposals are derived

@@ -24,11 +24,11 @@ Examples:
 - **Save decisions:** `saham research pre-open capture`  
 - Same-day learning: `track` → `labels` → `evaluate` / `status`  
 - Post-open assess: `saham analyze pre-open`  
-- Paper notebook: `saham trade log --type pre-open --observation-id … --opening-snapshot-id …`  
+- Paper notebook: `saham trade pre-open log --observation-id … --opening-snapshot-id …`
 - Live accum: `saham screen accum` → no observation write  
 
 Do **not** auto-write observations from live `screen`.  
-**Retired:** `research pre-open grade|prompt|tune`, `trade confirm`, `trade log --type intraday`.  
+**Retired:** `research pre-open grade|prompt|tune`, `trade confirm`, `trade pre-open log (intraday type removed)`.
 Operator runbook: `docs/runbook_pre_open.md`.
 
 ---
@@ -1315,14 +1315,14 @@ saham research signal readiness [OPTIONS]
 
 ---
 
-## saham research accumulation evaluate
+## saham research accum evaluate
 
 Historical accumulation audit — replay accumulation signals and measure forward returns.
 
 ```
-saham research accumulation evaluate [OPTIONS]
-saham research accumulation evaluate --universe idx80 --setup foreign-bounce
-saham research accumulation evaluate --universe lq45 --window 7 --min-score 70
+saham research accum evaluate [OPTIONS]
+saham research accum evaluate --universe idx80 --setup foreign-bounce
+saham research accum evaluate --universe lq45 --window 7 --min-score 70
 ```
 
 | Option | Default | Description |
@@ -1488,204 +1488,120 @@ saham analyze pre-open --format json
 
 ---
 
-## saham trade log
-
-Log a paper-trade decision to the journal.
+## saham trade (paper notebook only)
 
 ```
-saham trade log --type TYPE [OPTIONS]
-saham trade log --type swing --ticker BBRI --window 7
-saham trade log --type pre-open --observation-id OBS --opening-snapshot-id SNAP
+saham trade pre-open log|outcome|review
+saham trade accum log|review
 ```
 
-| Option | Short | Default | Description |
-|--------|-------|---------|-------------|
-| `--type` | | required | Journal type: swing, pre-open |
-| `--ticker` | | — | Ticker(s) for swing log |
-| `--window` | `-w` | 7 | Window for swing log |
-| `--observation-id` | | — | Required for `--type pre-open` |
-| `--opening-snapshot-id` | | — | Required for `--type pre-open` |
+Not paper: `saham research` (corpus), `saham policy accum` (config lifecycle),
+`saham analyze swing --capital` (sizing).
 
 ---
 
-## saham trade review pre-open
+## saham trade pre-open log
 
-Review pre-open paper confirmation journal.
+Log post-open assess rows to the pre-open paper notebook (immutable IDs).
 
 ```
-saham trade review pre-open [OPTIONS]
+saham trade pre-open log --observation-id OBS --opening-snapshot-id SNAP
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--observation-id` | required | Learning observation id from analyze pre-open |
+| `--opening-snapshot-id` | required | Opening track snapshot id |
+| `--journal` | config | Pre-open CSV journal path |
+| `--db` | config | SQLite database path |
+
+---
+
+## saham trade pre-open outcome
+
+Record the actual fill on a pre-open paper journal row.
+
+```
+saham trade pre-open outcome TICKER --entry 9000 --exit 9500 --result target
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--entry` | required | Actual entry price |
+| `--exit` | required | Actual exit price |
+| `--result` | manual | target, stop, manual, breakeven |
+| `--date` | today | Confirmed date YYYY-MM-DD |
+| `--notes` | — | Execution notes |
+| `--journal` | config | Pre-open CSV journal path |
+
+---
+
+## saham trade pre-open review
+
+Review pre-open paper journal buckets (manual outcome preferred; else daily OHLC proxy).
+
+```
+saham trade pre-open review [OPTIONS]
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--journal` | config | Pre-open CSV journal path |
-| `--db` | ./data.db | SQLite database path |
+| `--db` | config | SQLite database path |
 
 ---
 
-## saham trade review swing
+## saham trade accum log
 
-Review swing accumulation trade journal.
+Log an accumulation candidate to the accum paper journal.
 
 ```
-saham trade review swing [OPTIONS]
+saham trade accum log --ticker BBRI --window 7
+saham trade accum log --ticker BBRI --from-analysis --with-regime
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--horizon` | 20 | Review horizon in days |
-| `--min-score` | — | Minimum score filter |
-| `--journal` | ./trades.jsonl | Journal file path |
-| `--db` | ./data.db | SQLite database path |
+| `--ticker` / `-t` | required | Ticker symbol |
+| `--window` / `-w` | 7 | Accumulation window in sessions |
+| `--from-analysis` | false | Record setup match, gates, plan |
+| `--setup` | foreign-bounce | Setup name with --from-analysis |
+| `--with-regime` | false | Include market regime label |
+| `--journal` | config | Accum CSV journal path |
+| `--db` | config | SQLite database path |
 
 ---
 
-## saham trade outcome
+## saham trade accum review
 
-Record the actual outcome of a paper trade.
+Review accum paper journal forward returns.
 
 ```
-saham trade outcome TICKER [OPTIONS]
-saham trade outcome BBCA --entry 9000 --exit 9500 --result target
+saham trade accum review [OPTIONS]
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--entry` | — | Entry price |
-| `--exit` | — | Exit price |
-| `--result` | — | Outcome: target, stop, manual |
+| `--horizon` | 10 | Forward trading days |
+| `--min-foreign-flow-score` | 0 | Minimum score filter |
+| `--journal` | config | Accum CSV journal path |
+| `--db` | config | SQLite database path |
 
 ---
 
-## saham trade size
+## saham policy accum
 
-ATR-based position sizing calculator.
-
-```
-saham trade size TICKER [OPTIONS]
-saham trade size BBRI --capital 10000000
-saham trade size BBRI --capital 10000000 --risk-pct 2 --entry 4825
-```
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--capital` | required | Capital in IDR |
-| `--risk-pct` | 1.0 | % of capital at risk per trade |
-| `--entry` | — | Entry price override |
-
----
-
-## saham trade backtest-swing
-
-Walk-forward portfolio backtest for the swing workflow.
+Guarded setup-config lifecycle (not paper, not research corpus).
 
 ```
-saham trade backtest-swing [OPTIONS]
-saham trade backtest-swing --universe idx80 --setup foreign-bounce
-saham trade backtest-swing --universe lq45 --capital 50000000 --max-positions 3
+saham policy accum backtest|tune|review|validate|apply|status
+saham policy accum backtest --universe lq45 --setup foreign-bounce
+saham policy accum tune --universe lq45
+saham policy accum validate PROPOSAL_ID
+saham policy accum apply PROPOSAL_ID --yes
+saham policy accum status
 ```
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--universe` | idx80 | Universe to backtest |
-| `--setup` | foreign-bounce | Setup lens |
-| `--capital` | — | Capital in IDR |
-| `--max-positions` | — | Maximum concurrent positions |
-| `--allow-regimes` | — | Comma-separated allowed regimes |
-
----
-
-## saham trade backtest-intraday
-
-Walk-forward backtest for the intraday pre-open workflow using daily OHLC as proxy.
-
-```
-saham trade backtest-intraday [OPTIONS]
-```
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--universe` | idx80 | Universe to backtest |
-| `--start` | — | Start date |
-| `--end` | — | End date |
-
----
-
-## saham trade tune-swing
-
-Swing tuning review — generate config tuning recommendations from backtest attribution.
-
-```
-saham trade tune-swing [OPTIONS]
-```
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--universe` | idx80 | Universe |
-| `--setup` | foreign-bounce | Setup lens |
-| `--start` | — | Start date |
-| `--end` | — | End date |
-
----
-
-## saham trade tuning-status
-
-Read-only status of the swing tuning loop — latest review, pending patches, applied changes.
-
-```
-saham trade tuning-status
-```
-
----
-
-## saham trade review-tuning-swing
-
-Review saved swing tuning run results.
-
-```
-saham trade review-tuning-swing [OPTIONS]
-```
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--limit` | 10 | Number of recent reviews to show |
-
----
-
-## saham trade validate-tuning-patch
-
-Validate an exported swing tuning patch JSON file for schema correctness.
-
-```
-saham trade validate-tuning-patch [OPTIONS]
-```
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--file` | required | Path to tuning patch JSON |
-
----
-
-## saham trade apply-tuning-patch
-
-Dry-run or explicitly apply an exported tuning patch to the runtime config.
-
-```
-saham trade apply-tuning-patch [OPTIONS]
-```
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--file` | required | Path to tuning patch JSON |
-| `--apply` | false | Apply mode (default is dry-run) |
-| `--dry-run` | true | Report changes without applying |
-
----
-
-## saham trade migrate-journal
-
-One-time migration of CSV-format trade journals to JSONL format.
-
-```
-saham trade migrate-journal [OPTIONS]
-```
+Retired under `trade`: flat `log`/`outcome`/`review`, `size`, `swing *`,
+`backtest-intraday`, `migrate-journal`, and legacy `*-tuning-*` / `backtest-swing`
+command names.

@@ -137,7 +137,7 @@ row.
 | [018](docs/adr/ADR-018-cli-command-depth-saham-view-broker-exception.md) | CLI depth exception (`view` sub-groups) | Accepted; amended by ADR-044 |
 
 | [019](docs/adr/ADR-019-unified-fetch-timestamp-fetched-at-datetime-on-cached-domain-value-objects.md) | Fetch timestamp | Accepted |
-| [020](docs/adr/ADR-020-cli-adapter-file-naming-convention.md) | CLI adapter naming | Accepted |
+| [020](docs/adr/ADR-020-cli-adapter-file-naming-convention.md) | CLI adapter naming (`{top}_{sub}_*`) | Accepted; examples refreshed for trade/research/policy tree |
 | [021](docs/adr/ADR-021-strict-boundary-enforcement-infrastructure-decoupling-hexagonal-audit-clean-up.md) | Boundary enforcement | Accepted |
 | [022](docs/adr/ADR-022-idx-regular-market-price-floor-rp-50-enforcements.md) | IDX Rp50 floor | Accepted |
 | [023](docs/adr/ADR-023-codebase-directory-and-use-case-file-naming-standards.md) | Layout and naming | Superseded by ADR-049 |
@@ -166,7 +166,7 @@ row.
 | [046](docs/adr/ADR-046-cli-response-envelope.md) | Shared CLI response envelope | Accepted; generalizes envelope beyond view; adopt-on-touch for other families |
 | [047](docs/adr/ADR-047-scenario-adoption-seam-for-signal-risk-mce.md) | Scenario-adoption seam for Signal / Risk / MCE | Accepted; engines single; pre-open directional-baseline amendment mandates removal of its remaining local scorer |
 | [048](docs/adr/ADR-048-pre-open-signal-evidence-and-observation-identity.md) | Pre-open signal evidence + observation identity | Accepted; v3 is the unused first cohort and `pre_open_directional_baseline.v1` is its deterministic long-only champion |
-| [049](docs/adr/ADR-049-database-owned-learning-pipeline-clean-break.md) | Database-owned learning pipeline clean break | Accepted; supersedes ADR-023 learning persistence and amends ADR-027/033/041/042/048 |
+| [049](docs/adr/ADR-049-database-owned-learning-pipeline-clean-break.md) | Database-owned learning pipeline clean break | Accepted; supersedes ADR-023 learning persistence; amends ADR-027/033/041/042/048; public CLI family tree (trade/research/policy) |
 
 ## Adding or changing a decision
 

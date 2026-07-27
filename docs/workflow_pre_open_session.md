@@ -103,8 +103,8 @@ Malam        Refresh data / gap-fill lokal                saham fetch market
 09:00        Pasar buka — track sample                     saham research pre-open track
 09:00+       ★ POST-OPEN ASSESS ★                          saham analyze pre-open
 09:05+       Eksekusi order (di Stockbit/broker kamu)
-Siang        Catat outcome kalau ada posisi               saham trade outcome
-Sore         Log sesi ke journal                          saham trade log --type pre-open
+Siang        Catat outcome kalau ada posisi               saham trade pre-open outcome
+Sore         Log sesi ke journal                          saham trade pre-open log
 ```
 
 **Tiga momen paling kritis:** multi-tick IEV, 08:57 capture, dan post-open `analyze pre-open` setelah track.
@@ -201,7 +201,7 @@ IEV/IEP history: 47 days (2026-04-01 → 2026-06-17), avg 28 movers/day, IEP fil
 - Snapshot mulai 08:58 adalah matching-period diagnostic, bukan baseline sinyal
 
 **Manfaat jangka panjang:**
-- Setelah 3+ bulan, `saham trade backtest-intraday` bisa filter by IEV rank (match live behavior)
+- Setelah 3+ bulan, `# retired: retired trade backtest-intraday` bisa filter by IEV rank (match live behavior)
 - ΔIEV harian di output bersifat diagnostic; sinyal memakai IEV final 08:57
   dikurangi baseline locked-input 08:56
 
@@ -399,7 +399,7 @@ VERDICT sudah mensintesis semua sinyal. Cukup baca kolom pertama:
 | `? NO_DATA` | Tidak ada data ATR lokal | Skip hari ini, `saham fetch market TICKER --days 365` malam ini |
 
 Kolom lain berguna untuk context, bukan untuk keputusan utama:
-- **GAP%** dan **ENTRY-RANGE** → dikonfirmasi oleh opening confirmation di 09:00
+- **GAP%** dan **ENTRY-RANGE** → dikonfirmasi oleh analyze pre-open setelah track (09:00+)
 - **SPRD%** → likuiditas (0.5–1.5% normal, > 3% tidak likuid)
 - **STOP%** → posisi sizing, baca saat buat order plan
 - **SIGNAL** → ringkasan ACCUM + FVWAP + Prev High + IEV_INTENSITY dalam satu string
@@ -433,21 +433,21 @@ Stop%       : -7.2%              (dari STOP%)
 Prev H      : 114                (dari SIGNAL: PH:114)
 
 Skenario kalau open DALAM range (104–116):
-  → opening confirmation akan output ENTER
-  → Pasang limit buy di harga yang ditampilkan opening confirmation
+  → analyze pre-open akan output ENTER
+  → Pasang limit buy di harga yang ditampilkan analyze pre-open
   → Set stop segera setelah terisi
   → Target awal: Prev H 114
 
 Skenario kalau open DI ATAS 116:
-  → opening confirmation akan output SKIP (gap up)
+  → analyze pre-open akan output SKIP (gap up)
 
 Skenario kalau open DI BAWAH 104:
-  → opening confirmation akan output SKIP (gap down)
+  → analyze pre-open akan output SKIP (gap down)
 ────────────────────────────────────────
 ```
 
 > **Catatan:** Kamu tidak perlu hitung SUGGEST atau ATR-STOP manual lagi —
-> opening confirmation langsung menampilkan "Limit BUY X | Stop Y" setelah kamu input opening price.
+> analyze pre-open menampilkan "Limit BUY X | Stop Y" setelah kamu input opening price.
 
 > **Locked input 08:56–08:57:59; matching 08:58–08:59:59:** Order lama
 > dibatasi untuk amend/withdraw setelah 08:56, sementara order baru masih dapat
@@ -533,7 +533,7 @@ Output dikelompokkan per aksi:
    BBRI    regime WEAK: BACKED accumulation required (got DISTRIBUTING)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- saham trade log --type pre-open   (record this session)
+ saham trade pre-open log   (record this session)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
@@ -564,7 +564,7 @@ Untuk saham dengan keputusan `ENTER`:
 
 ```
 1. Buka aplikasi broker kamu (Stockbit Sekuritas / RTI / lainnya)
-2. Pasang limit buy di harga ENTRY (dari opening confirmation output)
+2. Pasang limit buy di harga ENTRY (dari output analyze pre-open)
 3. Begitu order terisi → LANGSUNG pasang stop-loss di harga STOP
 4. Set target awal di Prev High
 ```
@@ -601,25 +601,25 @@ Harga sidewalk 30+ menit:
 ### Log Sesi ke Journal
 
 ```bash
-# Log hasil opening confirmation (termasuk semua keputusan)
-saham trade log --type pre-open
+# Log paper notebook (setelah analyze, pakai ID immutable)
+saham trade pre-open log
 ```
 
-Perintah ini mencatat hasil `opening confirmation` terakhir ke `journals/pre_open_paper.csv`.
+Perintah ini mencatat hasil assess yang diikat observation_id + opening_snapshot_id ke `journals/pre_open_paper.csv`.
 
 ### Catat Outcome Aktual
 
 Setelah posisi ditutup (profit atau loss):
 
 ```bash
-saham trade outcome BBRI \
+saham trade pre-open outcome BBRI \
   --entry 2900 \
   --exit 2955 \
   --notes "keluar jam 09:45, tembus Prev H 2910, trailing sampai 2955"
 ```
 
 ```bash
-saham trade outcome BBRI \
+saham trade pre-open outcome BBRI \
   --entry 2900 \
   --exit 2788 \
   --notes "stop kena jam 09:12, gap down lanjut"
@@ -632,10 +632,10 @@ saham trade outcome BBRI \
 saham research pre-open evaluate
 
 # Akurasi keputusan (win rate per decision type)
-saham trade review pre-open
+saham trade pre-open review
 ```
 
-`saham trade review pre-open` menganalisis paper journal post-open assess. Review memakai manual outcome jika sudah dicatat dengan `saham trade outcome`; jika belum ada, tool memakai daily OHLC lokal sebagai proxy, bukan urutan tick intraday.
+`saham trade pre-open review` menganalisis paper journal post-open assess. Review memakai manual outcome jika sudah dicatat dengan `saham trade pre-open outcome`; jika belum ada, tool memakai daily OHLC lokal sebagai proxy, bukan urutan tick intraday.
 
 Contoh output review yang berguna:
 ```
@@ -656,7 +656,7 @@ Kalau sudah mengumpulkan data IEV harian via `saham fetch iev`:
 
 ```bash
 # Walk-forward backtest — filter top 5 oleh IEV rank
-saham trade backtest-intraday --iev-top-n 5 --days 90
+# retired: retired trade backtest-intraday --iev-top-n 5 --days 90
 ```
 
 Menggunakan data IEV asli dari Stockbit + candle OHLC lokal. Entry/exit pakai open/high/low/close, semua posisi keluar di hari yang sama. Tanpa data IEV, backtest jalan dengan universe penuh (warning ditampilkan).
@@ -698,15 +698,15 @@ Potong dan tempel di terminal kamu.
 │    saham analyze pre-open \                       │
 │      --opening-json '{"BNBR":___,"BUMI":___}'  │
 ├──────────────────────────────────────────────────────────────┤
-│  09:00–09:05  Eksekusi dari output opening confirmation              │
+│  09:00–09:05  Eksekusi dari output analyze pre-open              │
 │    ▶ ENTER → limit buy & stop sudah tertera, pasang langsung │
 │    ◎ WAIT  → pantau 15 menit, entry kalau holds above range  │
 │    ✗ SKIP  → tidak masuk, tanpa pengecualian                 │
 ├──────────────────────────────────────────────────────────────┤
 │  Setelah sesi                                                │
-│    saham trade log --type pre-open                                  │
-│    saham trade outcome TICKER --entry X --exit Y    │
-│    saham trade backtest-intraday (setelah 3+ bulan data)     │
+│    saham trade pre-open log                                  │
+│    saham trade pre-open outcome TICKER --entry X --exit Y    │
+│    # retired: retired trade backtest-intraday (setelah 3+ bulan data)     │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -825,7 +825,7 @@ Kalau output "No movers returned":
 - Sesi Stockbit expired → `saham fetch stockbit login`
 - Di luar jam pre-open (IEV hanya available 08:45–09:00)
 
-Tanpa data IEV: `saham trade backtest-intraday` tetap bisa jalan dengan universe penuh, tapi ada warning.
+Tanpa data IEV: `# retired: retired trade backtest-intraday` tetap bisa jalan dengan universe penuh, tapi ada warning.
 
 ---
 
@@ -835,7 +835,7 @@ Tanpa data IEV: `saham trade backtest-intraday` tetap bisa jalan dengan universe
 - Jangan eksekusi berdasarkan pre-open output setelah 09:30 — konteks sudah berubah
 - Tool memberikan analisis deterministik, bukan jaminan profit
 - Paper trade minimal 20 sesi sebelum menggunakan uang sungguhan
-- Gunakan `saham trade review pre-open` secara berkala untuk validasi apakah sinyal-sinyal ini bekerja di kondisi pasar saat ini
+- Gunakan `saham trade pre-open review` secara berkala untuk validasi apakah sinyal-sinyal ini bekerja di kondisi pasar saat ini
 - Kumpulkan data IEV tiap hari via `saham fetch iev` — setelah 3+ bulan, backtest jadi lebih akurat
 
 ---

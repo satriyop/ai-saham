@@ -301,7 +301,7 @@ class LogSwingCandidateUseCase:
             return float(v) if v is not None else None
 
         return {
-            "trade_type": "swing",
+            "trade_type": "accum",
             "logged_at": str(logged_at),
             "ticker": ticker,
             "regime": regime,

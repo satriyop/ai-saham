@@ -250,7 +250,7 @@ def test_backtest_json_contracts(temp_workspace, monkeypatch):
     swing_bt = runner.invoke(
         app,
         [
-                "trade", "swing", "backtest", "BBCA",
+            "policy", "accum", "backtest", "BBCA",
             "--start", "2026-06-01",
             "--end", "2026-06-20",
             "--format", "json",
@@ -261,16 +261,6 @@ def test_backtest_json_contracts(temp_workspace, monkeypatch):
     payload = _json_stdout(swing_bt)
     assert payload["artifact_type"] == "swing_backtest"
 
-    intraday_bt = runner.invoke(
-        app,
-        [
-            "trade", "backtest-intraday", "BBCA",
-            "--start", "2026-06-01",
-            "--end", "2026-06-20",
-            "--format", "json",
-            "--db", str(db_path),
-        ],
-    )
-    assert intraday_bt.exit_code == 0, intraday_bt.output
-    payload = _json_stdout(intraday_bt)
-    assert payload["artifact_type"] == "intraday_proxy_simulation"
+    # Retired: trade backtest-intraday (pre-open OHLC proxy CLI)
+    retired = runner.invoke(app, ["trade", "backtest-intraday", "--help"])
+    assert retired.exit_code != 0

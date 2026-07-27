@@ -81,9 +81,8 @@ def test_cli_uses_factory_and_logs_successfully(monkeypatch, base_response, base
         app,
         [
             "trade",
+            "accum",
             "log",
-            "--type",
-            "swing",
             "--ticker",
             "bbri",
             "--window",
@@ -102,21 +101,19 @@ def test_cli_uses_factory_and_logs_successfully(monkeypatch, base_response, base
     assert factory_calls[0]["with_regime"] is False
 
 
-def test_cli_calls_run_accumulation_log_command_from_router(
+def test_cli_calls_run_accumulation_log_command_from_trade_accum(
     monkeypatch, base_response, base_policy
 ):
-    import src.adapters.cli.trade_log_router_commands as trade_log_router
-
     router_calls = []
 
     def mock_run_command(*args, **kwargs):
         router_calls.append((args, kwargs))
 
-    monkeypatch.setattr(trade_log_router, "run_accumulation_log_command", mock_run_command)
+    monkeypatch.setattr(trade_accum_cli, "run_accumulation_log_command", mock_run_command)
 
     result = runner.invoke(
         app,
-        ["trade", "log", "--type", "swing", "--ticker", "bbri"],
+        ["trade", "accum", "log", "--ticker", "bbri"],
     )
 
     assert result.exit_code == 0
@@ -146,7 +143,7 @@ def test_cli_renders_duplicate_message(monkeypatch, base_response, base_policy):
 
     result = runner.invoke(
         app,
-        ["trade", "log", "--type", "swing", "--ticker", "bbri"],
+        ["trade", "accum", "log", "--ticker", "bbri"],
     )
 
     assert result.exit_code == 0, result.stdout
@@ -176,7 +173,7 @@ def test_cli_renders_missing_candidate_warning(monkeypatch, base_response, base_
 
     result = runner.invoke(
         app,
-        ["trade", "log", "--type", "swing", "--ticker", "bbri"],
+        ["trade", "accum", "log", "--ticker", "bbri"],
     )
 
     assert result.exit_code == 0, result.stdout
@@ -205,7 +202,7 @@ def test_cli_renders_failed_gates(monkeypatch, base_response, base_policy):
 
     result = runner.invoke(
         app,
-        ["trade", "log", "--type", "swing", "--ticker", "bbri", "--from-analysis"],
+        ["trade", "accum", "log", "--ticker", "bbri", "--from-analysis"],
     )
 
     assert result.exit_code == 0, result.stdout
@@ -227,7 +224,7 @@ def test_cli_prints_regime_factory_warnings_to_stderr_and_logs(
 
     result = runner.invoke(
         app,
-        ["trade", "log", "--type", "swing", "--ticker", "bbri"],
+        ["trade", "accum", "log", "--ticker", "bbri"],
     )
 
     assert result.exit_code == 0

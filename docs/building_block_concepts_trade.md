@@ -126,7 +126,7 @@ This document explains the conceptual building blocks of the trading system — 
   │  saham trade backtest-swing (walk-forward)  │           │                               │
   │  saham analyze swing-compare (side-by-side) │           │  REGIME                       │
   │  saham screen accum (accum CLI)             │           │  saham analyze regime         │
-  │  saham trade size (position sizing)         │           │                               │
+  │  analyze swing --capital  # sizing (position sizing)         │           │                               │
   │                                             │           │  CHART                        │
   │  INTRADAY (minutes horizon)                 │           │  saham analyze chart          │
   │  saham screen pre-open                      │           │                               │
@@ -136,9 +136,9 @@ This document explains the conceptual building blocks of the trading system — 
   │      registry (NOT strategies)              │           └───────────────-----───────────┘
   │  saham analyze pre-open                     │
   │    → 8-gate deterministic post-open assess  │
-  │  saham trade log --type pre-open / review   │
-  │  saham trade outcome                        │
-  │  saham trade backtest-intraday              │
+  │  saham trade pre-open log / review   │
+  │  saham trade pre-open outcome                        │
+  │  # retired: retired trade backtest-intraday              │
   │                                             │
   │  ACCUMULATION SCREEN                        │
   │  saham screen accum                         │

@@ -112,7 +112,7 @@ saham analyze chart volume TICKER --days 30
 Gunakan output analisis atau sizing standalone:
 
 ```bash
-saham trade size TICKER --capital 10000000 --risk-pct 1
+analyze swing --capital  # sizing TICKER --capital 10000000 --risk-pct 1
 ```
 
 - [ ] Tetapkan planned entry, stop, target, max hold, dan jumlah lot.
@@ -176,8 +176,8 @@ saham trade log swing \
 Review:
 
 ```bash
-saham trade review swing --horizon 5
-saham trade review swing --horizon 10
+saham trade accum review --horizon 5
+saham trade accum review --horizon 10
 ```
 
 - [ ] Bandingkan score bucket, setup match, pattern, regime, broker quality,
@@ -223,7 +223,7 @@ saham analyze swing-compare --universe lq45 --start 2025-01-01
 ### Broker Quality Audit
 
 ```bash
-saham research accumulation evaluate \
+saham research accum evaluate \
   --universe lq45 \
   --setup foreign-bounce \
   --start 2026-01-01

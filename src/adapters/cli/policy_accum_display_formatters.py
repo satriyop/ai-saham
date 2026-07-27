@@ -1,5 +1,5 @@
 """
-Shared pure formatting helpers for trade swing CLI display.
+Shared pure formatting helpers for policy accum CLI display.
 
 No Rich panel/table orchestration. No application tuning builder imports.
 All functions keep underscore prefix (private) unless imported by tests.

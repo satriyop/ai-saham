@@ -128,7 +128,7 @@ saham screen pre-open \
 - [ ] Log paper notebook dari ID yang sama dengan analyze:
 
   ```bash
-  saham trade log --type pre-open \
+  saham trade pre-open log \
     --observation-id OBS \
     --opening-snapshot-id SNAP
   ```
@@ -136,7 +136,7 @@ saham screen pre-open \
 - [ ] Setelah posisi ditutup, catat outcome aktual:
 
   ```bash
-  saham trade outcome BBCA \
+  saham trade pre-open outcome BBCA \
     --entry 5200 \
     --exit 5375 \
     --notes "keluar jam 10:30, target tercapai di Prev H"
@@ -150,7 +150,7 @@ Setelah minimal sekitar 20 sesi paper trade:
 
 ```bash
 saham research pre-open evaluate
-saham trade review pre-open
+saham trade pre-open review
 ```
 
 Periksa:
@@ -166,7 +166,7 @@ Periksa:
 ### Baseline Historis
 
 ```bash
-saham trade backtest-intraday \
+# retired: retired trade backtest-intraday \
   --universe lq45 \
   --start 2025-12-01
 ```
@@ -174,7 +174,7 @@ saham trade backtest-intraday \
 Jika snapshot IEV tersedia:
 
 ```bash
-saham trade backtest-intraday \
+# retired: retired trade backtest-intraday \
   --universe lq45 \
   --iev-top-n 5 \
   --start 2026-01-01
@@ -197,7 +197,7 @@ saham trade backtest-intraday \
 ```text
 1. Jalankan backtest historis dan cari edge setelah biaya.
 2. Paper trade minimal 20 sesi dan catat outcome aktual.
-3. Jalankan `saham trade review pre-open`.
+3. Jalankan `saham trade pre-open review`.
 4. Bandingkan paper result dengan ekspektasi backtest.
 5. Naikkan modal bertahap hanya jika hasil selaras dan risiko terkontrol.
 ```
