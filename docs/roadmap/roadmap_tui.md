@@ -401,7 +401,7 @@ Value acceptance:
 - Update never runs on mount, focus, or local Reload;
 - provider/write behavior is explicit and tested with disposable storage.
 
-Backlog: `tasks/backlog/tui_personal_command_center.md`.
+Backlog file: removed 2026-07-27 (re-spec from this roadmap when implementing).
 
 ### Milestone B — Candidate Discovery Workbench
 
@@ -426,7 +426,7 @@ Value acceptance:
   and unchanged tickers;
 - opening a ticker requires no second candidate computation.
 
-Backlog: `tasks/backlog/tui_candidate_discovery_workbench.md`.
+Backlog file: removed 2026-07-27 (re-spec from this roadmap when implementing).
 
 ### Milestone C — Ticker Decision Workbench
 
@@ -451,7 +451,7 @@ Value acceptance:
 - changing a tab or input does not silently rerun analysis;
 - logged data is shown before confirmation and exact success/failure is visible.
 
-Backlog: `tasks/backlog/tui_ticker_decision_workbench.md`.
+Backlog file: removed 2026-07-27 (re-spec from this roadmap when implementing).
 
 ### Milestone D — Backtest Workspace
 
@@ -475,7 +475,7 @@ Value acceptance:
 - comparisons never hide differing inputs;
 - no backtest result is presented as a live trade verdict.
 
-Backlog: `tasks/backlog/tui_backtest_workspace.md`.
+Backlog file: removed 2026-07-27 (re-spec from this roadmap when implementing).
 
 ### Milestone E — Journal And Review
 
@@ -499,7 +499,7 @@ Value acceptance:
   missing provenance;
 - review identifies repeatable strengths and failures without AI authority.
 
-Backlog: `tasks/backlog/tui_trade_review_workspace.md`.
+Backlog file: removed 2026-07-27 (re-spec from this roadmap when implementing).
 
 ## Deferred Until Personally Needed
 
@@ -580,20 +580,21 @@ whether a low-value feature deserves to exist.
 
 ## Backlog Reset
 
-- Completed TUI Phase 0–3 documents remain implementation history only.
-- Completed Phase 4 remains historical evidence for a rejected screen.
-- `tasks/backlog/tui_remove_research_screen.md` is the immediate cleanup task.
-- `tasks/backlog/tui_phase_5_hardening_and_release.md` is superseded and is not
-  part of this roadmap.
-- `tasks/backlog/tui_ui_ux_design_spec.md` retains useful shell/accessibility
-  evidence but its old route scope is superseded by this roadmap.
-- The Milestone A–E backlog files above are the active implementation contracts;
-  reverify their current-code claims before implementation.
+- Completed TUI Phase 0–5 / research-screen docs live under `tasks/done/`
+  (implementation history only).
+- Active TUI design token / shell contract retained as
+  `tasks/backlog/tui_ui_ux_design_spec.md` (route scope still subordinate to this
+  roadmap).
+- Milestone A–E task files under `tasks/backlog/tui_*.md` were **removed
+  2026-07-27** as stale product contracts; re-author from this roadmap before
+  implementation (do not resurrect deleted files without re-vetting current code).
 
 ## Immediate Order Of Work
 
-1. Finish removing Research Health and its TUI-only scope catalog.
-2. Draft and implement Milestone A: Personal Command Center.
+1. Treat remaining Research Health cleanup as historical if already done; do not
+   revive rejected TUI research-health scope.
+2. When resuming TUI product work: re-spec Milestone A (Personal Command Center)
+   from this roadmap + design-spec tokens, then implement.
 3. Draft Milestone B only after the Command Center workflow is usable.
 4. Build the Ticker Workbench before adding low-frequency diagnostics.
 5. Build Backtest around actual setup/strategy backtests, not generic forms.
