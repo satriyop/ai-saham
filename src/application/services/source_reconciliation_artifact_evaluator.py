@@ -80,8 +80,11 @@ def evaluate_candidate_observations_identity(
 
     if not raw.schema_sufficient:
         return _schema_insufficient_result(
-            name, table, "CANDIDATE_OBSERVATIONS_SCHEMA_INSUFFICIENT",
-            raw.row_count, raw.missing_columns,
+            name,
+            table,
+            "CANDIDATE_OBSERVATIONS_SCHEMA_INSUFFICIENT",
+            raw.row_count,
+            raw.missing_columns,
         )
 
     findings: list[SourceReconciliationFinding] = []
@@ -210,8 +213,11 @@ def evaluate_signal_forward_labels_linkage(
 
     if not raw.schema_sufficient:
         return _schema_insufficient_result(
-            name, table, "SIGNAL_FORWARD_LABELS_SCHEMA_INSUFFICIENT",
-            raw.row_count, raw.missing_columns,
+            name,
+            table,
+            "SIGNAL_FORWARD_LABELS_SCHEMA_INSUFFICIENT",
+            raw.row_count,
+            raw.missing_columns,
         )
 
     findings: list[SourceReconciliationFinding] = []
@@ -335,8 +341,11 @@ def evaluate_market_context_snapshot_identity(
 
     if not raw.schema_sufficient:
         return _schema_insufficient_result(
-            name, table, "MARKET_CONTEXT_SNAPSHOT_SCHEMA_INSUFFICIENT",
-            raw.row_count, raw.missing_columns,
+            name,
+            table,
+            "MARKET_CONTEXT_SNAPSHOT_SCHEMA_INSUFFICIENT",
+            raw.row_count,
+            raw.missing_columns,
         )
 
     findings: list[SourceReconciliationFinding] = []
@@ -348,9 +357,7 @@ def evaluate_market_context_snapshot_identity(
                 code="MARKET_CONTEXT_SNAPSHOT_INVALID_REGIME",
                 table=table,
                 field="regime",
-                message=(
-                    f"{raw.invalid_regime_count} row(s) have null/empty/unknown regime."
-                ),
+                message=(f"{raw.invalid_regime_count} row(s) have null/empty/unknown regime."),
                 impact="Regime-conditioned signal behavior cannot be trusted for these rows.",
                 sample_rows=raw.invalid_regime_samples,
                 row_count=raw.row_count,
@@ -380,9 +387,7 @@ def evaluate_market_context_snapshot_identity(
                 code="MARKET_CONTEXT_SNAPSHOT_MISSING_PROVENANCE",
                 table=table,
                 field="created_at",
-                message=(
-                    f"{raw.missing_provenance_count} row(s) have null created_at."
-                ),
+                message=(f"{raw.missing_provenance_count} row(s) have null created_at."),
                 impact="PIT provenance is incomplete for affected rows.",
                 sample_rows=raw.missing_provenance_samples,
                 row_count=raw.row_count,
@@ -430,8 +435,11 @@ def evaluate_regime_observations_identity(
 
     if not raw.schema_sufficient:
         return _schema_insufficient_result(
-            name, table, "REGIME_OBSERVATIONS_SCHEMA_INSUFFICIENT",
-            raw.row_count, raw.missing_columns,
+            name,
+            table,
+            "REGIME_OBSERVATIONS_SCHEMA_INSUFFICIENT",
+            raw.row_count,
+            raw.missing_columns,
         )
 
     findings: list[SourceReconciliationFinding] = []
@@ -443,9 +451,7 @@ def evaluate_regime_observations_identity(
                 code="REGIME_OBSERVATIONS_INVALID_REGIME",
                 table=table,
                 field="regime",
-                message=(
-                    f"{raw.invalid_regime_count} row(s) have null/empty/unknown regime."
-                ),
+                message=(f"{raw.invalid_regime_count} row(s) have null/empty/unknown regime."),
                 impact="Signal-conditioning evidence cannot be trusted for these rows.",
                 sample_rows=raw.invalid_regime_samples,
                 row_count=raw.row_count,

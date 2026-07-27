@@ -144,9 +144,7 @@ def test_trend_is_skipped_when_rules_file_is_provided():
     engine = FakeRiskEngine(response=response)
     use_case = RunRiskAnalysisWorkflowUseCase(risk_engine=engine)
 
-    result = use_case.execute(
-        _request(rules_file=Path("config/my_rules.yaml"), trend_days=7)
-    )
+    result = use_case.execute(_request(rules_file=Path("config/my_rules.yaml"), trend_days=7))
 
     assert result.trend_response is None
     assert engine.trend_requests == []

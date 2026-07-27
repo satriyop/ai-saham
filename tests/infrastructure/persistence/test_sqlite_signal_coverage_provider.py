@@ -10,8 +10,7 @@ def test_signal_coverage_includes_pit_replay_tables_and_excludes_display_valuati
 ):
     db_path = tmp_path / "coverage.sqlite"
     with sqlite3.connect(db_path) as conn:
-        conn.executescript(
-            """
+        conn.executescript("""
             CREATE TABLE candles (ticker TEXT);
             INSERT INTO candles (ticker) VALUES ('BBCA');
 
@@ -28,8 +27,7 @@ def test_signal_coverage_includes_pit_replay_tables_and_excludes_display_valuati
             INSERT INTO stock_meta (ticker, sector) VALUES ('BBCA', 'Financials');
             INSERT INTO company_profile_cache (ticker, listing_board) VALUES ('BBCA', 'MAIN');
             INSERT INTO earnings_cache (ticker, eps_actual) VALUES ('BBCA', 42.0);
-            """
-        )
+            """)
 
     report = SqliteSignalCoverageProvider().compute(db_path)
     by_factor = {factor.factor: factor for factor in report.factors}

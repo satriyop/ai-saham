@@ -52,6 +52,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
 class LocalClockMarketStatusProvider(MarketStatusProvider):
     """Derives IDX market status from Asia/Jakarta wall clock.
 
@@ -255,6 +256,7 @@ def read_cached_market_status(max_age_seconds: int = _CACHE_MAX_AGE_SECONDS) -> 
     Never raises.
     """
     import json
+
     try:
         if not _CACHE_FILE.exists():
             return None
@@ -283,6 +285,7 @@ def write_market_status_cache(status: MarketStatus) -> None:
     Only call this when status.source == 'stockbit'. Never raises.
     """
     import json
+
     try:
         data = {
             "status": status.status,
@@ -299,6 +302,7 @@ def write_market_status_cache(status: MarketStatus) -> None:
 
 
 # ── Module-level convenience functions ───────────────────────────────────────
+
 
 def get_display_market_status() -> MarketStatus:
     """Return market status for display in command headers — instant, no network.
@@ -324,6 +328,7 @@ def _fetch_and_maybe_cache_live_status() -> MarketStatus | None:
         from src.infrastructure.browser.stockbit_browser_context import (
             default_stockbit_profile_dir,
         )
+
         if not default_stockbit_profile_dir().exists():
             return None
         provider = StockbitBrokerProvider(create_stockbit_api_client())

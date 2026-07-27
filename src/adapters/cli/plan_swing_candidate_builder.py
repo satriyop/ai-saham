@@ -64,9 +64,7 @@ def create_accumulation_candidate_builder(
                 deps.institutional_accumulation_config_factory
             ),
             sector_context_builder_factory=deps.sector_context_builder_factory,
-            company_quality_context_builder_factory=(
-                deps.company_quality_context_builder_factory
-            ),
+            company_quality_context_builder_factory=(deps.company_quality_context_builder_factory),
         )
         accum_resp = accum_uc.execute(
             AccumulationScreenRequest(

@@ -89,8 +89,9 @@ class AuditRecord:
             "net_buy_ratio": round(self.net_buy_ratio, 4),
             "total_net_value": str(self.total_net_value),
             "flow_pct": round(self.flow_pct, 4) if self.flow_pct is not None else None,
-            "vwap_disc_pct": round(self.vwap_disc_pct, 4)
-            if self.vwap_disc_pct is not None else None,
+            "vwap_disc_pct": (
+                round(self.vwap_disc_pct, 4) if self.vwap_disc_pct is not None else None
+            ),
             "rsi": round(self.rsi, 4) if self.rsi is not None else None,
             "bb_pctile": round(self.bb_pctile, 4) if self.bb_pctile is not None else None,
             "trend": self.trend,
@@ -206,19 +207,15 @@ class AccumulationAuditClaimStamp:
     evaluation_role: str = "DESCRIPTIVE"
     outcome_basis: str = "raw_market"
     costs_modeled: bool = False
-    entry_assumption: str = (
-        "signal_day_close reference; forward windows start the next session"
-    )
+    entry_assumption: str = "signal_day_close reference; forward windows start the next session"
     exit_assumption: str = (
-        "optional TP/SL/max-hold path simulation at exact barrier prices; "
-        "not net-executable fills"
+        "optional TP/SL/max-hold path simulation at exact barrier prices; not net-executable fills"
     )
     setup_contract_note: str = (
         "audit YAML setups are filter presets, not TradeSetup / setup-evidence"
     )
     survivorship_warning: str = (
-        "uses the supplied current universe; historical index membership "
-        "is not reconstructed"
+        "uses the supplied current universe; historical index membership is not reconstructed"
     )
     source_availability_note: str = (
         "source_availability_use_case=None on historical replay "
@@ -259,12 +256,8 @@ class AccumulationAuditResponse:
     group_stats: list[AuditGroupStat] = field(default_factory=list)
     exit_simulations: list[ExitSimulationStat] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
-    skip_ledger: AccumulationAuditSkipLedger = field(
-        default_factory=AccumulationAuditSkipLedger
-    )
-    claim_stamp: AccumulationAuditClaimStamp = field(
-        default_factory=AccumulationAuditClaimStamp
-    )
+    skip_ledger: AccumulationAuditSkipLedger = field(default_factory=AccumulationAuditSkipLedger)
+    claim_stamp: AccumulationAuditClaimStamp = field(default_factory=AccumulationAuditClaimStamp)
 
 
 @dataclass(frozen=True)

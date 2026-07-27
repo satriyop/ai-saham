@@ -25,7 +25,8 @@ from tests.application.use_case.intraday_backtest_fixtures import (
 
 def test_proxy_does_not_require_backed_accumulation_when_no_broker_data():
     today = _candle(
-        TICKER, TRADE_DAY,
+        TICKER,
+        TRADE_DAY,
         open_=Decimal("100"),
         high=Decimal("106"),
         low=Decimal("99"),
@@ -44,7 +45,8 @@ def test_proxy_does_not_require_backed_accumulation_when_no_broker_data():
 
 def test_insufficient_history_skips_ticker_silently():
     today = _candle(
-        TICKER, TRADE_DAY,
+        TICKER,
+        TRADE_DAY,
         open_=Decimal("100"),
         high=Decimal("106"),
         low=Decimal("99"),
@@ -86,16 +88,18 @@ def test_backtest_uses_get_ncp_snapshot():
         iev_repository=iev_repo,
     )
 
-    resp = uc.execute(IntradayBacktestRequest(
-        tickers=tickers,
-        start_date=TRADE_DAY,
-        end_date=TRADE_DAY,
-        capital=Decimal("100000000"),
-        risk_pct=Decimal("0.01"),
-        max_daily_positions=3,
-        cost_bps=Decimal("0"),
-        history_days=30,
-    ))
+    resp = uc.execute(
+        IntradayBacktestRequest(
+            tickers=tickers,
+            start_date=TRADE_DAY,
+            end_date=TRADE_DAY,
+            capital=Decimal("100000000"),
+            risk_pct=Decimal("0.01"),
+            max_daily_positions=3,
+            cost_bps=Decimal("0"),
+            history_days=30,
+        )
+    )
 
     iev_repo.get_ncp_snapshot.assert_called_once()
     iev_repo.get_snapshot.assert_not_called()

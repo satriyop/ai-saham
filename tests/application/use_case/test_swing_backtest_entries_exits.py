@@ -24,19 +24,14 @@ def test_swing_backtest_opens_signal_and_exits_at_target():
     base = date(2026, 1, 1)
     signal_date = base + timedelta(days=24)
     exit_date = base + timedelta(days=25)
-    summaries = [
-        _summary("BBCA", base + timedelta(days=i), Decimal("110"))
-        for i in range(18, 25)
-    ]
+    summaries = [_summary("BBCA", base + timedelta(days=i), Decimal("110")) for i in range(18, 25)]
     benchmark_candles = [
-        _flat_candle("IHSG", base - timedelta(days=60 - i), Decimal(1000 + i))
-        for i in range(86)
+        _flat_candle("IHSG", base - timedelta(days=60 - i), Decimal(1000 + i)) for i in range(86)
     ]
     broker_repo = MockBrokerRepository(summaries)
-    market_repo = MockMarketRepository(
-        _base_candles("BBCA", base) + benchmark_candles
-    )
+    market_repo = MockMarketRepository(_base_candles("BBCA", base) + benchmark_candles)
     from src.domain.value_objects.market_context import MarketContext, MarketRegime
+
     fake_context = MarketContext(
         regime=MarketRegime.NEUTRAL,
         conviction=0.5,
@@ -58,25 +53,29 @@ def test_swing_backtest_opens_signal_and_exits_at_target():
         broker_repository=broker_repo,
         market_repository=market_repo,
         rules_loader=FakeRulesLoader(),
-        market_context_provider=FakeMarketContextProvider({
-            signal_date: fake_context,
-            exit_date: fake_context_exit,
-        }),
+        market_context_provider=FakeMarketContextProvider(
+            {
+                signal_date: fake_context,
+                exit_date: fake_context_exit,
+            }
+        ),
         signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
-    response = use_case.execute(SwingBacktestRequest(
-        tickers=["BBCA"],
-        start_date=signal_date,
-        end_date=exit_date,
-        capital=Decimal("1000000"),
-        risk_pct=Decimal("0.01"),
-        max_positions=1,
-        min_net_buy_days=1,
-        cost_bps=Decimal("0"),
-        include_regime=True,
-        benchmark_ticker="IHSG",
-    ))
+    response = use_case.execute(
+        SwingBacktestRequest(
+            tickers=["BBCA"],
+            start_date=signal_date,
+            end_date=exit_date,
+            capital=Decimal("1000000"),
+            risk_pct=Decimal("0.01"),
+            max_positions=1,
+            min_net_buy_days=1,
+            cost_bps=Decimal("0"),
+            include_regime=True,
+            benchmark_ticker="IHSG",
+        )
+    )
 
     assert response.trade_count == 1
     assert response.candidate_observations
@@ -106,13 +105,9 @@ def test_swing_backtest_opens_signal_and_exits_at_target():
     assert response.regime_stats
     summary = response.attribution_summary.to_dict()
     assert summary["intent"] == "learning_summary_only_not_entry_logic"
+    assert any(stat["dimension"] == "signal_strength" for stat in summary["group_stats"])
     assert any(
-        stat["dimension"] == "signal_strength"
-        for stat in summary["group_stats"]
-    )
-    assert any(
-        stat["dimension"] == "candidate_setup_match"
-        for stat in summary["candidate_group_stats"]
+        stat["dimension"] == "candidate_setup_match" for stat in summary["candidate_group_stats"]
     )
 
 
@@ -138,10 +133,7 @@ def test_swing_backtest_can_prioritize_target_when_same_day_hits_stop_and_target
             Decimal("100"),
         )
     )
-    summaries = [
-        _summary("BBCA", base + timedelta(days=i), Decimal("110"))
-        for i in range(18, 25)
-    ]
+    summaries = [_summary("BBCA", base + timedelta(days=i), Decimal("110")) for i in range(18, 25)]
     use_case = SwingBacktestUseCase(
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
@@ -150,17 +142,19 @@ def test_swing_backtest_can_prioritize_target_when_same_day_hits_stop_and_target
         signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
-    response = use_case.execute(SwingBacktestRequest(
-        tickers=["BBCA"],
-        start_date=signal_date,
-        end_date=exit_date,
-        capital=Decimal("1000000"),
-        risk_pct=Decimal("0.01"),
-        max_positions=1,
-        min_net_buy_days=1,
-        cost_bps=Decimal("0"),
-        same_day_exit_priority="target_first",
-    ))
+    response = use_case.execute(
+        SwingBacktestRequest(
+            tickers=["BBCA"],
+            start_date=signal_date,
+            end_date=exit_date,
+            capital=Decimal("1000000"),
+            risk_pct=Decimal("0.01"),
+            max_positions=1,
+            min_net_buy_days=1,
+            cost_bps=Decimal("0"),
+            same_day_exit_priority="target_first",
+        )
+    )
 
     assert response.trade_count == 1
     assert response.trades[0].exit_reason == "target"
@@ -189,10 +183,7 @@ def test_swing_backtest_can_prioritize_stop_when_same_day_hits_stop_and_target()
             Decimal("100"),
         )
     )
-    summaries = [
-        _summary("BBCA", base + timedelta(days=i), Decimal("110"))
-        for i in range(18, 25)
-    ]
+    summaries = [_summary("BBCA", base + timedelta(days=i), Decimal("110")) for i in range(18, 25)]
     use_case = SwingBacktestUseCase(
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
@@ -201,17 +192,19 @@ def test_swing_backtest_can_prioritize_stop_when_same_day_hits_stop_and_target()
         signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
-    response = use_case.execute(SwingBacktestRequest(
-        tickers=["BBCA"],
-        start_date=signal_date,
-        end_date=exit_date,
-        capital=Decimal("1000000"),
-        risk_pct=Decimal("0.01"),
-        max_positions=1,
-        min_net_buy_days=1,
-        cost_bps=Decimal("0"),
-        same_day_exit_priority="stop_first",
-    ))
+    response = use_case.execute(
+        SwingBacktestRequest(
+            tickers=["BBCA"],
+            start_date=signal_date,
+            end_date=exit_date,
+            capital=Decimal("1000000"),
+            risk_pct=Decimal("0.01"),
+            max_positions=1,
+            min_net_buy_days=1,
+            cost_bps=Decimal("0"),
+            same_day_exit_priority="stop_first",
+        )
+    )
 
     assert response.trade_count == 1
     assert response.trades[0].exit_reason == "stop"
@@ -231,10 +224,7 @@ def test_swing_backtest_force_exit_period_end():
         for i in range(25)
     ]
     candles.append(_flat_candle("BBCA", exit_date, Decimal("100")))
-    summaries = [
-        _summary("BBCA", base + timedelta(days=i), Decimal("110"))
-        for i in range(18, 25)
-    ]
+    summaries = [_summary("BBCA", base + timedelta(days=i), Decimal("110")) for i in range(18, 25)]
     use_case = SwingBacktestUseCase(
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
@@ -243,16 +233,18 @@ def test_swing_backtest_force_exit_period_end():
         signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
-    response = use_case.execute(SwingBacktestRequest(
-        tickers=["BBCA"],
-        start_date=signal_date,
-        end_date=exit_date,
-        capital=Decimal("1000000"),
-        risk_pct=Decimal("0.01"),
-        max_positions=1,
-        min_net_buy_days=1,
-        cost_bps=Decimal("0"),
-    ))
+    response = use_case.execute(
+        SwingBacktestRequest(
+            tickers=["BBCA"],
+            start_date=signal_date,
+            end_date=exit_date,
+            capital=Decimal("1000000"),
+            risk_pct=Decimal("0.01"),
+            max_positions=1,
+            min_net_buy_days=1,
+            cost_bps=Decimal("0"),
+        )
+    )
 
     assert response.trade_count == 1
     assert response.trades[0].exit_reason == "period_end"

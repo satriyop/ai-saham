@@ -13,24 +13,23 @@ from tests.application.services.swing_backtest_attribution_fixtures import (
 
 
 def test_summarize_swing_backtest_attribution_groups_tuning_dimensions():
-    summary = summarize_swing_backtest_attribution((
-        make_trade(ticker="BBCA", net_return_pct=5.0, pnl="500"),
-        make_trade(
-            ticker="BBRI",
-            net_return_pct=-3.0,
-            pnl="-300",
-            signal_strength="MODERATE",
-            signal_score=55,
-            risk_status="BLOCKED",
-            risk_gate="LiquidityGate",
-            regime="RISK_OFF",
-        ),
-    ))
+    summary = summarize_swing_backtest_attribution(
+        (
+            make_trade(ticker="BBCA", net_return_pct=5.0, pnl="500"),
+            make_trade(
+                ticker="BBRI",
+                net_return_pct=-3.0,
+                pnl="-300",
+                signal_strength="MODERATE",
+                signal_score=55,
+                risk_status="BLOCKED",
+                risk_gate="LiquidityGate",
+                regime="RISK_OFF",
+            ),
+        )
+    )
 
-    by_key = {
-        (stat.dimension, stat.bucket): stat
-        for stat in summary.group_stats
-    }
+    by_key = {(stat.dimension, stat.bucket): stat for stat in summary.group_stats}
 
     assert summary.intent == "learning_summary_only_not_entry_logic"
     assert by_key[("signal_strength", "STRONG")].trade_count == 1
@@ -67,9 +66,7 @@ def test_empty_swing_backtest_attribution_summary_is_deterministic():
         },
         "group_stats": [],
         "candidate_group_stats": [],
-        "tuning_targets": [
-            target.to_dict() for target in DEFAULT_TUNING_TARGETS
-        ],
+        "tuning_targets": [target.to_dict() for target in DEFAULT_TUNING_TARGETS],
     }
 
 
@@ -79,10 +76,7 @@ def test_summarize_swing_backtest_attribution_uses_configured_score_buckets():
         bucket_policy=AttributionBucketPolicy(high_min_score=80.0, mid_min_score=60.0),
     )
 
-    by_key = {
-        (stat.dimension, stat.bucket): stat
-        for stat in summary.group_stats
-    }
+    by_key = {(stat.dimension, stat.bucket): stat for stat in summary.group_stats}
 
     assert by_key[("signal_score_bucket", "MID_60_79")].trade_count == 1
     assert by_key[("signal_factor_bucket", "bandar_intensity:MID_60_79")].trade_count == 1
@@ -98,10 +92,7 @@ def test_summarize_swing_backtest_attribution_groups_candidate_observations():
         ),
     )
 
-    by_key = {
-        (stat.dimension, stat.bucket): stat
-        for stat in summary.candidate_group_stats
-    }
+    by_key = {(stat.dimension, stat.bucket): stat for stat in summary.candidate_group_stats}
 
     assert by_key[("candidate_setup_match", "NO_MATCH")].avg_forward_return_pct == 4.0
     assert by_key[("candidate_setup_match", "MATCH")].win_rate_pct == 0.0
@@ -116,13 +107,9 @@ def _retired_file_tuning_targets_cover_current_dimensions():
     )
 
     emitted_dimensions = {
-        stat.dimension
-        for stat in (*summary.group_stats, *summary.candidate_group_stats)
+        stat.dimension for stat in (*summary.group_stats, *summary.candidate_group_stats)
     }
-    target_by_dimension = {
-        target.dimension: target
-        for target in summary.tuning_targets
-    }
+    target_by_dimension = {target.dimension: target for target in summary.tuning_targets}
 
     assert emitted_dimensions <= set(target_by_dimension)
     assert target_by_dimension["candidate_risk_status"].source_scope == "screened_candidates"
@@ -150,10 +137,7 @@ def test_swing_backtest_attribution_marks_candidate_only_sample_quality():
 
 def test_swing_backtest_attribution_marks_trade_ready_sample_quality():
     summary = summarize_swing_backtest_attribution(
-        tuple(
-            make_trade(ticker=f"BB{i:02d}", net_return_pct=1.0, pnl="100")
-            for i in range(30)
-        ),
+        tuple(make_trade(ticker=f"BB{i:02d}", net_return_pct=1.0, pnl="100") for i in range(30)),
         (),
     )
 
@@ -168,10 +152,7 @@ def test_swing_backtest_attribution_marks_trade_ready_sample_quality():
 
 def test_swing_backtest_attribution_marks_mixed_ready_sample_quality():
     summary = summarize_swing_backtest_attribution(
-        tuple(
-            make_trade(ticker=f"BB{i:02d}", net_return_pct=1.0, pnl="100")
-            for i in range(30)
-        ),
+        tuple(make_trade(ticker=f"BB{i:02d}", net_return_pct=1.0, pnl="100") for i in range(30)),
         tuple(ObservationFixture(forward_return_pct=1.0) for _ in range(30)),
     )
 
@@ -348,6 +329,4 @@ def test_swing_backtest_attribution_summary_golden_contract():
             "avg_forward_return_pct": -2.0,
         },
     ]
-    assert payload["tuning_targets"] == [
-        target.to_dict() for target in DEFAULT_TUNING_TARGETS
-    ]
+    assert payload["tuning_targets"] == [target.to_dict() for target in DEFAULT_TUNING_TARGETS]

@@ -131,52 +131,58 @@ def aggregate_broker_detail_rows(
             buyer_sessions.setdefault(row.broker_code, set()).add(row.session_date)
             add_weighted_flow(row.broker_code, row.signed_value)
         elif row.signed_value < Decimal("0"):
-            seller_values[row.broker_code] = (
-                seller_values.get(row.broker_code, Decimal("0")) + abs(row.signed_value)
+            seller_values[row.broker_code] = seller_values.get(row.broker_code, Decimal("0")) + abs(
+                row.signed_value
             )
             seller_names[row.broker_code] = row.broker_name
             seller_types[row.broker_code] = row.broker_type
             seller_sessions.setdefault(row.broker_code, set()).add(row.session_date)
             add_weighted_flow(row.broker_code, row.signed_value)
 
-    buyers = tuple(sorted(
-        (
-            BrokerDetailLine(
-                broker_code=code,
-                broker_name=buyer_names.get(code, code),
-                broker_type=buyer_types.get(code, "unknown"),
-                net_value=value,
-                active_sessions=len(buyer_sessions.get(code, set())),
-            )
-            for code, value in buyer_values.items()
-        ),
-        key=_broker_line_sort_key,
-        reverse=True,
-    )[:top_n])
-    sellers = tuple(sorted(
-        (
-            BrokerDetailLine(
-                broker_code=code,
-                broker_name=seller_names.get(code, code),
-                broker_type=seller_types.get(code, "unknown"),
-                net_value=-value,
-                active_sessions=len(seller_sessions.get(code, set())),
-            )
-            for code, value in seller_values.items()
-        ),
-        key=_broker_line_sort_key,
-        reverse=True,
-    )[:top_n])
+    buyers = tuple(
+        sorted(
+            (
+                BrokerDetailLine(
+                    broker_code=code,
+                    broker_name=buyer_names.get(code, code),
+                    broker_type=buyer_types.get(code, "unknown"),
+                    net_value=value,
+                    active_sessions=len(buyer_sessions.get(code, set())),
+                )
+                for code, value in buyer_values.items()
+            ),
+            key=_broker_line_sort_key,
+            reverse=True,
+        )[:top_n]
+    )
+    sellers = tuple(
+        sorted(
+            (
+                BrokerDetailLine(
+                    broker_code=code,
+                    broker_name=seller_names.get(code, code),
+                    broker_type=seller_types.get(code, "unknown"),
+                    net_value=-value,
+                    active_sessions=len(seller_sessions.get(code, set())),
+                )
+                for code, value in seller_values.items()
+            ),
+            key=_broker_line_sort_key,
+            reverse=True,
+        )[:top_n]
+    )
 
     total_buy = sum(buyer_values.values(), Decimal("0"))
     total_sell = sum(seller_values.values(), Decimal("0"))
     top_buyer_share = (
         round(float(abs(buyers[0].net_value) / total_buy * Decimal("100")), 1)
-        if buyers and total_buy > Decimal("0") else None
+        if buyers and total_buy > Decimal("0")
+        else None
     )
     top_seller_share = (
         round(float(abs(sellers[0].net_value) / total_sell * Decimal("100")), 1)
-        if sellers and total_sell > Decimal("0") else None
+        if sellers and total_sell > Decimal("0")
+        else None
     )
 
     smart_share = _smart_share_pct(smart_flow, noise_flow, neutral_flow)

@@ -62,10 +62,12 @@ def print_sector_context_panel(ctx: SwingOutputDisplayContext) -> None:
                 suffix = " …" if len(peer_tickers) > 3 else ""
                 sc_text.append(Text(f"  Peers ({sc.peer_count}): {shown}{suffix}", style="dim"))
 
-            sc_text.append(Text(
-                f"  Coverage: {sc.coverage_score:.2f}  DIAGNOSTIC — no scoring impact",
-                style="dim",
-            ))
+            sc_text.append(
+                Text(
+                    f"  Coverage: {sc.coverage_score:.2f}  DIAGNOSTIC — no scoring impact",
+                    style="dim",
+                )
+            )
             for reason in list(sc.unavailable_reasons)[:2]:
                 sc_text.append(Text(f"  ⚠ {reason}", style="dim yellow"))
 

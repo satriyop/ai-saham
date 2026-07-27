@@ -222,10 +222,8 @@ If code decides what data to fetch, when to fetch it, whether cached data is fre
 ### Lint (Ruff)
 
 * Follow the Lint Gate in `AGENT_QUICKSTART.md` — mandatory agent close criterion
-* Touched Python under `src/`/`tests/`: `ruff check` + `ruff format --check` on
-  those paths until whole-repo baseline is restored
-* After `tasks/backlog/restore_repository_ruff_baseline.md`: whole-repo Ruff
-  as CI
+* Whole-repo: `ruff check src/ tests/` and `ruff format --check src/ tests/`
+  (same as CI)
 * Do not weaken Ruff config, add blanket ignores, or unreviewed repo-wide autofix
 
 ### Incremental Delivery

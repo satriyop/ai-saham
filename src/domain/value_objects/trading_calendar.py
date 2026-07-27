@@ -14,8 +14,8 @@ from datetime import date, timedelta
 
 def last_weekday(as_of: date) -> date:
     """Most recent Mon-Fri on or before as_of."""
-    if as_of.weekday() == 5:   # Saturday -> Friday
+    if as_of.weekday() == 5:  # Saturday -> Friday
         return as_of - timedelta(days=1)
-    if as_of.weekday() == 6:   # Sunday -> Friday
+    if as_of.weekday() == 6:  # Sunday -> Friday
         return as_of - timedelta(days=2)
     return as_of

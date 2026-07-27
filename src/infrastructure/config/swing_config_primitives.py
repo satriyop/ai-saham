@@ -5,7 +5,6 @@ Layer: Infrastructure
 """
 
 
-
 def float_or_default(data: dict, key: str, default: float) -> float:
     return float(data[key]) if key in data else default
 

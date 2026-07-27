@@ -123,9 +123,7 @@ def build_broker_detail(
 
     summaries = broker_repo.get_broker_summaries(ticker, end_date=as_of_date)
     detail_summaries = [
-        summary
-        for summary in summaries
-        if summary.top_buyers or summary.top_sellers
+        summary for summary in summaries if summary.top_buyers or summary.top_sellers
     ][-window_sessions:]
     if not detail_summaries:
         return None
@@ -134,22 +132,26 @@ def build_broker_detail(
     for summary in detail_summaries:
         for tx in summary.top_buyers:
             if tx.net_value > Decimal("0"):
-                rows.append(BrokerFlowRow(
-                    broker_code=tx.broker_code,
-                    broker_name=tx.broker_name,
-                    broker_type=tx.broker_type.value,
-                    signed_value=tx.net_value,
-                    session_date=summary.date,
-                ))
+                rows.append(
+                    BrokerFlowRow(
+                        broker_code=tx.broker_code,
+                        broker_name=tx.broker_name,
+                        broker_type=tx.broker_type.value,
+                        signed_value=tx.net_value,
+                        session_date=summary.date,
+                    )
+                )
         for tx in summary.top_sellers:
             if tx.net_value < Decimal("0"):
-                rows.append(BrokerFlowRow(
-                    broker_code=tx.broker_code,
-                    broker_name=tx.broker_name,
-                    broker_type=tx.broker_type.value,
-                    signed_value=tx.net_value,
-                    session_date=summary.date,
-                ))
+                rows.append(
+                    BrokerFlowRow(
+                        broker_code=tx.broker_code,
+                        broker_name=tx.broker_name,
+                        broker_type=tx.broker_type.value,
+                        signed_value=tx.net_value,
+                        session_date=summary.date,
+                    )
+                )
 
     latest = detail_summaries[-1]
     agg = aggregate_broker_detail_rows(

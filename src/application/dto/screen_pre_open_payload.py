@@ -35,10 +35,7 @@ def resolve_pre_open_result_status(
         return ScreenResultStatus.MISSING
     if source_status is PreOpenSourceStatus.OUTSIDE_WINDOW and candidate_count <= 0:
         return ScreenResultStatus.MISSING
-    if (
-        source_status is PreOpenSourceStatus.EMPTY_CONFIRMED
-        or candidate_count <= 0
-    ):
+    if source_status is PreOpenSourceStatus.EMPTY_CONFIRMED or candidate_count <= 0:
         return ScreenResultStatus.EMPTY
     return ScreenResultStatus.OK
 
@@ -73,12 +70,8 @@ def _freshness_payload(
         return None
     return {
         "analysis_date": freshness.analysis_date.isoformat(),
-        "candle_end": (
-            freshness.candle_end.isoformat() if freshness.candle_end else None
-        ),
-        "broker_end": (
-            freshness.broker_end.isoformat() if freshness.broker_end else None
-        ),
+        "candle_end": (freshness.candle_end.isoformat() if freshness.candle_end else None),
+        "broker_end": (freshness.broker_end.isoformat() if freshness.broker_end else None),
         "warnings": list(freshness.warnings),
     }
 
@@ -105,13 +98,9 @@ def build_pre_open_data(
         "ncp_authoritative": response.ncp_authoritative,
         "capture_phase": response.capture_phase,
         "collection_started_at": (
-            response.collection_started_at.isoformat()
-            if response.collection_started_at
-            else None
+            response.collection_started_at.isoformat() if response.collection_started_at else None
         ),
-        "decision_at": (
-            response.decision_at.isoformat() if response.decision_at else None
-        ),
+        "decision_at": (response.decision_at.isoformat() if response.decision_at else None),
         "decision_snapshot_ref": response.decision_snapshot_ref,
         "data_freshness": _freshness_payload(response.data_freshness),
         "regime_enabled": response.regime_enabled,
@@ -142,9 +131,11 @@ def build_pre_open_data(
                 ts_payload[ticker] = {
                     "action": setup.action.value,
                     "signal_score": setup.signal_score,
-                    "signal_strength": setup.signal_strength.value
-                    if hasattr(setup.signal_strength, "value")
-                    else str(setup.signal_strength),
+                    "signal_strength": (
+                        setup.signal_strength.value
+                        if hasattr(setup.signal_strength, "value")
+                        else str(setup.signal_strength)
+                    ),
                 }
         data["trade_setup_by_ticker"] = ts_payload
     if response.market_regime is not None and hasattr(response.market_regime, "to_dict"):

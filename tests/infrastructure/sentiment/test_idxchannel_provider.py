@@ -12,10 +12,9 @@ These tests verify:
 All tests run offline with mocked HTTP responses.
 """
 
-from datetime import datetime, timedelta
-from unittest.mock import patch, MagicMock
+from datetime import datetime
+from unittest.mock import patch
 
-from src.domain.ports.news_provider import RawHeadline
 from src.infrastructure.sentiment.idxchannel_provider import IDXChannelNewsProvider
 
 SAMPLE_RSS = """<?xml version="1.0" encoding="UTF-8"?>
@@ -74,7 +73,8 @@ class TestRSSParsing:
         assert headlines[0].url == "https://www.idxchannel.com/market-news/saham-bbca-melonjak"
 
     def test_parse_ticker_case_insensitive(self):
-        """Ticker matching is uppercase; _parse_rss receives uppercased ticker from fetch_headlines."""
+        """Ticker matching is uppercase; _parse_rss receives uppercased ticker from
+        fetch_headlines."""
         provider = IDXChannelNewsProvider()
         cutoff = datetime(2026, 1, 1)
         headlines = provider._parse_rss(SAMPLE_RSS.encode(), "BBCA", cutoff, 10)

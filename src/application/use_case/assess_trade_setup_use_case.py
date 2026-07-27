@@ -27,8 +27,8 @@ from src.domain.value_objects.signal_assessment import EntryQuality
 from src.domain.value_objects.trade_setup import SetupAction, TradeSetup
 
 if TYPE_CHECKING:
-    from src.application.use_case.assess_risk_use_case import AssessRiskResponse
     from src.application.dto.assess_signal import AssessSignalResponse
+    from src.application.use_case.assess_risk_use_case import AssessRiskResponse
     from src.domain.value_objects.market_context import MarketContext
 
 

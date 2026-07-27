@@ -22,15 +22,15 @@ from typer import Typer
 from typer.testing import CliRunner
 
 import src.adapters.cli.fetch_market_commands as fetch_market_commands
-from src.infrastructure.composition.fetch_market.fetch_market_calendar_refresh import (
-    DEFAULT_CALENDAR_EVENT_TYPES,
-    refresh_market_calendar,
-)
 from src.adapters.cli.fetch_market_commands import fetch_market
 from src.application.use_case.sync_corporate_action_calendar_use_case import (
     SyncCorporateActionCalendarResponse,
 )
 from src.domain.value_objects.corporate_action_calendar import CorporateActionType
+from src.infrastructure.composition.fetch_market.fetch_market_calendar_refresh import (
+    DEFAULT_CALENDAR_EVENT_TYPES,
+    refresh_market_calendar,
+)
 
 # ── DEFAULT_CALENDAR_EVENT_TYPES ─────────────────────────────────────────────
 
@@ -70,7 +70,9 @@ def _response(**overrides) -> SyncCorporateActionCalendarResponse:
 
 
 def _patch_use_case(monkeypatch, response=None, exception=None):
-    import src.infrastructure.composition.fetch_market.fetch_market_calendar_refresh as refresh_module
+    from src.infrastructure.composition.fetch_market import (
+        fetch_market_calendar_refresh as refresh_module,
+    )
 
     fake_uc = FakeUseCase(response=response, exception=exception)
     monkeypatch.setattr(
@@ -231,6 +233,7 @@ def _base_monkeypatches(monkeypatch, tmp_path: Path):
     from src.application.use_case.fetch_market_refresh_use_case import (
         FetchMarketRefreshResponse,
     )
+
     monkeypatch.setattr(
         "src.application.use_case.fetch_market_refresh_use_case.FetchMarketRefreshUseCase.execute",
         lambda self, request, on_ticker_complete=None: FetchMarketRefreshResponse(
@@ -239,7 +242,7 @@ def _base_monkeypatches(monkeypatch, tmp_path: Path):
             ticker_results=[],
             ok_count=len(request.tickers),
             fail_count=0,
-        )
+        ),
     )
     return tmp_path
 
@@ -250,7 +253,8 @@ class TestCalendarCalledOnceNotPerTicker:
     ):
         counting = _CountingCalendarRefresh()
         monkeypatch.setattr(
-            "src.infrastructure.composition.fetch_market.fetch_market_calendar_refresh.refresh_market_calendar", counting
+            "src.infrastructure.composition.fetch_market.fetch_market_calendar_refresh.refresh_market_calendar",
+            counting,
         )
         runner = CliRunner()
         result = runner.invoke(
@@ -272,7 +276,8 @@ class TestCalendarCalledOnceNotPerTicker:
     def test_calendar_summary_line_appears_in_output(self, monkeypatch, _base_monkeypatches):
         counting = _CountingCalendarRefresh(status="stockbit dividend=2")
         monkeypatch.setattr(
-            "src.infrastructure.composition.fetch_market.fetch_market_calendar_refresh.refresh_market_calendar", counting
+            "src.infrastructure.composition.fetch_market.fetch_market_calendar_refresh.refresh_market_calendar",
+            counting,
         )
         runner = CliRunner()
         result = runner.invoke(
@@ -296,7 +301,8 @@ class TestSkipFlagRouting:
     ):
         counting = _CountingCalendarRefresh()
         monkeypatch.setattr(
-            "src.infrastructure.composition.fetch_market.fetch_market_calendar_refresh.refresh_market_calendar", counting
+            "src.infrastructure.composition.fetch_market.fetch_market_calendar_refresh.refresh_market_calendar",
+            counting,
         )
         runner = CliRunner()
         result = runner.invoke(
@@ -320,7 +326,8 @@ class TestSkipFlagRouting:
     ):
         counting = _CountingCalendarRefresh()
         monkeypatch.setattr(
-            "src.infrastructure.composition.fetch_market.fetch_market_calendar_refresh.refresh_market_calendar", counting
+            "src.infrastructure.composition.fetch_market.fetch_market_calendar_refresh.refresh_market_calendar",
+            counting,
         )
         runner = CliRunner()
         result = runner.invoke(
@@ -344,7 +351,8 @@ class TestSkipFlagRouting:
     ):
         counting = _CountingCalendarRefresh()
         monkeypatch.setattr(
-            "src.infrastructure.composition.fetch_market.fetch_market_calendar_refresh.refresh_market_calendar", counting
+            "src.infrastructure.composition.fetch_market.fetch_market_calendar_refresh.refresh_market_calendar",
+            counting,
         )
         runner = CliRunner()
         result = runner.invoke(
@@ -372,7 +380,8 @@ class TestSkipFlagRouting:
         )
         counting = _CountingCalendarRefresh()
         monkeypatch.setattr(
-            "src.infrastructure.composition.fetch_market.fetch_market_calendar_refresh.refresh_market_calendar", counting
+            "src.infrastructure.composition.fetch_market.fetch_market_calendar_refresh.refresh_market_calendar",
+            counting,
         )
         runner = CliRunner()
         result = runner.invoke(

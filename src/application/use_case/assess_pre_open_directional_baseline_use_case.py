@@ -20,8 +20,8 @@ from src.domain.value_objects.pre_open_directional_baseline import (
 )
 from src.domain.value_objects.pre_open_signal_evidence import PRE_OPEN_SETUP_FAMILY
 from src.domain.value_objects.signal_assessment import (
-    EntryQuality,
     PRE_OPEN_AUCTION_DIRECTION_IDENTITY,
+    EntryQuality,
     SignalAssessment,
     SignalStrength,
 )

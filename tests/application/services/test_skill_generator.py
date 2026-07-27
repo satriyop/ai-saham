@@ -170,9 +170,7 @@ rules: []
         assert "- RSI" in skill_content
         assert "- SMA" in skill_content
 
-    def test_generate_for_strategy_detects_broker_data_requirements(
-        self, tmp_path: Path
-    ):
+    def test_generate_for_strategy_detects_broker_data_requirements(self, tmp_path: Path):
         """generate_for_strategy() should detect broker_flow requirement.
 
         Checks that it handles FOREIGN_FLOW indicators correctly.
@@ -207,9 +205,7 @@ rules: []
         assert "- broker_flow" in skill_content
         assert "- ohlcv" in skill_content  # Always included
 
-    def test_generate_for_strategy_detects_ohlcv_only_for_regular_indicators(
-        self, tmp_path: Path
-    ):
+    def test_generate_for_strategy_detects_ohlcv_only_for_regular_indicators(self, tmp_path: Path):
         """generate_for_strategy() should only require ohlcv for regular indicators."""
         strategy_yaml = """
 name: Simple Strategy
@@ -276,9 +272,7 @@ rules:
         assert "**Entry Signal** (buy): RSI shows oversold condition" in skill_content
         assert "**Exit Signal** (sell): RSI shows overbought condition" in skill_content
 
-    def test_generate_for_strategy_detects_drift_when_rules_change(
-        self, tmp_path: Path
-    ):
+    def test_generate_for_strategy_detects_drift_when_rules_change(self, tmp_path: Path):
         """generate_for_strategy() should detect drift when rules have changed."""
         strategy_yaml_v1 = """
 name: Test Strategy
@@ -353,9 +347,7 @@ rules: []
         assert "saham strategy validate my-strategy" in skill_content
         assert "saham backtest BBCA --strategy my-strategy" in skill_content
 
-    def test_generate_for_strategy_returns_failure_for_invalid_yaml(
-        self, tmp_path: Path
-    ):
+    def test_generate_for_strategy_returns_failure_for_invalid_yaml(self, tmp_path: Path):
         """generate_for_strategy() should return failure for malformed YAML."""
         strategy_yaml = """
 name: Test
@@ -495,9 +487,7 @@ SMOOTH_RSI:
         )
 
         output_dir = tmp_path / "skills" / "formulas"
-        result = generator.generate_for_formula(
-            "SMOOTH_RSI", formulas_path, output_dir=output_dir
-        )
+        result = generator.generate_for_formula("SMOOTH_RSI", formulas_path, output_dir=output_dir)
 
         assert result.success is True
         assert result.output_path is not None
@@ -507,9 +497,7 @@ SMOOTH_RSI:
         assert "# SMOOTH_RSI" in skill_content
         assert "RSI with EMA smoothing" in skill_content
 
-    def test_generate_for_formula_creates_in_skills_formulas_directory(
-        self, tmp_path: Path
-    ):
+    def test_generate_for_formula_creates_in_skills_formulas_directory(self, tmp_path: Path):
         """generate_for_formula() should create SKILL.md in skills/formulas/ directory."""
         formulas_path = tmp_path / "formulas.yaml"
         formulas_path.write_text("MOMENTUM_SCORE: {}", encoding="utf-8")

@@ -39,12 +39,10 @@ def test_positive_excess_return_20_session():
     as_of = dates[-1]
 
     ticker_candles = [
-        _candle("BBCA", dates[i], Decimal("100") if i == 0 else Decimal("120"))
-        for i in range(21)
+        _candle("BBCA", dates[i], Decimal("100") if i == 0 else Decimal("120")) for i in range(21)
     ]
     benchmark_candles = [
-        _candle("IHSG", dates[i], Decimal("100") if i == 0 else Decimal("105"))
-        for i in range(21)
+        _candle("IHSG", dates[i], Decimal("100") if i == 0 else Decimal("105")) for i in range(21)
     ]
 
     result = calc.calculate(
@@ -72,8 +70,7 @@ def test_negative_excess_return_5_session():
     as_of = dates[-1]
 
     ticker_candles = [
-        _candle("BBCA", dates[i], Decimal("100") if i == 0 else Decimal("95"))
-        for i in range(6)
+        _candle("BBCA", dates[i], Decimal("100") if i == 0 else Decimal("95")) for i in range(6)
     ]
     benchmark_candles = [_candle("IHSG", dates[i], Decimal("100")) for i in range(6)]
 
@@ -160,15 +157,9 @@ def test_independently_missing_dates_are_aligned_before_calculation():
 
     # Ticker is missing dates[2]; benchmark is missing dates[5].
     ticker_candles = [
-        _candle("BBCA", d, Decimal("100") + Decimal(i))
-        for i, d in enumerate(dates)
-        if i != 2
+        _candle("BBCA", d, Decimal("100") + Decimal(i)) for i, d in enumerate(dates) if i != 2
     ]
-    benchmark_candles = [
-        _candle("IHSG", d, Decimal("100"))
-        for i, d in enumerate(dates)
-        if i != 5
-    ]
+    benchmark_candles = [_candle("IHSG", d, Decimal("100")) for i, d in enumerate(dates) if i != 5]
 
     result = calc.calculate(
         ticker_candles=ticker_candles,
@@ -221,8 +212,7 @@ def test_future_candles_are_ignored():
     as_of = dates[-1]
 
     ticker_candles = [
-        _candle("BBCA", dates[i], Decimal("100") if i == 0 else Decimal("110"))
-        for i in range(6)
+        _candle("BBCA", dates[i], Decimal("100") if i == 0 else Decimal("110")) for i in range(6)
     ]
     benchmark_candles = [_candle("IHSG", dates[i], Decimal("100")) for i in range(6)]
 
@@ -256,8 +246,7 @@ def test_zero_base_close_is_unavailable():
     as_of = dates[-1]
 
     ticker_candles = [
-        _candle("BBCA", dates[i], Decimal("0") if i == 0 else Decimal("100"))
-        for i in range(6)
+        _candle("BBCA", dates[i], Decimal("0") if i == 0 else Decimal("100")) for i in range(6)
     ]
     benchmark_candles = [_candle("IHSG", dates[i], Decimal("100")) for i in range(6)]
 
@@ -272,8 +261,7 @@ def test_zero_base_close_is_unavailable():
     assert window.excess_return_pct is None
 
     benchmark_candles_zero = [
-        _candle("IHSG", dates[i], Decimal("0") if i == 0 else Decimal("100"))
-        for i in range(6)
+        _candle("IHSG", dates[i], Decimal("0") if i == 0 else Decimal("100")) for i in range(6)
     ]
     ticker_candles_ok = [_candle("BBCA", dates[i], Decimal("100")) for i in range(6)]
 
@@ -343,9 +331,7 @@ def test_horizons_available_independently():
         as_of_date=as_of,
     )
 
-    assert result.excess_return_vs_ihsg_5_session.status == (
-        BenchmarkExcessReturnStatus.AVAILABLE
-    )
+    assert result.excess_return_vs_ihsg_5_session.status == (BenchmarkExcessReturnStatus.AVAILABLE)
     assert result.excess_return_vs_ihsg_20_session.status == (
         BenchmarkExcessReturnStatus.UNAVAILABLE
     )

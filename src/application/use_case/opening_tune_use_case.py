@@ -19,22 +19,27 @@ OPENING_DATA_DIR = Path("data/opening")
 TUNE_SYSTEM_PROMPT = """\
 You are a quantitative analyst specializing in Indonesian equity markets (IDX/IHSG).
 
-You will receive today's accuracy report for a pre-open screener (IDX call auction, 08:45-09:00 WIB).
-The screener selects stocks to trade at the 09:00 WIB opening auction and predicts entry price ranges.
+You will receive today's accuracy report for a pre-open screener (IDX call auction, 08:45-09:00
+WIB).
+The screener selects stocks to trade at the 09:00 WIB opening auction and predicts entry price
+ranges.
 
 Your task: identify where the screener succeeded and failed based on the data, then suggest
 specific, evidence-based changes to the configuration parameters.
 
 Rules:
 - Ground EVERY recommendation in specific numbers from the report. No generic advice.
-- If clean_trade_rate for ENTER > WATCH, the TradeSetup selection logic works — focus on positioning.
+- If clean_trade_rate for ENTER > WATCH, the TradeSetup selection logic works — focus on
+positioning.
 - If entry_range_hit_rate is low, focus on ATR cap parameters.
 - If trend accuracy drops significantly from T5→T30, note momentum sustainability issues.
 - "1R" = one risk unit = entry_price - atr_stop. clean_trade = 1R reached before stop.
-- bid_pressure_preopen: NCP-locked (08:57 WIB) order book imbalance = bid_lots/(bid_lots+offer_lots). >0.6 = committed buyers, <0.4 = sellers dominating.
+- bid_pressure_preopen: NCP-locked (08:57 WIB) order book imbalance =
+bid_lots/(bid_lots+offer_lots). >0.6 = committed buyers, <0.4 = sellers dominating.
 - bid_pressure_T0: same metric at 09:00 (first post-open reading).
 - bid_momentum: bid_pressure_T5 - bid_pressure_T0. Positive = buying pressure increased after open.
-- Research basis: order flow imbalance is the most empirically validated short-horizon return predictor (Quantitative Finance, 2023).
+- Research basis: order flow imbalance is the most empirically validated short-horizon return
+predictor (Quantitative Finance, 2023).
 
 Output format — respond with EXACTLY this structure:
 ```json
@@ -134,10 +139,7 @@ def _invalid_snapshot_reason(grade: dict) -> str | None:
         )
 
     if capture_confidence == "LOW":
-        return (
-            "grade uses a low-confidence opening snapshot "
-            f"(phase={capture_phase or 'unknown'})"
-        )
+        return f"grade uses a low-confidence opening snapshot (phase={capture_phase or 'unknown'})"
 
     if capture_phase in {"OPEN", "POST_OPEN", "OUT_OF_SESSION"}:
         return f"grade capture phase is not valid for tuning: {capture_phase}"
@@ -153,54 +155,65 @@ def _build_user_prompt(grade: dict) -> str:
         per_ticker_summary.append(
             f"  {t['ticker']:8s} "
             f"action={t.get('trade_setup_action') or '?':8s} "
-            f"sig={t.get('signal_score','?'):>3} "
-            f"trend={t.get('trend','?'):8s} "
-            f"entry_hit={str(t.get('entry_range_hit','?')):5s} "
-            f"clean={str(t.get('clean_trade','?')):5s} "
-            f"iep_err={t.get('iep_error_pct','?')}% "
-            f"bp_preopen={t.get('bid_pressure_preopen','?')} "
-            f"bp_T0={t.get('bid_pressure_T0','?')} "
-            f"bp_T5={t.get('bid_pressure_T5','?')} "
-            f"bp_momentum={t.get('bid_momentum','?')}"
+            f"sig={t.get('signal_score', '?'):>3} "
+            f"trend={t.get('trend', '?'):8s} "
+            f"entry_hit={str(t.get('entry_range_hit', '?')):5s} "
+            f"clean={str(t.get('clean_trade', '?')):5s} "
+            f"iep_err={t.get('iep_error_pct', '?')}% "
+            f"bp_preopen={t.get('bid_pressure_preopen', '?')} "
+            f"bp_T0={t.get('bid_pressure_T0', '?')} "
+            f"bp_T5={t.get('bid_pressure_T5', '?')} "
+            f"bp_momentum={t.get('bid_momentum', '?')}"
         )
 
     config = grade.get("config_snapshot", {})
     by_action = grade.get("by_trade_setup_action", {})
     by_band = grade.get("by_signal_band", {})
 
-    return f"""DATE: {grade.get('date')}
+    return f"""DATE: {grade.get("date")}
 
 SESSION SUMMARY:
-  Tickers screened: {grade.get('tickers_screened')} | Tracked: {grade.get('tickers_tracked')}
-  Decision source: {grade.get('decision_source', 'N/A')}
-  Entry range hit rate:   {grade.get('entry_range_hit_rate', 'N/A')}
-  Trend accuracy T+5min:  {grade.get('trend_accuracy_T5', 'N/A')}
-  Trend accuracy T+15min: {grade.get('trend_accuracy_T15', 'N/A')}
-  Trend accuracy T+30min: {grade.get('trend_accuracy_T30', 'N/A')}
-  Clean trade rate:       {grade.get('clean_trade_rate', 'N/A')}
-  IEP mean error:         {grade.get('iep_accuracy', {}).get('mean_error_pct', 'N/A')}%
+  Tickers screened: {grade.get("tickers_screened")} | Tracked: {grade.get("tickers_tracked")}
+  Decision source: {grade.get("decision_source", "N/A")}
+  Entry range hit rate:   {grade.get("entry_range_hit_rate", "N/A")}
+  Trend accuracy T+5min:  {grade.get("trend_accuracy_T5", "N/A")}
+  Trend accuracy T+15min: {grade.get("trend_accuracy_T15", "N/A")}
+  Trend accuracy T+30min: {grade.get("trend_accuracy_T30", "N/A")}
+  Clean trade rate:       {grade.get("clean_trade_rate", "N/A")}
+  IEP mean error:         {grade.get("iep_accuracy", {}).get("mean_error_pct", "N/A")}%
 
 BY TRADESETUP ACTION (champion):
-  ENTER: count={by_action.get('ENTER',{}).get('count',0)} clean_trade={by_action.get('ENTER',{}).get('clean_trade_rate','N/A')} entry_hit={by_action.get('ENTER',{}).get('entry_range_hit_rate','N/A')}
-  WATCH: count={by_action.get('WATCH',{}).get('count',0)} clean_trade={by_action.get('WATCH',{}).get('clean_trade_rate','N/A')} entry_hit={by_action.get('WATCH',{}).get('entry_range_hit_rate','N/A')}
-  AVOID: count={by_action.get('AVOID',{}).get('count',0)} clean_trade={by_action.get('AVOID',{}).get('clean_trade_rate','N/A')}
+  ENTER: count={by_action.get("ENTER", {}).get("count", 0)} clean_trade={
+        by_action.get("ENTER", {}).get("clean_trade_rate", "N/A")
+    } entry_hit={by_action.get("ENTER", {}).get("entry_range_hit_rate", "N/A")}
+  WATCH: count={by_action.get("WATCH", {}).get("count", 0)} clean_trade={
+        by_action.get("WATCH", {}).get("clean_trade_rate", "N/A")
+    } entry_hit={by_action.get("WATCH", {}).get("entry_range_hit_rate", "N/A")}
+  AVOID: count={by_action.get("AVOID", {}).get("count", 0)} clean_trade={
+        by_action.get("AVOID", {}).get("clean_trade_rate", "N/A")
+    }
 
 BY SIGNAL BAND (champion):
-  strong: count={by_band.get('strong',{}).get('count',0)} clean_trade={by_band.get('strong',{}).get('clean_trade_rate','N/A')}
-  moderate: count={by_band.get('moderate',{}).get('count',0)} clean_trade={by_band.get('moderate',{}).get('clean_trade_rate','N/A')}
-  weak: count={by_band.get('weak',{}).get('count',0)} clean_trade={by_band.get('weak',{}).get('clean_trade_rate','N/A')}
+  strong: count={by_band.get("strong", {}).get("count", 0)} clean_trade={
+        by_band.get("strong", {}).get("clean_trade_rate", "N/A")
+    }
+  moderate: count={by_band.get("moderate", {}).get("count", 0)}
+  clean_trade={by_band.get("moderate", {}).get("clean_trade_rate", "N/A")}
+  weak: count={by_band.get("weak", {}).get("count", 0)} clean_trade={
+        by_band.get("weak", {}).get("clean_trade_rate", "N/A")
+    }
 
 PER TICKER:
 {chr(10).join(per_ticker_summary)}
 
 CURRENT CONFIG:
-  rsi_overbought_threshold:         {config.get('rsi_overbought_threshold', 'N/A')}
-  iev_intensity_unusual_threshold:  {config.get('iev_intensity_unusual_threshold', 'N/A')}
-  atr_range_cap_min:                {config.get('atr_range_cap_min', 'N/A')}
-  atr_range_cap_max:                {config.get('atr_range_cap_max', 'N/A')}
-  broker_backing_threshold:           {config.get('broker_backing_threshold', 'N/A')}
-  min_target_ticks:                 {config.get('min_target_ticks', 'N/A')}
-  tick_friction_gate:               {config.get('tick_friction_gate', 'N/A')}
+  rsi_overbought_threshold:         {config.get("rsi_overbought_threshold", "N/A")}
+  iev_intensity_unusual_threshold:  {config.get("iev_intensity_unusual_threshold", "N/A")}
+  atr_range_cap_min:                {config.get("atr_range_cap_min", "N/A")}
+  atr_range_cap_max:                {config.get("atr_range_cap_max", "N/A")}
+  broker_backing_threshold:           {config.get("broker_backing_threshold", "N/A")}
+  min_target_ticks:                 {config.get("min_target_ticks", "N/A")}
+  tick_friction_gate:               {config.get("tick_friction_gate", "N/A")}
 
 Analyze this and provide specific recommendations.
 """
@@ -209,6 +222,7 @@ Analyze this and provide specific recommendations.
 def _call_deepseek(system_prompt: str, user_prompt: str, api_key: str | None) -> tuple[str, int]:
     """Call DeepSeek API directly with a higher token limit than the base explainer allows."""
     import os
+
     resolved_key = api_key or os.environ.get("DEEPSEEK_API_KEY")
     if not resolved_key:
         raise ValueError("No DeepSeek API key available")
@@ -256,15 +270,15 @@ def _parse_response(raw: str) -> tuple[dict, str]:
                 elif raw[i] == "}":
                     depth -= 1
                     if depth == 0:
-                        json_str = raw[brace_start:i + 1]
+                        json_str = raw[brace_start : i + 1]
                         try:
                             json_block = json.loads(json_str)
                             # Narrative is everything after the closing ``` marker
                             end_marker = raw.find("```", i)
                             if end_marker != -1:
-                                narrative = raw[end_marker + 3:].strip()
+                                narrative = raw[end_marker + 3 :].strip()
                             else:
-                                narrative = raw[i + 1:].strip()
+                                narrative = raw[i + 1 :].strip()
                         except json.JSONDecodeError:
                             pass
                         break
@@ -280,4 +294,5 @@ def _now_iso() -> str:
     from datetime import datetime
 
     from src.domain.value_objects.idx_market import IDX_TIMEZONE
+
     return datetime.now(IDX_TIMEZONE).isoformat()

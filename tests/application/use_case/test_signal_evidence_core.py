@@ -18,8 +18,12 @@ from tests.application.use_case.signal_evidence_fixtures import (
 
 def test_both_groups_missing_raises_no_production_signal_evidence_error():
     from src.application.exceptions import NoProductionSignalEvidenceError
+
     uc = _use_case()
-    with pytest.raises(NoProductionSignalEvidenceError, match="Canonical signal assessment requires setup or flow evidence."):
+    with pytest.raises(
+        NoProductionSignalEvidenceError,
+        match="Canonical signal assessment requires setup or flow evidence.",
+    ):
         uc.execute(_req())
 
 
@@ -95,33 +99,37 @@ def test_only_setup_evidence_renormalized_to_setup_score():
 def test_partial_setup_match_gives_lower_score():
     uc = _use_case()
     resp = uc.execute(_req(setup_evidence=_setup_evidence("PARTIAL")))
-    assert resp.assessment.score == 60   # match_strength=60.0
+    assert resp.assessment.score == 60  # match_strength=60.0
 
 
 def test_no_match_setup_gives_low_score():
     uc = _use_case()
     resp = uc.execute(_req(setup_evidence=_setup_evidence("NO_MATCH")))
-    assert resp.assessment.score == 20   # match_strength=20.0
+    assert resp.assessment.score == 20  # match_strength=20.0
 
 
 def test_both_groups_present_weighted_combination():
     # setup=MATCH (100.0, weight=0.60) + flow=0.50 capped (50.0, weight=0.40)
     # base_score = (100*0.60 + 50*0.40) / (0.60+0.40) = (60+20)/1.0 = 80.0
     uc = _use_case()
-    resp = uc.execute(_req(
-        setup_evidence=_setup_evidence("MATCH"),
-        flow_confirmation_evidence=_flow_evidence(capped_strength=0.50),
-    ))
+    resp = uc.execute(
+        _req(
+            setup_evidence=_setup_evidence("MATCH"),
+            flow_confirmation_evidence=_flow_evidence(capped_strength=0.50),
+        )
+    )
     assert resp.assessment.score == 80
 
 
 def test_both_groups_present_full_strength_scores_100():
     # setup=MATCH (100) + flow capped=1.0 (100) → score=100
     uc = _use_case()
-    resp = uc.execute(_req(
-        setup_evidence=_setup_evidence("MATCH"),
-        flow_confirmation_evidence=_flow_evidence(capped_strength=1.0),
-    ))
+    resp = uc.execute(
+        _req(
+            setup_evidence=_setup_evidence("MATCH"),
+            flow_confirmation_evidence=_flow_evidence(capped_strength=1.0),
+        )
+    )
     assert resp.assessment.score == 100
     assert resp.assessment.strength == SignalStrength.STRONG
     assert resp.assessment.entry_quality.name == "ENTER"
@@ -139,10 +147,12 @@ def test_custom_group_weights_affect_score():
     uc = _use_case(cfg)
     # setup=PARTIAL (60), flow=capped=1.0 (100)
     # score = (60*0.80 + 100*0.20) / 1.0 = (48+20) = 68
-    resp = uc.execute(_req(
-        setup_evidence=_setup_evidence("PARTIAL"),
-        flow_confirmation_evidence=_flow_evidence(capped_strength=1.0),
-    ))
+    resp = uc.execute(
+        _req(
+            setup_evidence=_setup_evidence("PARTIAL"),
+            flow_confirmation_evidence=_flow_evidence(capped_strength=1.0),
+        )
+    )
     assert resp.assessment.score == 68
 
 

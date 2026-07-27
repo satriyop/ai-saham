@@ -124,8 +124,7 @@ class FetchMarketRefreshUseCase:
 
         ticker_list = self._with_benchmark_first(ticker_list)
         enrichment_available = (
-            not request.no_enrichment
-            and request.broker_provider_name == "stockbit"
+            not request.no_enrichment and request.broker_provider_name == "stockbit"
         )
 
         ok_count = 0
@@ -212,7 +211,8 @@ class FetchMarketRefreshUseCase:
                 on_ticker_complete(result_item, len(ticker_results), len(ticker_list))
 
         stock_tickers_only = [
-            ticker for ticker in ticker_list
+            ticker
+            for ticker in ticker_list
             if not is_benchmark_ticker(ticker) and not ticker.startswith("^")
         ]
         pit_coverage: list[EnrichmentPitTableCoverage] = []

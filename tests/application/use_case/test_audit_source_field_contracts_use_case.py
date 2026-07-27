@@ -70,9 +70,7 @@ class _FakeCatalog:
 
 
 class _FakeReader:
-    def __init__(
-        self, observations: dict[str, RawTableObservation], database_exists: bool = True
-    ):
+    def __init__(self, observations: dict[str, RawTableObservation], database_exists: bool = True):
         self._observations = observations
         self._database_exists = database_exists
 
@@ -123,11 +121,7 @@ def test_execute_produces_complete_response_shape():
 def test_missing_required_field_makes_status_fail():
     catalog = _FakeCatalog({"candles": (_TICKER_CONTRACT,)})
     reader = _FakeReader(
-        {
-            "candles": RawTableObservation(
-                table="candles", exists=True, row_count=5, fields=()
-            )
-        }
+        {"candles": RawTableObservation(table="candles", exists=True, row_count=5, fields=())}
     )
 
     use_case = AuditSourceFieldContractsUseCase(reader, catalog, clock=_fixed_clock)
@@ -224,11 +218,7 @@ def test_null_in_optional_metric_field_warns_not_fails():
                 table="broker_summaries",
                 exists=True,
                 row_count=10,
-                fields=(
-                    RawFieldObservation(
-                        field="foreign_buy_value", exists=True, null_count=2
-                    ),
-                ),
+                fields=(RawFieldObservation(field="foreign_buy_value", exists=True, null_count=2),),
             )
         }
     )

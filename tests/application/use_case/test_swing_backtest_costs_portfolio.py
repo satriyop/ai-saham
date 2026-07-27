@@ -22,10 +22,7 @@ def test_swing_backtest_default_applies_transaction_costs():
     base = date(2026, 1, 1)
     signal_date = base + timedelta(days=24)
     exit_date = base + timedelta(days=25)
-    summaries = [
-        _summary("BBCA", base + timedelta(days=i), Decimal("110"))
-        for i in range(18, 25)
-    ]
+    summaries = [_summary("BBCA", base + timedelta(days=i), Decimal("110")) for i in range(18, 25)]
     use_case = SwingBacktestUseCase(
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
@@ -34,15 +31,17 @@ def test_swing_backtest_default_applies_transaction_costs():
         signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
-    response = use_case.execute(SwingBacktestRequest(
-        tickers=["BBCA"],
-        start_date=signal_date,
-        end_date=exit_date,
-        capital=Decimal("1000000"),
-        risk_pct=Decimal("0.01"),
-        max_positions=1,
-        min_net_buy_days=1,
-    ))
+    response = use_case.execute(
+        SwingBacktestRequest(
+            tickers=["BBCA"],
+            start_date=signal_date,
+            end_date=exit_date,
+            capital=Decimal("1000000"),
+            risk_pct=Decimal("0.01"),
+            max_positions=1,
+            min_net_buy_days=1,
+        )
+    )
 
     assert response.cost_bps == DEFAULT_SWING_COST_BPS
     assert response.trade_count == 1
@@ -69,16 +68,18 @@ def test_swing_backtest_respects_max_positions():
         signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
-    response = use_case.execute(SwingBacktestRequest(
-        tickers=["BBCA", "BBRI"],
-        start_date=signal_date,
-        end_date=exit_date,
-        capital=Decimal("1000000"),
-        risk_pct=Decimal("0.01"),
-        max_positions=1,
-        min_net_buy_days=1,
-        cost_bps=Decimal("0"),
-    ))
+    response = use_case.execute(
+        SwingBacktestRequest(
+            tickers=["BBCA", "BBRI"],
+            start_date=signal_date,
+            end_date=exit_date,
+            capital=Decimal("1000000"),
+            risk_pct=Decimal("0.01"),
+            max_positions=1,
+            min_net_buy_days=1,
+            cost_bps=Decimal("0"),
+        )
+    )
 
     assert response.trade_count == 1
     assert len({trade.ticker for trade in response.trades}) == 1

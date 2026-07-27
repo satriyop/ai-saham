@@ -27,8 +27,8 @@ from dataclasses import dataclass
 from src.domain.rules.risk_gate import GateContext, GateResult, RiskGate
 
 _THIRD_LINER_CAP_IDR = 1_000_000_000_000  # IDR 1T
-_LIQUIDITY_FLOOR_IDR = 5_000_000_000       # IDR 5B per day
-_DEFAULT_LOOKBACK = 20                      # trading sessions
+_LIQUIDITY_FLOOR_IDR = 5_000_000_000  # IDR 5B per day
+_DEFAULT_LOOKBACK = 20  # trading sessions
 
 
 @dataclass(frozen=True)
@@ -78,12 +78,8 @@ class LiquidityGate(RiskGate):
 
         # Rec 2: median 20-day transaction value (dynamic, requires candles)
         if context.recent_candles:
-            candles = context.recent_candles[-self._lookback:]
-            tx_values = [
-                float(c.close * c.volume)
-                for c in candles
-                if c.volume > 0
-            ]
+            candles = context.recent_candles[-self._lookback :]
+            tx_values = [float(c.close * c.volume) for c in candles if c.volume > 0]
             if tx_values:
                 median_tx = statistics.median(tx_values)
                 if median_tx < self._liquidity_floor:
@@ -95,15 +91,18 @@ class LiquidityGate(RiskGate):
                             f"Illiquid: median 20d tx {median_m}M IDR"
                             f" < {floor_b}B IDR/day floor (slippage risk)"
                         ),
-                            confidence=self._policy.triggered_confidence,
-                        )
+                        confidence=self._policy.triggered_confidence,
+                    )
 
         if context.market_cap_idr is None and not context.recent_candles:
             triggered = self._policy.missing_data_action == "block"
             return GateResult(
                 triggered=triggered,
-                reason="liquidity data unavailable — gate blocked"
-                if triggered else "liquidity data unavailable — gate skipped",
+                reason=(
+                    "liquidity data unavailable — gate blocked"
+                    if triggered
+                    else "liquidity data unavailable — gate skipped"
+                ),
                 confidence=self._policy.missing_data_confidence,
             )
 

@@ -69,7 +69,9 @@ class _EmptyEnrichmentReader:
 
     def observe_corporate_action_linkage(self) -> RawCorporateActionLinkageObservation:
         return RawCorporateActionLinkageObservation(
-            events_exists=True, event_dates_exists=True, events_row_count=0,
+            events_exists=True,
+            event_dates_exists=True,
+            events_row_count=0,
             event_dates_row_count=0,
         )
 
@@ -84,8 +86,7 @@ class _EmptyEnrichmentReader:
 
 
 def _create_candles(conn: sqlite3.Connection) -> None:
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE candles (
             ticker TEXT NOT NULL,
             date TEXT NOT NULL,
@@ -98,13 +99,11 @@ def _create_candles(conn: sqlite3.Connection) -> None:
             volume_unit TEXT NOT NULL DEFAULT 'unknown',
             price_adjustment_policy TEXT NOT NULL DEFAULT 'unknown'
         )
-        """
-    )
+        """)
 
 
 def _create_broker_summaries(conn: sqlite3.Connection) -> None:
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE broker_summaries (
             ticker TEXT NOT NULL,
             date TEXT NOT NULL,
@@ -115,13 +114,11 @@ def _create_broker_summaries(conn: sqlite3.Connection) -> None:
             foreign_sell_lot INTEGER NOT NULL,
             total_value TEXT NOT NULL
         )
-        """
-    )
+        """)
 
 
 def _create_broker_daily_flow(conn: sqlite3.Connection) -> None:
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE broker_daily_flow (
             ticker TEXT NOT NULL,
             date TEXT NOT NULL,
@@ -131,21 +128,18 @@ def _create_broker_daily_flow(conn: sqlite3.Connection) -> None:
             sell_value TEXT NOT NULL DEFAULT '0',
             net_value TEXT NOT NULL DEFAULT '0'
         )
-        """
-    )
+        """)
 
 
 def _create_foreign_flow_points(conn: sqlite3.Connection) -> None:
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE foreign_flow_points (
             ticker TEXT NOT NULL,
             date TEXT NOT NULL,
             source TEXT NOT NULL,
             net_val TEXT NOT NULL
         )
-        """
-    )
+        """)
 
 
 @pytest.fixture
@@ -206,8 +200,7 @@ def test_candles_missing_provenance_columns_does_not_crash(tmp_path: Path):
     # those rows as unverifiable provenance, not crash on a missing column.
     db_path = tmp_path / "legacy_candles.db"
     conn = sqlite3.connect(str(db_path))
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE candles (
             ticker TEXT NOT NULL,
             date TEXT NOT NULL,
@@ -218,8 +211,7 @@ def test_candles_missing_provenance_columns_does_not_crash(tmp_path: Path):
             volume INTEGER NOT NULL,
             source TEXT NOT NULL DEFAULT 'unknown'
         )
-        """
-    )
+        """)
     conn.execute(
         "INSERT INTO candles (ticker, date, open, high, low, close, volume, source) "
         "VALUES ('BBCA', '2026-01-02', '100', '105', '95', '100', 10, 'idx')"
@@ -243,8 +235,7 @@ def test_candles_missing_ohlc_column_does_not_crash(tmp_path: Path):
     db_path = tmp_path / "partial_candles.db"
     conn = sqlite3.connect(str(db_path))
     conn.execute(
-        "CREATE TABLE candles (ticker TEXT NOT NULL, date TEXT NOT NULL, "
-        "open TEXT NOT NULL)"
+        "CREATE TABLE candles (ticker TEXT NOT NULL, date TEXT NOT NULL, open TEXT NOT NULL)"
     )
     conn.execute("INSERT INTO candles VALUES ('BBCA', '2026-01-02', '100')")
     conn.commit()
@@ -266,8 +257,7 @@ def test_use_case_reports_candles_schema_insufficient_finding_not_crash(tmp_path
     db_path = tmp_path / "partial_candles.db"
     conn = sqlite3.connect(str(db_path))
     conn.execute(
-        "CREATE TABLE candles (ticker TEXT NOT NULL, date TEXT NOT NULL, "
-        "open TEXT NOT NULL)"
+        "CREATE TABLE candles (ticker TEXT NOT NULL, date TEXT NOT NULL, open TEXT NOT NULL)"
     )
     conn.execute("INSERT INTO candles VALUES ('BBCA', '2026-01-02', '100')")
     conn.commit()
@@ -275,14 +265,15 @@ def test_use_case_reports_candles_schema_insufficient_finding_not_crash(tmp_path
 
     reader = SQLiteSourceReconciliationReader(db_path)
     use_case = AuditSourceReconciliationUseCase(
-        reader, enrichment_reader=_EmptyEnrichmentReader(), artifact_reader=_EmptyArtifactReader(),
-        clock=lambda: "2026-07-16T00:00:00+00:00"
+        reader,
+        enrichment_reader=_EmptyEnrichmentReader(),
+        artifact_reader=_EmptyArtifactReader(),
+        clock=lambda: "2026-07-16T00:00:00+00:00",
     )
     response = use_case.execute()
 
     assert any(
-        f.code == "CANDLES_SCHEMA_INSUFFICIENT" and f.severity == "FAIL"
-        for f in response.findings
+        f.code == "CANDLES_SCHEMA_INSUFFICIENT" and f.severity == "FAIL" for f in response.findings
     )
 
 
@@ -394,8 +385,10 @@ def test_use_case_reports_schema_insufficient_finding_not_crash(tmp_path: Path):
 
     reader = SQLiteSourceReconciliationReader(db_path)
     use_case = AuditSourceReconciliationUseCase(
-        reader, enrichment_reader=_EmptyEnrichmentReader(), artifact_reader=_EmptyArtifactReader(),
-        clock=lambda: "2026-07-16T00:00:00+00:00"
+        reader,
+        enrichment_reader=_EmptyEnrichmentReader(),
+        artifact_reader=_EmptyArtifactReader(),
+        clock=lambda: "2026-07-16T00:00:00+00:00",
     )
     response = use_case.execute()
 
@@ -446,8 +439,10 @@ def test_tracked_broker_subset_info_always_present_via_use_case(full_schema_db: 
 
     reader = SQLiteSourceReconciliationReader(full_schema_db)
     use_case = AuditSourceReconciliationUseCase(
-        reader, enrichment_reader=_EmptyEnrichmentReader(), artifact_reader=_EmptyArtifactReader(),
-        clock=lambda: "2026-07-16T00:00:00+00:00"
+        reader,
+        enrichment_reader=_EmptyEnrichmentReader(),
+        artifact_reader=_EmptyArtifactReader(),
+        clock=lambda: "2026-07-16T00:00:00+00:00",
     )
     response = use_case.execute()
 
@@ -500,8 +495,10 @@ def test_foreign_flow_partial_coverage_is_reported(full_schema_db: Path):
     )
 
     use_case = AuditSourceReconciliationUseCase(
-        reader, enrichment_reader=_EmptyEnrichmentReader(), artifact_reader=_EmptyArtifactReader(),
-        clock=lambda: "2026-07-16T00:00:00+00:00"
+        reader,
+        enrichment_reader=_EmptyEnrichmentReader(),
+        artifact_reader=_EmptyArtifactReader(),
+        clock=lambda: "2026-07-16T00:00:00+00:00",
     )
     response = use_case.execute()
 
@@ -532,16 +529,16 @@ def test_happy_path_produces_pass_except_tracked_broker_info(full_schema_db: Pat
         "INSERT INTO broker_daily_flow VALUES ('BBCA', '2026-01-02', 'YP', 'stockbit', "
         "'100', '50', '50')"
     )
-    conn.execute(
-        "INSERT INTO foreign_flow_points VALUES ('BBCA', '2026-01-02', 'idx', '50')"
-    )
+    conn.execute("INSERT INTO foreign_flow_points VALUES ('BBCA', '2026-01-02', 'idx', '50')")
     conn.commit()
     conn.close()
 
     reader = SQLiteSourceReconciliationReader(full_schema_db)
     use_case = AuditSourceReconciliationUseCase(
-        reader, enrichment_reader=_EmptyEnrichmentReader(), artifact_reader=_EmptyArtifactReader(),
-        clock=lambda: "2026-07-16T00:00:00+00:00"
+        reader,
+        enrichment_reader=_EmptyEnrichmentReader(),
+        artifact_reader=_EmptyArtifactReader(),
+        clock=lambda: "2026-07-16T00:00:00+00:00",
     )
     response = use_case.execute()
 

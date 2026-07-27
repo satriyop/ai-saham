@@ -116,9 +116,7 @@ def _setup_provenance(ticker: str = "BBCA", *, with_benchmark: bool = True) -> S
         ticker=ticker,
         candle_rows=(CandleRowIdentity(ticker=ticker, date=SNAP, source="stockbit"),),
         benchmark_candle_rows=(
-            (CandleRowIdentity(ticker="IHSG", date=SNAP, source="idx"),)
-            if with_benchmark
-            else ()
+            (CandleRowIdentity(ticker="IHSG", date=SNAP, source="idx"),) if with_benchmark else ()
         ),
     )
 
@@ -416,7 +414,9 @@ class TestDuplicateRowIdentities:
             FlowProvenance(ticker="BBCA", broker_summary_rows=(row, row), broker_daily_flow_rows=())
 
     def test_duplicate_broker_daily_flow_rows_raise(self) -> None:
-        row = BrokerDailyFlowRowIdentity(ticker="BBCA", date=SNAP, broker_code="YP", source="stockbit")
+        row = BrokerDailyFlowRowIdentity(
+            ticker="BBCA", date=SNAP, broker_code="YP", source="stockbit"
+        )
         with pytest.raises(ValueError, match="duplicate"):
             FlowProvenance(ticker="BBCA", broker_summary_rows=(), broker_daily_flow_rows=(row, row))
 
@@ -488,12 +488,8 @@ class TestCanonicalGroupRejectsFutureProvenance:
     def test_future_setup_ticker_candle_raises(self) -> None:
         provenance = SetupProvenance(
             ticker="BBCA",
-            candle_rows=(
-                CandleRowIdentity(ticker="BBCA", date=self.FUTURE, source="stockbit"),
-            ),
-            benchmark_candle_rows=(
-                CandleRowIdentity(ticker="IHSG", date=SNAP, source="idx"),
-            ),
+            candle_rows=(CandleRowIdentity(ticker="BBCA", date=self.FUTURE, source="stockbit"),),
+            benchmark_candle_rows=(CandleRowIdentity(ticker="IHSG", date=SNAP, source="idx"),),
         )
         availability = _setup_availability(observed_through=self.FUTURE)
 
@@ -560,9 +556,7 @@ class TestCanonicalGroupRejectsFutureProvenance:
     def test_future_broker_daily_flow_row_raises(self) -> None:
         provenance = FlowProvenance(
             ticker="BBCA",
-            broker_summary_rows=(
-                BrokerSummaryRowIdentity(ticker="BBCA", date=SNAP, source="idx"),
-            ),
+            broker_summary_rows=(BrokerSummaryRowIdentity(ticker="BBCA", date=SNAP, source="idx"),),
             broker_daily_flow_rows=(
                 BrokerDailyFlowRowIdentity(
                     ticker="BBCA", date=self.FUTURE, broker_code="YP", source="stockbit"

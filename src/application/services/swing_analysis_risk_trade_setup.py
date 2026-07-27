@@ -16,9 +16,9 @@ from src.application.use_case.assess_risk_use_case import AssessRiskRequest, Ass
 from src.domain.rules.risk_gate import GateContext, RiskGate
 
 if TYPE_CHECKING:
+    from src.application.dto.assess_signal import AssessSignalResponse
     from src.application.services.risk_engine import RiskEngine
     from src.application.services.signal_engine import SignalEngine
-    from src.application.dto.assess_signal import AssessSignalResponse
     from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.trade_setup import TradeSetup
 
@@ -84,14 +84,10 @@ class SwingAnalysisRiskTradeSetupComposer:
                 from src.domain.rules.technical_gate import TechnicalGate
 
                 evaluator = (
-                    self._risk_engine.indicator_evaluator
-                    if self._risk_engine is not None
-                    else None
+                    self._risk_engine.indicator_evaluator if self._risk_engine is not None else None
                 ) or IndicatorEvaluator()
                 indicator_defaults = (
-                    self._risk_engine.indicator_defaults
-                    if self._risk_engine is not None
-                    else None
+                    self._risk_engine.indicator_defaults if self._risk_engine is not None else None
                 )
                 technical_gate_config = (
                     self._risk_engine.technical_gate_config
@@ -107,20 +103,27 @@ class SwingAnalysisRiskTradeSetupComposer:
                     structural_gates=self._structural_gates or None,
                     execution_gates=execution_gates,
                     indicator_evaluator=evaluator,
-                    indicator_history_days=indicator_defaults.history_days
-                    if indicator_defaults is not None else 365,
-                    gate_recent_candle_lookback=indicator_defaults.gate_recent_candle_lookback
-                    if indicator_defaults is not None else 20,
+                    indicator_history_days=(
+                        indicator_defaults.history_days if indicator_defaults is not None else 365
+                    ),
+                    gate_recent_candle_lookback=(
+                        indicator_defaults.gate_recent_candle_lookback
+                        if indicator_defaults is not None
+                        else 20
+                    ),
                 )
                 risk_response = risk_use_case.execute(
                     AssessRiskRequest(
                         ticker=ticker,
-                        sma_period=indicator_defaults.sma_period
-                        if indicator_defaults is not None else 20,
-                        ema_period=indicator_defaults.ema_period
-                        if indicator_defaults is not None else 20,
-                        rsi_period=indicator_defaults.rsi_period
-                        if indicator_defaults is not None else 14,
+                        sma_period=(
+                            indicator_defaults.sma_period if indicator_defaults is not None else 20
+                        ),
+                        ema_period=(
+                            indicator_defaults.ema_period if indicator_defaults is not None else 20
+                        ),
+                        rsi_period=(
+                            indicator_defaults.rsi_period if indicator_defaults is not None else 14
+                        ),
                         gate_context=gate_ctx,
                     )
                 )
@@ -169,15 +172,20 @@ class SwingAnalysisRiskTradeSetupComposer:
                     AssessTradeSetupRequest,
                     AssessTradeSetupUseCase,
                 )
-                trade_setup = AssessTradeSetupUseCase().execute(
-                    AssessTradeSetupRequest(
-                        ticker=ticker,
-                        snapshot_date=snapshot_date,
-                        signal_response=signal_assessment,
-                        risk_response=risk_response,
-                        market_context=None,
+
+                trade_setup = (
+                    AssessTradeSetupUseCase()
+                    .execute(
+                        AssessTradeSetupRequest(
+                            ticker=ticker,
+                            snapshot_date=snapshot_date,
+                            signal_response=signal_assessment,
+                            risk_response=risk_response,
+                            market_context=None,
+                        )
                     )
-                ).setup
+                    .setup
+                )
             except Exception as exc:
                 warnings.append(f"TradeSetup unavailable: {exc}")
         return trade_setup, warnings
@@ -212,21 +220,26 @@ class SwingAnalysisRiskTradeSetupComposer:
                     AssessTradeSetupRequest,
                     AssessTradeSetupUseCase,
                 )
+
                 # Phase 5: canonical signal already includes regime conditioning.
                 # MCE preview still differs via risk_preview (regime-adjusted risk).
                 market_context_signal_preview = signal_assessment
                 market_context_risk_preview = self._risk_engine.apply_market_context(
                     risk_response, market_regime
                 )
-                market_context_trade_setup_preview = AssessTradeSetupUseCase().execute(
-                    AssessTradeSetupRequest(
-                        ticker=ticker,
-                        snapshot_date=snapshot_date,
-                        signal_response=market_context_signal_preview,
-                        risk_response=market_context_risk_preview,
-                        market_context=market_regime,
+                market_context_trade_setup_preview = (
+                    AssessTradeSetupUseCase()
+                    .execute(
+                        AssessTradeSetupRequest(
+                            ticker=ticker,
+                            snapshot_date=snapshot_date,
+                            signal_response=market_context_signal_preview,
+                            risk_response=market_context_risk_preview,
+                            market_context=market_regime,
+                        )
                     )
-                ).setup
+                    .setup
+                )
             except Exception as exc:
                 warnings.append(f"Market context preview unavailable: {exc}")
         return (
@@ -260,15 +273,20 @@ class SwingAnalysisRiskTradeSetupComposer:
                     AssessTradeSetupRequest,
                     AssessTradeSetupUseCase,
                 )
-                new_trade_setup = AssessTradeSetupUseCase().execute(
-                    AssessTradeSetupRequest(
-                        ticker=ticker,
-                        snapshot_date=snapshot_date,
-                        signal_response=signal_assessment,
-                        risk_response=risk_response,
-                        market_context=None,
+
+                new_trade_setup = (
+                    AssessTradeSetupUseCase()
+                    .execute(
+                        AssessTradeSetupRequest(
+                            ticker=ticker,
+                            snapshot_date=snapshot_date,
+                            signal_response=signal_assessment,
+                            risk_response=risk_response,
+                            market_context=None,
+                        )
                     )
-                ).setup
+                    .setup
+                )
             except Exception as exc:
                 warnings.append(f"TradeSetup re-composition unavailable: {exc}")
 
@@ -278,18 +296,23 @@ class SwingAnalysisRiskTradeSetupComposer:
                     AssessTradeSetupRequest,
                     AssessTradeSetupUseCase,
                 )
+
                 # Phase 5: canonical signal already includes regime — no
                 # separate apply_market_context() needed for signal preview.
                 new_mce_signal = signal_assessment
-                new_mce_trade_preview = AssessTradeSetupUseCase().execute(
-                    AssessTradeSetupRequest(
-                        ticker=ticker,
-                        snapshot_date=snapshot_date,
-                        signal_response=new_mce_signal,
-                        risk_response=market_context_risk_preview,
-                        market_context=market_regime,
+                new_mce_trade_preview = (
+                    AssessTradeSetupUseCase()
+                    .execute(
+                        AssessTradeSetupRequest(
+                            ticker=ticker,
+                            snapshot_date=snapshot_date,
+                            signal_response=new_mce_signal,
+                            risk_response=market_context_risk_preview,
+                            market_context=market_regime,
+                        )
                     )
-                ).setup
+                    .setup
+                )
             except Exception as exc:
                 warnings.append(f"MCE preview re-computation unavailable: {exc}")
 

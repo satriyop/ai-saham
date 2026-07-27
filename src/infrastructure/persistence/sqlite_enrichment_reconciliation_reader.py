@@ -173,9 +173,7 @@ class SQLiteEnrichmentReconciliationReader:
         return self._observe_pit_cache("analyst_cache", _ANALYST_METRIC_COLUMNS)
 
     def observe_forward_estimates(self) -> RawPitCacheObservation:
-        return self._observe_pit_cache(
-            "forward_estimates_cache", _FORWARD_ESTIMATES_METRIC_COLUMNS
-        )
+        return self._observe_pit_cache("forward_estimates_cache", _FORWARD_ESTIMATES_METRIC_COLUMNS)
 
     def _observe_pit_cache(
         self, table: str, metric_columns: tuple[str, ...]
@@ -342,9 +340,9 @@ class SQLiteEnrichmentReconciliationReader:
             events_columns = self._columns(conn, events_table)
             dates_columns = self._columns(conn, dates_table)
             events_row_count = conn.execute(f"SELECT COUNT(*) FROM {events_table}").fetchone()[0]
-            event_dates_row_count = conn.execute(
-                f"SELECT COUNT(*) FROM {dates_table}"
-            ).fetchone()[0]
+            event_dates_row_count = conn.execute(f"SELECT COUNT(*) FROM {dates_table}").fetchone()[
+                0
+            ]
 
             events_missing = self._missing_columns(
                 events_columns, _CORPORATE_ACTION_EVENTS_REQUIRED_COLUMNS
@@ -481,9 +479,7 @@ class SQLiteEnrichmentReconciliationReader:
                     missing_columns=missing,
                 )
 
-            missing_identity_condition = (
-                "(ticker IS NULL OR source IS NULL OR fetched_at IS NULL)"
-            )
+            missing_identity_condition = "(ticker IS NULL OR source IS NULL OR fetched_at IS NULL)"
             missing_identity_count = conn.execute(
                 f"SELECT COUNT(*) FROM {table} WHERE {missing_identity_condition}"
             ).fetchone()[0]
@@ -528,9 +524,7 @@ class SQLiteEnrichmentReconciliationReader:
             both_sector_industry_null_samples=both_sector_industry_null_samples,
         )
 
-    def _missing_columns(
-        self, columns: set[str], required: tuple[str, ...]
-    ) -> tuple[str, ...]:
+    def _missing_columns(self, columns: set[str], required: tuple[str, ...]) -> tuple[str, ...]:
         return tuple(c for c in required if c not in columns)
 
     def _table_exists(self, conn: sqlite3.Connection, table: str) -> bool:

@@ -109,9 +109,7 @@ def test_fetch_market_refresh_honors_skip_flags_and_collects_notes():
         universe_loader=MagicMock(),
     )
 
-    response = use_case.execute(
-        _request(candles_only=True, no_meta=True, tickers=["BBCA"])
-    )
+    response = use_case.execute(_request(candles_only=True, no_meta=True, tickers=["BBCA"]))
 
     assert candle_notes == [BENCHMARK_TICKER, "BBCA"]
     assert response.candle_short_history == [
@@ -197,11 +195,13 @@ def test_fetch_market_refresh_passes_refresh_to_enrichment():
         universe_loader=MagicMock(),
     )
 
-    use_case.execute(_request(
-        tickers=["BBCA"],
-        broker_provider_name="stockbit",
-        no_enrichment=False,
-        refresh=True,
-    ))
+    use_case.execute(
+        _request(
+            tickers=["BBCA"],
+            broker_provider_name="stockbit",
+            no_enrichment=False,
+            refresh=True,
+        )
+    )
 
     assert force_values == [True, True]

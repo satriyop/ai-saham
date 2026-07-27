@@ -77,9 +77,7 @@ def compute_data_freshness(
         broker_state=_classify_source_state(broker_as_of, expected_latest_eod, eod_pending),
         alignment_state=_classify_alignment(candle_as_of, broker_as_of),
         sources_aligned=(
-            candle_as_of is not None
-            and broker_as_of is not None
-            and candle_as_of == broker_as_of
+            candle_as_of is not None and broker_as_of is not None and candle_as_of == broker_as_of
         ),
         signal_evidence_coverage=signal_evidence_coverage,
     )

@@ -28,7 +28,10 @@ def test_build_broker_summary_url_contains_endpoint_ticker_period_limit():
 def test_build_foreign_top_stocks_url_repeats_broker_code_and_has_page_limit():
     _CFG = load_stockbit_config()
     url = build_foreign_top_stocks_url(
-        ["AK", "ZP", "YP"], "RT_PERIOD_LAST_7_DAYS", limit=20, page=1,
+        ["AK", "ZP", "YP"],
+        "RT_PERIOD_LAST_7_DAYS",
+        limit=20,
+        page=1,
         stockbit_config=_CFG,
     )
     assert url.startswith(_CFG.broker_activity_url)
@@ -60,7 +63,11 @@ def test_build_foreign_flow_history_url_uses_actual_days_when_below_cap():
 def test_build_historical_summary_url_formats_ticker_and_dates():
     _CFG = load_stockbit_config()
     url = build_historical_summary_url(
-        "bbca", date(2026, 6, 17), date(2026, 6, 18), page=2, limit=50,
+        "bbca",
+        date(2026, 6, 17),
+        date(2026, 6, 18),
+        page=2,
+        limit=50,
         stockbit_config=_CFG,
     )
     assert _CFG.historical_summary_url.format(ticker="BBCA") in url

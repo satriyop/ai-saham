@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List
 
-
 import src.adapters.cli.fetch_status_commands as status_commands
 
 
@@ -46,11 +45,13 @@ def _fake_use_case(provider) -> object:
     return type(
         "FakeUC",
         (),
-        {"execute": lambda self: type(
-            "FakeResp",
-            (),
-            {"providers": [], "freshness": []},
-        )()},
+        {
+            "execute": lambda self: type(
+                "FakeResp",
+                (),
+                {"providers": [], "freshness": []},
+            )()
+        },
     )()
 
 

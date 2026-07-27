@@ -27,6 +27,7 @@ from src.application.services.swing_backtest_attribution_buckets import (
     candidate_attribution_buckets,
     trade_attribution_buckets,
 )
+
 MIN_TUNING_SAMPLE_SIZE = 30
 DEFAULT_TUNING_TARGETS: tuple = ()
 
@@ -54,17 +55,14 @@ def _build_sample_quality(
         status = "CANDIDATE_ONLY"
         notes.append("Screened-candidate sample meets the minimum.")
         notes.append(
-            "Completed-trade sample is below the minimum; "
-            "portfolio outcome tuning is blocked."
+            "Completed-trade sample is below the minimum; portfolio outcome tuning is blocked."
         )
     else:
         status = "INSUFFICIENT_SAMPLE"
         notes.append("Samples are below the minimum required for tuning suggestions.")
 
     if completed_trade_count < min_sample_size:
-        notes.append(
-            f"Completed trades: {completed_trade_count}/{min_sample_size} minimum."
-        )
+        notes.append(f"Completed trades: {completed_trade_count}/{min_sample_size} minimum.")
     if candidate_observation_count < min_sample_size:
         notes.append(
             f"Candidate observations: {candidate_observation_count}/{min_sample_size} minimum."

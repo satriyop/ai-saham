@@ -223,9 +223,16 @@ class LearningObservation:
             decision_payload=dict(decision_payload),
             captured_at=captured_at,
         )
-        return cls(**{**asdict(draft), "artifact_digest": artifact_digest(
-            _artifact_payload(draft, id_field="observation_id", digest_field="artifact_digest")
-        )})
+        return cls(
+            **{
+                **asdict(draft),
+                "artifact_digest": artifact_digest(
+                    _artifact_payload(
+                        draft, id_field="observation_id", digest_field="artifact_digest"
+                    )
+                ),
+            }
+        )
 
 
 @dataclass(frozen=True)
@@ -267,9 +274,14 @@ class LearningTrackSnapshot:
             snapshot_payload=dict(snapshot_payload),
             captured_at=captured_at,
         )
-        return cls(**{**asdict(draft), "artifact_digest": artifact_digest(
-            _artifact_payload(draft, id_field="snapshot_id", digest_field="artifact_digest")
-        )})
+        return cls(
+            **{
+                **asdict(draft),
+                "artifact_digest": artifact_digest(
+                    _artifact_payload(draft, id_field="snapshot_id", digest_field="artifact_digest")
+                ),
+            }
+        )
 
 
 @dataclass(frozen=True)
@@ -327,9 +339,14 @@ class LearningOutcomeLabel:
             fingerprint=fingerprint,
             labeled_at=labeled_at,
         )
-        return cls(**{**asdict(draft), "artifact_digest": artifact_digest(
-            _artifact_payload(draft, id_field="label_id", digest_field="artifact_digest")
-        )})
+        return cls(
+            **{
+                **asdict(draft),
+                "artifact_digest": artifact_digest(
+                    _artifact_payload(draft, id_field="label_id", digest_field="artifact_digest")
+                ),
+            }
+        )
 
 
 @dataclass(frozen=True)
@@ -408,9 +425,16 @@ class LearningEvaluation:
             readiness=readiness,
             evaluated_at=evaluated_at,
         )
-        return cls(**{**asdict(draft), "artifact_digest": artifact_digest(
-            _artifact_payload(draft, id_field="evaluation_id", digest_field="artifact_digest")
-        )})
+        return cls(
+            **{
+                **asdict(draft),
+                "artifact_digest": artifact_digest(
+                    _artifact_payload(
+                        draft, id_field="evaluation_id", digest_field="artifact_digest"
+                    )
+                ),
+            }
+        )
 
 
 @dataclass(frozen=True)
@@ -456,9 +480,14 @@ class LearningPolicyProposal:
             rationale=dict(rationale),
             created_at=created_at,
         )
-        return cls(**{**asdict(draft), "artifact_digest": artifact_digest(
-            _artifact_payload(draft, id_field="proposal_id", digest_field="artifact_digest")
-        )})
+        return cls(
+            **{
+                **asdict(draft),
+                "artifact_digest": artifact_digest(
+                    _artifact_payload(draft, id_field="proposal_id", digest_field="artifact_digest")
+                ),
+            }
+        )
 
 
 @dataclass(frozen=True)
@@ -536,9 +565,16 @@ class LearningPolicyValidation:
             status=status,
             validated_at=validated_at,
         )
-        return cls(**{**asdict(draft), "artifact_digest": artifact_digest(
-            _artifact_payload(draft, id_field="validation_id", digest_field="artifact_digest")
-        )})
+        return cls(
+            **{
+                **asdict(draft),
+                "artifact_digest": artifact_digest(
+                    _artifact_payload(
+                        draft, id_field="validation_id", digest_field="artifact_digest"
+                    )
+                ),
+            }
+        )
 
 
 @dataclass(frozen=True)
@@ -597,6 +633,13 @@ class LearningPolicyApplication:
             applied_at=applied_at,
             reread_verified=reread_verified,
         )
-        return cls(**{**asdict(draft), "artifact_digest": artifact_digest(
-            _artifact_payload(draft, id_field="application_id", digest_field="artifact_digest")
-        )})
+        return cls(
+            **{
+                **asdict(draft),
+                "artifact_digest": artifact_digest(
+                    _artifact_payload(
+                        draft, id_field="application_id", digest_field="artifact_digest"
+                    )
+                ),
+            }
+        )

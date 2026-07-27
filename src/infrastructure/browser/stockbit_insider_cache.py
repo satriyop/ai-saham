@@ -208,17 +208,19 @@ class StockbitInsiderCache:
             txn_date = _parse_cached_date(row["transaction_date"])
             if txn_date is None:
                 continue
-            results.append(InsiderTransaction(
-                ticker=ticker.upper(),
-                name=row["name"],
-                role=row["role"],
-                action_type=row["action_type"],
-                shares=row["shares"],
-                price=row["price"],
-                transaction_date=txn_date,
-                ownership_before_pct=row["ownership_before_pct"],
-                ownership_after_pct=row["ownership_after_pct"],
-            ))
+            results.append(
+                InsiderTransaction(
+                    ticker=ticker.upper(),
+                    name=row["name"],
+                    role=row["role"],
+                    action_type=row["action_type"],
+                    shares=row["shares"],
+                    price=row["price"],
+                    transaction_date=txn_date,
+                    ownership_before_pct=row["ownership_before_pct"],
+                    ownership_after_pct=row["ownership_after_pct"],
+                )
+            )
         return results
 
     def _latest_eligible_snapshot_is_empty(

@@ -36,15 +36,11 @@ def test_identity_serializes_with_assessment() -> None:
 
 
 def test_identity_round_trips() -> None:
+    assert SignalAssessmentIdentity.from_dict(ACCUMULATION_DISCOVERY_IDENTITY.to_dict()) is not None
     assert (
-        SignalAssessmentIdentity.from_dict(
-            ACCUMULATION_DISCOVERY_IDENTITY.to_dict()
-        )
-        is not None
+        SignalAssessmentIdentity.from_dict(ACCUMULATION_DISCOVERY_IDENTITY.to_dict())
+        == ACCUMULATION_DISCOVERY_IDENTITY
     )
-    assert SignalAssessmentIdentity.from_dict(
-        ACCUMULATION_DISCOVERY_IDENTITY.to_dict()
-    ) == ACCUMULATION_DISCOVERY_IDENTITY
 
 
 @pytest.mark.parametrize("purpose", [None, "", "ACCUMULATION_DISCOVERY", "UNKNOWN"])

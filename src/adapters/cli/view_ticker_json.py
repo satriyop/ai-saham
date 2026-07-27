@@ -45,7 +45,9 @@ def _json_safe(value: Any) -> Any:
     return str(value)
 
 
-def _freshness_to_dict(items: list[FreshnessItem] | tuple[FreshnessItem, ...]) -> list[dict[str, Any]]:
+def _freshness_to_dict(
+    items: list[FreshnessItem] | tuple[FreshnessItem, ...],
+) -> list[dict[str, Any]]:
     return [
         {
             "key": item.key,
@@ -112,9 +114,7 @@ def _dashboard_data(dashboard: TickerDashboard) -> dict[str, Any]:
             {"verb": a.verb, "label": a.label, "command": a.command}
             for a in dashboard.related_actions
         ],
-        "panel_errors": [
-            {"key": e.key, "message": e.message} for e in dashboard.panel_errors
-        ],
+        "panel_errors": [{"key": e.key, "message": e.message} for e in dashboard.panel_errors],
     }
 
     if "identity" in panels:
@@ -148,9 +148,7 @@ def _dashboard_data(dashboard: TickerDashboard) -> dict[str, Any]:
         data["insider"] = {
             "transactions": [_optional_to_dict(t) for t in dashboard.insider_txns[:20]],
             "last_known_outside_window": (
-                dashboard.insider_last_known.isoformat()
-                if dashboard.insider_last_known
-                else None
+                dashboard.insider_last_known.isoformat() if dashboard.insider_last_known else None
             ),
             "status": dashboard.insider_status.value,
         }

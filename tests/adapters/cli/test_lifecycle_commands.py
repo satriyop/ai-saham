@@ -84,15 +84,15 @@ def test_view_broker_group_exposes_read_only_commands():
 
     assert result.exit_code == 0
     for cmd in (
-    "show",
-    "top-stocks",
-    "flow",
-    "history",
-    "status",
-    "top-foreign",
-    "mappings",
-    "list",
-):
+        "show",
+        "top-stocks",
+        "flow",
+        "history",
+        "status",
+        "top-foreign",
+        "mappings",
+        "list",
+    ):
         assert cmd in result.stdout
 
 

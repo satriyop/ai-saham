@@ -16,6 +16,7 @@ def _range(days: int) -> tuple[date, date]:
 
 # ── broker_summary_period_for_range ────────────────────────────────────────
 
+
 def test_broker_summary_period_1_day():
     assert broker_summary_period_for_range(*_range(1)) == "BROKER_SUMMARY_PERIOD_LATEST"
 
@@ -41,6 +42,7 @@ def test_broker_summary_period_beyond_180_days():
 
 
 # ── foreign_top_period_for_range ───────────────────────────────────────────
+
 
 def test_foreign_top_period_1_day():
     assert foreign_top_period_for_range(*_range(1)) == "RT_PERIOD_LAST_1_DAY"

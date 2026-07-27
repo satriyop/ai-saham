@@ -88,8 +88,7 @@ def test_frozen_immutable():
 
 def test_signal_evidence_aggregate_confidence():
     present = tuple(
-        _factor(name=f"p{i}", freshness=Freshness.FRESH, confidence=1.0)
-        for i in range(3)
+        _factor(name=f"p{i}", freshness=Freshness.FRESH, confidence=1.0) for i in range(3)
     )
     missing = tuple(
         _factor(
@@ -150,6 +149,7 @@ def test_signal_evidence_coverage_ratio_bounds():
 
 # ── from_dict / to_dict round-trip and schema-evolution tolerance ─────────────
 
+
 def test_factor_evidence_round_trip():
     fe = _factor()
     assert FactorEvidence.from_dict(fe.to_dict()) == fe
@@ -157,9 +157,9 @@ def test_factor_evidence_round_trip():
 
 def test_factor_evidence_from_dict_unknown_enum_falls_back_to_default():
     data = _factor().to_dict()
-    data["direction"] = "SIDEWAYS"   # unknown Direction value
-    data["freshness"] = "EXPIRED"    # unknown Freshness value
-    data["horizon"] = "DECADAL"      # unknown Horizon value
+    data["direction"] = "SIDEWAYS"  # unknown Direction value
+    data["freshness"] = "EXPIRED"  # unknown Freshness value
+    data["horizon"] = "DECADAL"  # unknown Horizon value
     parsed = FactorEvidence.from_dict(data)
     assert parsed.direction == Direction.NEUTRAL
     assert parsed.freshness == Freshness.MISSING

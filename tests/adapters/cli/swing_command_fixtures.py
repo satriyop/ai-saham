@@ -52,6 +52,7 @@ runner = CliRunner()
 
 def _build_broker_detail(*args, **kwargs):
     from src.adapters.cli.plan_swing_command_config import load_plan_swing_command_config
+
     cfg = load_plan_swing_command_config()
     smart_money_brokers = set(cfg.swing_config.smart_money_brokers)
     noise_brokers = set(cfg.swing_config.noise_brokers)
@@ -67,7 +68,6 @@ def _build_broker_detail(*args, **kwargs):
         broker_weights=broker_weights,
         smart_share_threshold_pct=cfg.swing_config.smart_share_threshold_pct,
     )
-
 
 
 class FakeBrokerSummaryRepository:

@@ -71,23 +71,19 @@ def test_empty_write_creates_none_sentinel_and_read_returns_empty(cache):
 
 
 def test_no_result_sentinel_does_not_hide_older_valid_pit_rows(cache):
-    cache._conn.execute(
-        """
+    cache._conn.execute("""
         INSERT OR REPLACE INTO insider_cache
             (ticker, name, role, action_type, shares, price, transaction_date,
              ownership_before_pct, ownership_after_pct, fetched_date)
         VALUES ('BBCA', 'Jane Doe', 'DIREKTUR', 'BUY', 1000, 5000, '2026-05-20',
                 0, 0, '2026-06-01')
-        """
-    )
-    cache._conn.execute(
-        """
+        """)
+    cache._conn.execute("""
         INSERT OR REPLACE INTO insider_cache
             (ticker, name, role, action_type, shares, price, transaction_date,
              ownership_before_pct, ownership_after_pct, fetched_date)
         VALUES ('BBCA', '__NONE__', '', 'NONE', 0, 0, '1970-01-01', 0, 0, '2026-06-15')
-        """
-    )
+        """)
 
     results = cache.read("BBCA", _WIDE_FROM, _WIDE_TO, "ALL", as_of_date=date(2026, 6, 10))
 
@@ -101,32 +97,26 @@ def test_sentinel_with_unrelated_real_row_does_not_leak_older_scoped_row(cache):
     suppress based on "any real row exists at all" — otherwise an unrelated
     real row from a different fetch leaks stale data for the requested scope.
     """
-    cache._conn.execute(
-        """
+    cache._conn.execute("""
         INSERT OR REPLACE INTO insider_cache
             (ticker, name, role, action_type, shares, price, transaction_date,
              ownership_before_pct, ownership_after_pct, fetched_date)
         VALUES ('BBCA', 'Old Seller', 'DIREKTUR', 'SELL', 1000, 5000, '2026-05-20',
                 0, 0, '2026-06-01')
-        """
-    )
-    cache._conn.execute(
-        """
+        """)
+    cache._conn.execute("""
         INSERT OR REPLACE INTO insider_cache
             (ticker, name, role, action_type, shares, price, transaction_date,
              ownership_before_pct, ownership_after_pct, fetched_date)
         VALUES ('BBCA', 'Buyer Latest', 'DIREKTUR', 'BUY', 2000, 5100, '2026-06-10',
                 0, 0, '2026-06-15')
-        """
-    )
-    cache._conn.execute(
-        """
+        """)
+    cache._conn.execute("""
         INSERT OR REPLACE INTO insider_cache
             (ticker, name, role, action_type, shares, price, transaction_date,
              ownership_before_pct, ownership_after_pct, fetched_date)
         VALUES ('BBCA', '__NONE__', '', 'NONE', 0, 0, '1970-01-01', 0, 0, '2026-06-15')
-        """
-    )
+        """)
 
     results = cache.read(
         "BBCA",
@@ -140,33 +130,27 @@ def test_sentinel_with_unrelated_real_row_does_not_leak_older_scoped_row(cache):
 
 
 def test_as_of_date_returns_only_latest_eligible_snapshot(cache):
-    cache._conn.execute(
-        """
+    cache._conn.execute("""
         INSERT OR REPLACE INTO insider_cache
             (ticker, name, role, action_type, shares, price, transaction_date,
              ownership_before_pct, ownership_after_pct, fetched_date)
         VALUES ('BBCA', 'Jane Doe', 'DIREKTUR', 'BUY', 1000, 5000, '2026-05-20',
                 0, 0, '2026-06-01')
-        """
-    )
-    cache._conn.execute(
-        """
+        """)
+    cache._conn.execute("""
         INSERT OR REPLACE INTO insider_cache
             (ticker, name, role, action_type, shares, price, transaction_date,
              ownership_before_pct, ownership_after_pct, fetched_date)
         VALUES ('BBCA', 'Jane Doe', 'DIREKTUR', 'BUY', 2000, 5100, '2026-05-20',
                 0, 0, '2026-06-15')
-        """
-    )
-    cache._conn.execute(
-        """
+        """)
+    cache._conn.execute("""
         INSERT OR REPLACE INTO insider_cache
             (ticker, name, role, action_type, shares, price, transaction_date,
              ownership_before_pct, ownership_after_pct, fetched_date)
         VALUES ('BBCA', 'Jane Doe', 'DIREKTUR', 'BUY', 3000, 5200, '2026-05-20',
                 0, 0, '2026-07-01')
-        """
-    )
+        """)
 
     results = cache.read("BBCA", _WIDE_FROM, _WIDE_TO, "ALL", as_of_date=date(2026, 6, 20))
 
@@ -177,8 +161,7 @@ def test_as_of_date_returns_only_latest_eligible_snapshot(cache):
 def test_legacy_schema_migration_preserves_rows(tmp_path):
     db_path = tmp_path / "legacy.db"
     with sqlite3.connect(db_path) as conn:
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE insider_cache (
                 ticker                TEXT NOT NULL,
                 name                  TEXT NOT NULL DEFAULT '',
@@ -192,17 +175,14 @@ def test_legacy_schema_migration_preserves_rows(tmp_path):
                 fetched_date          TEXT NOT NULL,
                 PRIMARY KEY (ticker, name, transaction_date, action_type)
             )
-            """
-        )
-        conn.execute(
-            """
+            """)
+        conn.execute("""
             INSERT INTO insider_cache
                 (ticker, name, role, action_type, shares, price, transaction_date,
                  ownership_before_pct, ownership_after_pct, fetched_date)
             VALUES ('BBCA', 'Jane Doe', 'DIREKTUR', 'BUY', 1000, 5000,
                     '2026-05-20', 0, 0, '2026-06-01')
-            """
-        )
+            """)
 
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -233,7 +213,5 @@ def test_is_fresh_true_for_today_and_false_for_stale(cache):
     cache.write("BBCA", [_txn()])
     assert cache.is_fresh("BBCA") is True
 
-    cache._conn.execute(
-        "UPDATE insider_cache SET fetched_date='2020-01-01' WHERE ticker='BBCA'"
-    )
+    cache._conn.execute("UPDATE insider_cache SET fetched_date='2020-01-01' WHERE ticker='BBCA'")
     assert cache.is_fresh("BBCA") is False

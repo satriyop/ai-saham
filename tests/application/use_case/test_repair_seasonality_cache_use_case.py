@@ -81,9 +81,7 @@ def _clock() -> str:
 
 
 def test_dry_run_reports_invalid_rows_and_does_not_call_repairer():
-    reader = _FakeReader(
-        RawSeasonalityCacheObservation(exists=True, rows=(_row(source=None),))
-    )
+    reader = _FakeReader(RawSeasonalityCacheObservation(exists=True, rows=(_row(source=None),)))
     repairer = _FakeRepairer()
 
     response = RepairSeasonalityCacheUseCase(
@@ -103,9 +101,7 @@ def test_dry_run_reports_invalid_rows_and_does_not_call_repairer():
 
 
 def test_dry_run_is_default():
-    reader = _FakeReader(
-        RawSeasonalityCacheObservation(exists=True, rows=(_row(source=None),))
-    )
+    reader = _FakeReader(RawSeasonalityCacheObservation(exists=True, rows=(_row(source=None),)))
     repairer = _FakeRepairer()
 
     response = RepairSeasonalityCacheUseCase(
@@ -171,9 +167,7 @@ def test_apply_calls_quarantine_and_delete_with_invalid_rows():
 
 
 def test_apply_reuses_repair_run_id_in_response():
-    reader = _FakeReader(
-        RawSeasonalityCacheObservation(exists=True, rows=(_row(source=None),))
-    )
+    reader = _FakeReader(RawSeasonalityCacheObservation(exists=True, rows=(_row(source=None),)))
     repairer = _FakeRepairer()
 
     response = RepairSeasonalityCacheUseCase(
@@ -231,9 +225,7 @@ def test_missing_table_returns_fail_no_mutation():
 
 
 def test_no_invalid_rows_returns_pass():
-    reader = _FakeReader(
-        RawSeasonalityCacheObservation(exists=True, rows=(_row(),))
-    )
+    reader = _FakeReader(RawSeasonalityCacheObservation(exists=True, rows=(_row(),)))
     repairer = _FakeRepairer()
 
     response = RepairSeasonalityCacheUseCase(
@@ -249,9 +241,7 @@ def test_no_invalid_rows_returns_pass():
 
 
 def test_no_invalid_rows_dry_run_also_returns_pass():
-    reader = _FakeReader(
-        RawSeasonalityCacheObservation(exists=True, rows=(_row(),))
-    )
+    reader = _FakeReader(RawSeasonalityCacheObservation(exists=True, rows=(_row(),)))
     repairer = _FakeRepairer()
 
     response = RepairSeasonalityCacheUseCase(
@@ -302,9 +292,7 @@ def test_reason_counts_tally_across_rows():
 
 
 def test_response_to_dict_includes_all_required_keys():
-    reader = _FakeReader(
-        RawSeasonalityCacheObservation(exists=True, rows=(_row(source=None),))
-    )
+    reader = _FakeReader(RawSeasonalityCacheObservation(exists=True, rows=(_row(source=None),)))
     repairer = _FakeRepairer()
 
     response = RepairSeasonalityCacheUseCase(

@@ -50,5 +50,6 @@ class RecordPreOpenPaperOutcomeUseCase:
             notes=request.notes,
         )
         return RecordPreOpenPaperOutcomeResponse(
-            updated=updated, outcome_r=outcome_r,
+            updated=updated,
+            outcome_r=outcome_r,
         )

@@ -24,9 +24,7 @@ from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarket
 def compute(
     indicator: Annotated[
         str,
-        typer.Argument(
-            help="Indicator name (SMA, RSI, ATR, or custom formula)"
-        ),
+        typer.Argument(help="Indicator name (SMA, RSI, ATR, or custom formula)"),
     ],
     ticker: Annotated[str, typer.Argument(help="Stock ticker symbol (e.g., BBCA)")],
     period: Annotated[

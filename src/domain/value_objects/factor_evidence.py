@@ -82,13 +82,9 @@ class FactorEvidence:
 
     def __post_init__(self) -> None:
         if not (0.0 <= self.strength <= 1.0):
-            raise ValueError(
-                f"FactorEvidence strength must be 0.0–1.0, got {self.strength}"
-            )
+            raise ValueError(f"FactorEvidence strength must be 0.0–1.0, got {self.strength}")
         if not (0.0 <= self.confidence <= 1.0):
-            raise ValueError(
-                f"FactorEvidence confidence must be 0.0–1.0, got {self.confidence}"
-            )
+            raise ValueError(f"FactorEvidence confidence must be 0.0–1.0, got {self.confidence}")
         for entry in self.raw_fields:
             if not (isinstance(entry, tuple) and len(entry) == 2):
                 raise ValueError(
@@ -97,8 +93,7 @@ class FactorEvidence:
             key, value = entry
             if not (isinstance(key, str) and isinstance(value, str)):
                 raise ValueError(
-                    f"FactorEvidence raw_fields entries must be 2-tuples of strings, "
-                    f"got {entry!r}"
+                    f"FactorEvidence raw_fields entries must be 2-tuples of strings, got {entry!r}"
                 )
 
     def to_dict(self) -> dict:

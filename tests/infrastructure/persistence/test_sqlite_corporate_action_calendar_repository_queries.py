@@ -179,7 +179,9 @@ class TestGetEventsForUniverse:
                 ),
             ]
         )
-        results = repo.get_events_for_universe(("BBCA", "BBRI"), date(2026, 7, 1), date(2026, 7, 31))
+        results = repo.get_events_for_universe(
+            ("BBCA", "BBRI"), date(2026, 7, 1), date(2026, 7, 31)
+        )
         tickers = {r.ticker for r in results}
         assert tickers == {"BBCA", "BBRI"}
 
@@ -194,7 +196,12 @@ class TestGetEventsForUniverse:
 
     def test_ticker_case_insensitivity(self, repo):
         repo.save_events(
-            [_event(ticker="BBCA", dates=(_date_row(CorporateActionDateRole.EX_DATE, date(2026, 7, 15)),))]
+            [
+                _event(
+                    ticker="BBCA",
+                    dates=(_date_row(CorporateActionDateRole.EX_DATE, date(2026, 7, 15)),),
+                )
+            ]
         )
         results = repo.get_events_for_universe(("bbca",), date(2026, 7, 1), date(2026, 7, 31))
         assert len(results) == 1
@@ -213,7 +220,9 @@ class TestGetEventsByDateRole:
         )
         assert len(results) == 1
 
-    def test_role_matches_but_date_outside_window_excludes_event_even_if_other_role_inside(self, repo):
+    def test_role_matches_but_date_outside_window_excludes_event_even_if_other_role_inside(
+        self, repo
+    ):
         """Contrast with ticker/universe query semantics: here matching is on
         (role, date) pair, not just any date row of the event. An event whose
         EX_DATE is outside the window but whose CUM_DATE is inside must NOT

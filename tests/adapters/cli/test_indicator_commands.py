@@ -55,7 +55,8 @@ class TestCreateIndicator:
         result = runner.invoke(
             app,
             [
-                "indicator", "create",
+                "indicator",
+                "create",
                 "smoothed RSI with 14 period",
                 "--name",
                 "SMOOTH_RSI",
@@ -75,7 +76,8 @@ class TestCreateIndicator:
         runner.invoke(
             app,
             [
-                "indicator", "create",
+                "indicator",
+                "create",
                 "14-day RSI",
                 "--name",
                 "MY_RSI",
@@ -96,7 +98,8 @@ class TestCreateIndicator:
         runner.invoke(
             app,
             [
-                "indicator", "create",
+                "indicator",
+                "create",
                 "14-day RSI",
                 "--name",
                 "MY_RSI",
@@ -115,7 +118,8 @@ class TestCreateIndicator:
         result = runner.invoke(
             app,
             [
-                "indicator", "create",
+                "indicator",
+                "create",
                 "simple moving average",
                 "--provider",
                 "mock",
@@ -132,7 +136,8 @@ class TestCreateIndicator:
         result = runner.invoke(
             app,
             [
-                "indicator", "create",
+                "indicator",
+                "create",
                 "predict tomorrow price",  # mock returns UNSUPPORTED
                 "--provider",
                 "mock",
@@ -245,7 +250,14 @@ class TestDeleteIndicator:
         """Should handle non-existent formula."""
         result = runner.invoke(
             app,
-            ["indicator", "delete", "NONEXISTENT", "--force", "--formulas-file", str(formulas_file)],
+            [
+                "indicator",
+                "delete",
+                "NONEXISTENT",
+                "--force",
+                "--formulas-file",
+                str(formulas_file),
+            ],
         )
 
         assert result.exit_code == 1

@@ -166,9 +166,7 @@ class StockbitCompanyProfileProvider(CompanyProfileProvider, StockbitCachingProv
         require_fresh: bool = True,
     ) -> CompanyProfile | None:
         """Public cache-only read. Never fetches from network."""
-        return self._read_cache(
-            ticker, as_of_date=as_of_date, require_fresh=require_fresh
-        )
+        return self._read_cache(ticker, as_of_date=as_of_date, require_fresh=require_fresh)
 
     def _read_cache(
         self,
@@ -289,14 +287,12 @@ def _rebuild_company_profile_cache_if_needed(sqlite_conn: sqlite3.Connection) ->
         return
     sqlite_conn.execute("ALTER TABLE company_profile_cache RENAME TO company_profile_cache_old")
     sqlite_conn.execute(_CREATE_TABLE)
-    sqlite_conn.execute(
-        """
+    sqlite_conn.execute("""
         INSERT INTO company_profile_cache
             (ticker, fetched_date, background, listing_board, ipo_date, ipo_price,
              ipo_amount, website, email, office_address)
         SELECT ticker, fetched_date, background, listing_board, ipo_date, ipo_price,
                ipo_amount, website, email, office_address
         FROM company_profile_cache_old
-        """
-    )
+        """)
     sqlite_conn.execute("DROP TABLE company_profile_cache_old")

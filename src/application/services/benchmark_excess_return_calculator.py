@@ -52,9 +52,7 @@ class BenchmarkExcessReturnCalculator:
         benchmark: str = "IHSG",
     ) -> BenchmarkExcessReturnResult:
         ticker_closes, ticker_conflict = self._closes_by_date(ticker_candles, as_of_date)
-        benchmark_closes, benchmark_conflict = self._closes_by_date(
-            benchmark_candles, as_of_date
-        )
+        benchmark_closes, benchmark_conflict = self._closes_by_date(benchmark_candles, as_of_date)
         conflict_reason = ticker_conflict or benchmark_conflict
 
         windows: dict[int, BenchmarkExcessReturn] = {}
@@ -134,9 +132,7 @@ class BenchmarkExcessReturnCalculator:
                 common_session_count=common_session_count,
             )
 
-        ticker_return_pct = float(
-            (ticker_now - ticker_then) / ticker_then * Decimal("100")
-        )
+        ticker_return_pct = float((ticker_now - ticker_then) / ticker_then * Decimal("100"))
         benchmark_return_pct = float(
             (benchmark_now - benchmark_then) / benchmark_then * Decimal("100")
         )

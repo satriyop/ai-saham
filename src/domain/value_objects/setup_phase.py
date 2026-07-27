@@ -57,9 +57,7 @@ class SetupPhaseHistoryEntry:
             age_sessions=int(data.get("age_sessions", 0)),
             strength=float(data.get("strength", 0.0)),
             reasons=tuple(str(v) for v in data.get("reasons") or ()),
-            sequence_valid_after_transition=data.get(
-                "sequence_valid_after_transition"
-            ),
+            sequence_valid_after_transition=data.get("sequence_valid_after_transition"),
         )
 
 
@@ -114,8 +112,7 @@ class SetupPhaseSnapshot:
         return cls(
             current_phase=SetupPhaseState(data["current_phase"]),
             previous_phase=(
-                SetupPhaseState(data["previous_phase"])
-                if data.get("previous_phase") else None
+                SetupPhaseState(data["previous_phase"]) if data.get("previous_phase") else None
             ),
             phase_age_sessions=int(data.get("phase_age_sessions", 0)),
             phase_detection_strength=float(data.get("phase_detection_strength", 0.0)),
@@ -125,10 +122,7 @@ class SetupPhaseSnapshot:
             unavailable_evidence_reasons=tuple(
                 str(v) for v in data.get("unavailable_evidence_reasons") or ()
             ),
-            history=tuple(
-                SetupPhaseHistoryEntry.from_dict(v)
-                for v in data.get("history") or ()
-            ),
+            history=tuple(SetupPhaseHistoryEntry.from_dict(v) for v in data.get("history") or ()),
             volume_dry_up_ratio=_optional_float(data.get("volume_dry_up_ratio")),
             volume_expansion_ratio=_optional_float(data.get("volume_expansion_ratio")),
             volume_dry_up_confirmed=data.get("volume_dry_up_confirmed"),

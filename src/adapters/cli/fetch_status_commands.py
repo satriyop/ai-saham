@@ -60,7 +60,9 @@ def status(
 
     for p in response.providers:
         warning = "key" in p.label or "expired" in p.label
-        icon = "[green]✅[/green]" if p.ok else ("[yellow]⚠[/yellow]" if warning else "[red]✗[/red]")
+        icon = (
+            "[green]✅[/green]" if p.ok else ("[yellow]⚠[/yellow]" if warning else "[red]✗[/red]")
+        )
         ms_str = f"{p.ms}s" if p.ms else ""
         health_table.add_row(p.name, icon, p.label, ms_str)
 
@@ -111,8 +113,6 @@ def status(
         else:
             status_str = "[bright_black]—[/bright_black]"
 
-        freshness_table.add_row(
-            item.table, item.source, item.latest, count_str, status_str
-        )
+        freshness_table.add_row(item.table, item.source, item.latest, count_str, status_str)
 
     console.print(freshness_table)

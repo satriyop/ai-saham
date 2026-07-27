@@ -16,20 +16,24 @@ from datetime import datetime
 @dataclass(frozen=True)
 class CompanyProfile:
     ticker: str
-    background: str | None          # company description (Indonesian)
-    listing_board: str | None       # "Papan Utama" | "Papan Pengembangan" | "Papan Akselerasi"
-    ipo_date: str | None            # "31 May 2000" (kept as-is — locale format)
-    ipo_price: int | None           # IDR per share at IPO
-    ipo_amount: str | None          # e.g. "927 B" (total IPO proceeds)
+    background: str | None  # company description (Indonesian)
+    listing_board: str | None  # "Papan Utama" | "Papan Pengembangan" | "Papan Akselerasi"
+    ipo_date: str | None  # "31 May 2000" (kept as-is — locale format)
+    ipo_price: int | None  # IDR per share at IPO
+    ipo_amount: str | None  # e.g. "927 B" (total IPO proceeds)
     website: str | None
-    email: str | None               # primary investor relations email
+    email: str | None  # primary investor relations email
     office_address: str | None
     fetched_at: datetime | None = None
 
     def to_dict(self) -> dict:
         d: dict = {"fetched_at": self.fetched_at.isoformat() if self.fetched_at else None}
         if self.background is not None:
-            d["background"] = self.background[:200] + "..." if len(self.background or "") > 200 else self.background
+            d["background"] = (
+                self.background[:200] + "..."
+                if len(self.background or "") > 200
+                else self.background
+            )
         if self.listing_board is not None:
             d["listing_board"] = self.listing_board
         if self.ipo_date is not None:

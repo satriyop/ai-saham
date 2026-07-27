@@ -51,20 +51,13 @@ def _add_detail_row(
 
 
 def _evidence_factor_rows(
-    candidate: AccumulationCandidate,
-    display_config: AccumulationDisplayConfig
+    candidate: AccumulationCandidate, display_config: AccumulationDisplayConfig
 ) -> list[tuple[str, ...]]:
-    bd = (
-        candidate.accum_score_breakdown.breakdown_dict
-        if candidate.accum_score_breakdown else {}
-    )
+    bd = candidate.accum_score_breakdown.breakdown_dict if candidate.accum_score_breakdown else {}
     rsi = f"{candidate.rsi:.1f}" if candidate.rsi is not None else "-"
     flow = f"{candidate.avg_flow_ratio:+.1f}%" if candidate.avg_flow_ratio is not None else "-"
     vwap = format_disc_pct_plain(candidate.vwap_discount_pct)
-    bb = (
-        f"{candidate.bb_width_pctile * 100:.0f}%"
-        if candidate.bb_width_pctile is not None else "-"
-    )
+    bb = f"{candidate.bb_width_pctile * 100:.0f}%" if candidate.bb_width_pctile is not None else "-"
     bb_scored = display_config.accum_score_policy.bb_squeeze.enabled
 
     def _pts(key: str) -> str:
@@ -72,10 +65,7 @@ def _evidence_factor_rows(
         return f"{value:.1f}" if value is not None else "—"
 
     bb_pts = _pts("bb") if bb_scored else "—"
-    bb_means = (
-        "Volatility squeeze" if bb_scored
-        else "Setup compression diagnostic, not flow score"
-    )
+    bb_means = "Volatility squeeze" if bb_scored else "Setup compression diagnostic, not flow score"
     return [
         (
             _pts("cons"),
@@ -183,9 +173,7 @@ def _signal_flow_factor_rows(
             return format_disc_pct_plain(candidate.vwap_discount_pct)
         if key == "flow":
             return (
-                f"{candidate.avg_flow_ratio:+.1f}%"
-                if candidate.avg_flow_ratio is not None
-                else "-"
+                f"{candidate.avg_flow_ratio:+.1f}%" if candidate.avg_flow_ratio is not None else "-"
             )
         if key == "inst":
             return _format_bci_status(candidate)
@@ -384,13 +372,14 @@ def build_enrichment_details_table(
             has_detail_rows = True
 
         missing = [
-            label for label, val in [
-                ("seasonal",  c.seasonal_edge),
-                ("analyst",   c.analyst_consensus),
-                ("holding",   c.shareholding),
-                ("bandar",    c.bandar_detector),
-                ("fundam",    c.fundamentals),
-                ("fwd_eps",   c.forward_estimates),
+            label
+            for label, val in [
+                ("seasonal", c.seasonal_edge),
+                ("analyst", c.analyst_consensus),
+                ("holding", c.shareholding),
+                ("bandar", c.bandar_detector),
+                ("fundam", c.fundamentals),
+                ("fwd_eps", c.forward_estimates),
             ]
             if val is None
         ]

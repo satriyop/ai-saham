@@ -290,7 +290,9 @@ class TestBonusParser:
             CorporateActionDateRole.RECORDING_DATE,
             CorporateActionDateRole.PAYMENT_DATE,
         }
-        payment_row = next(d for d in ev.dates if d.date_role == CorporateActionDateRole.PAYMENT_DATE)
+        payment_row = next(
+            d for d in ev.dates if d.date_role == CorporateActionDateRole.PAYMENT_DATE
+        )
         assert payment_row.event_date.isoformat() == "2026-07-30"
 
     def test_ratios_reuse_stocksplit_old_new_fields(self):

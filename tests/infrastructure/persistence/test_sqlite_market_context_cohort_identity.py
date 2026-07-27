@@ -98,8 +98,7 @@ def test_cohort_metadata_persisted_on_save(tmp_path):
 def test_legacy_schema_migrates_with_empty_cohort(tmp_path):
     db_path = tmp_path / "legacy.db"
     with sqlite3.connect(db_path) as conn:
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE market_context_snapshots (
                 as_of_date TEXT NOT NULL PRIMARY KEY,
                 regime TEXT NOT NULL,
@@ -115,15 +114,12 @@ def test_legacy_schema_migrates_with_empty_cohort(tmp_path):
                 days_in_regime INTEGER,
                 transition_warning TEXT
             )
-            """
-        )
-        conn.execute(
-            """
+            """)
+        conn.execute("""
             INSERT INTO market_context_snapshots VALUES
             ('2024-01-01', 'RISK_ON', 0.7, 1.0, 0, '[]', NULL, NULL,
              '2024-01-01T00:00:00', NULL, NULL, NULL, NULL)
-            """
-        )
+            """)
         conn.commit()
 
     repo = SQLiteMarketContextRepository(db_path)

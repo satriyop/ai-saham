@@ -82,10 +82,12 @@ def _add_signal_factor_buckets(
     dimension: str = "signal_factor_bucket",
 ) -> None:
     for name, value in signal_breakdown:
-        buckets.append((
-            dimension,
-            f"{name}:{_score_bucket(value, bucket_policy)}",
-        ))
+        buckets.append(
+            (
+                dimension,
+                f"{name}:{_score_bucket(value, bucket_policy)}",
+            )
+        )
 
 
 def _score_bucket(

@@ -94,10 +94,10 @@ class MarketContextEngine:
 
         cfg = self._config
 
-        vix_candles      = self._fetch(cfg.vix.ticker, start, as_of)
-        eido_candles     = self._fetch(cfg.eido.ticker, start, as_of)
-        ihsg_candles     = self._fetch(cfg.idx_trend.benchmark_ticker, start, as_of)
-        usd_idr_candles  = self._fetch(cfg.usd_idr.ticker, start, as_of)
+        vix_candles = self._fetch(cfg.vix.ticker, start, as_of)
+        eido_candles = self._fetch(cfg.eido.ticker, start, as_of)
+        ihsg_candles = self._fetch(cfg.idx_trend.benchmark_ticker, start, as_of)
+        usd_idr_candles = self._fetch(cfg.usd_idr.ticker, start, as_of)
 
         universe_candles: dict = {}
         if cfg.idx_breadth.enabled and self._universe:
@@ -134,6 +134,7 @@ class MarketContextEngine:
         # ── Pass 2: rebuild context with correct stability fields ─────────────
         if days_in is not None or stability is not None:
             import dataclasses as _dc
+
             transition_warning: str | None = None
             if stability == "TRANSITIONING":
                 transition_warning = (
@@ -321,7 +322,8 @@ class MarketContextEngine:
             except Exception as exc:
                 logger.debug(
                     "MarketContextEngine: failed to backfill forward labels for %s: %s",
-                    prior_candle.date, exc,
+                    prior_candle.date,
+                    exc,
                 )
 
     def _persist(self, context: "MarketContext") -> None:

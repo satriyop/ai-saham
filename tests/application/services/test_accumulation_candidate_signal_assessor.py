@@ -15,6 +15,11 @@ from src.application.use_case.assess_source_availability_use_case import (
     AssessSourceAvailabilityUseCase,
 )
 from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
+from src.domain.value_objects.accum_score_breakdown import (
+    AccumScoreBreakdown,
+    ForeignFlowComponentScore,
+    ForeignFlowComponentStatus,
+)
 from src.domain.value_objects.canonical_signal_evidence_input import (
     BrokerDailyFlowRowIdentity,
     BrokerSummaryRowIdentity,
@@ -24,11 +29,6 @@ from src.domain.value_objects.factor_evidence import Direction, Freshness
 from src.domain.value_objects.flow_confirmation_evidence import (
     FlowConfirmationEvidence,
     FlowSubSignal,
-)
-from src.domain.value_objects.accum_score_breakdown import (
-    ForeignFlowComponentScore,
-    ForeignFlowComponentStatus,
-    AccumScoreBreakdown,
 )
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
 
@@ -91,9 +91,7 @@ def _built_flow_evidence():
     )
     provenance = FlowProvenance(
         ticker="BBCA",
-        broker_summary_rows=(
-            BrokerSummaryRowIdentity(ticker="BBCA", date=today, source="test"),
-        ),
+        broker_summary_rows=(BrokerSummaryRowIdentity(ticker="BBCA", date=today, source="test"),),
         broker_daily_flow_rows=(
             BrokerDailyFlowRowIdentity(ticker="BBCA", date=today, broker_code="AK", source="test"),
         ),
@@ -160,6 +158,7 @@ def _make_assessor(
     from src.application.services.accumulation_candidate_signal_assessor import (
         AccumulationCandidateSignalAssessor,
     )
+
     signal_engine = MagicMock()
     signal_engine.evaluate_accumulation_discovery.return_value.assessment.score = signal_score
 
@@ -173,9 +172,7 @@ def _make_assessor(
     evidence_builder.detect_candidate_setup_phase.return_value = setup_phase
 
     accum_score_uc = MagicMock()
-    accum_score_uc.execute.return_value.evidence = _foreign_flow_breakdown(
-        accum_score
-    )
+    accum_score_uc.execute.return_value.evidence = _foreign_flow_breakdown(accum_score)
 
     return AccumulationCandidateSignalAssessor(
         signal_engine=signal_engine,
@@ -356,15 +353,17 @@ def test_setup_phase_assigned_once():
 
 # --- Screen assessor fallback/error tests (Step 5 tests) --------------------------
 
+
 def _make_assessor_real_engine(
     flow_builder_raises: bool = False,
     setup_phase: object = None,
     accum_score: float = 50.0,
 ):
-    from src.application.services.signal_engine import SignalEngine
     from src.application.services.accumulation_candidate_signal_assessor import (
         AccumulationCandidateSignalAssessor,
     )
+    from src.application.services.signal_engine import SignalEngine
+
     signal_engine = SignalEngine()
 
     flow_builder = MagicMock()
@@ -377,9 +376,7 @@ def _make_assessor_real_engine(
     evidence_builder.detect_candidate_setup_phase.return_value = setup_phase
 
     accum_score_uc = MagicMock()
-    accum_score_uc.execute.return_value.evidence = _foreign_flow_breakdown(
-        accum_score
-    )
+    accum_score_uc.execute.return_value.evidence = _foreign_flow_breakdown(accum_score)
 
     return AccumulationCandidateSignalAssessor(
         signal_engine=signal_engine,
@@ -393,7 +390,7 @@ def test_flow_evidence_with_missing_availability_reaches_signal_engine():
     # 13. Flow evidence plus missing availability use case still reaches SignalEngine.
     assessor = _make_assessor()
 
-    result = assessor.assess(
+    assessor.assess(
         _candidate(),
         request=_request(),
         as_of_date=date.today(),
@@ -413,6 +410,7 @@ def test_flow_evidence_with_missing_availability_reaches_signal_engine():
     flow_assessments = canonical_evidence.flow.availability.assessments
     assert len(flow_assessments) == 2
     from src.domain.value_objects.source_availability import SourceAvailabilityStatus
+
     assert flow_assessments[0].status == SourceAvailabilityStatus.UNKNOWN
     assert flow_assessments[1].status == SourceAvailabilityStatus.UNKNOWN
 
@@ -453,7 +451,7 @@ def test_operational_availability_failure_still_passes_flow_evidence():
         def execute(self, **kwargs):
             raise RuntimeError("Database error")
 
-    result = assessor.assess(
+    assessor.assess(
         _candidate(),
         request=_request(),
         as_of_date=date.today(),
@@ -472,6 +470,7 @@ def test_operational_availability_failure_still_passes_flow_evidence():
     flow_assessments = canonical_evidence.flow.availability.assessments
     assert len(flow_assessments) == 2
     from src.domain.value_objects.source_availability import SourceAvailabilityStatus
+
     assert flow_assessments[0].status == SourceAvailabilityStatus.UNKNOWN
     assert flow_assessments[1].status == SourceAvailabilityStatus.UNKNOWN
 
@@ -535,6 +534,7 @@ def test_flow_builder_operational_failure_results_in_missing_flow_evidence():
 def test_flow_builder_value_error_propagates():
     # 17. Flow builder ValueError still propagates.
     import pytest
+
     assessor = _make_assessor()
     assessor._flow_confirmation_builder.build.side_effect = ValueError("Contract error")
 
@@ -558,14 +558,11 @@ def test_family_resolved_once_and_phase_detected_once_before_signal_engine():
     detect_candidate_setup_phase are each called exactly once, both complete
     before SignalEngine.evaluate_accumulation_discovery, and SignalEngine receives the
     exact same family and phase objects — not value-equivalent copies."""
-    from src.application.services.primary_setup_family_resolver import (
-        PrimarySetupFamilyResult,
-    )
     from src.application.services.accumulation_candidate_signal_assessor import (
         AccumulationCandidateSignalAssessor,
     )
-    from src.domain.value_objects.accum_score_breakdown import (
-        AccumScoreBreakdown,
+    from src.application.services.primary_setup_family_resolver import (
+        PrimarySetupFamilyResult,
     )
 
     call_order: list[str] = []
@@ -720,8 +717,8 @@ def test_unknown_family_flow_only_attached_required_can_clear_authority_floor():
     from src.application.services.primary_setup_family_resolver import (
         PrimarySetupFamilyResult,
     )
-    from src.domain.value_objects.signal_assessment import EntryQuality
     from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
+    from src.domain.value_objects.signal_assessment import EntryQuality
 
     # Use a proven weekday (never Sat/Sun) for every date in this test so the
     # availability chain resolves CURRENT/authoritative regardless of which
@@ -738,9 +735,7 @@ def test_unknown_family_flow_only_attached_required_can_clear_authority_floor():
         resolution_source="test_fixture",
         notes=(),
     )
-    calendar = KnownTradingSessionCalendar(
-        sessions=(day,), coverage_start=day, coverage_end=day
-    )
+    calendar = KnownTradingSessionCalendar(sessions=(day,), coverage_start=day, coverage_end=day)
     source_availability_use_case = AssessSourceAvailabilityUseCase(calendar=calendar)
 
     strong_signal = FlowSubSignal(
@@ -765,9 +760,7 @@ def test_unknown_family_flow_only_attached_required_can_clear_authority_floor():
     )
     provenance = FlowProvenance(
         ticker="BBCA",
-        broker_summary_rows=(
-            BrokerSummaryRowIdentity(ticker="BBCA", date=day, source="test"),
-        ),
+        broker_summary_rows=(BrokerSummaryRowIdentity(ticker="BBCA", date=day, source="test"),),
         broker_daily_flow_rows=(
             BrokerDailyFlowRowIdentity(ticker="BBCA", date=day, broker_code="AK", source="test"),
         ),

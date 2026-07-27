@@ -26,10 +26,12 @@ def derive_forward_pe(
 @dataclass(frozen=True)
 class ForwardEstimates:
     ticker: str
-    forward_eps_1y: float | None       # next-year EPS estimate (IDR per share)
-    revenue_forward_1y: float | None   # next-year revenue estimate (IDR, billions "B" suffix stripped)
-    current_price: float | None        # close price at time of estimate fetch
-    forward_pe: float | None           # current_price / forward_eps_1y
+    forward_eps_1y: float | None  # next-year EPS estimate (IDR per share)
+    revenue_forward_1y: (
+        float | None
+    )  # next-year revenue estimate (IDR, billions "B" suffix stripped)
+    current_price: float | None  # close price at time of estimate fetch
+    forward_pe: float | None  # current_price / forward_eps_1y
     fetched_at: datetime | None = None
 
     @classmethod

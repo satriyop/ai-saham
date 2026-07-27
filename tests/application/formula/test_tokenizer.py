@@ -112,9 +112,7 @@ class TestTokenize:
         """Test tokenizing parenthesized expressions."""
         tokens = list(tokenize("(SMA(CLOSE, 10) + SMA(CLOSE, 20)) / 2"))
         # Count tokens (should include all parens)
-        paren_count = sum(
-            1 for t in tokens if t.type in (TokenType.LPAREN, TokenType.RPAREN)
-        )
+        paren_count = sum(1 for t in tokens if t.type in (TokenType.LPAREN, TokenType.RPAREN))
         assert paren_count == 6  # 3 pairs
 
     def test_whitespace_handling(self) -> None:

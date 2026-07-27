@@ -2,7 +2,6 @@
 
 from datetime import date
 from decimal import Decimal
-from unittest.mock import patch
 
 import pytest
 
@@ -18,10 +17,10 @@ from src.domain.entities.candle import Candle
 from src.domain.value_objects.institutional_accumulation_evidence import EvidenceStatus
 from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
 
-
 # --------------------------------------------------------------------------- #
 # Helpers
 # --------------------------------------------------------------------------- #
+
 
 def _candle(ticker: str, dt: str, close: float) -> Candle:
     return Candle(
@@ -38,9 +37,9 @@ def _candle(ticker: str, dt: str, close: float) -> Candle:
 def _make_candles(ticker: str, closes: list[float]) -> list[Candle]:
     base = date(2026, 5, 1)
     from datetime import timedelta
+
     return [
-        _candle(ticker, (base + timedelta(days=i)).isoformat(), c)
-        for i, c in enumerate(closes)
+        _candle(ticker, (base + timedelta(days=i)).isoformat(), c) for i, c in enumerate(closes)
     ]
 
 
@@ -61,6 +60,7 @@ def _default_config() -> SectorContextConfig:
 # --------------------------------------------------------------------------- #
 # Unit tests for pure helpers
 # --------------------------------------------------------------------------- #
+
 
 class TestComputeReturn:
     def test_basic_positive_return(self):
@@ -123,8 +123,8 @@ class TestClassifyRegime:
 
     def test_neutral_mixed_signals(self):
         result = _classify_regime(
-            sector_vs_ihsg_20d=0.02,   # sector outperforms
-            sector_breadth=0.40,       # but breadth is weak
+            sector_vs_ihsg_20d=0.02,  # sector outperforms
+            sector_breadth=0.40,  # but breadth is weak
             bullish_sector_vs_ihsg_min=0.01,
             bullish_breadth_min=0.55,
             bearish_sector_vs_ihsg_max=-0.01,
@@ -159,6 +159,7 @@ class TestClassifyRegime:
 # SectorContextEvidenceBuilder tests
 # --------------------------------------------------------------------------- #
 
+
 class TestSectorContextEvidenceBuilderBuild:
     def _make_builder(
         self,
@@ -166,7 +167,8 @@ class TestSectorContextEvidenceBuilderBuild:
     ) -> SectorContextEvidenceBuilder:
         return SectorContextEvidenceBuilder(
             config=_default_config(),
-            sector_universe_index=sector_index or {
+            sector_universe_index=sector_index
+            or {
                 "bank": ("BBCA", "BBRI", "BBNI", "BMRI", "BDMN"),
             },
         )
@@ -194,8 +196,7 @@ class TestSectorContextEvidenceBuilderBuild:
             sector=sector,
             ticker_candles=tuple(_make_candles(ticker, ticker_closes)),
             peer_candles={
-                peer: _make_candles(peer, closes)
-                for peer, closes in peer_closes.items()
+                peer: _make_candles(peer, closes) for peer, closes in peer_closes.items()
             },
             ihsg_20d_return=ihsg_20d_return,
         )
@@ -278,7 +279,7 @@ class TestSectorContextEvidenceBuilderBuild:
         builder = self._make_builder()
         request = self._make_request(
             peer_closes={
-                "BBRI": [100.0, 103.0],   # only 2 candles, below min_valid=5
+                "BBRI": [100.0, 103.0],  # only 2 candles, below min_valid=5
                 "BBNI": [100.0] * 10 + [105.0],  # valid
                 "BMRI": [100.0] * 10 + [104.0],  # valid
                 "BDMN": [100.0] * 10 + [103.0],  # valid

@@ -30,7 +30,7 @@ class CorporateActionEvent:
     """
 
     ticker: str
-    event_type: str        # normalised — use TYPE_* constants
+    event_type: str  # normalised — use TYPE_* constants
     ex_date: date | None = None
     cum_date: date | None = None
     record_date: date | None = None
@@ -40,15 +40,15 @@ class CorporateActionEvent:
     status: str = ""
 
     # Normalised event_type constants
-    TYPE_DIVIDEND     = "DIVIDEND"
+    TYPE_DIVIDEND = "DIVIDEND"
     TYPE_RIGHTS_ISSUE = "RIGHTS_ISSUE"
-    TYPE_RUPS         = "RUPS"
-    TYPE_SPLIT        = "SPLIT"
-    TYPE_BONUS        = "BONUS"
-    TYPE_WARRANT      = "WARRANT"
-    TYPE_IPO          = "IPO"
+    TYPE_RUPS = "RUPS"
+    TYPE_SPLIT = "SPLIT"
+    TYPE_BONUS = "BONUS"
+    TYPE_WARRANT = "WARRANT"
+    TYPE_IPO = "IPO"
     TYPE_TENDER_OFFER = "TENDER_OFFER"
-    TYPE_OTHER        = "OTHER"
+    TYPE_OTHER = "OTHER"
 
     @property
     def is_dividend(self) -> bool:

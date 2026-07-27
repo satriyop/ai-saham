@@ -216,16 +216,14 @@ def connect_learning_database(db_path: Path) -> sqlite3.Connection:
 def create_learning_schema(connection: sqlite3.Connection) -> None:
     """Create only the seven canonical tables and their indexes."""
 
-    connection.execute(
-        """
+    connection.execute("""
         CREATE TABLE IF NOT EXISTS _schema_migrations (
             namespace TEXT NOT NULL,
             version INTEGER NOT NULL,
             applied_at TEXT DEFAULT (datetime('now')),
             PRIMARY KEY (namespace, version)
         )
-        """
-    )
+        """)
     for statement in LEARNING_SCHEMA_STATEMENTS:
         connection.execute(statement)
     connection.execute(
@@ -266,9 +264,7 @@ def _immutable_insert(
     if existing is not None:
         if existing["artifact_digest"] == digest:
             return False
-        raise LearningContractError(
-            f"immutable artifact conflict for {table}.{artifact_id}"
-        )
+        raise LearningContractError(f"immutable artifact conflict for {table}.{artifact_id}")
     connection.execute(insert_sql, values)
     return True
 
@@ -545,9 +541,7 @@ class SQLiteLearningArtifactRepository:
             ).fetchone()
         return None if row is None else _load_json(row, _evaluation_from_dict)
 
-    def list_evaluations(
-        self, purpose: AssessmentPurpose
-    ) -> Sequence[LearningEvaluation]:
+    def list_evaluations(self, purpose: AssessmentPurpose) -> Sequence[LearningEvaluation]:
         with self._connect() as connection:
             rows = connection.execute(
                 """
@@ -568,8 +562,7 @@ class SQLiteLearningArtifactRepository:
                 artifact_id=artifact.proposal_id,
                 digest=artifact.artifact_digest,
                 insert_sql=(
-                    "INSERT INTO learning_policy_proposals "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                    "INSERT INTO learning_policy_proposals VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
                 ),
                 values=(
                     artifact.proposal_id,
@@ -595,12 +588,10 @@ class SQLiteLearningArtifactRepository:
 
     def list_proposals(self) -> Sequence[LearningPolicyProposal]:
         with self._connect() as connection:
-            rows = connection.execute(
-                """
+            rows = connection.execute("""
                 SELECT artifact_json FROM learning_policy_proposals
                 ORDER BY created_at, proposal_id
-                """
-            ).fetchall()
+                """).fetchall()
         return tuple(_load_json(row, _proposal_from_dict) for row in rows)
 
     def add_validation(self, artifact: LearningPolicyValidation) -> bool:
@@ -633,9 +624,7 @@ class SQLiteLearningArtifactRepository:
                 ),
             )
 
-    def get_validation_for_proposal(
-        self, proposal_id: str
-    ) -> LearningPolicyValidation | None:
+    def get_validation_for_proposal(self, proposal_id: str) -> LearningPolicyValidation | None:
         with self._connect() as connection:
             row = connection.execute(
                 """
@@ -648,12 +637,10 @@ class SQLiteLearningArtifactRepository:
 
     def list_validations(self) -> Sequence[LearningPolicyValidation]:
         with self._connect() as connection:
-            rows = connection.execute(
-                """
+            rows = connection.execute("""
                 SELECT artifact_json FROM learning_policy_validations
                 ORDER BY validated_at, validation_id
-                """
-            ).fetchall()
+                """).fetchall()
         return tuple(_load_json(row, _validation_from_dict) for row in rows)
 
     def add_application(self, artifact: LearningPolicyApplication) -> bool:
@@ -686,9 +673,7 @@ class SQLiteLearningArtifactRepository:
                 ),
             )
 
-    def get_application_for_proposal(
-        self, proposal_id: str
-    ) -> LearningPolicyApplication | None:
+    def get_application_for_proposal(self, proposal_id: str) -> LearningPolicyApplication | None:
         with self._connect() as connection:
             row = connection.execute(
                 """
@@ -701,10 +686,8 @@ class SQLiteLearningArtifactRepository:
 
     def list_applications(self) -> Sequence[LearningPolicyApplication]:
         with self._connect() as connection:
-            rows = connection.execute(
-                """
+            rows = connection.execute("""
                 SELECT artifact_json FROM learning_policy_applications
                 ORDER BY applied_at, application_id
-                """
-            ).fetchall()
+                """).fetchall()
         return tuple(_load_json(row, _application_from_dict) for row in rows)

@@ -28,9 +28,7 @@ def call_claude(api_key: str | None, system_prompt: str, user_prompt: str) -> st
     try:
         import anthropic
     except ImportError:
-        raise StrategyTranslatorError(
-            "anthropic package not installed. Run: pip install anthropic"
-        )
+        raise StrategyTranslatorError("anthropic package not installed. Run: pip install anthropic")
 
     try:
         client = anthropic.Anthropic(
@@ -63,9 +61,7 @@ def call_openai(api_key: str | None, system_prompt: str, user_prompt: str) -> st
     try:
         import openai
     except ImportError:
-        raise StrategyTranslatorError(
-            "openai package not installed. Run: pip install openai"
-        )
+        raise StrategyTranslatorError("openai package not installed. Run: pip install openai")
 
     try:
         client = openai.OpenAI(
@@ -101,8 +97,7 @@ def call_gemini(api_key: str | None, system_prompt: str, user_prompt: str) -> st
         import google.generativeai as genai
     except ImportError:
         raise StrategyTranslatorError(
-            "google-generativeai package not installed. "
-            "Run: pip install google-generativeai"
+            "google-generativeai package not installed. Run: pip install google-generativeai"
         )
 
     try:
@@ -165,9 +160,7 @@ def call_ollama(model: str | None, system_prompt: str, user_prompt: str) -> str:
     )
 
     try:
-        with urllib.request.urlopen(
-            req, timeout=STRATEGY_TRANSLATOR_TIMEOUT_SECONDS
-        ) as response:
+        with urllib.request.urlopen(req, timeout=STRATEGY_TRANSLATOR_TIMEOUT_SECONDS) as response:
             result = json.loads(response.read().decode("utf-8"))
 
         return result.get("message", {}).get("content", "")

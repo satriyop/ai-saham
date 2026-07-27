@@ -25,19 +25,14 @@ def test_swing_backtest_can_filter_entries_by_allowed_regimes():
     base = date(2026, 1, 1)
     signal_date = base + timedelta(days=24)
     exit_date = base + timedelta(days=25)
-    summaries = [
-        _summary("BBCA", base + timedelta(days=i), Decimal("110"))
-        for i in range(18, 25)
-    ]
+    summaries = [_summary("BBCA", base + timedelta(days=i), Decimal("110")) for i in range(18, 25)]
     benchmark_candles = [
-        _flat_candle("IHSG", base - timedelta(days=60 - i), Decimal(1000 + i))
-        for i in range(86)
+        _flat_candle("IHSG", base - timedelta(days=60 - i), Decimal(1000 + i)) for i in range(86)
     ]
     broker_repo = MockBrokerRepository(summaries)
-    market_repo = MockMarketRepository(
-        _base_candles("BBCA", base) + benchmark_candles
-    )
+    market_repo = MockMarketRepository(_base_candles("BBCA", base) + benchmark_candles)
     from src.domain.value_objects.market_context import MarketContext, MarketRegime
+
     fake_context = MarketContext(
         regime=MarketRegime.NEUTRAL,
         conviction=0.5,
@@ -59,25 +54,29 @@ def test_swing_backtest_can_filter_entries_by_allowed_regimes():
         broker_repository=broker_repo,
         market_repository=market_repo,
         rules_loader=FakeRulesLoader(),
-        market_context_provider=FakeMarketContextProvider({
-            signal_date: fake_context,
-            exit_date: fake_context_exit,
-        }),
+        market_context_provider=FakeMarketContextProvider(
+            {
+                signal_date: fake_context,
+                exit_date: fake_context_exit,
+            }
+        ),
         signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
-    response = use_case.execute(SwingBacktestRequest(
-        tickers=["BBCA"],
-        start_date=signal_date,
-        end_date=exit_date,
-        capital=Decimal("1000000"),
-        risk_pct=Decimal("0.01"),
-        max_positions=1,
-        min_net_buy_days=1,
-        cost_bps=Decimal("0"),
-        benchmark_ticker="IHSG",
-        allowed_regimes=("RISK_OFF",),
-    ))
+    response = use_case.execute(
+        SwingBacktestRequest(
+            tickers=["BBCA"],
+            start_date=signal_date,
+            end_date=exit_date,
+            capital=Decimal("1000000"),
+            risk_pct=Decimal("0.01"),
+            max_positions=1,
+            min_net_buy_days=1,
+            cost_bps=Decimal("0"),
+            benchmark_ticker="IHSG",
+            allowed_regimes=("RISK_OFF",),
+        )
+    )
 
     assert response.trade_count == 0
     assert response.skipped_by_regime == 1
@@ -92,10 +91,7 @@ def test_swing_backtest_provider_is_not_called_when_regime_is_not_requested():
     exit_date = base + timedelta(days=25)
 
     candles = _base_candles("BBCA", base)
-    summaries = [
-        _summary("BBCA", base + timedelta(days=i), Decimal("110"))
-        for i in range(18, 25)
-    ]
+    summaries = [_summary("BBCA", base + timedelta(days=i), Decimal("110")) for i in range(18, 25)]
 
     fake_context = MarketContext(
         regime=MarketRegime.NEUTRAL,
@@ -116,18 +112,20 @@ def test_swing_backtest_provider_is_not_called_when_regime_is_not_requested():
         signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
-    response = use_case.execute(SwingBacktestRequest(
-        tickers=["BBCA"],
-        start_date=signal_date,
-        end_date=exit_date,
-        capital=Decimal("1000000"),
-        risk_pct=Decimal("0.01"),
-        max_positions=1,
-        min_net_buy_days=1,
-        cost_bps=Decimal("0"),
-        include_regime=False,
-        allowed_regimes=(),
-    ))
+    response = use_case.execute(
+        SwingBacktestRequest(
+            tickers=["BBCA"],
+            start_date=signal_date,
+            end_date=exit_date,
+            capital=Decimal("1000000"),
+            risk_pct=Decimal("0.01"),
+            max_positions=1,
+            min_net_buy_days=1,
+            cost_bps=Decimal("0"),
+            include_regime=False,
+            allowed_regimes=(),
+        )
+    )
 
     assert provider.calls == []
     assert response.regime_by_date == {}
@@ -141,10 +139,7 @@ def test_swing_backtest_provider_is_called_when_include_regime_is_true():
     exit_date = base + timedelta(days=25)
 
     candles = _base_candles("BBCA", base)
-    summaries = [
-        _summary("BBCA", base + timedelta(days=i), Decimal("110"))
-        for i in range(18, 25)
-    ]
+    summaries = [_summary("BBCA", base + timedelta(days=i), Decimal("110")) for i in range(18, 25)]
 
     fake_context = MarketContext(
         regime=MarketRegime.NEUTRAL,
@@ -165,19 +160,21 @@ def test_swing_backtest_provider_is_called_when_include_regime_is_true():
         signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
-    response = use_case.execute(SwingBacktestRequest(
-        tickers=["bbca"],
-        start_date=signal_date,
-        end_date=exit_date,
-        capital=Decimal("1000000"),
-        risk_pct=Decimal("0.01"),
-        max_positions=1,
-        min_net_buy_days=1,
-        cost_bps=Decimal("0"),
-        include_regime=True,
-        allowed_regimes=(),
-        benchmark_ticker="ihsg",
-    ))
+    response = use_case.execute(
+        SwingBacktestRequest(
+            tickers=["bbca"],
+            start_date=signal_date,
+            end_date=exit_date,
+            capital=Decimal("1000000"),
+            risk_pct=Decimal("0.01"),
+            max_positions=1,
+            min_net_buy_days=1,
+            cost_bps=Decimal("0"),
+            include_regime=True,
+            allowed_regimes=(),
+            benchmark_ticker="ihsg",
+        )
+    )
 
     assert len(provider.calls) == 1
     assert provider.calls[0]["tickers"] == ["BBCA"]
@@ -193,10 +190,7 @@ def test_swing_backtest_provider_is_called_when_allowed_regimes_non_empty():
     exit_date = base + timedelta(days=25)
 
     candles = _base_candles("BBCA", base)
-    summaries = [
-        _summary("BBCA", base + timedelta(days=i), Decimal("110"))
-        for i in range(18, 25)
-    ]
+    summaries = [_summary("BBCA", base + timedelta(days=i), Decimal("110")) for i in range(18, 25)]
 
     fake_context = MarketContext(
         regime=MarketRegime.NEUTRAL,
@@ -217,18 +211,20 @@ def test_swing_backtest_provider_is_called_when_allowed_regimes_non_empty():
         signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
-    response = use_case.execute(SwingBacktestRequest(
-        tickers=["BBCA"],
-        start_date=signal_date,
-        end_date=exit_date,
-        capital=Decimal("1000000"),
-        risk_pct=Decimal("0.01"),
-        max_positions=1,
-        min_net_buy_days=1,
-        cost_bps=Decimal("0"),
-        include_regime=False,
-        allowed_regimes=("NEUTRAL",),
-    ))
+    response = use_case.execute(
+        SwingBacktestRequest(
+            tickers=["BBCA"],
+            start_date=signal_date,
+            end_date=exit_date,
+            capital=Decimal("1000000"),
+            risk_pct=Decimal("0.01"),
+            max_positions=1,
+            min_net_buy_days=1,
+            cost_bps=Decimal("0"),
+            include_regime=False,
+            allowed_regimes=("NEUTRAL",),
+        )
+    )
 
     assert len(provider.calls) == 1
     assert response.regime_by_date == {signal_date: fake_context}
@@ -240,10 +236,7 @@ def test_swing_backtest_raises_when_regime_requested_without_provider():
     exit_date = base + timedelta(days=25)
 
     candles = _base_candles("BBCA", base)
-    summaries = [
-        _summary("BBCA", base + timedelta(days=i), Decimal("110"))
-        for i in range(18, 25)
-    ]
+    summaries = [_summary("BBCA", base + timedelta(days=i), Decimal("110")) for i in range(18, 25)]
 
     use_case = SwingBacktestUseCase(
         indicator_registry=IndicatorRegistry(),
@@ -254,17 +247,19 @@ def test_swing_backtest_raises_when_regime_requested_without_provider():
     )
 
     with pytest.raises(ValueError, match="market_context_provider is required"):
-        use_case.execute(SwingBacktestRequest(
-            tickers=["BBCA"],
-            start_date=signal_date,
-            end_date=exit_date,
-            capital=Decimal("1000000"),
-            risk_pct=Decimal("0.01"),
-            max_positions=1,
-            min_net_buy_days=1,
-            cost_bps=Decimal("0"),
-            include_regime=True,
-        ))
+        use_case.execute(
+            SwingBacktestRequest(
+                tickers=["BBCA"],
+                start_date=signal_date,
+                end_date=exit_date,
+                capital=Decimal("1000000"),
+                risk_pct=Decimal("0.01"),
+                max_positions=1,
+                min_net_buy_days=1,
+                cost_bps=Decimal("0"),
+                include_regime=True,
+            )
+        )
 
 
 def test_swing_backtest_raises_when_allowed_regimes_without_provider():
@@ -273,10 +268,7 @@ def test_swing_backtest_raises_when_allowed_regimes_without_provider():
     exit_date = base + timedelta(days=25)
 
     candles = _base_candles("BBCA", base)
-    summaries = [
-        _summary("BBCA", base + timedelta(days=i), Decimal("110"))
-        for i in range(18, 25)
-    ]
+    summaries = [_summary("BBCA", base + timedelta(days=i), Decimal("110")) for i in range(18, 25)]
 
     use_case = SwingBacktestUseCase(
         indicator_registry=IndicatorRegistry(),
@@ -287,15 +279,17 @@ def test_swing_backtest_raises_when_allowed_regimes_without_provider():
     )
 
     with pytest.raises(ValueError, match="market_context_provider is required"):
-        use_case.execute(SwingBacktestRequest(
-            tickers=["BBCA"],
-            start_date=signal_date,
-            end_date=exit_date,
-            capital=Decimal("1000000"),
-            risk_pct=Decimal("0.01"),
-            max_positions=1,
-            min_net_buy_days=1,
-            cost_bps=Decimal("0"),
-            include_regime=False,
-            allowed_regimes=("NEUTRAL",),
-        ))
+        use_case.execute(
+            SwingBacktestRequest(
+                tickers=["BBCA"],
+                start_date=signal_date,
+                end_date=exit_date,
+                capital=Decimal("1000000"),
+                risk_pct=Decimal("0.01"),
+                max_positions=1,
+                min_net_buy_days=1,
+                cost_bps=Decimal("0"),
+                include_regime=False,
+                allowed_regimes=("NEUTRAL",),
+            )
+        )

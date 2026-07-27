@@ -42,9 +42,7 @@ def test_format_effective_session_label_live_eod_pending():
 
 def test_format_effective_session_line_prefixes_label():
     session = _session(is_eod_pending=False, analysis_as_of=date(2026, 7, 23))
-    assert format_effective_session_line(session) == (
-        "Effective session: 2026-07-23 (settled)"
-    )
+    assert format_effective_session_line(session) == ("Effective session: 2026-07-23 (settled)")
 
 
 def test_effective_session_to_json_round_trips_fields():

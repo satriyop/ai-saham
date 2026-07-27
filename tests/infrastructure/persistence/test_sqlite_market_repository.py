@@ -245,24 +245,20 @@ class TestSQLiteMarketRepository:
                     PRIMARY KEY (ticker, date)
                 )
             """)
-            conn.execute(
-                """
+            conn.execute("""
                 INSERT INTO candles (ticker, date, open, high, low, close, volume)
                 VALUES ('BBCA', '2024-01-01', '100', '110', '90', '105', 1000)
-                """
-            )
+                """)
             conn.commit()
 
         SQLiteMarketRepository(db_path=temp_db)
 
         with sqlite3.connect(temp_db) as conn:
-            row = conn.execute(
-                """
+            row = conn.execute("""
                 SELECT source, volume_unit, price_adjustment_policy
                 FROM candles
                 WHERE ticker = 'BBCA'
-                """
-            ).fetchone()
+                """).fetchone()
 
         assert row == ("unknown", "unknown", "unknown")
 
@@ -276,13 +272,11 @@ class TestSQLiteMarketRepository:
         )
 
         with sqlite3.connect(temp_db) as conn:
-            row = conn.execute(
-                """
+            row = conn.execute("""
                 SELECT source, volume_unit, price_adjustment_policy
                 FROM candles
                 WHERE ticker = 'BBCA'
-                """
-            ).fetchone()
+                """).fetchone()
 
         assert row == ("idx", "shares", "raw")
 
@@ -294,12 +288,10 @@ def test_get_candles_sanitizes_bad_database_ranges(temp_db):
 
     # Insert raw invalid bounds directly into SQLite to bypass standard Candle validation
     with sqlite3.connect(temp_db) as conn:
-        conn.execute(
-            """
+        conn.execute("""
             INSERT INTO candles (ticker, date, open, high, low, close, volume)
             VALUES ('IDR=X', '2026-06-25', '16500.00', '16400.00', '16200.00', '16100.00', 1000)
-            """
-        )
+            """)
         conn.commit()
 
     candles = repo.get_candles("IDR=X")
@@ -309,4 +301,3 @@ def test_get_candles_sanitizes_bad_database_ranges(temp_db):
     # Verify that the loaded Candle object attributes were correctly sanitized
     assert candle.high == Decimal("16500.00")
     assert candle.low == Decimal("16100.00")
-

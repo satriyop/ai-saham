@@ -86,8 +86,10 @@ def test_today_uses_loaded_config_and_not_global(tmp_path: Path):
 
     from src.adapters.cli.today_commands import today
 
-    with patch("src.adapters.cli.today_commands.load_accumulation_screener_config") as mock_load, \
-         patch("src.adapters.cli.today_commands.DailyBriefingUseCase") as mock_uc_class:
+    with (
+        patch("src.adapters.cli.today_commands.load_accumulation_screener_config") as mock_load,
+        patch("src.adapters.cli.today_commands.DailyBriefingUseCase") as mock_uc_class,
+    ):
         mock_cfg = MagicMock()
         mock_cfg.derived_features = MagicMock()
         mock_load.return_value = mock_cfg
@@ -241,7 +243,7 @@ def test_today_suppresses_accumulation_table_when_not_ready():
                 total_count=1,
                 status="UNAVAILABLE",
                 reason="Opening snapshot unavailable",
-            )
+            ),
         ],
         overall_authority="NOT_READY",
         regime=None,
@@ -345,7 +347,7 @@ def test_today_marks_partial_accumulation_output():
                 total_count=1,
                 status="UNAVAILABLE",
                 reason="Opening snapshot unavailable",
-            )
+            ),
         ],
         overall_authority="PARTIAL",
         regime=None,
@@ -760,13 +762,17 @@ def test_today_accumulation_not_ready_suppresses_projection_rows():
 def test_market_regime_text_renders_all_fields():
     from src.adapters.cli.today_commands import _market_regime_text
 
-    ctx = type("C", (), {
-        "regime": type("R", (), {"value": "RISK_ON"})(),
-        "conviction": 0.69,
-        "regime_confidence": 0.30,
-        "regime_stability": "TRANSITIONING",
-        "transition_warning": None,
-    })()
+    ctx = type(
+        "C",
+        (),
+        {
+            "regime": type("R", (), {"value": "RISK_ON"})(),
+            "conviction": 0.69,
+            "regime_confidence": 0.30,
+            "regime_stability": "TRANSITIONING",
+            "transition_warning": None,
+        },
+    )()
 
     expected = "RISK_ON | conviction 0.69 | confidence 0.30 | stability TRANSITIONING"
     assert _market_regime_text(ctx) == expected
@@ -775,13 +781,17 @@ def test_market_regime_text_renders_all_fields():
 def test_market_regime_text_omits_optional_metadata():
     from src.adapters.cli.today_commands import _market_regime_text
 
-    ctx = type("C", (), {
-        "regime": type("R", (), {"value": "RISK_ON"})(),
-        "conviction": 0.69,
-        "regime_confidence": None,
-        "regime_stability": None,
-        "transition_warning": None,
-    })()
+    ctx = type(
+        "C",
+        (),
+        {
+            "regime": type("R", (), {"value": "RISK_ON"})(),
+            "conviction": 0.69,
+            "regime_confidence": None,
+            "regime_stability": None,
+            "transition_warning": None,
+        },
+    )()
 
     assert _market_regime_text(ctx) == "RISK_ON | conviction 0.69"
 
@@ -789,13 +799,17 @@ def test_market_regime_text_omits_optional_metadata():
 def test_market_regime_text_appends_transition_warning():
     from src.adapters.cli.today_commands import _market_regime_text
 
-    ctx = type("C", (), {
-        "regime": type("R", (), {"value": "RISK_ON"})(),
-        "conviction": 0.69,
-        "regime_confidence": None,
-        "regime_stability": None,
-        "transition_warning": "some warning",
-    })()
+    ctx = type(
+        "C",
+        (),
+        {
+            "regime": type("R", (), {"value": "RISK_ON"})(),
+            "conviction": 0.69,
+            "regime_confidence": None,
+            "regime_stability": None,
+            "transition_warning": "some warning",
+        },
+    )()
 
     assert _market_regime_text(ctx) == "RISK_ON | conviction 0.69 | transition: some warning"
 
@@ -805,14 +819,18 @@ def test_today_market_regime_renders_plain_values():
 
     from src.application.use_case.daily_briefing_use_case import DailyBriefingResponse
 
-    fake_regime = type("MC", (), {
-        "regime": type("R", (), {"value": "RISK_ON"})(),
-        "conviction": 0.69,
-        "regime_confidence": 0.30,
-        "regime_stability": "TRANSITIONING",
-        "transition_warning": None,
-        "factors": (),
-    })()
+    fake_regime = type(
+        "MC",
+        (),
+        {
+            "regime": type("R", (), {"value": "RISK_ON"})(),
+            "conviction": 0.69,
+            "regime_confidence": 0.30,
+            "regime_stability": "TRANSITIONING",
+            "transition_warning": None,
+            "factors": (),
+        },
+    )()
 
     fake_response = DailyBriefingResponse(
         live_session_date=date(2026, 6, 19),
@@ -914,9 +932,9 @@ def test_setup_lens_impact_capped_cell_shows_no_entry_suffix():
     )
 
     first = AVAILABLE_SWING_SETUPS[0]
-    cells = (
-        _cell(first, action="WATCH", capped="no standalone entry authority"),
-    ) + tuple(_cell(name) for name in AVAILABLE_SWING_SETUPS[1:])
+    cells = (_cell(first, action="WATCH", capped="no standalone entry authority"),) + tuple(
+        _cell(name) for name in AVAILABLE_SWING_SETUPS[1:]
+    )
     row = type("Row", (), {"ticker": "INDF", "base_action": "WATCH", "cells": cells})()
     result = type("R", (), {"rows": (row,)})()
 
@@ -1009,25 +1027,29 @@ def test_setup_lens_next_commands_suppress_footer():
     )
     result = DailySetupLensImpactResult(rows=(row,))
 
-    fake_response = type("R", (), {
-        "universe": "lq45",
-        "universe_count": 45,
-        "stale_count": 0,
-        "regime": None,
-        "opening_candidates": [],
-        "market_wide_opening_observations": [],
-        "accumulation_candidates": [],
-        "accumulation_summary": None,
-        "daily_accumulation_candidates": [],
-        "warnings": [],
-        "live_session_date": date(2026, 6, 19),
-        "latest_completed_eod_date": date(2026, 6, 19),
-        "opening_snapshot_date": None,
-        "is_historical": True,
-        "readiness_items": [],
-        "overall_authority": "READY",
-        "setup_lens_impact": result,
-    })()
+    fake_response = type(
+        "R",
+        (),
+        {
+            "universe": "lq45",
+            "universe_count": 45,
+            "stale_count": 0,
+            "regime": None,
+            "opening_candidates": [],
+            "market_wide_opening_observations": [],
+            "accumulation_candidates": [],
+            "accumulation_summary": None,
+            "daily_accumulation_candidates": [],
+            "warnings": [],
+            "live_session_date": date(2026, 6, 19),
+            "latest_completed_eod_date": date(2026, 6, 19),
+            "opening_snapshot_date": None,
+            "is_historical": True,
+            "readiness_items": [],
+            "overall_authority": "READY",
+            "setup_lens_impact": result,
+        },
+    )()
 
     with patch("src.adapters.cli.today_commands.DailyBriefingUseCase") as mock_uc_class:
         mock_uc = MagicMock()
@@ -1161,8 +1183,9 @@ def test_today_fallback_next_screen_accum_when_no_candidates():
 
 def test_daily_display():
     # Test C: Daily Display
-    from src.adapters.cli.today_commands import _accumulation_screen_table
     from rich.console import Console
+
+    from src.adapters.cli.today_commands import _accumulation_screen_table
     from src.application.use_case.daily_accumulation_projection import DailyAccumulationCandidate
 
     candidate = DailyAccumulationCandidate(

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from datetime import date
 from pathlib import Path
 
 from src.application.ports.signal_coverage_provider import (
@@ -27,15 +28,15 @@ logger = logging.getLogger(__name__)
 # usable_rows equals total_rows and FactorCoverage.note flags this as
 # "cache total (no quality filter)".
 _FACTOR_TABLES: tuple[tuple[str, str, str | None], ...] = (
-    ("bandar_intensity",    "bandar_detector",        "broker_accdist IS NOT NULL"),
-    ("foreign_flow_quality","foreign_flow_points",    None),
-    ("insider_activity",    "insider_cache",          "shares > 0"),
-    ("seasonality_edge",    "seasonality_cache",      None),
-    ("analyst_consensus",   "analyst_cache",          "analyst_count > 0"),
-    ("forward_valuation",   "forward_estimates_cache",None),
-    ("sector_metadata",     "stock_meta",             "sector IS NOT NULL"),
-    ("company_profile",     "company_profile_cache",  "listing_board IS NOT NULL"),
-    ("earnings_history",    "earnings_cache",         "eps_actual IS NOT NULL"),
+    ("bandar_intensity", "bandar_detector", "broker_accdist IS NOT NULL"),
+    ("foreign_flow_quality", "foreign_flow_points", None),
+    ("insider_activity", "insider_cache", "shares > 0"),
+    ("seasonality_edge", "seasonality_cache", None),
+    ("analyst_consensus", "analyst_cache", "analyst_count > 0"),
+    ("forward_valuation", "forward_estimates_cache", None),
+    ("sector_metadata", "stock_meta", "sector IS NOT NULL"),
+    ("company_profile", "company_profile_cache", "listing_board IS NOT NULL"),
+    ("earnings_history", "earnings_cache", "eps_actual IS NOT NULL"),
 )
 
 _CACHE_TOTAL_NOTE = "cache total (no quality filter)"
@@ -99,6 +100,5 @@ def _scalar(conn: sqlite3.Connection, query: str, fallback: int = 0) -> int:
         return fallback
 
 
-def _today() -> "date":
-    from datetime import date
+def _today() -> date:
     return date.today()

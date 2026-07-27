@@ -65,9 +65,7 @@ def test_swing_analysis_workflow_can_emit_breakout_confirmation_with_local_volum
         ),
     )
 
-    response = workflow.execute(
-        _request(today=date(2026, 6, 18), setup_name="foreign-bounce")
-    )
+    response = workflow.execute(_request(today=date(2026, 6, 18), setup_name="foreign-bounce"))
 
     assert response.evidence.setup_evidence.candle_source == "idx"
     assert response.evidence.setup_phase.current_phase == SetupPhaseState.BREAKOUT_CONFIRMATION

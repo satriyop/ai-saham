@@ -217,9 +217,7 @@ class TestInstitutionalAccumulationDelegation:
         # the target ticker, not re-fetched from the repository (only the
         # sector-context benchmark lookup calls the repository).
         assert all(call["ticker"] != ticker for call in market_repo.get_candles_calls)
-        assert "Institutional accumulation evidence unavailable" not in " ".join(
-            result.warnings
-        )
+        assert "Institutional accumulation evidence unavailable" not in " ".join(result.warnings)
 
 
 class TestTickerProfileDelegation:

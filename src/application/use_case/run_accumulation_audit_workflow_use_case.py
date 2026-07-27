@@ -39,6 +39,7 @@ class NoTickersError(ValueError):
     unprefixed message instead of the generic "Error: <message>" wrapper.
     """
 
+
 _DEFAULT_WINDOW = 7
 _DEFAULT_MIN_FOREIGN_FLOW_SCORE = 40.0
 _DEFAULT_MIN_NET_BUY_DAYS = 2
@@ -158,40 +159,43 @@ class RunAccumulationAuditWorkflowUseCase:
 
         universe = request.universe or setup_values.get("universe")
         window = (
-            request.window if request.window is not None
+            request.window
+            if request.window is not None
             else int(setup_values.get("window", _DEFAULT_WINDOW))
         )
         min_accum_score = (
-            request.min_accum_score if request.min_accum_score is not None
+            request.min_accum_score
+            if request.min_accum_score is not None
             else float(setup_values.get("min_accum_score", _DEFAULT_MIN_FOREIGN_FLOW_SCORE))
         )
         min_net_buy_days = (
-            request.min_net_buy_days if request.min_net_buy_days is not None
+            request.min_net_buy_days
+            if request.min_net_buy_days is not None
             else int(setup_values.get("min_net_buy_days", _DEFAULT_MIN_NET_BUY_DAYS))
         )
         min_vwap_disc = (
-            request.min_vwap_disc if request.min_vwap_disc is not None
+            request.min_vwap_disc
+            if request.min_vwap_disc is not None
             else setup_values.get("min_vwap_disc")
         )
         trend = request.trend or setup_values.get("trend")
         min_flow_pct = (
-            request.min_flow_pct if request.min_flow_pct is not None
+            request.min_flow_pct
+            if request.min_flow_pct is not None
             else setup_values.get("min_flow_pct")
         )
         require_rsi = request.require_rsi or bool(setup_values.get("require_rsi", False))
-        max_rsi = (
-            request.max_rsi if request.max_rsi is not None else setup_values.get("max_rsi")
-        )
-        min_rsi = (
-            request.min_rsi if request.min_rsi is not None else setup_values.get("min_rsi")
-        )
+        max_rsi = request.max_rsi if request.max_rsi is not None else setup_values.get("max_rsi")
+        min_rsi = request.min_rsi if request.min_rsi is not None else setup_values.get("min_rsi")
         max_bb_width_pctile = (
-            request.max_bb_width_pctile if request.max_bb_width_pctile is not None
+            request.max_bb_width_pctile
+            if request.max_bb_width_pctile is not None
             else setup_values.get("max_bb_width_pctile")
         )
         broker_quality = request.broker_quality or setup_values.get("broker_quality")
         simulate_exits = (
-            request.simulate_exits if request.simulate_exits is not None
+            request.simulate_exits
+            if request.simulate_exits is not None
             else bool(setup_values.get("simulate_exits", False))
         )
         take_profits = request.take_profits or str(
@@ -202,7 +206,8 @@ class RunAccumulationAuditWorkflowUseCase:
         )
         max_holds = request.max_holds or str(setup_values.get("max_holds", _DEFAULT_MAX_HOLDS))
         resolved_horizon = (
-            request.horizon if request.horizon is not None
+            request.horizon
+            if request.horizon is not None
             else max(self._audit_policy.forward_return_horizons)
         )
 

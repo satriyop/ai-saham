@@ -65,9 +65,7 @@ class ViewTickerTopBrokersUseCase:
         self._repository = repository
         self._foreign_broker_codes = foreign_broker_codes
 
-    def execute(
-        self, request: ViewTickerTopBrokersRequest
-    ) -> ViewTickerTopBrokersResult | None:
+    def execute(self, request: ViewTickerTopBrokersRequest) -> ViewTickerTopBrokersResult | None:
         ticker = request.ticker.upper()
         summary = self._resolve_summary(ticker, request.target_date)
         if summary is None:

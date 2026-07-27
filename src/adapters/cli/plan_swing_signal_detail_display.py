@@ -30,16 +30,20 @@ def print_signal_detail_panel(ctx: SwingOutputDisplayContext) -> None:
             "WEAK": "red",
         }.get(sa.strength.value, "white")
         evidence_coverage = sa.signal_authority_coverage
-        signal_text.append(Text(
-            f"Explains the Signal column in Verdict: {sa.score_label} "
-            f"{sa.strength.value} / {evidence_coverage:.0%} coverage "
-            f"-> {sa.entry_quality.value}",
-            style=_sig_style,
-        ))
-        signal_text.append(Text(
-            "Scale: SignalEngine 0-100. Used in final TradeSetup: yes.",
-            style="dim",
-        ))
+        signal_text.append(
+            Text(
+                f"Explains the Signal column in Verdict: {sa.score_label} "
+                f"{sa.strength.value} / {evidence_coverage:.0%} coverage "
+                f"-> {sa.entry_quality.value}",
+                style=_sig_style,
+            )
+        )
+        signal_text.append(
+            Text(
+                "Scale: SignalEngine 0-100. Used in final TradeSetup: yes.",
+                style="dim",
+            )
+        )
         breakdown = getattr(sa, "breakdown_dict", None) or {}
         active_flags = getattr(signal_assessment, "active_flags", ())
         flag_adj = getattr(signal_assessment, "flag_adjustment", 0)
@@ -53,9 +57,14 @@ def print_signal_detail_panel(ctx: SwingOutputDisplayContext) -> None:
                 "flag_adjustment": "Flag Adjustment",
             }
             _group_sources = {
-                "setup_quality_group": "SetupEvidence.match_strength (MATCH=100, PARTIAL=60, NO_MATCH=20)",
+                "setup_quality_group": (
+                    "SetupEvidence.match_strength (MATCH=100, PARTIAL=60, NO_MATCH=20)"
+                ),
                 "flow_confirmation_group": "FlowConfirmationEvidence.capped_strength × 100",
-                "signal_authority_coverage": "present-authoritative PRODUCTION weight / required PRODUCTION weight (60% Setup + 40% Flow)",
+                "signal_authority_coverage": (
+                    "present-authoritative PRODUCTION weight / "
+                    "required PRODUCTION weight (60% Setup + 40% Flow)"
+                ),
                 "flag_adjustment": "sum of active flag penalties",
             }
             bd_table = compact_table()
@@ -79,35 +88,45 @@ def print_signal_detail_panel(ctx: SwingOutputDisplayContext) -> None:
             flag_detail = ", ".join(_flag_names.get(f, f) for f in active_flags)
             signal_text.append(Text(f"  Flags: {flag_detail}", style="dim yellow"))
         if raw_score is not None and flag_adj != 0:
-            signal_text.append(Text(
-                f"  Raw group score {raw_score} + flag adjustment {flag_adj:+d} = {sa.score}",
-                style="dim",
-            ))
+            signal_text.append(
+                Text(
+                    f"  Raw group score {raw_score} + flag adjustment {flag_adj:+d} = {sa.score}",
+                    style="dim",
+                )
+            )
         if conf is not None:
-            signal_text.append(Text(
-                f"  Signal authority coverage: {conf:.0%} of scoring weight covered",
-                style="dim",
-            ))
+            signal_text.append(
+                Text(
+                    f"  Signal authority coverage: {conf:.0%} of scoring weight covered",
+                    style="dim",
+                )
+            )
         for line in sa.rationale[-3:]:
             signal_text.append(Text(f"  {line}", style="dim"))
         if signal_assessment.coverage_warning:
-            signal_text.append(Text(f"  ⚠ {signal_assessment.coverage_warning}", style="dim yellow"))
+            signal_text.append(
+                Text(f"  ⚠ {signal_assessment.coverage_warning}", style="dim yellow")
+            )
         constraints = getattr(sa, "decision_constraints", None)
         if constraints is not None:
             signal_text.append(Text("  Decision constraints", style="bold cyan"))
-            signal_text.append(Text(
-                f"    max_decision={constraints.max_decision} "
-                f"regime={constraints.regime or 'none'} "
-                f"enter_allowed={constraints.regime_enter_allowed} "
-                f"size={constraints.effective_size_multiplier:.2f}",
-                style="dim",
-            ))
-            if constraints.setup_family or constraints.setup_regime_action:
-                signal_text.append(Text(
-                    f"    setup={constraints.setup_family or 'none'} "
-                    f"action={constraints.setup_regime_action or 'none'}",
+            signal_text.append(
+                Text(
+                    f"    max_decision={constraints.max_decision} "
+                    f"regime={constraints.regime or 'none'} "
+                    f"enter_allowed={constraints.regime_enter_allowed} "
+                    f"size={constraints.effective_size_multiplier:.2f}",
                     style="dim",
-                ))
+                )
+            )
+            if constraints.setup_family or constraints.setup_regime_action:
+                signal_text.append(
+                    Text(
+                        f"    setup={constraints.setup_family or 'none'} "
+                        f"action={constraints.setup_regime_action or 'none'}",
+                        style="dim",
+                    )
+                )
             for reason in constraints.constraint_reasons:
                 signal_text.append(Text(f"    - {reason}", style="dim yellow"))
 
@@ -132,18 +151,23 @@ def print_alpha_trigger_detail_panel(ctx: SwingOutputDisplayContext) -> None:
             alpha_s = f"{ats.alpha_score:.1f}" if ats.alpha_score is not None else "—"
             trig_s = f"{ats.trigger_score:.1f}" if ats.trigger_score is not None else "—"
             final_s = f"{ats.final_exact_score:.1f}" if ats.final_exact_score is not None else "—"
-            alpha_trigger_text.append(Text(
-                f"α {alpha_s}  trigger {trig_s}  final {final_s}  "
-                f"horizon {ats.horizon}  "
-                f"alpha {alpha_wt_pct}% · trigger {trigger_wt_pct}%",
-                style="bold cyan",
-            ))
-            alpha_trigger_text.append(Text(
-                f"coverage {ats.coverage_score:.2f}  authority {ats.authority_coverage_score:.2f}  "
-                f"conviction {ats.conviction_score:.2f}  "
-                f"flow_trigger {'✓ allowed' if ats.flow_trigger_allowed else '✗ blocked'}",
-                style="dim",
-            ))
+            alpha_trigger_text.append(
+                Text(
+                    f"α {alpha_s}  trigger {trig_s}  final {final_s}  "
+                    f"horizon {ats.horizon}  "
+                    f"alpha {alpha_wt_pct}% · trigger {trigger_wt_pct}%",
+                    style="bold cyan",
+                )
+            )
+            alpha_trigger_text.append(
+                Text(
+                    f"coverage {ats.coverage_score:.2f}  authority "
+                    f"{ats.authority_coverage_score:.2f}  "
+                    f"conviction {ats.conviction_score:.2f}  "
+                    f"flow_trigger {'✓ allowed' if ats.flow_trigger_allowed else '✗ blocked'}",
+                    style="dim",
+                )
+            )
             if ats.group_contributions:
                 ct = compact_table()
                 ct.add_column("Group")
@@ -167,7 +191,9 @@ def print_alpha_trigger_detail_panel(ctx: SwingOutputDisplayContext) -> None:
                     eff_wt_text = Text(f"{c.effective_weight:.3f}", style="dim" if is_diag else "")
                     ct.add_row(
                         Text(c.group, style="dim" if is_diag else ""),
-                        Text(f"{c.score:.1f}" if c.present else "—", style="dim" if is_diag else ""),
+                        Text(
+                            f"{c.score:.1f}" if c.present else "—", style="dim" if is_diag else ""
+                        ),
                         Text("✓" if c.present else "✗", style="dim" if is_diag else ""),
                         status_text,
                         Text(f"{c.configured_weight:.3f}", style="dim" if is_diag else ""),
@@ -182,9 +208,7 @@ def print_alpha_trigger_detail_panel(ctx: SwingOutputDisplayContext) -> None:
                         for reason in c.reasons:
                             text = flow_trigger_blocked_text(reason)
                             if text is not None:
-                                alpha_trigger_text.append(
-                                    Text(f"  {text}", style="dim yellow")
-                                )
+                                alpha_trigger_text.append(Text(f"  {text}", style="dim yellow"))
             for reason in list(ats.unavailable_reasons)[-3:]:
                 alpha_trigger_text.append(Text(f"  ⚠ {reason}", style="dim yellow"))
 

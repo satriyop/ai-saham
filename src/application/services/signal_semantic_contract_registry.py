@@ -8,20 +8,16 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from typing import Any, Mapping
+from typing import Mapping
 
+from src.domain.value_objects.alpha_trigger_score import EvidenceRegistration
 from src.domain.value_objects.signal_artifact_identity import (
     SemanticCompatibilityDimensions,
 )
-from src.domain.value_objects.signal_artifact_schema import (
-    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
-    SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
-)
+from src.domain.value_objects.signal_forward_label import SignalLabelHorizon
 from src.domain.value_objects.signal_semantic_contract import (
     SemanticContractDefinition,
 )
-from src.domain.value_objects.signal_forward_label import SignalLabelHorizon
-from src.domain.value_objects.alpha_trigger_score import EvidenceRegistration
 
 
 def _fail(value: object, msg: str) -> None:
@@ -64,8 +60,7 @@ def _canonicalize_unordered_strings(
         if not cleaned:
             _fail(
                 item,
-                f"{path}: unordered normalization member must not be empty "
-                "after normalization",
+                f"{path}: unordered normalization member must not be empty after normalization",
             )
         normalized.append(cleaned)
     return sorted(set(normalized))
@@ -128,21 +123,18 @@ def _canonicalize_commodity_components(value: object, path: str) -> list[dict[st
         if not isinstance(item, dict):
             _fail(
                 item,
-                f"{path}[{i}]: commodity component must be a mapping, "
-                f"got {type(item).__name__}",
+                f"{path}[{i}]: commodity component must be a mapping, got {type(item).__name__}",
             )
         extra_keys = set(item.keys()) - _COMMODITY_COMPONENT_ALLOWED_KEYS
         if extra_keys:
             _fail(
                 item,
-                f"{path}[{i}]: commodity component has unsupported keys "
-                f"{sorted(extra_keys)!r}",
+                f"{path}[{i}]: commodity component has unsupported keys {sorted(extra_keys)!r}",
             )
         if "ticker" not in item or "weight" not in item:
             _fail(
                 item,
-                f"{path}[{i}]: commodity component must have exactly "
-                "'ticker' and 'weight' keys",
+                f"{path}[{i}]: commodity component must have exactly 'ticker' and 'weight' keys",
             )
         ticker = item["ticker"]
         if not isinstance(ticker, str) or not ticker.strip():
@@ -151,8 +143,7 @@ def _canonicalize_commodity_components(value: object, path: str) -> list[dict[st
         if isinstance(weight, bool) or not isinstance(weight, (int, float)):
             _fail(
                 weight,
-                f"{path}[{i}].weight: must be a finite int or float, "
-                f"got {type(weight).__name__}",
+                f"{path}[{i}].weight: must be a finite int or float, got {type(weight).__name__}",
             )
         if isinstance(weight, float) and (math.isnan(weight) or math.isinf(weight)):
             _fail(weight, f"{path}[{i}].weight: must be finite")
@@ -251,7 +242,8 @@ class SignalSemanticContractRegistry:
             evaluation_horizon=evaluation_horizon,
         )
         material_hash = self._hash_material_config(
-            paths, material_config_values,
+            paths,
+            material_config_values,
         )
         authority_hash = self._hash_authority_registrations(
             self._definition.authority_registration_names,
@@ -294,7 +286,8 @@ class SignalSemanticContractRegistry:
             evaluation_horizon=evaluation_horizon,
         )
         material_hash = self._hash_material_config(
-            paths, material_config_values,
+            paths,
+            material_config_values,
         )
         authority_hash = self._hash_authority_registrations(
             self._definition.authority_registration_names,

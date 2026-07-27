@@ -53,6 +53,5 @@ class ConfigBackedMarketContextProvider:
         )
 
         return {
-            replay_date: engine.evaluate(as_of_date=replay_date)
-            for replay_date in replay_dates
+            replay_date: engine.evaluate(as_of_date=replay_date) for replay_date in replay_dates
         }

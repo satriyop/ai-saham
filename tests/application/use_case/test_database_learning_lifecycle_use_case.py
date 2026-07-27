@@ -219,7 +219,4 @@ def test_accumulation_price_path_labels_preserve_corporate_action_guard(
     )
 
     assert result.unavailable_count == 1
-    assert (
-        result.labels[0].metrics["unavailable_reason"]
-        == "corporate_action_coverage_unavailable"
-    )
+    assert result.labels[0].metrics["unavailable_reason"] == "corporate_action_coverage_unavailable"

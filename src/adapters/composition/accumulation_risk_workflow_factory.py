@@ -25,9 +25,7 @@ def create_accumulation_assess_risk_use_case(
     """Build the AssessRiskUseCase used by accumulation screen workflows."""
     cfg = load_app_config()
     config_path = risk_config_path or Path(cfg.config_paths.risk_engine)
-    structural_gates, execution_gates = resolve_risk_gates(
-        load_engine_config(config_path)
-    )
+    structural_gates, execution_gates = resolve_risk_gates(load_engine_config(config_path))
     return AssessRiskUseCase(
         repository=market_repository,
         structural_gates=structural_gates,

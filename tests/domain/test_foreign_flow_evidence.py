@@ -1,11 +1,11 @@
 from datetime import date
 
-from src.domain.value_objects.foreign_flow_evidence import ForeignFlowEvidence
 from src.domain.value_objects.accum_score_breakdown import (
+    AccumScoreBreakdown,
     ForeignFlowComponentScore,
     ForeignFlowComponentStatus,
-    AccumScoreBreakdown,
 )
+from src.domain.value_objects.foreign_flow_evidence import ForeignFlowEvidence
 
 
 def _comp(key: str, points: float | None, max_points: float, status: ForeignFlowComponentStatus):
@@ -59,9 +59,7 @@ def _accum_score_breakdown(
                 _comp(key, points, max_by_key[key], ForeignFlowComponentStatus.AVAILABLE)
             )
         else:
-            complete.append(
-                _comp(key, None, max_by_key[key], ForeignFlowComponentStatus.MISSING)
-            )
+            complete.append(_comp(key, None, max_by_key[key], ForeignFlowComponentStatus.MISSING))
     if round(max(remaining, 0.0), 1) != 0.0:
         raise AssertionError("test fixture cannot represent requested score")
     return AccumScoreBreakdown(

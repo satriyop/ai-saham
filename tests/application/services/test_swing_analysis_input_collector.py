@@ -12,13 +12,16 @@ from types import SimpleNamespace
 import pytest
 
 from src.application.dto.swing_analysis import SwingAnalysisWorkflowRequest
-from src.application.services.swing_analysis_input_collector import (
-    SwingAnalysisInputCollector,
-)
 from src.application.services.signal_evidence_execution_context_builder import (
     SignalEvidenceExecutionContextBuilder,
 )
-from src.domain.value_objects.canonical_signal_evidence_input import CandleRowIdentity, SetupProvenance
+from src.application.services.swing_analysis_input_collector import (
+    SwingAnalysisInputCollector,
+)
+from src.domain.value_objects.canonical_signal_evidence_input import (
+    CandleRowIdentity,
+    SetupProvenance,
+)
 
 
 def _request(today: date) -> SwingAnalysisWorkflowRequest:
@@ -95,9 +98,7 @@ def _collector_for_availability_tests(
 ):
     candle_date = candle_date if candle_date is not None else today
     market_repo = SimpleNamespace(
-        get_candles=lambda ticker, end_date=None: [
-            SimpleNamespace(close=100.0, date=candle_date)
-        ]
+        get_candles=lambda ticker, end_date=None: [SimpleNamespace(close=100.0, date=candle_date)]
     )
     builder = SignalEvidenceExecutionContextBuilder(
         trading_session_calendar_loader=trading_session_calendar_loader
@@ -250,11 +251,13 @@ def test_missing_calendar_loader_yields_typed_unknown_without_empty_calendar():
     # EvidenceSourceAvailabilityAssembler(None) produces typed UNKNOWN.
     provenance = SetupProvenance(
         ticker="BBRI",
-        candle_rows=tuple(CandleRowIdentity(ticker="BBRI", date=c.date, source=None) for c in state.candles),
+        candle_rows=tuple(
+            CandleRowIdentity(ticker="BBRI", date=c.date, source=None) for c in state.candles
+        ),
     )
-    setup = EvidenceSourceAvailabilityAssembler(state.signal_evidence_execution_context.source_availability_use_case).assess_setup(
-        effective_session=state.effective_session, provenance=provenance
-    )
+    setup = EvidenceSourceAvailabilityAssembler(
+        state.signal_evidence_execution_context.source_availability_use_case
+    ).assess_setup(effective_session=state.effective_session, provenance=provenance)
     assert setup.assessments[0].status == SourceAvailabilityStatus.UNKNOWN
 
 
@@ -314,7 +317,9 @@ def test_intraday_future_dated_observation_does_not_break_calendar_construction(
 
     provenance = SetupProvenance(
         ticker="BBRI",
-        candle_rows=tuple(CandleRowIdentity(ticker="BBRI", date=c.date, source=None) for c in state.candles),
+        candle_rows=tuple(
+            CandleRowIdentity(ticker="BBRI", date=c.date, source=None) for c in state.candles
+        ),
     )
     setup = EvidenceSourceAvailabilityAssembler(state.source_availability_use_case).assess_setup(
         effective_session=state.effective_session, provenance=provenance
@@ -365,6 +370,7 @@ def test_accumulation_builder_receives_request_today():
 
 def test_collector_stores_exact_context_object_from_builder():
     from unittest.mock import MagicMock
+
     historical = date(2025, 1, 15)
     sentinel_context = MagicMock()
     builder_spy = MagicMock()

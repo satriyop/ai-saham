@@ -4,7 +4,7 @@ Templates for newly created strategy packages.
 Layer: Application
 """
 
-STRATEGY_TEMPLATE = '''version: 1
+STRATEGY_TEMPLATE = """version: 1
 name: "{name}"
 description: "Strategy description goes here"
 
@@ -76,9 +76,9 @@ rules:
       value: 70
     outcome: HIGH_RISK
     rationale: "RSI above 70 indicates overbought conditions"
-'''
+"""
 
-README_TEMPLATE = '''# {name}
+README_TEMPLATE = """# {name}
 
 {description}
 
@@ -105,4 +105,4 @@ Edit `strategy.yaml` to customize:
 - Indicator periods
 - Rule thresholds
 - Signal mapping
-'''
+"""

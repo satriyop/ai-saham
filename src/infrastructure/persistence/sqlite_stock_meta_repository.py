@@ -84,7 +84,8 @@ class SQLiteStockMetaRepository(StockMetaRepository):
             conn.execute(
                 """
                 INSERT INTO stock_meta
-                    (ticker, name, sector, sector_key, industry, industry_key, source, fetched_at, checksum)
+                    (ticker, name, sector, sector_key, industry, industry_key, source, fetched_at,
+                    checksum)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(ticker, fetched_at) DO UPDATE SET
                     name         = excluded.name,
@@ -163,14 +164,12 @@ def _rebuild_stock_meta_if_needed(conn: sqlite3.Connection) -> None:
         return
     conn.execute("ALTER TABLE stock_meta RENAME TO stock_meta_old")
     conn.executescript(_CREATE_TABLE)
-    conn.execute(
-        """
+    conn.execute("""
         INSERT INTO stock_meta
             (ticker, name, sector, sector_key, industry, industry_key, source,
              fetched_at, checksum)
         SELECT ticker, name, sector, sector_key, industry, industry_key, source,
                fetched_at, checksum
         FROM stock_meta_old
-        """
-    )
+        """)
     conn.execute("DROP TABLE stock_meta_old")

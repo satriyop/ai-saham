@@ -25,11 +25,11 @@ from src.application.use_case.score_accum_use_case import (
     ScoreAccumRequest,
     ScoreAccumUseCase,
 )
-from src.domain.value_objects.foreign_flow_evidence import ForeignFlowEvidence
 from src.domain.value_objects.accum_score_breakdown import (
     ForeignFlowComponentScore,
     ForeignFlowComponentStatus,
 )
+from src.domain.value_objects.foreign_flow_evidence import ForeignFlowEvidence
 from src.domain.value_objects.signal_artifact_schema import (
     CANDIDATE_OBSERVATION_SCHEMA_VERSION,
     SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
@@ -60,24 +60,26 @@ def _typed_flow_from_score(**overrides):
     )
     base.update(overrides)
     breakdown = ScoreAccumUseCase().execute(ScoreAccumRequest(**base)).evidence
-    return ForeignFlowEvidence.from_score_breakdown(
-        breakdown, net_buy_days=5, total_days=7
-    )
+    return ForeignFlowEvidence.from_score_breakdown(breakdown, net_buy_days=5, total_days=7)
 
 
 def _build_flow_ev(foreign_flow_evidence):
-    return FlowConfirmationEvidenceBuilder().build(
-        SimpleNamespace(
-            ticker="BBCA",
-            foreign_flow_evidence=foreign_flow_evidence,
-            bandar_detector=None,
-            bci_label="CLUSTER" if foreign_flow_evidence else None,
-            bci_tier1_count=3 if foreign_flow_evidence else 0,
-            latest_candle_date=SNAP,
-        ),
-        consumed_broker_summaries=(),
-        consumed_broker_daily_flows=(),
-    ).evidence
+    return (
+        FlowConfirmationEvidenceBuilder()
+        .build(
+            SimpleNamespace(
+                ticker="BBCA",
+                foreign_flow_evidence=foreign_flow_evidence,
+                bandar_detector=None,
+                bci_label="CLUSTER" if foreign_flow_evidence else None,
+                bci_tier1_count=3 if foreign_flow_evidence else 0,
+                latest_candle_date=SNAP,
+            ),
+            consumed_broker_summaries=(),
+            consumed_broker_daily_flows=(),
+        )
+        .evidence
+    )
 
 
 def test_source_unavailable_flow_has_zero_authority():
@@ -148,8 +150,7 @@ def test_partial_flow_coverage_proportionally_lowers_authority():
     coverage = SignalEvidenceGroupScorer._compute_signal_authority_coverage(facts)
     g = cfg.evidence_groups
     expected = (
-        g.setup_quality.weight * 1.0
-        + g.flow_confirmation.weight * flow_ev.component_coverage
+        g.setup_quality.weight * 1.0 + g.flow_confirmation.weight * flow_ev.component_coverage
     ) / (g.setup_quality.weight + g.flow_confirmation.weight)
     assert coverage == pytest.approx(expected)
 
@@ -160,12 +161,20 @@ def test_alpha_trigger_partial_coverage_lowers_authority_not_directional_score()
             horizon="SWING_10D",
             groups=(
                 AlphaTriggerGroupInput(
-                    "setup_quality", 80.0, 0.35, True,
-                    coverage_fraction=1.0, authority_fraction=1.0,
+                    "setup_quality",
+                    80.0,
+                    0.35,
+                    True,
+                    coverage_fraction=1.0,
+                    authority_fraction=1.0,
                 ),
                 AlphaTriggerGroupInput(
-                    "institutional_flow", 60.0, 0.30, True,
-                    coverage_fraction=1.0, authority_fraction=1.0,
+                    "institutional_flow",
+                    60.0,
+                    0.30,
+                    True,
+                    coverage_fraction=1.0,
+                    authority_fraction=1.0,
                 ),
             ),
         )
@@ -175,12 +184,20 @@ def test_alpha_trigger_partial_coverage_lowers_authority_not_directional_score()
             horizon="SWING_10D",
             groups=(
                 AlphaTriggerGroupInput(
-                    "setup_quality", 80.0, 0.35, True,
-                    coverage_fraction=1.0, authority_fraction=1.0,
+                    "setup_quality",
+                    80.0,
+                    0.35,
+                    True,
+                    coverage_fraction=1.0,
+                    authority_fraction=1.0,
                 ),
                 AlphaTriggerGroupInput(
-                    "institutional_flow", 60.0, 0.30, True,
-                    coverage_fraction=0.5, authority_fraction=0.5,
+                    "institutional_flow",
+                    60.0,
+                    0.30,
+                    True,
+                    coverage_fraction=0.5,
+                    authority_fraction=0.5,
                 ),
             ),
         )
@@ -221,20 +238,24 @@ def test_schema_4_observations_are_noncanonical():
 
 
 def test_all_input_present_score_vector_unchanged():
-    evidence = ScoreAccumUseCase().execute(
-        ScoreAccumRequest(
-            ticker="BBCA",
-            snapshot_date=SNAP,
-            net_buy_ratio=1.0,
-            consecutive_streak=7,
-            vwap_discount_pct=10.0,
-            rsi=40.0,
-            avg_flow_ratio=20.0,
-            bb_width_pctile=0.0,
-            bci_label="CLUSTER",
-            bci_tier1_count=3,
+    evidence = (
+        ScoreAccumUseCase()
+        .execute(
+            ScoreAccumRequest(
+                ticker="BBCA",
+                snapshot_date=SNAP,
+                net_buy_ratio=1.0,
+                consecutive_streak=7,
+                vwap_discount_pct=10.0,
+                rsi=40.0,
+                avg_flow_ratio=20.0,
+                bb_width_pctile=0.0,
+                bci_label="CLUSTER",
+                bci_tier1_count=3,
+            )
         )
-    ).evidence
+        .evidence
+    )
     assert evidence.accum_score == 94.9
     assert evidence.component("bb").status is ForeignFlowComponentStatus.DISABLED
 

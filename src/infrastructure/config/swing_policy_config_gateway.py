@@ -81,9 +81,7 @@ class YamlSwingPolicyConfigGateway:
             if "*" in parsed.document_path:
                 raise LearningContractError("wildcard policy targets cannot be applied")
             documents.setdefault(parsed.file_path, self._read(parsed.file_path))
-            self._require_existing_path(
-                documents[parsed.file_path], parsed.document_path
-            )
+            self._require_existing_path(documents[parsed.file_path], parsed.document_path)
         for target, value in changes.items():
             parsed = parse_tuning_config_path(target)
             self._assign(documents[parsed.file_path], parsed.document_path, value)
@@ -136,9 +134,7 @@ class YamlSwingPolicyConfigGateway:
         current: Any = document
         for segment in dotted_path.split("."):
             if not isinstance(current, dict) or segment not in current:
-                raise LearningContractError(
-                    f"policy document path does not exist: {dotted_path}"
-                )
+                raise LearningContractError(f"policy document path does not exist: {dotted_path}")
             current = current[segment]
 
     @staticmethod

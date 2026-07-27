@@ -37,9 +37,7 @@ def _assessment(
 def test_all_authoritative_true_when_every_assessment_is_authoritative():
     group = EvidenceSourceAvailability(
         evidence_group="setup",
-        assessments=(
-            _assessment("candles", SourceAvailabilityStatus.CURRENT, True),
-        ),
+        assessments=(_assessment("candles", SourceAvailabilityStatus.CURRENT, True),),
     )
     assert group.all_authoritative is True
 

@@ -313,9 +313,7 @@ class TestBacktestWithFormula:
 class TestFormulaWorkflow:
     """Test complete formula workflow from creation to use."""
 
-    def test_formula_created_and_used_in_rules(
-        self, mock_repository, temp_dir
-    ):
+    def test_formula_created_and_used_in_rules(self, mock_repository, temp_dir):
         """Test creating a formula and using it in rules assessment."""
         # Step 1: Create registry and register formula (simulating create-indicator)
         registry = IndicatorRegistry()
@@ -361,9 +359,7 @@ signal_mapping:
         # Verify it works
         assert response.assessment is not None
 
-    def test_multiple_formulas_in_same_rules(
-        self, mock_repository, temp_dir
-    ):
+    def test_multiple_formulas_in_same_rules(self, mock_repository, temp_dir):
         """Test using multiple formulas in the same rules file."""
         # Register multiple formulas
         registry = IndicatorRegistry()
@@ -412,9 +408,7 @@ rules:
         # Both formulas should be computed
         assert response.assessment is not None
 
-    def test_formula_with_builtin_indicators_mixed(
-        self, mock_repository, temp_dir
-    ):
+    def test_formula_with_builtin_indicators_mixed(self, mock_repository, temp_dir):
         """Test rules mixing formulas with built-in indicators."""
         registry = IndicatorRegistry()
         registry.register_formula("SMOOTH_RSI", parse("SMA(RSI(14), 10)"))

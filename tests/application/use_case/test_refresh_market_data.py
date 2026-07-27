@@ -72,9 +72,7 @@ class MemoryMarketRepository(MarketDataRepository):
             self.saved_metadata.append(metadata)
         for candle in candles:
             ticker = candle.ticker.upper()
-            existing = [
-                c for c in self._storage.get(ticker, []) if c.date != candle.date
-            ]
+            existing = [c for c in self._storage.get(ticker, []) if c.date != candle.date]
             existing.append(candle)
             existing.sort(key=lambda c: c.date)
             self._storage[ticker] = existing
@@ -94,11 +92,7 @@ class MemoryMarketRepository(MarketDataRepository):
 
     def has_data(self, ticker: str, start_date: date, end_date: date) -> bool:
         cached_range = self.get_date_range(ticker)
-        return bool(
-            cached_range
-            and cached_range[0] <= start_date
-            and cached_range[1] >= end_date
-        )
+        return bool(cached_range and cached_range[0] <= start_date and cached_range[1] >= end_date)
 
     def get_date_range(self, ticker: str) -> tuple[date, date] | None:
         candles = self.get_candles(ticker)
@@ -124,12 +118,9 @@ def test_refresh_backfills_older_gap_without_refetching_current_data():
     )
 
     assert response.status.startswith("backfill+")
-    assert provider.requested_ranges == [
-        (requested_start, date(2026, 3, 15))
-    ]
+    assert provider.requested_ranges == [(requested_start, date(2026, 3, 15))]
     assert response.short_history_note == (
-        "  candles BBCA: 90d cached (from 2026-03-16), "
-        "requested 365d - backfilling older gap"
+        "  candles BBCA: 90d cached (from 2026-03-16), requested 365d - backfilling older gap"
     )
 
 
@@ -210,10 +201,12 @@ def test_refresh_forward_fill_includes_latest_to_overwrite_partial_candle():
     latest = date(2026, 6, 13)
 
     # Save a partial/pre-market candle for June 13
-    repo.save_candles([
-        _candle("BBCA", date(2026, 6, 1)),
-        _candle("BBCA", latest),
-    ])
+    repo.save_candles(
+        [
+            _candle("BBCA", date(2026, 6, 1)),
+            _candle("BBCA", latest),
+        ]
+    )
 
     RefreshMarketDataUseCase(provider, repo).execute(
         RefreshMarketDataRequest(
@@ -236,11 +229,13 @@ def test_refresh_forces_full_refresh_when_internal_gap_exists():
     requested_start = date(2025, 6, 14)
 
     # Save sparse candles with a huge gap in the middle (e.g. 10 days)
-    repo.save_candles([
-        _candle("BBCA", date(2026, 6, 1)),
-        _candle("BBCA", date(2026, 6, 12)),  # 11 days gap
-        _candle("BBCA", end_date),
-    ])
+    repo.save_candles(
+        [
+            _candle("BBCA", date(2026, 6, 1)),
+            _candle("BBCA", date(2026, 6, 12)),  # 11 days gap
+            _candle("BBCA", end_date),
+        ]
+    )
 
     response = RefreshMarketDataUseCase(provider, repo).execute(
         RefreshMarketDataRequest(
@@ -263,11 +258,13 @@ def test_refresh_forces_full_refresh_when_start_boundary_gap_exists():
 
     # Save a very old candle (so earliest is < requested_start)
     # and then recent candles, but leaving a gap at the start of requested range.
-    repo.save_candles([
-        _candle("BBCA", date(2024, 4, 22)),   # very old
-        _candle("BBCA", date(2026, 6, 10)),   # first in requested window (gap is ~5 months)
-        _candle("BBCA", end_date),
-    ])
+    repo.save_candles(
+        [
+            _candle("BBCA", date(2024, 4, 22)),  # very old
+            _candle("BBCA", date(2026, 6, 10)),  # first in requested window (gap is ~5 months)
+            _candle("BBCA", end_date),
+        ]
+    )
 
     response = RefreshMarketDataUseCase(provider, repo).execute(
         RefreshMarketDataRequest(
@@ -280,4 +277,3 @@ def test_refresh_forces_full_refresh_when_start_boundary_gap_exists():
     # Should trigger a full refresh of the entire requested range
     assert "refresh" in response.fetch_modes
     assert provider.requested_ranges == [(requested_start, end_date)]
-

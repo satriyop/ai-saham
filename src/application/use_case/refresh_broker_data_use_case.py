@@ -212,9 +212,7 @@ class RefreshBrokerDataUseCase:
 
         ranges: list[tuple[date, date, str]] = []
         summary_earliest, summary_latest = summary_range
-        tolerated_start = requested_start + timedelta(
-            days=request.requested_start_tolerance_days
-        )
+        tolerated_start = requested_start + timedelta(days=request.requested_start_tolerance_days)
         needs_backfill = summary_earliest > tolerated_start
         needs_forward = summary_latest < last_trading
         if needs_backfill:
@@ -286,8 +284,7 @@ class RefreshBrokerDataUseCase:
                     else 0
                 )
                 daily_part = (
-                    f"daily:+{daily_resp.fetched_count}rows/"
-                    f"{daily_resp.active_codes}codes/{span}d"
+                    f"daily:+{daily_resp.fetched_count}rows/{daily_resp.active_codes}codes/{span}d"
                 )
             elif latest_daily is not None:
                 daily_part = f"daily=✓({latest_daily})"

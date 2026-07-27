@@ -49,7 +49,9 @@ class StockbitConfig:
     # ── Broker flow endpoints ─────────────────────────────────────────────
     marketdetectors_url: str = "https://exodus.stockbit.com/marketdetectors"  # broker-level
     broker_activity_url: str = "https://exodus.stockbit.com/order-trade/broker/activity"
-    broker_historical_url: str = "https://exodus.stockbit.com/order-trade/broker/activity/historical"
+    broker_historical_url: str = (
+        "https://exodus.stockbit.com/order-trade/broker/activity/historical"
+    )
     broker_distribution_url: str = (
         "https://exodus.stockbit.com/order-trade/broker/distribution"
         "?date=&symbol={ticker}"
@@ -132,11 +134,33 @@ class StockbitConfig:
     spa_settle_ms: int = 4_000
     # ── Broker code lists ──────────────────────────────────────────────────
     institutional_proxy_codes: tuple[str, ...] = (
-        "AK", "ZP", "YP", "BK", "YU", "CP", "KZ", "HD", "RX", "DR"
+        "AK",
+        "ZP",
+        "YP",
+        "BK",
+        "YU",
+        "CP",
+        "KZ",
+        "HD",
+        "RX",
+        "DR",
     )
     tracked_broker_codes: tuple[str, ...] = (
-        "AK", "ZP", "YP", "BK", "YU", "CP", "KZ", "HD", "RX", "DR",
-        "XL", "PD", "MS", "DB", "ML",
+        "AK",
+        "ZP",
+        "YP",
+        "BK",
+        "YU",
+        "CP",
+        "KZ",
+        "HD",
+        "RX",
+        "DR",
+        "XL",
+        "PD",
+        "MS",
+        "DB",
+        "ML",
     )
 
 

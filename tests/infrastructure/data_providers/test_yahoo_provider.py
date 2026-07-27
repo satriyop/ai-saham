@@ -9,6 +9,7 @@ from src.infrastructure.data_providers.yahoo import YahooFinanceProvider
 
 # ── Ticker normalization ───────────────────────────────────────────────────────
 
+
 def test_yahoo_provider_appends_idx_suffix_to_plain_stock_ticker():
     provider = YahooFinanceProvider()
 
@@ -43,19 +44,22 @@ def test_yahoo_provider_exposes_candle_provenance_metadata():
 
 # ── Volume conversion helpers ─────────────────────────────────────────────────
 
+
 def _make_df(rows: list[dict]) -> pd.DataFrame:
     """Build a minimal yfinance-style DataFrame for _dataframe_to_candles."""
     records = []
     index = []
     for r in rows:
         index.append(pd.Timestamp(r["date"]))
-        records.append({
-            "Open":   r["open"],
-            "High":   r["high"],
-            "Low":    r["low"],
-            "Close":  r["close"],
-            "Volume": r["volume"],
-        })
+        records.append(
+            {
+                "Open": r["open"],
+                "High": r["high"],
+                "Low": r["low"],
+                "Close": r["close"],
+                "Volume": r["volume"],
+            }
+        )
     df = pd.DataFrame(records, index=pd.DatetimeIndex(index))
     df.index.name = "Date"
     return df
@@ -63,32 +67,54 @@ def _make_df(rows: list[dict]) -> pd.DataFrame:
 
 # ── IHSG volume: lots → shares conversion ────────────────────────────────────
 
+
 def test_yahoo_ihsg_volume_is_multiplied_by_100():
     """Yahoo reports ^JKSE volume in lots. The stored value must be in shares
     (lots * 100) to be consistent with Stockbit and the volume_unit='shares' label."""
     provider = YahooFinanceProvider()
-    df = _make_df([{
-        "date": "2026-06-25",
-        "open": 5873.07, "high": 6056.20, "low": 5864.00, "close": 5999.04,
-        "volume": 187_930_400,   # Yahoo value — in lots
-    }])
+    df = _make_df(
+        [
+            {
+                "date": "2026-06-25",
+                "open": 5873.07,
+                "high": 6056.20,
+                "low": 5864.00,
+                "close": 5999.04,
+                "volume": 187_930_400,  # Yahoo value — in lots
+            }
+        ]
+    )
 
     candles = provider._dataframe_to_candles("IHSG", df)
 
     assert len(candles) == 1
-    assert candles[0].volume == 187_930_400 * 100   # stored as shares
+    assert candles[0].volume == 187_930_400 * 100  # stored as shares
 
 
 def test_yahoo_ihsg_zero_volume_row_is_skipped():
     """Yahoo returns volume=0 for ^JKSE when the session is in progress.
     That row must be dropped — a zero-volume IHSG daily bar is not valid."""
     provider = YahooFinanceProvider()
-    df = _make_df([
-        {"date": "2026-06-30", "open": 5801.0, "high": 5811.0, "low": 5638.0,
-         "close": 5643.0, "volume": 177_538_200},
-        {"date": "2026-07-01", "open": 5640.0, "high": 5737.0, "low": 5607.0,
-         "close": 5695.0, "volume": 0},           # in-progress session
-    ])
+    df = _make_df(
+        [
+            {
+                "date": "2026-06-30",
+                "open": 5801.0,
+                "high": 5811.0,
+                "low": 5638.0,
+                "close": 5643.0,
+                "volume": 177_538_200,
+            },
+            {
+                "date": "2026-07-01",
+                "open": 5640.0,
+                "high": 5737.0,
+                "low": 5607.0,
+                "close": 5695.0,
+                "volume": 0,
+            },  # in-progress session
+        ]
+    )
 
     candles = provider._dataframe_to_candles("IHSG", df)
 
@@ -100,27 +126,41 @@ def test_yahoo_stock_volume_is_not_multiplied():
     """Non-benchmark tickers must NOT have volume multiplied — Yahoo stock
     volume is already in shares."""
     provider = YahooFinanceProvider()
-    df = _make_df([{
-        "date": "2026-06-25",
-        "open": 9400.0, "high": 9500.0, "low": 9350.0, "close": 9450.0,
-        "volume": 12_345_678,
-    }])
+    df = _make_df(
+        [
+            {
+                "date": "2026-06-25",
+                "open": 9400.0,
+                "high": 9500.0,
+                "low": 9350.0,
+                "close": 9450.0,
+                "volume": 12_345_678,
+            }
+        ]
+    )
 
     candles = provider._dataframe_to_candles("BBCA", df)
 
     assert len(candles) == 1
-    assert candles[0].volume == 12_345_678   # unchanged
+    assert candles[0].volume == 12_345_678  # unchanged
 
 
 def test_yahoo_stock_zero_volume_row_is_kept():
     """Zero volume for a regular stock (e.g. holiday, no trade) is valid
     and must not be dropped."""
     provider = YahooFinanceProvider()
-    df = _make_df([{
-        "date": "2026-06-25",
-        "open": 9400.0, "high": 9400.0, "low": 9400.0, "close": 9400.0,
-        "volume": 0,
-    }])
+    df = _make_df(
+        [
+            {
+                "date": "2026-06-25",
+                "open": 9400.0,
+                "high": 9400.0,
+                "low": 9400.0,
+                "close": 9400.0,
+                "volume": 0,
+            }
+        ]
+    )
 
     candles = provider._dataframe_to_candles("BBCA", df)
 
@@ -131,14 +171,18 @@ def test_yahoo_stock_zero_volume_row_is_kept():
 def test_yahoo_provider_sanitizes_invalid_high_low_bounds():
     """Test that open/close values outside high/low bounds are sanitized."""
     provider = YahooFinanceProvider()
-    df = _make_df([{
-        "date": "2026-06-25",
-        "open": 16500.00,  # higher than high
-        "high": 16400.00,
-        "low": 16200.00,
-        "close": 16100.00,  # lower than low
-        "volume": 1000,
-    }])
+    df = _make_df(
+        [
+            {
+                "date": "2026-06-25",
+                "open": 16500.00,  # higher than high
+                "high": 16400.00,
+                "low": 16200.00,
+                "close": 16100.00,  # lower than low
+                "volume": 1000,
+            }
+        ]
+    )
 
     candles = provider._dataframe_to_candles("IDR=X", df)
 
@@ -148,4 +192,3 @@ def test_yahoo_provider_sanitizes_invalid_high_low_bounds():
     assert candle.high == Decimal("16500.00")
     # Low should be sanitized to close_price (16100.00)
     assert candle.low == Decimal("16100.00")
-

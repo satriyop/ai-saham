@@ -29,7 +29,8 @@ def score_vix(
     close = latest_close(candles)
     if close is None:
         return unavailable_context_factor(
-            "vix", cfg.weight,
+            "vix",
+            cfg.weight,
             f"no {cfg.ticker} candles cached; run: saham fetch market {cfg.ticker}",
         )
 
@@ -42,7 +43,11 @@ def score_vix(
         score = _interpolate_score(v, cfg.low, cfg.elevated, cfg.low_score, cfg.elevated_score)
     elif v < cfg.high:
         score = _interpolate_score(
-            v, cfg.elevated, cfg.high, cfg.elevated_score, cfg.risk_off_score,
+            v,
+            cfg.elevated,
+            cfg.high,
+            cfg.elevated_score,
+            cfg.risk_off_score,
         )
     else:  # v >= cfg.high → score 0.0; VOLATILE override fires separately
         score = cfg.high_score
@@ -61,8 +66,13 @@ def score_vix(
         rationale += f" (volatile ≥{cfg.high})"
 
     return ContextFactor(
-        name="vix", enabled=True, value=v, score=round(score, 4),
-        weight=cfg.weight, label=label, rationale=rationale,
+        name="vix",
+        enabled=True,
+        value=v,
+        score=round(score, 4),
+        weight=cfg.weight,
+        label=label,
+        rationale=rationale,
     )
 
 
@@ -82,7 +92,8 @@ def score_eido(
 
     if eido_ret is None:
         return unavailable_context_factor(
-            "eido", cfg.weight,
+            "eido",
+            cfg.weight,
             f"no {cfg.ticker} candles cached; run: saham fetch market {cfg.ticker}",
         )
 
@@ -101,8 +112,13 @@ def score_eido(
     label = _score_label(score, labels)
 
     return ContextFactor(
-        name="eido", enabled=True, value=round(divergence, 4), score=round(score, 4),
-        weight=cfg.weight, label=label, rationale=rationale_suffix,
+        name="eido",
+        enabled=True,
+        value=round(divergence, 4),
+        score=round(score, 4),
+        weight=cfg.weight,
+        label=label,
+        rationale=rationale_suffix,
     )
 
 
@@ -119,7 +135,8 @@ def score_usd_idr(
     ret = pct_return(candles, cfg.lookback_days)
     if ret is None:
         return unavailable_context_factor(
-            "usd_idr", cfg.weight,
+            "usd_idr",
+            cfg.weight,
             f"no {cfg.ticker} candles cached; run: saham fetch market {cfg.ticker}",
         )
 
@@ -132,8 +149,13 @@ def score_usd_idr(
     rationale = f"IDR {direction} {abs(ret):.1f}% over {cfg.lookback_days}d (USD/IDR Δ {ret:+.1f}%)"
 
     return ContextFactor(
-        name="usd_idr", enabled=True, value=round(ret, 4), score=round(score, 4),
-        weight=cfg.weight, label=label, rationale=rationale,
+        name="usd_idr",
+        enabled=True,
+        value=round(ret, 4),
+        score=round(score, 4),
+        weight=cfg.weight,
+        label=label,
+        rationale=rationale,
     )
 
 
@@ -148,7 +170,8 @@ def score_idx_trend(
         return disabled_context_factor("idx_trend", cfg.weight)
     if not candles:
         return unavailable_context_factor(
-            "idx_trend", cfg.weight,
+            "idx_trend",
+            cfg.weight,
             f"no {cfg.benchmark_ticker} candles cached; "
             f"run: saham fetch market {cfg.benchmark_ticker}",
         )
@@ -159,7 +182,9 @@ def score_idx_trend(
 
     if sma50 is None:
         return unavailable_context_factor(
-            "idx_trend", cfg.weight, f"insufficient history for SMA{cfg.sma_slow}",
+            "idx_trend",
+            cfg.weight,
+            f"insufficient history for SMA{cfg.sma_slow}",
         )
 
     # Primary: % distance from SMA50
@@ -186,8 +211,13 @@ def score_idx_trend(
         rationale += f" / SMA{cfg.sma_fast} {'above' if close > float(sma20) else 'below'}"
 
     return ContextFactor(
-        name="idx_trend", enabled=True, value=round(dist_pct, 4), score=round(score, 4),
-        weight=cfg.weight, label=label, rationale=rationale,
+        name="idx_trend",
+        enabled=True,
+        value=round(dist_pct, 4),
+        score=round(score, 4),
+        weight=cfg.weight,
+        label=label,
+        rationale=rationale,
     )
 
 
@@ -202,14 +232,16 @@ def score_foreign_flow(
         return disabled_context_factor("foreign_flow", cfg.weight)
     if not series:
         return unavailable_context_factor(
-            "foreign_flow", cfg.weight, "no broker summary data; run: saham fetch market",
+            "foreign_flow",
+            cfg.weight,
+            "no broker summary data; run: saham fetch market",
         )
 
     # Sort by date, take up to reference_days entries
     sorted_series = sorted(series, key=lambda x: x[0])
-    lookback = sorted_series[-cfg.lookback_days:]
+    lookback = sorted_series[-cfg.lookback_days :]
     reference = (
-        sorted_series[-cfg.reference_days:]
+        sorted_series[-cfg.reference_days :]
         if len(sorted_series) >= cfg.reference_days
         else sorted_series
     )
@@ -240,13 +272,17 @@ def score_foreign_flow(
     flow_str = _fmt_idr(recent_avg)
     ref_str = _fmt_idr(ref_avg)
     rationale = (
-        f"Net foreign {flow_str} avg/{cfg.lookback_days}d "
-        f"(ref {ref_str} avg/{cfg.reference_days}d)"
+        f"Net foreign {flow_str} avg/{cfg.lookback_days}d (ref {ref_str} avg/{cfg.reference_days}d)"
     )
 
     return ContextFactor(
-        name="foreign_flow", enabled=True, value=round(float(recent_avg), 2),
-        score=round(score, 4), weight=cfg.weight, label=label, rationale=rationale,
+        name="foreign_flow",
+        enabled=True,
+        value=round(float(recent_avg), 2),
+        score=round(score, 4),
+        weight=cfg.weight,
+        label=label,
+        rationale=rationale,
     )
 
 
@@ -277,7 +313,9 @@ def score_idx_breadth(
 
     if evaluated == 0:
         return unavailable_context_factor(
-            "idx_breadth", cfg.weight, "no tickers with sufficient history",
+            "idx_breadth",
+            cfg.weight,
+            "no tickers with sufficient history",
         )
 
     breadth_pct = above / evaluated * 100.0
@@ -289,8 +327,13 @@ def score_idx_breadth(
     )
 
     return ContextFactor(
-        name="idx_breadth", enabled=True, value=round(breadth_pct, 4), score=round(score, 4),
-        weight=cfg.weight, label=label, rationale=rationale,
+        name="idx_breadth",
+        enabled=True,
+        value=round(breadth_pct, 4),
+        score=round(score, 4),
+        weight=cfg.weight,
+        label=label,
+        rationale=rationale,
     )
 
 
@@ -306,7 +349,9 @@ def weighted_market_conviction(factors: list[ContextFactor], neutral_score: floa
 
 
 def classify_market_regime(
-    conviction: float, vix_close: Decimal | None, thresholds,
+    conviction: float,
+    vix_close: Decimal | None,
+    thresholds,
 ) -> MarketRegime:
     # VOLATILE override: VIX hard threshold takes precedence
     if vix_close is not None and float(vix_close) > thresholds.volatile_vix_override:
@@ -341,19 +386,30 @@ def simple_moving_average(candles: list[Candle], period: int) -> Decimal | None:
 
 def unavailable_context_factor(name: str, weight: float, reason: str) -> ContextFactor:
     return ContextFactor(
-        name=name, enabled=True, value=None, score=None,
-        weight=weight, label="UNAVAILABLE", rationale=reason,
+        name=name,
+        enabled=True,
+        value=None,
+        score=None,
+        weight=weight,
+        label="UNAVAILABLE",
+        rationale=reason,
     )
 
 
 def disabled_context_factor(name: str, weight: float) -> ContextFactor:
     return ContextFactor(
-        name=name, enabled=False, value=None, score=None,
-        weight=weight, label="DISABLED", rationale="disabled in config",
+        name=name,
+        enabled=False,
+        value=None,
+        score=None,
+        weight=weight,
+        label="DISABLED",
+        rationale="disabled in config",
     )
 
 
 # ── Private helpers ─────────────────────────────────────────────────────────
+
 
 def _piecewise_linear(value: float, low: float, high: float, neutral_score: float = 0.5) -> float:
     """Map value linearly from low→0.0 to high→1.0, clamped."""

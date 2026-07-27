@@ -69,9 +69,7 @@ def build_pre_open_order_book_context(
         bid_gap_pct = _price_gap_pct(ob.price, prev_close)
         gap_pct = iep_gap_pct if iep_gap_pct is not None else bid_gap_pct
         gap_price_source = (
-            "IEP"
-            if iep_gap_pct is not None
-            else ("BEST_BID" if bid_gap_pct is not None else None)
+            "IEP" if iep_gap_pct is not None else ("BEST_BID" if bid_gap_pct is not None else None)
         )
         spread_pct: Decimal | None = None
         bid_offer_imbalance: float | None = None
@@ -126,6 +124,4 @@ def _price_gap_pct(
 ) -> Decimal | None:
     if price is None or prev_close is None or prev_close <= 0:
         return None
-    return ((Decimal(price) - prev_close) / prev_close * 100).quantize(
-        Decimal("0.01")
-    )
+    return ((Decimal(price) - prev_close) / prev_close * 100).quantize(Decimal("0.01"))

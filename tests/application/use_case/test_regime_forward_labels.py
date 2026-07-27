@@ -115,7 +115,7 @@ def test_get_recent_returns_newest_first(tmp_path):
 
 
 def test_no_ticker_column_in_table(tmp_path):
-    repo = SQLiteRegimeObservationRepository(tmp_path / "test.db")
+    _repo = SQLiteRegimeObservationRepository(tmp_path / "test.db")
     with sqlite3.connect(tmp_path / "test.db") as conn:
         column_names = {row[1] for row in conn.execute("PRAGMA table_info(regime_observations)")}
     assert "ticker" not in column_names

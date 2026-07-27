@@ -1,4 +1,5 @@
 """Adapter helpers for pre-open paper journal review/outcome commands."""
+
 from __future__ import annotations
 
 from datetime import date
@@ -27,7 +28,8 @@ def run_pre_open_paper_review(journal_path: Path, db_path: Path) -> None:
     if not journal_path.exists():
         typer.echo(
             f"No confirmation journal at '{journal_path}'.\n"
-            "Run `saham trade pre-open log` after analyze first.", err=True,
+            "Run `saham trade pre-open log` after analyze first.",
+            err=True,
         )
         raise typer.Exit(1)
     store = PreOpenPaperJournalCsvStore(journal_path)
@@ -51,19 +53,18 @@ def run_pre_open_paper_outcome(
     outcome_result = result.lower()
     if outcome_result not in valid:
         typer.echo(
-            f"Error: --result must be one of: {', '.join(sorted(valid))}", err=True,
+            f"Error: --result must be one of: {', '.join(sorted(valid))}",
+            err=True,
         )
         raise typer.Exit(1)
     if not journal_path.exists():
         typer.echo(
-            f"No confirmation journal at '{journal_path}'.\n"
-            "Run `saham trade pre-open log` first.", err=True,
+            f"No confirmation journal at '{journal_path}'.\nRun `saham trade pre-open log` first.",
+            err=True,
         )
         raise typer.Exit(1)
     try:
-        target_date = (
-            date.fromisoformat(confirmed_date) if confirmed_date else date.today()
-        )
+        target_date = date.fromisoformat(confirmed_date) if confirmed_date else date.today()
     except ValueError:
         typer.echo("Error: --date must use YYYY-MM-DD format.", err=True)
         raise typer.Exit(1)
@@ -73,20 +74,21 @@ def run_pre_open_paper_outcome(
     )
     response = RecordPreOpenPaperOutcomeUseCase(journal_service=service).execute(
         RecordPreOpenPaperOutcomeRequest(
-            confirmed_at=target_date, ticker=ticker.upper(),
+            confirmed_at=target_date,
+            ticker=ticker.upper(),
             actual_entry_price=Decimal(str(entry)),
             actual_exit_price=Decimal(str(exit_price)),
-            outcome_result=outcome_result, notes=notes,
+            outcome_result=outcome_result,
+            notes=notes,
         )
     )
     if not response.updated:
         typer.echo(
-            f"No logged confirmation for {ticker.upper()} on {target_date}.", err=True,
+            f"No logged confirmation for {ticker.upper()} on {target_date}.",
+            err=True,
         )
         raise typer.Exit(1)
-    r_label = (
-        f"{response.outcome_r:+.2f}R" if response.outcome_r is not None else "N/A"
-    )
+    r_label = f"{response.outcome_r:+.2f}R" if response.outcome_r is not None else "N/A"
     typer.echo(
         f"Recorded outcome for {ticker.upper()} on {target_date}: "
         f"{outcome_result} | entry={entry:,.0f} "

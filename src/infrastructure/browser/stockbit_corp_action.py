@@ -38,23 +38,23 @@ logger = logging.getLogger(__name__)
 
 # Map raw Stockbit action type strings → CorporateActionEvent.TYPE_* constants
 _TYPE_MAP: dict[str, str] = {
-    "dividend":     CorporateActionEvent.TYPE_DIVIDEND,
-    "dividen":      CorporateActionEvent.TYPE_DIVIDEND,
-    "cash dividend":CorporateActionEvent.TYPE_DIVIDEND,
-    "rightissue":   CorporateActionEvent.TYPE_RIGHTS_ISSUE,
-    "right issue":  CorporateActionEvent.TYPE_RIGHTS_ISSUE,
+    "dividend": CorporateActionEvent.TYPE_DIVIDEND,
+    "dividen": CorporateActionEvent.TYPE_DIVIDEND,
+    "cash dividend": CorporateActionEvent.TYPE_DIVIDEND,
+    "rightissue": CorporateActionEvent.TYPE_RIGHTS_ISSUE,
+    "right issue": CorporateActionEvent.TYPE_RIGHTS_ISSUE,
     "rights issue": CorporateActionEvent.TYPE_RIGHTS_ISSUE,
-    "hmetd":        CorporateActionEvent.TYPE_RIGHTS_ISSUE,   # Hak Memesan Efek Terlebih Dahulu
-    "rups":         CorporateActionEvent.TYPE_RUPS,
-    "rupslb":       CorporateActionEvent.TYPE_RUPS,
-    "stocksplit":   CorporateActionEvent.TYPE_SPLIT,
-    "stock split":  CorporateActionEvent.TYPE_SPLIT,
-    "split":        CorporateActionEvent.TYPE_SPLIT,
-    "bonus":        CorporateActionEvent.TYPE_BONUS,
-    "bonus share":  CorporateActionEvent.TYPE_BONUS,
-    "warrant":      CorporateActionEvent.TYPE_WARRANT,
-    "ipo":          CorporateActionEvent.TYPE_IPO,
-    "tenderoffer":  CorporateActionEvent.TYPE_TENDER_OFFER,
+    "hmetd": CorporateActionEvent.TYPE_RIGHTS_ISSUE,  # Hak Memesan Efek Terlebih Dahulu
+    "rups": CorporateActionEvent.TYPE_RUPS,
+    "rupslb": CorporateActionEvent.TYPE_RUPS,
+    "stocksplit": CorporateActionEvent.TYPE_SPLIT,
+    "stock split": CorporateActionEvent.TYPE_SPLIT,
+    "split": CorporateActionEvent.TYPE_SPLIT,
+    "bonus": CorporateActionEvent.TYPE_BONUS,
+    "bonus share": CorporateActionEvent.TYPE_BONUS,
+    "warrant": CorporateActionEvent.TYPE_WARRANT,
+    "ipo": CorporateActionEvent.TYPE_IPO,
+    "tenderoffer": CorporateActionEvent.TYPE_TENDER_OFFER,
     "tender offer": CorporateActionEvent.TYPE_TENDER_OFFER,
 }
 
@@ -134,12 +134,8 @@ def _parse_events(ticker: str, body: dict) -> list[CorporateActionEvent]:
             detail = f"RUPS {rups_time} {venue}".strip()
 
         elif event_type == CorporateActionEvent.TYPE_RIGHTS_ISSUE:
-            ex_date = _parse_date(
-                payload.get("rightissue_exdate") or payload.get("ex_date")
-            )
-            cum_date = _parse_date(
-                payload.get("rightissue_cumdate") or payload.get("cum_date")
-            )
+            ex_date = _parse_date(payload.get("rightissue_exdate") or payload.get("ex_date"))
+            cum_date = _parse_date(payload.get("rightissue_cumdate") or payload.get("cum_date"))
             record_date = _parse_date(payload.get("rightissue_recdate"))
             payment_date = _parse_date(payload.get("rightissue_paydate"))
             price = payload.get("rightissue_price") or payload.get("subscription_price")
@@ -157,17 +153,19 @@ def _parse_events(ticker: str, body: dict) -> list[CorporateActionEvent]:
             ex_date = _parse_date(payload.get("ex_date") or payload.get("exdate"))
             cum_date = _parse_date(payload.get("cum_date") or payload.get("cumdate"))
 
-        events.append(CorporateActionEvent(
-            ticker=ticker.upper(),
-            event_type=event_type,
-            ex_date=ex_date,
-            cum_date=cum_date,
-            record_date=record_date,
-            payment_date=payment_date,
-            announcement_date=announcement_date,
-            detail=detail,
-            status="active" if payload.get("corp_action_active") else "inactive",
-        ))
+        events.append(
+            CorporateActionEvent(
+                ticker=ticker.upper(),
+                event_type=event_type,
+                ex_date=ex_date,
+                cum_date=cum_date,
+                record_date=record_date,
+                payment_date=payment_date,
+                announcement_date=announcement_date,
+                detail=detail,
+                status="active" if payload.get("corp_action_active") else "inactive",
+            )
+        )
 
     return events
 
@@ -271,17 +269,19 @@ class StockbitCorporateActionRepository(CorporateActionRepository, StockbitCachi
             earliest = ex or cum or rec or _parse_date(row["announcement_date"])
             if earliest is None or not (from_date <= earliest <= to_date):
                 continue
-            events.append(CorporateActionEvent(
-                ticker=ticker.upper(),
-                event_type=row["event_type"],
-                ex_date=ex,
-                cum_date=cum,
-                record_date=rec,
-                payment_date=_parse_date(row["payment_date"]),
-                announcement_date=_parse_date(row["announcement_date"]),
-                detail=row["detail"] or "",
-                status=row["status"] or "",
-            ))
+            events.append(
+                CorporateActionEvent(
+                    ticker=ticker.upper(),
+                    event_type=row["event_type"],
+                    ex_date=ex,
+                    cum_date=cum,
+                    record_date=rec,
+                    payment_date=_parse_date(row["payment_date"]),
+                    announcement_date=_parse_date(row["announcement_date"]),
+                    detail=row["detail"] or "",
+                    status=row["status"] or "",
+                )
+            )
         return events
 
     def _write_cache(self, ticker: str, events: list[CorporateActionEvent]) -> None:
@@ -367,10 +367,7 @@ class StockbitCorporateActionRepository(CorporateActionRepository, StockbitCachi
         events = self._fetch_from_api(ticker)
         self._write_cache(ticker, events)
 
-        return [
-            e for e in events
-            if _event_in_window(e, from_date, to_date)
-        ]
+        return [e for e in events if _event_in_window(e, from_date, to_date)]
 
 
 def _event_in_window(event: CorporateActionEvent, from_date: date, to_date: date) -> bool:

@@ -104,9 +104,7 @@ class MarkdownSkillWriter(SkillWriter):
 
         # Footer
         sidecar_name = self._sidecar_name(metadata.artifact_type)
-        parts.append(
-            f"\n---\n*Auto-generated from {sidecar_name}. Do not edit directly.*"
-        )
+        parts.append(f"\n---\n*Auto-generated from {sidecar_name}. Do not edit directly.*")
 
         return "\n".join(parts) + "\n"
 

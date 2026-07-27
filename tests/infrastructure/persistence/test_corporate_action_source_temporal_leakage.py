@@ -70,7 +70,11 @@ def _event(
         event_type=CorporateActionType.DIVIDEND,
         source_event_id=source_event_id,
         ticker="BBCA",
-        dates=(CorporateActionCalendarDate(date_role=CorporateActionDateRole.EX_DATE, event_date=event_date),),
+        dates=(
+            CorporateActionCalendarDate(
+                date_role=CorporateActionDateRole.EX_DATE, event_date=event_date
+            ),
+        ),
         active=True,
         raw_payload_json="{}",
         fetched_at=fetched_at,
@@ -97,7 +101,13 @@ class TestCorporateActionEventsTemporalLeakage:
         event_date inside the query window, is returned by an unbounded call —
         proving `as_of_fetched_at` is necessary, not redundant."""
         repo.save_events(
-            [_event(source_event_id="future-sync", fetched_at=FUTURE_FETCHED_AT, event_date=date(2026, 7, 20))]
+            [
+                _event(
+                    source_event_id="future-sync",
+                    fetched_at=FUTURE_FETCHED_AT,
+                    event_date=date(2026, 7, 20),
+                )
+            ]
         )
 
         unbounded = repo.get_events_for_ticker("BBCA", date(2026, 7, 1), date(2026, 7, 31))
@@ -111,8 +121,16 @@ class TestCorporateActionEventsTemporalLeakage:
         future; fetched_at — when we learned about it — cannot)."""
         repo.save_events(
             [
-                _event(source_event_id="known", fetched_at=DECISION_FETCHED_AT, event_date=date(2026, 7, 20)),
-                _event(source_event_id="future-sync", fetched_at=FUTURE_FETCHED_AT, event_date=date(2026, 7, 20)),
+                _event(
+                    source_event_id="known",
+                    fetched_at=DECISION_FETCHED_AT,
+                    event_date=date(2026, 7, 20),
+                ),
+                _event(
+                    source_event_id="future-sync",
+                    fetched_at=FUTURE_FETCHED_AT,
+                    event_date=date(2026, 7, 20),
+                ),
             ]
         )
 
@@ -125,8 +143,16 @@ class TestCorporateActionEventsTemporalLeakage:
     def test_get_events_by_date_role_also_respects_as_of_fetched_at(self, repo):
         repo.save_events(
             [
-                _event(source_event_id="known", fetched_at=DECISION_FETCHED_AT, event_date=date(2026, 7, 20)),
-                _event(source_event_id="future-sync", fetched_at=FUTURE_FETCHED_AT, event_date=date(2026, 7, 20)),
+                _event(
+                    source_event_id="known",
+                    fetched_at=DECISION_FETCHED_AT,
+                    event_date=date(2026, 7, 20),
+                ),
+                _event(
+                    source_event_id="future-sync",
+                    fetched_at=FUTURE_FETCHED_AT,
+                    event_date=date(2026, 7, 20),
+                ),
             ]
         )
 
@@ -141,7 +167,13 @@ class TestCorporateActionEventsTemporalLeakage:
 
     def test_corporate_action_events_future_fetched_at_is_invalid(self, repo):
         repo.save_events(
-            [_event(source_event_id="future-sync", fetched_at=FUTURE_FETCHED_AT, event_date=date(2026, 7, 20))]
+            [
+                _event(
+                    source_event_id="future-sync",
+                    fetched_at=FUTURE_FETCHED_AT,
+                    event_date=date(2026, 7, 20),
+                )
+            ]
         )
         unbounded = repo.get_events_for_ticker("BBCA", date(2026, 7, 1), date(2026, 7, 31))
         assert len(unbounded) == 1
@@ -150,7 +182,9 @@ class TestCorporateActionEventsTemporalLeakage:
         result = use_case.execute(
             source_family="corporate_action_events",
             effective_session=_decision_session(),
-            available_at=datetime.fromisoformat(unbounded[0].fetched_at).replace(tzinfo=IDX_TIMEZONE),
+            available_at=datetime.fromisoformat(unbounded[0].fetched_at).replace(
+                tzinfo=IDX_TIMEZONE
+            ),
         )
 
         assert result.status is SourceAvailabilityStatus.INVALID
@@ -158,7 +192,13 @@ class TestCorporateActionEventsTemporalLeakage:
 
     def test_corporate_action_events_known_before_decision_is_current(self, repo):
         repo.save_events(
-            [_event(source_event_id="known", fetched_at=DECISION_FETCHED_AT, event_date=date(2026, 7, 20))]
+            [
+                _event(
+                    source_event_id="known",
+                    fetched_at=DECISION_FETCHED_AT,
+                    event_date=date(2026, 7, 20),
+                )
+            ]
         )
         bounded = repo.get_events_for_ticker(
             "BBCA", date(2026, 7, 1), date(2026, 7, 31), as_of_fetched_at=DECISION_FETCHED_AT
@@ -179,7 +219,13 @@ class TestCorporateActionEventsTemporalLeakage:
 class TestCorporateActionEventDatesTemporalLeakage:
     def test_corporate_action_event_dates_future_fetched_at_is_invalid(self, repo):
         repo.save_events(
-            [_event(source_event_id="future-sync", fetched_at=FUTURE_FETCHED_AT, event_date=date(2026, 7, 20))]
+            [
+                _event(
+                    source_event_id="future-sync",
+                    fetched_at=FUTURE_FETCHED_AT,
+                    event_date=date(2026, 7, 20),
+                )
+            ]
         )
         rows = repo.get_events_by_date_role(
             date(2026, 7, 1), date(2026, 7, 31), (CorporateActionDateRole.EX_DATE,)

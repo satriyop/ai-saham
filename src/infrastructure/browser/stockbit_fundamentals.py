@@ -141,7 +141,9 @@ class StockbitFundamentalsProvider(FundamentalsProvider, StockbitCachingProvider
                 written = self._write_historical_rows(historical)
                 logger.debug(
                     "Fundamentals %s: backfilled %d/%d historical quarterly rows",
-                    ticker, written, len(historical),
+                    ticker,
+                    written,
+                    len(historical),
                 )
             return result
         except Exception as e:

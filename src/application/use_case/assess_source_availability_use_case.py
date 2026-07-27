@@ -266,7 +266,12 @@ class AssessSourceAvailabilityUseCase:
                         "yet passed for the latest completed session; settlement is "
                         "still pending.",
                     )
-            return (SourceAvailabilityStatus.LATE, "SESSION_ALIGNED_LATE_WITHIN_LAG", notes, expected_available_at)
+            return (
+                SourceAvailabilityStatus.LATE,
+                "SESSION_ALIGNED_LATE_WITHIN_LAG",
+                notes,
+                expected_available_at,
+            )
 
         notes = (
             f"observed_through is {session_gap} trading session(s) behind the "
@@ -279,7 +284,12 @@ class AssessSourceAvailabilityUseCase:
                 "completed session has long passed; this source is beyond its "
                 "configured settlement lag.",
             )
-        return (SourceAvailabilityStatus.STALE, "SESSION_ALIGNED_STALE", notes, expected_available_at)
+        return (
+            SourceAvailabilityStatus.STALE,
+            "SESSION_ALIGNED_STALE",
+            notes,
+            expected_available_at,
+        )
 
     @staticmethod
     def _assess_fetch_timestamp(

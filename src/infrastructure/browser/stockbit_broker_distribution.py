@@ -48,35 +48,39 @@ _TTL_DAYS = 1
 
 def _parse_counterparties(raw: list) -> tuple[BrokerCounterparty, ...]:
     result = []
-    for item in (raw or []):
+    for item in raw or []:
         if not isinstance(item, dict):
             continue
         code = str(item.get("code") or "").strip()
         if not code:
             continue
-        result.append(BrokerCounterparty(
-            broker_code=code.upper(),
-            broker_type=str(item.get("type") or "").strip(),
-            amount_idr=int(item.get("amount") or 0),
-        ))
+        result.append(
+            BrokerCounterparty(
+                broker_code=code.upper(),
+                broker_type=str(item.get("type") or "").strip(),
+                amount_idr=int(item.get("amount") or 0),
+            )
+        )
     return tuple(sorted(result, key=lambda c: c.amount_idr, reverse=True))
 
 
 def _parse_entries(raw_list: list) -> tuple[BrokerDistributionEntry, ...]:
     result = []
-    for item in (raw_list or []):
+    for item in raw_list or []:
         if not isinstance(item, dict):
             continue
         detail = item.get("detail") or {}
         code = str(detail.get("code") or "").strip()
         if not code:
             continue
-        result.append(BrokerDistributionEntry(
-            broker_code=code.upper(),
-            broker_type=str(detail.get("type") or "").strip(),
-            amount_idr=int(detail.get("amount") or 0),
-            counterparties=_parse_counterparties(item.get("distribute_to") or []),
-        ))
+        result.append(
+            BrokerDistributionEntry(
+                broker_code=code.upper(),
+                broker_type=str(detail.get("type") or "").strip(),
+                amount_idr=int(detail.get("amount") or 0),
+                counterparties=_parse_counterparties(item.get("distribute_to") or []),
+            )
+        )
     return tuple(sorted(result, key=lambda e: e.amount_idr, reverse=True))
 
 
@@ -164,26 +168,34 @@ class StockbitBrokerDistributionProvider(BrokerDistributionProvider, StockbitCac
 
     def _write(self, snapshot: BrokerDistributionSnapshot) -> None:
         try:
-            buyers_json = json.dumps([
-                {
-                    "code": e.broker_code, "type": e.broker_type, "amount": e.amount_idr,
-                    "counterparties": [
-                        {"code": c.broker_code, "type": c.broker_type, "amount": c.amount_idr}
-                        for c in e.counterparties
-                    ],
-                }
-                for e in snapshot.top_buyers
-            ])
-            sellers_json = json.dumps([
-                {
-                    "code": e.broker_code, "type": e.broker_type, "amount": e.amount_idr,
-                    "counterparties": [
-                        {"code": c.broker_code, "type": c.broker_type, "amount": c.amount_idr}
-                        for c in e.counterparties
-                    ],
-                }
-                for e in snapshot.top_sellers
-            ])
+            buyers_json = json.dumps(
+                [
+                    {
+                        "code": e.broker_code,
+                        "type": e.broker_type,
+                        "amount": e.amount_idr,
+                        "counterparties": [
+                            {"code": c.broker_code, "type": c.broker_type, "amount": c.amount_idr}
+                            for c in e.counterparties
+                        ],
+                    }
+                    for e in snapshot.top_buyers
+                ]
+            )
+            sellers_json = json.dumps(
+                [
+                    {
+                        "code": e.broker_code,
+                        "type": e.broker_type,
+                        "amount": e.amount_idr,
+                        "counterparties": [
+                            {"code": c.broker_code, "type": c.broker_type, "amount": c.amount_idr}
+                            for c in e.counterparties
+                        ],
+                    }
+                    for e in snapshot.top_sellers
+                ]
+            )
             fetched_str = (
                 snapshot.fetched_at.isoformat()
                 if snapshot.fetched_at
@@ -197,8 +209,11 @@ class StockbitBrokerDistributionProvider(BrokerDistributionProvider, StockbitCac
                     VALUES (?, ?, ?, ?, ?)
                     """,
                     (
-                        snapshot.ticker, snapshot.date.isoformat(),
-                        buyers_json, sellers_json, fetched_str,
+                        snapshot.ticker,
+                        snapshot.date.isoformat(),
+                        buyers_json,
+                        sellers_json,
+                        fetched_str,
                     ),
                 )
         except Exception as exc:
@@ -231,7 +246,9 @@ class StockbitBrokerDistributionProvider(BrokerDistributionProvider, StockbitCac
         try:
             buyers = tuple(
                 BrokerDistributionEntry(
-                    broker_code=e["code"], broker_type=e["type"], amount_idr=e["amount"],
+                    broker_code=e["code"],
+                    broker_type=e["type"],
+                    amount_idr=e["amount"],
                     counterparties=tuple(
                         BrokerCounterparty(
                             broker_code=c["code"], broker_type=c["type"], amount_idr=c["amount"]
@@ -243,7 +260,9 @@ class StockbitBrokerDistributionProvider(BrokerDistributionProvider, StockbitCac
             )
             sellers = tuple(
                 BrokerDistributionEntry(
-                    broker_code=e["code"], broker_type=e["type"], amount_idr=e["amount"],
+                    broker_code=e["code"],
+                    broker_type=e["type"],
+                    amount_idr=e["amount"],
                     counterparties=tuple(
                         BrokerCounterparty(
                             broker_code=c["code"], broker_type=c["type"], amount_idr=c["amount"]

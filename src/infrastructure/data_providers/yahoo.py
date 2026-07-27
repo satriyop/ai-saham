@@ -57,6 +57,7 @@ class YahooFinanceProvider(MarketDataProvider):
         """
         if market_suffix is None:
             from src.infrastructure.config.app_config import load_app_config
+
             market_suffix = load_app_config().market.suffix
         self._market_suffix = market_suffix
         self._non_idx_tickers = non_idx_tickers or set()

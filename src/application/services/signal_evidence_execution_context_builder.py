@@ -35,9 +35,7 @@ class SignalEvidenceExecutionContextBuilder:
         use_case = None
         if self._trading_session_calendar_loader is not None:
             try:
-                calendar = self._trading_session_calendar_loader(
-                    coverage_start, coverage_end
-                )
+                calendar = self._trading_session_calendar_loader(coverage_start, coverage_end)
                 if calendar is not None:
                     use_case = AssessSourceAvailabilityUseCase(calendar=calendar)
             except (ValueError, TypeError):

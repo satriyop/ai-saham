@@ -88,9 +88,7 @@ def run_accumulation_log_command(
         return
 
     score_str = (
-        f"{result.candidate_accum_score:.1f}"
-        if result.candidate_accum_score is not None
-        else "N/A"
+        f"{result.candidate_accum_score:.1f}" if result.candidate_accum_score is not None else "N/A"
     )
     pattern_str = f" | pattern: {result.pattern}" if result.pattern else ""
     decision_str = f" | setup={setup_name} | match={result.setup_match}" if from_analysis else ""

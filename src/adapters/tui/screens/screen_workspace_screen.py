@@ -156,9 +156,7 @@ class ScreenWorkspaceScreen(Screen[None]):
                     zebra_stripes=True,
                 )
                 with VerticalScroll(id="candidate-preview"):
-                    yield Static(
-                        "Select a candidate to view preview detail.", id="preview-content"
-                    )
+                    yield Static("Select a candidate to view preview detail.", id="preview-content")
 
         yield Footer()
 
@@ -289,9 +287,7 @@ class ScreenWorkspaceScreen(Screen[None]):
             return
         idx = min(self._selected_index, len(self._watchlist_summaries) - 1)
         name = self._watchlist_summaries[idx].name
-        request = CompareScreenWatchlistRequest(
-            name=name, screen_request=self._build_request()
-        )
+        request = CompareScreenWatchlistRequest(name=name, screen_request=self._build_request())
         self._start(_OP_COMPARE, self._execute_compare, request)
 
     def action_toggle_multi(self) -> None:
@@ -389,9 +385,7 @@ class ScreenWorkspaceScreen(Screen[None]):
         if multi is not None:
             out: list[Any] = []
             for row in getattr(multi, "rows", []) or []:
-                cand = getattr(row, "canonical_candidate", None) or getattr(
-                    row, "candidate", None
-                )
+                cand = getattr(row, "canonical_candidate", None) or getattr(row, "candidate", None)
                 if cand is not None:
                     out.append(cand)
             return out
@@ -401,9 +395,7 @@ class ScreenWorkspaceScreen(Screen[None]):
         if hasattr(projection, "rows"):
             out = []
             for row in projection.rows:
-                cand = getattr(row, "canonical_candidate", None) or getattr(
-                    row, "candidate", None
-                )
+                cand = getattr(row, "canonical_candidate", None) or getattr(row, "candidate", None)
                 if cand is not None:
                     out.append(cand)
             return out
@@ -573,11 +565,7 @@ class ScreenWorkspaceScreen(Screen[None]):
         self._candidate_rows = view.candidate_rows
         self._related_actions = view.related_actions
         self._accum_view_is_multi = view.is_multi
-        if (
-            not view.candidate_rows
-            or status is ScreenStatus.EMPTY
-            or view.result_status == "empty"
-        ):
+        if not view.candidate_rows or status is ScreenStatus.EMPTY or view.result_status == "empty":
             mode = "MULTI · " if view.is_multi else ""
             self._set_status(f"EMPTY — {mode}0 candidates found", "semantic-info")
             self._clear_table()
@@ -585,9 +573,7 @@ class ScreenWorkspaceScreen(Screen[None]):
             self.query_one("#candidate-selected", Static).update(
                 "Action: - | Risk: UNKNOWN | Data: EMPTY"
             )
-            self.query_one("#preview-content", Static).update(
-                "No matching candidates found."
-            )
+            self.query_one("#preview-content", Static).update("No matching candidates found.")
             return
 
         n = len(view.candidate_rows)
@@ -599,9 +585,7 @@ class ScreenWorkspaceScreen(Screen[None]):
                 "semantic-ready",
             )
         else:
-            self._set_status(
-                f"READY — SINGLE · {n} candidate(s)", "semantic-ready"
-            )
+            self._set_status(f"READY — SINGLE · {n} candidate(s)", "semantic-ready")
         self._populate_accumulation_table(view)
         self._select_index(0)
         self._sync_cursor_to_selected_index()
@@ -620,9 +604,7 @@ class ScreenWorkspaceScreen(Screen[None]):
                 col_names.extend(["Pattern", SIGNAL, "Risk", "Action"])
                 table.add_columns(*col_names)
                 for row in view.candidate_rows:
-                    signal = (
-                        row.signal_score if row.signal_score is not None else "-"
-                    )
+                    signal = row.signal_score if row.signal_score is not None else "-"
                     disc = format_disc_pct_plain(row.vwap_discount_pct)
                     by_w = dict(row.window_accum)
                     cells: list[Any] = [
@@ -643,13 +625,9 @@ class ScreenWorkspaceScreen(Screen[None]):
                     )
                     table.add_row(*cells, key=str(row.canonical_rank - 1))
             else:
-                table.add_columns(
-                    "#", "Ticker", ACCUM, "Streak", "Disc%", "Risk", "Action", SIGNAL
-                )
+                table.add_columns("#", "Ticker", ACCUM, "Streak", "Disc%", "Risk", "Action", SIGNAL)
                 for row in view.candidate_rows:
-                    signal = (
-                        row.signal_score if row.signal_score is not None else "-"
-                    )
+                    signal = row.signal_score if row.signal_score is not None else "-"
                     disc = format_disc_pct_plain(row.vwap_discount_pct)
                     table.add_row(
                         str(row.canonical_rank),
@@ -669,11 +647,7 @@ class ScreenWorkspaceScreen(Screen[None]):
     def _render_candidate_preview(self, row: Any) -> None:
         disc = format_disc_pct_plain(getattr(row, "vwap_discount_pct", None))
         depth = getattr(row, "vwap_depth_label", None) or "-"
-        data_state = (
-            getattr(row, "data_state", None)
-            or getattr(row, "data_status", None)
-            or "-"
-        )
+        data_state = getattr(row, "data_state", None) or getattr(row, "data_status", None) or "-"
         is_multi = bool(getattr(row, "window_accum", ()) or getattr(row, "pattern", None))
         mode = "MULTI" if is_multi else "SINGLE"
         self.query_one("#candidate-selected", Static).update(
@@ -684,15 +658,9 @@ class ScreenWorkspaceScreen(Screen[None]):
         ticker = str(getattr(row, "ticker", "")).upper()
         related = getattr(self, "_related_actions", ()) or ()
         ticker_actions = [
-            action.command
-            for action in related
-            if ticker and ticker in action.command
+            action.command for action in related if ticker and ticker in action.command
         ]
-        next_steps = (
-            "\n".join(f"  {cmd}" for cmd in ticker_actions)
-            if ticker_actions
-            else "  -"
-        )
+        next_steps = "\n".join(f"  {cmd}" for cmd in ticker_actions) if ticker_actions else "  -"
         sig = row.signal_score if row.signal_score is not None else "-"
         cov = (
             f"{row.signal_authority_coverage:.0%}"
@@ -773,16 +741,8 @@ class ScreenWorkspaceScreen(Screen[None]):
                 close = f"{r.last_close:,.0f}" if r.last_close is not None else "—"
                 chg = f"{r.change_pct:+.2f}" if r.change_pct is not None else "—"
                 vol = f"{r.volume:,}" if r.volume is not None else "—"
-                fnet = (
-                    f"{r.foreign_net_value:,.0f}"
-                    if r.foreign_net_value is not None
-                    else "—"
-                )
-                fratio = (
-                    f"{r.foreign_flow_ratio:+.2f}"
-                    if r.foreign_flow_ratio is not None
-                    else "—"
-                )
+                fnet = f"{r.foreign_net_value:,.0f}" if r.foreign_net_value is not None else "—"
+                fratio = f"{r.foreign_flow_ratio:+.2f}" if r.foreign_flow_ratio is not None else "—"
                 table.add_row(r.ticker, close, chg, vol, fnet, fratio, key=str(i))
             self._set_table_message("")
         finally:
@@ -795,9 +755,7 @@ class ScreenWorkspaceScreen(Screen[None]):
         chg = f"{row.change_pct:+.2f}" if row.change_pct is not None else na
         vol = f"{row.volume:,}" if row.volume is not None else na
         fnet = str(row.foreign_net_value) if row.foreign_net_value is not None else na
-        fratio = (
-            f"{row.foreign_flow_ratio:+.2f}" if row.foreign_flow_ratio is not None else na
-        )
+        fratio = f"{row.foreign_flow_ratio:+.2f}" if row.foreign_flow_ratio is not None else na
         head_chg = f"{row.change_pct:+.2f}%" if row.change_pct is not None else "—"
         head_close = row.last_close if row.last_close is not None else "—"
         self.query_one("#candidate-selected", Static).update(

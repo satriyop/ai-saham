@@ -114,6 +114,4 @@ def print_skill_generation_result(result: SkillGenerationResult) -> None:
     if result.success:
         typer.echo(f"\nSKILL.md: {result.output_path}")
         if result.drift_detected:
-            typer.echo(
-                "  Warning: Rules changed — SKILL.md regenerated.", err=True
-            )
+            typer.echo("  Warning: Rules changed — SKILL.md regenerated.", err=True)

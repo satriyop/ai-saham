@@ -79,9 +79,7 @@ def _cnfb_bullish(
     per_window: dict[str, float] = {}
     for window in config.cnfb_bullish_windows:
         threshold = config.min_sessions.get(f"cnfb_{window}d", window)
-        score = _cnfb_divergence(
-            points, candles, window, threshold, bearish=False
-        )
+        score = _cnfb_divergence(points, candles, window, threshold, bearish=False)
         if score is not None:
             scores.append(score)
             per_window[f"cnfb_{window}d"] = round(score, 4)
@@ -101,9 +99,7 @@ def _cnfb_bearish(
     per_window: dict[str, float] = {}
     for window in config.cnfb_bearish_windows:
         threshold = config.min_sessions.get(f"cnfb_{window}d", 2)
-        score = _cnfb_divergence(
-            points, candles, window, threshold, bearish=True
-        )
+        score = _cnfb_divergence(points, candles, window, threshold, bearish=True)
         if score is not None:
             per_window[f"cnfb_{window}d"] = round(score, 4)
     if "cnfb_3d" in per_window:
@@ -176,9 +172,7 @@ def _foreign_vwap_distance(
 ) -> float | None:
     foreign = foreign_flows(flows, foreign_codes)
     threshold = config.min_sessions.get("vwap_20d", 10)
-    return vwap_distance(
-        foreign, candles, config.foreign_vwap_days, threshold
-    )
+    return vwap_distance(foreign, candles, config.foreign_vwap_days, threshold)
 
 
 def build_foreign_track(
@@ -190,8 +184,7 @@ def build_foreign_track(
     metadata: dict[str, Any],
     safe: Callable[[Callable[[], float | None], str], float | None],
     safe_pair: Callable[
-        [Callable[[], tuple[float | None, float | None]], str],
-        tuple[float | None, float | None]
+        [Callable[[], tuple[float | None, float | None]], str], tuple[float | None, float | None]
     ],
     mean_available: Callable[[list[float | None]], float | None],
     unavailable: list[str],
@@ -207,16 +200,12 @@ def build_foreign_track(
         "foreign_concentration",
     )
     cnfb_score = safe(
-        lambda: _cnfb_bullish(
-            request.foreign_flow_points, candles, config, metadata
-        ),
+        lambda: _cnfb_bullish(request.foreign_flow_points, candles, config, metadata),
         "cnfb_divergence",
     )
     # Fast-distribution windows are diagnostic-only fingerprint data.
     safe(
-        lambda: _cnfb_bearish(
-            request.foreign_flow_points, candles, config, metadata
-        ),
+        lambda: _cnfb_bearish(request.foreign_flow_points, candles, config, metadata),
         "cnfb_distribution",
     )
     vwap_dist = safe(
@@ -240,17 +229,13 @@ def build_foreign_track(
     if participation is not None:
         available.append((participation, w.get("foreign_participation", 0.0)))
     if concentration_score is not None:
-        available.append(
-            (concentration_score, w.get("foreign_concentration_cr4_cr8", 0.0))
-        )
+        available.append((concentration_score, w.get("foreign_concentration_cr4_cr8", 0.0)))
     if cnfb_score is not None:
         available.append((cnfb_score, w.get("cnfb_price_divergence", 0.0)))
     if vwap_dist is not None:
         available.append((vwap_dist, w.get("foreign_vwap_distance", 0.0)))
     total_w = sum(wt for _, wt in available)
-    conviction = (
-        sum(s * wt for s, wt in available) / total_w if total_w > 0 else 0.0
-    )
+    conviction = sum(s * wt for s, wt in available) / total_w if total_w > 0 else 0.0
 
     return ForeignInstitutionalTrack(
         foreign_participation_score=participation,

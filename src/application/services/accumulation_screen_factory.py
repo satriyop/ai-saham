@@ -60,9 +60,7 @@ def create_accumulation_screen_use_case(
     strategy-evidence lookups keep working when request.strategy_name is set.
     """
     score_use_case = (
-        ScoreAccumUseCase(accum_score_policy)
-        if accum_score_policy is not None
-        else None
+        ScoreAccumUseCase(accum_score_policy) if accum_score_policy is not None else None
     )
     return AccumulationScreenUseCase(
         broker_repository=broker_repository,

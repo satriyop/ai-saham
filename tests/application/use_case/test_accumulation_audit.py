@@ -193,13 +193,9 @@ def _alternating_candles(ticker: str, base: date, count: int) -> list[Candle]:
 
 def test_accumulation_audit_replays_signal_and_forward_returns_without_ai():
     base = date(2026, 1, 1)
-    candles = [
-        _candle("BBCA", base + timedelta(days=i), Decimal(100 + i))
-        for i in range(35)
-    ]
+    candles = [_candle("BBCA", base + timedelta(days=i), Decimal(100 + i)) for i in range(35)]
     summaries = [
-        _summary("BBCA", base + timedelta(days=i), Decimal(100 + i))
-        for i in range(10, 21)
+        _summary("BBCA", base + timedelta(days=i), Decimal(100 + i)) for i in range(10, 21)
     ]
 
     use_case = AccumulationAuditUseCase(
@@ -243,17 +239,12 @@ def test_accumulation_audit_replays_signal_and_forward_returns_without_ai():
 def test_accumulation_audit_does_not_use_future_candle_as_signal_price():
     base = date(2026, 1, 1)
     signal_date = base + timedelta(days=20)
-    candles = [
-        _candle("BBCA", base + timedelta(days=i), Decimal(100 + i))
-        for i in range(0, 21)
-    ]
+    candles = [_candle("BBCA", base + timedelta(days=i), Decimal(100 + i)) for i in range(0, 21)]
     candles.extend(
-        _candle("BBCA", base + timedelta(days=i), Decimal("1000"))
-        for i in range(21, 28)
+        _candle("BBCA", base + timedelta(days=i), Decimal("1000")) for i in range(21, 28)
     )
     summaries = [
-        _summary("BBCA", base + timedelta(days=i), Decimal(100 + i))
-        for i in range(14, 21)
+        _summary("BBCA", base + timedelta(days=i), Decimal(100 + i)) for i in range(14, 21)
     ]
 
     use_case = AccumulationAuditUseCase(
@@ -284,19 +275,12 @@ def test_accumulation_audit_strict_filters_keep_only_matching_candidates():
     base = date(2026, 1, 1)
     signal_date = base + timedelta(days=24)
     candles = _alternating_candles("BBCA", base, 25)
-    candles.extend(
-        _candle("BBCA", base + timedelta(days=i), Decimal("104"))
-        for i in range(25, 31)
-    )
+    candles.extend(_candle("BBCA", base + timedelta(days=i), Decimal("104")) for i in range(25, 31))
     candles.extend(_alternating_candles("BBRI", base, 31))
 
-    summaries = [
-        _summary("BBCA", base + timedelta(days=i), Decimal("110"))
-        for i in range(18, 25)
-    ]
+    summaries = [_summary("BBCA", base + timedelta(days=i), Decimal("110")) for i in range(18, 25)]
     summaries.extend(
-        _summary("BBRI", base + timedelta(days=i), Decimal("101"))
-        for i in range(18, 25)
+        _summary("BBRI", base + timedelta(days=i), Decimal("101")) for i in range(18, 25)
     )
 
     use_case = AccumulationAuditUseCase(
@@ -345,20 +329,11 @@ def test_accumulation_audit_groups_outcomes_by_broker_quality():
     base = date(2026, 1, 1)
     signal_date = base + timedelta(days=24)
     candles = _alternating_candles("BBCA", base, 25)
-    candles.extend(
-        _candle("BBCA", base + timedelta(days=i), Decimal("104"))
-        for i in range(25, 31)
-    )
+    candles.extend(_candle("BBCA", base + timedelta(days=i), Decimal("104")) for i in range(25, 31))
     candles.extend(_alternating_candles("BBRI", base, 25))
-    candles.extend(
-        _candle("BBRI", base + timedelta(days=i), Decimal("99"))
-        for i in range(25, 31)
-    )
+    candles.extend(_candle("BBRI", base + timedelta(days=i), Decimal("99")) for i in range(25, 31))
 
-    summaries = [
-        _summary("BBCA", base + timedelta(days=i), Decimal("110"))
-        for i in range(18, 24)
-    ]
+    summaries = [_summary("BBCA", base + timedelta(days=i), Decimal("110")) for i in range(18, 24)]
     summaries.append(
         _summary_with_brokers(
             "BBCA",
@@ -368,8 +343,7 @@ def test_accumulation_audit_groups_outcomes_by_broker_quality():
         )
     )
     summaries.extend(
-        _summary("BBRI", base + timedelta(days=i), Decimal("101"))
-        for i in range(18, 24)
+        _summary("BBRI", base + timedelta(days=i), Decimal("101")) for i in range(18, 24)
     )
     summaries.append(
         _summary_with_brokers(
@@ -408,9 +382,7 @@ def test_accumulation_audit_groups_outcomes_by_broker_quality():
     assert by_ticker["BBRI"].broker_quality == "noise+"
 
     broker_quality_stats = {
-        stat.bucket: stat
-        for stat in response.group_stats
-        if stat.dimension == "broker_quality"
+        stat.bucket: stat for stat in response.group_stats if stat.dimension == "broker_quality"
     }
     assert broker_quality_stats["smart+"].count == 1
     assert broker_quality_stats["noise+"].count == 1
@@ -420,24 +392,35 @@ def test_accumulation_audit_exit_simulation_reports_target_and_max_hold_stats():
     base = date(2026, 1, 1)
     signal_date = base + timedelta(days=24)
     candles = _alternating_candles("BBCA", base, 25)
-    candles.extend([
-        _ohlc(
-            "BBCA", base + timedelta(days=25),
-            Decimal("101"), Decimal("106"), Decimal("99"), Decimal("104"),
-        ),
-        _ohlc(
-            "BBCA", base + timedelta(days=26),
-            Decimal("104"), Decimal("105"), Decimal("102"), Decimal("103"),
-        ),
-        _ohlc(
-            "BBCA", base + timedelta(days=27),
-            Decimal("103"), Decimal("104"), Decimal("101"), Decimal("102"),
-        ),
-    ])
-    summaries = [
-        _summary("BBCA", base + timedelta(days=i), Decimal("110"))
-        for i in range(18, 25)
-    ]
+    candles.extend(
+        [
+            _ohlc(
+                "BBCA",
+                base + timedelta(days=25),
+                Decimal("101"),
+                Decimal("106"),
+                Decimal("99"),
+                Decimal("104"),
+            ),
+            _ohlc(
+                "BBCA",
+                base + timedelta(days=26),
+                Decimal("104"),
+                Decimal("105"),
+                Decimal("102"),
+                Decimal("103"),
+            ),
+            _ohlc(
+                "BBCA",
+                base + timedelta(days=27),
+                Decimal("103"),
+                Decimal("104"),
+                Decimal("101"),
+                Decimal("102"),
+            ),
+        ]
+    )
+    summaries = [_summary("BBCA", base + timedelta(days=i), Decimal("110")) for i in range(18, 25)]
 
     use_case = AccumulationAuditUseCase(
         indicator_registry=IndicatorRegistry(),
@@ -464,7 +447,8 @@ def test_accumulation_audit_exit_simulation_reports_target_and_max_hold_stats():
     )
 
     target_stat = next(
-        stat for stat in response.exit_simulations
+        stat
+        for stat in response.exit_simulations
         if stat.take_profit_pct == 5 and stat.stop_loss_pct == 3
     )
     assert target_stat.count == 1
@@ -474,7 +458,8 @@ def test_accumulation_audit_exit_simulation_reports_target_and_max_hold_stats():
     assert target_stat.target_rate_pct == 100.0
 
     max_hold_stat = next(
-        stat for stat in response.exit_simulations
+        stat
+        for stat in response.exit_simulations
         if stat.take_profit_pct == 20 and stat.stop_loss_pct == 20
     )
     assert max_hold_stat.avg_return_pct == 2.0
@@ -487,14 +472,15 @@ def test_accumulation_audit_exit_simulation_can_prioritize_target_on_same_day():
     candles = _alternating_candles("BBCA", base, 25)
     candles.append(
         _ohlc(
-            "BBCA", base + timedelta(days=25),
-            Decimal("100"), Decimal("106"), Decimal("94"), Decimal("100"),
+            "BBCA",
+            base + timedelta(days=25),
+            Decimal("100"),
+            Decimal("106"),
+            Decimal("94"),
+            Decimal("100"),
         )
     )
-    summaries = [
-        _summary("BBCA", base + timedelta(days=i), Decimal("110"))
-        for i in range(18, 25)
-    ]
+    summaries = [_summary("BBCA", base + timedelta(days=i), Decimal("110")) for i in range(18, 25)]
 
     use_case = AccumulationAuditUseCase(
         indicator_registry=IndicatorRegistry(),
@@ -544,13 +530,9 @@ def test_accumulation_audit_uses_injected_screen_and_preserves_signal_score():
 
     base = date(2026, 1, 1)
     signal_date = base + timedelta(days=20)
-    candles = [
-        _candle("BBCA", base + timedelta(days=i), Decimal(100 + i))
-        for i in range(35)
-    ]
+    candles = [_candle("BBCA", base + timedelta(days=i), Decimal(100 + i)) for i in range(35)]
     summaries = [
-        _summary("BBCA", base + timedelta(days=i), Decimal(100 + i))
-        for i in range(10, 21)
+        _summary("BBCA", base + timedelta(days=i), Decimal(100 + i)) for i in range(10, 21)
     ]
 
     assessment = AssessSignalResponse(
@@ -618,9 +600,7 @@ def test_accumulation_audit_uses_injected_screen_and_preserves_signal_score():
     assert fake_screen.execute.call_count == 1
     call_kwargs = fake_screen.execute.call_args
     assert call_kwargs.kwargs["execution_context"] is not None
-    assert isinstance(
-        call_kwargs.kwargs["execution_context"], SignalEvidenceExecutionContext
-    )
+    assert isinstance(call_kwargs.kwargs["execution_context"], SignalEvidenceExecutionContext)
     assert response.total_records == 1
     assert response.records[0].signal_score == 77
     assert response.records[0].signal_authority_coverage == 0.55

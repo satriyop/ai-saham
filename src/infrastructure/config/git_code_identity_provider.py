@@ -35,9 +35,7 @@ class GitCodeIdentityProvider:
             self._warnings.append("git_unavailable")
             return AuditCodeIdentity(git_commit=None, git_dirty=False, git_status_short=())
 
-        status_lines = tuple(
-            line for line in status_output.splitlines() if line.strip()
-        )
+        status_lines = tuple(line for line in status_output.splitlines() if line.strip())
         return AuditCodeIdentity(
             git_commit=commit.strip() or None,
             git_dirty=bool(status_lines),

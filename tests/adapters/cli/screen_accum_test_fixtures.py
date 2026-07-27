@@ -124,6 +124,7 @@ def _fake_workflow_result(**overrides):
     from src.application.use_case.run_accumulation_screen_workflow_use_case import (
         RunAccumulationScreenWorkflowResult,
     )
+
     params = dict(
         response=None,
         single_projection=None,

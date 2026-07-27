@@ -57,12 +57,8 @@ def _response(
         source_is_live=True,
         ncp_authoritative=True,
         capture_phase="NCP_LOCKED",
-        collection_started_at=datetime(
-            2026, 6, 12, 8, 56, tzinfo=ZoneInfo("Asia/Jakarta")
-        ),
-        decision_at=datetime(
-            2026, 6, 12, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta")
-        ),
+        collection_started_at=datetime(2026, 6, 12, 8, 56, tzinfo=ZoneInfo("Asia/Jakarta")),
+        decision_at=datetime(2026, 6, 12, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta")),
         decision_snapshot_ref="test:ncp",
     )
 
@@ -132,9 +128,7 @@ def test_build_pre_open_envelope_unavailable_missing():
     assert envelope["status"] == "missing"
     assert envelope["scope"] == "unavailable"
     assert envelope["scope_note"] == "auth failure"
-    assert envelope["fetch_hint"] == default_pre_open_fetch_hint(
-        PreOpenSourceStatus.UNAVAILABLE
-    )
+    assert envelope["fetch_hint"] == default_pre_open_fetch_hint(PreOpenSourceStatus.UNAVAILABLE)
 
 
 def test_build_pre_open_failure_envelope():

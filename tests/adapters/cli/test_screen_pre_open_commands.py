@@ -69,7 +69,8 @@ def test_pre_open_strategy_alias_is_removed():
     result = runner.invoke(
         app,
         [
-            "screen", "pre-open",
+            "screen",
+            "pre-open",
             "--movers-json",
             '[{"ticker":"BBCA","iev":150000}]',
             "--fast",
@@ -213,9 +214,7 @@ def test_pre_open_format_json_emits_envelope(monkeypatch):
         def now(cls, tz=None):
             return datetime(2026, 6, 12, 8, 50, tzinfo=tz)
 
-    monkeypatch.setattr(
-        "src.adapters.cli.screen_pre_open_commands.datetime", _FixedDatetime
-    )
+    monkeypatch.setattr("src.adapters.cli.screen_pre_open_commands.datetime", _FixedDatetime)
     monkeypatch.setattr(
         "src.adapters.cli.screen_pre_open_commands.resolve_pre_open_market_status",
         lambda: _BYPASS_GUARD_STATUS,
@@ -281,18 +280,14 @@ def test_pre_open_missing_session_json_status_missing(monkeypatch):
         def now(cls, tz=None):
             return datetime(2026, 6, 12, 8, 50, tzinfo=tz)
 
-    monkeypatch.setattr(
-        "src.adapters.cli.screen_pre_open_commands.datetime", _FixedDatetime
-    )
+    monkeypatch.setattr("src.adapters.cli.screen_pre_open_commands.datetime", _FixedDatetime)
     monkeypatch.setattr(
         "src.adapters.cli.screen_pre_open_commands.resolve_pre_open_market_status",
         lambda: _BYPASS_GUARD_STATUS,
     )
     monkeypatch.setattr(
         "src.adapters.cli.screen_pre_open_commands.resolve_pre_open_browser_plan",
-        lambda **kwargs: PreOpenBrowserPlan(
-            provider=None, autonomous=False, session_missing=True
-        ),
+        lambda **kwargs: PreOpenBrowserPlan(provider=None, autonomous=False, session_missing=True),
     )
 
     result = runner.invoke(app, ["screen", "pre-open", "--format", "json"])
@@ -339,18 +334,14 @@ def test_pre_open_missing_playwright_session_prints_plan_and_exits_0(monkeypatch
         def now(cls, tz=None):
             return datetime(2026, 6, 12, 8, 50, tzinfo=tz)
 
-    monkeypatch.setattr(
-        "src.adapters.cli.screen_pre_open_commands.datetime", _FixedDatetime
-    )
+    monkeypatch.setattr("src.adapters.cli.screen_pre_open_commands.datetime", _FixedDatetime)
     monkeypatch.setattr(
         "src.adapters.cli.screen_pre_open_commands.resolve_pre_open_market_status",
         lambda: _BYPASS_GUARD_STATUS,
     )
     monkeypatch.setattr(
         "src.adapters.cli.screen_pre_open_commands.resolve_pre_open_browser_plan",
-        lambda **kwargs: PreOpenBrowserPlan(
-            provider=None, autonomous=False, session_missing=True
-        ),
+        lambda **kwargs: PreOpenBrowserPlan(provider=None, autonomous=False, session_missing=True),
     )
 
     result = runner.invoke(app, ["screen", "pre-open"])
@@ -375,18 +366,14 @@ def test_pre_open_missing_provider_outside_window_with_snapshot_skips_browser_pl
         def now(cls, tz=None):
             return datetime(2026, 6, 12, 10, 15, tzinfo=tz)
 
-    monkeypatch.setattr(
-        "src.adapters.cli.screen_pre_open_commands.datetime", _FixedDatetime
-    )
+    monkeypatch.setattr("src.adapters.cli.screen_pre_open_commands.datetime", _FixedDatetime)
     monkeypatch.setattr(
         "src.adapters.cli.screen_pre_open_commands.resolve_pre_open_market_status",
         lambda: _BYPASS_GUARD_STATUS,
     )
     monkeypatch.setattr(
         "src.adapters.cli.screen_pre_open_commands.resolve_pre_open_browser_plan",
-        lambda **kwargs: PreOpenBrowserPlan(
-            provider=None, autonomous=False, session_missing=True
-        ),
+        lambda **kwargs: PreOpenBrowserPlan(provider=None, autonomous=False, session_missing=True),
     )
 
     result = runner.invoke(app, ["screen", "pre-open", "--db", str(db_path)])
@@ -409,18 +396,14 @@ def test_pre_open_missing_provider_outside_window_no_snapshot_skips_browser_plan
         def now(cls, tz=None):
             return datetime(2026, 6, 12, 10, 15, tzinfo=tz)
 
-    monkeypatch.setattr(
-        "src.adapters.cli.screen_pre_open_commands.datetime", _FixedDatetime
-    )
+    monkeypatch.setattr("src.adapters.cli.screen_pre_open_commands.datetime", _FixedDatetime)
     monkeypatch.setattr(
         "src.adapters.cli.screen_pre_open_commands.resolve_pre_open_market_status",
         lambda: _BYPASS_GUARD_STATUS,
     )
     monkeypatch.setattr(
         "src.adapters.cli.screen_pre_open_commands.resolve_pre_open_browser_plan",
-        lambda **kwargs: PreOpenBrowserPlan(
-            provider=None, autonomous=False, session_missing=True
-        ),
+        lambda **kwargs: PreOpenBrowserPlan(provider=None, autonomous=False, session_missing=True),
     )
 
     result = runner.invoke(app, ["screen", "pre-open", "--db", str(db_path)])
@@ -488,14 +471,11 @@ def _invoke_with_response(monkeypatch, response: PreOpenWorkflowResponse) -> tup
         ),
     )
 
-    
-
-
     result = runner.invoke(
         app,
         ["screen", "pre-open", "--movers-json", '[{"ticker":"BBCA","iev":150000}]'],
     )
-    return result, calls
+    return result
 
 
 def test_pre_open_outside_window_passed_to_workflow_request_for_autonomous_run(
@@ -506,9 +486,7 @@ def test_pre_open_outside_window_passed_to_workflow_request_for_autonomous_run(
         def now(cls, tz=None):
             return datetime(2026, 6, 12, 10, 15, tzinfo=tz)
 
-    monkeypatch.setattr(
-        "src.adapters.cli.screen_pre_open_commands.datetime", _FixedDatetime
-    )
+    monkeypatch.setattr("src.adapters.cli.screen_pre_open_commands.datetime", _FixedDatetime)
     monkeypatch.setattr(
         "src.adapters.cli.screen_pre_open_commands.resolve_pre_open_market_status",
         lambda: _BYPASS_GUARD_STATUS,
@@ -573,9 +551,7 @@ def test_pre_open_outside_window_with_saved_snapshot_yields_snapshot_success_end
         def now(cls, tz=None):
             return datetime(2026, 6, 12, 10, 15, tzinfo=tz)
 
-    monkeypatch.setattr(
-        "src.adapters.cli.screen_pre_open_commands.datetime", _FixedDatetime
-    )
+    monkeypatch.setattr("src.adapters.cli.screen_pre_open_commands.datetime", _FixedDatetime)
     monkeypatch.setattr(
         "src.adapters.cli.screen_pre_open_commands.resolve_pre_open_market_status",
         lambda: _BYPASS_GUARD_STATUS,
@@ -586,7 +562,6 @@ def test_pre_open_outside_window_with_saved_snapshot_yields_snapshot_success_end
             provider=object(), autonomous=True, session_missing=False
         ),
     )
-
 
     result = runner.invoke(app, ["screen", "pre-open", "--db", str(db_path)])
 

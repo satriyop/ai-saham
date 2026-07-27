@@ -1,10 +1,10 @@
 from datetime import date, datetime
 
+from src.domain.value_objects.ticker_notation import TickerNotationSnapshot
 from src.infrastructure.browser.stockbit_ticker_notation import (
     StockbitTickerNotationProvider,
     _parse_snapshot,
 )
-from src.domain.value_objects.ticker_notation import TickerNotationSnapshot
 
 
 def test_parse_emitten_info_notation_and_status():

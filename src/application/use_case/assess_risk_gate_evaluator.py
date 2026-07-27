@@ -72,9 +72,7 @@ class AssessRiskGateEvaluator:
         # Gate evaluation — build enriched context, then run gates.
         # Structural gates short-circuit first (BLOCKED_STRUCTURAL);
         # execution gates run after (BLOCKED_EXECUTION).
-        gate_ctx = self._build_gate_context(
-            request, latest_snapshot.date, latest_snapshot
-        )
+        gate_ctx = self._build_gate_context(request, latest_snapshot.date, latest_snapshot)
         completeness = (
             GateContextCompleteness.from_context(gate_ctx) if gate_ctx is not None else None
         )
@@ -226,7 +224,7 @@ class AssessRiskGateEvaluator:
                 request.ticker.upper(),
                 end_date=snapshot_date,
             )
-            ctx = replace(ctx, recent_candles=tuple(candles[-self._gate_recent_candle_lookback:]))
+            ctx = replace(ctx, recent_candles=tuple(candles[-self._gate_recent_candle_lookback :]))
         if latest_snapshot is not None and ctx.latest_snapshot is None:
             ctx = replace(ctx, latest_snapshot=latest_snapshot)
         return ctx

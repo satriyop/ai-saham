@@ -50,13 +50,14 @@ _DEFAULT_NEUTRAL_SCORE = 50.0
 # Config dataclass
 # --------------------------------------------------------------------------- #
 
+
 @dataclass(frozen=True)
 class CompanyQualityContextConfig:
     evidence_status: EvidenceStatus
     valuation_weight: float
     analyst_weight: float
     insider_weight: float
-    seasonality_weight: float          # CAP: strictly lower than the others
+    seasonality_weight: float  # CAP: strictly lower than the others
     scored_axis_count: int
 
     @classmethod
@@ -76,6 +77,7 @@ class CompanyQualityContextConfig:
 # Request dataclass
 # --------------------------------------------------------------------------- #
 
+
 @dataclass(frozen=True)
 class CompanyQualityContextRequest:
     ticker: str
@@ -86,6 +88,7 @@ class CompanyQualityContextRequest:
 # --------------------------------------------------------------------------- #
 # Builder
 # --------------------------------------------------------------------------- #
+
 
 class CompanyQualityContextEvidenceBuilder:
     """Build CompanyQualityContextEvidence from a pre-loaded SignalContext."""
@@ -105,9 +108,7 @@ class CompanyQualityContextEvidenceBuilder:
 
     # --------------------------------------------------------- main build
 
-    def build(
-        self, request: CompanyQualityContextRequest
-    ) -> CompanyQualityContextEvidence:
+    def build(self, request: CompanyQualityContextRequest) -> CompanyQualityContextEvidence:
         try:
             return self._build(request)
         except Exception as exc:  # never raise — degrade the whole snapshot
@@ -126,9 +127,7 @@ class CompanyQualityContextEvidenceBuilder:
                 metadata={"error": str(exc)},
             )
 
-    def _build(
-        self, request: CompanyQualityContextRequest
-    ) -> CompanyQualityContextEvidence:
+    def _build(self, request: CompanyQualityContextRequest) -> CompanyQualityContextEvidence:
         ctx = request.signal_context
         cfg = self._config
         scoring = self._scoring
@@ -163,9 +162,7 @@ class CompanyQualityContextEvidenceBuilder:
         )
 
         # ── Axis 3: insider net-buy direction ────────────────────────────────
-        insider_score, insider_present = score_insider_activity(
-            ctx, neutral_score=neutral
-        )
+        insider_score, insider_present = score_insider_activity(ctx, neutral_score=neutral)
 
         # ── Axis 4: generic seasonality (CAPPED) ─────────────────────────────
         seasonality_score, seasonality_present = score_seasonality(
@@ -220,8 +217,7 @@ class CompanyQualityContextEvidenceBuilder:
                 aggregate_score = sum(s * w for s, w in weighted) / weight_sum
                 aggregate_score = max(0.0, min(100.0, aggregate_score))
                 reasons.append(
-                    f"aggregate from {len(present_axes)} axes: "
-                    f"{', '.join(present_axes)}"
+                    f"aggregate from {len(present_axes)} axes: {', '.join(present_axes)}"
                 )
 
         metadata: dict[str, Any] = {
@@ -229,9 +225,7 @@ class CompanyQualityContextEvidenceBuilder:
                 "valuation": round(valuation_score, 4) if valuation_present else None,
                 "analyst": round(analyst_score, 4) if analyst_present else None,
                 "insider": round(insider_score, 4) if insider_present else None,
-                "seasonality": (
-                    round(seasonality_score, 4) if seasonality_present else None
-                ),
+                "seasonality": (round(seasonality_score, 4) if seasonality_present else None),
             },
             "axis_weights": {
                 "valuation": cfg.valuation_weight,

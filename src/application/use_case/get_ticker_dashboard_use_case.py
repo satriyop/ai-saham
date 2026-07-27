@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import date, timedelta
-from typing import Any, TypeVar
+from typing import TypeVar
 
 from src.application.dto.ticker_dashboard import (
     GetTickerDashboardRequest,
@@ -110,8 +110,10 @@ class GetTickerDashboardUseCase:
         bandar = safe(
             "bandar",
             None,
-            lambda: self._source.get_bandar(ticker, today)
-            or self._source.get_bandar(ticker, today - timedelta(days=1)),
+            lambda: (
+                self._source.get_bandar(ticker, today)
+                or self._source.get_bandar(ticker, today - timedelta(days=1))
+            ),
         )
         fwd = safe("forward_estimates", None, lambda: self._source.get_forward_estimates(ticker))
         profile = safe("profile", None, lambda: self._source.get_profile(ticker))
@@ -137,9 +139,7 @@ class GetTickerDashboardUseCase:
         insider_txns = safe(
             "insider",
             [],
-            lambda: self._source.get_insider_transactions(
-                ticker, insider_from, today, "ALL"
-            ),
+            lambda: self._source.get_insider_transactions(ticker, insider_from, today, "ALL"),
         )
         insider_last_known = None
         if not insider_txns and not any(e.key == "insider" for e in errors):

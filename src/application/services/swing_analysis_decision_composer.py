@@ -7,13 +7,14 @@ initial TradeSetup composition, market-context preview, and the
 evidence-enriched signal re-score with recomposition. Extracted from
 `SwingAnalysisWorkflowUseCase` to keep the use case as orchestration only.
 """
+
 from __future__ import annotations
 
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
-from src.application.exceptions import NoProductionSignalEvidenceError
 from src.application.dto import swing_analysis as swing_analysis_dto
+from src.application.exceptions import NoProductionSignalEvidenceError
 from src.application.services.evidence_source_availability_assembler import (
     EvidenceSourceAvailabilityAssembler,
 )
@@ -112,7 +113,8 @@ class SwingAnalysisDecisionComposer:
         signal_assessment_to_pass = state.signal_assessment
         if (
             state.signal_assessment_availability is not None
-            and state.signal_assessment_availability.status == swing_analysis_dto.SignalAssessmentStatus.UNAVAILABLE
+            and state.signal_assessment_availability.status
+            == swing_analysis_dto.SignalAssessmentStatus.UNAVAILABLE
         ):
             signal_assessment_to_pass = None
 
@@ -186,8 +188,7 @@ class SwingAnalysisDecisionComposer:
                         evidence.sector_context_evidence if evidence is not None else None
                     ),
                     company_quality_context_evidence=(
-                        evidence.company_quality_context_evidence
-                        if evidence is not None else None
+                        evidence.company_quality_context_evidence if evidence is not None else None
                     ),
                 )
             except (NoProductionSignalEvidenceError, TypeError, ValueError):
@@ -198,9 +199,13 @@ class SwingAnalysisDecisionComposer:
                 raise
             except Exception as exc:
                 state.warnings.append(f"Evidence-enriched signal re-score unavailable: {exc}")
-                state.signal_assessment_availability = swing_analysis_dto.SignalAssessmentAvailability(
-                    status=swing_analysis_dto.SignalAssessmentStatus.UNAVAILABLE,
-                    unavailable_reason=swing_analysis_dto.SignalAssessmentUnavailableReason.ASSESSMENT_FAILED,
+                state.signal_assessment_availability = (
+                    swing_analysis_dto.SignalAssessmentAvailability(
+                        status=swing_analysis_dto.SignalAssessmentStatus.UNAVAILABLE,
+                        unavailable_reason=(
+                            swing_analysis_dto.SignalAssessmentUnavailableReason.ASSESSMENT_FAILED
+                        ),
+                    )
                 )
                 state.signal_assessment = None
                 state.trade_setup = None
@@ -238,8 +243,10 @@ class SwingAnalysisDecisionComposer:
                 state.warnings.extend(recompose_warnings)
 
                 state.signal_assessment = signal_assessment
-                state.signal_assessment_availability = swing_analysis_dto.SignalAssessmentAvailability(
-                    status=swing_analysis_dto.SignalAssessmentStatus.AVAILABLE,
+                state.signal_assessment_availability = (
+                    swing_analysis_dto.SignalAssessmentAvailability(
+                        status=swing_analysis_dto.SignalAssessmentStatus.AVAILABLE,
+                    )
                 )
                 state.verdict = replace(
                     state.verdict,
@@ -266,9 +273,7 @@ class SwingAnalysisDecisionComposer:
             return None
 
         if state.signal_evidence_execution_context is None:
-            raise ValueError(
-                "Canonical swing evidence requires SignalEvidenceExecutionContext"
-            )
+            raise ValueError("Canonical swing evidence requires SignalEvidenceExecutionContext")
 
         assembler = EvidenceSourceAvailabilityAssembler(state.source_availability_use_case)
 

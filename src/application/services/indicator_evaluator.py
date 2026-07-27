@@ -78,11 +78,7 @@ class IndicatorEvaluator:
             overall = IndicatorReading.NEUTRAL
 
         all_same = len(set(readings)) == 1
-        confidence = (
-            cfg.full_agreement_confidence
-            if all_same
-            else cfg.partial_agreement_confidence
-        )
+        confidence = cfg.full_agreement_confidence if all_same else cfg.partial_agreement_confidence
 
         return IndicatorContext(
             sma_reading=sma_r,

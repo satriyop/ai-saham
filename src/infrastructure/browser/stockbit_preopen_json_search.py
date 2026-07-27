@@ -31,9 +31,7 @@ def _find_side_list_in_json(obj: Any, keys: tuple[str, ...], depth: int = 0) -> 
     return None
 
 
-def search_movers_in_api_responses(
-    responses: list[dict], iev_min: int
-) -> list[MoverData]:
+def search_movers_in_api_responses(responses: list[dict], iev_min: int) -> list[MoverData]:
     """
     Attempt to extract MoverData from captured API responses.
 
@@ -64,9 +62,7 @@ def search_movers_in_api_responses(
     return sorted(movers, key=lambda m: m.iev, reverse=True)
 
 
-def search_best_bid_in_api_responses(
-    responses: list[dict], ticker: str
-) -> OrderBookBid | None:
+def search_best_bid_in_api_responses(responses: list[dict], ticker: str) -> OrderBookBid | None:
     """
     Attempt to extract best bid from captured order book API responses.
 
@@ -109,8 +105,14 @@ def search_ticker_field(item: dict) -> str | None:
 
 def search_iev_field(item: dict) -> int | None:
     """Try common field names for IEV."""
-    for key in ("iev", "IEV", "intraday_expected_volume", "expected_volume",
-                "pre_open_volume", "volume_expected"):
+    for key in (
+        "iev",
+        "IEV",
+        "intraday_expected_volume",
+        "expected_volume",
+        "pre_open_volume",
+        "volume_expected",
+    ):
         val = item.get(key)
         if val is not None:
             try:
@@ -122,8 +124,14 @@ def search_iev_field(item: dict) -> int | None:
 
 def search_iev_in_mover(item: dict) -> int | None:
     """Extract IEV value — generic fallback for unknown response shapes."""
-    for key in ("iev", "IEV", "intraday_expected_volume", "ie_volume",
-                "expected_volume", "volume_iev"):
+    for key in (
+        "iev",
+        "IEV",
+        "intraday_expected_volume",
+        "ie_volume",
+        "expected_volume",
+        "volume_iev",
+    ):
         val = item.get(key)
         if val is not None:
             try:

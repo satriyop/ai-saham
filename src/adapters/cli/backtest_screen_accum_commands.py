@@ -28,6 +28,7 @@ from src.infrastructure.config.app_config import load_app_config
 
 def _display_audit_summary(response: AccumulationAuditResponse, top_groups: int) -> None:
     from src.adapters.cli.backtest_screen_accum_display import display_audit_summary
+
     display_audit_summary(response=response, top_groups=top_groups)
 
 
@@ -39,9 +40,7 @@ def screen_accum(
     universe: Annotated[
         Optional[str],
         typer.Option(
-            "--universe",
-            "-u",
-            help="Universe name or 'cached' — see `saham fetch universe list`"
+            "--universe", "-u", help="Universe name or 'cached' — see `saham fetch universe list`"
         ),
     ] = None,
     setup: Annotated[
@@ -102,8 +101,7 @@ def screen_accum(
     max_bb_width_pctile: Annotated[
         Optional[float],
         typer.Option(
-            "--max-bb-width-pctile",
-            help="Require BB width percentile at or below this value"
+            "--max-bb-width-pctile", help="Require BB width percentile at or below this value"
         ),
     ] = None,
     broker_quality: Annotated[

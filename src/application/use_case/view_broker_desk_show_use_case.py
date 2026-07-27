@@ -52,9 +52,7 @@ class ViewBrokerDeskShowUseCase:
         self._repository = repository
         self._foreign_broker_codes = foreign_broker_codes
 
-    def execute(
-        self, request: ViewBrokerDeskShowRequest
-    ) -> ViewBrokerDeskShowResult | None:
+    def execute(self, request: ViewBrokerDeskShowRequest) -> ViewBrokerDeskShowResult | None:
         code = request.broker_code.upper()
         flows = self._repository.get_broker_daily_flows_by_code(code)
         if not flows:

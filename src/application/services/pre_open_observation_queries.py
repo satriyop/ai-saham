@@ -12,8 +12,7 @@ from src.application.services.pre_open_observation_payload import PRE_OPEN_WORKF
 
 
 class PreOpenObservationsReader(Protocol):
-    def list_all_by_date(self, snapshot_date: date) -> list[Any]:
-        ...
+    def list_all_by_date(self, snapshot_date: date) -> list[Any]: ...
 
 
 def list_pre_open_observations_by_ticker(

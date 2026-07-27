@@ -63,9 +63,7 @@ def test_future_candle_rows_excluded_from_calculations_and_provenance():
     candles.append(_candle(TICKER, future_date, Decimal("9999")))
     summaries = [_summary(TICKER, day, Decimal("110")) for day in session_dates]
 
-    result = _evaluator(
-        LeakyMarketRepository(candles), LeakyBrokerRepository(summaries)
-    ).evaluate(
+    result = _evaluator(LeakyMarketRepository(candles), LeakyBrokerRepository(summaries)).evaluate(
         ticker=TICKER,
         window_days=10,
         today=today,
@@ -90,9 +88,7 @@ def test_future_broker_summary_rows_excluded_from_calculations_and_provenance():
     summaries = [_summary(TICKER, day, Decimal("110")) for day in session_dates]
     summaries.append(_summary(TICKER, future_date, Decimal("9999")))
 
-    result = _evaluator(
-        LeakyMarketRepository(candles), LeakyBrokerRepository(summaries)
-    ).evaluate(
+    result = _evaluator(LeakyMarketRepository(candles), LeakyBrokerRepository(summaries)).evaluate(
         ticker=TICKER,
         window_days=10,
         today=today,
@@ -140,9 +136,7 @@ def test_wrong_ticker_candle_rows_excluded():
     candles.append(_candle("ASII", today, Decimal("5000")))
     summaries = [_summary(TICKER, day, Decimal("110")) for day in session_dates]
 
-    result = _evaluator(
-        LeakyMarketRepository(candles), LeakyBrokerRepository(summaries)
-    ).evaluate(
+    result = _evaluator(LeakyMarketRepository(candles), LeakyBrokerRepository(summaries)).evaluate(
         ticker=TICKER,
         window_days=10,
         today=today,
@@ -163,9 +157,7 @@ def test_wrong_ticker_broker_summary_rows_excluded():
     summaries = [_summary(TICKER, day, Decimal("110")) for day in session_dates]
     summaries.append(_summary("ASII", today, Decimal("9999")))
 
-    result = _evaluator(
-        LeakyMarketRepository(candles), LeakyBrokerRepository(summaries)
-    ).evaluate(
+    result = _evaluator(LeakyMarketRepository(candles), LeakyBrokerRepository(summaries)).evaluate(
         ticker=TICKER,
         window_days=10,
         today=today,

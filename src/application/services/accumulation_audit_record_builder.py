@@ -40,9 +40,7 @@ class AccumulationAuditRecordBuilder:
         forward = self._market_repo.get_candles(
             candidate.ticker,
             start_date=signal_date + timedelta(days=1),
-            end_date=signal_date + timedelta(
-                days=horizon_days + policy.forward_fetch_buffer_days
-            ),
+            end_date=signal_date + timedelta(days=horizon_days + policy.forward_fetch_buffer_days),
         )
         forward = [c for c in forward if c.date > signal_date]
         if not forward:
@@ -61,8 +59,7 @@ class AccumulationAuditRecordBuilder:
         max_upside = max((_pct_change(c.close, price) for c in horizon), default=None)
         max_drawdown = min((_pct_change(c.close, price) for c in horizon), default=None)
         forward_returns = {
-            horizon: nth_return(horizon)
-            for horizon in policy.forward_return_horizons
+            horizon: nth_return(horizon) for horizon in policy.forward_return_horizons
         }
 
         return AuditRecord(

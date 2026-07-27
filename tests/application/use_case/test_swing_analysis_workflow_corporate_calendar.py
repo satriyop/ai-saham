@@ -75,7 +75,9 @@ class FakeCalendarRepositoryWithDividend:
     fake (from_date/to_date span the full max_lookahead_days=30, but the
     use case's per-role window check still applies afterwards)."""
 
-    def get_events_for_ticker(self, ticker, from_date, to_date, event_types=None, as_of_fetched_at=None):
+    def get_events_for_ticker(
+        self, ticker, from_date, to_date, event_types=None, as_of_fetched_at=None
+    ):
         # request.today is 2026-07-13 in this test file's _request() default.
         ex_date = date(2026, 7, 15)
         return [
@@ -94,7 +96,9 @@ class FakeCalendarRepositoryWithDividend:
 
 
 class FakeCalendarRepositoryRaising:
-    def get_events_for_ticker(self, ticker, from_date, to_date, event_types=None, as_of_fetched_at=None):
+    def get_events_for_ticker(
+        self, ticker, from_date, to_date, event_types=None, as_of_fetched_at=None
+    ):
         raise RuntimeError("calendar backend unavailable")
 
 
@@ -109,7 +113,9 @@ class FakeCalendarRepositoryRecordingAsOfFetchedAt:
     def __init__(self) -> None:
         self.calls: list[dict] = []
 
-    def get_events_for_ticker(self, ticker, from_date, to_date, event_types=None, as_of_fetched_at=None):
+    def get_events_for_ticker(
+        self, ticker, from_date, to_date, event_types=None, as_of_fetched_at=None
+    ):
         self.calls.append(
             {
                 "ticker": ticker,
@@ -244,8 +250,7 @@ def test_corporate_action_risk_failure_is_caught_and_recorded_as_warning():
 
     assert response.evidence.corporate_action_risk is None
     assert any(
-        "corporate action" in w.lower() or "calendar" in w.lower()
-        for w in response.warnings
+        "corporate action" in w.lower() or "calendar" in w.lower() for w in response.warnings
     ), f"expected a corporate action/calendar warning, got: {response.warnings}"
 
 

@@ -60,9 +60,7 @@ def aggregate_broker_transactions(
     top_buyers = tuple(t for t in sorted_by_net[:10] if t.net_value > 0)
 
     # Top 10 sellers (most negative net value)
-    top_sellers = tuple(
-        t for t in reversed(sorted_by_net[-10:]) if t.net_value < 0
-    )
+    top_sellers = tuple(t for t in reversed(sorted_by_net[-10:]) if t.net_value < 0)
 
     return BrokerSummary(
         ticker=ticker,

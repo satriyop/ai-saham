@@ -12,11 +12,12 @@ from src.infrastructure.browser.stockbit_valuation import (
 
 # ── _parse_response ────────────────────────────────────────────────────────────
 
+
 def _make_body(entries: list[dict] | None = None) -> dict:
     if entries is None:
         entries = [
             {"id": 12635, "value": "20.96"},
-            {"id": 0,     "value": "0.00"},   # placeholder — must be filtered
+            {"id": 0, "value": "0.00"},  # placeholder — must be filtered
             {"id": 13200, "value": "471.10"},
         ]
     return {"data": entries, "message": "Metric value for company BBCA"}
@@ -76,6 +77,7 @@ def test_parse_response_ticker_uppercased():
 
 # ── ValuationMetrics properties ────────────────────────────────────────────────
 
+
 def test_valuation_metrics_labeled_returns_known_ids():
     metrics = ValuationMetrics(
         ticker="BBCA",
@@ -117,6 +119,7 @@ def test_valuation_metrics_pe_sd_bands():
 
 
 # ── SQLite cache round-trip ────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def provider(tmp_path):

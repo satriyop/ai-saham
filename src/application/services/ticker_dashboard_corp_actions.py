@@ -68,8 +68,6 @@ def merge_corp_action_events(
 
     return sorted(
         merged,
-        key=lambda e: (
-            e.ex_date or e.cum_date or e.record_date or e.announcement_date or date.min
-        ),
+        key=lambda e: e.ex_date or e.cum_date or e.record_date or e.announcement_date or date.min,
         reverse=True,
     )

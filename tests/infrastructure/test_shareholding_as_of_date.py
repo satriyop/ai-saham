@@ -99,7 +99,12 @@ class TestBacktestNeverFetchesLive:
 
 class TestMemoryCacheBypass:
     def test_backtest_miss_does_not_corrupt_live_cache(self, provider, tmp_path):
-        _insert_row(tmp_path / "test.db", _TICKER, (datetime.now() - timedelta(days=1)).isoformat(), "2026-03-31")
+        _insert_row(
+            tmp_path / "test.db",
+            _TICKER,
+            (datetime.now() - timedelta(days=1)).isoformat(),
+            "2026-03-31",
+        )
 
         # Backtest call: report_date 2026-03-31 > as_of_date 2025-01-01 → None
         miss = provider.get_composition(_TICKER, as_of_date=date(2025, 1, 1))

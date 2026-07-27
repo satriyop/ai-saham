@@ -114,4 +114,3 @@ def test_validation_status_values_are_strict() -> None:
     assert ValidationStatus("PASS") is ValidationStatus.PASS
     with pytest.raises(ValueError):
         ValidationStatus("ELIGIBLE")
-

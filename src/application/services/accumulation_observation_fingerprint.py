@@ -145,7 +145,8 @@ def build_candidate_observation_payload(
             "raw_exact_score": signal.raw_exact_score,
             "alpha_trigger_score": (
                 signal.alpha_trigger_score.to_dict()
-                if signal.alpha_trigger_score is not None else None
+                if signal.alpha_trigger_score is not None
+                else None
             ),
             "flow_evidence": flow_ev.to_dict() if flow_ev is not None else None,
         }
@@ -237,16 +238,13 @@ def _sub_signal_fingerprint(
     )
     volatility_dict = _volatility_fingerprint(volatility_context)
     if setup_family_result is not None:
-        resolved_setup_family = (
-            setup_family_result.primary_setup_family
-            or constraints.get("setup_family")
+        resolved_setup_family = setup_family_result.primary_setup_family or constraints.get(
+            "setup_family"
         )
     else:
         resolved_setup_family = constraints.get("setup_family")
     market_regime_at_signal = (
-        market_context.regime.value
-        if market_context is not None
-        else constraints.get("regime")
+        market_context.regime.value if market_context is not None else constraints.get("regime")
     )
     fingerprint = {
         "signal_assessment_identity": (
@@ -259,19 +257,13 @@ def _sub_signal_fingerprint(
             else []
         ),
         "primary_setup_family": (
-            setup_family_result.primary_setup_family
-            if setup_family_result is not None
-            else None
+            setup_family_result.primary_setup_family if setup_family_result is not None else None
         ),
         "setup_family_source": (
-            setup_family_result.setup_family_source
-            if setup_family_result is not None
-            else None
+            setup_family_result.setup_family_source if setup_family_result is not None else None
         ),
         "setup_family_rationale": (
-            list(setup_family_result.rationale)
-            if setup_family_result is not None
-            else []
+            list(setup_family_result.rationale) if setup_family_result is not None else []
         ),
         "setup_name": constraints.get("setup_name"),
         **phase_dict,
@@ -302,9 +294,7 @@ def _sub_signal_fingerprint(
             and hasattr(candidate.bandar_detector, "bandar_score")
             else None
         ),
-        "flow_component_coverage": (
-            flow_ev.component_coverage if flow_ev is not None else None
-        ),
+        "flow_component_coverage": (flow_ev.component_coverage if flow_ev is not None else None),
         "flow_missing_components": (
             list(flow_ev.missing_components) if flow_ev is not None else []
         ),
@@ -361,9 +351,7 @@ def _named_setup_evaluations_fingerprint(
         if match_value is None:
             match_value = str(getattr(evaluation, "match", "NO_MATCH"))
         gates = getattr(evaluation, "gates", ()) or ()
-        failed_gates = [
-            gate.label for gate in gates if not getattr(gate, "passed", True)
-        ]
+        failed_gates = [gate.label for gate in gates if not getattr(gate, "passed", True)]
         out[setup_name] = {
             "match": match_value,
             "failed_gates": failed_gates,

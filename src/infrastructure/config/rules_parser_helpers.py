@@ -32,6 +32,5 @@ def require_field(
     value = data[field]
     if not isinstance(value, expected_type):
         raise RulesSchemaError(
-            f"{context}.{field}: expected {expected_type.__name__}, "
-            f"got {type(value).__name__}"
+            f"{context}.{field}: expected {expected_type.__name__}, got {type(value).__name__}"
         )

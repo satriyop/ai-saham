@@ -47,16 +47,10 @@ def parse_setup_phase_config(
             required_sequence=tuple(
                 _phase_state(p) for p in (value.get("required_sequence") or [])
             ),
-            enter_phases=tuple(
-                _phase_state(p) for p in (value.get("enter_phases") or [])
-            ),
-            requires_reclaim_or_pivot=bool_or_default(
-                value, "requires_reclaim_or_pivot", False
-            ),
+            enter_phases=tuple(_phase_state(p) for p in (value.get("enter_phases") or [])),
+            requires_reclaim_or_pivot=bool_or_default(value, "requires_reclaim_or_pivot", False),
             entry_authority=(
-                bool(value["entry_authority"])
-                if "entry_authority" in value
-                else None
+                bool(value["entry_authority"]) if "entry_authority" in value else None
             ),
         )
 
@@ -71,29 +65,23 @@ def parse_setup_phase_config(
         if not isinstance(setup_val, dict):
             continue
         family_value = str(setup_val.get("family") or "").strip().lower()
-        requirement = parsed_requirements.get(
-            family_value
-        ) or parsed_requirements.get(family_value.replace("-", "_"))
+        requirement = parsed_requirements.get(family_value) or parsed_requirements.get(
+            family_value.replace("-", "_")
+        )
         if requirement is None:
             continue
         name_key = str(setup_key).strip().lower()
         parsed_requirements.setdefault(name_key, requirement)
-        parsed_requirements.setdefault(
-            name_key.replace("-", "_"), requirement
-        )
+        parsed_requirements.setdefault(name_key.replace("-", "_"), requirement)
 
     benchmark_sources = vol.get("trusted_benchmark_volume_sources")
     if benchmark_sources is None:
         benchmark_sources = vol.get("allowed_sources")
     if isinstance(benchmark_sources, list):
-        parsed_benchmark_sources = tuple(
-            str(v).strip().lower() for v in benchmark_sources if v
-        )
+        parsed_benchmark_sources = tuple(str(v).strip().lower() for v in benchmark_sources if v)
     else:
         parsed_benchmark_sources = (
-            defaults.setup_phase_config
-            .volume_trigger
-            .trusted_benchmark_volume_sources
+            defaults.setup_phase_config.volume_trigger.trusted_benchmark_volume_sources
         )
 
     return SetupPhaseConfig(

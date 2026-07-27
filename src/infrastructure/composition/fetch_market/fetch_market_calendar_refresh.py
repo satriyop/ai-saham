@@ -62,8 +62,10 @@ def refresh_market_calendar(db_path: Path, api_client, refresh: bool) -> str:
         return "cached"
     if response.status == "failed":
         combined = " ".join(response.errors).lower()
-        return "ERR:auth" if "auth" in combined else (
-            f"ERR:{(response.errors[0] if response.errors else 'unknown')[:30]}"
+        return (
+            "ERR:auth"
+            if "auth" in combined
+            else (f"ERR:{(response.errors[0] if response.errors else 'unknown')[:30]}")
         )
     parts = " ".join(f"{k}={v}" for k, v in sorted(response.event_type_counts.items()))
     prefix = "stockbit" if response.status == "success" else "PARTIAL stockbit"

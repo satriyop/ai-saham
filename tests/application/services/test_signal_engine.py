@@ -4,8 +4,8 @@ import pytest
 
 from src.application.services.signal_engine import SignalEngine
 from src.application.services.signal_engine_config import (
-    BandarScoringConfig,
     AccumScoreMappingConfig,
+    BandarScoringConfig,
     SignalEngineConfig,
     SignalInputMappingConfig,
     SignalScoringConfig,
@@ -30,10 +30,11 @@ class RecordingInsiderProvider(EmptyInsiderProvider):
 
 class ForwardProviderWithMissingPe:
     """Returns ForwardEstimates with no pre-computed PE — must be derived from price."""
+
     def get_forward_estimates(self, ticker, as_of_date=None):
         return ForwardEstimates(
             ticker=ticker,
-            forward_eps_1y=2.0,          # PE=125 when price=250, PE=40 when price=80
+            forward_eps_1y=2.0,  # PE=125 when price=250, PE=40 when price=80
             revenue_forward_1y=None,
             current_price=None,
             forward_pe=None,
@@ -42,14 +43,19 @@ class ForwardProviderWithMissingPe:
 
 class AnalystProviderWithLowCurrentPrice:
     """Returns analyst consensus with a low current_price (→ PE=40, below threshold)."""
+
     def get_consensus(self, ticker, as_of_date=None):
-        return type("Consensus", (), {
-            "analyst_count": 1,
-            "buy_count": 1,
-            "buy_ratio": 1.0,        # required to populate analyst_current_price
-            "upside_pct": 10.0,
-            "current_price": 80.0,   # 80/2=40 PE → below VALUATION_STRETCHED threshold
-        })()
+        return type(
+            "Consensus",
+            (),
+            {
+                "analyst_count": 1,
+                "buy_count": 1,
+                "buy_ratio": 1.0,  # required to populate analyst_current_price
+                "upside_pct": 10.0,
+                "current_price": 80.0,  # 80/2=40 PE → below VALUATION_STRETCHED threshold
+            },
+        )()
 
 
 class SeasonalityProviderWithShortHistory:
@@ -98,21 +104,23 @@ class RecordingSeasonalityProvider(SeasonalityProviderWithShortHistory):
 
 
 def test_signal_engine_input_mapping_helpers_use_config():
-    engine = SignalEngine(config=SignalEngineConfig(
-        input_mapping=SignalInputMappingConfig(
-            accum_score=AccumScoreMappingConfig(
-                max_score=150.0,
-                clamp=True,
-            )
-        ),
-        scoring=SignalScoringConfig(
-            bandar=BandarScoringConfig(
-                mandatory_signal_count=4,
-                signal_score_unit=3,
-                default_max_range=12,
-            )
-        ),
-    ))
+    engine = SignalEngine(
+        config=SignalEngineConfig(
+            input_mapping=SignalInputMappingConfig(
+                accum_score=AccumScoreMappingConfig(
+                    max_score=150.0,
+                    clamp=True,
+                )
+            ),
+            scoring=SignalScoringConfig(
+                bandar=BandarScoringConfig(
+                    mandatory_signal_count=4,
+                    signal_score_unit=3,
+                    default_max_range=12,
+                )
+            ),
+        )
+    )
 
     assert engine.foreign_flow_quality_from_accum_score(75.0) == 0.5
     assert engine.foreign_flow_quality_from_accum_score(200.0) == 1.0
@@ -120,8 +128,13 @@ def test_signal_engine_input_mapping_helpers_use_config():
 
 
 def test_signal_engine_empty_insider_fetch_counts_as_neutral_data():
-    from src.domain.value_objects.canonical_signal_evidence_input import CanonicalSignalEvidenceInput
-    from tests.application.use_case.signal_evidence_fixtures import _flow_evidence, _wrap_flow_evidence
+    from src.domain.value_objects.canonical_signal_evidence_input import (
+        CanonicalSignalEvidenceInput,
+    )
+    from tests.application.use_case.signal_evidence_fixtures import (
+        _flow_evidence,
+        _wrap_flow_evidence,
+    )
 
     # Empty insider list → insider_net_buy_ratio=0.0 (not INSIDER_SELLING threshold of -0.30)
     engine = SignalEngine(insider_activity_provider=EmptyInsiderProvider())
@@ -131,9 +144,8 @@ def test_signal_engine_empty_insider_fetch_counts_as_neutral_data():
         ticker="BBCA",
         signal_context=ctx,
         canonical_evidence=CanonicalSignalEvidenceInput(
-            setup=None,
-            flow=_wrap_flow_evidence(_flow_evidence(capped_strength=0.70))
-        )
+            setup=None, flow=_wrap_flow_evidence(_flow_evidence(capped_strength=0.70))
+        ),
     )
 
     # 0.0 ratio does NOT trigger INSIDER_SELLING penalty
@@ -163,9 +175,7 @@ def test_accumulation_and_swing_share_arithmetic_but_not_identity():
     accumulation = engine.evaluate_accumulation_discovery(
         "BBCA", context, canonical_evidence=evidence
     )
-    swing = engine.evaluate_swing_trade_setup(
-        "BBCA", context, canonical_evidence=evidence
-    )
+    swing = engine.evaluate_swing_trade_setup("BBCA", context, canonical_evidence=evidence)
 
     assert (
         accumulation.score,
@@ -183,8 +193,13 @@ def test_accumulation_and_swing_share_arithmetic_but_not_identity():
 
 
 def test_signal_engine_derives_forward_pe_from_latest_price_before_analyst_price():
-    from src.domain.value_objects.canonical_signal_evidence_input import CanonicalSignalEvidenceInput
-    from tests.application.use_case.signal_evidence_fixtures import _flow_evidence, _wrap_flow_evidence
+    from src.domain.value_objects.canonical_signal_evidence_input import (
+        CanonicalSignalEvidenceInput,
+    )
+    from tests.application.use_case.signal_evidence_fixtures import (
+        _flow_evidence,
+        _wrap_flow_evidence,
+    )
 
     # With latest_price=250.0: PE = 250/2 = 125.0 > 50 → VALUATION_STRETCHED fires.
     # Without latest_price (analyst_price=80.0 only): PE = 80/2 = 40.0 ≤ 50 → no flag.
@@ -200,9 +215,8 @@ def test_signal_engine_derives_forward_pe_from_latest_price_before_analyst_price
         ticker="BBCA",
         signal_context=ctx,
         canonical_evidence=CanonicalSignalEvidenceInput(
-            setup=None,
-            flow=_wrap_flow_evidence(_flow_evidence(capped_strength=0.70))
-        )
+            setup=None, flow=_wrap_flow_evidence(_flow_evidence(capped_strength=0.70))
+        ),
     )
 
     assert "VALUATION_STRETCHED" in response.active_flags

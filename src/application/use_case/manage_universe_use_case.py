@@ -65,14 +65,11 @@ class UpdateUniverseUseCase:
 
         for key in targets:
             is_custom = (
-                key in existing
-                and isinstance(existing[key], dict)
-                and "sector_id" in existing[key]
+                key in existing and isinstance(existing[key], dict) and "sector_id" in existing[key]
             )
             utype = "custom" if is_custom else self._universe_type(key)
 
-            tickers = self._fetch_tickers(key, is_custom,
-                                          existing.get(key) if is_custom else None)
+            tickers = self._fetch_tickers(key, is_custom, existing.get(key) if is_custom else None)
 
             if tickers:
                 prev_count = len((existing.get(key) or {}).get("tickers") or [])
@@ -133,9 +130,9 @@ class UpdateUniverseUseCase:
                 t
                 for t in targets
                 if t not in available
-                and not (t in existing
-                         and isinstance(existing[t], dict)
-                         and "sector_id" in existing[t])
+                and not (
+                    t in existing and isinstance(existing[t], dict) and "sector_id" in existing[t]
+                )
             ]
             if unknown:
                 raise ValueError(
@@ -150,9 +147,7 @@ class UpdateUniverseUseCase:
                 targets.append(k)
         return targets
 
-    def _fetch_tickers(
-        self, key: str, is_custom: bool, custom_cfg: dict | None
-    ) -> list[str]:
+    def _fetch_tickers(self, key: str, is_custom: bool, custom_cfg: dict | None) -> list[str]:
         if is_custom and custom_cfg:
             return self._fetch_custom_tickers(custom_cfg)
         return self._provider.fetch(key)
@@ -253,14 +248,12 @@ class CreateUniverseUseCase:
             body = self._provider.get(url)
             if body is None:
                 raise ValueError(
-                    "Error: Failed to fetch data for sector "
-                    f"{sector_id} subsector {subsector_id}."
+                    f"Error: Failed to fetch data for sector {sector_id} subsector {subsector_id}."
                 )
             items = extract_company_tickers(body)
             if not items:
                 raise ValueError(
-                    f"No companies found in sector {sector_id} "
-                    f"subsector {subsector_id}."
+                    f"No companies found in sector {sector_id} subsector {subsector_id}."
                 )
             tickers.extend(items)
         else:
@@ -308,9 +301,7 @@ class InspectUniverseUseCase:
         with_count: bool,
     ) -> UniverseInspectResult:
         if subsector_id is not None and sector_id is None:
-            raise ValueError(
-                "--sector (-s) ID is required when specifying --subsector (-b) ID."
-            )
+            raise ValueError("--sector (-s) ID is required when specifying --subsector (-b) ID.")
 
         if sector_id is None:
             return self._inspect_sectors()
@@ -355,10 +346,7 @@ class InspectUniverseUseCase:
                     enriched.append(row)
             rows = tuple(enriched)
 
-        tip = (
-            "Tip: drill into a subsector with: "
-            f"--sector {sector_id} --subsector <SUB-ID>"
-        )
+        tip = f"Tip: drill into a subsector with: --sector {sector_id} --subsector <SUB-ID>"
         return UniverseInspectResult(
             title=f"SUBSECTORS OF SECTOR {sector_id}",
             rows=tuple(rows),
@@ -372,9 +360,7 @@ class InspectUniverseUseCase:
         )
         body = self._provider.get(url)
         if body is None:
-            raise ValueError(
-                f"No companies found in sector {sector_id} subsector {subsector_id}."
-            )
+            raise ValueError(f"No companies found in sector {sector_id} subsector {subsector_id}.")
         rows = extract_company_rows(body)
         return UniverseInspectResult(
             title=f"COMPANIES IN SUBSECTOR {subsector_id} (Sector {sector_id})",

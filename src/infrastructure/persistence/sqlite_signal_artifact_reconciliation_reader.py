@@ -113,12 +113,14 @@ class SQLiteSignalArtifactReconciliationReader:
                 )
 
             canonical_row_count = conn.execute(
-                f"SELECT COUNT(*) FROM {table} WHERE config_hash != '' AND schema_version = {CANDIDATE_OBSERVATION_SCHEMA_VERSION}"
+                f"SELECT COUNT(*) FROM {table} WHERE config_hash != '' AND "
+                f"schema_version = {CANDIDATE_OBSERVATION_SCHEMA_VERSION}"
             ).fetchone()[0]
             legacy_row_count = row_count - canonical_row_count
 
             canonical_missing_condition = (
-                f"config_hash != '' AND schema_version = {CANDIDATE_OBSERVATION_SCHEMA_VERSION} AND ("
+                f"config_hash != '' AND schema_version = "
+                f"{CANDIDATE_OBSERVATION_SCHEMA_VERSION} AND ("
                 "ticker IS NULL OR ticker = '' OR "
                 "snapshot_date IS NULL OR snapshot_date = '' OR "
                 "captured_at IS NULL OR captured_at = '' OR "
@@ -139,7 +141,8 @@ class SQLiteSignalArtifactReconciliationReader:
 
             duplicate_canonical_identity_count = conn.execute(
                 f"SELECT COALESCE(SUM(cnt - 1), 0) FROM ("
-                f"SELECT COUNT(*) AS cnt FROM {table} WHERE config_hash != '' AND schema_version = {CANDIDATE_OBSERVATION_SCHEMA_VERSION} "
+                f"SELECT COUNT(*) AS cnt FROM {table} WHERE config_hash != "
+                f"'' AND schema_version = {CANDIDATE_OBSERVATION_SCHEMA_VERSION} "
                 "GROUP BY ticker, snapshot_date, workflow, window_sessions, "
                 "data_as_of_date, config_hash HAVING cnt > 1"
                 ")"
@@ -148,7 +151,8 @@ class SQLiteSignalArtifactReconciliationReader:
                 conn,
                 "SELECT ticker, snapshot_date, workflow, window_sessions, data_as_of_date, "
                 f"config_hash, COUNT(*) AS duplicate_row_count FROM {table} "
-                f"WHERE config_hash != '' AND schema_version = {CANDIDATE_OBSERVATION_SCHEMA_VERSION} GROUP BY ticker, snapshot_date, workflow, "
+                f"WHERE config_hash != '' AND schema_version = "
+                f"{CANDIDATE_OBSERVATION_SCHEMA_VERSION} GROUP BY ticker, snapshot_date, workflow, "
                 "window_sessions, data_as_of_date, config_hash "
                 f"HAVING COUNT(*) > 1 LIMIT {_MAX_SAMPLE_ROWS}",
             )
@@ -274,9 +278,7 @@ class SQLiteSignalArtifactReconciliationReader:
                     "OR l.signal_date = '' OR l.horizon IS NULL OR l.horizon = '' "
                     "OR l.observation_captured_at IS NULL OR l.observation_captured_at = '')"
                 )
-                orphan_where = (
-                    f"o.ticker IS NULL AND NOT ({l_missing_identity_condition})"
-                )
+                orphan_where = f"o.ticker IS NULL AND NOT ({l_missing_identity_condition})"
                 orphan_linkage_count = conn.execute(
                     f"SELECT COUNT(*) FROM {table} l "
                     f"LEFT JOIN candidate_observations o ON {join_condition} "
@@ -318,9 +320,7 @@ class SQLiteSignalArtifactReconciliationReader:
             columns = self._columns(conn, table)
             row_count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
 
-            missing = self._missing_columns(
-                columns, _MARKET_CONTEXT_SNAPSHOT_REQUIRED_COLUMNS
-            )
+            missing = self._missing_columns(columns, _MARKET_CONTEXT_SNAPSHOT_REQUIRED_COLUMNS)
             if missing:
                 return RawMarketContextSnapshotObservation(
                     exists=True,
@@ -354,8 +354,7 @@ class SQLiteSignalArtifactReconciliationReader:
             ).fetchone()[0]
             missing_provenance_samples = self._rows_as_dicts(
                 conn,
-                f"SELECT as_of_date FROM {table} WHERE created_at IS NULL "
-                f"LIMIT {_MAX_SAMPLE_ROWS}",
+                f"SELECT as_of_date FROM {table} WHERE created_at IS NULL LIMIT {_MAX_SAMPLE_ROWS}",
             )
 
             invalid_factors_json_count = conn.execute(
@@ -447,9 +446,7 @@ class SQLiteSignalArtifactReconciliationReader:
             invalid_detection_inputs_json_samples=invalid_detection_inputs_json_samples,
         )
 
-    def _missing_columns(
-        self, columns: set[str], required: tuple[str, ...]
-    ) -> tuple[str, ...]:
+    def _missing_columns(self, columns: set[str], required: tuple[str, ...]) -> tuple[str, ...]:
         return tuple(c for c in required if c not in columns)
 
     def _table_exists(self, conn: sqlite3.Connection, table: str) -> bool:

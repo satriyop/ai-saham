@@ -242,8 +242,13 @@ def test_volatility_aliases_round_trip():
 
 
 def test_benchmark_excess_return_serialization_round_trips():
-    from src.domain.value_objects.benchmark_excess_return import BenchmarkExcessReturn, BenchmarkExcessReturnStatus
     from datetime import date
+
+    from src.domain.value_objects.benchmark_excess_return import (
+        BenchmarkExcessReturn,
+        BenchmarkExcessReturnStatus,
+    )
+
     r5 = BenchmarkExcessReturn(
         benchmark="IHSG",
         window_sessions=5,

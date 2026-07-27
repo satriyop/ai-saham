@@ -99,7 +99,7 @@ def test_parse_setup_family_fields():
                 "can_enter_from_phases": ["accumulation"],
                 "gates": {
                     "min_accum_score": 50.0,
-                }
+                },
             }
         }
     }

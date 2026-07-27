@@ -11,18 +11,18 @@ from src.adapters.cli.plan_swing_display import (
     print_swing_output,
 )
 from src.application.dto.swing_analysis import (
-    SwingDiagnostics,
-    SwingEvidence,
-    SwingVerdict,
     SignalAssessmentAvailability,
     SignalAssessmentStatus,
     SignalAssessmentUnavailableReason,
+    SwingDiagnostics,
+    SwingEvidence,
+    SwingVerdict,
 )
 from src.application.services.swing_data_freshness import SwingDataFreshness
 from src.domain.value_objects.accum_score_breakdown import (
+    AccumScoreBreakdown,
     ForeignFlowComponentScore,
     ForeignFlowComponentStatus,
-    AccumScoreBreakdown,
 )
 from src.domain.value_objects.setup_evaluation import (
     SetupEvaluation,
@@ -375,10 +375,14 @@ def test_swing_flow_detail_calls_out_conflicted_negative_flow(capsys):
 
 def test_cli_rendering_of_unavailable_reasons():
     from rich.console import Console
-    from src.adapters.cli.plan_swing_overview_panels import _signal_label, _build_signal_panel
+
+    from src.adapters.cli.plan_swing_overview_panels import _build_signal_panel, _signal_label
 
     reasons_map = [
-        (SignalAssessmentUnavailableReason.NO_PRODUCTION_SIGNAL_EVIDENCE, "no production signal evidence"),
+        (
+            SignalAssessmentUnavailableReason.NO_PRODUCTION_SIGNAL_EVIDENCE,
+            "no production signal evidence",
+        ),
         (SignalAssessmentUnavailableReason.SIGNAL_ENGINE_UNAVAILABLE, "signal engine unavailable"),
         (SignalAssessmentUnavailableReason.ASSESSMENT_FAILED, "assessment failed"),
     ]
@@ -405,8 +409,9 @@ def test_cli_rendering_of_unavailable_reasons():
 
 
 def test_cli_rendering_missing_availability_raises_type_error():
-    from src.adapters.cli.plan_swing_overview_panels import _signal_label, _build_signal_panel
     import pytest
+
+    from src.adapters.cli.plan_swing_overview_panels import _build_signal_panel, _signal_label
 
     with pytest.raises(TypeError):
         _signal_label(None, None)

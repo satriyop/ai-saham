@@ -14,8 +14,7 @@ from src.infrastructure.persistence.sqlite_audit_manifest_reader import (
 
 def _build_temp_db(path: Path) -> None:
     conn = sqlite3.connect(str(path))
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE candles (
             ticker TEXT NOT NULL,
             date TEXT NOT NULL,
@@ -26,8 +25,7 @@ def _build_temp_db(path: Path) -> None:
             volume INTEGER NOT NULL,
             source TEXT NOT NULL DEFAULT 'unknown'
         )
-        """
-    )
+        """)
     conn.executemany(
         "INSERT INTO candles (ticker, date, open, high, low, close, volume, source) "
         "VALUES (?, ?, '1', '1', '1', '1', 1, 'idx')",
@@ -99,8 +97,7 @@ def test_real_enrichment_table_names_are_recognized(tmp_path: Path):
     # "insider_cache", "company_fundamentals", "shareholding_composition".
     db_path = tmp_path / "enrichment.db"
     conn = sqlite3.connect(str(db_path))
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE insider_cache (
             ticker TEXT NOT NULL,
             name TEXT NOT NULL DEFAULT '',
@@ -108,24 +105,19 @@ def test_real_enrichment_table_names_are_recognized(tmp_path: Path):
             action_type TEXT NOT NULL,
             fetched_date TEXT NOT NULL
         )
-        """
-    )
-    conn.execute(
-        """
+        """)
+    conn.execute("""
         CREATE TABLE company_fundamentals (
             ticker TEXT NOT NULL,
             fetched_date TEXT NOT NULL
         )
-        """
-    )
-    conn.execute(
-        """
+        """)
+    conn.execute("""
         CREATE TABLE shareholding_composition (
             ticker TEXT NOT NULL,
             fetched_date TEXT NOT NULL
         )
-        """
-    )
+        """)
     conn.execute(
         "INSERT INTO insider_cache VALUES ('BBCA', 'X', '2026-01-02', 'buy', '2026-01-03')"
     )
@@ -153,8 +145,7 @@ def test_real_enrichment_table_names_are_recognized(tmp_path: Path):
 def test_seasonality_cache_reports_fetched_month_as_date(tmp_path: Path):
     db_path = tmp_path / "seasonality.db"
     conn = sqlite3.connect(str(db_path))
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE seasonality_cache (
             ticker TEXT NOT NULL,
             year INTEGER NOT NULL,
@@ -162,8 +153,7 @@ def test_seasonality_cache_reports_fetched_month_as_date(tmp_path: Path):
             fetched_month TEXT NOT NULL,
             fetched_at TEXT
         )
-        """
-    )
+        """)
     conn.executemany(
         "INSERT INTO seasonality_cache (ticker, year, month, fetched_month, fetched_at) "
         "VALUES (?, ?, ?, ?, ?)",
@@ -220,8 +210,10 @@ def test_reader_opens_connection_in_read_only_mode(temp_db: Path, monkeypatch):
     # A read-only connection must reject writes.
     with real_connect(f"file:{temp_db}?mode=ro", uri=True) as ro_conn:
         with pytest.raises(sqlite3.OperationalError):
-            ro_conn.execute("INSERT INTO candles (ticker, date, open, high, low, close, volume) "
-                             "VALUES ('X', '2026-01-01', '1', '1', '1', '1', 1)")
+            ro_conn.execute(
+                "INSERT INTO candles (ticker, date, open, high, low, close, volume) "
+                "VALUES ('X', '2026-01-01', '1', '1', '1', '1', 1)"
+            )
 
 
 def _row_count(db_path: Path, table: str) -> int:

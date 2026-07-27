@@ -57,7 +57,8 @@ class AccumulationAuditExitSimulator:
                                 max_hold_days=max_hold,
                                 policy=request.policy,
                             )
-                        ) is not None
+                        )
+                        is not None
                     ]
                     stats.append(
                         _make_exit_simulation_stat(
@@ -89,9 +90,8 @@ class AccumulationAuditExitSimulator:
         forward = self._market_repo.get_candles(
             record.ticker,
             start_date=record.signal_date + timedelta(days=1),
-            end_date=record.signal_date + timedelta(
-                days=max_hold_days + policy.exit_fetch_buffer_days
-            ),
+            end_date=record.signal_date
+            + timedelta(days=max_hold_days + policy.exit_fetch_buffer_days),
         )
         forward = [c for c in forward if c.date > record.signal_date]
         if not forward:
@@ -110,9 +110,7 @@ class AccumulationAuditExitSimulator:
             stop_hit = candle.low <= stop
             target_hit = candle.high >= target
 
-            if stop_hit and (
-                policy.same_day_exit_priority == "stop_first" or not target_hit
-            ):
+            if stop_hit and (policy.same_day_exit_priority == "stop_first" or not target_hit):
                 return _ExitOutcome(
                     return_pct=_pct_change(stop, entry),
                     holding_days=day_index,

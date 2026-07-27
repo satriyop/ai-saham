@@ -12,9 +12,9 @@ from __future__ import annotations
 from rich.console import Group
 from rich.text import Text
 
-from src.adapters.cli.rich_display import compact_table, console, panel
 from src.adapters.cli.policy_accum_attribution_display import display_swing_attribution
 from src.adapters.cli.policy_accum_display_formatters import _fmt_pct
+from src.adapters.cli.rich_display import compact_table, console, panel
 from src.application.use_case.swing_backtest_use_case import SwingBacktestResponse
 
 
@@ -67,19 +67,15 @@ def display_swing_backtest(
     metrics_table.add_row("Trades count", str(response.trade_count))
 
     win_val = response.win_rate_pct
-    win_color = (
-        "green"
-        if (win_val or 0) >= 55.0
-        else "yellow"
-        if (win_val or 0) >= 45.0
-        else "red"
-    )
+    win_color = "green" if (win_val or 0) >= 55.0 else "yellow" if (win_val or 0) >= 45.0 else "red"
     metrics_table.add_row("Win rate", f"[{win_color}]{_fmt_pct(win_val)}[/]")
     metrics_table.add_row("Avg trade return", _fmt_pct(response.avg_trade_return_pct, True))
 
     profit_factor = (
-        "INF" if response.profit_factor == float("inf")
-        else "N/A" if response.profit_factor is None
+        "INF"
+        if response.profit_factor == float("inf")
+        else "N/A"
+        if response.profit_factor is None
         else f"{response.profit_factor:.2f}"
     )
     metrics_table.add_row("Profit factor", profit_factor)
@@ -112,7 +108,7 @@ def display_swing_backtest(
                 str(stat.count),
                 f"[{pnl_color}]{_fmt_pct(stat.avg_return_pct, True)}[/]",
                 _fmt_pct(stat.win_rate_pct),
-                f"[{pnl_color}]{float(stat.total_pnl):+,.0f}[/]"
+                f"[{pnl_color}]{float(stat.total_pnl):+,.0f}[/]",
             )
         console().print("")
         console().print(
@@ -144,7 +140,7 @@ def display_swing_backtest(
                 f"[{pnl_color}]{_fmt_pct(trade.net_return_pct, True)}[/]",
                 f"[{pnl_color}]{float(trade.pnl):+,.0f}[/]",
                 str(trade.holding_days),
-                trade.exit_reason
+                trade.exit_reason,
             )
         console().print("")
         console().print(
@@ -175,10 +171,5 @@ def display_swing_backtest(
     )
 
     console().print("")
-    console().print(
-        panel(
-            Group(*footer_elements),
-            title="Reference Notes"
-        )
-    )
+    console().print(panel(Group(*footer_elements), title="Reference Notes"))
     console().print("")

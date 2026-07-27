@@ -38,11 +38,7 @@ def broker_update_status(
     if added_count == 0 and updated_range is None:
         return "no-data"
 
-    span_days = (
-        (updated_range[1] - updated_range[0]).days + 1
-        if updated_range
-        else 0
-    )
+    span_days = (updated_range[1] - updated_range[0]).days + 1 if updated_range else 0
     prefix = "backfill+" if "backfill" in fetch_modes else "+"
     return f"{prefix}{added_count}rows/span={span_days}d"
 
@@ -56,10 +52,6 @@ def range_update_status(
     if added_count == 0 and updated_range is None:
         return "no-data"
 
-    span_days = (
-        (updated_range[1] - updated_range[0]).days + 1
-        if updated_range
-        else 0
-    )
+    span_days = (updated_range[1] - updated_range[0]).days + 1 if updated_range else 0
     prefix = "backfill+" if "backfill" in fetch_modes else "+"
     return f"{prefix}{added_count}rows/span={span_days}d"

@@ -118,9 +118,9 @@ def broker_desk_show(
     """Show compact desk dashboard from tracked broker_daily_flow."""
     output_format = resolve_output_format(fmt or "table")
     repo, foreign = _repo_and_codes(db_path)
-    result = ViewBrokerDeskShowUseCase(
-        repo, foreign_broker_codes=foreign
-    ).execute(ViewBrokerDeskShowRequest(broker_code=code))
+    result = ViewBrokerDeskShowUseCase(repo, foreign_broker_codes=foreign).execute(
+        ViewBrokerDeskShowRequest(broker_code=code)
+    )
     if result is None:
         exit_missing_desk_data(code)
 
@@ -139,12 +139,8 @@ def broker_desk_show(
                     "day_net_value": str(result.day_net_value),
                     "day_net_lot": result.day_net_lot,
                     "day_ticker_count": result.day_ticker_count,
-                    "top_buy_stocks": [
-                        _desk_ticker_net_dict(r) for r in result.top_buy_stocks
-                    ],
-                    "top_sell_stocks": [
-                        _desk_ticker_net_dict(r) for r in result.top_sell_stocks
-                    ],
+                    "top_buy_stocks": [_desk_ticker_net_dict(r) for r in result.top_buy_stocks],
+                    "top_sell_stocks": [_desk_ticker_net_dict(r) for r in result.top_sell_stocks],
                 },
             )
         )
@@ -173,12 +169,8 @@ def broker_desk_top_stocks(
     output_format = resolve_output_format(fmt or "table")
     repo, foreign = _repo_and_codes(db_path)
     query_date = date.fromisoformat(target_date) if target_date else None
-    result = ViewBrokerDeskTopStocksUseCase(
-        repo, foreign_broker_codes=foreign
-    ).execute(
-        ViewBrokerDeskTopStocksRequest(
-            broker_code=code, target_date=query_date, limit=limit
-        )
+    result = ViewBrokerDeskTopStocksUseCase(repo, foreign_broker_codes=foreign).execute(
+        ViewBrokerDeskTopStocksRequest(broker_code=code, target_date=query_date, limit=limit)
     )
     if result is None:
         exit_missing_desk_data(code)
@@ -195,12 +187,8 @@ def broker_desk_top_stocks(
                     "broker_name": result.broker_name,
                     "broker_type": result.broker_type.value,
                     "date": result.date.isoformat(),
-                    "top_buy_stocks": [
-                        _desk_ticker_net_dict(r) for r in result.top_buy_stocks
-                    ],
-                    "top_sell_stocks": [
-                        _desk_ticker_net_dict(r) for r in result.top_sell_stocks
-                    ],
+                    "top_buy_stocks": [_desk_ticker_net_dict(r) for r in result.top_buy_stocks],
+                    "top_sell_stocks": [_desk_ticker_net_dict(r) for r in result.top_sell_stocks],
                 },
             )
         )
@@ -224,9 +212,9 @@ def broker_desk_flow(
     """Show desk aggregate net by day across cached tickers."""
     output_format = resolve_output_format(fmt or "table")
     repo, foreign = _repo_and_codes(db_path)
-    result = ViewBrokerDeskFlowUseCase(
-        repo, foreign_broker_codes=foreign
-    ).execute(ViewBrokerDeskFlowRequest(broker_code=code, days=days))
+    result = ViewBrokerDeskFlowUseCase(repo, foreign_broker_codes=foreign).execute(
+        ViewBrokerDeskFlowRequest(broker_code=code, days=days)
+    )
     if result is None:
         exit_missing_desk_data(code)
 
@@ -271,9 +259,7 @@ def broker_desk_history(
     """Show desk per-ticker daily rows from broker_daily_flow."""
     output_format = resolve_output_format(fmt or "table")
     repo, foreign = _repo_and_codes(db_path)
-    result = ViewBrokerDeskHistoryUseCase(
-        repo, foreign_broker_codes=foreign
-    ).execute(
+    result = ViewBrokerDeskHistoryUseCase(repo, foreign_broker_codes=foreign).execute(
         ViewBrokerDeskHistoryRequest(broker_code=code, days=days, ticker=ticker)
     )
     if result is None:

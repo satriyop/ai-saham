@@ -78,9 +78,7 @@ def refresh_market_context_inputs(
     if not ticker_inputs:
         return RefreshMarketContextInputsResponse(statuses=())
 
-    provider = YahooFinanceProvider(
-        market_suffix="", non_idx_tickers=get_global_context_tickers()
-    )
+    provider = YahooFinanceProvider(market_suffix="", non_idx_tickers=get_global_context_tickers())
     repo = SQLiteMarketRepository(db_path=db_path)
     market_data_use_case = RefreshMarketDataUseCase(provider=provider, repository=repo)
 

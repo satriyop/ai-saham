@@ -14,7 +14,6 @@ import pytest
 
 from src.application.use_case.assess_risk_use_case import (
     AssessRiskRequest,
-    AssessRiskResponse,
     AssessRiskUseCase,
 )
 from src.domain.entities.candle import Candle

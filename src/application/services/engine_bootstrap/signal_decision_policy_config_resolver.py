@@ -45,17 +45,13 @@ def resolve_decision_policy_config(decision_cfg: dict) -> DecisionPolicyConfig:
         raw = regime_cfg[regime] or {}
         decision = raw.get("max_decision")
         if decision not in _ALLOWED_DECISIONS:
-            raise ValueError(
-                f"Invalid max_decision for {regime}: {decision!r}"
-            )
+            raise ValueError(f"Invalid max_decision for {regime}: {decision!r}")
         if "min_signal_authority_coverage" not in raw:
             raise ValueError(
                 "signal_engine.decision_policy.regime_policy."
                 f"{regime}.min_signal_authority_coverage is required"
             )
-        min_signal_authority_coverage = float(
-            raw["min_signal_authority_coverage"]
-        )
+        min_signal_authority_coverage = float(raw["min_signal_authority_coverage"])
         if not (0.0 <= min_signal_authority_coverage <= 1.0):
             raise ValueError(
                 f"signal_engine.decision_policy.regime_policy.{regime}."
@@ -76,9 +72,7 @@ def resolve_decision_policy_config(decision_cfg: dict) -> DecisionPolicyConfig:
     for name, raw in raw_actions.items():
         decision = (raw or {}).get("max_decision")
         if decision not in _ALLOWED_DECISIONS:
-            raise ValueError(
-                f"Invalid setup_regime_actions.{name}.max_decision: {decision!r}"
-            )
+            raise ValueError(f"Invalid setup_regime_actions.{name}.max_decision: {decision!r}")
         resolved_actions[name] = SetupRegimeActionConfig(max_decision=decision)
 
     raw_setup_policy = decision_cfg.get("setup_regime_policy", {})
@@ -89,13 +83,10 @@ def resolve_decision_policy_config(decision_cfg: dict) -> DecisionPolicyConfig:
         resolved_family: dict[str, str] = {}
         for regime, action_name in by_regime.items():
             if regime not in _ALLOWED_REGIMES:
-                raise ValueError(
-                    f"Invalid setup_regime_policy.{family} regime: {regime!r}"
-                )
+                raise ValueError(f"Invalid setup_regime_policy.{family} regime: {regime!r}")
             if action_name not in resolved_actions:
                 raise ValueError(
-                    f"Invalid setup_regime_policy.{family}.{regime} action: "
-                    f"{action_name!r}"
+                    f"Invalid setup_regime_policy.{family}.{regime} action: {action_name!r}"
                 )
             resolved_family[regime] = action_name
         resolved_setup_policy[family] = resolved_family

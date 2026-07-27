@@ -28,9 +28,7 @@ def load_previous_setup_phases(
         return ()
     observations = [
         observation
-        for observation in repository.list_observations(
-            AssessmentPurpose.ACCUMULATION_DISCOVERY
-        )
+        for observation in repository.list_observations(AssessmentPurpose.ACCUMULATION_DISCOVERY)
         if observation.cutoff_at.date() < before_date
         and _payload_ticker(observation.decision_payload) == ticker.upper()
     ][-limit:]
@@ -43,9 +41,7 @@ def load_previous_setup_phases(
         if expected_family is not None:
             observed_family = _normalize_setup_family(fingerprint.get("setup_family"))
             if observed_family is None:
-                if not _allows_generic_screen_history(
-                    payload, expected_family, phase
-                ):
+                if not _allows_generic_screen_history(payload, expected_family, phase):
                     continue
             elif observed_family != expected_family:
                 continue

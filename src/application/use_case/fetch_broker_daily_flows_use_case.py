@@ -29,10 +29,10 @@ class FetchBrokerDailyFlowsRequest:
 @dataclass(frozen=True)
 class FetchBrokerDailyFlowsResponse:
     ticker: str
-    added_count: int       # new (date, broker_code) pairs stored
-    fetched_count: int     # rows actually saved (0 if cached or unsupported)
+    added_count: int  # new (date, broker_code) pairs stored
+    fetched_count: int  # rows actually saved (0 if cached or unsupported)
     cached_range: tuple[date, date] | None
-    status: str            # 'fetched' | 'cached' | 'no-data' | 'unsupported'
+    status: str  # 'fetched' | 'cached' | 'no-data' | 'unsupported'
     active_codes: int = 0  # distinct broker codes in the fetched batch
 
 

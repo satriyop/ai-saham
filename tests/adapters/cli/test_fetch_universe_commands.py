@@ -22,7 +22,8 @@ def _mock_authenticated_session(monkeypatch):
     """Patch get_stockbit_session() to return an authenticated session with a fake api_client."""
     _fake_client = object.__new__(_stockbit_api_client.StockbitApiClient)
     monkeypatch.setattr(
-        _session_svc, "get_stockbit_session",
+        _session_svc,
+        "get_stockbit_session",
         lambda stockbit_config=None: StockbitSession(api_client=_fake_client, authenticated=True),
     )
     return _fake_client
@@ -237,6 +238,7 @@ def test_universe_update_handles_custom_universe(monkeypatch, tmp_path: Path):
 
     # Mock Stockbit session & universe provider
     import src.infrastructure.browser.stockbit_universe as stockbit_universe
+
     _fake_client = _mock_authenticated_session(monkeypatch)
     monkeypatch.setattr(stockbit_universe, "StockbitUniverseProvider", MockUniverseProvider)
 
@@ -302,6 +304,7 @@ def test_universe_update_all_includes_custom_universes(monkeypatch, tmp_path: Pa
     monkeypatch.chdir(tmp_path)
 
     import src.infrastructure.browser.stockbit_universe as stockbit_universe
+
     _fake_client = _mock_authenticated_session(monkeypatch)
     monkeypatch.setattr(stockbit_universe, "StockbitUniverseProvider", MockUniverseProvider)
 

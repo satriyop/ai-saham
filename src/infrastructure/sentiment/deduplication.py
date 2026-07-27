@@ -53,7 +53,7 @@ def deduplicate_headlines(
                     merged_headline = RawHeadline(
                         title=existing_headline.title,
                         source=merged_source,
-                        published=existing_headline.published, # Keep older timestamp
+                        published=existing_headline.published,  # Keep older timestamp
                         url=existing_headline.url,
                     )
                     unique_headlines[i] = merged_headline

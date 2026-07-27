@@ -12,12 +12,12 @@ from src.domain.value_objects.benchmark_excess_return import (
     BenchmarkExcessReturn,
     BenchmarkExcessReturnStatus,
 )
+from src.domain.value_objects.canonical_signal_evidence_input import CanonicalSignalEvidenceInput
 from src.domain.value_objects.factor_evidence import Direction, Freshness
 from src.domain.value_objects.flow_confirmation_evidence import (
     FlowConfirmationEvidence,
     FlowSubSignal,
 )
-from src.domain.value_objects.canonical_signal_evidence_input import CanonicalSignalEvidenceInput
 from src.domain.value_objects.market_context import MarketContext, MarketRegime
 from src.domain.value_objects.setup_evidence import SetupEvidence
 from src.domain.value_objects.signal_assessment import (
@@ -172,9 +172,10 @@ def test_decision_policy_receives_signal_authority_coverage_from_scorer():
 
     constraints = response.assessment.decision_constraints
     assert constraints is not None
-    assert any(
-        "signal_authority_coverage" in r.lower() for r in constraints.constraint_reasons
-    ), f"Expected signal_authority_coverage constraint reason, got: {constraints.constraint_reasons}"
+    assert any("signal_authority_coverage" in r.lower() for r in constraints.constraint_reasons), (
+        f"Expected signal_authority_coverage constraint reason, got: "
+        f"{constraints.constraint_reasons}"
+    )
 
     # canonical field exists on SignalAssessment
     assert response.assessment.signal_authority_coverage is not None

@@ -197,11 +197,13 @@ class FakeMarketContextProvider:
         self.calls = []
 
     def evaluate_for_dates(self, *, tickers, replay_dates, benchmark_ticker):
-        self.calls.append({
-            "tickers": tickers,
-            "replay_dates": replay_dates,
-            "benchmark_ticker": benchmark_ticker,
-        })
+        self.calls.append(
+            {
+                "tickers": tickers,
+                "replay_dates": replay_dates,
+                "benchmark_ticker": benchmark_ticker,
+            }
+        )
         return {
             replay_date: self.contexts[replay_date]
             for replay_date in replay_dates

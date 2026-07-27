@@ -28,8 +28,8 @@ from src.domain.value_objects.skill_annotation import (
     SkillAnnotation,
     SkillMetadata,
 )
-from src.domain.value_objects.trade_action import TradeAction
 from src.domain.value_objects.ticker_classifier import is_non_idx_ticker
+from src.domain.value_objects.trade_action import TradeAction
 
 __all__ = [
     "ArtifactType",

@@ -60,13 +60,15 @@ def _snapshot(ticker: str, last_price: float) -> OrderBookSnapshot:
 
 def test_resolver_prefers_first_regular_running_trade_tick():
     uc = ResolveOpeningPricesUseCase(
-        running_trade_provider=StubRunningTradeProvider({
-            "BBCA": [
-                _tick("BBCA", "09:03:00", 6425),
-                _tick("BBCA", "08:59:59", 6400),
-                _tick("BBCA", "09:01:00", 6410),
-            ]
-        }),
+        running_trade_provider=StubRunningTradeProvider(
+            {
+                "BBCA": [
+                    _tick("BBCA", "09:03:00", 6425),
+                    _tick("BBCA", "08:59:59", 6400),
+                    _tick("BBCA", "09:01:00", 6410),
+                ]
+            }
+        ),
         order_book_provider=StubOrderBookProvider({"BBCA": _snapshot("BBCA", 6500)}),
     )
 
@@ -82,9 +84,9 @@ def test_resolver_prefers_first_regular_running_trade_tick():
 
 def test_resolver_ignores_non_regular_ticks_and_falls_back_to_orderbook():
     uc = ResolveOpeningPricesUseCase(
-        running_trade_provider=StubRunningTradeProvider({
-            "BBCA": [_tick("BBCA", "09:01:00", 6410, board="NG")]
-        }),
+        running_trade_provider=StubRunningTradeProvider(
+            {"BBCA": [_tick("BBCA", "09:01:00", 6410, board="NG")]}
+        ),
         order_book_provider=StubOrderBookProvider({"BBCA": _snapshot("BBCA", 6500)}),
     )
 
@@ -100,7 +102,9 @@ def test_resolver_ignores_non_regular_ticks_and_falls_back_to_orderbook():
 
 def test_resolver_manual_price_overrides_providers():
     uc = ResolveOpeningPricesUseCase(
-        running_trade_provider=StubRunningTradeProvider({"BBCA": [_tick("BBCA", "09:01:00", 6410)]}),
+        running_trade_provider=StubRunningTradeProvider(
+            {"BBCA": [_tick("BBCA", "09:01:00", 6410)]}
+        ),
         order_book_provider=StubOrderBookProvider({"BBCA": _snapshot("BBCA", 6500)}),
     )
 
@@ -123,10 +127,12 @@ def test_resolver_manual_price_overrides_providers():
 def test_resolver_reports_progress_for_each_observation():
     progress = []
     uc = ResolveOpeningPricesUseCase(
-        running_trade_provider=StubRunningTradeProvider({
-            "BBCA": [_tick("BBCA", "09:01:00", 6410)],
-            "GOTO": [],
-        }),
+        running_trade_provider=StubRunningTradeProvider(
+            {
+                "BBCA": [_tick("BBCA", "09:01:00", 6410)],
+                "GOTO": [],
+            }
+        ),
         order_book_provider=StubOrderBookProvider({}),
         on_observation=lambda index, total, obs: progress.append((index, total, obs)),
     )

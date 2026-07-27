@@ -73,9 +73,7 @@ def test_confirmation_only_match_reflects_watch_action_not_generic_matched_text(
 def test_phase_gated_match_reflects_watch_action_even_with_capital_sizing():
     """Even when --capital produced a lot-sizing plan, a phase-gated block
     must override the misleading 'Consider N lots' framing."""
-    setup_sizing = SimpleNamespace(
-        lots=10, entry_price=1000, target_price=1100, stop_price=950
-    )
+    setup_sizing = SimpleNamespace(lots=10, entry_price=1000, target_price=1100, stop_price=950)
     text, style = swing_plan_text(
         "INDF",
         10_000_000,

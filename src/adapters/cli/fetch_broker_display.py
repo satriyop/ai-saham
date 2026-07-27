@@ -35,7 +35,10 @@ def display_recent_fetch_summary(summaries: list) -> None:
     console_obj.print("")
 
     flow_style = "green" if total_foreign_flow > 0 else "red"
-    console_obj.print(f"Total foreign net flow: [bold {flow_style}]{format_value(total_foreign_flow)}[/bold {flow_style}]")
+    console_obj.print(
+        f"Total foreign net flow: [bold "
+        f"{flow_style}]{format_value(total_foreign_flow)}[/bold {flow_style}]"
+    )
     console_obj.print("\nRecent foreign flow:")
 
     table = Table(show_header=True, header_style="bold magenta")
@@ -66,7 +69,11 @@ def display_foreign_top_scan(snapshots: list) -> None:
         color = "green" if snap.is_accumulating else "red"
 
         # Style top 5 rank rows
-        style_val = f"[{color}]{format_value(snap.net_val)}[/{color}]" if rank <= 5 else format_value(snap.net_val)
+        style_val = (
+            f"[{color}]{format_value(snap.net_val)}[/{color}]"
+            if rank <= 5
+            else format_value(snap.net_val)
+        )
         style_lot = f"[{color}]{snap.net_lot:,}[/{color}]" if rank <= 5 else f"{snap.net_lot:,}"
         style_dir = f"[{color}]{direction}[/{color}]" if rank <= 5 else direction
 
@@ -82,7 +89,9 @@ def display_foreign_top_scan(snapshots: list) -> None:
 
 def display_history_fetch_preview(ticker: str, points: list) -> None:
     console_obj = Console()
-    console_obj.print(f"\nRecent Foreign Flow Fetch Preview for [bold cyan]{ticker.upper()}[/bold cyan]:")
+    console_obj.print(
+        f"\nRecent Foreign Flow Fetch Preview for [bold cyan]{ticker.upper()}[/bold cyan]:"
+    )
 
     table = Table(show_header=True, header_style="bold magenta")
     table.add_column("Date", style="cyan")

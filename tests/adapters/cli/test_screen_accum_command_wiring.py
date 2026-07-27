@@ -4,9 +4,13 @@ import json
 from datetime import date
 from types import SimpleNamespace
 
-from src.adapters.cli import screen_accum_commands as accum_cli
 from src.adapters.cli.main import app
 from src.application.dto.accumulation_screen import AccumulationScreenResponse
+from tests.adapters.cli.screen_accum_test_fixtures import (
+    _candidate,
+    _fake_workflow_result,
+    runner,
+)
 
 
 def _screen_payload(raw: dict) -> dict:
@@ -14,13 +18,6 @@ def _screen_payload(raw: dict) -> dict:
     if "verb" in raw and "data" in raw and isinstance(raw["data"], dict):
         return raw["data"]
     return raw
-
-
-from tests.adapters.cli.screen_accum_test_fixtures import (
-    _candidate,
-    _fake_workflow_result,
-    runner,
-)
 
 
 def test_screen_accum_delegates_workflow_construction_to_builder(monkeypatch):

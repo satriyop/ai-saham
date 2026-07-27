@@ -147,9 +147,7 @@ class TestMarketContextSnapshotsTemporalLeakage:
 
 
 class TestRegimeObservationsTemporalLeakage:
-    def test_regime_observation_get_is_keyed_by_exact_date_not_leaked_by_future_row(
-        self, tmp_path
-    ):
+    def test_regime_observation_get_is_keyed_by_exact_date_not_leaked_by_future_row(self, tmp_path):
         repo = SQLiteRegimeObservationRepository(tmp_path / "regime.db")
         repo.save(_evidence(DECISION_DATE))
         repo.save(_evidence(FUTURE_DATE))

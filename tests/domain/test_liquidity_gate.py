@@ -3,8 +3,6 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
-import pytest
-
 from src.domain.entities.candle import Candle
 from src.domain.rules.liquidity_gate import LiquidityGate
 from src.domain.rules.risk_gate import GateContext

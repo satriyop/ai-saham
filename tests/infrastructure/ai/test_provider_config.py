@@ -3,7 +3,6 @@
 Layer: Infrastructure
 """
 
-
 from src.infrastructure.ai.provider_config import resolve_ai_provider
 
 

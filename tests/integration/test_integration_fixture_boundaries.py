@@ -17,9 +17,9 @@ def test_integration_conftest_does_not_module_import_indicator_composition_facto
     forbidden = "src.infrastructure.composition.indicator_registry_factory"
 
     for node in tree.body:
-        assert not (
-            isinstance(node, ast.ImportFrom) and node.module == forbidden
-        ), "tests/integration/conftest.py must not module-import create_indicator_registry"
+        assert not (isinstance(node, ast.ImportFrom) and node.module == forbidden), (
+            "tests/integration/conftest.py must not module-import create_indicator_registry"
+        )
 
 
 def test_registry_with_formulas_fixture_is_pure_application_registry():

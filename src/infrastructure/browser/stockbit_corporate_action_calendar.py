@@ -106,6 +106,4 @@ class StockbitCorporateActionCalendarProvider(CorporateActionCalendarProvider):
     def _parse_body(
         self, event_type: CorporateActionType, body: dict
     ) -> list[CorporateActionCalendarEvent]:
-        return parse_corporate_action_items(
-            event_type, body, fetched_at=datetime.now().isoformat()
-        )
+        return parse_corporate_action_items(event_type, body, fetched_at=datetime.now().isoformat())

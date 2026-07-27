@@ -110,23 +110,18 @@ class IndicatorPluginLoader:
                     continue
 
                 if not hasattr(attr, "name"):
-                    logger.warning(
-                        f"Plugin in {path} missing 'name' class attribute"
-                    )
+                    logger.warning(f"Plugin in {path} missing 'name' class attribute")
                     continue
 
                 name = attr.name
                 if not isinstance(name, str) or not VALID_NAME_PATTERN.match(name):
                     logger.warning(
-                        f"Plugin in {path} has invalid name '{name}' - "
-                        "must match ^[A-Z0-9_]+$"
+                        f"Plugin in {path} has invalid name '{name}' - must match ^[A-Z0-9_]+$"
                     )
                     continue
 
                 if not hasattr(attr, "default_period"):
-                    logger.warning(
-                        f"Plugin in {path} missing 'default_period' class attribute"
-                    )
+                    logger.warning(f"Plugin in {path} missing 'default_period' class attribute")
                     continue
 
                 logger.info(f"Loaded plugin: {attr.name} from {path.name}")
@@ -139,5 +134,3 @@ class IndicatorPluginLoader:
         except Exception as e:
             logger.warning(f"Failed to load plugin {path}: {e}")
             return []
-
-

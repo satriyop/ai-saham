@@ -142,7 +142,9 @@ def test_adverse_phase_dominates_entry_authority_false(phase_state):
 def test_no_family_returns_none():
     assert (
         SetupPhaseReadinessEvaluator().evaluate(
-            setup_family=None, setup_evidence=_evidence(), setup_phase=_phase(SetupPhaseState.BREAKOUT_CONFIRMATION)
+            setup_family=None,
+            setup_evidence=_evidence(),
+            setup_phase=_phase(SetupPhaseState.BREAKOUT_CONFIRMATION),
         )
         is None
     )

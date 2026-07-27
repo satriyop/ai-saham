@@ -28,21 +28,28 @@ def print_sentiment_evidence_panel(ctx: SwingOutputDisplayContext) -> None:
     if sentiment_resp and not sentiment_resp.warning:
         snap = sentiment_resp.snapshot
         call_val = snap.overall_sentiment.value.upper()
-        call_style = "green" if call_val == "POSITIVE" else ("red" if call_val == "NEGATIVE" else "yellow")
+        call_style = (
+            "green" if call_val == "POSITIVE" else ("red" if call_val == "NEGATIVE" else "yellow")
+        )
 
         _sentiment_label = Text("News Sentiment (3d): ", style="bold cyan")
         _sentiment_label.append(call_val, style=call_style)
         sentiment_group.append(_sentiment_label)
-        sentiment_group.append(Text(
-            f"Headlines scanned: {snap.total_count} (+{snap.positive_count} / ={snap.neutral_count} / -{snap.negative_count}) | "
-            f"Confidence: {snap.confidence_pct}%"
-        ))
+        sentiment_group.append(
+            Text(
+                f"Headlines scanned: {snap.total_count} "
+                f"(+{snap.positive_count} / ={snap.neutral_count} / -{snap.negative_count}) | "
+                f"Confidence: {snap.confidence_pct}%"
+            )
+        )
     else:
         sentiment_group.append(Text("News Sentiment (3d)", style="bold cyan"))
         msg = sentiment_warning or "News unavailable (no network or fetch failed)."
         sentiment_group.append(Text(msg, style="dim"))
         if not sentiment_verbose:
-            sentiment_group.append(Text("Use --sentiment-verbose to show provider details.", style="dim italic"))
+            sentiment_group.append(
+                Text("Use --sentiment-verbose to show provider details.", style="dim italic")
+            )
 
     console().print("")
     console().print(

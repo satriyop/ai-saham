@@ -45,6 +45,7 @@ class RecordingEvaluator:
             setup_readiness=0.85,
         )
 
+
 class ISOnlyProposalGenerator:
     def __init__(self) -> None:
         self.received = None
@@ -66,9 +67,7 @@ def _dataset() -> SwingLearningDataset:
     )
     return SwingLearningDataset(
         compatibility_id="swing-compat-1",
-        dataset_fingerprint=artifact_digest(
-            {"row_ids": [row.row_id for row in rows]}
-        ),
+        dataset_fingerprint=artifact_digest({"row_ids": [row.row_id for row in rows]}),
         rows=rows,
     )
 
@@ -108,10 +107,7 @@ def test_emitted_proposal_is_exact_policy_consumed_by_oos_validator(tmp_path) ->
         == result.proposed_oos_evaluation.population["population_fingerprint"]
     )
     assert result.validation.status is ValidationStatus.PASS
-    assert (
-        result.proposed_oos_evaluation.readiness
-        is EvaluationReadiness.POLICY_REVIEW_ELIGIBLE
-    )
+    assert result.proposed_oos_evaluation.readiness is EvaluationReadiness.POLICY_REVIEW_ELIGIBLE
 
 
 def test_evaluator_cannot_substitute_oos_population(tmp_path) -> None:

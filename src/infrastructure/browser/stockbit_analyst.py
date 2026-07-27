@@ -63,6 +63,7 @@ def _parse_fetched_at(raw: str | None) -> datetime | None:
     except ValueError:
         try:
             from datetime import date as _date
+
             return datetime.combine(_date.fromisoformat(raw), datetime.min.time())
         except (ValueError, TypeError):
             return None
@@ -128,7 +129,9 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider, StockbitCaching
     # ── Schema ───────────────────────────────────────────────────────────────
 
     _MIGRATIONS: list[tuple[int, str]] = [
-        (0, """CREATE TABLE IF NOT EXISTS analyst_cache (
+        (
+            0,
+            """CREATE TABLE IF NOT EXISTS analyst_cache (
                         ticker             TEXT NOT NULL,
                         buy_count          INTEGER NOT NULL DEFAULT 0,
                         hold_count         INTEGER NOT NULL DEFAULT 0,
@@ -140,7 +143,8 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider, StockbitCaching
                         price_target_low   REAL,
                         price_target_high  REAL,
                         UNIQUE(ticker, fetched_date)
-                    )"""),
+                    )""",
+        ),
     ]
 
     def _ensure_schema(self) -> None:
@@ -221,7 +225,8 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider, StockbitCaching
 
     def _write_cache(self, ticker: str, consensus: AnalystConsensus | None) -> None:
         fetched_str = (
-            consensus.fetched_at.isoformat() if consensus and consensus.fetched_at
+            consensus.fetched_at.isoformat()
+            if consensus and consensus.fetched_at
             else datetime.now().isoformat()
         )
         try:
@@ -241,8 +246,11 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider, StockbitCaching
                         consensus.sell_count if consensus else 0,
                         consensus.avg_price_target if consensus else None,
                         consensus.current_price if consensus else None,
-                        consensus.last_updated.isoformat()
-                        if consensus and consensus.last_updated else None,
+                        (
+                            consensus.last_updated.isoformat()
+                            if consensus and consensus.last_updated
+                            else None
+                        ),
                         fetched_str,
                         consensus.price_target_low if consensus else None,
                         consensus.price_target_high if consensus else None,
@@ -291,7 +299,9 @@ class StockbitAnalystConsensusProvider(AnalystConsensusProvider, StockbitCaching
             if result:
                 logger.debug(
                     "Analyst %s → %s (%d analysts)",
-                    ticker, result.consensus_label, result.analyst_count
+                    ticker,
+                    result.consensus_label,
+                    result.analyst_count,
                 )
             return result
         except Exception as e:

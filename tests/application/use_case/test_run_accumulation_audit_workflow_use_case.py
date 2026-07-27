@@ -99,9 +99,7 @@ def test_explicit_cli_values_override_setup_preset():
     workflow = _make_workflow(
         audit_setups={"foreign-bounce": {"window": 12, "min_accum_score": 55.0}},
     )
-    result = workflow.execute(
-        _base_request(setup="foreign-bounce", window=3, min_accum_score=20.0)
-    )
+    result = workflow.execute(_base_request(setup="foreign-bounce", window=3, min_accum_score=20.0))
 
     assert result.window == 3
     assert result.min_accum_score == 20.0

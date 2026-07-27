@@ -216,8 +216,9 @@ def test_recent_quarter_skipped_to_protect_freshness_check(tmp_path):
     # Snap to nearest valid quarter-end in the past
     month = too_recent_period_end.month
     quarter_month = (((month - 1) // 3) * 3) + 3
-    too_recent_period_end = date(too_recent_period_end.year, quarter_month,
-                                  31 if quarter_month in (3, 12) else 30)
+    too_recent_period_end = date(
+        too_recent_period_end.year, quarter_month, 31 if quarter_month in (3, 12) else 30
+    )
     body = _body_for_period_end(too_recent_period_end)
     prov._write_historical_rows(_parse_historical_rows("BBCA", body))
 

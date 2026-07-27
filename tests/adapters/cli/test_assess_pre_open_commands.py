@@ -120,9 +120,7 @@ def test_assess_pre_open_missing_obs(tmp_path: Path) -> None:
 
 
 def test_command_boundary_no_sidecar_writes() -> None:
-    source = Path("src/adapters/cli/assess_pre_open_commands.py").read_text(
-        encoding="utf-8"
-    )
+    source = Path("src/adapters/cli/assess_pre_open_commands.py").read_text(encoding="utf-8")
     assert "write_intraday_confirmation" not in source
     assert "write_pre_open_sidecar" not in source
     assert "PreOpenPostOpenGatesUseCase" not in source

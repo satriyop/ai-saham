@@ -16,42 +16,44 @@ runner = CliRunner()
 
 def _seed(repo: SQLiteBrokerRepository) -> None:
     d = date(2026, 7, 23)
-    repo.save_broker_daily_flows([
-        BrokerDailyFlow(
-            ticker="AMMN",
-            broker_code="AK",
-            broker_name="UBS",
-            date=d,
-            buy_lot=100,
-            sell_lot=0,
-            net_lot=100,
-            buy_value=Decimal("1000"),
-            sell_value=Decimal("0"),
-            net_value=Decimal("1000"),
-            avg_buy_price=Decimal("0"),
-            avg_sell_price=Decimal("0"),
-            avg_price=Decimal("0"),
-            buy_pct=0.0,
-            sell_pct=0.0,
-        ),
-        BrokerDailyFlow(
-            ticker="BBCA",
-            broker_code="AK",
-            broker_name="UBS",
-            date=d,
-            buy_lot=0,
-            sell_lot=50,
-            net_lot=-50,
-            buy_value=Decimal("0"),
-            sell_value=Decimal("500"),
-            net_value=Decimal("-500"),
-            avg_buy_price=Decimal("0"),
-            avg_sell_price=Decimal("0"),
-            avg_price=Decimal("0"),
-            buy_pct=0.0,
-            sell_pct=0.0,
-        ),
-    ])
+    repo.save_broker_daily_flows(
+        [
+            BrokerDailyFlow(
+                ticker="AMMN",
+                broker_code="AK",
+                broker_name="UBS",
+                date=d,
+                buy_lot=100,
+                sell_lot=0,
+                net_lot=100,
+                buy_value=Decimal("1000"),
+                sell_value=Decimal("0"),
+                net_value=Decimal("1000"),
+                avg_buy_price=Decimal("0"),
+                avg_sell_price=Decimal("0"),
+                avg_price=Decimal("0"),
+                buy_pct=0.0,
+                sell_pct=0.0,
+            ),
+            BrokerDailyFlow(
+                ticker="BBCA",
+                broker_code="AK",
+                broker_name="UBS",
+                date=d,
+                buy_lot=0,
+                sell_lot=50,
+                net_lot=-50,
+                buy_value=Decimal("0"),
+                sell_value=Decimal("500"),
+                net_value=Decimal("-500"),
+                avg_buy_price=Decimal("0"),
+                avg_sell_price=Decimal("0"),
+                avg_price=Decimal("0"),
+                buy_pct=0.0,
+                sell_pct=0.0,
+            ),
+        ]
+    )
 
 
 def test_view_broker_top_stocks_ak(tmp_path: Path):
@@ -131,8 +133,16 @@ def test_view_broker_history_json(tmp_path: Path):
     result = runner.invoke(
         app,
         [
-            "view", "broker", "history", "AK",
-            "--db", str(db), "--format", "json", "--ticker", "BBCA",
+            "view",
+            "broker",
+            "history",
+            "AK",
+            "--db",
+            str(db),
+            "--format",
+            "json",
+            "--ticker",
+            "BBCA",
         ],
     )
     assert result.exit_code == 0

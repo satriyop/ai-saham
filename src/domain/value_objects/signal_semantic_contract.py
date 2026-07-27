@@ -5,8 +5,8 @@ Layer: Domain (pure value objects, no I/O)
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import re
+from dataclasses import dataclass
 
 from src.domain.value_objects.signal_artifact_schema import (
     CANDIDATE_OBSERVATION_SCHEMA_VERSION,
@@ -15,7 +15,6 @@ from src.domain.value_objects.signal_artifact_schema import (
 from src.domain.value_objects.signal_observation_contracts import (
     ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT,
 )
-
 
 _DOTTED_PATH = re.compile(r"^[a-zA-Z][a-zA-Z0-9_-]*(\.[a-zA-Z][a-zA-Z0-9_-]*)+$")
 _LOWERCASE_SNAKE = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -101,7 +100,6 @@ _COMMON_MATERIAL_CONFIG_PATHS_BASE: tuple[str, ...] = (
     "accumulation_screener.sector_breadth.breadth_threshold",
     "accumulation_screener.sector_breadth.enabled",
     "accumulation_screener.sector_breadth.min_tickers_for_breadth",
-
     "signal_engine.alpha_trigger.default_horizon",
     "signal_engine.alpha_trigger.enabled",
     "signal_engine.alpha_trigger.group_weights.company_quality_context",
@@ -240,12 +238,16 @@ _PULLBACK_CONTINUATION_SETUP_PATHS: tuple[str, ...] = (
     "swing_setups.setups.pullback-continuation.partial_max_failed_gates",
 )
 
-_SETUP_FAMILY_RESOLUTION_PATHS: tuple[str, ...] = tuple(sorted(set(
-    _FOREIGN_BOUNCE_SETUP_PATHS
-    + _COILED_SPRING_SETUP_PATHS
-    + _SMART_MONEY_CONFIRMED_SETUP_PATHS
-    + _PULLBACK_CONTINUATION_SETUP_PATHS
-)))
+_SETUP_FAMILY_RESOLUTION_PATHS: tuple[str, ...] = tuple(
+    sorted(
+        set(
+            _FOREIGN_BOUNCE_SETUP_PATHS
+            + _COILED_SPRING_SETUP_PATHS
+            + _SMART_MONEY_CONFIRMED_SETUP_PATHS
+            + _PULLBACK_CONTINUATION_SETUP_PATHS
+        )
+    )
+)
 
 _FOREIGN_BOUNCE_DECISION_POLICY_PATHS: tuple[str, ...] = (
     "signal_engine.decision_policy.setup_regime_policy.foreign_bounce.NEUTRAL",
@@ -410,15 +412,19 @@ _MARKET_CONTEXT_ENGINE_PATHS: tuple[str, ...] = (
     "market_context_engine.scoring.stale_business_day_gap",
 )
 
-_COMMON_MATERIAL_CONFIG_PATHS: tuple[str, ...] = tuple(sorted(set(
-    _COMMON_MATERIAL_CONFIG_PATHS_BASE
-    + _SETUP_FAMILY_RESOLUTION_PATHS
-    + _INSTITUTIONAL_ACCUMULATION_PATHS
-    + _TICKER_PROFILE_PATHS
-    + _SECTOR_CONTEXT_PATHS
-    + _COMPANY_QUALITY_CONTEXT_PATHS
-    + _MARKET_CONTEXT_ENGINE_PATHS
-)))
+_COMMON_MATERIAL_CONFIG_PATHS: tuple[str, ...] = tuple(
+    sorted(
+        set(
+            _COMMON_MATERIAL_CONFIG_PATHS_BASE
+            + _SETUP_FAMILY_RESOLUTION_PATHS
+            + _INSTITUTIONAL_ACCUMULATION_PATHS
+            + _TICKER_PROFILE_PATHS
+            + _SECTOR_CONTEXT_PATHS
+            + _COMPANY_QUALITY_CONTEXT_PATHS
+            + _MARKET_CONTEXT_ENGINE_PATHS
+        )
+    )
+)
 
 
 # ---------------------------------------------------------------------------
@@ -444,13 +450,17 @@ _MATERIAL_CONFIG_PATHS_BY_SETUP_FAMILY: tuple[tuple[str, tuple[str, ...]], ...] 
     ),
     (
         "foreign_bounce",
-        tuple(sorted(set(
-            (
-                "swing_setups.setup_phase.requirements.accumulation.enter_phases",
-                "swing_setups.setup_phase.requirements.accumulation.required_sequence",
+        tuple(
+            sorted(
+                set(
+                    (
+                        "swing_setups.setup_phase.requirements.accumulation.enter_phases",
+                        "swing_setups.setup_phase.requirements.accumulation.required_sequence",
+                    )
+                    + _FOREIGN_BOUNCE_DECISION_POLICY_PATHS
+                )
             )
-            + _FOREIGN_BOUNCE_DECISION_POLICY_PATHS
-        ))),
+        ),
     ),
     (
         "mean_reversion",
@@ -510,15 +520,19 @@ _MATERIAL_CONFIG_PATHS_BY_EVALUATION_HORIZON: tuple[tuple[str, tuple[str, ...]],
 # meaning. required_sequence is deliberately excluded from both: its order is
 # semantic (it is a state machine sequence, not a set).
 # ---------------------------------------------------------------------------
-_UNORDERED_UPPER_STRING_CONFIG_PATHS: tuple[str, ...] = tuple(sorted((
-    "accumulation_screener.broker_quality.noise.brokers",
-    "accumulation_screener.broker_quality.smart_money.brokers",
-    "accumulation_screener.broker_quality.tier1.brokers",
-    "institutional_accumulation.broker_classification.foreign_broker_codes",
-    "swing_setups.setup_phase.requirements.accumulation.enter_phases",
-    "swing_setups.setup_phase.requirements.breakout.enter_phases",
-    "swing_setups.setup_phase.requirements.pullback.enter_phases",
-)))
+_UNORDERED_UPPER_STRING_CONFIG_PATHS: tuple[str, ...] = tuple(
+    sorted(
+        (
+            "accumulation_screener.broker_quality.noise.brokers",
+            "accumulation_screener.broker_quality.smart_money.brokers",
+            "accumulation_screener.broker_quality.tier1.brokers",
+            "institutional_accumulation.broker_classification.foreign_broker_codes",
+            "swing_setups.setup_phase.requirements.accumulation.enter_phases",
+            "swing_setups.setup_phase.requirements.breakout.enter_phases",
+            "swing_setups.setup_phase.requirements.pullback.enter_phases",
+        )
+    )
+)
 
 _UNORDERED_LOWER_STRING_CONFIG_PATHS: tuple[str, ...] = (
     "swing_setups.setup_phase.volume_trigger.trusted_benchmark_volume_sources",
@@ -533,11 +547,15 @@ _UNORDERED_LOWER_STRING_CONFIG_PATHS: tuple[str, ...] = (
 # deliberately excluded — required_sequence remains ordered, and the others
 # are not unordered multisets.
 # ---------------------------------------------------------------------------
-_UNORDERED_INTEGER_CONFIG_PATHS: tuple[str, ...] = tuple(sorted((
-    "institutional_accumulation.windows.broker_consistency_days",
-    "institutional_accumulation.windows.cnfb_bearish_distribution",
-    "institutional_accumulation.windows.cnfb_bullish_accumulation",
-)))
+_UNORDERED_INTEGER_CONFIG_PATHS: tuple[str, ...] = tuple(
+    sorted(
+        (
+            "institutional_accumulation.windows.broker_consistency_days",
+            "institutional_accumulation.windows.cnfb_bearish_distribution",
+            "institutional_accumulation.windows.cnfb_bullish_accumulation",
+        )
+    )
+)
 
 # ---------------------------------------------------------------------------
 # Commodity-component normalization metadata — specialized to the current
@@ -661,8 +679,7 @@ def _require_evaluation_horizon_selector_present(
         _fail(
             common_paths,
             field,
-            f"must include evaluation-horizon selector path "
-            f"{_EVALUATION_HORIZON_SELECTOR_PATH!r}",
+            f"must include evaluation-horizon selector path {_EVALUATION_HORIZON_SELECTOR_PATH!r}",
         )
 
 
@@ -723,7 +740,7 @@ def _require_no_normalization_overlap(
     would make canonicalization ambiguous.
     """
     for i, (name_i, paths_i) in enumerate(named_collections):
-        for name_j, paths_j in named_collections[i + 1:]:
+        for name_j, paths_j in named_collections[i + 1 :]:
             overlap = set(paths_i) & set(paths_j)
             if overlap:
                 _fail(
@@ -775,19 +792,24 @@ class SemanticContractDefinition:
 
     def __post_init__(self) -> None:
         _require_non_empty_trimmed(
-            self.observation_contract, "observation_contract",
+            self.observation_contract,
+            "observation_contract",
         )
         _require_non_empty_trimmed(
-            self.evidence_contract_version, "evidence_contract_version",
+            self.evidence_contract_version,
+            "evidence_contract_version",
         )
         _require_non_empty_trimmed(
-            self.semantic_engine_version, "semantic_engine_version",
+            self.semantic_engine_version,
+            "semantic_engine_version",
         )
         _require_positive_int(
-            self.observation_schema_version, "observation_schema_version",
+            self.observation_schema_version,
+            "observation_schema_version",
         )
         _require_positive_int(
-            self.label_schema_version, "label_schema_version",
+            self.label_schema_version,
+            "label_schema_version",
         )
         _require_execution_label_policy_versions(
             self.execution_label_policy_versions,
@@ -810,7 +832,8 @@ class SemanticContractDefinition:
             "material_config_paths_by_evaluation_horizon",
         )
         _require_sorted_strings(
-            self.authority_registration_names, "authority_registration_names",
+            self.authority_registration_names,
+            "authority_registration_names",
         )
         _require_optional_sorted_dotted_paths(
             self.unordered_upper_string_config_paths,
@@ -828,12 +851,14 @@ class SemanticContractDefinition:
             self.commodity_component_config_paths,
             "commodity_component_config_paths",
         )
-        _require_no_normalization_overlap((
-            ("unordered_upper_string_config_paths", self.unordered_upper_string_config_paths),
-            ("unordered_lower_string_config_paths", self.unordered_lower_string_config_paths),
-            ("unordered_integer_config_paths", self.unordered_integer_config_paths),
-            ("commodity_component_config_paths", self.commodity_component_config_paths),
-        ))
+        _require_no_normalization_overlap(
+            (
+                ("unordered_upper_string_config_paths", self.unordered_upper_string_config_paths),
+                ("unordered_lower_string_config_paths", self.unordered_lower_string_config_paths),
+                ("unordered_integer_config_paths", self.unordered_integer_config_paths),
+                ("commodity_component_config_paths", self.commodity_component_config_paths),
+            )
+        )
         all_declared_material_paths: set[str] = set(self.common_material_config_paths)
         for _family, family_paths in self.material_config_paths_by_setup_family:
             all_declared_material_paths |= set(family_paths)

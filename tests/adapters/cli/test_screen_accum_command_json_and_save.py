@@ -21,6 +21,11 @@ from src.application.use_case.build_live_signal_evidence_execution_context_use_c
 from src.application.use_case.run_accumulation_screen_workflow_use_case import (
     RunAccumulationScreenWorkflowUseCase,
 )
+from tests.adapters.cli.screen_accum_test_fixtures import (
+    _candidate,
+    _fake_workflow_result,
+    runner,
+)
 
 
 def _screen_payload(raw: dict) -> dict:
@@ -28,13 +33,6 @@ def _screen_payload(raw: dict) -> dict:
     if "verb" in raw and "data" in raw and isinstance(raw["data"], dict):
         return raw["data"]
     return raw
-
-
-from tests.adapters.cli.screen_accum_test_fixtures import (
-    _candidate,
-    _fake_workflow_result,
-    runner,
-)
 
 
 def _real_workflow_uc(screen_execute, broker_repo=None):
@@ -193,18 +191,20 @@ def test_screen_accum_save_calls_use_case(monkeypatch):
         uc = SimpleNamespace()
         uc.execute = lambda req: _fake_workflow_result(
             response=AccumulationScreenResponse(
-                candidates=[_candidate(
-                    ticker="BBCA", accum_score=80.0, bci_label="CLUSTER",
-                )],
+                candidates=[
+                    _candidate(
+                        ticker="BBCA",
+                        accum_score=80.0,
+                        bci_label="CLUSTER",
+                    )
+                ],
                 screened_at=date(2026, 6, 28),
                 window_days=getattr(req, "window", 7),
                 total_tickers_checked=len(req.tickers),
                 tickers_skipped=0,
                 provider="fake",
             ),
-            save_result=SaveScreenWatchlistResult(
-                saved_count=1, name="mywatch"
-            ),
+            save_result=SaveScreenWatchlistResult(saved_count=1, name="mywatch"),
         )
         return uc
 
@@ -247,9 +247,7 @@ def test_screen_accum_json_save_includes_saved_watchlist(monkeypatch):
                     tickers_skipped=0,
                     provider="fake",
                 ),
-                save_result=SaveScreenWatchlistResult(
-                    saved_count=1, name="mywatch"
-                ),
+                save_result=SaveScreenWatchlistResult(saved_count=1, name="mywatch"),
             )
 
         uc.execute = execute
@@ -479,8 +477,17 @@ def test_screen_accum_multi_json_matches_table_rows_under_top_sort_squeeze(monke
     json_result = runner.invoke(
         app,
         [
-            "screen", "accum", "A", "B", "C", "--multi", "--squeeze-only",
-            "--top", "1", "--format", "json",
+            "screen",
+            "accum",
+            "A",
+            "B",
+            "C",
+            "--multi",
+            "--squeeze-only",
+            "--top",
+            "1",
+            "--format",
+            "json",
         ],
     )
     assert json_result.exit_code == 0, json_result.output
@@ -549,9 +556,7 @@ def test_screen_accum_multi_renders_tracked_broker_flow_not_broker_quality(monke
     assert "Broker Flow" not in table_result.output
     assert "Disc%" in table_result.output
 
-    json_result = runner.invoke(
-        app, ["screen", "accum", "A", "--multi", "--format", "json"]
-    )
+    json_result = runner.invoke(app, ["screen", "accum", "A", "--multi", "--format", "json"])
     assert json_result.exit_code == 0, json_result.output
     payload = _screen_payload(json.loads(json_result.output))
     entry = payload["tickers"]["A"]
@@ -631,9 +636,7 @@ def test_screen_accum_multi_duplicate_windows_fails_clearly(monkeypatch):
         lambda *, db_path, screener_config, swing_config, **kwargs: workflow_uc,
     )
 
-    result = runner.invoke(
-        app, ["screen", "accum", "BBCA", "--multi", "--windows", "7,7,30"]
-    )
+    result = runner.invoke(app, ["screen", "accum", "BBCA", "--multi", "--windows", "7,7,30"])
 
     assert result.exit_code != 0
     assert "Duplicate windows" in result.output
@@ -657,9 +660,7 @@ def test_screen_accum_invalid_sort_by_fails_clearly(monkeypatch):
         lambda *, db_path, screener_config, swing_config, **kwargs: workflow_uc,
     )
 
-    result = runner.invoke(
-        app, ["screen", "accum", "BBCA", "--multi", "--sort-by", "banana"]
-    )
+    result = runner.invoke(app, ["screen", "accum", "BBCA", "--multi", "--sort-by", "banana"])
 
     assert result.exit_code != 0
     assert "Invalid --sort-by" in result.output
@@ -691,7 +692,7 @@ def test_screen_accum_single_json_includes_universe_warnings_partial_result(monk
     )
 
     assert result.exit_code == 0, result.output
-    raw = json.loads(result.output[result.output.index("{"):])
+    raw = json.loads(result.output[result.output.index("{") :])
     assert raw["status"] == "ok"
     payload = _screen_payload(raw)
     assert payload["universe"] == "lq45"
@@ -786,7 +787,7 @@ def test_screen_accum_multi_json_includes_universe_warnings_partial_result(monke
     )
 
     assert result.exit_code == 0, result.output
-    payload = _screen_payload(json.loads(result.output[result.output.index("{"):]))
+    payload = _screen_payload(json.loads(result.output[result.output.index("{") :]))
     assert payload["universe"] == "lq45"
     assert payload["warnings"] == ["multi warning"]
     assert payload["partial_result"] is True
@@ -814,9 +815,7 @@ def test_screen_accum_multi_json_partial_result_false_when_nothing_skipped(monke
         fake_uc,
     )
 
-    result = runner.invoke(
-        app, ["screen", "accum", "BBCA", "--multi", "--format", "json"]
-    )
+    result = runner.invoke(app, ["screen", "accum", "BBCA", "--multi", "--format", "json"])
 
     assert result.exit_code == 0, result.output
     raw = json.loads(result.output)
@@ -848,9 +847,7 @@ def test_screen_accum_multi_json_status_empty_when_no_rows(monkeypatch):
         fake_uc,
     )
 
-    result = runner.invoke(
-        app, ["screen", "accum", "BBCA", "--multi", "--format", "json"]
-    )
+    result = runner.invoke(app, ["screen", "accum", "BBCA", "--multi", "--format", "json"])
 
     assert result.exit_code == 0, result.output
     raw = json.loads(result.output)
@@ -912,9 +909,7 @@ def test_screen_accum_multi_cli_json_contract(monkeypatch):
         fake_uc,
     )
 
-    result = runner.invoke(
-        app, ["screen", "accum", "BBCA", "--multi", "--format", "json"]
-    )
+    result = runner.invoke(app, ["screen", "accum", "BBCA", "--multi", "--format", "json"])
 
     assert result.exit_code == 0, result.output
     payload = _screen_payload(json.loads(result.output))

@@ -153,9 +153,7 @@ class PreOpenObservationPersister:
                 iev_min=response.result.iev_min,
                 market_regime=response.market_regime,
             )
-            payload["observation_contract"] = (
-                LearningContractId.PRE_OPEN_OBSERVATION.value
-            )
+            payload["observation_contract"] = LearningContractId.PRE_OPEN_OBSERVATION.value
             payload["provenance"] = {
                 "workflow": PRE_OPEN_WORKFLOW,
                 "config_hash": config_hash,
@@ -231,12 +229,9 @@ class PreOpenObservationPersister:
             if inserted:
                 inserted_count += 1
             ticker = str(
-                observation.decision_payload.get("ticker")
-                or observation.window_id.split(":", 1)[0]
+                observation.decision_payload.get("ticker") or observation.window_id.split(":", 1)[0]
             ).upper()
-            screen_result = str(
-                observation.decision_payload.get("screen_result") or ""
-            )
+            screen_result = str(observation.decision_payload.get("screen_result") or "")
             rows.append(
                 PreOpenPersistedObservation(
                     observation_id=observation.observation_id,

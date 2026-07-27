@@ -30,8 +30,7 @@ def _alpha_trigger_fingerprint(signal: "AssessSignalResponse | None") -> dict:
         "alpha_trigger_alpha_weight": score.alpha_weight,
         "flow_trigger_allowed": score.flow_trigger_allowed,
         "alpha_trigger_route_metadata": [
-            contribution.to_dict()
-            for contribution in score.group_contributions
+            contribution.to_dict() for contribution in score.group_contributions
         ],
         "alpha_trigger_unavailable_reasons": list(score.unavailable_reasons),
     }

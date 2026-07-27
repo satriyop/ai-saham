@@ -147,9 +147,7 @@ def test_has_liquidity_and_special_situation_risk_flags_detected_independently()
 
 
 def test_has_volume_distortion_risk_false_when_no_event_carries_flag():
-    events = (
-        _event(flags=(CorporateActionEventRiskFlag.PRICE_DISTORTION,)),
-    )
+    events = (_event(flags=(CorporateActionEventRiskFlag.PRICE_DISTORTION,)),)
     assessment = CorporateActionRiskAssessment(
         ticker="BBCA",
         as_of_date=date(2026, 7, 13),

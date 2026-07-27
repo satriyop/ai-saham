@@ -4,6 +4,9 @@ from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock
 
+from src.application.dto.signal_evidence_execution_context import (
+    SignalEvidenceExecutionContext,
+)
 from src.application.ports.rules_loader import RulesLoader
 from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.services.signal_engine import SignalEngine
@@ -230,9 +233,7 @@ def _daily_flow(
     *,
     net_value: Decimal | None = None,
 ) -> BrokerDailyFlow:
-    resolved_net_value = (
-        net_value if net_value is not None else Decimal(net_lot * 100 * 1000)
-    )
+    resolved_net_value = net_value if net_value is not None else Decimal(net_lot * 100 * 1000)
     buy_value = resolved_net_value if resolved_net_value > 0 else Decimal("0")
     sell_value = -resolved_net_value if resolved_net_value < 0 else Decimal("0")
     return BrokerDailyFlow(
@@ -456,8 +457,9 @@ def make_signal_evidence_execution_context(
     as_of: date,
     *,
     source_availability_use_case=None,
-) -> "SignalEvidenceExecutionContext":
+) -> SignalEvidenceExecutionContext:
     from datetime import datetime
+
     from src.application.dto.signal_evidence_execution_context import (
         SignalEvidenceExecutionContext,
     )

@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 
 from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
+    AccumulationScreenRequest,
     AccumulationScreenResponse,
 )
 from src.application.dto.signal_evidence_execution_context import (
@@ -131,8 +132,14 @@ class RecordingLiveContextUseCase:
         return self.context
 
 
-def _make_uc(*, screen_use_case=None, broker_repo=None, market_repo=None,
-             save_uc=None, live_context_use_case=None) -> RunAccumulationScreenWorkflowUseCase:
+def _make_uc(
+    *,
+    screen_use_case=None,
+    broker_repo=None,
+    market_repo=None,
+    save_uc=None,
+    live_context_use_case=None,
+) -> RunAccumulationScreenWorkflowUseCase:
     return RunAccumulationScreenWorkflowUseCase(
         screen_use_case=screen_use_case or MagicMock(),
         broker_repository=broker_repo or MagicMock(),
@@ -142,8 +149,7 @@ def _make_uc(*, screen_use_case=None, broker_repo=None, market_repo=None,
         rules_loader=MagicMock(),
         indicator_registry_factory=MagicMock(),
         live_signal_evidence_context_use_case=(
-            live_context_use_case
-            or RecordingLiveContextUseCase(_fake_execution_context())
+            live_context_use_case or RecordingLiveContextUseCase(_fake_execution_context())
         ),
         save_watchlist_use_case=save_uc,
     )
@@ -328,8 +334,8 @@ def test_multi_mode_resolves_effective_session_once_not_per_window():
     """DQ-002B: the shared live execution-context use case is called once
     per execute(), shared across all windows — never once per window."""
     screen_mock = MagicMock()
-    screen_mock.execute.side_effect = (
-        lambda req, *, execution_context: _screen_response(window_days=req.window_days)
+    screen_mock.execute.side_effect = lambda req, *, execution_context: _screen_response(
+        window_days=req.window_days
     )
     live_context_uc = RecordingLiveContextUseCase(_fake_execution_context())
     uc = _make_uc(screen_use_case=screen_mock, live_context_use_case=live_context_uc)
@@ -341,8 +347,8 @@ def test_multi_mode_resolves_effective_session_once_not_per_window():
 
 def test_multi_mode_executes_all_windows():
     screen_mock = MagicMock()
-    screen_mock.execute.side_effect = (
-        lambda req, *, execution_context: _screen_response(window_days=req.window_days)
+    screen_mock.execute.side_effect = lambda req, *, execution_context: _screen_response(
+        window_days=req.window_days
     )
     uc = _make_uc(screen_use_case=screen_mock)
 
@@ -355,8 +361,8 @@ def test_multi_mode_executes_all_windows():
 
 def test_multi_mode_score_filters_disabled():
     screen_mock = MagicMock()
-    screen_mock.execute.side_effect = (
-        lambda req, *, execution_context: _screen_response(window_days=req.window_days)
+    screen_mock.execute.side_effect = lambda req, *, execution_context: _screen_response(
+        window_days=req.window_days
     )
     uc = _make_uc(screen_use_case=screen_mock)
 
@@ -371,8 +377,8 @@ def test_multi_mode_score_filters_disabled():
 
 def test_multi_mode_passthrough_min_piotroski():
     screen_mock = MagicMock()
-    screen_mock.execute.side_effect = (
-        lambda req, *, execution_context: _screen_response(window_days=req.window_days)
+    screen_mock.execute.side_effect = lambda req, *, execution_context: _screen_response(
+        window_days=req.window_days
     )
     uc = _make_uc(screen_use_case=screen_mock)
 
@@ -384,8 +390,8 @@ def test_multi_mode_passthrough_min_piotroski():
 
 def test_multi_mode_tracked_broker_flow():
     screen_mock = MagicMock()
-    screen_mock.execute.side_effect = (
-        lambda req, *, execution_context: _screen_response(window_days=req.window_days)
+    screen_mock.execute.side_effect = lambda req, *, execution_context: _screen_response(
+        window_days=req.window_days
     )
 
     broker_repo = MagicMock()
@@ -399,8 +405,8 @@ def test_multi_mode_tracked_broker_flow():
 
 def test_multi_mode_canonical_window_defaults_to_7():
     screen_mock = MagicMock()
-    screen_mock.execute.side_effect = (
-        lambda req, *, execution_context: _screen_response(window_days=req.window_days)
+    screen_mock.execute.side_effect = lambda req, *, execution_context: _screen_response(
+        window_days=req.window_days
     )
     uc = _make_uc(screen_use_case=screen_mock)
 
@@ -414,8 +420,8 @@ def test_multi_mode_canonical_window_falls_back_to_first_requested_window():
     """S7: when 7 is not among the requested windows, canonical window falls
     back to the first requested window rather than failing."""
     screen_mock = MagicMock()
-    screen_mock.execute.side_effect = (
-        lambda req, *, execution_context: _screen_response(window_days=req.window_days)
+    screen_mock.execute.side_effect = lambda req, *, execution_context: _screen_response(
+        window_days=req.window_days
     )
     uc = _make_uc(screen_use_case=screen_mock)
 
@@ -468,9 +474,7 @@ def test_strategy_overlay_only_when_flag_true(monkeypatch):
 
     strat_mock = MagicMock()
     strat_mock.resolve.return_value = Path("/tmp/fake.yaml")
-    monkeypatch.setattr(
-        uc_mod, "StrategyLoader", lambda *, rules_loader, registry: strat_mock
-    )
+    monkeypatch.setattr(uc_mod, "StrategyLoader", lambda *, rules_loader, registry: strat_mock)
 
     risk_mock = MagicMock()
     risk_mock.execute.return_value.assessment.risk_level_name = "OPEN"
@@ -480,10 +484,12 @@ def test_strategy_overlay_only_when_flag_true(monkeypatch):
         lambda *, repository, registry, rules_loader: risk_mock,
     )
 
-    result = uc.execute(_single_request(
-        strategy_name="test-strat",
-        include_strategy_overlay=True,
-    ))
+    result = uc.execute(
+        _single_request(
+            strategy_name="test-strat",
+            include_strategy_overlay=True,
+        )
+    )
 
     strat_mock.resolve.assert_called_once_with("test-strat")
     assert len(result.strategy_signals) > 0
@@ -499,9 +505,7 @@ def test_strategy_overlay_skipped_when_flag_false(monkeypatch):
     uc = _make_uc(screen_use_case=screen_mock)
 
     strat_mock = MagicMock()
-    monkeypatch.setattr(
-        uc_mod, "StrategyLoader", lambda *, rules_loader, registry: strat_mock
-    )
+    monkeypatch.setattr(uc_mod, "StrategyLoader", lambda *, rules_loader, registry: strat_mock)
 
     risk_mock = MagicMock()
     monkeypatch.setattr(
@@ -510,10 +514,12 @@ def test_strategy_overlay_skipped_when_flag_false(monkeypatch):
         lambda *, repository, registry, rules_loader: risk_mock,
     )
 
-    result = uc.execute(_single_request(
-        strategy_name="test-strat",
-        include_strategy_overlay=False,
-    ))
+    result = uc.execute(
+        _single_request(
+            strategy_name="test-strat",
+            include_strategy_overlay=False,
+        )
+    )
 
     strat_mock.resolve.assert_not_called()
     assert result.strategy_signals == {}
@@ -531,9 +537,7 @@ def test_strategy_overlay_top_visible_only(monkeypatch):
 
     strat_mock = MagicMock()
     strat_mock.resolve.return_value = Path("/tmp/fake.yaml")
-    monkeypatch.setattr(
-        uc_mod, "StrategyLoader", lambda *, rules_loader, registry: strat_mock
-    )
+    monkeypatch.setattr(uc_mod, "StrategyLoader", lambda *, rules_loader, registry: strat_mock)
 
     risk_mock = MagicMock()
     risk_mock.execute.return_value.assessment.risk_level_name = "OPEN"
@@ -543,11 +547,13 @@ def test_strategy_overlay_top_visible_only(monkeypatch):
         lambda *, repository, registry, rules_loader: risk_mock,
     )
 
-    result = uc.execute(_single_request(
-        strategy_name="test-strat",
-        include_strategy_overlay=True,
-        top=3,
-    ))
+    result = uc.execute(
+        _single_request(
+            strategy_name="test-strat",
+            include_strategy_overlay=True,
+            top=3,
+        )
+    )
 
     assert len(result.strategy_signals) == 3
 
@@ -565,9 +571,7 @@ def test_strategy_overlay_maps_failures_to_question_mark(monkeypatch):
 
     strat_mock = MagicMock()
     strat_mock.resolve.return_value = Path("/tmp/fake.yaml")
-    monkeypatch.setattr(
-        uc_mod, "StrategyLoader", lambda *, rules_loader, registry: strat_mock
-    )
+    monkeypatch.setattr(uc_mod, "StrategyLoader", lambda *, rules_loader, registry: strat_mock)
 
     risk_mock = MagicMock()
     risk_mock.execute.side_effect = [
@@ -580,11 +584,13 @@ def test_strategy_overlay_maps_failures_to_question_mark(monkeypatch):
         lambda *, repository, registry, rules_loader: risk_mock,
     )
 
-    result = uc.execute(_single_request(
-        strategy_name="test-strat",
-        include_strategy_overlay=True,
-        top=5,
-    ))
+    result = uc.execute(
+        _single_request(
+            strategy_name="test-strat",
+            include_strategy_overlay=True,
+            top=5,
+        )
+    )
 
     assert result.strategy_signals.get("OK") == "OPEN"
     assert result.strategy_signals.get("FAIL") == "?"
@@ -604,14 +610,14 @@ def test_missing_strategy_returns_warning(monkeypatch):
     strat_mock.resolve.side_effect = StrategyNotFoundError(
         "missing", searched_paths=["/tmp/missing"]
     )
-    monkeypatch.setattr(
-        uc_mod, "StrategyLoader", lambda *, rules_loader, registry: strat_mock
-    )
+    monkeypatch.setattr(uc_mod, "StrategyLoader", lambda *, rules_loader, registry: strat_mock)
 
-    result = uc.execute(_single_request(
-        strategy_name="missing",
-        include_strategy_overlay=True,
-    ))
+    result = uc.execute(
+        _single_request(
+            strategy_name="missing",
+            include_strategy_overlay=True,
+        )
+    )
 
     assert len(result.warnings) == 1
     assert "Strategy not found" in result.warnings[0]
@@ -628,9 +634,7 @@ def test_missing_strategy_still_saves(monkeypatch):
     )
 
     screen_mock = MagicMock()
-    screen_mock.execute.return_value = _screen_response(
-        candidates=[_candidate(ticker="BBCA")]
-    )
+    screen_mock.execute.return_value = _screen_response(candidates=[_candidate(ticker="BBCA")])
     save_mock = MagicMock()
     save_mock.execute.return_value = SaveScreenWatchlistResult(
         saved_count=1, name="missing-strat-save"
@@ -641,16 +645,16 @@ def test_missing_strategy_still_saves(monkeypatch):
     strat_mock.resolve.side_effect = StrategyNotFoundError(
         "missing", searched_paths=["/tmp/missing"]
     )
-    monkeypatch.setattr(
-        uc_mod, "StrategyLoader", lambda *, rules_loader, registry: strat_mock
-    )
+    monkeypatch.setattr(uc_mod, "StrategyLoader", lambda *, rules_loader, registry: strat_mock)
 
-    result = uc.execute(_single_request(
-        strategy_name="missing",
-        include_strategy_overlay=True,
-        save_name="missing-strat-save",
-        save_enabled=True,
-    ))
+    result = uc.execute(
+        _single_request(
+            strategy_name="missing",
+            include_strategy_overlay=True,
+            save_name="missing-strat-save",
+            save_enabled=True,
+        )
+    )
 
     assert len(result.warnings) == 1
     assert "Strategy not found" in result.warnings[0]
@@ -674,16 +678,16 @@ def test_save_invoked_when_enabled():
         candidates=[_candidate(ticker="BBCA"), _candidate(ticker="BBRI")]
     )
     save_mock = MagicMock()
-    save_mock.execute.return_value = SaveScreenWatchlistResult(
-        saved_count=2, name="mywatch"
-    )
+    save_mock.execute.return_value = SaveScreenWatchlistResult(saved_count=2, name="mywatch")
     uc = _make_uc(screen_use_case=screen_mock, save_uc=save_mock)
 
-    result = uc.execute(_single_request(
-        save_name="mywatch",
-        save_enabled=True,
-        top=5,
-    ))
+    result = uc.execute(
+        _single_request(
+            save_name="mywatch",
+            save_enabled=True,
+            top=5,
+        )
+    )
 
     save_mock.execute.assert_called_once()
     call_args = save_mock.execute.call_args[0][0]
@@ -699,10 +703,12 @@ def test_save_skipped_when_disabled():
     save_mock = MagicMock()
     uc = _make_uc(screen_use_case=screen_mock, save_uc=save_mock)
 
-    result = uc.execute(_single_request(
-        save_name="mywatch",
-        save_enabled=False,
-    ))
+    result = uc.execute(
+        _single_request(
+            save_name="mywatch",
+            save_enabled=False,
+        )
+    )
 
     save_mock.execute.assert_not_called()
     assert result.save_result is None
@@ -717,16 +723,16 @@ def test_save_uses_top_candidates():
     screen_mock = MagicMock()
     screen_mock.execute.return_value = _screen_response(candidates=candidates)
     save_mock = MagicMock()
-    save_mock.execute.return_value = SaveScreenWatchlistResult(
-        saved_count=3, name="top3"
-    )
+    save_mock.execute.return_value = SaveScreenWatchlistResult(saved_count=3, name="top3")
     uc = _make_uc(screen_use_case=screen_mock, save_uc=save_mock)
 
-    result = uc.execute(_single_request(
-        save_name="top3",
-        save_enabled=True,
-        top=3,
-    ))
+    result = uc.execute(
+        _single_request(
+            save_name="top3",
+            save_enabled=True,
+            top=3,
+        )
+    )
 
     call_args = save_mock.execute.call_args[0][0]
     assert len(call_args.candidates) == 3
@@ -741,10 +747,10 @@ class RecordingScreenFake:
 
     def execute(
         self,
-        request: "AccumulationScreenRequest",
+        request: AccumulationScreenRequest,
         *,
-        execution_context: "SignalEvidenceExecutionContext",
-    ) -> "AccumulationScreenResponse":
+        execution_context: SignalEvidenceExecutionContext,
+    ) -> AccumulationScreenResponse:
         self.recorded_contexts.append(execution_context)
         self.recorded_requests.append(request)
         return self.responses.get(
@@ -792,9 +798,7 @@ def test_multi_mode_context_lineage_preserves_object_identity(monkeypatch):
             effective_session=effective_session,
         )
 
-    monkeypatch.setattr(
-        uc_mod, "project_multi_screen_result", spy_project_multi_screen_result
-    )
+    monkeypatch.setattr(uc_mod, "project_multi_screen_result", spy_project_multi_screen_result)
 
     uc = RunAccumulationScreenWorkflowUseCase(
         screen_use_case=screen_fake,
@@ -858,9 +862,7 @@ def test_single_mode_context_lineage_preserves_object_identity(monkeypatch):
             sort_by=sort_by,
         )
 
-    monkeypatch.setattr(
-        uc_mod, "project_single_screen_result", spy_project_single_screen_result
-    )
+    monkeypatch.setattr(uc_mod, "project_single_screen_result", spy_project_single_screen_result)
 
     uc = RunAccumulationScreenWorkflowUseCase(
         screen_use_case=screen_fake,

@@ -24,6 +24,7 @@ _USER_PATH = _PROJECT_ROOT / "config" / "user.yaml"
 
 # ── Sub-configs ────────────────────────────────────────────────────────────
 
+
 @dataclass(frozen=True)
 class MarketConfig:
     provider: str = "yahoo"
@@ -106,8 +107,8 @@ class BacktestConfig:
 
 @dataclass(frozen=True)
 class FetchConfig:
-    default_days: int = 90          # fetch window (distinct from analysis default_days)
-    start_tolerance_days: int = 7   # acceptable gap at start of a cached date range
+    default_days: int = 90  # fetch window (distinct from analysis default_days)
+    start_tolerance_days: int = 7  # acceptable gap at start of a cached date range
 
 
 @dataclass(frozen=True)
@@ -131,6 +132,7 @@ class AppConfig:
 
 
 # ── Loader ─────────────────────────────────────────────────────────────────
+
 
 def _deep_merge(base: dict, override: dict) -> dict:
     """Recursively merge override into base. override wins on conflicts."""

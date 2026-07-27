@@ -33,9 +33,7 @@ class AssessRiskTrendUseCase:
         self._indicator_evaluator = indicator_evaluator
         self._indicator_history_days = indicator_history_days
 
-    def execute(
-        self, request: AssessRiskRequest, days: int = 7
-    ) -> AssessRiskTrendResponse:
+    def execute(self, request: AssessRiskRequest, days: int = 7) -> AssessRiskTrendResponse:
         """
         Assess risk level trend over the last N trading days.
 
@@ -73,9 +71,7 @@ class AssessRiskTrendUseCase:
         if self._indicator_evaluator is not None:
             for snapshot in window:
                 ctx = self._indicator_evaluator.evaluate(snapshot)
-                history.append(
-                    (snapshot.date, ctx.overall.value.upper(), ctx.confidence)
-                )
+                history.append((snapshot.date, ctx.overall.value.upper(), ctx.confidence))
         else:
             for snapshot in window:
                 history.append((snapshot.date, "UNKNOWN", 0))

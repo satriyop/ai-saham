@@ -6,9 +6,6 @@ Public command registration lives in lifecycle routers:
   saham audit data reconcile-sources
   saham audit data contract-gate
   saham audit data seasonality-cleanup-plan
-  saham audit data candidate-observation-identity
-   saham audit data repair-candidate-observations
-   saham audit data repair-signal-forward-labels
 Layer: Adapter
 """
 
@@ -24,6 +21,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from src.adapters.cli.audit_sentiment_commands import sentiment_audit as _sentiment_audit_fn
 from src.application.use_case.audit_source_field_contracts_use_case import (
     AuditSourceFieldContractsResponse,
     AuditSourceFieldContractsUseCase,
@@ -49,9 +47,6 @@ from src.application.use_case.repair_seasonality_cache_use_case import (
     RepairSeasonalityCacheResponse,
     RepairSeasonalityCacheUseCase,
 )
-from src.infrastructure.persistence.sqlite_seasonality_cache_repairer import (
-    SQLiteSeasonalityCacheRepairer,
-)
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.audit_config_identity_reader import (
     FileAuditConfigIdentityReader,
@@ -69,14 +64,17 @@ from src.infrastructure.persistence.sqlite_audit_manifest_reader import (
 from src.infrastructure.persistence.sqlite_enrichment_reconciliation_reader import (
     SQLiteEnrichmentReconciliationReader,
 )
+from src.infrastructure.persistence.sqlite_seasonality_cache_repairer import (
+    SQLiteSeasonalityCacheRepairer,
+)
+from src.infrastructure.persistence.sqlite_seasonality_cleanup_plan_reader import (
+    SQLiteSeasonalityCleanupPlanReader,
+)
 from src.infrastructure.persistence.sqlite_signal_artifact_reconciliation_reader import (
     SQLiteSignalArtifactReconciliationReader,
 )
 from src.infrastructure.persistence.sqlite_source_field_contract_reader import (
     SQLiteSourceFieldContractReader,
-)
-from src.infrastructure.persistence.sqlite_seasonality_cleanup_plan_reader import (
-    SQLiteSeasonalityCleanupPlanReader,
 )
 from src.infrastructure.persistence.sqlite_source_reconciliation_reader import (
     SQLiteSourceReconciliationReader,
@@ -96,7 +94,8 @@ data_app = typer.Typer(
 
 audit_app = typer.Typer(
     name="audit",
-    help="Offline audits — data quality (`audit data`) and historical sentiment accuracy (`audit sentiment`).",
+    help="Offline audits — data quality (`audit data`) and historical "
+    "sentiment accuracy (`audit sentiment`).",
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},
 )
@@ -263,17 +262,14 @@ def repair_seasonality_cache(
     """
     if dry_run and apply:
         raise typer.BadParameter(
-            "Cannot use both --dry-run and --apply. "
-            "Default (no flag) is dry-run."
+            "Cannot use both --dry-run and --apply. Default (no flag) is dry-run."
         )
     _require_explicit_db_for_apply(apply=apply, db_path=db_path)
     if output_format not in _VALID_FORMATS:
         raise typer.BadParameter(
             f"--format must be one of {_VALID_FORMATS}, got '{output_format}'."
         )
-    _run_repair_seasonality_cache(
-        db_path=db_path, apply=apply, output_format=output_format
-    )
+    _run_repair_seasonality_cache(db_path=db_path, apply=apply, output_format=output_format)
 
 
 data_app.command("manifest")(manifest)
@@ -283,8 +279,6 @@ data_app.command("contract-gate")(contract_gate)
 data_app.command("seasonality-cleanup-plan")(seasonality_cleanup_plan)
 data_app.command("repair-seasonality-cache")(repair_seasonality_cache)
 audit_app.add_typer(data_app, name="data")
-
-from src.adapters.cli.audit_sentiment_commands import sentiment_audit as _sentiment_audit_fn
 audit_app.command("sentiment")(_sentiment_audit_fn)
 
 
@@ -489,9 +483,7 @@ def _print_reconcile_sources_table(response: AuditSourceReconciliationResponse) 
         table.add_column("Mismatches", justify="right")
         table.add_column("Status", justify="center")
         for c in response.checks:
-            status_color = {"PASS": "green", "WARN": "yellow", "FAIL": "red"}.get(
-                c.status, "white"
-            )
+            status_color = {"PASS": "green", "WARN": "yellow", "FAIL": "red"}.get(c.status, "white")
             table.add_row(
                 c.name,
                 ", ".join(c.tables),
@@ -571,8 +563,7 @@ def _print_contract_gate_table(response: DQContractGateResponse) -> None:
     )
     summary.add_row(
         "reconcile-sources",
-        f"[{reconciliation_color}]{response.source_reconciliation_status}"
-        f"[/{reconciliation_color}]",
+        f"[{reconciliation_color}]{response.source_reconciliation_status}[/{reconciliation_color}]",
     )
     console.print(summary)
 
@@ -599,9 +590,7 @@ def _print_contract_gate_table(response: DQContractGateResponse) -> None:
     if response.blockers:
         pass  # failure state already shown in the panel and Blockers section
     elif response.warnings:
-        console.print(
-            "[green]✓ DQ-CONTRACT-GATE passed with non-blocking warnings.[/green]"
-        )
+        console.print("[green]✓ DQ-CONTRACT-GATE passed with non-blocking warnings.[/green]")
     else:
         console.print("[green]✓ DQ-CONTRACT-GATE passed — no findings.[/green]")
     console.print("")
@@ -803,299 +792,4 @@ def _print_seasonality_cache_repair_table(response: RepairSeasonalityCacheRespon
     elif response.source_available and response.invalid_row_count == 0:
         console.print("")
         console.print("[green]✓ No invalid seasonality_cache rows found.[/green]")
-    console.print("")
-
-
-def _run_candidate_observation_identity(
-    db_path: Path | None,
-    output_format: str,
-) -> None:
-    cfg = load_app_config()
-    resolved_db = db_path or Path(cfg.storage.db_path)
-
-    use_case = AuditCandidateObservationIdentityUseCase(
-        reader=SQLiteCandidateObservationIdentityReader(resolved_db),
-    )
-    response = use_case.execute()
-
-    if output_format == "json":
-        typer.echo(json.dumps(response.to_dict(), indent=2, ensure_ascii=False))
-        return
-
-    _print_candidate_observation_identity_table(response)
-
-
-def _print_candidate_observation_identity_table(
-    response: CandidateObservationIdentityAuditResponse,
-) -> None:
-    console = Console()
-    color = {"PASS": "green", "WARN": "yellow", "FAIL": "red"}.get(response.status, "white")
-    rec_color = {"NO_ACTION": "green", "QUARANTINE_SAFE": "yellow", "REBUILD_REQUIRED": "red"}.get(
-        response.recommendation, "white"
-    )
-
-    console.print("")
-    status_text = Text()
-    status_text.append("Status: ", style="bold")
-    status_text.append(response.status, style=f"bold {color}")
-    status_text.append(f" | Recommendation: ", style="bold")
-    status_text.append(response.recommendation, style=f"bold {rec_color}")
-    panel = Panel(
-        status_text,
-        title="[bold]Candidate Observation Identity Audit (DQ-001I)[/bold]",
-        border_style=color,
-        expand=False,
-    )
-    console.print(panel)
-
-    if not response.source_available:
-        reason_message = {
-            "DATABASE_MISSING": "the SQLite database file could not be found",
-            "CANDIDATE_OBSERVATIONS_TABLE_MISSING": (
-                "the database exists but has no candidate_observations table"
-            ),
-        }.get(response.source_unavailable_reason or "", "the source is unavailable")
-        console.print("")
-        console.print(
-            f"[bold red]⚠ candidate_observations is unavailable[/bold red] "
-            f"([{response.source_unavailable_reason}]) — {reason_message}. "
-            "Check --db before trusting this report."
-        )
-        console.print("")
-        return
-
-    console.print("")
-    summary = Table(show_header=True, header_style="bold magenta")
-    summary.add_column("Measure", style="cyan")
-    summary.add_column("Value", justify="right")
-    summary.add_row("Total rows", f"{response.total_row_count:,}")
-    summary.add_row("Canonical rows", f"{response.canonical_row_count:,}")
-    summary.add_row("Legacy rows", f"{response.legacy_row_count:,}")
-    summary.add_row("Legacy ratio", f"{response.legacy_ratio:.2%}")
-    summary.add_row("Duplicate identity groups", str(response.duplicate_identity_group_count))
-    if response.latest_readiness_dependency.get("latest_snapshot_date"):
-        dep = response.latest_readiness_dependency
-        summary.add_row(
-            "Latest snapshot",
-            f"{dep['latest_snapshot_date']} "
-            f"({dep['latest_total_rows']} rows, "
-            f"{dep['latest_legacy_rows']} legacy)",
-        )
-    console.print(summary)
-
-    if response.findings:
-        console.print("")
-        console.print("[bold]Findings[/bold]")
-        for finding in response.findings:
-            fcolor = {"FAIL": "red", "WARN": "yellow", "INFO": "cyan"}.get(
-                finding.get("severity", ""), "white"
-            )
-            console.print(
-                f"  [bold {fcolor}][{finding['severity']}][/bold {fcolor}] "
-                f"[bold]{finding['code']}[/bold]"
-            )
-            if finding.get("message"):
-                console.print(f"    {finding['message']}")
-    console.print("")
-
-
-def _run_repair_candidate_observations(
-    db_path: Path | None,
-    apply: bool,
-    output_format: str,
-) -> None:
-    cfg = load_app_config()
-    resolved_db = db_path or Path(cfg.storage.db_path)
-
-    use_case = RepairCandidateObservationsUseCase(
-        reader=SQLiteCandidateObservationsRepairReader(resolved_db),
-        repairer=SQLiteCandidateObservationsRepairer(resolved_db),
-    )
-    response = use_case.execute(apply=apply)
-
-    if output_format == "json":
-        typer.echo(json.dumps(response.to_dict(), indent=2, ensure_ascii=False))
-        return
-
-    _print_repair_candidate_observations_table(response)
-
-
-def _print_repair_candidate_observations_table(
-    response: RepairCandidateObservationsResponse,
-) -> None:
-    console = Console()
-    mode_color = {"DRY_RUN": "yellow", "APPLY": "red" if response.status == "FAIL" else "green"}
-    color = {"PASS": "green", "FAIL": "red"}.get(response.status, "white")
-
-    console.print("")
-    status_text = Text()
-    status_text.append("Mode: ", style="bold")
-    status_text.append(response.mode, style=f"bold {mode_color.get(response.mode, 'white')}")
-    status_text.append("  |  Status: ", style="bold")
-    status_text.append(response.status, style=f"bold {color}")
-    status_text.append(f"  |  Legacy rows: {response.legacy_row_count}")
-    if response.dry_run:
-        status_text.append("  |  Dry run — no mutation performed", style="dim")
-    panel = Panel(
-        status_text,
-        title="[bold]Candidate Observations Repair (DQ-001J)[/bold]",
-        border_style=color,
-        expand=False,
-    )
-    console.print(panel)
-
-    if not response.source_available:
-        console.print("")
-        reason_message = {
-            "DATABASE_MISSING": "the SQLite database file could not be found",
-            "CANDIDATE_OBSERVATIONS_TABLE_MISSING": (
-                "the database exists but has no candidate_observations table"
-            ),
-        }.get(response.source_unavailable_reason or "", "the source is unavailable")
-        console.print(
-            f"[bold red]⚠ candidate_observations is unavailable[/bold red] "
-            f"([{response.source_unavailable_reason}]) — {reason_message}. "
-            "Check --db before trusting this report."
-        )
-        console.print("")
-        return
-
-    console.print("")
-    summary = Table(show_header=True, header_style="bold magenta")
-    summary.add_column("Measure", style="cyan")
-    summary.add_column("Value", justify="right")
-    summary.add_row("Total rows", f"{response.total_row_count:,}")
-    summary.add_row("Legacy rows", f"{response.legacy_row_count:,}")
-    summary.add_row("Canonical rows", f"{response.canonical_row_count:,}")
-    summary.add_row("Quarantined rows", f"{response.quarantined_row_count:,}")
-    summary.add_row("Deleted rows", f"{response.deleted_row_count:,}")
-    if response.latest_snapshot_date:
-        summary.add_row(
-            "Latest snapshot",
-            f"{response.latest_snapshot_date} "
-            f"({response.latest_snapshot_legacy_rows} legacy, "
-            f"{response.latest_snapshot_canonical_rows} canonical)",
-        )
-    console.print(summary)
-
-    if response.findings:
-        console.print("")
-        console.print("[bold]Findings[/bold]")
-        for finding in response.findings:
-            fcolor = {"FAIL": "red", "WARN": "yellow", "INFO": "cyan"}.get(
-                finding.get("severity", ""), "white"
-            )
-            console.print(
-                f"  [bold {fcolor}][{finding['severity']}][/bold {fcolor}] "
-                f"[bold]{finding['code']}[/bold]"
-            )
-            if finding.get("message"):
-                console.print(f"    {finding['message']}")
-
-    if response.dry_run and response.source_available:
-        console.print("")
-        console.print("[yellow]⚠ Dry-run: no mutation performed.[/yellow]")
-    console.print("")
-
-
-def _run_repair_signal_forward_labels(
-    db_path: Path | None,
-    apply: bool,
-    output_format: str,
-) -> None:
-    cfg = load_app_config()
-    resolved_db = db_path or Path(cfg.storage.db_path)
-
-    use_case = RepairSignalForwardLabelsUseCase(
-        reader=SQLiteSignalForwardLabelsRepairReader(resolved_db),
-        repairer=SQLiteSignalForwardLabelsRepairer(resolved_db),
-    )
-    response = use_case.execute(apply=apply)
-
-    if output_format == "json":
-        typer.echo(json.dumps(response.to_dict(), indent=2, ensure_ascii=False))
-        return
-
-    _print_repair_signal_forward_labels_table(response)
-
-
-def _print_repair_signal_forward_labels_table(
-    response: RepairSignalForwardLabelsResponse,
-) -> None:
-    console = Console()
-    mode_color = {"DRY_RUN": "yellow", "APPLY": "red" if response.status == "FAIL" else "green"}
-    color = {"PASS": "green", "FAIL": "red"}.get(response.status, "white")
-
-    console.print("")
-    status_text = Text()
-    status_text.append("Mode: ", style="bold")
-    status_text.append(response.mode, style=f"bold {mode_color.get(response.mode, 'white')}")
-    status_text.append("  |  Status: ", style="bold")
-    status_text.append(response.status, style=f"bold {color}")
-    status_text.append(f"  |  Orphan rows: {response.orphan_row_count}")
-    if response.dry_run:
-        status_text.append("  |  Dry run — no mutation performed", style="dim")
-    panel = Panel(
-        status_text,
-        title="[bold]Signal Forward Labels Repair (DQ-001L)[/bold]",
-        border_style=color,
-        expand=False,
-    )
-    console.print(panel)
-
-    if not response.source_available:
-        console.print("")
-        reason_message = {
-            "DATABASE_MISSING": "the SQLite database file could not be found",
-            "SIGNAL_FORWARD_LABELS_TABLE_MISSING": (
-                "the database exists but has no signal_forward_labels table"
-            ),
-            "CANDIDATE_OBSERVATIONS_TABLE_MISSING": (
-                "the database exists but has no candidate_observations table"
-            ),
-            "REQUIRED_LINKAGE_COLUMNS_MISSING": (
-                "one or both tables lack required join columns"
-            ),
-        }.get(response.source_unavailable_reason or "", "the source is unavailable")
-        console.print(
-            f"[bold red]⚠ signal_forward_labels repair is unavailable[/bold red] "
-            f"([{response.source_unavailable_reason}]) — {reason_message}. "
-            "Check --db before trusting this report."
-        )
-        console.print("")
-        return
-
-    console.print("")
-    summary = Table(show_header=True, header_style="bold magenta")
-    summary.add_column("Measure", style="cyan")
-    summary.add_column("Value", justify="right")
-    summary.add_row("Total rows", f"{response.total_row_count:,}")
-    summary.add_row("Orphan rows", f"{response.orphan_row_count:,}")
-    summary.add_row("Canonical rows", f"{response.canonical_row_count:,}")
-    summary.add_row("Quarantined rows", f"{response.quarantined_row_count:,}")
-    summary.add_row("Deleted rows", f"{response.deleted_row_count:,}")
-    if response.signal_date_min:
-        summary.add_row(
-            "Signal date range",
-            f"{response.signal_date_min} to {response.signal_date_max}",
-        )
-    console.print(summary)
-
-    if response.findings:
-        console.print("")
-        console.print("[bold]Findings[/bold]")
-        for finding in response.findings:
-            fcolor = {"FAIL": "red", "WARN": "yellow", "INFO": "cyan"}.get(
-                finding.get("severity", ""), "white"
-            )
-            console.print(
-                f"  [bold {fcolor}][{finding['severity']}][/bold {fcolor}] "
-                f"[bold]{finding['code']}[/bold]"
-            )
-            if finding.get("message"):
-                console.print(f"    {finding['message']}")
-
-    if response.dry_run and response.source_available:
-        console.print("")
-        console.print("[yellow]⚠ Dry-run: no mutation performed.[/yellow]")
     console.print("")

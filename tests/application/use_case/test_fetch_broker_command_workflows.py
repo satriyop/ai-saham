@@ -48,9 +48,7 @@ class FakeBrokerDataProvider(BrokerDataProvider):
     def is_authenticated(self) -> bool:
         return self._authenticated
 
-    def fetch_broker_summary(
-        self, ticker: str, target_date: date
-    ) -> Optional[BrokerSummary]:
+    def fetch_broker_summary(self, ticker: str, target_date: date) -> Optional[BrokerSummary]:
         self.summaries_fetched += 1
         self.last_fetched_ticker = ticker
         return BrokerSummary(
@@ -94,9 +92,7 @@ class FakeBrokerDataProvider(BrokerDataProvider):
         self.snapshots_fetched += 1
         return self.top_stocks
 
-    def fetch_foreign_flow_history(
-        self, ticker: str, days: int = 365
-    ) -> list[ForeignFlowPoint]:
+    def fetch_foreign_flow_history(self, ticker: str, days: int = 365) -> list[ForeignFlowPoint]:
         self.history_fetched += 1
         self.last_fetched_ticker = ticker
         return self.flow_history
@@ -106,9 +102,7 @@ class FakeBrokerDataRepository(BrokerDataRepository):
     def __init__(self, raise_on_save: bool = False, initially_cached: bool = False) -> None:
         self.saved_summaries: list[BrokerSummary] = []
         self.saved_points: list[ForeignFlowPoint] = []
-        self.saved_snapshots: list[
-            tuple[list[ForeignFlowSnapshot], date, int]
-        ] = []
+        self.saved_snapshots: list[tuple[list[ForeignFlowSnapshot], date, int]] = []
         self.raise_on_save = raise_on_save
         self.initially_cached = initially_cached
 
@@ -118,9 +112,7 @@ class FakeBrokerDataRepository(BrokerDataRepository):
     def save_broker_summaries(self, summaries: list[BrokerSummary]) -> None:
         self.saved_summaries.extend(summaries)
 
-    def get_broker_summary(
-        self, ticker: str, target_date: date
-    ) -> Optional[BrokerSummary]:
+    def get_broker_summary(self, ticker: str, target_date: date) -> Optional[BrokerSummary]:
         return None
 
     def get_broker_summaries(

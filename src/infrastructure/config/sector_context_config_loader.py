@@ -18,9 +18,7 @@ DEFAULT_SECTOR_CONTEXT_CONFIG_PATH = Path("config/sector_context.yaml")
 DEFAULT_UNIVERSES_PATH = Path("config/universes.yaml")
 
 # Universe keys that represent index membership, not sector groups.
-_INDEX_UNIVERSE_KEYS: frozenset[str] = frozenset(
-    {"lq45", "idx30", "idx80", "jii", "mbx"}
-)
+_INDEX_UNIVERSE_KEYS: frozenset[str] = frozenset({"lq45", "idx30", "idx80", "jii", "mbx"})
 
 
 def load_sector_context_config(

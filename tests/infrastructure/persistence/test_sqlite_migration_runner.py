@@ -50,10 +50,13 @@ def test_second_run_is_noop(db_path: Path) -> None:
 def test_new_migration_applied_on_subsequent_run(db_path: Path) -> None:
     runner = SqliteMigrationRunner(db_path)
     runner.run("t", [(0, "CREATE TABLE IF NOT EXISTS t (id INTEGER PRIMARY KEY)")])
-    runner.run("t", [
-        (0, "CREATE TABLE IF NOT EXISTS t (id INTEGER PRIMARY KEY)"),
-        (1, "ALTER TABLE t ADD COLUMN extra TEXT"),
-    ])
+    runner.run(
+        "t",
+        [
+            (0, "CREATE TABLE IF NOT EXISTS t (id INTEGER PRIMARY KEY)"),
+            (1, "ALTER TABLE t ADD COLUMN extra TEXT"),
+        ],
+    )
 
     assert applied_versions(db_path, "t") == {0, 1}
 
@@ -89,16 +92,17 @@ def test_duplicate_column_is_silently_skipped(db_path: Path) -> None:
     runner = SqliteMigrationRunner(db_path)
     runner.run("t", [(0, "CREATE TABLE IF NOT EXISTS t (id INTEGER PRIMARY KEY, name TEXT)")])
     # Adding 'name' again would fail in old code; runner must treat it as idempotent
-    runner.run("t", [
-        (0, "CREATE TABLE IF NOT EXISTS t (id INTEGER PRIMARY KEY, name TEXT)"),
-        (1, "ALTER TABLE t ADD COLUMN name TEXT"),  # duplicate column — should not raise
-    ])
+    runner.run(
+        "t",
+        [
+            (0, "CREATE TABLE IF NOT EXISTS t (id INTEGER PRIMARY KEY, name TEXT)"),
+            (1, "ALTER TABLE t ADD COLUMN name TEXT"),  # duplicate column — should not raise
+        ],
+    )
     assert applied_versions(db_path, "t") == {0, 1}
 
 
 def test_creates_parent_directories(tmp_path: Path) -> None:
     nested = tmp_path / "a" / "b" / "c" / "test.db"
-    SqliteMigrationRunner(nested).run(
-        "t", [(0, "CREATE TABLE IF NOT EXISTS t (x INTEGER)")]
-    )
+    SqliteMigrationRunner(nested).run("t", [(0, "CREATE TABLE IF NOT EXISTS t (x INTEGER)")])
     assert nested.exists()

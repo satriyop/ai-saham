@@ -146,8 +146,6 @@ class SwingBacktestAttributionSummary:
             "bucket_policy": self.bucket_policy.to_dict(),
             "sample_quality": self.sample_quality.to_dict(),
             "group_stats": [stat.to_dict() for stat in self.group_stats],
-            "candidate_group_stats": [
-                stat.to_dict() for stat in self.candidate_group_stats
-            ],
+            "candidate_group_stats": [stat.to_dict() for stat in self.candidate_group_stats],
             "tuning_targets": [target.to_dict() for target in self.tuning_targets],
         }

@@ -11,11 +11,8 @@ from src.domain.ports.system_status_provider import (
 
 
 class MockSystemStatusProvider(SystemStatusProvider):
-
     def check_provider_health(self):
-        return [
-            ProviderStatusDto(name="Test API", ok=True, label="200 OK", ms=0.1)
-        ]
+        return [ProviderStatusDto(name="Test API", ok=True, label="200 OK", ms=0.1)]
 
     def get_data_freshness(self):
         today_str = date.today().isoformat()
@@ -24,9 +21,7 @@ class MockSystemStatusProvider(SystemStatusProvider):
         stale_str = (date.today() - timedelta(days=10)).isoformat()
 
         return [
-            TableFreshnessDto(
-                table="table_today", source="test", latest=today_str, count=100
-            ),
+            TableFreshnessDto(table="table_today", source="test", latest=today_str, count=100),
             TableFreshnessDto(
                 table="table_yesterday",
                 source="test",
@@ -39,12 +34,8 @@ class MockSystemStatusProvider(SystemStatusProvider):
                 latest=current_str,
                 count=300,
             ),
-            TableFreshnessDto(
-                table="table_stale", source="test", latest=stale_str, count=400
-            ),
-            TableFreshnessDto(
-                table="table_empty", source="test", latest=None, count=0
-            ),
+            TableFreshnessDto(table="table_stale", source="test", latest=stale_str, count=400),
+            TableFreshnessDto(table="table_empty", source="test", latest=None, count=0),
         ]
 
 

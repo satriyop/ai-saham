@@ -27,6 +27,7 @@ from src.domain.value_objects.benchmark_excess_return import (
     BenchmarkExcessReturn,
     BenchmarkExcessReturnStatus,
 )
+from src.domain.value_objects.canonical_signal_evidence_input import CanonicalSignalEvidenceInput
 from src.domain.value_objects.factor_evidence import Direction, Freshness
 from src.domain.value_objects.flow_confirmation_evidence import (
     FlowConfirmationEvidence,
@@ -42,7 +43,6 @@ from tests.application.use_case.signal_evidence_fixtures import (
     _wrap_flow_evidence,
     _wrap_setup_evidence,
 )
-from src.domain.value_objects.canonical_signal_evidence_input import CanonicalSignalEvidenceInput
 
 SNAP = date(2026, 7, 3)
 
@@ -166,5 +166,6 @@ def test_high_score_with_flow_only_authority_coverage_capped_to_watch():
 
 def test_no_evidence_moderate_score_raises_no_production_signal_evidence_error():
     from src.application.exceptions import NoProductionSignalEvidenceError
+
     with pytest.raises(NoProductionSignalEvidenceError):
         _execute()

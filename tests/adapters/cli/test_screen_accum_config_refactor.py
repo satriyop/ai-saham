@@ -39,13 +39,15 @@ def test_screen_accum_commands_uses_shared_deps_and_passes_display_config():
         accum_score_policy=None,
     )
 
-    with patch(f"{pkg}.build_screen_deps", return_value=deps) as mock_deps, \
-         patch(f"{pkg}.resolve_tickers", return_value=["BBCA"]), \
-         patch(
-             f"{pkg}.accumulation_display_config_from_screener",
-             return_value=display_config,
-         ), \
-         patch(f"{pkg}.display_results") as mock_display_results:
+    with (
+        patch(f"{pkg}.build_screen_deps", return_value=deps) as mock_deps,
+        patch(f"{pkg}.resolve_tickers", return_value=["BBCA"]),
+        patch(
+            f"{pkg}.accumulation_display_config_from_screener",
+            return_value=display_config,
+        ),
+        patch(f"{pkg}.display_results") as mock_display_results,
+    ):
         accumulation_run(tickers=["BBCA"])
 
         mock_deps.assert_called_once()

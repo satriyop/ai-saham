@@ -41,7 +41,7 @@ class TestPluginDiscovery:
     def test_discover_valid_plugin(self):
         """Should discover valid plugin from .py file."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            plugin_code = '''
+            plugin_code = """
 from decimal import Decimal
 from src.application.ports.indicator_plugin import IndicatorPlugin
 from src.domain.entities.candle import Candle
@@ -52,7 +52,7 @@ class TestIndicator(IndicatorPlugin):
 
     def compute(self, candles: list[Candle], period: int) -> list[Decimal]:
         return [Decimal("1.0")] * max(0, len(candles) - period + 1)
-'''
+"""
             plugin_path = Path(tmpdir) / "test_indicator.py"
             plugin_path.write_text(plugin_code)
 
@@ -66,7 +66,7 @@ class TestIndicator(IndicatorPlugin):
     def test_discover_multiple_plugins(self):
         """Should discover multiple plugins from directory."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            plugin1 = '''
+            plugin1 = """
 from decimal import Decimal
 from src.application.ports.indicator_plugin import IndicatorPlugin
 from src.domain.entities.candle import Candle
@@ -77,8 +77,8 @@ class Plugin1(IndicatorPlugin):
 
     def compute(self, candles: list[Candle], period: int) -> list[Decimal]:
         return []
-'''
-            plugin2 = '''
+"""
+            plugin2 = """
 from decimal import Decimal
 from src.application.ports.indicator_plugin import IndicatorPlugin
 from src.domain.entities.candle import Candle
@@ -89,7 +89,7 @@ class Plugin2(IndicatorPlugin):
 
     def compute(self, candles: list[Candle], period: int) -> list[Decimal]:
         return []
-'''
+"""
             (Path(tmpdir) / "plugin1.py").write_text(plugin1)
             (Path(tmpdir) / "plugin2.py").write_text(plugin2)
 
@@ -107,7 +107,7 @@ class Plugin2(IndicatorPlugin):
             (Path(tmpdir) / "__init__.py").write_text("# init")
 
             # Create _private.py with valid plugin
-            private_plugin = '''
+            private_plugin = """
 from decimal import Decimal
 from src.application.ports.indicator_plugin import IndicatorPlugin
 
@@ -116,7 +116,7 @@ class PrivatePlugin(IndicatorPlugin):
     default_period = 5
     def compute(self, candles, period):
         return []
-'''
+"""
             (Path(tmpdir) / "_private.py").write_text(private_plugin)
 
             loader = IndicatorPluginLoader(Path(tmpdir))
@@ -137,7 +137,7 @@ class TestInvalidPluginHandling:
     def test_skip_plugin_missing_name(self):
         """Should skip plugin without name attribute."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            invalid_plugin = '''
+            invalid_plugin = """
 from decimal import Decimal
 from src.application.ports.indicator_plugin import IndicatorPlugin
 
@@ -147,7 +147,7 @@ class NoNamePlugin(IndicatorPlugin):
 
     def compute(self, candles, period):
         return []
-'''
+"""
             (Path(tmpdir) / "no_name.py").write_text(invalid_plugin)
 
             loader = IndicatorPluginLoader(Path(tmpdir))
@@ -158,7 +158,7 @@ class NoNamePlugin(IndicatorPlugin):
     def test_skip_plugin_missing_default_period(self):
         """Should skip plugin without default_period attribute."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            invalid_plugin = '''
+            invalid_plugin = """
 from decimal import Decimal
 from src.application.ports.indicator_plugin import IndicatorPlugin
 
@@ -168,7 +168,7 @@ class NoPeriodPlugin(IndicatorPlugin):
 
     def compute(self, candles, period):
         return []
-'''
+"""
             (Path(tmpdir) / "no_period.py").write_text(invalid_plugin)
 
             loader = IndicatorPluginLoader(Path(tmpdir))
@@ -190,7 +190,7 @@ class NoPeriodPlugin(IndicatorPlugin):
     def test_skip_file_with_import_error(self):
         """Should skip files with import errors."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            bad_import = '''
+            bad_import = """
 import nonexistent_module_12345
 
 from src.application.ports.indicator_plugin import IndicatorPlugin
@@ -200,7 +200,7 @@ class BrokenPlugin(IndicatorPlugin):
     default_period = 5
     def compute(self, candles, period):
         return []
-'''
+"""
             (Path(tmpdir) / "bad_import.py").write_text(bad_import)
 
             loader = IndicatorPluginLoader(Path(tmpdir))
@@ -211,14 +211,14 @@ class BrokenPlugin(IndicatorPlugin):
     def test_skip_file_without_plugin_class(self):
         """Should skip files that don't contain IndicatorPlugin subclass."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            no_plugin = '''
+            no_plugin = """
 # Just a regular Python file
 def some_function():
     return 42
 
 class RegularClass:
     pass
-'''
+"""
             (Path(tmpdir) / "not_a_plugin.py").write_text(no_plugin)
 
             loader = IndicatorPluginLoader(Path(tmpdir))
@@ -229,7 +229,7 @@ class RegularClass:
     def test_skip_plugin_with_lowercase_name(self):
         """Should skip plugin with lowercase name."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            invalid_plugin = '''
+            invalid_plugin = """
 from decimal import Decimal
 from src.application.ports.indicator_plugin import IndicatorPlugin
 
@@ -239,7 +239,7 @@ class LowercasePlugin(IndicatorPlugin):
 
     def compute(self, candles, period):
         return []
-'''
+"""
             (Path(tmpdir) / "lowercase.py").write_text(invalid_plugin)
 
             loader = IndicatorPluginLoader(Path(tmpdir))
@@ -250,7 +250,7 @@ class LowercasePlugin(IndicatorPlugin):
     def test_skip_plugin_with_special_characters(self):
         """Should skip plugin with special characters in name (e.g., hyphens)."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            invalid_plugin = '''
+            invalid_plugin = """
 from decimal import Decimal
 from src.application.ports.indicator_plugin import IndicatorPlugin
 
@@ -260,7 +260,7 @@ class HyphenPlugin(IndicatorPlugin):
 
     def compute(self, candles, period):
         return []
-'''
+"""
             (Path(tmpdir) / "hyphen.py").write_text(invalid_plugin)
 
             loader = IndicatorPluginLoader(Path(tmpdir))
@@ -271,7 +271,7 @@ class HyphenPlugin(IndicatorPlugin):
     def test_skip_plugin_with_spaces(self):
         """Should skip plugin with spaces in name."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            invalid_plugin = '''
+            invalid_plugin = """
 from decimal import Decimal
 from src.application.ports.indicator_plugin import IndicatorPlugin
 
@@ -281,7 +281,7 @@ class SpacedPlugin(IndicatorPlugin):
 
     def compute(self, candles, period):
         return []
-'''
+"""
             (Path(tmpdir) / "spaced.py").write_text(invalid_plugin)
 
             loader = IndicatorPluginLoader(Path(tmpdir))
@@ -292,7 +292,7 @@ class SpacedPlugin(IndicatorPlugin):
     def test_accept_valid_uppercase_name_with_underscore(self):
         """Should accept plugin with uppercase name containing underscore."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            valid_plugin = '''
+            valid_plugin = """
 from decimal import Decimal
 from src.application.ports.indicator_plugin import IndicatorPlugin
 from src.domain.entities.candle import Candle
@@ -303,7 +303,7 @@ class UnderscorePlugin(IndicatorPlugin):
 
     def compute(self, candles: list[Candle], period: int) -> list[Decimal]:
         return []
-'''
+"""
             (Path(tmpdir) / "underscore.py").write_text(valid_plugin)
 
             loader = IndicatorPluginLoader(Path(tmpdir))
@@ -315,7 +315,7 @@ class UnderscorePlugin(IndicatorPlugin):
     def test_accept_valid_name_with_numbers(self):
         """Should accept plugin with uppercase name containing numbers."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            valid_plugin = '''
+            valid_plugin = """
 from decimal import Decimal
 from src.application.ports.indicator_plugin import IndicatorPlugin
 from src.domain.entities.candle import Candle
@@ -326,7 +326,7 @@ class NumberPlugin(IndicatorPlugin):
 
     def compute(self, candles: list[Candle], period: int) -> list[Decimal]:
         return []
-'''
+"""
             (Path(tmpdir) / "ema200.py").write_text(valid_plugin)
 
             loader = IndicatorPluginLoader(Path(tmpdir))

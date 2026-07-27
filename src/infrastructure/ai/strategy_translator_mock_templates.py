@@ -76,7 +76,7 @@ def call_mock_strategy_translator(user_prompt: str) -> str:
 
 def _mock_rsi_strategy(name: str) -> str:
     """Generate mock RSI oversold/overbought strategy."""
-    return f'''version: 1
+    return f"""version: 1
 name: "{name}"
 description: "RSI oversold/overbought strategy"
 
@@ -105,12 +105,12 @@ rules:
       value: 70
     outcome: HIGH_RISK
     rationale: "RSI above 70 indicates overbought conditions"
-'''
+"""
 
 
 def _mock_ema_crossover(name: str) -> str:
     """Generate mock EMA crossover strategy."""
-    return f'''version: 1
+    return f"""version: 1
 name: "{name}"
 description: "EMA 9/21 crossover strategy"
 
@@ -151,12 +151,12 @@ rules:
         indicator: slow_ema
     outcome: HIGH_RISK
     rationale: "Fast EMA below slow EMA indicates bearish momentum"
-'''
+"""
 
 
 def _mock_rsi_ema_combined(name: str) -> str:
     """Generate mock combined RSI and EMA strategy."""
-    return f'''version: 1
+    return f"""version: 1
 name: "{name}"
 description: "RSI oversold with EMA crossover confirmation"
 
@@ -204,12 +204,12 @@ rules:
       value: 70
     outcome: HIGH_RISK
     rationale: "RSI above 70 indicates overbought conditions"
-'''
+"""
 
 
 def _mock_sma_crossover(name: str) -> str:
     """Generate mock SMA crossover strategy."""
-    return f'''version: 1
+    return f"""version: 1
 name: "{name}"
 description: "SMA 20/50 crossover strategy"
 
@@ -250,12 +250,12 @@ rules:
         indicator: slow_sma
     outcome: HIGH_RISK
     rationale: "Death cross - fast SMA crosses below slow SMA"
-'''
+"""
 
 
 def _mock_atr_strategy(name: str) -> str:
     """Generate mock ATR-based strategy."""
-    return f'''version: 1
+    return f"""version: 1
 name: "{name}"
 description: "ATR volatility-based strategy"
 
@@ -289,12 +289,12 @@ rules:
       value: 5.0
     outcome: HIGH_RISK
     rationale: "High volatility indicates increased risk"
-'''
+"""
 
 
 def _mock_conservative_strategy(name: str) -> str:
     """Generate mock conservative RSI strategy."""
-    return f'''version: 1
+    return f"""version: 1
 name: "{name}"
 description: "Conservative RSI strategy with strict thresholds"
 
@@ -323,12 +323,12 @@ rules:
       value: 75
     outcome: HIGH_RISK
     rationale: "RSI above 75 indicates extremely overbought conditions"
-'''
+"""
 
 
 def _mock_momentum_strategy(name: str) -> str:
     """Generate mock momentum strategy."""
-    return f'''version: 1
+    return f"""version: 1
 name: "{name}"
 description: "Momentum strategy using RSI and EMA"
 
@@ -376,4 +376,4 @@ rules:
       value: 65
     outcome: HIGH_RISK
     rationale: "RSI above 65 indicates potential reversal"
-'''
+"""

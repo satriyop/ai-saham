@@ -9,7 +9,6 @@ Layer: Adapter
 
 from __future__ import annotations
 
-from src.adapters.cli.rich_display import compact_table, console, panel
 from src.adapters.cli.policy_accum_display_formatters import (
     _fmt_pct,
     _quality_status_text,
@@ -17,6 +16,7 @@ from src.adapters.cli.policy_accum_display_formatters import (
     _stat_count,
     _stat_profit_factor,
 )
+from src.adapters.cli.rich_display import compact_table, console, panel
 from src.application.use_case.swing_backtest_use_case import SwingBacktestResponse
 
 
@@ -29,9 +29,8 @@ def display_swing_attribution(response: SwingBacktestResponse) -> None:
     Preserves current behavior: if no attribution rows exist, prints nothing.
     """
 
-    stats = (
-        tuple(response.attribution_summary.group_stats)
-        + tuple(response.attribution_summary.candidate_group_stats)
+    stats = tuple(response.attribution_summary.group_stats) + tuple(
+        response.attribution_summary.candidate_group_stats
     )
     if not stats:
         return
@@ -54,14 +53,16 @@ def display_swing_attribution(response: SwingBacktestResponse) -> None:
     rows = []
     for dimension in preferred_dimensions:
         dimension_rows = [stat for stat in stats if stat.dimension == dimension]
-        rows.extend(sorted(
-            dimension_rows,
-            key=lambda stat: (
-                _stat_count(stat),
-                _stat_avg_return(stat) or 0.0,
-            ),
-            reverse=True,
-        )[:5])
+        rows.extend(
+            sorted(
+                dimension_rows,
+                key=lambda stat: (
+                    _stat_count(stat),
+                    _stat_avg_return(stat) or 0.0,
+                ),
+                reverse=True,
+            )[:5]
+        )
 
     if not rows:
         return
@@ -95,8 +96,10 @@ def display_swing_attribution(response: SwingBacktestResponse) -> None:
         style = "green" if avg > 0 else "red" if avg < 0 else "yellow"
         raw_profit_factor = _stat_profit_factor(stat)
         profit_factor = (
-            "INF" if raw_profit_factor == float("inf")
-            else "N/A" if raw_profit_factor is None
+            "INF"
+            if raw_profit_factor == float("inf")
+            else "N/A"
+            if raw_profit_factor is None
             else f"{raw_profit_factor:.2f}"
         )
         table.add_row(

@@ -94,9 +94,7 @@ def test_update_discover_returns_items(
     use_case = UpdateUniverseUseCase(
         provider, config_store, sleep=sleep, universe_type=universe_type
     )
-    result = use_case.execute(
-        universe_name=None, discover=True, today=date(2026, 6, 24)
-    )
+    result = use_case.execute(universe_name=None, discover=True, today=date(2026, 6, 24))
 
     assert isinstance(result, tuple)
     assert len(result) == 2
@@ -114,9 +112,7 @@ def test_update_single_universe(
     use_case = UpdateUniverseUseCase(
         provider, config_store, sleep=sleep, universe_type=universe_type
     )
-    result = use_case.execute(
-        universe_name="lq45", discover=False, today=date(2026, 6, 24)
-    )
+    result = use_case.execute(universe_name="lq45", discover=False, today=date(2026, 6, 24))
 
     assert isinstance(result, UniverseUpdateResult)
     assert len(result.updated) == 1
@@ -135,9 +131,7 @@ def test_update_unknown_universe_fails(
         provider, config_store, sleep=sleep, universe_type=universe_type
     )
     with pytest.raises(ValueError, match="Unknown universe"):
-        use_case.execute(
-            universe_name="unknown", discover=False, today=date(2026, 6, 24)
-        )
+        use_case.execute(universe_name="unknown", discover=False, today=date(2026, 6, 24))
 
 
 def test_update_custom_universe_preserves_metadata(
@@ -177,9 +171,7 @@ def test_update_custom_universe_preserves_metadata(
     use_case = UpdateUniverseUseCase(
         provider, config_store, sleep=sleep, universe_type=universe_type
     )
-    result = use_case.execute(
-        universe_name="bank", discover=False, today=date(2026, 6, 24)
-    )
+    result = use_case.execute(universe_name="bank", discover=False, today=date(2026, 6, 24))
 
     assert len(result.updated) == 1
     assert result.updated[0].tickers == ("BBCA", "BBRI", "BMRI")
@@ -237,11 +229,10 @@ def test_update_all_includes_custom_universes(
 
 
 def test_update_custom_with_subsector_fetches_only_that(
-    provider: MockProvider,
-    config_store: UniverseConfigStore,
-    sleep: MockSleep
+    provider: MockProvider, config_store: UniverseConfigStore, sleep: MockSleep
 ):
     import yaml
+
     config_store.config_path.parent.mkdir(parents=True, exist_ok=True)
     initial = {
         "custom1": {
@@ -254,29 +245,26 @@ def test_update_custom_with_subsector_fetches_only_that(
     with open(config_store.config_path, "w") as f:
         yaml.dump(initial, f)
 
-    provider.set_get_response("subsector/10/company", {
-        "data": {"companies": [{"ticker": "MYOR"}, {"ticker": "icbp"}]}
-    })
+    provider.set_get_response(
+        "subsector/10/company", {"data": {"companies": [{"ticker": "MYOR"}, {"ticker": "icbp"}]}}
+    )
 
     use_case = UpdateUniverseUseCase(
         provider, config_store, sleep=sleep, universe_type=universe_type
     )
-    result = use_case.execute(
-        universe_name="custom1", discover=False, today=date(2026, 6, 24)
-    )
+    result = use_case.execute(universe_name="custom1", discover=False, today=date(2026, 6, 24))
 
     assert result.updated[0].tickers == ("ICBP", "MYOR")
 
 
 def test_update_custom_without_subsector_paces_between_subsectors(
-    tmp_path: Path,
-    provider: MockProvider,
-    sleep: MockSleep
+    tmp_path: Path, provider: MockProvider, sleep: MockSleep
 ):
     config_path = tmp_path / "config" / "universes.yaml"
     config_store = YamlUniverseConfigStore(config_path)
 
     import yaml
+
     config_path.parent.mkdir(parents=True, exist_ok=True)
     initial = {
         "custom_sector": {
@@ -288,12 +276,17 @@ def test_update_custom_without_subsector_paces_between_subsectors(
     with open(config_path, "w") as f:
         yaml.dump(initial, f)
 
-    provider.set_get_response("sectors/1/subsectors", {
-        "data": {"subsectors": [
-            {"id": 10, "name": "Food & Beverage"},
-            {"id": 11, "name": "Tobacco"},
-        ]}
-    })
+    provider.set_get_response(
+        "sectors/1/subsectors",
+        {
+            "data": {
+                "subsectors": [
+                    {"id": 10, "name": "Food & Beverage"},
+                    {"id": 11, "name": "Tobacco"},
+                ]
+            }
+        },
+    )
     provider.set_get_response("subsector/10/company", {"data": {"companies": [{"ticker": "ICBP"}]}})
     provider.set_get_response("subsector/11/company", {"data": {"companies": [{"ticker": "GGRM"}]}})
 
@@ -310,14 +303,13 @@ def test_update_custom_without_subsector_paces_between_subsectors(
 
 
 def test_update_custom_subsector_fetch_none_fails_that_universe(
-    tmp_path: Path,
-    provider: MockProvider,
-    sleep: MockSleep
+    tmp_path: Path, provider: MockProvider, sleep: MockSleep
 ):
     config_path = tmp_path / "config" / "universes.yaml"
     config_store = YamlUniverseConfigStore(config_path)
 
     import yaml
+
     config_path.parent.mkdir(parents=True, exist_ok=True)
     initial = {
         "custom_sector": {
@@ -329,12 +321,17 @@ def test_update_custom_subsector_fetch_none_fails_that_universe(
     with open(config_path, "w") as f:
         yaml.dump(initial, f)
 
-    provider.set_get_response("sectors/1/subsectors", {
-        "data": {"subsectors": [
-            {"id": 10, "name": "Food & Beverage"},
-            {"id": 11, "name": "Tobacco"},
-        ]}
-    })
+    provider.set_get_response(
+        "sectors/1/subsectors",
+        {
+            "data": {
+                "subsectors": [
+                    {"id": 10, "name": "Food & Beverage"},
+                    {"id": 11, "name": "Tobacco"},
+                ]
+            }
+        },
+    )
     provider.set_get_response("subsector/10/company", {"data": {"companies": [{"ticker": "ICBP"}]}})
     provider.set_get_response("subsector/11/company", None)  # fail second
 
@@ -350,9 +347,7 @@ def test_update_custom_subsector_fetch_none_fails_that_universe(
 
 
 def test_update_all_failed_returns_result(
-    provider: MockProvider,
-    config_store: UniverseConfigStore,
-    sleep: MockSleep
+    provider: MockProvider, config_store: UniverseConfigStore, sleep: MockSleep
 ):
     use_case = UpdateUniverseUseCase(
         provider, config_store, sleep=sleep, universe_type=universe_type
@@ -373,20 +368,21 @@ def test_update_all_failed_returns_result(
 
 
 def test_create_with_subsector(
-    provider: MockProvider,
-    config_store: UniverseConfigStore,
-    sleep: MockSleep
+    provider: MockProvider, config_store: UniverseConfigStore, sleep: MockSleep
 ):
-    provider.set_get_response("subsector/10/company", {
-        "data": {"companies": [
-            {"ticker": "MYOR", "name": "Mayora Indah"},
-            {"ticker": "icbp", "name": "Indofood CBP"},
-        ]}
-    })
-
-    use_case = CreateUniverseUseCase(
-        provider, config_store, sleep=sleep
+    provider.set_get_response(
+        "subsector/10/company",
+        {
+            "data": {
+                "companies": [
+                    {"ticker": "MYOR", "name": "Mayora Indah"},
+                    {"ticker": "icbp", "name": "Indofood CBP"},
+                ]
+            }
+        },
     )
+
+    use_case = CreateUniverseUseCase(provider, config_store, sleep=sleep)
     result = use_case.execute(
         name="food_bev", sector_id=1, subsector_id=10, today=date(2026, 6, 24)
     )
@@ -398,6 +394,7 @@ def test_create_with_subsector(
     assert config_store.config_path.exists()
 
     import yaml
+
     with open(config_store.config_path) as f:
         data = yaml.safe_load(f)
     assert data["food_bev"]["tickers"] == ["ICBP", "MYOR"]
@@ -406,32 +403,43 @@ def test_create_with_subsector(
 
 
 def test_create_sector_level_deduplicates_and_sorts(
-    provider: MockProvider,
-    config_store: UniverseConfigStore,
-    sleep: MockSleep
+    provider: MockProvider, config_store: UniverseConfigStore, sleep: MockSleep
 ):
-    provider.set_get_response("sectors/1/subsectors", {
-        "data": {"subsectors": [
-            {"id": 10, "name": "Food & Beverage"},
-            {"id": 11, "name": "Tobacco"},
-        ]}
-    })
-    provider.set_get_response("subsector/10/company", {
-        "data": {"companies": [
-            {"ticker": "ICBP", "name": "Indofood CBP"},
-            {"ticker": "INDF", "name": "Indofood Sukses"},
-        ]}
-    })
-    provider.set_get_response("subsector/11/company", {
-        "data": {"companies": [
-            {"ticker": "GGRM", "name": "Gudang Garam"},
-            {"ticker": "ICBP", "name": "Indofood CBP"},  # duplicate
-        ]}
-    })
-
-    use_case = CreateUniverseUseCase(
-        provider, config_store, sleep=sleep
+    provider.set_get_response(
+        "sectors/1/subsectors",
+        {
+            "data": {
+                "subsectors": [
+                    {"id": 10, "name": "Food & Beverage"},
+                    {"id": 11, "name": "Tobacco"},
+                ]
+            }
+        },
     )
+    provider.set_get_response(
+        "subsector/10/company",
+        {
+            "data": {
+                "companies": [
+                    {"ticker": "ICBP", "name": "Indofood CBP"},
+                    {"ticker": "INDF", "name": "Indofood Sukses"},
+                ]
+            }
+        },
+    )
+    provider.set_get_response(
+        "subsector/11/company",
+        {
+            "data": {
+                "companies": [
+                    {"ticker": "GGRM", "name": "Gudang Garam"},
+                    {"ticker": "ICBP", "name": "Indofood CBP"},  # duplicate
+                ]
+            }
+        },
+    )
+
+    use_case = CreateUniverseUseCase(provider, config_store, sleep=sleep)
     result = use_case.execute(
         name="consumer_primer_full", sector_id=1, subsector_id=None, today=date(2026, 6, 24)
     )
@@ -443,25 +451,26 @@ def test_create_sector_level_deduplicates_and_sorts(
 
 
 def test_create_sector_level_fail_fast_no_config_write(
-    tmp_path: Path,
-    provider: MockProvider,
-    sleep: MockSleep
+    tmp_path: Path, provider: MockProvider, sleep: MockSleep
 ):
     config_path = tmp_path / "config" / "universes.yaml"
     config_store = YamlUniverseConfigStore(config_path)
 
-    provider.set_get_response("sectors/1/subsectors", {
-        "data": {"subsectors": [
-            {"id": 10, "name": "Food & Beverage"},
-            {"id": 11, "name": "Tobacco"},
-        ]}
-    })
+    provider.set_get_response(
+        "sectors/1/subsectors",
+        {
+            "data": {
+                "subsectors": [
+                    {"id": 10, "name": "Food & Beverage"},
+                    {"id": 11, "name": "Tobacco"},
+                ]
+            }
+        },
+    )
     provider.set_get_response("subsector/10/company", {"data": {"companies": [{"ticker": "ICBP"}]}})
     provider.set_get_response("subsector/11/company", None)  # fail
 
-    use_case = CreateUniverseUseCase(
-        provider, config_store, sleep=sleep
-    )
+    use_case = CreateUniverseUseCase(provider, config_store, sleep=sleep)
     with pytest.raises(ValueError, match="Aborting transaction to keep config safe"):
         use_case.execute(
             name="should_fail", sector_id=1, subsector_id=None, today=date(2026, 6, 24)
@@ -472,15 +481,11 @@ def test_create_sector_level_fail_fast_no_config_write(
 
 
 def test_create_name_normalized(
-    provider: MockProvider,
-    config_store: UniverseConfigStore,
-    sleep: MockSleep
+    provider: MockProvider, config_store: UniverseConfigStore, sleep: MockSleep
 ):
     provider.set_get_response("subsector/10/company", {"data": {"companies": [{"ticker": "BBCA"}]}})
 
-    use_case = CreateUniverseUseCase(
-        provider, config_store, sleep=sleep
-    )
+    use_case = CreateUniverseUseCase(provider, config_store, sleep=sleep)
     result = use_case.execute(
         name="  Food_Bev  ", sector_id=1, subsector_id=10, today=date(2026, 6, 24)
     )
@@ -489,15 +494,11 @@ def test_create_name_normalized(
 
 
 def test_create_empty_tickers_fails(
-    provider: MockProvider,
-    config_store: UniverseConfigStore,
-    sleep: MockSleep
+    provider: MockProvider, config_store: UniverseConfigStore, sleep: MockSleep
 ):
     provider.set_get_response("subsector/10/company", {"data": {"companies": []}})
 
-    use_case = CreateUniverseUseCase(
-        provider, config_store, sleep=sleep
-    )
+    use_case = CreateUniverseUseCase(provider, config_store, sleep=sleep)
     with pytest.raises(ValueError, match="No companies found"):
         use_case.execute(name="empty", sector_id=1, subsector_id=10, today=date(2026, 6, 24))
 
@@ -506,12 +507,17 @@ def test_create_empty_tickers_fails(
 
 
 def test_inspect_sectors(provider: MockProvider):
-    provider.set_get_response("emitten/sectors", {
-        "data": {"sectors": [
-            {"id": 70, "name": "Finance", "total_company": 10},
-            {"id": 88, "name": "Indices", "total_company": 5},
-        ]}
-    })
+    provider.set_get_response(
+        "emitten/sectors",
+        {
+            "data": {
+                "sectors": [
+                    {"id": 70, "name": "Finance", "total_company": 10},
+                    {"id": 88, "name": "Indices", "total_company": 5},
+                ]
+            }
+        },
+    )
 
     use_case = InspectUniverseUseCase(provider)
     result = use_case.execute(sector_id=None, subsector_id=None, with_count=False)
@@ -525,12 +531,17 @@ def test_inspect_sectors(provider: MockProvider):
 
 
 def test_inspect_subsectors(provider: MockProvider):
-    provider.set_get_response("emitten/sectors/5/subsectors", {
-        "data": {"subsectors": [
-            {"id": 10, "name": "Bank", "total_company": 8},
-            {"id": 11, "name": "Insurance", "total_company": 2},
-        ]}
-    })
+    provider.set_get_response(
+        "emitten/sectors/5/subsectors",
+        {
+            "data": {
+                "subsectors": [
+                    {"id": 10, "name": "Bank", "total_company": 8},
+                    {"id": 11, "name": "Insurance", "total_company": 2},
+                ]
+            }
+        },
+    )
 
     use_case = InspectUniverseUseCase(provider)
     result = use_case.execute(sector_id=5, subsector_id=None, with_count=False)
@@ -542,15 +553,21 @@ def test_inspect_subsectors(provider: MockProvider):
 
 
 def test_inspect_subsectors_with_count_fetches_counts(provider: MockProvider):
-    provider.set_get_response("emitten/sectors/5/subsectors", {
-        "data": {"subsectors": [
-            {"id": 10, "name": "Bank", "total_company": 8},
-            {"id": 11, "name": "Insurance"},
-        ]}
-    })
-    provider.set_get_response("emitten/v3/sector/5/subsector/11/company", {
-        "data": {"companies": [{"ticker": "TEST1"}, {"ticker": "TEST2"}]}
-    })
+    provider.set_get_response(
+        "emitten/sectors/5/subsectors",
+        {
+            "data": {
+                "subsectors": [
+                    {"id": 10, "name": "Bank", "total_company": 8},
+                    {"id": 11, "name": "Insurance"},
+                ]
+            }
+        },
+    )
+    provider.set_get_response(
+        "emitten/v3/sector/5/subsector/11/company",
+        {"data": {"companies": [{"ticker": "TEST1"}, {"ticker": "TEST2"}]}},
+    )
 
     use_case = InspectUniverseUseCase(provider)
     result = use_case.execute(sector_id=5, subsector_id=None, with_count=True)
@@ -563,12 +580,17 @@ def test_inspect_subsectors_with_count_fetches_counts(provider: MockProvider):
 
 
 def test_inspect_companies(provider: MockProvider):
-    provider.set_get_response("emitten/v3/sector/5/subsector/49/company", {
-        "data": {"companies": [
-            {"ticker": "BBCA", "name": "Bank BCA"},
-            {"code": "BBRI", "company_name": "Bank BRI"},
-        ]}
-    })
+    provider.set_get_response(
+        "emitten/v3/sector/5/subsector/49/company",
+        {
+            "data": {
+                "companies": [
+                    {"ticker": "BBCA", "name": "Bank BCA"},
+                    {"code": "BBRI", "company_name": "Bank BRI"},
+                ]
+            }
+        },
+    )
 
     use_case = InspectUniverseUseCase(provider)
     result = use_case.execute(sector_id=5, subsector_id=49, with_count=False)

@@ -26,7 +26,7 @@ def compute_regime_confidence(
 
     VOLATILE confidence is based on VIX distance from the hard threshold.
     """
-    risk_on_min  = thresholds.risk_on_min_score
+    risk_on_min = thresholds.risk_on_min_score
     risk_off_max = thresholds.risk_off_max_score
     # half of the neutral band (risk_off_max ... risk_on_min)
     boundary_half = (risk_on_min - risk_off_max) / 2.0
@@ -112,12 +112,13 @@ def _compute_ihsg_inputs(candles: list) -> dict:
     # Volume trend: recent 5d avg vol / 20d avg vol
     volume_trend: float | None = None
     volumes = [
-        float(c.volume) for c in candles
+        float(c.volume)
+        for c in candles
         if hasattr(c, "volume") and c.volume is not None and float(c.volume) > 0
     ]
     if len(volumes) >= 20:
         recent_vol = sum(volumes[-5:]) / min(5, len(volumes[-5:]))
-        avg_vol    = sum(volumes[-20:]) / 20
+        avg_vol = sum(volumes[-20:]) / 20
         if avg_vol > 0:
             volume_trend = round(recent_vol / avg_vol, 4)
 
@@ -165,11 +166,11 @@ def _compute_foreign_flow_inputs(series: list[tuple]) -> dict:
     sorted_series = sorted(series, key=lambda x: x[0])
     values = [float(v) for _, v in sorted_series]
 
-    last_5  = values[-5:]  if len(values) >= 5  else values
+    last_5 = values[-5:] if len(values) >= 5 else values
     last_20 = values[-20:] if len(values) >= 20 else values
 
     # Count consecutive tail days with same sign (buy or sell streak)
-    buy_streak  = 0
+    buy_streak = 0
     sell_streak = 0
     for v in reversed(values):
         if v > 0:

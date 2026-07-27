@@ -62,9 +62,7 @@ class FetchBrokerSummaryWorkflowUseCase:
 
         exact_flow_saved_count = 0
         if not response.from_cache and request.provider_name == "stockbit":
-            points = self._provider.fetch_foreign_flow_history(
-                request.ticker, days=request.days
-            )
+            points = self._provider.fetch_foreign_flow_history(request.ticker, days=request.days)
             if points:
                 self._repository.save_foreign_flow_points(points)
                 exact_flow_saved_count = len(points)
@@ -170,9 +168,7 @@ class FetchBrokerFlowHistoryWorkflowUseCase:
             raise BrokerDataProviderError("Not authenticated.")
 
         ticker_upper = request.ticker.upper()
-        points = self._provider.fetch_foreign_flow_history(
-            ticker_upper, days=request.days
-        )
+        points = self._provider.fetch_foreign_flow_history(ticker_upper, days=request.days)
 
         saved_count = 0
         if points:

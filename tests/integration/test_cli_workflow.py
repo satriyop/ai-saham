@@ -10,7 +10,6 @@ Tests complete CLI command workflows:
 Uses Typer's CliRunner for isolated testing without affecting real files.
 """
 
-
 from typer.testing import CliRunner
 
 from src.adapters.cli.main import app
@@ -36,7 +35,8 @@ class TestCLICreateIndicatorWorkflow:
         result = runner.invoke(
             app,
             [
-                "indicator", "create",
+                "indicator",
+                "create",
                 "smoothed RSI",
                 "--name",
                 "TEST_SMOOTH_RSI",
@@ -62,7 +62,8 @@ class TestCLICreateIndicatorWorkflow:
         result = runner.invoke(
             app,
             [
-                "indicator", "create",
+                "indicator",
+                "create",
                 "14-day RSI",
                 "--name",
                 "TEMP_RSI",
@@ -236,7 +237,8 @@ class TestCLIBacktestWorkflow:
         result = runner.invoke(
             app,
             [
-                "strategy", "backtest",
+                "strategy",
+                "backtest",
                 "BBCA",
                 "--rules-file",
                 str(strategy_file),
@@ -267,7 +269,8 @@ class TestCLIBacktestWorkflow:
         result = runner.invoke(
             app,
             [
-                "strategy", "backtest",
+                "strategy",
+                "backtest",
                 "BBCA",
                 "--strategy",
                 "my_strat",
@@ -299,7 +302,8 @@ class TestCLIBacktestWorkflow:
         result = runner.invoke(
             app,
             [
-                "strategy", "backtest",
+                "strategy",
+                "backtest",
                 "TEST",
                 "--rules-file",
                 str(strategy_file),
@@ -328,7 +332,8 @@ class TestCLIBacktestWorkflow:
         result = runner.invoke(
             app,
             [
-                "strategy", "backtest",
+                "strategy",
+                "backtest",
                 "XXXX",
                 "--rules-file",
                 str(strategy_file),
@@ -339,7 +344,11 @@ class TestCLIBacktestWorkflow:
 
         assert result.exit_code == 1
         output = result.output or result.stdout
-        assert "no cached data" in output.lower() or "no data" in output.lower() or "fetch" in output.lower()
+        assert (
+            "no cached data" in output.lower()
+            or "no data" in output.lower()
+            or "fetch" in output.lower()
+        )
 
 
 class TestCLIComputeWorkflow:
@@ -358,7 +367,8 @@ class TestCLIComputeWorkflow:
         result = runner.invoke(
             app,
             [
-                "indicator", "compute",
+                "indicator",
+                "compute",
                 "RSI",
                 "BBCA",
                 "--period",
@@ -383,7 +393,8 @@ class TestCLIComputeWorkflow:
         result = runner.invoke(
             app,
             [
-                "indicator", "compute",
+                "indicator",
+                "compute",
                 "UNKNOWN_IND",
                 "BBCA",
                 "--db",
@@ -421,7 +432,8 @@ class TestCLIIndicatorListWorkflow:
         result = runner.invoke(
             app,
             [
-                "indicator", "create",
+                "indicator",
+                "create",
                 "smoothed RSI",
                 "--name",
                 "MY_RSI",
@@ -445,9 +457,7 @@ class TestCLIIndicatorListWorkflow:
 class TestCLIEndToEndWorkflow:
     """Test complete end-to-end CLI workflows."""
 
-    def test_full_workflow_create_indicator_to_backtest(
-        self, temp_workspace, monkeypatch
-    ):
+    def test_full_workflow_create_indicator_to_backtest(self, temp_workspace, monkeypatch):
         """Complete workflow: create indicator → strategy → backtest."""
         monkeypatch.chdir(temp_workspace)
         formulas_path = temp_workspace / "formulas.yaml"
@@ -457,7 +467,8 @@ class TestCLIEndToEndWorkflow:
         result = runner.invoke(
             app,
             [
-                "indicator", "create",
+                "indicator",
+                "create",
                 "14-day RSI",
                 "--name",
                 "CUSTOM_RSI",
@@ -487,7 +498,8 @@ class TestCLIEndToEndWorkflow:
         result = runner.invoke(
             app,
             [
-                "strategy", "backtest",
+                "strategy",
+                "backtest",
                 "E2E",
                 "--strategy",
                 "e2e_test",
@@ -529,7 +541,8 @@ class TestCLIEndToEndWorkflow:
         result = runner.invoke(
             app,
             [
-                "strategy", "backtest",
+                "strategy",
+                "backtest",
                 "AI_TEST",
                 "--strategy",
                 "ai_strat",
@@ -560,7 +573,8 @@ class TestCLIRiskAssessment:
         result = runner.invoke(
             app,
             [
-                "inspect", "risk",
+                "inspect",
+                "risk",
                 "RISK_TEST",
                 "--db",
                 str(db_path),
@@ -585,9 +599,11 @@ class TestCLIRiskAssessment:
         result = runner.invoke(
             app,
             [
-                "inspect", "risk",
+                "inspect",
+                "risk",
                 "RISK_JSON",
-                "--format", "json",
+                "--format",
+                "json",
                 "--db",
                 str(db_path),
             ],
@@ -613,7 +629,8 @@ class TestCLIRiskAssessment:
         result = runner.invoke(
             app,
             [
-                "inspect", "risk",
+                "inspect",
+                "risk",
                 "ALL_PROF",
                 "--all",
                 "--db",
@@ -642,7 +659,8 @@ class TestCLIRiskAssessment:
         result = runner.invoke(
             app,
             [
-                "inspect", "risk",
+                "inspect",
+                "risk",
                 "CUST_RISK",
                 "--rules-file",
                 str(rules_file),
@@ -686,4 +704,8 @@ class TestCLIEdgeCases:
 
         assert result.exit_code == 1
         output = result.output or result.stdout
-        assert "no cached data" in output.lower() or "no data" in output.lower() or "fetch" in output.lower()
+        assert (
+            "no cached data" in output.lower()
+            or "no data" in output.lower()
+            or "fetch" in output.lower()
+        )

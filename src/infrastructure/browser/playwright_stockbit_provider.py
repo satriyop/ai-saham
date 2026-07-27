@@ -154,9 +154,7 @@ class PlaywrightStockbitProvider(BrowserDataProvider):
         Returns:
             List of MoverWithOrderBook sorted by IEV descending
         """
-        all_movers = _fetch_iev_all_boards(
-            self._api_client, stockbit_config=self._stockbit_config
-        )
+        all_movers = _fetch_iev_all_boards(self._api_client, stockbit_config=self._stockbit_config)
         top_movers = all_movers[:top_n]
         logger.info("Top %d movers: %s", len(top_movers), [m.ticker for m in top_movers])
 

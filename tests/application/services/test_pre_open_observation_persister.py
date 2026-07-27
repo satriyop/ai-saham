@@ -61,9 +61,7 @@ def _candidate(ticker: str = "BBCA") -> ScreenerCandidate:
     )
 
 
-def _signal_summary(
-    *, score: int = 80, entry_quality: str = "ENTER"
-) -> PreOpenSignalSummary:
+def _signal_summary(*, score: int = 80, entry_quality: str = "ENTER") -> PreOpenSignalSummary:
     return PreOpenSignalSummary(
         identity=PRE_OPEN_AUCTION_DIRECTION_IDENTITY,
         contract="pre_open_directional_baseline.v1",
@@ -131,9 +129,7 @@ def _response(*, rejects=()) -> PreOpenWorkflowResponse:
 
 def test_derive_screen_result_funnel() -> None:
     assert (
-        derive_pre_open_screen_result(
-            has_entry_range=False, signal_summary=None, trade_setup=None
-        )
+        derive_pre_open_screen_result(has_entry_range=False, signal_summary=None, trade_setup=None)
         == "rejected_plan"
     )
     assert (
@@ -148,9 +144,7 @@ def test_derive_screen_result_funnel() -> None:
 
 def test_persists_database_owned_observation_idempotently(tmp_path: Path) -> None:
     repository = SQLiteLearningArtifactRepository(tmp_path / "data.db")
-    persister = PreOpenObservationPersister(
-        repository, PreOpenDirectionalBaselineConfig()
-    )
+    persister = PreOpenObservationPersister(repository, PreOpenDirectionalBaselineConfig())
     request = PreOpenWorkflowRequest(
         config=PreOpenScreenConfig(iev_min=100_000, top_n=5, fast_mode=True),
         run_date=date(2026, 6, 18),
@@ -177,9 +171,7 @@ def test_persists_database_owned_observation_idempotently(tmp_path: Path) -> Non
     assert second.observations[0].inserted is False
     assert second.observations[0].observation_id == first.observations[0].observation_id
 
-    rows = repository.list_observations(
-        AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION
-    )
+    rows = repository.list_observations(AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION)
     assert len(rows) == 1
     row = rows[0]
     assert row.contract_id is LearningContractId.PRE_OPEN_OBSERVATION
@@ -217,9 +209,7 @@ def test_persists_market_regime_when_present(tmp_path: Path) -> None:
         request,
         captured_at=datetime(2026, 6, 18, 8, 57, tzinfo=WIB),
     )
-    row = repository.list_observations(
-        AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION
-    )[0]
+    row = repository.list_observations(AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION)[0]
     assert row.decision_payload["market_regime"]["regime"] == "RISK_ON"
 
 
@@ -242,14 +232,13 @@ def test_persists_hard_filter_rejects(tmp_path: Path) -> None:
         captured_at=datetime(2026, 6, 18, 8, 57, tzinfo=WIB),
     )
 
-    rows = repository.list_observations(
-        AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION
-    )
+    rows = repository.list_observations(AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION)
     assert result.recorded_count == 2
     assert {r.ticker for r in result.observations} == {"BBCA", "XYZ"}
-    assert {
-        row.decision_payload["screen_result"] for row in rows
-    } == {"pass", "rejected_filter_speculative"}
+    assert {row.decision_payload["screen_result"] for row in rows} == {
+        "pass",
+        "rejected_filter_speculative",
+    }
 
 
 def test_no_repository_is_noop() -> None:

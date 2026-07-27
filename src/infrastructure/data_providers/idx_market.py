@@ -58,6 +58,7 @@ IDX_HEADERS = {
     "sec-ch-ua-platform": '"Windows"',
 }
 
+
 class IdxMarketDataProvider(MarketDataProvider):
     """
     IDX-native OHLCV provider using the public TradingSummary API.
@@ -119,7 +120,9 @@ class IdxMarketDataProvider(MarketDataProvider):
                         wait = RETRY_BACKOFF_BASE ** (attempt + 1)
                         logger.warning(
                             "IDX rate limited, waiting %.1fs (retry %d/%d)",
-                            wait, attempt + 1, MAX_RETRIES,
+                            wait,
+                            attempt + 1,
+                            MAX_RETRIES,
                         )
                         time.sleep(wait)
                         continue
@@ -128,7 +131,10 @@ class IdxMarketDataProvider(MarketDataProvider):
                         wait = RETRY_BACKOFF_BASE ** (attempt + 1)
                         logger.warning(
                             "IDX server error %d, waiting %.1fs (retry %d/%d)",
-                            response.status_code, wait, attempt + 1, MAX_RETRIES,
+                            response.status_code,
+                            wait,
+                            attempt + 1,
+                            MAX_RETRIES,
                         )
                         time.sleep(wait)
                         last_error = MarketDataProviderError(
@@ -137,9 +143,7 @@ class IdxMarketDataProvider(MarketDataProvider):
                         continue
 
                     if response.status_code != 200:
-                        raise MarketDataProviderError(
-                            f"IDX API error: {response.status_code}"
-                        )
+                        raise MarketDataProviderError(f"IDX API error: {response.status_code}")
 
                     return response.json()
 
@@ -154,9 +158,7 @@ class IdxMarketDataProvider(MarketDataProvider):
 
         raise last_error or MarketDataProviderError("IDX request failed after retries")
 
-    def _extract_ticker(
-        self, response_data: dict[str, Any], ticker: str
-    ) -> Candle | None:
+    def _extract_ticker(self, response_data: dict[str, Any], ticker: str) -> Candle | None:
         """Extract a single ticker's OHLCV from a market-wide response."""
         ticker_upper = ticker.upper()
         for item in response_data.get("data", []):

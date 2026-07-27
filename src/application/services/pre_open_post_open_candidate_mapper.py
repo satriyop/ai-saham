@@ -18,8 +18,8 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any, Mapping
 
-from src.domain.value_objects.pre_open_post_open_assessment import PreOpenPostOpenCandidate
 from src.domain.value_objects.learning_artifacts import LearningObservation
+from src.domain.value_objects.pre_open_post_open_assessment import PreOpenPostOpenCandidate
 
 _KNOWN_REGIMES = frozenset(
     {

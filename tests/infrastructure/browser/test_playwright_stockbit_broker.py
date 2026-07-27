@@ -85,6 +85,7 @@ def _historical_summary_body_two_days():
 
 # ── _parse_marketdetectors_response tests ─────────────────────────────────────
 
+
 def test_real_total_used_when_provided():
     real_total = (Decimal("1430146602500"), 2324893)
     summaries = _parse_marketdetectors_response(
@@ -133,6 +134,7 @@ def test_foreign_fields_unaffected_by_real_total():
 
 
 # ── _fetch_historical_summary_totals tests ────────────────────────────────────
+
 
 class _FakeApiClient:
     """Stub StockbitApiClient that returns a fixed response for any URL."""

@@ -52,7 +52,8 @@ class IntradayBacktestReportBuilder:
             decision_counts[t.decision] = decision_counts.get(t.decision, 0) + 1
 
         total_return_pct = round(
-            float((final_equity - request.capital) / request.capital * 100), 4,
+            float((final_equity - request.capital) / request.capital * 100),
+            4,
         )
 
         by_broker_backing = _breakdown_by(
@@ -194,11 +195,13 @@ def _breakdown_by(
     for key, group in sorted(groups.items()):
         wins = [g for g in group if g.pnl > 0]
         rets = [g.net_return_pct for g in group]
-        rows.append({
-            "label": label_fn(key) if label_fn else key,
-            "count": len(group),
-            "win_rate_pct": round(len(wins) / len(group) * 100, 1) if group else None,
-            "avg_return_pct": round(sum(rets) / len(rets), 4) if rets else None,
-            "total_pnl": sum(g.pnl for g in group),
-        })
+        rows.append(
+            {
+                "label": label_fn(key) if label_fn else key,
+                "count": len(group),
+                "win_rate_pct": round(len(wins) / len(group) * 100, 1) if group else None,
+                "avg_return_pct": round(sum(rets) / len(rets), 4) if rets else None,
+                "total_pnl": sum(g.pnl for g in group),
+            }
+        )
     return rows

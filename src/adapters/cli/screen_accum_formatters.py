@@ -17,6 +17,15 @@ from src.adapters.shared.vwap_depth_display import (
     format_disc_pct_plain,
     vwap_depth_label,
 )
+
+# Re-export for enrichment/TUI callers (kept even if unused in this module).
+__all__ = (
+    "format_disc_pct_plain",
+    "format_disc_pct",
+    "format_value",
+    "classify_pattern",
+    "vwap_depth_label",
+)
 from src.application.dto.accumulation_screen import AccumulationCandidate
 
 
@@ -118,7 +127,8 @@ def classify_pattern(
     """Label the multi-window pattern for a ticker."""
     threshold = display_config.coiled_spring_min_accum_score
     hot = [
-        w for w in windows
+        w
+        for w in windows
         if candidates_by_window.get(w) and candidates_by_window[w].accum_score >= threshold
     ]
 

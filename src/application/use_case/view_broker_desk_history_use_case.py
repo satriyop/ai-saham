@@ -42,9 +42,7 @@ class ViewBrokerDeskHistoryUseCase:
         self._repository = repository
         self._foreign_broker_codes = foreign_broker_codes
 
-    def execute(
-        self, request: ViewBrokerDeskHistoryRequest
-    ) -> ViewBrokerDeskHistoryResult | None:
+    def execute(self, request: ViewBrokerDeskHistoryRequest) -> ViewBrokerDeskHistoryResult | None:
         code = request.broker_code.upper()
         pin = request.ticker.upper() if request.ticker else None
         flows = self._repository.get_broker_daily_flows_by_code(code, ticker=pin)

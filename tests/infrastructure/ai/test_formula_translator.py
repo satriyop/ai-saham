@@ -126,9 +126,7 @@ class TestCanonicalizeFormula:
 
     def test_takes_first_line_only(self):
         """Should take only the first non-empty line."""
-        result = canonicalize_formula(
-            "SMA(CLOSE, 20)\nThis is an explanation\nMore text"
-        )
+        result = canonicalize_formula("SMA(CLOSE, 20)\nThis is an explanation\nMore text")
 
         assert result == "SMA(CLOSE, 20)"
 
@@ -409,9 +407,7 @@ class TestCallMockFormulaTranslator:
             call_mock_formula_translator,
         )
 
-        result = call_mock_formula_translator(
-            "Translate to formula: 20-day simple moving average"
-        )
+        result = call_mock_formula_translator("Translate to formula: 20-day simple moving average")
         assert result == "SMA(CLOSE, 20)"
 
     def test_ema(self):
@@ -420,9 +416,7 @@ class TestCallMockFormulaTranslator:
             call_mock_formula_translator,
         )
 
-        result = call_mock_formula_translator(
-            "Translate to formula: exponential moving average"
-        )
+        result = call_mock_formula_translator("Translate to formula: exponential moving average")
         assert result == "EMA(CLOSE, 20)"
 
     def test_atr(self):
@@ -478,9 +472,7 @@ class TestCallMockFormulaTranslator:
             call_mock_formula_translator,
         )
 
-        result = call_mock_formula_translator(
-            "Translate to formula: something completely unknown"
-        )
+        result = call_mock_formula_translator("Translate to formula: something completely unknown")
         assert result == "UNSUPPORTED"
 
     def test_unsupported_keywords_list(self):
@@ -530,9 +522,7 @@ class TestRetryBehavior:
         )
 
         assert result == "RSI(14)"
-        assert len(call_log) == 2, (
-            f"Expected exactly 2 calls to _call_llm, got {len(call_log)}"
-        )
+        assert len(call_log) == 2, f"Expected exactly 2 calls to _call_llm, got {len(call_log)}"
 
     def test_no_retry_when_first_output_is_valid(self, monkeypatch):
         """Should NOT retry when first call returns a valid formula."""
@@ -554,6 +544,4 @@ class TestRetryBehavior:
         )
 
         assert result == "RSI(14)"
-        assert len(call_log) == 1, (
-            f"Expected exactly 1 call to _call_llm, got {len(call_log)}"
-        )
+        assert len(call_log) == 1, f"Expected exactly 1 call to _call_llm, got {len(call_log)}"

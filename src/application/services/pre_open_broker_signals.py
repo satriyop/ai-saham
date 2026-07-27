@@ -106,7 +106,7 @@ def assess_pre_open_broker_signals(
             indicator = ForeignVWAPIndicator()
             indicator.set_broker_data(summaries)
             vwap_values = indicator.compute(
-                candles[-max(len(candles), fvwap_period):], fvwap_period
+                candles[-max(len(candles), fvwap_period) :], fvwap_period
             )
             if vwap_values:
                 vwap_latest = vwap_values[-1]

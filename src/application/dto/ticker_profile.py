@@ -43,9 +43,7 @@ class TickerProfileConfig:
     def validate(self) -> None:
         for name, score in self.index_membership_scores.items():
             if not 0.0 <= float(score) <= 1.0:
-                raise ValueError(
-                    f"index_membership_score for {name} must be in [0,1]"
-                )
+                raise ValueError(f"index_membership_score for {name} must be in [0,1]")
         for profile, weights in self.exposure_weights.items():
             if not weights:
                 continue
@@ -53,14 +51,10 @@ class TickerProfileConfig:
             for dim, weight in weights.items():
                 weight_float = float(weight)
                 if weight_float < 0.0:
-                    raise ValueError(
-                        f"exposure weight {profile}.{dim} must be non-negative"
-                    )
+                    raise ValueError(f"exposure weight {profile}.{dim} must be non-negative")
                 total += weight_float
             if abs(total - 1.0) > 0.0001:
-                raise ValueError(
-                    f"exposure weights for {profile} must sum to 1.0, got {total:.4f}"
-                )
+                raise ValueError(f"exposure weights for {profile} must sum to 1.0, got {total:.4f}")
 
     @classmethod
     def from_mapping(cls, raw: dict[str, Any]) -> "TickerProfileConfig":
@@ -76,8 +70,7 @@ class TickerProfileConfig:
             market_cap_mid=int(caps.get("mid", 1_000_000_000_000)),
             market_cap_small=int(caps.get("small", 200_000_000_000)),
             index_membership_scores={
-                str(k): float(v)
-                for k, v in (block.get("index_membership_scores") or {}).items()
+                str(k): float(v) for k, v in (block.get("index_membership_scores") or {}).items()
             },
             liquidity_high=float(liq.get("high_daily_value_idr", 50_000_000_000)),
             liquidity_low=float(liq.get("low_daily_value_idr", 500_000_000)),
@@ -88,10 +81,7 @@ class TickerProfileConfig:
                 block.get("conservative_fallback_confidence", 0.30)
             ),
             exposure_weights={
-                str(profile): {
-                    str(dim): float(weight)
-                    for dim, weight in (dims or {}).items()
-                }
+                str(profile): {str(dim): float(weight) for dim, weight in (dims or {}).items()}
                 for profile, dims in (block.get("exposure_weights") or {}).items()
             },
         )

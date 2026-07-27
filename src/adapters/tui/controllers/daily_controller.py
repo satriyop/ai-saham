@@ -82,9 +82,7 @@ class DailyController:
             dispatch(self._deliver_failure, generation, exc, listener)
             return
 
-        status = (
-            ScreenStatus.EMPTY if self._is_empty_briefing(response) else ScreenStatus.READY
-        )
+        status = ScreenStatus.EMPTY if self._is_empty_briefing(response) else ScreenStatus.READY
         dispatch(self._deliver_success, generation, response, status, listener)
 
     def execute_refresh_generation(
@@ -145,9 +143,7 @@ class DailyController:
             return
 
         status = (
-            ScreenStatus.EMPTY
-            if self._is_empty_briefing(result.briefing)
-            else ScreenStatus.READY
+            ScreenStatus.EMPTY if self._is_empty_briefing(result.briefing) else ScreenStatus.READY
         )
         dispatch(self._deliver_success, generation, result, status, listener)
 

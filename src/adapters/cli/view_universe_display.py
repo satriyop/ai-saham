@@ -121,6 +121,7 @@ def display_universe_list(meta: dict) -> None:
 # Sort key
 # ---------------------------------------------------------------------------
 
+
 def _sort_key(row: UniverseTickerRow, sort_by: str):
     """Nulls-last sort key; secondary sort by change_pct desc for flow ties."""
     if sort_by == "flow":
@@ -139,6 +140,7 @@ def _sort_key(row: UniverseTickerRow, sort_by: str):
 # ---------------------------------------------------------------------------
 # Formatters
 # ---------------------------------------------------------------------------
+
 
 def _fmt_price(value: Decimal | None) -> str:
     if value is None:

@@ -16,7 +16,6 @@ from tests.application.use_case.signal_evidence_fixtures import (
     _req,
     _sector_context,
     _setup_evidence,
-    _setup_phase,
     _use_case,
 )
 
@@ -276,7 +275,8 @@ def test_genuine_market_context_does_not_create_sector_context_contribution():
     groups_without = {c.group for c in resp_without.alpha_trigger_score.group_contributions}
     assert "market_context" not in groups_without
     sector_without = [
-        c for c in resp_without.alpha_trigger_score.group_contributions
+        c
+        for c in resp_without.alpha_trigger_score.group_contributions
         if c.group == "sector_context"
     ][0]
     assert sector_without.present is False
@@ -294,8 +294,7 @@ def test_genuine_market_context_does_not_create_sector_context_contribution():
     groups_with = {c.group for c in resp_with.alpha_trigger_score.group_contributions}
     assert "market_context" not in groups_with
     sector_with = [
-        c for c in resp_with.alpha_trigger_score.group_contributions
-        if c.group == "sector_context"
+        c for c in resp_with.alpha_trigger_score.group_contributions if c.group == "sector_context"
     ][0]
     assert sector_with.present is True
 

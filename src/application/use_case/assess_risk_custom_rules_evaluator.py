@@ -142,9 +142,7 @@ class AssessRiskCustomRulesEvaluator:
                 continue
 
             # Get type name as string for registry
-            type_name = (
-                ind_type.value if isinstance(ind_type, IndicatorType) else ind_type
-            )
+            type_name = ind_type.value if isinstance(ind_type, IndicatorType) else ind_type
             values = self._registry.compute(type_name, candles, period)
             if not values:
                 raise ValueError(
@@ -177,13 +175,15 @@ class AssessRiskCustomRulesEvaluator:
         candle_by_date = {c.date: c for c in candles}
         candle = candle_by_date.get(latest_date) or (candles[-1] if candles else None)
         if candle:
-            extras.extend([
-                ("OPEN", candle.open),
-                ("HIGH", candle.high),
-                ("LOW", candle.low),
-                ("CLOSE", candle.close),
-                ("VOLUME", Decimal(candle.volume)),
-            ])
+            extras.extend(
+                [
+                    ("OPEN", candle.open),
+                    ("HIGH", candle.high),
+                    ("LOW", candle.low),
+                    ("CLOSE", candle.close),
+                    ("VOLUME", Decimal(candle.volume)),
+                ]
+            )
 
         return IndicatorSnapshot(
             date=latest_date,

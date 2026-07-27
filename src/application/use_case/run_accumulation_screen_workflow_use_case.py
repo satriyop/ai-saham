@@ -11,12 +11,10 @@ Layer: Application
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 
 from src.application.dto.accumulation_screen import AccumulationScreenResponse
-
 from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSession,
 )
@@ -28,10 +26,6 @@ if TYPE_CHECKING:
     from src.application.use_case.build_live_signal_evidence_execution_context_use_case import (
         BuildLiveSignalEvidenceExecutionContextUseCase,
     )
-from src.application.services.tracked_broker_flow import (
-    TrackedBrokerFlowSnapshot,
-    compute_tracked_broker_flow_batch,
-)
 from src.application.services.screen_accum_result_projector import (
     ScreenAccumMultiProjection,
     ScreenAccumSingleProjection,
@@ -39,16 +33,20 @@ from src.application.services.screen_accum_result_projector import (
     project_single_screen_result,
     validate_multi_window_request,
 )
-from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
 from src.application.services.signal_observation_request_builder import (
     BuildSignalObservationScreenRequest,
 )
 from src.application.services.strategy_loader import StrategyLoader, StrategyNotFoundError
+from src.application.services.tracked_broker_flow import (
+    TrackedBrokerFlowSnapshot,
+    compute_tracked_broker_flow_batch,
+)
 from src.application.use_case.assess_risk_use_case import AssessRiskRequest, AssessRiskUseCase
 from src.application.use_case.save_screen_watchlist_use_case import (
     SaveScreenWatchlistRequest,
     SaveScreenWatchlistResult,
 )
+from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
 
 
 @dataclass(frozen=True)
@@ -144,9 +142,7 @@ class RunAccumulationScreenWorkflowUseCase:
         )
 
         if request.as_of_date is not None:
-            run_at = datetime.combine(
-                request.as_of_date, MARKET_CLOSE, tzinfo=IDX_TIMEZONE
-            )
+            run_at = datetime.combine(request.as_of_date, MARKET_CLOSE, tzinfo=IDX_TIMEZONE)
         else:
             run_at = datetime.now(IDX_TIMEZONE)
         execution_context = self._live_signal_evidence_context_uc.execute(run_at=run_at)
@@ -206,9 +202,7 @@ class RunAccumulationScreenWorkflowUseCase:
                 broker_repository=self._broker_repository,
                 market_repository=self._market_repository,
             )
-            strat_loader = StrategyLoader(
-                rules_loader=self._rules_loader, registry=registry
-            )
+            strat_loader = StrategyLoader(rules_loader=self._rules_loader, registry=registry)
             try:
                 rules_path = strat_loader.resolve(request.strategy_name)
             except StrategyNotFoundError as e:

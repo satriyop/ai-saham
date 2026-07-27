@@ -18,14 +18,19 @@ from dataclasses import dataclass, field
 from src.domain.rules.risk_gate import GateContext, GateResult, RiskGate
 
 # Labels from BandarDetectorSnapshot that indicate distribution
-_DEFAULT_DISTRIBUTION_LABELS = frozenset({
-    "Small Dist", "Big Dist",
-})
+_DEFAULT_DISTRIBUTION_LABELS = frozenset(
+    {
+        "Small Dist",
+        "Big Dist",
+    }
+)
 
 
 @dataclass(frozen=True)
 class BandarGateConfig:
-    distribution_labels: frozenset[str] = field(default_factory=lambda: _DEFAULT_DISTRIBUTION_LABELS)
+    distribution_labels: frozenset[str] = field(
+        default_factory=lambda: _DEFAULT_DISTRIBUTION_LABELS
+    )
     missing_data_action: str = "skip"
     missing_data_confidence: int = 0
     triggered_confidence: int = 80
@@ -48,16 +53,18 @@ class BandarGate(RiskGate):
             triggered = self._config.missing_data_action == "block"
             return GateResult(
                 triggered=triggered,
-                reason="no bandar flow data — gate blocked"
-                if triggered else "no bandar flow data — gate skipped",
+                reason=(
+                    "no bandar flow data — gate blocked"
+                    if triggered
+                    else "no bandar flow data — gate skipped"
+                ),
                 confidence=self._config.missing_data_confidence,
             )
         if context.five_day_accdist in self._config.distribution_labels:
             return GateResult(
                 triggered=True,
                 reason=(
-                    f"Bandar distribution ({context.five_day_accdist})"
-                    " — distribution trap risk"
+                    f"Bandar distribution ({context.five_day_accdist}) — distribution trap risk"
                 ),
                 confidence=self._config.triggered_confidence,
             )

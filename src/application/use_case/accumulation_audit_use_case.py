@@ -12,14 +12,6 @@ AI usage: None
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
-from src.application.dto.signal_evidence_execution_context import (
-    SignalEvidenceExecutionContext,
-)
-from src.application.services.effective_market_session_resolver import (
-    EffectiveMarketSessionResolver,
-)
-from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
-
 from src.application.dto.accumulation_audit import (
     AccumulationAuditClaimStamp,
     AccumulationAuditPolicy,
@@ -35,6 +27,9 @@ from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationDerivedFeaturePolicy,
     AccumulationScreenRequest,
+)
+from src.application.dto.signal_evidence_execution_context import (
+    SignalEvidenceExecutionContext,
 )
 from src.application.ports.rules_loader import RulesLoader
 from src.application.services.accumulation_audit_exit_simulator import (
@@ -52,9 +47,13 @@ from src.application.services.accumulation_broker_quality_classifier import (
 from src.application.services.accumulation_screen_factory import (
     create_accumulation_screen_use_case,
 )
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSessionResolver,
+)
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
+from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
 
 if TYPE_CHECKING:
     from src.application.services.signal_engine import SignalEngine
@@ -178,12 +177,8 @@ class AccumulationAuditUseCase:
             observation_candidates = list(
                 getattr(screen_response, "observation_candidates", ()) or ()
             )
-            total_checked = int(
-                getattr(screen_response, "total_tickers_checked", len(tickers))
-            )
-            screen_insufficient_data += max(
-                0, total_checked - len(observation_candidates)
-            )
+            total_checked = int(getattr(screen_response, "total_tickers_checked", len(tickers)))
+            screen_insufficient_data += max(0, total_checked - len(observation_candidates))
             for observation in observation_candidates:
                 result = getattr(observation, "screen_result", "")
                 if result == "pass":
@@ -244,8 +239,7 @@ class AccumulationAuditUseCase:
             records=records,
             group_stats=self._statistics_builder.build(records, request.policy),
             exit_simulations=(
-                self._exit_simulator.simulate(records, request)
-                if request.simulate_exits else []
+                self._exit_simulator.simulate(records, request) if request.simulate_exits else []
             ),
             warnings=warnings,
             skip_ledger=skip_ledger,

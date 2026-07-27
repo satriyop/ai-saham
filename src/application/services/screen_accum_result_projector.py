@@ -21,11 +21,11 @@ from src.application.dto.accumulation_screen import (
 from src.application.services.accumulation_multi_window_pattern import (
     classify_multi_window_pattern,
 )
+from src.application.services.data_freshness_service import compute_data_freshness
 from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSession,
 )
 from src.application.services.tracked_broker_flow import TrackedBrokerFlowSnapshot
-from src.application.services.data_freshness_service import compute_data_freshness
 
 
 class ScreenAccumProjectionError(ValueError):
@@ -154,7 +154,9 @@ def project_single_screen_result(
 
     for c in candidates:
         coverage = (
-            c.signal_assessment.assessment.signal_authority_coverage if c.signal_assessment else None
+            c.signal_assessment.assessment.signal_authority_coverage
+            if c.signal_assessment
+            else None
         )
         c.freshness = compute_data_freshness(
             candle_as_of=c.latest_candle_date,
@@ -266,12 +268,8 @@ def _canonical_evidence_fields(candidate: AccumulationCandidate | None) -> dict:
         "setup_phase": (
             candidate.setup_phase.current_phase.value if candidate.setup_phase else None
         ),
-        "data_status": (
-            candidate.freshness.alignment_state.value if candidate.freshness else None
-        ),
-        "next_action": (
-            candidate.trade_setup.action.value if candidate.trade_setup else None
-        ),
+        "data_status": (candidate.freshness.alignment_state.value if candidate.freshness else None),
+        "next_action": (candidate.trade_setup.action.value if candidate.trade_setup else None),
     }
 
 
@@ -394,11 +392,7 @@ def project_multi_screen_result(
             primary = pw.get(canonical_window)
             if primary is not None:
                 return _signal_sort_key(primary)
-            signals = [
-                _signal_sort_key(c)
-                for c in pw.values()
-                if c is not None
-            ]
+            signals = [_signal_sort_key(c) for c in pw.values() if c is not None]
             return max(signals) if signals else float("-inf")
         scores = [c.accum_score for c in pw.values() if c is not None]
         if not scores:
@@ -419,7 +413,9 @@ def project_multi_screen_result(
             if c is None:
                 continue
             coverage = (
-                c.signal_assessment.assessment.signal_authority_coverage if c.signal_assessment else None
+                c.signal_assessment.assessment.signal_authority_coverage
+                if c.signal_assessment
+                else None
             )
             c.freshness = compute_data_freshness(
                 candle_as_of=c.latest_candle_date,
@@ -441,9 +437,7 @@ def project_multi_screen_result(
                     coiled_spring_min_accum_score,
                     coiled_spring_bb_pctile,
                 ),
-                trend=next(
-                    (c.trend for w in resolved_windows for c in [pw.get(w)] if c), "—"
-                ),
+                trend=next((c.trend for w in resolved_windows for c in [pw.get(w)] if c), "—"),
                 tracked_broker_flow=tracked_broker_flow.get(ticker),
                 canonical_window=canonical_window,
                 canonical_candidate=canonical_candidate,

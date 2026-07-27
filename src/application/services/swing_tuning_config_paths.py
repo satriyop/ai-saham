@@ -67,9 +67,7 @@ def parse_tuning_config_path(raw_path: str) -> TuningConfigPath:
     """Parse a tuning target path in file.yaml:document.path format."""
     file_path, separator, document_path = raw_path.partition(":")
     if not separator or not file_path.strip() or not document_path.strip():
-        raise ValueError(
-            "Tuning config path must use 'file.yaml:document.path' format."
-        )
+        raise ValueError("Tuning config path must use 'file.yaml:document.path' format.")
     normalized_file_path = file_path.strip()
     if not normalized_file_path.endswith((".yaml", ".yml")):
         raise ValueError("Tuning config path file must end with .yaml or .yml.")
@@ -108,9 +106,7 @@ def expand_tuning_config_paths(
         return _expand_swing_setup_gate_paths(parsed_path, document_loader, active_setups)
 
     if parsed_path.document_path == _SETUP_PARTIAL_MAX_FAILED_GATES_WILDCARD_PATH:
-        return _expand_swing_setup_partial_gate_paths(
-            parsed_path, document_loader, active_setups
-        )
+        return _expand_swing_setup_partial_gate_paths(parsed_path, document_loader, active_setups)
 
     return (parsed_path.raw,)
 
@@ -185,9 +181,7 @@ def _expand_swing_setup_gate_paths(
         if not isinstance(gates, dict):
             continue
         for gate_name in gates:
-            expanded_paths.append(
-                f"{target_path.file_path}:setups.{setup_name}.gates.{gate_name}"
-            )
+            expanded_paths.append(f"{target_path.file_path}:setups.{setup_name}.gates.{gate_name}")
     # When a scope filter is active, return empty rather than the raw wildcard —
     # empty means "nothing matched the filter," not an expansion failure.
     if active_setups is not None:

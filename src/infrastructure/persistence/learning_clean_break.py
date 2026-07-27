@@ -59,9 +59,7 @@ def apply_learning_clean_break(db_path: Path) -> LearningCleanBreakReport:
         if connection.execute("PRAGMA foreign_keys").fetchone()[0] != 1:
             raise LearningContractError("SQLite foreign keys must be enabled")
         connection.execute("BEGIN IMMEDIATE")
-        before = {
-            table: _count_or_none(connection, table) for table in LEGACY_TABLES
-        }
+        before = {table: _count_or_none(connection, table) for table in LEGACY_TABLES}
 
         # Children first. Every statement names one exact approved table.
         for table in (
@@ -77,27 +75,20 @@ def apply_learning_clean_break(db_path: Path) -> LearningCleanBreakReport:
         if _table_exists(connection, "_schema_migrations"):
             placeholders = ",".join("?" for _ in LEGACY_MIGRATION_NAMESPACES)
             cursor = connection.execute(
-                "DELETE FROM _schema_migrations "
-                f"WHERE namespace IN ({placeholders})",
+                f"DELETE FROM _schema_migrations WHERE namespace IN ({placeholders})",
                 LEGACY_MIGRATION_NAMESPACES,
             )
             deleted_migrations = cursor.rowcount
 
         create_learning_schema(connection)
-        remaining_legacy = [
-            table for table in LEGACY_TABLES if _table_exists(connection, table)
-        ]
+        remaining_legacy = [table for table in LEGACY_TABLES if _table_exists(connection, table)]
         if remaining_legacy:
-            raise LearningContractError(
-                f"legacy learning tables remain: {remaining_legacy}"
-            )
+            raise LearningContractError(f"legacy learning tables remain: {remaining_legacy}")
         missing_learning = [
             table for table in LEARNING_TABLES if not _table_exists(connection, table)
         ]
         if missing_learning:
-            raise LearningContractError(
-                f"canonical learning tables missing: {missing_learning}"
-            )
+            raise LearningContractError(f"canonical learning tables missing: {missing_learning}")
         nonempty_learning = {
             table: _count_or_none(connection, table)
             for table in LEARNING_TABLES
@@ -136,9 +127,7 @@ def _table_exists(connection: sqlite3.Connection, table: str) -> bool:
     )
 
 
-def _count_or_none(
-    connection: sqlite3.Connection, table: str
-) -> int | None:
+def _count_or_none(connection: sqlite3.Connection, table: str) -> int | None:
     if not _table_exists(connection, table):
         return None
     return int(connection.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()[0])

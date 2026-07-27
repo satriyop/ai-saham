@@ -41,7 +41,6 @@ universe_app = typer.Typer(
 )
 
 
-
 @universe_app.command("list")
 def universe_list(
     config_path: Annotated[
@@ -80,13 +79,17 @@ def universe_list(
 def universe_update(
     universe_name: Annotated[
         Optional[str],
-        typer.Option("--universe", "-u", help="Universe(s) to update, comma-separated "
-                       "(e.g. lq45,idx80). Omit for all."),
+        typer.Option(
+            "--universe",
+            "-u",
+            help="Universe(s) to update, comma-separated (e.g. lq45,idx80). Omit for all.",
+        ),
     ] = None,
     discover: Annotated[
         bool,
-        typer.Option("--discover", help="List all available universes from Stockbit "
-                       "without updating"),
+        typer.Option(
+            "--discover", help="List all available universes from Stockbit without updating"
+        ),
     ] = False,
     config_path: Annotated[
         Optional[Path],
@@ -159,18 +162,19 @@ def universe_update(
 def universe_inspect(
     sector_id: Annotated[
         Optional[int],
-        typer.Option("--sector", "-s", help="Drill into a specific sector ID "
-                       "to show its subsectors"),
+        typer.Option(
+            "--sector", "-s", help="Drill into a specific sector ID to show its subsectors"
+        ),
     ] = None,
     subsector_id: Annotated[
         Optional[int],
-        typer.Option("--subsector", "-b", help="Drill into a specific subsector ID "
-                        "to show its companies"),
+        typer.Option(
+            "--subsector", "-b", help="Drill into a specific subsector ID to show its companies"
+        ),
     ] = None,
     with_count: Annotated[
         bool,
-        typer.Option("--count", "-c", help="Fetch company count for each subsector "
-                         "(slower)"),
+        typer.Option("--count", "-c", help="Fetch company count for each subsector (slower)"),
     ] = False,
 ) -> None:
     """
@@ -189,8 +193,9 @@ def universe_inspect(
         saham fetch universe inspect --sector 5 --subsector 49  # companies in subsector 49
     """
     if subsector_id is not None and sector_id is None:
-        typer.echo("Error: --sector (-s) ID is required when specifying "
-                   "--subsector (-b) ID.", err=True)
+        typer.echo(
+            "Error: --sector (-s) ID is required when specifying --subsector (-b) ID.", err=True
+        )
         raise typer.Exit(1)
 
     provider = create_provider_adapter()

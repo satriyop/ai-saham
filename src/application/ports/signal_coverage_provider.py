@@ -19,8 +19,8 @@ from pathlib import Path
 class FactorCoverage:
     factor: str
     total_rows: int
-    usable_rows: int     # rows matching the quality filter (or total if no filter)
-    total_tickers: int   # distinct ticker count in the table
+    usable_rows: int  # rows matching the quality filter (or total if no filter)
+    total_tickers: int  # distinct ticker count in the table
     note: str | None = field(default=None)
     # note is non-None when usable_rows == total_rows because no directional
     # quality filter exists for this factor (e.g. seasonality, forward estimates).

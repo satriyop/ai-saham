@@ -38,8 +38,7 @@ def build_broker_quality_note(
             )
 
     if setup_eval.match.value == "MATCH" and (
-        quality == "noisy accumulation"
-        or (noise_flow > Decimal("0") and noise_flow > smart_flow)
+        quality == "noisy accumulation" or (noise_flow > Decimal("0") and noise_flow > smart_flow)
     ):
         return BrokerQualityNote(
             level="warning",
@@ -52,19 +51,13 @@ def build_broker_quality_note(
     if setup_eval.match.value == "PARTIAL" and smart_flow > Decimal("0"):
         return BrokerQualityNote(
             level="support",
-            message=(
-                "Broker quality support: smart-money buying supports "
-                "watchlist priority."
-            ),
+            message=("Broker quality support: smart-money buying supports watchlist priority."),
         )
 
     if setup_eval.match.value == "MATCH" and smart_flow > Decimal("0"):
         return BrokerQualityNote(
             level="support",
-            message=(
-                "Broker quality support: smart-money buying confirms the "
-                "setup match."
-            ),
+            message=("Broker quality support: smart-money buying confirms the setup match."),
         )
 
     return None

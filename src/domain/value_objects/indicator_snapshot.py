@@ -91,10 +91,7 @@ class IndicatorSnapshot:
 
         # Not found
         available = list(builtin_map.keys()) + [n for n, _ in self.extras]
-        raise KeyError(
-            f"Indicator '{name}' not found. "
-            f"Available: {available}"
-        )
+        raise KeyError(f"Indicator '{name}' not found. Available: {available}")
 
     def with_extras(
         self, extras: tuple[tuple[str, Union[Decimal, str]], ...]

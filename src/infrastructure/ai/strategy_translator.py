@@ -91,8 +91,7 @@ class StrategyTranslatorAdapter:
 
         if provider not in SUPPORTED_PROVIDERS:
             raise ValueError(
-                f"Unsupported provider: {provider}. "
-                f"Supported: {', '.join(SUPPORTED_PROVIDERS)}"
+                f"Unsupported provider: {provider}. Supported: {', '.join(SUPPORTED_PROVIDERS)}"
             )
 
         self._provider = provider

@@ -41,6 +41,7 @@ from src.infrastructure.browser.stockbit_browser_provider import ManualBrowserDa
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.pre_open_config import load_pre_open_screen_config
 
+
 def _default_pre_open_config_path() -> Path:
     return Path(load_app_config().config_paths.pre_open_screener)
 
@@ -217,19 +218,13 @@ def pre_open(
             echo_json(
                 build_pre_open_failure_envelope(
                     status=ScreenResultStatus.MISSING,
-                    scope=(
-                        "session_missing"
-                        if browser_plan.session_missing
-                        else "browser_plan"
-                    ),
+                    scope=("session_missing" if browser_plan.session_missing else "browser_plan"),
                     scope_note=(
                         "Playwright session missing"
                         if browser_plan.session_missing
                         else "Browser plan required"
                     ),
-                    fetch_hint=default_pre_open_fetch_hint(
-                        PreOpenSourceStatus.UNAVAILABLE
-                    ),
+                    fetch_hint=default_pre_open_fetch_hint(PreOpenSourceStatus.UNAVAILABLE),
                     data={
                         "config": str(resolved_config),
                         "iev_min": config.iev_min,
@@ -332,9 +327,7 @@ def pre_open(
                     status=ScreenResultStatus.ERROR,
                     scope="browser_interaction",
                     scope_note=e.instructions,
-                    fetch_hint=default_pre_open_fetch_hint(
-                        PreOpenSourceStatus.UNAVAILABLE
-                    ),
+                    fetch_hint=default_pre_open_fetch_hint(PreOpenSourceStatus.UNAVAILABLE),
                     data={"url": e.url, "instructions": e.instructions},
                 )
             )

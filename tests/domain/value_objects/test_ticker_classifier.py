@@ -29,5 +29,7 @@ def test_is_non_idx_ticker_specific_global_tickers():
 def test_is_non_idx_ticker_idx_stocks_are_false():
     assert is_non_idx_ticker("BBCA") is False
     assert is_non_idx_ticker("BBRI") is False
-    assert is_non_idx_ticker("IHSG") is False  # benchmark alias is application benchmark, not global index
+    assert (
+        is_non_idx_ticker("IHSG") is False
+    )  # benchmark alias is application benchmark, not global index
     assert is_non_idx_ticker("ASII") is False

@@ -35,25 +35,23 @@ class TrackedBrokerFlowSnapshot:
     every consumer, including JSON.
     """
 
-    label: str          # "smart+" | "noise+" | "noise-" | "smart-" | "mixed" | "dist" | "n/a"
+    label: str  # "smart+" | "noise+" | "noise-" | "smart-" | "mixed" | "dist" | "n/a"
     smart_flow: Decimal
     noise_flow: Decimal
     neutral_flow: Decimal
     sessions: int
     through_date: date
-    source: str = "broker_daily_flow"    # fixed data-product name, not the raw provider
+    source: str = "broker_daily_flow"  # fixed data-product name, not the raw provider
     scope: str = "tracked_brokers"
 
     def __post_init__(self) -> None:
         if self.source != "broker_daily_flow":
             raise ValueError(
-                f'TrackedBrokerFlowSnapshot.source must be "broker_daily_flow", '
-                f"got {self.source!r}"
+                f'TrackedBrokerFlowSnapshot.source must be "broker_daily_flow", got {self.source!r}'
             )
         if self.scope != "tracked_brokers":
             raise ValueError(
-                f'TrackedBrokerFlowSnapshot.scope must be "tracked_brokers", '
-                f"got {self.scope!r}"
+                f'TrackedBrokerFlowSnapshot.scope must be "tracked_brokers", got {self.scope!r}'
             )
 
     def to_dict(self) -> dict:

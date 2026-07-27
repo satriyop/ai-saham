@@ -132,12 +132,8 @@ def pre_open_paper_outcome(
     result: Annotated[
         str, typer.Option("--result", help="Outcome: target/stop/manual/breakeven")
     ] = "manual",
-    confirmed_date: Annotated[
-        Optional[str], typer.Option("--date", help="Date YYYY-MM-DD")
-    ] = None,
-    notes: Annotated[
-        Optional[str], typer.Option("--notes", help="Execution notes")
-    ] = None,
+    confirmed_date: Annotated[Optional[str], typer.Option("--date", help="Date YYYY-MM-DD")] = None,
+    notes: Annotated[Optional[str], typer.Option("--notes", help="Execution notes")] = None,
     journal: Annotated[
         Optional[Path], typer.Option("--journal", help="Pre-open paper CSV journal")
     ] = None,

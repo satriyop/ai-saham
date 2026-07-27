@@ -33,12 +33,12 @@ validated by the current-contract validator below.
 
 from __future__ import annotations
 
+from src.domain.value_objects.accum_score_breakdown import (
+    INSTITUTIONAL_FLOW_COMPONENT_KEYS,
+)
 from src.domain.value_objects.alpha_trigger_score import (
     REMOVED_MARKET_CONTEXT_EVIDENCE_NAME,
     SECTOR_CONTEXT_EVIDENCE_NAME,
-)
-from src.domain.value_objects.accum_score_breakdown import (
-    INSTITUTIONAL_FLOW_COMPONENT_KEYS,
 )
 
 CANDIDATE_OBSERVATION_SCHEMA_VERSION = 8
@@ -129,13 +129,9 @@ def validate_flow_component_fingerprint(
 
     if component_coverage is None:
         if missing:
-            raise ValueError(
-                f"{context} cannot name missing flow components without coverage"
-            )
+            raise ValueError(f"{context} cannot name missing flow components without coverage")
         return
-    if isinstance(component_coverage, bool) or not isinstance(
-        component_coverage, (int, float)
-    ):
+    if isinstance(component_coverage, bool) or not isinstance(component_coverage, (int, float)):
         raise ValueError(f"{context} flow_component_coverage must be numeric or None")
     coverage = float(component_coverage)
     if not 0.0 <= coverage <= 1.0:
@@ -146,13 +142,9 @@ def validate_flow_component_fingerprint(
         raise ValueError(f"{context} flow_missing_components must be unique")
     unexpected = sorted(set(missing) - INSTITUTIONAL_FLOW_COMPONENT_KEYS)
     if unexpected:
-        raise ValueError(
-            f"{context} has unknown flow_missing_components: {unexpected}"
-        )
+        raise ValueError(f"{context} has unknown flow_missing_components: {unexpected}")
     if missing and coverage >= 1.0:
-        raise ValueError(
-            f"{context} cannot have full flow coverage with missing components"
-        )
+        raise ValueError(f"{context} cannot have full flow coverage with missing components")
 
 
 def validate_current_flow_component_fingerprint(
@@ -163,9 +155,7 @@ def validate_current_flow_component_fingerprint(
     if schema_version != CANDIDATE_OBSERVATION_SCHEMA_VERSION:
         return
     if not isinstance(fingerprint, dict):
-        raise ValueError(
-            f"schema_version={schema_version} sub_signal_fingerprint must be a dict"
-        )
+        raise ValueError(f"schema_version={schema_version} sub_signal_fingerprint must be a dict")
     validate_flow_component_fingerprint(
         component_coverage=fingerprint.get("flow_component_coverage"),
         missing_components=fingerprint.get("flow_missing_components"),

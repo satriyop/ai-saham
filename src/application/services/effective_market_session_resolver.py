@@ -60,9 +60,7 @@ class EffectiveMarketSession:
                 else None
             ),
             "analysis_as_of": (
-                self.analysis_as_of.isoformat()
-                if self.analysis_as_of is not None
-                else None
+                self.analysis_as_of.isoformat() if self.analysis_as_of is not None else None
             ),
             "market_session_name": self.market_session_name,
             "is_eod_pending": self.is_eod_pending,
@@ -115,8 +113,8 @@ class EffectiveMarketSessionResolver:
             market_session_name = self._weekday_pre_close_session_name(decision_time)
             is_eod_pending = True
         else:
-            latest_completed_session, resolution_source, is_eod_pending = (
-                self._resolve_after_close(decision_date, notes)
+            latest_completed_session, resolution_source, is_eod_pending = self._resolve_after_close(
+                decision_date, notes
             )
             market_session_name = "AFTER_CLOSE"
 
@@ -147,9 +145,7 @@ class EffectiveMarketSessionResolver:
             return "REGULAR"
         return "PRE_CLOSING"
 
-    def _resolve_weekend(
-        self, decision_date: date, notes: list[str]
-    ) -> tuple[date, str]:
+    def _resolve_weekend(self, decision_date: date, notes: list[str]) -> tuple[date, str]:
         cached = self._bounded_ihsg_session(end_date=decision_date)
         if cached is not None:
             return cached, "ihsg_cache_weekend"
@@ -159,9 +155,7 @@ class EffectiveMarketSessionResolver:
         )
         return last_weekday(decision_date), "weekday_fallback_weekend"
 
-    def _resolve_before_close(
-        self, decision_date: date, notes: list[str]
-    ) -> tuple[date, str]:
+    def _resolve_before_close(self, decision_date: date, notes: list[str]) -> tuple[date, str]:
         cached = self._bounded_ihsg_session(end_date=decision_date - timedelta(days=1))
         if cached is not None:
             return cached, "ihsg_cache_prior_session"
@@ -171,9 +165,7 @@ class EffectiveMarketSessionResolver:
         )
         return last_weekday(decision_date - timedelta(days=1)), "weekday_fallback_prior_session"
 
-    def _resolve_after_close(
-        self, decision_date: date, notes: list[str]
-    ) -> tuple[date, str, bool]:
+    def _resolve_after_close(self, decision_date: date, notes: list[str]) -> tuple[date, str, bool]:
         cached = self._bounded_ihsg_session(end_date=decision_date)
         if cached is None:
             notes.append(
@@ -198,13 +190,9 @@ class EffectiveMarketSessionResolver:
         the past can never observe a cached session that is chronologically
         after it.
         """
-        candles = self._market_repository.get_candles(
-            self._benchmark.canonical, end_date=end_date
-        )
+        candles = self._market_repository.get_candles(self._benchmark.canonical, end_date=end_date)
         if not candles and self._benchmark.legacy:
-            candles = self._market_repository.get_candles(
-                self._benchmark.legacy, end_date=end_date
-            )
+            candles = self._market_repository.get_candles(self._benchmark.legacy, end_date=end_date)
         if not candles:
             return None
         return candles[-1].date

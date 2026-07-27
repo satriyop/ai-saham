@@ -1,25 +1,25 @@
 """Tests for the accumulation-screen result projector (S2)."""
 
+from datetime import date, datetime
+from decimal import Decimal
+from zoneinfo import ZoneInfo
+
 import pytest
 
 from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenResponse,
 )
-from datetime import date, datetime
-from decimal import Decimal
-from zoneinfo import ZoneInfo
-
 from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSession,
 )
-from src.application.services.tracked_broker_flow import TrackedBrokerFlowSnapshot
 from src.application.services.screen_accum_result_projector import (
     ScreenAccumProjectionError,
     project_multi_screen_result,
     project_single_screen_result,
     validate_multi_window_request,
 )
+from src.application.services.tracked_broker_flow import TrackedBrokerFlowSnapshot
 
 _WIB = ZoneInfo("Asia/Jakarta")
 _NOW = datetime(2026, 7, 14, 16, 30, tzinfo=_WIB)
@@ -180,6 +180,7 @@ def test_single_projection_rejects_invalid_sort_by():
             sort_by="30s",
         )
 
+
 def test_single_projection_applies_min_streak():
     keep = _candidate(ticker="A", consecutive_streak=5)
     drop = _candidate(ticker="B", consecutive_streak=1)
@@ -192,7 +193,7 @@ def test_single_projection_applies_min_streak():
         top=10,
         min_streak=3,
         coiled_spring_bb_pctile=0.20,
-        effective_session=_EFFECTIVE_SESSION
+        effective_session=_EFFECTIVE_SESSION,
     )
 
     assert [c.ticker for c in projection.candidates] == ["A"]
@@ -213,7 +214,7 @@ def test_single_projection_counts_before_filter_is_pre_min_streak():
         top=10,
         min_streak=5,
         coiled_spring_bb_pctile=0.20,
-        effective_session=_EFFECTIVE_SESSION
+        effective_session=_EFFECTIVE_SESSION,
     )
 
     assert projection.raw_candidate_count == 4
@@ -232,7 +233,7 @@ def test_single_projection_applies_squeeze_only():
         top=10,
         min_streak=0,
         coiled_spring_bb_pctile=0.20,
-        effective_session=_EFFECTIVE_SESSION
+        effective_session=_EFFECTIVE_SESSION,
     )
 
     assert [c.ticker for c in projection.candidates] == ["A"]
@@ -249,7 +250,7 @@ def test_single_projection_applies_top_after_filters():
         top=2,
         min_streak=0,
         coiled_spring_bb_pctile=0.20,
-        effective_session=_EFFECTIVE_SESSION
+        effective_session=_EFFECTIVE_SESSION,
     )
 
     assert projection.projected_candidate_count == 2
@@ -270,7 +271,7 @@ def test_single_projection_data_as_of_from_candidates():
         top=10,
         min_streak=0,
         coiled_spring_bb_pctile=0.20,
-        effective_session=_EFFECTIVE_SESSION
+        effective_session=_EFFECTIVE_SESSION,
     )
 
     assert projection.data_as_of["latest_candle_date"] == "2026-07-10"
@@ -300,7 +301,7 @@ def test_multi_projection_applies_squeeze_only():
         coiled_spring_min_accum_score=50.0,
         coiled_spring_bb_pctile=0.20,
         canonical_window=7,
-        effective_session=_EFFECTIVE_SESSION
+        effective_session=_EFFECTIVE_SESSION,
     )
 
     assert [row.ticker for row in projection.rows] == ["A"]
@@ -328,7 +329,7 @@ def test_multi_projection_applies_sort_by_window_label():
         coiled_spring_min_accum_score=50.0,
         coiled_spring_bb_pctile=0.20,
         canonical_window=7,
-        effective_session=_EFFECTIVE_SESSION
+        effective_session=_EFFECTIVE_SESSION,
     )
 
     assert [row.ticker for row in projection.rows] == ["B", "A"]
@@ -348,7 +349,7 @@ def test_multi_projection_applies_top():
         coiled_spring_min_accum_score=50.0,
         coiled_spring_bb_pctile=0.20,
         canonical_window=7,
-        effective_session=_EFFECTIVE_SESSION
+        effective_session=_EFFECTIVE_SESSION,
     )
 
     assert projection.raw_ticker_count == 5
@@ -379,7 +380,7 @@ def test_multi_projection_includes_tracked_broker_flow():
         coiled_spring_min_accum_score=50.0,
         coiled_spring_bb_pctile=0.20,
         canonical_window=7,
-        effective_session=_EFFECTIVE_SESSION
+        effective_session=_EFFECTIVE_SESSION,
     )
 
     assert projection.rows[0].tracked_broker_flow is quality["A"]
@@ -475,6 +476,7 @@ def test_multi_projection_sorts_by_vwap_discount():
     assert [r.ticker for r in projection.rows] == ["DEEP", "SHALLOW"]
     assert projection.applied_filters.sort_by == "vwap"
 
+
 def test_project_multi_screen_result_raises_on_invalid_sort_by():
     c = _candidate(ticker="A")
     multi_results = {7: _response([c], window_days=7)}
@@ -489,8 +491,8 @@ def test_project_multi_screen_result_raises_on_invalid_sort_by():
             squeeze_only=False,
             coiled_spring_min_accum_score=50.0,
             coiled_spring_bb_pctile=0.20,
-        canonical_window=7,
-            effective_session=_EFFECTIVE_SESSION
+            canonical_window=7,
+            effective_session=_EFFECTIVE_SESSION,
         )
 
 
@@ -514,7 +516,7 @@ def test_single_projection_attaches_freshness_to_each_projected_candidate():
         top=10,
         min_streak=0,
         coiled_spring_bb_pctile=0.20,
-        effective_session=_EFFECTIVE_SESSION
+        effective_session=_EFFECTIVE_SESSION,
     )
 
     (result_candidate,) = projection.candidates
@@ -536,7 +538,7 @@ def test_single_projection_does_not_attach_freshness_to_filtered_out_candidates(
         top=10,
         min_streak=0,
         coiled_spring_bb_pctile=0.20,
-        effective_session=_EFFECTIVE_SESSION
+        effective_session=_EFFECTIVE_SESSION,
     )
 
     assert dropped.freshness is None
@@ -560,7 +562,7 @@ def test_multi_projection_attaches_freshness_to_projected_window_candidates():
         coiled_spring_min_accum_score=50.0,
         coiled_spring_bb_pctile=0.20,
         canonical_window=7,
-        effective_session=_EFFECTIVE_SESSION
+        effective_session=_EFFECTIVE_SESSION,
     )
 
     (row,) = projection.rows
@@ -596,7 +598,7 @@ def test_multi_projection_does_not_attach_freshness_to_squeeze_filtered_out_cand
         coiled_spring_min_accum_score=50.0,
         coiled_spring_bb_pctile=0.20,
         canonical_window=7,
-        effective_session=_EFFECTIVE_SESSION
+        effective_session=_EFFECTIVE_SESSION,
     )
 
     assert [row.ticker for row in projection.rows] == ["A"]
@@ -614,11 +616,11 @@ def _enriched_candidate(**overrides) -> AccumulationCandidate:
 
     from src.domain.value_objects.risk_assessment import RiskAssessment
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot, SetupPhaseState
-    from src.domain.value_objects.trade_setup import SetupAction, TradeSetup
     from src.domain.value_objects.signal_assessment import (
         ACCUMULATION_DISCOVERY_IDENTITY,
         SignalStrength,
     )
+    from src.domain.value_objects.trade_setup import SetupAction, TradeSetup
 
     signal_assessment = SimpleNamespace(
         assessment=SimpleNamespace(
@@ -692,7 +694,7 @@ def test_multi_projection_populates_canonical_fields_from_canonical_window():
         coiled_spring_min_accum_score=50.0,
         coiled_spring_bb_pctile=0.20,
         canonical_window=7,
-        effective_session=_EFFECTIVE_SESSION
+        effective_session=_EFFECTIVE_SESSION,
     )
 
     (row,) = projection.rows
@@ -725,7 +727,7 @@ def test_multi_projection_canonical_fields_none_when_ticker_missing_from_canonic
         coiled_spring_min_accum_score=50.0,
         coiled_spring_bb_pctile=0.20,
         canonical_window=7,
-        effective_session=_EFFECTIVE_SESSION
+        effective_session=_EFFECTIVE_SESSION,
     )
 
     (row,) = projection.rows
@@ -753,7 +755,7 @@ def test_project_multi_screen_result_raises_on_invalid_canonical_window():
             coiled_spring_min_accum_score=50.0,
             coiled_spring_bb_pctile=0.20,
             canonical_window=30,
-            effective_session=_EFFECTIVE_SESSION
+            effective_session=_EFFECTIVE_SESSION,
         )
 
 
@@ -771,7 +773,7 @@ def test_multi_row_to_dict_includes_canonical_fields():
         coiled_spring_min_accum_score=50.0,
         coiled_spring_bb_pctile=0.20,
         canonical_window=7,
-        effective_session=_EFFECTIVE_SESSION
+        effective_session=_EFFECTIVE_SESSION,
     )
 
     (row,) = projection.rows
@@ -814,7 +816,7 @@ def test_behavior_preservation():
         coiled_spring_min_accum_score=50.0,
         coiled_spring_bb_pctile=0.20,
         canonical_window=7,
-        effective_session=_EFFECTIVE_SESSION
+        effective_session=_EFFECTIVE_SESSION,
     )
 
     (row,) = projection.rows

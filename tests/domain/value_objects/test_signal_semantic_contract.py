@@ -6,6 +6,10 @@ from copy import deepcopy
 
 import pytest
 
+from src.domain.value_objects.signal_artifact_schema import (
+    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+    SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
+)
 from src.domain.value_objects.signal_semantic_contract import (
     ACCUMULATION_DISCOVERY,
     ACCUMULATION_DISCOVERY_CONTRACT,
@@ -13,11 +17,6 @@ from src.domain.value_objects.signal_semantic_contract import (
     SEMANTIC_ENGINE_VERSION,
     SemanticContractDefinition,
 )
-from src.domain.value_objects.signal_artifact_schema import (
-    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
-    SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
-)
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -42,15 +41,11 @@ _VALID_FAMILY_PATHS: tuple[tuple[str, tuple[str, ...]], ...] = (
 _VALID_HORIZON_PATHS: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
         "SWING_10D",
-        (
-            "signal_engine.alpha_trigger.horizon_alpha_weights.SWING_10D",
-        ),
+        ("signal_engine.alpha_trigger.horizon_alpha_weights.SWING_10D",),
     ),
     (
         "TACTICAL_3D",
-        (
-            "signal_engine.alpha_trigger.horizon_alpha_weights.TACTICAL_3D",
-        ),
+        ("signal_engine.alpha_trigger.horizon_alpha_weights.TACTICAL_3D",),
     ),
 )
 
@@ -114,9 +109,7 @@ def test_known_instance_normalization_paths_declared():
         + ACCUMULATION_DISCOVERY.unordered_lower_string_config_paths
     )
     for family in ("accumulation", "breakout", "pullback"):
-        required_sequence_path = (
-            f"swing_setups.setup_phase.requirements.{family}.required_sequence"
-        )
+        required_sequence_path = f"swing_setups.setup_phase.requirements.{family}.required_sequence"
         assert required_sequence_path not in all_normalization_paths, (
             "required_sequence order is semantic and must not be normalized"
         )
@@ -270,24 +263,22 @@ def test_empty_policy_versions_raises():
 
 def test_duplicate_horizon_raises():
     with pytest.raises(ValueError, match="duplicate horizon"):
-        _valid(execution_label_policy_versions=(
-            ("TACTICAL_3D", "v1"),
-            ("TACTICAL_3D", "v2"),
-        ))
+        _valid(
+            execution_label_policy_versions=(
+                ("TACTICAL_3D", "v1"),
+                ("TACTICAL_3D", "v2"),
+            )
+        )
 
 
 def test_empty_horizon_raises():
     with pytest.raises(ValueError, match="horizon"):
-        _valid(execution_label_policy_versions=(
-            ("", "v1"),
-        ))
+        _valid(execution_label_policy_versions=(("", "v1"),))
 
 
 def test_empty_version_raises():
     with pytest.raises(ValueError, match="version"):
-        _valid(execution_label_policy_versions=(
-            ("TACTICAL_3D", ""),
-        ))
+        _valid(execution_label_policy_versions=(("TACTICAL_3D", ""),))
 
 
 # ---------------------------------------------------------------------------
@@ -302,32 +293,32 @@ def test_empty_common_paths_raises():
 
 def test_unsorted_common_paths_raises():
     with pytest.raises(ValueError, match="paths must be sorted"):
-        _valid(common_material_config_paths=(
-            "z.path",
-            "a.path",
-        ))
+        _valid(
+            common_material_config_paths=(
+                "z.path",
+                "a.path",
+            )
+        )
 
 
 def test_duplicate_common_path_raises():
     with pytest.raises(ValueError, match="duplicate"):
-        _valid(common_material_config_paths=(
-            "a.path.one",
-            "a.path.one",
-        ))
+        _valid(
+            common_material_config_paths=(
+                "a.path.one",
+                "a.path.one",
+            )
+        )
 
 
 def test_invalid_dotted_path_segments_raises():
     with pytest.raises(ValueError, match="invalid dotted path"):
-        _valid(common_material_config_paths=(
-            "no_dots",
-        ))
+        _valid(common_material_config_paths=("no_dots",))
 
 
 def test_path_starting_with_dot_raises():
     with pytest.raises(ValueError, match="invalid dotted path"):
-        _valid(common_material_config_paths=(
-            ".starts.with.dot",
-        ))
+        _valid(common_material_config_paths=(".starts.with.dot",))
 
 
 def test_common_paths_missing_horizon_selector_raises():
@@ -335,10 +326,12 @@ def test_common_paths_missing_horizon_selector_raises():
     or a changed default_horizon could silently repoint which horizon-scoped
     paths are hashed without changing identity."""
     with pytest.raises(ValueError, match="evaluation-horizon selector"):
-        _valid(common_material_config_paths=(
-            "signal_engine.classification.moderate_min_score",
-            "signal_engine.classification.strong_min_score",
-        ))
+        _valid(
+            common_material_config_paths=(
+                "signal_engine.classification.moderate_min_score",
+                "signal_engine.classification.strong_min_score",
+            )
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -359,16 +352,12 @@ def test_duplicate_family_name_raises():
 
 def test_invalid_family_name_raises():
     with pytest.raises(ValueError, match="invalid family name"):
-        _valid(material_config_paths_by_setup_family=(
-            ("Invalid-Family!", ("a.path.one",)),
-        ))
+        _valid(material_config_paths_by_setup_family=(("Invalid-Family!", ("a.path.one",)),))
 
 
 def test_unsorted_family_paths_raises():
     with pytest.raises(ValueError, match="paths must be sorted"):
-        _valid(material_config_paths_by_setup_family=(
-            ("accumulation", ("z.path", "a.path")),
-        ))
+        _valid(material_config_paths_by_setup_family=(("accumulation", ("z.path", "a.path")),))
 
 
 # ---------------------------------------------------------------------------
@@ -383,10 +372,12 @@ def test_empty_horizon_groups_raises():
 
 def test_duplicate_horizon_group_name_raises():
     with pytest.raises(ValueError, match="duplicate horizon"):
-        _valid(material_config_paths_by_evaluation_horizon=(
-            ("SWING_10D", ("a.path.one",)),
-            ("SWING_10D", ("a.path.two",)),
-        ))
+        _valid(
+            material_config_paths_by_evaluation_horizon=(
+                ("SWING_10D", ("a.path.one",)),
+                ("SWING_10D", ("a.path.two",)),
+            )
+        )
 
 
 def test_unknown_evaluation_horizon_group_name_rejected_by_lookup():
@@ -397,31 +388,31 @@ def test_unknown_evaluation_horizon_group_name_rejected_by_lookup():
 
 def test_unsorted_horizon_groups_raises():
     with pytest.raises(ValueError, match="horizon groups must be sorted"):
-        _valid(material_config_paths_by_evaluation_horizon=(
-            ("TACTICAL_3D", ("a.path.one",)),
-            ("SWING_10D", ("a.path.two",)),
-        ))
+        _valid(
+            material_config_paths_by_evaluation_horizon=(
+                ("TACTICAL_3D", ("a.path.one",)),
+                ("SWING_10D", ("a.path.two",)),
+            )
+        )
 
 
 def test_unsorted_horizon_paths_raises():
     with pytest.raises(ValueError, match="paths must be sorted"):
-        _valid(material_config_paths_by_evaluation_horizon=(
-            ("SWING_10D", ("z.path", "a.path")),
-        ))
+        _valid(material_config_paths_by_evaluation_horizon=(("SWING_10D", ("z.path", "a.path")),))
 
 
 def test_duplicate_horizon_paths_raises():
     with pytest.raises(ValueError, match="duplicate path"):
-        _valid(material_config_paths_by_evaluation_horizon=(
-            ("SWING_10D", ("a.path.one", "a.path.one")),
-        ))
+        _valid(
+            material_config_paths_by_evaluation_horizon=(
+                ("SWING_10D", ("a.path.one", "a.path.one")),
+            )
+        )
 
 
 def test_empty_horizon_paths_raises():
     with pytest.raises(ValueError, match="non-empty tuple"):
-        _valid(material_config_paths_by_evaluation_horizon=(
-            ("SWING_10D", ()),
-        ))
+        _valid(material_config_paths_by_evaluation_horizon=(("SWING_10D", ()),))
 
 
 # ---------------------------------------------------------------------------
@@ -457,43 +448,43 @@ def test_normalization_paths_default_to_empty():
 
 def test_valid_contract_with_normalization_paths():
     c = _valid(
-        unordered_upper_string_config_paths=(
-            "signal_engine.classification.moderate_min_score",
-        ),
-        unordered_lower_string_config_paths=(
-            "swing_setups.setups.foreign-bounce.enabled",
-        ),
+        unordered_upper_string_config_paths=("signal_engine.classification.moderate_min_score",),
+        unordered_lower_string_config_paths=("swing_setups.setups.foreign-bounce.enabled",),
     )
     assert c.unordered_upper_string_config_paths == (
         "signal_engine.classification.moderate_min_score",
     )
-    assert c.unordered_lower_string_config_paths == (
-        "swing_setups.setups.foreign-bounce.enabled",
-    )
+    assert c.unordered_lower_string_config_paths == ("swing_setups.setups.foreign-bounce.enabled",)
 
 
 def test_unordered_upper_paths_must_be_sorted():
     with pytest.raises(ValueError, match="paths must be sorted"):
-        _valid(unordered_upper_string_config_paths=(
-            "signal_engine.classification.strong_min_score",
-            "signal_engine.classification.moderate_min_score",
-        ))
+        _valid(
+            unordered_upper_string_config_paths=(
+                "signal_engine.classification.strong_min_score",
+                "signal_engine.classification.moderate_min_score",
+            )
+        )
 
 
 def test_unordered_lower_paths_must_be_sorted():
     with pytest.raises(ValueError, match="paths must be sorted"):
-        _valid(unordered_lower_string_config_paths=(
-            "signal_engine.classification.strong_min_score",
-            "signal_engine.classification.moderate_min_score",
-        ))
+        _valid(
+            unordered_lower_string_config_paths=(
+                "signal_engine.classification.strong_min_score",
+                "signal_engine.classification.moderate_min_score",
+            )
+        )
 
 
 def test_unordered_upper_paths_duplicate_raises():
     with pytest.raises(ValueError, match="duplicate path"):
-        _valid(unordered_upper_string_config_paths=(
-            "signal_engine.classification.moderate_min_score",
-            "signal_engine.classification.moderate_min_score",
-        ))
+        _valid(
+            unordered_upper_string_config_paths=(
+                "signal_engine.classification.moderate_min_score",
+                "signal_engine.classification.moderate_min_score",
+            )
+        )
 
 
 def test_unordered_lower_paths_invalid_dotted_path_raises():
@@ -524,18 +515,20 @@ def test_unordered_lower_path_must_be_declared_material():
 
 
 def test_unordered_upper_path_declared_only_in_family_is_accepted():
-    c = _valid(unordered_upper_string_config_paths=(
-        "swing_setups.setups.foreign-bounce.entry_authority",
-    ))
+    c = _valid(
+        unordered_upper_string_config_paths=("swing_setups.setups.foreign-bounce.entry_authority",)
+    )
     assert c.unordered_upper_string_config_paths == (
         "swing_setups.setups.foreign-bounce.entry_authority",
     )
 
 
 def test_unordered_upper_path_declared_only_in_horizon_is_accepted():
-    c = _valid(unordered_upper_string_config_paths=(
-        "signal_engine.alpha_trigger.horizon_alpha_weights.SWING_10D",
-    ))
+    c = _valid(
+        unordered_upper_string_config_paths=(
+            "signal_engine.alpha_trigger.horizon_alpha_weights.SWING_10D",
+        )
+    )
     assert c.unordered_upper_string_config_paths == (
         "signal_engine.alpha_trigger.horizon_alpha_weights.SWING_10D",
     )
@@ -554,43 +547,41 @@ def test_integer_and_commodity_normalization_paths_default_to_empty():
 
 def test_valid_contract_with_integer_and_commodity_normalization_paths():
     c = _valid(
-        unordered_integer_config_paths=(
-            "signal_engine.classification.moderate_min_score",
-        ),
-        commodity_component_config_paths=(
-            "signal_engine.classification.strong_min_score",
-        ),
+        unordered_integer_config_paths=("signal_engine.classification.moderate_min_score",),
+        commodity_component_config_paths=("signal_engine.classification.strong_min_score",),
     )
-    assert c.unordered_integer_config_paths == (
-        "signal_engine.classification.moderate_min_score",
-    )
-    assert c.commodity_component_config_paths == (
-        "signal_engine.classification.strong_min_score",
-    )
+    assert c.unordered_integer_config_paths == ("signal_engine.classification.moderate_min_score",)
+    assert c.commodity_component_config_paths == ("signal_engine.classification.strong_min_score",)
 
 
 def test_unordered_integer_paths_must_be_sorted():
     with pytest.raises(ValueError, match="paths must be sorted"):
-        _valid(unordered_integer_config_paths=(
-            "signal_engine.classification.strong_min_score",
-            "signal_engine.classification.moderate_min_score",
-        ))
+        _valid(
+            unordered_integer_config_paths=(
+                "signal_engine.classification.strong_min_score",
+                "signal_engine.classification.moderate_min_score",
+            )
+        )
 
 
 def test_commodity_component_paths_must_be_sorted():
     with pytest.raises(ValueError, match="paths must be sorted"):
-        _valid(commodity_component_config_paths=(
-            "signal_engine.classification.strong_min_score",
-            "signal_engine.classification.moderate_min_score",
-        ))
+        _valid(
+            commodity_component_config_paths=(
+                "signal_engine.classification.strong_min_score",
+                "signal_engine.classification.moderate_min_score",
+            )
+        )
 
 
 def test_unordered_integer_paths_duplicate_raises():
     with pytest.raises(ValueError, match="duplicate path"):
-        _valid(unordered_integer_config_paths=(
-            "signal_engine.classification.moderate_min_score",
-            "signal_engine.classification.moderate_min_score",
-        ))
+        _valid(
+            unordered_integer_config_paths=(
+                "signal_engine.classification.moderate_min_score",
+                "signal_engine.classification.moderate_min_score",
+            )
+        )
 
 
 def test_unordered_integer_path_invalid_dotted_path_raises():
@@ -614,9 +605,7 @@ def test_unordered_integer_path_overlapping_upper_string_path_raises():
             unordered_upper_string_config_paths=(
                 "signal_engine.classification.moderate_min_score",
             ),
-            unordered_integer_config_paths=(
-                "signal_engine.classification.moderate_min_score",
-            ),
+            unordered_integer_config_paths=("signal_engine.classification.moderate_min_score",),
         )
 
 
@@ -626,21 +615,15 @@ def test_commodity_component_path_overlapping_lower_string_path_raises():
             unordered_lower_string_config_paths=(
                 "signal_engine.classification.moderate_min_score",
             ),
-            commodity_component_config_paths=(
-                "signal_engine.classification.moderate_min_score",
-            ),
+            commodity_component_config_paths=("signal_engine.classification.moderate_min_score",),
         )
 
 
 def test_unordered_integer_path_overlapping_commodity_path_raises():
     with pytest.raises(ValueError, match="must not overlap"):
         _valid(
-            unordered_integer_config_paths=(
-                "signal_engine.classification.moderate_min_score",
-            ),
-            commodity_component_config_paths=(
-                "signal_engine.classification.moderate_min_score",
-            ),
+            unordered_integer_config_paths=("signal_engine.classification.moderate_min_score",),
+            commodity_component_config_paths=("signal_engine.classification.moderate_min_score",),
         )
 
 

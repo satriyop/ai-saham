@@ -137,7 +137,9 @@ class IdxBrokerDataProvider(BrokerDataProvider):
                         wait = self._retry_backoff_base ** (attempt + 1)
                         logger.warning(
                             "IDX rate limited (429), waiting %.1fs before retry %d/%d",
-                            wait, attempt + 1, self._max_retries,
+                            wait,
+                            attempt + 1,
+                            self._max_retries,
                         )
                         time.sleep(wait)
                         continue
@@ -152,7 +154,10 @@ class IdxBrokerDataProvider(BrokerDataProvider):
                         wait = self._retry_backoff_base ** (attempt + 1)
                         logger.warning(
                             "IDX server error (%d), waiting %.1fs before retry %d/%d",
-                            response.status_code, wait, attempt + 1, self._max_retries,
+                            response.status_code,
+                            wait,
+                            attempt + 1,
+                            self._max_retries,
                         )
                         time.sleep(wait)
                         last_error = BrokerDataProviderError(
@@ -161,9 +166,7 @@ class IdxBrokerDataProvider(BrokerDataProvider):
                         continue
 
                     if response.status_code != 200:
-                        raise BrokerDataProviderError(
-                            f"IDX API error: {response.status_code}"
-                        )
+                        raise BrokerDataProviderError(f"IDX API error: {response.status_code}")
 
                     return response.json()
 
@@ -173,7 +176,9 @@ class IdxBrokerDataProvider(BrokerDataProvider):
                     wait = self._retry_backoff_base ** (attempt + 1)
                     logger.warning(
                         "IDX timeout, waiting %.1fs before retry %d/%d",
-                        wait, attempt + 1, self._max_retries,
+                        wait,
+                        attempt + 1,
+                        self._max_retries,
                     )
                     time.sleep(wait)
             except httpx.RequestError as e:
@@ -311,7 +316,9 @@ class IdxBrokerDataProvider(BrokerDataProvider):
             except BrokerDataProviderError as e:
                 logger.debug(
                     "Failed to fetch %s for %s: %s",
-                    ticker, current_date, e,
+                    ticker,
+                    current_date,
+                    e,
                 )
                 # Continue to next date - don't fail entire range for one day
 

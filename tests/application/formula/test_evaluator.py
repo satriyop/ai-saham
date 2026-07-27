@@ -97,9 +97,7 @@ class TestEvaluateFunctionCalls:
     def test_function_with_period(self) -> None:
         """Test evaluating function with explicit period."""
         rsi_values = [Decimal(str(50 + i)) for i in range(10)]
-        provider = MockSeriesProvider(
-            indicator_data={("RSI", 14): rsi_values}
-        )
+        provider = MockSeriesProvider(indicator_data={("RSI", 14): rsi_values})
         evaluator = FormulaEvaluator(provider)
         ast = parse("RSI(14)")
 
@@ -112,8 +110,7 @@ class TestEvaluateFunctionCalls:
         sma_values = [Decimal(str(105 + i)) for i in range(10)]
 
         provider = MockSeriesProvider(
-            series_data={"CLOSE": close_values},
-            indicator_data={("SMA", 10): sma_values}
+            series_data={"CLOSE": close_values}, indicator_data={("SMA", 10): sma_values}
         )
         evaluator = FormulaEvaluator(provider)
         ast = parse("SMA(CLOSE, 10)")
@@ -177,9 +174,7 @@ class TestEvaluateBinaryOperations:
         series1 = [Decimal("1"), Decimal("2"), Decimal("3")]
         series2 = [Decimal("10"), Decimal("20"), Decimal("30")]
 
-        provider = MockSeriesProvider(
-            series_data={"CLOSE": series1, "OPEN": series2}
-        )
+        provider = MockSeriesProvider(series_data={"CLOSE": series1, "OPEN": series2})
         evaluator = FormulaEvaluator(provider)
         ast = parse("CLOSE + OPEN")
 
@@ -191,9 +186,7 @@ class TestEvaluateBinaryOperations:
         series1 = [Decimal("10"), Decimal("20"), Decimal("30")]
         series2 = [Decimal("1"), Decimal("2"), Decimal("3")]
 
-        provider = MockSeriesProvider(
-            series_data={"CLOSE": series1, "OPEN": series2}
-        )
+        provider = MockSeriesProvider(series_data={"CLOSE": series1, "OPEN": series2})
         evaluator = FormulaEvaluator(provider)
         ast = parse("CLOSE - OPEN")
 
@@ -205,9 +198,7 @@ class TestEvaluateBinaryOperations:
         close = [Decimal("100"), Decimal("101"), Decimal("102")]
         volume = [Decimal("1000"), Decimal("2000"), Decimal("3000")]
 
-        provider = MockSeriesProvider(
-            series_data={"CLOSE": close, "VOLUME": volume}
-        )
+        provider = MockSeriesProvider(series_data={"CLOSE": close, "VOLUME": volume})
         evaluator = FormulaEvaluator(provider)
         ast = parse("CLOSE * VOLUME")
 
@@ -243,9 +234,7 @@ class TestEvaluateBinaryOperations:
         # Shorter series
         series2 = [Decimal(str(i * 10)) for i in range(5)]
 
-        provider = MockSeriesProvider(
-            series_data={"CLOSE": series1, "OPEN": series2}
-        )
+        provider = MockSeriesProvider(series_data={"CLOSE": series1, "OPEN": series2})
         evaluator = FormulaEvaluator(provider)
         ast = parse("CLOSE + OPEN")
 

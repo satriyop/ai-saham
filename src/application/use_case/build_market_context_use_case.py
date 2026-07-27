@@ -55,7 +55,7 @@ class BuildMarketContextRequest:
     # Cross-market (fetched by MarketContextEngine via YahooFinanceProvider)
     vix_candles: list[Candle]
     eido_candles: list[Candle]
-    ihsg_candles: list[Candle]    # used by both eido and idx_trend
+    ihsg_candles: list[Candle]  # used by both eido and idx_trend
     usd_idr_candles: list[Candle]
 
     # IDX-internal breadth (fetched from MarketDataRepository per universe ticker)
@@ -67,8 +67,8 @@ class BuildMarketContextRequest:
 
     # ── A2: regime quality inputs (computed by engine from prior observations) ──
     # Passed in so use case stays pure (no IO).
-    days_in_regime: int | None = None       # consecutive days in current regime
-    regime_stability: str | None = None     # "STABLE" | "TRANSITIONING" | "UNKNOWN"
+    days_in_regime: int | None = None  # consecutive days in current regime
+    regime_stability: str | None = None  # "STABLE" | "TRANSITIONING" | "UNKNOWN"
     banking_universe: list[str] = field(default_factory=list)  # tickers for banking_sector_vs_ihsg
 
 
@@ -94,32 +94,52 @@ class BuildMarketContextUseCase:
         factors: list[ContextFactor] = [
             score_vix(cfg.vix, request.vix_candles, as_of, cfg.scoring.labels),
             score_eido(
-                cfg.eido, request.eido_candles, request.ihsg_candles, as_of,
-                cfg.scoring.labels, cfg.scoring.neutral_score,
+                cfg.eido,
+                request.eido_candles,
+                request.ihsg_candles,
+                as_of,
+                cfg.scoring.labels,
+                cfg.scoring.neutral_score,
             ),
             score_usd_idr(
-                cfg.usd_idr, request.usd_idr_candles, as_of,
-                cfg.scoring.labels, cfg.scoring.neutral_score,
+                cfg.usd_idr,
+                request.usd_idr_candles,
+                as_of,
+                cfg.scoring.labels,
+                cfg.scoring.neutral_score,
             ),
             score_idx_trend(
-                cfg.idx_trend, request.ihsg_candles, as_of,
-                cfg.scoring.labels, cfg.scoring.neutral_score,
+                cfg.idx_trend,
+                request.ihsg_candles,
+                as_of,
+                cfg.scoring.labels,
+                cfg.scoring.neutral_score,
             ),
             score_idx_breadth(
-                cfg.idx_breadth, request.universe_candles, as_of,
-                cfg.scoring.labels, cfg.scoring.neutral_score,
+                cfg.idx_breadth,
+                request.universe_candles,
+                as_of,
+                cfg.scoring.labels,
+                cfg.scoring.neutral_score,
             ),
             score_foreign_flow(
-                cfg.foreign_flow, request.foreign_flow_series, as_of,
-                cfg.scoring.labels, cfg.scoring.neutral_score,
+                cfg.foreign_flow,
+                request.foreign_flow_series,
+                as_of,
+                cfg.scoring.labels,
+                cfg.scoring.neutral_score,
             ),
         ]
 
         # ── Commodity Composite (optional) ────────────────────────────────────
         if cfg.commodity.enabled:
-            factors.append(unavailable_context_factor(
-                "commodity_composite", cfg.commodity.weight, "commodity data not yet fetched",
-            ))
+            factors.append(
+                unavailable_context_factor(
+                    "commodity_composite",
+                    cfg.commodity.weight,
+                    "commodity data not yet fetched",
+                )
+            )
         else:
             factors.append(disabled_context_factor("commodity_composite", cfg.commodity.weight))
 
@@ -137,7 +157,8 @@ class BuildMarketContextUseCase:
             cfg.scoring.stale_business_day_gap,
         )
         coverage = market_context_coverage_warning(
-            factors, cfg.scoring.coverage_warning_unavailable_ratio,
+            factors,
+            cfg.scoring.coverage_warning_unavailable_ratio,
         )
 
         # ── A2: regime confidence and detection inputs ────────────────────────
@@ -150,9 +171,7 @@ class BuildMarketContextUseCase:
 
         breadth_factor = next((f for f in factors if f.name == "idx_breadth"), None)
         breadth_pct = (
-            breadth_factor.value
-            if breadth_factor and breadth_factor.value is not None
-            else None
+            breadth_factor.value if breadth_factor and breadth_factor.value is not None else None
         )
 
         detection_inputs = compute_market_context_detection_inputs(

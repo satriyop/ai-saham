@@ -105,7 +105,8 @@ class SignalLegacyRegimeConditioning:
                 old_s = setup_group_score
                 setup_group_score = setup_group_score * rc.setup_discount
                 notes.append(
-                    f"VOLATILE: setup {old_s:.0f}→{setup_group_score:.0f} (×{rc.setup_discount:.2f})"
+                    f"VOLATILE: setup {old_s:.0f}→{setup_group_score:.0f} "
+                    f"(×{rc.setup_discount:.2f})"
                 )
             if flow_present:
                 old_f = flow_group_score

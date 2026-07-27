@@ -173,7 +173,7 @@ Test description for the strategy.
         assert "Test Strategy" in result
         # Should show em-dash for missing description
         lines = result.split("\n")
-        strategy_line = [l for l in lines if "Test Strategy" in l][0]
+        strategy_line = [line for line in lines if "Test Strategy" in line][0]
         assert "—" in strategy_line
 
     def test_generate_handles_missing_tags(self, tmp_path: Path):
@@ -197,7 +197,7 @@ Test description
 
         assert "Test Strategy" in result
         lines = result.split("\n")
-        strategy_line = [l for l in lines if "Test Strategy" in l][0]
+        strategy_line = [line for line in lines if "Test Strategy" in line][0]
         # Should show em-dash for missing tags
         assert "—" in strategy_line
 
@@ -222,7 +222,7 @@ Test description
 
         # Should show em-dash since description is just a TODO comment
         lines = result.split("\n")
-        strategy_line = [l for l in lines if "Test Strategy" in l][0]
+        strategy_line = [line for line in lines if "Test Strategy" in line][0]
         assert "—" in strategy_line
 
     def test_generate_includes_auto_generated_footer(self, tmp_path: Path):

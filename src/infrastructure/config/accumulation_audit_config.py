@@ -40,11 +40,15 @@ def load_accumulation_audit_config(
     if not isinstance(root, dict):
         return AccumulationAuditConfig()
     setups_raw = root.get("setups") or {}
-    setups = {
-        str(name).lower(): values
-        for name, values in setups_raw.items()
-        if isinstance(values, dict)
-    } if isinstance(setups_raw, dict) else {}
+    setups = (
+        {
+            str(name).lower(): values
+            for name, values in setups_raw.items()
+            if isinstance(values, dict)
+        }
+        if isinstance(setups_raw, dict)
+        else {}
+    )
     return AccumulationAuditConfig(
         policy=load_accumulation_audit_policy(config_path),
         setups=setups,

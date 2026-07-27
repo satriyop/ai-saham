@@ -42,6 +42,7 @@ def default_corporate_action_policy_config_path(config: AppConfig | None = None)
     cfg = config or load_app_config()
     return Path(cfg.config_paths.corporate_action_policy)
 
+
 _KNOWN_EVENT_TYPES = {t.value for t in CorporateActionType}
 _KNOWN_DATE_ROLES = {r.value for r in CorporateActionDateRole}
 _KNOWN_SEVERITIES = {s.value for s in CorporateActionEventRiskSeverity}
@@ -167,9 +168,7 @@ def load_corporate_action_policy_config(
         with open(path, encoding="utf-8") as fh:
             raw = yaml.safe_load(fh)
     except yaml.YAMLError as exc:
-        raise CorporateActionPolicyConfigError(
-            f"Invalid YAML syntax in {path}: {exc}"
-        ) from exc
+        raise CorporateActionPolicyConfigError(f"Invalid YAML syntax in {path}: {exc}") from exc
 
     if raw is None:
         raise CorporateActionPolicyConfigError(f"Empty corporate action policy config: {path}")
@@ -189,12 +188,8 @@ def _parse_and_validate(raw: object, *, source: str) -> CorporateActionPolicyCon
             f"{source}: missing required root key 'corporate_action_policy'"
         )
 
-    default_lookback_days = _non_negative_int(
-        root, "default_lookback_days", 5, source=source
-    )
-    default_lookahead_days = _non_negative_int(
-        root, "default_lookahead_days", 30, source=source
-    )
+    default_lookback_days = _non_negative_int(root, "default_lookback_days", 5, source=source)
+    default_lookahead_days = _non_negative_int(root, "default_lookahead_days", 30, source=source)
 
     raw_event_types = root.get("event_types") or {}
     if not isinstance(raw_event_types, dict):

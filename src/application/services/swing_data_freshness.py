@@ -82,9 +82,7 @@ def build_swing_data_freshness(
         )
 
     if candle_end and broker_end and candle_end != broker_end:
-        warnings.append(
-            f"Candle date ({candle_end}) and broker flow date ({broker_end}) differ."
-        )
+        warnings.append(f"Candle date ({candle_end}) and broker flow date ({broker_end}) differ.")
     for action in refresh_actions:
         if "ERR:" in action:
             warnings.append(f"Refresh issue: {action}")

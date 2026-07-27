@@ -93,8 +93,7 @@ def test_screen_passes_as_of_date_to_insider_provider():
     session_dates = _weekdays(date(2026, 1, 1), 9)
     as_of = session_dates[-1]
     candles = [
-        _candle("BBCA", date(2025, 12, 1) + timedelta(days=i), Decimal("100"))
-        for i in range(45)
+        _candle("BBCA", date(2025, 12, 1) + timedelta(days=i), Decimal("100")) for i in range(45)
     ]
     summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates]
     insider_provider = RecordingInsiderProvider()

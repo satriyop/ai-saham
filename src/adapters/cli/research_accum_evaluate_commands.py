@@ -34,9 +34,7 @@ from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarket
 
 
 def accumulation_labels(
-    compatibility_id: Annotated[
-        Optional[str], typer.Option("--compatibility-id")
-    ] = None,
+    compatibility_id: Annotated[Optional[str], typer.Option("--compatibility-id")] = None,
     label_contract: Annotated[
         str,
         typer.Option(
@@ -88,9 +86,7 @@ def accumulation_labels(
 
 
 def accumulation_evaluate(
-    compatibility_id: Annotated[
-        Optional[str], typer.Option("--compatibility-id")
-    ] = None,
+    compatibility_id: Annotated[Optional[str], typer.Option("--compatibility-id")] = None,
     db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
     fmt: Annotated[str, typer.Option("--format")] = "table",
 ) -> None:
@@ -124,16 +120,12 @@ def accumulation_replay(
     """List immutable accumulation evaluations available for replay inspection."""
 
     _, repo = repository(db_path)
-    evaluations = repo.list_evaluations(
-        AssessmentPurpose.ACCUMULATION_DISCOVERY
-    )
+    evaluations = repo.list_evaluations(AssessmentPurpose.ACCUMULATION_DISCOVERY)
     echo(
         {
             "artifact_type": "learning_evaluation_catalog",
             "purpose": AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
-            "evaluation_ids": [
-                evaluation.evaluation_id for evaluation in evaluations
-            ],
+            "evaluation_ids": [evaluation.evaluation_id for evaluation in evaluations],
         },
         fmt,
     )

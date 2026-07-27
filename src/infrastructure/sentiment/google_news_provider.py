@@ -107,6 +107,7 @@ class GoogleNewsProvider:
             Full RSS URL
         """
         import urllib.parse
+
         # "saham" = stock in Indonesian, helps filter relevant results
         query = f"{ticker} saham"
         encoded_query = urllib.parse.quote_plus(query)

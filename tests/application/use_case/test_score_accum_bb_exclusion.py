@@ -1,8 +1,8 @@
 from datetime import date
 
 from src.application.use_case.score_accum_use_case import (
-    BollingerSqueezePolicy,
     AccumScorePolicy,
+    BollingerSqueezePolicy,
     ScoreAccumRequest,
     ScoreAccumUseCase,
 )

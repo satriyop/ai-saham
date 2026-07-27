@@ -156,9 +156,7 @@ class SkillGeneratorService:
         sidecar_path = plugin_dir / f"{indicator_name}.skill.yaml"
         annotation = self._read_annotation_safe(sidecar_path, warnings)
 
-        cli_usage = (
-            f"saham compute {indicator_name.upper()} BBCA",
-        )
+        cli_usage = (f"saham compute {indicator_name.upper()} BBCA",)
 
         metadata = SkillMetadata(
             artifact_type=ArtifactType.INDICATOR,
@@ -210,13 +208,9 @@ class SkillGeneratorService:
 
         annotation = annotations.get(formula_name)
         if annotation is None:
-            warnings.append(
-                f"No annotation found for formula '{formula_name}' in {sidecar_path}"
-            )
+            warnings.append(f"No annotation found for formula '{formula_name}' in {sidecar_path}")
 
-        cli_usage = (
-            f"saham compute {formula_name} BBCA",
-        )
+        cli_usage = (f"saham compute {formula_name} BBCA",)
 
         metadata = SkillMetadata(
             artifact_type=ArtifactType.FORMULA,
@@ -262,9 +256,7 @@ class SkillGeneratorService:
             warnings.append(f"Invalid sidecar {sidecar_path}: {e}")
             return None
 
-    def _extract_dependencies(
-        self, indicators_data: dict
-    ) -> tuple[str, ...]:
+    def _extract_dependencies(self, indicators_data: dict) -> tuple[str, ...]:
         """Extract indicator type names from the indicators section."""
         if not indicators_data:
             return ()
@@ -278,9 +270,7 @@ class SkillGeneratorService:
 
         return tuple(sorted(deps))
 
-    def _detect_data_requirements(
-        self, indicators_data: dict
-    ) -> tuple[str, ...]:
+    def _detect_data_requirements(self, indicators_data: dict) -> tuple[str, ...]:
         """Detect data sources required by the strategy's indicators."""
         requirements: set[str] = {"ohlcv"}  # All strategies need price data
 
@@ -323,9 +313,7 @@ class SkillGeneratorService:
             is_stale = stored_hash is not None and current_hash != stored_hash
 
             if is_stale:
-                warnings.append(
-                    "SKILL.md is stale — rules have changed since last generation"
-                )
+                warnings.append("SKILL.md is stale — rules have changed since last generation")
 
             return DriftInfo(
                 rules_hash=current_hash,

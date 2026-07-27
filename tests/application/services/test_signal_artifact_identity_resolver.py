@@ -11,29 +11,23 @@ from typing import Any
 
 import pytest
 
+from src.application.services.signal_artifact_identity_resolver import (
+    SignalArtifactIdentityResolver,
+)
 from src.domain.value_objects.signal_artifact_identity import (
-    ArtifactId,
     ArtifactIdentityDimensions,
     ArtifactProvenance,
     ArtifactSourceProvenance,
     SemanticCompatibilityDimensions,
     SemanticCompatibilityId,
-    SignalArtifactIdentity,
-)
-from src.application.services.signal_artifact_identity_resolver import (
-    SignalArtifactIdentityResolver,
 )
 
 # ---------------------------------------------------------------------------
 # Hard-coded known SHA-256 vectors (never computed from the resolver)
 # ---------------------------------------------------------------------------
 
-_KNOWN_SEMANTIC_ID = (
-    "sha256:38fa9b84fb8740079828939b4eb1eb08fef2d6dc1774eab0558fd5e945ba1511"
-)
-_KNOWN_ARTIFACT_ID = (
-    "sha256:96ea7e190d7481eb2238889ed318cc3be624d15f8cc447bada1b31d91db6a2c0"
-)
+_KNOWN_SEMANTIC_ID = "sha256:38fa9b84fb8740079828939b4eb1eb08fef2d6dc1774eab0558fd5e945ba1511"
+_KNOWN_ARTIFACT_ID = "sha256:96ea7e190d7481eb2238889ed318cc3be624d15f8cc447bada1b31d91db6a2c0"
 
 _HEX_64_A = "a" * 64
 _HEX_64_B = "b" * 64
@@ -222,10 +216,8 @@ class TestSemanticSensitivity:
         baseline_id = SignalArtifactIdentityResolver.resolve_semantic_compatibility_id(
             self._BASELINE,
         )
-        modified_id = (
-            SignalArtifactIdentityResolver.resolve_semantic_compatibility_id(
-                modified,
-            )
+        modified_id = SignalArtifactIdentityResolver.resolve_semantic_compatibility_id(
+            modified,
         )
         assert baseline_id != modified_id
 

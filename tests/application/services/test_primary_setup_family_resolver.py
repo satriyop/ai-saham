@@ -11,10 +11,10 @@ resolver's own docstring:
 from datetime import date
 from decimal import Decimal
 
+from src.application.dto.accumulation_screen import AccumulationCandidate
 from src.application.services.primary_setup_family_resolver import (
     PrimarySetupFamilyResolver,
 )
-from src.application.dto.accumulation_screen import AccumulationCandidate
 from src.application.use_case.evaluate_swing_setup_use_case import (
     CoiledSpringSetupConfig,
     ForeignBounceSetupConfig,
@@ -27,8 +27,8 @@ from src.domain.value_objects.strategy_evidence import (
     StrategyEvidenceOutcome,
 )
 
-
 # ── helpers ──────────────────────────────────────────────────────────────────
+
 
 def _candidate(**kwargs) -> AccumulationCandidate:
     defaults = dict(
@@ -66,6 +66,7 @@ def _strategy_evidence(**kwargs) -> StrategyEvidence:
 
 # ── 1. explicit request wins outright ───────────────────────────────────────
 
+
 def test_explicit_request_wins_outright():
     resolver = PrimarySetupFamilyResolver()
 
@@ -77,6 +78,7 @@ def test_explicit_request_wins_outright():
 
 
 # ── 2. strategy evidence wins over a conflicting detected family ───────────
+
 
 def test_strategy_evidence_wins_over_conflicting_detected_family():
     resolver = PrimarySetupFamilyResolver()
@@ -91,15 +93,9 @@ def test_strategy_evidence_wins_over_conflicting_detected_family():
     )
     catalog = SwingSetupCatalogConfig(
         foreign_bounce=ForeignBounceSetupConfig(enabled=False, family="foreign_bounce"),
-        coiled_spring=CoiledSpringSetupConfig(
-            gate_max_bb_width_pctile=0.20, family="breakout"
-        ),
-        smart_money_confirmed=SmartMoneyConfirmedSetupConfig(
-            enabled=False, family="confirmation"
-        ),
-        pullback_continuation=PullbackContinuationSetupConfig(
-            enabled=False, family="pullback"
-        ),
+        coiled_spring=CoiledSpringSetupConfig(gate_max_bb_width_pctile=0.20, family="breakout"),
+        smart_money_confirmed=SmartMoneyConfirmedSetupConfig(enabled=False, family="confirmation"),
+        pullback_continuation=PullbackContinuationSetupConfig(enabled=False, family="pullback"),
     )
     strategy_evidence = _strategy_evidence(strategy_name="foreign-accumulation")
 
@@ -119,6 +115,7 @@ def test_strategy_evidence_wins_over_conflicting_detected_family():
 
 # ── 3. multiple detected families -> deterministic primary via priority ────
 
+
 def test_multiple_detected_families_select_deterministic_primary_via_priority():
     resolver = PrimarySetupFamilyResolver()
 
@@ -135,12 +132,8 @@ def test_multiple_detected_families_select_deterministic_primary_via_priority():
     )
     catalog = SwingSetupCatalogConfig(
         foreign_bounce=ForeignBounceSetupConfig(enabled=False, family="foreign_bounce"),
-        coiled_spring=CoiledSpringSetupConfig(
-            gate_max_bb_width_pctile=0.20, family="breakout"
-        ),
-        smart_money_confirmed=SmartMoneyConfirmedSetupConfig(
-            enabled=False, family="confirmation"
-        ),
+        coiled_spring=CoiledSpringSetupConfig(gate_max_bb_width_pctile=0.20, family="breakout"),
+        smart_money_confirmed=SmartMoneyConfirmedSetupConfig(enabled=False, family="confirmation"),
         pullback_continuation=PullbackContinuationSetupConfig(
             gate_required_trend="UP",
             gate_min_vwap_discount_pct=-2.0,
@@ -160,6 +153,7 @@ def test_multiple_detected_families_select_deterministic_primary_via_priority():
 
 # ── 4. no matched family -> conservative fallback ──────────────────────────
 
+
 def test_no_matched_family_falls_back_conservatively():
     resolver = PrimarySetupFamilyResolver()
 
@@ -168,12 +162,8 @@ def test_no_matched_family_falls_back_conservatively():
     catalog = SwingSetupCatalogConfig(
         foreign_bounce=ForeignBounceSetupConfig(enabled=False, family="foreign_bounce"),
         coiled_spring=CoiledSpringSetupConfig(enabled=False, family="breakout"),
-        smart_money_confirmed=SmartMoneyConfirmedSetupConfig(
-            enabled=False, family="confirmation"
-        ),
-        pullback_continuation=PullbackContinuationSetupConfig(
-            enabled=False, family="pullback"
-        ),
+        smart_money_confirmed=SmartMoneyConfirmedSetupConfig(enabled=False, family="confirmation"),
+        pullback_continuation=PullbackContinuationSetupConfig(enabled=False, family="pullback"),
     )
 
     result = resolver.resolve(candidate=candidate, swing_setup_catalog=catalog)
@@ -184,6 +174,7 @@ def test_no_matched_family_falls_back_conservatively():
 
 
 # ── 5. detected family outside the priority tuple -> unranked ─────────────
+
 
 def test_detected_family_outside_priority_tuple_is_unranked():
     # smart-money-confirmed can never MATCH via this resolver because
@@ -201,15 +192,9 @@ def test_detected_family_outside_priority_tuple_is_unranked():
     )
     catalog = SwingSetupCatalogConfig(
         foreign_bounce=ForeignBounceSetupConfig(enabled=False, family="foreign_bounce"),
-        coiled_spring=CoiledSpringSetupConfig(
-            gate_max_bb_width_pctile=0.20, family="breakout"
-        ),
-        smart_money_confirmed=SmartMoneyConfirmedSetupConfig(
-            enabled=False, family="confirmation"
-        ),
-        pullback_continuation=PullbackContinuationSetupConfig(
-            enabled=False, family="pullback"
-        ),
+        coiled_spring=CoiledSpringSetupConfig(gate_max_bb_width_pctile=0.20, family="breakout"),
+        smart_money_confirmed=SmartMoneyConfirmedSetupConfig(enabled=False, family="confirmation"),
+        pullback_continuation=PullbackContinuationSetupConfig(enabled=False, family="pullback"),
     )
 
     result = resolver.resolve(candidate=candidate, swing_setup_catalog=catalog)

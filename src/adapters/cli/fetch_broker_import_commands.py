@@ -87,9 +87,7 @@ def broker_import(
     try:
         error_strategy = ErrorStrategy.parse(on_error)
     except ValueError:
-        typer.echo(
-            typer.style(f"Invalid --on-error value: {on_error}", fg=typer.colors.RED)
-        )
+        typer.echo(typer.style(f"Invalid --on-error value: {on_error}", fg=typer.colors.RED))
         typer.echo("Valid values: skip, fail, report")
         raise typer.Exit(1)
 
@@ -160,9 +158,7 @@ def broker_import(
                         )
                     )
             else:
-                typer.echo(
-                    typer.style(f"\nImport failed: {response.message}", fg=typer.colors.RED)
-                )
+                typer.echo(typer.style(f"\nImport failed: {response.message}", fg=typer.colors.RED))
                 raise typer.Exit(1)
 
             # Show errors if using report strategy

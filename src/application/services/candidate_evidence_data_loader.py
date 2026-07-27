@@ -7,6 +7,7 @@ need the same broker/candle windows to assemble institutional accumulation,
 ticker profile, and sector context evidence. This loader centralizes those
 repository calls so the two coordinators stop duplicating the fetch logic.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

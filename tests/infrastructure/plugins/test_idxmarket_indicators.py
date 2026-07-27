@@ -20,8 +20,10 @@ from src.infrastructure.composition.indicator_registry_factory import create_ind
 # Fixtures
 # ---------------------------------------------------------------------------
 
-def make_candle(i: int, close: float, volume: int = 100_000,
-                high: float | None = None, low: float | None = None) -> Candle:
+
+def make_candle(
+    i: int, close: float, volume: int = 100_000, high: float | None = None, low: float | None = None
+) -> Candle:
     p = Decimal(str(close))
     return Candle(
         ticker="TEST",
@@ -45,6 +47,7 @@ def flat_candles(n: int, price: float = 1000.0) -> list[Candle]:
 # ---------------------------------------------------------------------------
 # VolumeRatioIndicator
 # ---------------------------------------------------------------------------
+
 
 class TestVolumeRatioIndicator:
     def test_output_length(self):
@@ -83,6 +86,7 @@ class TestVolumeRatioIndicator:
 # MoneyFlowIndexIndicator
 # ---------------------------------------------------------------------------
 
+
 class TestMoneyFlowIndexIndicator:
     def test_output_length(self):
         candles = rising_candles(30)
@@ -103,8 +107,23 @@ class TestMoneyFlowIndexIndicator:
 
     def test_mfi_50_on_alternating_days(self):
         # Alternating up/down with equal volume → MFI near 50
-        prices = [1000, 1010, 1000, 1010, 1000, 1010, 1000, 1010,
-                  1000, 1010, 1000, 1010, 1000, 1010, 1000]
+        prices = [
+            1000,
+            1010,
+            1000,
+            1010,
+            1000,
+            1010,
+            1000,
+            1010,
+            1000,
+            1010,
+            1000,
+            1010,
+            1000,
+            1010,
+            1000,
+        ]
         candles = [make_candle(i, p) for i, p in enumerate(prices)]
         result = MoneyFlowIndexIndicator().compute(candles, 14)
         assert len(result) == 1
@@ -122,6 +141,7 @@ class TestMoneyFlowIndexIndicator:
 # ---------------------------------------------------------------------------
 # OnBalanceVolumeIndicator
 # ---------------------------------------------------------------------------
+
 
 class TestOnBalanceVolumeIndicator:
     def test_output_length_equals_candles(self):
@@ -171,6 +191,7 @@ class TestOnBalanceVolumeIndicator:
 # WilliamsRIndicator
 # ---------------------------------------------------------------------------
 
+
 class TestWilliamsRIndicator:
     def test_output_length(self):
         candles = rising_candles(30)
@@ -186,8 +207,7 @@ class TestWilliamsRIndicator:
     def test_zero_when_close_at_highest_high(self):
         # Rising candles: close is always at or near the highest point
         candles = [
-            make_candle(i, 1000 + i * 10, high=1000 + i * 10, low=990 + i * 10)
-            for i in range(14)
+            make_candle(i, 1000 + i * 10, high=1000 + i * 10, low=990 + i * 10) for i in range(14)
         ]
         result = WilliamsRIndicator().compute(candles, 14)
         assert result[0] == Decimal("0.00")
@@ -195,8 +215,7 @@ class TestWilliamsRIndicator:
     def test_minus100_when_close_at_lowest_low(self):
         # Falling candles: close is always at the lowest point
         candles = [
-            make_candle(i, 1000 - i * 10, high=1010 - i * 10, low=1000 - i * 10)
-            for i in range(14)
+            make_candle(i, 1000 - i * 10, high=1010 - i * 10, low=1000 - i * 10) for i in range(14)
         ]
         result = WilliamsRIndicator().compute(candles, 14)
         assert result[0] == Decimal("-100.00")
@@ -218,6 +237,7 @@ class TestWilliamsRIndicator:
 # ---------------------------------------------------------------------------
 # RelativeStrengthIHSGIndicator
 # ---------------------------------------------------------------------------
+
 
 class TestRelativeStrengthIHSGIndicator:
     def _make_ihsg(self, n: int, base: float = 7000.0, step: float = 10.0) -> list[Candle]:
@@ -246,13 +266,15 @@ class TestRelativeStrengthIHSGIndicator:
         # Stock: +20% over 20 days, IHSG: +10% — RS should be 2.0
         stock = [make_candle(i, 1000 + i * 10, volume=100_000) for i in range(21)]
         ihsg = [
-            Candle(ticker="IHSG",
-                   date=date(2025, 1, 1) + timedelta(days=i),
-                   open=Decimal(str(7000 + i * 5)),
-                   high=Decimal(str(7000 + i * 5 + 5)),
-                   low=Decimal(str(7000 + i * 5 - 5)),
-                   close=Decimal(str(7000 + i * 5)),
-                   volume=1_000_000_000)
+            Candle(
+                ticker="IHSG",
+                date=date(2025, 1, 1) + timedelta(days=i),
+                open=Decimal(str(7000 + i * 5)),
+                high=Decimal(str(7000 + i * 5 + 5)),
+                low=Decimal(str(7000 + i * 5 - 5)),
+                close=Decimal(str(7000 + i * 5)),
+                volume=1_000_000_000,
+            )
             for i in range(21)
         ]
         plugin = RelativeStrengthIHSGIndicator()
@@ -295,6 +317,7 @@ class TestRelativeStrengthIHSGIndicator:
 # Registry integration
 # ---------------------------------------------------------------------------
 
+
 class TestIDXIndicatorsRegistryIntegration:
     def test_all_discovered(self):
         registry = create_indicator_registry("plugins/indicators")
@@ -313,14 +336,18 @@ class TestIDXIndicatorsRegistryIntegration:
         registry = create_indicator_registry("plugins/indicators")
         candles = rising_candles(50)
         for name, period in [
-            ("VOLUME_RATIO", 20), ("MFI", 14), ("OBV", 1),
-            ("WILLIAMS_R", 14), ("RS_IHSG", 20),
+            ("VOLUME_RATIO", 20),
+            ("MFI", 14),
+            ("OBV", 1),
+            ("WILLIAMS_R", 14),
+            ("RS_IHSG", 20),
         ]:
             result = registry.compute(name, candles, period)
             assert isinstance(result, list), f"{name} did not return a list"
             if result:
                 d, v = result[0]
                 from datetime import date as date_type
+
                 assert isinstance(d, date_type)
                 assert isinstance(v, Decimal)
 

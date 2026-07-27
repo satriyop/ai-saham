@@ -23,7 +23,11 @@ def display_audit_summary(response: AccumulationAuditResponse, top_groups: int) 
     meta_table.add_column("Key", style="bold cyan")
     meta_table.add_column("Value")
     meta_table.add_row("Period", f"{response.start_date} to {response.end_date}")
-    meta_table.add_row("Config", f"window: {response.window_days} sessions | replay dates: {response.total_replay_dates} | tickers: {response.total_tickers}")
+    meta_table.add_row(
+        "Config",
+        f"window: {response.window_days} sessions | replay dates: "
+        f"{response.total_replay_dates} | tickers: {response.total_tickers}",
+    )
     meta_table.add_row(
         "Signal Counts",
         (
@@ -77,6 +81,7 @@ def display_audit_summary(response: AccumulationAuditResponse, top_groups: int) 
     stats_table.add_column("Max DD", justify="right")
 
     for stat in response.group_stats[:top_groups]:
+
         def fmt(v: float | None) -> str:
             if v is None:
                 return "—"
@@ -119,6 +124,7 @@ def display_audit_summary(response: AccumulationAuditResponse, top_groups: int) 
         exit_table.add_column("Avg DD", justify="right")
 
         for stat in response.exit_simulations[:top_groups]:
+
             def fmt_pct(v: float | None, signed: bool = False) -> str:
                 if v is None:
                     return "—"
@@ -149,13 +155,17 @@ def display_audit_summary(response: AccumulationAuditResponse, top_groups: int) 
         sim_intro = Text(
             "Rows below simulate managed exits using daily high/low: stop is checked first, "
             "then target, otherwise exit at max-hold close.\n\n"
-            f"Best by AVG_RET: TP {best.take_profit_pct:g}%, SL {best.stop_loss_pct:g}%, max hold {best.max_hold_days}d -> "
+            f"Best by AVG_RET: TP {best.take_profit_pct:g}%, SL "
+            f"{best.stop_loss_pct:g}%, max hold {best.max_hold_days}d -> "
             f"avg {avg_ret}, win {win}, avg hold {avg_days}.\n"
         )
         if response.total_records < 30:
             sim_intro.append(
-                "\nCaution: sample is small (<30 signals). Treat this as a hypothesis to retest on more dates/universes, not a final rule.",
-                style="yellow"
+                (
+                    "\nCaution: sample is small (<30 signals). Treat this as a hypothesis to"
+                    "retest on more dates/universes, not a final rule."
+                ),
+                style="yellow",
             )
 
         console().print("")
@@ -170,7 +180,9 @@ def display_audit_summary(response: AccumulationAuditResponse, top_groups: int) 
     guide_table = compact_table()
     guide_table.add_column("Metric / Column", style="bold cyan")
     guide_table.add_column("Description")
-    guide_table.add_row("AVG5D/10D/20D", "Passive close-to-close return after that many trading days.")
+    guide_table.add_row(
+        "AVG5D/10D/20D", "Passive close-to-close return after that many trading days."
+    )
     guide_table.add_row("MAXUP/MAXDD", "Average best/worst close-to-close move inside the horizon.")
     guide_table.add_row("AVG_RET", "Simulated exit return after TP/SL/max-hold rules.")
     guide_table.add_row("WIN", "Percent of simulated exits with positive return.")
@@ -188,15 +200,10 @@ def display_audit_summary(response: AccumulationAuditResponse, top_groups: int) 
     ]
     if warnings_group:
         footer_group.extend([Text("\nWarnings", style="bold yellow"), *warnings_group])
-    footer_group.extend([
-        Text("\nDISCLAIMER: Historical audit only. Not trading advice.", style="dim italic")
-    ])
+    footer_group.extend(
+        [Text("\nDISCLAIMER: Historical audit only. Not trading advice.", style="dim italic")]
+    )
 
     console().print("")
-    console().print(
-        panel(
-            Group(*footer_group),
-            title="Reference & Disclaimers"
-        )
-    )
+    console().print(panel(Group(*footer_group), title="Reference & Disclaimers"))
     console().print("")

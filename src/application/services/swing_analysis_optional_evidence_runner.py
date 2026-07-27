@@ -10,6 +10,7 @@ not performed here — that belongs to the decision composer, which runs
 after evidence exists. Extracted from `SwingAnalysisWorkflowUseCase` to
 keep the use case as orchestration only.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -78,9 +79,7 @@ class SwingAnalysisOptionalEvidenceRunner:
         backtest_result = None
         if request.strategy_name is not None:
             try:
-                loader = StrategyLoader(
-                    rules_loader=self._rules_loader, registry=self._registry
-                )
+                loader = StrategyLoader(rules_loader=self._rules_loader, registry=self._registry)
                 rules_path = loader.resolve(request.strategy_name)
                 backtest_use_case = BacktestUseCase(
                     repository=self._market_repo,

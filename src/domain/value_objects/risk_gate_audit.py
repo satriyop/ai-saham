@@ -44,9 +44,7 @@ def classify_gate_outcome(result: GateResult) -> GateEvaluationOutcome:
     if "skipped" in reason:
         return "skipped"
     if result.confidence == 0 and (
-        reason.startswith("no ")
-        or "unavailable" in reason
-        or "no snapshot" in reason
+        reason.startswith("no ") or "unavailable" in reason or "no snapshot" in reason
     ):
         return "skipped"
     return "pass"

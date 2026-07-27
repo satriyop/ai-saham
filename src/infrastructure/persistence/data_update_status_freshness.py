@@ -59,9 +59,7 @@ def freshness_status(
 
     partial_issue = None
     if ticker_count < requested_tickers:
-        partial_issue = (
-            f"{table} has {ticker_count}/{requested_tickers} requested tickers"
-        )
+        partial_issue = f"{table} has {ticker_count}/{requested_tickers} requested tickers"
 
     max_date = parse_dateish(max_raw, freshness)
 

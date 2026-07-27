@@ -134,8 +134,7 @@ def evaluate_seasonality(
                 table=table,
                 field="fetched_at",
                 message=(
-                    f"{raw.null_fetched_at_count} seasonality_cache row(s) have "
-                    "null fetched_at."
+                    f"{raw.null_fetched_at_count} seasonality_cache row(s) have null fetched_at."
                 ),
                 impact="Provenance timestamp missing; PIT coverage cannot be verified.",
                 sample_rows=raw.null_fetched_at_samples,
@@ -249,8 +248,7 @@ def _evaluate_pit_cache(
                 table=table,
                 field=None,
                 message=(
-                    f"{raw.missing_identity_count} {table} row(s) have null "
-                    f"{identity_description}."
+                    f"{raw.missing_identity_count} {table} row(s) have null {identity_description}."
                 ),
                 impact="Row cannot be trusted as a valid PIT-identifiable record.",
                 sample_rows=raw.missing_identity_samples,

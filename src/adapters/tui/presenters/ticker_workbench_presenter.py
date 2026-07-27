@@ -25,9 +25,7 @@ from .ticker_research_presenter import _enum_value, _flatten, _risk_name
 _SETUP_KEYS = frozenset(
     {"setup", "setup_evidence", "setup_phase", "strategy", "strategy_rule_evidence"}
 )
-_OVERVIEW_KEYS = frozenset(
-    {"accumulation", "foreign_flow_evidence", "flow", "regime", "sentiment"}
-)
+_OVERVIEW_KEYS = frozenset({"accumulation", "foreign_flow_evidence", "flow", "regime", "sentiment"})
 
 # Canonical action -> (symbol, semantic severity stem). Keyed on the domain
 # SetupAction enum (never string literals) so the TUI displays the canonical
@@ -97,9 +95,7 @@ def _setup_fields(evidence_dict: dict) -> tuple[str | None, str | None]:
 
 
 class TickerWorkbenchPresenter:
-    def present(
-        self, response: SwingAnalysisWorkflowResponse
-    ) -> TickerWorkbenchViewModel:
+    def present(self, response: SwingAnalysisWorkflowResponse) -> TickerWorkbenchViewModel:
         verdict = response.verdict
         evidence = response.evidence
         diagnostics = response.diagnostics
@@ -119,17 +115,17 @@ class TickerWorkbenchPresenter:
             badge=_badge(availability, trade_setup),
             signal_status=availability.status.value,
             signal_score=signal.assessment.score if signal else None,
-            signal_coverage=(
-                signal.assessment.signal_authority_coverage if signal else None
-            ),
+            signal_coverage=(signal.assessment.signal_authority_coverage if signal else None),
             risk=_risk_name(verdict.risk_response),
             regime=_enum_value(verdict.market_regime.regime) if verdict.market_regime else None,
             setup_name=setup_name,
             setup_match=setup_match,
             # Canonical blockers only; never fabricated when the field is absent.
-            blockers=tuple(getattr(trade_setup, "blocking_gates", ()) or ())
-            if trade_setup is not None
-            else (),
+            blockers=(
+                tuple(getattr(trade_setup, "blocking_gates", ()) or ())
+                if trade_setup is not None
+                else ()
+            ),
         )
 
         overview: dict = {}

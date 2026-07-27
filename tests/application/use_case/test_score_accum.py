@@ -1,9 +1,9 @@
 from datetime import date
 
 from src.application.use_case.score_accum_use_case import (
+    AccumScorePolicy,
     BollingerSqueezePolicy,
     EvidenceComponentPolicy,
-    AccumScorePolicy,
     ScoreAccumRequest,
     ScoreAccumUseCase,
 )
@@ -150,11 +150,7 @@ def test_all_input_present_known_score_vector_unchanged():
     uc = ScoreAccumUseCase()
     evidence = uc.execute(_full_request()).evidence
     assert evidence.accum_score == 94.9
-    assert {
-        k: v
-        for k, v in evidence.breakdown_dict.items()
-        if k != "bb"
-    } == {
+    assert {k: v for k, v in evidence.breakdown_dict.items() if k != "bb"} == {
         "cons": 33.3,
         "streak": 15.8,
         "vwap": 16.7,

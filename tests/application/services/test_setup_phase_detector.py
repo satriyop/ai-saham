@@ -172,10 +172,7 @@ def test_detector_routes_close_reclaim_and_valid_volume_to_breakout():
     assert snapshot.current_phase == SetupPhaseState.BREAKOUT_CONFIRMATION
     assert snapshot.sequence_valid is False
     assert snapshot.previous_phase is None
-    assert any(
-        "volume dry-up then expansion confirmed" in reason
-        for reason in snapshot.reasons
-    )
+    assert any("volume dry-up then expansion confirmed" in reason for reason in snapshot.reasons)
     assert snapshot.volume_dry_up_confirmed is True
     assert snapshot.volume_expansion_confirmed is True
     assert snapshot.volume_trigger_confirmed is True
@@ -216,8 +213,7 @@ def test_flow_confirmation_without_volume_cannot_create_breakout():
 
     assert snapshot.current_phase != SetupPhaseState.BREAKOUT_CONFIRMATION
     assert any(
-        "synthetic/missing source" in reason
-        for reason in snapshot.unavailable_evidence_reasons
+        "synthetic/missing source" in reason for reason in snapshot.unavailable_evidence_reasons
     )
 
 
@@ -310,8 +306,7 @@ def test_volume_trigger_unavailable_for_synthetic_source_or_zero_volume_window()
 
     assert snapshot.phase_input_coverage < 1.0
     assert any(
-        "synthetic/missing source" in reason
-        for reason in snapshot.unavailable_evidence_reasons
+        "synthetic/missing source" in reason for reason in snapshot.unavailable_evidence_reasons
     )
 
 
@@ -485,8 +480,7 @@ def test_expansion_without_dry_up_does_not_confirm_breakout():
     assert snapshot.current_phase != SetupPhaseState.BREAKOUT_CONFIRMATION
     assert "breakout: volume expansion without prior dry-up" in snapshot.reasons
     assert not any(
-        "volume dry-up then expansion confirmed" in reason
-        for reason in snapshot.reasons
+        "volume dry-up then expansion confirmed" in reason for reason in snapshot.reasons
     )
 
 
@@ -506,10 +500,7 @@ def test_dry_up_without_expansion_routes_to_compression():
     )
 
     assert snapshot.current_phase == SetupPhaseState.COMPRESSION
-    assert (
-        "compression: volume dry-up readiness, no expansion yet"
-        in snapshot.reasons
-    )
+    assert "compression: volume dry-up readiness, no expansion yet" in snapshot.reasons
 
 
 def test_volume_trigger_evidence_insufficient_sessions_marks_data_invalid():
@@ -521,9 +512,7 @@ def test_volume_trigger_evidence_insufficient_sessions_marks_data_invalid():
     )
 
     assert evidence.data_valid is False
-    assert any(
-        "required 21 sessions" in reason for reason in evidence.unavailable_reasons
-    )
+    assert any("required 21 sessions" in reason for reason in evidence.unavailable_reasons)
 
 
 def test_detect_reports_partial_coverage_with_fewer_than_20_candles():
@@ -556,9 +545,7 @@ def test_volume_trigger_evidence_zero_volume_distortion_above_tolerance():
 
 def test_expansion_requires_positive_close_blocks_on_flat_or_negative_close():
     volumes = [2_000] * 15 + [800] * 5 + [1_600]
-    candles = _candles_with_volumes(
-        volumes, latest_open=Decimal("100"), latest_close=Decimal("99")
-    )
+    candles = _candles_with_volumes(volumes, latest_open=Decimal("100"), latest_close=Decimal("99"))
 
     blocked = _volume_trigger_evidence(
         candles,

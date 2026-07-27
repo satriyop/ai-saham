@@ -88,4 +88,5 @@ def test_swing_workflow_preview_fields_are_none_without_market_context():
     assert response.modules["market_context"] is False
 
 
-# test_swing_workflow_mce_regime_forwarded_to_signal_engine removed and moved to test_swing_analysis_decision_composer.py
+# test_swing_workflow_mce_regime_forwarded_to_signal_engine removed and moved to
+# test_swing_analysis_decision_composer.py

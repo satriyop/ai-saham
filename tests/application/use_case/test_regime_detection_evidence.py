@@ -86,10 +86,7 @@ def _make_candles(
 def _make_flow_series(
     values: list[float], base_date: date = date(2024, 1, 1)
 ) -> list[tuple[date, Decimal]]:
-    return [
-        (base_date + timedelta(days=i), Decimal(str(v)))
-        for i, v in enumerate(values)
-    ]
+    return [(base_date + timedelta(days=i), Decimal(str(v))) for i, v in enumerate(values)]
 
 
 # ── Value object tests ────────────────────────────────────────────────────────
@@ -105,12 +102,27 @@ def test_to_dict_contains_all_keys():
     ev = _make_evidence()
     result = ev.to_dict()
     expected_keys = {
-        "observation_date", "schema_version", "regime", "regime_score",
-        "regime_confidence", "regime_stability", "days_in_regime", "transition_warning",
-        "ihsg_20d_return", "ihsg_trend_structure", "ihsg_breadth_pct_above_ma",
-        "ihsg_volume_trend", "ihsg_atr_pct", "idx_foreign_flow_5d", "idx_foreign_flow_20d",
-        "foreign_buy_streak", "foreign_sell_streak", "banking_sector_vs_ihsg",
-        "sector_breadth", "forward_ihsg_return_5d", "forward_ihsg_return_10d",
+        "observation_date",
+        "schema_version",
+        "regime",
+        "regime_score",
+        "regime_confidence",
+        "regime_stability",
+        "days_in_regime",
+        "transition_warning",
+        "ihsg_20d_return",
+        "ihsg_trend_structure",
+        "ihsg_breadth_pct_above_ma",
+        "ihsg_volume_trend",
+        "ihsg_atr_pct",
+        "idx_foreign_flow_5d",
+        "idx_foreign_flow_20d",
+        "foreign_buy_streak",
+        "foreign_sell_streak",
+        "banking_sector_vs_ihsg",
+        "sector_breadth",
+        "forward_ihsg_return_5d",
+        "forward_ihsg_return_10d",
         "forward_ihsg_return_20d",
     }
     assert expected_keys.issubset(result.keys())

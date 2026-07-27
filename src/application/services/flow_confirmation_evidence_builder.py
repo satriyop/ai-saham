@@ -24,6 +24,11 @@ from typing import Any
 from src.application.dto.built_evidence import BuiltFlowEvidence
 from src.application.use_case.score_accum_use_case import AccumScorePolicy
 from src.domain.entities.broker_flow import BrokerDailyFlow, BrokerSummary
+from src.domain.value_objects.accum_score_breakdown import (
+    FOREIGN_FLOW_COMPONENT_KEYS,
+    ForeignFlowComponentScore,
+    ForeignFlowComponentStatus,
+)
 from src.domain.value_objects.canonical_signal_evidence_input import (
     BrokerDailyFlowRowIdentity,
     BrokerSummaryRowIdentity,
@@ -33,11 +38,6 @@ from src.domain.value_objects.factor_evidence import Direction, Freshness
 from src.domain.value_objects.flow_confirmation_evidence import (
     FlowConfirmationEvidence,
     FlowSubSignal,
-)
-from src.domain.value_objects.accum_score_breakdown import (
-    FOREIGN_FLOW_COMPONENT_KEYS,
-    ForeignFlowComponentScore,
-    ForeignFlowComponentStatus,
 )
 from src.domain.value_objects.foreign_flow_evidence import ForeignFlowEvidence
 
@@ -88,6 +88,7 @@ class FlowConfirmationEvidenceBuilder:
             "bb": (policy.bb_squeeze.enabled, policy.bb_squeeze.weight),
             "inst": (policy.bci.enabled, policy.bci.cluster_points),
         }
+
     def build(
         self,
         candidate: Any,  # AccumulationCandidate; Any avoids domain coupling
@@ -168,11 +169,7 @@ class FlowConfirmationEvidenceBuilder:
         # Directional strength denominator uses available enabled flow-component
         # weights only. True-zero AVAILABLE components remain in that denominator.
         # MISSING components are excluded from the directional denominator.
-        flow_strength = (
-            available_score / available_weight
-            if available_weight > 0
-            else 0.0
-        )
+        flow_strength = available_score / available_weight if available_weight > 0 else 0.0
 
         if bandar_broad_score is not None:
             bandar_strength = (bandar_broad_score + _BANDAR_MAX_SCORE) / (2.0 * _BANDAR_MAX_SCORE)
@@ -183,9 +180,7 @@ class FlowConfirmationEvidenceBuilder:
         capped_strength = min(uncapped_strength, group_cap)
         # Completeness is represented by component statuses and coverage. It
         # must not be mislabeled as temporal staleness.
-        group_freshness = (
-            Freshness.FRESH if flow_evidence is not None else Freshness.MISSING
-        )
+        group_freshness = Freshness.FRESH if flow_evidence is not None else Freshness.MISSING
 
         evidence = FlowConfirmationEvidence(
             ticker=ticker,
@@ -249,13 +244,9 @@ class FlowConfirmationEvidenceBuilder:
                     f"does not match active policy {configured_max}"
                 )
             if enabled and component.status is ForeignFlowComponentStatus.DISABLED:
-                raise ValueError(
-                    f"flow component {key!r} is DISABLED but active policy enables it"
-                )
+                raise ValueError(f"flow component {key!r} is DISABLED but active policy enables it")
             if not enabled and component.status is not ForeignFlowComponentStatus.DISABLED:
-                raise ValueError(
-                    f"flow component {key!r} must be DISABLED under the active policy"
-                )
+                raise ValueError(f"flow component {key!r} must be DISABLED under the active policy")
         return components
 
     def _make_sub_signal(

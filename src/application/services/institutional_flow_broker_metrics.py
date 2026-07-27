@@ -122,6 +122,4 @@ def vwap_distance(
     min_sessions: int,
 ) -> float | None:
     current_price = float(candles[-1].close) if candles else None
-    return vwap_distance_from_price(
-        flows, current_price, days, min_sessions
-    )
+    return vwap_distance_from_price(flows, current_price, days, min_sessions)

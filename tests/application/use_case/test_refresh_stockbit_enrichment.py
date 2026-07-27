@@ -42,11 +42,13 @@ def test_force_refresh_fetches_even_when_cache_is_fresh():
 
     task = EnrichmentTask(label="analyst", is_fresh=is_fresh, fetch=fetch)
 
-    resp = _uc().execute(RefreshStockbitEnrichmentRequest(
-        ticker="BBCA",
-        tasks=[task],
-        force_refresh=True,
-    ))
+    resp = _uc().execute(
+        RefreshStockbitEnrichmentRequest(
+            ticker="BBCA",
+            tasks=[task],
+            force_refresh=True,
+        )
+    )
 
     assert calls["fetch"] == 1
     assert resp.fetched == ("analyst",)
@@ -56,9 +58,9 @@ def test_force_refresh_fetches_even_when_cache_is_fresh():
 def test_some_fetched_returns_plus_joined_with_cached_suffix():
     tasks = [
         _task("notation", fresh=False),
-        _task("analyst",  fresh=False),
-        _task("insider",  fresh=True),
-        _task("season",   fresh=True),
+        _task("analyst", fresh=False),
+        _task("insider", fresh=True),
+        _task("season", fresh=True),
     ]
     resp = _uc().execute(RefreshStockbitEnrichmentRequest(ticker="BBCA", tasks=tasks))
     assert resp.status == "notation+analyst  ✓(insider,season)"
@@ -77,8 +79,8 @@ def test_all_fetched_returns_plus_joined_without_cached_suffix():
 def test_error_on_one_task_returns_err_prefix_and_continues_others():
     tasks = [
         _task("notation", fresh=False, raises=True),
-        _task("analyst",  fresh=False),
-        _task("bandar",   fresh=True),
+        _task("analyst", fresh=False),
+        _task("bandar", fresh=True),
     ]
     resp = _uc().execute(RefreshStockbitEnrichmentRequest(ticker="BBCA", tasks=tasks))
     assert resp.status.startswith("ERR:")

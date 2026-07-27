@@ -12,13 +12,20 @@ from rich.console import Group
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, panel
-from src.adapters.cli.view_ticker_formatters import _empty_state_text, _fmt_idr, _fmt_vol, _not_cached
+from src.adapters.cli.view_ticker_formatters import (
+    _empty_state_text,
+    _fmt_idr,
+    _fmt_vol,
+    _not_cached,
+)
 from src.adapters.cli.view_ticker_status import CacheStatus
 from src.application.services.ticker_dashboard_flow import (
-    FOREIGN_FLOW_SOURCE_PREFERENCE,
     FOREIGN_FLOW_WINDOWS,
-    select_foreign_flow_points as _select_foreign_flow_points,
+)
+from src.application.services.ticker_dashboard_flow import (
     window_buy_sell_days as _window_buy_sell_days,
+)
+from src.application.services.ticker_dashboard_flow import (
     window_net as _window_net,
 )
 from src.domain.entities.broker_flow import ForeignFlowPoint

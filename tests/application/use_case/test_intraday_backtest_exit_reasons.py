@@ -11,7 +11,8 @@ from tests.application.use_case.intraday_backtest_fixtures import (
 
 def test_exit_reason_target_when_high_reaches_prev_high():
     today = _candle(
-        TICKER, TRADE_DAY,
+        TICKER,
+        TRADE_DAY,
         open_=Decimal("100"),
         high=Decimal("106"),
         low=Decimal("99"),
@@ -34,7 +35,8 @@ def test_exit_reason_target_when_high_reaches_prev_high():
 
 def test_exit_reason_stop_when_low_breaches_stop():
     today = _candle(
-        TICKER, TRADE_DAY,
+        TICKER,
+        TRADE_DAY,
         open_=Decimal("100"),
         high=Decimal("104"),
         low=Decimal("97"),
@@ -52,7 +54,8 @@ def test_exit_reason_stop_when_low_breaches_stop():
 
 def test_exit_reason_close_when_neither_stop_nor_target_hit():
     today = _candle(
-        TICKER, TRADE_DAY,
+        TICKER,
+        TRADE_DAY,
         open_=Decimal("100"),
         high=Decimal("104"),
         low=Decimal("99"),
@@ -69,7 +72,8 @@ def test_exit_reason_close_when_neither_stop_nor_target_hit():
 
 def test_exit_reason_both_assume_stop_when_high_and_low_both_breach():
     today = _candle(
-        TICKER, TRADE_DAY,
+        TICKER,
+        TRADE_DAY,
         open_=Decimal("100"),
         high=Decimal("106"),
         low=Decimal("97"),

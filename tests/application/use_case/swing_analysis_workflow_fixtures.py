@@ -9,11 +9,11 @@ from src.application.services.signal_evidence_execution_context_builder import (
 )
 from src.application.use_case.swing_analysis_workflow_use_case import SwingAnalysisWorkflowUseCase
 from src.domain.entities.candle import Candle
+from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.domain.value_objects.learning_artifacts import (
     AssessmentPurpose,
     LearningObservation,
 )
-from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 
 
@@ -57,14 +57,10 @@ class FakeLearningObservationsRepository:
                     policy_contract="test_policy.v1",
                     horizon_contract="test_horizon",
                     compatibility_id="test-cohort",
-                    cutoff_at=datetime(
-                        day.year, day.month, day.day, 9, 0, tzinfo=IDX_TIMEZONE
-                    ),
+                    cutoff_at=datetime(day.year, day.month, day.day, 9, 0, tzinfo=IDX_TIMEZONE),
                     universe_id="test",
                     window_id=f"{idx}",
-                    captured_at=datetime(
-                        day.year, day.month, day.day, 9, 0, tzinfo=IDX_TIMEZONE
-                    ),
+                    captured_at=datetime(day.year, day.month, day.day, 9, 0, tzinfo=IDX_TIMEZONE),
                     decision_payload={
                         "ticker": "BBCA",
                         "schema_version": 1,

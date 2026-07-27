@@ -58,12 +58,14 @@ def test_clean_row_span():
 
 def test_split_flow_parts():
     assert split_flow_parts("daily=✓(2026-06-19)") == ("daily=✓(2026-06-19)", "skip")
-    assert split_flow_parts(
-        "daily=✓(2026-06-19) agg=✓(2026-06-19)"
-    ) == ("daily=✓(2026-06-19)", "agg=✓(2026-06-19)")
-    assert split_flow_parts(
-        "daily:+648rows/12codes/96d agg:+2rows/373d"
-    ) == ("daily:+648rows/12codes/96d", "agg:+2rows/373d")
+    assert split_flow_parts("daily=✓(2026-06-19) agg=✓(2026-06-19)") == (
+        "daily=✓(2026-06-19)",
+        "agg=✓(2026-06-19)",
+    )
+    assert split_flow_parts("daily:+648rows/12codes/96d agg:+2rows/373d") == (
+        "daily:+648rows/12codes/96d",
+        "agg:+2rows/373d",
+    )
     assert split_flow_parts("skip") == ("skip", "skip")
     assert split_flow_parts("ERR:auth") == ("ERR:auth", "ERR:auth")
 
@@ -88,15 +90,25 @@ def test_fmt_meta_column():
 
 def test_fmt_enrichment_column():
     assert fmt_enrichment_column("skip") == "skip"
-    assert fmt_enrichment_column(
-        "✓(notation,analyst,insider,season,corp,holding,bandar,fundam,fwd_est,profile)"
-    ) == "10/10 ✓"
-    assert fmt_enrichment_column(
-        "notation+analyst  ✓(insider,season,corp,holding,bandar,fundam,fwd_est,profile)"
-    ) == "10/10 (+2: notation, analyst)"
-    assert fmt_enrichment_column(
-        "notation+analyst+insider  ✓(season,corp,holding,bandar,fundam,fwd_est,profile)"
-    ) == "10/10 (+3)"
-    assert fmt_enrichment_column(
-        "ERR:insider:Playwright error,corp:timeout"
-    ) == "8/10 (ERR: insider, corp)"
+    assert (
+        fmt_enrichment_column(
+            "✓(notation,analyst,insider,season,corp,holding,bandar,fundam,fwd_est,profile)"
+        )
+        == "10/10 ✓"
+    )
+    assert (
+        fmt_enrichment_column(
+            "notation+analyst  ✓(insider,season,corp,holding,bandar,fundam,fwd_est,profile)"
+        )
+        == "10/10 (+2: notation, analyst)"
+    )
+    assert (
+        fmt_enrichment_column(
+            "notation+analyst+insider  ✓(season,corp,holding,bandar,fundam,fwd_est,profile)"
+        )
+        == "10/10 (+3)"
+    )
+    assert (
+        fmt_enrichment_column("ERR:insider:Playwright error,corp:timeout")
+        == "8/10 (ERR: insider, corp)"
+    )

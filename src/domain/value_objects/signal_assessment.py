@@ -156,7 +156,7 @@ class SignalContext:
 
     # ── Foreign flow quality (screener path only) ─────────────────────────────
     # Pre-computed by AccumulationScreenUseCase; None in self-fetch path.
-    foreign_flow_quality: float | None = None   # 0.0–1.0
+    foreign_flow_quality: float | None = None  # 0.0–1.0
 
     # ── Insider activity ──────────────────────────────────────────────────────
     # Net insider buy direction: -1.0 (full selling) → 0.0 (neutral) → +1.0 (full buying).
@@ -169,12 +169,12 @@ class SignalContext:
     # Feeds seasonality factor-presence (signal_presence) and company-quality
     # context — NOT the weighted Setup/Flow score. win_rate_pct is the primary
     # value; avg_return_pct gives tailwind/headwind/neutral direction.
-    seasonality_win_rate: float | None = None       # 0.0–100.0
-    seasonality_avg_return_pct: float | None = None # e.g. +2.1 = +2.1%, -1.0 = -1.0%
+    seasonality_win_rate: float | None = None  # 0.0–100.0
+    seasonality_avg_return_pct: float | None = None  # e.g. +2.1 = +2.1%, -1.0 = -1.0%
 
     # ── Analyst consensus (daily, from AnalystConsensus) ─────────────────────
-    analyst_buy_pct: float | None = None        # 0.0–1.0  (buy_count / analyst_count)
-    analyst_upside_pct: float | None = None     # percentage, e.g. 15.0 = 15% upside
+    analyst_buy_pct: float | None = None  # 0.0–1.0  (buy_count / analyst_count)
+    analyst_upside_pct: float | None = None  # percentage, e.g. 15.0 = 15% upside
 
     # ── Forward valuation (daily, from ForwardEstimates.forward_pe) ──────────
     # Pre-computed by ForwardEstimates.compute(). None for loss-making companies.
@@ -202,10 +202,10 @@ class SignalAssessment:
 
     identity: SignalAssessmentIdentity
     ticker: str
-    score: int                              # 0–100 contextual policy score
-    strength: SignalStrength                # STRONG / MODERATE / WEAK
-    entry_quality: EntryQuality            # ENTER / WATCH / AVOID
-    breakdown: tuple[tuple[str, float], ...] # (factor_name, component_score) pairs
+    score: int  # 0–100 contextual policy score
+    strength: SignalStrength  # STRONG / MODERATE / WEAK
+    entry_quality: EntryQuality  # ENTER / WATCH / AVOID
+    breakdown: tuple[tuple[str, float], ...]  # (factor_name, component_score) pairs
     rationale: tuple[str, ...]
     snapshot_date: date
     # HIGH-2 canonical name: production-authority coverage (0.0-1.0), or None
@@ -222,7 +222,9 @@ class SignalAssessment:
             raise ValueError("SignalAssessment identity is required")
         if not (0 <= self.score <= 100):
             raise ValueError(f"SignalAssessment score must be 0–100, got {self.score}")
-        if self.legacy_conditioned_score is not None and not (0 <= self.legacy_conditioned_score <= 100):
+        if self.legacy_conditioned_score is not None and not (
+            0 <= self.legacy_conditioned_score <= 100
+        ):
             raise ValueError(
                 f"SignalAssessment legacy_conditioned_score must be 0–100, "
                 f"got {self.legacy_conditioned_score}"
@@ -237,8 +239,7 @@ class SignalAssessment:
             )
         if self.raw_exact_score is not None and not (0.0 <= self.raw_exact_score <= 100.0):
             raise ValueError(
-                f"SignalAssessment raw_exact_score must be 0.0–100.0, "
-                f"got {self.raw_exact_score}"
+                f"SignalAssessment raw_exact_score must be 0.0–100.0, got {self.raw_exact_score}"
             )
 
     @property
@@ -274,11 +275,9 @@ class SignalAssessment:
             "signal_authority_coverage": self.signal_authority_coverage,
             "raw_exact_score": self.raw_exact_score,
             "alpha_trigger_score": (
-                self.alpha_trigger_score.to_dict()
-                if self.alpha_trigger_score else None
+                self.alpha_trigger_score.to_dict() if self.alpha_trigger_score else None
             ),
             "decision_constraints": (
-                self.decision_constraints.to_dict()
-                if self.decision_constraints else None
+                self.decision_constraints.to_dict() if self.decision_constraints else None
             ),
         }

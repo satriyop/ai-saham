@@ -149,55 +149,83 @@ def fetch_enrichment(
     )
 
     tasks = [
-        EnrichmentTask("notation",
+        EnrichmentTask(
+            "notation",
             lambda: notation_prov.is_cache_fresh(ticker),
-            lambda: notation_prov.get_notation(ticker)),
-        EnrichmentTask("analyst",
+            lambda: notation_prov.get_notation(ticker),
+        ),
+        EnrichmentTask(
+            "analyst",
             lambda: analyst_prov._is_cache_fresh(ticker),
-            lambda: analyst_prov.get_consensus(ticker)),
-        EnrichmentTask("insider",
+            lambda: analyst_prov.get_consensus(ticker),
+        ),
+        EnrichmentTask(
+            "insider",
             lambda: insider_prov._is_cache_fresh(ticker),
-            lambda: insider_prov.get_insider_transactions(
-                ticker, insider_from, today, "ALL")),
-        EnrichmentTask("season",
+            lambda: insider_prov.get_insider_transactions(ticker, insider_from, today, "ALL"),
+        ),
+        EnrichmentTask(
+            "season",
             lambda: season_prov._is_cache_fresh(ticker, today.year, today.month),
-            lambda: season_prov.get_seasonal_edge(ticker, today.year, today.month)),
-        EnrichmentTask("corp",
+            lambda: season_prov.get_seasonal_edge(ticker, today.year, today.month),
+        ),
+        EnrichmentTask(
+            "corp",
             lambda: corp_repo._is_cache_fresh(ticker),
-            lambda: corp_repo.get_upcoming_events(
-                ticker, today, today + timedelta(days=90))),
-        EnrichmentTask("holding",
+            lambda: corp_repo.get_upcoming_events(ticker, today, today + timedelta(days=90)),
+        ),
+        EnrichmentTask(
+            "holding",
             lambda: shareholding_prov._is_cache_fresh(ticker),
-            lambda: shareholding_prov.get_composition(ticker)),
-        EnrichmentTask("bandar",
+            lambda: shareholding_prov.get_composition(ticker),
+        ),
+        EnrichmentTask(
+            "bandar",
             lambda: bandar_prov._is_cache_fresh(ticker),
-            lambda: bandar_prov.get_snapshot(ticker)),
-        EnrichmentTask("fundam",
+            lambda: bandar_prov.get_snapshot(ticker),
+        ),
+        EnrichmentTask(
+            "fundam",
             lambda: fundamentals_prov._is_cache_fresh(ticker),
-            lambda: fundamentals_prov.get_fundamentals(ticker)),
-        EnrichmentTask("fwd_est",
+            lambda: fundamentals_prov.get_fundamentals(ticker),
+        ),
+        EnrichmentTask(
+            "fwd_est",
             lambda: fwd_est_prov._read_cache(ticker) is not None,
-            lambda: fwd_est_prov.get_forward_estimates(ticker)),
-        EnrichmentTask("profile",
+            lambda: fwd_est_prov.get_forward_estimates(ticker),
+        ),
+        EnrichmentTask(
+            "profile",
             lambda: profile_prov._read_cache(ticker) is not None,
-            lambda: profile_prov.get_profile(ticker)),
-        EnrichmentTask("earnings",
+            lambda: profile_prov.get_profile(ticker),
+        ),
+        EnrichmentTask(
+            "earnings",
             lambda: earnings_prov.is_cache_fresh(ticker),
-            lambda: earnings_prov.get_earnings_history(ticker)),
-        EnrichmentTask("brdist",
+            lambda: earnings_prov.get_earnings_history(ticker),
+        ),
+        EnrichmentTask(
+            "brdist",
             lambda: distribution_prov.is_cache_fresh(ticker),
-            lambda: distribution_prov.get_distribution(ticker)),
-        EnrichmentTask("valuation",
+            lambda: distribution_prov.get_distribution(ticker),
+        ),
+        EnrichmentTask(
+            "valuation",
             lambda: valuation_prov.is_cache_fresh(ticker),
-            lambda: valuation_prov.get_valuation(ticker)),
+            lambda: valuation_prov.get_valuation(ticker),
+        ),
     ]
-    return RefreshStockbitEnrichmentUseCase().execute(
-        RefreshStockbitEnrichmentRequest(
-            ticker=ticker,
-            tasks=tasks,
-            force_refresh=force_refresh,
+    return (
+        RefreshStockbitEnrichmentUseCase()
+        .execute(
+            RefreshStockbitEnrichmentRequest(
+                ticker=ticker,
+                tasks=tasks,
+                force_refresh=force_refresh,
+            )
         )
-    ).status
+        .status
+    )
 
 
 def read_enrichment_pit_coverage(db_path: Path):
@@ -205,4 +233,5 @@ def read_enrichment_pit_coverage(db_path: Path):
     from src.infrastructure.persistence.sqlite_enrichment_pit_coverage import (
         read_enrichment_pit_coverage as _read_enrichment_pit_coverage,
     )
+
     return _read_enrichment_pit_coverage(db_path)

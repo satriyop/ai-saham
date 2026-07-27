@@ -66,7 +66,7 @@ class FailingStrategyTranslator:
 
 
 # Valid YAML for testing
-VALID_RSI_YAML = '''version: 1
+VALID_RSI_YAML = """version: 1
 name: "test_rsi"
 description: "RSI strategy"
 
@@ -81,9 +81,9 @@ rules:
       value: 30
     outcome: LOW_RISK
     rationale: "RSI below 30"
-'''
+"""
 
-VALID_EMA_YAML = '''version: 1
+VALID_EMA_YAML = """version: 1
 name: "test_ema"
 description: "EMA crossover strategy"
 
@@ -107,7 +107,7 @@ rules:
       right:
         indicator: slow_ema
     outcome: LOW_RISK
-'''
+"""
 
 
 class TestCreateStrategyFromIntentUseCase:
@@ -270,10 +270,10 @@ class TestCreateStrategyFromIntentUseCase:
     def test_invalid_schema_returns_error(self, registry):
         """Should return error when YAML has invalid schema."""
         # Missing required field 'rules'
-        invalid_schema = '''version: 1
+        invalid_schema = """version: 1
 name: "invalid"
 default_outcome: MODERATE
-'''
+"""
         translator = MockStrategyTranslator(return_value=invalid_schema)
         use_case = CreateStrategyFromIntentUseCase(
             translator=translator,
@@ -289,11 +289,13 @@ default_outcome: MODERATE
         )
 
         assert response.success is False
-        assert "schema" in response.error_message.lower() or "rules" in response.error_message.lower()
+        assert (
+            "schema" in response.error_message.lower() or "rules" in response.error_message.lower()
+        )
 
     def test_undefined_indicator_returns_error(self, registry):
         """Should return error when YAML references undefined indicator."""
-        yaml_with_undefined = '''version: 1
+        yaml_with_undefined = """version: 1
 name: "undefined"
 default_outcome: MODERATE
 
@@ -304,7 +306,7 @@ rules:
       operator: "<"
       value: 30
     outcome: LOW_RISK
-'''
+"""
         translator = MockStrategyTranslator(return_value=yaml_with_undefined)
         use_case = CreateStrategyFromIntentUseCase(
             translator=translator,
@@ -320,7 +322,10 @@ rules:
         )
 
         assert response.success is False
-        assert "undefined" in response.error_message.lower() or "invalid" in response.error_message.lower()
+        assert (
+            "undefined" in response.error_message.lower()
+            or "invalid" in response.error_message.lower()
+        )
 
     def test_handles_auth_error(self, registry):
         """Should return error response for auth failures."""
@@ -363,7 +368,9 @@ rules:
 
     def test_handles_rate_limit_error(self, registry):
         """Should return error response for rate limits."""
-        translator = FailingStrategyTranslator(StrategyTranslatorRateLimitError, "Rate limit exceeded")
+        translator = FailingStrategyTranslator(
+            StrategyTranslatorRateLimitError, "Rate limit exceeded"
+        )
         use_case = CreateStrategyFromIntentUseCase(
             translator=translator,
             registry=registry,

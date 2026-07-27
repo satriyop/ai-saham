@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timezone, timedelta, tzinfo
+from datetime import date, datetime, timedelta, timezone, tzinfo
 
 import pytest
 
@@ -16,7 +16,6 @@ from src.domain.value_objects.signal_artifact_identity import (
     SemanticCompatibilityId,
     SignalArtifactIdentity,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -211,8 +210,12 @@ class TestBlankRequiredStrings:
 
     @pytest.mark.parametrize(
         "field",
-        ["application_revision", "universe_snapshot_id", "idx_calendar_version",
-         "session_rule_version"],
+        [
+            "application_revision",
+            "universe_snapshot_id",
+            "idx_calendar_version",
+            "session_rule_version",
+        ],
     )
     def test_provenance_blank(self, field) -> None:
         with pytest.raises(ValueError, match="non-empty"):
@@ -512,9 +515,17 @@ class TestSemanticDimensionsFieldExclusion:
         "execution_label_policy_version",
     }
 
-    FORBIDDEN_IN_SEMANTIC = {"ticker", "effective_session", "universe_snapshot_id",
-                             "source_snapshot_cutoff_id", "captured_at", "decision_at",
-                             "invocation_command", "invocation_actor", "application_revision"}
+    FORBIDDEN_IN_SEMANTIC = {
+        "ticker",
+        "effective_session",
+        "universe_snapshot_id",
+        "source_snapshot_cutoff_id",
+        "captured_at",
+        "decision_at",
+        "invocation_command",
+        "invocation_actor",
+        "application_revision",
+    }
 
     def test_no_forbidden_fields_in_semantic_dict(self) -> None:
         d = _valid_semantic_dimensions().to_canonical_dict()
@@ -555,8 +566,15 @@ class TestArtifactDimensionsCanonicalJson:
 
     def test_no_captured_or_invocation_timestamp(self) -> None:
         d = _valid_artifact_dimensions().to_canonical_dict()
-        forbidden = {"captured_at", "decision_at", "invocation_command", "invocation_actor",
-                     "application_revision", "latest_completed_session", "analysis_as_of"}
+        forbidden = {
+            "captured_at",
+            "decision_at",
+            "invocation_command",
+            "invocation_actor",
+            "application_revision",
+            "latest_completed_session",
+            "analysis_as_of",
+        }
         overlap = set(d.keys()) & forbidden
         assert not overlap, f"artifact dimensions contains forbidden fields: {overlap}"
 
@@ -611,22 +629,18 @@ class TestProvenanceIsolation:
         assert a.to_canonical_json() == b.to_canonical_json()
 
     def test_reversing_source_input_order_produces_identical_json(self) -> None:
-        s1 = _valid_source(source_family="a_family", provider="a_provider",
-                           source_snapshot_id="s1")
-        s2 = _valid_source(source_family="b_family", provider="b_provider",
-                           source_snapshot_id="s2")
+        s1 = _valid_source(source_family="a_family", provider="a_provider", source_snapshot_id="s1")
+        s2 = _valid_source(source_family="b_family", provider="b_provider", source_snapshot_id="s2")
         forward = _valid_provenance(sources=(s1, s2))
         reverse = _valid_provenance(sources=(s2, s1))
         assert forward.to_canonical_json() == reverse.to_canonical_json()
 
     def test_different_cutoff_facts_produce_different_json(self) -> None:
         a = _valid_provenance(
-            sources=(_valid_source(cutoff_at=datetime(2026, 7, 18, 6, 0, 0,
-                                                      tzinfo=timezone.utc)),),
+            sources=(_valid_source(cutoff_at=datetime(2026, 7, 18, 6, 0, 0, tzinfo=timezone.utc)),),
         )
         b = _valid_provenance(
-            sources=(_valid_source(cutoff_at=datetime(2026, 7, 18, 7, 0, 0,
-                                                      tzinfo=timezone.utc)),),
+            sources=(_valid_source(cutoff_at=datetime(2026, 7, 18, 7, 0, 0, tzinfo=timezone.utc)),),
         )
         assert a.to_canonical_json() != b.to_canonical_json()
 
@@ -650,10 +664,12 @@ class TestSerializationCorrectness:
     def test_no_default_str_repr_filesystem_or_object_identity(self) -> None:
         """Serializer does not rely on repr(), str() fallback, paths, or object identity."""
         # Construct a complex provenance and verify serialization succeeds
-        s1 = _valid_source(source_family="candles", provider="yahoo_finance",
-                           source_snapshot_id="s1")
-        s2 = _valid_source(source_family="broker_summaries", provider="idx",
-                           source_snapshot_id="s2")
+        s1 = _valid_source(
+            source_family="candles", provider="yahoo_finance", source_snapshot_id="s1"
+        )
+        s2 = _valid_source(
+            source_family="broker_summaries", provider="idx", source_snapshot_id="s2"
+        )
         prov = _valid_provenance(
             sources=(s1, s2),
             invocation_command="saham screen accum",
@@ -727,10 +743,12 @@ class TestStructuralIntegrity:
         assert parsed["provider"] == "yahoo_finance"
 
     def test_provenance_to_canonical_json_contains_sorted_sources(self) -> None:
-        s1 = _valid_source(source_family="broker_summaries", provider="idx",
-                           source_snapshot_id="s1")
-        s2 = _valid_source(source_family="candles", provider="yahoo_finance",
-                           source_snapshot_id="s2")
+        s1 = _valid_source(
+            source_family="broker_summaries", provider="idx", source_snapshot_id="s1"
+        )
+        s2 = _valid_source(
+            source_family="candles", provider="yahoo_finance", source_snapshot_id="s2"
+        )
         prov = _valid_provenance(sources=(s2, s1))
         raw = prov.to_canonical_json()
         parsed = json.loads(raw)
@@ -880,13 +898,17 @@ class TestStrictTypeValidation:
 
     def test_tzinfo_with_none_utcoffset_rejected(self) -> None:
         """A tzinfo whose utcoffset() returns None is not timezone-aware."""
+
         class BogusTZ(tzinfo):
             def utcoffset(self, dt):
                 return None
+
             def tzname(self, dt):
                 return "BOGUS"
+
             def dst(self, dt):
                 return None
+
         with pytest.raises(ValueError, match="timezone-aware"):
             _valid_source(
                 available_at=datetime(2026, 7, 18, 5, 0, 0, tzinfo=BogusTZ()),
@@ -924,9 +946,7 @@ class TestExactCanonicalJson:
         + '","evidence_contract_version":"1.0",'
         '"execution_label_policy_version":"1.0",'
         '"label_schema_version":2,'
-        '"material_config_hash":"'
-        + _LOWER_HEX_64
-        + '",'
+        '"material_config_hash":"' + _LOWER_HEX_64 + '",'
         '"observation_contract":"accumulation-discovery",'
         '"observation_schema_version":3,'
         '"semantic_engine_version":"3.0.0",'
@@ -935,9 +955,7 @@ class TestExactCanonicalJson:
     _EXPECTED_ARTIFACT = (
         '{"artifact_type":"candidate_observation",'
         '"effective_session":"2026-07-18",'
-        '"semantic_compatibility_id":"'
-        + _VALID_PREFIXED
-        + '",'
+        '"semantic_compatibility_id":"' + _VALID_PREFIXED + '",'
         '"source_snapshot_cutoff_id":"cutoff-001",'
         '"ticker":"BBCA",'
         '"universe_snapshot_id":"univ-001"}'
@@ -954,12 +972,8 @@ class TestExactCanonicalJson:
         '{"analysis_as_of":"2026-07-18",'
         '"application_revision":"abc1234",'
         '"captured_at":"2026-07-18T08:00:00.000000Z",'
-        '"complete_authority_registry_hash":"'
-        + _ANOTHER_HEX_64
-        + '",'
-        '"complete_config_hash":"'
-        + _LOWER_HEX_64
-        + '",'
+        '"complete_authority_registry_hash":"' + _ANOTHER_HEX_64 + '",'
+        '"complete_config_hash":"' + _LOWER_HEX_64 + '",'
         '"decision_at":"2026-07-18T07:00:00.000000Z",'
         '"idx_calendar_version":"2026.1",'
         '"invocation_actor":"test_user",'
@@ -1036,4 +1050,3 @@ class TestEdgeCases:
         )
         raw = json.loads(prov.to_canonical_json())
         assert raw["decision_at"] == "2026-07-18T08:00:00.000000Z"
-

@@ -74,19 +74,31 @@ def test_save_creates_entries_with_correct_fields() -> None:
     use_case = SaveScreenWatchlistUseCase(repo)
 
     candidates = [
-        _candidate(ticker="BBCA", accum_score=80.0, consecutive_streak=5,
-                   net_buy_ratio=0.8, bci_label="CLUSTER",
-                   signal_assessment=_signal_assessment(72)),
-        _candidate(ticker="BBRI", accum_score=65.0, consecutive_streak=3,
-                   net_buy_ratio=0.6, bci_label="STABLE"),
+        _candidate(
+            ticker="BBCA",
+            accum_score=80.0,
+            consecutive_streak=5,
+            net_buy_ratio=0.8,
+            bci_label="CLUSTER",
+            signal_assessment=_signal_assessment(72),
+        ),
+        _candidate(
+            ticker="BBRI",
+            accum_score=65.0,
+            consecutive_streak=3,
+            net_buy_ratio=0.6,
+            bci_label="STABLE",
+        ),
     ]
 
-    use_case.execute(SaveScreenWatchlistRequest(
-        name="test-watch",
-        candidates=candidates,
-        universe="lq45",
-        window_days=7,
-    ))
+    use_case.execute(
+        SaveScreenWatchlistRequest(
+            name="test-watch",
+            candidates=candidates,
+            universe="lq45",
+            window_days=7,
+        )
+    )
 
     assert len(repo.saved) == 2
 
@@ -119,12 +131,14 @@ def test_save_rank_starts_at_one() -> None:
         _candidate(ticker="C"),
     ]
 
-    use_case.execute(SaveScreenWatchlistRequest(
-        name="ranks",
-        candidates=candidates,
-        universe="test",
-        window_days=7,
-    ))
+    use_case.execute(
+        SaveScreenWatchlistRequest(
+            name="ranks",
+            candidates=candidates,
+            universe="test",
+            window_days=7,
+        )
+    )
 
     assert repo.saved[0].rank == 1
     assert repo.saved[1].rank == 2
@@ -135,12 +149,14 @@ def test_save_returns_saved_count_and_name() -> None:
     repo = FakeWatchlistRepository()
     use_case = SaveScreenWatchlistUseCase(repo)
 
-    result = use_case.execute(SaveScreenWatchlistRequest(
-        name="my-watch",
-        candidates=[_candidate(ticker="BBCA")],
-        universe="lq45",
-        window_days=30,
-    ))
+    result = use_case.execute(
+        SaveScreenWatchlistRequest(
+            name="my-watch",
+            candidates=[_candidate(ticker="BBCA")],
+            universe="lq45",
+            window_days=30,
+        )
+    )
 
     assert result.saved_count == 1
     assert result.name == "my-watch"
@@ -154,11 +170,13 @@ def test_signal_score_none_when_no_signal_assessment() -> None:
         _candidate(ticker="BBCA", signal_assessment=None),
     ]
 
-    use_case.execute(SaveScreenWatchlistRequest(
-        name="no-signal",
-        candidates=candidates,
-        universe="test",
-        window_days=7,
-    ))
+    use_case.execute(
+        SaveScreenWatchlistRequest(
+            name="no-signal",
+            candidates=candidates,
+            universe="test",
+            window_days=7,
+        )
+    )
 
     assert repo.saved[0].signal_score is None

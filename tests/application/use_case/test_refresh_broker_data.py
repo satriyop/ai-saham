@@ -124,16 +124,18 @@ def test_refresh_broker_checks_idx_summaries_independently_from_stockbit_flow(tm
     repo = SQLiteBrokerRepository(db_path)
     end_date = date(2026, 6, 18)
     requested_start = date(2025, 6, 18)
-    repo.save_foreign_flow_points([
-        ForeignFlowPoint(
-            ticker="BBCA",
-            date=end_date,
-            net_val=Decimal("100"),
-            net_lot=1,
-            avg_price=Decimal("1000"),
-            source="stockbit",
-        )
-    ])
+    repo.save_foreign_flow_points(
+        [
+            ForeignFlowPoint(
+                ticker="BBCA",
+                date=end_date,
+                net_val=Decimal("100"),
+                net_lot=1,
+                avg_price=Decimal("1000"),
+                source="stockbit",
+            )
+        ]
+    )
     stockbit_provider = FakeBrokerProvider("stockbit")
     idx_provider = FakeBrokerProvider("idx")
 
@@ -162,24 +164,26 @@ def test_refresh_broker_reports_cached_current_without_provider_fetch(tmp_path: 
     requested_start = date(2025, 6, 18)
     repo.save_broker_summary(_summary("BBCA", requested_start, "idx"))
     repo.save_broker_summary(_summary("BBCA", end_date, "idx"))
-    repo.save_foreign_flow_points([
-        ForeignFlowPoint(
-            ticker="BBCA",
-            date=requested_start,
-            net_val=Decimal("100"),
-            net_lot=1,
-            avg_price=Decimal("1000"),
-            source="stockbit",
-        ),
-        ForeignFlowPoint(
-            ticker="BBCA",
-            date=end_date,
-            net_val=Decimal("100"),
-            net_lot=1,
-            avg_price=Decimal("1000"),
-            source="stockbit",
-        ),
-    ])
+    repo.save_foreign_flow_points(
+        [
+            ForeignFlowPoint(
+                ticker="BBCA",
+                date=requested_start,
+                net_val=Decimal("100"),
+                net_lot=1,
+                avg_price=Decimal("1000"),
+                source="stockbit",
+            ),
+            ForeignFlowPoint(
+                ticker="BBCA",
+                date=end_date,
+                net_val=Decimal("100"),
+                net_lot=1,
+                avg_price=Decimal("1000"),
+                source="stockbit",
+            ),
+        ]
+    )
     stockbit_provider = FakeBrokerProvider("stockbit")
     idx_provider = FakeBrokerProvider("idx")
 
@@ -210,16 +214,18 @@ def test_refresh_broker_fetches_daily_flow_until_expected_latest_trading_day(tmp
     requested_start = date(2025, 6, 18)
     repo.save_broker_summary(_summary("BBCA", requested_start, "idx"))
     repo.save_broker_summary(_summary("BBCA", expected_latest, "idx"))
-    repo.save_foreign_flow_points([
-        ForeignFlowPoint(
-            ticker="BBCA",
-            date=expected_latest,
-            net_val=Decimal("100"),
-            net_lot=1,
-            avg_price=Decimal("1000"),
-            source="stockbit",
-        )
-    ])
+    repo.save_foreign_flow_points(
+        [
+            ForeignFlowPoint(
+                ticker="BBCA",
+                date=expected_latest,
+                net_val=Decimal("100"),
+                net_lot=1,
+                avg_price=Decimal("1000"),
+                source="stockbit",
+            )
+        ]
+    )
     repo.save_broker_daily_flows([_daily_flow("BBCA", stale_daily)])
     stockbit_provider = FakeDailyBrokerProvider([_daily_flow("BBCA", expected_latest)])
     idx_provider = FakeBrokerProvider("idx")
@@ -250,9 +256,11 @@ def test_suspended_ticker_skipped_when_notation_says_not_tradeable(tmp_path: Pat
     repo = SQLiteBrokerRepository(db_path)
     idx_provider = FakeBrokerProvider("idx")
 
-    notation_repo = FakeNotationRepository({
-        "WSKT": TickerNotationSnapshot(ticker="WSKT", tradeable=False),
-    })
+    notation_repo = FakeNotationRepository(
+        {
+            "WSKT": TickerNotationSnapshot(ticker="WSKT", tradeable=False),
+        }
+    )
 
     response = RefreshBrokerDataUseCase(
         broker_provider=idx_provider,
@@ -277,9 +285,11 @@ def test_active_ticker_proceeds_when_notation_says_tradeable(tmp_path: Path):
     repo = SQLiteBrokerRepository(db_path)
     idx_provider = FakeBrokerProvider("idx")
 
-    notation_repo = FakeNotationRepository({
-        "BBCA": TickerNotationSnapshot(ticker="BBCA", tradeable=True),
-    })
+    notation_repo = FakeNotationRepository(
+        {
+            "BBCA": TickerNotationSnapshot(ticker="BBCA", tradeable=True),
+        }
+    )
 
     response = RefreshBrokerDataUseCase(
         broker_provider=idx_provider,

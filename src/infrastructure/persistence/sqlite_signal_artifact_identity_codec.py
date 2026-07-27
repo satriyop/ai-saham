@@ -6,7 +6,7 @@ Layer: Infrastructure
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 
 from src.domain.value_objects.signal_artifact_identity import (
     ArtifactId,
@@ -16,30 +16,34 @@ from src.domain.value_objects.signal_artifact_identity import (
     SignalArtifactIdentity,
 )
 
-_PROVENANCE_KEYS = frozenset({
-    "analysis_as_of",
-    "application_revision",
-    "captured_at",
-    "complete_authority_registry_hash",
-    "complete_config_hash",
-    "decision_at",
-    "idx_calendar_version",
-    "invocation_actor",
-    "invocation_command",
-    "latest_completed_session",
-    "session_rule_version",
-    "sources",
-    "universe_snapshot_id",
-})
+_PROVENANCE_KEYS = frozenset(
+    {
+        "analysis_as_of",
+        "application_revision",
+        "captured_at",
+        "complete_authority_registry_hash",
+        "complete_config_hash",
+        "decision_at",
+        "idx_calendar_version",
+        "invocation_actor",
+        "invocation_command",
+        "latest_completed_session",
+        "session_rule_version",
+        "sources",
+        "universe_snapshot_id",
+    }
+)
 
-_SOURCE_KEYS = frozenset({
-    "available_at",
-    "cutoff_at",
-    "observed_through",
-    "provider",
-    "source_family",
-    "source_snapshot_id",
-})
+_SOURCE_KEYS = frozenset(
+    {
+        "available_at",
+        "cutoff_at",
+        "observed_through",
+        "provider",
+        "source_family",
+        "source_snapshot_id",
+    }
+)
 
 
 def encode_signal_artifact_identity(
@@ -48,9 +52,7 @@ def encode_signal_artifact_identity(
     if identity is None:
         return ("", "", "")
     if not isinstance(identity, SignalArtifactIdentity):
-        raise TypeError(
-            f"Expected SignalArtifactIdentity | None, got {type(identity).__name__}"
-        )
+        raise TypeError(f"Expected SignalArtifactIdentity | None, got {type(identity).__name__}")
     return (
         str(identity.artifact_id),
         str(identity.semantic_compatibility_id),
@@ -95,9 +97,7 @@ def _require_str(value: object, field: str) -> None:
             "empty string expected for absent identity"
         )
     if not isinstance(value, str):
-        raise ValueError(
-            f"{field} must be a string, got {type(value).__name__}"
-        )
+        raise ValueError(f"{field} must be a string, got {type(value).__name__}")
 
 
 def _decode_artifact_id(raw: str) -> ArtifactId:
@@ -118,14 +118,11 @@ def _decode_provenance(raw: str) -> ArtifactProvenance:
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as e:
-        raise ValueError(
-            f"artifact_provenance_json: malformed JSON — {e}"
-        ) from e
+        raise ValueError(f"artifact_provenance_json: malformed JSON — {e}") from e
 
     if not isinstance(data, dict):
         raise ValueError(
-            "artifact_provenance_json: must be a JSON object, "
-            f"got {type(data).__name__}"
+            f"artifact_provenance_json: must be a JSON object, got {type(data).__name__}"
         )
 
     actual_keys = frozenset(data.keys())
@@ -137,15 +134,12 @@ def _decode_provenance(raw: str) -> ArtifactProvenance:
             parts.append(f"missing keys: {sorted(missing)}")
         if extra:
             parts.append(f"unexpected keys: {sorted(extra)}")
-        raise ValueError(
-            "artifact_provenance_json: " + "; ".join(parts)
-        )
+        raise ValueError("artifact_provenance_json: " + "; ".join(parts))
 
     sources_raw = data["sources"]
     if not isinstance(sources_raw, list):
         raise ValueError(
-            "artifact_provenance_json.sources: must be a list, "
-            f"got {type(sources_raw).__name__}"
+            f"artifact_provenance_json.sources: must be a list, got {type(sources_raw).__name__}"
         )
 
     sources = [_decode_source(i, s) for i, s in enumerate(sources_raw)]
@@ -173,9 +167,7 @@ def _decode_provenance(raw: str) -> ArtifactProvenance:
 
     canonical = provenance.to_canonical_json()
     if raw != canonical:
-        raise ValueError(
-            "artifact_provenance_json must use canonical provenance serialization"
-        )
+        raise ValueError("artifact_provenance_json must use canonical provenance serialization")
 
     return provenance
 
@@ -195,9 +187,7 @@ def _decode_source(index: int, raw: object) -> ArtifactSourceProvenance:
             parts.append(f"missing keys: {sorted(missing)}")
         if extra:
             parts.append(f"unexpected keys: {sorted(extra)}")
-        raise ValueError(
-            f"artifact_provenance_json.sources[{index}]: " + "; ".join(parts)
-        )
+        raise ValueError(f"artifact_provenance_json.sources[{index}]: " + "; ".join(parts))
 
     return ArtifactSourceProvenance(
         source_family=_require_str_field(raw, "source_family"),
@@ -233,8 +223,7 @@ def _require_str_field(data: dict[str, object], key: str) -> str:
     value = data[key]
     if not isinstance(value, str):
         raise ValueError(
-            f"artifact_provenance_json.{key}: must be a string, "
-            f"got {type(value).__name__}"
+            f"artifact_provenance_json.{key}: must be a string, got {type(value).__name__}"
         )
     return value
 
@@ -243,24 +232,19 @@ def _decode_optional_str(value: object) -> str | None:
     if value is None:
         return None
     if not isinstance(value, str):
-        raise ValueError(
-            f"Expected string or null, got {type(value).__name__}"
-        )
+        raise ValueError(f"Expected string or null, got {type(value).__name__}")
     return value
 
 
 def _decode_date(value: object, field: str) -> date:
     if not isinstance(value, str):
         raise ValueError(
-            f"artifact_provenance_json.{field}: must be a string, "
-            f"got {type(value).__name__}"
+            f"artifact_provenance_json.{field}: must be a string, got {type(value).__name__}"
         )
     try:
         return date.fromisoformat(value)
     except (ValueError, TypeError) as e:
-        raise ValueError(
-            f"artifact_provenance_json.{field}: invalid date {value!r} — {e}"
-        ) from e
+        raise ValueError(f"artifact_provenance_json.{field}: invalid date {value!r} — {e}") from e
 
 
 def _decode_optional_date(value: object, field: str) -> date | None:
@@ -272,8 +256,7 @@ def _decode_optional_date(value: object, field: str) -> date | None:
 def _decode_utc_datetime(value: object, field: str) -> datetime:
     if not isinstance(value, str):
         raise ValueError(
-            f"artifact_provenance_json.{field}: must be a string, "
-            f"got {type(value).__name__}"
+            f"artifact_provenance_json.{field}: must be a string, got {type(value).__name__}"
         )
     if not value.endswith("Z"):
         raise ValueError(

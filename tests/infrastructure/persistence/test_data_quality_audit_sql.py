@@ -32,13 +32,16 @@ def conn():
 
 
 def test_table_snapshot_missing_table_returns_none(conn):
-    assert table_snapshot(
-        conn,
-        "candles",
-        "date",
-        tickers=["BBCA"],
-        expected_trading_day=None,
-    ) is None
+    assert (
+        table_snapshot(
+            conn,
+            "candles",
+            "date",
+            tickers=["BBCA"],
+            expected_trading_day=None,
+        )
+        is None
+    )
 
 
 def test_table_snapshot_counts_latest_missing_and_stale_tickers(conn):
@@ -73,14 +76,12 @@ def test_count_rows_missing_table_returns_zero(conn):
 
 
 def test_unsafe_broker_summary_rows_uses_existing_predicate(conn):
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE broker_summaries (
             ticker TEXT, total_value TEXT, total_lot INTEGER,
             foreign_buy_lot INTEGER, foreign_sell_lot INTEGER
         )
-        """
-    )
+        """)
     conn.executemany(
         "INSERT INTO broker_summaries VALUES (?, ?, ?, ?, ?)",
         [
@@ -122,15 +123,9 @@ def test_unknown_candle_provenance_requires_columns(conn):
     conn.commit()
     assert unknown_candle_provenance_rows(conn, []) == 0
 
-    conn.execute(
-        "ALTER TABLE candles ADD COLUMN source TEXT"
-    )
-    conn.execute(
-        "ALTER TABLE candles ADD COLUMN volume_unit TEXT"
-    )
-    conn.execute(
-        "ALTER TABLE candles ADD COLUMN price_adjustment_policy TEXT"
-    )
+    conn.execute("ALTER TABLE candles ADD COLUMN source TEXT")
+    conn.execute("ALTER TABLE candles ADD COLUMN volume_unit TEXT")
+    conn.execute("ALTER TABLE candles ADD COLUMN price_adjustment_policy TEXT")
     conn.executemany(
         "INSERT INTO candles (ticker, source, volume_unit, price_adjustment_policy) "
         "VALUES (?, ?, ?, ?)",

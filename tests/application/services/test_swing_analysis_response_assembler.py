@@ -2,6 +2,7 @@
 
 Layer: Application (test)
 """
+
 import pytest
 
 from src.application.dto.swing_analysis import (
@@ -27,9 +28,7 @@ def test_assemble_rejects_state_and_verdict_availability_mismatch():
 
     verdict_availability = SignalAssessmentAvailability(
         status=SignalAssessmentStatus.UNAVAILABLE,
-        unavailable_reason=(
-            SignalAssessmentUnavailableReason.NO_PRODUCTION_SIGNAL_EVIDENCE
-        ),
+        unavailable_reason=(SignalAssessmentUnavailableReason.NO_PRODUCTION_SIGNAL_EVIDENCE),
     )
 
     state = SwingAnalysisWorkflowState(

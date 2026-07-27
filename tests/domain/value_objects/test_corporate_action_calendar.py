@@ -24,7 +24,9 @@ from src.domain.value_objects.corporate_action_calendar import (
 )
 
 
-def _date_row(role: CorporateActionDateRole = CorporateActionDateRole.EX_DATE) -> CorporateActionCalendarDate:
+def _date_row(
+    role: CorporateActionDateRole = CorporateActionDateRole.EX_DATE,
+) -> CorporateActionCalendarDate:
     return CorporateActionCalendarDate(date_role=role, event_date=date(2026, 7, 15))
 
 

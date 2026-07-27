@@ -20,25 +20,25 @@ _CONSOLE = Console()
 # Display-compatible label map: MCE regime → legacy-style label for callers
 # that previously showed BULLISH/SIDEWAYS/RISK_OFF labels.
 REGIME_DISPLAY_LABEL: dict[str, str] = {
-    "RISK_ON":  "BULLISH",
-    "NEUTRAL":  "SIDEWAYS",
+    "RISK_ON": "BULLISH",
+    "NEUTRAL": "SIDEWAYS",
     "RISK_OFF": "RISK_OFF",
     "VOLATILE": "VOLATILE",
 }
 
 _REGIME_STYLE = {
-    MarketRegime.RISK_ON:  ("bold green", "RISK_ON"),
-    MarketRegime.NEUTRAL:  ("bold yellow", "NEUTRAL"),
+    MarketRegime.RISK_ON: ("bold green", "RISK_ON"),
+    MarketRegime.NEUTRAL: ("bold yellow", "NEUTRAL"),
     MarketRegime.RISK_OFF: ("bold red", "RISK_OFF"),
     MarketRegime.VOLATILE: ("bold magenta", "VOLATILE"),
 }
 
 _LABEL_STYLE = {
-    "FAVORABLE":   "green",
-    "NEUTRAL":     "yellow",
-    "STRESSED":    "red",
+    "FAVORABLE": "green",
+    "NEUTRAL": "yellow",
+    "STRESSED": "red",
     "UNAVAILABLE": "dim",
-    "DISABLED":    "dim",
+    "DISABLED": "dim",
 }
 
 _SCORE_BAR_WIDTH = 10
@@ -48,7 +48,9 @@ def display_market_context(context: MarketContext, verbose: bool = False) -> Non
     """Render MarketContext to terminal."""
     _CONSOLE.print()
 
-    regime_style, regime_text = _REGIME_STYLE.get(context.regime, ("bold white", context.regime.value))
+    regime_style, regime_text = _REGIME_STYLE.get(
+        context.regime, ("bold white", context.regime.value)
+    )
 
     # ── Header ───────────────────────────────────────────────────────────────
     header = Text()
@@ -57,7 +59,9 @@ def display_market_context(context: MarketContext, verbose: bool = False) -> Non
     header.append(f"  (conviction: {context.conviction:.2f})", style="dim")
 
     # ── Factor table ─────────────────────────────────────────────────────────
-    table = Table(show_header=True, header_style="bold cyan", box=None, pad_edge=False, padding=(0, 1))
+    table = Table(
+        show_header=True, header_style="bold cyan", box=None, pad_edge=False, padding=(0, 1)
+    )
     table.add_column("Factor", style="bold", width=14)
     table.add_column("Score", justify="right", width=6)
     table.add_column("Weight", justify="right", width=7)
@@ -105,7 +109,7 @@ def display_market_context(context: MarketContext, verbose: bool = False) -> Non
     else:
         footer.append(f"signal_multiplier: {mult:.2f}", style="green")
 
-    footer.append(f"   gate_tightening: ", style="")
+    footer.append("   gate_tightening: ", style="")
     if context.gate_tightening:
         footer.append(tighten, style="bold red")
     else:
@@ -113,25 +117,29 @@ def display_market_context(context: MarketContext, verbose: bool = False) -> Non
 
     # ── A2: Regime quality metadata ───────────────────────────────────────────
     regime_quality_parts: list[Text] = []
-    regime_confidence  = getattr(context, "regime_confidence", None)
-    regime_stability   = getattr(context, "regime_stability", None)
-    days_in_regime     = getattr(context, "days_in_regime", None)
+    regime_confidence = getattr(context, "regime_confidence", None)
+    regime_stability = getattr(context, "regime_stability", None)
+    days_in_regime = getattr(context, "days_in_regime", None)
     transition_warning = getattr(context, "transition_warning", None)
 
     if regime_confidence is not None or regime_stability is not None:
         rq = Text()
         if regime_confidence is not None:
             conf_style = (
-                "green" if regime_confidence >= 0.65
-                else "yellow" if regime_confidence >= 0.35
+                "green"
+                if regime_confidence >= 0.65
+                else "yellow"
+                if regime_confidence >= 0.35
                 else "bold red"
             )
             rq.append("regime_confidence: ", style="dim")
             rq.append(f"{regime_confidence:.2f}", style=conf_style)
         if regime_stability is not None:
             stab_style = (
-                "green" if regime_stability == "STABLE"
-                else "yellow" if regime_stability == "UNKNOWN"
+                "green"
+                if regime_stability == "STABLE"
+                else "yellow"
+                if regime_stability == "UNKNOWN"
                 else "bold red"
             )
             rq.append("   stability: ", style="dim")
@@ -179,6 +187,7 @@ def _styled_label(label: str) -> Text:
 
 
 # ── Shared helpers for callers migrated from MarketRegimeUseCase ──────────────
+
 
 def context_factor_value(context: MarketContext, name: str) -> float | None:
     """Return the raw .value of a named ContextFactor, or None if not found/unavailable."""

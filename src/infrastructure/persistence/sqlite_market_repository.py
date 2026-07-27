@@ -87,13 +87,9 @@ class SQLiteMarketRepository(MarketDataRepository):
 
     def _ensure_metadata_columns(self, conn: sqlite3.Connection) -> None:
         """Add candle provenance columns to legacy databases."""
-        existing_cols = {
-            row[1] for row in conn.execute("PRAGMA table_info(candles)").fetchall()
-        }
+        existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(candles)").fetchall()}
         if "source" not in existing_cols:
-            conn.execute(
-                "ALTER TABLE candles ADD COLUMN source TEXT NOT NULL DEFAULT 'unknown'"
-            )
+            conn.execute("ALTER TABLE candles ADD COLUMN source TEXT NOT NULL DEFAULT 'unknown'")
         if "volume_unit" not in existing_cols:
             conn.execute(
                 "ALTER TABLE candles ADD COLUMN volume_unit TEXT NOT NULL DEFAULT 'unknown'"

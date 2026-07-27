@@ -128,9 +128,7 @@ class EvidenceSourceAvailabilityAssembler:
         effective_session: "EffectiveMarketSession",
         provenance: "SetupProvenance",
     ) -> EvidenceSourceAvailability:
-        latest_candle_date = max(
-            (row.date for row in provenance.candle_rows), default=None
-        )
+        latest_candle_date = max((row.date for row in provenance.candle_rows), default=None)
         return EvidenceSourceAvailability(
             evidence_group="setup",
             assessments=(
@@ -154,9 +152,7 @@ class EvidenceSourceAvailabilityAssembler:
         max_daily_flow_row_date = max(
             (row.date for row in provenance.broker_daily_flow_rows), default=None
         )
-        unassessed_contributors = (
-            ("bandar_detector",) if provenance.has_bandar_contributor else ()
-        )
+        unassessed_contributors = ("bandar_detector",) if provenance.has_bandar_contributor else ()
 
         return EvidenceSourceAvailability(
             evidence_group="flow",

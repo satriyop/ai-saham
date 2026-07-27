@@ -57,17 +57,29 @@ def _market_context_preview_group(
 
     regime_label = REGIME_DISPLAY_LABEL.get(market_regime.regime.value, market_regime.regime.value)
     regime_confidence = getattr(market_regime, "regime_confidence", None)
-    regime_stability  = getattr(market_regime, "regime_stability", None)
-    days_in           = getattr(market_regime, "days_in_regime", None)
+    regime_stability = getattr(market_regime, "regime_stability", None)
+    days_in = getattr(market_regime, "days_in_regime", None)
 
     regime_line = Text()
     regime_line.append(f"Regime: {regime_label}", style="bold cyan")
     if regime_confidence is not None:
-        conf_style = "green" if regime_confidence >= 0.65 else "yellow" if regime_confidence >= 0.35 else "bold red"
-        regime_line.append(f"  conf: ", style="dim")
+        conf_style = (
+            "green"
+            if regime_confidence >= 0.65
+            else "yellow"
+            if regime_confidence >= 0.35
+            else "bold red"
+        )
+        regime_line.append("  conf: ", style="dim")
         regime_line.append(f"{regime_confidence:.2f}", style=conf_style)
     if regime_stability is not None:
-        stab_style = "green" if regime_stability == "STABLE" else "yellow" if regime_stability == "UNKNOWN" else "red"
+        stab_style = (
+            "green"
+            if regime_stability == "STABLE"
+            else "yellow"
+            if regime_stability == "UNKNOWN"
+            else "red"
+        )
         regime_line.append(f"  [{regime_stability}]", style=stab_style)
     if days_in is not None:
         regime_line.append(f"  {days_in}d", style="dim")
@@ -91,30 +103,41 @@ def _market_context_preview_group(
             note = f"{regime_label_sig} conditioning applied — score {score:.0f} ({eq})"
             items.append(Text(f"Signal:         {note}", style="yellow"))
         else:
-            items.append(Text(
-                f"Signal:         score {score:.0f} ({eq}) — no regime conditioning fired",
-                style="dim",
-            ))
+            items.append(
+                Text(
+                    f"Signal:         score {score:.0f} ({eq}) — no regime conditioning fired",
+                    style="dim",
+                )
+            )
 
     if canonical_risk is not None and preview_risk is not None:
         raw_gate = canonical_risk.assessment.gate_triggered
         preview_gate = preview_risk.assessment.gate_triggered
         if preview_gate and not raw_gate:
-            items.append(Text(f"Risk preview:   regime gate would trigger ({preview_gate})", style="yellow"))
+            items.append(
+                Text(f"Risk preview:   regime gate would trigger ({preview_gate})", style="yellow")
+            )
         elif preview_gate and raw_gate and preview_gate != raw_gate:
-            items.append(Text(f"Risk preview:   gate upgraded {raw_gate} → {preview_gate}", style="yellow"))
+            items.append(
+                Text(f"Risk preview:   gate upgraded {raw_gate} → {preview_gate}", style="yellow")
+            )
         else:
             items.append(Text("Risk preview:   no additional gate triggered", style="dim"))
 
     canonical_action = canonical_trade_setup.action.value if canonical_trade_setup else "N/A"
     preview_action = preview_trade_setup.action.value
     if canonical_action != preview_action:
-        items.append(Text(
-            f"Preview:        TradeSetup risk-preview → {preview_action} (vs canonical {canonical_action})",
-            style="bold yellow",
-        ))
+        items.append(
+            Text(
+                f"Preview:        TradeSetup risk-preview → {preview_action} "
+                f"(vs canonical {canonical_action})",
+                style="bold yellow",
+            )
+        )
     else:
-        items.append(Text("Preview:        No action change under regime-adjusted risk.", style="dim green"))
+        items.append(
+            Text("Preview:        No action change under regime-adjusted risk.", style="dim green")
+        )
     items.append(Text(f"Canonical:      {canonical_action}", style="bold"))
 
     return Group(*items)
@@ -200,9 +223,7 @@ def print_risk_detail_panel(ctx: SwingOutputDisplayContext) -> None:
         risk_table.add_column("EMA20")
         risk_table.add_column("RSI14")
         risk_table.add_row(
-            f"{float(snap.sma):,.0f}",
-            f"{float(snap.ema):,.0f}",
-            f"{float(snap.rsi):.1f}"
+            f"{float(snap.sma):,.0f}", f"{float(snap.ema):,.0f}", f"{float(snap.rsi):.1f}"
         )
         risk_text.append(risk_table)
         for reason in r.rationale_list[:3]:
@@ -266,7 +287,10 @@ def print_swing_output(ctx: SwingOutputDisplayContext) -> None:
     print_market_detail_panel(ctx)
     print_sector_context_panel(ctx)
 
-    if ctx.options.include_flow_detail and ctx.evidence.institutional_accumulation_evidence is not None:
+    if (
+        ctx.options.include_flow_detail
+        and ctx.evidence.institutional_accumulation_evidence is not None
+    ):
         print_institutional_accumulation_section(ctx.evidence.institutional_accumulation_evidence)
 
     print_flow_detail_panel(ctx)

@@ -41,19 +41,13 @@ class SwingBacktestExitEngine:
                 position.regime, {"setup_targets": request.setup_targets}
             )
 
-        target = position.entry_price * (
-            Decimal("1") + tp_pct / Decimal("100")
-        )
-        stop = position.entry_price * (
-            Decimal("1") - sl_pct / Decimal("100")
-        )
+        target = position.entry_price * (Decimal("1") + tp_pct / Decimal("100"))
+        stop = position.entry_price * (Decimal("1") - sl_pct / Decimal("100"))
         holding_days = self._holding_days(position.ticker, position.entry_date, current_date)
 
         stop_hit = candle.low <= stop
         target_hit = candle.high >= target
-        if stop_hit and (
-            request.same_day_exit_priority == "stop_first" or not target_hit
-        ):
+        if stop_hit and (request.same_day_exit_priority == "stop_first" or not target_hit):
             return self.close_trade(position, current_date, stop, "stop", request)
         if target_hit:
             return self.close_trade(position, current_date, target, "target", request)

@@ -37,8 +37,18 @@ logger = logging.getLogger(__name__)
 
 # Stockbit uses abbreviated English month names as column keys
 _MONTH_TO_NAME = {
-    1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun",
-    7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec",
+    1: "Jan",
+    2: "Feb",
+    3: "Mar",
+    4: "Apr",
+    5: "May",
+    6: "Jun",
+    7: "Jul",
+    8: "Aug",
+    9: "Sep",
+    10: "Oct",
+    11: "Nov",
+    12: "Dec",
 }
 
 
@@ -141,7 +151,9 @@ class StockbitSeasonalityProvider(SeasonalityProvider, StockbitCachingProvider):
     # ── Schema ───────────────────────────────────────────────────────────────
 
     _MIGRATIONS: list[tuple[int, str]] = [
-        (0, """CREATE TABLE IF NOT EXISTS seasonality_cache (
+        (
+            0,
+            """CREATE TABLE IF NOT EXISTS seasonality_cache (
                         ticker           TEXT NOT NULL,
                         year             INTEGER NOT NULL,
                         month            INTEGER NOT NULL,
@@ -154,7 +166,8 @@ class StockbitSeasonalityProvider(SeasonalityProvider, StockbitCachingProvider):
                         fetched_month    TEXT NOT NULL,
                         fetched_at       TEXT,
                         UNIQUE(ticker, year, month, fetched_month, fetched_at)
-                    )"""),
+                    )""",
+        ),
     ]
 
     def _ensure_schema(self) -> None:
@@ -205,8 +218,7 @@ class StockbitSeasonalityProvider(SeasonalityProvider, StockbitCachingProvider):
         params: tuple = (ticker.upper(), year, month)
         if as_of_date is not None:
             where += (
-                " AND date(COALESCE(substr(fetched_at,1,10), fetched_month || '-01'))"
-                " <= date(?)"
+                " AND date(COALESCE(substr(fetched_at,1,10), fetched_month || '-01')) <= date(?)"
             )
             params = (ticker.upper(), year, month, as_of_date.isoformat())
         try:

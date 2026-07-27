@@ -52,9 +52,7 @@ class ClaudeTickerResearcher:
     ) -> None:
         self._api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
         if not self._api_key:
-            raise ValueError(
-                "No API key for Claude (set ANTHROPIC_API_KEY environment variable)"
-            )
+            raise ValueError("No API key for Claude (set ANTHROPIC_API_KEY environment variable)")
         self._model = model
         self._max_tokens = max_tokens
         self._timeout = timeout
@@ -64,9 +62,7 @@ class ClaudeTickerResearcher:
         try:
             import anthropic
         except ImportError:
-            raise RuntimeError(
-                "anthropic package not installed. Run: pip install anthropic"
-            )
+            raise RuntimeError("anthropic package not installed. Run: pip install anthropic")
 
         from datetime import date
 
@@ -78,9 +74,7 @@ class ClaudeTickerResearcher:
             messages=[
                 {
                     "role": "user",
-                    "content": RESEARCH_USER_PROMPT.format(
-                        ticker=ticker, date=date.today()
-                    ),
+                    "content": RESEARCH_USER_PROMPT.format(ticker=ticker, date=date.today()),
                 }
             ],
         )

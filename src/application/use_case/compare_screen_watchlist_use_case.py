@@ -6,10 +6,7 @@ Layer: Application
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Protocol
 
-from src.application.dto.accumulation_screen import AccumulationCandidate
 from src.application.services.screen_accum_result_projector import (
     ScreenAccumMultiProjection,
     ScreenAccumSingleProjection,
@@ -27,7 +24,6 @@ from src.application.use_case.run_accumulation_screen_workflow_use_case import (
     RunAccumulationScreenWorkflowResult,
     RunAccumulationScreenWorkflowUseCase,
 )
-from src.domain.value_objects.screen_snapshot import ScreenSnapshotEntry
 
 
 class WatchlistNotFoundError(Exception):
@@ -58,9 +54,7 @@ class CompareScreenWatchlistUseCase:
         self._watchlist_repository = watchlist_repository
         self._screen_workflow_use_case = screen_workflow_use_case
 
-    def execute(
-        self, request: CompareScreenWatchlistRequest
-    ) -> CompareScreenWatchlistResult:
+    def execute(self, request: CompareScreenWatchlistRequest) -> CompareScreenWatchlistResult:
         snapshot_entries = self._watchlist_repository.get_latest_snapshot(request.name)
         if not snapshot_entries:
             raise WatchlistNotFoundError(
@@ -88,9 +82,7 @@ class CompareScreenWatchlistUseCase:
             elif workflow_result.single_projection is not None:
                 fresh_projection = workflow_result.single_projection
             else:
-                raise ValueError(
-                    "Accumulation screen workflow returned no projection for compare."
-                )
+                raise ValueError("Accumulation screen workflow returned no projection for compare.")
         else:
             fresh_projection = workflow_result
 
@@ -105,11 +97,7 @@ class CompareScreenWatchlistUseCase:
 
         for rank, c in enumerate(candidates, 1):
             fresh_tickers.append(c.ticker)
-            composite = (
-                c.signal_assessment.assessment.score
-                if c.signal_assessment
-                else None
-            )
+            composite = c.signal_assessment.assessment.score if c.signal_assessment else None
             fresh_scores[c.ticker] = (c.accum_score, composite)
             fresh_ranks[c.ticker] = rank
 

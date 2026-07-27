@@ -96,9 +96,7 @@ def test_from_dict_accepts_legacy_profile_label_key():
 
 
 def test_from_dict_accepts_minimal_dict():
-    snapshot = TickerProfileSnapshot.from_dict(
-        {"ticker": "bbca", "snapshot_date": "2026-07-01"}
-    )
+    snapshot = TickerProfileSnapshot.from_dict({"ticker": "bbca", "snapshot_date": "2026-07-01"})
     assert snapshot.ticker == "BBCA"
     assert snapshot.snapshot_date == date(2026, 7, 1)
     assert snapshot.primary_profile == "unknown"
@@ -114,9 +112,7 @@ def test_from_dict_accepts_minimal_dict():
 
 
 def test_from_dict_returns_none_for_missing_optional_scores():
-    snapshot = TickerProfileSnapshot.from_dict(
-        {"ticker": "BBCA", "snapshot_date": "2026-07-01"}
-    )
+    snapshot = TickerProfileSnapshot.from_dict({"ticker": "BBCA", "snapshot_date": "2026-07-01"})
     assert snapshot.liquidity_score is None
     assert snapshot.broker_concentration_score is None
     assert snapshot.foreign_flow_score is None

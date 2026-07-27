@@ -2,8 +2,8 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
-from src.infrastructure.composition.fetch_market.fetch_market_broker_refresh import fetch_broker
 from src.domain.entities.broker_flow import ForeignFlowPoint
+from src.infrastructure.composition.fetch_market.fetch_market_broker_refresh import fetch_broker
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 from tests.adapters.cli.fetch_market_command_fixtures import (
@@ -70,24 +70,26 @@ def test_fetch_broker_uses_flow_points_for_stockbit_session_coverage(tmp_path: P
     today = date.today()
     flow_start = date.fromordinal(today.toordinal() - 90)
     requested_start = date.fromordinal(today.toordinal() - 365)
-    repo.save_foreign_flow_points([
-        ForeignFlowPoint(
-            ticker="BBCA",
-            date=flow_start,
-            net_val=Decimal("100"),
-            net_lot=1,
-            avg_price=Decimal("1000"),
-            source="stockbit",
-        ),
-        ForeignFlowPoint(
-            ticker="BBCA",
-            date=today,
-            net_val=Decimal("100"),
-            net_lot=1,
-            avg_price=Decimal("1000"),
-            source="stockbit",
-        ),
-    ])
+    repo.save_foreign_flow_points(
+        [
+            ForeignFlowPoint(
+                ticker="BBCA",
+                date=flow_start,
+                net_val=Decimal("100"),
+                net_lot=1,
+                avg_price=Decimal("1000"),
+                source="stockbit",
+            ),
+            ForeignFlowPoint(
+                ticker="BBCA",
+                date=today,
+                net_val=Decimal("100"),
+                net_lot=1,
+                avg_price=Decimal("1000"),
+                source="stockbit",
+            ),
+        ]
+    )
     historical_points = [
         ForeignFlowPoint(
             ticker="BBCA",
@@ -111,9 +113,7 @@ def test_fetch_broker_uses_flow_points_for_stockbit_session_coverage(tmp_path: P
     )
 
     assert result.summaries.startswith("+")
-    assert idx_provider.requested_ranges == [
-        (requested_start, today)
-    ]
+    assert idx_provider.requested_ranges == [(requested_start, today)]
     assert repo.get_foreign_flow_date_range("BBCA", source="stockbit") == (
         requested_start,
         today,
@@ -128,24 +128,26 @@ def test_fetch_broker_treats_recent_trading_day_as_current(tmp_path: Path):
     requested_start = date.fromordinal(today.toordinal() - 365)
     repo.save_broker_summary(_summary("BBCA", requested_start, "idx"))
     repo.save_broker_summary(_summary("BBCA", latest, "idx"))
-    repo.save_foreign_flow_points([
-        ForeignFlowPoint(
-            ticker="BBCA",
-            date=requested_start,
-            net_val=Decimal("100"),
-            net_lot=1,
-            avg_price=Decimal("1000"),
-            source="stockbit",
-        ),
-        ForeignFlowPoint(
-            ticker="BBCA",
-            date=latest,
-            net_val=Decimal("100"),
-            net_lot=1,
-            avg_price=Decimal("1000"),
-            source="stockbit",
-        ),
-    ])
+    repo.save_foreign_flow_points(
+        [
+            ForeignFlowPoint(
+                ticker="BBCA",
+                date=requested_start,
+                net_val=Decimal("100"),
+                net_lot=1,
+                avg_price=Decimal("1000"),
+                source="stockbit",
+            ),
+            ForeignFlowPoint(
+                ticker="BBCA",
+                date=latest,
+                net_val=Decimal("100"),
+                net_lot=1,
+                avg_price=Decimal("1000"),
+                source="stockbit",
+            ),
+        ]
+    )
     market_repo = SQLiteMarketRepository(db_path)
     market_repo.save_candles([_candle("IHSG", latest)])
     provider = FakeBrokerProvider("stockbit")
@@ -171,16 +173,18 @@ def test_fetch_broker_counts_only_new_local_dates(tmp_path: Path):
     requested_start = date.fromordinal(today.toordinal() - 365)
     repo.save_broker_summary(_summary("BBCA", requested_start, "idx"))
     repo.save_broker_summary(_summary("BBCA", latest, "idx"))
-    repo.save_foreign_flow_points([
-        ForeignFlowPoint(
-            ticker="BBCA",
-            date=latest,
-            net_val=Decimal("100"),
-            net_lot=1,
-            avg_price=Decimal("1000"),
-            source="stockbit",
-        )
-    ])
+    repo.save_foreign_flow_points(
+        [
+            ForeignFlowPoint(
+                ticker="BBCA",
+                date=latest,
+                net_val=Decimal("100"),
+                net_lot=1,
+                avg_price=Decimal("1000"),
+                source="stockbit",
+            )
+        ]
+    )
     stockbit_provider = FakeBrokerProvider("stockbit")
     idx_provider = EchoLatestBrokerProvider("idx", echo_date=latest)
 
@@ -195,6 +199,4 @@ def test_fetch_broker_counts_only_new_local_dates(tmp_path: Path):
 
     assert result.summaries == f"up-to-date({latest.isoformat()})"
     assert result.flow == f"agg=✓({latest.isoformat()})"
-    assert idx_provider.requested_ranges == [
-        (date.fromordinal(latest.toordinal() + 1), today)
-    ]
+    assert idx_provider.requested_ranges == [(date.fromordinal(latest.toordinal() + 1), today)]

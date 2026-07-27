@@ -128,13 +128,11 @@ def test_insider_write_cache_preserves_historical_snapshots(tmp_path):
     )
 
     with sqlite3.connect(db_path) as conn:
-        rows = conn.execute(
-            """
+        rows = conn.execute("""
             SELECT COUNT(DISTINCT fetched_date)
             FROM insider_cache
             WHERE ticker='BBCA' AND name='Jane Doe'
-            """
-        ).fetchone()[0]
+            """).fetchone()[0]
 
     assert rows == 2
 
@@ -163,15 +161,13 @@ def test_insider_pit_empty_sentinel_does_not_return_older_rows(tmp_path):
     provider = StockbitInsiderActivityProvider(api_client=None, db_path=db_path)
     _insert_insider_row(db_path, shares=1000, fetched_date=date(2026, 6, 1))
     with sqlite3.connect(db_path) as conn:
-        conn.execute(
-            """
+        conn.execute("""
             INSERT OR REPLACE INTO insider_cache
                 (ticker, name, role, action_type, shares, price, transaction_date,
                  ownership_before_pct, ownership_after_pct, fetched_date)
             VALUES ('BBCA', '__NONE__', '', 'NONE', 0, 0, '1970-01-01',
                     0, 0, '2026-06-15')
-            """
-        )
+            """)
 
     transactions = provider.get_insider_transactions(
         "BBCA",
@@ -187,8 +183,7 @@ def test_insider_pit_empty_sentinel_does_not_return_older_rows(tmp_path):
 def test_insider_old_cache_schema_migrates_to_fetched_date_primary_key(tmp_path):
     db_path = tmp_path / "stockbit.db"
     with sqlite3.connect(db_path) as conn:
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE insider_cache (
                 ticker                TEXT NOT NULL,
                 name                  TEXT NOT NULL DEFAULT '',
@@ -202,17 +197,14 @@ def test_insider_old_cache_schema_migrates_to_fetched_date_primary_key(tmp_path)
                 fetched_date          TEXT NOT NULL,
                 PRIMARY KEY (ticker, name, transaction_date, action_type)
             )
-            """
-        )
-        conn.execute(
-            """
+            """)
+        conn.execute("""
             INSERT INTO insider_cache
                 (ticker, name, role, action_type, shares, price, transaction_date,
                  ownership_before_pct, ownership_after_pct, fetched_date)
             VALUES ('BBCA', 'Jane Doe', 'DIREKTUR', 'BUY', 1000, 5000,
                     '2026-05-20', 0, 0, '2026-06-01')
-            """
-        )
+            """)
 
     StockbitInsiderActivityProvider(api_client=None, db_path=db_path)
 

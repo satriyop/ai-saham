@@ -44,7 +44,11 @@ def _event(
         event_type=event_type,
         source_event_id=source_event_id,
         ticker=ticker,
-        dates=(CorporateActionCalendarDate(date_role=CorporateActionDateRole.EX_DATE, event_date=_TODAY),),
+        dates=(
+            CorporateActionCalendarDate(
+                date_role=CorporateActionDateRole.EX_DATE, event_date=_TODAY
+            ),
+        ),
         raw_payload_json="{}",
         fetched_at=_TODAY.isoformat(),
     )
@@ -224,16 +228,22 @@ class TestSelfHealing:
         uc = SyncCorporateActionCalendarUseCase(provider=provider, repository=real_repo)
 
         first = uc.execute(
-            SyncCorporateActionCalendarRequest(event_types=_DIVIDEND_IPO, sync_date=_TODAY, force_remote_fetch=False)
+            SyncCorporateActionCalendarRequest(
+                event_types=_DIVIDEND_IPO, sync_date=_TODAY, force_remote_fetch=False
+            )
         )
         assert first.status == "partial"
 
         # Second call, still not forced — must retry (not short-circuit to cached)
         # because "partial" doesn't count as synced.
-        second_provider = FakeProvider(result=[_event(event_type=CorporateActionType.IPO, source_event_id="i1")])
+        second_provider = FakeProvider(
+            result=[_event(event_type=CorporateActionType.IPO, source_event_id="i1")]
+        )
         uc2 = SyncCorporateActionCalendarUseCase(provider=second_provider, repository=real_repo)
         second = uc2.execute(
-            SyncCorporateActionCalendarRequest(event_types=_DIVIDEND_IPO, sync_date=_TODAY, force_remote_fetch=False)
+            SyncCorporateActionCalendarRequest(
+                event_types=_DIVIDEND_IPO, sync_date=_TODAY, force_remote_fetch=False
+            )
         )
         assert second.status != "cached"
         assert second_provider.call_count == 1
@@ -242,14 +252,18 @@ class TestSelfHealing:
         provider = FakeProvider(result=[_event()])
         uc = SyncCorporateActionCalendarUseCase(provider=provider, repository=real_repo)
         first = uc.execute(
-            SyncCorporateActionCalendarRequest(event_types=_DIVIDEND_IPO, sync_date=_TODAY, force_remote_fetch=False)
+            SyncCorporateActionCalendarRequest(
+                event_types=_DIVIDEND_IPO, sync_date=_TODAY, force_remote_fetch=False
+            )
         )
         assert first.status == "success"
 
         second_provider = FakeProvider(result=[_event()])
         uc2 = SyncCorporateActionCalendarUseCase(provider=second_provider, repository=real_repo)
         second = uc2.execute(
-            SyncCorporateActionCalendarRequest(event_types=_DIVIDEND_IPO, sync_date=_TODAY, force_remote_fetch=False)
+            SyncCorporateActionCalendarRequest(
+                event_types=_DIVIDEND_IPO, sync_date=_TODAY, force_remote_fetch=False
+            )
         )
         assert second.status == "cached"
         assert second_provider.call_count == 0
@@ -258,10 +272,14 @@ class TestSelfHealing:
         provider = FakeProvider(result=[_event()])
         uc = SyncCorporateActionCalendarUseCase(provider=provider, repository=real_repo)
         uc.execute(
-            SyncCorporateActionCalendarRequest(event_types=_DIVIDEND_IPO, sync_date=_TODAY, force_remote_fetch=False)
+            SyncCorporateActionCalendarRequest(
+                event_types=_DIVIDEND_IPO, sync_date=_TODAY, force_remote_fetch=False
+            )
         )
 
-        rups_provider = FakeProvider(result=[_event(event_type=CorporateActionType.RUPS, source_event_id="r1")])
+        rups_provider = FakeProvider(
+            result=[_event(event_type=CorporateActionType.RUPS, source_event_id="r1")]
+        )
         uc2 = SyncCorporateActionCalendarUseCase(provider=rups_provider, repository=real_repo)
         response = uc2.execute(
             SyncCorporateActionCalendarRequest(

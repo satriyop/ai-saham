@@ -7,6 +7,7 @@ module and fails on any forbidden cross-layer or forbidden-library import
 that is not already listed in BASELINE_ALLOWLIST. New violations must not
 be added to the allowlist — fix the import instead.
 """
+
 import ast
 from dataclasses import dataclass
 from pathlib import Path
@@ -173,8 +174,7 @@ def test_layer_boundaries_do_not_drift():
                 )
 
     assert not violations, "\n".join(
-        f"{v.path}:{v.line}: {v.imported} — {v.rule}"
-        for v in violations
+        f"{v.path}:{v.line}: {v.imported} — {v.rule}" for v in violations
     )
 
     unused = set(BASELINE_ALLOWLIST) - used_allowlist
@@ -222,8 +222,7 @@ def test_boundary_allowlist_entries_are_actionable_cleanup_debt():
         assert entry.canonical_fix, f"{key}: canonical_fix must not be empty"
         assert entry.issue, f"{key}: issue must not be empty"
         assert "code-convention-audit" in entry.issue, (
-            f"{key}: issue must reference code-convention-audit, "
-            f"got {entry.issue!r}"
+            f"{key}: issue must reference code-convention-audit, got {entry.issue!r}"
         )
         lowered_fix = entry.canonical_fix.lower()
         for marker in _VAGUE_CANONICAL_FIX_MARKERS:

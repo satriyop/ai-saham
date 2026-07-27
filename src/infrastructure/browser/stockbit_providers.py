@@ -25,9 +25,18 @@ if TYPE_CHECKING:
 
 class StockbitProviders:
     """Holds all optional Stockbit providers sharing one authenticated session."""
-    __slots__ = ("corp_repo", "season_prov", "insider_prov", "analyst_prov",
-                 "shareholding_prov", "bandar_prov", "fundamentals_prov",
-                 "notation_prov", "forward_estimates_prov")
+
+    __slots__ = (
+        "corp_repo",
+        "season_prov",
+        "insider_prov",
+        "analyst_prov",
+        "shareholding_prov",
+        "bandar_prov",
+        "fundamentals_prov",
+        "notation_prov",
+        "forward_estimates_prov",
+    )
 
     def __init__(
         self,
@@ -53,6 +62,14 @@ class StockbitProviders:
 
     @classmethod
     def unavailable(cls) -> "StockbitProviders":
-        return cls(corp_repo=None, season_prov=None, insider_prov=None,
-                   analyst_prov=None, shareholding_prov=None, bandar_prov=None,
-                   fundamentals_prov=None, notation_prov=None, forward_estimates_prov=None)
+        return cls(
+            corp_repo=None,
+            season_prov=None,
+            insider_prov=None,
+            analyst_prov=None,
+            shareholding_prov=None,
+            bandar_prov=None,
+            fundamentals_prov=None,
+            notation_prov=None,
+            forward_estimates_prov=None,
+        )

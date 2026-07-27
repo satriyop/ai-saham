@@ -132,18 +132,14 @@ class BuildDQContractGateUseCase:
             _status_consistency_blockers(
                 contracts_response.status,
                 source="source_contracts",
-                has_fail_finding=any(
-                    f.source == "source_contracts" for f in blockers
-                ),
+                has_fail_finding=any(f.source == "source_contracts" for f in blockers),
             )
         )
         blockers.extend(
             _status_consistency_blockers(
                 reconciliation_response.status,
                 source="source_reconciliation",
-                has_fail_finding=any(
-                    f.source == "source_reconciliation" for f in blockers
-                ),
+                has_fail_finding=any(f.source == "source_reconciliation" for f in blockers),
             )
         )
 
@@ -161,9 +157,7 @@ class BuildDQContractGateUseCase:
         )
 
 
-def _findings_from(
-    response: _AuditResponseLike, *, source: str
-) -> list[DQContractGateFinding]:
+def _findings_from(response: _AuditResponseLike, *, source: str) -> list[DQContractGateFinding]:
     """Convert sub-audit findings verbatim, preserving severity. Partitioning
     into blockers/warnings happens in the caller — severity is never mutated
     and no code-based allowlist is applied here."""
@@ -206,8 +200,7 @@ def _status_consistency_blockers(
                 table=None,
                 field=None,
                 message=(
-                    f"{source} reported status FAIL but supplied no FAIL "
-                    "finding; failing closed."
+                    f"{source} reported status FAIL but supplied no FAIL finding; failing closed."
                 ),
             )
         ]

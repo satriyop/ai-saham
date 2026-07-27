@@ -15,7 +15,6 @@ from src.domain.value_objects.setup_evaluation import (
     SetupMatch,
 )
 
-
 FOREIGN_BOUNCE_SETUP = "foreign-bounce"
 COILED_SPRING_SETUP = "coiled-spring"
 SMART_MONEY_CONFIRMED_SETUP = "smart-money-confirmed"
@@ -87,12 +86,8 @@ class PullbackContinuationSetupConfig:
 
 @dataclass(frozen=True)
 class SwingSetupCatalogConfig:
-    foreign_bounce: ForeignBounceSetupConfig = field(
-        default_factory=ForeignBounceSetupConfig
-    )
-    coiled_spring: CoiledSpringSetupConfig = field(
-        default_factory=CoiledSpringSetupConfig
-    )
+    foreign_bounce: ForeignBounceSetupConfig = field(default_factory=ForeignBounceSetupConfig)
+    coiled_spring: CoiledSpringSetupConfig = field(default_factory=CoiledSpringSetupConfig)
     smart_money_confirmed: SmartMoneyConfirmedSetupConfig = field(
         default_factory=SmartMoneyConfirmedSetupConfig
     )
@@ -357,7 +352,8 @@ class EvaluateSwingSetupUseCase:
         total_abs = abs(smart_flow) + abs(noise_flow) + abs(neutral_flow)
         noise_share_pct = (
             float(abs(noise_flow) / total_abs * Decimal("100"))
-            if total_abs > Decimal("0") else None
+            if total_abs > Decimal("0")
+            else None
         )
         smart_share_pct = getattr(broker_detail, "smart_share_pct", None)
 
@@ -394,8 +390,7 @@ class EvaluateSwingSetupUseCase:
             ),
             SetupGate(
                 label="smart_net_selling",
-                passed=(smart_flow >= Decimal("0"))
-                if config.reject_smart_net_selling else True,
+                passed=(smart_flow >= Decimal("0")) if config.reject_smart_net_selling else True,
                 actual="true" if smart_flow < Decimal("0") else "false",
                 required="false",
             ),

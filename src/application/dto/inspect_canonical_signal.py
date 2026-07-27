@@ -28,9 +28,7 @@ class InspectCanonicalSignalRequest:
     ticker: str
     as_of_date: date | None = None
     window_days: int = 7
-    contract: InspectCanonicalSignalContract = (
-        InspectCanonicalSignalContract.ACCUMULATION_FLOW
-    )
+    contract: InspectCanonicalSignalContract = InspectCanonicalSignalContract.ACCUMULATION_FLOW
 
 
 @dataclass(frozen=True)
@@ -87,9 +85,7 @@ class InspectCanonicalSignalResponse:
                 "flag_adjustment": self.assessment.flag_adjustment,
                 "breakdown": self.assessment.assessment.breakdown_dict,
                 "rationale": list(self.assessment.assessment.rationale),
-                "legacy_conditioned_score": (
-                    self.assessment.assessment.legacy_conditioned_score
-                ),
+                "legacy_conditioned_score": (self.assessment.assessment.legacy_conditioned_score),
                 "legacy_conditioned_score_note": (
                     "regime conditioning diagnostic on the canonical path; "
                     "not the retired six-factor score"
@@ -131,9 +127,7 @@ class InspectCanonicalSignalResponse:
             "ticker": self.ticker,
             "as_of_date": self.as_of_date.isoformat(),
             "effective_session": (
-                self.effective_session.to_dict()
-                if self.effective_session is not None
-                else None
+                self.effective_session.to_dict() if self.effective_session is not None else None
             ),
             "screen_result": self.screen_result,
             "assessment": assessment_payload,

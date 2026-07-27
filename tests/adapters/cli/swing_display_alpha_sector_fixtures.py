@@ -8,12 +8,12 @@ from src.adapters.cli.plan_swing_display import (
     print_swing_output,
 )
 from src.application.dto.swing_analysis import (
-    SwingDiagnostics,
-    SwingEvidence,
-    SwingVerdict,
     SignalAssessmentAvailability,
     SignalAssessmentStatus,
     SignalAssessmentUnavailableReason,
+    SwingDiagnostics,
+    SwingEvidence,
+    SwingVerdict,
 )
 from src.application.services.swing_data_freshness import SwingDataFreshness
 from src.domain.value_objects.alpha_trigger_score import (
@@ -172,9 +172,7 @@ def _call_print(
     if signal_assessment is None:
         availability = SignalAssessmentAvailability(
             status=SignalAssessmentStatus.UNAVAILABLE,
-            unavailable_reason=(
-                SignalAssessmentUnavailableReason.NO_PRODUCTION_SIGNAL_EVIDENCE
-            ),
+            unavailable_reason=(SignalAssessmentUnavailableReason.NO_PRODUCTION_SIGNAL_EVIDENCE),
         )
     else:
         availability = SignalAssessmentAvailability(

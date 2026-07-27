@@ -138,9 +138,21 @@ def swing_candidate_to_record(
         "window_days": window_days,
         "accum_score": candidate.accum_score if candidate else None,
         "foreign_flow_buy_streak": candidate.consecutive_streak if candidate else None,
-        "flow_pct": float(candidate.avg_flow_ratio) if candidate and candidate.avg_flow_ratio is not None else None,
-        "vwap_disc_pct": float(candidate.vwap_discount_pct) if candidate and candidate.vwap_discount_pct is not None else None,
-        "bb_pctile": float(candidate.bb_width_pctile) if candidate and candidate.bb_width_pctile is not None else None,
+        "flow_pct": (
+            float(candidate.avg_flow_ratio)
+            if candidate and candidate.avg_flow_ratio is not None
+            else None
+        ),
+        "vwap_disc_pct": (
+            float(candidate.vwap_discount_pct)
+            if candidate and candidate.vwap_discount_pct is not None
+            else None
+        ),
+        "bb_pctile": (
+            float(candidate.bb_width_pctile)
+            if candidate and candidate.bb_width_pctile is not None
+            else None
+        ),
         "pattern": pattern,
         "setup": setup,
         "failed_gates": list(failed_gates),

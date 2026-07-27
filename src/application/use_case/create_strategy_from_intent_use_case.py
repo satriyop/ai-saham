@@ -220,9 +220,7 @@ class CreateStrategyFromIntentUseCase:
         self._registry = registry
         self._rules_loader = rules_loader
 
-    def execute(
-        self, request: CreateStrategyFromIntentRequest
-    ) -> CreateStrategyFromIntentResponse:
+    def execute(self, request: CreateStrategyFromIntentRequest) -> CreateStrategyFromIntentResponse:
         """
         Translate natural language intent into a validated strategy.
 

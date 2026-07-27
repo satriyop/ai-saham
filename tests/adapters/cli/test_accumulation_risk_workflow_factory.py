@@ -30,8 +30,7 @@ def test_passes_provided_market_repository_into_use_case():
 
 def test_disabled_gates_in_custom_config_remain_disabled(tmp_path):
     risk_config_path = tmp_path / "risk.yaml"
-    risk_config_path.write_text(
-        """
+    risk_config_path.write_text("""
 version: 1
 risk_engine:
   gates:
@@ -43,8 +42,7 @@ risk_engine:
       enabled: false
     bandar:
       enabled: false
-"""
-    )
+""")
     market_repository = MagicMock()
 
     use_case = create_accumulation_assess_risk_use_case(
@@ -58,8 +56,7 @@ risk_engine:
 
 def test_accepts_custom_risk_config_path_not_only_global_app_cfg(tmp_path):
     risk_config_path = tmp_path / "custom_risk.yaml"
-    risk_config_path.write_text(
-        """
+    risk_config_path.write_text("""
 version: 1
 risk_engine:
   gates:
@@ -71,8 +68,7 @@ risk_engine:
       enabled: false
     bandar:
       enabled: false
-"""
-    )
+""")
     market_repository = MagicMock()
 
     use_case = create_accumulation_assess_risk_use_case(

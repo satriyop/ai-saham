@@ -74,14 +74,10 @@ def classify_broker_quality_from_flows(
     neutral_flow: Decimal,
 ) -> str:
     positive_total = sum(
-        value
-        for value in (smart_flow, noise_flow, neutral_flow)
-        if value > Decimal("0")
+        value for value in (smart_flow, noise_flow, neutral_flow) if value > Decimal("0")
     )
     negative_total = sum(
-        abs(value)
-        for value in (smart_flow, noise_flow, neutral_flow)
-        if value < Decimal("0")
+        abs(value) for value in (smart_flow, noise_flow, neutral_flow) if value < Decimal("0")
     )
 
     if positive_total == Decimal("0") and negative_total == Decimal("0"):

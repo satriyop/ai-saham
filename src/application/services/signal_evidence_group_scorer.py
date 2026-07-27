@@ -252,12 +252,8 @@ class SignalEvidenceGroupScorer:
         canonical_evidence = request.canonical_evidence
         setup_group_input = canonical_evidence.setup if canonical_evidence else None
         flow_group_input = canonical_evidence.flow if canonical_evidence else None
-        setup_source_auth = SignalEvidenceGroupScorer._source_authority_fraction(
-            setup_group_input
-        )
-        flow_source_auth = SignalEvidenceGroupScorer._source_authority_fraction(
-            flow_group_input
-        )
+        setup_source_auth = SignalEvidenceGroupScorer._source_authority_fraction(setup_group_input)
+        flow_source_auth = SignalEvidenceGroupScorer._source_authority_fraction(flow_group_input)
         flow_component_coverage = SignalEvidenceGroupScorer._flow_component_coverage(
             request.flow_confirmation_evidence
         )
@@ -274,13 +270,9 @@ class SignalEvidenceGroupScorer:
                 present=setup_present,
                 authoritative=setup_auth,
                 # Setup remains source-authoritative 1.0 or 0.0.
-                authority_fraction=(
-                    setup_source_auth if setup_present else 0.0
-                ),
+                authority_fraction=(setup_source_auth if setup_present else 0.0),
                 has_unassessed_contributors=(
-                    SignalEvidenceGroupScorer._has_unassessed_contributors(
-                        setup_group_input
-                    )
+                    SignalEvidenceGroupScorer._has_unassessed_contributors(setup_group_input)
                 ),
             ),
             _GroupAuthorityFacts(
@@ -294,14 +286,10 @@ class SignalEvidenceGroupScorer:
                 authoritative=flow_auth and flow_component_coverage > 0.0,
                 # flow authority = source_authoritative_fraction * component_coverage
                 authority_fraction=(
-                    flow_source_auth * flow_component_coverage
-                    if flow_present
-                    else 0.0
+                    flow_source_auth * flow_component_coverage if flow_present else 0.0
                 ),
                 has_unassessed_contributors=(
-                    SignalEvidenceGroupScorer._has_unassessed_contributors(
-                        flow_group_input
-                    )
+                    SignalEvidenceGroupScorer._has_unassessed_contributors(flow_group_input)
                 ),
             ),
         )
@@ -333,10 +321,7 @@ class SignalEvidenceGroupScorer:
         for fact in facts:
             if not (fact.is_production and fact.required):
                 continue
-            if (
-                scope is AuthorityDenominatorScope.ATTACHED_REQUIRED
-                and not fact.present
-            ):
+            if scope is AuthorityDenominatorScope.ATTACHED_REQUIRED and not fact.present:
                 continue
             denominator += fact.weight
             numerator += fact.weight * max(0.0, min(1.0, fact.authority_fraction))
@@ -393,9 +378,7 @@ class SignalEvidenceGroupScorer:
         return SignalStrength.WEAK
 
     @staticmethod
-    def _classify_entry(
-        strength: SignalStrength, config: SignalEngineConfig
-    ) -> EntryQuality:
+    def _classify_entry(strength: SignalStrength, config: SignalEngineConfig) -> EntryQuality:
         """Directional strength only (HIGH-2). Authority coverage is applied
         exactly once, downstream, by DecisionPolicyService — never here."""
         del config  # kept for call-signature stability; no thresholds remain
@@ -461,9 +444,7 @@ class SignalEvidenceGroupScorer:
                     continue
                 problems.append(f"{fact.name}: required evidence absent")
             elif fact.authority_fraction <= 0.0:
-                problems.append(
-                    f"{fact.name}: present but not source-authoritative"
-                )
+                problems.append(f"{fact.name}: present but not source-authoritative")
             elif fact.authority_fraction < 1.0:
                 if (
                     fact.name == "flow_confirmation"
@@ -471,19 +452,13 @@ class SignalEvidenceGroupScorer:
                     and flow_evidence.missing_components
                 ):
                     missing = ", ".join(flow_evidence.missing_components)
-                    problems.append(
-                        f"{fact.name}: missing components: {missing}"
-                    )
+                    problems.append(f"{fact.name}: missing components: {missing}")
                 else:
                     problems.append(
                         f"{fact.name}: partial authority "
                         f"(authority_fraction={fact.authority_fraction:.4f})"
                     )
-            if (
-                fact.present
-                and fact.has_unassessed_contributors
-                and fact.authority_fraction > 0.0
-            ):
+            if fact.present and fact.has_unassessed_contributors and fact.authority_fraction > 0.0:
                 problems.append(
                     f"{fact.name}: settled sources authoritative but "
                     "unassessed contributors prevent complete-authority claim"

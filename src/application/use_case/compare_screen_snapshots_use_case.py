@@ -97,11 +97,11 @@ class SignalChange:
 @dataclass(frozen=True)
 class ScreenCompareResult:
     snapshot_name: str
-    new_tickers: list[str]       # appeared in fresh results, not in saved
-    dropped_tickers: list[str]   # in saved, gone from fresh
+    new_tickers: list[str]  # appeared in fresh results, not in saved
+    dropped_tickers: list[str]  # in saved, gone from fresh
     changed: list[SignalChange]  # in both; with movement metrics
-    snapshot_count: int          # tickers in saved snapshot
-    fresh_count: int             # tickers in fresh results
+    snapshot_count: int  # tickers in saved snapshot
+    fresh_count: int  # tickers in fresh results
     warnings: tuple[str, ...] = field(default_factory=tuple)
 
     @property
@@ -121,7 +121,7 @@ def compare_screen_snapshots(
     snapshot: list[ScreenSnapshotEntry],
     fresh_tickers: list[str],
     fresh_scores: dict[str, tuple[float, float | None]],  # ticker → (accum_score, composite)
-    fresh_ranks: dict[str, int],                           # ticker → 1-based rank
+    fresh_ranks: dict[str, int],  # ticker → 1-based rank
     snapshot_name: str,
 ) -> ScreenCompareResult:
     """Diff a saved snapshot against a fresh set of screener results.
@@ -163,15 +163,17 @@ def compare_screen_snapshots(
             continue
         saved = saved_by_ticker[ticker]
         flow, comp = fresh_scores.get(ticker, (0.0, None))
-        changed.append(SignalChange(
-            ticker=ticker,
-            old_rank=saved.rank,
-            new_rank=fresh_ranks.get(ticker, 999),
-            old_composite=_normalize(saved.signal_score),
-            new_composite=comp,
-            old_flow=_normalize(saved.accum_score),
-            new_flow=flow,
-        ))
+        changed.append(
+            SignalChange(
+                ticker=ticker,
+                old_rank=saved.rank,
+                new_rank=fresh_ranks.get(ticker, 999),
+                old_composite=_normalize(saved.signal_score),
+                new_composite=comp,
+                old_flow=_normalize(saved.accum_score),
+                new_flow=flow,
+            )
+        )
 
     return ScreenCompareResult(
         snapshot_name=snapshot_name,

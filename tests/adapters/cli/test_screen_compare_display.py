@@ -5,12 +5,8 @@ Read-only regression coverage lives in test_screen_accum_compare_factory.py
 (test_compare_writes_zero_candidate_observations).
 """
 
-from pathlib import Path
 from types import SimpleNamespace
 
-from src.adapters.cli.screen_accum_compare_factory import (
-    FreshAccumulationScreenForCompareResult,
-)
 from src.adapters.cli.screen_lifecycle_commands import (
     _display_compare_result,
     screen_app,
@@ -119,29 +115,32 @@ _FAKE_SWING = SimpleNamespace(
 
 
 def test_compare_command_shows_specific_fresh_screen_error(monkeypatch, tmp_path):
+    from datetime import datetime
+
+    from src.domain.value_objects.screen_snapshot import ScreenSnapshotEntry
     from src.infrastructure.persistence.sqlite_watchlist_repository import (
         SQLiteWatchlistRepository,
     )
-    from src.domain.value_objects.screen_snapshot import ScreenSnapshotEntry
-    from datetime import datetime
 
     db_path = tmp_path / "test.db"
     repo = SQLiteWatchlistRepository(db_path)
-    repo.save_snapshot([
-        ScreenSnapshotEntry(
-            name="morning-watch",
-            saved_at=datetime(2026, 6, 20, 9, 0),
-            universe="lq45",
-            window_days=7,
-            ticker="BBCA",
-            rank=1,
-            accum_score=80.0,
-            signal_score=65.0,
-            consecutive_streak=3,
-            net_buy_ratio=0.71,
-            bci_label="CLUSTER",
-        )
-    ])
+    repo.save_snapshot(
+        [
+            ScreenSnapshotEntry(
+                name="morning-watch",
+                saved_at=datetime(2026, 6, 20, 9, 0),
+                universe="lq45",
+                window_days=7,
+                ticker="BBCA",
+                rank=1,
+                accum_score=80.0,
+                signal_score=65.0,
+                consecutive_streak=3,
+                net_buy_ratio=0.71,
+                bci_label="CLUSTER",
+            )
+        ]
+    )
 
     class BoomWorkflow:
         def execute(self, request):

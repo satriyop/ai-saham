@@ -200,9 +200,7 @@ def pre_open_capture(
         for row in result.observations
     ]
     session = (
-        run_date.isoformat()
-        if run_date is not None
-        else str(result.response.result.screened_date)
+        run_date.isoformat() if run_date is not None else str(result.response.result.screened_date)
     )
     payload = {
         "artifact_type": "pre_open_observation_capture",
@@ -234,11 +232,7 @@ def pre_open_capture(
                 f"    {row['ticker']:6}  {row['observation_id']}  "
                 f"{row['screen_result'] or '-'}  ({flag})"
             )
+    typer.echo("  Next: research pre-open track → analyze pre-open → labels → evaluate")
     typer.echo(
-        "  Next: research pre-open track → analyze pre-open "
-        "→ labels → evaluate"
-    )
-    typer.echo(
-        "  Analyze: saham assess pre-open --observation-id <id> "
-        "[--opening-snapshot-id <id>]"
+        "  Analyze: saham assess pre-open --observation-id <id> [--opening-snapshot-id <id>]"
     )

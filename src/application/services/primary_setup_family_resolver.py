@@ -119,7 +119,8 @@ class PrimarySetupFamilyResolver:
             current_phase = getattr(setup_phase, "current_phase", None)
             if current_phase is not None:
                 rationale.append(
-                    f"setup phase at resolution time: {getattr(current_phase, 'value', current_phase)}"
+                    f"setup phase at resolution time: "
+                    f"{getattr(current_phase, 'value', current_phase)}"
                 )
 
         explicit = _normalize(request_setup_family)
@@ -166,9 +167,7 @@ class PrimarySetupFamilyResolver:
 
         primary = self._select_primary(matched)
         if primary is None:
-            rationale.append(
-                "detected families present but none rank in configured priority"
-            )
+            rationale.append("detected families present but none rank in configured priority")
             source = "detected_unranked"
         else:
             source = "detected_screen_evidence"
@@ -233,9 +232,7 @@ class PrimarySetupFamilyResolver:
                 continue
             if family not in families:
                 families.append(family)
-                rationale.append(
-                    f"setup '{setup_name}' matched screen gates -> family={family}"
-                )
+                rationale.append(f"setup '{setup_name}' matched screen gates -> family={family}")
         return families
 
     def _select_primary(self, matched: list[str]) -> str | None:

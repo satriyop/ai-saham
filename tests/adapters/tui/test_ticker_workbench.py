@@ -10,8 +10,6 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from textual.widgets import Static
-
 from src.adapters.tui.composition import create_tui_app
 from src.adapters.tui.presenters.ticker_workbench_presenter import (
     TickerWorkbenchPresenter,
@@ -28,7 +26,6 @@ from src.infrastructure.config.app_config import AppConfig
 
 from .daily_fixtures import ready_response
 from .research_fixtures import single_result, ticker_response
-
 
 # --------------------------------------------------------------------------
 # Refresh-mode mapping — the heart of the C0 contract
@@ -126,9 +123,7 @@ def test_unavailable_signal_has_no_action_and_no_blockers():
 
 
 def test_preview_is_isolated_from_canonical_decision():
-    view = TickerWorkbenchPresenter().present(
-        ticker_response(preview_action="PREVIEW_ONLY")
-    )
+    view = TickerWorkbenchPresenter().present(ticker_response(preview_action="PREVIEW_ONLY"))
     # The optional preview lives only in its own section, never the decision badge.
     assert ("action", "PREVIEW_ONLY") in view.preview
     assert view.decision.badge.text != "PREVIEW_ONLY"

@@ -83,7 +83,8 @@ class SwingBacktestSimulator:
 
             if closed_today:
                 open_positions = [
-                    p for p in open_positions
+                    p
+                    for p in open_positions
                     if not any(
                         p.ticker == closed.ticker and p.entry_date == closed.entry_date
                         for closed in closed_today
@@ -137,12 +138,14 @@ class SwingBacktestSimulator:
             equity = cash + self._mark_to_market(open_positions, current_date)
             if open_positions:
                 exposure_days += 1
-            equity_curve.append(SwingBacktestDailyEquity(
-                date=current_date,
-                equity=equity,
-                cash=cash,
-                open_positions=len(open_positions),
-            ))
+            equity_curve.append(
+                SwingBacktestDailyEquity(
+                    date=current_date,
+                    equity=equity,
+                    cash=cash,
+                    open_positions=len(open_positions),
+                )
+            )
 
         if replay_dates:
             final_date = replay_dates[-1]

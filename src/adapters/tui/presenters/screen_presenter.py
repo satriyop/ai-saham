@@ -249,18 +249,14 @@ class ScreenPresenter:
                             canonical_rank=rank,
                             ticker=str(getattr(c, "ticker", multi_row.ticker)),
                             accum_score=float(getattr(c, "accum_score", 0.0) or 0.0),
-                            consecutive_streak=int(
-                                getattr(c, "consecutive_streak", 0) or 0
-                            ),
+                            consecutive_streak=int(getattr(c, "consecutive_streak", 0) or 0),
                             net_buy_ratio=float(getattr(c, "net_buy_ratio", 0.0) or 0.0),
                             bci_label=getattr(c, "bci_label", None),
-                            setup_phase=str(phase) if phase else getattr(
-                                multi_row, "setup_phase", None
+                            setup_phase=(
+                                str(phase) if phase else getattr(multi_row, "setup_phase", None)
                             ),
                             risk_status=str(
-                                risk_status
-                                or getattr(multi_row, "risk_status", None)
-                                or "OPEN"
+                                risk_status or getattr(multi_row, "risk_status", None) or "OPEN"
                             ),
                             action=str(action) if action else None,
                             signal_score=sig_score,
@@ -294,9 +290,7 @@ class ScreenPresenter:
                             net_buy_ratio=0.0,
                             bci_label=None,
                             setup_phase=getattr(multi_row, "setup_phase", None),
-                            risk_status=str(
-                                getattr(multi_row, "risk_status", None) or "OPEN"
-                            ),
+                            risk_status=str(getattr(multi_row, "risk_status", None) or "OPEN"),
                             action=getattr(multi_row, "next_action", None),
                             signal_score=sig_score,
                             signal_authority_coverage=sig_cov,

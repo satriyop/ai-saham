@@ -63,11 +63,7 @@ class DecisionPolicyService:
         setup_key = _normalize_setup_family(setup_family)
         setup_action_name: str | None = None
         if setup_key is not None:
-            setup_action_name = (
-                self._config.setup_regime_policy
-                .get(setup_key, {})
-                .get(regime)
-            )
+            setup_action_name = self._config.setup_regime_policy.get(setup_key, {}).get(regime)
             if setup_action_name is not None:
                 action_cfg = self._config.setup_regime_actions[setup_action_name]
                 before = max_decision
@@ -77,9 +73,7 @@ class DecisionPolicyService:
                         f"Setup {setup_key} tightens {regime} to {action_cfg.max_decision}"
                     )
                 elif _ORDER[action_cfg.max_decision] > _ORDER[before]:
-                    reasons.append(
-                        "Setup-specific policy cannot override regime ENTER block"
-                    )
+                    reasons.append("Setup-specific policy cannot override regime ENTER block")
 
         if (
             regime_policy.enter_allowed
@@ -88,18 +82,14 @@ class DecisionPolicyService:
             and score < regime_policy.enter_threshold
         ):
             max_decision = _stricter(max_decision, EntryQuality.WATCH.value)
-            reasons.append(
-                f"{regime} ENTER requires score >= {regime_policy.enter_threshold}"
-            )
+            reasons.append(f"{regime} ENTER requires score >= {regime_policy.enter_threshold}")
 
         if (
             entry_quality in {EntryQuality.ENTER, EntryQuality.WATCH}
             and score < regime_policy.watch_threshold
         ):
             max_decision = _stricter(max_decision, EntryQuality.AVOID.value)
-            reasons.append(
-                f"{regime} WATCH requires score >= {regime_policy.watch_threshold}"
-            )
+            reasons.append(f"{regime} WATCH requires score >= {regime_policy.watch_threshold}")
 
         # ── HIGH-2: canonical signal_authority_coverage floor, applied exactly
         # once here. No other code path may apply a second coverage check.
@@ -112,7 +102,10 @@ class DecisionPolicyService:
                     f"{regime_policy.min_signal_authority_coverage:.0%}"
                 )
 
-        if not regime_policy.enter_allowed and entry_quality in {EntryQuality.ENTER, EntryQuality.WATCH}:
+        if not regime_policy.enter_allowed and entry_quality in {
+            EntryQuality.ENTER,
+            EntryQuality.WATCH,
+        }:
             # In disabled regimes (RISK_OFF/VOLATILE): floor governs WATCH diagnostic quality
             # — below floor means insufficient evidence for even a watchlist entry
             if signal_authority_coverage < regime_policy.min_signal_authority_coverage:
@@ -126,7 +119,7 @@ class DecisionPolicyService:
         # ── A2: regime quality caps (tightening-only; never relax A1 caps) ────
         if market_context is not None:
             regime_confidence = getattr(market_context, "regime_confidence", None)
-            regime_stability  = getattr(market_context, "regime_stability", None)
+            regime_stability = getattr(market_context, "regime_stability", None)
 
             if (
                 self._config.regime_transitioning_cap_enter
@@ -159,9 +152,7 @@ class DecisionPolicyService:
                 SetupPhaseState.FAILED,
             }:
                 max_decision = _stricter(max_decision, EntryQuality.AVOID.value)
-                reasons.append(
-                    f"Setup readiness INELIGIBLE (phase {phase.value}) blocks entry"
-                )
+                reasons.append(f"Setup readiness INELIGIBLE (phase {phase.value}) blocks entry")
             elif status == SetupReadinessStatus.INELIGIBLE and phase == SetupPhaseState.EXHAUSTION:
                 max_decision = _stricter(max_decision, EntryQuality.WATCH.value)
                 reasons.append("Setup readiness EXHAUSTION caps ENTER to WATCH")

@@ -14,10 +14,10 @@ import yaml
 
 from src.application.dto.accumulation_screen import AccumulationDerivedFeaturePolicy
 from src.application.use_case.score_accum_use_case import (
+    AccumScorePolicy,
     BciEvidencePolicy,
     BollingerSqueezePolicy,
     EvidenceComponentPolicy,
-    AccumScorePolicy,
     LinearSaturationPolicy,
     RsiEvidencePolicy,
     StreakEvidencePolicy,
@@ -46,9 +46,7 @@ class AccumulationDisplayConfig:
 
 @dataclass(frozen=True)
 class AccumulationScreenerConfig:
-    accum_score_policy: AccumScorePolicy = field(
-        default_factory=AccumScorePolicy
-    )
+    accum_score_policy: AccumScorePolicy = field(default_factory=AccumScorePolicy)
     derived_features: AccumulationDerivedFeaturePolicy = field(
         default_factory=AccumulationDerivedFeaturePolicy
     )

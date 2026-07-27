@@ -88,9 +88,7 @@ def _parse_detailed_row(
     avg_buy_price = (
         buy_value / (buy_lot * 100) if buy_lot > 0 else Decimal("0")
     )  # 100 shares per lot
-    avg_sell_price = (
-        sell_value / (sell_lot * 100) if sell_lot > 0 else Decimal("0")
-    )
+    avg_sell_price = sell_value / (sell_lot * 100) if sell_lot > 0 else Decimal("0")
 
     transaction = BrokerTransaction(
         broker_code=broker_code,
@@ -133,9 +131,7 @@ def parse_detailed_broker_csv(
             error, or FAIL strategy triggered
     """
     # Group transactions by (ticker, date)
-    transactions_by_key: dict[tuple[str, date], list[BrokerTransaction]] = (
-        defaultdict(list)
-    )
+    transactions_by_key: dict[tuple[str, date], list[BrokerTransaction]] = defaultdict(list)
     errors = []
     total_rows = 0
     skipped_rows = 0
@@ -171,15 +167,11 @@ def parse_detailed_broker_csv(
                         raise CsvBrokerParserError(f"Parse error: {error}")
 
     except UnicodeDecodeError:
-        raise CsvBrokerParserError(
-            "Could not decode file. Please ensure UTF-8 encoding."
-        )
+        raise CsvBrokerParserError("Could not decode file. Please ensure UTF-8 encoding.")
 
     # Aggregate transactions into summaries
     summaries = []
-    for (ticker, row_date), transactions in sorted(
-        transactions_by_key.items()
-    ):
+    for (ticker, row_date), transactions in sorted(transactions_by_key.items()):
         if max_rows and len(summaries) >= max_rows:
             break
 

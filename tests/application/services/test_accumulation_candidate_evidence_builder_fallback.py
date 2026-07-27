@@ -258,9 +258,7 @@ class TestPublicBuildFlowWithoutInjectedFactories:
         candidate = _candidate()
         snapshot_date = date(2026, 6, 10)
 
-        result = builder.build_candidate_sector_context(
-            candidate, snapshot_date, tp_snapshot=None
-        )
+        result = builder.build_candidate_sector_context(candidate, snapshot_date, tp_snapshot=None)
 
         assert result is not None
         # No injected sector factory: falls back to an empty sector index,

@@ -35,9 +35,7 @@ from src.domain.value_objects.benchmark_symbol import CANONICAL_BENCHMARK_TICKER
 from tests.application.use_case.accumulation_screen_fixtures import FakeRulesLoader
 
 
-def _excess_return(
-    window_sessions: int, excess_return_pct: float
-) -> BenchmarkExcessReturn:
+def _excess_return(window_sessions: int, excess_return_pct: float) -> BenchmarkExcessReturn:
     return BenchmarkExcessReturn(
         benchmark="IHSG",
         window_sessions=window_sessions,
@@ -209,9 +207,7 @@ class TestInstitutionalEvidenceFailureReturnsNone:
 
 class TestTickerProfileFailureReturnsNone:
     def test_returns_none_when_classifier_factory_raises(self):
-        builder = _builder(
-            ticker_profile_classifier_factory=_RaisingFactory("classifier down")
-        )
+        builder = _builder(ticker_profile_classifier_factory=_RaisingFactory("classifier down"))
         candidate = _candidate()
 
         result = builder.build_candidate_ticker_profile(candidate, date(2026, 6, 10))
@@ -244,9 +240,7 @@ class TestCompanyQualityFailureReturnsNone:
         builder = _builder(signal_engine=None)
         candidate = _candidate()
 
-        result = builder.build_candidate_company_quality_context(
-            candidate, date(2026, 6, 10)
-        )
+        result = builder.build_candidate_company_quality_context(candidate, date(2026, 6, 10))
 
         assert result is None
 
@@ -257,9 +251,7 @@ class TestCompanyQualityFailureReturnsNone:
         )
         candidate = _candidate()
 
-        result = builder.build_candidate_company_quality_context(
-            candidate, date(2026, 6, 10)
-        )
+        result = builder.build_candidate_company_quality_context(candidate, date(2026, 6, 10))
 
         assert result is None
 
@@ -474,12 +466,14 @@ class TestBenchmarkExcessReturnUsesCanonicalCandleRows:
 
         # 10-11. Provenance contains only the canonical rows.
         built = assembler.built_setup_evidence
-        assert tuple(
-            (row.ticker, row.date) for row in built.provenance.candle_rows
-        ) == (("BBCA", date(2026, 6, 13)), ("BBCA", date(2026, 6, 15)))
-        assert tuple(
-            (row.ticker, row.date) for row in built.provenance.benchmark_candle_rows
-        ) == (("IHSG", date(2026, 6, 13)), ("IHSG", date(2026, 6, 15)))
+        assert tuple((row.ticker, row.date) for row in built.provenance.candle_rows) == (
+            ("BBCA", date(2026, 6, 13)),
+            ("BBCA", date(2026, 6, 15)),
+        )
+        assert tuple((row.ticker, row.date) for row in built.provenance.benchmark_candle_rows) == (
+            ("IHSG", date(2026, 6, 13)),
+            ("IHSG", date(2026, 6, 15)),
+        )
 
         # 12. The ASII row, wrong benchmark row, and both future rows are
         # absent from calculator inputs, setup-builder inputs, provenance,
@@ -489,17 +483,15 @@ class TestBenchmarkExcessReturnUsesCanonicalCandleRows:
             ("BBCA", date(2026, 6, 14)),
             ("IHSG", date(2026, 6, 16)),
         }
-        observed_ticker_rows = {
-            (c.ticker, c.date) for c in recorded_calculator_ticker_candles
-        } | {(row.ticker, row.date) for row in built.provenance.candle_rows}
+        observed_ticker_rows = {(c.ticker, c.date) for c in recorded_calculator_ticker_candles} | {
+            (row.ticker, row.date) for row in built.provenance.candle_rows
+        }
         observed_benchmark_rows = {
             (c.ticker, c.date) for c in recorded_calculator_benchmark_candles
         } | {(row.ticker, row.date) for row in built.provenance.benchmark_candle_rows}
         assert not (forbidden_ticker_rows & observed_ticker_rows)
         assert not (forbidden_benchmark_rows & observed_benchmark_rows)
-        assert not any(
-            (c.ticker, c.date) in forbidden_ticker_rows for c in detect_call["candles"]
-        )
+        assert not any((c.ticker, c.date) in forbidden_ticker_rows for c in detect_call["candles"])
 
         # Existing behavior preserved: diagnostic attributes still attached.
         assert candidate.benchmark_excess_return_5_session.excess_return_pct == 3.3
@@ -540,9 +532,11 @@ class TestBuildSetupEvidenceDefensiveNormalization:
             benchmark_candles=benchmark_candles,
         )
 
-        assert tuple(
-            (row.ticker, row.date) for row in built.provenance.candle_rows
-        ) == (("BBCA", date(2026, 6, 13)), ("BBCA", date(2026, 6, 15)))
-        assert tuple(
-            (row.ticker, row.date) for row in built.provenance.benchmark_candle_rows
-        ) == (("IHSG", date(2026, 6, 13)), ("IHSG", date(2026, 6, 15)))
+        assert tuple((row.ticker, row.date) for row in built.provenance.candle_rows) == (
+            ("BBCA", date(2026, 6, 13)),
+            ("BBCA", date(2026, 6, 15)),
+        )
+        assert tuple((row.ticker, row.date) for row in built.provenance.benchmark_candle_rows) == (
+            ("IHSG", date(2026, 6, 13)),
+            ("IHSG", date(2026, 6, 15)),
+        )

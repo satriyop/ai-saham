@@ -145,11 +145,11 @@ from src.infrastructure.persistence.ihsg_trading_session_calendar_provider impor
     IHSGTradingSessionCalendarProvider,
 )
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
-from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
-    SQLiteLearningArtifactRepository,
-)
 from src.infrastructure.persistence.sqlite_corporate_action_calendar_repository import (
     SQLiteCorporateActionCalendarRepository,
+)
+from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
+    SQLiteLearningArtifactRepository,
 )
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
@@ -533,6 +533,7 @@ def _resolve_universe_tickers(universe_name: str) -> list[str]:
     try:
         from src.application.services.universe_loader import load_universe as _load_uni
         from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
+
         return _load_uni((universe_name or "lq45").lower(), YamlUniverseConfigLoader())
     except Exception:
         return []
@@ -675,7 +676,9 @@ def _build_daily_refresh_execution(
         no_calendar=not request.include_calendar,
     )
 
-    def refresh_market_data_capability(req: Any, on_start: Any = None, on_ticker_complete: Any = None):
+    def refresh_market_data_capability(
+        req: Any, on_start: Any = None, on_ticker_complete: Any = None
+    ):
         return workflow_use_case.execute(
             workflow_req,
             on_start=on_start,
@@ -743,9 +746,7 @@ class _ScreenDepsAccumulationRunner:
 
         tickers = list(request.tickers)
         if not tickers:
-            universe = (
-                request.universe_name or request.universe_label or "lq45"
-            ).lower()
+            universe = (request.universe_name or request.universe_label or "lq45").lower()
             tickers = resolve_tickers(
                 universe=universe,
                 explicit=[],
@@ -825,8 +826,6 @@ def _build_cached_ticker_search(db_path: Path) -> Callable[[str], tuple[str, ...
         # No limit: the search must expose the complete cached universe, not an
         # arbitrary slice. The modal list scrolls, so returning every match keeps
         # the universe fully reachable while typing narrows it.
-        return use_case.execute(
-            ListCachedTickersRequest(prefix=prefix or None, limit=None)
-        ).tickers
+        return use_case.execute(ListCachedTickersRequest(prefix=prefix or None, limit=None)).tickers
 
     return search

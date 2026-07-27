@@ -42,8 +42,7 @@ def read_enrichment_pit_coverage(db_path: Path) -> list[EnrichmentPitTableCovera
         try:
             with sqlite3.connect(str(db_path)) as conn:
                 agg = conn.execute(
-                    f"SELECT COUNT(DISTINCT {date_expr}), MAX({date_expr}) "
-                    f"FROM {table}"
+                    f"SELECT COUNT(DISTINCT {date_expr}), MAX({date_expr}) FROM {table}"
                 ).fetchone()
                 snap_count = int(agg[0]) if agg and agg[0] else 0
                 latest_date = agg[1] if agg else None
@@ -51,8 +50,7 @@ def read_enrichment_pit_coverage(db_path: Path) -> list[EnrichmentPitTableCovera
                 if latest_date:
                     ticker_count = (
                         conn.execute(
-                            f"SELECT COUNT(DISTINCT ticker) FROM {table} "
-                            f"WHERE {date_expr} = ?",
+                            f"SELECT COUNT(DISTINCT ticker) FROM {table} WHERE {date_expr} = ?",
                             (latest_date,),
                         ).fetchone()[0]
                         or 0

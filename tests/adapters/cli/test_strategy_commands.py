@@ -39,7 +39,7 @@ def create_strategy(base_dir: Path, name: str, content: str | None = None) -> Pa
     strategy_dir.mkdir(parents=True, exist_ok=True)
 
     if content is None:
-        content = f'''version: 1
+        content = f"""version: 1
 name: "{name}"
 description: "Test strategy"
 default_outcome: MODERATE
@@ -51,7 +51,7 @@ rules:
       operator: "<"
       value: 30
     outcome: LOW_RISK
-'''
+"""
 
     (strategy_dir / "strategy.yaml").write_text(content, encoding="utf-8")
     return strategy_dir
@@ -138,9 +138,7 @@ class TestStrategyInit:
                 readme_warning="disk full",
             )
 
-        monkeypatch.setattr(
-            use_case_mod.CreateStrategyPackageUseCase, "execute", patched_execute
-        )
+        monkeypatch.setattr(use_case_mod.CreateStrategyPackageUseCase, "execute", patched_execute)
 
         result = runner.invoke(
             app,
@@ -380,10 +378,13 @@ class TestStrategyCreate:
         result = runner.invoke(
             app,
             [
-                "strategy", "create",
+                "strategy",
+                "create",
                 "RSI oversold strategy",
-                "--name", "test_rsi",
-                "--provider", "mock",
+                "--name",
+                "test_rsi",
+                "--provider",
+                "mock",
             ],
         )
 
@@ -406,11 +407,15 @@ class TestStrategyCreate:
         result = runner.invoke(
             app,
             [
-                "strategy", "create",
+                "strategy",
+                "create",
                 "RSI strategy",
-                "--name", "my_rsi",
-                "--provider", "mock",
-                "--dir", str(target_dir),
+                "--name",
+                "my_rsi",
+                "--provider",
+                "mock",
+                "--dir",
+                str(target_dir),
             ],
         )
 
@@ -424,10 +429,13 @@ class TestStrategyCreate:
         result = runner.invoke(
             app,
             [
-                "strategy", "create",
+                "strategy",
+                "create",
                 "EMA crossover",
-                "--name", "preview_ema",
-                "--provider", "mock",
+                "--name",
+                "preview_ema",
+                "--provider",
+                "mock",
                 "--no-save",
             ],
         )
@@ -448,9 +456,11 @@ class TestStrategyCreate:
         result = runner.invoke(
             app,
             [
-                "strategy", "create",
+                "strategy",
+                "create",
                 "momentum trading system",
-                "--provider", "mock",
+                "--provider",
+                "mock",
             ],
         )
 
@@ -465,10 +475,13 @@ class TestStrategyCreate:
         result = runner.invoke(
             app,
             [
-                "strategy", "create",
+                "strategy",
+                "create",
                 "predict tomorrow's price",
-                "--name", "prediction",
-                "--provider", "mock",
+                "--name",
+                "prediction",
+                "--provider",
+                "mock",
             ],
         )
 
@@ -483,10 +496,13 @@ class TestStrategyCreate:
         result = runner.invoke(
             app,
             [
-                "strategy", "create",
+                "strategy",
+                "create",
                 "EMA crossover with 9 and 21 periods",
-                "--name", "ema_cross",
-                "--provider", "mock",
+                "--name",
+                "ema_cross",
+                "--provider",
+                "mock",
             ],
         )
 
@@ -501,10 +517,13 @@ class TestStrategyCreate:
         result = runner.invoke(
             app,
             [
-                "strategy", "create",
+                "strategy",
+                "create",
                 "RSI oversold with EMA crossover confirmation",
-                "--name", "combined",
-                "--provider", "mock",
+                "--name",
+                "combined",
+                "--provider",
+                "mock",
             ],
         )
 
@@ -520,10 +539,13 @@ class TestStrategyCreate:
         result = runner.invoke(
             app,
             [
-                "strategy", "create",
+                "strategy",
+                "create",
                 "RSI strategy",
-                "--name", "test",
-                "--provider", "invalid_provider",
+                "--name",
+                "test",
+                "--provider",
+                "invalid_provider",
             ],
         )
 
@@ -540,10 +562,13 @@ class TestStrategyCreate:
         result = runner.invoke(
             app,
             [
-                "strategy", "create",
+                "strategy",
+                "create",
                 "RSI strategy",
-                "--name", "existing",
-                "--provider", "mock",
+                "--name",
+                "existing",
+                "--provider",
+                "mock",
             ],
             input="n\n",  # Answer "no" to overwrite
         )
@@ -564,10 +589,13 @@ class TestStrategyCreate:
         result = runner.invoke(
             app,
             [
-                "strategy", "create",
+                "strategy",
+                "create",
                 "RSI strategy",
-                "--name", "overwrite_me",
-                "--provider", "mock",
+                "--name",
+                "overwrite_me",
+                "--provider",
+                "mock",
             ],
             input="y\n",  # Answer "yes" to overwrite
         )
@@ -583,10 +611,13 @@ class TestStrategyCreate:
         result = runner.invoke(
             app,
             [
-                "strategy", "create",
+                "strategy",
+                "create",
                 "RSI strategy",
-                "--name", "next_steps_test",
-                "--provider", "mock",
+                "--name",
+                "next_steps_test",
+                "--provider",
+                "mock",
             ],
         )
 

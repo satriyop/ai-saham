@@ -54,25 +54,63 @@ logger = logging.getLogger(__name__)
 
 # All known category labels from Stockbit shareholding API
 _ALL_CATEGORIES = {
-    "Mutual Funds", "Pension Funds", "Exchange Traded Funds", "Insurance",
-    "Bank", "Central Bank", "Sovereign Wealth Fund", "Hedge Fund",
-    "Investment Advisors", "Investment Manager", "Financial Institutional",
-    "Capital Market Inst.", "Private Bank", "Private Equity", "Trustee Bank",
-    "State Owned Enterprises", "Government", "Securities Company",
-    "Foundation", "Partnership", "Corporate", "State Owned Company",
-    "Educational Institution", "Assoc/Social Org", "Firm",
-    "CV / Limited Partnership", "Congregation", "Brokerage Firms",
-    "Sole Proprietorship", "Diocese", "Conference", "Peer to Peer Lending",
-    "Cooperatives", "Individual", "International Organization",
+    "Mutual Funds",
+    "Pension Funds",
+    "Exchange Traded Funds",
+    "Insurance",
+    "Bank",
+    "Central Bank",
+    "Sovereign Wealth Fund",
+    "Hedge Fund",
+    "Investment Advisors",
+    "Investment Manager",
+    "Financial Institutional",
+    "Capital Market Inst.",
+    "Private Bank",
+    "Private Equity",
+    "Trustee Bank",
+    "State Owned Enterprises",
+    "Government",
+    "Securities Company",
+    "Foundation",
+    "Partnership",
+    "Corporate",
+    "State Owned Company",
+    "Educational Institution",
+    "Assoc/Social Org",
+    "Firm",
+    "CV / Limited Partnership",
+    "Congregation",
+    "Brokerage Firms",
+    "Sole Proprietorship",
+    "Diocese",
+    "Conference",
+    "Peer to Peer Lending",
+    "Cooperatives",
+    "Individual",
+    "International Organization",
 }
 
 # Institutional subset — professional money
 _INSTITUTION_LABELS = {
-    "Mutual Funds", "Pension Funds", "Exchange Traded Funds", "Insurance",
-    "Bank", "Central Bank", "Sovereign Wealth Fund", "Hedge Fund",
-    "Investment Advisors", "Investment Manager", "Financial Institutional",
-    "Capital Market Inst.", "Private Bank", "Private Equity", "Trustee Bank",
-    "State Owned Enterprises", "Government", "State Owned Company",
+    "Mutual Funds",
+    "Pension Funds",
+    "Exchange Traded Funds",
+    "Insurance",
+    "Bank",
+    "Central Bank",
+    "Sovereign Wealth Fund",
+    "Hedge Fund",
+    "Investment Advisors",
+    "Investment Manager",
+    "Financial Institutional",
+    "Capital Market Inst.",
+    "Private Bank",
+    "Private Equity",
+    "Trustee Bank",
+    "State Owned Enterprises",
+    "Government",
+    "State Owned Company",
     "Securities Company",
 }
 
@@ -275,9 +313,11 @@ class StockbitShareholdingProvider(ShareholdingProvider, StockbitCachingProvider
             fetched_at = _parse_fetched_at(row[0])
             if fetched_at is None:
                 return None
-            if as_of_date is None and (
-                datetime.now() - fetched_at
-            ).days > self._stockbit_config.cache_ttl_days_shareholding:
+            if (
+                as_of_date is None
+                and (datetime.now() - fetched_at).days
+                > self._stockbit_config.cache_ttl_days_shareholding
+            ):
                 return None
             return ShareholdingComposition(
                 ticker=ticker,
@@ -295,9 +335,7 @@ class StockbitShareholdingProvider(ShareholdingProvider, StockbitCachingProvider
             return None
 
     def _write_cache(self, comp: ShareholdingComposition) -> None:
-        fetched_str = (
-            comp.fetched_at.isoformat() if comp.fetched_at else datetime.now().isoformat()
-        )
+        fetched_str = comp.fetched_at.isoformat() if comp.fetched_at else datetime.now().isoformat()
 
         def _do_write():
             with sqlite3.connect(self._db_path) as conn:

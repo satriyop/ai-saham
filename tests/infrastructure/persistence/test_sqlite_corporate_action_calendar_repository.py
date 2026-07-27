@@ -130,7 +130,10 @@ class TestDateRoleRowReplacement:
 
         with repo._get_connection() as conn:
             rows = conn.execute(
-                "SELECT date_role, event_date FROM corporate_action_event_dates WHERE source_event_id=?",
+                (
+                    "SELECT date_role, event_date FROM corporate_action_event_dates WHERE"
+                    "source_event_id=?"
+                ),
                 ("ev1",),
             ).fetchall()
         roles = {r["date_role"] for r in rows}
@@ -153,12 +156,20 @@ class TestDateRoleRowReplacement:
         )
         # Re-save A with a totally different role set.
         repo.save_events(
-            [_event(source_event_id="A", dates=(_date_row(CorporateActionDateRole.PAYMENT_DATE, date(2026, 9, 1)),))]
+            [
+                _event(
+                    source_event_id="A",
+                    dates=(_date_row(CorporateActionDateRole.PAYMENT_DATE, date(2026, 9, 1)),),
+                )
+            ]
         )
         assert _count_date_rows(repo, "B") == 1
         with repo._get_connection() as conn:
             b_row = conn.execute(
-                "SELECT date_role, event_date FROM corporate_action_event_dates WHERE source_event_id=?",
+                (
+                    "SELECT date_role, event_date FROM corporate_action_event_dates WHERE"
+                    "source_event_id=?"
+                ),
                 ("B",),
             ).fetchone()
         assert b_row["date_role"] == CorporateActionDateRole.EX_DATE.value
@@ -190,7 +201,11 @@ class TestSyncMarkers:
         assert repo.has_synced_for_date(date(2026, 7, 11), types) is False
 
     def test_different_event_type_subsets_have_independent_sync_keys(self, repo):
-        repo.mark_synced(date(2026, 7, 11), (CorporateActionType.DIVIDEND, CorporateActionType.IPO), status="success")
+        repo.mark_synced(
+            date(2026, 7, 11),
+            (CorporateActionType.DIVIDEND, CorporateActionType.IPO),
+            status="success",
+        )
         assert repo.has_synced_for_date(date(2026, 7, 11), (CorporateActionType.RUPS,)) is False
 
     def test_same_subset_different_order_collapses_to_same_sync_key(self, repo):
@@ -200,7 +215,9 @@ class TestSyncMarkers:
             status="success",
         )
         assert (
-            repo.has_synced_for_date(date(2026, 7, 11), (CorporateActionType.IPO, CorporateActionType.DIVIDEND))
+            repo.has_synced_for_date(
+                date(2026, 7, 11), (CorporateActionType.IPO, CorporateActionType.DIVIDEND)
+            )
             is True
         )
 

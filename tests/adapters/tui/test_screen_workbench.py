@@ -12,24 +12,21 @@ from textual.widgets import Checkbox, Select, Static
 from src.adapters.tui.composition import create_tui_app
 from src.adapters.tui.controllers.screen_controller import (
     ScreenController,
-    ScreenWorkspaceState,
 )
-from src.adapters.tui.screens.screen_workspace_screen import ScreenWorkspaceScreen
-
-from .daily_fixtures import ready_response
-from .research_fixtures import single_result
 from src.adapters.tui.presenters.screen_presenter import (
-    ScreenCandidateRowView,
     ScreenPresenter,
     ScreenViewModel,
 )
+from src.adapters.tui.screens.screen_workspace_screen import ScreenWorkspaceScreen
 from src.adapters.tui.state import ScreenStatus
 from src.application.dto.accumulation_screen import AccumulationCandidate
 from src.application.services.screen_accum_result_projector import (
     ScreenAccumMultiProjection,
     ScreenAccumSingleProjection,
 )
-from src.domain.value_objects.screen_snapshot import ScreenSnapshotEntry
+
+from .daily_fixtures import ready_response
+from .research_fixtures import single_result
 
 
 def test_screen_presenter_formats_single_projection() -> None:
@@ -88,7 +85,6 @@ def test_screen_presenter_multi_survives_null_canonical_candidate() -> None:
 
     from src.application.services.screen_accum_result_projector import (
         MultiScreenAppliedFilters,
-        ScreenAccumMultiProjection,
         ScreenAccumMultiRow,
     )
     from src.application.use_case.run_accumulation_screen_workflow_use_case import (
@@ -156,7 +152,6 @@ def test_screen_multi_table_shows_window_columns_and_pattern() -> None:
 
     from src.application.services.screen_accum_result_projector import (
         MultiScreenAppliedFilters,
-        ScreenAccumMultiProjection,
         ScreenAccumMultiRow,
     )
     from src.application.use_case.run_accumulation_screen_workflow_use_case import (
@@ -214,9 +209,7 @@ def test_screen_multi_table_shows_window_columns_and_pattern() -> None:
         screened_at=date(2026, 7, 22),
         canonical_window=7,
     )
-    payload = RunAccumulationScreenWorkflowResult(
-        multi_projection=multi, multi_results={}
-    )
+    payload = RunAccumulationScreenWorkflowResult(multi_projection=multi, multi_results={})
 
     controller = ScreenController(
         load_universe=lambda u: [],
@@ -513,9 +506,7 @@ def test_row_selected_does_not_open_workbench() -> None:
 
             table = screen.query_one("#candidate-table", DataTable)
             row_key = table.coordinate_to_cell_key(table.cursor_coordinate)[0]
-            screen._on_row_selected(
-                DataTable.RowSelected(table, table.cursor_row, row_key)
-            )
+            screen._on_row_selected(DataTable.RowSelected(table, table.cursor_row, row_key))
             await pilot.pause(0.02)
             assert opened == []
             assert isinstance(screen.app.screen, ScreenWorkspaceScreen)
@@ -592,10 +583,21 @@ def test_save_uses_actual_screened_universe_and_window_not_hardcoded() -> None:
     )
 
     screen._last_request = RunAccumulationScreenWorkflowRequest(
-        tickers=[], universe_label="idx30", universe_name="idx30", window=30,
-        min_streak=0, min_accum_score=None, min_signal_score=None,
-        min_piotroski=0, strategy_name=None, include_strategy_overlay=False,
-        multi=False, windows=[], top=50, save_name=None, save_enabled=False,
+        tickers=[],
+        universe_label="idx30",
+        universe_name="idx30",
+        window=30,
+        min_streak=0,
+        min_accum_score=None,
+        min_signal_score=None,
+        min_piotroski=0,
+        strategy_name=None,
+        include_strategy_overlay=False,
+        multi=False,
+        windows=[],
+        top=50,
+        save_name=None,
+        save_enabled=False,
     )
 
     result = screen._perform_save("idx30_list")
@@ -648,9 +650,14 @@ def _universe_result() -> UniverseViewResult:
         as_of_date=date(2026, 7, 22),
         rows=[
             UniverseTickerRow(
-                ticker="BBRI", name="Bank BRI", sector="Financials",
-                last_close=Decimal("4840"), change_pct=1.2, volume=1000000,
-                foreign_net_value=Decimal("5000000"), foreign_flow_ratio=0.18,
+                ticker="BBRI",
+                name="Bank BRI",
+                sector="Financials",
+                last_close=Decimal("4840"),
+                change_pct=1.2,
+                volume=1000000,
+                foreign_net_value=Decimal("5000000"),
+                foreign_flow_ratio=0.18,
                 latest_date=date(2026, 7, 22),
             )
         ],
@@ -701,8 +708,11 @@ def test_saved_tab_lists_then_compares_selected_snapshot() -> None:
     list_uc.execute.return_value = ListScreenWatchlistsResult(
         summaries=(
             ScreenWatchlistSummary(
-                name="my_list", latest_saved_at=datetime(2026, 7, 21, 10, 0),
-                universe="lq45", window_days=7, ticker_count=2,
+                name="my_list",
+                latest_saved_at=datetime(2026, 7, 21, 10, 0),
+                universe="lq45",
+                window_days=7,
+                ticker_count=2,
             ),
         ),
     )
@@ -710,13 +720,20 @@ def test_saved_tab_lists_then_compares_selected_snapshot() -> None:
     compare_uc = MagicMock()
     compare_uc.execute.return_value = CompareScreenWatchlistResult(
         saved_summary=ScreenWatchlistSummary(
-            name="my_list", latest_saved_at=datetime(2026, 7, 21, 10, 0),
-            universe="lq45", window_days=7, ticker_count=2,
+            name="my_list",
+            latest_saved_at=datetime(2026, 7, 21, 10, 0),
+            universe="lq45",
+            window_days=7,
+            ticker_count=2,
         ),
         fresh_projection=MagicMock(),
         comparison=ScreenCompareResult(
-            snapshot_name="my_list", new_tickers=["BBNI"], dropped_tickers=["BMRI"],
-            changed=[], snapshot_count=2, fresh_count=1,
+            snapshot_name="my_list",
+            new_tickers=["BBNI"],
+            dropped_tickers=["BMRI"],
+            changed=[],
+            snapshot_count=2,
+            fresh_count=1,
         ),
     )
 
@@ -751,8 +768,7 @@ def test_saved_tab_lists_then_compares_selected_snapshot() -> None:
             table = screen.query_one("#candidate-table")
             # Compare groups rendered as DataTable rows.
             flat = " ".join(
-                " ".join(str(cell) for cell in table.get_row_at(i))
-                for i in range(table.row_count)
+                " ".join(str(cell) for cell in table.get_row_at(i)) for i in range(table.row_count)
             )
             assert "New" in flat and "BBNI" in flat
             assert "Dropped" in flat and "BMRI" in flat

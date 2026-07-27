@@ -54,22 +54,13 @@ def score_seasonality(
     """
     if ctx.seasonality_win_rate is None or ctx.seasonality_avg_return_pct is None:
         return neutral_score, False
-    if (
-        ctx.seasonality_total_years is None
-        or ctx.seasonality_total_years < 5
-    ):
+    if ctx.seasonality_total_years is None or ctx.seasonality_total_years < 5:
         return neutral_score, False
 
     win = ctx.seasonality_win_rate
     avg = ctx.seasonality_avg_return_pct
-    is_tailwind = (
-        avg > tailwind_min_avg_return_pct
-        and win > tailwind_min_win_rate_pct
-    )
-    is_headwind = (
-        avg < headwind_max_avg_return_pct
-        and win < headwind_max_win_rate_pct
-    )
+    is_tailwind = avg > tailwind_min_avg_return_pct and win > tailwind_min_win_rate_pct
+    is_headwind = avg < headwind_max_avg_return_pct and win < headwind_max_win_rate_pct
 
     if is_tailwind:
         return win, True
@@ -144,9 +135,7 @@ def score_forward_pe(
         fwd = interpolate(pe, fair_pe, expensive_pe, fair_score, expensive_score)
     else:
         decay = (
-            (pe - expensive_pe)
-            / post_expensive_pe_step
-            * post_expensive_score_decay
+            (pe - expensive_pe) / post_expensive_pe_step * post_expensive_score_decay
             if post_expensive_pe_step > 0
             else expensive_score
         )

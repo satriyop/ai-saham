@@ -70,9 +70,7 @@ def create_accumulation_screen_workflow(
     """Build accumulation screen workflow dependencies for reconciliation."""
     deps = dependencies or create_stock_analysis_workflow_dependencies(db_path)
     swing_setup_catalog = (
-        build_swing_setup_catalog_config(swing_config)
-        if swing_config is not None
-        else None
+        build_swing_setup_catalog_config(swing_config) if swing_config is not None else None
     )
 
     risk_use_case = (
@@ -97,13 +95,9 @@ def create_accumulation_screen_workflow(
         swing_setup_catalog=swing_setup_catalog,
         rules_loader=deps.rules_loader_factory(),
         ticker_profile_classifier_factory=deps.ticker_profile_classifier_factory,
-        institutional_accumulation_config_factory=(
-            deps.institutional_accumulation_config_factory
-        ),
+        institutional_accumulation_config_factory=(deps.institutional_accumulation_config_factory),
         sector_context_builder_factory=deps.sector_context_builder_factory,
-        company_quality_context_builder_factory=(
-            deps.company_quality_context_builder_factory
-        ),
+        company_quality_context_builder_factory=(deps.company_quality_context_builder_factory),
     )
 
     return AccumulationScreenWorkflow(
@@ -129,9 +123,7 @@ def create_accumulation_screen_workflow_bundle(
     """
     deps = dependencies or create_stock_analysis_workflow_dependencies(db_path)
     swing_setup_catalog = (
-        build_swing_setup_catalog_config(swing_config)
-        if swing_config is not None
-        else None
+        build_swing_setup_catalog_config(swing_config) if swing_config is not None else None
     )
 
     risk_use_case = (
@@ -156,13 +148,9 @@ def create_accumulation_screen_workflow_bundle(
         swing_setup_catalog=swing_setup_catalog,
         rules_loader=deps.rules_loader_factory(),
         ticker_profile_classifier_factory=deps.ticker_profile_classifier_factory,
-        institutional_accumulation_config_factory=(
-            deps.institutional_accumulation_config_factory
-        ),
+        institutional_accumulation_config_factory=(deps.institutional_accumulation_config_factory),
         sector_context_builder_factory=deps.sector_context_builder_factory,
-        company_quality_context_builder_factory=(
-            deps.company_quality_context_builder_factory
-        ),
+        company_quality_context_builder_factory=(deps.company_quality_context_builder_factory),
     )
 
 
@@ -179,13 +167,12 @@ def create_live_signal_evidence_execution_context_use_case(
     return BuildLiveSignalEvidenceExecutionContextUseCase(
         session_resolver=EffectiveMarketSessionResolver(market_repository),
         context_builder=SignalEvidenceExecutionContextBuilder(
-            trading_session_calendar_loader=lambda start, end:
-                IHSGTradingSessionCalendarProvider(
-                    market_repository
-                ).load(
-                    coverage_start=start,
-                    coverage_end=end,
-                )
+            trading_session_calendar_loader=lambda start, end: IHSGTradingSessionCalendarProvider(
+                market_repository
+            ).load(
+                coverage_start=start,
+                coverage_end=end,
+            )
         ),
         market_data_repository=market_repository,
     )
@@ -216,11 +203,7 @@ def create_run_accumulation_screen_workflow_use_case(
         rules_loader=deps.rules_loader_factory(),
         indicator_registry_factory=deps.indicator_registry_factory,
         live_signal_evidence_context_use_case=(
-            create_live_signal_evidence_execution_context_use_case(
-                deps.market_repository
-            )
+            create_live_signal_evidence_execution_context_use_case(deps.market_repository)
         ),
-        save_watchlist_use_case=SaveScreenWatchlistUseCase(
-            SQLiteWatchlistRepository(db_path)
-        ),
+        save_watchlist_use_case=SaveScreenWatchlistUseCase(SQLiteWatchlistRepository(db_path)),
     )

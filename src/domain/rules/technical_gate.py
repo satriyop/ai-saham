@@ -4,6 +4,7 @@ Off by default. Uses IndicatorEvaluator internally. Does not affect other gates.
 
 Layer: Domain
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -35,8 +36,11 @@ class TechnicalGate(RiskGate):
             triggered = self._config.missing_data_action == "block"
             return GateResult(
                 triggered=triggered,
-                reason="no snapshot for technical gate — blocked"
-                if triggered else "no snapshot for technical gate",
+                reason=(
+                    "no snapshot for technical gate — blocked"
+                    if triggered
+                    else "no snapshot for technical gate"
+                ),
                 confidence=self._config.missing_data_confidence,
             )
         indicator_ctx = self._evaluator.evaluate(context.latest_snapshot)

@@ -22,11 +22,13 @@ def test_validation_empty_tickers_raises():
         indicator_registry=StubIndicatorRegistry(),
     )
     with pytest.raises(ValueError, match="ticker"):
-        use_case.execute(IntradayBacktestRequest(
-            tickers=[],
-            start_date=TRADE_DAY,
-            end_date=TRADE_DAY,
-        ))
+        use_case.execute(
+            IntradayBacktestRequest(
+                tickers=[],
+                start_date=TRADE_DAY,
+                end_date=TRADE_DAY,
+            )
+        )
 
 
 def test_validation_start_after_end_raises():
@@ -36,8 +38,10 @@ def test_validation_start_after_end_raises():
         indicator_registry=StubIndicatorRegistry(),
     )
     with pytest.raises(ValueError, match="start_date"):
-        use_case.execute(IntradayBacktestRequest(
-            tickers=[TICKER],
-            start_date=TRADE_DAY,
-            end_date=TRADE_DAY - timedelta(days=1),
-        ))
+        use_case.execute(
+            IntradayBacktestRequest(
+                tickers=[TICKER],
+                start_date=TRADE_DAY,
+                end_date=TRADE_DAY - timedelta(days=1),
+            )
+        )

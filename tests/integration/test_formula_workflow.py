@@ -160,20 +160,22 @@ class TestFormulaWorkflowIntegration:
     def test_invalid_formula_skipped(self, storage):
         """Invalid formulas should be skipped with warning."""
         # 1. Save invalid formula (will fail to parse)
-        storage._save_raw({
-            "formulas": {
-                "INVALID": {
-                    "formula": "INVALID_SYNTAX(((",
-                    "intent": "bad formula",
-                    "created": "2024-01-01T00:00:00",
-                },
-                "VALID": {
-                    "formula": "RSI(14)",
-                    "intent": "valid formula",
-                    "created": "2024-01-01T00:00:00",
-                },
+        storage._save_raw(
+            {
+                "formulas": {
+                    "INVALID": {
+                        "formula": "INVALID_SYNTAX(((",
+                        "intent": "bad formula",
+                        "created": "2024-01-01T00:00:00",
+                    },
+                    "VALID": {
+                        "formula": "RSI(14)",
+                        "intent": "valid formula",
+                        "created": "2024-01-01T00:00:00",
+                    },
+                }
             }
-        })
+        )
 
         # 2. Create registry - should skip invalid
         registry = create_indicator_registry(

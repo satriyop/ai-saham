@@ -32,9 +32,7 @@ class SignalInputs:
     canonical_evidence: "CanonicalSignalEvidenceInput | None"
     setup_family: str | None = None
     setup_phase: "SetupPhaseSnapshot | None" = None
-    authority_denominator_scope: AuthorityDenominatorScope = (
-        AuthorityDenominatorScope.ALL_REQUIRED
-    )
+    authority_denominator_scope: AuthorityDenominatorScope = AuthorityDenominatorScope.ALL_REQUIRED
 
 
 @runtime_checkable

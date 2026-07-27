@@ -38,8 +38,7 @@ def _resolve_evidence_promotion_record(
         return None
     if not isinstance(raw, dict):
         raise ValueError(
-            "signal_engine.alpha_trigger.evidence_registrations."
-            f"{name}.promotion must be a mapping"
+            f"signal_engine.alpha_trigger.evidence_registrations.{name}.promotion must be a mapping"
         )
 
     promoted_to_raw = str(raw.get("promoted_to", "")).upper()
@@ -117,7 +116,8 @@ def _validate_promotion_record(*, name: str, status, promotion) -> None:
         )
     promoted_to = (
         promotion.promoted_to.value
-        if hasattr(promotion.promoted_to, "value") else str(promotion.promoted_to)
+        if hasattr(promotion.promoted_to, "value")
+        else str(promotion.promoted_to)
     )
     if promoted_to != status_value:
         raise ValueError(

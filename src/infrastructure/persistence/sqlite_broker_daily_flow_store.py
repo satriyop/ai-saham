@@ -175,6 +175,4 @@ class SQLiteBrokerDailyFlowStore:
                 rows = conn.execute(query, params).fetchall()
             return [row_to_broker_daily_flow(r) for r in rows]
         except sqlite3.Error as e:
-            raise BrokerDataRepositoryError(
-                f"Failed to get broker daily flows by code: {e}"
-            ) from e
+            raise BrokerDataRepositoryError(f"Failed to get broker daily flows by code: {e}") from e

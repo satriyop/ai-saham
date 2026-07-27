@@ -20,30 +20,40 @@ def _write_yaml(path: Path, data: dict) -> Path:
 
 # ── Loader unit tests ─────────────────────────────────────────────────────
 
+
 def test_loads_tracked_broker_codes_from_yaml(tmp_path):
-    cfg_file = _write_yaml(tmp_path / "stockbit.yaml", {
-        "broker_codes": {"tracked": ["AK", "ZP"]},
-        "endpoints": {},
-    })
+    cfg_file = _write_yaml(
+        tmp_path / "stockbit.yaml",
+        {
+            "broker_codes": {"tracked": ["AK", "ZP"]},
+            "endpoints": {},
+        },
+    )
     result = _load_stockbit_config(cfg_file)
     assert result.tracked_broker_codes == ("AK", "ZP")
 
 
 def test_loads_institutional_proxy_codes_from_yaml(tmp_path):
-    cfg_file = _write_yaml(tmp_path / "stockbit.yaml", {
-        "broker_codes": {"institutional_proxy": ["BK", "YU"]},
-        "endpoints": {},
-    })
+    cfg_file = _write_yaml(
+        tmp_path / "stockbit.yaml",
+        {
+            "broker_codes": {"institutional_proxy": ["BK", "YU"]},
+            "endpoints": {},
+        },
+    )
     result = _load_stockbit_config(cfg_file)
     assert result.institutional_proxy_codes == ("BK", "YU")
 
 
 def test_loads_endpoint_url_from_yaml(tmp_path):
     custom_url = "https://example.stockbit.com/custom-orderbook/{ticker}"
-    cfg_file = _write_yaml(tmp_path / "stockbit.yaml", {
-        "endpoints": {"orderbook": {"url": custom_url}},
-        "broker_codes": {},
-    })
+    cfg_file = _write_yaml(
+        tmp_path / "stockbit.yaml",
+        {
+            "endpoints": {"orderbook": {"url": custom_url}},
+            "broker_codes": {},
+        },
+    )
     result = _load_stockbit_config(cfg_file)
     assert result.orderbook_url == custom_url
 
@@ -61,29 +71,38 @@ def test_falls_back_to_defaults_when_yaml_invalid(tmp_path):
 
 
 def test_falls_back_to_defaults_when_codes_list_empty(tmp_path):
-    cfg_file = _write_yaml(tmp_path / "stockbit.yaml", {
-        "broker_codes": {"tracked": []},
-        "endpoints": {},
-    })
+    cfg_file = _write_yaml(
+        tmp_path / "stockbit.yaml",
+        {
+            "broker_codes": {"tracked": []},
+            "endpoints": {},
+        },
+    )
     result = _load_stockbit_config(cfg_file)
     # Empty list → fall back to hardcoded defaults (never leave codes empty)
     assert result.tracked_broker_codes == _StockbitConfig().tracked_broker_codes
 
 
 def test_strips_and_uppercases_broker_codes(tmp_path):
-    cfg_file = _write_yaml(tmp_path / "stockbit.yaml", {
-        "broker_codes": {"tracked": ["ak", " zp "]},
-        "endpoints": {},
-    })
+    cfg_file = _write_yaml(
+        tmp_path / "stockbit.yaml",
+        {
+            "broker_codes": {"tracked": ["ak", " zp "]},
+            "endpoints": {},
+        },
+    )
     result = _load_stockbit_config(cfg_file)
     assert result.tracked_broker_codes == ("AK", "ZP")
 
 
 def test_partial_yaml_uses_defaults_for_missing_keys(tmp_path):
     """Only tracked codes provided; institutional_proxy should stay at defaults."""
-    cfg_file = _write_yaml(tmp_path / "stockbit.yaml", {
-        "broker_codes": {"tracked": ["AK"]},
-    })
+    cfg_file = _write_yaml(
+        tmp_path / "stockbit.yaml",
+        {
+            "broker_codes": {"tracked": ["AK"]},
+        },
+    )
     result = _load_stockbit_config(cfg_file)
     assert result.tracked_broker_codes == ("AK",)
     assert result.institutional_proxy_codes == _StockbitConfig().institutional_proxy_codes
@@ -100,6 +119,7 @@ def test_live_config_loads_without_error():
 
 
 # ── Config values wired correctly ────────────────────────────────────────
+
 
 def test_config_values_are_populated():
     """Config loaded from YAML should have populated lists and URLs."""

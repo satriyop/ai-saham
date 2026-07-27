@@ -89,6 +89,7 @@ app.command("tui", rich_help_panel=_PANEL_GENERAL)(tui)
 
 # ── Flat commands ──────────────────────────────────────────────────────────────
 
+
 @app.command(rich_help_panel=_PANEL_GENERAL)
 def version() -> None:
     """Show version and build information."""

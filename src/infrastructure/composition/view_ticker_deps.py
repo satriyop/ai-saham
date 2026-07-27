@@ -69,9 +69,7 @@ def build_view_ticker_deps(db_path: Path | str) -> ViewTickerDeps:
         distribution_provider=dist_provider,
         foreign_broker_codes=foreign,
         dashboard=GetTickerDashboardUseCase(SQLiteTickerDashboardSource(resolved)),
-        top_brokers=ViewTickerTopBrokersUseCase(
-            repo, foreign_broker_codes=foreign
-        ),
+        top_brokers=ViewTickerTopBrokersUseCase(repo, foreign_broker_codes=foreign),
         flow=ViewTickerFlowUseCase(repo),
         foreign_history=ViewTickerForeignHistoryUseCase(repo),
         distribution=ViewTickerDistributionUseCase(dist_provider),

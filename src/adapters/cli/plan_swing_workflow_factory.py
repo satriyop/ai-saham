@@ -127,21 +127,16 @@ def create_swing_analysis_workflow(
         accum_score_policy=accumulation_config.accum_score_policy,
         corporate_action_risk_use_case=create_corporate_action_risk_use_case(db_path),
         ticker_profile_classifier_factory=deps.ticker_profile_classifier_factory,
-        institutional_accumulation_config_factory=(
-            deps.institutional_accumulation_config_factory
-        ),
+        institutional_accumulation_config_factory=(deps.institutional_accumulation_config_factory),
         sector_context_builder_factory=deps.sector_context_builder_factory,
-        company_quality_context_builder_factory=(
-            deps.company_quality_context_builder_factory
-        ),
+        company_quality_context_builder_factory=(deps.company_quality_context_builder_factory),
         session_resolver=EffectiveMarketSessionResolver(deps.market_repository),
         signal_evidence_context_builder=SignalEvidenceExecutionContextBuilder(
-            trading_session_calendar_loader=lambda start, end:
-                IHSGTradingSessionCalendarProvider(
-                    deps.market_repository
-                ).load(
-                    coverage_start=start,
-                    coverage_end=end,
-                )
+            trading_session_calendar_loader=lambda start, end: IHSGTradingSessionCalendarProvider(
+                deps.market_repository
+            ).load(
+                coverage_start=start,
+                coverage_end=end,
+            )
         ),
     )

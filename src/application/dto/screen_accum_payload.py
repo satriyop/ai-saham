@@ -106,9 +106,7 @@ def build_accum_single_envelope(
     )
     return build_screen_envelope(
         verb="accum",
-        status=resolve_accum_result_status(
-            result_count=len(projection.candidates)
-        ),
+        status=resolve_accum_result_status(result_count=len(projection.candidates)),
         subject_kind=ScreenSubjectKind.UNIVERSE,
         subject_id=universe_label,
         as_of=response.screened_at,
@@ -136,9 +134,7 @@ def build_accum_multi_data(
         entry.pop("ticker", None)
         tickers_payload[row.ticker] = entry
 
-    partial_result = any(
-        resp.tickers_skipped > 0 for resp in multi_results.values()
-    )
+    partial_result = any(resp.tickers_skipped > 0 for resp in multi_results.values())
     return {
         "schema_version": 1,
         "artifact_type": "accumulation_screen_multi",

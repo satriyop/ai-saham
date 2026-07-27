@@ -16,6 +16,7 @@ class BenchmarkTickerAliases:
     canonical: str
     legacy: str | None = None
 
+
 _BENCHMARK_ALIASES = {
     CANONICAL_BENCHMARK_TICKER,
     YAHOO_IHSG_TICKER,

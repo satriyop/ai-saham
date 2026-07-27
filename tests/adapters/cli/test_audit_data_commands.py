@@ -11,8 +11,8 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from src.adapters.cli.main import app
-from src.domain.value_objects.signal_artifact_schema import (
-    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+from src.application.dto.source_reconciliation_dto import (
+    SourceReconciliationFinding,
 )
 from src.application.use_case.audit_source_field_contracts_use_case import (
     AuditSourceFieldContractsResponse,
@@ -21,8 +21,8 @@ from src.application.use_case.audit_source_field_contracts_use_case import (
 from src.application.use_case.audit_source_reconciliation_use_case import (
     AuditSourceReconciliationResponse,
 )
-from src.application.dto.source_reconciliation_dto import (
-    SourceReconciliationFinding,
+from src.domain.value_objects.signal_artifact_schema import (
+    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
 )
 
 runner = CliRunner()
@@ -30,8 +30,7 @@ runner = CliRunner()
 
 def _build_temp_db(path: Path) -> None:
     conn = sqlite3.connect(str(path))
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE candles (
             ticker TEXT NOT NULL,
             date TEXT NOT NULL,
@@ -42,8 +41,7 @@ def _build_temp_db(path: Path) -> None:
             volume INTEGER NOT NULL,
             source TEXT NOT NULL DEFAULT 'unknown'
         )
-        """
-    )
+        """)
     conn.execute(
         "INSERT INTO candles (ticker, date, open, high, low, close, volume, source) "
         "VALUES ('BBCA', '2026-01-02', '1', '1', '1', '1', 1, 'idx')"
@@ -477,9 +475,7 @@ def test_contract_gate_json_exits_zero_on_pass(tmp_path: Path, monkeypatch):
     assert payload["warnings"] == []
 
 
-def test_contract_gate_json_warn_only_exits_zero_and_retains_warnings(
-    tmp_path: Path, monkeypatch
-):
+def test_contract_gate_json_warn_only_exits_zero_and_retains_warnings(tmp_path: Path, monkeypatch):
     """WARN sub-audits with only WARN findings must pass the gate (exit 0) while
     keeping every warning machine-readable in the JSON artifact."""
     db_path = tmp_path / "gate_warn.db"
@@ -650,8 +646,13 @@ def test_seasonality_cleanup_plan_json_output_follows_contract_when_clean(tmp_pa
     result = runner.invoke(
         app,
         [
-            "audit", "data", "seasonality-cleanup-plan",
-            "--format", "json", "--db", str(db_path),
+            "audit",
+            "data",
+            "seasonality-cleanup-plan",
+            "--format",
+            "json",
+            "--db",
+            str(db_path),
         ],
     )
 
@@ -676,8 +677,13 @@ def test_seasonality_cleanup_plan_json_output_lists_invalid_rows(tmp_path: Path)
     result = runner.invoke(
         app,
         [
-            "audit", "data", "seasonality-cleanup-plan",
-            "--format", "json", "--db", str(db_path),
+            "audit",
+            "data",
+            "seasonality-cleanup-plan",
+            "--format",
+            "json",
+            "--db",
+            str(db_path),
         ],
     )
 
@@ -700,8 +706,13 @@ def test_seasonality_cleanup_plan_exits_zero_even_when_status_fail(tmp_path: Pat
     result = runner.invoke(
         app,
         [
-            "audit", "data", "seasonality-cleanup-plan",
-            "--format", "json", "--db", str(db_path),
+            "audit",
+            "data",
+            "seasonality-cleanup-plan",
+            "--format",
+            "json",
+            "--db",
+            str(db_path),
         ],
     )
 
@@ -731,8 +742,13 @@ def test_seasonality_cleanup_plan_rejects_invalid_format(tmp_path: Path):
     result = runner.invoke(
         app,
         [
-            "audit", "data", "seasonality-cleanup-plan",
-            "--format", "xml", "--db", str(db_path),
+            "audit",
+            "data",
+            "seasonality-cleanup-plan",
+            "--format",
+            "xml",
+            "--db",
+            str(db_path),
         ],
     )
 
@@ -747,8 +763,13 @@ def test_seasonality_cleanup_plan_does_not_mutate_database(tmp_path: Path):
     runner.invoke(
         app,
         [
-            "audit", "data", "seasonality-cleanup-plan",
-            "--format", "json", "--db", str(db_path),
+            "audit",
+            "data",
+            "seasonality-cleanup-plan",
+            "--format",
+            "json",
+            "--db",
+            str(db_path),
         ],
     )
 
@@ -764,8 +785,13 @@ def test_seasonality_cleanup_plan_reports_fail_not_pass_for_missing_database(tmp
     result = runner.invoke(
         app,
         [
-            "audit", "data", "seasonality-cleanup-plan",
-            "--format", "json", "--db", str(missing_db),
+            "audit",
+            "data",
+            "seasonality-cleanup-plan",
+            "--format",
+            "json",
+            "--db",
+            str(missing_db),
         ],
     )
 
@@ -787,8 +813,13 @@ def test_seasonality_cleanup_plan_reports_table_missing_reason(tmp_path: Path):
     result = runner.invoke(
         app,
         [
-            "audit", "data", "seasonality-cleanup-plan",
-            "--format", "json", "--db", str(db_path),
+            "audit",
+            "data",
+            "seasonality-cleanup-plan",
+            "--format",
+            "json",
+            "--db",
+            str(db_path),
         ],
     )
 
@@ -871,8 +902,14 @@ def test_repair_seasonality_cache_dry_run_json_exits_zero(tmp_path: Path):
     result = runner.invoke(
         app,
         [
-            "audit", "data", "repair-seasonality-cache",
-            "--dry-run", "--format", "json", "--db", str(db_path),
+            "audit",
+            "data",
+            "repair-seasonality-cache",
+            "--dry-run",
+            "--format",
+            "json",
+            "--db",
+            str(db_path),
         ],
     )
 
@@ -896,8 +933,13 @@ def test_repair_seasonality_cache_default_is_dry_run(tmp_path: Path):
     result = runner.invoke(
         app,
         [
-            "audit", "data", "repair-seasonality-cache",
-            "--format", "json", "--db", str(db_path),
+            "audit",
+            "data",
+            "repair-seasonality-cache",
+            "--format",
+            "json",
+            "--db",
+            str(db_path),
         ],
     )
 
@@ -914,8 +956,13 @@ def test_repair_seasonality_cache_dry_run_and_apply_together_fails(tmp_path: Pat
     result = runner.invoke(
         app,
         [
-            "audit", "data", "repair-seasonality-cache",
-            "--dry-run", "--apply", "--db", str(db_path),
+            "audit",
+            "data",
+            "repair-seasonality-cache",
+            "--dry-run",
+            "--apply",
+            "--db",
+            str(db_path),
         ],
     )
 
@@ -938,8 +985,14 @@ def test_repair_seasonality_cache_apply_json_mutates(tmp_path: Path):
     result = runner.invoke(
         app,
         [
-            "audit", "data", "repair-seasonality-cache",
-            "--apply", "--format", "json", "--db", str(db_path),
+            "audit",
+            "data",
+            "repair-seasonality-cache",
+            "--apply",
+            "--format",
+            "json",
+            "--db",
+            str(db_path),
         ],
     )
 
@@ -979,8 +1032,13 @@ def test_repair_seasonality_cache_missing_db_exits_zero_with_fail(tmp_path: Path
     result = runner.invoke(
         app,
         [
-            "audit", "data", "repair-seasonality-cache",
-            "--format", "json", "--db", str(missing_db),
+            "audit",
+            "data",
+            "repair-seasonality-cache",
+            "--format",
+            "json",
+            "--db",
+            str(missing_db),
         ],
     )
 
@@ -998,8 +1056,14 @@ def test_repair_seasonality_cache_table_format_shows_counts(tmp_path: Path):
     result = runner.invoke(
         app,
         [
-            "audit", "data", "repair-seasonality-cache",
-            "--dry-run", "--format", "table", "--db", str(db_path),
+            "audit",
+            "data",
+            "repair-seasonality-cache",
+            "--dry-run",
+            "--format",
+            "table",
+            "--db",
+            str(db_path),
         ],
     )
 
@@ -1017,8 +1081,13 @@ def test_repair_seasonality_cache_clean_db_returns_pass(tmp_path: Path):
     result = runner.invoke(
         app,
         [
-            "audit", "data", "repair-seasonality-cache",
-            "--format", "json", "--db", str(db_path),
+            "audit",
+            "data",
+            "repair-seasonality-cache",
+            "--format",
+            "json",
+            "--db",
+            str(db_path),
         ],
     )
 
@@ -1035,8 +1104,13 @@ def test_repair_seasonality_cache_rejects_invalid_format(tmp_path: Path):
     result = runner.invoke(
         app,
         [
-            "audit", "data", "repair-seasonality-cache",
-            "--format", "xml", "--db", str(db_path),
+            "audit",
+            "data",
+            "repair-seasonality-cache",
+            "--format",
+            "xml",
+            "--db",
+            str(db_path),
         ],
     )
 
@@ -1125,24 +1199,51 @@ def _build_candidate_observation_db(db_path: Path) -> None:
         "(ticker, snapshot_date, captured_at, schema_version, payload_json, "
         "workflow, window_sessions, data_as_of_date, config_hash) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        ("BBCA", "2026-07-15", "2026-07-15T00:00:00+00:00", CANDIDATE_OBSERVATION_SCHEMA_VERSION,
-         f'{{"schema_version":{CANDIDATE_OBSERVATION_SCHEMA_VERSION}}}', "accumulation_screen", 30, "2026-07-15", "abc123"),
+        (
+            "BBCA",
+            "2026-07-15",
+            "2026-07-15T00:00:00+00:00",
+            CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+            f'{{"schema_version":{CANDIDATE_OBSERVATION_SCHEMA_VERSION}}}',
+            "accumulation_screen",
+            30,
+            "2026-07-15",
+            "abc123",
+        ),
     )
     conn.execute(
         "INSERT INTO candidate_observations "
         "(ticker, snapshot_date, captured_at, schema_version, payload_json, "
         "workflow, window_sessions, data_as_of_date, config_hash) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        ("BBRI", "2026-07-15", "2026-07-15T01:00:00+00:00", CANDIDATE_OBSERVATION_SCHEMA_VERSION,
-         f'{{"schema_version":{CANDIDATE_OBSERVATION_SCHEMA_VERSION}}}', "accumulation_screen", 30, "2026-07-15", "def456"),
+        (
+            "BBRI",
+            "2026-07-15",
+            "2026-07-15T01:00:00+00:00",
+            CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+            f'{{"schema_version":{CANDIDATE_OBSERVATION_SCHEMA_VERSION}}}',
+            "accumulation_screen",
+            30,
+            "2026-07-15",
+            "def456",
+        ),
     )
     conn.execute(
         "INSERT INTO candidate_observations "
         "(ticker, snapshot_date, captured_at, schema_version, payload_json, "
         "workflow, window_sessions, data_as_of_date, config_hash) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        ("TLKM", "2026-07-14", "2026-07-14T00:00:00+00:00", 1,
-         '{"schema_version":1}', "accumulation_screen", 7, "2026-07-14", ""),
+        (
+            "TLKM",
+            "2026-07-14",
+            "2026-07-14T00:00:00+00:00",
+            1,
+            '{"schema_version":1}',
+            "accumulation_screen",
+            7,
+            "2026-07-14",
+            "",
+        ),
     )
     conn.commit()
     conn.close()
@@ -1161,8 +1262,13 @@ def _retired_candidate_observation_identity_json_output_follows_contract(tmp_pat
     result = runner.invoke(
         app,
         [
-            "audit", "data", "candidate-observation-identity",
-            "--format", "json", "--db", str(db_path),
+            "audit",
+            "data",
+            "candidate-observation-identity",
+            "--format",
+            "json",
+            "--db",
+            str(db_path),
         ],
     )
 
@@ -1199,8 +1305,13 @@ def _retired_candidate_observation_identity_missing_db_returns_fail(tmp_path: Pa
     result = runner.invoke(
         app,
         [
-            "audit", "data", "candidate-observation-identity",
-            "--format", "json", "--db", str(missing_db),
+            "audit",
+            "data",
+            "candidate-observation-identity",
+            "--format",
+            "json",
+            "--db",
+            str(missing_db),
         ],
     )
 
@@ -1218,8 +1329,13 @@ def _retired_candidate_observation_identity_missing_table_returns_fail(tmp_path:
     result = runner.invoke(
         app,
         [
-            "audit", "data", "candidate-observation-identity",
-            "--format", "json", "--db", str(db_path),
+            "audit",
+            "data",
+            "candidate-observation-identity",
+            "--format",
+            "json",
+            "--db",
+            str(db_path),
         ],
     )
 
@@ -1237,8 +1353,13 @@ def _retired_candidate_observation_identity_table_format_shows_counts(tmp_path: 
     result = runner.invoke(
         app,
         [
-            "audit", "data", "candidate-observation-identity",
-            "--format", "table", "--db", str(db_path),
+            "audit",
+            "data",
+            "candidate-observation-identity",
+            "--format",
+            "table",
+            "--db",
+            str(db_path),
         ],
     )
 
@@ -1257,8 +1378,13 @@ def _retired_candidate_observation_identity_rejects_invalid_format(tmp_path: Pat
     result = runner.invoke(
         app,
         [
-            "audit", "data", "candidate-observation-identity",
-            "--format", "xml", "--db", str(db_path),
+            "audit",
+            "data",
+            "candidate-observation-identity",
+            "--format",
+            "xml",
+            "--db",
+            str(db_path),
         ],
     )
 
@@ -1287,16 +1413,34 @@ def _retired_candidate_observation_identity_legacy_latest_returns_fail(tmp_path:
         "(ticker, snapshot_date, captured_at, schema_version, payload_json, "
         "workflow, window_sessions, data_as_of_date, config_hash) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        ("BBCA", "2026-07-15", "2026-07-15T00:00:00+00:00", 1,
-         '{}', "accumulation_screen", 30, "2026-07-15", ""),
+        (
+            "BBCA",
+            "2026-07-15",
+            "2026-07-15T00:00:00+00:00",
+            1,
+            "{}",
+            "accumulation_screen",
+            30,
+            "2026-07-15",
+            "",
+        ),
     )
     conn.execute(
         "INSERT INTO candidate_observations "
         "(ticker, snapshot_date, captured_at, schema_version, payload_json, "
         "workflow, window_sessions, data_as_of_date, config_hash) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        ("BBRI", "2026-07-14", "2026-07-14T00:00:00+00:00", 1,
-         '{}', "swing_analysis", 7, "2026-07-14", "canonical123"),
+        (
+            "BBRI",
+            "2026-07-14",
+            "2026-07-14T00:00:00+00:00",
+            1,
+            "{}",
+            "swing_analysis",
+            7,
+            "2026-07-14",
+            "canonical123",
+        ),
     )
     conn.commit()
     conn.close()
@@ -1304,8 +1448,13 @@ def _retired_candidate_observation_identity_legacy_latest_returns_fail(tmp_path:
     result = runner.invoke(
         app,
         [
-            "audit", "data", "candidate-observation-identity",
-            "--format", "json", "--db", str(db_path),
+            "audit",
+            "data",
+            "candidate-observation-identity",
+            "--format",
+            "json",
+            "--db",
+            str(db_path),
         ],
     )
 
@@ -1314,6 +1463,5 @@ def _retired_candidate_observation_identity_legacy_latest_returns_fail(tmp_path:
     assert payload["status"] == "FAIL"
     assert payload["recommendation"] == "REBUILD_REQUIRED"
     assert any(
-        f["code"] == "LATEST_READINESS_DEPENDS_ON_LEGACY_IDENTITY"
-        for f in payload["findings"]
+        f["code"] == "LATEST_READINESS_DEPENDS_ON_LEGACY_IDENTITY" for f in payload["findings"]
     )

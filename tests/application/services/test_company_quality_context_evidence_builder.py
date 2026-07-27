@@ -17,12 +17,12 @@ from datetime import date
 
 import pytest
 
+from src.application.services import company_quality_scoring as cqs
 from src.application.services.company_quality_context_evidence_builder import (
-    CompanyQualityContextEvidenceBuilder,
     CompanyQualityContextConfig,
+    CompanyQualityContextEvidenceBuilder,
     CompanyQualityContextRequest,
 )
-from src.application.services import company_quality_scoring as cqs
 from src.application.services.signal_scoring_config import SignalScoringConfig
 from src.domain.value_objects.institutional_accumulation_evidence import EvidenceStatus
 from src.domain.value_objects.signal_assessment import SignalContext
@@ -45,23 +45,25 @@ def _builder() -> CompanyQualityContextEvidenceBuilder:
 
 def _build(ctx: SignalContext):
     return _builder().build(
-        CompanyQualityContextRequest(
-            ticker="TEST", snapshot_date=SNAP, signal_context=ctx
-        )
+        CompanyQualityContextRequest(ticker="TEST", snapshot_date=SNAP, signal_context=ctx)
     )
 
 
 # ── all four axes present ──────────────────────────────────────────────────────
 
+
 def test_all_four_axes_present():
-    ev = _build(_ctx(
-        forward_pe=8.0,                       # valuation → 95 (very cheap)
-        analyst_buy_pct=1.0, analyst_upside_pct=30.0,  # analyst → 100
-        insider_net_buy_ratio=1.0,            # insider → 100
-        seasonality_win_rate=30.0,            # headwind → 30
-        seasonality_avg_return_pct=-1.0,
-        seasonality_total_years=5,
-    ))
+    ev = _build(
+        _ctx(
+            forward_pe=8.0,  # valuation → 95 (very cheap)
+            analyst_buy_pct=1.0,
+            analyst_upside_pct=30.0,  # analyst → 100
+            insider_net_buy_ratio=1.0,  # insider → 100
+            seasonality_win_rate=30.0,  # headwind → 30
+            seasonality_avg_return_pct=-1.0,
+            seasonality_total_years=5,
+        )
+    )
     assert set(ev.present_axes) == {"valuation", "analyst", "insider", "seasonality"}
     assert ev.coverage_score == pytest.approx(1.0)
     assert ev.valuation_score == pytest.approx(95.0)
@@ -74,14 +76,17 @@ def test_all_four_axes_present():
 
 
 def test_deferred_axes_recorded_but_excluded_from_coverage():
-    ev = _build(_ctx(
-        forward_pe=8.0,
-        analyst_buy_pct=1.0, analyst_upside_pct=30.0,
-        insider_net_buy_ratio=1.0,
-        seasonality_win_rate=30.0,
-        seasonality_avg_return_pct=-1.0,
-        seasonality_total_years=5,
-    ))
+    ev = _build(
+        _ctx(
+            forward_pe=8.0,
+            analyst_buy_pct=1.0,
+            analyst_upside_pct=30.0,
+            insider_net_buy_ratio=1.0,
+            seasonality_win_rate=30.0,
+            seasonality_avg_return_pct=-1.0,
+            seasonality_total_years=5,
+        )
+    )
     assert ev.earnings_trend_score is None
     assert any("earnings_trend:deferred" in r for r in ev.unavailable_reasons)
     assert any("event_alpha:deferred" in r for r in ev.unavailable_reasons)
@@ -91,12 +96,15 @@ def test_deferred_axes_recorded_but_excluded_from_coverage():
 
 # ── partial coverage (2 of 4) ──────────────────────────────────────────────────
 
+
 def test_partial_coverage_two_of_four():
-    ev = _build(_ctx(
-        forward_pe=8.0,                # valuation present
-        insider_net_buy_ratio=0.0,     # insider present (neutral 50)
-        # no analyst, no seasonality
-    ))
+    ev = _build(
+        _ctx(
+            forward_pe=8.0,  # valuation present
+            insider_net_buy_ratio=0.0,  # insider present (neutral 50)
+            # no analyst, no seasonality
+        )
+    )
     assert set(ev.present_axes) == {"valuation", "insider"}
     assert ev.coverage_score == pytest.approx(0.5)
     assert ev.analyst_score is None
@@ -109,6 +117,7 @@ def test_partial_coverage_two_of_four():
 
 # ── zero coverage → unavailable-like ──────────────────────────────────────────
 
+
 def test_zero_coverage_yields_no_aggregate():
     ev = _build(_ctx())  # all enrichment None
     assert ev.present_axes == ()
@@ -119,17 +128,20 @@ def test_zero_coverage_yields_no_aggregate():
 
 # ── seasonality cap actually lowers its influence ─────────────────────────────
 
+
 def test_seasonality_cap_lowers_its_influence():
     # valuation high (95), seasonality low (30). With the 0.5 cap the aggregate
     # is pulled toward valuation vs. an equal-weight mean.
-    ev = _build(_ctx(
-        forward_pe=8.0,
-        seasonality_win_rate=30.0,
-        seasonality_avg_return_pct=-1.0,
-        seasonality_total_years=5,
-    ))
-    equal_weight = (95.0 + 30.0) / 2.0            # 62.5
-    capped = (95.0 + 0.5 * 30.0) / (1.0 + 0.5)    # 73.33
+    ev = _build(
+        _ctx(
+            forward_pe=8.0,
+            seasonality_win_rate=30.0,
+            seasonality_avg_return_pct=-1.0,
+            seasonality_total_years=5,
+        )
+    )
+    equal_weight = (95.0 + 30.0) / 2.0  # 62.5
+    capped = (95.0 + 0.5 * 30.0) / (1.0 + 0.5)  # 73.33
     assert ev.aggregate_score == pytest.approx(capped)
     assert ev.aggregate_score > equal_weight
 
@@ -143,6 +155,7 @@ def test_seasonality_cap_weight_is_strictly_lower_than_other_axes():
 
 # ── metadata exposes per-axis sub-scores for Phase I attribution ──────────────
 
+
 def test_metadata_exposes_axis_scores():
     ev = _build(_ctx(forward_pe=8.0, insider_net_buy_ratio=0.0))
     axis_scores = ev.metadata["axis_scores"]
@@ -153,6 +166,7 @@ def test_metadata_exposes_axis_scores():
 
 
 # ── config from_mapping ───────────────────────────────────────────────────────
+
 
 def test_config_from_mapping_defaults():
     cfg = CompanyQualityContextConfig.from_mapping({})
@@ -177,11 +191,11 @@ _SCORING = SignalScoringConfig()
 @pytest.mark.parametrize(
     "pe,expected_score,expected_present",
     [
-        (8.0, 95.0, True),     # <= very_cheap_pe: flat very_cheap_score
-        (12.0, 87.0, True),    # interpolate(12, 10, 15, 95, 75)
-        (18.0, 60.0, True),    # interpolate(18, 15, 20, 75, 50)
-        (25.0, 37.5, True),    # interpolate(25, 20, 30, 50, 25)
-        (45.0, 2.5, True),     # post-expensive decay: 25 - (45-30)/10*15
+        (8.0, 95.0, True),  # <= very_cheap_pe: flat very_cheap_score
+        (12.0, 87.0, True),  # interpolate(12, 10, 15, 95, 75)
+        (18.0, 60.0, True),  # interpolate(18, 15, 20, 75, 50)
+        (25.0, 37.5, True),  # interpolate(25, 20, 30, 50, 25)
+        (45.0, 2.5, True),  # post-expensive decay: 25 - (45-30)/10*15
         (None, _NEUTRAL_SCORE, False),
     ],
 )
@@ -246,7 +260,7 @@ def test_score_insider_activity_missing_is_neutral():
 @pytest.mark.parametrize(
     "win_rate,avg_return,total_years,expected_score,expected_present",
     [
-        (70.0, 2.0, 6, 70.0, True),    # tailwind: avg>0 and win>50 -> score=win
+        (70.0, 2.0, 6, 70.0, True),  # tailwind: avg>0 and win>50 -> score=win
         (70.0, 2.0, 3, _NEUTRAL_SCORE, False),  # < 5 years -> neutral, absent
         (None, None, None, _NEUTRAL_SCORE, False),
     ],
@@ -272,11 +286,13 @@ def test_score_seasonality_known_vectors(
 
 # ── round-trip serialization ──────────────────────────────────────────────────
 
+
 def test_evidence_to_dict_from_dict_round_trip():
     ev = _build(_ctx(forward_pe=8.0, insider_net_buy_ratio=0.0))
     from src.domain.value_objects.company_quality_context_evidence import (
         CompanyQualityContextEvidence,
     )
+
     restored = CompanyQualityContextEvidence.from_dict(ev.to_dict())
     assert restored.aggregate_score == pytest.approx(ev.aggregate_score)
     assert restored.present_axes == ev.present_axes

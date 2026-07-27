@@ -13,8 +13,8 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.backtest_portfolio_runner import _run_swing_backtest
 from src.adapters.cli.backtest_portfolio_display import display_swing_backtest
+from src.adapters.cli.backtest_portfolio_runner import _run_swing_backtest
 from src.application.use_case.swing_backtest_use_case import (
     FOREIGN_BOUNCE_SETUP as BACKTEST_FOREIGN_BOUNCE_SETUP,
 )
@@ -48,14 +48,12 @@ def _swing_backtest_payload(response: SwingBacktestResponse) -> dict:
         "warnings": response.warnings,
         "regime_stats": [stat.to_dict() for stat in response.regime_stats],
         "regime_by_date": {
-            key.isoformat(): value.to_dict()
-            for key, value in response.regime_by_date.items()
+            key.isoformat(): value.to_dict() for key, value in response.regime_by_date.items()
         },
         "attribution_summary": response.attribution_summary.to_dict(),
         "trades": [trade.to_dict() for trade in response.trades],
         "candidate_observations": [
-            observation.to_dict()
-            for observation in response.candidate_observations
+            observation.to_dict() for observation in response.candidate_observations
         ],
         "equity_curve": [point.to_dict() for point in response.equity_curve],
     }
@@ -166,32 +164,24 @@ def swing_backtest(
     output_format = output_format or cfg.analysis.format
 
     from src.adapters.cli.backtest_portfolio_runner import load_swing_backtest_runner_config
+
     runner_config = load_swing_backtest_runner_config()
 
-    resolved_capital = (
-        capital if capital is not None else runner_config.backtest_config.capital
-    )
-    resolved_risk_pct = (
-        risk_pct if risk_pct is not None else runner_config.backtest_config.risk_pct
-    )
+    resolved_capital = capital if capital is not None else runner_config.backtest_config.capital
+    resolved_risk_pct = risk_pct if risk_pct is not None else runner_config.backtest_config.risk_pct
     resolved_max_positions = (
-        max_positions if max_positions is not None
-        else runner_config.backtest_config.max_positions
+        max_positions if max_positions is not None else runner_config.backtest_config.max_positions
     )
     resolved_take_profit = (
-        take_profit if take_profit is not None
-        else runner_config.backtest_config.take_profit_pct
+        take_profit if take_profit is not None else runner_config.backtest_config.take_profit_pct
     )
     resolved_stop_loss = (
-        stop_loss if stop_loss is not None
-        else runner_config.backtest_config.stop_loss_pct
+        stop_loss if stop_loss is not None else runner_config.backtest_config.stop_loss_pct
     )
     resolved_max_hold = (
         max_hold if max_hold is not None else runner_config.backtest_config.max_hold_days
     )
-    resolved_cost_bps = (
-        cost_bps if cost_bps is not None else runner_config.backtest_config.cost_bps
-    )
+    resolved_cost_bps = cost_bps if cost_bps is not None else runner_config.backtest_config.cost_bps
 
     response = _run_swing_backtest(
         tickers=tickers,

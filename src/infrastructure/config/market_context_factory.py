@@ -37,6 +37,7 @@ def create_market_context_engine(
 ) -> MarketContextEngine:
     """Construct MCE with local SQLite repositories and configured universe."""
     from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
+
     tickers = resolve_tickers(
         universe=universe,
         explicit=[],
@@ -67,7 +68,6 @@ def create_market_context_engine(
         regime_observation_repository=SQLiteRegimeObservationRepository(db_path=db_path),
         mce_identity=mce_identity,
     )
-
 
 
 def evaluate_market_context(

@@ -104,9 +104,7 @@ class AccumulationCandidateSignalAssessor:
         self._signal_engine = signal_engine
         self._flow_confirmation_builder = flow_confirmation_builder
         self._candidate_evidence_builder = candidate_evidence_builder
-        self._accum_score_uc = (
-            accum_score_uc or ScoreAccumUseCase()
-        )
+        self._accum_score_uc = accum_score_uc or ScoreAccumUseCase()
         self._pipeline = pipeline or ScreenAssessmentPipeline(
             policy=ScreenPolicy.accumulation(),
             signal_engine=signal_engine,
@@ -194,16 +192,12 @@ class AccumulationCandidateSignalAssessor:
         # canonical evidence. Store both on the candidate so persistence
         # reuses them verbatim instead of recomputing after scoring.
         setup_family_result = (
-            self._candidate_evidence_builder.resolve_preliminary_setup_family_result(
-                candidate
-            )
+            self._candidate_evidence_builder.resolve_preliminary_setup_family_result(candidate)
         )
         setup_family = setup_family_result.primary_setup_family
         candidate.setup_family_result = setup_family_result
-        candidate.setup_phase = (
-            self._candidate_evidence_builder.detect_candidate_setup_phase(
-                candidate, flow_ev, as_of_date, setup_family=setup_family
-            )
+        candidate.setup_phase = self._candidate_evidence_builder.detect_candidate_setup_phase(
+            candidate, flow_ev, as_of_date, setup_family=setup_family
         )
 
         canonical_evidence: CanonicalSignalEvidenceInput | None = None
@@ -275,20 +269,13 @@ class AccumulationCandidateSignalAssessor:
         flow_ev = scored.flow_evidence
 
         # Classification: first-match-wins (preserved order)
-        if (
-            request.min_accum_score_enabled
-            and candidate.accum_score < request.min_accum_score
-        ):
-            return CandidateSignalAssessmentResult(
-                candidate, flow_ev, "rejected_flow", False
-            )
+        if request.min_accum_score_enabled and candidate.accum_score < request.min_accum_score:
+            return CandidateSignalAssessmentResult(candidate, flow_ev, "rejected_flow", False)
 
         if request.min_signal_score_enabled and (
             candidate.signal_assessment is None
             or candidate.signal_assessment.assessment.score < request.min_signal_score
         ):
-            return CandidateSignalAssessmentResult(
-                candidate, flow_ev, "rejected_signal", False
-            )
+            return CandidateSignalAssessmentResult(candidate, flow_ev, "rejected_signal", False)
 
         return CandidateSignalAssessmentResult(candidate, flow_ev, "pass", True)

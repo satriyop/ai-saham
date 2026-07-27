@@ -25,12 +25,8 @@ class _FakeAuditUseCase:
 
 
 def test_factory_returns_workflow_use_case(monkeypatch):
-    monkeypatch.setattr(
-        factory, "load_accumulation_audit_config", lambda: _FakeAuditConfig()
-    )
-    monkeypatch.setattr(
-        factory, "load_accumulation_screener_config", lambda: _FakeScreenerConfig()
-    )
+    monkeypatch.setattr(factory, "load_accumulation_audit_config", lambda: _FakeAuditConfig())
+    monkeypatch.setattr(factory, "load_accumulation_screener_config", lambda: _FakeScreenerConfig())
     monkeypatch.setattr(factory, "SQLiteBrokerRepository", lambda db_path: object())
     monkeypatch.setattr(factory, "SQLiteMarketRepository", lambda db_path: object())
     monkeypatch.setattr(factory, "create_indicator_registry", lambda: object())
@@ -49,12 +45,8 @@ def test_factory_wires_audit_use_case_with_infrastructure_dependencies(monkeypat
         captured.update(kwargs)
         return _FakeAuditUseCase(**kwargs)
 
-    monkeypatch.setattr(
-        factory, "load_accumulation_audit_config", lambda: _FakeAuditConfig()
-    )
-    monkeypatch.setattr(
-        factory, "load_accumulation_screener_config", lambda: _FakeScreenerConfig()
-    )
+    monkeypatch.setattr(factory, "load_accumulation_audit_config", lambda: _FakeAuditConfig())
+    monkeypatch.setattr(factory, "load_accumulation_screener_config", lambda: _FakeScreenerConfig())
     broker_repo = object()
     market_repo = object()
     registry = object()

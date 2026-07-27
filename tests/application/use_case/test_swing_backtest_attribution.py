@@ -23,10 +23,7 @@ def test_swing_backtest_records_rejected_candidate_observations():
     base = date(2026, 1, 1)
     signal_date = base + timedelta(days=24)
     exit_date = base + timedelta(days=25)
-    summaries = [
-        _summary("BBCA", base + timedelta(days=i), Decimal("110"))
-        for i in range(18, 25)
-    ]
+    summaries = [_summary("BBCA", base + timedelta(days=i), Decimal("110")) for i in range(18, 25)]
     use_case = SwingBacktestUseCase(
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
@@ -35,17 +32,19 @@ def test_swing_backtest_records_rejected_candidate_observations():
         signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
-    response = use_case.execute(SwingBacktestRequest(
-        tickers=["BBCA"],
-        start_date=signal_date,
-        end_date=exit_date,
-        setup="smart-money-confirmed",
-        capital=Decimal("1000000"),
-        risk_pct=Decimal("0.01"),
-        max_positions=1,
-        min_net_buy_days=1,
-        cost_bps=Decimal("0"),
-    ))
+    response = use_case.execute(
+        SwingBacktestRequest(
+            tickers=["BBCA"],
+            start_date=signal_date,
+            end_date=exit_date,
+            setup="smart-money-confirmed",
+            capital=Decimal("1000000"),
+            risk_pct=Decimal("0.01"),
+            max_positions=1,
+            min_net_buy_days=1,
+            cost_bps=Decimal("0"),
+        )
+    )
 
     assert response.trade_count == 0
     assert response.candidate_observations
@@ -54,8 +53,7 @@ def test_swing_backtest_records_rejected_candidate_observations():
     assert observation.forward_return_pct == 5.0
     summary = response.attribution_summary.to_dict()
     assert any(
-        stat["dimension"] == "candidate_setup_match"
-        for stat in summary["candidate_group_stats"]
+        stat["dimension"] == "candidate_setup_match" for stat in summary["candidate_group_stats"]
     )
 
 
@@ -63,10 +61,7 @@ def test_swing_backtest_records_risk_and_trade_setup_attribution():
     base = date(2026, 1, 1)
     signal_date = base + timedelta(days=24)
     exit_date = base + timedelta(days=25)
-    summaries = [
-        _summary("BBCA", base + timedelta(days=i), Decimal("110"))
-        for i in range(18, 25)
-    ]
+    summaries = [_summary("BBCA", base + timedelta(days=i), Decimal("110")) for i in range(18, 25)]
     risk_engine = FakeRiskEngine()
     use_case = SwingBacktestUseCase(
         indicator_registry=IndicatorRegistry(),
@@ -77,16 +72,18 @@ def test_swing_backtest_records_risk_and_trade_setup_attribution():
         signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
-    response = use_case.execute(SwingBacktestRequest(
-        tickers=["BBCA"],
-        start_date=signal_date,
-        end_date=exit_date,
-        capital=Decimal("1000000"),
-        risk_pct=Decimal("0.01"),
-        max_positions=1,
-        min_net_buy_days=1,
-        cost_bps=Decimal("0"),
-    ))
+    response = use_case.execute(
+        SwingBacktestRequest(
+            tickers=["BBCA"],
+            start_date=signal_date,
+            end_date=exit_date,
+            capital=Decimal("1000000"),
+            risk_pct=Decimal("0.01"),
+            max_positions=1,
+            min_net_buy_days=1,
+            cost_bps=Decimal("0"),
+        )
+    )
 
     assert response.trade_count == 1
     trade = response.trades[0]
@@ -102,10 +99,7 @@ def test_swing_backtest_keeps_trade_when_risk_attribution_fails():
     base = date(2026, 1, 1)
     signal_date = base + timedelta(days=24)
     exit_date = base + timedelta(days=25)
-    summaries = [
-        _summary("BBCA", base + timedelta(days=i), Decimal("110"))
-        for i in range(18, 25)
-    ]
+    summaries = [_summary("BBCA", base + timedelta(days=i), Decimal("110")) for i in range(18, 25)]
     use_case = SwingBacktestUseCase(
         indicator_registry=IndicatorRegistry(),
         broker_repository=MockBrokerRepository(summaries),
@@ -115,16 +109,18 @@ def test_swing_backtest_keeps_trade_when_risk_attribution_fails():
         signal_engine=SignalEngine(config=SignalEngineConfig()),
     )
 
-    response = use_case.execute(SwingBacktestRequest(
-        tickers=["BBCA"],
-        start_date=signal_date,
-        end_date=exit_date,
-        capital=Decimal("1000000"),
-        risk_pct=Decimal("0.01"),
-        max_positions=1,
-        min_net_buy_days=1,
-        cost_bps=Decimal("0"),
-    ))
+    response = use_case.execute(
+        SwingBacktestRequest(
+            tickers=["BBCA"],
+            start_date=signal_date,
+            end_date=exit_date,
+            capital=Decimal("1000000"),
+            risk_pct=Decimal("0.01"),
+            max_positions=1,
+            min_net_buy_days=1,
+            cost_bps=Decimal("0"),
+        )
+    )
 
     assert response.trade_count == 1
     assert response.trades[0].risk_status is None

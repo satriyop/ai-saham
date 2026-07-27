@@ -118,9 +118,11 @@ def _use_case(*, session, builder, sessions=None):
         end = session.latest_completed_session or session.decision_at.date()
         sessions = _weekdays(end - timedelta(days=20), 15)
     return BuildLiveSignalEvidenceExecutionContextUseCase(
-        session_resolver=RecordingSessionResolver(session)
-        if isinstance(session, EffectiveMarketSession)
-        else session,
+        session_resolver=(
+            RecordingSessionResolver(session)
+            if isinstance(session, EffectiveMarketSession)
+            else session
+        ),
         context_builder=builder,
         market_data_repository=FakeMarketRepository(sessions),
     )

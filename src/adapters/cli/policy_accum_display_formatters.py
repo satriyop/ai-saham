@@ -64,9 +64,7 @@ def _fmt_target_path(item) -> str:
 
 
 def _fmt_evidence_dimensions(item) -> str:
-    dimensions = getattr(item, "evidence_dimensions", ()) or (
-        item.evidence_dimension,
-    )
+    dimensions = getattr(item, "evidence_dimensions", ()) or (item.evidence_dimension,)
     return ",".join(dimensions)
 
 
@@ -79,11 +77,7 @@ def _fmt_count_map(counts: object) -> str:
 def _fmt_evidence_snapshot(snapshot) -> str:
     if snapshot is None:
         return "N/A"
-    spread = (
-        "N/A"
-        if snapshot.return_spread_pct is None
-        else f"{snapshot.return_spread_pct:+.2f}%"
-    )
+    spread = "N/A" if snapshot.return_spread_pct is None else f"{snapshot.return_spread_pct:+.2f}%"
     return (
         f"n={snapshot.sample_count}, spread={spread}, "
         f"strength={snapshot.evidence_strength}, priority={snapshot.priority}"

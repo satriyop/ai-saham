@@ -15,6 +15,7 @@ from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.cli.effective_session_display import parse_as_of_option
 from src.adapters.cli.plan_swing_command_config import (
     PlanSwingCommandConfig,
     load_plan_swing_command_config,
@@ -25,7 +26,6 @@ from src.adapters.cli.plan_swing_display import (
     SwingOutputDisplayOptions,
     print_swing_output,
 )
-from src.adapters.cli.effective_session_display import parse_as_of_option
 from src.adapters.cli.plan_swing_optional_fetchers import (
     fetch_swing_sentiment as _fetch_swing_sentiment_with_config,
 )
@@ -96,8 +96,8 @@ def _evaluate_foreign_bounce_setup(
     return _evaluate_swing_setup(FOREIGN_BOUNCE_SETUP_NAME, accum, broker_detail, cfg)
 
 
-
 # ─── swing command ───────────────────────────────────────────────────────────
+
 
 def swing(
     ticker: Annotated[str, typer.Argument(help="Stock ticker symbol (e.g., BBRI)")],
@@ -220,7 +220,8 @@ def swing(
         Optional[str],
         typer.Option(
             "--as-of",
-            help="Point-in-time as-of date YYYY-MM-DD (pins effective session; default: live today).",
+            help="Point-in-time as-of date YYYY-MM-DD (pins effective session; "
+            "default: live today).",
         ),
     ] = None,
     db_path: Annotated[

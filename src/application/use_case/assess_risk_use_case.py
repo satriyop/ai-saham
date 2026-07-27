@@ -117,9 +117,7 @@ class AssessRiskUseCase:
         """
         if request.rules_file is not None:
             if self._rules_loader is None:
-                raise ValueError(
-                    "rules_loader is required when rules_file is provided"
-                )
+                raise ValueError("rules_loader is required when rules_file is provided")
             custom_rules_evaluator = AssessRiskCustomRulesEvaluator(
                 repository=self._repository,
                 registry=self._registry,
@@ -129,8 +127,6 @@ class AssessRiskUseCase:
             return custom_rules_evaluator.evaluate(request)
         return self._gate_evaluator.evaluate(request)
 
-    def execute_trend(
-        self, request: AssessRiskRequest, days: int = 7
-    ) -> "AssessRiskTrendResponse":
+    def execute_trend(self, request: AssessRiskRequest, days: int = 7) -> "AssessRiskTrendResponse":
         """Assess risk level trend over the last N trading days."""
         return self._trend_use_case.execute(request, days=days)

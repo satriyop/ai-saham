@@ -83,9 +83,7 @@ class YamlRuleInterpreter:
         """Return the number of rules in the rule set."""
         return len(self._rule_set.rules)
 
-    def evaluate(
-        self, snapshot: IndicatorSnapshot
-    ) -> tuple[RiskLevel, int, list[str]]:
+    def evaluate(self, snapshot: IndicatorSnapshot) -> tuple[RiskLevel, int, list[str]]:
         """Evaluate the rule set against an indicator snapshot.
 
         Returns the same signature as BaseRule.evaluate() for compatibility
@@ -109,9 +107,7 @@ class YamlRuleInterpreter:
 
         return self._build_default_result(snapshot)
 
-    def _evaluate_condition(
-        self, condition: Condition, snapshot: IndicatorSnapshot
-    ) -> bool:
+    def _evaluate_condition(self, condition: Condition, snapshot: IndicatorSnapshot) -> bool:
         """Evaluate a single condition against a snapshot.
 
         Args:
@@ -122,10 +118,7 @@ class YamlRuleInterpreter:
             True if condition is satisfied, False otherwise
         """
         if isinstance(condition, CompoundCondition):
-            return all(
-                self._evaluate_condition(sub, snapshot)
-                for sub in condition.conditions
-            )
+            return all(self._evaluate_condition(sub, snapshot) for sub in condition.conditions)
         elif isinstance(condition, ConditionIndicatorVsValue):
             return self._evaluate_indicator_vs_value(condition, snapshot)
         elif isinstance(condition, ConditionIndicatorVsIndicator):
@@ -146,7 +139,7 @@ class YamlRuleInterpreter:
         compare_func = self._OPERATOR_FUNCS[condition.operator]
 
         # If comparing mixed types (e.g. str vs Decimal), try casting or use strict equality
-        if type(indicator_value) != type(condition.value):
+        if type(indicator_value) is not type(condition.value):
             if condition.operator in (Operator.EQ, Operator.NE):
                 # For EQ/NE, str vs Decimal is safe to compare as strings
                 return compare_func(str(indicator_value), str(condition.value))
@@ -171,9 +164,7 @@ class YamlRuleInterpreter:
         compare_func = self._OPERATOR_FUNCS[condition.operator]
         return compare_func(left_value, right_value)
 
-    def _get_indicator_value(
-        self, indicator_name: str, snapshot: IndicatorSnapshot
-    ) -> Decimal:
+    def _get_indicator_value(self, indicator_name: str, snapshot: IndicatorSnapshot) -> Decimal:
         """Get the value of an indicator from a snapshot.
 
         Supports both built-in indicators (RSI, SMA, EMA) and custom
@@ -237,9 +228,7 @@ class YamlRuleInterpreter:
 
         return risk_level, confidence, rationale
 
-    def _format_condition(
-        self, condition: Condition, snapshot: IndicatorSnapshot
-    ) -> str:
+    def _format_condition(self, condition: Condition, snapshot: IndicatorSnapshot) -> str:
         """Format a condition for display in rationale.
 
         Args:
@@ -250,10 +239,7 @@ class YamlRuleInterpreter:
             Human-readable condition string
         """
         if isinstance(condition, CompoundCondition):
-            parts = [
-                self._format_condition(sub, snapshot)
-                for sub in condition.conditions
-            ]
+            parts = [self._format_condition(sub, snapshot) for sub in condition.conditions]
             return " AND ".join(f"({p})" for p in parts)
         elif isinstance(condition, ConditionIndicatorVsValue):
             actual = self._get_indicator_value(condition.indicator_name, snapshot)
@@ -263,20 +249,14 @@ class YamlRuleInterpreter:
                 f"{condition.operator.value} {condition.value}"
             )
         elif isinstance(condition, ConditionIndicatorVsIndicator):
-            left_actual = self._get_indicator_value(
-                condition.left.name, snapshot
-            )
+            left_actual = self._get_indicator_value(condition.left.name, snapshot)
             if isinstance(condition.right, IndicatorRef):
-                right_actual = self._get_indicator_value(
-                    condition.right.name, snapshot
-                )
+                right_actual = self._get_indicator_value(condition.right.name, snapshot)
                 right_str = f"{condition.right.name}({right_actual:.2f})"
             else:
                 right_str = str(condition.right)
             return (
-                f"{condition.left.name}({left_actual:.2f}) "
-                f"{condition.operator.value} "
-                f"{right_str}"
+                f"{condition.left.name}({left_actual:.2f}) {condition.operator.value} {right_str}"
             )
         else:
             return str(condition)
@@ -327,6 +307,7 @@ class YamlRuleInterpreter:
                     # into the registry so _compute_plugin can dispatch it at runtime.
                     if registry is not None and not registry.is_registered(name_upper):
                         from src.application.formula.parser import parse
+
                         ast = parse(definition.formula)
                         registry.register_formula(name_upper, ast)
                     required[name_upper] = (name_upper, 0)

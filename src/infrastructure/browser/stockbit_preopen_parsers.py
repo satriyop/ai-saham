@@ -126,9 +126,7 @@ def _parse_order_book_response(body: dict) -> OrderBookTopOfBook | None:
     bid_price, bid_lots, offer_price, offer_lots = _parse_top_of_book(body)
     bid = OrderBookBid(price=bid_price, volume=bid_lots) if bid_price and bid_lots else None
     offer = (
-        OrderBookBid(price=offer_price, volume=offer_lots)
-        if offer_price and offer_lots
-        else None
+        OrderBookBid(price=offer_price, volume=offer_lots) if offer_price and offer_lots else None
     )
     if bid is None and offer is None:
         return None
@@ -161,8 +159,8 @@ def _parse_top_of_book(
 
     # Primary: iepiev.best_bid_offer (confirmed, values already in lots)
     bbo = (data.get("iepiev") or {}).get("best_bid_offer") or {}
-    bid_raw = (bbo.get("bid") or {})
-    offer_raw = (bbo.get("offer") or {})
+    bid_raw = bbo.get("bid") or {}
+    offer_raw = bbo.get("offer") or {}
 
     bid_price = _safe_decimal((bid_raw.get("price") or {}).get("raw"))
     bid_lots = _safe_int((bid_raw.get("quantity") or {}).get("raw"))

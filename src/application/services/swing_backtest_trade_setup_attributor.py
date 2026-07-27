@@ -49,15 +49,19 @@ class SwingBacktestTradeSetupAttributor:
             )
             return None, None
 
-        trade_setup = AssessTradeSetupUseCase().execute(
-            AssessTradeSetupRequest(
-                ticker=candidate.ticker,
-                snapshot_date=signal_date,
-                signal_response=candidate.signal_assessment,
-                risk_response=risk_response,
-                market_context=market_context,
+        trade_setup = (
+            AssessTradeSetupUseCase()
+            .execute(
+                AssessTradeSetupRequest(
+                    ticker=candidate.ticker,
+                    snapshot_date=signal_date,
+                    signal_response=candidate.signal_assessment,
+                    risk_response=risk_response,
+                    market_context=market_context,
+                )
             )
-        ).setup
+            .setup
+        )
         return risk_response, trade_setup
 
     @staticmethod
@@ -69,19 +73,17 @@ class SwingBacktestTradeSetupAttributor:
             ticker=candidate.ticker,
             snapshot_date=signal_date,
             piotroski_f_score=(
-                candidate.fundamentals.piotroski_f_score
-                if candidate.fundamentals else None
+                candidate.fundamentals.piotroski_f_score if candidate.fundamentals else None
             ),
             market_cap_idr=(
-                candidate.fundamentals.market_cap_idr
-                if candidate.fundamentals else None
+                candidate.fundamentals.market_cap_idr if candidate.fundamentals else None
             ),
             free_float_pct=(
                 candidate.shareholding.free_float_pct
-                if candidate.shareholding is not None else None
+                if candidate.shareholding is not None
+                else None
             ),
             five_day_accdist=(
-                candidate.bandar_detector.five_day_accdist
-                if candidate.bandar_detector else None
+                candidate.bandar_detector.five_day_accdist if candidate.bandar_detector else None
             ),
         )

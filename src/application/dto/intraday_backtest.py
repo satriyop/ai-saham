@@ -18,23 +18,23 @@ class IntradayBacktestRequest:
     start_date: date
     end_date: date
     capital: Decimal = Decimal("100000000")
-    risk_pct: Decimal = Decimal("0.01")           # 1% of capital at risk per trade
+    risk_pct: Decimal = Decimal("0.01")  # 1% of capital at risk per trade
     max_daily_positions: int = 3
     atr_period: int = 14
     rsi_period: int = 14
     sma_period: int = 20
     atr_multiplier: Decimal = Decimal("1.0")
-    max_stop_pct: Decimal = Decimal("0.07")        # 7% max stop distance
+    max_stop_pct: Decimal = Decimal("0.07")  # 7% max stop distance
     rsi_overbought_threshold: Decimal = Decimal("75")
-    atr_range_cap_min: Decimal = Decimal("0.01")   # 1% floor on ATR band
-    atr_range_cap_max: Decimal = Decimal("0.05")   # 5% ceiling on ATR band
+    atr_range_cap_min: Decimal = Decimal("0.01")  # 1% floor on ATR band
+    atr_range_cap_max: Decimal = Decimal("0.05")  # 5% ceiling on ATR band
     broker_backing_window_days: int = 7
     broker_backing_threshold: float = 50.0
     fvwap_period: int = 20
-    history_days: int = 60                         # min candle lookback per ticker
-    include_wait: bool = False                     # treat WAIT as ENTER if True
-    cost_bps: Decimal = Decimal("20")              # bps per side (round-trip = 2×)
-    iev_top_n: int = 5                             # IEV top-N movers per day limit
+    history_days: int = 60  # min candle lookback per ticker
+    include_wait: bool = False  # treat WAIT as ENTER if True
+    cost_bps: Decimal = Decimal("20")  # bps per side (round-trip = 2×)
+    iev_top_n: int = 5  # IEV top-N movers per day limit
 
 
 # ── Result DTOs ────────────────────────────────────────────────────────────────
@@ -46,11 +46,11 @@ class IntradayBacktestTrade:
 
     ticker: str
     trade_date: date
-    decision: str                    # "ENTER" or "WAIT" (when include_wait)
+    decision: str  # "ENTER" or "WAIT" (when include_wait)
     opening_price: Decimal
     entry_price: Decimal
     exit_price: Decimal
-    exit_reason: str                 # "target" | "stop" | "close" | "both_assume_stop"
+    exit_reason: str  # "target" | "stop" | "close" | "both_assume_stop"
     stop_price: Decimal
     target_price: Decimal
     lots: int

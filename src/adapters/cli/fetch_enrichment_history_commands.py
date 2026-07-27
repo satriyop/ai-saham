@@ -15,14 +15,14 @@ from typing import Annotated, Optional
 import typer
 
 from src.adapters.cli.fetch_market_display import render_enrichment_pit_coverage
-from src.infrastructure.composition.fetch_market.fetch_market_enrichment_refresh import (
-    fetch_enrichment,
-    read_enrichment_pit_coverage,
-)
 from src.adapters.cli.fetch_market_provider_factory import create_broker_provider
 from src.application.services.universe_loader import (
     UniverseNotFoundError,
     resolve_tickers,
+)
+from src.infrastructure.composition.fetch_market.fetch_market_enrichment_refresh import (
+    fetch_enrichment,
+    read_enrichment_pit_coverage,
 )
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader

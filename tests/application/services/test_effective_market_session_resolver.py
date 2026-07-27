@@ -64,9 +64,7 @@ def _wib(y, m, d, hh, mm) -> datetime:
 
 
 def test_weekday_before_market_close_uses_prior_completed_session():
-    repo = FakeMarketDataRepository(
-        {"IHSG": [date(2026, 6, 17), date(2026, 6, 18)]}
-    )
+    repo = FakeMarketDataRepository({"IHSG": [date(2026, 6, 17), date(2026, 6, 18)]})
     resolver = EffectiveMarketSessionResolver(repo, benchmark=ALIASES)
 
     result = resolver.resolve(run_at=_wib(2026, 6, 19, 10, 0))
@@ -78,9 +76,7 @@ def test_weekday_before_market_close_uses_prior_completed_session():
 
 
 def test_weekday_after_market_close_uses_cached_same_day_ihsg():
-    repo = FakeMarketDataRepository(
-        {"IHSG": [date(2026, 6, 18), date(2026, 6, 19)]}
-    )
+    repo = FakeMarketDataRepository({"IHSG": [date(2026, 6, 18), date(2026, 6, 19)]})
     resolver = EffectiveMarketSessionResolver(repo, benchmark=ALIASES)
 
     result = resolver.resolve(run_at=_wib(2026, 6, 19, 17, 0))

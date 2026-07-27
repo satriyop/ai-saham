@@ -33,13 +33,7 @@ class AccumRiskInputsBuilder:
             piotroski_f_score=(
                 fundamentals.piotroski_f_score if fundamentals is not None else None
             ),
-            market_cap_idr=(
-                fundamentals.market_cap_idr if fundamentals is not None else None
-            ),
-            free_float_pct=(
-                shareholding.free_float_pct if shareholding is not None else None
-            ),
-            five_day_accdist=(
-                bandar.five_day_accdist if bandar is not None else None
-            ),
+            market_cap_idr=(fundamentals.market_cap_idr if fundamentals is not None else None),
+            free_float_pct=(shareholding.free_float_pct if shareholding is not None else None),
+            five_day_accdist=(bandar.five_day_accdist if bandar is not None else None),
         )

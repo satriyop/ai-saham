@@ -32,7 +32,9 @@ class SQLiteTickerDashboardSource(TickerDashboardSource):
             StockbitCompanyProfileProvider,
         )
         from src.infrastructure.browser.stockbit_config_bundle import load_stockbit_provider_config
-        from src.infrastructure.browser.stockbit_corp_action import StockbitCorporateActionRepository
+        from src.infrastructure.browser.stockbit_corp_action import (
+            StockbitCorporateActionRepository,
+        )
         from src.infrastructure.browser.stockbit_earnings import StockbitEarningsProvider
         from src.infrastructure.browser.stockbit_forward_estimates import (
             StockbitForwardEstimatesProvider,

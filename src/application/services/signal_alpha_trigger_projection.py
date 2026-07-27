@@ -14,8 +14,8 @@ from src.application.services.alpha_trigger_aggregator import (
     AlphaTriggerGroupInput,
 )
 from src.domain.value_objects.alpha_trigger_score import (
-    EvidenceAuthorityStatus,
     SECTOR_CONTEXT_EVIDENCE_NAME,
+    EvidenceAuthorityStatus,
 )
 
 if TYPE_CHECKING:

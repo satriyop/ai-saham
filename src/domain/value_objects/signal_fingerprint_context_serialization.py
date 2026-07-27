@@ -58,9 +58,7 @@ def _parse_institutional_accumulation_fields(data: dict[str, Any]) -> dict[str, 
         "ia_cnfb_distribution_3d": _optional_float(data.get("ia_cnfb_distribution_3d")),
         "ia_foreign_vwap_distance": _optional_float(data.get("ia_foreign_vwap_distance")),
         "ia_foreign_track_coverage": _optional_float(data.get("ia_foreign_track_coverage")),
-        "ia_foreign_track_conviction": _optional_float(
-            data.get("ia_foreign_track_conviction")
-        ),
+        "ia_foreign_track_conviction": _optional_float(data.get("ia_foreign_track_conviction")),
         "ia_domestic_broker_consistency": _optional_float(
             data.get("ia_domestic_broker_consistency")
         ),
@@ -68,9 +66,7 @@ def _parse_institutional_accumulation_fields(data: dict[str, Any]) -> dict[str, 
         "ia_domestic_accumulation_session_ratio": _optional_float(
             data.get("ia_domestic_accumulation_session_ratio")
         ),
-        "ia_domestic_buy_vwap_distance": _optional_float(
-            data.get("ia_domestic_buy_vwap_distance")
-        ),
+        "ia_domestic_buy_vwap_distance": _optional_float(data.get("ia_domestic_buy_vwap_distance")),
         "ia_domestic_broker_hhi_divergence": _optional_float(
             data.get("ia_domestic_broker_hhi_divergence")
         ),
@@ -121,21 +117,15 @@ def _parse_ticker_profile_fields(data: dict[str, Any]) -> dict[str, Any]:
         "tp_foreign_institutional_exposure": _optional_float(
             data.get("tp_foreign_institutional_exposure")
         ),
-        "tp_domestic_bandar_exposure": _optional_float(
-            data.get("tp_domestic_bandar_exposure")
-        ),
+        "tp_domestic_bandar_exposure": _optional_float(data.get("tp_domestic_bandar_exposure")),
         "tp_retail_speculative_exposure": _optional_float(
             data.get("tp_retail_speculative_exposure")
         ),
         "tp_liquidity_score": _optional_float(data.get("tp_liquidity_score")),
-        "tp_broker_concentration_score": _optional_float(
-            data.get("tp_broker_concentration_score")
-        ),
+        "tp_broker_concentration_score": _optional_float(data.get("tp_broker_concentration_score")),
         "tp_foreign_flow_score": _optional_float(data.get("tp_foreign_flow_score")),
         "tp_volatility_score": _optional_float(data.get("tp_volatility_score")),
-        "tp_index_membership_score": _optional_float(
-            data.get("tp_index_membership_score")
-        ),
+        "tp_index_membership_score": _optional_float(data.get("tp_index_membership_score")),
         "tp_market_cap_bucket": data.get("tp_market_cap_bucket"),
         "tp_sector": data.get("tp_sector"),
         "tp_index_memberships": data.get("tp_index_memberships"),

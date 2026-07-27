@@ -114,9 +114,7 @@ def accum(
 
 
 def _display(response) -> None:
-    typer.echo(
-        f"\nSignal Inspect · accum-flow · {response.ticker} · {response.contract.value}"
-    )
+    typer.echo(f"\nSignal Inspect · accum-flow · {response.ticker} · {response.contract.value}")
     typer.echo("═" * 78)
     typer.echo(f"Status: {response.status.value}")
     typer.echo(f"As-of: {response.as_of_date.isoformat()}")
@@ -140,9 +138,7 @@ def _display(response) -> None:
         if constraints is not None:
             typer.echo(f"Decision constraints: {constraints.to_dict()}")
         if a.flow_source_availability is not None:
-            typer.echo(
-                f"Flow source availability: {a.flow_source_availability.to_dict()}"
-            )
+            typer.echo(f"Flow source availability: {a.flow_source_availability.to_dict()}")
         if a.assessment.rationale:
             typer.echo("Rationale:")
             for line in a.assessment.rationale:

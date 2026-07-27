@@ -10,7 +10,6 @@ from src.domain.value_objects.alpha_trigger_score import (
     EvidenceRegistration,
 )
 
-
 # ── SECTOR-CONTEXT-IDENTITY: removed market_context evidence-name rejection ──
 # market_context is a removal tombstone, not an alias. No domain object may be
 # constructed with it as an Alpha/Trigger evidence identity.
@@ -172,8 +171,10 @@ def test_route_fraction_bounds_are_validated():
 
 # ── canonical naming properties ───────────────────────────────────────────────
 
-def _make_score(coverage: float = 0.75, conviction: float = 0.60,
-                authority: float = 0.65) -> AlphaTriggerScore:
+
+def _make_score(
+    coverage: float = 0.75, conviction: float = 0.60, authority: float = 0.65
+) -> AlphaTriggerScore:
     return AlphaTriggerScore(
         alpha_score=70.0,
         trigger_score=55.0,

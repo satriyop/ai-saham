@@ -41,8 +41,7 @@ def resolve_alpha_trigger_config(raw: dict) -> AlphaTriggerConfig:
         return defaults
 
     route_fractions = {
-        horizon: dict(groups)
-        for horizon, groups in defaults.route_fractions.items()
+        horizon: dict(groups) for horizon, groups in defaults.route_fractions.items()
     }
     for horizon, groups in (raw.get("route_fractions") or {}).items():
         if REMOVED_MARKET_CONTEXT_EVIDENCE_NAME in (groups or {}):
@@ -54,7 +53,8 @@ def resolve_alpha_trigger_config(raw: dict) -> AlphaTriggerConfig:
         for group, group_cfg in (groups or {}).items():
             alpha_fraction = (
                 (group_cfg or {}).get("alpha_fraction")
-                if isinstance(group_cfg, dict) else group_cfg
+                if isinstance(group_cfg, dict)
+                else group_cfg
             )
             value = float(alpha_fraction)
             if not (0.0 <= value <= 1.0):
@@ -75,9 +75,7 @@ def resolve_alpha_trigger_config(raw: dict) -> AlphaTriggerConfig:
     for group, value in raw_group_weights.items():
         weight = float(value)
         if weight < 0.0:
-            raise ValueError(
-                f"signal_engine.alpha_trigger.group_weights.{group} must be >= 0.0"
-            )
+            raise ValueError(f"signal_engine.alpha_trigger.group_weights.{group} must be >= 0.0")
         group_weights[group] = weight
     if sum(group_weights.values()) <= 0:
         raise ValueError("signal_engine.alpha_trigger.group_weights must sum above 0")
@@ -87,8 +85,7 @@ def resolve_alpha_trigger_config(raw: dict) -> AlphaTriggerConfig:
         weight = float(value)
         if not (0.0 <= weight <= 1.0):
             raise ValueError(
-                f"signal_engine.alpha_trigger.horizon_alpha_weights.{horizon} "
-                "must be 0.0-1.0"
+                f"signal_engine.alpha_trigger.horizon_alpha_weights.{horizon} must be 0.0-1.0"
             )
         horizon_alpha_weights[horizon] = weight
 
@@ -128,9 +125,7 @@ def resolve_alpha_trigger_config(raw: dict) -> AlphaTriggerConfig:
             evidence_name=name,
             status=status,
             low_weight_cap=float((reg or {}).get("low_weight_cap", low_weight_cap)),
-            promotion_requires=tuple(
-                str(v) for v in (reg or {}).get("promotion_requires", ())
-            ),
+            promotion_requires=tuple(str(v) for v in (reg or {}).get("promotion_requires", ())),
             promoted_by=(reg or {}).get("promoted_by"),
             promoted_date=(reg or {}).get("promoted_date"),
             promotion=promotion,

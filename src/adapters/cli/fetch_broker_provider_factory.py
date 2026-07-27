@@ -24,12 +24,11 @@ def create_broker_data_provider(provider_name: str) -> BrokerDataProvider:
             load_stockbit_provider_config,
         )
         from src.infrastructure.composition.stockbit_session_factory import get_stockbit_session
+
         stockbit_config = load_stockbit_provider_config()
         session = get_stockbit_session(stockbit_config)
         if not session or not session.authenticated:
             raise ValueError("No active Stockbit session. Run `saham fetch stockbit login`.")
         return StockbitBrokerProvider(session.api_client, stockbit_config=stockbit_config)
     else:
-        raise ValueError(
-            f"Unknown provider: {provider_name}. Choose from: {', '.join(PROVIDERS)}"
-        )
+        raise ValueError(f"Unknown provider: {provider_name}. Choose from: {', '.join(PROVIDERS)}")

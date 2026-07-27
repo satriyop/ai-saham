@@ -163,9 +163,7 @@ def _built_flow_evidence(has_bandar_contributor: bool = False) -> BuiltFlowEvide
 
 
 def _source_availability_use_case() -> AssessSourceAvailabilityUseCase:
-    calendar = KnownTradingSessionCalendar(
-        sessions=(SNAP,), coverage_start=SNAP, coverage_end=SNAP
-    )
+    calendar = KnownTradingSessionCalendar(sessions=(SNAP,), coverage_start=SNAP, coverage_end=SNAP)
     return AssessSourceAvailabilityUseCase(calendar=calendar)
 
 
@@ -215,7 +213,10 @@ class _RecordingSignalEngine:
         self.calls.append(kwargs)
         resp = _signal_response(score=self._response_score)
         if kwargs.get("canonical_evidence") is not None:
-            from src.domain.value_objects.evidence_source_availability import AvailabilityEnforcementMode
+            from src.domain.value_objects.evidence_source_availability import (
+                AvailabilityEnforcementMode,
+            )
+
             resp.availability_enforcement = AvailabilityEnforcementMode.SHADOW
         return resp
 
@@ -245,6 +246,7 @@ def _state(
     from src.application.dto.signal_evidence_execution_context import (
         SignalEvidenceExecutionContext,
     )
+
     state.signal_evidence_execution_context = SignalEvidenceExecutionContext(
         effective_session=_effective_session(),
         source_availability_use_case=source_availability_use_case,
@@ -379,6 +381,7 @@ def test_missing_source_availability_use_case_rescores_with_unknown_shadow_avail
 
     # availability_enforcement == SHADOW
     from src.domain.value_objects.evidence_source_availability import AvailabilityEnforcementMode
+
     assert result.signal_assessment.availability_enforcement == AvailabilityEnforcementMode.SHADOW
 
     # built evidence is not removed
@@ -423,9 +426,11 @@ def test_trade_setup_recomposition_runs_alongside_canonical_evidence():
 
 # --- Swing composer fallback/error tests (Step 4 tests) ---------------------------
 
+
 def test_rescores_when_availability_use_case_is_none():
     # 9. Built setup and flow evidence are rescored when the availability use case is None.
     from src.application.services.signal_engine import SignalEngine
+
     engine = SignalEngine()
     composer = SwingAnalysisDecisionComposer(
         risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
@@ -444,6 +449,7 @@ def test_rescores_when_availability_use_case_is_none():
 def test_operational_availability_failure_still_rescored():
     # 10. Operational availability failure still rescored with canonical evidence.
     from src.application.services.signal_engine import SignalEngine
+
     engine = SignalEngine()
     composer = SwingAnalysisDecisionComposer(
         risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
@@ -461,15 +467,26 @@ def test_operational_availability_failure_still_rescored():
 
     result = composer.recompose_after_evidence(_request(), state)
     assert result.signal_assessment.score != 50
-    assert result.signal_assessment.setup_source_availability.assessments[0].status == SourceAvailabilityStatus.UNKNOWN
-    assert result.signal_assessment.flow_source_availability.assessments[0].status == SourceAvailabilityStatus.UNKNOWN
-    assert result.signal_assessment.flow_source_availability.assessments[1].status == SourceAvailabilityStatus.UNKNOWN
+    assert (
+        result.signal_assessment.setup_source_availability.assessments[0].status
+        == SourceAvailabilityStatus.UNKNOWN
+    )
+    assert (
+        result.signal_assessment.flow_source_availability.assessments[0].status
+        == SourceAvailabilityStatus.UNKNOWN
+    )
+    assert (
+        result.signal_assessment.flow_source_availability.assessments[1].status
+        == SourceAvailabilityStatus.UNKNOWN
+    )
 
 
 def test_contract_value_error_escapes_in_swing():
     # 11. Contract ValueError still escapes.
     import pytest
+
     from src.application.services.signal_engine import SignalEngine
+
     engine = SignalEngine()
     composer = SwingAnalysisDecisionComposer(
         risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
@@ -495,6 +512,7 @@ def test_current_and_unknown_availability_produce_identical_directional_score_in
     #     identical guarantee this test previously enforced:
     #     signal_authority_coverage is now availability-gated by design.
     from src.application.services.signal_engine import SignalEngine
+
     engine = SignalEngine()
     composer = SwingAnalysisDecisionComposer(
         risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
@@ -556,8 +574,10 @@ def test_recompose_after_evidence_failure_clears_pre_existing_trade_setup():
     class FailingSignalEngine:
         def foreign_flow_quality_from_accum_score(self, score):
             return None
+
         def bandar_max_range(self, n):
             return 0
+
         def evaluate_swing_trade_setup(self, ticker, signal_context, market_context=None, **kwargs):
             raise RuntimeError("rescore boom")
 
@@ -568,8 +588,9 @@ def test_recompose_after_evidence_failure_clears_pre_existing_trade_setup():
     )
 
     # Pre-existing verdict and trade setup
-    from src.domain.value_objects.trade_setup import TradeSetup, SetupAction
     from src.domain.value_objects.signal_assessment import SignalStrength
+    from src.domain.value_objects.trade_setup import SetupAction, TradeSetup
+
     pre_existing_setup = TradeSetup(
         ticker=TICKER,
         snapshot_date=SNAP,
@@ -601,5 +622,11 @@ def test_recompose_after_evidence_failure_clears_pre_existing_trade_setup():
     assert state.verdict.signal_assessment is None
     assert state.verdict.market_context_signal_preview is None
     assert state.verdict.market_context_trade_setup_preview is None
-    assert state.signal_assessment_availability.status == swing_analysis_dto.SignalAssessmentStatus.UNAVAILABLE
-    assert state.signal_assessment_availability.unavailable_reason == swing_analysis_dto.SignalAssessmentUnavailableReason.ASSESSMENT_FAILED
+    assert (
+        state.signal_assessment_availability.status
+        == swing_analysis_dto.SignalAssessmentStatus.UNAVAILABLE
+    )
+    assert (
+        state.signal_assessment_availability.unavailable_reason
+        == swing_analysis_dto.SignalAssessmentUnavailableReason.ASSESSMENT_FAILED
+    )

@@ -104,9 +104,7 @@ _CONFIRMATION_SEQUENCE_REQUIREMENT = SetupPhaseRequirementConfig(entry_authority
 
 @dataclass(frozen=True)
 class SetupPhaseConfig:
-    thresholds: SetupPhaseThresholdsConfig = field(
-        default_factory=SetupPhaseThresholdsConfig
-    )
+    thresholds: SetupPhaseThresholdsConfig = field(default_factory=SetupPhaseThresholdsConfig)
     requirements_by_family: dict[str, SetupPhaseRequirementConfig] = field(
         default_factory=lambda: {
             "accumulation": _ACCUMULATION_SEQUENCE_REQUIREMENT,
@@ -123,13 +121,9 @@ class SetupPhaseConfig:
             "smart_money_confirmed": _CONFIRMATION_SEQUENCE_REQUIREMENT,
         }
     )
-    volume_trigger: VolumeTriggerValidityConfig = field(
-        default_factory=VolumeTriggerValidityConfig
-    )
+    volume_trigger: VolumeTriggerValidityConfig = field(default_factory=VolumeTriggerValidityConfig)
 
-    def requirement_for(
-        self, setup_family: str | None
-    ) -> SetupPhaseRequirementConfig | None:
+    def requirement_for(self, setup_family: str | None) -> SetupPhaseRequirementConfig | None:
         if not setup_family:
             return None
         key = setup_family.strip().lower()

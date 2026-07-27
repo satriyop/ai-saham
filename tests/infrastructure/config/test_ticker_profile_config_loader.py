@@ -111,9 +111,7 @@ def test_create_ticker_profile_classifier_returns_instance(tmp_path):
     with open(univ_p, "w") as f:
         yaml.dump(universes_data, f)
 
-    classifier = create_ticker_profile_classifier(
-        profile_path=prof_p, universes_path=univ_p
-    )
+    classifier = create_ticker_profile_classifier(profile_path=prof_p, universes_path=univ_p)
     assert isinstance(classifier, TickerProfileClassifier)
     assert classifier._universe_index == {"BBCA": ("lq45",)}
     assert classifier._config.index_membership_scores == {"lq45": 1.0}

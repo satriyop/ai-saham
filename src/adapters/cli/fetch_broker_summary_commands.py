@@ -60,7 +60,8 @@ def broker_fetch(
     provider_name: Annotated[
         Optional[str],
         typer.Option(
-            "--provider", "-P",
+            "--provider",
+            "-P",
             help=f"Data provider ({', '.join(PROVIDERS)})",
         ),
     ] = None,
@@ -127,8 +128,9 @@ def broker_fetch(
         response = result.response
         source = "cache" if response.from_cache else resolved_provider
         typer.echo(
-            typer.style(f"Loaded {len(response.summaries)} days from {source}",
-                       fg=typer.colors.GREEN)
+            typer.style(
+                f"Loaded {len(response.summaries)} days from {source}", fg=typer.colors.GREEN
+            )
         )
 
         if result.exact_flow_saved_count > 0:

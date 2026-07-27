@@ -252,9 +252,7 @@ class SwingBacktestResponse:
     skipped_no_forward_data: int
     skipped_by_regime: int
     trades: list[SwingBacktestTrade] = field(default_factory=list)
-    candidate_observations: list[SwingBacktestCandidateObservation] = field(
-        default_factory=list
-    )
+    candidate_observations: list[SwingBacktestCandidateObservation] = field(default_factory=list)
     equity_curve: list[SwingBacktestDailyEquity] = field(default_factory=list)
     regime_stats: list[SwingBacktestRegimeStat] = field(default_factory=list)
     regime_by_date: dict[date, MarketContext] = field(default_factory=dict)

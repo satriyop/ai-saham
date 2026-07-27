@@ -49,16 +49,12 @@ class AnnotationReader(AnnotationReaderPort):
             return None
 
         if not isinstance(data, dict):
-            raise AnnotationSchemaError(
-                f"Expected a mapping in {path}, got {type(data).__name__}"
-            )
+            raise AnnotationSchemaError(f"Expected a mapping in {path}, got {type(data).__name__}")
 
         self._warn_unknown_keys(data, path)
         return self._parse_annotation(data, path)
 
-    def read_formula_annotations(
-        self, path: Path
-    ) -> dict[str, SkillAnnotation]:
+    def read_formula_annotations(self, path: Path) -> dict[str, SkillAnnotation]:
         """Read a multi-formula .skill.yaml file (keyed by formula name).
 
         Args:
@@ -78,9 +74,7 @@ class AnnotationReader(AnnotationReaderPort):
             return {}
 
         if not isinstance(data, dict):
-            raise AnnotationSchemaError(
-                f"Expected a mapping in {path}, got {type(data).__name__}"
-            )
+            raise AnnotationSchemaError(f"Expected a mapping in {path}, got {type(data).__name__}")
 
         result: dict[str, SkillAnnotation] = {}
         for formula_name, formula_data in data.items():
@@ -95,9 +89,7 @@ class AnnotationReader(AnnotationReaderPort):
             try:
                 result[formula_name] = self._parse_annotation(formula_data, path)
             except AnnotationSchemaError as e:
-                logger.warning(
-                    "Skipping formula '%s' in %s: %s", formula_name, path, e
-                )
+                logger.warning("Skipping formula '%s' in %s: %s", formula_name, path, e)
 
         return result
 
@@ -122,9 +114,7 @@ class AnnotationReader(AnnotationReaderPort):
             logger.warning("Could not read %s: %s", path, e)
             return None
 
-    def _parse_annotation(
-        self, data: dict, source_path: Path
-    ) -> SkillAnnotation:
+    def _parse_annotation(self, data: dict, source_path: Path) -> SkillAnnotation:
         """Parse a dict into a SkillAnnotation.
 
         Args:
@@ -157,12 +147,8 @@ class AnnotationReader(AnnotationReaderPort):
             )
 
         tags = self._to_str_tuple(data.get("tags", []), "tags", source_path)
-        limitations = self._to_str_tuple(
-            data.get("limitations", []), "limitations", source_path
-        )
-        examples = self._to_str_tuple(
-            data.get("examples", []), "examples", source_path
-        )
+        limitations = self._to_str_tuple(data.get("limitations", []), "limitations", source_path)
+        examples = self._to_str_tuple(data.get("examples", []), "examples", source_path)
 
         return SkillAnnotation(
             description=description.strip(),
@@ -172,9 +158,7 @@ class AnnotationReader(AnnotationReaderPort):
             examples=examples,
         )
 
-    def _to_str_tuple(
-        self, value: object, field_name: str, source_path: Path
-    ) -> tuple[str, ...]:
+    def _to_str_tuple(self, value: object, field_name: str, source_path: Path) -> tuple[str, ...]:
         """Convert a YAML value to a tuple of strings.
 
         Args:
@@ -201,6 +185,4 @@ class AnnotationReader(AnnotationReaderPort):
         """Warn about unknown keys in the annotation."""
         unknown = set(data.keys()) - _KNOWN_KEYS
         if unknown:
-            logger.warning(
-                "Unknown keys in %s: %s", source_path, ", ".join(sorted(unknown))
-            )
+            logger.warning("Unknown keys in %s: %s", source_path, ", ".join(sorted(unknown)))

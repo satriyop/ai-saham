@@ -78,9 +78,7 @@ def _read_scoring_config_canonical(config_paths) -> str:
     is deterministic regardless of attribute order, and a NUL delimiter keeps
     file boundaries unambiguous. The application resolver hashes this string.
     """
-    rel_paths = sorted(
-        {getattr(config_paths, attr) for attr in _SCORING_CONFIG_PATH_ATTRS}
-    )
+    rel_paths = sorted({getattr(config_paths, attr) for attr in _SCORING_CONFIG_PATH_ATTRS})
     blocks = []
     for rel_path in rel_paths:
         content = Path(rel_path).read_text(encoding="utf-8")
@@ -156,11 +154,11 @@ def run_signal_observation_corpus_write(
         evaluate_market_context=_evaluate_market_context_for_corpus,
         session_resolver=EffectiveMarketSessionResolver(market_repo),
         evidence_context_builder=SignalEvidenceExecutionContextBuilder(
-            trading_session_calendar_loader=lambda start, end: (
-                IHSGTradingSessionCalendarProvider(market_repo).load(
-                    coverage_start=start,
-                    coverage_end=end,
-                )
+            trading_session_calendar_loader=lambda start, end: IHSGTradingSessionCalendarProvider(
+                market_repo
+            ).load(
+                coverage_start=start,
+                coverage_end=end,
             ),
         ),
     ).execute(
@@ -242,9 +240,7 @@ def _display_backfill_response(
         typer.echo("")
         typer.echo("Ticker exclusions:")
         for exclusion in response.ticker_exclusions:
-            typer.echo(
-                f"  - {exclusion.date.isoformat()} {exclusion.ticker}: {exclusion.reason}"
-            )
+            typer.echo(f"  - {exclusion.date.isoformat()} {exclusion.ticker}: {exclusion.reason}")
     if response.processed_dates:
         typer.echo("")
         typer.echo("Processed dates:")

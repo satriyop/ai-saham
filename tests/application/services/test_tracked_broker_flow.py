@@ -27,6 +27,7 @@ _NOISE = ("YP", "PD")
 
 # ── classify_broker_tier ───────────────────────────────────────────────────────
 
+
 def test_smart_broker_classified_correctly():
     assert classify_broker_tier("AK", _SMART, _NOISE) == "smart"
 
@@ -45,6 +46,7 @@ def test_broker_tier_case_insensitive():
 
 
 # ── compute_quality_label ──────────────────────────────────────────────────────
+
 
 def test_label_smart_plus_when_smart_dominates_buying():
     label = compute_quality_label(Decimal("100"), Decimal("20"), Decimal("10"))
@@ -83,6 +85,7 @@ def test_label_na_when_all_zero():
 
 
 # ── compute_tracked_broker_flow (unit with mock repo) ──────────────────────────
+
 
 @dataclass
 class _FakeDailyFlow:
@@ -129,9 +132,7 @@ def test_compute_tracked_broker_flow_mixed_smart_and_noise():
 
 
 def test_compute_tracked_broker_flow_respects_window_sessions():
-    flows = [
-        _FakeDailyFlow("AK", Decimal("10"), date(2026, 6, i)) for i in range(1, 11)
-    ]
+    flows = [_FakeDailyFlow("AK", Decimal("10"), date(2026, 6, i)) for i in range(1, 11)]
     result = compute_tracked_broker_flow(
         "BBCA", _make_repo(flows), _SMART, _NOISE, window_sessions=3
     )
@@ -162,6 +163,7 @@ def test_compute_tracked_broker_flow_calls_get_broker_daily_flows_not_summaries(
 
 # ── compute_tracked_broker_flow_batch ──────────────────────────────────────────
 
+
 def test_batch_returns_dict_by_ticker():
     flows = [_FakeDailyFlow("AK", Decimal("100"), date(2026, 6, 20))]
     repo = _make_repo(flows)
@@ -177,6 +179,7 @@ def test_batch_excludes_tickers_with_no_rows():
 
 
 # ── TrackedBrokerFlowSnapshot.to_dict ──────────────────────────────────────────
+
 
 def test_to_dict_serialization():
     snap = TrackedBrokerFlowSnapshot(

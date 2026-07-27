@@ -58,8 +58,8 @@ class CompanyQualityContextEvidence:
     seasonality_score: float | None
     present_axes: tuple[str, ...]
     aggregate_score: float | None
-    coverage_score: float               # [0, 1]
-    evidence_status: EvidenceStatus     # always DIAGNOSTIC in this phase
+    coverage_score: float  # [0, 1]
+    evidence_status: EvidenceStatus  # always DIAGNOSTIC in this phase
     reasons: tuple[str, ...]
     unavailable_reasons: tuple[str, ...]
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -74,19 +74,13 @@ class CompanyQualityContextEvidence:
 
     def __post_init__(self) -> None:
         if not (0.0 <= self.coverage_score <= 1.0):
-            raise ValueError(
-                f"coverage_score must be in [0,1], got {self.coverage_score}"
-            )
+            raise ValueError(f"coverage_score must be in [0,1], got {self.coverage_score}")
         for name in self._SCORE_FIELDS:
             value = getattr(self, name)
             if value is not None and not (0.0 <= value <= 100.0):
                 raise ValueError(f"{name} must be in [0,100], got {value}")
-        if self.aggregate_score is not None and not (
-            0.0 <= self.aggregate_score <= 100.0
-        ):
-            raise ValueError(
-                f"aggregate_score must be in [0,100], got {self.aggregate_score}"
-            )
+        if self.aggregate_score is not None and not (0.0 <= self.aggregate_score <= 100.0):
+            raise ValueError(f"aggregate_score must be in [0,100], got {self.aggregate_score}")
 
     def to_dict(self) -> dict[str, Any]:
         def _round(value: float | None) -> float | None:

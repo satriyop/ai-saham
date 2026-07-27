@@ -21,14 +21,14 @@ from src.application.use_case.pre_open_post_open_gates_use_case import (
     PreOpenPostOpenGatesRequest,
     PreOpenPostOpenGatesUseCase,
 )
-from src.domain.value_objects.pre_open_post_open_assessment import (
-    PreOpenPostOpenCandidate,
-    PreOpenPostOpenDecision,
-)
 from src.domain.value_objects.learning_artifacts import (
     AssessmentPurpose,
     LearningObservation,
     LearningTrackSnapshot,
+)
+from src.domain.value_objects.pre_open_post_open_assessment import (
+    PreOpenPostOpenCandidate,
+    PreOpenPostOpenDecision,
 )
 from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
     SQLiteLearningArtifactRepository,
@@ -128,9 +128,7 @@ def test_happy_path_matches_pure_confirm(tmp_path: Path) -> None:
         },
     )
 
-    result = _uc(repo).execute(
-        AnalyzePreOpenRequest(observation_id=obs.observation_id)
-    )
+    result = _uc(repo).execute(AnalyzePreOpenRequest(observation_id=obs.observation_id))
     assert result.status is AnalyzePreOpenStatus.OK
     assert len(result.lines) == 1
     line = result.lines[0]
@@ -174,9 +172,7 @@ def test_mid_only_snapshot_does_not_masquerade_as_open(tmp_path: Path) -> None:
         sampled_at=datetime(2026, 6, 18, 9, 1, tzinfo=WIB),
         payload={"mid_price": "10050", "best_bid": "10000", "best_offer": "10100"},
     )
-    result = _uc(repo).execute(
-        AnalyzePreOpenRequest(observation_id=obs.observation_id)
-    )
+    result = _uc(repo).execute(AnalyzePreOpenRequest(observation_id=obs.observation_id))
     assert result.status is AnalyzePreOpenStatus.UNAVAILABLE_OPENING
     assert result.lines[0].confirmation.decision is PreOpenPostOpenDecision.SKIP_INSUFFICIENT_DATA
     assert result.lines[0].price_provenance["opening_price"] is None
@@ -200,9 +196,7 @@ def test_no_post_open_track_unavailable(tmp_path: Path) -> None:
             "opening_price_source": "order_book_lastprice",
         },
     )
-    result = _uc(repo).execute(
-        AnalyzePreOpenRequest(observation_id=obs.observation_id)
-    )
+    result = _uc(repo).execute(AnalyzePreOpenRequest(observation_id=obs.observation_id))
     assert result.status is AnalyzePreOpenStatus.UNAVAILABLE_OPENING
     assert result.lines[0].opening_snapshot_id is None
 
@@ -230,9 +224,7 @@ def test_default_picks_earliest_open_window_sample(tmp_path: Path) -> None:
         },
         source="stockbit.opening_track.b",
     )
-    result = _uc(repo).execute(
-        AnalyzePreOpenRequest(observation_id=obs.observation_id)
-    )
+    result = _uc(repo).execute(AnalyzePreOpenRequest(observation_id=obs.observation_id))
     assert result.lines[0].opening_snapshot_id == early.snapshot_id
     assert result.lines[0].confirmation.opening_price == Decimal("10000")
 
@@ -285,9 +277,9 @@ def test_session_selects_single_cohort(tmp_path: Path) -> None:
 
 
 def test_application_layer_imports_are_clean() -> None:
-    source = Path(
-        "src/application/use_case/analyze_pre_open_use_case.py"
-    ).read_text(encoding="utf-8")
+    source = Path("src/application/use_case/analyze_pre_open_use_case.py").read_text(
+        encoding="utf-8"
+    )
     for forbidden in (
         "sqlite3",
         "typer",

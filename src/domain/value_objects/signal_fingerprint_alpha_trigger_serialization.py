@@ -18,12 +18,8 @@ def _serialize_alpha_trigger_fields(fp: "SignalObservationFingerprint") -> dict[
         "alpha_trigger_horizon": fp.alpha_trigger_horizon,
         "alpha_trigger_alpha_weight": fp.alpha_trigger_alpha_weight,
         "flow_trigger_allowed": fp.flow_trigger_allowed,
-        "alpha_trigger_route_metadata": [
-            dict(v) for v in fp.alpha_trigger_route_metadata
-        ],
-        "alpha_trigger_unavailable_reasons": list(
-            fp.alpha_trigger_unavailable_reasons
-        ),
+        "alpha_trigger_route_metadata": [dict(v) for v in fp.alpha_trigger_route_metadata],
+        "alpha_trigger_unavailable_reasons": list(fp.alpha_trigger_unavailable_reasons),
     }
 
 
@@ -35,14 +31,10 @@ def _parse_alpha_trigger_fields(data: dict[str, Any]) -> dict[str, Any]:
             data.get("alpha_trigger_final_exact_score")
         ),
         "alpha_trigger_horizon": data.get("alpha_trigger_horizon"),
-        "alpha_trigger_alpha_weight": _optional_float(
-            data.get("alpha_trigger_alpha_weight")
-        ),
+        "alpha_trigger_alpha_weight": _optional_float(data.get("alpha_trigger_alpha_weight")),
         "flow_trigger_allowed": _optional_bool(data.get("flow_trigger_allowed")),
         "alpha_trigger_route_metadata": tuple(
-            dict(v)
-            for v in data.get("alpha_trigger_route_metadata") or ()
-            if isinstance(v, dict)
+            dict(v) for v in data.get("alpha_trigger_route_metadata") or () if isinstance(v, dict)
         ),
         "alpha_trigger_unavailable_reasons": tuple(
             str(v) for v in data.get("alpha_trigger_unavailable_reasons") or ()

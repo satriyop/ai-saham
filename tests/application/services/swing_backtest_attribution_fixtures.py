@@ -19,9 +19,7 @@ class ObservationFixture:
         self.signal_score = signal_score
         self.signal_strength = "WEAK"
         self.signal_breakdown = (("foreign_flow_quality", float(signal_score)),)
-        self.setup_gates = (
-            SetupGate("vwap_discount", False, "1", ">= 3"),
-        )
+        self.setup_gates = (SetupGate("vwap_discount", False, "1", ">= 3"),)
         self.risk_status = risk_status
         self.risk_gate = None
         self.trade_setup_action = "WATCH"

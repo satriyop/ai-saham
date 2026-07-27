@@ -31,9 +31,7 @@ def test_lists_all_cached_tickers_when_no_prefix() -> None:
 
 def test_prefix_filter_is_case_insensitive() -> None:
     catalog = _FakeCatalog(["BBRI", "BBCA", "BMRI", "ANTM"])
-    result = ListCachedTickersUseCase(catalog).execute(
-        ListCachedTickersRequest(prefix="bb")
-    )
+    result = ListCachedTickersUseCase(catalog).execute(ListCachedTickersRequest(prefix="bb"))
 
     assert result.tickers == ("BBRI", "BBCA")
     assert result.total_cached == 4  # total reflects full catalog, not matches
@@ -41,9 +39,7 @@ def test_prefix_filter_is_case_insensitive() -> None:
 
 def test_limit_caps_matches() -> None:
     catalog = _FakeCatalog(["BBRI", "BBCA", "BMRI"])
-    result = ListCachedTickersUseCase(catalog).execute(
-        ListCachedTickersRequest(limit=2)
-    )
+    result = ListCachedTickersUseCase(catalog).execute(ListCachedTickersRequest(limit=2))
 
     assert result.tickers == ("BBRI", "BBCA")
 

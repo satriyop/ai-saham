@@ -40,6 +40,7 @@ if TYPE_CHECKING:
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
     from src.domain.value_objects.setup_phase_readiness import SetupPhaseReadiness
     from src.domain.value_objects.signal_assessment import (
+        SignalAssessment,
         SignalAssessmentIdentity,
         SignalContext,
     )
@@ -69,9 +70,7 @@ class AssessSignalEvidenceRequest:
     # denominator. Default ALL_REQUIRED preserves swing / full-contract
     # behavior. Screen discovery passes ATTACHED_REQUIRED so intentionally
     # unattached setup does not dilute flow-only coverage.
-    authority_denominator_scope: AuthorityDenominatorScope = (
-        AuthorityDenominatorScope.ALL_REQUIRED
-    )
+    authority_denominator_scope: AuthorityDenominatorScope = AuthorityDenominatorScope.ALL_REQUIRED
 
     @property
     def setup_evidence(self) -> "SetupEvidence | None":

@@ -22,8 +22,10 @@ def _make_dependencies():
 
 def test_with_risk_false_does_not_call_risk_factory():
     deps = _make_dependencies()
-    with patch(f"{MODULE_PATH}.create_accumulation_assess_risk_use_case") as mock_risk, \
-         patch(f"{MODULE_PATH}.create_accumulation_screen_use_case") as mock_use_case:
+    with (
+        patch(f"{MODULE_PATH}.create_accumulation_assess_risk_use_case") as mock_risk,
+        patch(f"{MODULE_PATH}.create_accumulation_screen_use_case") as mock_use_case,
+    ):
         create_accumulation_screen_workflow(
             db_path=Path("db.sqlite"),
             screener_config=MagicMock(),
@@ -37,8 +39,10 @@ def test_with_risk_false_does_not_call_risk_factory():
 
 def test_with_risk_true_calls_risk_factory_with_market_repository():
     deps = _make_dependencies()
-    with patch(f"{MODULE_PATH}.create_accumulation_assess_risk_use_case") as mock_risk, \
-         patch(f"{MODULE_PATH}.create_accumulation_screen_use_case") as mock_use_case:
+    with (
+        patch(f"{MODULE_PATH}.create_accumulation_assess_risk_use_case") as mock_risk,
+        patch(f"{MODULE_PATH}.create_accumulation_screen_use_case") as mock_use_case,
+    ):
         create_accumulation_screen_workflow(
             db_path=Path("db.sqlite"),
             screener_config=MagicMock(),
@@ -64,10 +68,7 @@ def test_workflow_uses_deps_configured_signal_engine_exactly_once():
         )
 
     deps.create_signal_engine.assert_called_once_with()
-    assert (
-        mock_use_case.call_args.kwargs["signal_engine"]
-        is deps.create_signal_engine.return_value
-    )
+    assert mock_use_case.call_args.kwargs["signal_engine"] is deps.create_signal_engine.return_value
 
 
 def test_workflow_bundle_uses_deps_configured_signal_engine_exactly_once():
@@ -82,10 +83,7 @@ def test_workflow_bundle_uses_deps_configured_signal_engine_exactly_once():
         )
 
     deps.create_signal_engine.assert_called_once_with()
-    assert (
-        mock_bundle.call_args.kwargs["signal_engine"]
-        is deps.create_signal_engine.return_value
-    )
+    assert mock_bundle.call_args.kwargs["signal_engine"] is deps.create_signal_engine.return_value
 
 
 def test_module_does_not_import_private_or_bootstrap_helpers():

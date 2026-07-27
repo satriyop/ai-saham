@@ -125,8 +125,7 @@ class SQLiteWatchlistRepository:
     def list_snapshots(self) -> list[dict]:
         """Return summary info for all snapshot names: name, count, latest saved_at."""
         with self._get_conn() as conn:
-            rows = conn.execute(
-                """
+            rows = conn.execute("""
                 WITH latest AS (
                     SELECT name, MAX(saved_at) AS latest_saved_at
                     FROM screen_snapshots
@@ -148,8 +147,7 @@ class SQLiteWatchlistRepository:
                 FROM latest_rows
                 GROUP BY name, saved_at
                 ORDER BY latest_saved_at DESC
-                """
-            ).fetchall()
+                """).fetchall()
         return [dict(r) for r in rows]
 
     def snapshot_exists(self, name: str) -> bool:

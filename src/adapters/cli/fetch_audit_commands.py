@@ -42,9 +42,9 @@ def data_quality_audit(
     cfg = load_app_config()
     resolved_db = db_path or Path(cfg.storage.db_path)
 
-    response = DataQualityAuditUseCase(
-        SQLiteDataQualityAuditReader(resolved_db)
-    ).execute(DataQualityAuditRequest(tickers=tickers))
+    response = DataQualityAuditUseCase(SQLiteDataQualityAuditReader(resolved_db)).execute(
+        DataQualityAuditRequest(tickers=tickers)
+    )
 
     console = Console()
 
@@ -127,6 +127,8 @@ def _print_issue(console: Console, issue: DataQualityIssue) -> None:
         "info": "cyan",
     }.get(issue.severity, "white")
 
-    console.print(f"  [bold {color}][{issue.severity.upper()}][/bold {color}] [bold]{issue.code}[/bold]")
+    console.print(
+        f"  [bold {color}][{issue.severity.upper()}][/bold {color}] [bold]{issue.code}[/bold]"
+    )
     console.print(f"    [dim]Message:[/dim] {issue.message}")
     console.print(f"    [dim]Impact:[/dim]  {issue.impact}")

@@ -197,34 +197,36 @@ class TestSQLiteBrokerRepository:
 
     def test_get_summary_prefers_idx_when_multiple_sources_exist(self, repository):
         """Single-date summary reads should use the same IDX-first policy as range reads."""
-        repository.save_broker_summaries([
-            BrokerSummary(
-                ticker="BBCA",
-                date=date(2024, 1, 15),
-                top_buyers=(),
-                top_sellers=(),
-                foreign_buy_value=Decimal("100000000"),
-                foreign_sell_value=Decimal("50000000"),
-                foreign_buy_lot=1000,
-                foreign_sell_lot=500,
-                total_value=Decimal("1000000000"),
-                total_lot=10000,
-                source="stockbit",
-            ),
-            BrokerSummary(
-                ticker="BBCA",
-                date=date(2024, 1, 15),
-                top_buyers=(),
-                top_sellers=(),
-                foreign_buy_value=Decimal("200000000"),
-                foreign_sell_value=Decimal("50000000"),
-                foreign_buy_lot=2000,
-                foreign_sell_lot=500,
-                total_value=Decimal("2000000000"),
-                total_lot=20000,
-                source="idx",
-            ),
-        ])
+        repository.save_broker_summaries(
+            [
+                BrokerSummary(
+                    ticker="BBCA",
+                    date=date(2024, 1, 15),
+                    top_buyers=(),
+                    top_sellers=(),
+                    foreign_buy_value=Decimal("100000000"),
+                    foreign_sell_value=Decimal("50000000"),
+                    foreign_buy_lot=1000,
+                    foreign_sell_lot=500,
+                    total_value=Decimal("1000000000"),
+                    total_lot=10000,
+                    source="stockbit",
+                ),
+                BrokerSummary(
+                    ticker="BBCA",
+                    date=date(2024, 1, 15),
+                    top_buyers=(),
+                    top_sellers=(),
+                    foreign_buy_value=Decimal("200000000"),
+                    foreign_sell_value=Decimal("50000000"),
+                    foreign_buy_lot=2000,
+                    foreign_sell_lot=500,
+                    total_value=Decimal("2000000000"),
+                    total_lot=20000,
+                    source="idx",
+                ),
+            ]
+        )
 
         single = repository.get_broker_summary("BBCA", date(2024, 1, 15))
         ranged = repository.get_broker_summaries("BBCA")
@@ -288,30 +290,33 @@ class TestSQLiteBrokerRepository:
 
     def test_get_foreign_flow_date_range(self, repository):
         """Should return date range for daily aggregate foreign flow points."""
-        repository.save_foreign_flow_points([
-            ForeignFlowPoint(
-                ticker="BBCA",
-                date=date(2024, 1, 10),
-                net_val=Decimal("1000"),
-                net_lot=10,
-                avg_price=Decimal("100"),
-                source="stockbit",
-            ),
-            ForeignFlowPoint(
-                ticker="BBCA",
-                date=date(2024, 1, 20),
-                net_val=Decimal("2000"),
-                net_lot=20,
-                avg_price=Decimal("100"),
-                source="stockbit",
-            ),
-        ])
+        repository.save_foreign_flow_points(
+            [
+                ForeignFlowPoint(
+                    ticker="BBCA",
+                    date=date(2024, 1, 10),
+                    net_val=Decimal("1000"),
+                    net_lot=10,
+                    avg_price=Decimal("100"),
+                    source="stockbit",
+                ),
+                ForeignFlowPoint(
+                    ticker="BBCA",
+                    date=date(2024, 1, 20),
+                    net_val=Decimal("2000"),
+                    net_lot=20,
+                    avg_price=Decimal("100"),
+                    source="stockbit",
+                ),
+            ]
+        )
 
         assert repository.get_foreign_flow_date_range("BBCA", source="stockbit") == (
             date(2024, 1, 10),
             date(2024, 1, 20),
         )
         assert repository.get_foreign_flow_date_range("BBCA", source="idx") is None
+
     def test_migrates_legacy_broker_flow_points_table(self, temp_db):
         """Should migrate legacy broker_flow_points into foreign_flow_points."""
         with sqlite3.connect(temp_db) as conn:
@@ -327,13 +332,11 @@ class TestSQLiteBrokerRepository:
                     PRIMARY KEY (ticker, date, source)
                 )
             """)
-            conn.execute(
-                """
+            conn.execute("""
                 INSERT INTO broker_flow_points
                     (ticker, date, source, net_val, net_lot, avg_price)
                 VALUES ('BBCA', '2024-01-10', 'stockbit', '1000', 10, '100')
-                """
-            )
+                """)
             conn.commit()
 
         repository = SQLiteBrokerRepository(temp_db)

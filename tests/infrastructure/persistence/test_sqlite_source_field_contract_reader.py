@@ -19,8 +19,7 @@ from src.infrastructure.persistence.sqlite_source_field_contract_reader import (
 
 
 def _create_candles(conn: sqlite3.Connection) -> None:
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE candles (
             ticker TEXT NOT NULL,
             date TEXT NOT NULL,
@@ -33,13 +32,11 @@ def _create_candles(conn: sqlite3.Connection) -> None:
             volume_unit TEXT NOT NULL DEFAULT 'unknown',
             price_adjustment_policy TEXT NOT NULL DEFAULT 'unknown'
         )
-        """
-    )
+        """)
 
 
 def _create_broker_daily_flow(conn: sqlite3.Connection) -> None:
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE broker_daily_flow (
             ticker TEXT NOT NULL,
             date TEXT NOT NULL,
@@ -52,13 +49,11 @@ def _create_broker_daily_flow(conn: sqlite3.Connection) -> None:
             sell_value TEXT NOT NULL DEFAULT '0',
             net_value TEXT NOT NULL DEFAULT '0'
         )
-        """
-    )
+        """)
 
 
 def _create_candidate_observations(conn: sqlite3.Connection) -> None:
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE candidate_observations (
             ticker TEXT NOT NULL,
             snapshot_date TEXT NOT NULL,
@@ -70,8 +65,7 @@ def _create_candidate_observations(conn: sqlite3.Connection) -> None:
             data_as_of_date TEXT NOT NULL DEFAULT '',
             config_hash TEXT NOT NULL DEFAULT ''
         )
-        """
-    )
+        """)
 
 
 @pytest.fixture
@@ -104,8 +98,7 @@ def test_valid_candles_passes_field_existence_and_null_checks(tmp_path: Path, ca
 def test_candles_missing_source_column_reports_not_exists(tmp_path: Path, catalog):
     db_path = tmp_path / "missing_source.db"
     conn = sqlite3.connect(str(db_path))
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE candles (
             ticker TEXT NOT NULL,
             date TEXT NOT NULL,
@@ -117,8 +110,7 @@ def test_candles_missing_source_column_reports_not_exists(tmp_path: Path, catalo
             volume_unit TEXT NOT NULL DEFAULT 'unknown',
             price_adjustment_policy TEXT NOT NULL DEFAULT 'unknown'
         )
-        """
-    )
+        """)
     conn.execute(
         "INSERT INTO candles VALUES ('BBCA', '2026-01-02', '100', '105', '99', '104', 1000, "
         "'lots', 'adjusted')"
@@ -154,9 +146,7 @@ def test_candles_source_unknown_value_is_flagged_invalid(tmp_path: Path, catalog
     assert source_field.invalid_value_count == 1
 
 
-def test_broker_daily_flow_reports_all_fields_for_tracked_broker_contract(
-    tmp_path: Path, catalog
-):
+def test_broker_daily_flow_reports_all_fields_for_tracked_broker_contract(tmp_path: Path, catalog):
     db_path = tmp_path / "broker_daily_flow.db"
     conn = sqlite3.connect(str(db_path))
     _create_broker_daily_flow(conn)
@@ -172,8 +162,18 @@ def test_broker_daily_flow_reports_all_fields_for_tracked_broker_contract(
 
     assert raw.exists is True
     field_names = {f.field for f in raw.fields}
-    assert {"ticker", "date", "broker_code", "source", "buy_value", "sell_value", "net_value",
-            "buy_lot", "sell_lot", "net_lot"} <= field_names
+    assert {
+        "ticker",
+        "date",
+        "broker_code",
+        "source",
+        "buy_value",
+        "sell_value",
+        "net_value",
+        "buy_lot",
+        "sell_lot",
+        "net_lot",
+    } <= field_names
 
     contracts = catalog.contracts_for_table("broker_daily_flow")
     ticker_contract = next(c for c in contracts if c.field == "ticker")
@@ -205,9 +205,7 @@ def _retired_candidate_observations_empty_config_hash_emits_legacy_warning(tmp_p
         reader=reader, catalog=catalog, clock=lambda: "2026-07-16T00:00:00+00:00"
     )
     response = use_case.execute()
-    legacy_findings = [
-        f for f in response.findings if f.code == "LEGACY_NON_CANONICAL_IDENTITY"
-    ]
+    legacy_findings = [f for f in response.findings if f.code == "LEGACY_NON_CANONICAL_IDENTITY"]
     assert len(legacy_findings) == 1
 
 
@@ -681,8 +679,7 @@ def _minimal_dq_001e_schema(conn: sqlite3.Connection) -> None:
 def _create_candidate_observations_with_identity_columns(
     conn: sqlite3.Connection,
 ) -> None:
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE candidate_observations (
             id                       INTEGER PRIMARY KEY AUTOINCREMENT,
             ticker                   TEXT    NOT NULL,
@@ -705,8 +702,7 @@ def _create_candidate_observations_with_identity_columns(
             semantic_compatibility_id TEXT   NOT NULL DEFAULT '',
             artifact_provenance_json TEXT   NOT NULL DEFAULT ''
         )
-        """
-    )
+        """)
 
 
 def _retired_artifact_identity_empty_strings_produce_warn_invalid_value(
@@ -724,8 +720,7 @@ def _retired_artifact_identity_empty_strings_produce_warn_invalid_value(
              workflow, window_sessions, data_as_of_date, config_hash)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        ("BBCA", "2026-07-03", "2026-07-03T09:00:00", 1, "{}",
-         "", 0, "", ""),
+        ("BBCA", "2026-07-03", "2026-07-03T09:00:00", 1, "{}", "", 0, "", ""),
     )
     conn.commit()
     conn.close()
@@ -738,8 +733,7 @@ def _retired_artifact_identity_empty_strings_produce_warn_invalid_value(
 
     for field in ("artifact_id", "semantic_compatibility_id", "artifact_provenance_json"):
         findings = [
-            f for f in response.findings
-            if f.field == field and f.code == "INVALID_FIELD_VALUE"
+            f for f in response.findings if f.field == field and f.code == "INVALID_FIELD_VALUE"
         ]
         assert len(findings) == 1, (
             f"Expected one INVALID_FIELD_VALUE for {field}, got {len(findings)}"
@@ -765,25 +759,34 @@ def test_artifact_identity_populated_produces_no_findings(
              artifact_id, semantic_compatibility_id, artifact_provenance_json)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        ("BBCA", "2026-07-03", "2026-07-03T09:00:00",
-         3, "{}", "screen_accum", 7, "2026-07-03", "abc123",
-         "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-         "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-         '{"analysis_as_of":"2026-07-03","application_revision":"abc1234",'
-         '"captured_at":"2026-07-03T09:30:00.456789Z",'
-         '"complete_authority_registry_hash":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",'
-         '"complete_config_hash":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",'
-         '"decision_at":"2026-07-03T16:00:00.123456Z",'
-         '"idx_calendar_version":"2026-v3",'
-         '"invocation_actor":null,"invocation_command":null,'
-         '"latest_completed_session":"2026-07-03",'
-         '"session_rule_version":"sr-v2",'
-         '"sources":[{"available_at":"2026-07-03T07:00:00.000000Z",'
-         '"cutoff_at":"2026-07-03T08:00:00.000000Z",'
-         '"observed_through":"2026-07-03",'
-         '"provider":"idx","source_family":"exchange",'
-         '"source_snapshot_id":"snap-001"}],'
-         '"universe_snapshot_id":"univ-001"}'),
+        (
+            "BBCA",
+            "2026-07-03",
+            "2026-07-03T09:00:00",
+            3,
+            "{}",
+            "screen_accum",
+            7,
+            "2026-07-03",
+            "abc123",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            '{"analysis_as_of":"2026-07-03","application_revision":"abc1234",'
+            '"captured_at":"2026-07-03T09:30:00.456789Z",'
+            '"complete_authority_registry_hash":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",'
+            '"complete_config_hash":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",'
+            '"decision_at":"2026-07-03T16:00:00.123456Z",'
+            '"idx_calendar_version":"2026-v3",'
+            '"invocation_actor":null,"invocation_command":null,'
+            '"latest_completed_session":"2026-07-03",'
+            '"session_rule_version":"sr-v2",'
+            '"sources":[{"available_at":"2026-07-03T07:00:00.000000Z",'
+            '"cutoff_at":"2026-07-03T08:00:00.000000Z",'
+            '"observed_through":"2026-07-03",'
+            '"provider":"idx","source_family":"exchange",'
+            '"source_snapshot_id":"snap-001"}],'
+            '"universe_snapshot_id":"univ-001"}',
+        ),
     )
     conn.commit()
     conn.close()
@@ -795,10 +798,7 @@ def test_artifact_identity_populated_produces_no_findings(
     response = use_case.execute()
 
     for field in ("artifact_id", "semantic_compatibility_id", "artifact_provenance_json"):
-        findings = [
-            f for f in response.findings
-            if f.field == field
-        ]
+        findings = [f for f in response.findings if f.field == field]
         assert len(findings) == 0, (
             f"Expected no findings for {field} with populated identity, "
             f"got {len(findings)}: {[f.code for f in findings]}"
@@ -812,8 +812,7 @@ def _retired_artifact_identity_null_produces_fail(
     db_path = tmp_path / "null_identity.db"
     conn = sqlite3.connect(str(db_path))
     # Create table with NULLABLE identity columns to simulate corruption
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE candidate_observations (
             id                       INTEGER PRIMARY KEY AUTOINCREMENT,
             ticker                   TEXT    NOT NULL,
@@ -836,8 +835,7 @@ def _retired_artifact_identity_null_produces_fail(
             semantic_compatibility_id TEXT,
             artifact_provenance_json TEXT
         )
-        """
-    )
+        """)
     conn.execute(
         """
         INSERT INTO candidate_observations
@@ -846,9 +844,7 @@ def _retired_artifact_identity_null_produces_fail(
              artifact_id, semantic_compatibility_id, artifact_provenance_json)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        ("BBCA", "2026-07-03", "2026-07-03T09:00:00", 1, "{}",
-         "", 0, "", "",
-         None, None, None),
+        ("BBCA", "2026-07-03", "2026-07-03T09:00:00", 1, "{}", "", 0, "", "", None, None, None),
     )
     conn.commit()
     conn.close()
@@ -861,24 +857,20 @@ def _retired_artifact_identity_null_produces_fail(
 
     for field in ("artifact_id", "semantic_compatibility_id", "artifact_provenance_json"):
         null_findings = [
-            f for f in response.findings
-            if f.field == field and f.code == "NULLS_IN_REQUIRED_FIELD"
+            f for f in response.findings if f.field == field and f.code == "NULLS_IN_REQUIRED_FIELD"
         ]
         invalid_findings = [
-            f for f in response.findings
-            if f.field == field and f.code == "INVALID_FIELD_VALUE"
+            f for f in response.findings if f.field == field and f.code == "INVALID_FIELD_VALUE"
         ]
         assert len(null_findings) == 1, (
-            f"Expected NULLS_IN_REQUIRED_FIELD for {field} (null), "
-            f"got {len(null_findings)}"
+            f"Expected NULLS_IN_REQUIRED_FIELD for {field} (null), got {len(null_findings)}"
         )
         assert null_findings[0].severity == "FAIL", (
             f"NULL in {field} should be FAIL, got {null_findings[0].severity}"
         )
         # NULL also counts as an invalid value (reader counts IS NULL + invalid values together)
         assert len(invalid_findings) == 1, (
-            f"Expected INVALID_FIELD_VALUE for {field} (null+empty), "
-            f"got {len(invalid_findings)}"
+            f"Expected INVALID_FIELD_VALUE for {field} (null+empty), got {len(invalid_findings)}"
         )
 
 
@@ -886,8 +878,7 @@ def _retired_artifact_identity_null_produces_fail(
 
 
 def _create_signal_forward_labels_with_identity(conn: sqlite3.Connection) -> None:
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE signal_forward_labels (
             id                       INTEGER PRIMARY KEY AUTOINCREMENT,
             ticker                   TEXT    NOT NULL,
@@ -921,8 +912,7 @@ def _create_signal_forward_labels_with_identity(conn: sqlite3.Connection) -> Non
             semantic_compatibility_id TEXT   NOT NULL DEFAULT '',
             artifact_provenance_json TEXT   NOT NULL DEFAULT ''
         )
-        """
-    )
+        """)
 
 
 def _retired_signal_forward_labels_empty_identity_produces_warn_invalid_value(
@@ -940,8 +930,17 @@ def _retired_signal_forward_labels_empty_identity_produces_warn_invalid_value(
              outcome_label, fingerprint_json, schema_version, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        ("BBCA", "2026-07-01", "SWING_10D", "2026-07-01T09:00:00",
-         "SUCCESS", '{"v":1}', 2, "2026-07-16T00:00:00", "2026-07-16T00:00:00"),
+        (
+            "BBCA",
+            "2026-07-01",
+            "SWING_10D",
+            "2026-07-01T09:00:00",
+            "SUCCESS",
+            '{"v":1}',
+            2,
+            "2026-07-16T00:00:00",
+            "2026-07-16T00:00:00",
+        ),
     )
     conn.commit()
     conn.close()
@@ -954,7 +953,8 @@ def _retired_signal_forward_labels_empty_identity_produces_warn_invalid_value(
 
     for field in ("artifact_id", "semantic_compatibility_id", "artifact_provenance_json"):
         findings = [
-            f for f in response.findings
+            f
+            for f in response.findings
             if f.table == "signal_forward_labels"
             and f.field == field
             and f.code == "INVALID_FIELD_VALUE"
@@ -964,8 +964,7 @@ def _retired_signal_forward_labels_empty_identity_produces_warn_invalid_value(
             f"got {len(findings)}"
         )
         assert findings[0].severity == "WARN", (
-            f"signal_forward_labels.{field} empty string should be WARN, "
-            f"got {findings[0].severity}"
+            f"signal_forward_labels.{field} empty string should be WARN, got {findings[0].severity}"
         )
 
 
@@ -985,25 +984,34 @@ def test_signal_forward_labels_populated_identity_produces_no_findings(
              artifact_id, semantic_compatibility_id, artifact_provenance_json)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        ("BBCA", "2026-07-01", "SWING_10D", "2026-07-01T09:00:00",
-         "SUCCESS", '{"v":1}', 2, "2026-07-16T00:00:00", "2026-07-16T00:00:00",
-         "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-         "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-         '{"analysis_as_of":"2026-07-01","application_revision":"abc1234",'
-         '"captured_at":"2026-07-01T09:30:00.456789Z",'
-         '"complete_authority_registry_hash":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",'
-         '"complete_config_hash":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",'
-         '"decision_at":"2026-07-01T16:00:00.123456Z",'
-         '"idx_calendar_version":"2026-v3",'
-         '"invocation_actor":null,"invocation_command":null,'
-         '"latest_completed_session":"2026-07-01",'
-         '"session_rule_version":"sr-v2",'
-         '"sources":[{"available_at":"2026-07-01T07:00:00.000000Z",'
-         '"cutoff_at":"2026-07-01T08:00:00.000000Z",'
-         '"observed_through":"2026-07-01",'
-         '"provider":"idx","source_family":"exchange",'
-         '"source_snapshot_id":"snap-001"}],'
-         '"universe_snapshot_id":"univ-001"}'),
+        (
+            "BBCA",
+            "2026-07-01",
+            "SWING_10D",
+            "2026-07-01T09:00:00",
+            "SUCCESS",
+            '{"v":1}',
+            2,
+            "2026-07-16T00:00:00",
+            "2026-07-16T00:00:00",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            '{"analysis_as_of":"2026-07-01","application_revision":"abc1234",'
+            '"captured_at":"2026-07-01T09:30:00.456789Z",'
+            '"complete_authority_registry_hash":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",'
+            '"complete_config_hash":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",'
+            '"decision_at":"2026-07-01T16:00:00.123456Z",'
+            '"idx_calendar_version":"2026-v3",'
+            '"invocation_actor":null,"invocation_command":null,'
+            '"latest_completed_session":"2026-07-01",'
+            '"session_rule_version":"sr-v2",'
+            '"sources":[{"available_at":"2026-07-01T07:00:00.000000Z",'
+            '"cutoff_at":"2026-07-01T08:00:00.000000Z",'
+            '"observed_through":"2026-07-01",'
+            '"provider":"idx","source_family":"exchange",'
+            '"source_snapshot_id":"snap-001"}],'
+            '"universe_snapshot_id":"univ-001"}',
+        ),
     )
     conn.commit()
     conn.close()
@@ -1016,8 +1024,7 @@ def test_signal_forward_labels_populated_identity_produces_no_findings(
 
     for field in ("artifact_id", "semantic_compatibility_id", "artifact_provenance_json"):
         findings = [
-            f for f in response.findings
-            if f.table == "signal_forward_labels" and f.field == field
+            f for f in response.findings if f.table == "signal_forward_labels" and f.field == field
         ]
         assert len(findings) == 0, (
             f"Expected no findings for signal_forward_labels.{field} "
@@ -1031,8 +1038,7 @@ def _retired_signal_forward_labels_nullable_identity_produces_fail(
     """Actual NULL in label identity columns must produce FAIL findings."""
     db_path = tmp_path / "null_label_identity.db"
     conn = sqlite3.connect(str(db_path))
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE signal_forward_labels (
             id                       INTEGER PRIMARY KEY AUTOINCREMENT,
             ticker                   TEXT    NOT NULL,
@@ -1066,8 +1072,7 @@ def _retired_signal_forward_labels_nullable_identity_produces_fail(
             semantic_compatibility_id TEXT,
             artifact_provenance_json TEXT
         )
-        """
-    )
+        """)
     conn.execute(
         """
         INSERT INTO signal_forward_labels
@@ -1076,9 +1081,20 @@ def _retired_signal_forward_labels_nullable_identity_produces_fail(
              artifact_id, semantic_compatibility_id, artifact_provenance_json)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        ("BBCA", "2026-07-01", "SWING_10D", "2026-07-01T09:00:00",
-         "SUCCESS", '{"v":1}', 2, "2026-07-16T00:00:00", "2026-07-16T00:00:00",
-         None, None, None),
+        (
+            "BBCA",
+            "2026-07-01",
+            "SWING_10D",
+            "2026-07-01T09:00:00",
+            "SUCCESS",
+            '{"v":1}',
+            2,
+            "2026-07-16T00:00:00",
+            "2026-07-16T00:00:00",
+            None,
+            None,
+            None,
+        ),
     )
     conn.commit()
     conn.close()
@@ -1091,7 +1107,8 @@ def _retired_signal_forward_labels_nullable_identity_produces_fail(
 
     for field in ("artifact_id", "semantic_compatibility_id", "artifact_provenance_json"):
         null_findings = [
-            f for f in response.findings
+            f
+            for f in response.findings
             if f.table == "signal_forward_labels"
             and f.field == field
             and f.code == "NULLS_IN_REQUIRED_FIELD"
@@ -1101,8 +1118,7 @@ def _retired_signal_forward_labels_nullable_identity_produces_fail(
             f"got {len(null_findings)}"
         )
         assert null_findings[0].severity == "FAIL", (
-            f"NULL in signal_forward_labels.{field} should be FAIL, "
-            f"got {null_findings[0].severity}"
+            f"NULL in signal_forward_labels.{field} should be FAIL, got {null_findings[0].severity}"
         )
 
 
@@ -1176,9 +1192,18 @@ def _verify_identity_audit(
                  artifact_id, semantic_compatibility_id, artifact_provenance_json)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
-        params = ("BBCA", "2026-07-01", "SWING_10D", "2026-07-01T09:00:00",
-                  "SUCCESS", '{"v":1}', 2, "2026-07-16T00:00:00", "2026-07-16T00:00:00",
-                  *identity_values)
+        params = (
+            "BBCA",
+            "2026-07-01",
+            "SWING_10D",
+            "2026-07-01T09:00:00",
+            "SUCCESS",
+            '{"v":1}',
+            2,
+            "2026-07-16T00:00:00",
+            "2026-07-16T00:00:00",
+            *identity_values,
+        )
     else:
         _create_candidate_observations_with_identity_columns(conn)
         insert_sql = """
@@ -1188,9 +1213,18 @@ def _verify_identity_audit(
                  artifact_id, semantic_compatibility_id, artifact_provenance_json)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
-        params = ("BBCA", "2026-07-03", "2026-07-03T09:00:00",
-                  3, "{}", "screen_accum", 7, "2026-07-03", "abc123",
-                  *identity_values)
+        params = (
+            "BBCA",
+            "2026-07-03",
+            "2026-07-03T09:00:00",
+            3,
+            "{}",
+            "screen_accum",
+            7,
+            "2026-07-03",
+            "abc123",
+            *identity_values,
+        )
 
     conn.execute(insert_sql, params)
     conn.commit()
@@ -1203,8 +1237,7 @@ def _verify_identity_audit(
     response = use_case.execute()
 
     findings = [
-        f for f in response.findings
-        if f.table == table and f.code == "INVALID_ARTIFACT_IDENTITY"
+        f for f in response.findings if f.table == table and f.code == "INVALID_ARTIFACT_IDENTITY"
     ]
     if expect_identity_finding:
         assert len(findings) == 1, (
@@ -1218,8 +1251,7 @@ def _verify_identity_audit(
         return 1
     else:
         assert len(findings) == 0, (
-            f"Expected no INVALID_ARTIFACT_IDENTITY for {table}, "
-            f"got {len(findings)}: {findings}"
+            f"Expected no INVALID_ARTIFACT_IDENTITY for {table}, got {len(findings)}: {findings}"
         )
         return 0
 
@@ -1375,7 +1407,10 @@ def _retired_signal_forward_labels_malformed_artifact_identity(
     desc: str,
 ):
     _verify_identity_audit(
-        tmp_path, catalog, "signal_forward_labels", (aid, sid, prov),
+        tmp_path,
+        catalog,
+        "signal_forward_labels",
+        (aid, sid, prov),
         expect_identity_finding=True,
     )
 
@@ -1385,7 +1420,10 @@ def test_signal_forward_labels_valid_empty_triplet_no_identity_finding(
 ):
     """All-empty identity triplet must NOT trigger INVALID_ARTIFACT_IDENTITY."""
     _verify_identity_audit(
-        tmp_path, catalog, "signal_forward_labels", ("", "", ""),
+        tmp_path,
+        catalog,
+        "signal_forward_labels",
+        ("", "", ""),
         expect_identity_finding=False,
     )
 
@@ -1435,7 +1473,10 @@ def _retired_candidate_observations_malformed_artifact_identity(
     desc: str,
 ):
     _verify_identity_audit(
-        tmp_path, catalog, "candidate_observations", (aid, sid, prov),
+        tmp_path,
+        catalog,
+        "candidate_observations",
+        (aid, sid, prov),
         expect_identity_finding=True,
     )
 
@@ -1445,7 +1486,10 @@ def test_candidate_observations_valid_empty_triplet_no_identity_finding(
 ):
     """All-empty identity triplet must NOT trigger INVALID_ARTIFACT_IDENTITY."""
     _verify_identity_audit(
-        tmp_path, catalog, "candidate_observations", ("", "", ""),
+        tmp_path,
+        catalog,
+        "candidate_observations",
+        ("", "", ""),
         expect_identity_finding=False,
     )
 

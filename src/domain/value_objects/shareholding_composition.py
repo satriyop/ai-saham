@@ -21,12 +21,12 @@ from datetime import date, datetime
 class ShareholdingComposition:
     ticker: str
     report_date: date | None
-    institution_pct: float         # sum of institutional category holders
-    individual_pct: float          # "Individual" retail category
-    top_holder_name: str           # largest single named entity (not a category)
-    top_holder_pct: float          # its ownership %
-    total_shares: int | None = None             # periods[0].total_shares.raw (total issued shares)
-    total_shares_formatted: str | None = None   # e.g. "123.28 B"
+    institution_pct: float  # sum of institutional category holders
+    individual_pct: float  # "Individual" retail category
+    top_holder_name: str  # largest single named entity (not a category)
+    top_holder_pct: float  # its ownership %
+    total_shares: int | None = None  # periods[0].total_shares.raw (total issued shares)
+    total_shares_formatted: str | None = None  # e.g. "123.28 B"
     fetched_at: datetime | None = None
 
     @property

@@ -89,7 +89,9 @@ def _wrap_setup_evidence(evidence: SetupEvidence | None) -> "SetupEvidenceGroupI
         evidence_group="setup",
         assessments=(_current_assessment("candles", evidence.snapshot_date),),
     )
-    return SetupEvidenceGroupInput(evidence=evidence, provenance=provenance, availability=availability)
+    return SetupEvidenceGroupInput(
+        evidence=evidence, provenance=provenance, availability=availability
+    )
 
 
 def _wrap_flow_evidence(
@@ -151,10 +153,14 @@ def _wrap_flow_evidence(
         ),
         unassessed_contributors=unassessed_contributors,
     )
-    return FlowEvidenceGroupInput(evidence=evidence, provenance=provenance, availability=availability)
+    return FlowEvidenceGroupInput(
+        evidence=evidence, provenance=provenance, availability=availability
+    )
 
 
-def _available_excess_return(window_sessions: int, excess_return_pct: float) -> BenchmarkExcessReturn:
+def _available_excess_return(
+    window_sessions: int, excess_return_pct: float
+) -> BenchmarkExcessReturn:
     return BenchmarkExcessReturn(
         benchmark="IHSG",
         window_sessions=window_sessions,

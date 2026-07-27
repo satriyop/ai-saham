@@ -12,40 +12,42 @@ from src.domain.rules.liquidity_gate import LiquidityGate
 
 
 def test_resolve_risk_gates_reads_liquidity_market_cap_floor():
-    structural, execution = _resolve_risk_gates({
-        "risk_engine": {
-            "gates": {
-                "fundamental": {
-                    "enabled": True,
-                    "piotroski_min": 4,
-                    "missing_data_action": "block",
-                    "missing_data_confidence": 25,
-                    "triggered_confidence": 95,
-                    "pass_confidence": 85,
-                },
-                "liquidity": {
-                    "enabled": True,
-                    "market_cap_floor_idr": 500_000_000_000,
-                    "median_tx_floor_idr": 3_000_000_000,
-                    "lookback_days": 10,
-                    "missing_data_action": "block",
-                    "missing_data_confidence": 20,
-                    "triggered_confidence": 90,
-                    "pass_confidence": 80,
-                },
-                "free_float": {
-                    "enabled": True,
-                    "min_free_float_pct": 20.0,
-                    "missing_data_action": "block",
-                    "missing_data_confidence": 15,
-                    "triggered_confidence": 88,
-                    "pass_confidence": 78,
-                },
-                "bandar": {"enabled": True},
-                "technical": {"block_when_bearish": False},
+    structural, execution = _resolve_risk_gates(
+        {
+            "risk_engine": {
+                "gates": {
+                    "fundamental": {
+                        "enabled": True,
+                        "piotroski_min": 4,
+                        "missing_data_action": "block",
+                        "missing_data_confidence": 25,
+                        "triggered_confidence": 95,
+                        "pass_confidence": 85,
+                    },
+                    "liquidity": {
+                        "enabled": True,
+                        "market_cap_floor_idr": 500_000_000_000,
+                        "median_tx_floor_idr": 3_000_000_000,
+                        "lookback_days": 10,
+                        "missing_data_action": "block",
+                        "missing_data_confidence": 20,
+                        "triggered_confidence": 90,
+                        "pass_confidence": 80,
+                    },
+                    "free_float": {
+                        "enabled": True,
+                        "min_free_float_pct": 20.0,
+                        "missing_data_action": "block",
+                        "missing_data_confidence": 15,
+                        "triggered_confidence": 88,
+                        "pass_confidence": 78,
+                    },
+                    "bandar": {"enabled": True},
+                    "technical": {"block_when_bearish": False},
+                }
             }
         }
-    })
+    )
 
     fundamental = next(g for g in structural if isinstance(g, FundamentalGate))
     liquidity = next(g for g in structural if isinstance(g, LiquidityGate))
@@ -72,23 +74,25 @@ def test_resolve_risk_gates_reads_liquidity_market_cap_floor():
 
 
 def test_resolve_risk_gates_reads_bandar_policy():
-    _, execution = _resolve_risk_gates({
-        "risk_engine": {
-            "gates": {
-                "fundamental": {"enabled": False},
-                "liquidity": {"enabled": False},
-                "free_float": {"enabled": False},
-                "bandar": {
-                    "enabled": True,
-                    "distribution_labels": ["Custom Dist"],
-                    "missing_data_action": "block",
-                    "missing_data_confidence": 30,
-                    "triggered_confidence": 70,
-                    "pass_confidence": 90,
-                },
+    _, execution = _resolve_risk_gates(
+        {
+            "risk_engine": {
+                "gates": {
+                    "fundamental": {"enabled": False},
+                    "liquidity": {"enabled": False},
+                    "free_float": {"enabled": False},
+                    "bandar": {
+                        "enabled": True,
+                        "distribution_labels": ["Custom Dist"],
+                        "missing_data_action": "block",
+                        "missing_data_confidence": 30,
+                        "triggered_confidence": 70,
+                        "pass_confidence": 90,
+                    },
+                }
             }
         }
-    })
+    )
 
     bandar = next(g for g in execution if isinstance(g, BandarGate))
     assert bandar._config.distribution_labels == frozenset({"Custom Dist"})
@@ -99,16 +103,18 @@ def test_resolve_risk_gates_reads_bandar_policy():
 
 
 def test_resolve_risk_gates_omits_disabled_gates():
-    structural, execution = _resolve_risk_gates({
-        "risk_engine": {
-            "gates": {
-                "fundamental": {"enabled": False},
-                "liquidity": {"enabled": False},
-                "free_float": {"enabled": False},
-                "bandar": {"enabled": False},
+    structural, execution = _resolve_risk_gates(
+        {
+            "risk_engine": {
+                "gates": {
+                    "fundamental": {"enabled": False},
+                    "liquidity": {"enabled": False},
+                    "free_float": {"enabled": False},
+                    "bandar": {"enabled": False},
+                }
             }
         }
-    })
+    )
 
     assert structural == []
     assert execution == []

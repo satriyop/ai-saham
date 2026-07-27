@@ -11,9 +11,9 @@ from textual.containers import VerticalScroll
 from textual.widgets import Static
 
 from src.adapters.tui.composition import create_tui_app
-from src.adapters.tui.screens.screen_workspace_screen import ScreenWorkspaceScreen
 from src.adapters.tui.screens.daily_screen import DailyScreen
 from src.adapters.tui.screens.help import HelpScreen
+from src.adapters.tui.screens.screen_workspace_screen import ScreenWorkspaceScreen
 from src.adapters.tui.screens.ticker_workbench_screen import TickerWorkbenchScreen
 
 from .daily_fixtures import (
@@ -145,9 +145,7 @@ def test_full_keyboard_journey_is_offline_read_only_and_authority_safe(size):
             await pilot.press("?")
             await pilot.pause()
             assert isinstance(app.screen, HelpScreen)
-            help_copy = "\n".join(
-                str(widget.content) for widget in app.screen.query(Static)
-            )
+            help_copy = "\n".join(str(widget.content) for widget in app.screen.query(Static))
             assert "Research" not in help_copy
             await pilot.press("escape")
             await pilot.pause()

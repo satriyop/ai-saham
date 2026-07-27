@@ -57,7 +57,7 @@ def test_get_with_valid_cached_token(tmp_path):
     token = _make_jwt()
     store = _make_store(tmp_path, token)
     refresher_called = []
-    client = StockbitApiClient(store, lambda: (refresher_called.append(1) or "newtoken"))
+    client = StockbitApiClient(store, lambda: refresher_called.append(1) or "newtoken")
 
     with patch("httpx.get", return_value=_fake_response(200, {"result": "data"})) as mock_get:
         result = client.get("https://exodus.stockbit.com/test")

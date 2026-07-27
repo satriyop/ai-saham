@@ -21,7 +21,11 @@ from src.adapters.cli.fetch_universe_commands import universe_app
 
 fetch_app = typer.Typer(
     name="fetch",
-    help="Data ingestion — market data, broker flow, IEV, Stockbit, and universes. Writes local caches only. Browse: `saham view`. Decisions: `saham plan` / `saham assess` (not fetch).",
+    help=(
+        "Data ingestion — market data, broker flow, IEV, Stockbit, and universes. "
+        "Writes local caches only. Browse: `saham view`. "
+        "Decisions: `saham plan` / `saham assess` (not fetch)."
+    ),
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},
 )

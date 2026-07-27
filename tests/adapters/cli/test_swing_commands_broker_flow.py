@@ -31,6 +31,7 @@ def _build_broker_quality_note(detail, setup):
     from src.application.services.swing_broker_detail_builder import (
         build_broker_quality_note as _bbqn,
     )
+
     return _bbqn(detail, setup)
 
 
@@ -63,7 +64,7 @@ def test_failed_gates_summary_includes_all_failed_reasons():
             trend="DOWN",
             avg_flow_ratio=-3.0,
             rsi=32.0,
-        )
+        ),
     )
 
     summary = _format_failed_gates_summary(evaluation)

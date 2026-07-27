@@ -27,28 +27,24 @@ def display_journal_review(
     info_table.add_column("Value")
     info_table.add_row("Journal", str(journal_path))
     info_table.add_row(
-        "Entries",
-        f"{report.total_entries} total | {report.enriched_entries} with {horizon}d+ data"
+        "Entries", f"{report.total_entries} total | {report.enriched_entries} with {horizon}d+ data"
     )
     info_table.add_row(
-        "Horizon",
-        f"{horizon} trading days | min foreign-flow score filter: {min_accum_score}"
+        "Horizon", f"{horizon} trading days | min foreign-flow score filter: {min_accum_score}"
     )
 
     console().print("")
-    console().print(
-        panel(
-            info_table,
-            title="ACCUMULATION TRADE JOURNAL REVIEW"
-        )
-    )
+    console().print(panel(info_table, title="ACCUMULATION TRADE JOURNAL REVIEW"))
 
     if report.enriched_entries == 0:
         console().print("")
         console().print(
             panel(
-                Text("No enriched entries yet — check back after market data covers the horizon.", style="yellow"),
-                title="Status"
+                Text(
+                    "No enriched entries yet — check back after market data covers the horizon.",
+                    style="yellow",
+                ),
+                title="Status",
             )
         )
         return
@@ -82,16 +78,11 @@ def display_journal_review(
             str(stat.n),
             _pct(stat.avg_return_5d),
             _pct(stat.avg_return_10d),
-            _wr(stat.win_rate_10d)
+            _wr(stat.win_rate_10d),
         )
 
     console().print("")
-    console().print(
-        panel(
-            bucket_table,
-            title="PERFORMANCE BY FOREIGN-FLOW SCORE BUCKET"
-        )
-    )
+    console().print(panel(bucket_table, title="PERFORMANCE BY FOREIGN-FLOW SCORE BUCKET"))
 
     # 3. Performance By Setup Match
     if report.by_decision:
@@ -110,16 +101,11 @@ def display_journal_review(
                 _pct(stat.avg_return_10d),
                 _wr(stat.win_rate_10d),
                 _pct(stat.avg_max_upside),
-                _pct(stat.avg_max_drawdown)
+                _pct(stat.avg_max_drawdown),
             )
 
         console().print("")
-        console().print(
-            panel(
-                decision_table,
-                title="PERFORMANCE BY SETUP MATCH"
-            )
-        )
+        console().print(panel(decision_table, title="PERFORMANCE BY SETUP MATCH"))
 
     # 4. Performance By Pattern
     if report.by_pattern:
@@ -138,16 +124,11 @@ def display_journal_review(
                 _pct(stat.avg_return_10d),
                 _wr(stat.win_rate_10d),
                 _pct(stat.avg_max_upside),
-                _pct(stat.avg_max_drawdown)
+                _pct(stat.avg_max_drawdown),
             )
 
         console().print("")
-        console().print(
-            panel(
-                pattern_table,
-                title="PERFORMANCE BY PATTERN"
-            )
-        )
+        console().print(panel(pattern_table, title="PERFORMANCE BY PATTERN"))
 
     # 5. Signal Delta
     if report.signal_deltas:
@@ -168,27 +149,17 @@ def display_journal_review(
                 _pct(d.group_a_avg_10d),
                 d.group_b_label,
                 str(d.group_b_n),
-                _pct(d.group_b_avg_10d)
+                _pct(d.group_b_avg_10d),
             )
 
         console().print("")
-        console().print(
-            panel(
-                delta_table,
-                title="SIGNAL DELTA (correlation with 10d return)"
-            )
-        )
+        console().print(panel(delta_table, title="SIGNAL DELTA (correlation with 10d return)"))
 
     # 6. Warnings & Footer
     footer_elements = [
         Text("Note: 20+ entries needed for statistically meaningful results.", style="yellow"),
-        Text("DISCLAIMER: Past performance does not predict future returns.", style="dim italic")
+        Text("DISCLAIMER: Past performance does not predict future returns.", style="dim italic"),
     ]
     console().print("")
-    console().print(
-        panel(
-            Group(*footer_elements),
-            title="Reference Notes"
-        )
-    )
+    console().print(panel(Group(*footer_elements), title="Reference Notes"))
     console().print("")

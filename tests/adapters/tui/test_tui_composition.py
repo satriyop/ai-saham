@@ -104,7 +104,7 @@ def test_create_tui_app_screen_uses_build_screen_deps(monkeypatch):
     )
     monkeypatch.setattr(
         "src.adapters.tui.composition.create_daily_capability",
-        lambda: (lambda: ready_response()),
+        lambda: lambda: ready_response(),
     )
     monkeypatch.setattr(
         "src.adapters.tui.composition._build_research_execution",

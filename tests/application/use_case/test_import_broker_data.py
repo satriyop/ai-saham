@@ -339,9 +339,7 @@ class TestIntegrationImportAndQuery:
         repository = SQLiteBrokerRepository(db_path)
         use_case = ImportBrokerDataUseCase(parser, repository)
 
-        response = use_case.execute(
-            ImportBrokerDataRequest(file_path=csv_file)
-        )
+        response = use_case.execute(ImportBrokerDataRequest(file_path=csv_file))
 
         assert response.success is True
         assert response.imported_count == 3

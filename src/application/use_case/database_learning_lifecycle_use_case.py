@@ -139,9 +139,7 @@ class GenerateAccumulationPricePathLabelsUseCase:
         self._market = market_data
         self._corporate_actions = corporate_actions
 
-    def execute(
-        self, request: GenerateLearningLabelsRequest
-    ) -> GenerateLearningLabelsResult:
+    def execute(self, request: GenerateLearningLabelsRequest) -> GenerateLearningLabelsResult:
         if request.purpose is not AssessmentPurpose.ACCUMULATION_DISCOVERY:
             raise LearningContractError("accumulation label generator received wrong purpose")
         horizon_days = _HORIZON_DAYS.get(request.label_contract)
@@ -177,6 +175,7 @@ class GenerateAccumulationPricePathLabelsUseCase:
             unavailable_count=unavailable,
             labels=tuple(labels),
         )
+
     def _label_one(
         self,
         observation: LearningObservation,
@@ -225,9 +224,7 @@ class GenerateAccumulationPricePathLabelsUseCase:
                 labeled_at,
                 "corporate_action_coverage_unavailable",
             )
-        if self._has_mechanical_corporate_action(
-            ticker, window[0].date, window[-1].date
-        ):
+        if self._has_mechanical_corporate_action(ticker, window[0].date, window[-1].date):
             return self._unavailable(
                 observation,
                 contract_id,
@@ -271,9 +268,7 @@ class GenerateAccumulationPricePathLabelsUseCase:
             labeled_at=labeled_at,
         )
 
-    def _has_mechanical_corporate_action(
-        self, ticker: str, start: date, end: date
-    ) -> bool:
+    def _has_mechanical_corporate_action(self, ticker: str, start: date, end: date) -> bool:
         from src.domain.value_objects.corporate_action_calendar import (
             CorporateActionDateRole,
             CorporateActionType,
@@ -292,8 +287,7 @@ class GenerateAccumulationPricePathLabelsUseCase:
             event_types=invalidating,
         )
         return any(
-            dated.date_role is CorporateActionDateRole.EX_DATE
-            and start <= dated.event_date <= end
+            dated.date_role is CorporateActionDateRole.EX_DATE and start <= dated.event_date <= end
             for event in events
             for dated in event.dates
         )
@@ -332,9 +326,7 @@ class GeneratePreOpenOutcomeLabelsUseCase:
         self._tracks = tracks
         self._labels = labels
 
-    def execute(
-        self, request: GenerateLearningLabelsRequest
-    ) -> GenerateLearningLabelsResult:
+    def execute(self, request: GenerateLearningLabelsRequest) -> GenerateLearningLabelsResult:
         if request.purpose is not AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION:
             raise LearningContractError("pre-open label generator received wrong purpose")
         if request.label_contract is not LearningContractId.PRE_OPEN_LABEL:
@@ -374,9 +366,7 @@ class GeneratePreOpenOutcomeLabelsUseCase:
             }
         )
         prices = [
-            price
-            for track in tracks
-            if (price := _track_price(track.snapshot_payload)) is not None
+            price for track in tracks if (price := _track_price(track.snapshot_payload)) is not None
         ]
         if not prices:
             return LearningOutcomeLabel.create(
@@ -405,12 +395,8 @@ class GeneratePreOpenOutcomeLabelsUseCase:
             "trough_09_30": min(prices),
             "close_proxy_09_30": close_proxy,
             "open_to_close_return_pct": close_return,
-            "max_favorable_excursion_pct": round(
-                (max(prices) - opening) / opening * 100.0, 4
-            ),
-            "max_adverse_excursion_pct": round(
-                (min(prices) - opening) / opening * 100.0, 4
-            ),
+            "max_favorable_excursion_pct": round((max(prices) - opening) / opening * 100.0, 4),
+            "max_adverse_excursion_pct": round((min(prices) - opening) / opening * 100.0, 4),
         }
         return LearningOutcomeLabel.create(
             contract_id=LearningContractId.PRE_OPEN_LABEL,
@@ -464,14 +450,11 @@ class EvaluateLearningCohortUseCase:
         if not observations:
             raise LearningContractError("compatible cohort has no observations")
         if any(
-            observation.compatibility_id != request.compatibility_id
-            for observation in observations
+            observation.compatibility_id != request.compatibility_id for observation in observations
         ):
             raise LearningContractError("evaluation cohort has incompatible observations")
         labels = tuple(
-            self._labels.list_labels(
-                [observation.observation_id for observation in observations]
-            )
+            self._labels.list_labels([observation.observation_id for observation in observations])
         )
         if not labels:
             raise LearningContractError("compatible cohort has no persisted labels")
@@ -486,21 +469,14 @@ class EvaluateLearningCohortUseCase:
         available = tuple(
             label for label in labels if label.availability is LabelAvailability.AVAILABLE
         )
-        sessions = {
-            observation.cutoff_at.date().isoformat() for observation in observations
-        }
+        sessions = {observation.cutoff_at.date().isoformat() for observation in observations}
         readiness = (
             EvaluationReadiness.DESCRIPTIVE_READY
             if len(sessions) <= 1
             else EvaluationReadiness.OOS_DIAGNOSTIC_READY
         )
         returns = [
-            value
-            for label in available
-            if (
-                value := _metric_return(label.metrics)
-            )
-            is not None
+            value for label in available if (value := _metric_return(label.metrics)) is not None
         ]
         histogram: dict[str, int] = {}
         for label in available:
@@ -577,9 +553,7 @@ class GetLearningStatusUseCase:
     def execute(self, purpose: AssessmentPurpose) -> LearningStatus:
         observations = tuple(self._observations.list_observations(purpose))
         labels = tuple(
-            self._labels.list_labels(
-                [observation.observation_id for observation in observations]
-            )
+            self._labels.list_labels([observation.observation_id for observation in observations])
         )
         evaluations = tuple(self._evaluations.list_evaluations(purpose))
         return LearningStatus(
@@ -648,20 +622,14 @@ class GetPreOpenSessionStatusUseCase:
         ).execute(AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION)
 
         all_obs = tuple(
-            self._observations.list_observations(
-                AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION
-            )
+            self._observations.list_observations(AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION)
         )
         session_obs = tuple(
-            o
-            for o in all_obs
-            if o.cutoff_at.astimezone(IDX_TIMEZONE).date() == session_date
+            o for o in all_obs if o.cutoff_at.astimezone(IDX_TIMEZONE).date() == session_date
         )
         labels_by_obs = {
             label.observation_id: label
-            for label in self._labels.list_labels(
-                [o.observation_id for o in session_obs]
-            )
+            for label in self._labels.list_labels([o.observation_id for o in session_obs])
         }
 
         lines: list[PreOpenSessionObservationLine] = []
@@ -682,9 +650,7 @@ class GetPreOpenSessionStatusUseCase:
                 s
                 for s in snaps
                 if s.sampled_at.astimezone(IDX_TIMEZONE).date() == session_date
-                and s.sampled_at.astimezone(IDX_TIMEZONE)
-                .timetz()
-                .replace(tzinfo=None)
+                and s.sampled_at.astimezone(IDX_TIMEZONE).timetz().replace(tzinfo=None)
                 >= REGULAR_OPEN
             ]
             open_window.sort(key=lambda s: (s.sampled_at, s.snapshot_id))
@@ -705,10 +671,7 @@ class GetPreOpenSessionStatusUseCase:
                 opening_snapshot_id = open_window[0].snapshot_id
 
             label = labels_by_obs.get(obs.observation_id)
-            label_ok = (
-                label is not None
-                and label.availability is LabelAvailability.AVAILABLE
-            )
+            label_ok = label is not None and label.availability is LabelAvailability.AVAILABLE
             if has_open:
                 with_open += 1
             elif snaps:
@@ -778,8 +741,7 @@ class GetPreOpenSessionStatusUseCase:
         no_track = sum(1 for line in lines if line.readiness == "NO_TRACK")
         if no_track:
             actions.append(
-                f"{no_track} observation(s) have no track: "
-                "`saham research pre-open track`."
+                f"{no_track} observation(s) have no track: `saham research pre-open track`."
             )
         if missing_open:
             actions.append(
@@ -806,9 +768,7 @@ class GetPreOpenSessionStatusUseCase:
                 "`saham research pre-open labels` then `evaluate`."
             )
         if labeled and labeled == observation_count:
-            actions.append(
-                "Session labels present: `saham research pre-open evaluate`."
-            )
+            actions.append("Session labels present: `saham research pre-open evaluate`.")
         if not actions:
             actions.append("Session looks complete for captured observations.")
         return tuple(actions)

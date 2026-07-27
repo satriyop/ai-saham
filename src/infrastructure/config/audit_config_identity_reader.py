@@ -44,8 +44,7 @@ class FileAuditConfigIdentityReader:
 
     def config_identity(self) -> AuditConfigIdentity:
         config_files = tuple(
-            self._file_identity(relative_path)
-            for relative_path in _TRACKED_CONFIG_RELATIVE_PATHS
+            self._file_identity(relative_path) for relative_path in _TRACKED_CONFIG_RELATIVE_PATHS
         )
         user_config_exists = (self._project_root / _USER_CONFIG_RELATIVE_PATH).exists()
         return AuditConfigIdentity(

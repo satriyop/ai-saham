@@ -96,7 +96,8 @@ def test_candidate_observation_canonical_row_empty_identity_fails(full_schema_db
         "INSERT INTO candidate_observations "
         "(ticker, snapshot_date, captured_at, schema_version, payload_json, workflow, "
         "window_sessions, data_as_of_date, config_hash) "
-        f"VALUES ('', '2026-01-02', '2026-01-02T00:00:00', {CANDIDATE_OBSERVATION_SCHEMA_VERSION}, '{{}}', 'w', 5, "
+        f"VALUES ('', '2026-01-02', '2026-01-02T00:00:00', "
+        f"{CANDIDATE_OBSERVATION_SCHEMA_VERSION}, '{{}}', 'w', 5, "
         "'2026-01-02', 'abc123')"
     )
     conn.commit()
@@ -117,7 +118,8 @@ def test_candidate_observation_canonical_row_invalid_window_sessions_fails(
         "INSERT INTO candidate_observations "
         "(ticker, snapshot_date, captured_at, schema_version, payload_json, workflow, "
         "window_sessions, data_as_of_date, config_hash) "
-        f"VALUES ('BBCA', '2026-01-02', '2026-01-02T00:00:00', {CANDIDATE_OBSERVATION_SCHEMA_VERSION}, '{{}}', 'w', 0, "
+        f"VALUES ('BBCA', '2026-01-02', '2026-01-02T00:00:00', "
+        f"{CANDIDATE_OBSERVATION_SCHEMA_VERSION}, '{{}}', 'w', 0, "
         "'2026-01-02', 'abc123')"
     )
     conn.commit()
@@ -156,7 +158,8 @@ def test_duplicate_canonical_candidate_identity_warns(full_schema_db: Path):
             "INSERT INTO candidate_observations "
             "(ticker, snapshot_date, captured_at, schema_version, payload_json, workflow, "
             "window_sessions, data_as_of_date, config_hash) "
-            f"VALUES ('BBCA', '2026-01-02', '2026-01-02T00:00:00', {CANDIDATE_OBSERVATION_SCHEMA_VERSION}, '{{}}', 'w', 5, "
+            f"VALUES ('BBCA', '2026-01-02', '2026-01-02T00:00:00', "
+            f"{CANDIDATE_OBSERVATION_SCHEMA_VERSION}, '{{}}', 'w', 5, "
             "'2026-01-02', 'abc123')"
         )
     conn.commit()

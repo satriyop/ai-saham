@@ -49,9 +49,7 @@ class PersistGeneratedFormulaUseCase:
         self._store = store
         self._registry = registry
 
-    def execute(
-        self, request: PersistGeneratedFormulaRequest
-    ) -> PersistGeneratedFormulaResponse:
+    def execute(self, request: PersistGeneratedFormulaRequest) -> PersistGeneratedFormulaResponse:
         auto_generated = not request.requested_name
         name = (request.requested_name or self._auto_name(request.formula)).upper()
 
@@ -70,9 +68,7 @@ class PersistGeneratedFormulaUseCase:
         save_error: str | None = None
         if save_attempted:
             try:
-                self._store.save(
-                    name=name, formula=request.formula, intent=request.intent
-                )
+                self._store.save(name=name, formula=request.formula, intent=request.intent)
                 saved = True
             except FormulaStoreError as e:  # persistence failure is non-fatal
                 save_error = str(e)

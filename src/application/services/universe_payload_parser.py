@@ -8,9 +8,7 @@ from typing import Any
 from src.application.dto.universe_management import UniverseInspectRow
 
 
-def extract_payload_list(
-    body: dict[str, Any] | None, *keys: str
-) -> list[dict[str, Any]]:
+def extract_payload_list(body: dict[str, Any] | None, *keys: str) -> list[dict[str, Any]]:
     """Extract a list of dict items from a response body using known key patterns.
 
     Accepted list keys (in order): companies, list, items, stocks.
@@ -65,9 +63,7 @@ def extract_sector_rows(body: dict[str, Any] | None) -> list[UniverseInspectRow]
         sid = s.get("id") or s.get("sector_id") or "?"
         name = s.get("name") or s.get("sector_name") or "?"
         count = s.get("total_company") or s.get("company_count") or ""
-        rows.append(
-            UniverseInspectRow(id=str(sid), name=name, count=str(count) if count else "—")
-        )
+        rows.append(UniverseInspectRow(id=str(sid), name=name, count=str(count) if count else "—"))
     return rows
 
 

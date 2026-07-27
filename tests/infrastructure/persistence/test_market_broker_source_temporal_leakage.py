@@ -68,7 +68,9 @@ def _decision_session(latest_completed_session: date = DECISION_DATE) -> Effecti
 
 
 def _candle(ticker: str, on: date, close: int = 100) -> Candle:
-    return Candle(ticker=ticker, date=on, open=close, high=close, low=close, close=close, volume=1000)
+    return Candle(
+        ticker=ticker, date=on, open=close, high=close, low=close, close=close, volume=1000
+    )
 
 
 class TestCandleTemporalLeakage:
@@ -241,15 +243,21 @@ class TestForeignFlowPointsTemporalLeakage:
 
 class TestForeignFlowSnapshotsTemporalLeakage:
     def _snapshot(self, ticker: str = "BBCA") -> ForeignFlowSnapshot:
-        return ForeignFlowSnapshot(ticker=ticker, date=DECISION_DATE, net_val=Decimal("1000"), net_lot=10)
+        return ForeignFlowSnapshot(
+            ticker=ticker, date=DECISION_DATE, net_val=Decimal("1000"), net_lot=10
+        )
 
     def test_foreign_flow_snapshots_reader_is_keyed_by_exact_snapshot_date(self, tmp_path):
         """`get_foreign_flow_snapshots` is an exact-match query (no end_date
         bound exists), so planting a future-dated snapshot must not appear
         when querying the correct decision-date key."""
         repo = SQLiteBrokerRepository(tmp_path / "broker.db")
-        repo.save_foreign_flow_snapshots([self._snapshot()], snapshot_date=DECISION_DATE, period_days=7)
-        repo.save_foreign_flow_snapshots([self._snapshot()], snapshot_date=FUTURE_DATE, period_days=7)
+        repo.save_foreign_flow_snapshots(
+            [self._snapshot()], snapshot_date=DECISION_DATE, period_days=7
+        )
+        repo.save_foreign_flow_snapshots(
+            [self._snapshot()], snapshot_date=FUTURE_DATE, period_days=7
+        )
 
         rows = repo.get_foreign_flow_snapshots(DECISION_DATE, period_days=7)
 
@@ -258,7 +266,9 @@ class TestForeignFlowSnapshotsTemporalLeakage:
 
     def test_foreign_flow_snapshots_future_snapshot_date_is_invalid(self, tmp_path):
         repo = SQLiteBrokerRepository(tmp_path / "broker.db")
-        repo.save_foreign_flow_snapshots([self._snapshot()], snapshot_date=FUTURE_DATE, period_days=7)
+        repo.save_foreign_flow_snapshots(
+            [self._snapshot()], snapshot_date=FUTURE_DATE, period_days=7
+        )
         rows = repo.get_foreign_flow_snapshots(FUTURE_DATE, period_days=7)
 
         use_case = AssessSourceAvailabilityUseCase(calendar=_calendar())

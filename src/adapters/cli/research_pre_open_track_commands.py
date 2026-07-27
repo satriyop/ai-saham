@@ -88,8 +88,7 @@ def track(
             )
             raise typer.Exit(1)
         observation_ids_by_ticker = {
-            ticker.upper(): observation_ids_by_ticker[ticker.upper()]
-            for ticker in resolved_tickers
+            ticker.upper(): observation_ids_by_ticker[ticker.upper()] for ticker in resolved_tickers
         }
     resolved_tickers = sorted(observation_ids_by_ticker)
     if not resolved_tickers:
@@ -125,10 +124,12 @@ def track(
     from src.infrastructure.composition.stockbit_session_factory import (
         get_stockbit_session as _get_learn_session,
     )
+
     _stockbit_config = load_stockbit_provider_config()
     _learn_session = _get_learn_session(_stockbit_config)
 
     from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
+
     _api_client = (
         _learn_session.api_client if _learn_session else None
     ) or create_stockbit_api_client(
@@ -223,7 +224,4 @@ def track(
         extras = [f"ob={n_ob}/{len(resolved_tickers)}"]
         if broker_confirm:
             extras.append(f"broker={n_broker}/{len(resolved_tickers)}")
-        typer.echo(
-            f"  {at}  {n_ok}/{len(resolved_tickers)} tickers OK  "
-            + "  ".join(extras)
-        )
+        typer.echo(f"  {at}  {n_ok}/{len(resolved_tickers)} tickers OK  " + "  ".join(extras))

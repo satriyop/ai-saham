@@ -9,6 +9,20 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSession,
+)
+from src.application.services.position_sizer import PercentSizingResult, SizingResult
+from src.application.services.swing_analysis_serialization import (
+    candidate_accumulation_to_dict,
+    object_to_dict,
+    risk_response_to_dict,
+    risk_response_to_preview_dict,
+    signal_response_to_dict,
+    volatility_context_to_dict,
+)
+
+
 class SignalAssessmentStatus(str, Enum):
     AVAILABLE = "AVAILABLE"
     UNAVAILABLE = "UNAVAILABLE"
@@ -40,18 +54,6 @@ class SignalAssessmentAvailability:
             if self.unavailable_reason is None:
                 raise ValueError("UNAVAILABLE requires a reason.")
 
-from src.application.services.effective_market_session_resolver import (
-    EffectiveMarketSession,
-)
-from src.application.services.position_sizer import PercentSizingResult, SizingResult
-from src.application.services.swing_analysis_serialization import (
-    candidate_accumulation_to_dict,
-    object_to_dict,
-    risk_response_to_dict,
-    risk_response_to_preview_dict,
-    signal_response_to_dict,
-    volatility_context_to_dict,
-)
 
 if TYPE_CHECKING:
     from src.application.dto.assess_signal import AssessSignalResponse
@@ -131,36 +133,40 @@ class SwingVerdict:
             if self.market_context_signal_preview is not None:
                 raise ValueError("UNAVAILABLE requires market_context_signal_preview to be None.")
             if self.market_context_trade_setup_preview is not None:
-                raise ValueError("UNAVAILABLE requires market_context_trade_setup_preview to be None.")
+                raise ValueError(
+                    "UNAVAILABLE requires market_context_trade_setup_preview to be None."
+                )
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "trade_setup": self.trade_setup.to_dict() if self.trade_setup else None,
             "signal_assessment": signal_response_to_dict(self.signal_assessment),
             "risk_assessment": risk_response_to_dict(self.risk_response),
-            "market_context": (
-                self.market_regime.to_dict() if self.market_regime else None
-            ),
+            "market_context": (self.market_regime.to_dict() if self.market_regime else None),
             "signal_assessment_status": (
                 self.signal_assessment_availability.status.value
-                if self.signal_assessment_availability else None
+                if self.signal_assessment_availability
+                else None
             ),
             "signal_assessment_unavailable_reason": (
                 self.signal_assessment_availability.unavailable_reason.value
-                if self.signal_assessment_availability and self.signal_assessment_availability.unavailable_reason else None
+                if self.signal_assessment_availability
+                and self.signal_assessment_availability.unavailable_reason
+                else None
             ),
-            "market_context_preview": {
-                "signal_preview": signal_response_to_dict(
-                    self.market_context_signal_preview
-                ),
-                "risk_preview": risk_response_to_preview_dict(
-                    self.market_context_risk_preview
-                ),
-                "trade_setup_preview": (
-                    self.market_context_trade_setup_preview.to_dict()
-                    if self.market_context_trade_setup_preview else None
-                ),
-            } if self.market_regime else None,
+            "market_context_preview": (
+                {
+                    "signal_preview": signal_response_to_dict(self.market_context_signal_preview),
+                    "risk_preview": risk_response_to_preview_dict(self.market_context_risk_preview),
+                    "trade_setup_preview": (
+                        self.market_context_trade_setup_preview.to_dict()
+                        if self.market_context_trade_setup_preview
+                        else None
+                    ),
+                }
+                if self.market_regime
+                else None
+            ),
         }
 
 
@@ -186,7 +192,9 @@ class SwingEvidence:
     company_quality_context_evidence: "CompanyQualityContextEvidence | None" = None
     corporate_action_risk: "CorporateActionRiskAssessment | None" = None
 
-    def to_dict(self, *, strategy_name: str | None = None, max_hold_days: int | None = None) -> dict[str, Any]:
+    def to_dict(
+        self, *, strategy_name: str | None = None, max_hold_days: int | None = None
+    ) -> dict[str, Any]:
         candidate = self.accumulation_candidate
         setup_eval = self.setup_eval
         backtest_result = self.backtest_result
@@ -194,83 +202,92 @@ class SwingEvidence:
         return {
             "foreign_flow_evidence": (
                 candidate.foreign_flow_evidence.to_dict()
-                if candidate and getattr(candidate, "foreign_flow_evidence", None) else None
+                if candidate and getattr(candidate, "foreign_flow_evidence", None)
+                else None
             ),
             "accumulation": candidate_accumulation_to_dict(candidate),
-            "setup": {
-                "name": setup_eval.name if setup_eval else None,
-                "passed": setup_eval.passed if setup_eval else None,
-                "match": setup_eval.match.value if setup_eval else None,
-                "failed_reasons": list(setup_eval.failed_reasons) if setup_eval else [],
-                "plan": {
-                    "take_profit_pct": float(self.take_profit_pct) if setup_eval else None,
-                    "stop_loss_pct": float(self.stop_loss_pct) if setup_eval else None,
-                    "regime": self.regime_label,
-                    "max_hold_days": max_hold_days if setup_eval else None,
-                },
-            } if setup_eval else None,
-            "strategy_evidence": {
-                "name": strategy_name,
-                "win_rate": float(backtest_result.win_rate) if backtest_result else None,
-                "profit_factor": (
-                    float(backtest_result.profit_factor) if backtest_result else None
-                ),
-                "max_drawdown_pct": (
-                    float(backtest_result.max_drawdown_pct)
-                    if backtest_result else None
-                ),
-                "trade_count": backtest_result.trade_count if backtest_result else None,
-                "diagnostic": (
-                    self.strategy_rule_evidence.to_dict()
-                    if self.strategy_rule_evidence
-                    else None
-                ),
-            } if strategy_name else None,
+            "setup": (
+                {
+                    "name": setup_eval.name if setup_eval else None,
+                    "passed": setup_eval.passed if setup_eval else None,
+                    "match": setup_eval.match.value if setup_eval else None,
+                    "failed_reasons": list(setup_eval.failed_reasons) if setup_eval else [],
+                    "plan": {
+                        "take_profit_pct": float(self.take_profit_pct) if setup_eval else None,
+                        "stop_loss_pct": float(self.stop_loss_pct) if setup_eval else None,
+                        "regime": self.regime_label,
+                        "max_hold_days": max_hold_days if setup_eval else None,
+                    },
+                }
+                if setup_eval
+                else None
+            ),
+            "strategy_evidence": (
+                {
+                    "name": strategy_name,
+                    "win_rate": float(backtest_result.win_rate) if backtest_result else None,
+                    "profit_factor": (
+                        float(backtest_result.profit_factor) if backtest_result else None
+                    ),
+                    "max_drawdown_pct": (
+                        float(backtest_result.max_drawdown_pct) if backtest_result else None
+                    ),
+                    "trade_count": backtest_result.trade_count if backtest_result else None,
+                    "diagnostic": (
+                        self.strategy_rule_evidence.to_dict()
+                        if self.strategy_rule_evidence
+                        else None
+                    ),
+                }
+                if strategy_name
+                else None
+            ),
             "sentiment": {
                 "call": (
                     sentiment_resp.snapshot.overall_sentiment.value
-                    if sentiment_resp and not sentiment_resp.warning else None
+                    if sentiment_resp and not sentiment_resp.warning
+                    else None
                 ),
                 "warning": self.sentiment_warning,
                 "total_headlines": (
                     sentiment_resp.snapshot.total_count
-                    if sentiment_resp and not sentiment_resp.warning else None
+                    if sentiment_resp and not sentiment_resp.warning
+                    else None
                 ),
                 "confidence_pct": (
                     sentiment_resp.snapshot.confidence_pct
-                    if sentiment_resp and not sentiment_resp.warning else None
+                    if sentiment_resp and not sentiment_resp.warning
+                    else None
                 ),
             },
             "setup_evidence": self.setup_evidence.to_dict() if self.setup_evidence else None,
             "setup_phase": self.setup_phase.to_dict() if self.setup_phase else None,
             "strategy_rule_evidence": (
-                self.strategy_rule_evidence.to_dict()
-                if self.strategy_rule_evidence
-                else None
+                self.strategy_rule_evidence.to_dict() if self.strategy_rule_evidence else None
             ),
             "flow_confirmation_evidence": (
                 self.flow_confirmation_evidence.to_dict()
-                if self.flow_confirmation_evidence else None
+                if self.flow_confirmation_evidence
+                else None
             ),
             "institutional_accumulation_evidence": (
                 self.institutional_accumulation_evidence.to_dict()
-                if self.institutional_accumulation_evidence else None
+                if self.institutional_accumulation_evidence
+                else None
             ),
             "ticker_profile_snapshot": (
-                self.ticker_profile_snapshot.to_dict()
-                if self.ticker_profile_snapshot else None
+                self.ticker_profile_snapshot.to_dict() if self.ticker_profile_snapshot else None
             ),
             "sector_context_evidence": (
-                self.sector_context_evidence.to_dict()
-                if self.sector_context_evidence else None
+                self.sector_context_evidence.to_dict() if self.sector_context_evidence else None
             ),
             "company_quality_context_evidence": (
                 self.company_quality_context_evidence.to_dict()
-                if self.company_quality_context_evidence else None
+                if self.company_quality_context_evidence
+                else None
             ),
             "corporate_action_risk": (
-                self.corporate_action_risk.to_dict()
-                if self.corporate_action_risk else None
+                self.corporate_action_risk.to_dict() if self.corporate_action_risk else None
             ),
         }
 
@@ -391,10 +408,7 @@ class SwingAnalysisWorkflowResponse:
             warnings=self.warnings,
         )
         diagnostics_out = diagnostics.to_dict()
-        if (
-            isinstance(diagnostics_out.get("data"), dict)
-            and verdict.market_regime is not None
-        ):
+        if isinstance(diagnostics_out.get("data"), dict) and verdict.market_regime is not None:
             diagnostics_out["data"]["regime_as_of"] = verdict.market_regime.as_of_date.isoformat()
         diagnostics_out["volatility_context"] = volatility_context_to_dict(
             atr_value=self.atr_value,
@@ -416,9 +430,7 @@ class SwingAnalysisWorkflowResponse:
             "ticker": self.ticker,
             "date": str(self.today),
             "effective_session": (
-                self.effective_session.to_dict()
-                if self.effective_session is not None
-                else None
+                self.effective_session.to_dict() if self.effective_session is not None else None
             ),
             "modules": self.modules or {},
             "verdict": verdict.to_dict(),

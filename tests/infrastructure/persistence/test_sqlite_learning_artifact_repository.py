@@ -86,12 +86,10 @@ def test_schema_enables_foreign_keys_and_creates_exact_learning_tables(
         enabled = connection.execute("PRAGMA foreign_keys").fetchone()[0]
         tables = {
             row[0]
-            for row in connection.execute(
-                """
+            for row in connection.execute("""
                 SELECT name FROM sqlite_master
                 WHERE type = 'table' AND name LIKE 'learning_%'
-                """
-            )
+                """)
         }
 
     assert enabled == 1
@@ -257,4 +255,3 @@ def test_delete_is_restricted_for_linked_artifacts(tmp_path: Path) -> None:
                 "DELETE FROM learning_observations WHERE observation_id = ?",
                 (observation.observation_id,),
             )
-

@@ -57,7 +57,6 @@ def test_neutral_can_permit_enter_with_reduced_size():
 def test_risk_off_blocks_enter_even_when_entry_quality_is_enter():
     result = _resolve("RISK_OFF", signal_authority_coverage=0.85)
 
-
     assert result.entry_quality == EntryQuality.WATCH
     assert result.constraints.max_decision == "WATCH"
     assert result.constraints.regime_enter_allowed is False
@@ -143,4 +142,3 @@ def test_low_regime_confidence_caps_enter_to_watch():
         "Low regime_confidence (0.20 < 0.35) — ENTER capped"
         in result.constraints.constraint_reasons
     )
-

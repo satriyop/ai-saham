@@ -87,10 +87,7 @@ class SwingProposalGenerator(Protocol):
 class ConservativeSwingExitProposalGenerator:
     """Propose one bounded execution TP change from IS performance only."""
 
-    TARGET = (
-        "config/swing_backtest.yaml:"
-        "swing_backtest.execution.take_profit_pct"
-    )
+    TARGET = "config/swing_backtest.yaml:swing_backtest.execution.take_profit_pct"
 
     def __init__(self, current_value: float, *, step: float = 0.5) -> None:
         if current_value <= 0 or step <= 0:
@@ -118,8 +115,7 @@ def swing_policy_metrics_from_backtest(
 
     candidates = tuple(response.candidate_observations)
     authority_coverage = (
-        sum(candidate.signal_score is not None for candidate in candidates)
-        / len(candidates)
+        sum(candidate.signal_score is not None for candidate in candidates) / len(candidates)
         if candidates
         else 0.0
     )
@@ -131,10 +127,7 @@ def swing_policy_metrics_from_backtest(
     )
     regime_stats = tuple(response.regime_stats)
     regime_stability = (
-        sum(
-            stat.avg_return_pct is not None and stat.avg_return_pct >= 0.0
-            for stat in regime_stats
-        )
+        sum(stat.avg_return_pct is not None and stat.avg_return_pct >= 0.0 for stat in regime_stats)
         / len(regime_stats)
         if regime_stats
         else 0.0
@@ -184,9 +177,7 @@ class ResolveSwingLearningDatasetUseCase:
     def __init__(self, market_data: SwingDatasetMarketRepository) -> None:
         self._market_data = market_data
 
-    def execute(
-        self, request: ResolveSwingLearningDatasetRequest
-    ) -> SwingLearningDataset:
+    def execute(self, request: ResolveSwingLearningDatasetRequest) -> SwingLearningDataset:
         if not request.tickers:
             raise LearningContractError("swing learning dataset requires tickers")
         candles = self._market_data.get_candles(
@@ -202,9 +193,7 @@ class ResolveSwingLearningDatasetUseCase:
             }
         )
         if len(sessions) < 2:
-            raise LearningContractError(
-                "swing learning dataset requires at least two sessions"
-            )
+            raise LearningContractError("swing learning dataset requires at least two sessions")
         tickers = tuple(sorted({ticker.upper() for ticker in request.tickers}))
         rows = tuple(
             SwingLearningRow(
@@ -280,9 +269,7 @@ class RunSwingPolicyReviewUseCase:
         self._proposals = proposals
         self._validations = validations
 
-    def execute(
-        self, request: RunSwingPolicyReviewRequest
-    ) -> RunSwingPolicyReviewResult:
+    def execute(self, request: RunSwingPolicyReviewRequest) -> RunSwingPolicyReviewResult:
         if not 0.0 < request.is_ratio < 1.0:
             raise LearningContractError("is_ratio must be between zero and one")
         rows = tuple(sorted(request.dataset.rows, key=lambda row: (row.observed_at, row.row_id)))
@@ -322,20 +309,14 @@ class RunSwingPolicyReviewUseCase:
         )
         self._proposals.add_proposal(proposal)
 
-        baseline_oos_metrics = self._evaluator.evaluate(
-            oos_rows, request.baseline_policy.values
-        )
+        baseline_oos_metrics = self._evaluator.evaluate(oos_rows, request.baseline_policy.values)
         proposed_policy = {**request.baseline_policy.values, **proposal.changes}
         proposed_oos_metrics = self._evaluator.evaluate(oos_rows, proposed_policy)
         self._require_population(baseline_oos_metrics, oos_population, "OOS baseline")
         self._require_population(proposed_oos_metrics, oos_population, "OOS proposed")
 
-        paired_deltas = self._paired_deltas(
-            baseline_oos_metrics, proposed_oos_metrics
-        )
-        issues = self._validation_issues(
-            baseline_oos_metrics, proposed_oos_metrics
-        )
+        paired_deltas = self._paired_deltas(baseline_oos_metrics, proposed_oos_metrics)
+        issues = self._validation_issues(baseline_oos_metrics, proposed_oos_metrics)
         status = ValidationStatus.PASS if not issues else ValidationStatus.FAIL
         proposed_readiness = (
             EvaluationReadiness.POLICY_REVIEW_ELIGIBLE
@@ -378,13 +359,9 @@ class RunSwingPolicyReviewUseCase:
         )
 
     @staticmethod
-    def _require_population(
-        metrics: SwingPolicyMetrics, expected: str, label: str
-    ) -> None:
+    def _require_population(metrics: SwingPolicyMetrics, expected: str, label: str) -> None:
         if metrics.population_fingerprint != expected:
-            raise LearningContractError(
-                f"{label} evaluator changed the immutable population"
-            )
+            raise LearningContractError(f"{label} evaluator changed the immutable population")
 
     @staticmethod
     def _evaluation(
@@ -424,16 +401,12 @@ class RunSwingPolicyReviewUseCase:
             "drawdown_regression": proposed.max_drawdown - baseline.max_drawdown,
             "trade_count": proposed.trade_count - baseline.trade_count,
             "regime_stability": proposed.regime_stability - baseline.regime_stability,
-            "authority_coverage": (
-                proposed.authority_coverage - baseline.authority_coverage
-            ),
+            "authority_coverage": (proposed.authority_coverage - baseline.authority_coverage),
             "setup_readiness": proposed.setup_readiness - baseline.setup_readiness,
         }
 
     @staticmethod
-    def _validation_issues(
-        baseline: SwingPolicyMetrics, proposed: SwingPolicyMetrics
-    ) -> list[str]:
+    def _validation_issues(baseline: SwingPolicyMetrics, proposed: SwingPolicyMetrics) -> list[str]:
         issues: list[str] = []
         if proposed.net_return <= baseline.net_return:
             issues.append("net_return_not_improved")

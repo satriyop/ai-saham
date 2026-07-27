@@ -89,9 +89,7 @@ def test_fetched_at_is_fresh_with_explicit_today():
 
 
 def _make_table(conn: sqlite3.Connection) -> None:
-    conn.execute(
-        "CREATE TABLE test_cache (ticker TEXT NOT NULL, fetched_date TEXT NOT NULL)"
-    )
+    conn.execute("CREATE TABLE test_cache (ticker TEXT NOT NULL, fetched_date TEXT NOT NULL)")
 
 
 def _insert_row(conn: sqlite3.Connection, ticker: str, fetched_date: str) -> None:

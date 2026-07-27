@@ -12,6 +12,7 @@ assembly live in dedicated collaborators (`CandidateEvidenceDataLoader` and
 the `candidate_*_evidence_assembler` modules) shared with
 `AccumulationCandidateEvidenceBuilder`.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -147,9 +148,7 @@ class SwingAnalysisEvidenceBuilder:
             market_repository, candidate_observations_repository
         )
         self._institutional_assembler = CandidateInstitutionalAccumulationEvidenceAssembler(
-            _normalize_institutional_accumulation_factory(
-                institutional_accumulation_config_factory
-            )
+            _normalize_institutional_accumulation_factory(institutional_accumulation_config_factory)
         )
         self._ticker_profile_assembler = CandidateTickerProfileEvidenceAssembler(
             ticker_profile_classifier_factory
@@ -214,9 +213,7 @@ class SwingAnalysisEvidenceBuilder:
                 built_flow_evidence = self._flow_confirmation_builder.build(
                     accumulation_candidate,
                     analysis_date=snapshot_date,
-                    consumed_broker_summaries=(
-                        accumulation_evaluation.consumed_broker_summaries
-                    ),
+                    consumed_broker_summaries=(accumulation_evaluation.consumed_broker_summaries),
                     consumed_broker_daily_flows=(
                         accumulation_evaluation.consumed_broker_daily_flows
                     ),
@@ -260,9 +257,7 @@ class SwingAnalysisEvidenceBuilder:
 
                 strategy_rule_evidence = StrategyEvidenceBuilder(
                     registry=self._registry,
-                    loader=StrategyLoader(
-                        rules_loader=self._rules_loader, registry=self._registry
-                    ),
+                    loader=StrategyLoader(rules_loader=self._rules_loader, registry=self._registry),
                 ).build(
                     StrategyEvidenceRequest(
                         ticker=ticker,
@@ -346,11 +341,7 @@ class SwingAnalysisEvidenceBuilder:
                 if accumulation_candidate is not None
                 and accumulation_candidate.ticker_notation is not None
                 else None
-            ) or (
-                ticker_profile_snapshot.sector
-                if ticker_profile_snapshot is not None
-                else None
-            )
+            ) or (ticker_profile_snapshot.sector if ticker_profile_snapshot is not None else None)
             peer_tickers = sc_builder.peers_for_ticker(ticker)
             sector_inputs = self._data_loader.load_sector_context_inputs(
                 ticker=ticker,

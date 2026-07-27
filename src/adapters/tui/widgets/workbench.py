@@ -25,9 +25,7 @@ def rows_text(rows: tuple[tuple[str, str], ...]) -> str:
 
 def verdict_line(decision: DecisionStripView) -> str:
     """The single strongest line: canonical action badge first, always."""
-    coverage = (
-        "—" if decision.signal_coverage is None else f"{decision.signal_coverage:.0%}"
-    )
+    coverage = "—" if decision.signal_coverage is None else f"{decision.signal_coverage:.0%}"
     return (
         f"{decision.badge.symbol} {decision.badge.text}"
         f"   Signal {_display(decision.signal_score)}/{coverage}"

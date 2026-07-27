@@ -125,9 +125,7 @@ class AccumulationCandidateObservationPersister:
             effective_session.latest_completed_session is None
             or effective_session.analysis_as_of is None
         ):
-            raise ValueError(
-                "canonical accumulation capture requires completed-session provenance"
-            )
+            raise ValueError("canonical accumulation capture requires completed-session provenance")
         captured_at = datetime.now(IDX_TIMEZONE)
         config_hash = compute_accumulation_config_hash(request)
         universe_id = artifact_digest({"tickers": sorted(request.tickers)})
@@ -141,18 +139,16 @@ class AccumulationCandidateObservationPersister:
             # evidence remains diagnostic-only input to the payload.
             setup_phase = c.setup_phase
             setup_family_result = c.setup_family_result
-            strategy_evidence = (
-                self._candidate_evidence_builder.build_candidate_strategy_evidence(
-                    c,
-                    setup_phase,
-                    snapshot_date,
-                    request,
-                    setup_family=(
-                        setup_family_result.primary_setup_family
-                        if setup_family_result is not None
-                        else None
-                    ),
-                )
+            strategy_evidence = self._candidate_evidence_builder.build_candidate_strategy_evidence(
+                c,
+                setup_phase,
+                snapshot_date,
+                request,
+                setup_family=(
+                    setup_family_result.primary_setup_family
+                    if setup_family_result is not None
+                    else None
+                ),
             )
             builder = self._candidate_evidence_builder
             ia_evidence = builder.build_candidate_institutional_accumulation_evidence(
@@ -167,11 +163,9 @@ class AccumulationCandidateObservationPersister:
                 snapshot_date,
                 tp_snapshot,
             )
-            cq_evidence = (
-                self._candidate_evidence_builder.build_candidate_company_quality_context(
-                    c,
-                    snapshot_date,
-                )
+            cq_evidence = self._candidate_evidence_builder.build_candidate_company_quality_context(
+                c,
+                snapshot_date,
             )
             volatility_context = (
                 self._candidate_evidence_builder.build_candidate_volatility_context(

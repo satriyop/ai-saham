@@ -175,16 +175,29 @@ def test_refresh_generation_end_to_end_against_real_workflow_contracts() -> None
     Hand-written stubs previously mirrored the buggy shapes, so the contract is
     exercised here through production code and real DTOs instead.
     """
+
     # A real refresh use case with in-memory fetch seams: one ticker errors so a
     # real non-zero fail_count flows through to the warning.
     def fake_fetch_candles(
-        *, ticker, days, db_path, provider_name, refresh, short_history,
+        *,
+        ticker,
+        days,
+        db_path,
+        provider_name,
+        refresh,
+        short_history,
         effective_session=None,
     ):
         return "ERR: injected" if ticker == "FAIL" else "cached"
 
     def fake_fetch_broker(
-        *, ticker, days, db_path, broker_provider, refresh, short_history,
+        *,
+        ticker,
+        days,
+        db_path,
+        broker_provider,
+        refresh,
+        short_history,
         effective_session=None,
     ):
         return BrokerFetchResult(summaries="cached", flow="cached")

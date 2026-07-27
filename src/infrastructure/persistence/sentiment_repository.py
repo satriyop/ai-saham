@@ -55,7 +55,10 @@ class SQLiteSentimentRepository(SentimentRepository):
         """Save a new sentiment log."""
         with sqlite3.connect(self._db_path) as conn:
             cursor = conn.execute(
-                "INSERT INTO sentiment_logs (date, ticker, sentiment, catalyst, score) VALUES (?, ?, ?, ?, ?)",
+                (
+                    "INSERT INTO sentiment_logs (date, ticker, sentiment, catalyst, score)"
+                    "VALUES (?, ?, ?, ?, ?)"
+                ),
                 (
                     log.date.isoformat(),
                     log.ticker.upper(),
@@ -99,7 +102,10 @@ class SQLiteSentimentRepository(SentimentRepository):
         """Save an audit result."""
         with sqlite3.connect(self._db_path) as conn:
             conn.execute(
-                "INSERT OR REPLACE INTO sentiment_audits (log_id, days_after, price_delta_pct, audited_at) VALUES (?, ?, ?, ?)",
+                (
+                    "INSERT OR REPLACE INTO sentiment_audits (log_id, days_after,"
+                    "price_delta_pct, audited_at) VALUES (?, ?, ?, ?)"
+                ),
                 (
                     audit.log_id,
                     audit.days_after,

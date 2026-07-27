@@ -24,8 +24,7 @@ from tests.application.use_case.swing_analysis_workflow_fixtures import (
 def test_simple_return_computes_decimal_return_from_candles():
     start = date(2026, 6, 1)
     candles = [
-        _candle_with_close(start + timedelta(days=idx), str(1000 + (idx * 10)))
-        for idx in range(20)
+        _candle_with_close(start + timedelta(days=idx), str(1000 + (idx * 10))) for idx in range(20)
     ]
 
     ret = simple_return(candles, lookback=20, min_valid=18)

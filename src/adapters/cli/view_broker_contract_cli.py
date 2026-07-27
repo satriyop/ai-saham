@@ -11,8 +11,11 @@ from typing import Any
 
 import typer
 
-from src.application.dto.view_ticker_contract import ViewSubjectKind, build_view_envelope
-from src.application.dto.view_ticker_contract import ViewResultStatus
+from src.application.dto.view_ticker_contract import (
+    ViewResultStatus,
+    ViewSubjectKind,
+    build_view_envelope,
+)
 
 
 def resolve_output_format(fmt: str | None, *, default: str = "table") -> str:

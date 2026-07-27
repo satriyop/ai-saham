@@ -65,9 +65,7 @@ class AnalyzePreOpenResult:
     @property
     def opening_snapshot_ids(self) -> tuple[str, ...]:
         return tuple(
-            line.opening_snapshot_id
-            for line in self.lines
-            if line.opening_snapshot_id is not None
+            line.opening_snapshot_id for line in self.lines if line.opening_snapshot_id is not None
         )
 
 

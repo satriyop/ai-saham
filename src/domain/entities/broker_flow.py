@@ -204,16 +204,10 @@ class BrokerSummary:
         return cls(
             ticker=data["ticker"],
             date=(
-                date.fromisoformat(data["date"])
-                if isinstance(data["date"], str)
-                else data["date"]
+                date.fromisoformat(data["date"]) if isinstance(data["date"], str) else data["date"]
             ),
-            top_buyers=tuple(
-                BrokerTransaction.from_dict(b) for b in data.get("top_buyers", [])
-            ),
-            top_sellers=tuple(
-                BrokerTransaction.from_dict(s) for s in data.get("top_sellers", [])
-            ),
+            top_buyers=tuple(BrokerTransaction.from_dict(b) for b in data.get("top_buyers", [])),
+            top_sellers=tuple(BrokerTransaction.from_dict(s) for s in data.get("top_sellers", [])),
             foreign_buy_value=Decimal(data["foreign_buy_value"]),
             foreign_sell_value=Decimal(data["foreign_sell_value"]),
             foreign_buy_lot=int(data["foreign_buy_lot"]),
@@ -235,7 +229,7 @@ class ForeignFlowPoint:
 
     ticker: str
     date: date
-    net_val: Decimal   # foreign net value (positive = net buy)
+    net_val: Decimal  # foreign net value (positive = net buy)
     net_lot: int
     avg_price: Decimal  # average price for the period; 'idx'=close price approx, 'stockbit'=exact
     source: str = "stockbit"  # e.g. 'idx' | 'stockbit'
@@ -292,11 +286,11 @@ class BrokerDailyFlow:
     buy_value: Decimal
     sell_value: Decimal
     net_value: Decimal
-    avg_buy_price: Decimal   # avg price at which broker bought (buy_summary.avg_price)
+    avg_buy_price: Decimal  # avg price at which broker bought (buy_summary.avg_price)
     avg_sell_price: Decimal  # avg price at which broker sold (sell_summary.avg_price)
-    avg_price: Decimal       # net_summary.avg_price (dominant-side price; kept for compat)
-    buy_pct: float    # broker's buy lot as % of total market buy that day
-    sell_pct: float   # broker's sell lot as % of total market sell that day
+    avg_price: Decimal  # net_summary.avg_price (dominant-side price; kept for compat)
+    buy_pct: float  # broker's buy lot as % of total market buy that day
+    sell_pct: float  # broker's sell lot as % of total market sell that day
     source: str = "stockbit"
 
     @property

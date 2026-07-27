@@ -102,9 +102,7 @@ def parse_csv_date(value: str, transform: Transform | None) -> date:
 
             return datetime.strptime(value, date_format).date()
         except ValueError:
-            raise ValueError(
-                f"Invalid date '{value}' for format '{date_format}'"
-            )
+            raise ValueError(f"Invalid date '{value}' for format '{date_format}'")
 
     # Try common formats
     formats = [
@@ -124,8 +122,7 @@ def parse_csv_date(value: str, transform: Transform | None) -> date:
             continue
 
     raise ValueError(
-        f"Could not parse date '{value}'. "
-        f"Supported formats: YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY"
+        f"Could not parse date '{value}'. Supported formats: YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY"
     )
 
 

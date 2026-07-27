@@ -7,6 +7,7 @@ Locks in behavior that must survive the collaborator extraction
 service, response assembler): warning text, response field wiring, and
 module flags.
 """
+
 from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
@@ -191,7 +192,8 @@ class _RescoreSignalEngine:
         return 0
 
     def evaluate(self, ticker, as_of_date=None, market_context=None):
-        # Exist solely as an explicit regression trap. Standalone evaluate should not run when candidate present.
+        # Exist solely as an explicit regression trap. Standalone evaluate should not run when
+        # candidate present.
         raise AssertionError("standalone evaluate should not run when candidate present")
 
     def evaluate_swing_trade_setup(self, ticker, signal_context, market_context=None, **kwargs):
@@ -276,9 +278,16 @@ def test_evidence_enriched_rescore_failure_returns_exact_warning():
     assert "Evidence-enriched signal re-score unavailable: rescore boom" in response.warnings
     # Under the new availability-aware design, a failed rescore clears the signal assessment
     assert response.signal_assessment is None
-    from src.application.dto.swing_analysis import SignalAssessmentStatus, SignalAssessmentUnavailableReason
+    from src.application.dto.swing_analysis import (
+        SignalAssessmentStatus,
+        SignalAssessmentUnavailableReason,
+    )
+
     assert response.signal_assessment_availability.status == SignalAssessmentStatus.UNAVAILABLE
-    assert response.signal_assessment_availability.unavailable_reason == SignalAssessmentUnavailableReason.ASSESSMENT_FAILED
+    assert (
+        response.signal_assessment_availability.unavailable_reason
+        == SignalAssessmentUnavailableReason.ASSESSMENT_FAILED
+    )
     assert response.verdict.signal_assessment is None
     assert response.trade_setup is None
     assert response.market_context_signal_preview is None
@@ -323,9 +332,7 @@ class _SignalEngineMustNotAssessWithoutEvidence:
 
     def evaluate_swing_trade_setup(self, *args, **kwargs):
         self.evaluate_swing_trade_setup_calls += 1
-        raise AssertionError(
-            "SignalEngine must not assess when no candidate evidence exists"
-        )
+        raise AssertionError("SignalEngine must not assess when no candidate evidence exists")
 
 
 def test_no_candidate_reports_typed_unavailable_without_signal_assessment():
@@ -348,9 +355,7 @@ def test_no_candidate_reports_typed_unavailable_without_signal_assessment():
         SignalAssessmentUnavailableReason,
     )
 
-    assert response.signal_assessment_availability.status is (
-        SignalAssessmentStatus.UNAVAILABLE
-    )
+    assert response.signal_assessment_availability.status is (SignalAssessmentStatus.UNAVAILABLE)
     assert response.signal_assessment_availability.unavailable_reason is (
         SignalAssessmentUnavailableReason.NO_PRODUCTION_SIGNAL_EVIDENCE
     )
@@ -370,8 +375,7 @@ def test_no_candidate_reports_typed_unavailable_without_signal_assessment():
 
     assert verdict_payload["signal_assessment_status"] == "UNAVAILABLE"
     assert (
-        verdict_payload["signal_assessment_unavailable_reason"]
-        == "no_production_signal_evidence"
+        verdict_payload["signal_assessment_unavailable_reason"] == "no_production_signal_evidence"
     )
     assert verdict_payload["signal_assessment"] is None
     assert verdict_payload["trade_setup"] is None

@@ -12,8 +12,8 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
 
-from src.application.services.stats import average, win_rate
 from src.application.dto.accumulation_screen import AccumulationCandidate
+from src.application.services.stats import average, win_rate
 from src.domain.ports.accumulation_journal_store import AccumulationJournalStore
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.value_objects.accumulation_journal_entry import AccumulationJournalEntry
@@ -51,6 +51,7 @@ class DecisionStat:
 @dataclass
 class SignalDelta:
     """Compares avg 10d return for two groups to assess signal quality."""
+
     signal: str
     group_a_label: str
     group_a_n: int
@@ -124,6 +125,7 @@ class AccumulationJournalService:
         Returns:
             1 if written, 0 if duplicate
         """
+
         def _d(f: float | None) -> Decimal | None:
             return Decimal(str(round(f, 4))) if f is not None else None
 
@@ -273,18 +275,18 @@ class AccumulationJournalService:
                 if e.actual_close_5d is not None and e.entry_price != 0
             ]
             returns_10d = [e.return_10d_pct for e in group if e.return_10d_pct is not None]
-            result.append(AccumScoreBucketStat(
-                bucket=label,
-                n=len(group),
-                avg_return_5d=_avg(returns_5d),
-                avg_return_10d=_avg(returns_10d),
-                win_rate_10d=_win_rate(returns_10d),
-            ))
+            result.append(
+                AccumScoreBucketStat(
+                    bucket=label,
+                    n=len(group),
+                    avg_return_5d=_avg(returns_5d),
+                    avg_return_10d=_avg(returns_10d),
+                    win_rate_10d=_win_rate(returns_10d),
+                )
+            )
         return result
 
-    def _decision_stats(
-        self, entries: list[AccumulationJournalEntry]
-    ) -> list[DecisionStat]:
+    def _decision_stats(self, entries: list[AccumulationJournalEntry]) -> list[DecisionStat]:
         decisions: dict[str, list[AccumulationJournalEntry]] = {}
         for e in entries:
             key = e.setup_match or "unknown"
@@ -295,19 +297,19 @@ class AccumulationJournalService:
             returns_10d = [e.return_10d_pct for e in group if e.return_10d_pct is not None]
             upsides = [e.max_upside_pct for e in group if e.max_upside_pct is not None]
             drawdowns = [e.max_drawdown_pct for e in group if e.max_drawdown_pct is not None]
-            result.append(DecisionStat(
-                decision=decision,
-                n=len(group),
-                avg_return_10d=_avg(returns_10d),
-                win_rate_10d=_win_rate(returns_10d),
-                avg_max_upside=_avg(upsides),
-                avg_max_drawdown=_avg(drawdowns),
-            ))
+            result.append(
+                DecisionStat(
+                    decision=decision,
+                    n=len(group),
+                    avg_return_10d=_avg(returns_10d),
+                    win_rate_10d=_win_rate(returns_10d),
+                    avg_max_upside=_avg(upsides),
+                    avg_max_drawdown=_avg(drawdowns),
+                )
+            )
         return result
 
-    def _pattern_stats(
-        self, entries: list[AccumulationJournalEntry]
-    ) -> list[PatternStat]:
+    def _pattern_stats(self, entries: list[AccumulationJournalEntry]) -> list[PatternStat]:
         patterns: dict[str, list[AccumulationJournalEntry]] = {}
         for e in entries:
             key = e.pattern or "unknown"
@@ -318,42 +320,54 @@ class AccumulationJournalService:
             returns_10d = [e.return_10d_pct for e in group if e.return_10d_pct is not None]
             upsides = [e.max_upside_pct for e in group if e.max_upside_pct is not None]
             drawdowns = [e.max_drawdown_pct for e in group if e.max_drawdown_pct is not None]
-            result.append(PatternStat(
-                pattern=pat,
-                n=len(group),
-                avg_return_10d=_avg(returns_10d),
-                win_rate_10d=_win_rate(returns_10d),
-                avg_max_upside=_avg(upsides),
-                avg_max_drawdown=_avg(drawdowns),
-            ))
+            result.append(
+                PatternStat(
+                    pattern=pat,
+                    n=len(group),
+                    avg_return_10d=_avg(returns_10d),
+                    win_rate_10d=_win_rate(returns_10d),
+                    avg_max_upside=_avg(upsides),
+                    avg_max_drawdown=_avg(drawdowns),
+                )
+            )
         return result
 
-    def _signal_deltas(
-        self, entries: list[AccumulationJournalEntry]
-    ) -> list[SignalDelta]:
+    def _signal_deltas(self, entries: list[AccumulationJournalEntry]) -> list[SignalDelta]:
         """Compare avg 10d return for four binary signal splits."""
         comparisons = [
             (
-                "foreign_flow_buy_streak", "≥5d", "foreign_flow_buy_streak >= 5",
-                "<5d", "foreign_flow_buy_streak < 5",
+                "foreign_flow_buy_streak",
+                "≥5d",
+                "foreign_flow_buy_streak >= 5",
+                "<5d",
+                "foreign_flow_buy_streak < 5",
                 lambda e: e.foreign_flow_buy_streak is not None,
                 lambda e: e.foreign_flow_buy_streak is not None and e.foreign_flow_buy_streak >= 5,
             ),
             (
-                "vwap_disc", ">0 (underwater)", "vwap_disc > 0",
-                "≤0 (in profit)", "vwap_disc ≤ 0",
+                "vwap_disc",
+                ">0 (underwater)",
+                "vwap_disc > 0",
+                "≤0 (in profit)",
+                "vwap_disc ≤ 0",
                 lambda e: e.vwap_disc_pct is not None,
                 lambda e: e.vwap_disc_pct is not None and e.vwap_disc_pct > 0,
             ),
             (
-                "bb_pctile", "≤20% (squeeze)", "bb_pctile ≤ 20%",
-                ">40%", "bb_pctile > 40%",
+                "bb_pctile",
+                "≤20% (squeeze)",
+                "bb_pctile ≤ 20%",
+                ">40%",
+                "bb_pctile > 40%",
                 lambda e: e.bb_pctile is not None,
                 lambda e: e.bb_pctile is not None and e.bb_pctile <= Decimal("0.20"),
             ),
             (
-                "flow_pct", "≥15%", "flow ≥ 15%",
-                "<15%", "flow < 15%",
+                "flow_pct",
+                "≥15%",
+                "flow ≥ 15%",
+                "<15%",
+                "flow < 15%",
                 lambda e: e.flow_pct is not None,
                 lambda e: e.flow_pct is not None and e.flow_pct >= Decimal("15"),
             ),
@@ -363,13 +377,15 @@ class AccumulationJournalService:
             eligible = [e for e in entries if has_signal(e)]
             group_a = [e for e in eligible if pred(e)]
             group_b = [e for e in eligible if not pred(e)]
-            result.append(SignalDelta(
-                signal=signal,
-                group_a_label=a_label,
-                group_a_n=len(group_a),
-                group_a_avg_10d=_group_avg_10d(group_a),
-                group_b_label=b_label,
-                group_b_n=len(group_b),
-                group_b_avg_10d=_group_avg_10d(group_b),
-            ))
+            result.append(
+                SignalDelta(
+                    signal=signal,
+                    group_a_label=a_label,
+                    group_a_n=len(group_a),
+                    group_a_avg_10d=_group_avg_10d(group_a),
+                    group_b_label=b_label,
+                    group_b_n=len(group_b),
+                    group_b_avg_10d=_group_avg_10d(group_b),
+                )
+            )
         return result

@@ -25,56 +25,70 @@ def _resolve_risk_gates(cfg: dict) -> tuple[list, list]:
     structural = []
     fund = gates.get("fundamental", {})
     if fund.get("enabled", True):
-        structural.append(FundamentalGate(
-            distress_threshold=fund.get("piotroski_min", 3),
-            policy=FundamentalGatePolicy(
-                missing_data_action=fund.get("missing_data_action", "skip"),
-                missing_data_confidence=fund.get("missing_data_confidence", 0),
-                triggered_confidence=fund.get("triggered_confidence", 100),
-                pass_confidence=fund.get("pass_confidence", 100),
-            ),
-        ))
+        structural.append(
+            FundamentalGate(
+                distress_threshold=fund.get("piotroski_min", 3),
+                policy=FundamentalGatePolicy(
+                    missing_data_action=fund.get("missing_data_action", "skip"),
+                    missing_data_confidence=fund.get("missing_data_confidence", 0),
+                    triggered_confidence=fund.get("triggered_confidence", 100),
+                    pass_confidence=fund.get("pass_confidence", 100),
+                ),
+            )
+        )
 
     liq = gates.get("liquidity", {})
     if liq.get("enabled", True):
-        structural.append(LiquidityGate(
-            third_liner_cap_idr=liq.get("market_cap_floor_idr", 1_000_000_000_000),
-            liquidity_floor_idr=liq.get("median_tx_floor_idr", 5_000_000_000),
-            lookback_days=liq.get("lookback_days", 20),
-            policy=LiquidityGatePolicy(
-                missing_data_action=liq.get("missing_data_action", "skip"),
-                missing_data_confidence=liq.get("missing_data_confidence", 0),
-                triggered_confidence=liq.get("triggered_confidence", 100),
-                pass_confidence=liq.get("pass_confidence", 100),
-            ),
-        ))
+        structural.append(
+            LiquidityGate(
+                third_liner_cap_idr=liq.get("market_cap_floor_idr", 1_000_000_000_000),
+                liquidity_floor_idr=liq.get("median_tx_floor_idr", 5_000_000_000),
+                lookback_days=liq.get("lookback_days", 20),
+                policy=LiquidityGatePolicy(
+                    missing_data_action=liq.get("missing_data_action", "skip"),
+                    missing_data_confidence=liq.get("missing_data_confidence", 0),
+                    triggered_confidence=liq.get("triggered_confidence", 100),
+                    pass_confidence=liq.get("pass_confidence", 100),
+                ),
+            )
+        )
 
     ff = gates.get("free_float", {})
     if ff.get("enabled", True):
-        structural.append(FreeFloatGate(
-            min_free_float_pct=ff.get("min_free_float_pct", 15.0),
-            policy=FreeFloatGatePolicy(
-                missing_data_action=ff.get("missing_data_action", "skip"),
-                missing_data_confidence=ff.get("missing_data_confidence", 0),
-                triggered_confidence=ff.get("triggered_confidence", 100),
-                pass_confidence=ff.get("pass_confidence", 100),
-            ),
-        ))
+        structural.append(
+            FreeFloatGate(
+                min_free_float_pct=ff.get("min_free_float_pct", 15.0),
+                policy=FreeFloatGatePolicy(
+                    missing_data_action=ff.get("missing_data_action", "skip"),
+                    missing_data_confidence=ff.get("missing_data_confidence", 0),
+                    triggered_confidence=ff.get("triggered_confidence", 100),
+                    pass_confidence=ff.get("pass_confidence", 100),
+                ),
+            )
+        )
 
     execution = []
     bandar = gates.get("bandar", {})
     if bandar.get("enabled", True):
-        execution.append(BandarGate(
-            BandarGateConfig(
-                distribution_labels=frozenset(bandar.get("distribution_labels", [
-                    "Small Dist", "Big Dist",
-                ])),
-                missing_data_action=bandar.get("missing_data_action", "skip"),
-                missing_data_confidence=bandar.get("missing_data_confidence", 0),
-                triggered_confidence=bandar.get("triggered_confidence", 80),
-                pass_confidence=bandar.get("pass_confidence", 100),
+        execution.append(
+            BandarGate(
+                BandarGateConfig(
+                    distribution_labels=frozenset(
+                        bandar.get(
+                            "distribution_labels",
+                            [
+                                "Small Dist",
+                                "Big Dist",
+                            ],
+                        )
+                    ),
+                    missing_data_action=bandar.get("missing_data_action", "skip"),
+                    missing_data_confidence=bandar.get("missing_data_confidence", 0),
+                    triggered_confidence=bandar.get("triggered_confidence", 80),
+                    pass_confidence=bandar.get("pass_confidence", 100),
+                )
             )
-        ))
+        )
 
     return structural, execution
 

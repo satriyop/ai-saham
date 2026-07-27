@@ -26,7 +26,9 @@ from src.domain.value_objects.insider_transaction import InsiderTransaction
 class FakeTickerDashboardSource(TickerDashboardSource):
     def __init__(self) -> None:
         self.notation = object()
-        self.fundamentals = type("F", (), {"week52_high": 1500, "week52_low": 1000, "fetched_at": datetime(2026, 7, 20)})()
+        self.fundamentals = type(
+            "F", (), {"week52_high": 1500, "week52_low": 1000, "fetched_at": datetime(2026, 7, 20)}
+        )()
         self.analyst = type("A", (), {"fetched_at": datetime(2026, 7, 22)})()
         self.ownership = type("O", (), {"fetched_at": datetime(2026, 7, 21)})()
         self.bandar = type("B", (), {"session_date": date(2026, 7, 23)})()
@@ -54,7 +56,9 @@ class FakeTickerDashboardSource(TickerDashboardSource):
                 ticker="BBCA",
                 dates=(
                     CorporateActionCalendarDate(CorporateActionDateRole.EX_DATE, date(2026, 6, 17)),
-                    CorporateActionCalendarDate(CorporateActionDateRole.CUM_DATE, date(2026, 6, 15)),
+                    CorporateActionCalendarDate(
+                        CorporateActionDateRole.CUM_DATE, date(2026, 6, 15)
+                    ),
                 ),
                 amount_value="20",
                 amount_currency="CURRENCY_IDR",
@@ -198,9 +202,7 @@ def test_use_case_assembles_full_dashboard_with_policy():
 def test_use_case_brief_mode_filters_panel_keys():
     source = FakeTickerDashboardSource()
     uc = GetTickerDashboardUseCase(source)
-    dash = uc.execute(
-        GetTickerDashboardRequest(ticker="BBCA", brief=True, today=date(2026, 7, 24))
-    )
+    dash = uc.execute(GetTickerDashboardRequest(ticker="BBCA", brief=True, today=date(2026, 7, 24)))
     assert dash.mode == "brief"
     assert "price_structure" in dash.panel_keys
     assert "foreign_flow" in dash.panel_keys

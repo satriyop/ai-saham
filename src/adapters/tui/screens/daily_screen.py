@@ -62,17 +62,13 @@ class DailyScreen(Screen[None]):
         with Vertical(id="daily-shell"):
             yield Static("Daily", id="daily-title")
             with Horizontal(id="daily-action-bar"):
-                yield Static(
-                    "IDLE — OFFLINE", id="daily-status", classes="semantic-info"
-                )
+                yield Static("IDLE — OFFLINE", id="daily-status", classes="semantic-info")
                 yield Button("Update Data", id="update-btn", variant="primary")
                 yield Button("Refresh", id="reload-btn", variant="default")
             yield ProgressBar(id="daily-progress", show_percentage=True, show_eta=True)
             with VerticalScroll(id="daily-content"):
                 yield Static("", id="daily-warnings", classes="daily-section")
-                yield Static(
-                    "", id="daily-accumulation", classes="daily-section"
-                )
+                yield Static("", id="daily-accumulation", classes="daily-section")
                 yield Static("", id="daily-regime", classes="daily-section")
                 yield Static("", id="daily-readiness", classes="daily-section")
                 yield Static("", id="daily-clocks", classes="daily-section")
@@ -116,22 +112,16 @@ class DailyScreen(Screen[None]):
     def _execute_reload(self, generation: int) -> None:
         self._controller.execute_reload_generation(
             generation,
-            dispatch=lambda callback, *args: dispatch_if_active(
-                self.app, callback, *args
-            ),
+            dispatch=lambda callback, *args: dispatch_if_active(self.app, callback, *args),
             listener=self._render_state,
         )
 
     @work(thread=True, exclusive=True)
-    def _execute_refresh(
-        self, generation: int, request: RefreshDailyWorkspaceRequest
-    ) -> None:
+    def _execute_refresh(self, generation: int, request: RefreshDailyWorkspaceRequest) -> None:
         self._controller.execute_refresh_generation(
             generation,
             request,
-            dispatch=lambda callback, *args: dispatch_if_active(
-                self.app, callback, *args
-            ),
+            dispatch=lambda callback, *args: dispatch_if_active(self.app, callback, *args),
             listener=self._render_state,
             progress_callback=self._handle_progress_event,
         )

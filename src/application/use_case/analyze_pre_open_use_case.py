@@ -41,16 +41,16 @@ from src.domain.ports.learning_artifact_repositories import (
     LearningTrackSnapshotRepository,
 )
 from src.domain.value_objects.idx_market import IDX_TIMEZONE, REGULAR_OPEN
-from src.domain.value_objects.pre_open_post_open_assessment import (
-    PreOpenPostOpenAssessment,
-    PreOpenPostOpenCandidate,
-    PreOpenPostOpenDecision,
-)
 from src.domain.value_objects.learning_artifacts import (
     AssessmentPurpose,
     LearningContractId,
     LearningObservation,
     LearningTrackSnapshot,
+)
+from src.domain.value_objects.pre_open_post_open_assessment import (
+    PreOpenPostOpenAssessment,
+    PreOpenPostOpenCandidate,
+    PreOpenPostOpenDecision,
 )
 
 _PRE_OPEN_PURPOSE = AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION
@@ -83,9 +83,7 @@ class AnalyzePreOpenUseCase:
                 f"No pre-open observations for session {session.isoformat()}"
             )
 
-        regime_label, regime_warning = extract_market_regime_label(
-            selected[0].decision_payload
-        )
+        regime_label, regime_warning = extract_market_regime_label(selected[0].decision_payload)
         warnings: list[str] = []
         if regime_warning:
             warnings.append(regime_warning)
@@ -94,8 +92,7 @@ class AnalyzePreOpenUseCase:
         # Explicit snapshot only valid for a single observation target
         if request.opening_snapshot_id and len(selected) != 1:
             raise AnalyzePreOpenSnapshotError(
-                "--opening-snapshot-id requires exactly one observation "
-                "(pass --observation-id)"
+                "--opening-snapshot-id requires exactly one observation (pass --observation-id)"
             )
 
         lines: list[AnalyzePreOpenLine] = []
@@ -120,9 +117,7 @@ class AnalyzePreOpenUseCase:
                 regime=regime_label,
                 regime_gate_enabled=self._config.regime_gate_enabled,
                 tighten_in_regimes=tuple(self._config.tighten_in_regimes),
-                gap_pct_tightening_factor=Decimal(
-                    str(self._config.gap_pct_tightening_factor)
-                ),
+                gap_pct_tightening_factor=Decimal(str(self._config.gap_pct_tightening_factor)),
                 require_backed_in_weak=self._config.require_backed_in_weak,
             )
         )
@@ -186,14 +181,8 @@ class AnalyzePreOpenUseCase:
                 )
             return [obs]
 
-        rows = list(
-            self._observations.list_observations(_PRE_OPEN_PURPOSE)
-        )
-        session_rows = [
-            o
-            for o in rows
-            if o.cutoff_at.astimezone(IDX_TIMEZONE).date() == session
-        ]
+        rows = list(self._observations.list_observations(_PRE_OPEN_PURPOSE))
+        session_rows = [o for o in rows if o.cutoff_at.astimezone(IDX_TIMEZONE).date() == session]
         for o in session_rows:
             self._assert_pre_open_contract(o)
 
@@ -300,11 +289,7 @@ class AnalyzePreOpenUseCase:
                 )
             return matches[0]
 
-        open_window = [
-            s
-            for s in snaps
-            if self._is_open_window_sample(s.sampled_at, session)
-        ]
+        open_window = [s for s in snaps if self._is_open_window_sample(s.sampled_at, session)]
         if not open_window:
             return None
 
@@ -330,9 +315,7 @@ class AnalyzePreOpenUseCase:
     def _status(lines: Sequence[AnalyzePreOpenLine]) -> AnalyzePreOpenStatus:
         if not lines:
             return AnalyzePreOpenStatus.UNAVAILABLE_OPENING
-        has_price = [
-            line.price_provenance.get("opening_price") is not None for line in lines
-        ]
+        has_price = [line.price_provenance.get("opening_price") is not None for line in lines]
         if all(has_price):
             return AnalyzePreOpenStatus.OK
         if any(has_price):

@@ -36,19 +36,40 @@ class TestPositiveClassification:
         classifier = KeywordClassifier()
 
         # Test various Indonesian positive keywords
-        assert classifier.classify("", "BBCA catat laba bersih naik 20%").sentiment == Sentiment.POSITIVE
-        assert classifier.classify("", "Saham BBRI melonjak ke rekor tertinggi").sentiment == Sentiment.POSITIVE
-        assert classifier.classify("", "Investor optimis sektor perbankan tumbuh").sentiment == Sentiment.POSITIVE
-        assert classifier.classify("", "TLKM untung besar surplus kuartal ini").sentiment == Sentiment.POSITIVE
+        assert (
+            classifier.classify("", "BBCA catat laba bersih naik 20%").sentiment
+            == Sentiment.POSITIVE
+        )
+        assert (
+            classifier.classify("", "Saham BBRI melonjak ke rekor tertinggi").sentiment
+            == Sentiment.POSITIVE
+        )
+        assert (
+            classifier.classify("", "Investor optimis sektor perbankan tumbuh").sentiment
+            == Sentiment.POSITIVE
+        )
+        assert (
+            classifier.classify("", "TLKM untung besar surplus kuartal ini").sentiment
+            == Sentiment.POSITIVE
+        )
 
     def test_english_positive_keywords(self):
         """English positive keywords should classify as POSITIVE."""
         classifier = KeywordClassifier()
 
-        assert classifier.classify("", "BBCA reports strong profit growth").sentiment == Sentiment.POSITIVE
+        assert (
+            classifier.classify("", "BBCA reports strong profit growth").sentiment
+            == Sentiment.POSITIVE
+        )
         assert classifier.classify("", "Stock surge to record high").sentiment == Sentiment.POSITIVE
-        assert classifier.classify("", "Bullish market rally continues").sentiment == Sentiment.POSITIVE
-        assert classifier.classify("", "Company beat earnings expectations").sentiment == Sentiment.POSITIVE
+        assert (
+            classifier.classify("", "Bullish market rally continues").sentiment
+            == Sentiment.POSITIVE
+        )
+        assert (
+            classifier.classify("", "Company beat earnings expectations").sentiment
+            == Sentiment.POSITIVE
+        )
 
 
 class TestNegativeClassification:
@@ -58,19 +79,42 @@ class TestNegativeClassification:
         """Indonesian negative keywords should classify as NEGATIVE."""
         classifier = KeywordClassifier()
 
-        assert classifier.classify("", "Saham BBCA anjlok 5% hari ini").sentiment == Sentiment.NEGATIVE
-        assert classifier.classify("", "BBRI catat rugi besar kuartal III").sentiment == Sentiment.NEGATIVE
-        assert classifier.classify("", "Sektor perbankan tertekan melemah").sentiment == Sentiment.NEGATIVE
-        assert classifier.classify("", "Investor pesimis bearish saham turun").sentiment == Sentiment.NEGATIVE
+        assert (
+            classifier.classify("", "Saham BBCA anjlok 5% hari ini").sentiment == Sentiment.NEGATIVE
+        )
+        assert (
+            classifier.classify("", "BBRI catat rugi besar kuartal III").sentiment
+            == Sentiment.NEGATIVE
+        )
+        assert (
+            classifier.classify("", "Sektor perbankan tertekan melemah").sentiment
+            == Sentiment.NEGATIVE
+        )
+        assert (
+            classifier.classify("", "Investor pesimis bearish saham turun").sentiment
+            == Sentiment.NEGATIVE
+        )
 
     def test_english_negative_keywords(self):
         """English negative keywords should classify as NEGATIVE."""
         classifier = KeywordClassifier()
 
-        assert classifier.classify("", "Stock crash amid market selloff").sentiment == Sentiment.NEGATIVE
-        assert classifier.classify("", "Company reports significant loss").sentiment == Sentiment.NEGATIVE
-        assert classifier.classify("", "Bearish pressure continues to plunge").sentiment == Sentiment.NEGATIVE
-        assert classifier.classify("", "Shares decline on weak guidance").sentiment == Sentiment.NEGATIVE
+        assert (
+            classifier.classify("", "Stock crash amid market selloff").sentiment
+            == Sentiment.NEGATIVE
+        )
+        assert (
+            classifier.classify("", "Company reports significant loss").sentiment
+            == Sentiment.NEGATIVE
+        )
+        assert (
+            classifier.classify("", "Bearish pressure continues to plunge").sentiment
+            == Sentiment.NEGATIVE
+        )
+        assert (
+            classifier.classify("", "Shares decline on weak guidance").sentiment
+            == Sentiment.NEGATIVE
+        )
 
 
 class TestNeutralClassification:
@@ -80,9 +124,16 @@ class TestNeutralClassification:
         """Headlines with no sentiment keywords should be NEUTRAL."""
         classifier = KeywordClassifier()
 
-        assert classifier.classify("", "BBCA akan rapat pemegang saham").sentiment == Sentiment.NEUTRAL
-        assert classifier.classify("", "Company announces new CEO appointment").sentiment == Sentiment.NEUTRAL
-        assert classifier.classify("", "Market opens for trading today").sentiment == Sentiment.NEUTRAL
+        assert (
+            classifier.classify("", "BBCA akan rapat pemegang saham").sentiment == Sentiment.NEUTRAL
+        )
+        assert (
+            classifier.classify("", "Company announces new CEO appointment").sentiment
+            == Sentiment.NEUTRAL
+        )
+        assert (
+            classifier.classify("", "Market opens for trading today").sentiment == Sentiment.NEUTRAL
+        )
 
     def test_balanced_keywords_is_neutral(self):
         """Headlines with equal positive/negative keywords should be NEUTRAL."""
@@ -222,7 +273,9 @@ class TestEdgeCases:
         classifier = KeywordClassifier()
 
         assert classifier.classify("", "BBCA +2% naik!!!").sentiment == Sentiment.POSITIVE
-        assert classifier.classify("", "[BREAKING] Saham anjlok -5%").sentiment == Sentiment.NEGATIVE
+        assert (
+            classifier.classify("", "[BREAKING] Saham anjlok -5%").sentiment == Sentiment.NEGATIVE
+        )
 
     def test_numbers_in_headline(self):
         """Headlines with numbers should work."""

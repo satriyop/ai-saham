@@ -121,9 +121,7 @@ class FlowProvenance:
                     f"provenance ticker={self.ticker!r}, row ticker={row.ticker!r}"
                 )
         if _duplicate_identities(self.broker_summary_rows):
-            raise ValueError(
-                "FlowProvenance broker_summary_rows contains duplicate row identities"
-            )
+            raise ValueError("FlowProvenance broker_summary_rows contains duplicate row identities")
         if _duplicate_identities(self.broker_daily_flow_rows):
             raise ValueError(
                 "FlowProvenance broker_daily_flow_rows contains duplicate row identities"
@@ -135,9 +133,7 @@ def _max_date(rows: tuple, key) -> date | None:
     return max(dates) if dates else None
 
 
-def _require_assessment(
-    availability: EvidenceSourceAvailability, source_family: str
-) -> "object":
+def _require_assessment(availability: EvidenceSourceAvailability, source_family: str) -> "object":
     for assessment in availability.assessments:
         if assessment.source_family == source_family:
             return assessment
@@ -149,8 +145,7 @@ def _require_assessment(
 
 def _benchmark_excess_return_available(excess_return) -> bool:
     return (
-        excess_return is not None
-        and excess_return.status == BenchmarkExcessReturnStatus.AVAILABLE
+        excess_return is not None and excess_return.status == BenchmarkExcessReturnStatus.AVAILABLE
     )
 
 

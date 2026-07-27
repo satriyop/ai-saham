@@ -66,6 +66,7 @@ def test_fetch_candles_backfills_older_gap(monkeypatch, tmp_path: Path):
     cached_start = date.fromordinal(today.toordinal() - 90)
     requested_start = date.fromordinal(today.toordinal() - 365)
     repo.save_candles(_generate_candles("BBCA", cached_start, today))
+
     class _FakeBroker:
         api_client = object()
 
@@ -91,8 +92,7 @@ def test_fetch_candles_backfills_older_gap(monkeypatch, tmp_path: Path):
         (requested_start, date.fromordinal(cached_start.toordinal() - 1))
     ]
     assert notes == [
-        f"  candles BBCA: 90d cached (from {cached_start}), "
-        "requested 365d - backfilling older gap"
+        f"  candles BBCA: 90d cached (from {cached_start}), requested 365d - backfilling older gap"
     ]
 
 
@@ -106,6 +106,7 @@ def test_fetch_candles_treats_small_leading_non_trading_gap_as_current(
     requested_start = date.fromordinal(today.toordinal() - 365)
     cached_start = date.fromordinal(requested_start.toordinal() + 2)
     repo.save_candles(_generate_candles("BBCA", cached_start, today))
+
     class _FakeBroker:
         api_client = object()
 
@@ -137,9 +138,13 @@ def test_fetch_candles_treats_recent_trading_day_as_current(monkeypatch, tmp_pat
     today = date.today()
     latest = date.fromordinal(today.toordinal() - 2)
     requested_start = date.fromordinal(today.toordinal() - 365)
-    repo.save_candles(_generate_candles("BBCA", requested_start, latest) + [
-        _candle("IHSG", latest),
-    ])
+    repo.save_candles(
+        _generate_candles("BBCA", requested_start, latest)
+        + [
+            _candle("IHSG", latest),
+        ]
+    )
+
     class _FakeBroker:
         api_client = object()
 
@@ -204,10 +209,12 @@ def test_fetch_market_command_fails_fast_when_stockbit_session_missing(monkeypat
         app,
         [
             "BBCA",
-            "--provider", "yahoo",
+            "--provider",
+            "yahoo",
             "--no-meta",
             "--no-enrichment",
-            "--db", str(tmp_path / "data.db"),
+            "--db",
+            str(tmp_path / "data.db"),
         ],
     )
 

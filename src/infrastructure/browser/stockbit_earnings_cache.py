@@ -56,16 +56,14 @@ def _rebuild_earnings_cache_if_needed(conn: sqlite3.Connection) -> None:
         return
     conn.execute("ALTER TABLE earnings_cache RENAME TO earnings_cache_old")
     conn.execute(_CREATE_TABLE)
-    conn.execute(
-        """
+    conn.execute("""
         INSERT OR IGNORE INTO earnings_cache
             (ticker, year, quarter, eps_actual, eps_estimate, eps_surprise_pct,
              eps_yoy_change, eps_prev_year, fetched_date)
         SELECT ticker, year, quarter, eps_actual, eps_estimate, eps_surprise_pct,
                eps_yoy_change, eps_prev_year, fetched_date
         FROM earnings_cache_old
-        """
-    )
+        """)
     conn.execute("DROP TABLE earnings_cache_old")
 
 
@@ -176,17 +174,19 @@ class StockbitEarningsCache:
                 fetched_at = datetime.fromisoformat(raw_fa) if raw_fa else None
             except ValueError:
                 fetched_at = None
-            records.append(EarningsRecord(
-                ticker=ticker.upper(),
-                year=row["year"],
-                quarter=row["quarter"],
-                eps_actual=row["eps_actual"],
-                eps_estimate=row["eps_estimate"],
-                eps_surprise_pct=row["eps_surprise_pct"],
-                eps_yoy_change=row["eps_yoy_change"],
-                eps_prev_year=row["eps_prev_year"],
-                fetched_at=fetched_at,
-            ))
+            records.append(
+                EarningsRecord(
+                    ticker=ticker.upper(),
+                    year=row["year"],
+                    quarter=row["quarter"],
+                    eps_actual=row["eps_actual"],
+                    eps_estimate=row["eps_estimate"],
+                    eps_surprise_pct=row["eps_surprise_pct"],
+                    eps_yoy_change=row["eps_yoy_change"],
+                    eps_prev_year=row["eps_prev_year"],
+                    fetched_at=fetched_at,
+                )
+            )
         return records
 
     def read_single(self, ticker: str, year: int, quarter: int) -> EarningsRecord | None:

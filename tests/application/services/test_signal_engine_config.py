@@ -146,10 +146,7 @@ def test_resolve_signal_config_reads_policy_blocks():
     assert resolved.decision_policy.regime_policy["RISK_OFF"].enter_allowed is False
     assert resolved.decision_policy.regime_policy["RISK_OFF"].max_decision == "WATCH"
     assert resolved.decision_policy.regime_policy["NEUTRAL"].regime_size_multiplier == 0.5
-    assert (
-        resolved.decision_policy.regime_policy["RISK_ON"].min_signal_authority_coverage
-        == 0.61
-    )
+    assert resolved.decision_policy.regime_policy["RISK_ON"].min_signal_authority_coverage == 0.61
     assert (
         resolved.decision_policy.setup_regime_policy["foreign_bounce"]["RISK_OFF"]
         == "allowed_if_flow_confirmation_strong"
@@ -161,13 +158,9 @@ def test_resolve_signal_config_reads_policy_blocks():
     assert resolved.alpha_trigger.group_weights["sector_context"] == 0.25
     assert resolved.alpha_trigger.group_weights["company_quality_context"] == 0.10
     assert resolved.alpha_trigger.horizon_alpha_weights["TACTICAL_3D"] == 0.25
+    assert resolved.alpha_trigger.route_fractions["TACTICAL_3D"]["institutional_flow"] == 0.65
     assert (
-        resolved.alpha_trigger.route_fractions["TACTICAL_3D"]["institutional_flow"]
-        == 0.65
-    )
-    assert (
-        resolved.alpha_trigger.evidence_registrations["sector_context"].status.value
-        == "LOW_WEIGHT"
+        resolved.alpha_trigger.evidence_registrations["sector_context"].status.value == "LOW_WEIGHT"
     )
 
 
@@ -177,21 +170,17 @@ def test_resolve_signal_config_current_file_passes():
     resolved = _resolve_signal_config(cfg)
 
     assert (
-        resolved.alpha_trigger.evidence_registrations["setup_quality"].status.value
-        == "PRODUCTION"
+        resolved.alpha_trigger.evidence_registrations["setup_quality"].status.value == "PRODUCTION"
     )
     assert (
         resolved.alpha_trigger.evidence_registrations["institutional_flow"].status.value
         == "PRODUCTION"
     )
     assert (
-        resolved.alpha_trigger.evidence_registrations["sector_context"].status.value
-        == "DIAGNOSTIC"
+        resolved.alpha_trigger.evidence_registrations["sector_context"].status.value == "DIAGNOSTIC"
     )
     assert (
-        resolved.alpha_trigger.evidence_registrations[
-            "company_quality_context"
-        ].status.value
+        resolved.alpha_trigger.evidence_registrations["company_quality_context"].status.value
         == "DIAGNOSTIC"
     )
     # HIGH-2 Finding 1: production RISK_ON/NEUTRAL enforce a 0.70
@@ -199,14 +188,8 @@ def test_resolve_signal_config_current_file_passes():
     # code-level DecisionPolicyConfig() default must match exactly so a
     # caller that constructs SignalEngine() without an explicit config
     # cannot silently fall back to an unenforced (0.0) floor.
-    assert (
-        resolved.decision_policy.regime_policy["RISK_ON"].min_signal_authority_coverage
-        == 0.70
-    )
-    assert (
-        resolved.decision_policy.regime_policy["NEUTRAL"].min_signal_authority_coverage
-        == 0.70
-    )
+    assert resolved.decision_policy.regime_policy["RISK_ON"].min_signal_authority_coverage == 0.70
+    assert resolved.decision_policy.regime_policy["NEUTRAL"].min_signal_authority_coverage == 0.70
 
 
 def test_decision_policy_config_defaults_match_canonical_yaml_floor():
@@ -263,9 +246,7 @@ def test_resolve_signal_config_rejects_removed_scoring_key(removed_scoring_key):
         },
     }
 
-    with pytest.raises(
-        ValueError, match=f"signal_engine.scoring.{removed_scoring_key}"
-    ):
+    with pytest.raises(ValueError, match=f"signal_engine.scoring.{removed_scoring_key}"):
         _resolve_signal_config(cfg)
 
 
@@ -531,9 +512,7 @@ def test_resolve_signal_config_rejects_promotion_evidence_name_mismatch():
                 "evidence_registrations": {
                     "sector_context": {
                         "status": "LOW_WEIGHT",
-                        "promotion": _valid_promotion(
-                            evidence_name="company_quality_context"
-                        ),
+                        "promotion": _valid_promotion(evidence_name="company_quality_context"),
                     },
                 },
             },
@@ -640,9 +619,7 @@ def test_resolve_signal_config_complete_valid_promotion_record_passes():
 
     resolved = _resolve_signal_config(cfg)
 
-    promotion = resolved.alpha_trigger.evidence_registrations[
-        "sector_context"
-    ].promotion
+    promotion = resolved.alpha_trigger.evidence_registrations["sector_context"].promotion
     assert promotion is not None
     assert promotion.evidence_name == "sector_context"
     assert promotion.promoted_to.value == "LOW_WEIGHT"

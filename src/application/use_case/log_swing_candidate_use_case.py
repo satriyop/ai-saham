@@ -19,20 +19,20 @@ from src.application.dto.accumulation_screen import AccumulationScreenRequest
 from src.application.dto.signal_evidence_execution_context import (
     SignalEvidenceExecutionContext,
 )
-from src.application.services.effective_market_session_resolver import (
-    EffectiveMarketSessionResolver,
-)
-from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
 from src.application.services.accumulation_multi_window_pattern import (
     classify_multi_window_pattern,
 )
 from src.application.services.accumulation_trade_plan import compute_percent_plan
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSessionResolver,
+)
 from src.application.use_case.evaluate_swing_setup_use_case import (
     FOREIGN_BOUNCE_SETUP,
     EvaluateSwingSetupRequest,
     EvaluateSwingSetupUseCase,
     SwingSetupCatalogConfig,
 )
+from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
 
 if TYPE_CHECKING:
     from src.application.dto.accumulation_screen import AccumulationCandidate
@@ -316,15 +316,21 @@ class LogSwingCandidateUseCase:
             "window_days": window_days,
             "accum_score": candidate.accum_score if candidate else None,
             "foreign_flow_buy_streak": candidate.consecutive_streak if candidate else None,
-            "flow_pct": float(candidate.avg_flow_ratio)
-            if candidate and candidate.avg_flow_ratio is not None
-            else None,
-            "vwap_disc_pct": float(candidate.vwap_discount_pct)
-            if candidate and candidate.vwap_discount_pct is not None
-            else None,
-            "bb_pctile": float(candidate.bb_width_pctile)
-            if candidate and candidate.bb_width_pctile is not None
-            else None,
+            "flow_pct": (
+                float(candidate.avg_flow_ratio)
+                if candidate and candidate.avg_flow_ratio is not None
+                else None
+            ),
+            "vwap_disc_pct": (
+                float(candidate.vwap_discount_pct)
+                if candidate and candidate.vwap_discount_pct is not None
+                else None
+            ),
+            "bb_pctile": (
+                float(candidate.bb_width_pctile)
+                if candidate and candidate.bb_width_pctile is not None
+                else None
+            ),
             "pattern": pattern,
             "setup": setup,
             "failed_gates": list(failed_gates),

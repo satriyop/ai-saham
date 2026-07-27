@@ -20,9 +20,7 @@ from src.application.use_case.swing_analysis_workflow_use_case import (
 # must be (refresh mode), and which named setup to fit (or None). The controller
 # never builds provider flags itself — that mapping lives in TickerRefreshMode and
 # the composition-owned loader.
-TickerLoader = Callable[
-    [str, TickerRefreshMode, "str | None"], SwingAnalysisWorkflowResponse
-]
+TickerLoader = Callable[[str, TickerRefreshMode, "str | None"], SwingAnalysisWorkflowResponse]
 
 
 @dataclass(frozen=True)

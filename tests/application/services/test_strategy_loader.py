@@ -54,7 +54,7 @@ def create_strategy_package(
     strategy_dir.mkdir(parents=True, exist_ok=True)
 
     if content is None:
-        content = f'''version: 1
+        content = f"""version: 1
 name: "{name}"
 description: "Test strategy"
 default_outcome: MODERATE
@@ -66,7 +66,7 @@ rules:
       operator: "<"
       value: 30
     outcome: LOW_RISK
-'''
+"""
 
     (strategy_dir / "strategy.yaml").write_text(content, encoding="utf-8")
 

@@ -5,9 +5,9 @@ import asyncio
 from textual.widgets import Static
 
 from src.adapters.tui.composition import create_tui_app
-from src.adapters.tui.screens.screen_workspace_screen import ScreenWorkspaceScreen
 from src.adapters.tui.screens.daily_screen import DailyScreen
 from src.adapters.tui.screens.help import HelpScreen
+from src.adapters.tui.screens.screen_workspace_screen import ScreenWorkspaceScreen
 from src.adapters.tui.screens.ticker_workbench_screen import TickerWorkbenchScreen
 
 from .daily_fixtures import not_ready_response, ready_response
@@ -67,6 +67,7 @@ def test_launch_calls_daily_once_reload_once_and_navigation_does_not_call():
             assert capability.calls == 2
 
     asyncio.run(scenario())
+
 
 def test_shell_hierarchy_and_text_semantics_at_supported_sizes():
     async def scenario(size) -> None:

@@ -12,10 +12,9 @@ These tests verify:
 All tests run offline with mocked HTTP responses.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from unittest.mock import patch
 
-from src.domain.ports.news_provider import RawHeadline
 from src.infrastructure.sentiment.katadata_provider import KatadataNewsProvider
 
 SAMPLE_RSS = """<?xml version="1.0" encoding="UTF-8"?>

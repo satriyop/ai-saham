@@ -120,6 +120,7 @@ class BrokerDataProvider(ABC):
         """
         return []
 
+
 class BrokerDataProviderError(Exception):
     """Raised when broker data provider encounters an error."""
 

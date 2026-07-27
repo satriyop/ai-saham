@@ -17,8 +17,7 @@ class YamlUniverseConfigLoader(UniverseConfigLoader):
     def load_config(self, path: Path) -> dict:
         if not path.exists():
             raise FileNotFoundError(
-                f"Universe config not found at '{path}'. "
-                "Run: saham fetch universe update"
+                f"Universe config not found at '{path}'. Run: saham fetch universe update"
             )
         with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f)

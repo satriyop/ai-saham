@@ -127,9 +127,7 @@ class StrategyEvidence:
             conviction_score=_optional_float(data.get("conviction_score")),
             freshness_score=_optional_float(data.get("freshness_score")),
             rationale=tuple(str(v) for v in data.get("rationale") or ()),
-            unavailable_reasons=tuple(
-                str(v) for v in data.get("unavailable_reasons") or ()
-            ),
+            unavailable_reasons=tuple(str(v) for v in data.get("unavailable_reasons") or ()),
             metadata=dict(data.get("metadata") or {}),
         )
 

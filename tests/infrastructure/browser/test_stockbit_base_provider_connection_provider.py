@@ -13,9 +13,7 @@ class _TestProvider(StockbitCachingProvider):
 
     def _ensure_schema(self) -> None:
         conn = self._get_conn()
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS test_data (k TEXT PRIMARY KEY, v TEXT)"
-        )
+        conn.execute("CREATE TABLE IF NOT EXISTS test_data (k TEXT PRIMARY KEY, v TEXT)")
 
 
 def test_ensure_schema_runs_during_construction(tmp_path):

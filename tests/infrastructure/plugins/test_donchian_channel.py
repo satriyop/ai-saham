@@ -45,12 +45,12 @@ class TestDonchianChannelIndicators:
         # Create candles with a specific high and low pattern
         # Lookback window for candle 5 (period=5) will look at candles 0 to 4.
         candles = [
-            make_candle(0, 100, 105, 95), # high=105, low=95
-            make_candle(1, 101, 110, 96), # high=110, low=96
-            make_candle(2, 102, 108, 92), # high=108, low=92 (min low)
-            make_candle(3, 103, 115, 98), # high=115, low=98 (max high)
-            make_candle(4, 104, 107, 97), # high=107, low=97
-            make_candle(5, 105, 120, 85), # high=120, low=85 (ignored for index 5 calculation)
+            make_candle(0, 100, 105, 95),  # high=105, low=95
+            make_candle(1, 101, 110, 96),  # high=110, low=96
+            make_candle(2, 102, 108, 92),  # high=108, low=92 (min low)
+            make_candle(3, 103, 115, 98),  # high=115, low=98 (max high)
+            make_candle(4, 104, 107, 97),  # high=107, low=97
+            make_candle(5, 105, 120, 85),  # high=120, low=85 (ignored for index 5 calculation)
         ]
 
         upper = DonchianUpperIndicator().compute(candles, 5)
@@ -62,9 +62,9 @@ class TestDonchianChannelIndicators:
         assert len(lower) == 1
         assert len(mid) == 1
 
-        assert upper[0] == Decimal("115") # max(105, 110, 108, 115, 107)
+        assert upper[0] == Decimal("115")  # max(105, 110, 108, 115, 107)
         assert lower[0] == Decimal("92")  # min(95, 96, 92, 98, 97)
-        assert mid[0] == Decimal("103.5") # (115 + 92) / 2
+        assert mid[0] == Decimal("103.5")  # (115 + 92) / 2
 
     def test_too_few_candles_returns_empty(self):
         # For period 20, 20 candles returns empty list (we need at least 21 to have 1 lookup date)

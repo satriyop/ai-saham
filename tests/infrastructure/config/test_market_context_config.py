@@ -70,12 +70,14 @@ market_context_engine:
 
 def test_get_global_context_tickers_returns_defaults_without_fallback_exception():
     from src.infrastructure.config.market_context_config import get_global_context_tickers
+
     tickers = get_global_context_tickers()
     assert tickers == {"^VIX", "EIDO", "IDR=X"}
 
 
 def test_get_global_context_tickers_includes_commodities_when_enabled(tmp_path):
     from src.infrastructure.config.market_context_config import get_global_context_tickers
+
     path = tmp_path / "market_context_engine.yaml"
     path.write_text(
         """
@@ -97,5 +99,3 @@ market_context_engine:
     assert "IDR=X" in tickers
     assert "KO=F" in tickers
     assert "MTF=F" in tickers
-
-

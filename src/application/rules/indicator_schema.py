@@ -116,20 +116,15 @@ class IndicatorDefinition:
 
         if not has_type and not has_formula:
             raise ValueError(
-                f"Indicator '{self.name}' must have either 'type' (with period) "
-                "or 'formula'."
+                f"Indicator '{self.name}' must have either 'type' (with period) or 'formula'."
             )
 
         # Type-based validation
         if has_type:
             if self.period is None:
-                raise ValueError(
-                    f"Indicator '{self.name}' with type requires a period."
-                )
+                raise ValueError(f"Indicator '{self.name}' with type requires a period.")
             if self.period < 1:
-                raise ValueError(
-                    f"Indicator period must be >= 1, got {self.period}"
-                )
+                raise ValueError(f"Indicator period must be >= 1, got {self.period}")
 
         # Formula-based validation
         if has_formula:
@@ -139,9 +134,7 @@ class IndicatorDefinition:
                     "Period is determined by the formula expression."
                 )
             if not self.formula.strip():
-                raise ValueError(
-                    f"Indicator '{self.name}' has empty formula."
-                )
+                raise ValueError(f"Indicator '{self.name}' has empty formula.")
 
     def is_formula(self) -> bool:
         """Check if this is a formula-based indicator.

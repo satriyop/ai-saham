@@ -84,5 +84,7 @@ class StrategyNotFoundError(RulesError):
                 for path in self.searched_paths:
                     lines.append(f"  - {path}")
                 lines.append("")
-                lines.append(f"Tip: Use 'saham strategy init {strategy_name}' to create a new strategy.")
+                lines.append(
+                    f"Tip: Use 'saham strategy init {strategy_name}' to create a new strategy."
+                )
             super().__init__("\n".join(lines))

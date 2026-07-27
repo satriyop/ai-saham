@@ -24,7 +24,9 @@ class _FakeManifestReader:
 
     def database_identity(self) -> AuditDatabaseIdentity:
         if not self._database_exists:
-            return AuditDatabaseIdentity(path="missing.db", exists=False, sha256=None, size_bytes=None)
+            return AuditDatabaseIdentity(
+                path="missing.db", exists=False, sha256=None, size_bytes=None
+            )
         return AuditDatabaseIdentity(path="data.db", exists=True, sha256="abc123", size_bytes=1024)
 
     def schema_identity(self) -> AuditSchemaIdentity:
@@ -71,7 +73,9 @@ class _FakeCodeIdentityProvider:
     def code_identity(self) -> AuditCodeIdentity:
         if not self._available:
             return AuditCodeIdentity(git_commit=None, git_dirty=False, git_status_short=())
-        return AuditCodeIdentity(git_commit="deadbeef", git_dirty=True, git_status_short=(" M file.py",))
+        return AuditCodeIdentity(
+            git_commit="deadbeef", git_dirty=True, git_status_short=(" M file.py",)
+        )
 
     def warnings(self) -> tuple[str, ...]:
         return () if self._available else ("git_unavailable",)
@@ -126,9 +130,7 @@ def test_execute_merges_warnings_from_all_readers():
         clock=_fixed_clock,
     )
 
-    manifest = use_case.execute(
-        BuildAuditBaselineManifestRequest(db_path=Path("missing.db"))
-    )
+    manifest = use_case.execute(BuildAuditBaselineManifestRequest(db_path=Path("missing.db")))
 
     assert manifest.database.exists is False
     assert manifest.database.sha256 is None

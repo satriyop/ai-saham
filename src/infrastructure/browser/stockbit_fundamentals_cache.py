@@ -87,9 +87,7 @@ class StockbitFundamentalsCache:
         except Exception:
             return False
 
-    def read(
-        self, ticker: str, as_of_date: date | None = None
-    ) -> CompanyFundamentals | None:
+    def read(self, ticker: str, as_of_date: date | None = None) -> CompanyFundamentals | None:
         where = "WHERE ticker=?"
         params: tuple = (ticker,)
         if as_of_date is not None:

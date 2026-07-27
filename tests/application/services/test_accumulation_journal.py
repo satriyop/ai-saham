@@ -4,12 +4,13 @@ from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock
 
-from src.application.services.accumulation_journal import AccumulationJournalService
 from src.application.dto.accumulation_screen import AccumulationCandidate
+from src.application.services.accumulation_journal import AccumulationJournalService
 from src.domain.entities.candle import Candle
 from src.domain.value_objects.accumulation_journal_entry import AccumulationJournalEntry
 
 # ── helpers ─────────────────────────────────────────────────────────────────
+
 
 def _make_candidate(
     ticker="BBRI",
@@ -106,6 +107,7 @@ def _make_service(store, repo) -> AccumulationJournalService:
 
 
 # ── TestLogCandidate ─────────────────────────────────────────────────────────
+
 
 class TestLogCandidate:
     def test_log_with_full_candidate_maps_all_fields(self):
@@ -255,6 +257,7 @@ class TestLogCandidate:
 
 # ── TestReviewEmptyAndShortCircuit ───────────────────────────────────────────
 
+
 class TestReviewEmptyAndShortCircuit:
     def test_review_returns_zeroed_report_when_store_is_empty(self):
         store = MagicMock()
@@ -326,12 +329,14 @@ class TestReviewEmptyAndShortCircuit:
 
 # ── TestReviewEnrichment ─────────────────────────────────────────────────────
 
+
 class TestReviewEnrichment:
     def _make_forward_candles(
         self, start_date: date, count: int, start_price: float = 5000.0
     ) -> list[Candle]:
         """Generate count candles starting from start_date + 1 day."""
         from datetime import timedelta
+
         candles = []
         d = start_date
         for i in range(count):
@@ -356,12 +361,14 @@ class TestReviewEnrichment:
 
         store.read_all.side_effect = [
             [entry],
-            [_make_entry(
-                logged_at=logged_at,
-                actual_close_10d=candles[9].close,
-                actual_close_5d=candles[4].close,
-                actual_close_20d=candles[19].close,
-            )],
+            [
+                _make_entry(
+                    logged_at=logged_at,
+                    actual_close_10d=candles[9].close,
+                    actual_close_5d=candles[4].close,
+                    actual_close_20d=candles[19].close,
+                )
+            ],
         ]
         store.update_review_fields.side_effect = capture_update
 
@@ -422,19 +429,41 @@ class TestReviewEnrichment:
         entry = _make_entry(logged_at=logged_at, actual_close_10d=None)
 
         from datetime import timedelta
+
         # 15 candles with known prices
         candles = []
         d = logged_at
-        prices = [5000, 5100, 4900, 5200, 4800, 5300, 4700, 5400, 4600, 5500, 5600, 5700, 5800, 5900, 6000]
+        prices = [
+            5000,
+            5100,
+            4900,
+            5200,
+            4800,
+            5300,
+            4700,
+            5400,
+            4600,
+            5500,
+            5600,
+            5700,
+            5800,
+            5900,
+            6000,
+        ]
         for price in prices:
             d = d + timedelta(days=1)
             candles.append(_make_candle(d, float(price)))
 
         store = MagicMock()
-        store.read_all.side_effect = [[entry], [_make_entry(
-            logged_at=logged_at,
-            actual_close_10d=candles[9].close,
-        )]]
+        store.read_all.side_effect = [
+            [entry],
+            [
+                _make_entry(
+                    logged_at=logged_at,
+                    actual_close_10d=candles[9].close,
+                )
+            ],
+        ]
         repo = MagicMock()
         repo.get_candles.return_value = candles
         service = _make_service(store, repo)
@@ -449,6 +478,7 @@ class TestReviewEnrichment:
 
 # ── TestReviewScoreBuckets ───────────────────────────────────────────────────
 
+
 class TestReviewScoreBuckets:
     def _service_with_enriched_entries(self, entries):
         store = MagicMock()
@@ -460,26 +490,58 @@ class TestReviewScoreBuckets:
     def test_accum_score_buckets_partition_at_58_3_and_33_3(self):
         # Rescaled 0-120 -> 0-100 (ADR-039): bucket edges are now 33.3/58.3.
         entries = [
-            _make_entry(accum_score=25.0, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840")),
-            _make_entry(accum_score=33.3, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840"), ticker="A"),
-            _make_entry(accum_score=58.2, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840"), ticker="B"),
-            _make_entry(accum_score=58.3, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840"), ticker="C"),
-            _make_entry(accum_score=75.0, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840"), ticker="D"),
+            _make_entry(
+                accum_score=25.0, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840")
+            ),
+            _make_entry(
+                accum_score=33.3,
+                actual_close_10d=Decimal("5000"),
+                entry_price=Decimal("4840"),
+                ticker="A",
+            ),
+            _make_entry(
+                accum_score=58.2,
+                actual_close_10d=Decimal("5000"),
+                entry_price=Decimal("4840"),
+                ticker="B",
+            ),
+            _make_entry(
+                accum_score=58.3,
+                actual_close_10d=Decimal("5000"),
+                entry_price=Decimal("4840"),
+                ticker="C",
+            ),
+            _make_entry(
+                accum_score=75.0,
+                actual_close_10d=Decimal("5000"),
+                entry_price=Decimal("4840"),
+                ticker="D",
+            ),
         ]
         service = self._service_with_enriched_entries(entries)
 
         report = service.review()
 
         by_bucket = {s.bucket: s for s in report.accum_score_buckets}
-        assert by_bucket["58.3+"].n == 2         # 58.3 and 75.0
-        assert by_bucket["33.3–58.2"].n == 2      # 33.3 and 58.2
-        assert by_bucket["0–33.2"].n == 1         # 25.0
+        assert by_bucket["58.3+"].n == 2  # 58.3 and 75.0
+        assert by_bucket["33.3–58.2"].n == 2  # 33.3 and 58.2
+        assert by_bucket["0–33.2"].n == 1  # 25.0
 
     def test_foreign_flow_score_bucket_win_rate_uses_strict_positive_return(self):
         """A return of exactly 0% counts as a loss."""
         entries = [
-            _make_entry(accum_score=80.0, actual_close_10d=Decimal("4840"), entry_price=Decimal("4840"), ticker="A"),  # 0% return
-            _make_entry(accum_score=80.0, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840"), ticker="B"),  # positive
+            _make_entry(
+                accum_score=80.0,
+                actual_close_10d=Decimal("4840"),
+                entry_price=Decimal("4840"),
+                ticker="A",
+            ),  # 0% return
+            _make_entry(
+                accum_score=80.0,
+                actual_close_10d=Decimal("5000"),
+                entry_price=Decimal("4840"),
+                ticker="B",
+            ),  # positive
         ]
         service = self._service_with_enriched_entries(entries)
 
@@ -491,7 +553,9 @@ class TestReviewScoreBuckets:
 
     def test_foreign_flow_score_bucket_with_no_entries_returns_none_for_metrics(self):
         entries = [
-            _make_entry(accum_score=80.0, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840")),
+            _make_entry(
+                accum_score=80.0, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840")
+            ),
         ]
         service = self._service_with_enriched_entries(entries)
 
@@ -504,8 +568,15 @@ class TestReviewScoreBuckets:
 
     def test_foreign_flow_score_bucket_excludes_none_scores(self):
         entries = [
-            _make_entry(accum_score=None, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840")),
-            _make_entry(accum_score=30.0, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840"), ticker="A"),
+            _make_entry(
+                accum_score=None, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840")
+            ),
+            _make_entry(
+                accum_score=30.0,
+                actual_close_10d=Decimal("5000"),
+                entry_price=Decimal("4840"),
+                ticker="A",
+            ),
         ]
         service = self._service_with_enriched_entries(entries)
 
@@ -516,6 +587,7 @@ class TestReviewScoreBuckets:
 
 
 # ── TestReviewPatternStats ───────────────────────────────────────────────────
+
 
 class TestReviewPatternStats:
     def _service_with_entries(self, entries):
@@ -540,9 +612,33 @@ class TestReviewPatternStats:
 
     def test_pattern_stats_sorted_by_descending_count(self):
         entries = (
-            [_make_entry(pattern="sustained", ticker=f"A{i}", actual_close_10d=Decimal("5000"), entry_price=Decimal("4840")) for i in range(3)]
-            + [_make_entry(pattern="weak", ticker=f"B{i}", actual_close_10d=Decimal("5000"), entry_price=Decimal("4840")) for i in range(1)]
-            + [_make_entry(pattern="building", ticker=f"C{i}", actual_close_10d=Decimal("5000"), entry_price=Decimal("4840")) for i in range(2)]
+            [
+                _make_entry(
+                    pattern="sustained",
+                    ticker=f"A{i}",
+                    actual_close_10d=Decimal("5000"),
+                    entry_price=Decimal("4840"),
+                )
+                for i in range(3)
+            ]
+            + [
+                _make_entry(
+                    pattern="weak",
+                    ticker=f"B{i}",
+                    actual_close_10d=Decimal("5000"),
+                    entry_price=Decimal("4840"),
+                )
+                for i in range(1)
+            ]
+            + [
+                _make_entry(
+                    pattern="building",
+                    ticker=f"C{i}",
+                    actual_close_10d=Decimal("5000"),
+                    entry_price=Decimal("4840"),
+                )
+                for i in range(2)
+            ]
         )
         service = self._service_with_entries(entries)
 
@@ -554,6 +650,7 @@ class TestReviewPatternStats:
 
 # ── TestReviewSignalDeltas ───────────────────────────────────────────────────
 
+
 class TestReviewSignalDeltas:
     def _service_with_entries(self, entries):
         store = MagicMock()
@@ -564,16 +661,26 @@ class TestReviewSignalDeltas:
 
     def test_signal_delta_streak_splits_at_five_inclusive(self):
         entries = [
-            _make_entry(ticker="A", foreign_flow_buy_streak=5, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840")),
-            _make_entry(ticker="B", foreign_flow_buy_streak=4, actual_close_10d=Decimal("5000"), entry_price=Decimal("4840")),
+            _make_entry(
+                ticker="A",
+                foreign_flow_buy_streak=5,
+                actual_close_10d=Decimal("5000"),
+                entry_price=Decimal("4840"),
+            ),
+            _make_entry(
+                ticker="B",
+                foreign_flow_buy_streak=4,
+                actual_close_10d=Decimal("5000"),
+                entry_price=Decimal("4840"),
+            ),
         ]
         service = self._service_with_entries(entries)
 
         report = service.review()
 
         delta = next(d for d in report.signal_deltas if d.signal == "foreign_flow_buy_streak")
-        assert delta.group_a_n == 1   # foreign_flow_buy_streak=5 → group_a
-        assert delta.group_b_n == 1   # foreign_flow_buy_streak=4 → group_b
+        assert delta.group_a_n == 1  # foreign_flow_buy_streak=5 → group_a
+        assert delta.group_b_n == 1  # foreign_flow_buy_streak=4 → group_b
 
     def test_signal_delta_none_vwap_bb_flow_are_excluded(self):
         entries = [
@@ -597,8 +704,18 @@ class TestReviewSignalDeltas:
 
     def test_signal_delta_bb_pctile_threshold_at_0_20_decimal(self):
         entries = [
-            _make_entry(ticker="A", bb_pctile=Decimal("0.20"), actual_close_10d=Decimal("5000"), entry_price=Decimal("4840")),  # squeeze
-            _make_entry(ticker="B", bb_pctile=Decimal("0.21"), actual_close_10d=Decimal("5000"), entry_price=Decimal("4840")),  # not
+            _make_entry(
+                ticker="A",
+                bb_pctile=Decimal("0.20"),
+                actual_close_10d=Decimal("5000"),
+                entry_price=Decimal("4840"),
+            ),  # squeeze
+            _make_entry(
+                ticker="B",
+                bb_pctile=Decimal("0.21"),
+                actual_close_10d=Decimal("5000"),
+                entry_price=Decimal("4840"),
+            ),  # not
         ]
         service = self._service_with_entries(entries)
 
@@ -610,7 +727,12 @@ class TestReviewSignalDeltas:
 
     def test_signal_delta_avg_10d_none_when_group_has_no_return_data(self):
         entries = [
-            _make_entry(ticker="A", foreign_flow_buy_streak=10, actual_close_10d=None, entry_price=Decimal("4840")),
+            _make_entry(
+                ticker="A",
+                foreign_flow_buy_streak=10,
+                actual_close_10d=None,
+                entry_price=Decimal("4840"),
+            ),
         ]
         # Entry has no actual_close_10d → won't appear in stats at all
         # After re-read, return the same entry (not enriched)
@@ -629,6 +751,7 @@ class TestReviewSignalDeltas:
 
 
 # ── TestReviewReportTotals ───────────────────────────────────────────────────
+
 
 class TestReviewReportTotals:
     def test_total_entries_and_enriched_counts_correctly(self):

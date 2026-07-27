@@ -89,7 +89,9 @@ class AssessCorporateActionEventRiskUseCase:
                 if role_policy is None:
                     continue
                 days_from_as_of = (date_row.event_date - as_of).days
-                if not (-role_policy.lookback_days <= days_from_as_of <= role_policy.lookahead_days):
+                if not (
+                    -role_policy.lookback_days <= days_from_as_of <= role_policy.lookahead_days
+                ):
                     continue
                 matched.append(
                     CorporateActionRiskEvent(

@@ -37,5 +37,6 @@ class SystemStatusProvider(ABC):
 
     @abstractmethod
     def get_data_freshness(self) -> List[TableFreshnessDto]:
-        """Query database tables and return freshness metrics (row count, latest update date) for each table."""
+        """Query database tables and return freshness metrics (row count, latest update date) for
+        each table."""
         pass

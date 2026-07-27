@@ -29,9 +29,7 @@ def _create_deepseek_client(model: str | None = None):
             raise HeadlineClassifierError("DEEPSEEK_API_KEY not set")
         # DeepSeek uses OpenAI-compatible API
         return openai.OpenAI(
-            api_key=api_key,
-            base_url="https://api.deepseek.com",
-            timeout=LLM_TIMEOUT_SECONDS
+            api_key=api_key, base_url="https://api.deepseek.com", timeout=LLM_TIMEOUT_SECONDS
         )
     except ImportError:
         raise HeadlineClassifierError("openai package not installed (required for DeepSeek)")

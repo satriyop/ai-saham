@@ -8,8 +8,7 @@ from src.infrastructure.persistence.sqlite_enrichment_pit_coverage import (
 def test_enrichment_pit_coverage_reports_all_replay_relevant_tables(tmp_path):
     db_path = tmp_path / "pit_coverage.sqlite"
     with sqlite3.connect(db_path) as conn:
-        conn.executescript(
-            """
+        conn.executescript("""
             CREATE TABLE company_fundamentals (ticker TEXT, fetched_date TEXT);
             CREATE TABLE shareholding_composition (ticker TEXT, fetched_date TEXT);
             CREATE TABLE analyst_cache (ticker TEXT, fetched_date TEXT);
@@ -33,8 +32,7 @@ def test_enrichment_pit_coverage_reports_all_replay_relevant_tables(tmp_path):
             INSERT INTO company_profile_cache VALUES ('BBCA', '2026-07-07T10:00:00');
             INSERT INTO seasonality_cache VALUES ('BBCA', '2026-07', NULL);
             INSERT INTO earnings_cache VALUES ('BBCA', '2026-07-07T10:00:00');
-            """
-        )
+            """)
 
     coverage = read_enrichment_pit_coverage(db_path)
     by_table = {row.table: row for row in coverage}

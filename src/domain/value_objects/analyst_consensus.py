@@ -19,10 +19,10 @@ class AnalystConsensus:
     buy_count: int
     hold_count: int
     sell_count: int
-    avg_price_target: float | None    # IDR; Stockbit's "best_target"
-    current_price: float | None       # IDR at time of last update
+    avg_price_target: float | None  # IDR; Stockbit's "best_target"
+    current_price: float | None  # IDR at time of last update
     last_updated: date | None
-    price_target_low: float | None = None   # best_low_target — most bearish analyst
+    price_target_low: float | None = None  # best_low_target — most bearish analyst
     price_target_high: float | None = None  # best_high_target — most bullish analyst
     fetched_at: datetime | None = None
 

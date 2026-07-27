@@ -10,8 +10,9 @@ from src.application.services.swing_broker_quality_note_policy import (
 from src.domain.value_objects.setup_evaluation import SetupMatch
 
 
-def _make_detail(smart_flow="0", noise_flow="0", neutral_flow="0",
-                  quality="neutral detail") -> BrokerDetail:
+def _make_detail(
+    smart_flow="0", noise_flow="0", neutral_flow="0", quality="neutral detail"
+) -> BrokerDetail:
     return BrokerDetail(
         window_sessions=5,
         detail_sessions=3,
@@ -57,14 +58,15 @@ def test_smart_selling_warning():
 def test_smart_selling_below_threshold_skips_warning():
     detail = _make_detail(smart_flow="-500000", noise_flow="5000000", neutral_flow="5000000")
     note = build_broker_quality_note(
-        detail, _make_setup(SetupMatch.MATCH), smart_sell_min_share_pct=15.0,
+        detail,
+        _make_setup(SetupMatch.MATCH),
+        smart_sell_min_share_pct=15.0,
     )
     assert note is None or "smart-money net selling" not in note.message
 
 
 def test_noisy_accumulation_warning_for_match():
-    detail = _make_detail(smart_flow="1000000", noise_flow="5000000",
-                           quality="noisy accumulation")
+    detail = _make_detail(smart_flow="1000000", noise_flow="5000000", quality="noisy accumulation")
     note = build_broker_quality_note(detail, _make_setup(SetupMatch.MATCH))
     assert note is not None
     assert note.level == "warning"
@@ -72,8 +74,7 @@ def test_noisy_accumulation_warning_for_match():
 
 
 def test_noisy_accumulation_trigger_via_condition():
-    detail = _make_detail(smart_flow="1000000", noise_flow="5000000",
-                           quality="neutral detail")
+    detail = _make_detail(smart_flow="1000000", noise_flow="5000000", quality="neutral detail")
     note = build_broker_quality_note(detail, _make_setup(SetupMatch.MATCH))
     assert note is not None
     assert note.level == "warning"

@@ -23,8 +23,7 @@ from src.domain.value_objects.setup_evidence import SetupEvidence
 
 def _benchmark_excess_return_available(excess_return) -> bool:
     return (
-        excess_return is not None
-        and excess_return.status == BenchmarkExcessReturnStatus.AVAILABLE
+        excess_return is not None and excess_return.status == BenchmarkExcessReturnStatus.AVAILABLE
     )
 
 
@@ -56,9 +55,7 @@ class BuiltSetupEvidence:
                 )
         if (
             _benchmark_excess_return_available(self.evidence.benchmark_excess_return_5_session)
-            or _benchmark_excess_return_available(
-                self.evidence.benchmark_excess_return_20_session
-            )
+            or _benchmark_excess_return_available(self.evidence.benchmark_excess_return_20_session)
         ) and not self.provenance.benchmark_candle_rows:
             raise ValueError(
                 "BuiltSetupEvidence has an AVAILABLE benchmark excess-return "

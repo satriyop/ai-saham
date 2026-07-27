@@ -20,7 +20,6 @@ from src.adapters.cli.view_broker_commands import broker_view_app
 from src.adapters.cli.view_ticker_commands import ticker_view_app
 from src.infrastructure.config.app_config import load_app_config
 
-
 # Retired view subcommands that must not be rewritten as ticker show.
 _RETIRED_VIEW_TOKENS = frozenset(
     {

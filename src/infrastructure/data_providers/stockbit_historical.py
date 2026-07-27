@@ -83,15 +83,17 @@ def _parse_ohlcv_rows(ticker: str, rows: list[dict]) -> list[Candle]:
             sanitized_low = min(open_, low, close, high)
 
             volume_shares = int(vol_lots) * _LOTS_PER_SHARE
-            candles.append(Candle(
-                ticker=ticker.upper(),
-                date=d,
-                open=open_,
-                high=sanitized_high,
-                low=sanitized_low,
-                close=close,
-                volume=volume_shares,
-            ))
+            candles.append(
+                Candle(
+                    ticker=ticker.upper(),
+                    date=d,
+                    open=open_,
+                    high=sanitized_high,
+                    low=sanitized_low,
+                    close=close,
+                    volume=volume_shares,
+                )
+            )
         except (ValueError, TypeError, Exception) as exc:
             logger.debug("skipping bad row for %s on %s: %s", ticker, row.get("date"), exc)
 
@@ -109,7 +111,7 @@ class StockbitHistoricalProvider(MarketDataProvider):
     """
 
     provider_name = "stockbit"
-    volume_unit = "shares"          # lots converted to shares (* 100) on ingest
+    volume_unit = "shares"  # lots converted to shares (* 100) on ingest
     price_adjustment_policy = "raw"
 
     def __init__(

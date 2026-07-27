@@ -37,8 +37,7 @@ class TestConfigPathsFromAppConfig:
 
         with (
             patch(
-                "src.adapters.composition.stock_analysis_workflow_dependencies"
-                ".load_app_config",
+                "src.adapters.composition.stock_analysis_workflow_dependencies.load_app_config",
                 return_value=app_cfg,
             ),
             patch(
@@ -56,16 +55,13 @@ class TestConfigPathsFromAppConfig:
             universes_path=self.CUSTOM_PATHS.universes,
         )
 
-    def test_institutional_accumulation_config_uses_app_config_paths(
-        self, tmp_path
-    ):
+    def test_institutional_accumulation_config_uses_app_config_paths(self, tmp_path):
         app_cfg = self._make_custom_app_config()
         sentinel = MagicMock()
 
         with (
             patch(
-                "src.adapters.composition.stock_analysis_workflow_dependencies"
-                ".load_app_config",
+                "src.adapters.composition.stock_analysis_workflow_dependencies.load_app_config",
                 return_value=app_cfg,
             ),
             patch(
@@ -88,8 +84,7 @@ class TestConfigPathsFromAppConfig:
 
         with (
             patch(
-                "src.adapters.composition.stock_analysis_workflow_dependencies"
-                ".load_app_config",
+                "src.adapters.composition.stock_analysis_workflow_dependencies.load_app_config",
                 return_value=app_cfg,
             ),
             patch(
@@ -107,16 +102,13 @@ class TestConfigPathsFromAppConfig:
             universes_path=self.CUSTOM_PATHS.universes,
         )
 
-    def test_company_quality_context_builder_uses_app_config_paths(
-        self, tmp_path
-    ):
+    def test_company_quality_context_builder_uses_app_config_paths(self, tmp_path):
         app_cfg = self._make_custom_app_config()
         sentinel = MagicMock()
 
         with (
             patch(
-                "src.adapters.composition.stock_analysis_workflow_dependencies"
-                ".load_app_config",
+                "src.adapters.composition.stock_analysis_workflow_dependencies.load_app_config",
                 return_value=app_cfg,
             ),
             patch(
@@ -145,8 +137,7 @@ class TestConfigPathsFromAppConfig:
 
         with (
             patch(
-                "src.adapters.composition.stock_analysis_workflow_dependencies"
-                ".load_app_config",
+                "src.adapters.composition.stock_analysis_workflow_dependencies.load_app_config",
                 return_value=app_cfg,
             ),
             patch(
@@ -174,8 +165,7 @@ class TestConfigPathsFromAppConfig:
 
         with (
             patch(
-                "src.adapters.composition.stock_analysis_workflow_dependencies"
-                ".load_app_config",
+                "src.adapters.composition.stock_analysis_workflow_dependencies.load_app_config",
                 return_value=app_cfg,
             ),
             patch(
@@ -199,8 +189,7 @@ class TestConfigPathsFromAppConfig:
 
         with (
             patch(
-                "src.adapters.composition.stock_analysis_workflow_dependencies"
-                ".load_app_config",
+                "src.adapters.composition.stock_analysis_workflow_dependencies.load_app_config",
                 return_value=app_cfg,
             ),
             patch(

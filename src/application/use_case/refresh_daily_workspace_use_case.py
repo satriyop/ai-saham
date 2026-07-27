@@ -84,7 +84,9 @@ class PreviewDailyWorkspaceRefreshUseCase:
             include_meta=request.include_meta,
             include_enrichment=request.include_enrichment,
             include_calendar=request.include_calendar,
-            local_write_disclosure="This operation fetches provider data and updates local cache storage.",
+            local_write_disclosure=(
+                "This operation fetches provider data and updateslocal cache storage."
+            ),
             warnings=warnings,
         )
 

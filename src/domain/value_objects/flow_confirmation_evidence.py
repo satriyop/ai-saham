@@ -10,8 +10,10 @@ Depends on: stdlib + Direction/Freshness from factor_evidence
 """
 
 from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import date
+
 from src.domain.value_objects.factor_evidence import Direction, Freshness
 
 _VALID_CONFIRMATION_STATUS = {"CONFIRMED", "WATCH_ZONE", "WEAK"}
@@ -22,23 +24,30 @@ _VALID_FLOW_SIGNAL_KEYS = {"cons", "streak", "vwap", "flow", "inst"}
 @dataclass(frozen=True)
 class FlowSubSignal:
     """One scored sub-signal within the flow confirmation group."""
-    key: str        # "cons" | "streak" | "vwap" | "flow" | "inst"
-    score: float    # raw component score from breakdown; 0.0 when MISSING
-    weight: float   # max weight (ceiling) for this component
+
+    key: str  # "cons" | "streak" | "vwap" | "flow" | "inst"
+    score: float  # raw component score from breakdown; 0.0 when MISSING
+    weight: float  # max weight (ceiling) for this component
     direction: Direction
     freshness: Freshness
 
     def __post_init__(self):
         if self.key not in _VALID_FLOW_SIGNAL_KEYS:
-            raise ValueError(f"FlowSubSignal key must be one of {_VALID_FLOW_SIGNAL_KEYS}, got {self.key!r}")
+            raise ValueError(
+                f"FlowSubSignal key must be one of {_VALID_FLOW_SIGNAL_KEYS}, got {self.key!r}"
+            )
         if self.score < 0:
             raise ValueError(f"FlowSubSignal score must be >= 0, got {self.score}")
         if self.weight < 0:
             raise ValueError(f"FlowSubSignal weight must be >= 0, got {self.weight}")
         if not isinstance(self.direction, Direction):
-            raise ValueError(f"FlowSubSignal direction must be Direction enum, got {self.direction!r}")
+            raise ValueError(
+                f"FlowSubSignal direction must be Direction enum, got {self.direction!r}"
+            )
         if not isinstance(self.freshness, Freshness):
-            raise ValueError(f"FlowSubSignal freshness must be Freshness enum, got {self.freshness!r}")
+            raise ValueError(
+                f"FlowSubSignal freshness must be Freshness enum, got {self.freshness!r}"
+            )
 
     def to_dict(self) -> dict:
         return {
@@ -61,25 +70,27 @@ class FlowConfirmationEvidence:
     This object is diagnostic only in Phase 3; it feeds the replacement
     aggregator in Phase 4 as a scored evidence group.
     """
+
     ticker: str
     snapshot_date: date
     # Foreign flow sub-signals (bb and rsi excluded)
     flow_signals: tuple[FlowSubSignal, ...]
-    flow_score_ex_bb: float       # sum of available flow_signals.score
-    confirmation_status: str      # "CONFIRMED" | "WATCH_ZONE" | "WEAK"
-    flow_direction: str           # "POSITIVE" | "NEGATIVE" | "FLAT" | "UNKNOWN"
+    flow_score_ex_bb: float  # sum of available flow_signals.score
+    confirmation_status: str  # "CONFIRMED" | "WATCH_ZONE" | "WEAK"
+    flow_direction: str  # "POSITIVE" | "NEGATIVE" | "FLAT" | "UNKNOWN"
     # Bandar (smart money operator) sub-signal — Stockbit only
     bandar_broad_score: int | None  # -12 to +12; None = MISSING
     bandar_direction: Direction
-    bandar_freshness: Freshness     # MISSING if no Stockbit snapshot
+    bandar_freshness: Freshness  # MISSING if no Stockbit snapshot
     # BCI smart-money context
-    bci_label: str | None           # "CLUSTER" | "STABLE" | "RETAIL-LED" | None
-    bci_tier1_count: int            # count of distinct Tier 1 institutional brokers
+    bci_label: str | None  # "CLUSTER" | "STABLE" | "RETAIL-LED" | None
+    bci_tier1_count: int  # count of distinct Tier 1 institutional brokers
     # Group aggregate with cap (Phase 4 uses capped_strength as scoring input)
     uncapped_strength: float  # 0.0–1.0 combined, before cap
-    capped_strength: float    # 0.0–1.0, after group_cap applied
-    group_cap: float          # cap ceiling (default 0.80)
+    capped_strength: float  # 0.0–1.0, after group_cap applied
+    group_cap: float  # cap ceiling (default 0.80)
     group_freshness: Freshness
+
     # Weighted coverage of enabled institutional-flow components only
     # (cons, streak, vwap, flow, inst). RSI/BB never enter this denominator.
     def __post_init__(self):
@@ -94,11 +105,19 @@ class FlowConfirmationEvidence:
                 f"{_VALID_FLOW_DIRECTION}, got {self.flow_direction!r}"
             )
         if self.flow_score_ex_bb < 0:
-            raise ValueError(f"FlowConfirmationEvidence flow_score_ex_bb must be >= 0, got {self.flow_score_ex_bb}")
+            raise ValueError(
+                f"FlowConfirmationEvidence flow_score_ex_bb must be >= 0, "
+                f"got {self.flow_score_ex_bb}"
+            )
         if not (0.0 <= self.capped_strength <= 1.0):
-            raise ValueError(f"FlowConfirmationEvidence capped_strength must be 0.0–1.0, got {self.capped_strength}")
+            raise ValueError(
+                f"FlowConfirmationEvidence capped_strength must be 0.0–1.0, "
+                f"got {self.capped_strength}"
+            )
         if not (0.0 < self.group_cap <= 1.0):
-            raise ValueError(f"FlowConfirmationEvidence group_cap must be (0.0, 1.0], got {self.group_cap}")
+            raise ValueError(
+                f"FlowConfirmationEvidence group_cap must be (0.0, 1.0], got {self.group_cap}"
+            )
         keys = [signal.key for signal in self.flow_signals]
         if len(keys) != len(set(keys)):
             raise ValueError(f"flow_signals keys must be unique, got {keys}")
@@ -114,11 +133,17 @@ class FlowConfirmationEvidence:
                 f"got {self.bandar_broad_score}"
             )
         if not isinstance(self.bandar_direction, Direction):
-            raise ValueError(f"bandar_direction must be Direction enum, got {self.bandar_direction!r}")
+            raise ValueError(
+                f"bandar_direction must be Direction enum, got {self.bandar_direction!r}"
+            )
         if not isinstance(self.bandar_freshness, Freshness):
-            raise ValueError(f"bandar_freshness must be Freshness enum, got {self.bandar_freshness!r}")
+            raise ValueError(
+                f"bandar_freshness must be Freshness enum, got {self.bandar_freshness!r}"
+            )
         if not isinstance(self.group_freshness, Freshness):
-            raise ValueError(f"group_freshness must be Freshness enum, got {self.group_freshness!r}")
+            raise ValueError(
+                f"group_freshness must be Freshness enum, got {self.group_freshness!r}"
+            )
 
     @property
     def component_coverage(self) -> float:
@@ -135,9 +160,7 @@ class FlowConfirmationEvidence:
     @property
     def missing_components(self) -> tuple[str, ...]:
         return tuple(
-            signal.key
-            for signal in self.flow_signals
-            if signal.freshness is Freshness.MISSING
+            signal.key for signal in self.flow_signals if signal.freshness is Freshness.MISSING
         )
 
     def to_dict(self) -> dict:

@@ -66,27 +66,19 @@ class TestArithmeticOperations:
     """Tests for each arithmetic operation."""
 
     def test_addition(self) -> None:
-        result = apply_binary_op(
-            "+", [Decimal("1"), Decimal("2")], [Decimal("10"), Decimal("20")]
-        )
+        result = apply_binary_op("+", [Decimal("1"), Decimal("2")], [Decimal("10"), Decimal("20")])
         assert result == [Decimal("11"), Decimal("22")]
 
     def test_subtraction(self) -> None:
-        result = apply_binary_op(
-            "-", [Decimal("10"), Decimal("20")], [Decimal("1"), Decimal("2")]
-        )
+        result = apply_binary_op("-", [Decimal("10"), Decimal("20")], [Decimal("1"), Decimal("2")])
         assert result == [Decimal("9"), Decimal("18")]
 
     def test_multiplication(self) -> None:
-        result = apply_binary_op(
-            "*", [Decimal("3"), Decimal("4")], [Decimal("5"), Decimal("6")]
-        )
+        result = apply_binary_op("*", [Decimal("3"), Decimal("4")], [Decimal("5"), Decimal("6")])
         assert result == [Decimal("15"), Decimal("24")]
 
     def test_division(self) -> None:
-        result = apply_binary_op(
-            "/", [Decimal("10"), Decimal("20")], [Decimal("2"), Decimal("4")]
-        )
+        result = apply_binary_op("/", [Decimal("10"), Decimal("20")], [Decimal("2"), Decimal("4")])
         assert result == [Decimal("5"), Decimal("5")]
 
 
@@ -113,7 +105,5 @@ class TestUnsupportedOperator:
 
     def test_unsupported_operator_returns_empty(self) -> None:
         """Unknown operator produces no appended values (current behavior)."""
-        result = apply_binary_op(
-            "%", [Decimal("1"), Decimal("2")], [Decimal("3"), Decimal("4")]
-        )
+        result = apply_binary_op("%", [Decimal("1"), Decimal("2")], [Decimal("3"), Decimal("4")])
         assert result == []

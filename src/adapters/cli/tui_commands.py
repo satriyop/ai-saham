@@ -12,8 +12,7 @@ from collections.abc import Callable
 import typer
 
 MISSING_TUI_EXTRA_MESSAGE = (
-    "TUI support is not installed. Install this checkout with: "
-    "pip install -e '.[tui]'"
+    "TUI support is not installed. Install this checkout with: pip install -e '.[tui]'"
 )
 
 

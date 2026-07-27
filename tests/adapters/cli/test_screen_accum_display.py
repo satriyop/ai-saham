@@ -89,7 +89,7 @@ def test_display_results_never_shows_fresh_ok_and_splits_align_from_ready(capsys
         top=10,
         min_streak=0,
         coiled_spring_bb_pctile=0.20,
-        effective_session=_FAKE_EFFECTIVE_SESSION
+        effective_session=_FAKE_EFFECTIVE_SESSION,
     )
 
     display_results(
@@ -223,7 +223,7 @@ def test_display_multi_renders_rich_accumulation_panel(capsys):
         coiled_spring_min_accum_score=_CFG.coiled_spring_min_accum_score,
         coiled_spring_bb_pctile=_CFG.coiled_spring_bb_pctile,
         canonical_window=7,
-        effective_session=_FAKE_EFFECTIVE_SESSION
+        effective_session=_FAKE_EFFECTIVE_SESSION,
     )
 
     display_multi(
@@ -309,7 +309,7 @@ def test_display_multi_renders_canonical_signal_risk_phase_data_next(capsys):
         coiled_spring_min_accum_score=_CFG.coiled_spring_min_accum_score,
         coiled_spring_bb_pctile=_CFG.coiled_spring_bb_pctile,
         canonical_window=7,
-        effective_session=_FAKE_EFFECTIVE_SESSION
+        effective_session=_FAKE_EFFECTIVE_SESSION,
     )
 
     display_multi(

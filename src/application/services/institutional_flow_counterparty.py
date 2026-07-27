@@ -21,13 +21,12 @@ if TYPE_CHECKING:
     )
 
 
-
 def _counterparty_hhi(
     flows: list[BrokerDailyFlow],
     config: InstitutionalAccumulationConfig,
 ) -> CounterpartyTransferEvidence:
     by_date = _group_by_date(flows)
-    recent = sorted(by_date)[-config.counterparty_window_days:]
+    recent = sorted(by_date)[-config.counterparty_window_days :]
     net_buy: dict[str, float] = {}
     net_sell: dict[str, float] = {}
     for d in recent:

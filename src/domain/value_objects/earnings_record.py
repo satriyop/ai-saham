@@ -32,11 +32,11 @@ class EarningsRecord:
 
     ticker: str
     year: int
-    quarter: int       # 1–4
+    quarter: int  # 1–4
     eps_actual: float | None
-    eps_estimate: float | None      # None when API returns "-"
+    eps_estimate: float | None  # None when API returns "-"
     eps_surprise_pct: float | None  # None when no estimate
-    eps_yoy_change: float | None    # signed IDR change vs prior year
+    eps_yoy_change: float | None  # signed IDR change vs prior year
     eps_prev_year: float | None
     fetched_at: datetime | None = None
 
@@ -80,10 +80,14 @@ class EarningsRecord:
             "period_label": self.period_label,
             "eps_actual": self.eps_actual,
             "eps_estimate": self.eps_estimate,
-            "eps_surprise_pct": round(self.eps_surprise_pct, 2) if self.eps_surprise_pct is not None else None,
+            "eps_surprise_pct": (
+                round(self.eps_surprise_pct, 2) if self.eps_surprise_pct is not None else None
+            ),
             "eps_yoy_change": self.eps_yoy_change,
             "eps_prev_year": self.eps_prev_year,
-            "yoy_growth_pct": round(self.yoy_growth_pct, 1) if self.yoy_growth_pct is not None else None,
+            "yoy_growth_pct": (
+                round(self.yoy_growth_pct, 1) if self.yoy_growth_pct is not None else None
+            ),
             "beat": self.beat,
             "fetched_at": self.fetched_at.isoformat() if self.fetched_at else None,
         }

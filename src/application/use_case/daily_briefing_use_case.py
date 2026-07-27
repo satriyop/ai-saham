@@ -37,10 +37,10 @@ from src.application.use_case.daily_setup_lens_impact_use_case import (
     DailySetupLensImpactUseCase,
 )
 from src.domain.ports.broker_data_repository import BrokerDataRepository
-from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.ports.learning_artifact_repositories import (
     LearningObservationRepository,
 )
+from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.value_objects.data_freshness_status import (
     DataFreshnessStatus,
     SourceFreshnessState,
@@ -54,6 +54,7 @@ if TYPE_CHECKING:
 ReadinessStatus = Literal["READY", "PARTIAL", "NOT_READY", "UNAVAILABLE"]
 OverallAuthority = Literal["READY", "PARTIAL", "NOT_READY"]
 
+
 @dataclass(frozen=True)
 class DataReadiness:
     dataset: str
@@ -62,6 +63,7 @@ class DataReadiness:
     total_count: int
     status: ReadinessStatus
     reason: str | None = None
+
 
 MIN_READY_COVERAGE_RATIO = 0.80
 
@@ -114,9 +116,7 @@ class DailyBriefingResponse:
     market_wide_opening_observations: list[OpeningBriefingCandidate] = field(default_factory=list)
     accumulation_candidates: list[AccumulationCandidate] = field(default_factory=list)
     accumulation_summary: DailyAccumulationSummary | None = None
-    daily_accumulation_candidates: list[DailyAccumulationCandidate] = field(
-        default_factory=list
-    )
+    daily_accumulation_candidates: list[DailyAccumulationCandidate] = field(default_factory=list)
     setup_lens_impact: DailySetupLensImpactResult | None = None
     warnings: list[str] = field(default_factory=list)
 
@@ -172,9 +172,7 @@ class DailyBriefingUseCase:
             # can prove (cached IHSG session when available, weekday fallback
             # otherwise) rather than blindly assuming the prior Friday.
             if effective_session.market_session_name == "WEEKEND":
-                live_session_date = (
-                    effective_session.latest_completed_session or live_session_date
-                )
+                live_session_date = effective_session.latest_completed_session or live_session_date
 
         warnings: list[str] = []
 
@@ -357,7 +355,8 @@ class DailyBriefingUseCase:
         candle_coverage = sum(
             1
             for item in freshness
-            if item.freshness.candle_state in {
+            if item.freshness.candle_state
+            in {
                 SourceFreshnessState.READY,
                 SourceFreshnessState.PENDING_EOD,
             }
@@ -368,8 +367,7 @@ class DailyBriefingUseCase:
             candle_reason = "No universe tickers resolved"
         elif candle_status in ("NOT_READY", "PARTIAL"):
             candle_reason = (
-                f"Only {candle_coverage}/{candle_total} "
-                "tickers have current candle data"
+                f"Only {candle_coverage}/{candle_total} tickers have current candle data"
             )
 
         items.append(
@@ -388,7 +386,8 @@ class DailyBriefingUseCase:
         broker_coverage = sum(
             1
             for item in freshness
-            if item.freshness.broker_state in {
+            if item.freshness.broker_state
+            in {
                 SourceFreshnessState.READY,
                 SourceFreshnessState.PENDING_EOD,
             }
@@ -399,8 +398,7 @@ class DailyBriefingUseCase:
             broker_reason = "No universe tickers resolved"
         elif broker_status in ("NOT_READY", "PARTIAL"):
             broker_reason = (
-                f"Only {broker_coverage}/{broker_total} "
-                "tickers have current broker data"
+                f"Only {broker_coverage}/{broker_total} tickers have current broker data"
             )
 
         items.append(
@@ -435,8 +433,7 @@ class DailyBriefingUseCase:
         opening_total = 1
         opening_status = "READY" if opening_snapshot_date is not None else "UNAVAILABLE"
         opening_reason = (
-            None if opening_snapshot_date is not None
-            else "Opening snapshot unavailable"
+            None if opening_snapshot_date is not None else "Opening snapshot unavailable"
         )
         items.append(
             DataReadiness(
@@ -479,7 +476,6 @@ class DailyBriefingUseCase:
             return "PARTIAL"
         else:
             return "READY"
-
 
     def _data_freshness(
         self,

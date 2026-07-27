@@ -28,9 +28,7 @@ def validate_setup_phase_sequence(
     if requirement is None:
         return None, None
     if requirement.requires_reclaim_or_pivot:
-        has_reclaim = any(
-            "VWAP reclaim" in r or "support reclaim" in r for r in reasons
-        )
+        has_reclaim = any("VWAP reclaim" in r or "support reclaim" in r for r in reasons)
         valid = phase == SetupPhaseState.BREAKOUT_CONFIRMATION and has_reclaim
         return valid, "sequence policy: trend support plus reclaim/pivot confirmation"
     if not requirement.required_sequence:

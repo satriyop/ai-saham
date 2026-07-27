@@ -212,9 +212,11 @@ class ResolveOpeningPricesUseCase:
                 price=Decimal(str(snapshot.last_price)),
                 source="order_book_lastprice",
                 confidence="MEDIUM",
-                timestamp=snapshot.captured_at.astimezone(IDX_TIMEZONE)
-                if snapshot.captured_at.tzinfo
-                else snapshot.captured_at.replace(tzinfo=IDX_TIMEZONE),
+                timestamp=(
+                    snapshot.captured_at.astimezone(IDX_TIMEZONE)
+                    if snapshot.captured_at.tzinfo
+                    else snapshot.captured_at.replace(tzinfo=IDX_TIMEZONE)
+                ),
                 reason="Stockbit orderbook lastprice fallback",
                 auto_confirmed=True,
                 manual_override=False,
@@ -227,9 +229,11 @@ class ResolveOpeningPricesUseCase:
                 price=Decimal(str(round(midpoint, 2))),
                 source="top_of_book_midpoint",
                 confidence="LOW",
-                timestamp=snapshot.captured_at.astimezone(IDX_TIMEZONE)
-                if snapshot.captured_at.tzinfo
-                else snapshot.captured_at.replace(tzinfo=IDX_TIMEZONE),
+                timestamp=(
+                    snapshot.captured_at.astimezone(IDX_TIMEZONE)
+                    if snapshot.captured_at.tzinfo
+                    else snapshot.captured_at.replace(tzinfo=IDX_TIMEZONE)
+                ),
                 reason="midpoint fallback; not an execution price",
                 auto_confirmed=True,
                 manual_override=False,

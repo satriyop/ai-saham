@@ -43,6 +43,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
 def _raw_int(obj: dict | None, key: str = "raw") -> int | None:
     if not isinstance(obj, dict):
         return None
@@ -73,13 +74,15 @@ def _parse_chart(ticker: str, body: dict) -> RunningTradeChart | None:
         close = _raw_int(bar.get("value"))
         if close is None:
             continue
-        price_bars.append(IntradayPriceBar(
-            time=time,
-            close=close,
-            open=_raw_int(bar.get("open")),
-            high=_raw_int(bar.get("high")),
-            low=_raw_int(bar.get("low")),
-        ))
+        price_bars.append(
+            IntradayPriceBar(
+                time=time,
+                close=close,
+                open=_raw_int(bar.get("open")),
+                high=_raw_int(bar.get("high")),
+                low=_raw_int(bar.get("low")),
+            )
+        )
 
     # Broker bars — flatten all brokers from all chart_data sections
     broker_bars: list[IntradayBrokerBar] = []
@@ -101,11 +104,13 @@ def _parse_chart(ticker: str, body: dict) -> RunningTradeChart | None:
                     net_value = Decimal(str(raw_val)) if raw_val is not None else Decimal(0)
                 except Exception:
                     net_value = Decimal(0)
-                broker_bars.append(IntradayBrokerBar(
-                    broker_code=broker_code,
-                    time=time,
-                    net_value=net_value,
-                ))
+                broker_bars.append(
+                    IntradayBrokerBar(
+                        broker_code=broker_code,
+                        time=time,
+                        net_value=net_value,
+                    )
+                )
 
     if not price_bars:
         return None

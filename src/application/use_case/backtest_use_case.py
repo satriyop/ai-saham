@@ -231,9 +231,7 @@ class BacktestUseCase:
 
         for name, (ind_type, period) in required_indicators.items():
             # Get type name as string for registry lookup
-            type_name = (
-                ind_type.value if isinstance(ind_type, IndicatorType) else ind_type
-            )
+            type_name = ind_type.value if isinstance(ind_type, IndicatorType) else ind_type
             values = self._registry.compute(type_name, candles, period)
             # Convert list of tuples to date-indexed dict
             result[name] = {d: v for d, v in values}

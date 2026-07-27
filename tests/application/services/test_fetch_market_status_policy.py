@@ -23,26 +23,29 @@ def test_is_cached_status_matches_explicit_cache_statuses():
 
 
 def test_no_new_data_status_reports_provider_check_result():
-    assert (
-        no_new_data_status(date(2026, 6, 10))
-        == "up-to-date(2026-06-10)"
-    )
+    assert no_new_data_status(date(2026, 6, 10)) == "up-to-date(2026-06-10)"
     assert no_new_data_status(None) == "no-data"
 
 
 def test_broker_update_status_distinguishes_rows_from_calendar_span():
-    assert broker_update_status(
-        added_count=11,
-        updated_range=(date(2025, 6, 14), date(2026, 6, 14)),
-        fetch_modes={"backfill"},
-    ) == "backfill+11rows/span=366d"
+    assert (
+        broker_update_status(
+            added_count=11,
+            updated_range=(date(2025, 6, 14), date(2026, 6, 14)),
+            fetch_modes={"backfill"},
+        )
+        == "backfill+11rows/span=366d"
+    )
     assert broker_update_status(0, None, {"initial"}) == "no-data"
 
 
 def test_range_update_status_distinguishes_rows_from_calendar_span():
-    assert range_update_status(
-        added_count=11,
-        updated_range=(date(2025, 6, 14), date(2026, 6, 14)),
-        fetch_modes={"backfill"},
-    ) == "backfill+11rows/span=366d"
+    assert (
+        range_update_status(
+            added_count=11,
+            updated_range=(date(2025, 6, 14), date(2026, 6, 14)),
+            fetch_modes={"backfill"},
+        )
+        == "backfill+11rows/span=366d"
+    )
     assert range_update_status(0, None, {"initial"}) == "no-data"

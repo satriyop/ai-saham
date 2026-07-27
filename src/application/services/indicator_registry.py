@@ -82,9 +82,7 @@ class IndicatorRegistry:
         Raises:
             PluginRegistrationError: If name conflicts with built-in or duplicate
         """
-        if not hasattr(plugin_class, "name") or not hasattr(
-            plugin_class, "default_period"
-        ):
+        if not hasattr(plugin_class, "name") or not hasattr(plugin_class, "default_period"):
             raise PluginRegistrationError(
                 f"Plugin {plugin_class.__name__} missing 'name' or 'default_period'"
             )
@@ -92,17 +90,13 @@ class IndicatorRegistry:
         name = plugin_class.name.upper()
 
         if name in BUILTIN_NAMES:
-            raise PluginRegistrationError(
-                f"'{name}' conflicts with built-in indicator"
-            )
+            raise PluginRegistrationError(f"'{name}' conflicts with built-in indicator")
 
         if name in self._plugins:
             raise PluginRegistrationError(f"'{name}' already registered")
 
         if name in self._formulas:
-            raise PluginRegistrationError(
-                f"'{name}' conflicts with registered formula"
-            )
+            raise PluginRegistrationError(f"'{name}' conflicts with registered formula")
 
         self._plugins[name] = (plugin_class, plugin_class.default_period)
 
@@ -123,14 +117,10 @@ class IndicatorRegistry:
         name_upper = name.upper()
 
         if name_upper in BUILTIN_NAMES:
-            raise FormulaRegistrationError(
-                f"'{name}' conflicts with built-in indicator"
-            )
+            raise FormulaRegistrationError(f"'{name}' conflicts with built-in indicator")
 
         if name_upper in self._plugins:
-            raise FormulaRegistrationError(
-                f"'{name}' conflicts with registered plugin"
-            )
+            raise FormulaRegistrationError(f"'{name}' conflicts with registered plugin")
 
         if name_upper in self._formulas:
             raise FormulaRegistrationError(f"'{name}' already registered")
@@ -155,9 +145,7 @@ class IndicatorRegistry:
             ValueError: If indicator name is unknown
         """
         if self._current_candles is None:
-            raise RuntimeError(
-                "get_series() must be called within compute() context"
-            )
+            raise RuntimeError("get_series() must be called within compute() context")
 
         candles = self._current_candles
         name_upper = name.upper()
@@ -266,9 +254,7 @@ class IndicatorRegistry:
         # Example: 100 candles, 86 values -> values[0] maps to candles[14]
         offset = len(candles) - len(values)
 
-        return [
-            (candles[offset + i].date, value) for i, value in enumerate(values)
-        ]
+        return [(candles[offset + i].date, value) for i, value in enumerate(values)]
 
     def _compute_formula(
         self,
@@ -310,10 +296,7 @@ class IndicatorRegistry:
 
             # Align values to dates (values align to end of candles)
             start_idx = len(candles) - len(values)
-            return [
-                (candles[start_idx + i].date, v)
-                for i, v in enumerate(values)
-            ]
+            return [(candles[start_idx + i].date, v) for i, v in enumerate(values)]
         finally:
             self._current_candles = None
 
@@ -375,11 +358,7 @@ class IndicatorRegistry:
         Returns:
             Sorted list of indicator names (built-in + plugins + formulas)
         """
-        all_names = (
-            set(BUILTIN_NAMES)
-            | set(self._plugins.keys())
-            | set(self._formulas.keys())
-        )
+        all_names = set(BUILTIN_NAMES) | set(self._plugins.keys()) | set(self._formulas.keys())
         return sorted(all_names)
 
     def list_formulas(self) -> list[str]:
@@ -400,8 +379,4 @@ class IndicatorRegistry:
         Returns:
             Set of uppercase indicator names
         """
-        return (
-            set(BUILTIN_NAMES)
-            | set(self._plugins.keys())
-            | set(self._formulas.keys())
-        )
+        return set(BUILTIN_NAMES) | set(self._plugins.keys()) | set(self._formulas.keys())

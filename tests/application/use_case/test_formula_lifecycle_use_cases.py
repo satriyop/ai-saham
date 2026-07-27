@@ -46,15 +46,11 @@ class FakeFormulaStore:
     def get(self, name: str) -> StoredFormula | None:
         return self._formulas.get(name.upper())
 
-    def save(
-        self, name: str, formula: str, intent: str | None = None
-    ) -> StoredFormula:
+    def save(self, name: str, formula: str, intent: str | None = None) -> StoredFormula:
         self.save_calls.append((name, formula, intent))
         if self.fail_save is not None:
             raise self.fail_save
-        stored = StoredFormula(
-            name=name, formula=formula, intent=intent, created=datetime.now()
-        )
+        stored = StoredFormula(name=name, formula=formula, intent=intent, created=datetime.now())
         self._formulas[name] = stored
         return stored
 
@@ -92,9 +88,7 @@ class FakeIndicatorRegistry:
 
 
 def _stored(name: str, formula: str = "SMA(20)", intent: str | None = None):
-    return StoredFormula(
-        name=name, formula=formula, intent=intent, created=datetime(2026, 1, 1)
-    )
+    return StoredFormula(name=name, formula=formula, intent=intent, created=datetime(2026, 1, 1))
 
 
 class TestListFormulasUseCase:

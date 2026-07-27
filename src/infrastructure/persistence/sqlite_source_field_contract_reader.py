@@ -84,9 +84,9 @@ class SQLiteSourceFieldContractReader:
             if not all(component in columns for component in derived_from):
                 return RawFieldObservation(field=contract.field, exists=False)
             null_expr = " OR ".join(f"{component} IS NULL" for component in derived_from)
-            null_count = conn.execute(
-                f"SELECT COUNT(*) FROM {table} WHERE {null_expr}"
-            ).fetchone()[0]
+            null_count = conn.execute(f"SELECT COUNT(*) FROM {table} WHERE {null_expr}").fetchone()[
+                0
+            ]
             return RawFieldObservation(field=contract.field, exists=True, null_count=null_count)
 
         if contract.field not in columns:
@@ -101,9 +101,9 @@ class SQLiteSourceFieldContractReader:
         max_value: str | None = None
 
         if stats_mode in ("identity_text", "date", "enum_text"):
-            distinct_count = conn.execute(
-                f"SELECT COUNT(DISTINCT {col}) FROM {table}"
-            ).fetchone()[0]
+            distinct_count = conn.execute(f"SELECT COUNT(DISTINCT {col}) FROM {table}").fetchone()[
+                0
+            ]
 
         if stats_mode == "date":
             row = conn.execute(
@@ -182,8 +182,7 @@ class SQLiteSourceFieldContractReader:
             return
 
         rows = conn.execute(
-            f"SELECT artifact_id, semantic_compatibility_id, artifact_provenance_json "
-            f"FROM {table}"
+            f"SELECT artifact_id, semantic_compatibility_id, artifact_provenance_json FROM {table}"
         ).fetchall()
 
         malformed = 0

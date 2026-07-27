@@ -11,6 +11,7 @@ screening runs before a strategy is evaluated, so it also needs benchmark
 excess return computed to feed `SetupEvidence.benchmark_excess_return_5_session`
 / `benchmark_excess_return_20_session`.
 """
+
 from __future__ import annotations
 
 from datetime import date

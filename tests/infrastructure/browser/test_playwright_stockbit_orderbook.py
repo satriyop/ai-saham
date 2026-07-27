@@ -11,7 +11,7 @@ def _body(bid_price, bid_qty, offer_price, offer_qty):
         "data": {
             "iepiev": {
                 "best_bid_offer": {
-                    "bid":   {"price": {"raw": bid_price},   "quantity": {"raw": bid_qty}},
+                    "bid": {"price": {"raw": bid_price}, "quantity": {"raw": bid_qty}},
                     "offer": {"price": {"raw": offer_price}, "quantity": {"raw": offer_qty}},
                 }
             }
@@ -32,13 +32,13 @@ def test_parse_top_of_book_fallback_to_depth_arrays():
     """When iepiev block is absent, fall back to data.bid[]/data.offer[] arrays."""
     body = {
         "data": {
-            "bid":   [{"price": "4900", "volume": 50_000}],
+            "bid": [{"price": "4900", "volume": 50_000}],
             "offer": [{"price": "4925", "volume": 30_000}],
         }
     }
     bid_price, bid_lots, offer_price, offer_lots = _parse_top_of_book(body)
     assert bid_price == Decimal("4900")
-    assert bid_lots == 500   # 50_000 shares ÷ 100
+    assert bid_lots == 500  # 50_000 shares ÷ 100
     assert offer_price == Decimal("4925")
     assert offer_lots == 300  # 30_000 shares ÷ 100
 
@@ -49,7 +49,7 @@ def test_parse_top_of_book_partial_data_offer_only():
         "data": {
             "iepiev": {
                 "best_bid_offer": {
-                    "bid":   {"price": {"raw": 0}, "quantity": {"raw": 0}},
+                    "bid": {"price": {"raw": 0}, "quantity": {"raw": 0}},
                     "offer": {"price": {"raw": 5_025}, "quantity": {"raw": 150}},
                 }
             },

@@ -105,7 +105,8 @@ class DataQualityAuditUseCase:
             )
 
         core_tables = tuple(
-            table for table in (
+            table
+            for table in (
                 snapshot.candles,
                 snapshot.broker_summaries_idx,
                 snapshot.foreign_flow_stockbit,
@@ -157,8 +158,7 @@ class DataQualityAuditUseCase:
                     severity="fail",
                     code="BAD_CANDLE_OHLC",
                     message=(
-                        f"{snapshot.bad_candle_rows} candle row(s) have invalid "
-                        "OHLC/volume values."
+                        f"{snapshot.bad_candle_rows} candle row(s) have invalid OHLC/volume values."
                     ),
                     impact="Indicators using those rows are not reliable.",
                 )
@@ -195,12 +195,10 @@ class DataQualityAuditUseCase:
                     severity="warn",
                     code="DEGRADED_STOCKBIT_SUMMARIES",
                     message=(
-                        f"{snapshot.stockbit_summary_rows} Stockbit broker summary "
-                        "row(s) remain."
+                        f"{snapshot.stockbit_summary_rows} Stockbit broker summary row(s) remain."
                     ),
                     impact=(
-                        "Stockbit summary total_value is synthetic; prefer IDX for "
-                        "aggregate flow."
+                        "Stockbit summary total_value is synthetic; prefer IDX for aggregate flow."
                     ),
                 )
             )
@@ -270,8 +268,10 @@ class DataQualityAuditUseCase:
                 )
             )
 
-        status = "fail" if any(i.severity == "fail" for i in issues) else (
-            "warn" if any(i.severity == "warn" for i in issues) else "pass"
+        status = (
+            "fail"
+            if any(i.severity == "fail" for i in issues)
+            else ("warn" if any(i.severity == "warn" for i in issues) else "pass")
         )
         return DataQualityAuditResponse(
             status=status,

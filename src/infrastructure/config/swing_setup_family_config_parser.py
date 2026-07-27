@@ -31,9 +31,7 @@ def parse_setup_family_fields(
     pc_gates = pc.get("gates") or {}
 
     return {
-        "foreign_bounce_enabled": bool_or_default(
-            fb, "enabled", defaults.foreign_bounce_enabled
-        ),
+        "foreign_bounce_enabled": bool_or_default(fb, "enabled", defaults.foreign_bounce_enabled),
         "gate_min_accum_score": float_or_default(
             fb_gates, "min_accum_score", defaults.gate_min_accum_score
         ),
@@ -50,18 +48,14 @@ def parse_setup_family_fields(
         "partial_max_failed_gates": int_or_default(
             fb, "partial_max_failed_gates", defaults.partial_max_failed_gates
         ),
-        "foreign_bounce_family": str_or_default(
-            fb, "family", defaults.foreign_bounce_family
-        ),
+        "foreign_bounce_family": str_or_default(fb, "family", defaults.foreign_bounce_family),
         "foreign_bounce_entry_authority": bool_or_default(
             fb, "entry_authority", defaults.foreign_bounce_entry_authority
         ),
         "foreign_bounce_can_enter_from_phases": phase_names_or_default(
             fb, "can_enter_from_phases", defaults.foreign_bounce_can_enter_from_phases
         ),
-        "coiled_spring_enabled": bool_or_default(
-            cs, "enabled", defaults.coiled_spring_enabled
-        ),
+        "coiled_spring_enabled": bool_or_default(cs, "enabled", defaults.coiled_spring_enabled),
         "coiled_spring_gate_min_accum_score": float_or_default(
             cs_gates,
             "min_accum_score",
@@ -79,9 +73,7 @@ def parse_setup_family_fields(
         "coiled_spring_partial_max_failed_gates": int_or_default(
             cs, "partial_max_failed_gates", defaults.coiled_spring_partial_max_failed_gates
         ),
-        "coiled_spring_family": str_or_default(
-            cs, "family", defaults.coiled_spring_family
-        ),
+        "coiled_spring_family": str_or_default(cs, "family", defaults.coiled_spring_family),
         "coiled_spring_entry_authority": bool_or_default(
             cs, "entry_authority", defaults.coiled_spring_entry_authority
         ),
@@ -97,26 +89,31 @@ def parse_setup_family_fields(
             defaults.smart_money_confirmed_gate_min_accum_score,
         ),
         "smart_money_confirmed_gate_min_smart_flow_idr": Decimal(
-            str(float_or_default(
-                smc_gates, "min_smart_flow_idr",
-                float(defaults.smart_money_confirmed_gate_min_smart_flow_idr)
-            ))
+            str(
+                float_or_default(
+                    smc_gates,
+                    "min_smart_flow_idr",
+                    float(defaults.smart_money_confirmed_gate_min_smart_flow_idr),
+                )
+            )
         ),
         "smart_money_confirmed_gate_min_smart_share_pct": float_or_default(
-            smc_gates, "min_smart_share_pct",
-            defaults.smart_money_confirmed_gate_min_smart_share_pct
+            smc_gates,
+            "min_smart_share_pct",
+            defaults.smart_money_confirmed_gate_min_smart_share_pct,
         ),
         "smart_money_confirmed_gate_max_noise_share_pct": float_or_default(
-            smc_gates, "max_noise_share_pct",
-            defaults.smart_money_confirmed_gate_max_noise_share_pct
+            smc_gates,
+            "max_noise_share_pct",
+            defaults.smart_money_confirmed_gate_max_noise_share_pct,
         ),
         "smart_money_confirmed_reject_smart_net_selling": bool_or_default(
-            smc_gates, "reject_smart_net_selling",
-            defaults.smart_money_confirmed_reject_smart_net_selling
+            smc_gates,
+            "reject_smart_net_selling",
+            defaults.smart_money_confirmed_reject_smart_net_selling,
         ),
         "smart_money_confirmed_partial_max_failed_gates": int_or_default(
-            smc, "partial_max_failed_gates",
-            defaults.smart_money_confirmed_partial_max_failed_gates
+            smc, "partial_max_failed_gates", defaults.smart_money_confirmed_partial_max_failed_gates
         ),
         "smart_money_confirmed_family": str_or_default(
             smc, "family", defaults.smart_money_confirmed_family
@@ -131,16 +128,13 @@ def parse_setup_family_fields(
             pc, "enabled", defaults.pullback_continuation_enabled
         ),
         "pullback_continuation_gate_min_accum_score": float_or_default(
-            pc_gates, "min_accum_score",
-            defaults.pullback_continuation_gate_min_accum_score
+            pc_gates, "min_accum_score", defaults.pullback_continuation_gate_min_accum_score
         ),
         "pullback_continuation_gate_required_trend": str_or_default(
-            pc_gates, "required_trend",
-            defaults.pullback_continuation_gate_required_trend
+            pc_gates, "required_trend", defaults.pullback_continuation_gate_required_trend
         ),
         "pullback_continuation_gate_min_flow_ratio_pct": float_or_default(
-            pc_gates, "min_flow_ratio_pct",
-            defaults.pullback_continuation_gate_min_flow_ratio_pct
+            pc_gates, "min_flow_ratio_pct", defaults.pullback_continuation_gate_min_flow_ratio_pct
         ),
         "pullback_continuation_gate_min_rsi": float_or_default(
             pc_gates, "min_rsi", defaults.pullback_continuation_gate_min_rsi
@@ -149,12 +143,12 @@ def parse_setup_family_fields(
             pc_gates, "max_rsi", defaults.pullback_continuation_gate_max_rsi
         ),
         "pullback_continuation_gate_min_vwap_discount_pct": float_or_default(
-            pc_gates, "min_vwap_discount_pct",
-            defaults.pullback_continuation_gate_min_vwap_discount_pct
+            pc_gates,
+            "min_vwap_discount_pct",
+            defaults.pullback_continuation_gate_min_vwap_discount_pct,
         ),
         "pullback_continuation_partial_max_failed_gates": int_or_default(
-            pc, "partial_max_failed_gates",
-            defaults.pullback_continuation_partial_max_failed_gates
+            pc, "partial_max_failed_gates", defaults.pullback_continuation_partial_max_failed_gates
         ),
         "pullback_continuation_family": str_or_default(
             pc, "family", defaults.pullback_continuation_family

@@ -30,11 +30,13 @@ def signal_response_to_dict(
         "coverage_warning": response.coverage_warning,
         "alpha_trigger_score": (
             response.assessment.alpha_trigger_score.to_dict()
-            if response.assessment.alpha_trigger_score else None
+            if response.assessment.alpha_trigger_score
+            else None
         ),
         "decision_constraints": (
             response.assessment.decision_constraints.to_dict()
-            if getattr(response.assessment, "decision_constraints", None) else None
+            if getattr(response.assessment, "decision_constraints", None)
+            else None
         ),
         # DQ-002 Blocker 2 / HIGH-2: source-availability diagnostics.
         # availability_enforcement=ENFORCED means this same availability
@@ -42,15 +44,16 @@ def signal_response_to_dict(
         # second time here to derive score/entry_quality directly.
         "setup_source_availability": (
             response.setup_source_availability.to_dict()
-            if response.setup_source_availability else None
+            if response.setup_source_availability
+            else None
         ),
         "flow_source_availability": (
             response.flow_source_availability.to_dict()
-            if response.flow_source_availability else None
+            if response.flow_source_availability
+            else None
         ),
         "availability_enforcement": (
-            response.availability_enforcement.value
-            if response.availability_enforcement else None
+            response.availability_enforcement.value if response.availability_enforcement else None
         ),
     }
 
@@ -136,32 +139,24 @@ def candidate_accumulation_to_dict(candidate: Any | None) -> dict[str, Any]:
         "bb_width_pctile": candidate.bb_width_pctile,
         "foreign_flow_evidence": (
             candidate.foreign_flow_evidence.to_dict()
-            if getattr(candidate, "foreign_flow_evidence", None) else None
+            if getattr(candidate, "foreign_flow_evidence", None)
+            else None
         ),
         "dividend_risk": candidate.dividend_risk,
         "rights_issue_risk": candidate.rights_issue_risk,
         "upcoming_rups": candidate.upcoming_rups,
-        "seasonal_score": (
-            candidate.seasonal_edge.score if candidate.seasonal_edge else None
-        ),
-        "seasonal_label": (
-            candidate.seasonal_edge.label if candidate.seasonal_edge else None
-        ),
+        "seasonal_score": (candidate.seasonal_edge.score if candidate.seasonal_edge else None),
+        "seasonal_label": (candidate.seasonal_edge.label if candidate.seasonal_edge else None),
         "insider_buying": candidate.insider_buying,
         "recent_insider_buys": candidate.recent_insider_buys,
         "analyst_consensus": (
-            candidate.analyst_consensus.to_dict()
-            if candidate.analyst_consensus else None
+            candidate.analyst_consensus.to_dict() if candidate.analyst_consensus else None
         ),
-        "shareholding": (
-            candidate.shareholding.to_dict() if candidate.shareholding else None
-        ),
+        "shareholding": (candidate.shareholding.to_dict() if candidate.shareholding else None),
         "bandar_detector": (
             candidate.bandar_detector.to_dict() if candidate.bandar_detector else None
         ),
-        "fundamentals": (
-            candidate.fundamentals.to_dict() if candidate.fundamentals else None
-        ),
+        "fundamentals": (candidate.fundamentals.to_dict() if candidate.fundamentals else None),
         "ticker_notation": (
             candidate.ticker_notation.to_dict() if candidate.ticker_notation else None
         ),

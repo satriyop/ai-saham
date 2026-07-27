@@ -90,9 +90,7 @@ def test_empty_candidates_returns_empty_and_never_executes():
     workflows = _all_workflows(response=_response())
     uc = DailySetupLensImpactUseCase(setup_workflows=workflows, request_defaults=DEFAULTS)
 
-    result = uc.execute(
-        DailySetupLensImpactRequest(candidates=(), as_of_date=date(2026, 7, 1))
-    )
+    result = uc.execute(DailySetupLensImpactRequest(candidates=(), as_of_date=date(2026, 7, 1)))
 
     assert result.rows == ()
     for wf in workflows.values():
@@ -284,9 +282,7 @@ def test_unexpected_setup_failure_propagates_same_exception(exception_type):
     with pytest.raises(exception_type) as caught:
         uc.execute(
             DailySetupLensImpactRequest(
-                candidates=(
-                    DailySetupLensImpactCandidate(ticker="BBRI", base_action="WATCH"),
-                ),
+                candidates=(DailySetupLensImpactCandidate(ticker="BBRI", base_action="WATCH"),),
                 as_of_date=date(2026, 7, 1),
             )
         )

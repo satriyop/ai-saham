@@ -300,9 +300,7 @@ def test_live_context_composition_helper_wires_real_ihsg_calendar_provider():
     ihsg_candles = [_candle("IHSG", d, Decimal("7000")) for d in session_dates]
     market_repository = MockMarketRepository(ihsg_candles)
 
-    context_use_case = create_live_signal_evidence_execution_context_use_case(
-        market_repository
-    )
+    context_use_case = create_live_signal_evidence_execution_context_use_case(market_repository)
     run_at = datetime.combine(decision_date, MARKET_CLOSE, tzinfo=IDX_TIMEZONE)
 
     execution_context = context_use_case.execute(run_at=run_at)

@@ -6,6 +6,7 @@ Owns ATR calculation, ATR-based position sizing, setup entry selection,
 setup percent sizing, and swing target resolution. Extracted from
 `SwingAnalysisWorkflowUseCase` to keep the use case as orchestration only.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -53,16 +54,12 @@ class SwingAnalysisSizingService:
         sizing = None
         if request.capital is not None and state.setup_eval is not None and state.setup_eval.passed:
             setup_entry = (
-                Decimal(str(request.entry_price))
-                if request.entry_price
-                else state.latest_close
+                Decimal(str(request.entry_price)) if request.entry_price else state.latest_close
             )
         elif request.capital is not None and state.atr_value and state.setup_eval is None:
             try:
                 entry = (
-                    Decimal(str(request.entry_price))
-                    if request.entry_price
-                    else state.latest_close
+                    Decimal(str(request.entry_price)) if request.entry_price else state.latest_close
                 )
                 sizing = compute_position_size(
                     entry=entry,

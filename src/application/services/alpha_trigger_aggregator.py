@@ -42,16 +42,11 @@ class AlphaTriggerGroupInput:
                 f"AlphaTriggerGroupInput.authority_fraction must be 0.0–1.0, "
                 f"got {self.authority_fraction}"
             )
-        if not self.present and (
-            self.coverage_fraction != 0.0 or self.authority_fraction != 0.0
-        ):
-            raise ValueError(
-                "absent AlphaTriggerGroupInput requires zero coverage and authority"
-            )
+        if not self.present and (self.coverage_fraction != 0.0 or self.authority_fraction != 0.0):
+            raise ValueError("absent AlphaTriggerGroupInput requires zero coverage and authority")
         if self.authority_fraction > self.coverage_fraction:
             raise ValueError(
-                "AlphaTriggerGroupInput.authority_fraction cannot exceed "
-                "coverage_fraction"
+                "AlphaTriggerGroupInput.authority_fraction cannot exceed coverage_fraction"
             )
 
 
@@ -83,7 +78,9 @@ class AlphaTriggerAggregator:
         self,
         request: AlphaTriggerAggregationRequest,
     ) -> AlphaTriggerScore:
-        horizon = request.horizon if request.horizon in self._config.route_fractions else "SWING_10D"
+        horizon = (
+            request.horizon if request.horizon in self._config.route_fractions else "SWING_10D"
+        )
         route_cfg = self._config.route_fractions[horizon]
         alpha_weight = self._config.horizon_alpha_weights.get(horizon, 0.40)
         flow_trigger_allowed, flow_gate_reasons = _flow_trigger_gate(
@@ -106,8 +103,7 @@ class AlphaTriggerAggregator:
         for group_name, alpha_fraction in route_cfg.items():
             group_input = inputs_by_group.get(group_name)
             configured_weight = (
-                max(0.0, group_input.configured_weight)
-                if group_input is not None else 0.0
+                max(0.0, group_input.configured_weight) if group_input is not None else 0.0
             )
             configured_required_weight += configured_weight
 
@@ -197,11 +193,13 @@ class AlphaTriggerAggregator:
 
         coverage = (
             min(1.0, configured_available_weight / configured_required_weight)
-            if configured_required_weight > 0 else 0.0
+            if configured_required_weight > 0
+            else 0.0
         )
         authority_coverage = (
             min(1.0, effective_authority_weight / configured_required_weight)
-            if configured_required_weight > 0 else 0.0
+            if configured_required_weight > 0
+            else 0.0
         )
         conviction = (final_exact / 100.0) if final_exact is not None else 0.0
 
@@ -253,9 +251,7 @@ def _flow_trigger_gate(
     if setup_phase is None:
         reasons.append("flow_trigger_blocked:no_setup_phase")
     elif setup_phase.current_phase.value != "BREAKOUT_CONFIRMATION":
-        reasons.append(
-            "flow_trigger_blocked:setup_phase_not_breakout_confirmation"
-        )
+        reasons.append("flow_trigger_blocked:setup_phase_not_breakout_confirmation")
     if flow_confirmation_evidence is None:
         reasons.append("flow_trigger_blocked:no_flow_confirmation_evidence")
     elif flow_confirmation_evidence.confirmation_status != "CONFIRMED":

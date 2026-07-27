@@ -8,19 +8,19 @@ from src.application.services.flow_confirmation_evidence_builder import (
     FlowConfirmationEvidenceBuilder,
 )
 from src.application.use_case.score_accum_use_case import (
+    AccumScorePolicy,
     BciEvidencePolicy,
     EvidenceComponentPolicy,
-    AccumScorePolicy,
     LinearSaturationPolicy,
     StreakEvidencePolicy,
 )
 from src.domain.entities.broker_flow import BrokerDailyFlow, BrokerSummary
-from src.domain.value_objects.factor_evidence import Direction, Freshness
-from src.domain.value_objects.foreign_flow_evidence import ForeignFlowEvidence
 from src.domain.value_objects.accum_score_breakdown import (
     ForeignFlowComponentScore,
     ForeignFlowComponentStatus,
 )
+from src.domain.value_objects.factor_evidence import Direction, Freshness
+from src.domain.value_objects.foreign_flow_evidence import ForeignFlowEvidence
 
 
 def _broker_summary(ticker: str, day: date, *, source: str = "idx") -> BrokerSummary:
@@ -100,9 +100,9 @@ def _flow_evidence(
         net_buy_days=5,
         total_days=7,
         streak=4,
-        components=tuple(defaults[key] for key in (
-            "cons", "streak", "vwap", "rsi", "flow", "bb", "inst"
-        )),
+        components=tuple(
+            defaults[key] for key in ("cons", "streak", "vwap", "rsi", "flow", "bb", "inst")
+        ),
     )
 
 
@@ -429,23 +429,17 @@ def test_flow_direction_extracted_from_evidence():
     builder = FlowConfirmationEvidenceBuilder()
 
     pos = builder.build(
-        _candidate(
-            flow_evidence=_flow_evidence(_FULL_COMPONENTS, flow_direction="POSITIVE")
-        ),
+        _candidate(flow_evidence=_flow_evidence(_FULL_COMPONENTS, flow_direction="POSITIVE")),
         consumed_broker_summaries=(),
         consumed_broker_daily_flows=(),
     ).evidence
     neg = builder.build(
-        _candidate(
-            flow_evidence=_flow_evidence(_FULL_COMPONENTS, flow_direction="NEGATIVE")
-        ),
+        _candidate(flow_evidence=_flow_evidence(_FULL_COMPONENTS, flow_direction="NEGATIVE")),
         consumed_broker_summaries=(),
         consumed_broker_daily_flows=(),
     ).evidence
     flat = builder.build(
-        _candidate(
-            flow_evidence=_flow_evidence(_FULL_COMPONENTS, flow_direction="FLAT")
-        ),
+        _candidate(flow_evidence=_flow_evidence(_FULL_COMPONENTS, flow_direction="FLAT")),
         consumed_broker_summaries=(),
         consumed_broker_daily_flows=(),
     ).evidence
@@ -591,9 +585,7 @@ def test_all_disabled_flow_strength_is_zero_without_bandar():
             "inst": 12.5,
         }.items()
     )
-    candidate = _candidate(
-        flow_evidence=_flow_evidence(disabled_components), bandar_detector=None
-    )
+    candidate = _candidate(flow_evidence=_flow_evidence(disabled_components), bandar_detector=None)
 
     evidence = builder.build(
         candidate, consumed_broker_summaries=(), consumed_broker_daily_flows=()
@@ -674,9 +666,7 @@ class TestProvenance:
             "BK",
         }
         assert all(r.ticker == "BBCA" for r in built.provenance.broker_daily_flow_rows)
-        assert all(
-            r.source == "stockbit" for r in built.provenance.broker_daily_flow_rows
-        )
+        assert all(r.source == "stockbit" for r in built.provenance.broker_daily_flow_rows)
 
     def test_provenance_excludes_rows_not_passed_in(self):
         builder = FlowConfirmationEvidenceBuilder()
@@ -731,9 +721,7 @@ class TestProvenance:
 
     def test_mismatched_ticker_summary_row_raises(self):
         builder = FlowConfirmationEvidenceBuilder()
-        candidate = _candidate(
-            ticker="BBCA", flow_evidence=_flow_evidence(_FULL_COMPONENTS)
-        )
+        candidate = _candidate(ticker="BBCA", flow_evidence=_flow_evidence(_FULL_COMPONENTS))
         foreign_row = (_broker_summary("ASII", date(2026, 6, 1)),)
 
         with pytest.raises(ValueError, match="ticker mismatch"):
@@ -745,9 +733,7 @@ class TestProvenance:
 
     def test_mismatched_ticker_daily_flow_row_raises(self):
         builder = FlowConfirmationEvidenceBuilder()
-        candidate = _candidate(
-            ticker="BBCA", flow_evidence=_flow_evidence(_FULL_COMPONENTS)
-        )
+        candidate = _candidate(ticker="BBCA", flow_evidence=_flow_evidence(_FULL_COMPONENTS))
         foreign_row = (_broker_daily_flow("ASII", date(2026, 6, 1), "AK"),)
 
         with pytest.raises(ValueError, match="ticker mismatch"):

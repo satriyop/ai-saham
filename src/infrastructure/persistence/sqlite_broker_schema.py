@@ -171,18 +171,20 @@ def _migrate_foreign_flow_points_if_needed(db_path: str | Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(str(path))
         try:
-            old_exists = conn.execute(
-                """
+            old_exists = (
+                conn.execute("""
                 SELECT 1 FROM sqlite_master
                 WHERE type='table' AND name='broker_flow_points'
-                """
-            ).fetchone() is not None
-            new_exists = conn.execute(
-                """
+                """).fetchone()
+                is not None
+            )
+            new_exists = (
+                conn.execute("""
                 SELECT 1 FROM sqlite_master
                 WHERE type='table' AND name='foreign_flow_points'
-                """
-            ).fetchone() is not None
+                """).fetchone()
+                is not None
+            )
 
             if not old_exists:
                 return
@@ -209,9 +211,7 @@ def _migrate_foreign_flow_points_if_needed(db_path: str | Path) -> None:
         finally:
             conn.close()
     except sqlite3.Error as e:
-        raise BrokerDataRepositoryError(
-            f"Failed to migrate foreign_flow_points: {e}"
-        ) from e
+        raise BrokerDataRepositoryError(f"Failed to migrate foreign_flow_points: {e}") from e
 
 
 def _migrate_broker_daily_flow_if_needed(db_path: str | Path) -> None:
@@ -243,9 +243,7 @@ def _migrate_broker_daily_flow_if_needed(db_path: str | Path) -> None:
         finally:
             conn.close()
     except sqlite3.Error as e:
-        raise BrokerDataRepositoryError(
-            f"Failed to migrate broker_daily_flow: {e}"
-        ) from e
+        raise BrokerDataRepositoryError(f"Failed to migrate broker_daily_flow: {e}") from e
 
 
 def _cleanup_stockbit_summaries_superseded_by_idx(db_path: str | Path) -> None:
@@ -257,9 +255,12 @@ def _cleanup_stockbit_summaries_superseded_by_idx(db_path: str | Path) -> None:
     """
     try:
         with connect_sqlite_broker_db(db_path) as conn:
-            if conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='broker_summaries'"
-            ).fetchone() is None:
+            if (
+                conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='broker_summaries'"
+                ).fetchone()
+                is None
+            ):
                 return
             conn.execute("""
                 DELETE FROM broker_summaries
@@ -272,6 +273,4 @@ def _cleanup_stockbit_summaries_superseded_by_idx(db_path: str | Path) -> None:
                   )
             """)
     except sqlite3.Error as e:
-        raise BrokerDataRepositoryError(
-            f"Failed to clean up stockbit broker_summaries: {e}"
-        ) from e
+        raise BrokerDataRepositoryError(f"Failed to clean up stockbit broker_summaries: {e}") from e

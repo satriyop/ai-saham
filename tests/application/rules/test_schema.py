@@ -370,69 +370,83 @@ class TestFacadeExports:
     def test_indicator_type_is_canonical(self):
         from src.application.rules import indicator_schema
         from src.application.rules.schema import IndicatorType
+
         assert IndicatorType is indicator_schema.IndicatorType
 
     def test_builtin_indicators_is_canonical(self):
         from src.application.rules import indicator_schema
         from src.application.rules.schema import BUILTIN_INDICATORS
+
         assert BUILTIN_INDICATORS is indicator_schema.BUILTIN_INDICATORS
 
     def test_indicator_alias_is_canonical(self):
         from src.application.rules import indicator_schema
         from src.application.rules.schema import Indicator
+
         assert Indicator is indicator_schema.Indicator
 
     def test_indicator_definition_is_canonical(self):
         from src.application.rules import indicator_schema
         from src.application.rules.schema import IndicatorDefinition
+
         assert IndicatorDefinition is indicator_schema.IndicatorDefinition
 
     def test_operator_is_canonical(self):
         from src.application.rules import condition_schema
         from src.application.rules.schema import Operator
+
         assert Operator is condition_schema.Operator
 
     def test_indicator_ref_is_canonical(self):
         from src.application.rules import condition_schema
         from src.application.rules.schema import IndicatorRef
+
         assert IndicatorRef is condition_schema.IndicatorRef
 
     def test_condition_indicator_vs_value_is_canonical(self):
         from src.application.rules import condition_schema
         from src.application.rules.schema import ConditionIndicatorVsValue
+
         assert ConditionIndicatorVsValue is condition_schema.ConditionIndicatorVsValue
 
     def test_condition_indicator_vs_indicator_is_canonical(self):
         from src.application.rules import condition_schema
         from src.application.rules.schema import ConditionIndicatorVsIndicator
+
         assert ConditionIndicatorVsIndicator is condition_schema.ConditionIndicatorVsIndicator
 
     def test_compound_condition_is_canonical(self):
         from src.application.rules import condition_schema
         from src.application.rules.schema import CompoundCondition
+
         assert CompoundCondition is condition_schema.CompoundCondition
 
     def test_condition_union_is_canonical(self):
         from src.application.rules import condition_schema
         from src.application.rules.schema import Condition
+
         assert Condition is condition_schema.Condition
 
     def test_outcome_is_canonical(self):
         from src.application.rules import outcome_schema
         from src.application.rules.schema import Outcome
+
         assert Outcome is outcome_schema.Outcome
 
     def test_signal_mapping_is_canonical(self):
         from src.application.rules import outcome_schema
         from src.application.rules.schema import SignalMapping
+
         assert SignalMapping is outcome_schema.SignalMapping
 
     def test_rule_is_canonical(self):
         from src.application.rules import rule_schema
         from src.application.rules.schema import Rule
+
         assert Rule is rule_schema.Rule
 
     def test_rule_set_is_canonical(self):
         from src.application.rules import rule_schema
         from src.application.rules.schema import RuleSet
+
         assert RuleSet is rule_schema.RuleSet

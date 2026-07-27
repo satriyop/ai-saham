@@ -44,6 +44,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
 def _parse_chart(broker_code: str, body: dict) -> IntradayBrokerChart | None:
     data = body.get("data") if isinstance(body, dict) else None
     if not isinstance(data, dict):
@@ -93,10 +94,12 @@ def _parse_chart(broker_code: str, body: dict) -> IntradayBrokerChart | None:
                 net_value = Decimal(0)
             points.append(IntradayBrokerChartPoint(time=time, net_value=net_value))
         if points:
-            symbol_charts.append(IntradayBrokerSymbolChart(
-                symbol=symbol,
-                points=tuple(points),
-            ))
+            symbol_charts.append(
+                IntradayBrokerSymbolChart(
+                    symbol=symbol,
+                    points=tuple(points),
+                )
+            )
 
     if not symbol_charts:
         return None

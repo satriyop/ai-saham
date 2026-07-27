@@ -12,14 +12,11 @@ from typing import Annotated, Optional
 import typer
 
 from src.adapters.cli.inspect_sentiment_display import (
-    display_sentiment_audit,
     display_sentiment_full,
 )
 from src.adapters.cli.inspect_sentiment_workflow_factory import (
-    create_audit_sentiment_use_case,
     create_fetch_sentiment_use_case,
 )
-from src.application.use_case.audit_sentiment_use_case import AuditSentimentRequest
 from src.application.use_case.fetch_sentiment_use_case import FetchSentimentRequest
 from src.infrastructure.config.app_config import load_app_config
 

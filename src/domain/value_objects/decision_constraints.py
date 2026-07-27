@@ -28,13 +28,11 @@ class DecisionConstraints:
     def __post_init__(self) -> None:
         if not (0.0 <= self.regime_size_multiplier <= 1.0):
             raise ValueError(
-                "regime_size_multiplier must be 0.0-1.0, "
-                f"got {self.regime_size_multiplier}"
+                f"regime_size_multiplier must be 0.0-1.0, got {self.regime_size_multiplier}"
             )
         if not (0.0 <= self.effective_size_multiplier <= 1.0):
             raise ValueError(
-                "effective_size_multiplier must be 0.0-1.0, "
-                f"got {self.effective_size_multiplier}"
+                f"effective_size_multiplier must be 0.0-1.0, got {self.effective_size_multiplier}"
             )
 
     def to_dict(self) -> dict:

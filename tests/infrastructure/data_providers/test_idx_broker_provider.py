@@ -243,9 +243,7 @@ class TestFetchBrokerSummaries:
 
         provider = IdxBrokerDataProvider()
         # 2025-01-20 (Mon) to 2025-01-26 (Sun) = 5 weekdays
-        provider.fetch_broker_summaries(
-            "BBCA", date(2025, 1, 20), date(2025, 1, 26)
-        )
+        provider.fetch_broker_summaries("BBCA", date(2025, 1, 20), date(2025, 1, 26))
 
         # Should have called API 5 times (Mon-Fri), not 7
         assert mock_client.get.call_count == 5
@@ -298,9 +296,7 @@ class TestFetchBrokerSummaries:
         ]
 
         provider = IdxBrokerDataProvider()
-        summaries = provider.fetch_broker_summaries(
-            "BBCA", date(2025, 1, 20), date(2025, 1, 21)
-        )
+        summaries = provider.fetch_broker_summaries("BBCA", date(2025, 1, 20), date(2025, 1, 21))
 
         # Day 1 is holiday (403 → empty), day 2 has data → 1 summary
         assert len(summaries) == 1

@@ -7,6 +7,7 @@ enrichment already loaded on the candidate (forward P/E, analyst, insider,
 seasonality) via the shared SignalContext builder — no extra provider fetch.
 Zero effective score authority (DIAGNOSTIC -> effective_weight 0.0).
 """
+
 from __future__ import annotations
 
 from datetime import date

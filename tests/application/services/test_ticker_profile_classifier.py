@@ -91,10 +91,7 @@ def _candle(offset: int, *, high: float, low: float, close: float, volume: int) 
 def _flat_candles(
     n: int, *, high=100.0, low=99.0, close=100.0, volume=10_000
 ) -> tuple[Candle, ...]:
-    return tuple(
-        _candle(off, high=high, low=low, close=close, volume=volume)
-        for off in range(n)
-    )
+    return tuple(_candle(off, high=high, low=low, close=close, volume=volume) for off in range(n))
 
 
 def _flow(code: str, offset: int, *, buy: float) -> BrokerDailyFlow:
@@ -153,8 +150,7 @@ def _request(**overrides) -> TickerProfileRequest:
 def test_liquidity_score_high_volume_candles():
     # high=1000, volume=100_000_000 -> daily_value=100B IDR >= 50B high -> ~1.0
     candles = tuple(
-        _candle(off, high=1000.0, low=990.0, close=1000.0, volume=100_000_000)
-        for off in range(12)
+        _candle(off, high=1000.0, low=990.0, close=1000.0, volume=100_000_000) for off in range(12)
     )
     snap = _classifier().classify(_request(candles=candles))
     assert snap.liquidity_score == pytest.approx(1.0, abs=1e-4)
@@ -163,8 +159,7 @@ def test_liquidity_score_high_volume_candles():
 def test_liquidity_score_low_volume_candles():
     # high=100, volume=1000 -> daily_value=100k IDR <= 500M low -> 0.0
     candles = tuple(
-        _candle(off, high=100.0, low=99.0, close=100.0, volume=1000)
-        for off in range(12)
+        _candle(off, high=100.0, low=99.0, close=100.0, volume=1000) for off in range(12)
     )
     snap = _classifier().classify(_request(candles=candles))
     assert snap.liquidity_score == pytest.approx(0.0, abs=1e-4)
@@ -222,9 +217,7 @@ def test_market_cap_bucket_micro():
 
 
 def test_market_cap_bucket_unknown_when_unavailable():
-    snap = _classifier().classify(
-        _request(candles=_flat_candles(12), market_cap_idr=None)
-    )
+    snap = _classifier().classify(_request(candles=_flat_candles(12), market_cap_idr=None))
     assert snap.market_cap_bucket == "UNKNOWN"
 
 
@@ -279,8 +272,7 @@ def test_market_tier_speculative():
     # daily_value = 100 * 1000 = 100k -> ~0.0 liquidity.
     # True ATR: prev_close=100, high=150, low=50 -> TR=100, /100 = 1.0 -> saturates 1.0.
     candles = tuple(
-        _candle(off, high=150.0, low=50.0, close=100.0, volume=1000)
-        for off in range(12)
+        _candle(off, high=150.0, low=50.0, close=100.0, volume=1000) for off in range(12)
     )
     clf = _classifier(index={})
     # No market cap so bucket None; index 0.0. speculative must beat third_liner:
@@ -391,18 +383,14 @@ def test_broker_concentration_hhi_local_only():
         _flow(LOCAL2, 0, buy=100.0),
         _flow(FOREIGN, 0, buy=1000.0),  # excluded (foreign)
     )
-    snap = _classifier().classify(
-        _request(candles=_flat_candles(12), broker_daily_flows=flows)
-    )
+    snap = _classifier().classify(_request(candles=_flat_candles(12), broker_daily_flows=flows))
     assert snap.broker_concentration_score == pytest.approx(0.5, abs=1e-6)
 
 
 def test_foreign_flow_score_from_summaries():
     # foreign (buy+sell) / total = (30+10)/100 = 0.4
     summaries = (_summary(0, fb=30.0, fs=10.0, total=100.0),)
-    snap = _classifier().classify(
-        _request(candles=_flat_candles(12), broker_summaries=summaries)
-    )
+    snap = _classifier().classify(_request(candles=_flat_candles(12), broker_summaries=summaries))
     assert snap.foreign_flow_score == pytest.approx(0.4, abs=1e-6)
 
 
@@ -412,8 +400,7 @@ def test_foreign_flow_score_from_summaries():
 def _liquid_candles(n: int) -> tuple[Candle, ...]:
     # high=1000, volume=100M -> daily_value=100B >= 50B high -> liquidity ~1.0
     return tuple(
-        _candle(off, high=1000.0, low=990.0, close=1000.0, volume=100_000_000)
-        for off in range(n)
+        _candle(off, high=1000.0, low=990.0, close=1000.0, volume=100_000_000) for off in range(n)
     )
 
 
@@ -429,9 +416,7 @@ def test_exposure_sums_to_one():
 
 def test_foreign_institutional_profile_high_foreign_flow():
     # High foreign flow + LQ45 membership + large cap -> foreign_institutional.
-    summaries = tuple(
-        _summary(off, fb=90.0, fs=0.0, total=100.0) for off in range(12)
-    )
+    summaries = tuple(_summary(off, fb=90.0, fs=0.0, total=100.0) for off in range(12))
     clf = _classifier(index={"BBCA": ("lq45",)})
     snap = clf.classify(
         _request(
@@ -451,9 +436,7 @@ def test_foreign_institutional_profile_high_foreign_flow():
 def test_domestic_bandar_profile_high_concentration():
     # One dominant local broker (HHI ~1.0) + low foreign flow -> domestic_bandar.
     flows = tuple(_flow(LOCAL, off, buy=100.0) for off in range(12))
-    summaries = tuple(
-        _summary(off, fb=5.0, fs=0.0, total=100.0) for off in range(12)
-    )
+    summaries = tuple(_summary(off, fb=5.0, fs=0.0, total=100.0) for off in range(12))
     snap = _classifier().classify(
         _request(
             ticker="BAND",
@@ -468,8 +451,7 @@ def test_domestic_bandar_profile_high_concentration():
 def test_retail_speculative_profile_high_volatility_illiquid():
     # High volatility + illiquid + micro cap -> retail_speculative.
     candles = tuple(
-        _candle(off, high=150.0, low=50.0, close=100.0, volume=1000)
-        for off in range(12)
+        _candle(off, high=150.0, low=50.0, close=100.0, volume=1000) for off in range(12)
     )
     snap = _classifier().classify(
         _request(
@@ -484,9 +466,7 @@ def test_retail_speculative_profile_high_volatility_illiquid():
 def test_profile_confidence_is_exposure_margin_not_coverage():
     # FI-heavy ticker: flows absent -> coverage 0.8, but confidence is the
     # exposure margin (primary minus second), which must differ from coverage.
-    summaries = tuple(
-        _summary(off, fb=90.0, fs=0.0, total=100.0) for off in range(12)
-    )
+    summaries = tuple(_summary(off, fb=90.0, fs=0.0, total=100.0) for off in range(12))
     clf = _classifier(index={"BBCA": ("lq45",)})
     snap = clf.classify(
         _request(

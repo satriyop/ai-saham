@@ -46,9 +46,8 @@ def test_same_config_resolves_to_identical_id() -> None:
 def test_changed_config_value_forks_the_id() -> None:
     base = "accumulation_screener:\n  min_signal_score: 40\n"
     changed = "accumulation_screener:\n  min_signal_score: 41\n"
-    assert (
-        resolve_lean_semantic_compatibility_id(base)
-        != resolve_lean_semantic_compatibility_id(changed)
+    assert resolve_lean_semantic_compatibility_id(base) != resolve_lean_semantic_compatibility_id(
+        changed
     )
 
 
@@ -58,14 +57,17 @@ def test_id_folds_in_contract_versions() -> None:
     import hashlib
 
     config = "x: 1\n"
-    expected = "sha256:" + hashlib.sha256(
-        (
-            config
-            + str(CANDIDATE_OBSERVATION_SCHEMA_VERSION)
-            + SEMANTIC_ENGINE_VERSION
-            + EVIDENCE_CONTRACT_VERSION
-        ).encode("utf-8")
-    ).hexdigest()
+    expected = (
+        "sha256:"
+        + hashlib.sha256(
+            (
+                config
+                + str(CANDIDATE_OBSERVATION_SCHEMA_VERSION)
+                + SEMANTIC_ENGINE_VERSION
+                + EVIDENCE_CONTRACT_VERSION
+            ).encode("utf-8")
+        ).hexdigest()
+    )
     assert resolve_lean_semantic_compatibility_id(config).value == expected
 
 

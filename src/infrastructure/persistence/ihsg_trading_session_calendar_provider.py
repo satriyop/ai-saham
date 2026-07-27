@@ -39,9 +39,9 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
 from src.domain.value_objects.benchmark_symbol import BenchmarkTickerAliases
-from src.domain.ports.market_data_repository import MarketDataRepository
 
 DEFAULT_BENCHMARK_ALIASES = BenchmarkTickerAliases(canonical="IHSG", legacy="^JKSE")
 
@@ -115,5 +115,7 @@ class IHSGTradingSessionCalendarProvider:
             return None
 
         return KnownTradingSessionCalendar(
-            sessions=tuple(sorted(sessions)), coverage_start=coverage_start, coverage_end=coverage_end
+            sessions=tuple(sorted(sessions)),
+            coverage_start=coverage_start,
+            coverage_end=coverage_end,
         )

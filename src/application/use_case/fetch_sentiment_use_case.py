@@ -197,16 +197,20 @@ class FetchSentimentUseCase:
                 cat_counts = {}
                 for r in results:
                     cat_counts[r.catalyst] = cat_counts.get(r.catalyst, 0) + 1
-                primary_catalyst = max(cat_counts, key=cat_counts.get) if cat_counts else CatalystType.GENERAL
+                primary_catalyst = (
+                    max(cat_counts, key=cat_counts.get) if cat_counts else CatalystType.GENERAL
+                )
 
-                self._sentiment_repo.save_log(SentimentLog(
-                    id=None,
-                    date=today,
-                    ticker=ticker,
-                    sentiment=snapshot.overall_sentiment,
-                    catalyst=primary_catalyst,
-                    score=float(snapshot.confidence_pct) / 100.0
-                ))
+                self._sentiment_repo.save_log(
+                    SentimentLog(
+                        id=None,
+                        date=today,
+                        ticker=ticker,
+                        sentiment=snapshot.overall_sentiment,
+                        catalyst=primary_catalyst,
+                        score=float(snapshot.confidence_pct) / 100.0,
+                    )
+                )
             except Exception:
                 pass  # Logging is secondary to the immediate result
 

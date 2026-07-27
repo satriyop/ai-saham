@@ -165,9 +165,7 @@ class TickerProfileClassifier:
         memberships: tuple[str, ...] = ()
         try:
             memberships = self._universe_index.get(ticker, ())
-            index_membership_score: float | None = self._index_membership(
-                memberships
-            )
+            index_membership_score: float | None = self._index_membership(memberships)
         except Exception as exc:  # noqa: BLE001 - never let membership kill build
             index_membership_score = 0.0
             unavailable.append(f"index_membership_failed:{exc}")
@@ -263,9 +261,7 @@ class TickerProfileClassifier:
         if not values:
             raise _Unavailable("no_valid_candles")
         mean_value = _mean(values)
-        return _saturating(
-            mean_value, self._config.liquidity_low, self._config.liquidity_high
-        )
+        return _saturating(mean_value, self._config.liquidity_low, self._config.liquidity_high)
 
     def _broker_concentration(
         self, flows: tuple[BrokerDailyFlow, ...], window: int
@@ -283,19 +279,14 @@ class TickerProfileClassifier:
         hhi = sum((v / total_local_buy) ** 2 for v in by_broker.values())
         return _clamp01(hhi)
 
-    def _foreign_flow(
-        self, summaries: tuple[BrokerSummary, ...], window: int
-    ) -> float | None:
+    def _foreign_flow(self, summaries: tuple[BrokerSummary, ...], window: int) -> float | None:
         ordered = sorted(summaries, key=lambda s: s.date)[-window:]
         ratios: list[float] = []
         for summary in ordered:
             total = float(summary.total_value)
             if total == 0:
                 continue
-            ratio = (
-                float(summary.foreign_buy_value)
-                + float(summary.foreign_sell_value)
-            ) / total
+            ratio = (float(summary.foreign_buy_value) + float(summary.foreign_sell_value)) / total
             ratios.append(ratio)
         if not ratios:
             raise _Unavailable("no_valid_sessions")
@@ -319,9 +310,7 @@ class TickerProfileClassifier:
         if not true_ranges:
             raise _Unavailable("no_valid_candles")
         mean_tr = _mean(true_ranges)
-        return _saturating(
-            mean_tr, self._config.volatility_low, self._config.volatility_high
-        )
+        return _saturating(mean_tr, self._config.volatility_low, self._config.volatility_high)
 
     def _index_membership(self, memberships: tuple[str, ...]) -> float:
         if not memberships:
@@ -379,9 +368,7 @@ class TickerProfileClassifier:
     # Helpers
     # =================================================================== #
     @staticmethod
-    def _flows_in_window(
-        flows: tuple[BrokerDailyFlow, ...], window: int
-    ) -> list[BrokerDailyFlow]:
+    def _flows_in_window(flows: tuple[BrokerDailyFlow, ...], window: int) -> list[BrokerDailyFlow]:
         if not flows:
             return []
         dates = sorted({flow.date for flow in flows})[-window:]

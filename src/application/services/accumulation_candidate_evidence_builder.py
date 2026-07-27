@@ -131,9 +131,7 @@ class AccumulationCandidateEvidenceBuilder:
             market_repository, candidate_observations_repository
         )
         self._institutional_assembler = CandidateInstitutionalAccumulationEvidenceAssembler(
-            _normalize_institutional_accumulation_factory(
-                institutional_accumulation_config_factory
-            )
+            _normalize_institutional_accumulation_factory(institutional_accumulation_config_factory)
         )
         self._ticker_profile_assembler = CandidateTickerProfileEvidenceAssembler(
             ticker_profile_classifier_factory
@@ -279,9 +277,7 @@ class AccumulationCandidateEvidenceBuilder:
             ):
                 market_cap_idr = Decimal(str(candidate.fundamentals.market_cap_idr))
             sector = (
-                candidate.ticker_notation.sector
-                if candidate.ticker_notation is not None
-                else None
+                candidate.ticker_notation.sector if candidate.ticker_notation is not None else None
             )
             sub_sector = (
                 candidate.ticker_notation.sub_sector
@@ -332,9 +328,7 @@ class AccumulationCandidateEvidenceBuilder:
         try:
             sc_builder = self._sector_context_builder_factory()
             sector = (
-                candidate.ticker_notation.sector
-                if candidate.ticker_notation is not None
-                else None
+                candidate.ticker_notation.sector if candidate.ticker_notation is not None else None
             ) or (tp_snapshot.sector if tp_snapshot is not None else None)
             peer_tickers = sc_builder.peers_for_ticker(candidate.ticker)
             inputs = self._data_loader.load_sector_context_inputs(

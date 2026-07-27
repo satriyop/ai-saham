@@ -176,9 +176,7 @@ class PreOpenScreenUseCase:
 
             # Floor-price filter: skip if previous close or IEP is at or below IDX floor price (50)
             if prev_close is not None and prev_close <= 50:
-                reason = (
-                    f"{ticker}: SKIP_FLOOR — previous close is at the IDX floor price (50)"
-                )
+                reason = f"{ticker}: SKIP_FLOOR — previous close is at the IDX floor price (50)"
                 warnings.append(reason)
                 filter_rejects.append(
                     PreOpenFilterReject(
@@ -267,9 +265,7 @@ class PreOpenScreenUseCase:
                 and stop_loss_price is not None
                 and entry_price <= stop_loss_price
             ):
-                reason = (
-                    f"{ticker}: SKIP_FLOOR — entry <= stop (one_r=0, at price floor)"
-                )
+                reason = f"{ticker}: SKIP_FLOOR — entry <= stop (one_r=0, at price floor)"
                 warnings.append(reason)
                 filter_rejects.append(
                     PreOpenFilterReject(
@@ -299,9 +295,7 @@ class PreOpenScreenUseCase:
             fvwap_discount_pct: float | None = None
 
             if self._broker_repository is not None:
-                current_price = (
-                    ob_ctx.bid_price if ob_ctx.bid_price is not None else prev_close
-                )
+                current_price = ob_ctx.bid_price if ob_ctx.bid_price is not None else prev_close
                 broker_sig = assess_pre_open_broker_signals(
                     self._broker_repository,
                     ticker=ticker,

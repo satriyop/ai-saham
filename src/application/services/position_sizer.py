@@ -21,16 +21,16 @@ class SizingResult:
     atr_multiplier: Decimal
     stop_price: Decimal
     stop_distance: Decimal
-    stop_pct: Decimal           # negative %
+    stop_pct: Decimal  # negative %
     target_price: Decimal
-    target_pct: Decimal         # positive %
+    target_pct: Decimal  # positive %
     reward_risk_ratio: Decimal
     capital: Decimal
-    risk_amount: Decimal        # capital × risk_pct
+    risk_amount: Decimal  # capital × risk_pct
     reward_amount: Decimal
-    lots: int                   # floor(shares_raw / 100)
-    shares: int                 # lots × 100
-    position_cost: Decimal      # shares × entry_price
+    lots: int  # floor(shares_raw / 100)
+    shares: int  # lots × 100
+    position_cost: Decimal  # shares × entry_price
     capital_used_pct: Decimal
 
 
@@ -98,9 +98,7 @@ def compute_position_size(
     shares = lots * SHARES_PER_LOT
 
     position_cost = Decimal(str(shares)) * entry
-    capital_used_pct = (
-        position_cost / capital * Decimal("100") if capital > 0 else Decimal("0")
-    )
+    capital_used_pct = position_cost / capital * Decimal("100") if capital > 0 else Decimal("0")
 
     return SizingResult(
         entry_price=entry,
@@ -166,9 +164,7 @@ def compute_percent_position_size(
     lots = shares_raw // SHARES_PER_LOT
     shares = lots * SHARES_PER_LOT
     position_cost = Decimal(str(shares)) * entry
-    capital_used_pct = (
-        position_cost / capital * Decimal("100") if capital > 0 else Decimal("0")
-    )
+    capital_used_pct = position_cost / capital * Decimal("100") if capital > 0 else Decimal("0")
 
     return PercentSizingResult(
         entry_price=entry,

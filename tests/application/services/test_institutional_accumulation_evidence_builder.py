@@ -192,9 +192,7 @@ def test_missing_bandar_marks_reason_but_track_still_available():
     for off in range(10):
         for code in (LOCAL, LOCAL2, LOCAL3):
             flows.append(_flow(code, off, buy=100.0, sell=10.0))
-    result = _builder().build(
-        _request(broker_daily_flows=tuple(flows), bandar_snapshot=None)
-    )
+    result = _builder().build(_request(broker_daily_flows=tuple(flows), bandar_snapshot=None))
     track = result.domestic_bandar_track
     assert track.bandar_broad_score_normalized is None
     assert "bandar_snapshot_unavailable" in track.unavailable_reasons
@@ -241,9 +239,7 @@ def test_cnfb_divergence_positive_flow_flat_price_scores_one():
     # 20 sessions of steady positive foreign net flow, flat close.
     points = tuple(_ffp(off, 100.0) for off in range(20))
     candles = tuple(_candle(off, 500.0) for off in range(20))
-    result = _builder().build(
-        _request(foreign_flow_points=points, candles=candles)
-    )
+    result = _builder().build(_request(foreign_flow_points=points, candles=candles))
     track = result.foreign_institutional_track
     # cnfb slope > 0, price slope == 0 -> bullish score 1.0
     assert track.cnfb_divergence_score == pytest.approx(1.0, abs=1e-4)
@@ -257,9 +253,7 @@ def test_below_min_sessions_marks_metric_unavailable():
     # Only 5 CNFB points (< 15 min for 20d, < 22 for 30d) -> divergence None.
     points = tuple(_ffp(off, 100.0) for off in range(5))
     candles = tuple(_candle(off, 500.0) for off in range(5))
-    result = _builder().build(
-        _request(foreign_flow_points=points, candles=candles)
-    )
+    result = _builder().build(_request(foreign_flow_points=points, candles=candles))
     track = result.foreign_institutional_track
     assert track.cnfb_divergence_score is None
     assert track.coverage_score < 1.0
@@ -275,9 +269,7 @@ def test_missing_foreign_flows_keeps_domestic_coverage():
     for off in range(10):
         for code in (LOCAL, LOCAL2, LOCAL3):
             flows.append(_flow(code, off, buy=100.0, sell=10.0))
-    result = _builder().build(
-        _request(broker_daily_flows=tuple(flows), bandar_snapshot=_bandar())
-    )
+    result = _builder().build(_request(broker_daily_flows=tuple(flows), bandar_snapshot=_bandar()))
     assert result.domestic_bandar_track.coverage_score > 0.0
     # foreign participation/concentration unavailable but doesn't kill domestic
     assert result.foreign_institutional_track.foreign_cr4_score is None
@@ -394,6 +386,7 @@ def test_config_dataclass_has_no_evidence_status_field():
 # Central evidence authority: every producer result is DIAGNOSTIC
 # --------------------------------------------------------------------------- #
 
+
 def test_successful_full_build_is_diagnostic_everywhere():
     flows = []
     for off in range(30):
@@ -497,9 +490,7 @@ def test_cnfb_bullish_scores_stored_per_window_in_metadata():
     # 20 sessions: verify both 20d and 30d sub-keys are stored in metadata.
     points = tuple(_ffp(off, 100.0) for off in range(30))
     candles = tuple(_candle(off, 500.0) for off in range(30))
-    result = _builder().build(
-        _request(foreign_flow_points=points, candles=candles)
-    )
+    result = _builder().build(_request(foreign_flow_points=points, candles=candles))
     bullish = result.metadata.get("cnfb_bullish_scores", {})
     assert "cnfb_20d" in bullish, "cnfb_20d raw score must be stored in metadata"
     assert "cnfb_30d" in bullish, "cnfb_30d raw score must be stored in metadata"
@@ -510,9 +501,7 @@ def test_cnfb_bearish_scores_stored_per_window_in_metadata():
     # Bearish: positive cumulative CNFB slope (foreign selling) + rising price.
     points = tuple(_ffp(off, -50.0) for off in range(7))
     candles = tuple(_candle(off, 500.0 + off * 10) for off in range(7))
-    result = _builder().build(
-        _request(foreign_flow_points=points, candles=candles)
-    )
+    result = _builder().build(_request(foreign_flow_points=points, candles=candles))
     bearish = result.metadata.get("cnfb_bearish_scores", {})
     # At least cnfb_3d should be present if min sessions (2/3) are met.
     assert "cnfb_3d" in bearish, "cnfb_3d bearish score must be in cnfb_bearish_scores"
@@ -526,9 +515,7 @@ def test_ia_fingerprint_reads_raw_cnfb_window_keys():
 
     points = tuple(_ffp(off, 100.0) for off in range(30))
     candles = tuple(_candle(off, 500.0) for off in range(30))
-    result = _builder().build(
-        _request(foreign_flow_points=points, candles=candles)
-    )
+    result = _builder().build(_request(foreign_flow_points=points, candles=candles))
     fp = _ia_evidence_fingerprint(result)
     # Raw 20d score is in metadata["cnfb_bullish_scores"]["cnfb_20d"]
     expected_20d = result.metadata["cnfb_bullish_scores"]["cnfb_20d"]
@@ -541,13 +528,12 @@ def test_ia_fingerprint_reads_raw_cnfb_window_keys():
 # Broker classification config tests (Part 1)
 # --------------------------------------------------------------------------- #
 
+
 def test_config_loads_foreign_broker_codes_from_yaml():
     """YAML broker_classification.foreign_broker_codes is parsed into frozenset."""
     raw = {
         "institutional_accumulation": {
-            "broker_classification": {
-                "foreign_broker_codes": ["zp", " YU ", "ak"]
-            },
+            "broker_classification": {"foreign_broker_codes": ["zp", " YU ", "ak"]},
         }
     }
     config = InstitutionalAccumulationConfig.from_mapping(raw)
@@ -559,32 +545,34 @@ def test_config_loads_foreign_broker_codes_from_yaml():
 
 def test_local_flows_excludes_configured_foreign_codes():
     """Config-loaded foreign_broker_codes drive the local/foreign split."""
-    config = InstitutionalAccumulationConfig.from_mapping({
-        "institutional_accumulation": {
-            "broker_classification": {
-                "foreign_broker_codes": ["XX", "YY"],
-            },
-            "foreign_institutional_track_components": {
-                "foreign_participation": 0.25,
-                "foreign_concentration_cr4_cr8": 0.20,
-                "cnfb_price_divergence": 0.35,
-                "foreign_vwap_distance": 0.20,
-            },
-            "domestic_bandar_track_components": {
-                "broker_consistency": 0.25,
-                "broker_reversal": 0.15,
-                "accumulation_session_ratio": 0.20,
-                "domestic_buy_vwap_distance": 0.15,
-                "broker_hhi_divergence": 0.15,
-                "bandar_broad_or_accumulation_score": 0.10,
-            },
-            "track_weights": {
-                "foreign_institutional_track": 0.45,
-                "domestic_bandar_track": 0.40,
-                "counterparty_transfer": 0.15,
-            },
+    config = InstitutionalAccumulationConfig.from_mapping(
+        {
+            "institutional_accumulation": {
+                "broker_classification": {
+                    "foreign_broker_codes": ["XX", "YY"],
+                },
+                "foreign_institutional_track_components": {
+                    "foreign_participation": 0.25,
+                    "foreign_concentration_cr4_cr8": 0.20,
+                    "cnfb_price_divergence": 0.35,
+                    "foreign_vwap_distance": 0.20,
+                },
+                "domestic_bandar_track_components": {
+                    "broker_consistency": 0.25,
+                    "broker_reversal": 0.15,
+                    "accumulation_session_ratio": 0.20,
+                    "domestic_buy_vwap_distance": 0.15,
+                    "broker_hhi_divergence": 0.15,
+                    "bandar_broad_or_accumulation_score": 0.10,
+                },
+                "track_weights": {
+                    "foreign_institutional_track": 0.45,
+                    "domestic_bandar_track": 0.40,
+                    "counterparty_transfer": 0.15,
+                },
+            }
         }
-    })
+    )
     builder = InstitutionalAccumulationEvidenceBuilder(config)
 
     flows = [
@@ -717,27 +705,15 @@ def test_runtime_parity_cnfb_bullish_calculation_multiplicity(monkeypatch):
     )
 
     # Build configurations locally using InstitutionalAccumulationConfig.from_mapping()
-    baseline_cfg = InstitutionalAccumulationConfig.from_mapping({
-        "institutional_accumulation": {
-            "windows": {
-                "cnfb_bullish_accumulation": [20, 30]
-            }
-        }
-    })
-    reordered_cfg = InstitutionalAccumulationConfig.from_mapping({
-        "institutional_accumulation": {
-            "windows": {
-                "cnfb_bullish_accumulation": [30, 20]
-            }
-        }
-    })
-    duplicated_cfg = InstitutionalAccumulationConfig.from_mapping({
-        "institutional_accumulation": {
-            "windows": {
-                "cnfb_bullish_accumulation": [20, 30, 20]
-            }
-        }
-    })
+    baseline_cfg = InstitutionalAccumulationConfig.from_mapping(
+        {"institutional_accumulation": {"windows": {"cnfb_bullish_accumulation": [20, 30]}}}
+    )
+    reordered_cfg = InstitutionalAccumulationConfig.from_mapping(
+        {"institutional_accumulation": {"windows": {"cnfb_bullish_accumulation": [30, 20]}}}
+    )
+    duplicated_cfg = InstitutionalAccumulationConfig.from_mapping(
+        {"institutional_accumulation": {"windows": {"cnfb_bullish_accumulation": [20, 30, 20]}}}
+    )
 
     # Call _cnfb_bullish() with configurations
     metadata_baseline = {}

@@ -157,8 +157,7 @@ def accumulation_run(
             "--strategy",
             "-S",
             help=(
-                "Show strategy signal column alongside foreign-flow score "
-                "(e.g. williams-r-bounce)"
+                "Show strategy signal column alongside foreign-flow score (e.g. williams-r-bounce)"
             ),
         ),
     ] = None,
@@ -212,7 +211,6 @@ def accumulation_run(
     output_format = resolve_output_format(output_format or cfg.analysis.format)
     deps = build_screen_deps(resolved_db)
 
-    swing_config = deps.swing_config
     accumulation_config = deps.screener_config
     display_config = accumulation_display_config_from_screener(accumulation_config)
 

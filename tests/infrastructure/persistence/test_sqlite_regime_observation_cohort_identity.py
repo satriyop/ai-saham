@@ -45,8 +45,12 @@ def _make_evidence(**kwargs) -> RegimeDetectionEvidence:
 def test_two_cohorts_same_date_both_survive(tmp_path):
     repo = SQLiteRegimeObservationRepository(tmp_path / "test.db")
     d = date(2024, 1, 15)
-    repo.save(_make_evidence(observation_date=d, semantic_compatibility_id="cohort-a", regime="RISK_ON"))
-    repo.save(_make_evidence(observation_date=d, semantic_compatibility_id="cohort-b", regime="RISK_OFF"))
+    repo.save(
+        _make_evidence(observation_date=d, semantic_compatibility_id="cohort-a", regime="RISK_ON")
+    )
+    repo.save(
+        _make_evidence(observation_date=d, semantic_compatibility_id="cohort-b", regime="RISK_OFF")
+    )
 
     a = repo.get(d, semantic_compatibility_id="cohort-a")
     b = repo.get(d, semantic_compatibility_id="cohort-b")
@@ -110,8 +114,7 @@ def test_cohort_fields_round_trip(tmp_path):
 def test_legacy_schema_migrates_with_empty_cohort(tmp_path):
     db_path = tmp_path / "legacy.db"
     with sqlite3.connect(db_path) as conn:
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE regime_observations (
                 observation_date TEXT NOT NULL PRIMARY KEY,
                 schema_version INTEGER NOT NULL DEFAULT 1,
@@ -128,15 +131,12 @@ def test_legacy_schema_migrates_with_empty_cohort(tmp_path):
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )
-            """
-        )
-        conn.execute(
-            """
+            """)
+        conn.execute("""
             INSERT INTO regime_observations VALUES
             ('2024-01-01', 1, 'RISK_ON', 0.7, 0.8, 'STABLE', 3, NULL,
              '{}', NULL, NULL, NULL, '2024-01-01T00:00:00', '2024-01-01T00:00:00')
-            """
-        )
+            """)
         conn.commit()
 
     repo = SQLiteRegimeObservationRepository(db_path)

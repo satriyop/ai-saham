@@ -65,7 +65,9 @@ def load_analyze_swing_config(config_path: Path | None = None) -> AnalyzeSwingCo
             "min_net_buy_days",
             defaults.candidate_min_net_buy_days,
         ),
-        candidate_min_accum_score=_float(candidate, "min_accum_score", defaults.candidate_min_accum_score),
+        candidate_min_accum_score=_float(
+            candidate, "min_accum_score", defaults.candidate_min_accum_score
+        ),
     )
 
 

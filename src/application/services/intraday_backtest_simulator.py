@@ -107,35 +107,40 @@ class IntradayBacktestSimulator:
                 today_candle = raw[0]
                 today_candles[cand.ticker] = today_candle
                 candidate_map[cand.ticker] = cand
-                conf_candidates.append(PreOpenPostOpenCandidate(
-                    ticker=cand.ticker,
-                    opening_price=today_candle.open,
-                    iev=None,
-                    entry_range_low=cand.entry_range_low,
-                    entry_range_high=cand.entry_range_high,
-                    suggested_entry=cand.prev_close,
-                    atr_stop=cand.atr_stop,
-                    trend=cand.trend,
-                    rsi=cand.rsi,
-                    gap_pct=None,
-                    opening_broker_backing_tag=cand.opening_broker_backing_tag,
-                    fvwap_discount_pct=(
-                        Decimal(str(cand.fvwap_discount_pct))
-                        if cand.fvwap_discount_pct is not None else None
-                    ),
-                ))
+                conf_candidates.append(
+                    PreOpenPostOpenCandidate(
+                        ticker=cand.ticker,
+                        opening_price=today_candle.open,
+                        iev=None,
+                        entry_range_low=cand.entry_range_low,
+                        entry_range_high=cand.entry_range_high,
+                        suggested_entry=cand.prev_close,
+                        atr_stop=cand.atr_stop,
+                        trend=cand.trend,
+                        rsi=cand.rsi,
+                        gap_pct=None,
+                        opening_broker_backing_tag=cand.opening_broker_backing_tag,
+                        fvwap_discount_pct=(
+                            Decimal(str(cand.fvwap_discount_pct))
+                            if cand.fvwap_discount_pct is not None
+                            else None
+                        ),
+                    )
+                )
 
             if not conf_candidates:
                 equity_curve.append(cash)
                 continue
 
-            confirm_result = self._confirm.execute(PreOpenPostOpenGatesRequest(
-                candidates=conf_candidates,
-                run_date=d,
-                max_stop_pct=request.max_stop_pct,
-                tick_friction_gate=False,
-                regime_gate_enabled=False,
-            ))
+            confirm_result = self._confirm.execute(
+                PreOpenPostOpenGatesRequest(
+                    candidates=conf_candidates,
+                    run_date=d,
+                    max_stop_pct=request.max_stop_pct,
+                    tick_friction_gate=False,
+                    regime_gate_enabled=False,
+                )
+            )
 
             # ── Step 3: filter, rank, and cap ────────────────────────────────
             accepted_decisions = {PreOpenPostOpenDecision.ENTER}
@@ -143,8 +148,7 @@ class IntradayBacktestSimulator:
                 accepted_decisions.add(PreOpenPostOpenDecision.WAIT)
 
             entries = [
-                conf for conf in confirm_result.confirmations
-                if conf.decision in accepted_decisions
+                conf for conf in confirm_result.confirmations if conf.decision in accepted_decisions
             ]
 
             def _rank_key(conf):
@@ -160,7 +164,7 @@ class IntradayBacktestSimulator:
                 )
 
             entries.sort(key=_rank_key)
-            entries = entries[:request.max_daily_positions]
+            entries = entries[: request.max_daily_positions]
 
             # ── Step 4: simulate each entry ───────────────────────────────────
             for conf in entries:
@@ -182,7 +186,12 @@ class IntradayBacktestSimulator:
                     target = (entry * (Decimal("1") + request.max_stop_pct)).quantize(Decimal("1"))
 
                 lots, shares = size_intraday_position(
-                    entry, stop, request.capital, request.risk_pct, cash, request.cost_bps,
+                    entry,
+                    stop,
+                    request.capital,
+                    request.risk_pct,
+                    cash,
+                    request.cost_bps,
                 )
                 if lots <= 0:
                     continue
@@ -206,7 +215,10 @@ class IntradayBacktestSimulator:
                     exit_reason = "close"
 
                 pnl, gross_pct, net_pct, cost_total = compute_intraday_pnl(
-                    shares, entry, exit_price, request.cost_bps,
+                    shares,
+                    entry,
+                    exit_price,
+                    request.cost_bps,
                 )
                 entry_value = Decimal(shares) * entry
                 exit_value = Decimal(shares) * exit_price
@@ -280,12 +292,13 @@ class IntradayBacktestSimulator:
                 "IEV filter NOT active — full universe screened every day. "
                 "Run 'saham fetch iev' at 08:50 WIB each trading day to build history."
             )
-        warnings.extend([
-            "Same-day H/L ordering is conservative: "
-            "both-breached cases assume stop hit first.",
-            "Opening price = candle.open (IDX 09:00 call-auction clearing price proxy).",
-            "Tick-friction and regime gates are NOT replayed in this daily-OHLC proxy.",
-        ])
+        warnings.extend(
+            [
+                "Same-day H/L ordering is conservative: both-breached cases assume stop hit first.",
+                "Opening price = candle.open (IDX 09:00 call-auction clearing price proxy).",
+                "Tick-friction and regime gates are NOT replayed in this daily-OHLC proxy.",
+            ]
+        )
         if not request.include_wait:
             warnings.append(
                 "WAIT decisions are skipped by default; use --include-wait to include them."

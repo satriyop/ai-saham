@@ -102,8 +102,12 @@ class TestRupsParser:
         }
         events = self._fetch(item)
         ev = events[0]
-        rups_date_row = next(d for d in ev.dates if d.date_role == CorporateActionDateRole.RUPS_DATE)
-        eligible_row = next(d for d in ev.dates if d.date_role == CorporateActionDateRole.ELIGIBLE_DATE)
+        rups_date_row = next(
+            d for d in ev.dates if d.date_role == CorporateActionDateRole.RUPS_DATE
+        )
+        eligible_row = next(
+            d for d in ev.dates if d.date_role == CorporateActionDateRole.ELIGIBLE_DATE
+        )
         assert rups_date_row.event_time == "10:00"
         assert eligible_row.event_time is None
 
@@ -122,7 +126,9 @@ class TestRupsParser:
     def test_missing_rups_time_leaves_event_time_none(self):
         item = {"company_symbol": "BBCA", "rups_id": "r1", "rups_date": "2026-08-18"}
         events = self._fetch(item)
-        rups_date_row = next(d for d in events[0].dates if d.date_role == CorporateActionDateRole.RUPS_DATE)
+        rups_date_row = next(
+            d for d in events[0].dates if d.date_role == CorporateActionDateRole.RUPS_DATE
+        )
         assert rups_date_row.event_time is None
 
     def test_company_name_is_captured(self):

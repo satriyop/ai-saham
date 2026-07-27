@@ -40,9 +40,7 @@ def load_universe(
 
     if name not in data:
         available = ", ".join(data.keys())
-        raise UniverseNotFoundError(
-            f"Universe '{name}' not found. Available: {available}"
-        )
+        raise UniverseNotFoundError(f"Universe '{name}' not found. Available: {available}")
 
     return list(data[name]["tickers"])
 
@@ -64,9 +62,7 @@ def load_universe_entry(
     data = loader.load_config(config_path)
     if name not in data:
         available = ", ".join(data.keys())
-        raise UniverseNotFoundError(
-            f"Universe '{name}' not found. Available: {available}"
-        )
+        raise UniverseNotFoundError(f"Universe '{name}' not found. Available: {available}")
     entry = data[name]
     return list(entry.get("tickers", [])), str(entry.get("updated", "unknown"))
 

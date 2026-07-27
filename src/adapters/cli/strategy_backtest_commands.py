@@ -39,9 +39,7 @@ def backtest(
     start: Annotated[
         Optional[str], typer.Option("--start", "-s", help="Start date (YYYY-MM-DD)")
     ] = None,
-    end: Annotated[
-        Optional[str], typer.Option("--end", "-e", help="End date (YYYY-MM-DD)")
-    ] = None,
+    end: Annotated[Optional[str], typer.Option("--end", "-e", help="End date (YYYY-MM-DD)")] = None,
     capital: Annotated[
         Optional[int],
         typer.Option("--capital", "-c", help="Initial capital in IDR", min=1),
@@ -49,9 +47,7 @@ def backtest(
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Show trade-by-trade output")
     ] = False,
-    db_path: Annotated[
-        Optional[Path], typer.Option("--db", help="Path to SQLite database")
-    ] = None,
+    db_path: Annotated[Optional[Path], typer.Option("--db", help="Path to SQLite database")] = None,
     fmt: Annotated[
         Optional[str], typer.Option("--format", help="Output format: table or json")
     ] = None,
@@ -120,34 +116,37 @@ def backtest(
         use_case = BacktestUseCase(
             repository=repository, rules_loader=RulesYamlLoader(), registry=registry
         )
-        response = use_case.execute(BacktestRequest(
-            ticker=ticker,
-            rules_file=resolved_rules_path,
-            start_date=start_date,
-            end_date=end_date,
-            initial_capital=Decimal(str(capital)),
-        ))
+        response = use_case.execute(
+            BacktestRequest(
+                ticker=ticker,
+                rules_file=resolved_rules_path,
+                start_date=start_date,
+                end_date=end_date,
+                initial_capital=Decimal(str(capital)),
+            )
+        )
         result = response.result
 
         if fmt == "json":
             import json as _json
+
             typer.echo(_json.dumps(result.to_dict(), indent=2))
             return
 
-        typer.echo(f"\n{'='*52}")
+        typer.echo(f"\n{'=' * 52}")
         typer.echo(f" Backtest Results  ·  {result.ticker}  ·  {result.strategy_name}")
-        typer.echo(f"{'='*52}\n")
+        typer.echo(f"{'=' * 52}\n")
         typer.echo(f"Period: {result.start_date} → {result.end_date}")
 
         typer.echo("\nPerformance")
-        typer.echo(f"{'─'*40}")
+        typer.echo(f"{'─' * 40}")
         typer.echo(f"  Initial Capital:  {result.initial_capital:>18,.0f} IDR")
         typer.echo(f"  Final Capital:    {result.final_capital:>18,.0f} IDR")
         typer.echo(f"  Total Return:     {result.total_return_pct:>18.2f}%")
         typer.echo(f"  Max Drawdown:     {result.max_drawdown_pct:>18.2f}%")
 
         typer.echo("\nTrade Statistics")
-        typer.echo(f"{'─'*40}")
+        typer.echo(f"{'─' * 40}")
         typer.echo(f"  Total Trades:     {result.trade_count:>18}")
         typer.echo(f"  Winning Trades:   {result.winning_trades:>18}")
         typer.echo(f"  Losing Trades:    {result.losing_trades:>18}")
@@ -176,7 +175,7 @@ def backtest(
             typer.echo(f"\nEntry Rules: {', '.join(set(t.entry_rule for t in result.trades))}")
             typer.echo(f"Exit Rules:  {', '.join(set(t.exit_rule for t in result.trades))}")
 
-        typer.echo(f"\n{'='*52}")
+        typer.echo(f"\n{'=' * 52}")
         typer.echo("\nDISCLAIMER: Historical simulation only, not trading advice.")
 
     except StrategyNotFoundError as e:

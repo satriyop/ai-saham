@@ -76,9 +76,11 @@ def build_pre_open_signal_evidence(
         auction = AuctionNcpEvidence(
             ticker=ticker,
             iev=iev,
-            gap_pct=gap_pct
-            if isinstance(gap_pct, Decimal)
-            else (Decimal(str(gap_pct)) if gap_pct is not None else None),
+            gap_pct=(
+                gap_pct
+                if isinstance(gap_pct, Decimal)
+                else (Decimal(str(gap_pct)) if gap_pct is not None else None)
+            ),
             bid_pressure=getattr(candidate, "bid_offer_imbalance", None),
             spread_pct=getattr(candidate, "spread_pct", None),
             prev_close=prev_close if isinstance(prev_close, Decimal) else Decimal(str(prev_close)),

@@ -105,9 +105,7 @@ class RefreshMarketDataUseCase:
                 if has_internal_gap:
                     fetch_ranges.append((requested_start, end_date, "refresh"))
                 else:
-                    tolerated_start = requested_start + timedelta(
-                        days=request.start_tolerance_days
-                    )
+                    tolerated_start = requested_start + timedelta(days=request.start_tolerance_days)
                     tolerated_end = end_date - timedelta(days=request.end_tolerance_days)
                     needs_older_backfill = earliest > tolerated_start
                     needs_forward_fill = latest < tolerated_end
@@ -119,19 +117,19 @@ class RefreshMarketDataUseCase:
                             f"(from {earliest}), requested {request.days}d "
                             "- backfilling older gap"
                         )
-                        fetch_ranges.append((
-                            requested_start,
-                            earliest - timedelta(days=1),
-                            "backfill",
-                        ))
+                        fetch_ranges.append(
+                            (
+                                requested_start,
+                                earliest - timedelta(days=1),
+                                "backfill",
+                            )
+                        )
 
                     if needs_forward_fill:
                         fetch_ranges.append((latest, end_date, "forward"))
 
                 if not fetch_ranges:
-                    candles = self._repository.get_candles(
-                        ticker, requested_start, end_date
-                    )
+                    candles = self._repository.get_candles(ticker, requested_start, end_date)
                     return RefreshMarketDataResponse(
                         ticker=ticker,
                         status="cached-current",

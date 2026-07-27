@@ -81,7 +81,9 @@ class FallbackMarketDataProvider(MarketDataProvider):
         try:
             primary_candles = self._primary.fetch_daily_ohlcv(ticker, start_date, end_date)
         except Exception as exc:
-            logger.debug("FallbackProvider: primary failed for %s (%s), trying fallback", ticker, exc)
+            logger.debug(
+                "FallbackProvider: primary failed for %s (%s), trying fallback", ticker, exc
+            )
             primary_candles = []
 
         expected = _expected_trading_days(start_date, end_date)
@@ -95,7 +97,9 @@ class FallbackMarketDataProvider(MarketDataProvider):
 
         logger.info(
             "FallbackProvider: %s primary coverage %.0f%% < %.0f%% threshold — trying fallback",
-            ticker, coverage * 100, self._threshold * 100,
+            ticker,
+            coverage * 100,
+            self._threshold * 100,
         )
         try:
             fallback_candles = self._fallback.fetch_daily_ohlcv(ticker, start_date, end_date)

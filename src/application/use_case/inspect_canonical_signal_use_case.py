@@ -30,9 +30,7 @@ _FLOW_ONLY_NOTE = (
     "contract=accumulation-flow: setup evidence is intentionally absent "
     "(same boundary as the accumulation screen assessor)."
 )
-_READ_ONLY_NOTE = (
-    "Read-only inspection: no observation, label, tuning, or promotion writes."
-)
+_READ_ONLY_NOTE = "Read-only inspection: no observation, label, tuning, or promotion writes."
 _PROVISIONAL_CLI_NOTE = (
     "CLI surface: saham inspect signal accum "
     "(accumulation-flow contract only; not pre-open or swing TradeSetup)."
@@ -75,9 +73,7 @@ class InspectCanonicalSignalUseCase:
     screen_request_builder: ScreenRequestBuilder
     session_resolver: SessionResolver
 
-    def execute(
-        self, request: InspectCanonicalSignalRequest
-    ) -> InspectCanonicalSignalResponse:
+    def execute(self, request: InspectCanonicalSignalRequest) -> InspectCanonicalSignalResponse:
         ticker = request.ticker.strip().upper()
         if not ticker:
             return InspectCanonicalSignalResponse(
@@ -164,9 +160,7 @@ class InspectCanonicalSignalUseCase:
                 ticker=ticker,
                 as_of_date=pit_as_of,
                 effective_session=session_view,
-                screen_result=(
-                    None if observation is None else observation.screen_result
-                ),
+                screen_result=(None if observation is None else observation.screen_result),
                 reasons=("missing_local_source_data",),
                 notes=notes,
             )

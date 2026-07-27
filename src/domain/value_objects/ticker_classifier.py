@@ -3,6 +3,7 @@
 Layer: Domain (Pure functions, standard library only)
 """
 
+
 def is_non_idx_ticker(ticker: str, custom_non_idx: set[str] | None = None) -> bool:
     """Return True if the ticker is a global/non-IDX ticker.
 
@@ -16,7 +17,5 @@ def is_non_idx_ticker(ticker: str, custom_non_idx: set[str] | None = None) -> bo
     if custom_non_idx and ticker_upper in custom_non_idx:
         return True
     return (
-        ticker_upper.startswith("^")
-        or ticker_upper.endswith("=X")
-        or ticker_upper.endswith("=F")
+        ticker_upper.startswith("^") or ticker_upper.endswith("=X") or ticker_upper.endswith("=F")
     )

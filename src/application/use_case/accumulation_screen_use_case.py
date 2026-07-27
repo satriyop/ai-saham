@@ -322,9 +322,7 @@ class AccumulationScreenUseCase:
         uses_stockbit = False
 
         effective_session = execution_context.effective_session
-        source_availability_use_case = (
-            execution_context.source_availability_use_case
-        )
+        source_availability_use_case = execution_context.source_availability_use_case
 
         for ticker in request.tickers:
             eval_result = self._candidate_evaluator.evaluate(

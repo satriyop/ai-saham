@@ -52,9 +52,7 @@ def load_swing_config(
                 swing_risk_policy_path=Path(app_cfg.config_paths.swing_risk_policy),
             )
     except Exception:
-        logger.warning(
-            "Could not read swing config; falling back to defaults", exc_info=True
-        )
+        logger.warning("Could not read swing config; falling back to defaults", exc_info=True)
         return defaults
 
     try:
@@ -77,12 +75,8 @@ def load_swing_config(
             min_market_cap_idr=int_or_default(
                 sc, "min_market_cap_idr", defaults.min_market_cap_idr
             ),
-            enter_min_score=float_or_default(
-                vd, "enter_min_score", defaults.enter_min_score
-            ),
-            watch_min_score=float_or_default(
-                vd, "watch_min_score", defaults.watch_min_score
-            ),
+            enter_min_score=float_or_default(vd, "enter_min_score", defaults.enter_min_score),
+            watch_min_score=float_or_default(vd, "watch_min_score", defaults.watch_min_score),
             strong_min_score=float_or_default(
                 vd_sig, "strong_min_score", defaults.strong_min_score
             ),
@@ -101,9 +95,7 @@ def load_swing_config(
             coiled_spring_min_score=float_or_default(
                 vd_sig, "coiled_spring_min_score", defaults.coiled_spring_min_score
             ),
-            sector_breadth_enabled=bool_or_default(
-                sb, "enabled", defaults.sector_breadth_enabled
-            ),
+            sector_breadth_enabled=bool_or_default(sb, "enabled", defaults.sector_breadth_enabled),
             sector_breadth_threshold=float_or_default(
                 sb, "breadth_threshold", defaults.sector_breadth_threshold
             ),

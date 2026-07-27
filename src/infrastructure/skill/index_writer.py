@@ -30,19 +30,13 @@ class SkillIndexWriter:
 
         parts: list[str] = []
         parts.append("# Skills Index\n")
-        parts.append(
-            "Catalog of all documented artifacts in this project.\n"
-        )
+        parts.append("Catalog of all documented artifacts in this project.\n")
 
         # Group by type
         strategies = [e for e in entries if e["type"] == "strategy"]
         indicators = [e for e in entries if e["type"] == "indicator"]
         formulas = [e for e in entries if e["type"] == "formula"]
-        other = [
-            e
-            for e in entries
-            if e["type"] not in ("strategy", "indicator", "formula")
-        ]
+        other = [e for e in entries if e["type"] not in ("strategy", "indicator", "formula")]
 
         if strategies:
             parts.append("## Strategies\n")

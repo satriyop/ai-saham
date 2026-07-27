@@ -30,9 +30,11 @@ def auto_refresh_swing_data(
     force_refresh: bool,
     analyze_config: AnalyzeSwingConfig,
 ) -> tuple[str, ...]:
-    from src.infrastructure.composition.fetch_market.fetch_market_broker_refresh import fetch_broker
-    from src.infrastructure.composition.fetch_market.fetch_market_candle_refresh import fetch_candles
     from src.adapters.cli.fetch_market_provider_factory import create_broker_provider
+    from src.infrastructure.composition.fetch_market.fetch_market_broker_refresh import fetch_broker
+    from src.infrastructure.composition.fetch_market.fetch_market_candle_refresh import (
+        fetch_candles,
+    )
 
     return refresh_swing_data(
         ticker=ticker,
@@ -79,11 +81,13 @@ def fetch_swing_sentiment(
                 news_provider=news_provider,
                 classifier=classifier,
             )
-            response = sent_uc.execute(FetchSentimentRequest(
-                ticker=ticker,
-                max_headlines=analyze_config.sentiment_max_headlines,
-                days=analyze_config.sentiment_days,
-            ))
+            response = sent_uc.execute(
+                FetchSentimentRequest(
+                    ticker=ticker,
+                    max_headlines=analyze_config.sentiment_max_headlines,
+                    days=analyze_config.sentiment_days,
+                )
+            )
         return response, response.warning
     except Exception as exc:
         if sentiment_verbose:

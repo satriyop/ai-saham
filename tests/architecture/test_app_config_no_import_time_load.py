@@ -6,6 +6,7 @@ docs/code-convention-audit.md finding 1.
 
 Layer: Test (architecture guard, no runtime behavior).
 """
+
 from __future__ import annotations
 
 import ast
@@ -63,9 +64,7 @@ def test_cli_adapters_do_not_import_app_cfg():
 def test_no_src_line_references_app_cfg_attribute_access():
     violations = []
     for path in _iter_python_files():
-        for lineno, line in enumerate(
-            path.read_text(encoding="utf-8").splitlines(), start=1
-        ):
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
             if "APP_CFG." in line or "APP_CFG:" in line or " APP_CFG " in line:
                 violations.append(f"{path}:{lineno}: {line.strip()}")
 

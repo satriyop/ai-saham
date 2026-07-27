@@ -148,8 +148,7 @@ class SetupPhaseDetector:
         flow_direction = getattr(flow_evidence, "flow_direction", None)
         bandar_score = getattr(flow_evidence, "bandar_broad_score", None)
         if flow_direction == "NEGATIVE" or (
-            bandar_score is not None
-            and bandar_score <= thresholds.distribution_min_bandar_score
+            bandar_score is not None and bandar_score <= thresholds.distribution_min_bandar_score
         ):
             reasons.append("terminal: distribution flow detected")
             return SetupPhaseState.DISTRIBUTION, 0.9
@@ -163,9 +162,7 @@ class SetupPhaseDetector:
                 drawdown <= thresholds.failed_max_drawdown_from_recent_high_pct
                 or support_break <= thresholds.failed_breakdown_below_support_pct
             ):
-                reasons.append(
-                    "terminal: price failed recent high/support structure"
-                )
+                reasons.append("terminal: price failed recent high/support structure")
                 return SetupPhaseState.FAILED, 0.8
 
         rsi = getattr(setup_evidence, "rsi", None)
@@ -240,9 +237,7 @@ class SetupPhaseDetector:
         if bb is not None and bb <= thresholds.compression_max_bb_width_pctile:
             reasons.append("compression: BB width readiness")
             if volume_evidence.dry_up_confirmed and not volume_evidence.expansion_confirmed:
-                reasons.append(
-                    "compression: volume dry-up readiness, no expansion yet"
-                )
+                reasons.append("compression: volume dry-up readiness, no expansion yet")
             return SetupPhaseState.COMPRESSION, min(1.0, 0.55 + (match_strength / 250.0))
 
         accumulation_gates = (
@@ -253,9 +248,7 @@ class SetupPhaseDetector:
         if any(accumulation_gates):
             reasons.append("accumulation: flow/absorption evidence present")
             if volume_evidence.dry_up_confirmed and not volume_evidence.expansion_confirmed:
-                reasons.append(
-                    "accumulation: volume dry-up readiness, no expansion yet"
-                )
+                reasons.append("accumulation: volume dry-up readiness, no expansion yet")
             return SetupPhaseState.ACCUMULATION, min(1.0, 0.45 + (match_strength / 220.0))
 
         if rsi is not None and 40.0 <= rsi <= 60.0 and match_strength >= 60.0:
@@ -298,9 +291,7 @@ def _snapshot(
         sequence_valid=sequence_valid,
         reasons=tuple(out_reasons),
         unavailable_evidence_reasons=unavailable,
-        volume_dry_up_ratio=(
-            volume_evidence.dry_up_ratio if volume_evidence is not None else None
-        ),
+        volume_dry_up_ratio=(volume_evidence.dry_up_ratio if volume_evidence is not None else None),
         volume_expansion_ratio=(
             volume_evidence.expansion_ratio if volume_evidence is not None else None
         ),

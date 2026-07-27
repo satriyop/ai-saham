@@ -10,13 +10,8 @@ from dataclasses import dataclass, field
 from datetime import date
 from enum import Enum
 
-
-FOREIGN_FLOW_COMPONENT_KEYS = frozenset(
-    {"cons", "streak", "vwap", "rsi", "flow", "bb", "inst"}
-)
-INSTITUTIONAL_FLOW_COMPONENT_KEYS = frozenset(
-    {"cons", "streak", "vwap", "flow", "inst"}
-)
+FOREIGN_FLOW_COMPONENT_KEYS = frozenset({"cons", "streak", "vwap", "rsi", "flow", "bb", "inst"})
+INSTITUTIONAL_FLOW_COMPONENT_KEYS = frozenset({"cons", "streak", "vwap", "flow", "inst"})
 
 
 class ForeignFlowComponentStatus(str, Enum):
@@ -46,9 +41,7 @@ class ForeignFlowComponentScore:
             )
         if self.status is ForeignFlowComponentStatus.AVAILABLE:
             if self.max_points <= 0:
-                raise ValueError(
-                    "AVAILABLE ForeignFlowComponentScore requires max_points > 0"
-                )
+                raise ValueError("AVAILABLE ForeignFlowComponentScore requires max_points > 0")
             if self.score_points is None:
                 raise ValueError(
                     "AVAILABLE ForeignFlowComponentScore requires numeric score_points"
@@ -60,9 +53,7 @@ class ForeignFlowComponentScore:
                 )
         else:
             if self.status is ForeignFlowComponentStatus.MISSING and self.max_points <= 0:
-                raise ValueError(
-                    "MISSING ForeignFlowComponentScore requires max_points > 0"
-                )
+                raise ValueError("MISSING ForeignFlowComponentScore requires max_points > 0")
             if self.score_points is not None:
                 raise ValueError(
                     f"{self.status.value} ForeignFlowComponentScore requires "
@@ -84,9 +75,7 @@ class ForeignFlowComponentScore:
         return cls(
             key=str(data["key"]),
             score_points=(
-                float(data["score_points"])
-                if data.get("score_points") is not None
-                else None
+                float(data["score_points"]) if data.get("score_points") is not None else None
             ),
             max_points=float(data["max_points"]),
             status=ForeignFlowComponentStatus(str(data["status"])),
@@ -115,9 +104,7 @@ class AccumScoreBreakdown:
             raise ValueError("AccumScoreBreakdown max_score must be positive")
         keys = [c.key for c in self.components]
         if len(keys) != len(set(keys)):
-            raise ValueError(
-                f"AccumScoreBreakdown component keys must be unique, got {keys}"
-            )
+            raise ValueError(f"AccumScoreBreakdown component keys must be unique, got {keys}")
         if set(keys) != FOREIGN_FLOW_COMPONENT_KEYS:
             missing = sorted(FOREIGN_FLOW_COMPONENT_KEYS - set(keys))
             unexpected = sorted(set(keys) - FOREIGN_FLOW_COMPONENT_KEYS)
@@ -187,9 +174,7 @@ class AccumScoreBreakdown:
     @property
     def missing_components(self) -> tuple[str, ...]:
         return tuple(
-            c.key
-            for c in self.components
-            if c.status is ForeignFlowComponentStatus.MISSING
+            c.key for c in self.components if c.status is ForeignFlowComponentStatus.MISSING
         )
 
     @property
@@ -219,16 +204,16 @@ class AccumScoreBreakdown:
             },
             "net_buy_ratio": round(self.net_buy_ratio, 4),
             "consecutive_streak": self.consecutive_streak,
-            "vwap_discount_pct": round(self.vwap_discount_pct, 2)
-            if self.vwap_discount_pct is not None
-            else None,
+            "vwap_discount_pct": (
+                round(self.vwap_discount_pct, 2) if self.vwap_discount_pct is not None else None
+            ),
             "rsi": round(self.rsi, 2) if self.rsi is not None else None,
-            "avg_flow_ratio": round(self.avg_flow_ratio, 2)
-            if self.avg_flow_ratio is not None
-            else None,
-            "bb_width_pctile": round(self.bb_width_pctile, 3)
-            if self.bb_width_pctile is not None
-            else None,
+            "avg_flow_ratio": (
+                round(self.avg_flow_ratio, 2) if self.avg_flow_ratio is not None else None
+            ),
+            "bb_width_pctile": (
+                round(self.bb_width_pctile, 3) if self.bb_width_pctile is not None else None
+            ),
             "bci_label": self.bci_label,
             "bci_tier1_count": self.bci_tier1_count,
         }

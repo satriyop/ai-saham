@@ -216,9 +216,7 @@ class TestRuleSetWithIndicators:
 
     def test_builtin_shadowing_without_override_raises(self):
         """Should raise ValueError when shadowing built-in without override."""
-        indicators = (
-            IndicatorDefinition("RSI", IndicatorType.RSI, 7),  # Shadows built-in
-        )
+        indicators = (IndicatorDefinition("RSI", IndicatorType.RSI, 7),)  # Shadows built-in
         with pytest.raises(ValueError, match="shadows built-in"):
             RuleSet(
                 version=1,
@@ -230,9 +228,7 @@ class TestRuleSetWithIndicators:
 
     def test_builtin_shadowing_with_override_ok(self):
         """Should allow shadowing built-in with override=True."""
-        indicators = (
-            IndicatorDefinition("RSI", IndicatorType.RSI, 7, override=True),
-        )
+        indicators = (IndicatorDefinition("RSI", IndicatorType.RSI, 7, override=True),)
         rule_set = RuleSet(
             version=1,
             name="test_rules",

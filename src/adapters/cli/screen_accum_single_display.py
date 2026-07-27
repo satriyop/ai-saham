@@ -11,16 +11,6 @@ from rich.text import Text
 
 from src.adapters.cli.effective_session_display import format_effective_session_label
 from src.adapters.cli.rich_display import compact_table, console, panel
-from src.adapters.shared.score_display_labels import (
-    ACCUM,
-    ACCUM_DEFINITION,
-    FLOW_GRP,
-    FLOW_GRP_DEFINITION,
-    FLOW_RATIO_PCT,
-    SETUP_GRP,
-    SIGNAL,
-    SIGNAL_DEFINITION,
-)
 from src.adapters.cli.screen_accum_enrichment_display import (
     _evidence_factor_rows,
     _signal_flow_factor_rows,
@@ -37,6 +27,16 @@ from src.adapters.cli.screen_accum_formatters import (
     _risk_detail_line,
     _risk_tier,
     format_disc_pct,
+)
+from src.adapters.shared.score_display_labels import (
+    ACCUM,
+    ACCUM_DEFINITION,
+    FLOW_GRP,
+    FLOW_GRP_DEFINITION,
+    FLOW_RATIO_PCT,
+    SETUP_GRP,
+    SIGNAL,
+    SIGNAL_DEFINITION,
 )
 from src.application.dto.accumulation_screen import (
     AccumulationScreenResponse,
@@ -103,8 +103,7 @@ def _scoring_definitions_panel(display_config: AccumulationDisplayConfig):
             f"fades to 0 by {p.bb_squeeze.loose_pctile:.0%}"
             if _bb_scored
             else (
-                "structure/setup evidence (shown diagnostically); "
-                "not scored in default flow score"
+                "structure/setup evidence (shown diagnostically); not scored in default flow score"
             )
         ),
     )
@@ -291,20 +290,18 @@ def display_results(
             if c.risk_assessment and c.risk_assessment.gate_triggered
             else None
         )
-        gate_status = "BLOCKED" if gate_triggered else (
-            "OPEN" if c.risk_assessment else "N/A"
-        )
-        gate_style = "bold red" if gate_triggered else (
-            "green" if c.risk_assessment else "bright_black"
+        gate_status = "BLOCKED" if gate_triggered else ("OPEN" if c.risk_assessment else "N/A")
+        gate_style = (
+            "bold red" if gate_triggered else ("green" if c.risk_assessment else "bright_black")
         )
         gate_cell = Text(gate_status, style=gate_style)
 
         if c.trade_setup is not None:
             _action_style = {
-                "ENTER":              "bold green",
-                "WATCH":              "yellow",
-                "AVOID":              "red",
-                "BLOCKED_EXECUTION":  "bold red",
+                "ENTER": "bold green",
+                "WATCH": "yellow",
+                "AVOID": "red",
+                "BLOCKED_EXECUTION": "bold red",
                 "BLOCKED_STRUCTURAL": "bold red",
             }.get(c.trade_setup.action.value, "white")
             action_cell = Text(c.trade_setup.action.short, style=_action_style)
@@ -326,8 +323,8 @@ def display_results(
         if strategy_signals is not None:
             raw = strategy_signals.get(c.ticker, "?")
             sym = _STRAT_SYMBOL.get(raw, raw)
-            strat_style = "green" if raw == "LOW_RISK" else (
-                "red" if raw == "HIGH_RISK" else "bright_black"
+            strat_style = (
+                "green" if raw == "LOW_RISK" else ("red" if raw == "HIGH_RISK" else "bright_black")
             )
             row.append(Text(sym, style=strat_style))
         action_table.add_row(*row)
@@ -389,13 +386,14 @@ def display_results(
         risk_detail_lines.append(_risk_detail_line(i, c))
 
         missing = [
-            label for label, val in [
-                ("seasonal",  c.seasonal_edge),
-                ("analyst",   c.analyst_consensus),
-                ("holding",   c.shareholding),
-                ("bandar",    c.bandar_detector),
-                ("fundam",    c.fundamentals),
-                ("fwd_eps",   c.forward_estimates),
+            label
+            for label, val in [
+                ("seasonal", c.seasonal_edge),
+                ("analyst", c.analyst_consensus),
+                ("holding", c.shareholding),
+                ("bandar", c.bandar_detector),
+                ("fundam", c.fundamentals),
+                ("fwd_eps", c.forward_estimates),
             ]
             if val is None
         ]
@@ -503,7 +501,7 @@ def display_results(
         "Stats",
         f"Checked: {response.total_tickers_checked} | "
         f"Shown: {len(candidates)} | "
-        f"Skipped (no data): {response.tickers_skipped}"
+        f"Skipped (no data): {response.tickers_skipped}",
     )
 
     if response.provider == "stockbit":
@@ -512,14 +510,14 @@ def display_results(
             (
                 "stockbit  ·  foreign aggregate from IDX  ·  "
                 "broker detail: inst desk proxy (10 codes, not all-foreign)"
-            )
+            ),
         )
     else:
         meta_table.add_row(
             "Provider",
             f"{response.provider} (aggregate foreign flow)\n"
             "For per-broker detail: run `saham fetch stockbit login`, "
-            "then fetch with `--provider stockbit`"
+            "then fetch with `--provider stockbit`",
         )
 
     explain_lines = [
@@ -545,8 +543,7 @@ def display_results(
     ]
     if strategy_signals is not None:
         explain_lines.append(
-            f"STRAT ({strategy_name}): "
-            "↑=LOW_RISK(entry)  ~=MODERATE(hold)  ↓=HIGH_RISK(exit)"
+            f"STRAT ({strategy_name}): ↑=LOW_RISK(entry)  ~=MODERATE(hold)  ↓=HIGH_RISK(exit)"
         )
 
     meta_table.add_row("Definitions", "\n".join(explain_lines))
@@ -554,7 +551,7 @@ def display_results(
         "Disclaimer",
         "Swing trade watchlist — cross-check with `saham screen pre-open` "
         "for intraday entry timing.\n"
-        "DISCLAIMER: Analysis only, not trading advice."
+        "DISCLAIMER: Analysis only, not trading advice.",
     )
 
     console().print(

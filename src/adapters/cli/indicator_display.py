@@ -31,10 +31,10 @@ def print_db_not_found_error(db_path: Path, ticker: str, days: int) -> None:
 
 
 def print_compute_header(ticker: str, label: str, values: list, display_count: int = 0) -> None:
-    typer.echo(f"\n{'='*52}")
+    typer.echo(f"\n{'=' * 52}")
     typer.echo(f" {label}  ·  {ticker}  ·  {values[0][0]} → {values[-1][0]}")
     typer.echo(f" {len(values)} values computed  (showing last {display_count or len(values)})")
-    typer.echo(f"{'='*52}\n")
+    typer.echo(f"{'=' * 52}\n")
 
 
 def print_compute_table(display_values: list, label: str, is_rsi: bool) -> None:
@@ -63,9 +63,9 @@ def print_compute_summary(values: list, is_rsi: bool) -> None:
     peak_date = all_dates[all_vals.index(peak_val)]
     trough_date = all_dates[all_vals.index(trough_val)]
 
-    typer.echo(f"\n{'─'*52}")
+    typer.echo(f"\n{'─' * 52}")
     typer.echo("Summary")
-    typer.echo(f"{'─'*52}")
+    typer.echo(f"{'─' * 52}")
     if is_rsi:
         typer.echo(f"  Latest:   {latest:>10.2f}  ← {rsi_signal(latest)}")
     else:
@@ -76,17 +76,13 @@ def print_compute_summary(values: list, is_rsi: bool) -> None:
 
 def print_snapshot_table(response: AggregateIndicatorsResponse) -> None:
     w = 13
-    typer.echo(
-        f"{'Date':<12} {'SMA':>{w}} {'EMA':>{w}} {'RSI':>8}   Signal"
-    )
+    typer.echo(f"{'Date':<12} {'SMA':>{w}} {'EMA':>{w}} {'RSI':>8}   Signal")
     typer.echo("─" * 60)
 
     for s in response.snapshots:
         sig = rsi_signal(s.rsi)
         marker = f"  ← {sig}" if sig != "NEUTRAL" else ""
-        typer.echo(
-            f"{s.date!s:<12} {s.sma:>{w},.2f} {s.ema:>{w},.2f} {s.rsi:>8.2f}{marker}"
-        )
+        typer.echo(f"{s.date!s:<12} {s.sma:>{w},.2f} {s.ema:>{w},.2f} {s.rsi:>8.2f}{marker}")
 
 
 def print_snapshot_summary(response: AggregateIndicatorsResponse) -> None:
@@ -97,17 +93,15 @@ def print_snapshot_summary(response: AggregateIndicatorsResponse) -> None:
     rsi_vals = [s.rsi for s in response.snapshots]
     latest = response.snapshots[-1]
 
-    typer.echo(f"\n{'─'*60}")
+    typer.echo(f"\n{'─' * 60}")
     typer.echo("Summary (latest)")
-    typer.echo(f"{'─'*60}")
+    typer.echo(f"{'─' * 60}")
 
     def _fmt_range(vals):
         return f"[{min(vals):,.2f} – {max(vals):,.2f}]"
 
-    typer.echo(f"  SMA({response.sma_period}):  "
-               f"{latest.sma:>12,.2f}  Range {_fmt_range(sma_vals)}")
-    typer.echo(f"  EMA({response.ema_period}):  "
-               f"{latest.ema:>12,.2f}  Range {_fmt_range(ema_vals)}")
+    typer.echo(f"  SMA({response.sma_period}):  {latest.sma:>12,.2f}  Range {_fmt_range(sma_vals)}")
+    typer.echo(f"  EMA({response.ema_period}):  {latest.ema:>12,.2f}  Range {_fmt_range(ema_vals)}")
     rsi_sig = rsi_signal(latest.rsi)
     typer.echo(
         f"  RSI({response.rsi_period}):  {latest.rsi:>12.2f}  "

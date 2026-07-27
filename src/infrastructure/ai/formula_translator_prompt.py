@@ -46,7 +46,8 @@ Your ONLY task is to translate natural language into formula expressions.
 - "MACD line" -> EMA(CLOSE, 12) - EMA(CLOSE, 26)
 - "RSI smoothed with EMA" -> EMA(RSI(14), 10)
 - "average true range 14" -> ATR(14)
-- "bollinger band width" -> (BB_UPPER(CLOSE, 20, 2) - BB_LOWER(CLOSE, 20, 2)) / BB_MIDDLE(CLOSE, 20, 2)
+- "bollinger band width" -> (BB_UPPER(CLOSE, 20, 2) - BB_LOWER(CLOSE, 20, 2)) / BB_MIDDLE(CLOSE,
+20, 2)
 
 ## Output Rules
 - Return ONLY the formula (single line, no explanation)

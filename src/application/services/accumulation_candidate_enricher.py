@@ -120,8 +120,7 @@ class AccumulationCandidateEnricher:
         if self._insider_provider is not None:
             insider_txns = self._insider_provider.get_insider_transactions(
                 ticker=candidate.ticker,
-                from_date=as_of_date
-                - timedelta(days=self._derived_features.insider_lookback_days),
+                from_date=as_of_date - timedelta(days=self._derived_features.insider_lookback_days),
                 to_date=as_of_date,
                 action_type="ALL",
                 as_of_date=request.as_of_date,
@@ -170,11 +169,9 @@ class AccumulationCandidateEnricher:
 
         # Forward estimates + forward PE derivation
         if self._forward_estimates_provider is not None:
-            candidate.forward_estimates = (
-                self._forward_estimates_provider.get_forward_estimates(
-                    ticker=candidate.ticker,
-                    as_of_date=request.as_of_date,
-                )
+            candidate.forward_estimates = self._forward_estimates_provider.get_forward_estimates(
+                ticker=candidate.ticker,
+                as_of_date=request.as_of_date,
             )
             if (
                 candidate.forward_estimates is not None
@@ -182,10 +179,8 @@ class AccumulationCandidateEnricher:
                 and candidate.forward_estimates.forward_eps_1y is not None
                 and candidate.current_price > Decimal("0")
             ):
-                candidate.forward_estimates = (
-                    candidate.forward_estimates.with_current_price(
-                        float(candidate.current_price)
-                    )
+                candidate.forward_estimates = candidate.forward_estimates.with_current_price(
+                    float(candidate.current_price)
                 )
 
         return CandidateEnrichmentResult(

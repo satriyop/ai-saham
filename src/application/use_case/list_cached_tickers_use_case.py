@@ -33,9 +33,7 @@ class ListCachedTickersUseCase:
     def __init__(self, catalog: CachedTickerCatalog) -> None:
         self._catalog = catalog
 
-    def execute(
-        self, request: ListCachedTickersRequest | None = None
-    ) -> ListCachedTickersResult:
+    def execute(self, request: ListCachedTickersRequest | None = None) -> ListCachedTickersResult:
         req = request or ListCachedTickersRequest()
         all_tickers = [t.upper() for t in self._catalog.list_tickers()]
 

@@ -10,10 +10,9 @@ Covers the three bugs fixed in the 2026-06-24 code review:
 from datetime import date
 from decimal import Decimal
 
-import pytest
-
 from src.application.use_case.fetch_broker_daily_flows_use_case import (
     FetchBrokerDailyFlowsRequest,
+    FetchBrokerDailyFlowsResponse,
     FetchBrokerDailyFlowsUseCase,
 )
 from src.domain.entities.broker_flow import BrokerDailyFlow
@@ -86,7 +85,7 @@ def _run(
     existing_range: tuple[date, date] | None,
     refresh: bool = False,
     expected_latest: date | None = None,
-) -> tuple[FakeRepository, "FetchBrokerDailyFlowsResponse"]:
+) -> tuple[FakeRepository, FetchBrokerDailyFlowsResponse]:
     provider = FakeProvider(provider_flows)
     repo = FakeRepository(existing_range=existing_range)
     uc = FetchBrokerDailyFlowsUseCase(provider=provider, repository=repo)
@@ -129,7 +128,7 @@ class TestRefreshOverwritesExistingRows:
         assert repo.saved_calls
         saved_dates = {r.date for r in repo.saved_calls[0]}
         assert _D1 not in saved_dates  # D1 < D2 — filtered out
-        assert _D2 in saved_dates      # D2 == before_max_date — now included (fix #7)
+        assert _D2 in saved_dates  # D2 == before_max_date — now included (fix #7)
         assert _D3 in saved_dates
 
 
@@ -172,9 +171,11 @@ class TestActiveCodesFromFullProviderResponse:
         """active_codes must count unique broker codes in the full provider response."""
         # DB has D1–D3 already; provider returns same 3 days with 5 broker codes
         provider_flows = [
-            _flow(_D1, "AK"), _flow(_D1, "YP"),
+            _flow(_D1, "AK"),
+            _flow(_D1, "YP"),
             _flow(_D2, "BK"),
-            _flow(_D3, "ZP"), _flow(_D3, "MG"),
+            _flow(_D3, "ZP"),
+            _flow(_D3, "MG"),
         ]
         _, resp = _run(
             provider_flows,
@@ -189,7 +190,8 @@ class TestActiveCodesFromFullProviderResponse:
         repo = FakeRepository(existing_range=(_D1, _D3))
         uc = FetchBrokerDailyFlowsUseCase(provider=provider, repository=repo)
         req = FetchBrokerDailyFlowsRequest(
-            ticker="BBCA", refresh=False,
+            ticker="BBCA",
+            refresh=False,
             expected_latest_date=date(2099, 1, 1),
         )
         resp = uc.execute(req)
@@ -198,8 +200,9 @@ class TestActiveCodesFromFullProviderResponse:
     def test_incremental_active_codes_not_undercounted(self):
         """After an incremental refresh adding 1 day, active_codes shows full window."""
         provider_flows = [
-            _flow(_D1, "AK"), _flow(_D1, "YP"),  # 2 codes on D1
-            _flow(_D2, "ZP"),                       # 1 new code on D2 (new day)
+            _flow(_D1, "AK"),
+            _flow(_D1, "YP"),  # 2 codes on D1
+            _flow(_D2, "ZP"),  # 1 new code on D2 (new day)
         ]
         _, resp = _run(
             provider_flows,

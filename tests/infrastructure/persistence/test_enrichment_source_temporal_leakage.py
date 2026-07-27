@@ -76,7 +76,21 @@ def _insert_fundamentals_row(db_path: Path, fetched_date: str) -> None:
             "roe_ttm, net_profit_margin, revenue_yoy_growth, piotroski_f_score, "
             "dividend_yield, week52_high, week52_low, near_52w_high_rank, "
             "market_cap_idr, pbv) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            ("BBCA", fetched_date, 15.0, 22.0, 18.0, 5.0, 7, 2.5, 10000, 7000, 85.0, 2_000_000_000_000, 3.0),
+            (
+                "BBCA",
+                fetched_date,
+                15.0,
+                22.0,
+                18.0,
+                5.0,
+                7,
+                2.5,
+                10000,
+                7000,
+                85.0,
+                2_000_000_000_000,
+                3.0,
+            ),
         )
 
 

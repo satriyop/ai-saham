@@ -165,8 +165,7 @@ class InstitutionalAccumulationEvidenceBuilder:
             ),
         ]
         counterparty_available = (
-            counterparty is not None
-            and counterparty.transfer_asymmetry_score is not None
+            counterparty is not None and counterparty.transfer_asymmetry_score is not None
         )
         if counterparty_available:
             included.append(
@@ -286,4 +285,3 @@ class InstitutionalAccumulationEvidenceBuilder:
 
     def _local_flows(self, flows: list[BrokerDailyFlow]) -> list[BrokerDailyFlow]:
         return local_flows(flows, self._foreign_codes)
-

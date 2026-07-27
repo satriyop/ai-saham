@@ -44,9 +44,7 @@ def test_swing_deprecated_no_sentiment_flag_is_removed():
 def test_swing_backtest_has_no_tuning_diff_apply_flag():
     from src.adapters.cli import backtest_portfolio_swing_commands
 
-    params = inspect.signature(
-        backtest_portfolio_swing_commands.swing_backtest
-    ).parameters
+    params = inspect.signature(backtest_portfolio_swing_commands.swing_backtest).parameters
     result = runner.invoke(
         app,
         [
@@ -65,8 +63,9 @@ def test_swing_backtest_has_no_tuning_diff_apply_flag():
 
 def test_swing_compare_route_retired():
     """ADR-050: swing-compare removed; no unknown-variant path remains."""
-    from src.adapters.cli.main import app
     from typer.testing import CliRunner
+
+    from src.adapters.cli.main import app
+
     result = CliRunner().invoke(app, ["analyze", "swing-compare", "--help"])
     assert result.exit_code != 0
-

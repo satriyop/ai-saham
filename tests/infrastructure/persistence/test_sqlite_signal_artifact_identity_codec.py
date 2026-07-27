@@ -61,9 +61,7 @@ def _provenance(
     )
 
 
-def _identity(
-    *, provenance: ArtifactProvenance | None = None
-) -> SignalArtifactIdentity:
+def _identity(*, provenance: ArtifactProvenance | None = None) -> SignalArtifactIdentity:
     return SignalArtifactIdentity(
         artifact_id=ArtifactId(
             "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -236,12 +234,8 @@ class TestRoundTrip:
             provenance=_provenance(
                 sources=(
                     _source(
-                        available_at=datetime(
-                            2026, 7, 3, 7, 0, 0, 123456, tzinfo=timezone.utc
-                        ),
-                        cutoff_at=datetime(
-                            2026, 7, 3, 8, 0, 0, 654321, tzinfo=timezone.utc
-                        ),
+                        available_at=datetime(2026, 7, 3, 7, 0, 0, 123456, tzinfo=timezone.utc),
+                        cutoff_at=datetime(2026, 7, 3, 8, 0, 0, 654321, tzinfo=timezone.utc),
                     ),
                 )
             )
@@ -384,9 +378,7 @@ class TestDecodeTimestampFormat:
 class TestDecodeCanonicalJson:
     def test_pretty_printed_json_raises(self):
         valid = encode_signal_artifact_identity(_identity())[2]
-        pretty = __import__("json").dumps(
-            __import__("json").loads(valid), indent=2, sort_keys=True
-        )
+        pretty = __import__("json").dumps(__import__("json").loads(valid), indent=2, sort_keys=True)
         with pytest.raises(ValueError, match="canonical provenance serialization"):
             decode_signal_artifact_identity(
                 artifact_id_raw="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -410,11 +402,15 @@ class TestDecodeCanonicalJson:
         valid = encode_signal_artifact_identity(_identity())[2]
         data = __import__("json").loads(valid)
         keys = sorted(data.keys(), reverse=True)
-        reordered = "{" + ",".join(
-            f"{__import__('json').dumps(k, separators=(',',':'))}:"
-            f"{__import__('json').dumps(data[k], separators=(',',':'))}"
-            for k in keys
-        ) + "}"
+        reordered = (
+            "{"
+            + ",".join(
+                f"{__import__('json').dumps(k, separators=(',', ':'))}:"
+                f"{__import__('json').dumps(data[k], separators=(',', ':'))}"
+                for k in keys
+            )
+            + "}"
+        )
         with pytest.raises(ValueError, match="canonical provenance serialization"):
             decode_signal_artifact_identity(
                 artifact_id_raw="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",

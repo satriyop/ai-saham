@@ -94,10 +94,7 @@ def test_average_flow_ratio_and_latest_fields():
 
 
 def test_window_sessions_limit():
-    summaries = [
-        _fake_summary(date(2026, 6, day), 10000000, True, 1.0)
-        for day in range(1, 11)
-    ]
+    summaries = [_fake_summary(date(2026, 6, day), 10000000, True, 1.0) for day in range(1, 11)]
     result = build_flow_detail(
         "BBCA",
         _FakeBrokerRepo(summaries),

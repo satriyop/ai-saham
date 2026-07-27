@@ -65,12 +65,10 @@ class SetupEvidenceBuilder:
         # --- Entry authority metadata (explicit config; no name-guessing) ------
         setup_family = getattr(setup_eval, "family", None) if setup_eval is not None else None
         entry_authority = (
-            bool(getattr(setup_eval, "entry_authority", True))
-            if setup_eval is not None else True
+            bool(getattr(setup_eval, "entry_authority", True)) if setup_eval is not None else True
         )
         can_enter_from_phases = tuple(
-            getattr(setup_eval, "can_enter_from_phases", ()) or ()
-            if setup_eval is not None else ()
+            getattr(setup_eval, "can_enter_from_phases", ()) or () if setup_eval is not None else ()
         )
 
         # --- Technical structure ----------------------------------------------

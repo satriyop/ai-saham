@@ -11,8 +11,6 @@ Verifies that:
 from datetime import date, timedelta
 from decimal import Decimal
 
-import pytest
-
 from src.application.use_case.assess_risk_use_case import (
     AssessRiskRequest,
     AssessRiskUseCase,
@@ -23,7 +21,6 @@ from src.domain.rules.bandar_gate import BandarGate
 from src.domain.rules.fundamental_gate import FundamentalGate
 from src.domain.rules.liquidity_gate import LiquidityGate
 from src.domain.rules.risk_gate import GateContext
-
 
 # ─── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -103,6 +100,7 @@ def _ctx(
 
 # ─── No gates — baseline unchanged ───────────────────────────────────────────
 
+
 def test_no_gates_returns_technical_assessment():
     uc = _make_use_case()
     req = AssessRiskRequest(ticker="BBCA")
@@ -120,6 +118,7 @@ def test_gates_inactive_when_no_gate_context():
 
 
 # ─── FundamentalGate integration ──────────────────────────────────────────────
+
 
 def test_fundamental_gate_short_circuits_on_distress():
     uc = _make_use_case(structural_gates=[FundamentalGate()])
@@ -154,6 +153,7 @@ def test_fundamental_gate_passes_when_no_fundamental_data():
 
 
 # ─── LiquidityGate integration ────────────────────────────────────────────────
+
 
 def test_liquidity_gate_fires_on_third_liner():
     uc = _make_use_case(structural_gates=[LiquidityGate()])
@@ -209,6 +209,7 @@ def test_liquidity_gate_passes_liquid_large_cap():
 
 # ─── BandarGate integration ───────────────────────────────────────────────────
 
+
 def test_bandar_gate_fires_on_distribution():
     """BandarGate fires unconditionally on distribution label."""
     uc = _make_use_case(execution_gates=[BandarGate()])
@@ -235,6 +236,7 @@ def test_bandar_gate_does_not_fire_when_accumulating():
 
 # ─── Gate ordering: structural before execution ───────────────────────────────
 
+
 def test_structural_gate_fires_before_execution_gate():
     """When FundamentalGate fires, verdict short-circuits; BandarGate is not_evaluated."""
     uc = _make_use_case(
@@ -257,6 +259,7 @@ def test_structural_gate_fires_before_execution_gate():
 
 
 # ─── Gate rationale preservation ──────────────────────────────────────────────
+
 
 def test_structural_gate_preserves_gate_rationale():
     """Structural gate must surface the gate reason."""

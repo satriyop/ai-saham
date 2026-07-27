@@ -13,8 +13,14 @@ from src.infrastructure.persistence.sqlite_watchlist_repository import (
 )
 
 
-def _entry(ticker: str, rank: int, flow: float = 80.0, comp: float | None = 65.0,
-           name: str = "test", saved_at: datetime | None = None) -> ScreenSnapshotEntry:
+def _entry(
+    ticker: str,
+    rank: int,
+    flow: float = 80.0,
+    comp: float | None = 65.0,
+    name: str = "test",
+    saved_at: datetime | None = None,
+) -> ScreenSnapshotEntry:
     return ScreenSnapshotEntry(
         name=name,
         saved_at=saved_at or datetime(2026, 6, 20, 9, 0),
@@ -37,6 +43,7 @@ def repo(tmp_path):
 
 # ── Schema ────────────────────────────────────────────────────────────────────
 
+
 def test_schema_created(repo):
     with repo._get_conn() as conn:
         row = conn.execute(
@@ -46,6 +53,7 @@ def test_schema_created(repo):
 
 
 # ── Save / read round-trip ────────────────────────────────────────────────────
+
 
 def test_save_and_retrieve_snapshot(repo):
     entries = [_entry("BBCA", 1), _entry("BBRI", 2), _entry("BMRI", 3)]
@@ -82,62 +90,125 @@ def test_list_snapshots_returns_all_names(repo):
 def test_list_snapshots_counts_latest_run_only(repo):
     entries_a = [
         ScreenSnapshotEntry(
-            name="multi-run", saved_at=datetime(2026, 7, 1, 9, 0),
-            universe="lq45", window_days=7,
-            ticker="BBCA", rank=1, accum_score=70.0, signal_score=65.0,
-            consecutive_streak=3, net_buy_ratio=0.5, bci_label="CLUSTER",
+            name="multi-run",
+            saved_at=datetime(2026, 7, 1, 9, 0),
+            universe="lq45",
+            window_days=7,
+            ticker="BBCA",
+            rank=1,
+            accum_score=70.0,
+            signal_score=65.0,
+            consecutive_streak=3,
+            net_buy_ratio=0.5,
+            bci_label="CLUSTER",
         ),
         ScreenSnapshotEntry(
-            name="multi-run", saved_at=datetime(2026, 7, 1, 9, 0),
-            universe="lq45", window_days=7,
-            ticker="BBRI", rank=2, accum_score=60.0, signal_score=55.0,
-            consecutive_streak=2, net_buy_ratio=0.4, bci_label="CLUSTER",
+            name="multi-run",
+            saved_at=datetime(2026, 7, 1, 9, 0),
+            universe="lq45",
+            window_days=7,
+            ticker="BBRI",
+            rank=2,
+            accum_score=60.0,
+            signal_score=55.0,
+            consecutive_streak=2,
+            net_buy_ratio=0.4,
+            bci_label="CLUSTER",
         ),
         ScreenSnapshotEntry(
-            name="multi-run", saved_at=datetime(2026, 7, 1, 9, 0),
-            universe="lq45", window_days=7,
-            ticker="BMRI", rank=3, accum_score=50.0, signal_score=45.0,
-            consecutive_streak=1, net_buy_ratio=0.3, bci_label="CLUSTER",
+            name="multi-run",
+            saved_at=datetime(2026, 7, 1, 9, 0),
+            universe="lq45",
+            window_days=7,
+            ticker="BMRI",
+            rank=3,
+            accum_score=50.0,
+            signal_score=45.0,
+            consecutive_streak=1,
+            net_buy_ratio=0.3,
+            bci_label="CLUSTER",
         ),
     ]
     entries_b = [
         ScreenSnapshotEntry(
-            name="multi-run", saved_at=datetime(2026, 7, 2, 9, 0),
-            universe="idx80", window_days=30,
-            ticker="BBCA", rank=1, accum_score=80.0, signal_score=70.0,
-            consecutive_streak=4, net_buy_ratio=0.6, bci_label="SMART",
+            name="multi-run",
+            saved_at=datetime(2026, 7, 2, 9, 0),
+            universe="idx80",
+            window_days=30,
+            ticker="BBCA",
+            rank=1,
+            accum_score=80.0,
+            signal_score=70.0,
+            consecutive_streak=4,
+            net_buy_ratio=0.6,
+            bci_label="SMART",
         ),
         ScreenSnapshotEntry(
-            name="multi-run", saved_at=datetime(2026, 7, 2, 9, 0),
-            universe="idx80", window_days=30,
-            ticker="BBRI", rank=2, accum_score=75.0, signal_score=65.0,
-            consecutive_streak=3, net_buy_ratio=0.5, bci_label="SMART",
+            name="multi-run",
+            saved_at=datetime(2026, 7, 2, 9, 0),
+            universe="idx80",
+            window_days=30,
+            ticker="BBRI",
+            rank=2,
+            accum_score=75.0,
+            signal_score=65.0,
+            consecutive_streak=3,
+            net_buy_ratio=0.5,
+            bci_label="SMART",
         ),
     ]
     entries_c = [
         ScreenSnapshotEntry(
-            name="multi-run", saved_at=datetime(2026, 7, 3, 9, 0),
-            universe="custom", window_days=90,
-            ticker="BBCA", rank=1, accum_score=90.0, signal_score=80.0,
-            consecutive_streak=5, net_buy_ratio=0.7, bci_label="SMART",
+            name="multi-run",
+            saved_at=datetime(2026, 7, 3, 9, 0),
+            universe="custom",
+            window_days=90,
+            ticker="BBCA",
+            rank=1,
+            accum_score=90.0,
+            signal_score=80.0,
+            consecutive_streak=5,
+            net_buy_ratio=0.7,
+            bci_label="SMART",
         ),
         ScreenSnapshotEntry(
-            name="multi-run", saved_at=datetime(2026, 7, 3, 9, 0),
-            universe="custom", window_days=90,
-            ticker="BBRI", rank=2, accum_score=85.0, signal_score=75.0,
-            consecutive_streak=4, net_buy_ratio=0.6, bci_label="SMART",
+            name="multi-run",
+            saved_at=datetime(2026, 7, 3, 9, 0),
+            universe="custom",
+            window_days=90,
+            ticker="BBRI",
+            rank=2,
+            accum_score=85.0,
+            signal_score=75.0,
+            consecutive_streak=4,
+            net_buy_ratio=0.6,
+            bci_label="SMART",
         ),
         ScreenSnapshotEntry(
-            name="multi-run", saved_at=datetime(2026, 7, 3, 9, 0),
-            universe="custom", window_days=90,
-            ticker="BMRI", rank=3, accum_score=80.0, signal_score=70.0,
-            consecutive_streak=3, net_buy_ratio=0.5, bci_label="SMART",
+            name="multi-run",
+            saved_at=datetime(2026, 7, 3, 9, 0),
+            universe="custom",
+            window_days=90,
+            ticker="BMRI",
+            rank=3,
+            accum_score=80.0,
+            signal_score=70.0,
+            consecutive_streak=3,
+            net_buy_ratio=0.5,
+            bci_label="SMART",
         ),
         ScreenSnapshotEntry(
-            name="multi-run", saved_at=datetime(2026, 7, 3, 9, 0),
-            universe="custom", window_days=90,
-            ticker="GOTO", rank=4, accum_score=75.0, signal_score=65.0,
-            consecutive_streak=2, net_buy_ratio=0.4, bci_label="NOISE",
+            name="multi-run",
+            saved_at=datetime(2026, 7, 3, 9, 0),
+            universe="custom",
+            window_days=90,
+            ticker="GOTO",
+            rank=4,
+            accum_score=75.0,
+            signal_score=65.0,
+            consecutive_streak=2,
+            net_buy_ratio=0.4,
+            bci_label="NOISE",
         ),
     ]
     repo.save_snapshot(entries_a)
@@ -154,18 +225,32 @@ def test_list_snapshots_counts_latest_run_only(repo):
 def test_list_snapshots_uses_latest_universe_and_window_days(repo):
     old = [
         ScreenSnapshotEntry(
-            name="morning-watch", saved_at=datetime(2026, 7, 1, 9, 0),
-            universe="lq45", window_days=7,
-            ticker="BBCA", rank=1, accum_score=70.0, signal_score=65.0,
-            consecutive_streak=3, net_buy_ratio=0.5, bci_label="CLUSTER",
+            name="morning-watch",
+            saved_at=datetime(2026, 7, 1, 9, 0),
+            universe="lq45",
+            window_days=7,
+            ticker="BBCA",
+            rank=1,
+            accum_score=70.0,
+            signal_score=65.0,
+            consecutive_streak=3,
+            net_buy_ratio=0.5,
+            bci_label="CLUSTER",
         ),
     ]
     latest = [
         ScreenSnapshotEntry(
-            name="morning-watch", saved_at=datetime(2026, 7, 3, 9, 0),
-            universe="custom", window_days=90,
-            ticker="BBCA", rank=1, accum_score=90.0, signal_score=80.0,
-            consecutive_streak=5, net_buy_ratio=0.7, bci_label="SMART",
+            name="morning-watch",
+            saved_at=datetime(2026, 7, 3, 9, 0),
+            universe="custom",
+            window_days=90,
+            ticker="BBCA",
+            rank=1,
+            accum_score=90.0,
+            signal_score=80.0,
+            consecutive_streak=5,
+            net_buy_ratio=0.7,
+            bci_label="SMART",
         ),
     ]
     repo.save_snapshot(old)
@@ -181,18 +266,32 @@ def test_list_snapshots_uses_latest_universe_and_window_days(repo):
 def test_list_snapshots_orders_by_latest_saved_at_desc(repo):
     early = [
         ScreenSnapshotEntry(
-            name="alpha", saved_at=datetime(2026, 7, 1, 9, 0),
-            universe="lq45", window_days=7,
-            ticker="BBCA", rank=1, accum_score=70.0, signal_score=65.0,
-            consecutive_streak=3, net_buy_ratio=0.5, bci_label="CLUSTER",
+            name="alpha",
+            saved_at=datetime(2026, 7, 1, 9, 0),
+            universe="lq45",
+            window_days=7,
+            ticker="BBCA",
+            rank=1,
+            accum_score=70.0,
+            signal_score=65.0,
+            consecutive_streak=3,
+            net_buy_ratio=0.5,
+            bci_label="CLUSTER",
         ),
     ]
     late = [
         ScreenSnapshotEntry(
-            name="beta", saved_at=datetime(2026, 7, 3, 9, 0),
-            universe="lq45", window_days=7,
-            ticker="BBCA", rank=1, accum_score=90.0, signal_score=80.0,
-            consecutive_streak=5, net_buy_ratio=0.7, bci_label="SMART",
+            name="beta",
+            saved_at=datetime(2026, 7, 3, 9, 0),
+            universe="lq45",
+            window_days=7,
+            ticker="BBCA",
+            rank=1,
+            accum_score=90.0,
+            signal_score=80.0,
+            consecutive_streak=5,
+            net_buy_ratio=0.7,
+            bci_label="SMART",
         ),
     ]
     repo.save_snapshot(early)
@@ -229,8 +328,7 @@ def test_legacy_flow_score_columns_dual_read(tmp_path):
     import sqlite3
 
     with sqlite3.connect(str(db_path)) as conn:
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE screen_snapshots (
                 id                INTEGER PRIMARY KEY AUTOINCREMENT,
                 name              TEXT    NOT NULL,
@@ -245,8 +343,7 @@ def test_legacy_flow_score_columns_dual_read(tmp_path):
                 net_buy_ratio     REAL    NOT NULL DEFAULT 0,
                 bci_label         TEXT
             )
-            """
-        )
+            """)
         conn.execute(
             """
             INSERT INTO screen_snapshots
@@ -281,6 +378,7 @@ def test_legacy_flow_score_columns_dual_read(tmp_path):
 
 
 # ── compare_screen_snapshots ──────────────────────────────────────────────────
+
 
 def _snap(tickers: list[str]) -> list[ScreenSnapshotEntry]:
     return [_entry(t, i + 1) for i, t in enumerate(tickers)]
@@ -330,10 +428,15 @@ def test_compare_changed_tracks_movement():
 
 def test_compare_strengthening_flag():
     from src.application.use_case.compare_screen_snapshots_use_case import SignalChange
+
     change = SignalChange(
-        ticker="BBCA", old_rank=8, new_rank=2,
-        old_composite=60.0, new_composite=75.0,
-        old_flow=80.0, new_flow=95.0,
+        ticker="BBCA",
+        old_rank=8,
+        new_rank=2,
+        old_composite=60.0,
+        new_composite=75.0,
+        old_flow=80.0,
+        new_flow=95.0,
     )
     assert change.rank_delta == 6
     assert change.composite_delta == pytest.approx(15.0)

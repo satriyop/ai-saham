@@ -177,12 +177,8 @@ class AuditSourceReconciliationUseCase:
             enrichment_eval.evaluate_company_fundamentals(
                 self._enrichment_reader.observe_company_fundamentals()
             ),
-            enrichment_eval.evaluate_analyst_cache(
-                self._enrichment_reader.observe_analyst_cache()
-            ),
-            enrichment_eval.evaluate_insider_cache(
-                self._enrichment_reader.observe_insider_cache()
-            ),
+            enrichment_eval.evaluate_analyst_cache(self._enrichment_reader.observe_analyst_cache()),
+            enrichment_eval.evaluate_insider_cache(self._enrichment_reader.observe_insider_cache()),
             enrichment_eval.evaluate_corporate_action_linkage(
                 self._enrichment_reader.observe_corporate_action_linkage()
             ),

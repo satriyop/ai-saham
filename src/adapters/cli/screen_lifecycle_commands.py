@@ -104,9 +104,7 @@ def screen_watchlist(
                     )
                 )
                 return
-            typer.echo(
-                "No saved watchlists. Use 'saham screen accum --save NAME' to create one."
-            )
+            typer.echo("No saved watchlists. Use 'saham screen accum --save NAME' to create one.")
             return
 
         if output_format == "json":
@@ -137,9 +135,7 @@ def screen_watchlist(
         typer.echo(f"  {'─' * 24}  {'─' * 7}  {'─' * 6}  {'─' * 20}")
         for s in result.summaries:
             saved_str = s.latest_saved_at.isoformat()[:16].replace("T", " ")
-            typer.echo(
-                f"  {s.name:<24} {s.ticker_count:>7}  {s.window_days:>5}s  {saved_str}"
-            )
+            typer.echo(f"  {s.name:<24} {s.ticker_count:>7}  {s.window_days:>5}s  {saved_str}")
         typer.echo("")
         return
 
@@ -188,7 +184,8 @@ def screen_watchlist(
     typer.echo(f"\n  Watchlist: {name}  |  {len(entries)} tickers  |  saved {saved_str}")
     typer.echo(f"  {'─' * 60}")
     typer.echo(
-        f"  {'#':>3}  {'TICKER':<8}  {'SIGNAL':>6}  {'ACCUM':>6}  {'STREAK':>6}  {'NET BUY':>7}  BCI"
+        f"  {'#':>3}  {'TICKER':<8}  {'SIGNAL':>6}  {'ACCUM':>6}  "
+        f"{'STREAK':>6}  {'NET BUY':>7}  BCI"
     )
     typer.echo(f"  {'─' * 3}  {'─' * 8}  {'─' * 6}  {'─' * 6}  {'─' * 6}  {'─' * 7}  {'─' * 10}")
     for e in entries:
@@ -260,7 +257,8 @@ def screen_compare(
 
     if output_format != "json":
         typer.echo(
-            f"\n  Comparing '{name}' (saved {saved_at_str}) against fresh screen on '{run_universe}'..."
+            f"\n  Comparing '{name}' (saved {saved_at_str}) against fresh "
+            f"screen on '{run_universe}'..."
         )
 
     try:
@@ -431,9 +429,7 @@ def _display_compare_result(result: ScreenCompareResult) -> None:
     weakening = result.weakening
     if weakening:
         typer.echo(
-            typer.style(
-                f"\n  ↓ WEAKENING  ({len(weakening)} signals)", fg=typer.colors.MAGENTA
-            )
+            typer.style(f"\n  ↓ WEAKENING  ({len(weakening)} signals)", fg=typer.colors.MAGENTA)
         )
         for c in sorted(weakening, key=lambda x: x.rank_delta)[:10]:
             typer.echo(_signal_change_row(c))

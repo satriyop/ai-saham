@@ -98,7 +98,10 @@ class SQLiteMarketContextRepository:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         with sqlite3.connect(self._db_path) as conn:
             row = conn.execute(
-                "SELECT sql FROM sqlite_master WHERE type='table' AND name='market_context_snapshots'"
+                (
+                    "SELECT sql FROM sqlite_master "
+                    "WHERE type='table' AND name='market_context_snapshots'"
+                )
             ).fetchone()
             if row is None:
                 conn.execute(_CREATE_TABLE)
@@ -234,6 +237,7 @@ class SQLiteMarketContextRepository:
 
 
 # ── serialization helpers ─────────────────────────────────────────────────────
+
 
 def _factor_to_dict(f: ContextFactor) -> dict:
     return {

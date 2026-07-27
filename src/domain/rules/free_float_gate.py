@@ -48,8 +48,11 @@ class FreeFloatGate(RiskGate):
             triggered = self._policy.missing_data_action == "block"
             return GateResult(
                 triggered=triggered,
-                reason="Free float data unavailable — gate blocked"
-                if triggered else "Free float data unavailable — gate skipped",
+                reason=(
+                    "Free float data unavailable — gate blocked"
+                    if triggered
+                    else "Free float data unavailable — gate skipped"
+                ),
                 confidence=self._policy.missing_data_confidence,
             )
 

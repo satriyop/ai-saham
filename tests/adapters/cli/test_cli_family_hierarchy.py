@@ -29,8 +29,7 @@ def test_contextual_routes_are_exposed() -> None:
         for command in ("capture", "track", "labels", "evaluate", "status")
     )
     assert all(
-        command in policy.stdout
-        for command in ("tune", "review", "validate", "apply", "status")
+        command in policy.stdout for command in ("tune", "review", "validate", "apply", "status")
     )
     assert trade.exit_code == 0
     assert "pre-open" in trade.stdout
@@ -71,9 +70,7 @@ def test_removed_routes_fail() -> None:
 
 
 def test_removed_learning_flags_are_absent() -> None:
-    pre_open_labels = runner.invoke(
-        app, ["research", "pre-open", "labels", "--help"]
-    )
+    pre_open_labels = runner.invoke(app, ["research", "pre-open", "labels", "--help"])
     policy_tune = runner.invoke(app, ["policy", "accum", "tune", "--help"])
 
     assert "--no-persist" not in pre_open_labels.stdout

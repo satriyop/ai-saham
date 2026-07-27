@@ -179,6 +179,7 @@ class TestAssessRiskResponseDTO:
         assert isinstance(response.confidence, int)
         assert 0 <= response.confidence <= 100
 
+
 class TestAssessRiskRequestDTO:
     """Test AssessRiskRequest DTO defaults."""
 
@@ -221,6 +222,7 @@ class TestAssessRiskDeterminism:
         assert response1.assessment.gate_triggered == response2.assessment.gate_triggered
         assert response1.assessment.gate_confidence == response2.assessment.gate_confidence
         assert response1.assessment.rationale == response2.assessment.rationale
+
 
 class TestAssessRiskIntegration:
     """Integration tests verifying rule application."""

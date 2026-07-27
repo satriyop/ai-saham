@@ -33,7 +33,8 @@ def init(
     directory: Annotated[
         Optional[Path],
         typer.Option(
-            "--dir", "-d",
+            "--dir",
+            "-d",
             help="Directory to create strategy in (default: ./strategies/NAME)",
         ),
     ] = None,

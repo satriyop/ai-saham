@@ -34,7 +34,5 @@ def _parse_strategy_fields(data: dict[str, Any]) -> dict[str, Any]:
         "strategy_coverage_score": _optional_float(data.get("strategy_coverage_score")),
         "strategy_conviction_score": _optional_float(data.get("strategy_conviction_score")),
         "strategy_freshness_score": _optional_float(data.get("strategy_freshness_score")),
-        "strategy_rationale": tuple(
-            str(v) for v in data.get("strategy_rationale") or ()
-        ),
+        "strategy_rationale": tuple(str(v) for v in data.get("strategy_rationale") or ()),
     }

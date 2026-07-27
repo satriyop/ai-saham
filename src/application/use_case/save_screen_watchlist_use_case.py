@@ -52,9 +52,7 @@ class SaveScreenWatchlistUseCase:
                 rank=i + 1,
                 accum_score=c.accum_score,
                 signal_score=(
-                    c.signal_assessment.assessment.score
-                    if c.signal_assessment
-                    else None
+                    c.signal_assessment.assessment.score if c.signal_assessment else None
                 ),
                 consecutive_streak=c.consecutive_streak,
                 net_buy_ratio=c.net_buy_ratio,

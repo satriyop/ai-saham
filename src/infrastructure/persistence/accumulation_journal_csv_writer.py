@@ -17,14 +17,32 @@ from src.domain.value_objects.accumulation_journal_entry import AccumulationJour
 
 _COLUMNS = [
     # Log-time fields
-    "logged_at", "ticker", "entry_price", "window_days",
-    "accum_score", "foreign_flow_buy_streak", "flow_pct", "vwap_disc_pct", "bb_pctile", "rsi",
-    "trend", "pattern",
-    "setup", "setup_match", "failed_gates", "regime",
-    "planned_entry", "planned_stop", "planned_target", "max_hold_days",
+    "logged_at",
+    "ticker",
+    "entry_price",
+    "window_days",
+    "accum_score",
+    "foreign_flow_buy_streak",
+    "flow_pct",
+    "vwap_disc_pct",
+    "bb_pctile",
+    "rsi",
+    "trend",
+    "pattern",
+    "setup",
+    "setup_match",
+    "failed_gates",
+    "regime",
+    "planned_entry",
+    "planned_stop",
+    "planned_target",
+    "max_hold_days",
     # Review-time fields
-    "actual_close_5d", "actual_close_10d", "actual_close_20d",
-    "max_close_in_horizon", "min_close_in_horizon",
+    "actual_close_5d",
+    "actual_close_10d",
+    "actual_close_20d",
+    "max_close_in_horizon",
+    "min_close_in_horizon",
 ]
 
 
@@ -73,9 +91,7 @@ def _row_to_entry(row: dict[str, str]) -> AccumulationJournalEntry:
         setup=row.get("setup") or None,
         setup_match=row.get("setup_match") or None,
         failed_gates=tuple(
-            part.strip()
-            for part in (row.get("failed_gates") or "").split(";")
-            if part.strip()
+            part.strip() for part in (row.get("failed_gates") or "").split(";") if part.strip()
         ),
         regime=row.get("regime") or None,
         planned_entry=_from_str(row.get("planned_entry", "")),
@@ -121,7 +137,6 @@ def _entry_to_row(e: AccumulationJournalEntry) -> dict[str, str | int | float]:
 
 
 class AccumulationJournalCsvWriter(AccumulationJournalStore):
-
     def __init__(self, path: Path) -> None:
         self._path = path
 
@@ -137,7 +152,8 @@ class AccumulationJournalCsvWriter(AccumulationJournalStore):
         write_header = not self._path.exists()
 
         new_entries = [
-            e for e in entries
+            e
+            for e in entries
             if (str(e.logged_at), e.ticker, str(e.window_days)) not in existing_keys
         ]
         if not new_entries:
@@ -163,17 +179,14 @@ class AccumulationJournalCsvWriter(AccumulationJournalStore):
 
         return sorted(entries, key=lambda e: e.logged_at)
 
-    def update_review_fields(
-        self, entries: list[AccumulationJournalEntry]
-    ) -> int:
+    def update_review_fields(self, entries: list[AccumulationJournalEntry]) -> int:
         """Rewrite CSV updating review fields for matching (logged_at, ticker, window_days)."""
         if not self._path.exists():
             return 0
 
         existing = self.read_all()
         lookup: dict[tuple, AccumulationJournalEntry] = {
-            (str(e.logged_at), e.ticker, str(e.window_days)): e
-            for e in entries
+            (str(e.logged_at), e.ticker, str(e.window_days)): e for e in entries
         }
 
         updated = 0

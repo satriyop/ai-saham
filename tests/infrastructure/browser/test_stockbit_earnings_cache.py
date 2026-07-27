@@ -115,8 +115,7 @@ def test_is_fresh_true_when_recent_false_when_stale(cache):
 def test_legacy_migration_insert_is_safe_and_preserves_rows(tmp_path):
     db_path = tmp_path / "legacy.db"
     with sqlite3.connect(db_path) as conn:
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE earnings_cache (
                 ticker TEXT NOT NULL,
                 year INTEGER NOT NULL,
@@ -129,16 +128,13 @@ def test_legacy_migration_insert_is_safe_and_preserves_rows(tmp_path):
                 fetched_date TEXT NOT NULL,
                 PRIMARY KEY (ticker, year, quarter)
             )
-            """
-        )
-        conn.execute(
-            """
+            """)
+        conn.execute("""
             INSERT INTO earnings_cache
                 (ticker, year, quarter, eps_actual, eps_estimate, eps_surprise_pct,
                  eps_yoy_change, eps_prev_year, fetched_date)
             VALUES ('BBCA', 2026, 1, 101.0, NULL, NULL, NULL, NULL, '2026-06-01T09:00:00')
-            """
-        )
+            """)
 
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -147,7 +143,8 @@ def test_legacy_migration_insert_is_safe_and_preserves_rows(tmp_path):
     store.ensure_schema()  # idempotent on an already-migrated schema
 
     pk_columns = {
-        row["name"] for row in conn.execute("PRAGMA table_info(earnings_cache)")
+        row["name"]
+        for row in conn.execute("PRAGMA table_info(earnings_cache)")
         if int(row["pk"]) > 0
     }
     result = store.read("BBCA", as_of_date=date(2026, 6, 6))

@@ -56,9 +56,7 @@ class FetchEnrichmentHistoryUseCase:
         self._enrich_ticker = enrich_ticker
         self._read_pit_coverage = read_pit_coverage
 
-    def execute(
-        self, request: FetchEnrichmentHistoryRequest
-    ) -> FetchEnrichmentHistoryResponse:
+    def execute(self, request: FetchEnrichmentHistoryRequest) -> FetchEnrichmentHistoryResponse:
         results: list[tuple[str, str]] = []
         ok_count = 0
         fail_count = 0

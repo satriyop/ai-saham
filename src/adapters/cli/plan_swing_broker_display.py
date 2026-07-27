@@ -33,7 +33,6 @@ def fmt_broker_detail_lines(lines: tuple[BrokerDetailLine, ...]) -> str:
     parts = []
     for line in lines[:3]:
         parts.append(
-            f"{line.broker_code} {fmt_money_short(line.net_value)} "
-            f"({line.active_sessions}s)"
+            f"{line.broker_code} {fmt_money_short(line.net_value)} ({line.active_sessions}s)"
         )
     return ", ".join(parts)

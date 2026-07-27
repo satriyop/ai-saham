@@ -29,16 +29,12 @@ class AccumulationAuditStatisticsBuilder:
                 policy.buckets.accum_score,
             ),
             "streak": lambda r: _range_bucket(float(r.streak), policy.buckets.streak),
-            "flow_pct": lambda r: _nullable_range_bucket(
-                r.flow_pct, policy.buckets.flow_pct
-            ),
+            "flow_pct": lambda r: _nullable_range_bucket(r.flow_pct, policy.buckets.flow_pct),
             "vwap_disc_pct": lambda r: _nullable_range_bucket(
                 r.vwap_disc_pct, policy.buckets.vwap_disc_pct
             ),
             "rsi": lambda r: _nullable_range_bucket(r.rsi, policy.buckets.rsi),
-            "bb_pctile": lambda r: _nullable_range_bucket(
-                r.bb_pctile, policy.buckets.bb_pctile
-            ),
+            "bb_pctile": lambda r: _nullable_range_bucket(r.bb_pctile, policy.buckets.bb_pctile),
             "trend": lambda r: r.trend,
             "broker_quality": lambda r: r.broker_quality,
         }

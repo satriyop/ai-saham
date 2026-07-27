@@ -30,7 +30,6 @@ def load_broker_import_mapping(mapping: str | None):
     return mapping_loader.load(mapping)
 
 
-
 def create_fetch_broker_summary_workflow(
     provider_name: str,
     db_path: Path,

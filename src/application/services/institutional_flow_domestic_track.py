@@ -103,9 +103,7 @@ def _broker_reversal(
             elif d in late_dates:
                 late_net[code] = late_net.get(code, 0.0) + float(flow.net_value)
     flipped = sum(
-        1
-        for code in top10
-        if early_net.get(code, 0.0) < 0 and late_net.get(code, 0.0) > 0
+        1 for code in top10 if early_net.get(code, 0.0) < 0 and late_net.get(code, 0.0) > 0
     )
     return _clamp01(flipped / len(top10))
 
@@ -143,9 +141,7 @@ def _domestic_vwap_distance(
 ) -> float | None:
     local = local_flows(flows, foreign_codes)
     threshold = config.min_sessions.get("vwap_20d", 10)
-    return vwap_distance_from_price(
-        local, current_price, config.domestic_vwap_days, threshold
-    )
+    return vwap_distance_from_price(local, current_price, config.domestic_vwap_days, threshold)
 
 
 def _broker_hhi_divergence(flows: list[BrokerDailyFlow]) -> float | None:
@@ -160,13 +156,9 @@ def _broker_hhi_divergence(flows: list[BrokerDailyFlow]) -> float | None:
         total_buy = sum(float(f.buy_value) for f in session)
         total_sell = sum(float(f.sell_value) for f in session)
         if total_buy > 0:
-            buy_hhi.append(
-                sum((float(f.buy_value) / total_buy) ** 2 for f in session)
-            )
+            buy_hhi.append(sum((float(f.buy_value) / total_buy) ** 2 for f in session))
         if total_sell > 0:
-            sell_hhi.append(
-                sum((float(f.sell_value) / total_sell) ** 2 for f in session)
-            )
+            sell_hhi.append(sum((float(f.sell_value) / total_sell) ** 2 for f in session))
     if len(buy_hhi) < 3 or len(sell_hhi) < 3:
         raise _Unavailable("insufficient_hhi_sides")
     buy_slope = _slope(buy_hhi)
@@ -210,9 +202,7 @@ def build_domestic_track(
         lambda: _broker_hhi_divergence(flows),
         "broker_hhi_divergence",
     )
-    broad_norm, accum_norm = _bandar_normalise(
-        request.bandar_snapshot, unavailable
-    )
+    broad_norm, accum_norm = _bandar_normalise(request.bandar_snapshot, unavailable)
 
     # ----- coverage: 6 slots (bandar broad|accumulation collapse to 1)
     slots = [
@@ -234,21 +224,15 @@ def build_domestic_track(
     if reversal is not None:
         available.append((reversal, w.get("broker_reversal", 0.0)))
     if session_ratio is not None:
-        available.append(
-            (session_ratio, w.get("accumulation_session_ratio", 0.0))
-        )
+        available.append((session_ratio, w.get("accumulation_session_ratio", 0.0)))
     if vwap_dist is not None:
         available.append((vwap_dist, w.get("domestic_buy_vwap_distance", 0.0)))
     if hhi_div is not None:
         available.append((hhi_div, w.get("broker_hhi_divergence", 0.0)))
     if bandar_score is not None:
-        available.append(
-            (bandar_score, w.get("bandar_broad_or_accumulation_score", 0.0))
-        )
+        available.append((bandar_score, w.get("bandar_broad_or_accumulation_score", 0.0)))
     total_w = sum(wt for _, wt in available)
-    conviction = (
-        sum(s * wt for s, wt in available) / total_w if total_w > 0 else 0.0
-    )
+    conviction = sum(s * wt for s, wt in available) / total_w if total_w > 0 else 0.0
 
     return DomesticBandarTrack(
         broker_consistency_score=consistency,

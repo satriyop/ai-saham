@@ -88,9 +88,7 @@ def test_use_case_references_effective_market_session_resolver(path: str) -> Non
     )
 
 
-@pytest.mark.parametrize(
-    "path", ADAPTER_FACTORY_FILES + USE_CASE_FILES
-)
+@pytest.mark.parametrize("path", ADAPTER_FACTORY_FILES + USE_CASE_FILES)
 def test_workflow_does_not_bypass_resolver_with_internal_fallback(path: str) -> None:
     """No screen / swing / canonical-capture / accumulation-evaluation
     file may call ``last_weekday()`` directly — that is a resolver-

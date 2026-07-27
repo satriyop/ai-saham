@@ -28,9 +28,7 @@ def build_signal_mapping(data: dict[str, Any]) -> SignalMapping:
         RulesValidationError: If values are invalid
     """
     if not isinstance(data, dict):
-        raise RulesSchemaError(
-            f"signal_mapping: expected mapping, got {type(data).__name__}"
-        )
+        raise RulesSchemaError(f"signal_mapping: expected mapping, got {type(data).__name__}")
 
     # Map of valid action strings to TradeAction enums
     action_map = {

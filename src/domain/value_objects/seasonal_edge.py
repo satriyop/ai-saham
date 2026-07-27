@@ -30,9 +30,9 @@ class SeasonalEdge:
     """
 
     ticker: str
-    month: int               # 1–12
+    month: int  # 1–12
     avg_monthly_return_pct: float
-    win_rate_pct: float      # 0–100
+    win_rate_pct: float  # 0–100
     positive_years: int
     total_years: int
     back_years: int

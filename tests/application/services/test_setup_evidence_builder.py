@@ -82,9 +82,7 @@ def test_match_translates_to_strength():
 
 def test_failed_gates_threaded():
     reasons = ("rsi too high", "not near support")
-    evidence = SetupEvidenceBuilder().build(
-        _candidate(), _setup_eval(failed_reasons=reasons)
-    )
+    evidence = SetupEvidenceBuilder().build(_candidate(), _setup_eval(failed_reasons=reasons))
     assert evidence.failed_gates == reasons
 
 
@@ -198,9 +196,7 @@ def test_technical_fields_threaded():
 
 def test_bb_width_pctile_bounds():
     with pytest.raises(ValueError):
-        SetupEvidenceBuilder().build(
-            _candidate(bb_width_pctile=1.5), _setup_eval()
-        )
+        SetupEvidenceBuilder().build(_candidate(bb_width_pctile=1.5), _setup_eval())
 
 
 def test_no_setup_eval():

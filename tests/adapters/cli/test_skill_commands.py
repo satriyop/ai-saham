@@ -25,9 +25,7 @@ runner = CliRunner()
 class TestSkillCheckCommand:
     """Test 'skill check' command."""
 
-    def test_check_command_runs_without_error_on_empty_project(
-        self, tmp_path: Path, monkeypatch
-    ):
+    def test_check_command_runs_without_error_on_empty_project(self, tmp_path: Path, monkeypatch):
         """skill check should run successfully even with no artifacts."""
         monkeypatch.chdir(tmp_path)
 
@@ -36,9 +34,7 @@ class TestSkillCheckCommand:
         assert result.exit_code == 0
         assert "No artifacts found to check" in result.stdout
 
-    def test_check_command_reports_strategy_with_no_skill_md(
-        self, tmp_path: Path, monkeypatch
-    ):
+    def test_check_command_reports_strategy_with_no_skill_md(self, tmp_path: Path, monkeypatch):
         """skill check should report strategies missing SKILL.md."""
         # Create a strategy without SKILL.md
         strategy_dir = tmp_path / "strategies" / "test-strategy"
@@ -57,9 +53,7 @@ rules: []
         assert "test-strategy: no SKILL.md" in result.stdout
         assert "1/1 artifact(s) need regeneration" in result.stdout
 
-    def test_check_command_reports_up_to_date_strategy(
-        self, tmp_path: Path, monkeypatch
-    ):
+    def test_check_command_reports_up_to_date_strategy(self, tmp_path: Path, monkeypatch):
         """skill check should report strategies that are up to date."""
         from src.infrastructure.skill.rules_hasher import RulesHasher
 
@@ -126,9 +120,7 @@ rules:
         assert "test-strategy: STALE" in result.stdout
         assert "1/1 artifact(s) need regeneration" in result.stdout
 
-    def test_check_command_handles_multiple_strategies(
-        self, tmp_path: Path, monkeypatch
-    ):
+    def test_check_command_handles_multiple_strategies(self, tmp_path: Path, monkeypatch):
         """skill check should check multiple strategies."""
         from src.infrastructure.skill.rules_hasher import RulesHasher
 
@@ -151,9 +143,7 @@ rules: []
         # Create second strategy (missing SKILL.md)
         strategy2_dir = tmp_path / "strategies" / "strategy2"
         strategy2_dir.mkdir(parents=True)
-        (strategy2_dir / "strategy.yaml").write_text(
-            "indicators: {}\nrules: []", encoding="utf-8"
-        )
+        (strategy2_dir / "strategy.yaml").write_text("indicators: {}\nrules: []", encoding="utf-8")
 
         monkeypatch.chdir(tmp_path)
         result = runner.invoke(skill_app, ["check"])
@@ -167,9 +157,7 @@ rules: []
 class TestSkillIndexCommand:
     """Test 'skill index' command."""
 
-    def test_index_command_creates_skills_index_file(
-        self, tmp_path: Path, monkeypatch
-    ):
+    def test_index_command_creates_skills_index_file(self, tmp_path: Path, monkeypatch):
         """skill index should create SKILLS_INDEX.md."""
         monkeypatch.chdir(tmp_path)
 
@@ -216,9 +204,7 @@ Test strategy description
         # Create a SKILL.md in the custom root
         strategy_dir = project_root / "strategies" / "test"
         strategy_dir.mkdir(parents=True)
-        (strategy_dir / "SKILL.md").write_text(
-            "# Test\n\n**Type:** strategy", encoding="utf-8"
-        )
+        (strategy_dir / "SKILL.md").write_text("# Test\n\n**Type:** strategy", encoding="utf-8")
 
         result = runner.invoke(skill_app, ["index", "--root", str(project_root)])
 
@@ -227,9 +213,7 @@ Test strategy description
         index_path = project_root / "SKILLS_INDEX.md"
         assert index_path.exists()
 
-    def test_index_command_overwrites_existing_file(
-        self, tmp_path: Path, monkeypatch
-    ):
+    def test_index_command_overwrites_existing_file(self, tmp_path: Path, monkeypatch):
         """skill index should overwrite existing SKILLS_INDEX.md."""
         # Create old index
         index_path = tmp_path / "SKILLS_INDEX.md"
@@ -248,9 +232,7 @@ Test strategy description
 class TestSkillGenerateCommand:
     """Test 'skill generate' command (basic smoke tests)."""
 
-    def test_generate_command_fails_for_missing_strategy(
-        self, tmp_path: Path, monkeypatch
-    ):
+    def test_generate_command_fails_for_missing_strategy(self, tmp_path: Path, monkeypatch):
         """skill generate should fail gracefully for missing strategy."""
         monkeypatch.chdir(tmp_path)
         # Create strategies directory but no actual strategy
@@ -260,7 +242,7 @@ class TestSkillGenerateCommand:
 
         assert result.exit_code != 0
         # Error messages may be in stderr or stdout depending on typer configuration
-        output = result.stdout + result.stderr
+        _output = result.stdout + result.stderr
         # Just verify the command failed with non-zero exit code
         assert result.exit_code == 1
 
@@ -276,11 +258,10 @@ class TestSkillGenerateCommand:
         monkeypatch.chdir(tmp_path)
 
         # Test with indicator type (will fail due to missing plugin, but validates flag parsing)
-        result = runner.invoke(
-            skill_app, ["generate", "test", "--type", "indicator"]
-        )
+        result = runner.invoke(skill_app, ["generate", "test", "--type", "indicator"])
 
         # Command should parse correctly (even if it fails due to missing file)
         # The important thing is it doesn't fail on argument parsing
-        # Just verify the command failed with non-zero exit code (missing file, not arg parsing error)
+        # Just verify the command failed with non-zero exit code (missing file, not arg parsing
+        # error)
         assert result.exit_code == 1

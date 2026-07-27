@@ -118,9 +118,7 @@ def _parse_with_encoding(
                 break
 
             try:
-                summary = _parse_simple_row(
-                    row, row_num, header_map, mapping.transforms
-                )
+                summary = _parse_simple_row(row, row_num, header_map, mapping.transforms)
                 summaries.append(summary)
             except ValueError as e:
                 error = ParseError(
@@ -187,9 +185,7 @@ def parse_simple_broker_csv(
                     break
 
                 try:
-                    summary = _parse_simple_row(
-                        row, row_num, header_map, mapping.transforms
-                    )
+                    summary = _parse_simple_row(row, row_num, header_map, mapping.transforms)
                     summaries.append(summary)
                 except ValueError as e:
                     error = ParseError(
@@ -206,9 +202,7 @@ def parse_simple_broker_csv(
 
     except UnicodeDecodeError:
         # Retry with latin-1 encoding
-        return _parse_with_encoding(
-            file_path, mapping, error_strategy, "latin-1", max_rows
-        )
+        return _parse_with_encoding(file_path, mapping, error_strategy, "latin-1", max_rows)
 
     return ParseResult(
         summaries=summaries,

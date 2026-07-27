@@ -16,19 +16,19 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.application.dto.accumulation_screen import AccumulationCandidate
+    from src.application.dto.swing_analysis import SignalAssessmentAvailability
     from src.application.services.position_sizer import SizingResult
     from src.application.services.swing_data_freshness import SwingDataFreshness
-    from src.application.dto.swing_analysis import SignalAssessmentAvailability
 
 from rich.console import Group
 from rich.text import Text
 
+from src.adapters.cli.effective_session_display import format_effective_session_label
 from src.adapters.cli.plan_swing_formatters import (
     SwingDisplayConfig,
     fmt_pct,
     signal_label,
 )
-from src.adapters.cli.effective_session_display import format_effective_session_label
 from src.adapters.cli.plan_swing_overview_panels import (
     _build_data_panel,
     _build_market_context_panel,
@@ -40,11 +40,11 @@ from src.adapters.cli.plan_swing_overview_panels import (
     _signal_label,
 )
 from src.adapters.cli.rich_display import compact_table, console, panel
+from src.application.dto.swing_analysis import SignalAssessmentAvailability
 from src.application.dto.swing_broker_detail import (
     BrokerDetail,
     BrokerQualityNote,
 )
-from src.application.dto.swing_analysis import SignalAssessmentAvailability
 from src.domain.value_objects.market_context import MarketContext
 from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
 
@@ -97,8 +97,10 @@ def _accumulation_label(accum: Any | None, config: SwingDisplayConfig) -> tuple[
     if accum is None:
         return "missing", "red", "no accumulation candidate"
     label = signal_label(accum, config)
-    style = "bold green" if accum.accum_score >= config.enter_min_score else (
-        "yellow" if accum.accum_score >= config.watch_min_score else "red"
+    style = (
+        "bold green"
+        if accum.accum_score >= config.enter_min_score
+        else ("yellow" if accum.accum_score >= config.watch_min_score else "red")
     )
     detail = (
         f"foreign-flow score {accum.accum_score:.1f}; streak {accum.consecutive_streak}s; "
@@ -109,9 +111,7 @@ def _accumulation_label(accum: Any | None, config: SwingDisplayConfig) -> tuple[
 
 def flow_trigger_blocked_text(reason: str) -> str | None:
     messages = {
-        "flow_trigger_blocked:no_setup_phase": (
-            "Flow trigger blocked: setup phase unavailable"
-        ),
+        "flow_trigger_blocked:no_setup_phase": ("Flow trigger blocked: setup phase unavailable"),
         "flow_trigger_blocked:setup_phase_not_breakout_confirmation": (
             "Flow trigger blocked: setup phase is not BREAKOUT_CONFIRMATION"
         ),
@@ -197,9 +197,7 @@ def _top_findings(
         for reason in setup_eval.failed_reasons[:2]:
             findings.append(Text(f"- Setup gate: {reason}", style="yellow"))
     if risk_resp is not None and risk_resp.assessment.gate_triggered:
-        findings.append(
-            Text(f"- Risk gate: {risk_resp.assessment.gate_triggered}", style="red")
-        )
+        findings.append(Text(f"- Risk gate: {risk_resp.assessment.gate_triggered}", style="red"))
     if broker_quality_note is not None:
         style = "yellow" if broker_quality_note.level == "warning" else "cyan"
         findings.append(Text(f"- Broker: {broker_quality_note.message}", style=style))
@@ -444,9 +442,7 @@ def print_swing_rich_overview(
     ]
 
     if effective_session is not None:
-        subtitle = (
-            f"{today.isoformat()} · {format_effective_session_label(effective_session)}"
-        )
+        subtitle = f"{today.isoformat()} · {format_effective_session_label(effective_session)}"
     else:
         subtitle = today.isoformat()
 

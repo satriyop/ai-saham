@@ -22,9 +22,7 @@ from src.infrastructure.skill.rules_hasher import RulesHasher
 class TestRulesHasherCompute:
     """Test compute_hash() functionality."""
 
-    def test_compute_hash_returns_consistent_hash_for_same_content(
-        self, tmp_path: Path
-    ):
+    def test_compute_hash_returns_consistent_hash_for_same_content(self, tmp_path: Path):
         """compute_hash() should return same hash for same rules content."""
         yaml_content = """
 name: Test Strategy
@@ -48,9 +46,7 @@ rules:
         assert isinstance(hash1, str)
         assert len(hash1) == 64  # SHA-256 produces 64-char hex string
 
-    def test_compute_hash_returns_different_hash_for_different_rules(
-        self, tmp_path: Path
-    ):
+    def test_compute_hash_returns_different_hash_for_different_rules(self, tmp_path: Path):
         """compute_hash() should return different hashes for different rules."""
         yaml1 = """
 indicators:
@@ -152,9 +148,7 @@ rules:
 class TestRulesHasherExtract:
     """Test extract_stored_hash() functionality."""
 
-    def test_extract_stored_hash_extracts_hash_from_html_comment(
-        self, tmp_path: Path
-    ):
+    def test_extract_stored_hash_extracts_hash_from_html_comment(self, tmp_path: Path):
         """extract_stored_hash() should extract hash from HTML comment."""
         skill_content = """
 # Test Strategy
@@ -183,9 +177,7 @@ Some content here.
 
         assert result is None
 
-    def test_extract_stored_hash_returns_none_when_no_hash_comment(
-        self, tmp_path: Path
-    ):
+    def test_extract_stored_hash_returns_none_when_no_hash_comment(self, tmp_path: Path):
         """extract_stored_hash() should return None when no hash comment exists."""
         skill_content = """
 # Test Strategy
@@ -301,9 +293,7 @@ rules:
 
         assert result is True
 
-    def test_is_stale_returns_true_when_no_hash_comment_in_skill_md(
-        self, tmp_path: Path
-    ):
+    def test_is_stale_returns_true_when_no_hash_comment_in_skill_md(self, tmp_path: Path):
         """is_stale() should return True when SKILL.md has no hash comment."""
         strategy_yaml = """
 indicators:

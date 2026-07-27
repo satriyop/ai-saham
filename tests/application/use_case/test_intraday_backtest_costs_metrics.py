@@ -11,7 +11,8 @@ from tests.application.use_case.intraday_backtest_fixtures import (
 
 def test_cost_arithmetic_and_gross_vs_net_for_winner():
     today = _candle(
-        TICKER, TRADE_DAY,
+        TICKER,
+        TRADE_DAY,
         open_=Decimal("100"),
         high=Decimal("106"),
         low=Decimal("99"),
@@ -39,7 +40,8 @@ def test_cost_arithmetic_and_gross_vs_net_for_winner():
 
 def test_r_multiple_equals_pnl_over_initial_risk():
     today = _candle(
-        TICKER, TRADE_DAY,
+        TICKER,
+        TRADE_DAY,
         open_=Decimal("100"),
         high=Decimal("106"),
         low=Decimal("99"),

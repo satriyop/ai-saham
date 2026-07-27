@@ -30,6 +30,7 @@ from src.domain.value_objects.sector_context_evidence import SectorContextEviden
 # Config dataclass
 # --------------------------------------------------------------------------- #
 
+
 @dataclass(frozen=True)
 class SectorContextConfig:
     evidence_status: EvidenceStatus
@@ -66,19 +67,21 @@ class SectorContextConfig:
 # Request dataclass
 # --------------------------------------------------------------------------- #
 
+
 @dataclass(frozen=True)
 class SectorContextRequest:
     ticker: str
     snapshot_date: date
-    sector: str | None                         # from ticker metadata (StockMeta / TickerNotation)
-    ticker_candles: tuple[Candle, ...]         # candles for the target ticker
-    peer_candles: dict[str, list[Candle]]      # {peer_ticker: [Candle, ...]}; may be empty
-    ihsg_20d_return: float | None              # IHSG 20-session return; None when unavailable
+    sector: str | None  # from ticker metadata (StockMeta / TickerNotation)
+    ticker_candles: tuple[Candle, ...]  # candles for the target ticker
+    peer_candles: dict[str, list[Candle]]  # {peer_ticker: [Candle, ...]}; may be empty
+    ihsg_20d_return: float | None  # IHSG 20-session return; None when unavailable
 
 
 # --------------------------------------------------------------------------- #
 # Builder
 # --------------------------------------------------------------------------- #
+
 
 class SectorContextEvidenceBuilder:
     """Build SectorContextEvidence from local candle data.
@@ -183,14 +186,10 @@ class SectorContextEvidenceBuilder:
 
         # Equal-weight sector 20d return.
         sector_20d_return = sum(peer_returns) / len(peer_returns)
-        reasons.append(
-            f"sector_20d_return computed from {peer_count} peers"
-        )
+        reasons.append(f"sector_20d_return computed from {peer_count} peers")
 
         # Sector breadth: fraction of peers with positive 20d return.
-        sector_breadth = (
-            sum(1 for r in peer_returns if r > 0.0) / len(peer_returns)
-        )
+        sector_breadth = sum(1 for r in peer_returns if r > 0.0) / len(peer_returns)
 
         # Sector vs IHSG.
         sector_vs_ihsg_20d: float | None = None
@@ -243,6 +242,7 @@ class SectorContextEvidenceBuilder:
 # Private helpers
 # --------------------------------------------------------------------------- #
 
+
 def _compute_return(
     candles: tuple[Candle, ...] | list[Candle],
     lookback: int,
@@ -291,18 +291,12 @@ def _classify_regime(
     if sector_vs_ihsg_20d is None:
         # Classify from breadth alone when IHSG return is unavailable.
         if sector_breadth >= bullish_breadth_min:
-            return "NEUTRAL"    # bullish breadth but no IHSG context = NEUTRAL
+            return "NEUTRAL"  # bullish breadth but no IHSG context = NEUTRAL
         if sector_breadth <= bearish_breadth_max:
-            return "NEUTRAL"    # bearish breadth but no IHSG context = NEUTRAL
+            return "NEUTRAL"  # bearish breadth but no IHSG context = NEUTRAL
         return "NEUTRAL"
-    if (
-        sector_vs_ihsg_20d >= bullish_sector_vs_ihsg_min
-        and sector_breadth >= bullish_breadth_min
-    ):
+    if sector_vs_ihsg_20d >= bullish_sector_vs_ihsg_min and sector_breadth >= bullish_breadth_min:
         return "BULLISH"
-    if (
-        sector_vs_ihsg_20d <= bearish_sector_vs_ihsg_max
-        and sector_breadth <= bearish_breadth_max
-    ):
+    if sector_vs_ihsg_20d <= bearish_sector_vs_ihsg_max and sector_breadth <= bearish_breadth_max:
         return "BEARISH"
     return "NEUTRAL"

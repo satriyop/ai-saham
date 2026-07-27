@@ -43,16 +43,11 @@ def test_provider_factory_unknown_provider_and_missing_session(
     # 2. Missing stockbit session message
     import src.infrastructure.composition.stockbit_session_factory as session_factory
 
-    monkeypatch.setattr(
-        session_factory, "get_stockbit_session", lambda stockbit_config=None: None
-    )
+    monkeypatch.setattr(session_factory, "get_stockbit_session", lambda stockbit_config=None: None)
 
     with pytest.raises(ValueError) as exc_session:
         create_broker_data_provider("stockbit")
-    assert (
-        "No active Stockbit session. Run `saham fetch stockbit login`."
-        in str(exc_session.value)
-    )
+    assert "No active Stockbit session. Run `saham fetch stockbit login`." in str(exc_session.value)
 
 
 def test_broker_fetch_exact_flow_message_appears(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -97,9 +92,7 @@ def test_broker_top_foreign_no_save(monkeypatch: pytest.MonkeyPatch) -> None:
     captured_requests = []
 
     class DummyWorkflow:
-        def execute(
-            self, request: Any
-        ) -> FetchForeignTopStocksWorkflowResult:
+        def execute(self, request: Any) -> FetchForeignTopStocksWorkflowResult:
             captured_requests.append(request)
             return FetchForeignTopStocksWorkflowResult(
                 start_date=date(2024, 1, 1),
@@ -215,9 +208,7 @@ def test_broker_fetch_default_provider_shown_when_no_provider_flag(
 
 
 def test_broker_fetch_unknown_provider_prints_available_providers() -> None:
-    result = runner.invoke(
-        app, ["fetch", "broker", "BBCA", "--provider", "nonexistent"]
-    )
+    result = runner.invoke(app, ["fetch", "broker", "BBCA", "--provider", "nonexistent"])
     assert result.exit_code == 1
     assert "Unknown provider: nonexistent" in result.stdout
     assert "Available providers:" in result.stdout

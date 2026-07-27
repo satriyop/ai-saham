@@ -108,13 +108,13 @@ def compute_resistance_levels(
 
     ma200: Decimal | None = None
     if len(candles) >= resistance_ma_period:
-        ma200 = Decimal(str(sum(c.close for c in candles[-resistance_ma_period:]) / resistance_ma_period))
+        ma200 = Decimal(
+            str(sum(c.close for c in candles[-resistance_ma_period:]) / resistance_ma_period)
+        )
 
     week52_high: Decimal | None = None
     if len(candles) >= 1:
-        week52_high = max(
-            c.high for c in candles[-resistance_high_period:]
-        )
+        week52_high = max(c.high for c in candles[-resistance_high_period:])
 
     resistances: list[float] = []
     for level in (ma200, week52_high):

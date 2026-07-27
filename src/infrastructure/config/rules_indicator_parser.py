@@ -54,9 +54,7 @@ def build_rule_indicators(
     return tuple(indicators)
 
 
-def build_indicator_definition(
-    name: str, data: dict[str, Any]
-) -> IndicatorDefinition:
+def build_indicator_definition(name: str, data: dict[str, Any]) -> IndicatorDefinition:
     """Build a single indicator definition.
 
     Supports three modes:
@@ -84,29 +82,22 @@ def build_indicator_definition(
     # Validate mutual exclusivity
     if has_type and has_formula:
         raise RulesSchemaError(
-            "cannot have both 'type' and 'formula'. "
-            "Use either type+period OR formula."
+            "cannot have both 'type' and 'formula'. Use either type+period OR formula."
         )
 
     if not has_type and not has_formula:
-        raise RulesSchemaError(
-            "must have either 'type' (with period) or 'formula'"
-        )
+        raise RulesSchemaError("must have either 'type' (with period) or 'formula'")
 
     # Parse override (common to both modes)
     override = data.get("override", False)
     if not isinstance(override, bool):
-        raise RulesSchemaError(
-            f"override: expected bool, got {type(override).__name__}"
-        )
+        raise RulesSchemaError(f"override: expected bool, got {type(override).__name__}")
 
     # Formula-based indicator
     if has_formula:
         formula = data["formula"]
         if not isinstance(formula, str):
-            raise RulesSchemaError(
-                f"formula: expected string, got {type(formula).__name__}"
-            )
+            raise RulesSchemaError(f"formula: expected string, got {type(formula).__name__}")
 
         formula = formula.strip()
         if not formula:

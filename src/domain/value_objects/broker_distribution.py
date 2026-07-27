@@ -26,9 +26,9 @@ from datetime import date, datetime
 class BrokerCounterparty:
     """One counterparty record inside a `distribute_to` list."""
 
-    broker_code: str        # e.g. "ZP", "AK"
-    broker_type: str        # e.g. "Asing", "Lokal", "Pemerintah"
-    amount_idr: int         # IDR traded with this counterparty
+    broker_code: str  # e.g. "ZP", "AK"
+    broker_type: str  # e.g. "Asing", "Lokal", "Pemerintah"
+    amount_idr: int  # IDR traded with this counterparty
 
 
 @dataclass(frozen=True)
@@ -37,7 +37,7 @@ class BrokerDistributionEntry:
 
     broker_code: str
     broker_type: str
-    amount_idr: int                             # total buy or sell amount (IDR)
+    amount_idr: int  # total buy or sell amount (IDR)
     counterparties: tuple[BrokerCounterparty, ...]  # sorted by amount desc
 
     @property
@@ -49,7 +49,9 @@ class BrokerDistributionEntry:
         """Fraction of this broker's volume traded against other foreign brokers."""
         if not self.counterparties or self.amount_idr == 0:
             return 0.0
-        foreign_amt = sum(c.amount_idr for c in self.counterparties if c.broker_type.lower() == "asing")
+        foreign_amt = sum(
+            c.amount_idr for c in self.counterparties if c.broker_type.lower() == "asing"
+        )
         return foreign_amt / self.amount_idr * 100
 
     @property
@@ -86,7 +88,8 @@ class BrokerDistributionSnapshot:
 
     @property
     def foreign_buying_from_domestic(self) -> bool:
-        """True when the top foreign buyer has >50% domestic counterparties — accumulation signal."""
+        """True when the top foreign buyer has >50% domestic counterparties — accumulation
+        signal."""
         foreign_buyers = [b for b in self.top_buyers if b.is_foreign]
         if not foreign_buyers:
             return False

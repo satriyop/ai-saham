@@ -17,28 +17,30 @@ from src.domain.value_objects.institutional_accumulation_evidence import Evidenc
 class TickerProfileSnapshot:
     ticker: str
     snapshot_date: date
-    epoch: str                               # "YYYY-MM" — monthly cadence
-    primary_profile: str                     # "foreign_institutional"|"domestic_bandar"|"retail_speculative"|"unclassified"|"unknown"
-    profile_confidence: float                # [0,1]; exposure margin (primary − second)
-    liquidity_score: float | None            # [0,1]; avg daily turnover normalized
-    broker_concentration_score: float | None # [0,1]; domestic buy-side HHI
-    foreign_flow_score: float | None         # [0,1]; avg foreign participation ratio
-    volatility_score: float | None           # [0,1]; ATR/price normalized (higher = more volatile)
-    index_membership_score: float | None     # [0,1]; best index score; 0.0 when in no index
-    market_cap_bucket: str | None            # "large"|"mid"|"small"|"micro"|"UNKNOWN"
+    epoch: str  # "YYYY-MM" — monthly cadence
+    primary_profile: str  # foreign_institutional|domestic_bandar|retail|...
+    profile_confidence: float  # [0,1]; exposure margin (primary − second)
+    liquidity_score: float | None  # [0,1]; avg daily turnover normalized
+    broker_concentration_score: float | None  # [0,1]; domestic buy-side HHI
+    foreign_flow_score: float | None  # [0,1]; avg foreign participation ratio
+    volatility_score: float | None  # [0,1]; ATR/price normalized (higher = more volatile)
+    index_membership_score: float | None  # [0,1]; best index score; 0.0 when in no index
+    market_cap_bucket: str | None  # "large"|"mid"|"small"|"micro"|"UNKNOWN"
     sector: str | None
     sub_sector: str | None
-    index_memberships: tuple[str, ...]       # e.g. ("lq45", "idx80")
-    coverage_score: float                    # available dimensions / 5
-    evidence_status: EvidenceStatus          # always DIAGNOSTIC in Phase F
+    index_memberships: tuple[str, ...]  # e.g. ("lq45", "idx80")
+    coverage_score: float  # available dimensions / 5
+    evidence_status: EvidenceStatus  # always DIAGNOSTIC in Phase F
     reasons: tuple[str, ...]
     unavailable_reasons: tuple[str, ...]
     # Market-cap / liquidity tier (behaviorally orthogonal to primary_profile).
-    market_tier: str | None = None           # "blue_chip"|"second_liner"|"third_liner"|"speculative"|"unknown"
+    market_tier: str | None = (
+        None  # "blue_chip"|"second_liner"|"third_liner"|"speculative"|"unknown"
+    )
     # Soft behavioral exposures — a simplex over the three canonical profiles.
-    foreign_institutional_exposure: float | None = None   # [0,1]
-    domestic_bandar_exposure: float | None = None         # [0,1]
-    retail_speculative_exposure: float | None = None      # [0,1]
+    foreign_institutional_exposure: float | None = None  # [0,1]
+    domestic_bandar_exposure: float | None = None  # [0,1]
+    retail_speculative_exposure: float | None = None  # [0,1]
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -106,36 +108,26 @@ class TickerProfileSnapshot:
             ),
             profile_confidence=float(data.get("profile_confidence") or 0.0),
             liquidity_score=_optional_float(data.get("liquidity_score")),
-            broker_concentration_score=_optional_float(
-                data.get("broker_concentration_score")
-            ),
+            broker_concentration_score=_optional_float(data.get("broker_concentration_score")),
             foreign_flow_score=_optional_float(data.get("foreign_flow_score")),
             volatility_score=_optional_float(data.get("volatility_score")),
             index_membership_score=_optional_float(data.get("index_membership_score")),
             market_cap_bucket=data.get("market_cap_bucket"),
             sector=data.get("sector"),
             sub_sector=data.get("sub_sector"),
-            index_memberships=tuple(
-                str(v) for v in data.get("index_memberships") or ()
-            ),
+            index_memberships=tuple(str(v) for v in data.get("index_memberships") or ()),
             coverage_score=float(data.get("coverage_score") or 0.0),
             evidence_status=EvidenceStatus(
                 data.get("evidence_status") or EvidenceStatus.DIAGNOSTIC.value
             ),
             reasons=tuple(str(v) for v in data.get("reasons") or ()),
-            unavailable_reasons=tuple(
-                str(v) for v in data.get("unavailable_reasons") or ()
-            ),
+            unavailable_reasons=tuple(str(v) for v in data.get("unavailable_reasons") or ()),
             market_tier=data.get("market_tier"),
             foreign_institutional_exposure=_optional_float(
                 data.get("foreign_institutional_exposure")
             ),
-            domestic_bandar_exposure=_optional_float(
-                data.get("domestic_bandar_exposure")
-            ),
-            retail_speculative_exposure=_optional_float(
-                data.get("retail_speculative_exposure")
-            ),
+            domestic_bandar_exposure=_optional_float(data.get("domestic_bandar_exposure")),
+            retail_speculative_exposure=_optional_float(data.get("retail_speculative_exposure")),
             metadata=dict(data.get("metadata") or {}),
         )
 

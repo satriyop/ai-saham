@@ -26,31 +26,31 @@ from typing import ClassVar
 class BandarDetectorSnapshot:
     ticker: str
     session_date: date
-    broker_accdist: str        # "Acc" | "Dis" | "Neutral"
-    today_accdist: str         # avg.accdist — today's intensity label
-    five_day_accdist: str      # avg5.accdist — 5-session moving label
-    top1_accdist: str          # top1.accdist — single-largest operator pattern
-    top1_percent: float        # top1.percent — concentration % of largest operator
-    today_percent: float       # avg.percent — avg net % of total volume
-    total_buyer: int           # number of broker codes on buy side
-    total_seller: int          # number of broker codes on sell side
+    broker_accdist: str  # "Acc" | "Dis" | "Neutral"
+    today_accdist: str  # avg.accdist — today's intensity label
+    five_day_accdist: str  # avg5.accdist — 5-session moving label
+    top1_accdist: str  # top1.accdist — single-largest operator pattern
+    top1_percent: float  # top1.percent — concentration % of largest operator
+    today_percent: float  # avg.percent — avg net % of total volume
+    total_buyer: int  # number of broker codes on buy side
+    total_seller: int  # number of broker codes on sell side
 
     # Extended fields (added 2026-06-20 from API probe)
-    top3_accdist: str | None = None    # top3.accdist — top-3 brokers smoothed signal
-    top5_accdist: str | None = None    # top5.accdist — top-5 brokers smoothed signal
-    top10_accdist: str | None = None   # top10.accdist — top-10 brokers smoothed signal
+    top3_accdist: str | None = None  # top3.accdist — top-3 brokers smoothed signal
+    top5_accdist: str | None = None  # top5.accdist — top-5 brokers smoothed signal
+    top10_accdist: str | None = None  # top10.accdist — top-10 brokers smoothed signal
     number_broker_buysell: int | None = None  # negative = more sellers than buyers
-    vwap: Decimal | None = None        # average — VWAP for the session
-    total_value: Decimal | None = None # value — total traded value (IDR)
-    total_volume: int | None = None    # volume — total traded volume (lots)
+    vwap: Decimal | None = None  # average — VWAP for the session
+    total_value: Decimal | None = None  # value — total traded value (IDR)
+    total_volume: int | None = None  # volume — total traded volume (lots)
 
     # Confirmed 5-level ordinal from API probe 2026-06-20.
     _INTENSITY_SCORE: ClassVar[dict[str, int]] = {
-        "Big Acc":    2,
-        "Small Acc":  1,
-        "Neutral":    0,
+        "Big Acc": 2,
+        "Small Acc": 1,
+        "Neutral": 0,
         "Small Dist": -1,
-        "Big Dist":   -2,
+        "Big Dist": -2,
     }
 
     @property
@@ -75,9 +75,12 @@ class BandarDetectorSnapshot:
         return sum(
             self._INTENSITY_SCORE.get(x, 0)
             for x in [
-                self.today_accdist, self.five_day_accdist,
-                self.top1_accdist, self.top3_accdist,
-                self.top5_accdist, self.top10_accdist,
+                self.today_accdist,
+                self.five_day_accdist,
+                self.top1_accdist,
+                self.top3_accdist,
+                self.top5_accdist,
+                self.top10_accdist,
             ]
             if x is not None
         )

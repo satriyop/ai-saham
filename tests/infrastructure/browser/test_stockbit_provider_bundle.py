@@ -22,9 +22,7 @@ def test_create_readonly_stockbit_providers_uses_cache_only(tmp_path):
     assert providers.forward_estimates_prov._api_client is None
 
 
-def test_create_readonly_stockbit_providers_loads_config_once_and_shares_it(
-    tmp_path, monkeypatch
-):
+def test_create_readonly_stockbit_providers_loads_config_once_and_shares_it(tmp_path, monkeypatch):
     """Config must be loaded exactly once and the same instance shared."""
     calls = []
 

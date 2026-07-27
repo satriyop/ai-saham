@@ -31,9 +31,7 @@ def render_update_result(result: UniverseUpdateResult) -> None:
     typer.echo("")
     for item in result.updated:
         delta_str = (
-            f"+{item.delta}" if item.delta > 0
-            else str(item.delta) if item.delta < 0
-            else "="
+            f"+{item.delta}" if item.delta > 0 else str(item.delta) if item.delta < 0 else "="
         )
         typer.echo(
             f"  {item.key:<14} [{item.universe_type}]... "
@@ -42,10 +40,7 @@ def render_update_result(result: UniverseUpdateResult) -> None:
     typer.echo("")
     typer.echo(f"Updated {result.config_path}  ({len(result.updated)} universe(s))")
     if result.failed:
-        typer.echo(typer.style(
-            f"Failed: {', '.join(result.failed)}",
-            fg=typer.colors.YELLOW
-        ))
+        typer.echo(typer.style(f"Failed: {', '.join(result.failed)}", fg=typer.colors.YELLOW))
 
 
 def render_inspect_result(result: UniverseInspectResult) -> None:
@@ -84,10 +79,5 @@ def render_create_result(result: UniverseCreateResult) -> None:
     table.add_row("Tickers", tickers_str)
     table.add_row("Config File", str(result.config_path))
 
-    console().print(
-        panel(
-            table,
-            title="CUSTOM UNIVERSE CREATED & SYNCED"
-        )
-    )
+    console().print(panel(table, title="CUSTOM UNIVERSE CREATED & SYNCED"))
     console().print("")

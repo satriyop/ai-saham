@@ -18,7 +18,7 @@ STRATEGY_TRANSLATOR_MAX_TOKENS = 2000
 STRATEGY_TRANSLATOR_MAX_RETRIES = 1
 
 # System prompt template
-SYSTEM_PROMPT_TEMPLATE = '''You are a strategy YAML generator for a stock analysis engine.
+SYSTEM_PROMPT_TEMPLATE = """You are a strategy YAML generator for a stock analysis engine.
 
 Your ONLY task is to translate natural language trading strategies into valid YAML configurations.
 
@@ -244,7 +244,7 @@ Return exactly "UNSUPPORTED" (nothing else) for:
 - Guaranteed outcomes ("strategy that always wins")
 - Non-strategy requests ("explain RSI", "what is EMA")
 - Requests requiring unavailable indicators
-- News-based or fundamental analysis strategies'''
+- News-based or fundamental analysis strategies"""
 
 # Retry hint prompt (appended when first attempt returns UNSUPPORTED or invalid)
 RETRY_HINT = """

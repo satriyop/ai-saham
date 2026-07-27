@@ -34,60 +34,60 @@ logger = logging.getLogger(__name__)
 
 # Known subsector IDs for sector 88 — used as fast-path fallback if discovery fails.
 _KNOWN_IDS: dict[str, int | str] = {
-    "lq45":   550,
-    "idx30":  559,
-    "jii":    551,
-    "mbx":    552,
+    "lq45": 550,
+    "idx30": 559,
+    "jii": 551,
+    "mbx": 552,
     "bumn20": 1000000011,
-    "ihsg":   467,
+    "ihsg": 467,
 }
 
 # Universe type by key — used for display in update command.
 _UNIVERSE_TYPE: dict[str, str] = {
-    "lq45":       "broad",
-    "idx30":      "broad",
-    "idx80":      "broad",
-    "jii":        "broad",
-    "mbx":        "broad",
-    "bumn20":     "broad",
-    "ihsg":       "broad",
-    "finance":    "sectoral",
-    "energy":     "sectoral",
-    "basic":      "sectoral",
+    "lq45": "broad",
+    "idx30": "broad",
+    "idx80": "broad",
+    "jii": "broad",
+    "mbx": "broad",
+    "bumn20": "broad",
+    "ihsg": "broad",
+    "finance": "sectoral",
+    "energy": "sectoral",
+    "basic": "sectoral",
     "industrial": "sectoral",
-    "infra":      "sectoral",
-    "tech":       "sectoral",
-    "health":     "sectoral",
-    "noncyc":     "sectoral",
-    "cyclic":     "sectoral",
-    "property":   "sectoral",
-    "transport":  "sectoral",
+    "infra": "sectoral",
+    "tech": "sectoral",
+    "health": "sectoral",
+    "noncyc": "sectoral",
+    "cyclic": "sectoral",
+    "property": "sectoral",
+    "transport": "sectoral",
 }
 
 # Broad index name hints — sector 88 (case-insensitive substring match)
 _BROAD_NAME_HINTS: dict[str, list[str]] = {
-    "lq45":   ["lq45", "lq 45"],
-    "idx30":  ["idx30", "idx 30"],
-    "idx80":  ["idx80", "idx 80"],
-    "jii":    ["jii", "jakarta islamic"],
-    "mbx":    ["mbx"],
+    "lq45": ["lq45", "lq 45"],
+    "idx30": ["idx30", "idx 30"],
+    "idx80": ["idx80", "idx 80"],
+    "jii": ["jii", "jakarta islamic"],
+    "mbx": ["mbx"],
     "bumn20": ["bumn20", "bumn 20"],
-    "ihsg":   ["ihsg", "composite", "issi"],
+    "ihsg": ["ihsg", "composite", "issi"],
 }
 
 # Sectoral index name hints — sector 70 (Indonesian + English, case-insensitive)
 _SECTORAL_NAME_HINTS: dict[str, list[str]] = {
-    "finance":    ["keuangan", "finance", "idxfinance"],
-    "energy":     ["energi", "energy", "idxenergy"],
-    "basic":      ["barang baku", "basic material", "basic", "idxbasic"],
+    "finance": ["keuangan", "finance", "idxfinance"],
+    "energy": ["energi", "energy", "idxenergy"],
+    "basic": ["barang baku", "basic material", "basic", "idxbasic"],
     "industrial": ["perindustrian", "industrial", "indust", "idxindust"],
-    "infra":      ["infrastruktur", "infrastructure", "infra", "idxinfra"],
-    "tech":       ["teknologi", "technology", "techno", "idxtechno"],
-    "health":     ["kesehatan", "health", "idxhealth"],
-    "noncyc":     ["kebutuhan primer", "non-cyclic", "noncyc", "idxnoncyc"],
-    "cyclic":     ["barang konsumen", "cyclic", "consumer cycl", "idxcyclic"],
-    "property":   ["properti", "property", "real estate", "propert", "idxpropert"],
-    "transport":  ["transportasi", "transport", "logistik", "trans", "idxtrans"],
+    "infra": ["infrastruktur", "infrastructure", "infra", "idxinfra"],
+    "tech": ["teknologi", "technology", "techno", "idxtechno"],
+    "health": ["kesehatan", "health", "idxhealth"],
+    "noncyc": ["kebutuhan primer", "non-cyclic", "noncyc", "idxnoncyc"],
+    "cyclic": ["barang konsumen", "cyclic", "consumer cycl", "idxcyclic"],
+    "property": ["properti", "property", "real estate", "propert", "idxpropert"],
+    "transport": ["transportasi", "transport", "logistik", "trans", "idxtrans"],
 }
 
 
@@ -179,9 +179,7 @@ class StockbitUniverseProvider:
             dict mapping universe_key → (subsector_id, sector_number)
         """
         # Seed with known IDs for sector 88 (broad indices)
-        result: dict[str, tuple[int | str, int]] = {
-            k: (v, 88) for k, v in _KNOWN_IDS.items()
-        }
+        result: dict[str, tuple[int | str, int]] = {k: (v, 88) for k, v in _KNOWN_IDS.items()}
 
         # Discover broad indices (sector 88)
         self._discover_sector(
@@ -284,7 +282,8 @@ class StockbitUniverseProvider:
             if not isinstance(data, list):
                 logger.info(
                     "screener/universe: unexpected shape — data is %s: %r",
-                    type(data).__name__, str(body)[:300]
+                    type(data).__name__,
+                    str(body)[:300],
                 )
                 return {}
             result: dict[str, int] = {}

@@ -11,8 +11,13 @@ from src.application.services.swing_broker_detail_builder import (
 
 _SMART = {"AK", "BK", "KZ"}
 _NOISE = {"YP", "XL"}
-_WEIGHTS = {"AK": Decimal("1.5"), "BK": Decimal("1.5"), "KZ": Decimal("1.5"),
-            "YP": Decimal("0.5"), "XL": Decimal("0.5")}
+_WEIGHTS = {
+    "AK": Decimal("1.5"),
+    "BK": Decimal("1.5"),
+    "KZ": Decimal("1.5"),
+    "YP": Decimal("0.5"),
+    "XL": Decimal("0.5"),
+}
 _THRESHOLD = 60.0
 
 
@@ -35,9 +40,14 @@ def test_daily_flow_path_uses_daily_flows():
     repo.get_broker_daily_flows.return_value = flows
 
     detail = build_broker_detail(
-        "BBCA", repo, window_sessions=5, as_of_date=date(2026, 6, 1),
-        smart_money_brokers=_SMART, noise_brokers=_NOISE,
-        broker_weights=_WEIGHTS, smart_share_threshold_pct=_THRESHOLD,
+        "BBCA",
+        repo,
+        window_sessions=5,
+        as_of_date=date(2026, 6, 1),
+        smart_money_brokers=_SMART,
+        noise_brokers=_NOISE,
+        broker_weights=_WEIGHTS,
+        smart_share_threshold_pct=_THRESHOLD,
     )
     assert detail is not None
     assert detail.source == "stockbit"
@@ -52,9 +62,14 @@ def test_daily_flow_preserves_source_and_broker_type():
         _flow("YP", "CGS-CIMB", -3000000, 1),
     ]
     detail = build_broker_detail_from_daily_flows(
-        "BBCA", flows, window_sessions=5, as_of_date=date(2026, 6, 1),
-        smart_money_brokers=_SMART, noise_brokers=_NOISE,
-        broker_weights=_WEIGHTS, smart_share_threshold_pct=_THRESHOLD,
+        "BBCA",
+        flows,
+        window_sessions=5,
+        as_of_date=date(2026, 6, 1),
+        smart_money_brokers=_SMART,
+        noise_brokers=_NOISE,
+        broker_weights=_WEIGHTS,
+        smart_share_threshold_pct=_THRESHOLD,
     )
     assert detail is not None
     assert detail.source == "stockbit"
@@ -86,7 +101,8 @@ def test_summary_fallback_preserves_latest_source_and_broker_type():
         def get_broker_summaries(self, ticker, end_date=None):
             return [
                 _FakeSummary(
-                    date(2026, 6, 1), "idx",
+                    date(2026, 6, 1),
+                    "idx",
                     top_buyers=(_FakeTx("AK", "UBS", MagicMock(value="FOREIGN"), 5000000),),
                     top_sellers=(),
                     foreign_net=5000000,
@@ -95,9 +111,14 @@ def test_summary_fallback_preserves_latest_source_and_broker_type():
 
     repo = _FakeRepo()
     detail = build_broker_detail(
-        "BBCA", repo, window_sessions=5, as_of_date=date(2026, 6, 1),
-        smart_money_brokers=_SMART, noise_brokers=_NOISE,
-        broker_weights=_WEIGHTS, smart_share_threshold_pct=_THRESHOLD,
+        "BBCA",
+        repo,
+        window_sessions=5,
+        as_of_date=date(2026, 6, 1),
+        smart_money_brokers=_SMART,
+        noise_brokers=_NOISE,
+        broker_weights=_WEIGHTS,
+        smart_share_threshold_pct=_THRESHOLD,
     )
     assert detail is not None
     assert detail.source == "idx"
@@ -110,9 +131,14 @@ def test_daily_flow_quality_labels():
         _flow("AK", "UBS", -5000000, 1),
     ]
     detail = build_broker_detail_from_daily_flows(
-        "BBCA", flows, window_sessions=5, as_of_date=None,
-        smart_money_brokers=_SMART, noise_brokers=_NOISE,
-        broker_weights=_WEIGHTS, smart_share_threshold_pct=_THRESHOLD,
+        "BBCA",
+        flows,
+        window_sessions=5,
+        as_of_date=None,
+        smart_money_brokers=_SMART,
+        noise_brokers=_NOISE,
+        broker_weights=_WEIGHTS,
+        smart_share_threshold_pct=_THRESHOLD,
     )
     assert detail is not None
     assert detail.quality == "no buyer detail"
@@ -123,9 +149,14 @@ def test_daily_flow_quality_labels():
         _flow("HD", "Mandiri", 2000000, 1),
     ]
     detail = build_broker_detail_from_daily_flows(
-        "BBCA", flows, window_sessions=5, as_of_date=None,
-        smart_money_brokers=_SMART, noise_brokers=_NOISE,
-        broker_weights=_WEIGHTS, smart_share_threshold_pct=_THRESHOLD,
+        "BBCA",
+        flows,
+        window_sessions=5,
+        as_of_date=None,
+        smart_money_brokers=_SMART,
+        noise_brokers=_NOISE,
+        broker_weights=_WEIGHTS,
+        smart_share_threshold_pct=_THRESHOLD,
     )
     assert detail is not None
     assert detail.quality == "concentrated accumulation"
@@ -141,9 +172,14 @@ def test_daily_flow_quality_labels():
         _flow("HD", "Mandiri", 500000, 3),
     ]
     detail = build_broker_detail_from_daily_flows(
-        "BBCA", flows, window_sessions=5, as_of_date=None,
-        smart_money_brokers=_SMART, noise_brokers=_NOISE,
-        broker_weights=_WEIGHTS, smart_share_threshold_pct=_THRESHOLD,
+        "BBCA",
+        flows,
+        window_sessions=5,
+        as_of_date=None,
+        smart_money_brokers=_SMART,
+        noise_brokers=_NOISE,
+        broker_weights=_WEIGHTS,
+        smart_share_threshold_pct=_THRESHOLD,
     )
     assert detail is not None
     assert detail.quality == "broad accumulation"
@@ -155,9 +191,14 @@ def test_daily_flow_quality_labels():
         _flow("YP", "CGS-CIMB", 2000000, 1),
     ]
     detail = build_broker_detail_from_daily_flows(
-        "BBCA", flows, window_sessions=5, as_of_date=None,
-        smart_money_brokers=_SMART, noise_brokers=_NOISE,
-        broker_weights=_WEIGHTS, smart_share_threshold_pct=_THRESHOLD,
+        "BBCA",
+        flows,
+        window_sessions=5,
+        as_of_date=None,
+        smart_money_brokers=_SMART,
+        noise_brokers=_NOISE,
+        broker_weights=_WEIGHTS,
+        smart_share_threshold_pct=_THRESHOLD,
     )
     assert detail is not None
     assert detail.quality == "recent distribution"
@@ -168,9 +209,14 @@ def test_daily_flow_quality_labels():
         _flow("YP", "CGS-CIMB", 4000000, 1),
     ]
     detail = build_broker_detail_from_daily_flows(
-        "BBCA", flows, window_sessions=5, as_of_date=None,
-        smart_money_brokers=_SMART, noise_brokers=_NOISE,
-        broker_weights=_WEIGHTS, smart_share_threshold_pct=_THRESHOLD,
+        "BBCA",
+        flows,
+        window_sessions=5,
+        as_of_date=None,
+        smart_money_brokers=_SMART,
+        noise_brokers=_NOISE,
+        broker_weights=_WEIGHTS,
+        smart_share_threshold_pct=_THRESHOLD,
     )
     assert detail is not None
     assert detail.quality == "limited accumulation detail"
@@ -202,31 +248,49 @@ def test_summary_fallback_quality_labels():
             return self._summaries
 
     # recent distribution (latest foreign net < 0)
-    repo = _FakeRepo([
-        _FakeSummary(date(2026, 6, 1),
-                     top_buyers=(_FakeTx("AK", "UBS", 5000000),),
-                     top_sellers=(),
-                     foreign_net=-2000000),
-    ])
+    repo = _FakeRepo(
+        [
+            _FakeSummary(
+                date(2026, 6, 1),
+                top_buyers=(_FakeTx("AK", "UBS", 5000000),),
+                top_sellers=(),
+                foreign_net=-2000000,
+            ),
+        ]
+    )
     detail = build_broker_detail(
-        "BBCA", repo, window_sessions=5, as_of_date=date(2026, 6, 1),
-        smart_money_brokers=_SMART, noise_brokers=_NOISE,
-        broker_weights=_WEIGHTS, smart_share_threshold_pct=_THRESHOLD,
+        "BBCA",
+        repo,
+        window_sessions=5,
+        as_of_date=date(2026, 6, 1),
+        smart_money_brokers=_SMART,
+        noise_brokers=_NOISE,
+        broker_weights=_WEIGHTS,
+        smart_share_threshold_pct=_THRESHOLD,
     )
     assert detail is not None
     assert detail.quality == "recent distribution"
 
     # no buyers -> no buyer detail
-    repo = _FakeRepo([
-        _FakeSummary(date(2026, 6, 1),
-                     top_buyers=(),
-                     top_sellers=(_FakeTx("AK", "UBS", -5000000),),
-                     foreign_net=2000000),
-    ])
+    repo = _FakeRepo(
+        [
+            _FakeSummary(
+                date(2026, 6, 1),
+                top_buyers=(),
+                top_sellers=(_FakeTx("AK", "UBS", -5000000),),
+                foreign_net=2000000,
+            ),
+        ]
+    )
     detail = build_broker_detail(
-        "BBCA", repo, window_sessions=5, as_of_date=date(2026, 6, 1),
-        smart_money_brokers=_SMART, noise_brokers=_NOISE,
-        broker_weights=_WEIGHTS, smart_share_threshold_pct=_THRESHOLD,
+        "BBCA",
+        repo,
+        window_sessions=5,
+        as_of_date=date(2026, 6, 1),
+        smart_money_brokers=_SMART,
+        noise_brokers=_NOISE,
+        broker_weights=_WEIGHTS,
+        smart_share_threshold_pct=_THRESHOLD,
     )
     assert detail is not None
     assert detail.quality == "no buyer detail"
@@ -243,8 +307,13 @@ def test_build_broker_detail_returns_none_when_no_data():
             return []
 
     detail = build_broker_detail(
-        "BBCA", _FakeRepo(), window_sessions=5, as_of_date=date(2026, 6, 1),
-        smart_money_brokers=_SMART, noise_brokers=_NOISE,
-        broker_weights=_WEIGHTS, smart_share_threshold_pct=_THRESHOLD,
+        "BBCA",
+        _FakeRepo(),
+        window_sessions=5,
+        as_of_date=date(2026, 6, 1),
+        smart_money_brokers=_SMART,
+        noise_brokers=_NOISE,
+        broker_weights=_WEIGHTS,
+        smart_share_threshold_pct=_THRESHOLD,
     )
     assert detail is None

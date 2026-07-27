@@ -44,20 +44,14 @@ class CreateStrategyPackageUseCase:
     def __init__(self, writer: StrategyPackageWriter) -> None:
         self._writer = writer
 
-    def execute(
-        self, request: CreateStrategyPackageRequest
-    ) -> CreateStrategyPackageResponse:
+    def execute(self, request: CreateStrategyPackageRequest) -> CreateStrategyPackageResponse:
         name = request.name
 
         if "/" in name or "\\" in name:
-            raise InvalidStrategyPackageName(
-                "Strategy name cannot contain path separators."
-            )
+            raise InvalidStrategyPackageName("Strategy name cannot contain path separators.")
 
         if name.endswith(".yaml"):
-            raise InvalidStrategyPackageName(
-                "Strategy name should not end with .yaml."
-            )
+            raise InvalidStrategyPackageName("Strategy name should not end with .yaml.")
 
         target_dir = request.directory if request.directory else Path("strategies") / name
 

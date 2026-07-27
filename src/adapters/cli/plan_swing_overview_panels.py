@@ -41,7 +41,9 @@ def _signal_label(
         raise TypeError("availability must be a SignalAssessmentAvailability")
 
     if availability.status is SignalAssessmentStatus.UNAVAILABLE:
-        reason_str = availability.unavailable_reason.value if availability.unavailable_reason else "unknown"
+        reason_str = (
+            availability.unavailable_reason.value if availability.unavailable_reason else "unknown"
+        )
         reason_display = reason_str.replace("_", " ")
         return "N/A", "bright_black", f"signal unavailable: {reason_display}"
 
@@ -107,7 +109,9 @@ def _build_signal_panel(
         raise TypeError("availability must be a SignalAssessmentAvailability")
 
     if availability.status is SignalAssessmentStatus.UNAVAILABLE:
-        reason_str = availability.unavailable_reason.value if availability.unavailable_reason else "unknown"
+        reason_str = (
+            availability.unavailable_reason.value if availability.unavailable_reason else "unknown"
+        )
         reason_display = reason_str.replace("_", " ")
         return panel(Text(f"Signal unavailable: {reason_display}", style="dim red"), title="Signal")
 
@@ -153,8 +157,11 @@ def _build_signal_panel(
         factor_table.add_column("Flags")
         factor_table.add_row(
             *(
-                (f"{breakdown[key]:.0f}%" if is_pct else str(round(breakdown[key])))
-                if key in breakdown else "-"
+                (
+                    (f"{breakdown[key]:.0f}%" if is_pct else str(round(breakdown[key])))
+                    if key in breakdown
+                    else "-"
+                )
                 for key, _, is_pct in key_map
             ),
             " ".join(_flag_abbr.get(f, f[:3]) for f in active_flags) or "-",
@@ -165,8 +172,7 @@ def _build_signal_panel(
     if constraints is not None:
         reasons = list(getattr(constraints, "constraint_reasons", ()) or ())
         detail = (
-            f"max {constraints.max_decision}; "
-            f"size x{constraints.effective_size_multiplier:.2f}"
+            f"max {constraints.max_decision}; size x{constraints.effective_size_multiplier:.2f}"
         )
         if constraints.regime:
             detail = f"{constraints.regime}; " + detail
@@ -230,8 +236,7 @@ def _build_market_context_panel(
             if gate_tightened:
                 markers.append("gate tightening")
             signal_detail = (
-                f"{assessment.score:.0f} ({assessment.entry_quality.value}) · "
-                + ", ".join(markers)
+                f"{assessment.score:.0f} ({assessment.entry_quality.value}) · " + ", ".join(markers)
             )
     table.add_row("Signal", signal_summary, signal_detail)
 
@@ -305,9 +310,11 @@ def _build_data_panel(
         table.add_row(
             "Notation",
             getattr(notation, "listing_board", "") or "-",
-            f"haircut={getattr(notation, 'haircut_percentage', '')}"
-            if getattr(notation, "haircut_percentage", None)
-            else notation_detail(notation),
+            (
+                f"haircut={getattr(notation, 'haircut_percentage', '')}"
+                if getattr(notation, "haircut_percentage", None)
+                else notation_detail(notation)
+            ),
         )
 
     return panel(table, title="Data")

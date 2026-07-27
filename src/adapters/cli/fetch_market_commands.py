@@ -29,13 +29,15 @@ from src.adapters.cli.fetch_market_display import (
     render_fetch_market_row,
 )
 from src.adapters.cli.fetch_market_provider_factory import create_broker_provider
-from src.infrastructure.composition.fetch_market.fetch_market_workflow_factory import create_workflow_use_case
 from src.application.services.universe_loader import UniverseNotFoundError
 from src.application.use_case.fetch_market_command_workflow_use_case import (
     FetchMarketCommandStartEvent,
     FetchMarketCommandWorkflowRequest,
 )
 from src.application.use_case.fetch_market_refresh_use_case import FetchMarketTickerResult
+from src.infrastructure.composition.fetch_market.fetch_market_workflow_factory import (
+    create_workflow_use_case,
+)
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.data_sources_config import (
     candle_source as _candle_source,
@@ -50,7 +52,8 @@ def fetch_market(
     universe: Annotated[
         Optional[str],
         typer.Option(
-            "--universe", "-u",
+            "--universe",
+            "-u",
             help="Universe name or 'cached' — see `saham fetch universe list`",
         ),
     ] = None,
@@ -159,8 +162,7 @@ def fetch_market(
                 )
                 typer.echo("  Tracked Flow:     stockbit  (daily activity for 15 tracked brokers)")
                 typer.echo(
-                    "  Inst. Flow:       stockbit  "
-                    "(net flow proxy for 10 institutional desks)"
+                    "  Inst. Flow:       stockbit  (net flow proxy for 10 institutional desks)"
                 )
             else:
                 typer.echo(
@@ -193,10 +195,10 @@ def fetch_market(
         )
         if not event.no_meta:
             header_line += f"  {'Meta':<18}"
-            sep_line    += f"  {'──────────────────':<18}"
+            sep_line += f"  {'──────────────────':<18}"
         if event.enrichment_available:
             header_line += f"  {'Enrichment':<26}"
-            sep_line    += f"  {'──────────────────────────':<26}"
+            sep_line += f"  {'──────────────────────────':<26}"
         typer.echo(header_line)
         typer.echo(sep_line)
 
@@ -260,12 +262,14 @@ def fetch_market(
     )
     echo_note_group(
         title=(
-            f"Broker history shorter than --days {days} for "
-            f"{len(response.broker_backfills)} ticker(s); "
-            "older broker gaps were fetched automatically:"
-        )
-        if response.broker_backfills
-        else "",
+            (
+                f"Broker history shorter than --days {days} for "
+                f"{len(response.broker_backfills)} ticker(s); "
+                "older broker gaps were fetched automatically:"
+            )
+            if response.broker_backfills
+            else ""
+        ),
         messages=response.broker_backfills,
         color=typer.colors.CYAN,
     )

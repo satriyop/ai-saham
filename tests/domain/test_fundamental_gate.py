@@ -1,7 +1,8 @@
 """Tests for FundamentalGate — structural gate for Piotroski F-Score distress."""
 
-import pytest
 from datetime import date
+
+import pytest
 
 from src.domain.rules.fundamental_gate import FundamentalGate
 from src.domain.rules.risk_gate import GateContext

@@ -1,22 +1,23 @@
 from datetime import date
 from decimal import Decimal
+
 import pytest
 
+from src.application.dto.assess_signal import AssessSignalResponse
 from src.application.dto.swing_analysis import (
     SignalAssessmentAvailability,
     SignalAssessmentStatus,
     SignalAssessmentUnavailableReason,
-    SwingVerdict,
     SwingAnalysisWorkflowResponse,
+    SwingVerdict,
 )
-from src.application.dto.assess_signal import AssessSignalResponse
-from src.domain.value_objects.trade_setup import TradeSetup, SetupAction
 from src.domain.value_objects.signal_assessment import (
     SWING_TRADE_SETUP_IDENTITY,
     EntryQuality,
     SignalAssessment,
     SignalStrength,
 )
+from src.domain.value_objects.trade_setup import SetupAction, TradeSetup
 
 
 def _assess_response() -> AssessSignalResponse:
@@ -64,7 +65,9 @@ def test_availability_valid_states():
         unavailable_reason=SignalAssessmentUnavailableReason.NO_PRODUCTION_SIGNAL_EVIDENCE,
     )
     assert avail2.status == SignalAssessmentStatus.UNAVAILABLE
-    assert avail2.unavailable_reason == SignalAssessmentUnavailableReason.NO_PRODUCTION_SIGNAL_EVIDENCE
+    assert (
+        avail2.unavailable_reason == SignalAssessmentUnavailableReason.NO_PRODUCTION_SIGNAL_EVIDENCE
+    )
 
 
 def test_availability_available_with_reason_raises_value_error():
@@ -86,7 +89,9 @@ def test_availability_status_string_raises_type_error():
 
 
 def test_availability_reason_string_raises_type_error():
-    with pytest.raises(TypeError, match="unavailable_reason must be a SignalAssessmentUnavailableReason"):
+    with pytest.raises(
+        TypeError, match="unavailable_reason must be a SignalAssessmentUnavailableReason"
+    ):
         SignalAssessmentAvailability(
             status=SignalAssessmentStatus.UNAVAILABLE,
             unavailable_reason="no_production_signal_evidence",
@@ -94,7 +99,9 @@ def test_availability_reason_string_raises_type_error():
 
 
 def test_verdict_validation_types():
-    with pytest.raises(TypeError, match="signal_assessment_availability must be a SignalAssessmentAvailability"):
+    with pytest.raises(
+        TypeError, match="signal_assessment_availability must be a SignalAssessmentAvailability"
+    ):
         SwingVerdict(
             trade_setup=None,
             signal_assessment=None,
@@ -151,7 +158,9 @@ def test_verdict_unavailable_with_signal_preview_raises_value_error():
         status=SignalAssessmentStatus.UNAVAILABLE,
         unavailable_reason=SignalAssessmentUnavailableReason.NO_PRODUCTION_SIGNAL_EVIDENCE,
     )
-    with pytest.raises(ValueError, match="UNAVAILABLE requires market_context_signal_preview to be None"):
+    with pytest.raises(
+        ValueError, match="UNAVAILABLE requires market_context_signal_preview to be None"
+    ):
         SwingVerdict(
             trade_setup=None,
             signal_assessment=None,
@@ -167,7 +176,9 @@ def test_verdict_unavailable_with_trade_setup_preview_raises_value_error():
         status=SignalAssessmentStatus.UNAVAILABLE,
         unavailable_reason=SignalAssessmentUnavailableReason.NO_PRODUCTION_SIGNAL_EVIDENCE,
     )
-    with pytest.raises(ValueError, match="UNAVAILABLE requires market_context_trade_setup_preview to be None"):
+    with pytest.raises(
+        ValueError, match="UNAVAILABLE requires market_context_trade_setup_preview to be None"
+    ):
         SwingVerdict(
             trade_setup=None,
             signal_assessment=None,
@@ -179,7 +190,9 @@ def test_verdict_unavailable_with_trade_setup_preview_raises_value_error():
 
 
 def test_response_validation_types():
-    with pytest.raises(TypeError, match="signal_assessment_availability must be a SignalAssessmentAvailability"):
+    with pytest.raises(
+        TypeError, match="signal_assessment_availability must be a SignalAssessmentAvailability"
+    ):
         SwingAnalysisWorkflowResponse(
             ticker="BBCA",
             today=date(2026, 6, 18),

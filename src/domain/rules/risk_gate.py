@@ -27,8 +27,8 @@ class GateResult:
     """Outcome from a single RiskGate evaluation."""
 
     triggered: bool
-    reason: str                       # human-readable; surfaced in RiskAssessment rationale
-    confidence: int = 100             # confidence of the trigger (0, 50, 80, or 100)
+    reason: str  # human-readable; surfaced in RiskAssessment rationale
+    confidence: int = 100  # confidence of the trigger (0, 50, 80, or 100)
 
 
 @dataclass(frozen=True)

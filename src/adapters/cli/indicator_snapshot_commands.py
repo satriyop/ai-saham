@@ -26,22 +26,14 @@ from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarket
 
 def snapshot(
     ticker: Annotated[str, typer.Argument(help="Stock ticker symbol (e.g., BBCA)")],
-    sma_period: Annotated[
-        int, typer.Option("--sma", help="SMA period (default: 20)", min=1)
-    ] = 20,
-    ema_period: Annotated[
-        int, typer.Option("--ema", help="EMA period (default: 20)", min=1)
-    ] = 20,
-    rsi_period: Annotated[
-        int, typer.Option("--rsi", help="RSI period (default: 14)", min=1)
-    ] = 14,
+    sma_period: Annotated[int, typer.Option("--sma", help="SMA period (default: 20)", min=1)] = 20,
+    ema_period: Annotated[int, typer.Option("--ema", help="EMA period (default: 20)", min=1)] = 20,
+    rsi_period: Annotated[int, typer.Option("--rsi", help="RSI period (default: 14)", min=1)] = 14,
     days: Annotated[
         Optional[int],
         typer.Option("--days", "-d", help="Days of history to load", min=1),
     ] = None,
-    db_path: Annotated[
-        Optional[Path], typer.Option("--db", help="Path to SQLite database")
-    ] = None,
+    db_path: Annotated[Optional[Path], typer.Option("--db", help="Path to SQLite database")] = None,
     fmt: Annotated[
         Optional[str],
         typer.Option("--format", help="Output format: table or json"),
@@ -72,13 +64,15 @@ def snapshot(
     try:
         repository = SQLiteMarketRepository(db_path=resolved_db)
         use_case = AggregateIndicatorsUseCase(repository=repository)
-        response = use_case.execute(AggregateIndicatorsRequest(
-            ticker=ticker,
-            sma_period=sma_period,
-            ema_period=ema_period,
-            rsi_period=rsi_period,
-            days=resolved_days,
-        ))
+        response = use_case.execute(
+            AggregateIndicatorsRequest(
+                ticker=ticker,
+                sma_period=sma_period,
+                ema_period=ema_period,
+                rsi_period=rsi_period,
+                days=resolved_days,
+            )
+        )
 
         if not response.has_values:
             typer.echo(
@@ -87,7 +81,9 @@ def snapshot(
                 f" need at least {max(sma_period, ema_period, rsi_period)}.",
                 err=True,
             )
-            typer.echo(f"        Fix:   saham fetch market {ticker_upper} --days {resolved_days}", err=True)
+            typer.echo(
+                f"        Fix:   saham fetch market {ticker_upper} --days {resolved_days}", err=True
+            )
             raise typer.Exit(1)
 
         if response.coverage_warning:
@@ -107,15 +103,13 @@ def snapshot(
             return
 
         start, end = response.date_range or ("?", "?")
-        typer.echo(f"\n{'='*60}")
-        typer.echo(
-            f" Indicator Snapshot  ·  {ticker_upper}  ·  {start} → {end}"
-        )
+        typer.echo(f"\n{'=' * 60}")
+        typer.echo(f" Indicator Snapshot  ·  {ticker_upper}  ·  {start} → {end}")
         typer.echo(
             f" SMA({response.sma_period}) / EMA({response.ema_period}) / RSI({response.rsi_period})"
             f"  ·  {response.snapshot_count} rows"
         )
-        typer.echo(f"{'='*60}\n")
+        typer.echo(f"{'=' * 60}\n")
 
         print_snapshot_table(response)
         print_snapshot_summary(response)

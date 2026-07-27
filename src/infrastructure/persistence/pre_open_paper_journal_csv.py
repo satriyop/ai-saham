@@ -123,9 +123,7 @@ class PreOpenPaperJournalCsvStore:
                         confirmed_at=date.fromisoformat(row["confirmed_at"]),
                         ticker=row["ticker"],
                         decision=row["decision"],
-                        reason_codes=tuple(
-                            code for code in row["reason_codes"].split("|") if code
-                        ),
+                        reason_codes=tuple(code for code in row["reason_codes"].split("|") if code),
                         opening_price=_decimal_or_none(row["opening_price"]),
                         planned_entry=_decimal_or_none(row["planned_entry"]),
                         stop_loss_price=_decimal_or_none(row["stop_loss_price"]),
@@ -136,12 +134,8 @@ class PreOpenPaperJournalCsvStore:
                         gap_pct=_decimal_or_none(row["gap_pct"]),
                         opening_broker_backing_tag=row["opening_broker_backing_tag"] or None,
                         fvwap_discount_pct=_decimal_or_none(row["fvwap_discount_pct"]),
-                        actual_entry_price=_decimal_or_none(
-                            row.get("actual_entry_price", "")
-                        ),
-                        actual_exit_price=_decimal_or_none(
-                            row.get("actual_exit_price", "")
-                        ),
+                        actual_entry_price=_decimal_or_none(row.get("actual_entry_price", "")),
+                        actual_exit_price=_decimal_or_none(row.get("actual_exit_price", "")),
                         outcome_result=row.get("outcome_result", "") or None,
                         outcome_r=_decimal_or_none(row.get("outcome_r", "")),
                         outcome_notes=row.get("outcome_notes", "") or None,

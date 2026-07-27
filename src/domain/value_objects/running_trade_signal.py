@@ -33,7 +33,7 @@ class RunningTradeSignal:
     tick_count: int
     institutional_net_lot: int
     institutional_net_value: float
-    absorption_ratio: float        # 0–1: fraction of buy-side held by institutions
+    absorption_ratio: float  # 0–1: fraction of buy-side held by institutions
     dominant_side: Literal["BUY", "SELL", "NEUTRAL"]
 
     @property
@@ -46,7 +46,7 @@ class RunningTradeSignal:
         """Human-readable summary, e.g. 'BUY (abs 72%, net +340L)'."""
         return (
             f"{self.dominant_side}"
-            f" (abs {self.absorption_ratio*100:.0f}%,"
+            f" (abs {self.absorption_ratio * 100:.0f}%,"
             f" net {self.institutional_net_lot:+d}L)"
         )
 

@@ -5,7 +5,6 @@ Verifies the use case orchestrates AI translation correctly and
 handles all error cases gracefully.
 """
 
-
 from src.application.formula.ast_nodes import FunctionCallNode
 from src.application.ports.formula_translator import (
     FormulaTranslatorError,
@@ -71,9 +70,7 @@ class TestCreateIndicatorFromIntentUseCase:
             available_functions={"RSI", "SMA", "EMA"},
         )
 
-        response = use_case.execute(
-            CreateIndicatorFromIntentRequest(intent="14-day RSI")
-        )
+        response = use_case.execute(CreateIndicatorFromIntentRequest(intent="14-day RSI"))
 
         assert response.success is True
         assert response.unsupported is False
@@ -112,9 +109,7 @@ class TestCreateIndicatorFromIntentUseCase:
         )
 
         response = use_case.execute(
-            CreateIndicatorFromIntentRequest(
-                intent="difference between 12 and 26 day EMA"
-            )
+            CreateIndicatorFromIntentRequest(intent="difference between 12 and 26 day EMA")
         )
 
         assert response.success is True
@@ -164,9 +159,7 @@ class TestCreateIndicatorFromIntentUseCase:
             available_functions={"RSI"},
         )
 
-        response = use_case.execute(
-            CreateIndicatorFromIntentRequest(intent="")
-        )
+        response = use_case.execute(CreateIndicatorFromIntentRequest(intent=""))
 
         assert response.success is False
         assert response.unsupported is False
@@ -181,9 +174,7 @@ class TestCreateIndicatorFromIntentUseCase:
             available_functions={"RSI"},
         )
 
-        response = use_case.execute(
-            CreateIndicatorFromIntentRequest(intent="   \t\n  ")
-        )
+        response = use_case.execute(CreateIndicatorFromIntentRequest(intent="   \t\n  "))
 
         assert response.success is False
         assert "empty" in response.error_message.lower()
@@ -196,9 +187,7 @@ class TestCreateIndicatorFromIntentUseCase:
             available_functions={"SMA"},
         )
 
-        response = use_case.execute(
-            CreateIndicatorFromIntentRequest(intent="broken formula")
-        )
+        response = use_case.execute(CreateIndicatorFromIntentRequest(intent="broken formula"))
 
         assert response.success is False
         assert response.unsupported is False
@@ -212,9 +201,7 @@ class TestCreateIndicatorFromIntentUseCase:
             available_functions={"RSI", "SMA"},  # UNKNOWN not available
         )
 
-        response = use_case.execute(
-            CreateIndicatorFromIntentRequest(intent="some intent")
-        )
+        response = use_case.execute(CreateIndicatorFromIntentRequest(intent="some intent"))
 
         assert response.success is False
         assert response.unsupported is False
@@ -228,9 +215,7 @@ class TestCreateIndicatorFromIntentUseCase:
             available_functions={"RSI"},
         )
 
-        response = use_case.execute(
-            CreateIndicatorFromIntentRequest(intent="14-day RSI")
-        )
+        response = use_case.execute(CreateIndicatorFromIntentRequest(intent="14-day RSI"))
 
         assert response.success is False
         assert response.unsupported is False
@@ -244,9 +229,7 @@ class TestCreateIndicatorFromIntentUseCase:
             available_functions={"RSI"},
         )
 
-        response = use_case.execute(
-            CreateIndicatorFromIntentRequest(intent="14-day RSI")
-        )
+        response = use_case.execute(CreateIndicatorFromIntentRequest(intent="14-day RSI"))
 
         assert response.success is False
         assert "timed out" in response.error_message.lower()
@@ -259,9 +242,7 @@ class TestCreateIndicatorFromIntentUseCase:
             available_functions={"RSI"},
         )
 
-        response = use_case.execute(
-            CreateIndicatorFromIntentRequest(intent="14-day RSI")
-        )
+        response = use_case.execute(CreateIndicatorFromIntentRequest(intent="14-day RSI"))
 
         assert response.success is False
         assert "Rate limit" in response.error_message
@@ -274,9 +255,7 @@ class TestCreateIndicatorFromIntentUseCase:
             available_functions={"RSI"},
         )
 
-        response = use_case.execute(
-            CreateIndicatorFromIntentRequest(intent="14-day RSI")
-        )
+        response = use_case.execute(CreateIndicatorFromIntentRequest(intent="14-day RSI"))
 
         assert response.success is False
         assert "API error" in response.error_message
@@ -289,9 +268,7 @@ class TestCreateIndicatorFromIntentUseCase:
             available_functions={"RSI"},
         )
 
-        response = use_case.execute(
-            CreateIndicatorFromIntentRequest(intent="14-day RSI")
-        )
+        response = use_case.execute(CreateIndicatorFromIntentRequest(intent="14-day RSI"))
 
         assert response.success is False
         assert "Unexpected" in response.error_message
@@ -317,9 +294,7 @@ class TestCreateIndicatorFromIntentUseCase:
             available_functions={"RSI"},
         )
 
-        use_case.execute(
-            CreateIndicatorFromIntentRequest(intent="  14-day RSI  ")
-        )
+        use_case.execute(CreateIndicatorFromIntentRequest(intent="  14-day RSI  "))
 
         assert translator.last_intent == "14-day RSI"
 
@@ -390,9 +365,7 @@ class TestWithRealMockAdapter:
             available_functions={"RSI", "SMA", "EMA"},
         )
 
-        response = use_case.execute(
-            CreateIndicatorFromIntentRequest(intent="14-day RSI")
-        )
+        response = use_case.execute(CreateIndicatorFromIntentRequest(intent="14-day RSI"))
 
         assert response.success is True
         assert response.formula == "RSI(14)"
@@ -406,9 +379,7 @@ class TestWithRealMockAdapter:
         )
 
         response = use_case.execute(
-            CreateIndicatorFromIntentRequest(
-                intent="smoothed RSI with 14 period"
-            )
+            CreateIndicatorFromIntentRequest(intent="smoothed RSI with 14 period")
         )
 
         assert response.success is True
@@ -441,9 +412,7 @@ class TestEdgeCases:
             available_functions={"SMA"},
         )
 
-        response = use_case.execute(
-            CreateIndicatorFromIntentRequest(intent="closing price")
-        )
+        response = use_case.execute(CreateIndicatorFromIntentRequest(intent="closing price"))
 
         # CLOSE is a series, not a function, so it should parse successfully
         assert response.success is True
@@ -457,9 +426,7 @@ class TestEdgeCases:
             available_functions={"SMA"},
         )
 
-        response = use_case.execute(
-            CreateIndicatorFromIntentRequest(intent="the number 14")
-        )
+        response = use_case.execute(CreateIndicatorFromIntentRequest(intent="the number 14"))
 
         # Pure numbers should parse successfully
         assert response.success is True
@@ -473,9 +440,7 @@ class TestEdgeCases:
         )
 
         long_intent = "Calculate the " + ("very " * 100) + "long RSI"
-        response = use_case.execute(
-            CreateIndicatorFromIntentRequest(intent=long_intent)
-        )
+        response = use_case.execute(CreateIndicatorFromIntentRequest(intent=long_intent))
 
         # Should not fail for long intents
         assert response.success is True

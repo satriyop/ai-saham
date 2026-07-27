@@ -53,9 +53,7 @@ class InMemoryBrokerRepository(BrokerDataRepository):
     def save_broker_summaries(self, summaries: list[BrokerSummary]) -> None:
         self._summaries.extend(summaries)
 
-    def get_broker_summary(
-        self, ticker: str, target_date: date
-    ) -> BrokerSummary | None:
+    def get_broker_summary(self, ticker: str, target_date: date) -> BrokerSummary | None:
         for s in self._summaries:
             if s.ticker == ticker.upper() and s.date == target_date:
                 return s
@@ -166,24 +164,24 @@ def _history_with_prev(
     return candles
 
 
-def _backed_summaries(
-    ticker: str, end_day: date, days: int = 7
-) -> list[BrokerSummary]:
+def _backed_summaries(ticker: str, end_day: date, days: int = 7) -> list[BrokerSummary]:
     out = []
     for i in range(days):
         day = end_day - timedelta(days=days - 1 - i)
-        out.append(BrokerSummary(
-            ticker=ticker,
-            date=day,
-            top_buyers=(),
-            top_sellers=(),
-            foreign_buy_value=Decimal("1000000"),
-            foreign_sell_value=Decimal("100000"),
-            foreign_buy_lot=10_000,
-            foreign_sell_lot=1_000,
-            total_value=Decimal("2000000"),
-            total_lot=20_000,
-        ))
+        out.append(
+            BrokerSummary(
+                ticker=ticker,
+                date=day,
+                top_buyers=(),
+                top_sellers=(),
+                foreign_buy_value=Decimal("1000000"),
+                foreign_sell_value=Decimal("100000"),
+                foreign_buy_lot=10_000,
+                foreign_sell_lot=1_000,
+                total_value=Decimal("2000000"),
+                total_lot=20_000,
+            )
+        )
     return out
 
 
@@ -218,9 +216,7 @@ def _build(
     hist = history if history is not None else _history_with_prev(ticker, PREV_DAY)
     market = InMemoryMarketRepository(hist + [today_candle])
     default_sums = _backed_summaries(ticker, PREV_DAY)
-    broker = InMemoryBrokerRepository(
-        summaries if summaries is not None else default_sums
-    )
+    broker = InMemoryBrokerRepository(summaries if summaries is not None else default_sums)
     reg = registry if registry is not None else StubIndicatorRegistry()
     return IntradayBacktestUseCase(
         market_repository=market,

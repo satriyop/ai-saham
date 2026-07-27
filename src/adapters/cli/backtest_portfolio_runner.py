@@ -102,8 +102,7 @@ def _run_swing_backtest(
     setup_name = setup.lower()
     if setup_name not in AVAILABLE_SWING_SETUPS:
         typer.echo(
-            f"Unknown swing setup '{setup}'. "
-            f"Available setups: {', '.join(AVAILABLE_SWING_SETUPS)}",
+            f"Unknown swing setup '{setup}'. Available setups: {', '.join(AVAILABLE_SWING_SETUPS)}",
             err=True,
         )
         raise typer.Exit(1)
@@ -161,33 +160,35 @@ def _run_swing_backtest(
         market_context_provider=deps.create_market_context_provider(),
     )
     try:
-        return use_case.execute(SwingBacktestRequest(
-            tickers=ticker_list,
-            start_date=start_date,
-            end_date=end_date,
-            setup=setup_name,
-            capital=Decimal(str(capital)),
-            risk_pct=Decimal(str(risk_pct)) / Decimal("100"),
-            max_positions=max_positions,
-            take_profit_pct=Decimal(str(take_profit)),
-            stop_loss_pct=Decimal(str(stop_loss)),
-            max_hold_days=max_hold,
-            cost_bps=Decimal(str(cost_bps)),
-            include_regime=with_regime or bool(allowed_regimes),
-            benchmark_ticker=benchmark,
-            allowed_regimes=allowed_regimes,
-            setup_targets=runner_config.swing_config.setup_targets,
-            setup_config=runner_config.setup_config,
-            resistance_gate_enabled=runner_config.swing_config.resistance_gate_enabled,
-            resistance_headroom_min_pct=runner_config.swing_config.resistance_headroom_min_pct,
-            ex_date_warning_days=runner_config.swing_config.ex_date_warning_days,
-            forward_data_lookahead_days=runner_config.backtest_config.forward_data_lookahead_days,
-            same_day_exit_priority=runner_config.backtest_config.same_day_exit_priority,
-            attribution_bucket_policy=AttributionBucketPolicy(
-                high_min_score=runner_config.backtest_config.attribution_high_min_score,
-                mid_min_score=runner_config.backtest_config.attribution_mid_min_score,
-            ),
-        ))
+        return use_case.execute(
+            SwingBacktestRequest(
+                tickers=ticker_list,
+                start_date=start_date,
+                end_date=end_date,
+                setup=setup_name,
+                capital=Decimal(str(capital)),
+                risk_pct=Decimal(str(risk_pct)) / Decimal("100"),
+                max_positions=max_positions,
+                take_profit_pct=Decimal(str(take_profit)),
+                stop_loss_pct=Decimal(str(stop_loss)),
+                max_hold_days=max_hold,
+                cost_bps=Decimal(str(cost_bps)),
+                include_regime=with_regime or bool(allowed_regimes),
+                benchmark_ticker=benchmark,
+                allowed_regimes=allowed_regimes,
+                setup_targets=runner_config.swing_config.setup_targets,
+                setup_config=runner_config.setup_config,
+                resistance_gate_enabled=runner_config.swing_config.resistance_gate_enabled,
+                resistance_headroom_min_pct=runner_config.swing_config.resistance_headroom_min_pct,
+                ex_date_warning_days=runner_config.swing_config.ex_date_warning_days,
+                forward_data_lookahead_days=runner_config.backtest_config.forward_data_lookahead_days,
+                same_day_exit_priority=runner_config.backtest_config.same_day_exit_priority,
+                attribution_bucket_policy=AttributionBucketPolicy(
+                    high_min_score=runner_config.backtest_config.attribution_high_min_score,
+                    mid_min_score=runner_config.backtest_config.attribution_mid_min_score,
+                ),
+            )
+        )
     except ValueError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)

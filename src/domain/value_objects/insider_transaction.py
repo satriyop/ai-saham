@@ -32,9 +32,9 @@ class InsiderTransaction:
     ticker: str
     name: str
     role: str
-    action_type: str          # "BUY" | "SELL"
+    action_type: str  # "BUY" | "SELL"
     shares: int
-    price: float              # IDR per share; 0 if undisclosed
+    price: float  # IDR per share; 0 if undisclosed
     transaction_date: date
     ownership_before_pct: float
     ownership_after_pct: float

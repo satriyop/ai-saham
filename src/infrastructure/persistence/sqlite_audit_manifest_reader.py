@@ -36,15 +36,9 @@ _TABLE_CATALOG: dict[str, _TableAuditSpec] = {
     "candles": _TableAuditSpec("date", ("ticker", "date", "source")),
     "broker_summaries": _TableAuditSpec("date", ("ticker", "date", "source")),
     "broker_daily_flow": _TableAuditSpec("date", ("ticker", "date", "broker_code", "source")),
-    "learning_observations": _TableAuditSpec(
-        "cutoff_at", ("observation_id", "artifact_digest")
-    ),
-    "learning_track_snapshots": _TableAuditSpec(
-        "sampled_at", ("snapshot_id", "observation_id")
-    ),
-    "learning_outcome_labels": _TableAuditSpec(
-        "labeled_at", ("label_id", "observation_id")
-    ),
+    "learning_observations": _TableAuditSpec("cutoff_at", ("observation_id", "artifact_digest")),
+    "learning_track_snapshots": _TableAuditSpec("sampled_at", ("snapshot_id", "observation_id")),
+    "learning_outcome_labels": _TableAuditSpec("labeled_at", ("label_id", "observation_id")),
     "learning_evaluations": _TableAuditSpec(
         "evaluated_at", ("evaluation_id", "dataset_fingerprint")
     ),
@@ -179,20 +173,16 @@ class SQLiteAuditManifestReader:
 
         ticker_count: int | None = None
         if "ticker" in columns:
-            ticker_count = conn.execute(
-                f"SELECT COUNT(DISTINCT ticker) FROM {table}"
-            ).fetchone()[0]
+            ticker_count = conn.execute(f"SELECT COUNT(DISTINCT ticker) FROM {table}").fetchone()[0]
 
         duplicate_key_count: int | None = None
         if spec.identity_columns and all(col in columns for col in spec.identity_columns):
             group_cols = ", ".join(spec.identity_columns)
-            row = conn.execute(
-                f"""
+            row = conn.execute(f"""
                 SELECT COALESCE(SUM(cnt - 1), 0) FROM (
                     SELECT COUNT(*) AS cnt FROM {table} GROUP BY {group_cols}
                 ) dup WHERE cnt > 1
-                """
-            ).fetchone()
+                """).fetchone()
             duplicate_key_count = row[0]
         else:
             self._warnings.append(f"duplicate_key_unknown:{table}")

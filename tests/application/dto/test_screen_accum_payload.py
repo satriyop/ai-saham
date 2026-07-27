@@ -66,10 +66,7 @@ def test_build_accum_single_envelope_ok_with_strategy_save_and_actions():
     assert data["saved_watchlist"] == {"name": "morning", "saved_count": 2}
     assert data["effective_session"]["analysis_as_of"] == "2026-06-28"
     assert any(a["command"] == "saham view BBCA" for a in data["related_actions"])
-    assert any(
-        a["command"] == "saham screen compare morning"
-        for a in data["related_actions"]
-    )
+    assert any(a["command"] == "saham screen compare morning" for a in data["related_actions"])
 
 
 def test_build_accum_single_envelope_empty_status():

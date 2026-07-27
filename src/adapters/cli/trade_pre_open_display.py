@@ -40,10 +40,7 @@ def format_opening_observation_status(
     prefix = f"[{index}/{total}] {observation.ticker}"
     if observation.price is not None:
         source = observation.source or "unknown"
-        return (
-            f"{prefix}: {fmt_price(observation.price)} "
-            f"via {source}/{observation.confidence}"
-        )
+        return f"{prefix}: {fmt_price(observation.price)} via {source}/{observation.confidence}"
     reason = observation.reason or "unresolved"
     return f"{prefix}: unresolved - {reason}"
 
@@ -126,9 +123,7 @@ def display_pre_open_post_open_assessments(
     if unresolved:
         warning_table = compact_table(show_header=False)
         warning_table.add_column("Warning")
-        warning_table.add_row(
-            "Unresolved opening prices: " + format_ticker_preview(unresolved)
-        )
+        warning_table.add_row("Unresolved opening prices: " + format_ticker_preview(unresolved))
         sections.extend([Text("Warnings", style="bold yellow"), warning_table])
 
     console().print(
@@ -150,9 +145,9 @@ def display_pre_open_paper_review(report, journal_path: Path) -> None:
 
     if report.total_entries == 0:
         summary.add_row(
-        "Next",
-        "saham trade pre-open log --observation-id … --opening-snapshot-id …",
-    )
+            "Next",
+            "saham trade pre-open log --observation-id … --opening-snapshot-id …",
+        )
         console().print(panel(summary, title="PRE-OPEN PAPER JOURNAL REVIEW"))
         return
 

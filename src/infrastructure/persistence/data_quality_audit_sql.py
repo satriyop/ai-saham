@@ -18,10 +18,13 @@ from src.infrastructure.persistence.data_quality_audit_catalog import (
 
 
 def table_exists(conn: sqlite3.Connection, table: str) -> bool:
-    return conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
-        (table,),
-    ).fetchone() is not None
+    return (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+            (table,),
+        ).fetchone()
+        is not None
+    )
 
 
 def has_columns(conn: sqlite3.Connection, table: str, columns: set[str] | frozenset[str]) -> bool:
@@ -213,8 +216,7 @@ def unknown_candle_provenance_rows(conn: sqlite3.Connection, tickers: list[str])
         "candles",
         tickers=tickers,
         where_extra=(
-            "source = 'unknown' OR volume_unit = 'unknown' "
-            "OR price_adjustment_policy = 'unknown'"
+            "source = 'unknown' OR volume_unit = 'unknown' OR price_adjustment_policy = 'unknown'"
         ),
     )
 

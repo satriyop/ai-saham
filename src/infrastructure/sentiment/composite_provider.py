@@ -89,11 +89,16 @@ class CompositeNewsProvider(NewsProvider):
 
         # TIER 2: Fallback to Google News if coverage is low
         if len(deduplicated) < self._fallback_threshold:
-            logger.info(f"Tier 1 yielded {len(deduplicated)} results (< {self._fallback_threshold}). Triggering Tier 2 (Google News).")
+            logger.info(
+                f"Tier 1 yielded {len(deduplicated)} results (< "
+                f"{self._fallback_threshold}). Triggering Tier 2 (Google News)."
+            )
             try:
                 google_results = self._google.fetch_headlines(ticker, max_headlines, days)
                 pooled_headlines.extend(google_results)
-                logger.debug(f"Fetched {len(google_results)} headlines from {self._google.provider_name}")
+                logger.debug(
+                    f"Fetched {len(google_results)} headlines from {self._google.provider_name}"
+                )
             except Exception as e:
                 logger.warning(f"Error fetching from {self._google.provider_name}: {e}")
 

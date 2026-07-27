@@ -75,9 +75,7 @@ def test_use_case_returns_pass_when_no_invalid_rows():
 
 
 def test_use_case_returns_fail_when_invalid_rows_exist():
-    reader = _FakeReader(
-        RawSeasonalityCacheObservation(exists=True, rows=(_row(source=None),))
-    )
+    reader = _FakeReader(RawSeasonalityCacheObservation(exists=True, rows=(_row(source=None),)))
 
     response = BuildSeasonalityCleanupPlanUseCase(reader=reader, clock=_clock).execute()
 
@@ -114,9 +112,7 @@ def test_unknown_source_case_insensitive_flagged_invalid_source():
 
 
 def test_null_fetched_at_flagged_missing_fetched_at():
-    reader = _FakeReader(
-        RawSeasonalityCacheObservation(exists=True, rows=(_row(fetched_at=None),))
-    )
+    reader = _FakeReader(RawSeasonalityCacheObservation(exists=True, rows=(_row(fetched_at=None),)))
 
     response = BuildSeasonalityCleanupPlanUseCase(reader=reader, clock=_clock).execute()
 
@@ -124,9 +120,7 @@ def test_null_fetched_at_flagged_missing_fetched_at():
 
 
 def test_empty_fetched_at_flagged_missing_fetched_at():
-    reader = _FakeReader(
-        RawSeasonalityCacheObservation(exists=True, rows=(_row(fetched_at=""),))
-    )
+    reader = _FakeReader(RawSeasonalityCacheObservation(exists=True, rows=(_row(fetched_at=""),)))
 
     response = BuildSeasonalityCleanupPlanUseCase(reader=reader, clock=_clock).execute()
 
@@ -287,7 +281,19 @@ def test_real_reader_detects_all_reason_codes_end_to_end(tmp_path: Path):
             # malformed fetched_at
             ("ICBP", 2026, 6, 1.0, 60.0, 3, 5, 5, "stockbit", "2026-06", "not-a-date"),
             # all metrics null
-            ("KLBF", 2026, 7, None, None, None, None, None, "stockbit", "2026-07", "2026-07-01T00:00:00"),
+            (
+                "KLBF",
+                2026,
+                7,
+                None,
+                None,
+                None,
+                None,
+                None,
+                "stockbit",
+                "2026-07",
+                "2026-07-01T00:00:00",
+            ),
         ]
         conn.executemany(
             """

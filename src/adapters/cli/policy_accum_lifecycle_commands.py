@@ -88,16 +88,10 @@ class _BacktestPolicyEvaluator(SwingPolicyEvaluator):
             raise LearningContractError("swing evaluator received an empty population")
         sessions = [str(row.payload["session"]) for row in rows]
         take_profit = float(
-            policy[
-                "config/swing_backtest.yaml:"
-                "swing_backtest.execution.take_profit_pct"
-            ]
+            policy["config/swing_backtest.yaml:swing_backtest.execution.take_profit_pct"]
         )
         stop_loss = float(
-            policy[
-                "config/swing_backtest.yaml:"
-                "swing_backtest.execution.stop_loss_pct"
-            ]
+            policy["config/swing_backtest.yaml:swing_backtest.execution.stop_loss_pct"]
         )
         response = _run_swing_backtest(
             tickers=self._tickers,
@@ -121,9 +115,7 @@ class _BacktestPolicyEvaluator(SwingPolicyEvaluator):
         )
         return swing_policy_metrics_from_backtest(
             response,
-            population_fingerprint=artifact_digest(
-                {"row_ids": [row.row_id for row in rows]}
-            ),
+            population_fingerprint=artifact_digest({"row_ids": [row.row_id for row in rows]}),
         )
 
 
@@ -136,16 +128,12 @@ def _echo(payload: dict[str, Any], fmt: str) -> None:
 
 
 def swing_tune(
-    tickers: Annotated[
-        Optional[list[str]], typer.Argument(help="Explicit ticker symbols")
-    ] = None,
+    tickers: Annotated[Optional[list[str]], typer.Argument(help="Explicit ticker symbols")] = None,
     universe: Annotated[Optional[str], typer.Option("--universe", "-u")] = None,
     setup: Annotated[str, typer.Option("--setup")] = "foreign-bounce",
     start: Annotated[Optional[str], typer.Option("--start")] = None,
     end: Annotated[Optional[str], typer.Option("--end")] = None,
-    is_ratio: Annotated[
-        float, typer.Option("--is-ratio", help="Chronological IS share")
-    ] = 0.7,
+    is_ratio: Annotated[float, typer.Option("--is-ratio", help="Chronological IS share")] = 0.7,
     with_regime: Annotated[bool, typer.Option("--with-regime")] = True,
     db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
     fmt: Annotated[str, typer.Option("--format")] = "table",
@@ -179,9 +167,7 @@ def swing_tune(
             "tickers": sorted(resolved_tickers),
         }
     )
-    dataset = ResolveSwingLearningDatasetUseCase(
-        dependencies.market_repository
-    ).execute(
+    dataset = ResolveSwingLearningDatasetUseCase(dependencies.market_repository).execute(
         ResolveSwingLearningDatasetRequest(
             tickers=tuple(resolved_tickers),
             start_date=start_date,
@@ -207,11 +193,7 @@ def swing_tune(
             dependencies=dependencies,
         ),
         proposal_generator=ConservativeSwingExitProposalGenerator(
-            float(
-                baseline.values[
-                    ConservativeSwingExitProposalGenerator.TARGET
-                ]
-            )
+            float(baseline.values[ConservativeSwingExitProposalGenerator.TARGET])
         ),
         evaluations=repository,
         proposals=repository,
@@ -237,6 +219,7 @@ def swing_tune(
         fmt,
     )
 
+
 def swing_review(
     proposal_id: Annotated[Optional[str], typer.Argument()] = None,
     db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
@@ -245,13 +228,9 @@ def swing_review(
     """Review immutable proposal and paired-validation records."""
 
     cfg = load_app_config()
-    repository = SQLiteLearningArtifactRepository(
-        db_path or Path(cfg.storage.db_path)
-    )
+    repository = SQLiteLearningArtifactRepository(db_path or Path(cfg.storage.db_path))
     proposals = (
-        [repository.get_proposal(proposal_id)]
-        if proposal_id
-        else list(repository.list_proposals())
+        [repository.get_proposal(proposal_id)] if proposal_id else list(repository.list_proposals())
     )
     proposals = [proposal for proposal in proposals if proposal is not None]
     _echo(
@@ -264,8 +243,7 @@ def swing_review(
                     "validation_status": (
                         validation.status.value
                         if (
-                            validation
-                            := repository.get_validation_for_proposal(
+                            validation := repository.get_validation_for_proposal(
                                 proposal.proposal_id
                             )
                         )
@@ -287,9 +265,7 @@ def swing_validate(
     """Inspect the persisted paired OOS validation for a proposal."""
 
     cfg = load_app_config()
-    repository = SQLiteLearningArtifactRepository(
-        db_path or Path(cfg.storage.db_path)
-    )
+    repository = SQLiteLearningArtifactRepository(db_path or Path(cfg.storage.db_path))
     validation = repository.get_validation_for_proposal(proposal_id)
     if validation is None:
         typer.echo("Validation not found for proposal.", err=True)
@@ -319,9 +295,7 @@ def swing_apply(
     """Apply one passing proposal to clean YAML and audit reread verification."""
 
     cfg = load_app_config()
-    repository = SQLiteLearningArtifactRepository(
-        db_path or Path(cfg.storage.db_path)
-    )
+    repository = SQLiteLearningArtifactRepository(db_path or Path(cfg.storage.db_path))
     try:
         application = ApplySwingPolicyUseCase(
             proposals=repository,
@@ -359,9 +333,7 @@ def swing_status(
     """Show database-owned swing evaluation and policy lifecycle counts."""
 
     cfg = load_app_config()
-    repository = SQLiteLearningArtifactRepository(
-        db_path or Path(cfg.storage.db_path)
-    )
+    repository = SQLiteLearningArtifactRepository(db_path or Path(cfg.storage.db_path))
     _echo(
         {
             "artifact_type": "swing_policy_status",

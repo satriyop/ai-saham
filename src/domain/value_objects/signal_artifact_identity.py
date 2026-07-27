@@ -5,12 +5,11 @@ Layer: Domain (pure value objects, no I/O)
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import date, datetime, timezone
 import json
 import re
+from dataclasses import dataclass
+from datetime import date, datetime, timezone
 from typing import Any
-
 
 _SHA256_PREFIXED = re.compile(r"^sha256:[0-9a-f]{64}\Z")
 _LOWERCASE_HEX_64 = re.compile(r"^[0-9a-f]{64}\Z")
@@ -71,9 +70,7 @@ def _require_tz_aware(value: object, field: str) -> None:
 
 def _require_at_least_one_present(a: Any, a_name: str, b: Any, b_name: str) -> None:
     if a is None and b is None:
-        raise ValueError(
-            f"at least one of {a_name} or {b_name} must be present"
-        )
+        raise ValueError(f"at least one of {a_name} or {b_name} must be present")
 
 
 def _require_instance(value: object, expected_type: type, field: str) -> None:
@@ -166,17 +163,21 @@ class SemanticCompatibilityDimensions:
         _require_positive_int_or_none(self.observation_schema_version, "observation_schema_version")
         _require_positive_int_or_none(self.label_schema_version, "label_schema_version")
         _require_at_least_one_present(
-            self.observation_schema_version, "observation_schema_version",
-            self.label_schema_version, "label_schema_version",
+            self.observation_schema_version,
+            "observation_schema_version",
+            self.label_schema_version,
+            "label_schema_version",
         )
         _require_non_empty_trimmed(self.semantic_engine_version, "semantic_engine_version")
         _require_lowercase_hex_64(self.material_config_hash, "material_config_hash")
         _require_lowercase_hex_64(
-            self.authority_registrations_hash, "authority_registrations_hash",
+            self.authority_registrations_hash,
+            "authority_registrations_hash",
         )
         if self.execution_label_policy_version is not None:
             _require_non_empty_trimmed(
-                self.execution_label_policy_version, "execution_label_policy_version",
+                self.execution_label_policy_version,
+                "execution_label_policy_version",
             )
 
     def to_canonical_dict(self) -> dict[str, object]:
@@ -215,14 +216,16 @@ class ArtifactIdentityDimensions:
     def __post_init__(self) -> None:
         _require_lowercase_snake(self.artifact_type, "artifact_type")
         _require_instance(
-            self.semantic_compatibility_id, SemanticCompatibilityId,
+            self.semantic_compatibility_id,
+            SemanticCompatibilityId,
             "semantic_compatibility_id",
         )
         _require_required_exact_date(self.effective_session, "effective_session")
         _require_ticker(self.ticker)
         _require_non_empty_trimmed(self.universe_snapshot_id, "universe_snapshot_id")
         _require_non_empty_trimmed(
-            self.source_snapshot_cutoff_id, "source_snapshot_cutoff_id",
+            self.source_snapshot_cutoff_id,
+            "source_snapshot_cutoff_id",
         )
 
     def to_canonical_dict(self) -> dict[str, object]:
@@ -308,7 +311,8 @@ class ArtifactProvenance:
         _require_non_empty_trimmed(self.application_revision, "application_revision")
         _require_lowercase_hex_64(self.complete_config_hash, "complete_config_hash")
         _require_lowercase_hex_64(
-            self.complete_authority_registry_hash, "complete_authority_registry_hash",
+            self.complete_authority_registry_hash,
+            "complete_authority_registry_hash",
         )
         _require_non_empty_trimmed(self.universe_snapshot_id, "universe_snapshot_id")
         _require_non_empty_trimmed(self.idx_calendar_version, "idx_calendar_version")
@@ -327,8 +331,7 @@ class ArtifactProvenance:
         for i, s in enumerate(self.sources):
             if not isinstance(s, ArtifactSourceProvenance):
                 raise ValueError(
-                    f"sources[{i}] must be ArtifactSourceProvenance, "
-                    f"got {type(s).__name__}"
+                    f"sources[{i}] must be ArtifactSourceProvenance, got {type(s).__name__}"
                 )
         if self.invocation_command is not None:
             _require_non_empty_trimmed(self.invocation_command, "invocation_command")
@@ -387,7 +390,8 @@ class SignalArtifactIdentity:
     def __post_init__(self) -> None:
         _require_instance(self.artifact_id, ArtifactId, "artifact_id")
         _require_instance(
-            self.semantic_compatibility_id, SemanticCompatibilityId,
+            self.semantic_compatibility_id,
+            SemanticCompatibilityId,
             "semantic_compatibility_id",
         )
         _require_instance(self.provenance, ArtifactProvenance, "provenance")

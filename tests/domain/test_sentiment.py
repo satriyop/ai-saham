@@ -162,7 +162,7 @@ class TestSentimentSnapshot:
         with pytest.raises(ValueError, match="Ticker cannot be empty"):
             SentimentSnapshot(
                 ticker="",
-                    headlines=(),
+                headlines=(),
                 positive_count=0,
                 neutral_count=0,
                 negative_count=0,
@@ -174,7 +174,7 @@ class TestSentimentSnapshot:
         with pytest.raises(ValueError, match="cannot be negative"):
             SentimentSnapshot(
                 ticker="BBCA",
-                    headlines=(),
+                headlines=(),
                 positive_count=-1,
                 neutral_count=0,
                 negative_count=0,

@@ -6,6 +6,8 @@ from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
 
+import pytest
+
 from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenRequest,
@@ -19,11 +21,12 @@ from src.application.use_case.log_swing_candidate_use_case import (
     LogSwingCandidateRequest,
     LogSwingCandidateUseCase,
 )
-from src.domain.value_objects.market_context import MarketRegime, MarketContext
+from src.domain.value_objects.market_context import MarketContext, MarketRegime
 
 # ---------------------------------------------------------------------------
 # Fakes / stubs
 # ---------------------------------------------------------------------------
+
 
 class FakeScreenUseCase:
     """Returns a canned AccumulationCandidate keyed by (ticker, window_days)."""
@@ -140,6 +143,7 @@ class FakeRegimeUseCase:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_candidate(
     ticker: str = "BBCA",
     window_days: int = 7,
@@ -212,6 +216,7 @@ def _make_request(
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 def test_logs_candidate_and_returns_written_true():
     candidate = _make_candidate()
@@ -329,6 +334,3 @@ def test_multi_window_all_hot_produces_sustained_pattern():
 
     assert result.pattern == "sustained"
     assert journal.calls[0]["pattern"] == "sustained"
-
-
-import pytest

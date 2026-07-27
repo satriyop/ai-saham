@@ -32,11 +32,7 @@ def print_formula_list(registry, stored_formulas, show_formulas, resolved_path):
         builtin_table.add_row(ind_name, desc, str(period))
     console.print(builtin_table)
 
-    plugin_names = (
-        set(registry.list_indicators())
-        - BUILTIN_NAMES
-        - set(registry.list_formulas())
-    )
+    plugin_names = set(registry.list_indicators()) - BUILTIN_NAMES - set(registry.list_formulas())
     if plugin_names:
         console.print("")
         console.print("[bold]Plugin Indicators[/bold]")

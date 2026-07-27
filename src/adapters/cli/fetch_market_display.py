@@ -25,7 +25,7 @@ def _fmt_status(s: str) -> str:
     for prefix in ("agg=up-to-date(", "daily=up-to-date(", "up-to-date("):
         if s.startswith(prefix):
             tag = prefix[: prefix.index("up-to-date(")]  # "" | "agg=" | "daily="
-            date_part = s[len(prefix):-1]
+            date_part = s[len(prefix) : -1]
             return f"{tag}✓({date_part})"
     return s
 
@@ -34,11 +34,11 @@ def clean_row_span(s: str) -> str:
     # Remove up-to-date prefix
     s = _fmt_status(s)
     # Replace backfill+Nrows/span=Kd -> bf+Nr(Kd)
-    s = re.sub(r'backfill\+(\d+)rows/span=(\d+)d', r'bf+\1r(\2d)', s)
+    s = re.sub(r"backfill\+(\d+)rows/span=(\d+)d", r"bf+\1r(\2d)", s)
     # Replace +Nrows/span=Kd -> +Nr(Kd)
-    s = re.sub(r'\+(\d+)rows/span=(\d+)d', r'+\1r(\2d)', s)
+    s = re.sub(r"\+(\d+)rows/span=(\d+)d", r"+\1r(\2d)", s)
     # Replace refreshed/span=Kd -> ref(Kd)
-    s = re.sub(r'refreshed/span=(\d+)d', r'ref(\1d)', s)
+    s = re.sub(r"refreshed/span=(\d+)d", r"ref(\1d)", s)
     return s
 
 
@@ -47,12 +47,12 @@ def split_flow_parts(flow_str: str) -> tuple[str, str]:
     agg_part = "skip"
 
     # Extract daily part
-    daily_match = re.search(r'(daily=✓\([^)]+\)|daily=[^ ]+|daily:\+[^ ]+)', flow_str)
+    daily_match = re.search(r"(daily=✓\([^)]+\)|daily=[^ ]+|daily:\+[^ ]+)", flow_str)
     if daily_match:
         daily_part = daily_match.group(1)
 
     # Extract agg part
-    agg_match = re.search(r'(agg=✓\([^)]+\)|agg=[^ ]+|agg:\+[^ ]+)', flow_str)
+    agg_match = re.search(r"(agg=✓\([^)]+\)|agg=[^ ]+|agg:\+[^ ]+)", flow_str)
     if agg_match:
         agg_part = agg_match.group(1)
 
@@ -68,22 +68,22 @@ def split_flow_parts(flow_str: str) -> tuple[str, str]:
 
 def fmt_tracked_flow_column(daily_part: str) -> str:
     s = _fmt_status(daily_part)
-    s = re.sub(r'\b\d{4}-', '', s)
-    s = re.sub(r'daily=✓\(([^)]+)\)', r'✓(\1)', s)
-    s = re.sub(r'daily=✓', '✓', s)
-    s = re.sub(r'daily:\+(\d+)rows/\d+codes/(\d+)d', r'+\1r(\2d)', s)
-    s = re.sub(r'daily:\+(\d+)rows/(\d+)d', r'+\1r(\2d)', s)
-    s = re.sub(r'daily:', '', s)
+    s = re.sub(r"\b\d{4}-", "", s)
+    s = re.sub(r"daily=✓\(([^)]+)\)", r"✓(\1)", s)
+    s = re.sub(r"daily=✓", "✓", s)
+    s = re.sub(r"daily:\+(\d+)rows/\d+codes/(\d+)d", r"+\1r(\2d)", s)
+    s = re.sub(r"daily:\+(\d+)rows/(\d+)d", r"+\1r(\2d)", s)
+    s = re.sub(r"daily:", "", s)
     return s
 
 
 def fmt_inst_flow_column(agg_part: str) -> str:
     s = _fmt_status(agg_part)
-    s = re.sub(r'\b\d{4}-', '', s)
-    s = re.sub(r'agg=✓\(([^)]+)\)', r'✓(\1)', s)
-    s = re.sub(r'agg=✓', '✓', s)
-    s = re.sub(r'agg:\+(\d+)rows/(\d+)d', r'+\1r(\2d)', s)
-    s = re.sub(r'agg:', '', s)
+    s = re.sub(r"\b\d{4}-", "", s)
+    s = re.sub(r"agg=✓\(([^)]+)\)", r"✓(\1)", s)
+    s = re.sub(r"agg=✓", "✓", s)
+    s = re.sub(r"agg:\+(\d+)rows/(\d+)d", r"+\1r(\2d)", s)
+    s = re.sub(r"agg:", "", s)
     return s
 
 
@@ -92,13 +92,13 @@ def fmt_meta_column(s: str) -> str:
     if len(s) <= 18:
         return s
 
-    match = re.match(r'(\w+)\((.+)\)', s)
+    match = re.match(r"(\w+)\((.+)\)", s)
     if match:
         prefix, content = match.groups()
         # Truncate content so total length is 18
         max_content_len = 18 - len(prefix) - 2  # -2 for "(" and ")"
         if max_content_len > 3:
-            truncated = content[:max_content_len-2] + ".."
+            truncated = content[: max_content_len - 2] + ".."
             return f"{prefix}({truncated})"
     return s[:18]
 
@@ -203,9 +203,7 @@ def print_table_summary(
     except Exception as e:
         typer.echo("")
         typer.echo(
-            typer.style(
-                f"Database status unavailable: {str(e)[:80]}", fg=typer.colors.YELLOW
-            )
+            typer.style(f"Database status unavailable: {str(e)[:80]}", fg=typer.colors.YELLOW)
         )
         return
 
@@ -246,8 +244,7 @@ def print_table_summary(
 
     typer.echo(f"{'─' * W}")
     typer.echo(
-        f"  Rows/tickers are totals for the {len(stock_tickers)} "
-        "stock ticker(s) in this run."
+        f"  Rows/tickers are totals for the {len(stock_tickers)} stock ticker(s) in this run."
     )
     if issues:
         echo_note_group(
@@ -266,7 +263,7 @@ def render_enrichment_pit_coverage(coverage) -> None:
     w = 26
     typer.echo("\nPoint-in-time enrichment coverage:")
     typer.echo(f"  {'TABLE':<{w}} {'SNAPSHOTS':>10} {'LATEST':>12} {'TICKERS (LATEST)':>18}")
-    typer.echo(f"  {'─'*w} {'─'*10} {'─'*12} {'─'*18}")
+    typer.echo(f"  {'─' * w} {'─' * 10} {'─' * 12} {'─' * 18}")
     for row in coverage:
         typer.echo(
             f"  {row.table:<{w}} {row.snapshot_count:>10} "
@@ -304,7 +301,7 @@ def render_fetch_market_row(
         f"{candles_col:<13}",
         f"{summaries_col:<18}",
         f"{tracked_col:<18}",
-        f"{inst_col:<18}"
+        f"{inst_col:<18}",
     ]
 
     if include_meta:

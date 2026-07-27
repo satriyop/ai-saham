@@ -58,12 +58,7 @@ def _parse_broker_tx(item: dict) -> BrokerTransaction | None:
       Shape B (flat):    item.buy_lot / item.sell_lot
     """
     broker_node = item.get("broker") or {}
-    code = (
-        broker_node.get("code")
-        or item.get("broker_code")
-        or item.get("code")
-        or ""
-    )
+    code = broker_node.get("code") or item.get("broker_code") or item.get("code") or ""
     name = broker_node.get("name") or item.get("broker_name") or item.get("name") or code
     if not code:
         return None
@@ -130,14 +125,16 @@ def _parse_historical_summary_flow(
         net_val = Decimal(str(row.get("net_foreign") or 0))
         net_lot = int(row.get("volume") or 0)
         close_price = Decimal(str(row.get("close") or 0))
-        points.append(ForeignFlowPoint(
-            ticker=ticker.upper(),
-            date=d,
-            net_val=net_val,
-            net_lot=net_lot,
-            avg_price=close_price,
-            source="stockbit_summary",
-        ))
+        points.append(
+            ForeignFlowPoint(
+                ticker=ticker.upper(),
+                date=d,
+                net_val=net_val,
+                net_lot=net_lot,
+                avg_price=close_price,
+                source="stockbit_summary",
+            )
+        )
     return sorted(points, key=lambda p: p.date)
 
 
@@ -192,17 +189,19 @@ def _parse_marketdetectors_response(
         if not code:
             continue
         try:
-            buyers.append(BrokerTransaction(
-                broker_code=code,
-                broker_name=code,
-                broker_type=_broker_type(item),
-                buy_lot=abs(_dict_int(item, "blot")),
-                sell_lot=0,
-                buy_value=abs(_dict_dec(item, "bval")),
-                sell_value=Decimal("0"),
-                avg_buy_price=_dict_dec(item, "netbs_buy_avg_price"),
-                avg_sell_price=Decimal("0"),
-            ))
+            buyers.append(
+                BrokerTransaction(
+                    broker_code=code,
+                    broker_name=code,
+                    broker_type=_broker_type(item),
+                    buy_lot=abs(_dict_int(item, "blot")),
+                    sell_lot=0,
+                    buy_value=abs(_dict_dec(item, "bval")),
+                    sell_value=Decimal("0"),
+                    avg_buy_price=_dict_dec(item, "netbs_buy_avg_price"),
+                    avg_sell_price=Decimal("0"),
+                )
+            )
         except Exception as e:
             logger.debug("Could not parse buy broker %s: %s", code, e)
 
@@ -214,17 +213,19 @@ def _parse_marketdetectors_response(
         if not code:
             continue
         try:
-            sellers.append(BrokerTransaction(
-                broker_code=code,
-                broker_name=code,
-                broker_type=_broker_type(item),
-                buy_lot=0,
-                sell_lot=abs(_dict_int(item, "slot")),
-                buy_value=Decimal("0"),
-                sell_value=abs(_dict_dec(item, "sval")),
-                avg_buy_price=Decimal("0"),
-                avg_sell_price=_dict_dec(item, "netbs_sell_avg_price"),
-            ))
+            sellers.append(
+                BrokerTransaction(
+                    broker_code=code,
+                    broker_name=code,
+                    broker_type=_broker_type(item),
+                    buy_lot=0,
+                    sell_lot=abs(_dict_int(item, "slot")),
+                    buy_value=Decimal("0"),
+                    sell_value=abs(_dict_dec(item, "sval")),
+                    avg_buy_price=Decimal("0"),
+                    avg_sell_price=_dict_dec(item, "netbs_sell_avg_price"),
+                )
+            )
         except Exception as e:
             logger.debug("Could not parse sell broker %s: %s", code, e)
 
@@ -254,19 +255,21 @@ def _parse_marketdetectors_response(
         )
 
     try:
-        return [BrokerSummary(
-            ticker=ticker.upper(),
-            date=actual_date,
-            top_buyers=tuple(buyers[:10]),
-            top_sellers=tuple(sellers[:10]),
-            foreign_buy_value=foreign_buy_val,
-            foreign_sell_value=foreign_sell_val,
-            foreign_buy_lot=foreign_buy_lot,
-            foreign_sell_lot=foreign_sell_lot,
-            total_value=total_val,
-            total_lot=total_lot,
-            source="stockbit",
-        )]
+        return [
+            BrokerSummary(
+                ticker=ticker.upper(),
+                date=actual_date,
+                top_buyers=tuple(buyers[:10]),
+                top_sellers=tuple(sellers[:10]),
+                foreign_buy_value=foreign_buy_val,
+                foreign_sell_value=foreign_sell_val,
+                foreign_buy_lot=foreign_buy_lot,
+                foreign_sell_lot=foreign_sell_lot,
+                total_value=total_val,
+                total_lot=total_lot,
+                source="stockbit",
+            )
+        ]
     except Exception as e:
         logger.debug("Could not build BrokerSummary for %s: %s", ticker, e)
         return []
@@ -282,14 +285,16 @@ def _parse_nval_trend(ticker: str, trend_raw: list) -> tuple[ForeignFlowPoint, .
             d = date.fromisoformat(str(row.get("date") or "")[:10])
             net_val = Decimal(str(row.get("nval") or 0))
             net_lot = int(row.get("nvol") or 0)
-            points.append(ForeignFlowPoint(
-                ticker=ticker,
-                date=d,
-                net_val=net_val,
-                net_lot=net_lot,
-                avg_price=Decimal(str(row.get("close") or 0)),
-                source="stockbit_trend",
-            ))
+            points.append(
+                ForeignFlowPoint(
+                    ticker=ticker,
+                    date=d,
+                    net_val=net_val,
+                    net_lot=net_lot,
+                    avg_price=Decimal(str(row.get("close") or 0)),
+                    source="stockbit_trend",
+                )
+            )
         except Exception:
             pass
     return tuple(sorted(points, key=lambda p: p.date))
@@ -339,13 +344,15 @@ def _parse_foreign_top_stocks(
             except (ValueError, TypeError):
                 item_date = snapshot_date
             nval_trend = _parse_nval_trend(ticker, item.get("nval_trend") or [])
-            snapshots.append(ForeignFlowSnapshot(
-                ticker=ticker,
-                date=item_date,
-                net_val=net_val,
-                net_lot=net_lot,
-                nval_trend=nval_trend,
-            ))
+            snapshots.append(
+                ForeignFlowSnapshot(
+                    ticker=ticker,
+                    date=item_date,
+                    net_val=net_val,
+                    net_lot=net_lot,
+                    nval_trend=nval_trend,
+                )
+            )
         except Exception as e:
             logger.debug("Could not parse foreign flow snapshot for %s: %s", ticker, e)
 
@@ -366,13 +373,15 @@ def _parse_foreign_top_stocks(
             except (ValueError, TypeError):
                 item_date = snapshot_date
             nval_trend = _parse_nval_trend(ticker, item.get("nval_trend") or [])
-            snapshots.append(ForeignFlowSnapshot(
-                ticker=ticker,
-                date=item_date,
-                net_val=net_val,
-                net_lot=net_lot,
-                nval_trend=nval_trend,
-            ))
+            snapshots.append(
+                ForeignFlowSnapshot(
+                    ticker=ticker,
+                    date=item_date,
+                    net_val=net_val,
+                    net_lot=net_lot,
+                    nval_trend=nval_trend,
+                )
+            )
         except Exception as e:
             logger.debug("Could not parse foreign flow snapshot for %s: %s", ticker, e)
 
@@ -422,13 +431,15 @@ def _parse_foreign_flow_history(
         avg_price = _dict_dec(net, "avg_price") or _dict_dec(price_activity, "close_price")
 
         try:
-            points.append(ForeignFlowPoint(
-                ticker=ticker.upper(),
-                date=point_date,
-                net_val=net_val,
-                net_lot=net_lot,
-                avg_price=avg_price,
-            ))
+            points.append(
+                ForeignFlowPoint(
+                    ticker=ticker.upper(),
+                    date=point_date,
+                    net_val=net_val,
+                    net_lot=net_lot,
+                    avg_price=avg_price,
+                )
+            )
         except Exception as e:
             logger.debug("Could not parse flow point for %s %s: %s", ticker, date_str, e)
 

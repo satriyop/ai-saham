@@ -23,6 +23,7 @@ def _require_api_client() -> tuple[StockbitApiClient, StockbitConfig]:
     _session = _stockbit_session.get_stockbit_session(stockbit_config)
     if not _session or not _session.authenticated:
         from typer import Exit, echo
+
         echo("Stockbit session expired. Run `saham fetch stockbit login` to refresh.")
         raise Exit(1)
     return _session.api_client, stockbit_config

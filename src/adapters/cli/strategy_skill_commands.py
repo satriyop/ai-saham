@@ -32,6 +32,7 @@ skill_app = typer.Typer(
 def _create_skill_generator() -> SkillGeneratorService:
     """Wire up the skill generator with its dependencies."""
     from src.infrastructure.skill.yaml_strategy_document_reader import YamlStrategyDocumentReader
+
     return SkillGeneratorService(
         annotation_reader=AnnotationReader(),
         skill_writer=MarkdownSkillWriter(),
@@ -49,7 +50,8 @@ def generate(
     artifact_type: Annotated[
         str,
         typer.Option(
-            "--type", "-t",
+            "--type",
+            "-t",
             help="Artifact type (strategy/indicator/formula). Auto-detected if omitted.",
         ),
     ] = "strategy",
@@ -149,12 +151,18 @@ def check() -> None:
             checked_count += 1
 
             if not skill_md.exists():
-                typer.echo(f"  {strategy_dir.name}: no SKILL.md (run: saham strategy skill generate {strategy_dir.name})")
+                typer.echo(
+                    f"  {strategy_dir.name}: no SKILL.md (run: saham "
+                    f"strategy skill generate {strategy_dir.name})"
+                )
                 stale_count += 1
                 continue
 
             if hasher.is_stale(strategy_yaml, skill_md):
-                typer.echo(f"  {strategy_dir.name}: STALE (run: saham strategy skill generate {strategy_dir.name})")
+                typer.echo(
+                    f"  {strategy_dir.name}: STALE (run: saham strategy "
+                    f"skill generate {strategy_dir.name})"
+                )
                 stale_count += 1
             else:
                 typer.echo(f"  {strategy_dir.name}: up to date")
@@ -169,7 +177,10 @@ def check() -> None:
             checked_count += 1
             skill_md = plugins_dir / f"{plugin_path.stem}.SKILL.md"
             if not skill_md.exists():
-                typer.echo(f"  {plugin_path.stem}: no SKILL.md (run: saham strategy skill generate {plugin_path.stem} --type indicator)")
+                typer.echo(
+                    f"  {plugin_path.stem}: no SKILL.md (run: saham strategy "
+                    f"skill generate {plugin_path.stem} --type indicator)"
+                )
                 stale_count += 1
             else:
                 typer.echo(f"  {plugin_path.stem}: up to date")

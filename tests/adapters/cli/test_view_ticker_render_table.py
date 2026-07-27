@@ -1,7 +1,6 @@
 """Unit tests for pure table rendering over TickerDashboard DTO."""
 
 from datetime import date
-from decimal import Decimal
 
 from src.adapters.cli.view_ticker_display import _render_ticker_dashboard_table
 from src.application.dto.ticker_dashboard import TickerDashboard

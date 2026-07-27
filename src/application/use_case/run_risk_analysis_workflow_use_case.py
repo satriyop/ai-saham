@@ -93,9 +93,7 @@ class RunRiskAnalysisWorkflowUseCase:
         self._risk_engine = risk_engine
         self._sentiment_fetcher = sentiment_fetcher
 
-    def execute(
-        self, request: RunRiskAnalysisWorkflowRequest
-    ) -> RunRiskAnalysisWorkflowResult:
+    def execute(self, request: RunRiskAnalysisWorkflowRequest) -> RunRiskAnalysisWorkflowResult:
         warnings: list[str] = []
 
         sentiment_snapshot = None

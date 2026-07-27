@@ -61,10 +61,10 @@ from src.infrastructure.config.market_context_config import load_market_context_
 from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
-from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
     SQLiteLearningArtifactRepository,
 )
+from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 
 def _parse_date(value: str | None) -> date | None:
@@ -128,7 +128,9 @@ def _accumulation_screen_table(candidates: list[DailyAccumulationCandidate]):
         phase_text = candidate.setup_phase or "-"
         signal_text = str(candidate.signal_score) if candidate.signal_score is not None else "-"
         coverage_text = (
-            f"{candidate.signal_authority_coverage:.0%}" if candidate.signal_authority_coverage is not None else "-"
+            f"{candidate.signal_authority_coverage:.0%}"
+            if candidate.signal_authority_coverage is not None
+            else "-"
         )
         risk_style = _RISK_STATUS_STYLE.get(candidate.risk_status, "white")
         risk_text = f"[{risk_style}]{candidate.risk_status}[/{risk_style}]"
@@ -255,9 +257,7 @@ def _setup_lens_impact_elements(setup_lens_impact) -> SetupLensImpactRender:
                 # rich markup and stripped.
                 row_values.append(Text(f"[warning: {cell.warning}]"))
                 continue
-            score_text = (
-                str(cell.signal_score) if cell.signal_score is not None else "-"
-            )
+            score_text = str(cell.signal_score) if cell.signal_score is not None else "-"
             text = f"{cell.action or '-'} {score_text} {cell.setup_match}"
             if cell.capped_reason:
                 text += "(no-entry)"
@@ -270,9 +270,7 @@ def _setup_lens_impact_elements(setup_lens_impact) -> SetupLensImpactRender:
     for row in setup_lens_impact.rows:
         for cell in row.cells:
             if cell.warning is None and cell.action in ("ENTER", "WATCH"):
-                next_lines.append(
-                    f"  saham plan swing {row.ticker} --setup {cell.setup_name}"
-                )
+                next_lines.append(f"  saham plan swing {row.ticker} --setup {cell.setup_name}")
     rendered_next = bool(next_lines)
     if next_lines:
         elements.append(Text("Next:", style="bold"))
@@ -295,7 +293,8 @@ def _fallback_next_command(response) -> str:
 
 def today(
     universe: Annotated[
-        Optional[str], typer.Option("--universe", "-u", help="Universe to brief"),
+        Optional[str],
+        typer.Option("--universe", "-u", help="Universe to brief"),
     ] = None,
     top: Annotated[int, typer.Option("--top", help="Number of candidates per section", min=1)] = 3,
     date_str: Annotated[Optional[str], typer.Option("--date", help="Date YYYY-MM-DD")] = None,
@@ -376,6 +375,7 @@ def today(
         from src.infrastructure.browser.stockbit_market_time import (
             get_display_market_status,
         )
+
         market_status = get_display_market_status()
         market_style = "green" if market_status.is_open else "yellow"
         market_text = Text()
@@ -396,9 +396,7 @@ def today(
     )
     summary.add_row("Latest completed EOD", latest_eod_str)
     opening_date_str = (
-        response.opening_snapshot_date.isoformat()
-        if response.opening_snapshot_date
-        else "-"
+        response.opening_snapshot_date.isoformat() if response.opening_snapshot_date else "-"
     )
     summary.add_row("Opening snapshot date", opening_date_str)
 
@@ -434,16 +432,20 @@ def today(
     no_opening = not response.opening_candidates
     no_market = not response.market_wide_opening_observations
     if no_snapshot and no_opening and no_market:
-        pre_open_elements.extend([
-            Text("No saved opening snapshot"),
-            Text("Run: saham research pre-open capture"),
-        ])
+        pre_open_elements.extend(
+            [
+                Text("No saved opening snapshot"),
+                Text("Run: saham research pre-open capture"),
+            ]
+        )
     else:
         if not response.opening_candidates:
-            pre_open_elements.extend([
-                Text(f"NO ACTIONABLE {response.universe.upper()} SETUPS", style="bold red"),
-                Text("No universe-scoped pre-open observations"),
-            ])
+            pre_open_elements.extend(
+                [
+                    Text(f"NO ACTIONABLE {response.universe.upper()} SETUPS", style="bold red"),
+                    Text("No universe-scoped pre-open observations"),
+                ]
+            )
         else:
             if actionable_rows:
                 verdict_str = f"ACTIONABLE {response.universe.upper()} SETUPS"
@@ -458,10 +460,12 @@ def today(
                 pre_open_elements.append(_opening_table(observation_rows))
 
     if response.market_wide_opening_observations:
-        pre_open_elements.extend([
-            Text("Market-wide observations", style="bold cyan"),
-            _opening_table(response.market_wide_opening_observations),
-        ])
+        pre_open_elements.extend(
+            [
+                Text("Market-wide observations", style="bold cyan"),
+                _opening_table(response.market_wide_opening_observations),
+            ]
+        )
 
     accumulation = _accumulation_screen_table(response.daily_accumulation_candidates)
 
@@ -504,7 +508,7 @@ def today(
     if response.overall_authority == "PARTIAL":
         accum_title = Text.assemble(
             ("ACCUMULATION SCREEN", "bold cyan"),
-            ("   ⚠ PARTIAL DATA — verify readiness before acting", "bold yellow")
+            ("   ⚠ PARTIAL DATA — verify readiness before acting", "bold yellow"),
         )
 
     sections.append(accum_title)

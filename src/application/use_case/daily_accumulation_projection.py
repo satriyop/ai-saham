@@ -87,9 +87,7 @@ class DailyAccumulationProjector:
             warnings=warnings,
         )
 
-    def _project_candidate(
-        self, candidate: AccumulationCandidate
-    ) -> DailyAccumulationCandidate:
+    def _project_candidate(self, candidate: AccumulationCandidate) -> DailyAccumulationCandidate:
         setup_phase = None
         if candidate.setup_phase is not None:
             phase = candidate.setup_phase.current_phase
@@ -99,7 +97,9 @@ class DailyAccumulationProjector:
         signal_authority_coverage = None
         if candidate.signal_assessment is not None:
             signal_score = candidate.signal_assessment.assessment.score
-            signal_authority_coverage = candidate.signal_assessment.assessment.signal_authority_coverage
+            signal_authority_coverage = (
+                candidate.signal_assessment.assessment.signal_authority_coverage
+            )
 
         if candidate.risk_assessment is None:
             risk_status = "UNKNOWN"
@@ -108,11 +108,7 @@ class DailyAccumulationProjector:
         else:
             risk_status = "OPEN"
 
-        action = (
-            candidate.trade_setup.action.value
-            if candidate.trade_setup is not None
-            else None
-        )
+        action = candidate.trade_setup.action.value if candidate.trade_setup is not None else None
 
         return DailyAccumulationCandidate(
             ticker=candidate.ticker,

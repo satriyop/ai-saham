@@ -32,24 +32,21 @@ from src.application.use_case.persist_generated_formula_use_case import (
 
 
 def create(
-    intent: Annotated[
-        str, typer.Argument(help="Natural language description of the indicator")
-    ],
+    intent: Annotated[str, typer.Argument(help="Natural language description of the indicator")],
     name: Annotated[
         Optional[str],
         typer.Option("--name", "-n", help="Indicator name (e.g., SMOOTH_RSI)"),
     ] = None,
     provider: Annotated[
         str,
-        typer.Option("--provider", "-p",
-                      help="AI provider (deepseek/claude/openai/gemini/ollama/mock)"),
+        typer.Option(
+            "--provider", "-p", help="AI provider (deepseek/claude/openai/gemini/ollama/mock)"
+        ),
     ] = "mock",
     model: Annotated[
         Optional[str], typer.Option("--model", "-m", help="Model name for AI provider")
     ] = None,
-    save: Annotated[
-        bool, typer.Option("--save/--no-save", help="Save formula to storage")
-    ] = True,
+    save: Annotated[bool, typer.Option("--save/--no-save", help="Save formula to storage")] = True,
     formulas_path: Annotated[
         Optional[Path], typer.Option("--formulas", help="Path to formulas file")
     ] = None,
@@ -66,10 +63,10 @@ def create(
         )
 
         if translation.unsupported:
-            typer.echo("\n[error] This intent cannot be expressed as a "
-                       "formula.", err=True)
-            typer.echo("        Tip:   Describe a mathematical combination "
-                       "of indicators.", err=True)
+            typer.echo("\n[error] This intent cannot be expressed as a formula.", err=True)
+            typer.echo(
+                "        Tip:   Describe a mathematical combination of indicators.", err=True
+            )
             raise typer.Exit(1)
 
         if not translation.success:
@@ -78,13 +75,15 @@ def create(
 
         typer.echo(f"\nFormula: {translation.formula}")
 
-        result = authoring.persist.execute(PersistGeneratedFormulaRequest(
-            formula=translation.formula,
-            ast=translation.ast,
-            intent=intent,
-            requested_name=name,
-            save=save,
-        ))
+        result = authoring.persist.execute(
+            PersistGeneratedFormulaRequest(
+                formula=translation.formula,
+                ast=translation.ast,
+                intent=intent,
+                requested_name=name,
+                save=save,
+            )
+        )
 
         if result.auto_generated:
             typer.echo(f"Auto-generated name: {result.name}")
@@ -93,15 +92,16 @@ def create(
             if result.registered:
                 typer.echo(f"Registered: {result.name}")
             else:
-                typer.echo(f"Warning: Could not register formula in memory: "
-                           f"{result.register_error}", err=True)
+                typer.echo(
+                    f"Warning: Could not register formula in memory: {result.register_error}",
+                    err=True,
+                )
 
         if result.save_attempted:
             if result.saved:
                 typer.echo(f"Saved to:   {resolve_formulas_path(formulas_path)}")
             else:
-                typer.echo(f"Warning: Could not save formula: {result.save_error}",
-                           err=True)
+                typer.echo(f"Warning: Could not save formula: {result.save_error}", err=True)
 
         typer.echo(f"\nUse it: saham indicator compute {result.name} TICKER")
 
@@ -111,8 +111,9 @@ def create(
         msg = str(e).lower()
         if "api key" in msg or "authentication" in msg:
             typer.echo(f"[error] {e}", err=True)
-            typer.echo("        Tip:   Set the API key environment "
-                       f"variable for {provider}.", err=True)
+            typer.echo(
+                f"        Tip:   Set the API key environment variable for {provider}.", err=True
+            )
         elif "connection" in msg or "timeout" in msg:
             typer.echo("[error] Could not connect to AI provider.", err=True)
             if provider == "ollama":
@@ -168,9 +169,7 @@ def show(
 
 def delete(
     name: Annotated[str, typer.Argument(help="Formula name to delete")],
-    force: Annotated[
-        bool, typer.Option("--force", "-f", help="Skip confirmation prompt")
-    ] = False,
+    force: Annotated[bool, typer.Option("--force", "-f", help="Skip confirmation prompt")] = False,
     formulas_path: Annotated[
         Optional[Path],
         typer.Option("--formulas-file", help="Path to formulas file"),

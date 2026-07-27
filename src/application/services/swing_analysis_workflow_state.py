@@ -6,6 +6,7 @@ Carries values produced by one workflow collaborator and consumed by a
 later one. Extracted from `SwingAnalysisWorkflowUseCase` to keep the use
 case as orchestration only.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

@@ -1,6 +1,6 @@
 """Snapshot-style contract tests for view ticker JSON shapes."""
 
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 
 from src.adapters.cli.view_ticker_json import ticker_dashboard_to_json_dict
@@ -15,7 +15,6 @@ from src.application.dto.view_ticker_contract import (
 )
 from src.application.services.ticker_dashboard_layout import panel_keys_for_mode
 from src.application.services.ticker_dashboard_status import CacheStatus, FreshnessItem
-
 
 ENVELOPE_KEYS = {
     "subject",

@@ -42,14 +42,10 @@ def _serialize_setup_fields(fp: "SignalObservationFingerprint") -> dict[str, Any
 def _parse_setup_fields(data: dict[str, Any]) -> dict[str, Any]:
     return {
         "setup_family": data.get("setup_family"),
-        "matched_setup_families": tuple(
-            str(v) for v in data.get("matched_setup_families") or ()
-        ),
+        "matched_setup_families": tuple(str(v) for v in data.get("matched_setup_families") or ()),
         "primary_setup_family": data.get("primary_setup_family"),
         "setup_family_source": data.get("setup_family_source"),
-        "setup_family_rationale": tuple(
-            str(v) for v in data.get("setup_family_rationale") or ()
-        ),
+        "setup_family_rationale": tuple(str(v) for v in data.get("setup_family_rationale") or ()),
         "setup_name": data.get("setup_name"),
         "setup_phase": data.get("setup_phase") or data.get("setup_phase_current"),
         "setup_phase_previous": data.get("setup_phase_previous"),

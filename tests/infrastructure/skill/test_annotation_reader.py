@@ -140,9 +140,7 @@ when_to_use: Test usage
 
         reader = AnnotationReader()
 
-        with pytest.raises(
-            AnnotationSchemaError, match="'description' must be a non-empty string"
-        ):
+        with pytest.raises(AnnotationSchemaError, match="'description' must be a non-empty string"):
             reader.read(sidecar_path)
 
     def test_read_raises_error_for_whitespace_only_description(self, tmp_path: Path):
@@ -156,9 +154,7 @@ when_to_use: Test usage
 
         reader = AnnotationReader()
 
-        with pytest.raises(
-            AnnotationSchemaError, match="'description' must be a non-empty string"
-        ):
+        with pytest.raises(AnnotationSchemaError, match="'description' must be a non-empty string"):
             reader.read(sidecar_path)
 
     def test_read_raises_error_for_invalid_yaml_syntax(self, tmp_path: Path):
@@ -186,14 +182,10 @@ when_to_use: [unclosed list
 
         reader = AnnotationReader()
 
-        with pytest.raises(
-            AnnotationSchemaError, match="Expected a mapping.*got list"
-        ):
+        with pytest.raises(AnnotationSchemaError, match="Expected a mapping.*got list"):
             reader.read(sidecar_path)
 
-    def test_read_converts_non_list_tags_to_empty_tuple(
-        self, tmp_path: Path, caplog
-    ):
+    def test_read_converts_non_list_tags_to_empty_tuple(self, tmp_path: Path, caplog):
         """read() should gracefully handle non-list tags field."""
         yaml_content = """
 description: Test
@@ -214,9 +206,7 @@ tags: "not a list"
 class TestAnnotationReaderMultiFormula:
     """Test reading multi-formula .skill.yaml files."""
 
-    def test_read_formula_annotations_returns_dict_keyed_by_name(
-        self, tmp_path: Path
-    ):
+    def test_read_formula_annotations_returns_dict_keyed_by_name(self, tmp_path: Path):
         """read_formula_annotations() should return dict keyed by formula name."""
         yaml_content = """
 SMOOTH_RSI:
@@ -242,9 +232,7 @@ MOMENTUM_SCORE:
         assert result["SMOOTH_RSI"].description == "RSI with EMA smoothing"
         assert result["MOMENTUM_SCORE"].tags == ("momentum", "composite")
 
-    def test_read_formula_annotations_returns_empty_dict_for_missing_file(
-        self, tmp_path: Path
-    ):
+    def test_read_formula_annotations_returns_empty_dict_for_missing_file(self, tmp_path: Path):
         """read_formula_annotations() should return empty dict for missing file."""
         reader = AnnotationReader()
         missing_path = tmp_path / "nonexistent.skill.yaml"
@@ -280,9 +268,7 @@ ANOTHER_VALID:
         assert "INVALID_FORMULA" not in result
         assert "Skipping formula 'INVALID_FORMULA'" in caplog.text
 
-    def test_read_formula_annotations_skips_non_dict_entries(
-        self, tmp_path: Path, caplog
-    ):
+    def test_read_formula_annotations_skips_non_dict_entries(self, tmp_path: Path, caplog):
         """read_formula_annotations() should skip non-dict formula entries."""
         yaml_content = """
 VALID_FORMULA:
@@ -306,9 +292,7 @@ ANOTHER_VALID:
         assert "BAD_FORMULA" not in result
         assert "expected mapping, got str" in caplog.text
 
-    def test_read_formula_annotations_raises_error_for_non_dict_root(
-        self, tmp_path: Path
-    ):
+    def test_read_formula_annotations_raises_error_for_non_dict_root(self, tmp_path: Path):
         """read_formula_annotations() should raise error for non-dict root."""
         yaml_content = """
 - not a dict
@@ -319,7 +303,5 @@ ANOTHER_VALID:
 
         reader = AnnotationReader()
 
-        with pytest.raises(
-            AnnotationSchemaError, match="Expected a mapping.*got list"
-        ):
+        with pytest.raises(AnnotationSchemaError, match="Expected a mapping.*got list"):
             reader.read_formula_annotations(sidecar_path)

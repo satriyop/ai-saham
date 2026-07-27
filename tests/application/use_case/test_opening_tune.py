@@ -7,19 +7,23 @@ from src.application.use_case.opening_tune_use_case import OpeningTuneRequest, O
 
 def _write_grade(day_dir, *, phase="POST_OPEN", valid=False, confidence="LOW"):
     day_dir.mkdir(parents=True)
-    (day_dir / "grade.json").write_text(json.dumps({
-        "date": "2026-06-18",
-        "capture_phase": phase,
-        "capture_valid_for_opening_prediction": valid,
-        "capture_confidence": confidence,
-        "data_quality": {
-            "capture_phase": phase,
-            "capture_valid_for_opening_prediction": valid,
-            "capture_confidence": confidence,
-        },
-        "per_ticker": [],
-        "config_snapshot": {},
-    }))
+    (day_dir / "grade.json").write_text(
+        json.dumps(
+            {
+                "date": "2026-06-18",
+                "capture_phase": phase,
+                "capture_valid_for_opening_prediction": valid,
+                "capture_confidence": confidence,
+                "data_quality": {
+                    "capture_phase": phase,
+                    "capture_valid_for_opening_prediction": valid,
+                    "capture_confidence": confidence,
+                },
+                "per_ticker": [],
+                "config_snapshot": {},
+            }
+        )
+    )
 
 
 def test_opening_tune_skips_invalid_snapshot_before_ai_call(tmp_path, monkeypatch):
@@ -52,12 +56,16 @@ def test_opening_tune_allows_invalid_snapshot_with_explicit_override(tmp_path, m
     day_dir = tmp_path / "20260618"
     _write_grade(day_dir)
     monkeypatch.setattr(opening_tune, "OPENING_DATA_DIR", tmp_path)
-    monkeypatch.setattr(opening_tune, "_call_deepseek", lambda **kwargs: (
-        """```json
+    monkeypatch.setattr(
+        opening_tune,
+        "_call_deepseek",
+        lambda **kwargs: (
+            """```json
 {"summary":"ok","top_finding":"none","config_recommendations":{},"watch_next_session":[]}
 ```""",
-        12,
-    ))
+            12,
+        ),
+    )
 
     result = OpeningTuneUseCase().execute(
         OpeningTuneRequest(

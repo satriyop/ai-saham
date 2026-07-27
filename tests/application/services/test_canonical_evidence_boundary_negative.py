@@ -41,7 +41,7 @@ from src.application.dto.accumulation_screen import (
     AccumulationScreenRequest,
 )
 from src.application.dto.assess_signal import AssessSignalResponse
-from src.application.dto.built_evidence import BuiltFlowEvidence, BuiltSetupEvidence
+from src.application.dto.built_evidence import BuiltSetupEvidence
 from src.application.dto.signal_evidence_execution_context import (
     SignalEvidenceExecutionContext,
 )
@@ -138,9 +138,16 @@ def _daily_flow(day: date, broker_code: str = "AK"):
 
 def _no_excess_return() -> BenchmarkExcessReturn:
     return BenchmarkExcessReturn(
-        benchmark="IHSG", window_sessions=5, ticker_return_pct=None, benchmark_return_pct=None,
-        excess_return_pct=None, window_start=None, window_end=None, common_session_count=0,
-        status=BenchmarkExcessReturnStatus.UNAVAILABLE, unavailable_reason="test",
+        benchmark="IHSG",
+        window_sessions=5,
+        ticker_return_pct=None,
+        benchmark_return_pct=None,
+        excess_return_pct=None,
+        window_start=None,
+        window_end=None,
+        common_session_count=0,
+        status=BenchmarkExcessReturnStatus.UNAVAILABLE,
+        unavailable_reason="test",
     )
 
 
@@ -170,8 +177,13 @@ class TestEvaluationResultRejectsFutureRows:
 
     def test_future_candle_row_raises(self):
         candle = Candle(
-            ticker=TICKER, date=SNAP + timedelta(days=1), open=Decimal("100"), high=Decimal("101"),
-            low=Decimal("99"), close=Decimal("100"), volume=1000,
+            ticker=TICKER,
+            date=SNAP + timedelta(days=1),
+            open=Decimal("100"),
+            high=Decimal("101"),
+            low=Decimal("99"),
+            close=Decimal("100"),
+            volume=1000,
         )
         with pytest.raises(ValueError, match="after analysis_date"):
             AccumulationCandidateEvaluationResult(
@@ -188,12 +200,22 @@ class TestEvaluationResultRejectsFutureRows:
 
 def _setup_evidence() -> SetupEvidence:
     return SetupEvidence(
-        ticker=TICKER, snapshot_date=SNAP, setup_name="foreign-bounce", setup_match="MATCH",
-        match_strength=100.0, failed_gates=(), trend="UP", rsi=45.0, bb_width_pctile=0.2,
-        vwap_discount_pct=1.5, vwap_pct=1.0,
+        ticker=TICKER,
+        snapshot_date=SNAP,
+        setup_name="foreign-bounce",
+        setup_match="MATCH",
+        match_strength=100.0,
+        failed_gates=(),
+        trend="UP",
+        rsi=45.0,
+        bb_width_pctile=0.2,
+        vwap_discount_pct=1.5,
+        vwap_pct=1.0,
         benchmark_excess_return_5_session=_no_excess_return(),
         benchmark_excess_return_20_session=_no_excess_return(),
-        volume_trend_ratio=1.2, volume_freshness=Freshness.FRESH, candle_source="test",
+        volume_trend_ratio=1.2,
+        volume_freshness=Freshness.FRESH,
+        candle_source="test",
     )
 
 
@@ -201,7 +223,9 @@ class TestBuiltSetupEvidenceRejectsFutureRows:
     def test_future_ticker_candle_raises(self):
         provenance = SetupProvenance(
             ticker=TICKER,
-            candle_rows=(CandleRowIdentity(ticker=TICKER, date=SNAP + timedelta(days=1), source="test"),),
+            candle_rows=(
+                CandleRowIdentity(ticker=TICKER, date=SNAP + timedelta(days=1), source="test"),
+            ),
         )
         with pytest.raises(ValueError, match="after evidence.snapshot_date"):
             BuiltSetupEvidence(evidence=_setup_evidence(), provenance=provenance)
@@ -303,7 +327,9 @@ def test_signal_engine_rejects_loose_setup_evidence_kwarg():
     ctx = SignalContext(ticker=TICKER, snapshot_date=SNAP)
     with pytest.raises(TypeError):
         engine.evaluate_accumulation_discovery(
-            TICKER, ctx, setup_evidence=_setup_evidence()  # type: ignore[call-arg]
+            TICKER,
+            ctx,
+            setup_evidence=_setup_evidence(),  # type: ignore[call-arg]
         )
 
 
@@ -312,7 +338,9 @@ def test_signal_engine_rejects_loose_flow_confirmation_evidence_kwarg():
     ctx = SignalContext(ticker=TICKER, snapshot_date=SNAP)
     with pytest.raises(TypeError):
         engine.evaluate_accumulation_discovery(
-            TICKER, ctx, flow_confirmation_evidence=None  # type: ignore[call-arg]
+            TICKER,
+            ctx,
+            flow_confirmation_evidence=None,  # type: ignore[call-arg]
         )
 
 

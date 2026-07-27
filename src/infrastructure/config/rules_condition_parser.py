@@ -70,9 +70,7 @@ def _build_compound_condition(data: dict[str, Any]) -> CompoundCondition:
     """
     sub_list = data["all"]
     if not isinstance(sub_list, list):
-        raise RulesSchemaError(
-            f"when.all: expected list, got {type(sub_list).__name__}"
-        )
+        raise RulesSchemaError(f"when.all: expected list, got {type(sub_list).__name__}")
     if len(sub_list) < 2:
         raise RulesSchemaError("when.all: must have at least 2 sub-conditions")
 
@@ -192,9 +190,7 @@ def _build_indicator_vs_indicator(
                 f"when.right.value: must be a number, got '{right_data['value']}'"
             )
     else:
-        raise RulesSchemaError(
-            "when.right: must have either 'indicator' or 'value'"
-        )
+        raise RulesSchemaError("when.right: must have either 'indicator' or 'value'")
 
     return ConditionIndicatorVsIndicator(
         left=IndicatorRef(name=left_name),

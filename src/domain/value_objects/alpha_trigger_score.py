@@ -63,14 +63,8 @@ class EvidencePromotionRecord:
         if not isinstance(self.requirements, tuple):
             raise ValueError("promotion.requirements must be a tuple")
         for item in self.requirements:
-            if (
-                not isinstance(item, tuple)
-                or len(item) != 2
-                or not isinstance(item[0], str)
-            ):
-                raise ValueError(
-                    "promotion.requirements must contain (name, value) tuples"
-                )
+            if not isinstance(item, tuple) or len(item) != 2 or not isinstance(item[0], str):
+                raise ValueError("promotion.requirements must contain (name, value) tuples")
 
     @property
     def requirements_dict(self) -> dict[str, float]:
@@ -105,9 +99,7 @@ class EvidenceRegistration:
         if not isinstance(self.status, EvidenceAuthorityStatus):
             raise ValueError("status must be an EvidenceAuthorityStatus")
         _validate_unit("low_weight_cap", self.low_weight_cap)
-        if self.promotion is not None and not isinstance(
-            self.promotion, EvidencePromotionRecord
-        ):
+        if self.promotion is not None and not isinstance(self.promotion, EvidencePromotionRecord):
             raise ValueError("promotion must be an EvidencePromotionRecord")
 
     def effective_weight(self, configured_weight: float) -> float:
@@ -127,10 +119,7 @@ class EvidenceRegistration:
             "promotion_requires": list(self.promotion_requires),
             "promoted_by": self.promoted_by,
             "promoted_date": self.promoted_date,
-            "promotion": (
-                self.promotion.to_dict()
-                if self.promotion is not None else None
-            ),
+            "promotion": (self.promotion.to_dict() if self.promotion is not None else None),
         }
 
 
@@ -192,12 +181,10 @@ class AlphaTriggerScore:
     final_exact_score: float | None
     horizon: str
     alpha_weight: float
-    group_contributions: tuple[AlphaTriggerGroupContribution, ...] = field(
-        default_factory=tuple
-    )
-    coverage: float = 0.0           # legacy field name — use coverage_score property
+    group_contributions: tuple[AlphaTriggerGroupContribution, ...] = field(default_factory=tuple)
+    coverage: float = 0.0  # legacy field name — use coverage_score property
     authority_coverage: float = 0.0  # legacy field name — use authority_coverage_score property
-    conviction: float = 0.0          # legacy field name — use conviction_score property
+    conviction: float = 0.0  # legacy field name — use conviction_score property
     flow_trigger_allowed: bool = False
     reasons: tuple[str, ...] = field(default_factory=tuple)
     unavailable_reasons: tuple[str, ...] = field(default_factory=tuple)
@@ -242,12 +229,12 @@ class AlphaTriggerScore:
             "alpha_weight": round(self.alpha_weight, 6),
             "trigger_weight": round(1.0 - self.alpha_weight, 6),
             "group_contributions": [c.to_dict() for c in self.group_contributions],
-            "coverage_score": round(self.coverage, 4),         # canonical
+            "coverage_score": round(self.coverage, 4),  # canonical
             "authority_coverage_score": round(self.authority_coverage, 4),  # canonical
-            "conviction_score": round(self.conviction, 4),      # canonical
-            "coverage": round(self.coverage, 4),                # legacy alias
+            "conviction_score": round(self.conviction, 4),  # canonical
+            "coverage": round(self.coverage, 4),  # legacy alias
             "authority_coverage": round(self.authority_coverage, 4),  # legacy alias
-            "conviction": round(self.conviction, 4),            # legacy alias
+            "conviction": round(self.conviction, 4),  # legacy alias
             "flow_trigger_allowed": self.flow_trigger_allowed,
             "reasons": list(self.reasons),
             "unavailable_reasons": list(self.unavailable_reasons),

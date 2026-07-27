@@ -51,6 +51,7 @@ __all__ = [
     "get_global_context_tickers",
 ]
 
+
 def default_market_context_config_path(config: AppConfig | None = None) -> Path:
     cfg = config or load_app_config()
     return Path(cfg.config_paths.market_context_engine)
@@ -197,18 +198,22 @@ def load_market_context_config(
             commodity=_commodity(factors.get("commodity_composite", {})),
             regime_thresholds=RegimeThresholds(
                 risk_on_min_score=rt.get(
-                    "risk_on_min_score", defaults.regime_thresholds.risk_on_min_score,
+                    "risk_on_min_score",
+                    defaults.regime_thresholds.risk_on_min_score,
                 ),
                 risk_off_max_score=rt.get(
-                    "risk_off_max_score", defaults.regime_thresholds.risk_off_max_score,
+                    "risk_off_max_score",
+                    defaults.regime_thresholds.risk_off_max_score,
                 ),
                 volatile_vix_override=rt.get(
-                    "volatile_vix_override", defaults.regime_thresholds.volatile_vix_override,
+                    "volatile_vix_override",
+                    defaults.regime_thresholds.volatile_vix_override,
                 ),
             ),
             scoring=MarketContextScoringConfig(
                 neutral_score=root.get("scoring", {}).get(
-                    "neutral_score", defaults.scoring.neutral_score,
+                    "neutral_score",
+                    defaults.scoring.neutral_score,
                 ),
                 stale_business_day_gap=root.get("scoring", {}).get(
                     "stale_business_day_gap",
@@ -221,14 +226,18 @@ def load_market_context_config(
                 labels=ScoreLabelThresholds(
                     favorable_min_score=root.get("score_labels", {}).get(
                         "favorable_min_score",
-                        root.get("scoring", {}).get("labels", {}).get(
+                        root.get("scoring", {})
+                        .get("labels", {})
+                        .get(
                             "favorable_min_score",
                             defaults.scoring.labels.favorable_min_score,
                         ),
                     ),
                     neutral_min_score=root.get("score_labels", {}).get(
                         "neutral_min_score",
-                        root.get("scoring", {}).get("labels", {}).get(
+                        root.get("scoring", {})
+                        .get("labels", {})
+                        .get(
                             "neutral_min_score",
                             defaults.scoring.labels.neutral_min_score,
                         ),
@@ -242,8 +251,8 @@ def load_market_context_config(
                 )
             ),
             regime_effects={
-                "RISK_ON":  _re("RISK_ON"),
-                "NEUTRAL":  _re("NEUTRAL"),
+                "RISK_ON": _re("RISK_ON"),
+                "NEUTRAL": _re("NEUTRAL"),
                 "RISK_OFF": _re("RISK_OFF"),
                 "VOLATILE": _re("VOLATILE"),
             },
@@ -272,4 +281,3 @@ def get_global_context_tickers(config_path: Path | None = None) -> set[str]:
     except Exception:
         # Fallback to defaults on error
         return {"^VIX", "EIDO", "IDR=X"}
-

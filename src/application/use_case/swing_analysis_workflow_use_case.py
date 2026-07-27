@@ -4,6 +4,7 @@ Application workflow coordinator for `saham analyze swing`.
 Layer: Application
 AI usage: Optional sentiment provider, controlled by injected fetcher.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -73,6 +74,7 @@ from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.rules.risk_gate import RiskGate
 
 __all__ = ["SwingAnalysisWorkflowUseCase", "SwingAnalysisDataUnavailable"]
+
 
 class SwingAnalysisWorkflowUseCase:
     """Run deterministic swing analysis steps and return structured state."""
@@ -173,8 +175,7 @@ class SwingAnalysisWorkflowUseCase:
             build_accumulation_candidate_evaluation=build_accumulation_candidate_evaluation,
             evaluate_market_context=evaluate_market_context,
             signal_evidence_context_builder=signal_evidence_context_builder,
-            session_resolver=session_resolver
-            or EffectiveMarketSessionResolver(market_repository),
+            session_resolver=session_resolver or EffectiveMarketSessionResolver(market_repository),
         )
         self._decision_composer = SwingAnalysisDecisionComposer(
             risk_trade_setup_composer=self._risk_trade_setup_composer,

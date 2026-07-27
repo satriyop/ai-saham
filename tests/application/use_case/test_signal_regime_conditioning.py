@@ -30,13 +30,13 @@ from src.domain.value_objects.benchmark_excess_return import (
     BenchmarkExcessReturn,
     BenchmarkExcessReturnStatus,
 )
+from src.domain.value_objects.canonical_signal_evidence_input import CanonicalSignalEvidenceInput
 from src.domain.value_objects.factor_evidence import Direction, Freshness
 from src.domain.value_objects.flow_confirmation_evidence import (
     FlowConfirmationEvidence,
     FlowSubSignal,
 )
 from src.domain.value_objects.market_context import MarketContext, MarketRegime
-from src.domain.value_objects.canonical_signal_evidence_input import CanonicalSignalEvidenceInput
 from src.domain.value_objects.setup_evidence import SetupEvidence
 from src.domain.value_objects.signal_assessment import (
     SWING_TRADE_SETUP_IDENTITY,
@@ -63,6 +63,8 @@ def _excess_return(window_sessions: int, excess_return_pct: float) -> BenchmarkE
         status=BenchmarkExcessReturnStatus.AVAILABLE,
         unavailable_reason=None,
     )
+
+
 UC = AssessSignalEvidenceUseCase()
 
 
@@ -342,6 +344,7 @@ def test_volatile_with_only_flow():
 
 def test_no_evidence_conditioning_is_noop():
     from src.application.exceptions import NoProductionSignalEvidenceError
+
     for regime in ("NEUTRAL", "RISK_OFF", "VOLATILE"):
         with pytest.raises(NoProductionSignalEvidenceError):
             UC.execute(_req(market_context=_mctx(regime)))

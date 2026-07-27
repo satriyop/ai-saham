@@ -12,6 +12,9 @@ from src.application.dto.accumulation_screen import (
     AccumulationScreenRequest,
     AccumulationScreenResponse,
 )
+from src.application.dto.signal_evidence_execution_context import (
+    SignalEvidenceExecutionContext,
+)
 from src.application.services.accumulation_screen_factory import (
     create_accumulation_screen_use_case_bundle,
 )
@@ -31,11 +34,6 @@ from src.domain.value_objects.signal_artifact_identity import (
 from src.domain.value_objects.signal_semantic_contract import (
     ACCUMULATION_DISCOVERY_CONTRACT,
 )
-from src.application.dto.signal_evidence_execution_context import (
-    SignalEvidenceExecutionContext,
-)
-
-_LEAN_ID = SemanticCompatibilityId("sha256:" + "a" * 64)
 from tests.application.use_case.accumulation_screen_fixtures import (
     FakeRulesLoader,
     MockBrokerRepository,
@@ -46,8 +44,12 @@ from tests.application.use_case.accumulation_screen_fixtures import (
     _weekdays,
 )
 
+_LEAN_ID = SemanticCompatibilityId("sha256:" + "a" * 64)
 
-def _context(as_of: date, session: EffectiveMarketSession | None = None) -> SignalEvidenceExecutionContext:
+
+def _context(
+    as_of: date, session: EffectiveMarketSession | None = None
+) -> SignalEvidenceExecutionContext:
     if session is None:
         now = datetime(2026, 7, 16, 16, 0, tzinfo=IDX_TIMEZONE)
         session = EffectiveMarketSession(
@@ -190,10 +192,7 @@ def test_effective_session_passed_into_execute_is_persisted_on_every_observation
     assert len(spy_repo.saved) == 1
     provenance = spy_repo.saved[0].decision_payload["provenance"]
     assert provenance["decision_at"] == session.decision_at.isoformat()
-    assert (
-        provenance["latest_completed_session"]
-        == session.latest_completed_session.isoformat()
-    )
+    assert provenance["latest_completed_session"] == session.latest_completed_session.isoformat()
     assert provenance["analysis_as_of"] == session.analysis_as_of.isoformat()
     assert provenance["market_session_name"] == session.market_session_name
     assert provenance["is_eod_pending"] == session.is_eod_pending
@@ -235,6 +234,7 @@ def test_no_effective_session_fails_closed():
 
 def test_record_use_case_omitting_context_raises_type_error():
     import pytest
+
     bundle, as_of = _build_bundle(None)
     with pytest.raises(TypeError):
         # execute() requires execution_context as a mandatory keyword-only argument
@@ -250,6 +250,7 @@ def test_record_use_case_omitting_context_raises_type_error():
 
 def test_screen_use_case_omitting_context_raises_type_error():
     import pytest
+
     bundle, as_of = _build_bundle(None)
     with pytest.raises(TypeError):
         # execute() requires execution_context as a mandatory keyword-only argument

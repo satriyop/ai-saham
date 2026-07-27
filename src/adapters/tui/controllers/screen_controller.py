@@ -52,7 +52,9 @@ class ScreenWorkspaceState:
 
 
 class ScreenController:
-    """Orchestrate stateful Screen tabs (CLI: saham screen): Universe, Accumulation, and Saved/Compare."""
+    """Orchestrate stateful Screen tabs (CLI: saham screen):
+    Universe, Accumulation, and Saved/Compare.
+    """
 
     def __init__(
         self,

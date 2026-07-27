@@ -175,9 +175,7 @@ class RiskEngine:
         response = self._use_case.execute(request_with_context)
         return _apply_regime_gate(response, market_context, self._market_context_gate)
 
-    def assess_trend(
-        self, request: AssessRiskRequest, days: int = 7
-    ) -> "AssessRiskTrendResponse":
+    def assess_trend(self, request: AssessRiskRequest, days: int = 7) -> "AssessRiskTrendResponse":
         """Evaluate risk trend over the last N days."""
         return self._use_case.execute_trend(
             self._inject_gate_context(self._apply_request_defaults(request)),
@@ -276,6 +274,7 @@ class RiskEngine:
 
 
 # ── Market context post-processing ───────────────────────────────────────────
+
 
 def _apply_regime_gate(
     response: AssessRiskResponse,

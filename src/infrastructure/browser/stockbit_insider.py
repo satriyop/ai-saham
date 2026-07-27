@@ -133,17 +133,19 @@ def _parse_transactions(ticker: str, body: dict, action_filter: str) -> list[Ins
                 role = _BADGE_MAP[badge]
                 break
 
-        results.append(InsiderTransaction(
-            ticker=ticker.upper(),
-            name=str(item.get("name") or "").strip().title(),
-            role=role,
-            action_type=action,
-            shares=shares,
-            price=price,
-            transaction_date=txn_date,
-            ownership_before_pct=own_before,
-            ownership_after_pct=own_after,
-        ))
+        results.append(
+            InsiderTransaction(
+                ticker=ticker.upper(),
+                name=str(item.get("name") or "").strip().title(),
+                role=role,
+                action_type=action,
+                shares=shares,
+                price=price,
+                transaction_date=txn_date,
+                ownership_before_pct=own_before,
+                ownership_after_pct=own_after,
+            )
+        )
 
     return results
 
@@ -204,9 +206,7 @@ class StockbitInsiderActivityProvider(InsiderActivityProvider, StockbitCachingPr
         ticker = ticker.upper()
 
         if as_of_date is not None:
-            return self._cache.read(
-                ticker, from_date, to_date, action_type, as_of_date=as_of_date
-            )
+            return self._cache.read(ticker, from_date, to_date, action_type, as_of_date=as_of_date)
 
         if self._api_client is None:
             return self._cache.read(ticker, from_date, to_date, action_type)

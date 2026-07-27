@@ -25,9 +25,7 @@ from src.domain.value_objects.learning_artifacts import AssessmentPurpose
 
 
 def pre_open_evaluate(
-    compatibility_id: Annotated[
-        Optional[str], typer.Option("--compatibility-id")
-    ] = None,
+    compatibility_id: Annotated[Optional[str], typer.Option("--compatibility-id")] = None,
     db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
     fmt: Annotated[str, typer.Option("--format")] = "table",
 ) -> None:

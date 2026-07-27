@@ -118,11 +118,15 @@ def test_extract_subsector_rows_handles_missing_count():
 
 def test_extract_company_rows():
     """extract_company_rows parses company response."""
-    body = {"data": {"companies": [
-        {"ticker": "BBCA", "name": "Bank BCA"},
-        {"code": "BBRI", "company_name": "Bank BRI"},
-        {"stock_detail": {"code": "BMRI", "name": "Bank Mandiri"}},
-    ]}}
+    body = {
+        "data": {
+            "companies": [
+                {"ticker": "BBCA", "name": "Bank BCA"},
+                {"code": "BBRI", "company_name": "Bank BRI"},
+                {"stock_detail": {"code": "BMRI", "name": "Bank Mandiri"}},
+            ]
+        }
+    }
     rows = extract_company_rows(body)
     assert len(rows) == 3
     assert rows[0].id == "BBCA"

@@ -146,7 +146,7 @@ class TestIchimokuSpanA:
         result = IchimokuSpanA().compute(candles, 26)
 
         t_at_25 = midpoint(candles, 17, 26)  # Tenkan window ending at idx 25
-        k_at_25 = midpoint(candles, 0, 26)   # Kijun window ending at idx 25
+        k_at_25 = midpoint(candles, 0, 26)  # Kijun window ending at idx 25
         expected = (t_at_25 + k_at_25) / Decimal("2")
 
         assert result[0] == expected
@@ -244,8 +244,13 @@ class TestIchimokuChikou:
 class TestIchimokuRegistryIntegration:
     def test_all_ichimoku_plugins_discovered(self):
         registry = create_indicator_registry("plugins/indicators")
-        for name in ("ICHIMOKU_TENKAN", "ICHIMOKU_KIJUN", "ICHIMOKU_SPAN_A",
-                     "ICHIMOKU_SPAN_B", "ICHIMOKU_CHIKOU"):
+        for name in (
+            "ICHIMOKU_TENKAN",
+            "ICHIMOKU_KIJUN",
+            "ICHIMOKU_SPAN_A",
+            "ICHIMOKU_SPAN_B",
+            "ICHIMOKU_CHIKOU",
+        ):
             assert registry.is_registered(name), f"{name} not registered"
 
     def test_default_periods(self):
@@ -285,9 +290,7 @@ class TestIchimokuRegistryIntegration:
             ("ICHIMOKU_CHIKOU", 26),
         ]:
             result = registry.compute(name, candles, period)
-            assert result[-1][0] == last_date, (
-                f"{name}: last date {result[-1][0]} != {last_date}"
-            )
+            assert result[-1][0] == last_date, f"{name}: last date {result[-1][0]} != {last_date}"
 
     def test_span_a_ends_on_last_candle(self):
         """
@@ -302,6 +305,4 @@ class TestIchimokuRegistryIntegration:
 
         for name, period in [("ICHIMOKU_SPAN_A", 26), ("ICHIMOKU_SPAN_B", 52)]:
             result = registry.compute(name, candles, period)
-            assert result[-1][0] == last_date, (
-                f"{name}: last date {result[-1][0]} != {last_date}"
-            )
+            assert result[-1][0] == last_date, f"{name}: last date {result[-1][0]} != {last_date}"

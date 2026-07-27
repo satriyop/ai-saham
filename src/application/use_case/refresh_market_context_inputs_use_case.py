@@ -58,8 +58,6 @@ class RefreshMarketContextInputsUseCase:
                     status = "✓"
                 results.append(f"{ticker_input.ticker}({ticker_input.factor}):{status}")
             except Exception as e:
-                results.append(
-                    f"{ticker_input.ticker}({ticker_input.factor}):ERR:{str(e)[:20]}"
-                )
+                results.append(f"{ticker_input.ticker}({ticker_input.factor}):ERR:{str(e)[:20]}")
 
         return RefreshMarketContextInputsResponse(statuses=tuple(results))

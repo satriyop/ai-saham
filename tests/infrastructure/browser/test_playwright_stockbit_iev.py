@@ -40,10 +40,12 @@ class _FakeApiClient:
 
 
 def test_fetch_iev_all_boards_preserves_iep_after_dedup():
-    client = _FakeApiClient([
-        _body("BBCA", 450_000, 5_925),
-        _body("BBCA", 430_000, 5_900),
-    ])
+    client = _FakeApiClient(
+        [
+            _body("BBCA", 450_000, 5_925),
+            _body("BBCA", 430_000, 5_900),
+        ]
+    )
 
     movers = stockbit._fetch_iev_all_boards(client)
 

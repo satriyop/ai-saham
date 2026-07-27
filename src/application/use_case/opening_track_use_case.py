@@ -91,9 +91,7 @@ class OpeningTrackUseCase:
                 break
 
             if current >= TRACK_START:
-                snapshot = self._capture(
-                    list(request.observation_ids_by_ticker), request
-                )
+                snapshot = self._capture(list(request.observation_ids_by_ticker), request)
                 self._persist(snapshot, request)
                 snapshots.append(snapshot)
 
@@ -147,12 +145,15 @@ class OpeningTrackUseCase:
                         AnalyzeRunningTradeRequest,
                         analyze_running_trade,
                     )
+
                     ticks = self._running_trade_provider.fetch_running_trade(ticker)
-                    signal = analyze_running_trade(AnalyzeRunningTradeRequest(
-                        ticker=ticker,
-                        ticks=ticks,
-                        institutional_broker_codes=request.institutional_broker_codes,
-                    ))
+                    signal = analyze_running_trade(
+                        AnalyzeRunningTradeRequest(
+                            ticker=ticker,
+                            ticks=ticks,
+                            institutional_broker_codes=request.institutional_broker_codes,
+                        )
+                    )
                     entry["broker_signal"] = signal.to_dict() if signal else None
                 except Exception:
                     entry["broker_signal"] = None
@@ -199,9 +200,7 @@ class OpeningTrackUseCase:
                         entry.get("opening_price_source") or "order_book_lastprice",
                     )
                     entry.setdefault("opening_price_confidence", "MEDIUM")
-                    entry.setdefault(
-                        "opening_price_timestamp", sampled_at.isoformat()
-                    )
+                    entry.setdefault("opening_price_timestamp", sampled_at.isoformat())
                     return
             except (TypeError, ValueError):
                 entry.pop("opening_price", None)

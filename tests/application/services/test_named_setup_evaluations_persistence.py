@@ -59,15 +59,9 @@ def _candidate(**kwargs) -> AccumulationCandidate:
 def _catalog_match_coiled() -> SwingSetupCatalogConfig:
     return SwingSetupCatalogConfig(
         foreign_bounce=ForeignBounceSetupConfig(enabled=False, family="foreign_bounce"),
-        coiled_spring=CoiledSpringSetupConfig(
-            gate_max_bb_width_pctile=0.20, family="breakout"
-        ),
-        smart_money_confirmed=SmartMoneyConfirmedSetupConfig(
-            enabled=False, family="confirmation"
-        ),
-        pullback_continuation=PullbackContinuationSetupConfig(
-            enabled=False, family="pullback"
-        ),
+        coiled_spring=CoiledSpringSetupConfig(gate_max_bb_width_pctile=0.20, family="breakout"),
+        smart_money_confirmed=SmartMoneyConfirmedSetupConfig(enabled=False, family="confirmation"),
+        pullback_continuation=PullbackContinuationSetupConfig(enabled=False, family="pullback"),
     )
 
 

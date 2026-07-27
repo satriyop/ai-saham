@@ -80,7 +80,8 @@ class TestComputeCommand:
         result = runner.invoke(
             app,
             [
-                "indicator", "compute",
+                "indicator",
+                "compute",
                 "UNKNOWN_INDICATOR",
                 "BBCA",
                 "--db",
@@ -101,7 +102,8 @@ class TestComputeCommand:
         result = runner.invoke(
             app,
             [
-                "indicator", "compute",
+                "indicator",
+                "compute",
                 "RSI",
                 "BBCA",
                 "--db",
@@ -127,6 +129,7 @@ class TestComputeCommand:
         mock_repo_cls.return_value = mock_repo
 
         from datetime import timedelta
+
         mock_registry = MagicMock()
         mock_registry.is_registered.return_value = True
         mock_registry.get_default_period.return_value = 14
@@ -140,7 +143,8 @@ class TestComputeCommand:
         result = runner.invoke(
             app,
             [
-                "indicator", "compute",
+                "indicator",
+                "compute",
                 "RSI",
                 "BBCA",
                 "--period",
@@ -172,6 +176,7 @@ class TestComputeCommand:
         mock_repo_cls.return_value = mock_repo
 
         from datetime import timedelta
+
         mock_registry = MagicMock()
         mock_registry.is_registered.return_value = True
         mock_registry.get_default_period.return_value = 0  # Formula indicator
@@ -184,7 +189,8 @@ class TestComputeCommand:
         result = runner.invoke(
             app,
             [
-                "indicator", "compute",
+                "indicator",
+                "compute",
                 "SMOOTH_RSI",
                 "BBCA",
                 "--tail",
@@ -218,7 +224,8 @@ class TestComputeCommand:
         result = runner.invoke(
             app,
             [
-                "indicator", "compute",
+                "indicator",
+                "compute",
                 "SMA",
                 "BBCA",
                 "--period",
@@ -244,6 +251,7 @@ class TestComputeCommand:
         mock_repo_cls.return_value = mock_repo
 
         from datetime import timedelta
+
         mock_registry = MagicMock()
         mock_registry.is_registered.return_value = True
         mock_registry.get_default_period.return_value = 20
@@ -257,7 +265,8 @@ class TestComputeCommand:
         result = runner.invoke(
             app,
             [
-                "indicator", "compute",
+                "indicator",
+                "compute",
                 "SMA",
                 "BBCA",
                 "--tail",
@@ -297,7 +306,8 @@ class TestComputeCommand:
         result = runner.invoke(
             app,
             [
-                "indicator", "compute",
+                "indicator",
+                "compute",
                 "RSI",
                 "BBCA",
                 "--db",
@@ -323,7 +333,8 @@ class TestComputeCommandIntegration:
         result = runner.invoke(
             app,
             [
-                "indicator", "compute",
+                "indicator",
+                "compute",
                 "rsi",  # lowercase
                 "bbca",  # lowercase ticker
                 "--db",

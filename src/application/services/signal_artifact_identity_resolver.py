@@ -27,9 +27,7 @@ class SignalArtifactIdentityResolver:
         dimensions: SemanticCompatibilityDimensions,
     ) -> SemanticCompatibilityId:
         if not isinstance(dimensions, SemanticCompatibilityDimensions):
-            raise TypeError(
-                "semantic_dimensions must be SemanticCompatibilityDimensions"
-            )
+            raise TypeError("semantic_dimensions must be SemanticCompatibilityDimensions")
         canonical_json = dimensions.to_canonical_json()
         digest = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
         return SemanticCompatibilityId(f"sha256:{digest}")
@@ -39,9 +37,7 @@ class SignalArtifactIdentityResolver:
         dimensions: ArtifactIdentityDimensions,
     ) -> ArtifactId:
         if not isinstance(dimensions, ArtifactIdentityDimensions):
-            raise TypeError(
-                "artifact_dimensions must be ArtifactIdentityDimensions"
-            )
+            raise TypeError("artifact_dimensions must be ArtifactIdentityDimensions")
         canonical_json = dimensions.to_canonical_json()
         digest = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
         return ArtifactId(f"sha256:{digest}")
@@ -54,13 +50,9 @@ class SignalArtifactIdentityResolver:
         provenance: ArtifactProvenance,
     ) -> SignalArtifactIdentity:
         if not isinstance(semantic_dimensions, SemanticCompatibilityDimensions):
-            raise TypeError(
-                "semantic_dimensions must be SemanticCompatibilityDimensions"
-            )
+            raise TypeError("semantic_dimensions must be SemanticCompatibilityDimensions")
         if not isinstance(artifact_dimensions, ArtifactIdentityDimensions):
-            raise TypeError(
-                "artifact_dimensions must be ArtifactIdentityDimensions"
-            )
+            raise TypeError("artifact_dimensions must be ArtifactIdentityDimensions")
         if not isinstance(provenance, ArtifactProvenance):
             raise TypeError("provenance must be ArtifactProvenance")
 
@@ -68,22 +60,14 @@ class SignalArtifactIdentityResolver:
             semantic_dimensions,
         )
 
-        if (
-            artifact_dimensions.semantic_compatibility_id
-            != semantic_compatibility_id
-        ):
+        if artifact_dimensions.semantic_compatibility_id != semantic_compatibility_id:
             raise ValueError(
                 "artifact semantic_compatibility_id does not match "
                 "resolved semantic compatibility ID"
             )
 
-        if (
-            artifact_dimensions.universe_snapshot_id
-            != provenance.universe_snapshot_id
-        ):
-            raise ValueError(
-                "artifact and provenance universe_snapshot_id must match"
-            )
+        if artifact_dimensions.universe_snapshot_id != provenance.universe_snapshot_id:
+            raise ValueError("artifact and provenance universe_snapshot_id must match")
 
         artifact_id = self.resolve_artifact_id(artifact_dimensions)
 

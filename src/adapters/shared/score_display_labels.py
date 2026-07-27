@@ -48,6 +48,5 @@ FLOW_RATIO_DEFINITION = (
 )
 
 FLOW_GRP_DEFINITION = (
-    f"{FLOW_GRP}: SignalEngine flow-confirmation group (0–100). "
-    f"Not Accum and not {FLOW_RATIO_PCT}."
+    f"{FLOW_GRP}: SignalEngine flow-confirmation group (0–100). Not Accum and not {FLOW_RATIO_PCT}."
 )

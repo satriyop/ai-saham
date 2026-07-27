@@ -19,6 +19,7 @@ def default_stockbit_profile_dir(config: AppConfig | None = None) -> Path:
     cfg = config or load_app_config()
     return Path(cfg.storage.stockbit_profile_dir)
 
+
 # ── Stockbit URLs (hardcoded — not from StockbitConfig) ────────────────────
 BASE_URL = "https://stockbit.com"
 STREAM_URL = "https://stockbit.com/stream"

@@ -6,15 +6,15 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from src.domain.value_objects.benchmark_excess_return import BenchmarkExcessReturn
+from src.domain.value_objects.signal_artifact_schema import (
+    validate_flow_component_fingerprint,
+)
+from src.domain.value_objects.signal_assessment import SignalAssessmentIdentity
 from src.domain.value_objects.signal_observation_fingerprint_serialization import (
     signal_observation_fingerprint_from_dict,
     signal_observation_fingerprint_to_canonical_dict,
     signal_observation_fingerprint_to_dict,
 )
-from src.domain.value_objects.signal_artifact_schema import (
-    validate_flow_component_fingerprint,
-)
-from src.domain.value_objects.signal_assessment import SignalAssessmentIdentity
 
 
 @dataclass(frozen=True)
@@ -113,7 +113,7 @@ class SignalObservationFingerprint:
     ia_coverage_score: float | None = None
     ia_conviction_score: float | None = None
     # Phase F: ticker profile snapshot
-    ticker_profile_label: str | None = None    # now stores primary_profile
+    ticker_profile_label: str | None = None  # now stores primary_profile
     ticker_profile_confidence: float | None = None
     tp_market_tier: str | None = None
     tp_foreign_institutional_exposure: float | None = None
@@ -126,7 +126,7 @@ class SignalObservationFingerprint:
     tp_index_membership_score: float | None = None
     tp_market_cap_bucket: str | None = None
     tp_sector: str | None = None
-    tp_index_memberships: str | None = None    # comma-joined, e.g. "lq45,idx80"
+    tp_index_memberships: str | None = None  # comma-joined, e.g. "lq45,idx80"
     tp_coverage_score: float | None = None
     tp_epoch: str | None = None
     # Phase H: Sector context evidence fingerprint

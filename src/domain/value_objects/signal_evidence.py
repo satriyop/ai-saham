@@ -47,8 +47,7 @@ class SignalEvidence:
             )
         if not (0.0 <= self.coverage_ratio <= 1.0):
             raise ValueError(
-                f"SignalEvidence coverage_ratio must be 0.0–1.0, "
-                f"got {self.coverage_ratio}"
+                f"SignalEvidence coverage_ratio must be 0.0–1.0, got {self.coverage_ratio}"
             )
 
     SCHEMA_VERSION = 1

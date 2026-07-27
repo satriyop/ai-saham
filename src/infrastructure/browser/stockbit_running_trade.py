@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
 def _parse_ticks(ticker: str, body: dict) -> list[TradeTick]:
     """Parse running-trade response into TradeTick list.
 
@@ -48,6 +49,7 @@ def _parse_ticks(ticker: str, body: dict) -> list[TradeTick]:
         value.raw     → int, IDR value of the trade
     """
     from src.domain.value_objects.idx_market import IDX_TIMEZONE as IDX_TZ
+
     today = datetime.now(IDX_TZ).date()
 
     data = body.get("data") if isinstance(body, dict) else None
@@ -82,9 +84,11 @@ def _parse_ticks(ticker: str, body: dict) -> list[TradeTick]:
             elif raw_ts and len(str(raw_ts)) <= 8:
                 # "HH:MM:SS" — attach today's date in IDX timezone
                 from datetime import time as dt_time
+
                 t = dt_time.fromisoformat(str(raw_ts))
-                ts = datetime(today.year, today.month, today.day,
-                              t.hour, t.minute, t.second, tzinfo=IDX_TZ)
+                ts = datetime(
+                    today.year, today.month, today.day, t.hour, t.minute, t.second, tzinfo=IDX_TZ
+                )
             else:
                 ts = datetime.fromisoformat(str(raw_ts).replace("Z", "+00:00"))
         except (TypeError, ValueError):
@@ -123,20 +127,26 @@ def _parse_ticks(ticker: str, body: dict) -> list[TradeTick]:
         trade_type = str(
             item.get("trade_type") or item.get("action") or item.get("market_board") or ""
         ).strip()
-        investor_type = str(
-            item.get("investor_type") or item.get("type_investor") or item.get("inv_type") or ""
-        ).strip().upper()
+        investor_type = (
+            str(
+                item.get("investor_type") or item.get("type_investor") or item.get("inv_type") or ""
+            )
+            .strip()
+            .upper()
+        )
 
-        ticks.append(TradeTick(
-            ticker=ticker.upper(),
-            timestamp=ts,
-            price=price,
-            lot=lot,
-            buyer_broker_code=buyer,
-            seller_broker_code=seller,
-            trade_type=trade_type,
-            investor_type=investor_type,
-        ))
+        ticks.append(
+            TradeTick(
+                ticker=ticker.upper(),
+                timestamp=ts,
+                price=price,
+                lot=lot,
+                buyer_broker_code=buyer,
+                seller_broker_code=seller,
+                trade_type=trade_type,
+                investor_type=investor_type,
+            )
+        )
 
     return ticks
 

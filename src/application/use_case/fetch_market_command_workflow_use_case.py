@@ -126,7 +126,8 @@ class FetchMarketCommandWorkflowUseCase:
 
         # Preserve benchmark-first normalization before provider precondition validation
         without_benchmark = [
-            canonicalize_ticker(t) for t in ticker_list
+            canonicalize_ticker(t)
+            for t in ticker_list
             if canonicalize_ticker(t) != BENCHMARK_TICKER
         ]
         full_ticker_list = [BENCHMARK_TICKER] + list(dict.fromkeys(without_benchmark))
@@ -149,8 +150,7 @@ class FetchMarketCommandWorkflowUseCase:
 
         # 4. Call on_start
         enrichment_available = (
-            not request.no_enrichment
-            and request.broker_provider_name == "stockbit"
+            not request.no_enrichment and request.broker_provider_name == "stockbit"
         )
         if on_start is not None:
             on_start(

@@ -16,8 +16,8 @@ from decimal import Decimal
 
 @dataclass(frozen=True)
 class IntradayPriceBar:
-    time: str        # "09:00" — minute-level timestamp
-    close: int       # value.raw (IDR price)
+    time: str  # "09:00" — minute-level timestamp
+    close: int  # value.raw (IDR price)
     open: int | None
     high: int | None
     low: int | None
@@ -26,8 +26,8 @@ class IntradayPriceBar:
 @dataclass(frozen=True)
 class IntradayBrokerBar:
     broker_code: str
-    time: str        # "09:00"
-    net_value: Decimal   # IDR cumulative net buy/sell; negative = net seller
+    time: str  # "09:00"
+    net_value: Decimal  # IDR cumulative net buy/sell; negative = net seller
 
 
 @dataclass(frozen=True)
@@ -36,7 +36,9 @@ class RunningTradeChart:
     date: date
     fetched_at: datetime
     price_bars: tuple[IntradayPriceBar, ...]
-    broker_bars: tuple[IntradayBrokerBar, ...]  # all brokers flattened, sorted by (broker_code, time)
+    broker_bars: tuple[
+        IntradayBrokerBar, ...
+    ]  # all brokers flattened, sorted by (broker_code, time)
 
     @property
     def top_broker_codes(self) -> list[str]:

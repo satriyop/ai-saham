@@ -26,42 +26,60 @@ def _write_yaml(path: Path, data: dict) -> Path:
 
 # ── Loader unit tests ─────────────────────────────────────────────────────
 
+
 def test_loads_smart_money_brokers_from_yaml(tmp_path):
-    cfg = _write_yaml(tmp_path / "s.yaml", {
-        "broker_quality": {"smart_money": {"brokers": ["AK", "ZP"], "weight": 1.5}},
-    })
+    cfg = _write_yaml(
+        tmp_path / "s.yaml",
+        {
+            "broker_quality": {"smart_money": {"brokers": ["AK", "ZP"], "weight": 1.5}},
+        },
+    )
     result = _load_swing_config(cfg)
     assert result.smart_money_brokers == ("AK", "ZP")
 
 
 def test_loads_noise_brokers_from_yaml(tmp_path):
-    cfg = _write_yaml(tmp_path / "s.yaml", {
-        "broker_quality": {"noise": {"brokers": ["YP"], "weight": 0.5}},
-    })
+    cfg = _write_yaml(
+        tmp_path / "s.yaml",
+        {
+            "broker_quality": {"noise": {"brokers": ["YP"], "weight": 0.5}},
+        },
+    )
     result = _load_swing_config(cfg)
     assert result.noise_brokers == ("YP",)
 
 
 def test_loads_broker_weights_from_yaml(tmp_path):
-    cfg = _write_yaml(tmp_path / "s.yaml", {
-        "broker_quality": {
-            "smart_money": {"brokers": ["AK"], "weight": 2.0},
-            "noise": {"brokers": ["YP"], "weight": 0.3},
+    cfg = _write_yaml(
+        tmp_path / "s.yaml",
+        {
+            "broker_quality": {
+                "smart_money": {"brokers": ["AK"], "weight": 2.0},
+                "noise": {"brokers": ["YP"], "weight": 0.3},
+            },
         },
-    })
+    )
     result = _load_swing_config(cfg)
     assert result.smart_weight == Decimal("2.0")
     assert result.noise_weight == Decimal("0.3")
 
 
 def test_loads_gate_thresholds_from_yaml(tmp_path):
-    cfg = _write_yaml(tmp_path / "s.yaml", {
-        "foreign_bounce": {
-            "gates": {"min_accum_score": 65, "max_rsi": 55, "min_vwap_discount_pct": 2.0,
-                      "required_trend": "UP", "min_flow_ratio_pct": 3.0},
-            "partial_max_failed_gates": 1,
+    cfg = _write_yaml(
+        tmp_path / "s.yaml",
+        {
+            "foreign_bounce": {
+                "gates": {
+                    "min_accum_score": 65,
+                    "max_rsi": 55,
+                    "min_vwap_discount_pct": 2.0,
+                    "required_trend": "UP",
+                    "min_flow_ratio_pct": 3.0,
+                },
+                "partial_max_failed_gates": 1,
+            },
         },
-    })
+    )
     result = _load_swing_config(cfg)
     assert result.gate_min_accum_score == 65.0
     assert result.gate_max_rsi == 55.0
@@ -70,26 +88,29 @@ def test_loads_gate_thresholds_from_yaml(tmp_path):
 
 
 def test_loads_setup_catalog_thresholds_from_yaml(tmp_path):
-    cfg = _write_yaml(tmp_path / "s.yaml", {
-        "setups": {
-            "coiled-spring": {
-                "enabled": False,
-                "gates": {"min_accum_score": 61, "max_bb_width_pctile": 0.15},
-                "partial_max_failed_gates": 1,
-            },
-            "smart-money-confirmed": {
-                "gates": {
-                    "min_smart_flow_idr": 1000000,
-                    "min_smart_share_pct": 45,
-                    "max_noise_share_pct": 40,
-                    "reject_smart_net_selling": False,
+    cfg = _write_yaml(
+        tmp_path / "s.yaml",
+        {
+            "setups": {
+                "coiled-spring": {
+                    "enabled": False,
+                    "gates": {"min_accum_score": 61, "max_bb_width_pctile": 0.15},
+                    "partial_max_failed_gates": 1,
+                },
+                "smart-money-confirmed": {
+                    "gates": {
+                        "min_smart_flow_idr": 1000000,
+                        "min_smart_share_pct": 45,
+                        "max_noise_share_pct": 40,
+                        "reject_smart_net_selling": False,
+                    },
+                },
+                "pullback-continuation": {
+                    "gates": {"min_rsi": 42, "max_rsi": 63, "required_trend": "UP"},
                 },
             },
-            "pullback-continuation": {
-                "gates": {"min_rsi": 42, "max_rsi": 63, "required_trend": "UP"},
-            },
         },
-    })
+    )
     result = _load_swing_config(cfg)
 
     assert result.coiled_spring_enabled is False
@@ -106,20 +127,23 @@ def test_loads_setup_catalog_thresholds_from_yaml(tmp_path):
 
 
 def test_loads_setup_entry_authority_metadata_from_yaml(tmp_path):
-    cfg = _write_yaml(tmp_path / "s.yaml", {
-        "setups": {
-            "foreign-bounce": {
-                "family": "accumulation",
-                "entry_authority": True,
-                "can_enter_from_phases": ["BREAKOUT_CONFIRMATION"],
-            },
-            "smart-money-confirmed": {
-                "family": "confirmation",
-                "entry_authority": False,
-                "can_enter_from_phases": [],
+    cfg = _write_yaml(
+        tmp_path / "s.yaml",
+        {
+            "setups": {
+                "foreign-bounce": {
+                    "family": "accumulation",
+                    "entry_authority": True,
+                    "can_enter_from_phases": ["BREAKOUT_CONFIRMATION"],
+                },
+                "smart-money-confirmed": {
+                    "family": "confirmation",
+                    "entry_authority": False,
+                    "can_enter_from_phases": [],
+                },
             },
         },
-    })
+    )
     result = _load_swing_config(cfg)
 
     assert result.foreign_bounce_family == "accumulation"
@@ -131,9 +155,12 @@ def test_loads_setup_entry_authority_metadata_from_yaml(tmp_path):
 
 
 def test_setup_entry_authority_metadata_falls_back_to_defaults_when_absent(tmp_path):
-    cfg = _write_yaml(tmp_path / "s.yaml", {
-        "setups": {"foreign-bounce": {"gates": {"max_rsi": 55}}},
-    })
+    cfg = _write_yaml(
+        tmp_path / "s.yaml",
+        {
+            "setups": {"foreign-bounce": {"gates": {"max_rsi": 55}}},
+        },
+    )
     result = _load_swing_config(cfg)
 
     assert result.foreign_bounce_family == "unknown"
@@ -160,33 +187,42 @@ def test_live_config_setups_are_explicit_entry_authority_metadata():
 
 
 def test_loads_verdict_thresholds_from_yaml(tmp_path):
-    cfg = _write_yaml(tmp_path / "s.yaml", {
-        "verdicts": {"enter_min_score": 75, "watch_min_score": 45},
-    })
+    cfg = _write_yaml(
+        tmp_path / "s.yaml",
+        {
+            "verdicts": {"enter_min_score": 75, "watch_min_score": 45},
+        },
+    )
     result = _load_swing_config(cfg)
     assert result.enter_min_score == 75.0
     assert result.watch_min_score == 45.0
 
 
 def test_loads_signal_thresholds_from_yaml(tmp_path):
-    cfg = _write_yaml(tmp_path / "s.yaml", {
-        "verdicts": {"signals": {"strong_min_streak": 10, "building_min_score": 55.0}},
-    })
+    cfg = _write_yaml(
+        tmp_path / "s.yaml",
+        {
+            "verdicts": {"signals": {"strong_min_streak": 10, "building_min_score": 55.0}},
+        },
+    )
     result = _load_swing_config(cfg)
     assert result.strong_min_streak == 10
     assert result.building_min_score == 55.0
 
 
 def test_loads_resistance_and_corporate_action_thresholds_from_yaml(tmp_path):
-    cfg = _write_yaml(tmp_path / "s.yaml", {
-        "resistance": {
-            "enabled": False,
-            "headroom_min_pct": 7.5,
+    cfg = _write_yaml(
+        tmp_path / "s.yaml",
+        {
+            "resistance": {
+                "enabled": False,
+                "headroom_min_pct": 7.5,
+            },
+            "corporate_actions": {
+                "ex_date_warning_days": 15,
+            },
         },
-        "corporate_actions": {
-            "ex_date_warning_days": 15,
-        },
-    })
+    )
     result = _load_swing_config(cfg)
     assert result.resistance_gate_enabled is False
     assert result.resistance_headroom_min_pct == 7.5
@@ -206,27 +242,36 @@ def test_falls_back_to_defaults_when_yaml_invalid(tmp_path):
 
 
 def test_falls_back_to_defaults_when_broker_codes_empty(tmp_path):
-    cfg = _write_yaml(tmp_path / "s.yaml", {
-        "broker_quality": {"smart_money": {"brokers": []}},
-    })
+    cfg = _write_yaml(
+        tmp_path / "s.yaml",
+        {
+            "broker_quality": {"smart_money": {"brokers": []}},
+        },
+    )
     result = _load_swing_config(cfg)
     # Empty list → fall back to hardcoded defaults
     assert result.smart_money_brokers == _SwingConfig().smart_money_brokers
 
 
 def test_strips_and_uppercases_codes(tmp_path):
-    cfg = _write_yaml(tmp_path / "s.yaml", {
-        "broker_quality": {"smart_money": {"brokers": ["ak", " zp "]}},
-    })
+    cfg = _write_yaml(
+        tmp_path / "s.yaml",
+        {
+            "broker_quality": {"smart_money": {"brokers": ["ak", " zp "]}},
+        },
+    )
     result = _load_swing_config(cfg)
     assert result.smart_money_brokers == ("AK", "ZP")
 
 
 def test_partial_yaml_uses_defaults_for_missing_sections(tmp_path):
     """Only one section provided; all other fields stay at defaults."""
-    cfg = _write_yaml(tmp_path / "s.yaml", {
-        "verdicts": {"enter_min_score": 75},
-    })
+    cfg = _write_yaml(
+        tmp_path / "s.yaml",
+        {
+            "verdicts": {"enter_min_score": 75},
+        },
+    )
     result = _load_swing_config(cfg)
     assert result.enter_min_score == 75.0
     assert result.smart_money_brokers == _SwingConfig().smart_money_brokers
@@ -249,6 +294,7 @@ def test_live_config_loads_without_error():
 
 
 # ── Module-level constants wired correctly ────────────────────────────────
+
 
 def test_module_constants_populated():
     cfg = load_plan_swing_command_config()
@@ -279,34 +325,43 @@ def test_broker_weights_derived_from_sc():
         assert broker_weights[code] == cfg.swing_config.noise_weight
 
 
-
 # ── Tier1 broker codes ────────────────────────────────────────────────────
 
+
 def test_loads_tier1_brokers_from_yaml(tmp_path):
-    cfg = _write_yaml(tmp_path / "s.yaml", {
-        "broker_quality": {
-            "tier1": {"brokers": ["AK", "BK"], "cluster_min_count": 3, "stable_min_count": 1},
+    cfg = _write_yaml(
+        tmp_path / "s.yaml",
+        {
+            "broker_quality": {
+                "tier1": {"brokers": ["AK", "BK"], "cluster_min_count": 3, "stable_min_count": 1},
+            },
         },
-    })
+    )
     result = _load_swing_config(cfg)
     assert result.tier1_broker_codes == frozenset({"AK", "BK"})
 
 
 def test_loads_bci_count_thresholds(tmp_path):
-    cfg = _write_yaml(tmp_path / "s.yaml", {
-        "broker_quality": {
-            "tier1": {"brokers": ["AK"], "cluster_min_count": 4, "stable_min_count": 2},
+    cfg = _write_yaml(
+        tmp_path / "s.yaml",
+        {
+            "broker_quality": {
+                "tier1": {"brokers": ["AK"], "cluster_min_count": 4, "stable_min_count": 2},
+            },
         },
-    })
+    )
     result = _load_swing_config(cfg)
     assert result.bci_cluster_min_count == 4
     assert result.bci_stable_min_count == 2
 
 
 def test_tier1_falls_back_to_defaults_when_empty(tmp_path):
-    cfg = _write_yaml(tmp_path / "s.yaml", {
-        "broker_quality": {"tier1": {"brokers": []}},
-    })
+    cfg = _write_yaml(
+        tmp_path / "s.yaml",
+        {
+            "broker_quality": {"tier1": {"brokers": []}},
+        },
+    )
     result = _load_swing_config(cfg)
     assert result.tier1_broker_codes == _SwingConfig().tier1_broker_codes
 
@@ -319,16 +374,19 @@ def test_cs_not_in_tier1_brokers():
     assert "CS" not in cfg.swing_config.tier1_broker_codes
 
 
-
 # ── Setup targets ─────────────────────────────────────────────────────────
 
+
 def test_loads_setup_targets_from_yaml(tmp_path):
-    cfg = _write_yaml(tmp_path / "s.yaml", {
-        "setup_targets": {
-            "risk_on": {"take_profit_pct": 9.0, "stop_loss_pct": 4.5},
-            "default": {"take_profit_pct": 6.0, "stop_loss_pct": 3.0},
+    cfg = _write_yaml(
+        tmp_path / "s.yaml",
+        {
+            "setup_targets": {
+                "risk_on": {"take_profit_pct": 9.0, "stop_loss_pct": 4.5},
+                "default": {"take_profit_pct": 6.0, "stop_loss_pct": 3.0},
+            },
         },
-    })
+    )
     result = _load_swing_config(cfg)
     assert result.setup_targets["risk_on"].take_profit_pct == Decimal("9.0")
     assert result.setup_targets["risk_on"].stop_loss_pct == Decimal("4.5")
@@ -388,16 +446,17 @@ def test_loader_reraises_programmer_errors_instead_of_silent_default(tmp_path, m
     loader's broad ``except Exception: return defaults`` — silently voiding the
     entire operator config. Programmer errors must now propagate.
     """
-    cfg = _write_yaml(tmp_path / "s.yaml", {
-        "broker_quality": {"smart_money": {"brokers": ["AK"], "weight": 2.0}},
-    })
+    cfg = _write_yaml(
+        tmp_path / "s.yaml",
+        {
+            "broker_quality": {"smart_money": {"brokers": ["AK"], "weight": 2.0}},
+        },
+    )
 
     def _boom(*args, **kwargs):
         raise AttributeError("simulated renamed-field bug")
 
-    monkeypatch.setattr(
-        "src.infrastructure.config.swing_config_loader.parse_setup_targets", _boom
-    )
+    monkeypatch.setattr("src.infrastructure.config.swing_config_loader.parse_setup_targets", _boom)
 
     with pytest.raises(AttributeError):
         _load_swing_config(cfg)

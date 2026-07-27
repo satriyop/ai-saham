@@ -52,12 +52,8 @@ class StrategyEvidenceBuilder:
             self._loader = loader
         else:
             if rules_loader is None:
-                raise ValueError(
-                    "rules_loader is required when loader is not provided"
-                )
-            self._loader = StrategyLoader(
-                rules_loader=rules_loader, registry=self._registry
-            )
+                raise ValueError("rules_loader is required when loader is not provided")
+            self._loader = StrategyLoader(rules_loader=rules_loader, registry=self._registry)
 
     def build(self, request: StrategyEvidenceRequest) -> StrategyEvidence:
         ticker = request.ticker.upper().strip()
@@ -74,9 +70,7 @@ class StrategyEvidenceBuilder:
         try:
             rule_set = self._loader.load(strategy_ref)
             interpreter = YamlRuleInterpreter(rule_set)
-            required_indicators = interpreter.get_required_indicators(
-                registry=self._registry
-            )
+            required_indicators = interpreter.get_required_indicators(registry=self._registry)
             indicator_series = self._compute_all_indicators(
                 candles,
                 required_indicators,
@@ -158,9 +152,7 @@ class StrategyEvidenceBuilder:
     ) -> dict[str, dict[date, Decimal]]:
         result: dict[str, dict[date, Decimal]] = {}
         for name, (ind_type, period) in required_indicators.items():
-            type_name = (
-                ind_type.value if isinstance(ind_type, IndicatorType) else str(ind_type)
-            )
+            type_name = ind_type.value if isinstance(ind_type, IndicatorType) else str(ind_type)
             values = self._registry.compute(type_name, list(candles), period)
             result[name] = {d: v for d, v in values}
         return result
@@ -178,11 +170,7 @@ class StrategyEvidenceBuilder:
                 return None
             values[name] = indicator_series[name][target_date]
 
-        extras = [
-            (name, value)
-            for name, value in values.items()
-            if name not in BUILTIN_INDICATORS
-        ]
+        extras = [(name, value) for name, value in values.items() if name not in BUILTIN_INDICATORS]
         extras.extend(
             [
                 ("OPEN", candle.open),
@@ -209,9 +197,7 @@ class StrategyEvidenceBuilder:
         if not required_indicators:
             return 1.0
         available = sum(
-            1
-            for name in required_indicators
-            if target_date in indicator_series.get(name, {})
+            1 for name in required_indicators if target_date in indicator_series.get(name, {})
         )
         return round(available / len(required_indicators), 4)
 

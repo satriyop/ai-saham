@@ -55,27 +55,29 @@ def volume_trigger_evidence(
     # reference_total - lookback (matching the documented contract).
     total_required = reference_total + 1
     if len(candles) < total_required:
-        return _unavailable_volume_evidence([
-            f"volume trigger unavailable: required {total_required} sessions, "
-            f"found {len(candles)}"
-        ])
+        return _unavailable_volume_evidence(
+            [
+                f"volume trigger unavailable: required {total_required} sessions, "
+                f"found {len(candles)}"
+            ]
+        )
     if lookback <= 0 or lookback >= reference_total:
-        return _unavailable_volume_evidence([
-            "volume trigger unavailable: invalid dry-up window configuration"
-        ])
+        return _unavailable_volume_evidence(
+            ["volume trigger unavailable: invalid dry-up window configuration"]
+        )
 
     quality_window = candles[-reference_total:]
     zero_volume = sum(1 for candle in quality_window if int(candle.volume) <= 0)
     valid_sessions = reference_total - zero_volume
     if valid_sessions < cfg.min_valid_20d_sessions or zero_volume > cfg.zero_volume_tolerance:
-        return _unavailable_volume_evidence([
-            "volume trigger unavailable: insufficient valid 20d volume sessions"
-        ])
+        return _unavailable_volume_evidence(
+            ["volume trigger unavailable: insufficient valid 20d volume sessions"]
+        )
 
     window = candles[-total_required:]
     latest = window[-1]
-    dry_up_window = window[-(lookback + 1):-1]
-    reference_window = window[:-(lookback + 1)]
+    dry_up_window = window[-(lookback + 1) : -1]
+    reference_window = window[: -(lookback + 1)]
 
     reference_avg = _avg_volume(reference_window)
     dry_up_avg = _avg_volume(dry_up_window)
@@ -84,9 +86,7 @@ def volume_trigger_evidence(
             ["volume trigger unavailable: invalid reference baseline"]
         )
     if dry_up_avg <= 0:
-        return _unavailable_volume_evidence(
-            ["volume trigger unavailable: invalid dry-up baseline"]
-        )
+        return _unavailable_volume_evidence(["volume trigger unavailable: invalid dry-up baseline"])
 
     dry_up_ratio = round(dry_up_avg / reference_avg, 4)
     expansion_ratio = round(float(latest.volume) / dry_up_avg, 4)
@@ -120,8 +120,7 @@ def _volume_source_unavailable_reason(
         trusted = {str(value).strip().lower() for value in cfg.trusted_benchmark_volume_sources}
         if source_key not in trusted:
             return (
-                "volume trigger unavailable: benchmark source "
-                f"{source or 'missing'} is not trusted"
+                f"volume trigger unavailable: benchmark source {source or 'missing'} is not trusted"
             )
         return None
     if source_key in {"synthetic", "yahoo_inferred", "missing"}:

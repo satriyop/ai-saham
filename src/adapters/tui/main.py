@@ -1,5 +1,7 @@
 """Textual application and runtime entrypoint for the optional TUI adapter."""
 
+from collections.abc import Callable
+
 from textual.app import App
 from textual.binding import Binding
 
@@ -7,15 +9,13 @@ from src.adapters.tui.controllers.accumulation_controller import AccumulationCon
 from src.adapters.tui.controllers.daily_controller import DailyController
 from src.adapters.tui.controllers.screen_controller import ScreenController
 from src.adapters.tui.controllers.ticker_research_controller import TickerResearchController
-from collections.abc import Callable
-
 from src.adapters.tui.presenters.accumulation_presenter import AccumulationPresenter
 from src.adapters.tui.presenters.daily_presenter import DailyPresenter
 from src.adapters.tui.presenters.screen_presenter import ScreenPresenter
 from src.adapters.tui.presenters.ticker_workbench_presenter import TickerWorkbenchPresenter
-from src.adapters.tui.screens.screen_workspace_screen import ScreenWorkspaceScreen
 from src.adapters.tui.screens.daily_screen import DailyScreen
 from src.adapters.tui.screens.help import HelpScreen
+from src.adapters.tui.screens.screen_workspace_screen import ScreenWorkspaceScreen
 from src.adapters.tui.screens.ticker_search_modal import TickerSearchModal
 from src.adapters.tui.screens.ticker_workbench_screen import TickerWorkbenchScreen
 

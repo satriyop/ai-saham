@@ -79,7 +79,7 @@ class AuditSentimentUseCase:
                             log_id=log.id,
                             days_after=horizon,
                             price_delta_pct=delta,
-                            audited_at=date.today()
+                            audited_at=date.today(),
                         )
                     )
                     total_audits += 1
@@ -87,12 +87,12 @@ class AuditSentimentUseCase:
         stats = self._sentiment_repo.get_stats()
 
         return AuditSentimentResponse(
-            logs_audited=total_logs,
-            audits_saved=total_audits,
-            stats=stats
+            logs_audited=total_logs, audits_saved=total_audits, stats=stats
         )
 
-    def _compute_price_delta(self, ticker: str, start_date: date, days_after: int) -> Optional[Decimal]:
+    def _compute_price_delta(
+        self, ticker: str, start_date: date, days_after: int
+    ) -> Optional[Decimal]:
         """Compute actual price delta over a trading window.
 
         Args:

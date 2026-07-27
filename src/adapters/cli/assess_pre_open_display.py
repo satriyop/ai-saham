@@ -101,18 +101,15 @@ def display_assess_pre_open(result: AnalyzePreOpenResult) -> None:
     for line in result.lines:
         c = line.confirmation
         pre = line.pre_open
-        pre_label = (
-            f"{pre.get('setup_action') or pre.get('entry_quality') or pre.get('screen_result') or '-'}"
-            f"/{pre.get('direction') or pre.get('trend_signal') or '-'}"
+        setup = (
+            pre.get("setup_action") or pre.get("entry_quality") or pre.get("screen_result") or "-"
         )
+        direction = pre.get("direction") or pre.get("trend_signal") or "-"
+        pre_label = f"{setup}/{direction}"
         open_px = f"{c.opening_price:,.0f}" if c.opening_price is not None else "-"
         entry = f"{c.planned_entry:,.0f}" if c.planned_entry is not None else "-"
         stop = f"{c.stop_loss_price:,.0f}" if c.stop_loss_price is not None else "-"
-        source = (
-            line.price_provenance.get("opening_price_source")
-            or c.opening_price_source
-            or "-"
-        )
+        source = line.price_provenance.get("opening_price_source") or c.opening_price_source or "-"
         reason = "; ".join(c.reasons) if c.reasons else "-"
         table.add_row(
             line.ticker,
@@ -137,9 +134,7 @@ def display_assess_pre_open(result: AnalyzePreOpenResult) -> None:
         table,
     ]
     if result.warnings:
-        sections.append(
-            Text("Warnings: " + " | ".join(result.warnings), style="yellow")
-        )
+        sections.append(Text("Warnings: " + " | ".join(result.warnings), style="yellow"))
 
     console().print(panel(Group(*sections), title="ANALYZE PRE-OPEN"))
 

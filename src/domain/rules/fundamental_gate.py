@@ -52,7 +52,9 @@ class FundamentalGate(RiskGate):
             triggered = self._policy.missing_data_action == "block"
             return GateResult(
                 triggered=triggered,
-                reason="no fundamental data — gate blocked" if triggered else "no fundamental data — gate skipped",
+                reason="no fundamental data — gate blocked"
+                if triggered
+                else "no fundamental data — gate skipped",
                 confidence=self._policy.missing_data_confidence,
             )
         if context.piotroski_f_score <= self._threshold:
@@ -66,6 +68,8 @@ class FundamentalGate(RiskGate):
             )
         return GateResult(
             triggered=False,
-            reason=f"F-score {context.piotroski_f_score} > {self._threshold} (fundamental gate passes)",
+            reason=(
+                f"F-score {context.piotroski_f_score} > {self._threshold} (fundamental gate passes)"
+            ),
             confidence=self._policy.pass_confidence,
         )

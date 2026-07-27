@@ -27,8 +27,14 @@ def print_strategy_evidence_panel(ctx: SwingOutputDisplayContext) -> None:
     history_group = []
     if include_strategy and backtest_result is not None and backtest_result.trade_count > 0:
         r = backtest_result
-        history_group.append(Text(f"Historical Backtest ({strategy_name}): {r.trade_count} trades", style="bold cyan"))
-        history_group.append(Text("Evidence only: this panel does not change TradeSetup.action.", style="dim"))
+        history_group.append(
+            Text(
+                f"Historical Backtest ({strategy_name}): {r.trade_count} trades", style="bold cyan"
+            )
+        )
+        history_group.append(
+            Text("Evidence only: this panel does not change TradeSetup.action.", style="dim")
+        )
         period_start = getattr(r, "start_date", None)
         period_end = getattr(r, "end_date", None)
         period_text = (
@@ -40,7 +46,9 @@ def print_strategy_evidence_panel(ctx: SwingOutputDisplayContext) -> None:
         hist_table.add_column("Metric", style="bold")
         hist_table.add_column("Value")
 
-        win_style = "green" if float(r.win_rate) >= 55 else ("yellow" if float(r.win_rate) >= 45 else "red")
+        win_style = (
+            "green" if float(r.win_rate) >= 55 else ("yellow" if float(r.win_rate) >= 45 else "red")
+        )
         avg_win_val = f"{float(r.avg_win):,.0f} IDR" if r.avg_win else "—"
         avg_loss_val = f"{float(r.avg_loss):,.0f} IDR" if r.avg_loss else "—"
 
@@ -52,16 +60,33 @@ def print_strategy_evidence_panel(ctx: SwingOutputDisplayContext) -> None:
         history_group.append(hist_table)
     elif include_strategy and backtest_result is not None and backtest_result.trade_count == 0:
         history_group.append(Text(f"Historical Backtest ({strategy_name})", style="bold cyan"))
-        if getattr(backtest_result, "start_date", None) is not None and getattr(backtest_result, "end_date", None) is not None:
-            history_group.append(Text(
-                f"Period: {backtest_result.start_date} to {backtest_result.end_date}",
-                style="dim",
-            ))
-        history_group.append(Text("No trades triggered in available history (needs more broker data).", style="dim"))
-        history_group.append(Text(f"Tip: run `saham backtest {ticker} --strategy {strategy_name} --verbose`", style="dim italic"))
+        if (
+            getattr(backtest_result, "start_date", None) is not None
+            and getattr(backtest_result, "end_date", None) is not None
+        ):
+            history_group.append(
+                Text(
+                    f"Period: {backtest_result.start_date} to {backtest_result.end_date}",
+                    style="dim",
+                )
+            )
+        history_group.append(
+            Text("No trades triggered in available history (needs more broker data).", style="dim")
+        )
+        history_group.append(
+            Text(
+                f"Tip: run `saham backtest {ticker} --strategy {strategy_name} --verbose`",
+                style="dim italic",
+            )
+        )
     elif include_strategy:
         history_group.append(Text("Historical Backtest", style="bold cyan"))
-        history_group.append(Text(f"Could not run backtest. Run: `saham fetch market {ticker} --days 730`", style="dim yellow"))
+        history_group.append(
+            Text(
+                f"Could not run backtest. Run: `saham fetch market {ticker} --days 730`",
+                style="dim yellow",
+            )
+        )
 
     # ── Strategy rule evidence (Phase D VO) ──────────────────────────────────
     if include_strategy and strategy_evidence is not None:
@@ -106,7 +131,11 @@ def print_strategy_evidence_panel(ctx: SwingOutputDisplayContext) -> None:
             scores_table.add_row("Conviction", f"{se.conviction_score:.2f}")
         if se.freshness_score is not None:
             scores_table.add_row("Freshness", f"{se.freshness_score:.2f}")
-        if se.coverage_score is not None or se.conviction_score is not None or se.freshness_score is not None:
+        if (
+            se.coverage_score is not None
+            or se.conviction_score is not None
+            or se.freshness_score is not None
+        ):
             history_group.append(scores_table)
 
         if not mr:
@@ -116,10 +145,12 @@ def print_strategy_evidence_panel(ctx: SwingOutputDisplayContext) -> None:
             for reason in list(se.unavailable_reasons)[:2]:
                 history_group.append(Text(f"  ⚠ {reason}", style="dim yellow"))
 
-        history_group.append(Text(
-            "  DIAGNOSTIC — strategy evidence does not control ENTER/WATCH/AVOID",
-            style="dim",
-        ))
+        history_group.append(
+            Text(
+                "  DIAGNOSTIC — strategy evidence does not control ENTER/WATCH/AVOID",
+                style="dim",
+            )
+        )
 
     if history_group:
         console().print("")

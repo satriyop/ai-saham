@@ -62,9 +62,7 @@ def test_weekend_or_holiday_case_uses_resolved_session_not_stale():
 def test_before_close_live_case_prior_session_data_does_not_warn_stale():
     freshness = build_swing_data_freshness(
         ticker="BBCA",
-        effective_session=_session(
-            latest_completed_session=date(2026, 6, 25), is_eod_pending=True
-        ),
+        effective_session=_session(latest_completed_session=date(2026, 6, 25), is_eod_pending=True),
         market_repo=FakeRangeRepo({"BBCA": (date(2026, 1, 1), date(2026, 6, 25))}),
         broker_repo=FakeRangeRepo({"BBCA": (date(2026, 1, 1), date(2026, 6, 25))}),
     )

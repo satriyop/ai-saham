@@ -13,8 +13,6 @@ from __future__ import annotations
 from datetime import date, timedelta
 from pathlib import Path
 
-import pytest
-
 from src.application.use_case.assess_corporate_action_event_risk_use_case import (
     AssessCorporateActionEventRiskRequest,
     AssessCorporateActionEventRiskUseCase,
@@ -50,7 +48,9 @@ class FakeCorporateActionCalendarRepository:
         self._events = events
         self.calls: list[tuple[str, date, date, str | None]] = []
 
-    def get_events_for_ticker(self, ticker, from_date, to_date, event_types=None, as_of_fetched_at=None):
+    def get_events_for_ticker(
+        self, ticker, from_date, to_date, event_types=None, as_of_fetched_at=None
+    ):
         self.calls.append((ticker, from_date, to_date, as_of_fetched_at))
         if as_of_fetched_at is not None:
             return [e for e in self._events if e.fetched_at <= as_of_fetched_at]
@@ -328,9 +328,7 @@ def test_sorting_is_deterministic_by_full_tuple_key():
         ),
     )
     # A far-away event (+2 days magnitude smaller) sorts first.
-    closer_event = _dividend_event(
-        as_of + timedelta(days=2), source_event_id="closer-1"
-    )
+    closer_event = _dividend_event(as_of + timedelta(days=2), source_event_id="closer-1")
     # A negative direction event with the same abs distance as the same_day
     # events (3 days) but earlier event_date sorts before them (event_date
     # tie-break comes before event_type when abs(days) ties but dates differ).

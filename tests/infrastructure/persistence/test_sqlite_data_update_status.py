@@ -11,8 +11,7 @@ from src.infrastructure.persistence.sqlite_data_update_status import (
 
 def _init_core_tables(db_path: Path) -> None:
     with sqlite3.connect(db_path) as conn:
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE candles (
                 ticker TEXT NOT NULL,
                 date TEXT NOT NULL,
@@ -23,10 +22,8 @@ def _init_core_tables(db_path: Path) -> None:
                 volume INTEGER NOT NULL,
                 PRIMARY KEY (ticker, date)
             )
-            """
-        )
-        conn.execute(
-            """
+            """)
+        conn.execute("""
             CREATE TABLE broker_summaries (
                 ticker TEXT NOT NULL,
                 date TEXT NOT NULL,
@@ -39,10 +36,8 @@ def _init_core_tables(db_path: Path) -> None:
                 total_lot INTEGER NOT NULL,
                 PRIMARY KEY (ticker, date, source)
             )
-            """
-        )
-        conn.execute(
-            """
+            """)
+        conn.execute("""
             CREATE TABLE foreign_flow_points (
                 ticker TEXT NOT NULL,
                 date TEXT NOT NULL,
@@ -52,10 +47,8 @@ def _init_core_tables(db_path: Path) -> None:
                 avg_price TEXT NOT NULL,
                 PRIMARY KEY (ticker, date, source)
             )
-            """
-        )
-        conn.execute(
-            """
+            """)
+        conn.execute("""
             CREATE TABLE analyst_cache (
                 ticker TEXT PRIMARY KEY,
                 buy_count INTEGER NOT NULL,
@@ -63,32 +56,23 @@ def _init_core_tables(db_path: Path) -> None:
                 sell_count INTEGER NOT NULL,
                 fetched_date TEXT NOT NULL
             )
-            """
-        )
+            """)
 
 
 def test_status_reports_independent_touched_tables(tmp_path: Path):
     db_path = tmp_path / "data.db"
     _init_core_tables(db_path)
     with sqlite3.connect(db_path) as conn:
-        conn.execute(
-            "INSERT INTO candles VALUES ('BBCA','2026-06-18','1','1','1','1',1)"
-        )
-        conn.execute(
-            """
+        conn.execute("INSERT INTO candles VALUES ('BBCA','2026-06-18','1','1','1','1',1)")
+        conn.execute("""
             INSERT INTO broker_summaries
             VALUES ('BBCA','2026-06-18','idx','1','0',1,0,'1',1)
-            """
-        )
-        conn.execute(
-            """
+            """)
+        conn.execute("""
             INSERT INTO foreign_flow_points
             VALUES ('BBCA','2026-06-18','stockbit','1',1,'1')
-            """
-        )
-        conn.execute(
-            "INSERT INTO analyst_cache VALUES ('BBCA',1,0,0,'2026-06-18')"
-        )
+            """)
+        conn.execute("INSERT INTO analyst_cache VALUES ('BBCA',1,0,0,'2026-06-18')")
 
     statuses = build_data_update_table_statuses(
         db_path,

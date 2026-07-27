@@ -23,7 +23,8 @@ from tests.application.use_case.intraday_backtest_fixtures import (
 
 def test_proxy_does_not_replay_tick_friction_gate():
     today = _candle(
-        TICKER, TRADE_DAY,
+        TICKER,
+        TRADE_DAY,
         open_=Decimal("100"),
         high=Decimal("102"),
         low=Decimal("100"),
@@ -49,7 +50,8 @@ def test_proxy_does_not_replay_tick_friction_gate():
 
 def test_include_wait_false_skips_wait_decisions():
     today = _candle(
-        TICKER, TRADE_DAY,
+        TICKER,
+        TRADE_DAY,
         open_=Decimal("100"),
         high=Decimal("106"),
         low=Decimal("99"),
@@ -64,7 +66,8 @@ def test_include_wait_false_skips_wait_decisions():
 
 def test_include_wait_true_trades_wait_decisions():
     today = _candle(
-        TICKER, TRADE_DAY,
+        TICKER,
+        TRADE_DAY,
         open_=Decimal("100"),
         high=Decimal("106"),
         low=Decimal("99"),
@@ -98,14 +101,16 @@ def test_max_daily_positions_one_caps_trades_per_day():
         indicator_registry=StubIndicatorRegistry(),
     )
 
-    resp = use_case.execute(IntradayBacktestRequest(
-        tickers=tickers,
-        start_date=TRADE_DAY,
-        end_date=TRADE_DAY,
-        max_daily_positions=1,
-        cost_bps=Decimal("0"),
-        history_days=30,
-    ))
+    resp = use_case.execute(
+        IntradayBacktestRequest(
+            tickers=tickers,
+            start_date=TRADE_DAY,
+            end_date=TRADE_DAY,
+            max_daily_positions=1,
+            cost_bps=Decimal("0"),
+            history_days=30,
+        )
+    )
 
     assert resp.trade_count == 1
 
@@ -124,32 +129,36 @@ def test_ranking_picks_higher_opening_broker_backing_score_when_capped():
     summaries.extend(_backed_summaries("BBCA", PREV_DAY, days=7))
     for i in range(3):
         day = PREV_DAY - timedelta(days=6 - i)
-        summaries.append(BrokerSummary(
-            ticker="BBRI",
-            date=day,
-            top_buyers=(),
-            top_sellers=(),
-            foreign_buy_value=Decimal("100000"),
-            foreign_sell_value=Decimal("1000000"),
-            foreign_buy_lot=1_000,
-            foreign_sell_lot=10_000,
-            total_value=Decimal("2000000"),
-            total_lot=20_000,
-        ))
+        summaries.append(
+            BrokerSummary(
+                ticker="BBRI",
+                date=day,
+                top_buyers=(),
+                top_sellers=(),
+                foreign_buy_value=Decimal("100000"),
+                foreign_sell_value=Decimal("1000000"),
+                foreign_buy_lot=1_000,
+                foreign_sell_lot=10_000,
+                total_value=Decimal("2000000"),
+                total_lot=20_000,
+            )
+        )
     for i in range(4):
         day = PREV_DAY - timedelta(days=3 - i)
-        summaries.append(BrokerSummary(
-            ticker="BBRI",
-            date=day,
-            top_buyers=(),
-            top_sellers=(),
-            foreign_buy_value=Decimal("1000000"),
-            foreign_sell_value=Decimal("100000"),
-            foreign_buy_lot=10_000,
-            foreign_sell_lot=1_000,
-            total_value=Decimal("2000000"),
-            total_lot=20_000,
-        ))
+        summaries.append(
+            BrokerSummary(
+                ticker="BBRI",
+                date=day,
+                top_buyers=(),
+                top_sellers=(),
+                foreign_buy_value=Decimal("1000000"),
+                foreign_sell_value=Decimal("100000"),
+                foreign_buy_lot=10_000,
+                foreign_sell_lot=1_000,
+                total_value=Decimal("2000000"),
+                total_lot=20_000,
+            )
+        )
 
     market = InMemoryMarketRepository(history + today_candles)
     broker = InMemoryBrokerRepository(summaries)
@@ -159,14 +168,16 @@ def test_ranking_picks_higher_opening_broker_backing_score_when_capped():
         indicator_registry=StubIndicatorRegistry(),
     )
 
-    resp = use_case.execute(IntradayBacktestRequest(
-        tickers=tickers,
-        start_date=TRADE_DAY,
-        end_date=TRADE_DAY,
-        max_daily_positions=1,
-        cost_bps=Decimal("0"),
-        history_days=30,
-    ))
+    resp = use_case.execute(
+        IntradayBacktestRequest(
+            tickers=tickers,
+            start_date=TRADE_DAY,
+            end_date=TRADE_DAY,
+            max_daily_positions=1,
+            cost_bps=Decimal("0"),
+            history_days=30,
+        )
+    )
 
     assert resp.trade_count == 1
     chosen = resp.trades[0]

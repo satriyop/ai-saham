@@ -346,7 +346,5 @@ def parse_corporate_action_items(
             if event is not None:
                 events.append(event)
         except Exception as e:
-            logger.warning(
-                "Skipping malformed %s row: %s", event_type.value, e
-            )
+            logger.warning("Skipping malformed %s row: %s", event_type.value, e)
     return events

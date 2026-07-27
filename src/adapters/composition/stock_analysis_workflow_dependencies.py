@@ -91,13 +91,9 @@ class StockAnalysisWorkflowDependencies:
     rules_loader_factory: Callable[[], RulesLoader]
     indicator_registry_factory: Callable[..., IndicatorRegistry]
     ticker_profile_classifier_factory: Callable[..., TickerProfileClassifier]
-    institutional_accumulation_config_factory: Callable[
-        ..., InstitutionalAccumulationConfig
-    ]
+    institutional_accumulation_config_factory: Callable[..., InstitutionalAccumulationConfig]
     sector_context_builder_factory: Callable[..., SectorContextEvidenceBuilder]
-    company_quality_context_builder_factory: Callable[
-        ..., CompanyQualityContextEvidenceBuilder
-    ]
+    company_quality_context_builder_factory: Callable[..., CompanyQualityContextEvidenceBuilder]
     create_risk_engine: Callable[[], RiskEngine]
     create_signal_engine: Callable[[], SignalEngine]
     create_market_context_provider: Callable[[], ConfigBackedMarketContextProvider]
@@ -177,13 +173,9 @@ def create_stock_analysis_workflow_dependencies(
         rules_loader_factory=RulesYamlLoader,
         indicator_registry_factory=create_indicator_registry,
         ticker_profile_classifier_factory=_create_ticker_profile_classifier,
-        institutional_accumulation_config_factory=(
-            _load_institutional_accumulation_config
-        ),
+        institutional_accumulation_config_factory=(_load_institutional_accumulation_config),
         sector_context_builder_factory=_create_sector_context_evidence_builder,
-        company_quality_context_builder_factory=(
-            _create_company_quality_context_evidence_builder
-        ),
+        company_quality_context_builder_factory=(_create_company_quality_context_evidence_builder),
         create_risk_engine=_make_risk_engine,
         create_signal_engine=_make_signal_engine,
         create_market_context_provider=_make_market_context_provider,

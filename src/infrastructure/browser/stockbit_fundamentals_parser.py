@@ -18,7 +18,10 @@ from src.domain.value_objects.company_fundamentals import CompanyFundamentals
 logger = logging.getLogger(__name__)
 
 _QUARTER_END: dict[str, tuple[int, int]] = {
-    "Q1": (3, 31), "Q2": (6, 30), "Q3": (9, 30), "Q4": (12, 31)
+    "Q1": (3, 31),
+    "Q2": (6, 30),
+    "Q3": (9, 30),
+    "Q4": (12, 31),
 }
 
 
@@ -102,15 +105,15 @@ def _parse_fundamentals(ticker: str, body: dict) -> CompanyFundamentals | None:
     if not metrics:
         return None
 
-    pe      = _parse_float(metrics.get("Current PE Ratio (TTM)"))
-    roe     = _parse_float(metrics.get("Return on Equity (TTM)"))
-    npm     = _parse_float(metrics.get("Net Profit Margin (Quarter)"))
+    pe = _parse_float(metrics.get("Current PE Ratio (TTM)"))
+    roe = _parse_float(metrics.get("Return on Equity (TTM)"))
+    npm = _parse_float(metrics.get("Net Profit Margin (Quarter)"))
     rev_yoy = _parse_float(metrics.get("Revenue (Quarter YoY Growth)"))
     f_score = _parse_int(metrics.get("Piotroski F-Score"))
     div_yld = _parse_float(metrics.get("Dividend Yield"))
-    hi52    = _parse_float(metrics.get("52 Week High"))
-    lo52    = _parse_float(metrics.get("52 Week Low"))
-    near52  = _parse_float(metrics.get("Rank (Near 52 Weeks High)"))
+    hi52 = _parse_float(metrics.get("52 Week High"))
+    lo52 = _parse_float(metrics.get("52 Week Low"))
+    near52 = _parse_float(metrics.get("Rank (Near 52 Weeks High)"))
 
     if all(v is None for v in [pe, roe, npm, rev_yoy, f_score]):
         return None

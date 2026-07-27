@@ -24,9 +24,7 @@ class FormulaStore(Protocol):
         """Return the stored formula for ``name``, or None if absent."""
         ...
 
-    def save(
-        self, name: str, formula: str, intent: str | None = None
-    ) -> StoredFormula:
+    def save(self, name: str, formula: str, intent: str | None = None) -> StoredFormula:
         """Persist a formula. Raises FormulaStoreError on failure."""
         ...
 

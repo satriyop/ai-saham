@@ -11,9 +11,9 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from src.domain.value_objects.accum_score_breakdown import (
+    AccumScoreBreakdown,
     ForeignFlowComponentScore,
     ForeignFlowComponentStatus,
-    AccumScoreBreakdown,
 )
 
 
@@ -59,15 +59,11 @@ class AccumScorePolicy:
     consistency: EvidenceComponentPolicy = field(
         default_factory=lambda: EvidenceComponentPolicy(weight=33.3)
     )
-    streak: StreakEvidencePolicy = field(
-        default_factory=lambda: StreakEvidencePolicy(weight=25.0)
-    )
+    streak: StreakEvidencePolicy = field(default_factory=lambda: StreakEvidencePolicy(weight=25.0))
     vwap_discount: LinearSaturationPolicy = field(
         default_factory=lambda: LinearSaturationPolicy(weight=16.7, saturate_at=10.0)
     )
-    rsi_headroom: RsiEvidencePolicy = field(
-        default_factory=lambda: RsiEvidencePolicy(weight=8.3)
-    )
+    rsi_headroom: RsiEvidencePolicy = field(default_factory=lambda: RsiEvidencePolicy(weight=8.3))
     foreign_flow_ratio: LinearSaturationPolicy = field(
         default_factory=lambda: LinearSaturationPolicy(weight=8.3, saturate_at=20.0)
     )
@@ -135,9 +131,7 @@ class ScoreAccumUseCase:
         rounded_components = tuple(
             ForeignFlowComponentScore(
                 key=c.key,
-                score_points=(
-                    round(c.score_points, 1) if c.score_points is not None else None
-                ),
+                score_points=(round(c.score_points, 1) if c.score_points is not None else None),
                 max_points=c.max_points,
                 status=c.status,
             )
@@ -255,8 +249,7 @@ class ScoreAccumUseCase:
             score = policy.weight - pctile / policy.tight_pctile * (policy.weight / 2)
         elif pctile <= policy.loose_pctile:
             score = (policy.weight / 2) - (
-                (pctile - policy.tight_pctile)
-                / (policy.loose_pctile - policy.tight_pctile)
+                (pctile - policy.tight_pctile) / (policy.loose_pctile - policy.tight_pctile)
             ) * (policy.weight / 2)
         else:
             score = 0.0
@@ -280,7 +273,6 @@ class ScoreAccumUseCase:
             score = 0.0
         else:
             raise ValueError(
-                "bci_label must be CLUSTER, STABLE, RETAIL-LED, or None, "
-                f"got {label!r}"
+                f"bci_label must be CLUSTER, STABLE, RETAIL-LED, or None, got {label!r}"
             )
         return self._available("inst", score, max_points)

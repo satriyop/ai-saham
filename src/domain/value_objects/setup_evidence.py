@@ -37,11 +37,11 @@ class SetupEvidence:
     snapshot_date: date
     # Setup gate result (translated from SetupEvaluation)
     setup_name: str | None
-    setup_match: str          # "MATCH" | "PARTIAL" | "NO_MATCH"
-    match_strength: float     # MATCH→100.0, PARTIAL→60.0, NO_MATCH→20.0
+    setup_match: str  # "MATCH" | "PARTIAL" | "NO_MATCH"
+    match_strength: float  # MATCH→100.0, PARTIAL→60.0, NO_MATCH→20.0
     failed_gates: tuple[str, ...]
     # Technical structure (from AccumulationCandidate)
-    trend: str | None         # "UP" | "DOWN" | "SIDE"
+    trend: str | None  # "UP" | "DOWN" | "SIDE"
     rsi: float | None
     bb_width_pctile: float | None  # 0–1; lower = tighter volatility compression
     vwap_discount_pct: float | None
@@ -54,7 +54,7 @@ class SetupEvidence:
     # Volume trend sub-signal (data-quality-gated; vendor identity is not policy)
     volume_trend_ratio: float | None  # 5d/20d volume ratio; None when unavailable
     volume_freshness: Freshness
-    candle_source: str | None    # e.g. "idx", "stockbit", "yahoo_inferred", None
+    candle_source: str | None  # e.g. "idx", "stockbit", "yahoo_inferred", None
     # Entry authority metadata — sourced from config/swing_setups.yaml via
     # EvaluateSwingSetupUseCase + SetupEvidenceBuilder, never inferred from
     # setup_name. DecisionPolicyService reads these to decide whether a MATCH
@@ -72,8 +72,7 @@ class SetupEvidence:
             )
         if self.setup_match not in _VALID_MATCH:
             raise ValueError(
-                f"SetupEvidence setup_match must be one of {_VALID_MATCH}, "
-                f"got {self.setup_match!r}"
+                f"SetupEvidence setup_match must be one of {_VALID_MATCH}, got {self.setup_match!r}"
             )
         if not isinstance(self.benchmark_excess_return_5_session, BenchmarkExcessReturn):
             raise ValueError(
@@ -92,8 +91,7 @@ class SetupEvidence:
             )
         if self.bb_width_pctile is not None and not (0.0 <= self.bb_width_pctile <= 1.0):
             raise ValueError(
-                f"SetupEvidence bb_width_pctile must be 0.0–1.0, "
-                f"got {self.bb_width_pctile}"
+                f"SetupEvidence bb_width_pctile must be 0.0–1.0, got {self.bb_width_pctile}"
             )
 
     def to_dict(self) -> dict:

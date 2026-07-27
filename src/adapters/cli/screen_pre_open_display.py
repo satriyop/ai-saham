@@ -122,7 +122,7 @@ def display_raw_movers(raw_movers: list, top_n: int | None, iev_min: int) -> Non
 
     movers_text = []
     for i in range(0, len(tickers_with_iev), 5):
-        chunk = tickers_with_iev[i:i+5]
+        chunk = tickers_with_iev[i : i + 5]
         movers_text.append(Text("  |  ".join(chunk)))
 
     if total > 20:
@@ -131,8 +131,7 @@ def display_raw_movers(raw_movers: list, top_n: int | None, iev_min: int) -> Non
     console().print("")
     console().print(
         panel(
-            Group(*movers_text),
-            title=f"Fetched {total} movers from Stockbit (top {cap} screened)"
+            Group(*movers_text), title=f"Fetched {total} movers from Stockbit (top {cap} screened)"
         )
     )
 
@@ -165,51 +164,56 @@ def _format_action_text(action: SetupAction | None) -> str:
 def print_browser_plan(config: PreOpenScreenConfig) -> None:
     top_label = f"top {config.top_n}" if config.top_n else "all rows"
     steps = [
-        Text("Claude Code: execute these steps, then re-run this command\n"
-             "with --movers-json and --order-books-json flags.\n", style="bold yellow"),
+        Text(
+            "Claude Code: execute these steps, then re-run this command\n"
+            "with --movers-json and --order-books-json flags.\n",
+            style="bold yellow",
+        ),
         Text("STEP 1 — Fetch IEV Movers from Stockbit", style="bold cyan"),
-        Text("  URL: https://stockbit.com/#/screener\n"
-             "  1. Go to Screener → Movers section, click \"Selengkapnya\"\n"
-             "  2. Sort by IEV column, descending\n"
-             f"  3. Collect {top_label} with IEV >= {config.iev_min:,}\n"
-             "  4. Build JSON array: [{\"ticker\": \"BBCA\", \"iev\": 150000}, ...]\n"),
+        Text(
+            "  URL: https://stockbit.com/#/screener\n"
+            '  1. Go to Screener → Movers section, click "Selengkapnya"\n'
+            "  2. Sort by IEV column, descending\n"
+            f"  3. Collect {top_label} with IEV >= {config.iev_min:,}\n"
+            '  4. Build JSON array: [{"ticker": "BBCA", "iev": 150000}, ...]\n'
+        ),
     ]
     if not config.fast_mode:
-        steps.extend([
-            Text("STEP 2 — Fetch Order Books (for each ticker from Step 1)", style="bold cyan"),
-            Text("  URL: https://stockbit.com/#/stock/{TICKER}/orderbook\n"
-                 "  1. For each ticker: open order book tab\n"
-                 "  2. Find the BID row with the LARGEST volume (lots)\n"
-                 "  3. Record price and volume\n"
-                 "  4. Build JSON object: {\"BBCA\": {\"price\": 8900, \"volume\": 50000}, ...}\n"),
-            Text("STEP 3 — Re-run with collected data", style="bold cyan"),
-            Text("  saham screen pre-open \\\n"
-                 "    --movers-json '<step1_json>' \\\n"
-                 "    --order-books-json '<step2_json>'", style="cyan")
-        ])
+        steps.extend(
+            [
+                Text("STEP 2 — Fetch Order Books (for each ticker from Step 1)", style="bold cyan"),
+                Text(
+                    "  URL: https://stockbit.com/#/stock/{TICKER}/orderbook\n"
+                    "  1. For each ticker: open order book tab\n"
+                    "  2. Find the BID row with the LARGEST volume (lots)\n"
+                    "  3. Record price and volume\n"
+                    '  4. Build JSON object: {"BBCA": {"price": 8900, "volume": 50000}, ...}\n'
+                ),
+                Text("STEP 3 — Re-run with collected data", style="bold cyan"),
+                Text(
+                    "  saham screen pre-open \\\n"
+                    "    --movers-json '<step1_json>' \\\n"
+                    "    --order-books-json '<step2_json>'",
+                    style="cyan",
+                ),
+            ]
+        )
     else:
         steps.extend(
             [
                 Text(
-                    "STEP 2 — Re-run with movers data "
-                    "(fast mode — no order book needed)",
+                    "STEP 2 — Re-run with movers data (fast mode — no order book needed)",
                     style="bold cyan",
                 ),
                 Text(
-                    "  saham screen pre-open --fast "
-                    "--movers-json '<step1_json>'",
+                    "  saham screen pre-open --fast --movers-json '<step1_json>'",
                     style="cyan",
                 ),
             ]
         )
 
     console().print("")
-    console().print(
-        panel(
-            Group(*steps),
-            title="BROWSER ACTION PLAN — Pre-Open Screener"
-        )
-    )
+    console().print(panel(Group(*steps), title="BROWSER ACTION PLAN — Pre-Open Screener"))
     console().print("")
 
 
@@ -380,12 +384,7 @@ def display_results(
         message = no_candidates_message(source_status, source_message, source_snapshot_ref)
         style = SOURCE_STATUS_STYLE.get(source_status, "yellow")
         console().print("")
-        console().print(
-            panel(
-                Text(message, style=style),
-                title="Screener Results"
-            )
-        )
+        console().print(panel(Text(message, style=style), title="Screener Results"))
         return
 
     def _sort_key(c: ScreenerCandidate):
@@ -463,11 +462,13 @@ def display_results(
         if show_spread:
             row_cells.append(candidate.spread_label)
 
-        row_cells.extend([
-            rng,
-            stop_pct,
-            rsi_str,
-        ])
+        row_cells.extend(
+            [
+                rng,
+                stop_pct,
+                rsi_str,
+            ]
+        )
 
         if show_notation:
             row_cells.append(notation_label(candidate.ticker_notation))
@@ -506,12 +507,7 @@ def display_results(
                 ai_elements.append(Text(candidate.ai_summary))
 
         console().print("")
-        console().print(
-            panel(
-                Group(*ai_elements),
-                title="AI RESEARCH SUMMARIES"
-            )
-        )
+        console().print(panel(Group(*ai_elements), title="AI RESEARCH SUMMARIES"))
 
     # 4. Next Action Panel — SetupAction.is_open_watchlist (ENTER/WATCH)
     watchlist = [
@@ -536,7 +532,6 @@ def display_results(
         footer_elements.append(Text("\nNON-WATCHLIST", style="bold dim"))
         footer_elements.append(Text("  " + skip_labels, style="dim"))
 
-        tickers_json = ",".join(f'"{c.ticker}":___' for c in watchlist)
         footer_elements.append(
             Text(
                 "\nAfter capture+track (post-open), assess the NCP plan:",
@@ -552,20 +547,13 @@ def display_results(
             )
         )
     else:
-        footer_elements.append(
-            Text("No ENTER/WATCH TradeSetup candidates today.", style="yellow")
-        )
+        footer_elements.append(Text("No ENTER/WATCH TradeSetup candidates today.", style="yellow"))
         footer_elements.append(
             Text("Consider: --iev-min 50000 or run 'saham fetch iev'", style="dim")
         )
 
     console().print("")
-    console().print(
-        panel(
-            Group(*footer_elements),
-            title="NEXT ACTION & TRACKING LIST"
-        )
-    )
+    console().print(panel(Group(*footer_elements), title="NEXT ACTION & TRACKING LIST"))
 
     # 5. Explanations & Disclaimers
     legends = [
@@ -587,10 +575,5 @@ def display_results(
     legends.append(Text("\nDISCLAIMER: Analysis only. Not trading advice.", style="dim italic"))
 
     console().print("")
-    console().print(
-        panel(
-            Group(*legends),
-            title="Reference & Explanation"
-        )
-    )
+    console().print(panel(Group(*legends), title="Reference & Explanation"))
     console().print("")

@@ -119,9 +119,7 @@ class SyncCorporateActionCalendarUseCase:
                 event_type_counts[key] = event_type_counts.get(key, 0) + 1
 
         # 4. Determine final status.
-        errors = tuple(
-            f"{et.value}:{reason}" for et, reason in reason_by_type.items()
-        )
+        errors = tuple(f"{et.value}:{reason}" for et, reason in reason_by_type.items())
         if not failed_types:
             status = "success"
         elif events:
@@ -131,9 +129,7 @@ class SyncCorporateActionCalendarUseCase:
 
         # 5. Mark synced only when something was actually attempted/saved.
         if status in ("success", "partial"):
-            self._repository.mark_synced(
-                sync_date, event_types, status=status, source=source
-            )
+            self._repository.mark_synced(sync_date, event_types, status=status, source=source)
 
         return SyncCorporateActionCalendarResponse(
             status=status,

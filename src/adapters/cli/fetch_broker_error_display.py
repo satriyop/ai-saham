@@ -17,9 +17,7 @@ from src.domain.ports.broker_data_provider import (
 
 
 def echo_unknown_provider(provider_name: str, providers: Iterable[str]) -> None:
-    typer.echo(
-        typer.style(f"Unknown provider: {provider_name}", fg=typer.colors.RED)
-    )
+    typer.echo(typer.style(f"Unknown provider: {provider_name}", fg=typer.colors.RED))
     typer.echo(f"Available providers: {', '.join(providers)}")
 
 

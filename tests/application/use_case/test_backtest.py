@@ -134,9 +134,7 @@ class MockRepository(MarketDataRepository):
 
 def create_temp_rules_file(content: str) -> Path:
     """Create a temporary YAML rules file."""
-    temp_file = tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False
-    )
+    temp_file = tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False)
     temp_file.write(content)
     temp_file.close()
     return Path(temp_file.name)

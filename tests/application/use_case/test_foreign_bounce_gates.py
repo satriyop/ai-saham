@@ -23,8 +23,10 @@ from src.domain.value_objects.setup_evaluation import SetupMatch
 
 # ── helpers ────────────────────────────────────────────────────────────────────
 
+
 def _candidate(**kwargs) -> AccumulationCandidate:
     from decimal import Decimal
+
     defaults = dict(
         ticker="BBCA",
         window_days=7,
@@ -69,6 +71,7 @@ def _eval(candidate, **overrides):
 
 
 # ── foreign-bounce setup evaluation ────────────────────────────────────────────
+
 
 def test_all_gates_pass_returns_match():
     c = _candidate()
@@ -267,6 +270,7 @@ def test_pullback_continuation_matches_uptrend_pullback():
 
 
 # ── compute_percent_plan ───────────────────────────────────────────────────────
+
 
 def test_percent_plan_basic():
     stop, target = compute_percent_plan(

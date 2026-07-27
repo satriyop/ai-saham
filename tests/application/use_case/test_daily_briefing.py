@@ -178,9 +178,7 @@ def test_daily_briefing_explicit_as_of_date_uses_deterministic_after_close_decis
 
     fake_resolver.resolve.assert_called_once()
     called_run_at = fake_resolver.resolve.call_args.kwargs["run_at"]
-    assert called_run_at == datetime.combine(
-        date(2026, 6, 19), MARKET_CLOSE, tzinfo=IDX_TIMEZONE
-    )
+    assert called_run_at == datetime.combine(date(2026, 6, 19), MARKET_CLOSE, tzinfo=IDX_TIMEZONE)
 
 
 def test_daily_briefing_resolves_session_once_per_execute_not_per_ticker(monkeypatch):
@@ -217,9 +215,7 @@ def test_daily_briefing_resolves_session_once_per_execute_not_per_ticker(monkeyp
         session_resolver=fake_resolver,
     )
 
-    use_case.execute(
-        DailyBriefingRequest(universe="lq45", as_of_date=date(2026, 6, 19))
-    )
+    use_case.execute(DailyBriefingRequest(universe="lq45", as_of_date=date(2026, 6, 19)))
 
     fake_resolver.resolve.assert_called_once()
 
@@ -295,9 +291,7 @@ def test_daily_briefing_historical_mode(monkeypatch):
         universe_loader=MagicMock(),
     )
 
-    response = use_case.execute(
-        DailyBriefingRequest(universe="lq45", as_of_date=date(2026, 6, 19))
-    )
+    response = use_case.execute(DailyBriefingRequest(universe="lq45", as_of_date=date(2026, 6, 19)))
 
     assert response.is_historical is True
     assert response.live_session_date == date(2026, 6, 19)
@@ -331,9 +325,7 @@ def test_daily_briefing_shared_freshness(monkeypatch):
         universe_loader=MagicMock(),
     )
 
-    response = use_case.execute(
-        DailyBriefingRequest(universe="lq45", as_of_date=date(2026, 6, 19))
-    )
+    response = use_case.execute(DailyBriefingRequest(universe="lq45", as_of_date=date(2026, 6, 19)))
 
     assert len(response.data_freshness) == 1
     assert response.data_freshness[0].freshness.candle_state.value == "STALE"
@@ -342,6 +334,7 @@ def test_daily_briefing_shared_freshness(monkeypatch):
 
 def _retired_file_owned_opening_snapshot(tmp_path, monkeypatch):
     import json
+
     opening_dir = tmp_path / "opening"
     date_dir = opening_dir / "20260619"
     date_dir.mkdir(parents=True)
@@ -350,8 +343,14 @@ def _retired_file_owned_opening_snapshot(tmp_path, monkeypatch):
     snapshot_data = {
         "captured_at": "2026-06-19T09:05:00+07:00",
         "candidates": [
-            {"ticker": "BBCA", "trade_setup_action": "ENTER", "iev": 10000, "iep": 10050, "trend": "UP"}
-        ]
+            {
+                "ticker": "BBCA",
+                "trade_setup_action": "ENTER",
+                "iev": 10000,
+                "iep": 10050,
+                "trend": "UP",
+            }
+        ],
     }
     snapshot_file.write_text(json.dumps(snapshot_data))
 
@@ -401,10 +400,12 @@ def test_daily_briefing_not_ready_when_candle_coverage_below_policy(monkeypatch)
     current_tickers = [f"T{i}" for i in range(4)]
     market_repo = MagicMock()
     market_repo.get_candles.return_value = []
+
     def market_side_effect(ticker):
         if ticker in current_tickers:
             return (date(2026, 6, 1), date(2026, 6, 19))
         return (date(2026, 6, 1), date(2026, 6, 18))
+
     market_repo.get_date_range.side_effect = market_side_effect
 
     broker_repo = MagicMock()
@@ -422,9 +423,7 @@ def test_daily_briefing_not_ready_when_candle_coverage_below_policy(monkeypatch)
         universe_loader=MagicMock(),
     )
 
-    response = use_case.execute(
-        DailyBriefingRequest(universe="lq45", as_of_date=date(2026, 6, 19))
-    )
+    response = use_case.execute(DailyBriefingRequest(universe="lq45", as_of_date=date(2026, 6, 19)))
 
     candles_readiness = next(item for item in response.readiness_items if item.dataset == "candles")
     assert candles_readiness.status == "NOT_READY"
@@ -446,10 +445,12 @@ def test_daily_briefing_suppresses_accumulation_when_broker_coverage_below_polic
 
     current_tickers = [f"T{i}" for i in range(4)]
     broker_repo = MagicMock()
+
     def broker_side_effect(ticker):
         if ticker in current_tickers:
             return (date(2026, 6, 1), date(2026, 6, 19))
         return (date(2026, 6, 1), date(2026, 6, 18))
+
     broker_repo.get_date_range.side_effect = broker_side_effect
 
     regime_uc = MagicMock()
@@ -464,9 +465,7 @@ def test_daily_briefing_suppresses_accumulation_when_broker_coverage_below_polic
         universe_loader=MagicMock(),
     )
 
-    response = use_case.execute(
-        DailyBriefingRequest(universe="lq45", as_of_date=date(2026, 6, 19))
-    )
+    response = use_case.execute(DailyBriefingRequest(universe="lq45", as_of_date=date(2026, 6, 19)))
 
     broker_readiness = next(
         item for item in response.readiness_items if item.dataset == "broker_flow"
@@ -488,17 +487,21 @@ def test_daily_briefing_partial_allows_accumulation_with_warning(monkeypatch):
 
     market_repo = MagicMock()
     market_repo.get_candles.return_value = []
+
     def market_side_effect(ticker):
         if ticker in current_tickers:
             return (date(2026, 6, 1), date(2026, 6, 19))
         return (date(2026, 6, 1), date(2026, 6, 18))
+
     market_repo.get_date_range.side_effect = market_side_effect
 
     broker_repo = MagicMock()
+
     def broker_side_effect(ticker):
         if ticker in current_tickers:
             return (date(2026, 6, 1), date(2026, 6, 19))
         return (date(2026, 6, 1), date(2026, 6, 18))
+
     broker_repo.get_date_range.side_effect = broker_side_effect
 
     regime_uc = MagicMock()
@@ -514,9 +517,7 @@ def test_daily_briefing_partial_allows_accumulation_with_warning(monkeypatch):
         universe_loader=MagicMock(),
     )
 
-    response = use_case.execute(
-        DailyBriefingRequest(universe="lq45", as_of_date=date(2026, 6, 19))
-    )
+    response = use_case.execute(DailyBriefingRequest(universe="lq45", as_of_date=date(2026, 6, 19)))
 
     assert response.overall_authority == "PARTIAL"
     accum_uc.execute.assert_called_once()
@@ -541,13 +542,14 @@ def _retired_file_owned_ready_snapshot(tmp_path, monkeypatch):
     regime_uc.evaluate.return_value = MagicMock()
 
     import json
+
     opening_dir = tmp_path / "opening"
     date_dir = opening_dir / "20260619"
     date_dir.mkdir(parents=True)
     snapshot_file = date_dir / "ops_session.json"
     snapshot_data = {
         "captured_at": "2026-06-19T09:05:00+07:00",
-        "candidates": [{"ticker": "T1", "trade_setup_action": "ENTER"}]
+        "candidates": [{"ticker": "T1", "trade_setup_action": "ENTER"}],
     }
     snapshot_file.write_text(json.dumps(snapshot_data))
 
@@ -570,9 +572,7 @@ def _retired_file_owned_ready_snapshot(tmp_path, monkeypatch):
         )
     )
 
-    candles_readiness = next(
-        item for item in response.readiness_items if item.dataset == "candles"
-    )
+    candles_readiness = next(item for item in response.readiness_items if item.dataset == "candles")
     broker_readiness = next(
         item for item in response.readiness_items if item.dataset == "broker_flow"
     )
@@ -584,6 +584,7 @@ def _retired_file_owned_ready_snapshot(tmp_path, monkeypatch):
 
 def _retired_file_owned_universe_split(tmp_path, monkeypatch):
     import json
+
     opening_dir = tmp_path / "opening"
     date_dir = opening_dir / "20260619"
     date_dir.mkdir(parents=True)
@@ -593,8 +594,8 @@ def _retired_file_owned_universe_split(tmp_path, monkeypatch):
         "captured_at": "2026-06-19T09:05:00+07:00",
         "candidates": [
             {"ticker": "a", "trade_setup_action": "ENTER"},
-            {"ticker": "c", "trade_setup_action": "WATCH"}
-        ]
+            {"ticker": "c", "trade_setup_action": "WATCH"},
+        ],
     }
     snapshot_file.write_text(json.dumps(snapshot_data))
 
@@ -641,6 +642,7 @@ def _retired_file_owned_universe_split(tmp_path, monkeypatch):
 
 def _retired_file_owned_empty_universe(tmp_path, monkeypatch):
     import json
+
     opening_dir = tmp_path / "opening"
     date_dir = opening_dir / "20260619"
     date_dir.mkdir(parents=True)
@@ -648,9 +650,7 @@ def _retired_file_owned_empty_universe(tmp_path, monkeypatch):
     snapshot_file = date_dir / "ops_session.json"
     snapshot_data = {
         "captured_at": "2026-06-19T09:05:00+07:00",
-        "candidates": [
-            {"ticker": "A", "trade_setup_action": "ENTER"}
-        ]
+        "candidates": [{"ticker": "A", "trade_setup_action": "ENTER"}],
     }
     snapshot_file.write_text(json.dumps(snapshot_data))
 
@@ -736,9 +736,7 @@ def test_daily_briefing_projects_accumulation_candidates(monkeypatch):
         universe_loader=MagicMock(),
     )
 
-    response = use_case.execute(
-        DailyBriefingRequest(universe="lq45", as_of_date=date(2026, 6, 19))
-    )
+    response = use_case.execute(DailyBriefingRequest(universe="lq45", as_of_date=date(2026, 6, 19)))
 
     assert response.accumulation_summary is not None
     assert response.accumulation_summary.checked == 3
@@ -783,9 +781,7 @@ def test_daily_briefing_not_ready_skips_accumulation_projection_rows(monkeypatch
         universe_loader=MagicMock(),
     )
 
-    response = use_case.execute(
-        DailyBriefingRequest(universe="lq45", as_of_date=date(2026, 6, 19))
-    )
+    response = use_case.execute(DailyBriefingRequest(universe="lq45", as_of_date=date(2026, 6, 19)))
 
     assert response.overall_authority == "NOT_READY"
     assert response.daily_accumulation_candidates == []
@@ -873,9 +869,7 @@ def test_daily_briefing_not_ready_never_calls_setup_lens_impact(monkeypatch):
         setup_lens_impact_use_case=impact_uc,
     )
 
-    response = use_case.execute(
-        DailyBriefingRequest(universe="lq45", as_of_date=date(2026, 6, 19))
-    )
+    response = use_case.execute(DailyBriefingRequest(universe="lq45", as_of_date=date(2026, 6, 19)))
 
     assert response.overall_authority == "NOT_READY"
     impact_uc.execute.assert_not_called()
@@ -907,16 +901,12 @@ def test_daily_briefing_without_setup_lens_impact_use_case_leaves_none(monkeypat
         universe_loader=MagicMock(),
     )
 
-    response = use_case.execute(
-        DailyBriefingRequest(universe="lq45", as_of_date=date(2026, 6, 19))
-    )
+    response = use_case.execute(DailyBriefingRequest(universe="lq45", as_of_date=date(2026, 6, 19)))
 
     assert response.setup_lens_impact is None
 
 
-def _failure_boundary_dependencies(
-    *, universe_loader=None, setup_lens_impact_use_case=None
-):
+def _failure_boundary_dependencies(*, universe_loader=None, setup_lens_impact_use_case=None):
     market_repo = MagicMock()
     market_repo.get_date_range.return_value = (date(2026, 6, 1), date(2026, 6, 19))
     broker_repo = MagicMock()
@@ -954,8 +944,8 @@ def test_daily_briefing_universe_failure_propagates_same_exception():
     failure = ValueError("invalid universe configuration")
     loader = _empty_universe_loader()
     loader.load_config.side_effect = failure
-    use_case, market_repo, broker_repo, regime_uc, accum_uc = (
-        _failure_boundary_dependencies(universe_loader=loader)
+    use_case, market_repo, broker_repo, regime_uc, accum_uc = _failure_boundary_dependencies(
+        universe_loader=loader
     )
 
     with pytest.raises(ValueError) as caught:
@@ -1030,9 +1020,7 @@ def test_daily_briefing_setup_lens_failure_propagates_same_exception(monkeypatch
     use_case, _, _, _, accum_uc = _failure_boundary_dependencies(
         setup_lens_impact_use_case=impact_uc
     )
-    accum_uc.execute.return_value = MagicMock(
-        candidates=[_real_accumulation_candidate("BBCA")]
-    )
+    accum_uc.execute.return_value = MagicMock(candidates=[_real_accumulation_candidate("BBCA")])
 
     with pytest.raises(ValueError) as caught:
         _execute_historical(use_case)

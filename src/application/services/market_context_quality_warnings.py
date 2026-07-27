@@ -33,7 +33,8 @@ def market_context_staleness_warning(
 
 
 def market_context_coverage_warning(
-    factors: list[ContextFactor], unavailable_ratio: float,
+    factors: list[ContextFactor],
+    unavailable_ratio: float,
 ) -> str | None:
     enabled = [f for f in factors if f.enabled]
     unavailable = [f for f in enabled if f.score is None]

@@ -42,8 +42,7 @@ def _screen_request(as_of: date) -> AccumulationScreenRequest:
 
 def _build_use_case(session_dates):
     candles = [
-        _candle("BBCA", date(2025, 12, 1) + timedelta(days=i), Decimal("100"))
-        for i in range(45)
+        _candle("BBCA", date(2025, 12, 1) + timedelta(days=i), Decimal("100")) for i in range(45)
     ]
     summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates]
     return AccumulationScreenUseCase(

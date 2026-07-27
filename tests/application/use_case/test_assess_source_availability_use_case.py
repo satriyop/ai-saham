@@ -4,14 +4,14 @@ from datetime import date, datetime, timedelta
 
 import pytest
 
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSession,
+)
 from src.application.services.source_settlement_registry import (
     SettlementBasis,
     SourceSettlementRegistry,
     SourceSettlementRule,
     default_source_settlement_registry,
-)
-from src.application.services.effective_market_session_resolver import (
-    EffectiveMarketSession,
 )
 from src.application.use_case.assess_source_availability_use_case import (
     AssessSourceAvailabilityUseCase,
@@ -417,9 +417,7 @@ class TestProviderSettlementCutoff:
         assert result.expected_available_at == datetime(2026, 7, 16, 20, 0, tzinfo=IDX_TIMEZONE)
         assert any("has not yet passed" in note for note in result.notes)
 
-    def test_broker_source_one_session_behind_after_cutoff_stays_late_not_stale(
-        self, use_case
-    ):
+    def test_broker_source_one_session_behind_after_cutoff_stays_late_not_stale(self, use_case):
         """Chosen DQ-002H rule: the cutoff having passed does NOT demote a
         source that is still within its configured settlement lag to STALE
         — it stays LATE, with an explicit note that the cutoff has passed."""
@@ -437,9 +435,7 @@ class TestProviderSettlementCutoff:
         assert result.expected_available_at == datetime(2026, 7, 16, 20, 0, tzinfo=IDX_TIMEZONE)
         assert any("has passed" in note and "remains within" in note for note in result.notes)
 
-    def test_broker_source_beyond_configured_lag_is_stale_regardless_of_cutoff(
-        self, use_case
-    ):
+    def test_broker_source_beyond_configured_lag_is_stale_regardless_of_cutoff(self, use_case):
         decision_at = _wib(2026, 7, 16, 21, 0)
         session = _session(date(2026, 7, 16), decision_at)
 
@@ -688,9 +684,7 @@ class TestSentimentIsDiagnosticOnlyGuard:
                 is_authoritative_capable=True,
             )
 
-    def test_sentiment_cannot_be_swapped_in_as_authoritative_via_custom_registry(
-        self, use_case
-    ):
+    def test_sentiment_cannot_be_swapped_in_as_authoritative_via_custom_registry(self, use_case):
         """Even a custom registry cannot construct sentiment as authoritative —
         the guard is in the rule's own __post_init__, not the use case."""
         with pytest.raises(ValueError):

@@ -192,9 +192,7 @@ class TickerWorkbenchScreen(Screen[None]):
         verdict_widget.update("VERDICT  " + verdict_line(self._view.decision))
         # Severity reinforces the text badge with semantic color; the text/symbol
         # already carries the status, so color is never the only signal.
-        severity_class = _SEVERITY_CLASS.get(
-            self._view.decision.badge.severity, "semantic-info"
-        )
+        severity_class = _SEVERITY_CLASS.get(self._view.decision.badge.severity, "semantic-info")
         for known in _SEVERITY_CLASS.values():
             verdict_widget.set_class(known == severity_class, known)
         blockers = self._view.decision.blockers

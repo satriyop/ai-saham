@@ -18,6 +18,7 @@ from src.infrastructure.browser.stockbit_broker_distribution import (
 
 # ── Fixtures / helpers ────────────────────────────────────────────────────────
 
+
 def _make_body(
     date_info="2026-06-19",
     buy_entries=None,
@@ -28,9 +29,9 @@ def _make_body(
             {
                 "detail": {"code": "YU", "type": "Asing", "amount": 510553670000},
                 "distribute_to": [
-                    {"code": "ZP",  "type": "Asing",      "amount": 163554732500},
-                    {"code": "AK",  "type": "Asing",      "amount": 138896915000},
-                    {"code": "SQ",  "type": "Lokal",      "amount": 27915345000},
+                    {"code": "ZP", "type": "Asing", "amount": 163554732500},
+                    {"code": "AK", "type": "Asing", "amount": 138896915000},
+                    {"code": "SQ", "type": "Lokal", "amount": 27915345000},
                 ],
             },
         ]
@@ -57,6 +58,7 @@ def _make_body(
 
 # ── Parser tests ──────────────────────────────────────────────────────────────
 
+
 def test_parse_counterparties_basic():
     raw = [
         {"code": "ZP", "type": "Asing", "amount": 163554732500},
@@ -80,7 +82,10 @@ def test_parse_counterparties_sorted_descending():
 
 
 def test_parse_counterparties_skips_missing_code():
-    raw = [{"code": "", "type": "Asing", "amount": 100}, {"code": "AK", "type": "Asing", "amount": 200}]
+    raw = [
+        {"code": "", "type": "Asing", "amount": 100},
+        {"code": "AK", "type": "Asing", "amount": 200},
+    ]
     result = _parse_counterparties(raw)
     assert len(result) == 1
     assert result[0].broker_code == "AK"
@@ -124,25 +129,26 @@ def test_parse_response_returns_none_when_no_entries():
 
 # ── BrokerDistributionEntry properties ───────────────────────────────────────
 
+
 def test_is_foreign_asing():
     entry = BrokerDistributionEntry(
-        broker_code="YU", broker_type="Asing", amount_idr=100,
-        counterparties=()
+        broker_code="YU", broker_type="Asing", amount_idr=100, counterparties=()
     )
     assert entry.is_foreign is True
 
 
 def test_is_foreign_lokal():
     entry = BrokerDistributionEntry(
-        broker_code="SQ", broker_type="Lokal", amount_idr=100,
-        counterparties=()
+        broker_code="SQ", broker_type="Lokal", amount_idr=100, counterparties=()
     )
     assert entry.is_foreign is False
 
 
 def test_domestic_counterparty_pct():
     entry = BrokerDistributionEntry(
-        broker_code="YU", broker_type="Asing", amount_idr=200,
+        broker_code="YU",
+        broker_type="Asing",
+        amount_idr=200,
         counterparties=(
             BrokerCounterparty("ZP", "Asing", 100),
             BrokerCounterparty("SQ", "Lokal", 100),
@@ -154,15 +160,22 @@ def test_domestic_counterparty_pct():
 
 # ── BrokerDistributionSnapshot properties ────────────────────────────────────
 
-def _make_snapshot(buyer_type="Asing", counterparty_type="Lokal", buy_pct=0.7) -> BrokerDistributionSnapshot:
+
+def _make_snapshot(
+    buyer_type="Asing", counterparty_type="Lokal", buy_pct=0.7
+) -> BrokerDistributionSnapshot:
     cp_amount = int(100_000 * buy_pct)
     entry = BrokerDistributionEntry(
-        broker_code="YU", broker_type=buyer_type, amount_idr=100_000,
-        counterparties=(BrokerCounterparty("SQ", counterparty_type, cp_amount),)
+        broker_code="YU",
+        broker_type=buyer_type,
+        amount_idr=100_000,
+        counterparties=(BrokerCounterparty("SQ", counterparty_type, cp_amount),),
     )
     return BrokerDistributionSnapshot(
-        ticker="BBCA", date=date(2026, 6, 19),
-        top_buyers=(entry,), top_sellers=(),
+        ticker="BBCA",
+        date=date(2026, 6, 19),
+        top_buyers=(entry,),
+        top_sellers=(),
     )
 
 
@@ -188,6 +201,7 @@ def test_foreign_buying_from_domestic_false_when_foreign_counterparty():
 
 # ── Cache round-trip ──────────────────────────────────────────────────────────
 
+
 @pytest.fixture
 def tmp_provider(tmp_path):
     return StockbitBrokerDistributionProvider(api_client=None, db_path=tmp_path / "test.db")
@@ -204,8 +218,10 @@ def test_schema_created(tmp_provider):
 def test_write_then_read(tmp_provider):
     snapshot = _parse_response("BBCA", _make_body())
     snapshot = BrokerDistributionSnapshot(
-        ticker="BBCA", date=date(2026, 6, 19),
-        top_buyers=snapshot.top_buyers, top_sellers=snapshot.top_sellers,
+        ticker="BBCA",
+        date=date(2026, 6, 19),
+        top_buyers=snapshot.top_buyers,
+        top_sellers=snapshot.top_sellers,
         fetched_at=datetime.now(),
     )
     tmp_provider._write(snapshot)

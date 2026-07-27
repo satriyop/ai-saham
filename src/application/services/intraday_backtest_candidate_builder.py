@@ -66,14 +66,16 @@ class IntradayBacktestCandidateBuilder:
         lookback_end = trade_date - timedelta(days=1)
 
         candles = self._market_repo.get_candles(
-            ticker, start_date=lookback_start, end_date=lookback_end,
+            ticker,
+            start_date=lookback_start,
+            end_date=lookback_end,
         )
         if not candles:
             return None
 
         # Slice to history_days
         if len(candles) > request.history_days:
-            candles = candles[-request.history_days:]
+            candles = candles[-request.history_days :]
 
         min_required = max(request.atr_period, request.rsi_period, request.sma_period) + 2
         if len(candles) < min_required:
@@ -93,7 +95,10 @@ class IntradayBacktestCandidateBuilder:
 
         # Entry range
         _, range_low, range_high = _compute_entry_range(
-            prev.close, atr, request.atr_range_cap_min, request.atr_range_cap_max,
+            prev.close,
+            atr,
+            request.atr_range_cap_min,
+            request.atr_range_cap_max,
         )
 
         # ATR stop (anchored on prev.close)
@@ -208,7 +213,9 @@ def _assess_broker_as_of(
     try:
         start = signal_date - timedelta(days=broker_backing_window + fvwap_period + 10)
         summaries = broker_repo.get_broker_summaries(
-            ticker=ticker, start_date=start, end_date=signal_date,
+            ticker=ticker,
+            start_date=start,
+            end_date=signal_date,
         )
     except Exception:
         return empty
@@ -249,10 +256,12 @@ def _assess_broker_as_of(
     if candles and current_price is not None and current_price > 0:
         try:
             from plugins.indicators.foreign_vwap import ForeignVWAPIndicator  # type: ignore[import]
+
             indicator = ForeignVWAPIndicator()
             indicator.set_broker_data(summaries)
             vwap_values = indicator.compute(
-                candles[-max(len(candles), fvwap_period):], fvwap_period,
+                candles[-max(len(candles), fvwap_period) :],
+                fvwap_period,
             )
             if vwap_values:
                 fvwap = vwap_values[-1]

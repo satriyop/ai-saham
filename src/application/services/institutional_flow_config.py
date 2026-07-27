@@ -7,8 +7,24 @@ from typing import Any
 
 DEFAULT_FOREIGN_BROKER_CODES: frozenset[str] = frozenset(
     {
-        "AK", "BK", "ZP", "KZ", "YU", "RX", "HD", "CP", "DR",  # tier-1 foreign
-        "DB", "ML", "CS", "AI", "GW", "BW", "KI", "DP", "YB",  # broader foreign
+        "AK",
+        "BK",
+        "ZP",
+        "KZ",
+        "YU",
+        "RX",
+        "HD",
+        "CP",
+        "DR",  # tier-1 foreign
+        "DB",
+        "ML",
+        "CS",
+        "AI",
+        "GW",
+        "BW",
+        "KI",
+        "DP",
+        "YB",  # broader foreign
     }
 )
 
@@ -73,9 +89,7 @@ class InstitutionalAccumulationConfig:
         for name, weights in groups.items():
             total = round(sum(float(v) for v in weights.values()), 6)
             if abs(total - 1.0) > 1e-6:
-                raise ValueError(
-                    f"{name} weights must sum to 1.00, got {total}"
-                )
+                raise ValueError(f"{name} weights must sum to 1.00, got {total}")
 
     @classmethod
     def from_mapping(cls, raw: dict[str, Any]) -> "InstitutionalAccumulationConfig":
@@ -111,8 +125,7 @@ class InstitutionalAccumulationConfig:
             domestic_track_weights={
                 str(k): float(v)
                 for k, v in (
-                    block.get("domestic_bandar_track_components")
-                    or DEFAULT_DOMESTIC_TRACK_WEIGHTS
+                    block.get("domestic_bandar_track_components") or DEFAULT_DOMESTIC_TRACK_WEIGHTS
                 ).items()
             },
             track_weights={
@@ -121,4 +134,3 @@ class InstitutionalAccumulationConfig:
             },
             foreign_broker_codes=_parse_foreign_broker_codes(block),
         )
-

@@ -10,8 +10,8 @@ from dataclasses import dataclass
 
 from src.application.services.broker_desk_from_daily_flow import (
     DeskDayNet,
-    classify_desk_type,
     aggregate_desk_by_date,
+    classify_desk_type,
 )
 from src.domain.entities.broker_flow import BrokerType
 from src.domain.ports.broker_data_repository import BrokerDataRepository

@@ -151,7 +151,9 @@ def test_mixed_fail_and_warn_partition_into_blockers_and_warnings():
             status="FAIL",
             findings=(_fail("MISSING_TABLE", table="stock_meta"), _warn("W_CONTRACTS")),
         ),
-        _FakeAuditResponse(status="WARN", findings=(_warn("W_RECON", table="foreign_flow_points"),)),
+        _FakeAuditResponse(
+            status="WARN", findings=(_warn("W_RECON", table="foreign_flow_points"),)
+        ),
     )
 
     assert response.status == "FAIL"

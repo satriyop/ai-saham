@@ -43,8 +43,7 @@ def _parse_regime_fields(data: dict[str, Any]) -> dict[str, Any]:
     return {
         "market_regime": dict(regime or {}),
         "market_regime_at_signal": (
-            data.get("market_regime_at_signal")
-            or (regime.get("regime") if regime else None)
+            data.get("market_regime_at_signal") or (regime.get("regime") if regime else None)
         ),
         "regime_confidence_at_signal": _optional_float(
             data.get("regime_confidence_at_signal")

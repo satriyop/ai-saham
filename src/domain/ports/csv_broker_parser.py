@@ -63,7 +63,9 @@ class ParseError:
     message: str
 
     def __str__(self) -> str:
-        return f"Row {self.row_number}, field '{self.field}': {self.message} (value: '{self.value}')"
+        return (
+            f"Row {self.row_number}, field '{self.field}': {self.message} (value: '{self.value}')"
+        )
 
 
 @dataclass(frozen=True)

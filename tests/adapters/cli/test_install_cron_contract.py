@@ -2,21 +2,16 @@
 
 from pathlib import Path
 
-
 SCRIPT = (Path(__file__).resolve().parents[3] / "install_cron.sh").read_text()
-ACTIVE_CRON_LINES = tuple(
-    line for line in SCRIPT.splitlines() if line and line[0].isdigit()
-)
+ACTIVE_CRON_LINES = tuple(line for line in SCRIPT.splitlines() if line and line[0].isdigit())
 
 
 def test_pre_open_schedule_stays_inside_authoritative_window() -> None:
     assert any(
-        line.startswith("56 8 * * 1-5 ") and "saham fetch iev" in line
-        for line in ACTIVE_CRON_LINES
+        line.startswith("56 8 * * 1-5 ") and "saham fetch iev" in line for line in ACTIVE_CRON_LINES
     )
     assert any(
-        line.startswith("57 8 * * 1-5 ")
-        and "saham research pre-open capture" in line
+        line.startswith("57 8 * * 1-5 ") and "saham research pre-open capture" in line
         for line in ACTIVE_CRON_LINES
     )
     assert not any(line.startswith("58 8 * * 1-5 ") for line in ACTIVE_CRON_LINES)

@@ -22,9 +22,9 @@ from src.application.dto.accumulation_screen import (
     AccumulationScreenResponse,
 )
 from src.domain.value_objects.accum_score_breakdown import (
+    AccumScoreBreakdown,
     ForeignFlowComponentScore,
     ForeignFlowComponentStatus,
-    AccumScoreBreakdown,
 )
 
 

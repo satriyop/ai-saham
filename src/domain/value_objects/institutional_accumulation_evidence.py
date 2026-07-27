@@ -58,24 +58,18 @@ class ForeignInstitutionalTrack:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ForeignInstitutionalTrack":
         return cls(
-            foreign_participation_score=_optional_float(
-                data.get("foreign_participation_score")
-            ),
+            foreign_participation_score=_optional_float(data.get("foreign_participation_score")),
             foreign_cr4_score=_optional_float(data.get("foreign_cr4_score")),
             foreign_cr8_score=_optional_float(data.get("foreign_cr8_score")),
             cnfb_divergence_score=_optional_float(data.get("cnfb_divergence_score")),
-            foreign_vwap_distance_score=_optional_float(
-                data.get("foreign_vwap_distance_score")
-            ),
+            foreign_vwap_distance_score=_optional_float(data.get("foreign_vwap_distance_score")),
             coverage_score=float(data.get("coverage_score") or 0.0),
             conviction_score=float(data.get("conviction_score") or 0.0),
             evidence_status=EvidenceStatus(
                 data.get("evidence_status") or EvidenceStatus.DIAGNOSTIC.value
             ),
             reasons=tuple(str(v) for v in data.get("reasons") or ()),
-            unavailable_reasons=tuple(
-                str(v) for v in data.get("unavailable_reasons") or ()
-            ),
+            unavailable_reasons=tuple(str(v) for v in data.get("unavailable_reasons") or ()),
         )
 
 
@@ -118,9 +112,7 @@ class DomesticBandarTrack:
             "domestic_buy_vwap_distance_score": self.domestic_buy_vwap_distance_score,
             "broker_hhi_divergence_score": self.broker_hhi_divergence_score,
             "bandar_broad_score_normalized": self.bandar_broad_score_normalized,
-            "bandar_accumulation_score_normalized": (
-                self.bandar_accumulation_score_normalized
-            ),
+            "bandar_accumulation_score_normalized": (self.bandar_accumulation_score_normalized),
             "coverage_score": self.coverage_score,
             "conviction_score": self.conviction_score,
             "evidence_status": self.evidence_status.value,
@@ -131,19 +123,13 @@ class DomesticBandarTrack:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "DomesticBandarTrack":
         return cls(
-            broker_consistency_score=_optional_float(
-                data.get("broker_consistency_score")
-            ),
+            broker_consistency_score=_optional_float(data.get("broker_consistency_score")),
             broker_reversal_score=_optional_float(data.get("broker_reversal_score")),
-            accumulation_session_ratio=_optional_float(
-                data.get("accumulation_session_ratio")
-            ),
+            accumulation_session_ratio=_optional_float(data.get("accumulation_session_ratio")),
             domestic_buy_vwap_distance_score=_optional_float(
                 data.get("domestic_buy_vwap_distance_score")
             ),
-            broker_hhi_divergence_score=_optional_float(
-                data.get("broker_hhi_divergence_score")
-            ),
+            broker_hhi_divergence_score=_optional_float(data.get("broker_hhi_divergence_score")),
             bandar_broad_score_normalized=_optional_float(
                 data.get("bandar_broad_score_normalized")
             ),
@@ -156,9 +142,7 @@ class DomesticBandarTrack:
                 data.get("evidence_status") or EvidenceStatus.DIAGNOSTIC.value
             ),
             reasons=tuple(str(v) for v in data.get("reasons") or ()),
-            unavailable_reasons=tuple(
-                str(v) for v in data.get("unavailable_reasons") or ()
-            ),
+            unavailable_reasons=tuple(str(v) for v in data.get("unavailable_reasons") or ()),
         )
 
 
@@ -193,9 +177,7 @@ class CounterpartyTransferEvidence:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "CounterpartyTransferEvidence":
         return cls(
-            transfer_asymmetry_score=_optional_float(
-                data.get("transfer_asymmetry_score")
-            ),
+            transfer_asymmetry_score=_optional_float(data.get("transfer_asymmetry_score")),
             buy_side_hhi=_optional_float(data.get("buy_side_hhi")),
             sell_side_hhi=_optional_float(data.get("sell_side_hhi")),
             coverage_score=float(data.get("coverage_score") or 0.0),
@@ -203,9 +185,7 @@ class CounterpartyTransferEvidence:
             evidence_status=EvidenceStatus(
                 data.get("evidence_status") or EvidenceStatus.DIAGNOSTIC.value
             ),
-            unavailable_reasons=tuple(
-                str(v) for v in data.get("unavailable_reasons") or ()
-            ),
+            unavailable_reasons=tuple(str(v) for v in data.get("unavailable_reasons") or ()),
         )
 
 
@@ -277,9 +257,7 @@ class InstitutionalAccumulationEvidence:
                 data.get("evidence_status") or EvidenceStatus.DIAGNOSTIC.value
             ),
             reasons=tuple(str(v) for v in data.get("reasons") or ()),
-            unavailable_reasons=tuple(
-                str(v) for v in data.get("unavailable_reasons") or ()
-            ),
+            unavailable_reasons=tuple(str(v) for v in data.get("unavailable_reasons") or ()),
             metadata=dict(data.get("metadata") or {}),
         )
 

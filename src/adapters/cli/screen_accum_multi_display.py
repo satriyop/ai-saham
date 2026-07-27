@@ -99,12 +99,14 @@ def display_multi(
             if candidate is None:
                 score_cells.append(Text("—", style="bright_black"))
                 continue
-            style = "green" if candidate.accum_score >= (
-                display_config.enter_min_accum_score
-            ) else (
-                "yellow" if candidate.accum_score >= (
-                    display_config.watch_min_accum_score
-                ) else ""
+            style = (
+                "green"
+                if candidate.accum_score >= (display_config.enter_min_accum_score)
+                else (
+                    "yellow"
+                    if candidate.accum_score >= (display_config.watch_min_accum_score)
+                    else ""
+                )
             )
             score_cells.append(Text(f"{candidate.accum_score:.0f}", style=style))
 
@@ -172,16 +174,13 @@ def display_multi(
         )
 
     meta_table.add_row(
-        "Stats",
-        f"Checked: {total_tickers_checked} | "
-        f"Shown: {len(rows)} | "
-        f"Provider: {provider}"
+        "Stats", f"Checked: {total_tickers_checked} | Shown: {len(rows)} | Provider: {provider}"
     )
 
     meta_table.add_row(
         "Signal",
         "SignalEngine total score (and optional coverage) from the canonical "
-        "window — not Accum. Window columns 7s/30s/90s are Accum scores."
+        "window — not Accum. Window columns 7s/30s/90s are Accum scores.",
     )
 
     enter_score = display_config.enter_min_accum_score
@@ -189,31 +188,27 @@ def display_multi(
     meta_table.add_row(
         "Accum scores",
         f"window cells ≥{enter_score:g} green | ≥{watch_score:g} yellow | "
-        f"<{watch_score:g} white (foreign-accumulation composite)"
+        f"<{watch_score:g} white (foreign-accumulation composite)",
     )
 
     meta_table.add_row(
-        "Patterns",
-        "sustained | building | fresh rotation | long-term only | coiled spring | weak"
+        "Patterns", "sustained | building | fresh rotation | long-term only | coiled spring | weak"
     )
 
     meta_table.add_row(
         "Tracked Broker Flow",
         "Tracked Broker Flow uses configured tracked brokers from broker_daily_flow. "
         "It is not full-market broker composition. "
-        "smart+/noise+ = net buying, smart-/noise- = net selling, N/A = no detail"
+        "smart+/noise+ = net buying, smart-/noise- = net selling, N/A = no detail",
     )
 
     meta_table.add_row(
         "Canonical Window",
         f"{canonical_window} sessions — Signal/Risk/Phase/Data/Next come "
-        "from the canonical window only; other windows are Accum context."
+        "from the canonical window only; other windows are Accum context.",
     )
 
-    meta_table.add_row(
-        "Disclaimer",
-        "DISCLAIMER: Analysis only, not trading advice."
-    )
+    meta_table.add_row("Disclaimer", "DISCLAIMER: Analysis only, not trading advice.")
 
     console().print(
         panel(

@@ -51,9 +51,7 @@ def test_contract_rejects_snapshot_date_ahead_of_analysis_as_of():
 def test_contract_rejects_latest_completed_session_behind_analysis_as_of():
     latest = date(2026, 6, 30)
     as_of = date(2026, 7, 1)
-    with pytest.raises(
-        ValueError, match="snapshot_date .* must equal latest_completed_session"
-    ):
+    with pytest.raises(ValueError, match="snapshot_date .* must equal latest_completed_session"):
         CanonicalSwingSessionContract(
             snapshot_date=as_of,
             latest_completed_session=latest,

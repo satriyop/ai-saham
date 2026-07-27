@@ -10,7 +10,6 @@ Layer: Application
 
 from __future__ import annotations
 
-import json
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -63,15 +62,13 @@ class SeasonalityCacheRepairRow:
 class SeasonalityCacheRepairer(Protocol):
     """Mutating port for the seasonality_cache quarantine/delete workflow."""
 
-    def ensure_quarantine_table(self) -> None:
-        ...
+    def ensure_quarantine_table(self) -> None: ...
 
     def quarantine_and_delete(
         self,
         rows: list[SeasonalityCacheRepairRow],
         repair_run_id: str,
-    ) -> int:
-        ...
+    ) -> int: ...
 
 
 @dataclass(frozen=True)
@@ -161,9 +158,7 @@ class RepairSeasonalityCacheUseCase:
             if not observation.exists:
                 source_unavailable_reason = REASON_SEASONALITY_CACHE_TABLE_MISSING
             else:
-                repair_rows = self._collect_invalid_rows(
-                    observation.rows, reason_counts
-                )
+                repair_rows = self._collect_invalid_rows(observation.rows, reason_counts)
 
         source_available = source_unavailable_reason is None
         if source_unavailable_reason is not None:
@@ -207,9 +202,7 @@ class RepairSeasonalityCacheUseCase:
         deleted_count = 0
         if not dry_run:
             self._repairer.ensure_quarantine_table()
-            affected = self._repairer.quarantine_and_delete(
-                repair_rows, repair_run_id
-            )
+            affected = self._repairer.quarantine_and_delete(repair_rows, repair_run_id)
             quarantined_count = affected
             deleted_count = affected
 

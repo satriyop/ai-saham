@@ -175,9 +175,9 @@ A task is acceptable when:
 * [ ] relevant ADRs considered
 * [ ] Adapter thinness reviewed; workflow/policy lives in application
 * [ ] **Lint Gate** (`AGENT_QUICKSTART.md`): for any Python under `src/` or
-      `tests/`, `ruff check` and `ruff format --check` pass on **touched paths**
-      (or whole-repo after `restore_repository_ruff_baseline` is done). No rule
-      weakening, blanket `# noqa`, or new per-file ignores to land the task.
+      `tests/`, whole-repo `ruff check src/ tests/` and
+      `ruff format --check src/ tests/` pass. No rule weakening, blanket
+      `# noqa`, or new per-file ignores to land the task.
 
 ---
 
@@ -186,9 +186,9 @@ A task is acceptable when:
 * What logic must be unit-tested?
 * Are mocks or stubs required?
 * Can tests run offline?
-* Which Python paths will require Ruff check/format before close?
+* Confirm whole-repo Ruff check/format before close when Python is touched.
 
-Skipping tests requires justification. Skipping Ruff on edited Python requires
+Skipping tests requires justification. Skipping Ruff on Python changes requires
 explicit justification (e.g. environment has no Ruff binary — state it).
 
 ---

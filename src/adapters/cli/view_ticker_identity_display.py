@@ -56,7 +56,9 @@ def _freshness_panel(
 ) -> object:
     """Compact cache-completeness strip for the dashboard header."""
     lines = format_freshness_lines(ticker, items, as_of=as_of)
-    body = Group(*[Text(f"  {line}", style="dim" if i else "default") for i, line in enumerate(lines)])
+    body = Group(
+        *[Text(f"  {line}", style="dim" if i else "default") for i, line in enumerate(lines)]
+    )
     return panel(body, title="Data Freshness")
 
 

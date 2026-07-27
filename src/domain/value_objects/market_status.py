@@ -16,15 +16,15 @@ from datetime import datetime
 
 @dataclass(frozen=True)
 class MarketStatus:
-    status: str             # "STATUS_OPEN" | "STATUS_CLOSE"
-    session_name: str       # "Pre-Open" | "Opening Call Auction" | "Regular" |
-                            # "Pre-Closing" | "Closing" | "Post-Market" |
-                            # "Weekend" | "Unknown"
-    is_open: bool           # True only during STATUS_OPEN sessions
-    session_open: str | None    # WIB time string, e.g. "08:45"
-    session_close: str | None   # WIB time string, e.g. "09:00"
+    status: str  # "STATUS_OPEN" | "STATUS_CLOSE"
+    session_name: str  # "Pre-Open" | "Opening Call Auction" | "Regular" |
+    # "Pre-Closing" | "Closing" | "Post-Market" |
+    # "Weekend" | "Unknown"
+    is_open: bool  # True only during STATUS_OPEN sessions
+    session_open: str | None  # WIB time string, e.g. "08:45"
+    session_close: str | None  # WIB time string, e.g. "09:00"
     fetched_at: datetime
-    source: str             # "stockbit" | "local_clock"
+    source: str  # "stockbit" | "local_clock"
 
     @property
     def is_pre_open(self) -> bool:

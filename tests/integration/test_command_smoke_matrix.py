@@ -9,7 +9,6 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-import src.adapters.cli.screen_pre_open_commands as screen_pre_open_commands
 from src.adapters.cli.main import app
 from src.domain.entities.broker_flow import BrokerSummary, BrokerTransaction, BrokerType
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
@@ -61,10 +60,9 @@ def _seed_db(tmp_path: Path, ticker: str = "BBCA") -> Path:
     market_repo = SQLiteMarketRepository(db_path=db_path)
     market_repo.save_candles(candles)
     broker_repo = SQLiteBrokerRepository(db_path)
-    broker_repo.save_broker_summaries([
-        _broker_summary(ticker, candle.date)
-        for candle in candles[-40:]
-    ])
+    broker_repo.save_broker_summaries(
+        [_broker_summary(ticker, candle.date) for candle in candles[-40:]]
+    )
     return db_path
 
 
@@ -89,10 +87,14 @@ def test_plan_swing_table_and_json_contracts(temp_workspace, monkeypatch):
     js = runner.invoke(
         app,
         [
-            "plan", "swing", "BBCA",
+            "plan",
+            "swing",
+            "BBCA",
             "--no-refresh",
-            "--format", "json",
-            "--db", str(db_path),
+            "--format",
+            "json",
+            "--db",
+            str(db_path),
         ],
     )
     assert js.exit_code == 0, js.output
@@ -147,7 +149,10 @@ def _retired_screen_accum_pre_learning_json_contract(temp_workspace, monkeypatch
     assert payload["candidates"][0]["accum_score"] is not None
     assert "composite_foreign_flow_score" not in payload["candidates"][0]
     assert "risk_level" not in payload["candidates"][0]
-    assert payload["candidates"][0]["foreign_flow_evidence"]["score_family"] == "composite_foreign_flow"
+    assert (
+        payload["candidates"][0]["foreign_flow_evidence"]["score_family"]
+        == "composite_foreign_flow"
+    )
 
     multi = runner.invoke(app, ["screen", "accum", "BBCA", "--multi", "--db", str(db_path)])
     assert multi.exit_code == 0, multi.output
@@ -159,11 +164,15 @@ def _retired_pre_open_file_sidecar_contract(temp_workspace, monkeypatch):
     pre_open = runner.invoke(
         app,
         [
-            "screen", "pre-open",
-            "--movers-json", '[{"ticker":"BBCA","iev":150000}]',
-            "--order-books-json", '{"BBCA":{"price":1000,"volume":50000}}',
+            "screen",
+            "pre-open",
+            "--movers-json",
+            '[{"ticker":"BBCA","iev":150000}]',
+            "--order-books-json",
+            '{"BBCA":{"price":1000,"volume":50000}}',
             "--allow-non-trading-day",
-            "--db", str(db_path),
+            "--db",
+            str(db_path),
         ],
     )
     assert pre_open.exit_code == 0, pre_open.output
@@ -232,10 +241,14 @@ def _retired_pre_open_file_sidecar_contract(temp_workspace, monkeypatch):
     analyze = runner.invoke(
         app,
         [
-            "assess", "pre-open",
-            "--session", "2026-06-12",
-            "--db", str(db_path),
-            "--format", "json",
+            "assess",
+            "pre-open",
+            "--session",
+            "2026-06-12",
+            "--db",
+            str(db_path),
+            "--format",
+            "json",
         ],
     )
     assert analyze.exit_code == 0, analyze.output
@@ -250,11 +263,18 @@ def test_backtest_json_contracts(temp_workspace, monkeypatch):
     swing_bt = runner.invoke(
         app,
         [
-            "backtest", "portfolio", "swing", "BBCA",
-            "--start", "2026-06-01",
-            "--end", "2026-06-20",
-            "--format", "json",
-            "--db", str(db_path),
+            "backtest",
+            "portfolio",
+            "swing",
+            "BBCA",
+            "--start",
+            "2026-06-01",
+            "--end",
+            "2026-06-20",
+            "--format",
+            "json",
+            "--db",
+            str(db_path),
         ],
     )
     assert swing_bt.exit_code == 0, swing_bt.output

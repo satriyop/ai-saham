@@ -30,12 +30,12 @@ from src.adapters.cli.plan_swing_display import (
     print_swing_output,
 )
 from src.application.dto.swing_analysis import (
-    SwingDiagnostics,
-    SwingEvidence,
-    SwingVerdict,
     SignalAssessmentAvailability,
     SignalAssessmentStatus,
     SignalAssessmentUnavailableReason,
+    SwingDiagnostics,
+    SwingEvidence,
+    SwingVerdict,
 )
 from src.application.services.swing_data_freshness import SwingDataFreshness
 from src.domain.value_objects.strategy_evidence import (
@@ -45,6 +45,7 @@ from src.domain.value_objects.strategy_evidence import (
 )
 
 # ── Shared helpers ─────────────────────────────────────────────────────────────
+
 
 def _freshness() -> SwingDataFreshness:
     return SwingDataFreshness(
@@ -154,6 +155,7 @@ def _call_print(
 
 # ── Panel gate tests ───────────────────────────────────────────────────────────
 
+
 class TestStrategyEvidencePanelGate:
     def test_panel_rendered_when_include_strategy_and_evidence_present(self, capsys):
         se = _make_strategy_evidence()
@@ -188,6 +190,7 @@ class TestStrategyEvidencePanelGate:
 
 
 # ── Outcome display tests ──────────────────────────────────────────────────────
+
 
 class TestStrategyEvidenceOutcomeDisplay:
     def test_matched_outcome_shown(self, capsys):
@@ -236,6 +239,7 @@ class TestStrategyEvidenceOutcomeDisplay:
 
 
 # ── Strategy name and rule field tests ────────────────────────────────────────
+
 
 class TestStrategyEvidenceNameAndRule:
     def test_strategy_name_shown(self, capsys):
@@ -290,6 +294,7 @@ class TestStrategyEvidenceNameAndRule:
 
 # ── Coverage/conviction/freshness tests ───────────────────────────────────────
 
+
 class TestStrategyEvidenceScores:
     def test_coverage_shown_when_present(self, capsys):
         se = _make_strategy_evidence(coverage_score=0.80)
@@ -333,6 +338,7 @@ class TestStrategyEvidenceScores:
 
 # ── Unavailable / no matched rule ─────────────────────────────────────────────
 
+
 class TestStrategyEvidenceUnavailable:
     def test_unavailable_reason_shown(self, capsys):
         se = _make_strategy_evidence(
@@ -363,6 +369,7 @@ class TestStrategyEvidenceUnavailable:
 
 # ── DIAGNOSTIC disclaimer ──────────────────────────────────────────────────────
 
+
 class TestStrategyEvidenceDiagnosticFooter:
     def test_diagnostic_disclaimer_shown(self, capsys):
         se = _make_strategy_evidence()
@@ -390,9 +397,11 @@ class TestStrategyEvidenceDiagnosticFooter:
 
 # ── Coexistence with backtest result ──────────────────────────────────────────
 
+
 class TestStrategyEvidenceCoexistenceWithBacktest:
     def _make_backtest(self) -> SimpleNamespace:
         from decimal import Decimal
+
         return SimpleNamespace(
             trade_count=12,
             win_rate=Decimal("58.3"),

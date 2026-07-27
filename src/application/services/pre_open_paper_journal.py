@@ -13,8 +13,8 @@ from typing import Protocol
 
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.value_objects.pre_open_post_open_assessment import (
-    PreOpenPostOpenAssessment,
     PreOpenPaperJournalEntry,
+    PreOpenPostOpenAssessment,
 )
 
 
@@ -224,9 +224,7 @@ class PreOpenPaperJournalService:
         ):
             risk = entry.planned_entry - entry.stop_loss_price
             if risk > 0:
-                close_r = ((candle.close - entry.planned_entry) / risk).quantize(
-                    Decimal("0.01")
-                )
+                close_r = ((candle.close - entry.planned_entry) / risk).quantize(Decimal("0.01"))
                 stop_hit = candle.low <= entry.stop_loss_price
                 target_hit = candle.high >= entry.planned_entry + risk
 
@@ -263,8 +261,7 @@ class PreOpenPaperJournalService:
         key_fn,
     ) -> list[PreOpenPaperBucketStats]:
         outcomes_by_key: dict[tuple, PreOpenPaperOutcome] = {
-            (outcome.entry.confirmed_at, outcome.entry.ticker): outcome
-            for outcome in outcomes
+            (outcome.entry.confirmed_at, outcome.entry.ticker): outcome for outcome in outcomes
         }
         all_keys = sorted({key_fn(entry) for entry in entries})
         stats: list[PreOpenPaperBucketStats] = []
@@ -281,9 +278,9 @@ class PreOpenPaperJournalService:
             ]
             avg_close_r = None
             if close_rs:
-                avg_close_r = (
-                    sum(close_rs, Decimal("0")) / Decimal(str(len(close_rs)))
-                ).quantize(Decimal("0.01"))
+                avg_close_r = (sum(close_rs, Decimal("0")) / Decimal(str(len(close_rs)))).quantize(
+                    Decimal("0.01")
+                )
 
             stats.append(
                 PreOpenPaperBucketStats(
@@ -292,9 +289,7 @@ class PreOpenPaperJournalService:
                     with_data=len(group_outcomes),
                     enter_count=sum(1 for entry in group_entries if entry.decision == "ENTER"),
                     up_count=sum(1 for outcome in group_outcomes if outcome.direction == "UP"),
-                    stop_hit_count=sum(
-                        1 for outcome in group_outcomes if outcome.stop_hit is True
-                    ),
+                    stop_hit_count=sum(1 for outcome in group_outcomes if outcome.stop_hit is True),
                     target_1r_hit_count=sum(
                         1 for outcome in group_outcomes if outcome.target_1r_hit is True
                     ),

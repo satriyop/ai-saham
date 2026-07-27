@@ -1,8 +1,3 @@
-from src.domain.value_objects.accum_score_breakdown import (
-    ForeignFlowComponentScore,
-    ForeignFlowComponentStatus,
-)
-from src.domain.value_objects.foreign_flow_evidence import ForeignFlowEvidence
 from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
@@ -14,6 +9,11 @@ from src.application.services.flow_confirmation_evidence_builder import (
     FlowConfirmationEvidenceBuilder,
 )
 from src.application.services.swing_analysis_serialization import signal_response_to_dict
+from src.domain.value_objects.accum_score_breakdown import (
+    ForeignFlowComponentScore,
+    ForeignFlowComponentStatus,
+)
+from src.domain.value_objects.foreign_flow_evidence import ForeignFlowEvidence
 from src.domain.value_objects.setup_phase import SetupPhaseSnapshot, SetupPhaseState
 
 
@@ -31,7 +31,9 @@ def test_swing_evidence_to_dict_includes_flow_confirmation_evidence():
             avg_flow_ratio=8.0,
             components=(
                 ForeignFlowComponentScore("cons", 33.3, 33.3, ForeignFlowComponentStatus.AVAILABLE),
-                ForeignFlowComponentScore("streak", 25.0, 25.0, ForeignFlowComponentStatus.AVAILABLE),
+                ForeignFlowComponentScore(
+                    "streak", 25.0, 25.0, ForeignFlowComponentStatus.AVAILABLE
+                ),
                 ForeignFlowComponentScore("vwap", 16.7, 16.7, ForeignFlowComponentStatus.AVAILABLE),
                 ForeignFlowComponentScore("rsi", 8.3, 8.3, ForeignFlowComponentStatus.AVAILABLE),
                 ForeignFlowComponentScore("flow", 8.3, 8.3, ForeignFlowComponentStatus.AVAILABLE),
@@ -44,12 +46,16 @@ def test_swing_evidence_to_dict_includes_flow_confirmation_evidence():
         bci_tier1_count=3,
         latest_candle_date=date(2026, 6, 25),
     )
-    flow_ev = FlowConfirmationEvidenceBuilder().build(
-        candidate,
-        analysis_date=date(2026, 6, 25),
-        consumed_broker_summaries=(),
-        consumed_broker_daily_flows=(),
-    ).evidence
+    flow_ev = (
+        FlowConfirmationEvidenceBuilder()
+        .build(
+            candidate,
+            analysis_date=date(2026, 6, 25),
+            consumed_broker_summaries=(),
+            consumed_broker_daily_flows=(),
+        )
+        .evidence
+    )
     evidence = SwingEvidence(
         accumulation_candidate=None,
         setup_eval=None,

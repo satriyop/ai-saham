@@ -40,15 +40,11 @@ def resolve_compatibility_id(
     if requested is not None:
         return requested
     available = sorted(
-        {
-            observation.compatibility_id
-            for observation in repo.list_observations(purpose)
-        }
+        {observation.compatibility_id for observation in repo.list_observations(purpose)}
     )
     if len(available) != 1:
         raise typer.BadParameter(
-            "specify --compatibility-id; available cohorts: "
-            + (", ".join(available) or "none")
+            "specify --compatibility-id; available cohorts: " + (", ".join(available) or "none")
         )
     return available[0]
 

@@ -37,11 +37,7 @@ def build_signal_context_from_candidate(
     fe = getattr(candidate, "forward_estimates", None)
 
     num_optional = (
-        sum(
-            1
-            for x in [bd.top3_accdist, bd.top5_accdist, bd.top10_accdist]
-            if x is not None
-        )
+        sum(1 for x in [bd.top3_accdist, bd.top5_accdist, bd.top10_accdist] if x is not None)
         if bd is not None
         else 0
     )
@@ -63,9 +59,11 @@ def build_signal_context_from_candidate(
         snapshot_date=snapshot_date,
         foreign_flow_quality=foreign_flow_quality,
         bandar_broad_score=bd.broad_score if bd else None,
-        bandar_max_range=signal_engine.bandar_max_range(num_optional)
-        if bd
-        else signal_engine.bandar_max_range(0),
+        bandar_max_range=(
+            signal_engine.bandar_max_range(num_optional)
+            if bd
+            else signal_engine.bandar_max_range(0)
+        ),
         insider_net_buy_ratio=getattr(candidate, "insider_net_buy_ratio", None),
         seasonality_win_rate=se.win_rate_pct if se else None,
         seasonality_avg_return_pct=se.avg_monthly_return_pct if se else None,

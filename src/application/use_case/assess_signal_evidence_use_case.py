@@ -24,8 +24,8 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
-from src.application.exceptions import NoProductionSignalEvidenceError
 from src.application.dto.assess_signal import AssessSignalEvidenceRequest
+from src.application.exceptions import NoProductionSignalEvidenceError
 from src.application.services.decision_policy import DecisionPolicyService
 from src.application.services.setup_phase_readiness_evaluator import (
     SetupPhaseReadinessEvaluator,

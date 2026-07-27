@@ -6,6 +6,7 @@ Owns diagnostics construction, module flag assembly, and the final
 `SwingAnalysisWorkflowResponse` construction. Extracted from
 `SwingAnalysisWorkflowUseCase` to keep the use case as orchestration only.
 """
+
 from __future__ import annotations
 
 from src.application.dto import swing_analysis as swing_analysis_dto
@@ -27,13 +28,8 @@ class SwingAnalysisResponseAssembler:
             raise ValueError("state.verdict is missing")
         if state.signal_assessment_availability is None:
             raise ValueError("state.signal_assessment_availability is missing")
-        if (
-            state.signal_assessment_availability
-            != verdict.signal_assessment_availability
-        ):
-            raise ValueError(
-                "state and verdict signal assessment availability differ"
-            )
+        if state.signal_assessment_availability != verdict.signal_assessment_availability:
+            raise ValueError("state and verdict signal assessment availability differ")
         diagnostics = swing_analysis_dto.SwingDiagnostics(
             data_freshness=state.data_freshness,
             flow_detail=state.flow_detail,

@@ -10,8 +10,13 @@ from src.application.services.broker_detail_aggregation import (
 
 _SMART = {"AK", "BK", "KZ"}
 _NOISE = {"YP", "XL"}
-_WEIGHTS = {"AK": Decimal("1.5"), "BK": Decimal("1.5"), "KZ": Decimal("1.5"),
-            "YP": Decimal("0.5"), "XL": Decimal("0.5")}
+_WEIGHTS = {
+    "AK": Decimal("1.5"),
+    "BK": Decimal("1.5"),
+    "KZ": Decimal("1.5"),
+    "YP": Decimal("0.5"),
+    "XL": Decimal("0.5"),
+}
 _THRESHOLD = 60.0
 
 
@@ -70,8 +75,9 @@ def test_top_5_limit_and_sort_by_abs_value():
     rows = []
     for i in range(7):
         code = f"BR{i:02d}"
-        rows.append(BrokerFlowRow(code, f"Broker{i}", "FOREIGN",
-                                   Decimal(f"{7-i}00000"), date(2026, 6, 1)))
+        rows.append(
+            BrokerFlowRow(code, f"Broker{i}", "FOREIGN", Decimal(f"{7 - i}00000"), date(2026, 6, 1))
+        )
     agg = aggregate_broker_detail_rows(
         rows,
         latest_net_flow=Decimal("1000000"),
@@ -82,8 +88,13 @@ def test_top_5_limit_and_sort_by_abs_value():
     )
     assert len(agg.buyers) == 5
     values = [b.net_value for b in agg.buyers]
-    assert values == [Decimal("700000"), Decimal("600000"), Decimal("500000"),
-                       Decimal("400000"), Decimal("300000")]
+    assert values == [
+        Decimal("700000"),
+        Decimal("600000"),
+        Decimal("500000"),
+        Decimal("400000"),
+        Decimal("300000"),
+    ]
 
 
 def test_smart_noise_neutral_flow_totals():
@@ -103,9 +114,11 @@ def test_smart_noise_neutral_flow_totals():
     assert agg.smart_flow == Decimal("8000000")
     assert agg.noise_flow == Decimal("5000000")
     assert agg.neutral_flow == Decimal("3000000")
-    expected_weighted = (Decimal("8000000") * Decimal("1.5")
-                         + Decimal("5000000") * Decimal("0.5")
-                         + Decimal("3000000"))
+    expected_weighted = (
+        Decimal("8000000") * Decimal("1.5")
+        + Decimal("5000000") * Decimal("0.5")
+        + Decimal("3000000")
+    )
     assert agg.weighted_net_flow == expected_weighted
 
 

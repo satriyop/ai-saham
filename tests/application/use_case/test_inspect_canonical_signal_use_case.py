@@ -131,9 +131,7 @@ def test_inspect_returns_shared_path_assessment_fields():
         screen_use_case=screen,
         screen_request_builder=builder,
         session_resolver=resolver,
-    ).execute(
-        InspectCanonicalSignalRequest(ticker="bbca", as_of_date=day, window_days=7)
-    )
+    ).execute(InspectCanonicalSignalRequest(ticker="bbca", as_of_date=day, window_days=7))
 
     assert response.status is InspectCanonicalSignalStatus.OK
     assert response.contract is InspectCanonicalSignalContract.ACCUMULATION_FLOW
@@ -208,9 +206,7 @@ def test_missing_data_cannot_increase_authority_coverage_in_payload_identity():
     day = date(2026, 7, 7)
     low = _assessment(day=day, score=40, coverage=0.0)
     response = InspectCanonicalSignalUseCase(
-        screen_use_case=FakeScreen(
-            response=_screen_response(ticker="BBCA", assessment=low)
-        ),
+        screen_use_case=FakeScreen(response=_screen_response(ticker="BBCA", assessment=low)),
         screen_request_builder=FakeRequestBuilder(),
         session_resolver=FakeSessionResolver(session=_session(day)),
     ).execute(InspectCanonicalSignalRequest(ticker="BBCA", as_of_date=day))

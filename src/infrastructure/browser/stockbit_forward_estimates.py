@@ -218,9 +218,7 @@ class StockbitForwardEstimatesProvider(ForwardEstimatesProvider, StockbitCaching
         as_of_date: date | None = None,
     ) -> ForwardEstimates | None:
         """Public cache-only read. Never fetches from network."""
-        return self._read_cache(
-            ticker, require_fresh=require_fresh, as_of_date=as_of_date
-        )
+        return self._read_cache(ticker, require_fresh=require_fresh, as_of_date=as_of_date)
 
     def _read_cache(
         self,
@@ -321,14 +319,12 @@ def _rebuild_forward_estimates_cache_if_needed(sqlite_conn: sqlite3.Connection) 
         return
     sqlite_conn.execute("ALTER TABLE forward_estimates_cache RENAME TO forward_estimates_cache_old")
     sqlite_conn.execute(_CREATE_TABLE)
-    sqlite_conn.execute(
-        """
+    sqlite_conn.execute("""
         INSERT INTO forward_estimates_cache
             (ticker, fetched_date, forward_eps_1y, revenue_forward_1y,
              current_price, forward_pe)
         SELECT ticker, fetched_date, forward_eps_1y, revenue_forward_1y,
                current_price, forward_pe
         FROM forward_estimates_cache_old
-        """
-    )
+        """)
     sqlite_conn.execute("DROP TABLE forward_estimates_cache_old")

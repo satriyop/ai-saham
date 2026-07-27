@@ -63,7 +63,8 @@ def broker_status(
         "auth_required": True,
         "session_age_hours": age_h,
         "detail": (
-            f"Active ({age_h}h old)" if stockbit_active and age_h is not None
+            f"Active ({age_h}h old)"
+            if stockbit_active and age_h is not None
             else ("Active" if stockbit_active else "No session")
         ),
     }

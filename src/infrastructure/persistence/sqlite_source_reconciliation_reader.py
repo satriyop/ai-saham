@@ -91,14 +91,10 @@ class SQLiteSourceReconciliationReader:
             )
 
             provenance_columns = [
-                c
-                for c in ("source", "volume_unit", "price_adjustment_policy")
-                if c in columns
+                c for c in ("source", "volume_unit", "price_adjustment_policy") if c in columns
             ]
             missing_provenance_columns = [
-                c
-                for c in ("source", "volume_unit", "price_adjustment_policy")
-                if c not in columns
+                c for c in ("source", "volume_unit", "price_adjustment_policy") if c not in columns
             ]
 
             if missing_provenance_columns:
@@ -245,9 +241,7 @@ class SQLiteSourceReconciliationReader:
                     value_columns_present=value_columns_present,
                 )
 
-            negative_condition = (
-                "(CAST(buy_value AS REAL) < 0 OR CAST(sell_value AS REAL) < 0)"
-            )
+            negative_condition = "(CAST(buy_value AS REAL) < 0 OR CAST(sell_value AS REAL) < 0)"
             negative_value_count = conn.execute(
                 f"SELECT COUNT(*) FROM broker_daily_flow WHERE {negative_condition}"
             ).fetchone()[0]
@@ -347,9 +341,7 @@ class SQLiteSourceReconciliationReader:
                     foreign_flow_snapshots_exists=snapshots_exists,
                 )
 
-            total_row_count = conn.execute(
-                "SELECT COUNT(*) FROM foreign_flow_points"
-            ).fetchone()[0]
+            total_row_count = conn.execute("SELECT COUNT(*) FROM foreign_flow_points").fetchone()[0]
 
             matched_row_count = conn.execute(
                 "SELECT COUNT(*) FROM foreign_flow_points ffp "
@@ -402,9 +394,7 @@ class SQLiteSourceReconciliationReader:
         return {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
 
     def _distribution(self, conn: sqlite3.Connection, table: str, column: str) -> dict:
-        rows = conn.execute(
-            f"SELECT {column}, COUNT(*) FROM {table} GROUP BY {column}"
-        ).fetchall()
+        rows = conn.execute(f"SELECT {column}, COUNT(*) FROM {table} GROUP BY {column}").fetchall()
         return {(value if value is not None else "null"): count for value, count in rows}
 
     def _rows_as_dicts(self, conn: sqlite3.Connection, query: str) -> tuple[dict, ...]:

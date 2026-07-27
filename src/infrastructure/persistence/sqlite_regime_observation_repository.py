@@ -281,6 +281,7 @@ class SQLiteRegimeObservationRepository:
 
 # ── serialization helpers ─────────────────────────────────────────────────────
 
+
 def _row_to_evidence(row: sqlite3.Row) -> RegimeDetectionEvidence:
     inputs = json.loads(row["detection_inputs_json"])
     return RegimeDetectionEvidence(

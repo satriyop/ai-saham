@@ -116,9 +116,7 @@ def test_dry_run_does_not_change_existing_data_rows(tmp_path: Path):
 
     with sqlite3.connect(str(db_path)) as conn:
         conn.row_factory = sqlite3.Row
-        count_before = conn.execute(
-            "SELECT COUNT(*) FROM seasonality_cache"
-        ).fetchone()[0]
+        count_before = conn.execute("SELECT COUNT(*) FROM seasonality_cache").fetchone()[0]
         row_before = conn.execute(
             "SELECT source, fetched_at FROM seasonality_cache WHERE ticker='BBRI'"
         ).fetchone()
@@ -128,9 +126,7 @@ def test_dry_run_does_not_change_existing_data_rows(tmp_path: Path):
 
     with sqlite3.connect(str(db_path)) as conn:
         conn.row_factory = sqlite3.Row
-        count_after = conn.execute(
-            "SELECT COUNT(*) FROM seasonality_cache"
-        ).fetchone()[0]
+        count_after = conn.execute("SELECT COUNT(*) FROM seasonality_cache").fetchone()[0]
         row_after = conn.execute(
             "SELECT source, fetched_at FROM seasonality_cache WHERE ticker='BBRI'"
         ).fetchone()
@@ -150,9 +146,7 @@ def test_ensure_quarantine_table_creates_table(tmp_path: Path):
     with sqlite3.connect(str(db_path)) as conn:
         tables = {
             row[0]
-            for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         }
     assert "seasonality_cache_quarantine" in tables
 
@@ -168,9 +162,7 @@ def test_ensure_quarantine_table_is_idempotent(tmp_path: Path):
     with sqlite3.connect(str(db_path)) as conn:
         tables = {
             row[0]
-            for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         }
     assert "seasonality_cache_quarantine" in tables
 
@@ -190,9 +182,7 @@ def test_apply_creates_quarantine_table_implicitly(tmp_path: Path):
     with sqlite3.connect(str(db_path)) as conn:
         tables = {
             row[0]
-            for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         }
     assert "seasonality_cache_quarantine" in tables
 
@@ -208,9 +198,7 @@ def test_apply_moves_invalid_row_into_quarantine(tmp_path: Path):
     repairer.quarantine_and_delete([_repair_row()], _REPAIR_RUN_ID)
 
     with sqlite3.connect(str(db_path)) as conn:
-        quarantine_rows = conn.execute(
-            "SELECT * FROM seasonality_cache_quarantine"
-        ).fetchall()
+        quarantine_rows = conn.execute("SELECT * FROM seasonality_cache_quarantine").fetchall()
     assert len(quarantine_rows) == 1
     assert quarantine_rows[0][0] == "BBRI"
     assert quarantine_rows[0][4] is None
@@ -254,9 +242,7 @@ def test_apply_preserves_valid_rows(tmp_path: Path):
     repairer.quarantine_and_delete(rows_to_repair, _REPAIR_RUN_ID)
 
     with sqlite3.connect(str(db_path)) as conn:
-        remaining = conn.execute(
-            "SELECT ticker FROM seasonality_cache ORDER BY ticker"
-        ).fetchall()
+        remaining = conn.execute("SELECT ticker FROM seasonality_cache ORDER BY ticker").fetchall()
     assert [r[0] for r in remaining] == ["BBCA"]
 
 
@@ -296,8 +282,7 @@ def test_rerun_apply_is_idempotent(tmp_path: Path):
 
     with sqlite3.connect(str(db_path)) as conn:
         remaining_invalid = conn.execute(
-            "SELECT COUNT(*) FROM seasonality_cache "
-            "WHERE source IS NULL AND fetched_at IS NULL"
+            "SELECT COUNT(*) FROM seasonality_cache WHERE source IS NULL AND fetched_at IS NULL"
         ).fetchone()[0]
     assert remaining_invalid == 0
 
@@ -319,14 +304,10 @@ def test_null_safe_deletion_handles_null_source(tmp_path: Path):
 
     repairer = _make_repairer(db_path)
     repairer.ensure_quarantine_table()
-    repairer.quarantine_and_delete(
-        [_repair_row(source=None, fetched_at=None)], _REPAIR_RUN_ID
-    )
+    repairer.quarantine_and_delete([_repair_row(source=None, fetched_at=None)], _REPAIR_RUN_ID)
 
     with sqlite3.connect(str(db_path)) as conn:
-        remaining = conn.execute(
-            "SELECT ticker FROM seasonality_cache"
-        ).fetchall()
+        remaining = conn.execute("SELECT ticker FROM seasonality_cache").fetchall()
     assert len(remaining) == 1
     assert remaining[0][0] == "BBCA"
 
@@ -365,9 +346,7 @@ def test_null_safe_deletion_handles_mixed_nulls(tmp_path: Path):
     )
 
     with sqlite3.connect(str(db_path)) as conn:
-        remaining = conn.execute(
-            "SELECT ticker FROM seasonality_cache"
-        ).fetchall()
+        remaining = conn.execute("SELECT ticker FROM seasonality_cache").fetchall()
     assert len(remaining) == 1
     assert remaining[0][0] == "BBCA"
 
@@ -392,15 +371,11 @@ def test_transaction_rollback_when_delete_matches_zero_rows(tmp_path: Path):
         repairer.quarantine_and_delete([good_row, bad_row], _REPAIR_RUN_ID)
 
     with sqlite3.connect(str(db_path)) as conn:
-        remaining = conn.execute(
-            "SELECT ticker FROM seasonality_cache ORDER BY ticker"
-        ).fetchall()
+        remaining = conn.execute("SELECT ticker FROM seasonality_cache ORDER BY ticker").fetchall()
     assert [r[0] for r in remaining] == ["BBCA", "BBRI", "TLKM"]
 
     with sqlite3.connect(str(db_path)) as conn:
-        qcount = conn.execute(
-            "SELECT COUNT(*) FROM seasonality_cache_quarantine"
-        ).fetchone()[0]
+        qcount = conn.execute("SELECT COUNT(*) FROM seasonality_cache_quarantine").fetchone()[0]
     assert qcount == 0
 
 
@@ -471,9 +446,7 @@ def test_transaction_deletes_quarantine_entries_on_rollback(tmp_path: Path):
         repairer.quarantine_and_delete(rows, _REPAIR_RUN_ID)
 
     with sqlite3.connect(str(db_path)) as conn:
-        remaining = conn.execute(
-            "SELECT ticker FROM seasonality_cache ORDER BY ticker"
-        ).fetchall()
+        remaining = conn.execute("SELECT ticker FROM seasonality_cache ORDER BY ticker").fetchall()
     assert [r[0] for r in remaining] == ["BBCA", "BBRI"]
 
     with sqlite3.connect(str(db_path)) as conn:

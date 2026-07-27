@@ -44,9 +44,7 @@ def test_same_candle_and_broker_date_is_aligned():
     result = compute_data_freshness(
         candle_as_of=date(2026, 7, 13),
         broker_as_of=date(2026, 7, 13),
-        effective_session=_session(
-            latest_completed_session=date(2026, 7, 13), is_eod_pending=True
-        ),
+        effective_session=_session(latest_completed_session=date(2026, 7, 13), is_eod_pending=True),
     )
     assert result.alignment_state is SourceAlignmentState.ALIGNED
     assert result.sources_aligned is True
@@ -56,9 +54,7 @@ def test_different_candle_and_broker_dates_are_lag():
     result = compute_data_freshness(
         candle_as_of=date(2026, 7, 13),
         broker_as_of=date(2026, 7, 10),
-        effective_session=_session(
-            latest_completed_session=date(2026, 7, 13), is_eod_pending=True
-        ),
+        effective_session=_session(latest_completed_session=date(2026, 7, 13), is_eod_pending=True),
     )
     assert result.alignment_state is SourceAlignmentState.LAG
     assert result.sources_aligned is False
@@ -68,9 +64,7 @@ def test_missing_candle_date_is_missing_and_not_aligned():
     result = compute_data_freshness(
         candle_as_of=None,
         broker_as_of=date(2026, 7, 13),
-        effective_session=_session(
-            latest_completed_session=date(2026, 7, 13), is_eod_pending=True
-        ),
+        effective_session=_session(latest_completed_session=date(2026, 7, 13), is_eod_pending=True),
     )
     assert result.candle_state is SourceFreshnessState.MISSING
     assert result.alignment_state is SourceAlignmentState.MISSING
@@ -81,9 +75,7 @@ def test_missing_broker_date_is_missing_and_not_aligned():
     result = compute_data_freshness(
         candle_as_of=date(2026, 7, 13),
         broker_as_of=None,
-        effective_session=_session(
-            latest_completed_session=date(2026, 7, 13), is_eod_pending=True
-        ),
+        effective_session=_session(latest_completed_session=date(2026, 7, 13), is_eod_pending=True),
     )
     assert result.broker_state is SourceFreshnessState.MISSING
     assert result.alignment_state is SourceAlignmentState.MISSING
@@ -97,9 +89,7 @@ def test_prior_session_data_during_pre_close_session_is_pending_eod_when_eod_pen
     result = compute_data_freshness(
         candle_as_of=date(2026, 7, 13),
         broker_as_of=date(2026, 7, 13),
-        effective_session=_session(
-            latest_completed_session=date(2026, 7, 13), is_eod_pending=True
-        ),
+        effective_session=_session(latest_completed_session=date(2026, 7, 13), is_eod_pending=True),
     )
     assert result.expected_latest_eod == date(2026, 7, 13)
     assert result.candle_state is SourceFreshnessState.PENDING_EOD
@@ -125,9 +115,7 @@ def test_stale_source_dates_remain_stale_regardless_of_eod_pending():
     result = compute_data_freshness(
         candle_as_of=date(2026, 7, 10),
         broker_as_of=date(2026, 7, 10),
-        effective_session=_session(
-            latest_completed_session=date(2026, 7, 13), is_eod_pending=True
-        ),
+        effective_session=_session(latest_completed_session=date(2026, 7, 13), is_eod_pending=True),
     )
     assert result.candle_state is SourceFreshnessState.STALE
     assert result.broker_state is SourceFreshnessState.STALE
@@ -147,9 +135,7 @@ def test_signal_evidence_coverage_passes_through_without_approximation():
     result = compute_data_freshness(
         candle_as_of=date(2026, 7, 13),
         broker_as_of=date(2026, 7, 13),
-        effective_session=_session(
-            latest_completed_session=date(2026, 7, 13), is_eod_pending=True
-        ),
+        effective_session=_session(latest_completed_session=date(2026, 7, 13), is_eod_pending=True),
         signal_evidence_coverage=0.4,
     )
     assert result.signal_evidence_coverage == 0.4
@@ -159,8 +145,6 @@ def test_signal_evidence_coverage_is_explicit_none_when_unavailable():
     result = compute_data_freshness(
         candle_as_of=date(2026, 7, 13),
         broker_as_of=date(2026, 7, 13),
-        effective_session=_session(
-            latest_completed_session=date(2026, 7, 13), is_eod_pending=True
-        ),
+        effective_session=_session(latest_completed_session=date(2026, 7, 13), is_eod_pending=True),
     )
     assert result.signal_evidence_coverage is None

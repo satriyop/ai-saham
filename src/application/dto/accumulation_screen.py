@@ -7,20 +7,20 @@ from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from src.domain.value_objects.foreign_flow_evidence import ForeignFlowEvidence
 from src.domain.value_objects.accum_score_breakdown import AccumScoreBreakdown
+from src.domain.value_objects.foreign_flow_evidence import ForeignFlowEvidence
 
 if TYPE_CHECKING:
     from src.application.dto.assess_signal import AssessSignalResponse
+    from src.application.services.primary_setup_family_resolver import (
+        PrimarySetupFamilyResult,
+    )
     from src.domain.value_objects.analyst_consensus import AnalystConsensus
     from src.domain.value_objects.bandar_detector_snapshot import BandarDetectorSnapshot
     from src.domain.value_objects.company_fundamentals import CompanyFundamentals
     from src.domain.value_objects.data_freshness_status import DataFreshnessStatus
     from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.forward_estimates import ForwardEstimates
-    from src.application.services.primary_setup_family_resolver import (
-        PrimarySetupFamilyResult,
-    )
     from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.risk_assessment import RiskAssessment
     from src.domain.value_objects.risk_gate_audit import (
@@ -267,9 +267,9 @@ class AccumulationCandidate:
             "consecutive_streak": self.consecutive_streak,
             "foreign_vwap": str(self.foreign_vwap) if self.foreign_vwap else None,
             "current_price": str(self.current_price),
-            "vwap_discount_pct": round(self.vwap_discount_pct, 2)
-            if self.vwap_discount_pct is not None
-            else None,
+            "vwap_discount_pct": (
+                round(self.vwap_discount_pct, 2) if self.vwap_discount_pct is not None else None
+            ),
             "rsi": round(self.rsi, 2) if self.rsi is not None else None,
             "trend": self.trend,
             "accum_score": self.accum_score,
@@ -278,9 +278,7 @@ class AccumulationCandidate:
             "bci_label": self.bci_label,
             "bci_tier1_count": self.bci_tier1_count,
             "bci_tier1_net_value": (
-                str(self.bci_tier1_net_value)
-                if self.bci_tier1_net_value is not None
-                else None
+                str(self.bci_tier1_net_value) if self.bci_tier1_net_value is not None else None
             ),
             "bci_absorption_ratio": (
                 round(self.bci_absorption_ratio, 4)
@@ -288,9 +286,9 @@ class AccumulationCandidate:
                 else None
             ),
             "vwap_pct": round(self.vwap_pct, 2) if self.vwap_pct is not None else None,
-            "avg_flow_ratio": round(self.avg_flow_ratio, 2)
-            if self.avg_flow_ratio is not None
-            else None,
+            "avg_flow_ratio": (
+                round(self.avg_flow_ratio, 2) if self.avg_flow_ratio is not None else None
+            ),
             "accum_score_breakdown": (
                 self.accum_score_breakdown.to_dict()
                 if self.accum_score_breakdown is not None
@@ -302,9 +300,9 @@ class AccumulationCandidate:
                 else None
             ),
             "bb_width": round(self.bb_width, 2) if self.bb_width is not None else None,
-            "bb_width_pctile": round(self.bb_width_pctile, 3)
-            if self.bb_width_pctile is not None
-            else None,
+            "bb_width_pctile": (
+                round(self.bb_width_pctile, 3) if self.bb_width_pctile is not None else None
+            ),
             "dividend_risk": self.dividend_risk,
             "rights_issue_risk": self.rights_issue_risk,
             "upcoming_rups": self.upcoming_rups,
@@ -312,57 +310,61 @@ class AccumulationCandidate:
             "seasonal_label": self.seasonal_edge.label if self.seasonal_edge else None,
             "insider_buying": self.insider_buying,
             "recent_insider_buys": self.recent_insider_buys,
-            "insider_net_buy_ratio": round(self.insider_net_buy_ratio, 4)
-            if self.insider_net_buy_ratio is not None
-            else None,
-            "analyst_consensus": self.analyst_consensus.to_dict()
-            if self.analyst_consensus
-            else None,
+            "insider_net_buy_ratio": (
+                round(self.insider_net_buy_ratio, 4)
+                if self.insider_net_buy_ratio is not None
+                else None
+            ),
+            "analyst_consensus": (
+                self.analyst_consensus.to_dict() if self.analyst_consensus else None
+            ),
             "shareholding": self.shareholding.to_dict() if self.shareholding else None,
             "bandar_detector": self.bandar_detector.to_dict() if self.bandar_detector else None,
             "fundamentals": self.fundamentals.to_dict() if self.fundamentals else None,
             "ticker_notation": self.ticker_notation.to_dict() if self.ticker_notation else None,
             "sector_breadth_pct": (
-                round(self.sector_breadth_pct, 4)
-                if self.sector_breadth_pct is not None
-                else None
+                round(self.sector_breadth_pct, 4) if self.sector_breadth_pct is not None else None
             ),
             "sector_breadth_bonus": round(float(self.sector_breadth_bonus), 4),
-            "latest_candle_date": self.latest_candle_date.isoformat()
-            if self.latest_candle_date
-            else None,
-            "latest_broker_date": self.latest_broker_date.isoformat()
-            if self.latest_broker_date
-            else None,
-            "latest_broker_daily_flow_date": self.latest_broker_daily_flow_date.isoformat()
-            if self.latest_broker_daily_flow_date
-            else None,
-            "forward_estimates": self.forward_estimates.to_dict()
-            if self.forward_estimates
-            else None,
-            "signal_assessment": {
-                "identity": self.signal_assessment.assessment.identity.to_dict(),
-                "score": self.signal_assessment.assessment.score,
-                "strength": self.signal_assessment.assessment.strength.value,
-                "entry_quality": self.signal_assessment.assessment.entry_quality.value,
-                "breakdown": self.signal_assessment.assessment.breakdown_dict,
-                "signal_authority_coverage": (
-                    self.signal_assessment.assessment.signal_authority_coverage
-                ),
-                "setup_readiness": (
-                    self.signal_assessment.setup_readiness.to_dict()
-                    if self.signal_assessment.setup_readiness
-                    else None
-                ),
-                "coverage_warning": self.signal_assessment.coverage_warning,
-                "decision_constraints": (
-                    self.signal_assessment.assessment.decision_constraints.to_dict()
-                    if self.signal_assessment.assessment.decision_constraints
-                    else None
-                ),
-            }
-            if self.signal_assessment
-            else None,
+            "latest_candle_date": (
+                self.latest_candle_date.isoformat() if self.latest_candle_date else None
+            ),
+            "latest_broker_date": (
+                self.latest_broker_date.isoformat() if self.latest_broker_date else None
+            ),
+            "latest_broker_daily_flow_date": (
+                self.latest_broker_daily_flow_date.isoformat()
+                if self.latest_broker_daily_flow_date
+                else None
+            ),
+            "forward_estimates": (
+                self.forward_estimates.to_dict() if self.forward_estimates else None
+            ),
+            "signal_assessment": (
+                {
+                    "identity": self.signal_assessment.assessment.identity.to_dict(),
+                    "score": self.signal_assessment.assessment.score,
+                    "strength": self.signal_assessment.assessment.strength.value,
+                    "entry_quality": self.signal_assessment.assessment.entry_quality.value,
+                    "breakdown": self.signal_assessment.assessment.breakdown_dict,
+                    "signal_authority_coverage": (
+                        self.signal_assessment.assessment.signal_authority_coverage
+                    ),
+                    "setup_readiness": (
+                        self.signal_assessment.setup_readiness.to_dict()
+                        if self.signal_assessment.setup_readiness
+                        else None
+                    ),
+                    "coverage_warning": self.signal_assessment.coverage_warning,
+                    "decision_constraints": (
+                        self.signal_assessment.assessment.decision_constraints.to_dict()
+                        if self.signal_assessment.assessment.decision_constraints
+                        else None
+                    ),
+                }
+                if self.signal_assessment
+                else None
+            ),
             "risk_status": self.risk_assessment.risk_level_name if self.risk_assessment else None,
             "risk_confidence": self.risk_assessment.confidence if self.risk_assessment else None,
             "risk_gate": self.risk_assessment.gate_triggered if self.risk_assessment else None,
@@ -434,9 +436,7 @@ class AccumulationCandidateEvaluationResult:
                 f"{self.candidate.latest_candle_date!r} disagrees with max consumed "
                 f"candle date={max_candle_date!r}"
             )
-        max_broker_date = max(
-            (row.date for row in self.consumed_broker_summaries), default=None
-        )
+        max_broker_date = max((row.date for row in self.consumed_broker_summaries), default=None)
         if self.candidate.latest_broker_date != max_broker_date:
             raise ValueError(
                 f"AccumulationCandidateEvaluationResult candidate.latest_broker_date="

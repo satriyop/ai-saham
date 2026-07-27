@@ -92,13 +92,15 @@ class SwingConfig:
     bci_cluster_min_count: int = 3
     bci_stable_min_count: int = 1
     # regime-adaptive setup exits
-    setup_targets: dict[str, SetupTargetConfig] = field(default_factory=lambda: {
-        "risk_on": SetupTargetConfig(Decimal("8"), Decimal("4")),
-        "neutral": SetupTargetConfig(Decimal("5"), Decimal("5")),
-        "volatile": SetupTargetConfig(Decimal("3"), Decimal("3")),
-        "risk_off": SetupTargetConfig(Decimal("3"), Decimal("3")),
-        "default": SetupTargetConfig(Decimal("5"), Decimal("5")),
-    })
+    setup_targets: dict[str, SetupTargetConfig] = field(
+        default_factory=lambda: {
+            "risk_on": SetupTargetConfig(Decimal("8"), Decimal("4")),
+            "neutral": SetupTargetConfig(Decimal("5"), Decimal("5")),
+            "volatile": SetupTargetConfig(Decimal("3"), Decimal("3")),
+            "risk_off": SetupTargetConfig(Decimal("3"), Decimal("3")),
+            "default": SetupTargetConfig(Decimal("5"), Decimal("5")),
+        }
+    )
     # sector breadth confirmation (accumulation_screener.yaml)
     sector_breadth_enabled: bool = True
     sector_breadth_threshold: float = 0.60

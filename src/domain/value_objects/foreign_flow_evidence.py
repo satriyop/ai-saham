@@ -11,11 +11,10 @@ from dataclasses import dataclass, field
 
 from src.domain.value_objects.accum_score_breakdown import (
     FOREIGN_FLOW_COMPONENT_KEYS,
+    AccumScoreBreakdown,
     ForeignFlowComponentScore,
     ForeignFlowComponentStatus,
-    AccumScoreBreakdown,
 )
-
 
 COMPOSITE_FOREIGN_FLOW = "composite_foreign_flow"
 
@@ -69,9 +68,7 @@ class ForeignFlowEvidence:
             raise ValueError("ForeignFlowEvidence net_buy_days cannot exceed total_days")
         keys = [c.key for c in self.components]
         if len(keys) != len(set(keys)):
-            raise ValueError(
-                f"ForeignFlowEvidence component keys must be unique, got {keys}"
-            )
+            raise ValueError(f"ForeignFlowEvidence component keys must be unique, got {keys}")
         if set(keys) != FOREIGN_FLOW_COMPONENT_KEYS:
             missing = sorted(FOREIGN_FLOW_COMPONENT_KEYS - set(keys))
             unexpected = sorted(set(keys) - FOREIGN_FLOW_COMPONENT_KEYS)
@@ -124,17 +121,12 @@ class ForeignFlowEvidence:
     @property
     def missing_components(self) -> tuple[str, ...]:
         return tuple(
-            c.key
-            for c in self.components
-            if c.status is ForeignFlowComponentStatus.MISSING
+            c.key for c in self.components if c.status is ForeignFlowComponentStatus.MISSING
         )
 
     @property
     def longer_term_context_dict(self) -> dict[str, object]:
-        return {
-            key: _thaw_context_value(value)
-            for key, value in self.longer_term_context
-        }
+        return {key: _thaw_context_value(value) for key, value in self.longer_term_context}
 
     @classmethod
     def from_score_breakdown(
@@ -183,14 +175,14 @@ class ForeignFlowEvidence:
             "net_buy_days": self.net_buy_days,
             "total_days": self.total_days,
             "streak": self.streak,
-            "avg_flow_ratio": round(self.avg_flow_ratio, 2)
-            if self.avg_flow_ratio is not None else None,
-            "f_vwap_pct": round(self.f_vwap_pct, 2)
-            if self.f_vwap_pct is not None else None,
-            "vwap_pct": round(self.vwap_pct, 2)
-            if self.vwap_pct is not None else None,
-            "bb_width_pctile": round(self.bb_width_pctile, 3)
-            if self.bb_width_pctile is not None else None,
+            "avg_flow_ratio": (
+                round(self.avg_flow_ratio, 2) if self.avg_flow_ratio is not None else None
+            ),
+            "f_vwap_pct": round(self.f_vwap_pct, 2) if self.f_vwap_pct is not None else None,
+            "vwap_pct": round(self.vwap_pct, 2) if self.vwap_pct is not None else None,
+            "bb_width_pctile": (
+                round(self.bb_width_pctile, 3) if self.bb_width_pctile is not None else None
+            ),
             "component_coverage": round(self.component_coverage, 4),
             "component_coverage_unit": "ratio_0_1",
             "missing_components": list(self.missing_components),
@@ -212,12 +204,7 @@ def classify_flow_direction(avg_flow_ratio: float | None) -> str:
 
 def _freeze_context_value(value: object) -> object:
     if isinstance(value, Mapping):
-        return tuple(
-            sorted(
-                (str(key), _freeze_context_value(item))
-                for key, item in value.items()
-            )
-        )
+        return tuple(sorted((str(key), _freeze_context_value(item)) for key, item in value.items()))
     if isinstance(value, tuple):
         return tuple(_freeze_context_value(item) for item in value)
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
@@ -228,9 +215,7 @@ def _freeze_context_value(value: object) -> object:
 def _thaw_context_value(value: object) -> object:
     if isinstance(value, tuple):
         if all(
-            isinstance(item, tuple)
-            and len(item) == 2
-            and isinstance(item[0], str)
+            isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], str)
             for item in value
         ):
             return {key: _thaw_context_value(item) for key, item in value}

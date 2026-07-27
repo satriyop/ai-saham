@@ -17,7 +17,9 @@ ALIASES = BenchmarkTickerAliases(canonical="IHSG", legacy="^JKSE")
 
 
 def _candle(ticker: str, on: date, close: int = 100) -> Candle:
-    return Candle(ticker=ticker, date=on, open=close, high=close, low=close, close=close, volume=1000)
+    return Candle(
+        ticker=ticker, date=on, open=close, high=close, low=close, close=close, volume=1000
+    )
 
 
 class FakeMarketRepository(MarketDataRepository):

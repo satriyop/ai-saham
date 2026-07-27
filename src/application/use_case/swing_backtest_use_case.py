@@ -10,18 +10,13 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
-from src.application.dto.signal_evidence_execution_context import (
-    SignalEvidenceExecutionContext,
-)
-from src.application.services.effective_market_session_resolver import (
-    EffectiveMarketSessionResolver,
-)
-from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
-
 from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationDerivedFeaturePolicy,
     AccumulationScreenRequest,
+)
+from src.application.dto.signal_evidence_execution_context import (
+    SignalEvidenceExecutionContext,
 )
 from src.application.dto.swing_backtest import (
     DEFAULT_SWING_COST_BPS,
@@ -43,6 +38,9 @@ from src.application.services.backtest_statistics import (
     trade_profit_factor,
     win_rate_pct,
 )
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSessionResolver,
+)
 from src.application.services.swing_backtest_attribution import (
     summarize_swing_backtest_attribution,
 )
@@ -63,6 +61,7 @@ from src.application.use_case.evaluate_swing_setup_use_case import (
 )
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
+from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
 from src.domain.value_objects.market_context import MarketContext
 from src.domain.value_objects.setup_evaluation import SetupEvaluation
 
@@ -172,9 +171,11 @@ class SwingBacktestUseCase:
             win_rate_pct=win_rate_pct([float(t.pnl) for t in sim_result.trades]),
             avg_trade_return_pct=average_pct([t.net_return_pct for t in sim_result.trades]),
             profit_factor=trade_profit_factor(sim_result.trades),
-            exposure_pct=round(sim_result.exposure_days / len(replay_dates) * 100, 2)
-            if replay_dates
-            else 0.0,
+            exposure_pct=(
+                round(sim_result.exposure_days / len(replay_dates) * 100, 2)
+                if replay_dates
+                else 0.0
+            ),
             skipped_no_cash=sim_result.skipped_no_cash,
             skipped_duplicate=sim_result.skipped_duplicate,
             skipped_no_forward_data=sim_result.skipped_no_forward_data,

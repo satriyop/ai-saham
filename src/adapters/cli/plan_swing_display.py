@@ -15,15 +15,14 @@ from __future__ import annotations
 from src.adapters.cli.plan_swing_evidence_display import print_swing_output
 from src.adapters.cli.plan_swing_formatters import (
     SwingDisplayConfig,
-    _fmt_pct_compare,
+    flow_direction_label,
     fmt_date,
     fmt_pct,
-    flow_direction_label,
     foreign_flow_evidence_label,
     notation_detail,
     notation_label,
-    sep,
     section_header,
+    sep,
     signal_label,
     style_bb,
     style_gate,

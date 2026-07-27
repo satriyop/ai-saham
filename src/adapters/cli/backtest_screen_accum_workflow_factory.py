@@ -24,13 +24,13 @@ from src.application.use_case.run_accumulation_audit_workflow_use_case import (
 from src.infrastructure.composition.indicator_registry_factory import (
     create_indicator_registry,
 )
+from src.infrastructure.composition.signal_engine_factory import create_signal_engine
 from src.infrastructure.config.accumulation_audit_config import (
     load_accumulation_audit_config,
 )
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
 )
-from src.infrastructure.composition.signal_engine_factory import create_signal_engine
 from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository

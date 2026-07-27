@@ -12,8 +12,8 @@ from src.domain.value_objects import tick_size as tick_size_module
 from src.domain.value_objects.pre_open_post_open_assessment import (
     PreOpenPostOpenAssessment,
     PreOpenPostOpenCandidate,
-    PreOpenPostOpenResult,
     PreOpenPostOpenDecision,
+    PreOpenPostOpenResult,
 )
 
 
@@ -42,8 +42,7 @@ class PreOpenPostOpenGatesUseCase:
     def execute(self, request: PreOpenPostOpenGatesRequest) -> PreOpenPostOpenResult:
         confirmed_date = request.run_date or date.today()
         confirmations = tuple(
-            self._confirm_candidate(candidate, request)
-            for candidate in request.candidates
+            self._confirm_candidate(candidate, request) for candidate in request.candidates
         )
         return PreOpenPostOpenResult(
             confirmed_date=confirmed_date,
@@ -101,14 +100,17 @@ class PreOpenPostOpenGatesUseCase:
                 f"regime {request.regime}: entry band tightened to"
                 f" {effective_range_low:,.0f}–{effective_range_high:,.0f}"
             )
-            if request.require_backed_in_weak and candidate.opening_broker_backing_tag not in ("BACKED",):
+            if request.require_backed_in_weak and candidate.opening_broker_backing_tag not in (
+                "BACKED",
+            ):
                 return self._result(
                     candidate,
                     PreOpenPostOpenDecision.SKIP_BEARISH_CONTEXT,
                     planned_entry=opening,
                     stop_pct=self._stop_pct(opening, candidate.atr_stop),
                     reasons=tuple(
-                        reasons + [
+                        reasons
+                        + [
                             f"regime {request.regime}: BACKED broker flow required"
                             f" (got {candidate.opening_broker_backing_tag or 'None'})"
                         ]
@@ -132,9 +134,7 @@ class PreOpenPostOpenGatesUseCase:
                 PreOpenPostOpenDecision.SKIP_GAP_DOWN,
                 planned_entry=opening,
                 stop_pct=self._stop_pct(opening, candidate.atr_stop),
-                reasons=tuple(
-                    reasons + [f"open {opening} below range low {effective_range_low}"]
-                ),
+                reasons=tuple(reasons + [f"open {opening} below range low {effective_range_low}"]),
             )
 
         reasons.append("open inside entry range")
@@ -174,8 +174,7 @@ class PreOpenPostOpenGatesUseCase:
                 planned_entry=opening,
                 stop_pct=stop_pct,
                 reasons=tuple(
-                    reasons
-                    + [f"stop {stop_pct:.1f}% exceeds max {max_stop_pct * 100:.1f}%"]
+                    reasons + [f"stop {stop_pct:.1f}% exceeds max {max_stop_pct * 100:.1f}%"]
                 ),
             )
 
@@ -195,7 +194,8 @@ class PreOpenPostOpenGatesUseCase:
                     planned_entry=opening,
                     stop_pct=stop_pct,
                     reasons=tuple(
-                        reasons + [
+                        reasons
+                        + [
                             f"tick-friction: stop={stop_ticks}t target={target_ticks}t"
                             f" (min stop={request.min_stop_ticks}t"
                             f" target={request.min_target_ticks}t)"

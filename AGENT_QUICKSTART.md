@@ -32,10 +32,11 @@ Read this before every task. This is the mandatory entry point for agents. The l
 - Trust current code during audits. Treat docs as intent, then verify against implementation.
 - Do not revert unrelated user or agent changes.
 - Do not run destructive git cleanup in a shared dirty worktree. `git reset`, `git checkout --`, `git restore`, `git clean`, and broad stash/cleanup commands require explicit user approval and a stated file scope.
-- **Lint is an agent gate, not optional style.** Python edits under `src/` or
-  `tests/` must leave **touched paths** clean under the current Ruff rule set
-  (see Lint Gate below). Do not weaken `pyproject.toml` Ruff config, add blanket
-  ignores, or expand per-file exemptions to land a task.
+- **Lint is an agent gate, not optional style.** After any Python change under
+  `src/` or `tests/`, whole-repo `ruff check src/ tests/` and
+  `ruff format --check src/ tests/` must pass (same as CI). Do not weaken
+  `pyproject.toml` Ruff config, add blanket ignores, or expand per-file
+  exemptions to land a task.
 
 ## Before Editing
 
@@ -52,45 +53,30 @@ Read this before every task. This is the mandatory entry point for agents. The l
 
 CI runs `ruff check src/ tests/` and `ruff format --check src/ tests/` (see
 `.github/workflows/ci.yml`). Agents must treat the same tools as a **close
-criterion**, not only CONTRIBUTING advice.
-
-### Until whole-repo baseline is green
-
-Whole-repo Ruff is still red historically. The dedicated catch-up task is
-`tasks/backlog/restore_repository_ruff_baseline.md`. Until that task is done:
+criterion**, not only CONTRIBUTING advice. The repository baseline is **green**
+(restored 2026-07-27).
 
 | Change type | Required |
 |-------------|----------|
-| Python under `src/` or `tests/` | `ruff check <touched paths>` and `ruff format --check <touched paths>` must pass on **every path you edited or added** |
+| Any Python under `src/` or `tests/` | `ruff check src/ tests/` **and** `ruff format --check src/ tests/` must pass |
 | Docs / config / non-Python only | Ruff not required |
-| The baseline restore task itself | Whole-repo `ruff check src/ tests/` and `ruff format --check src/ tests/` |
 
-Rules while the baseline is red:
+Rules:
 
-- Do **not** claim whole-repo lint is green.
-- Do **not** introduce new Ruff findings on files you touch.
-- Prefer fixing issues in files you already open for the task; do **not** start
-  a repository-wide auto-fix rewrite unless the task is the baseline restore
-  or the user explicitly requests it.
-- Do **not** disable rules, add `# noqa` drive-bys, or per-file ignores to
-  silence debt outside the task scope.
-- If a pre-existing violation on a file you must edit is huge and unrelated,
-  fix what your edit requires at minimum so **your touched paths** pass Ruff;
-  note residual whole-repo debt only when relevant.
-
-### After baseline restore lands
-
-- Every code task: `ruff check src/ tests/` and `ruff format --check src/ tests/`
-  must pass (same as CI).
-- Touch-path-only is no longer sufficient.
+- Do **not** disable rules, add `# noqa` drive-bys, or per-file ignores to silence debt.
+- Prefer `ruff check --fix` + `ruff format` on the tree (or on paths you edit),
+  then re-run whole-repo check before declaring done.
+- If Ruff is unavailable in the environment, say so explicitly — do not claim
+  lint passed.
 
 Commands:
 
 ```bash
-ruff check path/to/edited.py path/to/other.py
-ruff format --check path/to/edited.py path/to/other.py
-# or format in place then re-check:
-ruff format path/to/edited.py
+ruff check src/ tests/
+ruff format --check src/ tests/
+# or fix then re-check:
+ruff check src/ tests/ --fix
+ruff format src/ tests/
 ```
 
 ## Fix Stale Docstrings In Files You Touch
@@ -235,7 +221,7 @@ Required structure:
 6. Define close criteria.
    - State what must be true before the task is considered done.
    - Include focused tests, full tests when feasible, `git diff --check`, and
-     the Lint Gate (Ruff on touched paths; whole-repo after baseline restore).
+     the Lint Gate (whole-repo Ruff check + format).
 7. Require pre-edit design confirmation for structural changes.
    - The agent must state how it will implement the contract before editing.
    - If the design violates any forbidden interpretation, stop before coding.
@@ -341,8 +327,8 @@ Before marking done:
 - [ ] No old code path still performs logic that was supposed to move layers.
 - [ ] Grep confirms the old forbidden behavior is gone.
 - [ ] Focused tests and `git diff --check` pass.
-- [ ] Lint Gate: Ruff check + format on touched `src/`/`tests/` paths (or
-      whole-repo after baseline restore) pass.
+- [ ] Lint Gate: `ruff check src/ tests/` and `ruff format --check src/ tests/`
+      pass (whole-repo, same as CI).
 
 ## Manual Dependency Injection
 
@@ -395,14 +381,13 @@ For documentation-only edits:
 
 - Documentation-only: run `git diff --check`; run tests only if examples/contracts changed.
 - Small localized code change: run focused tests for touched behavior,
-  `git diff --check`, and **Lint Gate** on every touched Python path under
-  `src/` or `tests/`.
-- Shared scoring/risk/signal/tuning/persistence/config change: run focused tests, architecture boundary tests, and the full test suite unless explicitly deferred; **Lint Gate** on touched Python paths (whole-repo Ruff after baseline restore).
-- CLI/output change: run command contract or display tests, and manually inspect representative output when practical; **Lint Gate** on touched Python adapters/tests.
+  `git diff --check`, and **Lint Gate** (whole-repo Ruff).
+- Shared scoring/risk/signal/tuning/persistence/config change: run focused tests, architecture boundary tests, and the full test suite unless explicitly deferred; **Lint Gate** (whole-repo Ruff).
+- CLI/output change: run command contract or display tests, and manually inspect representative output when practical; **Lint Gate** (whole-repo Ruff).
 - Data ingestion, persistence, source mapping, observations, labels, replay,
   readiness, tuning, market-context evidence, or data-safety claims: apply the
   Data Contract Audit Gate in `AI_AGENT_CHECKLIST.md` and report relevant
-  `saham audit data ...` findings; **Lint Gate** on touched Python paths.
+  `saham audit data ...` findings; **Lint Gate** (whole-repo Ruff).
 
 If verification is skipped or impossible, say exactly why (including if Ruff
 is unavailable in the environment — state that explicitly; do not pretend

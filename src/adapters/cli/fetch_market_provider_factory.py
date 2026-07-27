@@ -39,10 +39,7 @@ def create_broker_provider(name: str | None):
     if name == "idx":
         return IdxBrokerDataProvider(), "idx"
     if name is not None:
-        raise ValueError(
-            "Unknown broker provider: "
-            f"{name}. Choose from: idx, stockbit"
-        )
+        raise ValueError(f"Unknown broker provider: {name}. Choose from: idx, stockbit")
 
     # Auto-detect
     stockbit_config = load_stockbit_provider_config()

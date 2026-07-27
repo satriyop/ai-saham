@@ -121,9 +121,15 @@ def signal_label(candidate: Any, config: SwingDisplayConfig) -> str:
         and candidate.accum_score >= config.coiled_spring_min_score
     ):
         return "coiled spring"
-    if candidate.accum_score >= config.strong_min_score and candidate.consecutive_streak >= config.strong_min_streak:
+    if (
+        candidate.accum_score >= config.strong_min_score
+        and candidate.consecutive_streak >= config.strong_min_streak
+    ):
         return "strong"
-    if candidate.accum_score >= config.building_min_score and candidate.consecutive_streak >= config.building_min_streak:
+    if (
+        candidate.accum_score >= config.building_min_score
+        and candidate.consecutive_streak >= config.building_min_streak
+    ):
         return "building"
     if candidate.accum_score >= config.enter_min_score:
         return "high score"

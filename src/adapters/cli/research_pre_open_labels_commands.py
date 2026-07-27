@@ -49,12 +49,8 @@ def pre_open_labels(
     )
 
     repository = SQLiteLearningArtifactRepository(resolved_db)
-    observations = repository.list_observations(
-        AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION
-    )
-    compatibility_ids = sorted(
-        {observation.compatibility_id for observation in observations}
-    )
+    observations = repository.list_observations(AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION)
+    compatibility_ids = sorted({observation.compatibility_id for observation in observations})
     if compatibility_id is None:
         if len(compatibility_ids) != 1:
             typer.echo(

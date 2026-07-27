@@ -47,10 +47,12 @@ def test_attached_required_flow_only_skips_absent_setup_warning():
 
 def test_full_confidence_no_coverage_warning():
     uc = _use_case()
-    resp = uc.execute(_req(
-        setup_evidence=_setup_evidence("MATCH"),
-        flow_confirmation_evidence=_flow_evidence(),
-    ))
+    resp = uc.execute(
+        _req(
+            setup_evidence=_setup_evidence("MATCH"),
+            flow_confirmation_evidence=_flow_evidence(),
+        )
+    )
     assert resp.coverage_warning is None
 
 
@@ -67,10 +69,12 @@ def test_setup_only_emits_coverage_warning_naming_absent_flow_group():
 
 def test_breakdown_includes_present_groups_and_authority_coverage():
     uc = _use_case()
-    resp = uc.execute(_req(
-        setup_evidence=_setup_evidence("MATCH"),
-        flow_confirmation_evidence=_flow_evidence(capped_strength=0.70),
-    ))
+    resp = uc.execute(
+        _req(
+            setup_evidence=_setup_evidence("MATCH"),
+            flow_confirmation_evidence=_flow_evidence(capped_strength=0.70),
+        )
+    )
     bd = resp.assessment.breakdown_dict
     assert "setup_quality_group" in bd
     assert "flow_confirmation_group" in bd
@@ -91,7 +95,9 @@ def test_breakdown_omits_missing_groups():
 def test_flag_adjustment_in_breakdown_when_nonzero():
     uc = _use_case()
     ctx = _ctx(forward_pe=55.0)
-    resp = uc.execute(_req(signal_context=ctx, flow_confirmation_evidence=_flow_evidence(capped_strength=0.50)))
+    resp = uc.execute(
+        _req(signal_context=ctx, flow_confirmation_evidence=_flow_evidence(capped_strength=0.50))
+    )
     bd = resp.assessment.breakdown_dict
     assert "flag_adjustment" in bd
     assert bd["flag_adjustment"] == -10.0
@@ -115,6 +121,7 @@ def test_response_has_all_phase4_fields():
 
 def test_no_evidence_at_all_raises_no_production_signal_evidence_error():
     from src.application.exceptions import NoProductionSignalEvidenceError
+
     uc = _use_case()
     with pytest.raises(NoProductionSignalEvidenceError):
         uc.execute(_req())
@@ -124,11 +131,13 @@ def test_present_but_non_authoritative_flow_names_the_group():
     # HIGH-2 distinction 3: attached + PRODUCTION-registered, but the
     # resolved source availability is not authoritative.
     uc = _use_case()
-    resp = uc.execute(_req(
-        setup_evidence=_setup_evidence("MATCH"),
-        flow_confirmation_evidence=_flow_evidence(),
-        flow_all_authoritative=False,
-    ))
+    resp = uc.execute(
+        _req(
+            setup_evidence=_setup_evidence("MATCH"),
+            flow_confirmation_evidence=_flow_evidence(),
+            flow_all_authoritative=False,
+        )
+    )
     assert resp.coverage_warning is not None
     assert "flow_confirmation" in resp.coverage_warning
     assert "not source-authoritative" in resp.coverage_warning
@@ -148,10 +157,12 @@ def test_attached_non_production_registration_names_the_group():
         )
     )
     uc = _use_case(config)
-    resp = uc.execute(_req(
-        setup_evidence=_setup_evidence("MATCH"),
-        flow_confirmation_evidence=_flow_evidence(),
-    ))
+    resp = uc.execute(
+        _req(
+            setup_evidence=_setup_evidence("MATCH"),
+            flow_confirmation_evidence=_flow_evidence(),
+        )
+    )
     assert resp.coverage_warning is not None
     assert "setup_quality" in resp.coverage_warning
     assert "registration is not PRODUCTION" in resp.coverage_warning

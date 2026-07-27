@@ -11,12 +11,6 @@ Verifies:
 """
 
 from datetime import date, datetime, timedelta
-from src.application.dto.signal_evidence_execution_context import (
-    SignalEvidenceExecutionContext,
-)
-from src.application.services.effective_market_session_resolver import (
-    EffectiveMarketSession,
-)
 from decimal import Decimal
 from unittest.mock import MagicMock
 
@@ -24,12 +18,18 @@ from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenRequest,
 )
+from src.application.dto.assess_signal import AssessSignalResponse
+from src.application.dto.signal_evidence_execution_context import (
+    SignalEvidenceExecutionContext,
+)
 from src.application.services.accumulation_risk_funnel import AccumulationRiskFunnel
+from src.application.services.effective_market_session_resolver import (
+    EffectiveMarketSession,
+)
 from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.services.signal_engine import SignalEngine
 from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
-from src.application.dto.assess_signal import AssessSignalResponse
 from src.application.use_case.assess_risk_use_case import AssessRiskResponse, AssessRiskUseCase
 from src.domain.entities.candle import Candle
 from src.domain.rules.fundamental_gate import FundamentalGate
@@ -142,10 +142,16 @@ def test_risk_funnel_fires_fundamental_gate_on_distressed_ticker():
     candidate.ticker = "BBCA"
     candidate.fundamentals = CompanyFundamentals(
         ticker="BBCA",
-        pe_ratio_ttm=None, roe_ttm=None, net_profit_margin=None,
-        revenue_yoy_growth=None, piotroski_f_score=1,  # distressed
-        dividend_yield=None, week52_high=None, week52_low=None,
-        near_52w_high_rank=None, market_cap_idr=2_000_000_000_000,
+        pe_ratio_ttm=None,
+        roe_ttm=None,
+        net_profit_margin=None,
+        revenue_yoy_growth=None,
+        piotroski_f_score=1,  # distressed
+        dividend_yield=None,
+        week52_high=None,
+        week52_low=None,
+        near_52w_high_rank=None,
+        market_cap_idr=2_000_000_000_000,
     )
     candidate.bandar_detector = None
 
@@ -168,10 +174,16 @@ def test_risk_funnel_passes_healthy_ticker():
     candidate.ticker = "BBCA"
     candidate.fundamentals = CompanyFundamentals(
         ticker="BBCA",
-        pe_ratio_ttm=None, roe_ttm=None, net_profit_margin=None,
-        revenue_yoy_growth=None, piotroski_f_score=8,  # healthy
-        dividend_yield=None, week52_high=None, week52_low=None,
-        near_52w_high_rank=None, market_cap_idr=2_000_000_000_000,
+        pe_ratio_ttm=None,
+        roe_ttm=None,
+        net_profit_margin=None,
+        revenue_yoy_growth=None,
+        piotroski_f_score=8,  # healthy
+        dividend_yield=None,
+        week52_high=None,
+        week52_low=None,
+        near_52w_high_rank=None,
+        market_cap_idr=2_000_000_000_000,
     )
     candidate.bandar_detector = None
 
@@ -249,6 +261,7 @@ def test_risk_funnel_builds_gate_context_from_candidate_data():
         def evaluate(self, ctx):
             captured_contexts.append(ctx)
             from src.domain.rules.risk_gate import GateResult
+
             return GateResult(triggered=False, reason="pass", confidence=0)
 
     risk_uc = AssessRiskUseCase(
@@ -260,10 +273,16 @@ def test_risk_funnel_builds_gate_context_from_candidate_data():
     candidate.ticker = "BBCA"
     candidate.fundamentals = CompanyFundamentals(
         ticker="BBCA",
-        pe_ratio_ttm=None, roe_ttm=None, net_profit_margin=None,
-        revenue_yoy_growth=None, piotroski_f_score=7,
-        dividend_yield=None, week52_high=None, week52_low=None,
-        near_52w_high_rank=None, market_cap_idr=5_000_000_000_000,
+        pe_ratio_ttm=None,
+        roe_ttm=None,
+        net_profit_margin=None,
+        revenue_yoy_growth=None,
+        piotroski_f_score=7,
+        dividend_yield=None,
+        week52_high=None,
+        week52_low=None,
+        near_52w_high_rank=None,
+        market_cap_idr=5_000_000_000_000,
     )
     candidate.bandar_detector = MagicMock()
     candidate.bandar_detector.five_day_accdist = "Big Acc"

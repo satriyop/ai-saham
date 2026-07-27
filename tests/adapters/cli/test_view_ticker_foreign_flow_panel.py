@@ -41,7 +41,9 @@ def test_select_foreign_flow_points_prefers_stockbit_over_idx():
 
 
 def test_select_foreign_flow_points_falls_back_to_idx():
-    points, source = _select_foreign_flow_points({"stockbit": [], "idx": [_point(23, "10", source="idx")]})
+    points, source = _select_foreign_flow_points(
+        {"stockbit": [], "idx": [_point(23, "10", source="idx")]}
+    )
     assert source == "idx"
     assert points[0].source == "idx"
 

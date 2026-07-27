@@ -54,6 +54,7 @@ logger = logging.getLogger(__name__)
 
 # ── API-client-backed BrokerDataProvider ──────────────────────────────────
 
+
 class StockbitBrokerProvider(BrokerDataProvider):
     """
     BrokerDataProvider backed by StockbitApiClient (no Playwright needed for data).
@@ -129,12 +130,18 @@ class StockbitBrokerProvider(BrokerDataProvider):
             logger.warning(
                 "No broker data for %s (%s–%s). "
                 "Run: saham fetch stockbit spy --target stock --ticker %s",
-                ticker, start_date, end_date, ticker,
+                ticker,
+                start_date,
+                end_date,
+                ticker,
             )
             return []
 
         real_total = _fetch_historical_summary_totals(
-            ticker, start_date, end_date, self._api_client,
+            ticker,
+            start_date,
+            end_date,
+            self._api_client,
             stockbit_config=self._stockbit_config,
         )
         if real_total is None:
@@ -225,7 +232,10 @@ class StockbitBrokerProvider(BrokerDataProvider):
         try:
             while True:
                 url = build_historical_summary_url(
-                    ticker, start_date, end_date, page,
+                    ticker,
+                    start_date,
+                    end_date,
+                    page,
                     stockbit_config=self._stockbit_config,
                 )
                 body = self._api_client.get(url)
@@ -266,24 +276,26 @@ class StockbitBrokerProvider(BrokerDataProvider):
             days: Max calendar days to look back (capped at 365 by the API).
         """
         codes = (
-            broker_codes if broker_codes is not None
-            else self._stockbit_config.tracked_broker_codes
+            broker_codes if broker_codes is not None else self._stockbit_config.tracked_broker_codes
         )
         all_flows: list[BrokerDailyFlow] = []
 
         for code in codes:
             flows = _fetch_broker_daily_flows_for_code(
-                self._api_client, ticker, code, days,
+                self._api_client,
+                ticker,
+                code,
+                days,
                 stockbit_config=self._stockbit_config,
             )
             all_flows.extend(flows)
-            logger.debug(
-                "fetch_broker_daily_flows: %s/%s → %d records", ticker, code, len(flows)
-            )
+            logger.debug("fetch_broker_daily_flows: %s/%s → %d records", ticker, code, len(flows))
 
         logger.info(
             "fetch_broker_daily_flows: %s → %d total records across %d codes",
-            ticker, len(all_flows), len(codes),
+            ticker,
+            len(all_flows),
+            len(codes),
         )
         return all_flows
 
@@ -358,27 +370,30 @@ def _fetch_broker_daily_flows_for_code(
             avg_price = _dict_dec(net, "avg_price")
 
             try:
-                results.append(BrokerDailyFlow(
-                    ticker=ticker.upper(),
-                    date=flow_date,
-                    broker_code=broker_code.upper(),
-                    broker_name=broker_name,
-                    source="stockbit",
-                    buy_lot=abs(buy_lot),
-                    sell_lot=abs(sell_lot),
-                    net_lot=net_lot,
-                    buy_value=abs(buy_value),
-                    sell_value=abs(sell_value),
-                    net_value=net_value,
-                    avg_buy_price=avg_buy_price,
-                    avg_sell_price=avg_sell_price,
-                    avg_price=avg_price,
-                    buy_pct=float(total_buy.get("pct") or 0),
-                    sell_pct=float(total_sell.get("pct") or 0),
-                ))
+                results.append(
+                    BrokerDailyFlow(
+                        ticker=ticker.upper(),
+                        date=flow_date,
+                        broker_code=broker_code.upper(),
+                        broker_name=broker_name,
+                        source="stockbit",
+                        buy_lot=abs(buy_lot),
+                        sell_lot=abs(sell_lot),
+                        net_lot=net_lot,
+                        buy_value=abs(buy_value),
+                        sell_value=abs(sell_value),
+                        net_value=net_value,
+                        avg_buy_price=avg_buy_price,
+                        avg_sell_price=avg_sell_price,
+                        avg_price=avg_price,
+                        buy_pct=float(total_buy.get("pct") or 0),
+                        sell_pct=float(total_sell.get("pct") or 0),
+                    )
+                )
             except Exception as e:
-                logger.debug("Could not parse BrokerDailyFlow %s/%s %s: %s",
-                             ticker, broker_code, date_str, e)
+                logger.debug(
+                    "Could not parse BrokerDailyFlow %s/%s %s: %s", ticker, broker_code, date_str, e
+                )
 
         pagination = data.get("pagination") or {}
         if not pagination.get("has_next"):
@@ -414,7 +429,10 @@ def _fetch_historical_summary_totals(
     try:
         while True:
             url = build_historical_summary_url(
-                ticker, start_date, end_date, page,
+                ticker,
+                start_date,
+                end_date,
+                page,
                 stockbit_config=stockbit_config,
             )
             body = api_client.get(url)

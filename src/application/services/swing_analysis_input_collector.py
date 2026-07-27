@@ -7,6 +7,7 @@ loading, accumulation-candidate build, and market-context evaluation.
 Extracted from `SwingAnalysisWorkflowUseCase` to keep the use case as
 orchestration only.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -26,9 +27,6 @@ if TYPE_CHECKING:
     from src.application.dto import swing_analysis as swing_analysis_dto
     from src.application.dto.accumulation_screen import (
         AccumulationCandidateEvaluationResult,
-    )
-    from src.application.dto.signal_evidence_execution_context import (
-        SignalEvidenceExecutionContext,
     )
     from src.application.services.signal_evidence_execution_context_builder import (
         SignalEvidenceExecutionContextBuilder,
@@ -57,9 +55,9 @@ class SwingAnalysisInputCollector:
         build_data_freshness: Callable[..., Any],
         build_flow_detail: Callable[..., Any],
         build_broker_detail: Callable[..., Any],
-        build_accumulation_candidate_evaluation: (
-            Callable[..., "AccumulationCandidateEvaluationResult | None"]
-        ),
+        build_accumulation_candidate_evaluation: Callable[
+            ..., "AccumulationCandidateEvaluationResult | None"
+        ],
         signal_evidence_context_builder: "SignalEvidenceExecutionContextBuilder",
         evaluate_market_context: Callable[..., "MarketContext"] | None,
         session_resolver: EffectiveMarketSessionResolver | None = None,
@@ -144,23 +142,14 @@ class SwingAnalysisInputCollector:
         latest_close = candles[-1].close
 
         coverage_end = (
-            (effective_session.latest_completed_session if effective_session else None)
-            or request.today
-        )
+            effective_session.latest_completed_session if effective_session else None
+        ) or request.today
 
         eligible_candle_dates = sorted(
-            {
-                candle.date
-                for candle in candles
-                if candle.date <= coverage_end
-            }
+            {candle.date for candle in candles if candle.date <= coverage_end}
         )
 
-        coverage_start = (
-            eligible_candle_dates[0]
-            if eligible_candle_dates
-            else coverage_end
-        )
+        coverage_start = eligible_candle_dates[0] if eligible_candle_dates else coverage_end
 
         execution_context = self._signal_evidence_context_builder.build(
             effective_session=effective_session,

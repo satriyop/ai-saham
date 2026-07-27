@@ -229,9 +229,7 @@ class BackfillSignalObservationsUseCase:
             market_context = None
             if self._evaluate_market_context is not None:
                 try:
-                    market_context = self._evaluate_market_context(
-                        as_of_date=trading_date
-                    )
+                    market_context = self._evaluate_market_context(as_of_date=trading_date)
                 except Exception:
                     market_context_notes.append(
                         f"market_context_unavailable_for_{trading_date.isoformat()}"
@@ -344,9 +342,7 @@ class BackfillSignalObservationsUseCase:
             recall_eligibility=recall_eligibility,
         )
 
-    def _build_execution_context(
-        self, effective_session
-    ) -> SignalEvidenceExecutionContext:
+    def _build_execution_context(self, effective_session) -> SignalEvidenceExecutionContext:
         """Build capture context with availability assessment when possible.
 
         Uses a gap-free IHSG session window (not a fixed 14-calendar-day
@@ -359,9 +355,7 @@ class BackfillSignalObservationsUseCase:
                 effective_session=effective_session,
                 source_availability_use_case=None,
                 observation_contract=self._observation_identity.observation_contract,
-                semantic_compatibility_id=(
-                    self._observation_identity.semantic_compatibility_id
-                ),
+                semantic_compatibility_id=(self._observation_identity.semantic_compatibility_id),
             )
 
         coverage_end = (
@@ -378,9 +372,7 @@ class BackfillSignalObservationsUseCase:
         return replace(
             built,
             observation_contract=self._observation_identity.observation_contract,
-            semantic_compatibility_id=(
-                self._observation_identity.semantic_compatibility_id
-            ),
+            semantic_compatibility_id=(self._observation_identity.semantic_compatibility_id),
         )
 
     def _resolve_availability_calendar_start(self, coverage_end: date) -> date:
@@ -388,9 +380,7 @@ class BackfillSignalObservationsUseCase:
             resolve_gap_free_availability_calendar_start,
         )
 
-        probe_start = coverage_end - timedelta(
-            days=self._AVAILABILITY_CALENDAR_PROBE_DAYS
-        )
+        probe_start = coverage_end - timedelta(days=self._AVAILABILITY_CALENDAR_PROBE_DAYS)
         candles = self._market.get_candles(
             "IHSG",
             start_date=probe_start,
@@ -415,6 +405,7 @@ class BackfillSignalObservationsUseCase:
             )
             for ticker in tickers
         )
+
 
 def _dates_from_candles(candles) -> list[date]:
     return sorted({candle.date for candle in candles})

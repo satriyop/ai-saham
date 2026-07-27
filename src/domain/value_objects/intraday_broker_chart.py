@@ -19,13 +19,13 @@ from decimal import Decimal
 
 @dataclass(frozen=True)
 class IntradayBrokerChartPoint:
-    time: str          # "09:00"
+    time: str  # "09:00"
     net_value: Decimal  # IDR cumulative net buy/sell; negative = net sell
 
 
 @dataclass(frozen=True)
 class IntradayBrokerSymbolChart:
-    symbol: str        # ticker, e.g. "EMAS"
+    symbol: str  # ticker, e.g. "EMAS"
     points: tuple[IntradayBrokerChartPoint, ...]
 
     @property
@@ -47,8 +47,8 @@ class IntradayBrokerSymbolChart:
 
 @dataclass(frozen=True)
 class IntradayBrokerChart:
-    broker_code: str    # e.g. "XL"
-    broker_name: str    # e.g. "Stockbit Sekuritas Digital" (may be empty)
+    broker_code: str  # e.g. "XL"
+    broker_name: str  # e.g. "Stockbit Sekuritas Digital" (may be empty)
     date: date
     fetched_at: datetime
     symbols: tuple[IntradayBrokerSymbolChart, ...]

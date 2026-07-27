@@ -17,21 +17,23 @@ from src.domain.value_objects.signal_artifact_schema import (
     CANDIDATE_OBSERVATION_SCHEMA_VERSION,
 )
 
-TOP_LEVEL_KEYS = frozenset({
-    "schema_version",
-    "artifact_type",
-    "signal_assessment_identity",
-    "ticker",
-    "snapshot_date",
-    "captured_at",
-    "workflow",
-    "screen_result",
-    "request",
-    "sub_signal_fingerprint",
-    "candidate",
-    "signal",
-    "trade_setup",
-})
+TOP_LEVEL_KEYS = frozenset(
+    {
+        "schema_version",
+        "artifact_type",
+        "signal_assessment_identity",
+        "ticker",
+        "snapshot_date",
+        "captured_at",
+        "workflow",
+        "screen_result",
+        "request",
+        "sub_signal_fingerprint",
+        "candidate",
+        "signal",
+        "trade_setup",
+    }
+)
 
 
 def _minimal_request(**overrides):
@@ -157,6 +159,7 @@ class TestTopLevelKeysPreserved:
 # ── sub_signal_fingerprint section key presence ──
 # These tests verify that every section produces its keys even when the
 # underlying evidence is None (keys present with None/[], not missing).
+
 
 class TestSubSignalFingerprintSections:
     """All sections must produce persisted keys even when evidence is None."""
@@ -375,10 +378,10 @@ def test_real_producer_schema_4_fingerprint_parses_to_sector_context_route_only(
     a fingerprint-parsing check; the full producer -> observation repo -> label
     generator -> label repo round trip lives in
     test_generate_signal_forward_labels_use_case.py."""
+    from src.domain.value_objects.setup_phase import SetupPhaseState
     from src.domain.value_objects.signal_observation_fingerprint import (
         SignalObservationFingerprint,
     )
-    from src.domain.value_objects.setup_phase import SetupPhaseState
     from tests.application.use_case.signal_evidence_fixtures import (
         _flow_evidence,
         _phase_state,

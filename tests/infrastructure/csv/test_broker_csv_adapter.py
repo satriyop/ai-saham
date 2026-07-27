@@ -224,9 +224,7 @@ class TestBrokerCsvAdapter:
         with pytest.raises(CsvBrokerParserError):
             adapter.parse(csv_file, error_strategy=ErrorStrategy.FAIL)
 
-    def test_parse_with_custom_mapping(
-        self, adapter: BrokerCsvAdapter, tmp_path: Path
-    ) -> None:
+    def test_parse_with_custom_mapping(self, adapter: BrokerCsvAdapter, tmp_path: Path) -> None:
         """Should parse using custom column mapping."""
         csv_content = (
             "Trade Date,Stock Code,FB Val,FS Val,FB Lot,FS Lot,Total Val,Total Lot\n"
@@ -267,9 +265,7 @@ class TestBrokerCsvAdapter:
         assert summary.foreign_buy_value == Decimal("50000000000")  # 50000 * 1M
         assert summary.foreign_sell_value == Decimal("30000000000")  # 30000 * 1M
 
-    def test_preview_limits_rows(
-        self, adapter: BrokerCsvAdapter, tmp_path: Path
-    ) -> None:
+    def test_preview_limits_rows(self, adapter: BrokerCsvAdapter, tmp_path: Path) -> None:
         """Should limit rows in preview mode."""
         lines = [
             "date,ticker,foreign_buy_value,foreign_sell_value,"
@@ -277,8 +273,8 @@ class TestBrokerCsvAdapter:
         ]
         for i in range(1, 11):
             lines.append(
-                f"2024-01-{i:02d},BBCA,{i}000000000,{i-1}000000000,"
-                f"{i}000,{i-1}000,{i}0000000000,{i}0000"
+                f"2024-01-{i:02d},BBCA,{i}000000000,{i - 1}000000000,"
+                f"{i}000,{i - 1}000,{i}0000000000,{i}0000"
             )
         csv_content = "\n".join(lines)
         csv_file = tmp_path / "many_rows.csv"
@@ -311,9 +307,7 @@ class TestBrokerCsvAdapter:
         summary = result.summaries[0]
         assert summary.foreign_buy_value == Decimal("50000000000")
 
-    def test_parse_multiple_tickers(
-        self, adapter: BrokerCsvAdapter, tmp_path: Path
-    ) -> None:
+    def test_parse_multiple_tickers(self, adapter: BrokerCsvAdapter, tmp_path: Path) -> None:
         """Should handle multiple tickers in same file."""
         csv_content = (
             "date,ticker,foreign_buy_value,foreign_sell_value,"

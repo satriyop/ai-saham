@@ -126,9 +126,7 @@ class RulesYamlLoader(RulesLoader):
                 return default_path
 
         locations = ", ".join(str(p) for p in DEFAULT_LOCATIONS)
-        raise RulesFileError(
-            f"No rules file found in default locations: {locations}"
-        )
+        raise RulesFileError(f"No rules file found in default locations: {locations}")
 
     @classmethod
     def _read_file(cls, path: Path) -> str:
@@ -205,9 +203,7 @@ class RulesYamlLoader(RulesLoader):
 
         version = data["version"]
         if version != 1:
-            raise RulesSchemaError(
-                f"Unsupported version {version}. Only version 1 is supported."
-            )
+            raise RulesSchemaError(f"Unsupported version {version}. Only version 1 is supported.")
 
         name = data["name"]
         description = data.get("description")

@@ -46,17 +46,13 @@ def _price_structure_panel(
     )
 
     if structure.low_52w is not None and structure.high_52w is not None:
-        range_txt = (
-            f"  52w  Rp{structure.low_52w:,.0f} \u2013 Rp{structure.high_52w:,.0f}"
-        )
+        range_txt = f"  52w  Rp{structure.low_52w:,.0f} \u2013 Rp{structure.high_52w:,.0f}"
         if structure.range_52w_pct is not None:
             range_txt += f"   pos {_pct(structure.range_52w_pct)}"
         lines.append(Text(range_txt, style="default"))
 
     if structure.volume is not None:
-        vol_line = Text("  Vol ", style="dim") + Text(
-            _fmt_vol(structure.volume), style="default"
-        )
+        vol_line = Text("  Vol ", style="dim") + Text(_fmt_vol(structure.volume), style="default")
         if structure.avg_volume_20d is not None:
             vol_line += Text(
                 f"   20d avg {_fmt_vol(int(structure.avg_volume_20d))}",

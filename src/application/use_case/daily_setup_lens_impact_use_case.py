@@ -134,9 +134,7 @@ class DailySetupLensImpactUseCase:
         self._setup_workflows = dict(setup_workflows)
         self._defaults = request_defaults
 
-    def execute(
-        self, request: DailySetupLensImpactRequest
-    ) -> DailySetupLensImpactResult:
+    def execute(self, request: DailySetupLensImpactRequest) -> DailySetupLensImpactResult:
         if not request.candidates:
             return DailySetupLensImpactResult(rows=())
 
@@ -238,9 +236,7 @@ class DailySetupLensImpactUseCase:
             signal_score = None
 
         setup_match = setup_eval.match.value if setup_eval is not None else "NO_MATCH"
-        entry_authority = (
-            setup_eval.entry_authority if setup_eval is not None else None
-        )
+        entry_authority = setup_eval.entry_authority if setup_eval is not None else None
 
         capped_reason: str | None = None
         if signal_assessment is not None:

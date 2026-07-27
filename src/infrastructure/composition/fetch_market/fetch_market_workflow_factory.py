@@ -10,13 +10,6 @@ from typing import Any
 
 import src.infrastructure.composition.fetch_market.fetch_market_calendar_refresh as _calendar_mod
 import src.infrastructure.composition.fetch_market.fetch_market_context_inputs as _context_mod
-from src.infrastructure.composition.fetch_market.fetch_market_broker_refresh import fetch_broker
-from src.infrastructure.composition.fetch_market.fetch_market_candle_refresh import fetch_candles
-from src.infrastructure.composition.fetch_market.fetch_market_enrichment_refresh import (
-    fetch_enrichment,
-    read_enrichment_pit_coverage,
-)
-from src.infrastructure.composition.fetch_market.fetch_market_meta_refresh import fetch_meta
 from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSessionResolver,
 )
@@ -32,6 +25,13 @@ from src.application.use_case.fetch_market_command_workflow_use_case import (
 from src.application.use_case.fetch_market_refresh_use_case import (
     FetchMarketRefreshUseCase,
 )
+from src.infrastructure.composition.fetch_market.fetch_market_broker_refresh import fetch_broker
+from src.infrastructure.composition.fetch_market.fetch_market_candle_refresh import fetch_candles
+from src.infrastructure.composition.fetch_market.fetch_market_enrichment_refresh import (
+    fetch_enrichment,
+    read_enrichment_pit_coverage,
+)
+from src.infrastructure.composition.fetch_market.fetch_market_meta_refresh import fetch_meta
 from src.infrastructure.config.market_context_config import get_global_context_tickers
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
@@ -76,6 +76,7 @@ def create_workflow_use_case(
             format_market_status_line,
             get_display_market_status,
         )
+
         mstatus = fetch_and_cache_market_status() or get_display_market_status()
         if mstatus is None:
             return None
@@ -93,9 +94,7 @@ def create_workflow_use_case(
         return _context_mod.refresh_market_context_inputs(resolved_db, days=days)
 
     market_freshness = MarketFreshnessService()
-    session_resolver = EffectiveMarketSessionResolver(
-        SQLiteMarketRepository(db_path=db_path)
-    )
+    session_resolver = EffectiveMarketSessionResolver(SQLiteMarketRepository(db_path=db_path))
 
     def ticker_resolver(universe: str | None, explicit: list[str], db_path: Path) -> list[str]:
         return resolve_tickers(

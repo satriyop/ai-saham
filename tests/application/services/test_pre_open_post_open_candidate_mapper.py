@@ -1,6 +1,6 @@
 """Unit tests for pre-open → confirm candidate mapping."""
 
-from datetime import date, datetime
+from datetime import datetime
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 

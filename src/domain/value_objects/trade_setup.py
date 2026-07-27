@@ -28,11 +28,11 @@ if TYPE_CHECKING:
 
 
 class SetupAction(Enum):
-    ENTER               = "ENTER"
-    WATCH               = "WATCH"
-    AVOID               = "AVOID"
-    BLOCKED_EXECUTION   = "BLOCKED_EXECUTION"   # bandar distributing; re-check in days
-    BLOCKED_STRUCTURAL  = "BLOCKED_STRUCTURAL"  # fundamental/liquidity/free_float; skip
+    ENTER = "ENTER"
+    WATCH = "WATCH"
+    AVOID = "AVOID"
+    BLOCKED_EXECUTION = "BLOCKED_EXECUTION"  # bandar distributing; re-check in days
+    BLOCKED_STRUCTURAL = "BLOCKED_STRUCTURAL"  # fundamental/liquidity/free_float; skip
 
     @property
     def is_blocked(self) -> bool:
@@ -79,10 +79,10 @@ class SetupAction(Enum):
 
 
 _SHORT_LABELS: dict[SetupAction, str] = {
-    SetupAction.ENTER:              "ENTER",
-    SetupAction.WATCH:              "WATCH",
-    SetupAction.AVOID:              "AVOID",
-    SetupAction.BLOCKED_EXECUTION:  "BLOCKED(exec)",
+    SetupAction.ENTER: "ENTER",
+    SetupAction.WATCH: "WATCH",
+    SetupAction.AVOID: "AVOID",
+    SetupAction.BLOCKED_EXECUTION: "BLOCKED(exec)",
     SetupAction.BLOCKED_STRUCTURAL: "BLOCKED(struct)",
 }
 
@@ -118,16 +118,16 @@ class TradeSetup:
     action: SetupAction
 
     # Signal dimension
-    signal_score: int                       # regime-adjusted 0–100
-    signal_score_raw: int                   # pre-regime (== signal_score if no MCE)
+    signal_score: int  # regime-adjusted 0–100
+    signal_score_raw: int  # pre-regime (== signal_score if no MCE)
     signal_strength: "SignalStrength"
 
     # Risk dimension — verdict is gate_triggered only; blocking_gates names the gate(s)
-    blocking_gates: tuple[str, ...]         # empty when no gate blocked
+    blocking_gates: tuple[str, ...]  # empty when no gate blocked
 
     # Regime dimension (self-contained for learning loop)
     regime: "MarketRegime | None"
-    signal_multiplier: float                # 1.0 = no impact; <1.0 = headwind
+    signal_multiplier: float  # 1.0 = no impact; <1.0 = headwind
     gate_tightening: bool
 
     rationale: str

@@ -11,8 +11,8 @@ application use case — owns:
 
 from pathlib import Path
 
-from src.infrastructure.composition.fetch_market import fetch_market_context_inputs as wiring
 from src.application.use_case.refresh_market_data_use_case import RefreshMarketDataResponse
+from src.infrastructure.composition.fetch_market import fetch_market_context_inputs as wiring
 from src.infrastructure.config.market_context_config import (
     EidoFactorConfig,
     MarketContextConfig,

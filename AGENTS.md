@@ -16,8 +16,8 @@ Always confirm explicitly:
 - You will ask for clarification if a task violates the Task Template or is architecturally unsafe.
 - You will keep adapters thin and put workflow/policy in application use cases.
 - You will protect shared worktree changes and will not run destructive git cleanup without explicit approval and file scope.
-- You will obey the Lint Gate in `AGENT_QUICKSTART.md` (Ruff check + format on
-  touched `src/`/`tests/` paths; whole-repo after baseline restore).
+- You will obey the Lint Gate in `AGENT_QUICKSTART.md` (whole-repo
+  `ruff check src/ tests/` and `ruff format --check src/ tests/`).
 
 Before coding, state:
 

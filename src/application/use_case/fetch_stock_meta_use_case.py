@@ -30,7 +30,7 @@ class FetchStockMetaRequest:
 @dataclass(frozen=True)
 class FetchStockMetaResult:
     ticker: str
-    status: MetaStatus      # 'cached' | 'new' | 'verified' | 'changed' | 'error'
+    status: MetaStatus  # 'cached' | 'new' | 'verified' | 'changed' | 'error'
     sector: str | None
     industry: str | None
     cached_days: int | None  # how old the cached record is (None if new/error)

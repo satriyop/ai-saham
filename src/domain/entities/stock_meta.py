@@ -12,6 +12,6 @@ class StockMeta:
     sector_key: str | None
     industry: str | None
     industry_key: str | None
-    source: str              # 'yahoo' | 'idxic' — tracks classification origin
+    source: str  # 'yahoo' | 'idxic' — tracks classification origin
     fetched_at: datetime
-    checksum: str            # sha1(sector|industry) — change detection
+    checksum: str  # sha1(sector|industry) — change detection
