@@ -111,7 +111,7 @@ saham screen pre-open \
 - [ ] Assess plan NCP (read-only, database-identified):
 
   ```bash
-  saham analyze pre-open --session YYYY-MM-DD
+  saham assess pre-open --session YYYY-MM-DD
   # atau: --observation-id … --opening-snapshot-id …
   ```
 

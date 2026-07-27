@@ -7,23 +7,35 @@ Troubleshooting → `CLI_TROUBLESHOOTING.md`
 
 ## Command-family consistency
 
-Same shape for every screen scenario (pre-open, accum, …):
+Verb dictionary (ADR-050): first token is the behavior contract.
 
-| Family | Role | Writes learning DB? |
-|--------|------|---------------------|
-| **`screen`** | **Live** discovery / operator display | **No** |
-| **`research <scenario> capture`** | **Save decisions** (observations) | **Yes** |
-| **`research pre-open track`** | Opening samples linked to observation | Track snapshots |
-| **`research <scenario> labels`** | **Outcomes** on saved decisions | Labels |
-| **`research pre-open evaluate`** | Cohort summary over labels | Evaluations |
-| **`analyze pre-open`** | Post-open assess of frozen plan | **No** (stdout only) |
+| Family | Role | Writes learning DB? | Final action words? |
+|--------|------|---------------------|---------------------|
+| **`screen`** | Live multi-candidate discovery | **No** | provisional only |
+| **`inspect`** | Live single-subject capability/evidence lens | **No** | **No** |
+| **`plan`** | Live TradeSetup / trade plan (`plan swing`) | **No** | **Yes** |
+| **`assess`** | Frozen-plan confirmation (`assess pre-open`) | **No** | relative to frozen plan |
+| **`research`** | Learning corpus (capture/labels/evaluate/…) | **Yes** | no |
+| **`trade`** | Human paper notebook | paper journal only | paper only |
+| **`policy`** | Guarded setup-config lifecycle | policy tables | no |
+| **`audit`** | Offline data quality / sentiment accuracy | audit stores may write | no |
+
+Learning scenarios (pre-open, accum) share the same research/trade shape:
+
+| Family | Role |
+|--------|------|
+| **`research <scenario> capture`** | Save decisions (observations) |
+| **`research pre-open track`** | Opening samples linked to observation |
+| **`research <scenario> labels`** | Outcomes on saved decisions |
+| **`research <scenario> evaluate`** | Cohort summary over labels |
+
 
 Examples:
 
 - Live open: `saham screen pre-open` → no observation write  
 - **Save decisions:** `saham research pre-open capture`  
 - Same-day learning: `track` → `labels` → `evaluate` / `status`  
-- Post-open assess: `saham analyze pre-open`  
+- Post-open assess: `saham assess pre-open`  
 - Paper notebook: `saham trade pre-open log --observation-id … --opening-snapshot-id …`
 - Live accum: `saham screen accum` → no observation write  
 
@@ -604,15 +616,15 @@ saham indicator delete SMOOTH_RSI --force
 
 ---
 
-## saham analyze risk
+## saham inspect risk
 
 Rule-based risk assessment using deterministic gates. Returns OPEN (no gate fired) or BLOCKED (gate name).
 
 ```
-saham analyze risk TICKER [OPTIONS]
-saham analyze risk BBCA
-saham analyze risk BBCA --all --explain
-saham analyze risk BBCA --rules-file config/my_rules.yaml
+saham inspect risk TICKER [OPTIONS]
+saham inspect risk BBCA
+saham inspect risk BBCA --all --explain
+saham inspect risk BBCA --rules-file config/my_rules.yaml
 ```
 
 | Option | Short | Default | Description |
@@ -633,13 +645,13 @@ saham analyze risk BBCA --rules-file config/my_rules.yaml
 
 ---
 
-## saham analyze compare
+## # retired: analyze compare
 
 Side-by-side risk comparison across multiple tickers.
 
 ```
-saham analyze compare TICKER TICKER...
-saham analyze compare BBCA BBRI BMRI
+# retired: analyze compare TICKER TICKER...
+# retired: analyze compare BBCA BBRI BMRI
 ```
 
 | Option | Short | Default | Description |
@@ -649,14 +661,14 @@ saham analyze compare BBCA BBRI BMRI
 
 ---
 
-## saham analyze sentiment
+## saham inspect sentiment
 
 News sentiment analysis with keyword or AI classification.
 
 ```
-saham analyze sentiment TICKER [OPTIONS]
-saham analyze sentiment BBCA
-saham analyze sentiment BBCA --days 7 --ai-classify
+saham inspect sentiment TICKER [OPTIONS]
+saham inspect sentiment BBCA
+saham inspect sentiment BBCA --days 7 --ai-classify
 ```
 
 | Option | Short | Default | Description |
@@ -671,12 +683,12 @@ saham analyze sentiment BBCA --days 7 --ai-classify
 
 ---
 
-## saham analyze audit
+## saham audit sentiment
 
 Audit past sentiment predictions against actual price moves (1, 3, 5 trading days).
 
 ```
-saham analyze audit [OPTIONS]
+saham audit sentiment [OPTIONS]
 ```
 
 | Option | Default | Description |
@@ -685,14 +697,14 @@ saham analyze audit [OPTIONS]
 
 ---
 
-## saham analyze regime
+## saham inspect regime
 
 Show deterministic IHSG market regime context (BULLISH, SIDEWAYS, WEAK, RISK_OFF).
 
 ```
-saham analyze regime [OPTIONS]
-saham analyze regime
-saham analyze regime --as-of 2026-06-01 --verbose
+saham inspect regime [OPTIONS]
+saham inspect regime
+saham inspect regime --as-of 2026-06-01 --verbose
 ```
 
 | Option | Short | Default | Description |
@@ -706,14 +718,14 @@ saham analyze regime --as-of 2026-06-01 --verbose
 
 ---
 
-## saham analyze swing
+## saham plan swing
 
 Unified swing analysis — verdict-first with SignalEngine + RiskEngine, optional setup gates, market context, and position sizing.
 
 ```
-saham analyze swing TICKER [OPTIONS]
-saham analyze swing BBRI
-saham analyze swing BBRI --setup foreign-bounce --capital 10000000 --full
+saham plan swing TICKER [OPTIONS]
+saham plan swing BBRI
+saham plan swing BBRI --setup foreign-bounce --capital 10000000 --full
 ```
 
 | Option | Short | Default | Description |
@@ -749,29 +761,17 @@ saham analyze swing BBRI --setup foreign-bounce --capital 10000000 --full
 
 ---
 
-## saham analyze swing-compare
+## ~~saham analyze swing-compare~~ (retired ADR-050)
 
-Compare regime-filtered swing variants side-by-side.
+Removed. No replacement route.
 
-```
-saham analyze swing-compare [OPTIONS]
-saham analyze swing-compare --universe idx80
-saham analyze swing-compare --universe lq45 --variants baseline,sideways_only
-```
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--universe` | idx80 | Universe to scan |
-| `--variants` | baseline,risk_off,sideways_only | Comma-separated regime variants |
-
----
-
-## saham analyze signal inspect
+## saham inspect signal
 
 Live read-only SignalEngine inspection for a ticker — see every factor score.
 
 ```
-saham analyze signal inspect TICKER [OPTIONS]
+saham inspect signal TICKER [OPTIONS]
 ```
 
 | Option | Default | Description |
@@ -781,14 +781,14 @@ saham analyze signal inspect TICKER [OPTIONS]
 
 ---
 
-## saham analyze chart price
+## saham inspect chart price
 
 Plot an ASCII price chart in the terminal with optional SMA/EMA overlays.
 
 ```
-saham analyze chart price TICKER [OPTIONS]
-saham analyze chart price BBCA
-saham analyze chart price BBCA --sma 20 --ema 9 --days 120
+saham inspect chart price TICKER [OPTIONS]
+saham inspect chart price BBCA
+saham inspect chart price BBCA --sma 20 --ema 9 --days 120
 ```
 
 | Option | Default | Description |
@@ -800,13 +800,13 @@ saham analyze chart price BBCA --sma 20 --ema 9 --days 120
 
 ---
 
-## saham analyze chart rsi
+## saham inspect chart rsi
 
 Plot an ASCII RSI chart in the terminal with overbought/oversold bands.
 
 ```
-saham analyze chart rsi TICKER [OPTIONS]
-saham analyze chart rsi BBCA --period 9 --days 120
+saham inspect chart rsi TICKER [OPTIONS]
+saham inspect chart rsi BBCA --period 9 --days 120
 ```
 
 | Option | Default | Description |
@@ -816,12 +816,12 @@ saham analyze chart rsi BBCA --period 9 --days 120
 
 ---
 
-## saham analyze chart volume
+## saham inspect chart volume
 
 Plot ASCII volume bars in the terminal.
 
 ```
-saham analyze chart volume TICKER [OPTIONS]
+saham inspect chart volume TICKER [OPTIONS]
 ```
 
 | Option | Default | Description |
@@ -1466,16 +1466,16 @@ saham strategy skill index
 
 ---
 
-## saham analyze pre-open
+## saham assess pre-open
 
 Post-open assessment of an immutable NCP pre-open plan (read-only).
 Reads `learning_observations` + linked track snapshots — no live prices, no journal write.
 
 ```
-saham analyze pre-open [OPTIONS]
-saham analyze pre-open --session 2026-06-18
-saham analyze pre-open --observation-id OBS --opening-snapshot-id SNAP
-saham analyze pre-open --format json
+saham assess pre-open [OPTIONS]
+saham assess pre-open --session 2026-06-18
+saham assess pre-open --observation-id OBS --opening-snapshot-id SNAP
+saham assess pre-open --format json
 ```
 
 | Option | Default | Description |
@@ -1496,7 +1496,7 @@ saham trade accum log|review
 ```
 
 Not paper: `saham research` (corpus), `saham policy accum` (config lifecycle),
-`saham analyze swing --capital` (sizing).
+`saham plan swing --capital` (sizing).
 
 ---
 
@@ -1510,7 +1510,7 @@ saham trade pre-open log --observation-id OBS --opening-snapshot-id SNAP
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--observation-id` | required | Learning observation id from analyze pre-open |
+| `--observation-id` | required | Learning observation id from assess pre-open |
 | `--opening-snapshot-id` | required | Opening track snapshot id |
 | `--journal` | config | Pre-open CSV journal path |
 | `--db` | config | SQLite database path |

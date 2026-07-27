@@ -390,8 +390,8 @@ saham screen accum BBRI --window 30 --explain
 saham view ticker flow BBRI --days 30
 
 # Swing decision and risk/signal context
-saham analyze swing BBRI --with-risk-detail --with-signal-detail
-saham analyze swing BBRI --with-sentiment   # add news context
+saham plan swing BBRI --with-risk-detail --with-signal-detail
+saham plan swing BBRI --with-sentiment   # add news context
 ```
 
 ### What Makes a Strong Candidate?

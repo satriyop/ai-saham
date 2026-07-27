@@ -22,14 +22,14 @@ Canonical artifact ownership:
 
 | Command | Workflow family | Canonical artifact | Meaning |
 |---------|-----------------|--------------------|---------|
-| `saham analyze swing TICKER` | Single-ticker swing decision | `TradeSetup` | Authoritative swing action from `SignalEngine + RiskEngine` |
+| `saham plan swing TICKER` | Single-ticker swing decision | `TradeSetup` | Authoritative swing action from `SignalEngine + RiskEngine` |
 | `saham screen accum` | Candidate discovery | `AccumulationCandidate` with optional `TradeSetup` | Ranked candidates; final action exists only when both signal and risk are present |
 | `saham screen pre-open` | Intraday pre-open planning | `PreOpenScreenResult` | Conditional pre-open candidate list and entry ranges |
-| `saham analyze pre-open` | Post-open assessment of NCP pre-open plan | `AnalyzePreOpenResult` / `PreOpenPostOpenResult` | Read-only ENTER/WAIT/SKIP after opening track snapshot; database-identified (replaces retired `trade confirm` sidecars) |
+| `saham assess pre-open` | Post-open assessment of NCP pre-open plan | `AnalyzePreOpenResult` / `PreOpenPostOpenResult` | Read-only ENTER/WAIT/SKIP after opening track snapshot; database-identified (replaces retired `trade confirm` sidecars) |
 | `saham trade pre-open log` | Paper journal for pre-open strategy | journal row with observation_id + opening_snapshot_id | Explicit notebook write via same assess use case; not a learning label |
 | `saham policy accum backtest` | Historical replay | typed learning evaluation | Walk-forward performance artifact, not a live verdict |
 | `# retired: retired trade backtest-intraday` | Historical proxy simulation | `IntradayBacktestResponse` | Daily-OHLC proxy performance artifact, not exact intraday replay |
-| `saham analyze accum-audit` | Learning/audit replay | `AccumulationAuditResponse` | Forward-return audit of foreign-flow score evidence |
+| `saham research accum evaluate` | Learning/audit replay | `AccumulationAuditResponse` | Forward-return audit of foreign-flow score evidence |
 | `saham trade accum log` | Journal continuation | `LogSwingCandidateResponse` | Persistence outcome for a logged candidate |
 
 Composition rules:
@@ -56,7 +56,7 @@ JSON contract rules:
   `trade_setup.action`.
 * Opening-session artifacts use `opening_setup` for PRIME/WATCH/SKIP labels;
   they must not use generic `verdict` unless they compose a `TradeSetup`.
-* `saham analyze swing --format json` treats grouped `verdict`, `evidence`, and
+* `saham plan swing --format json` treats grouped `verdict`, `evidence`, and
   `diagnostics` as canonical. It does not emit top-level aliases such as
   `trade_setup`, `signal_assessment`, `accumulation`, `risk`, or `data`.
 

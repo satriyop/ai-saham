@@ -101,13 +101,13 @@ Malam        Refresh data / gap-fill lokal                saham fetch market
 08:57        Capture keputusan kanonis                     saham research pre-open capture
 08:58–09:00  Pre-opening matching — bukan window keputusan produksi
 09:00        Pasar buka — track sample                     saham research pre-open track
-09:00+       ★ POST-OPEN ASSESS ★                          saham analyze pre-open
+09:00+       ★ POST-OPEN ASSESS ★                          saham assess pre-open
 09:05+       Eksekusi order (di Stockbit/broker kamu)
 Siang        Catat outcome kalau ada posisi               saham trade pre-open outcome
 Sore         Log sesi ke journal                          saham trade pre-open log
 ```
 
-**Tiga momen paling kritis:** multi-tick IEV, 08:57 capture, dan post-open `analyze pre-open` setelah track.
+**Tiga momen paling kritis:** multi-tick IEV, 08:57 capture, dan post-open `assess pre-open` setelah track.
 
 ---
 
@@ -239,7 +239,7 @@ Durasi: ~20–30 detik.
 saham screen pre-open --top 5
 ```
 
-Baris `REGIME` memakai logic yang sama dengan `saham analyze regime`: benchmark 20d, breadth di atas SMA20, dan foreign-flow breadth.
+Baris `REGIME` memakai logic yang sama dengan `saham inspect regime`: benchmark 20d, breadth di atas SMA20, dan foreign-flow breadth.
 
 Di regime `WEAK` atau `RISK_OFF`, entry band dipersempit 50% (`gap_pct_tightening_factor: 0.5` di config) dan hanya kandidat `BACKED` yang lanjut ke WATCHLIST. Ini melindungi dari BBCA/BBRI/BMRI/BBNI anchor effect — saat IHSG turun tajam, bid second-liner menguap.
 
@@ -373,7 +373,7 @@ VERDICT    TICKER      IEV    GAP%   SPRD%     ENTRY-RANGE   STOP%   RSI  SIGNAL
  SKIP       BBRI  BBCA  CUAN
 
  At 09:00, fill opening prices and run:
-   saham analyze pre-open \
+   saham assess pre-open \
      --opening-json '{"BNBR":___,"BUMI":___}'
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ==========================================================================================
@@ -399,7 +399,7 @@ VERDICT sudah mensintesis semua sinyal. Cukup baca kolom pertama:
 | `? NO_DATA` | Tidak ada data ATR lokal | Skip hari ini, `saham fetch market TICKER --days 365` malam ini |
 
 Kolom lain berguna untuk context, bukan untuk keputusan utama:
-- **GAP%** dan **ENTRY-RANGE** → dikonfirmasi oleh analyze pre-open setelah track (09:00+)
+- **GAP%** dan **ENTRY-RANGE** → dikonfirmasi oleh assess pre-open setelah track (09:00+)
 - **SPRD%** → likuiditas (0.5–1.5% normal, > 3% tidak likuid)
 - **STOP%** → posisi sizing, baca saat buat order plan
 - **SIGNAL** → ringkasan ACCUM + FVWAP + Prev High + IEV_INTENSITY dalam satu string
@@ -433,21 +433,21 @@ Stop%       : -7.2%              (dari STOP%)
 Prev H      : 114                (dari SIGNAL: PH:114)
 
 Skenario kalau open DALAM range (104–116):
-  → analyze pre-open akan output ENTER
-  → Pasang limit buy di harga yang ditampilkan analyze pre-open
+  → assess pre-open akan output ENTER
+  → Pasang limit buy di harga yang ditampilkan assess pre-open
   → Set stop segera setelah terisi
   → Target awal: Prev H 114
 
 Skenario kalau open DI ATAS 116:
-  → analyze pre-open akan output SKIP (gap up)
+  → assess pre-open akan output SKIP (gap up)
 
 Skenario kalau open DI BAWAH 104:
-  → analyze pre-open akan output SKIP (gap down)
+  → assess pre-open akan output SKIP (gap down)
 ────────────────────────────────────────
 ```
 
 > **Catatan:** Kamu tidak perlu hitung SUGGEST atau ATR-STOP manual lagi —
-> analyze pre-open menampilkan "Limit BUY X | Stop Y" setelah kamu input opening price.
+> assess pre-open menampilkan "Limit BUY X | Stop Y" setelah kamu input opening price.
 
 > **Locked input 08:56–08:57:59; matching 08:58–08:59:59:** Order lama
 > dibatasi untuk amend/withdraw setelah 08:56, sementara order baru masih dapat
@@ -477,13 +477,13 @@ Tepat saat pasar buka (09:00 WIB), tool otomatis mengambil opening price aktual 
 
 ```bash
 # Auto-resolve — baca opening price dari Stockbit running trade + order book
-saham analyze pre-open
+saham assess pre-open
 ```
 
 Kalau mau override harga tertentu (misalnya karena delay data):
 ```bash
 # Manual override untuk ticker tertentu, sisanya auto-resolve
-saham analyze pre-open \
+saham assess pre-open \
   --opening-json '{"BUMI": 158}'
 ```
 
@@ -564,7 +564,7 @@ Untuk saham dengan keputusan `ENTER`:
 
 ```
 1. Buka aplikasi broker kamu (Stockbit Sekuritas / RTI / lainnya)
-2. Pasang limit buy di harga ENTRY (dari output analyze pre-open)
+2. Pasang limit buy di harga ENTRY (dari output assess pre-open)
 3. Begitu order terisi → LANGSUNG pasang stop-loss di harga STOP
 4. Set target awal di Prev High
 ```
@@ -695,10 +695,10 @@ Potong dan tempel di terminal kamu.
 │    ? NO_DATA → saham fetch market TICKER --days 365 malam ini │
 ├──────────────────────────────────────────────────────────────┤
 │  09:00  Isi opening prices dari WATCHLIST template           │
-│    saham analyze pre-open \                       │
+│    saham assess pre-open \                       │
 │      --opening-json '{"BNBR":___,"BUMI":___}'  │
 ├──────────────────────────────────────────────────────────────┤
-│  09:00–09:05  Eksekusi dari output analyze pre-open              │
+│  09:00–09:05  Eksekusi dari output assess pre-open              │
 │    ▶ ENTER → limit buy & stop sudah tertera, pasang langsung │
 │    ◎ WAIT  → pantau 15 menit, entry kalau holds above range  │
 │    ✗ SKIP  → tidak masuk, tanpa pengecualian                 │

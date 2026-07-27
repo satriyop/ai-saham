@@ -169,7 +169,7 @@ row.
 | [047](docs/adr/ADR-047-scenario-adoption-seam-for-signal-risk-mce.md) | Scenario-adoption seam for Signal / Risk / MCE | Accepted; engines single; pre-open directional-baseline amendment mandates removal of its remaining local scorer |
 | [048](docs/adr/ADR-048-pre-open-signal-evidence-and-observation-identity.md) | Pre-open signal evidence + observation identity | Accepted; v3 is the unused first cohort and `pre_open_directional_baseline.v1` is its deterministic long-only champion |
 | [049](docs/adr/ADR-049-database-owned-learning-pipeline-clean-break.md) | Database-owned learning pipeline clean break | Accepted; supersedes ADR-023 learning persistence; amends ADR-027/033/041/042/048; public CLI family tree (trade/research/policy) |
-| [050](docs/adr/ADR-050-cli-verb-contracts.md) | CLI verb contracts (`plan` / `inspect` / `assess`) | Accepted decision; implementation pending clean-break slices; amends 020/032/033/049 command paths |
+| [050](docs/adr/ADR-050-cli-verb-contracts.md) | CLI verb contracts (`plan` / `inspect` / `assess`) | Accepted; implementation landed; amends 020/032/033/049 command paths |
 
 ## Adding or changing a decision
 

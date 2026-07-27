@@ -137,11 +137,11 @@ Three built-in profiles with different threshold sensitivity:
 | **aggressive** | > 65 | < 35 | Active trading |
 
 ```bash
-saham analyze risk BBCA                    # balanced (default)
-saham analyze risk BBCA --all              # all three profiles
-saham analyze risk BBCA --with-sentiment   # include news context
-saham analyze risk BBCA --trend 20         # risk history over 20 days
-saham analyze risk BBCA --format json
+saham inspect risk BBCA                    # balanced (default)
+saham inspect risk BBCA --all              # all three profiles
+saham inspect risk BBCA --with-sentiment   # include news context
+saham inspect risk BBCA --trend 20         # risk history over 20 days
+saham inspect risk BBCA --format json
 ```
 
 ---
@@ -151,10 +151,10 @@ saham analyze risk BBCA --format json
 Sentiment analysis adds context to price movements by analyzing news headlines. Sentiment does NOT affect risk assessment — it's supplementary information only.
 
 ```bash
-saham analyze sentiment BBCA               # last 3 days, keyword-classified
-saham analyze sentiment BBCA --days 7
-saham analyze sentiment BBCA --news-provider google
-saham analyze sentiment BBCA --no-ai       # offline keyword mode
+saham inspect sentiment BBCA               # last 3 days, keyword-classified
+saham inspect sentiment BBCA --days 7
+saham inspect sentiment BBCA --news-provider google
+saham inspect sentiment BBCA --no-ai       # offline keyword mode
 ```
 
 ### Audit Sentiment Accuracy
@@ -162,7 +162,7 @@ saham analyze sentiment BBCA --no-ai       # offline keyword mode
 Checks whether past POSITIVE/NEUTRAL/NEGATIVE classifications were correct after 1, 3, and 5 trading days.
 
 ```bash
-saham analyze audit
+saham audit sentiment
 ```
 
 ---
@@ -249,8 +249,8 @@ Computed from: benchmark SMA20/SMA50 position, breadth (% of universe above SMA2
 breadth change, and foreign flow breadth.
 
 ```bash
-saham analyze regime
-saham analyze regime --as-of 2026-06-01 --verbose
+saham inspect regime
+saham inspect regime --as-of 2026-06-01 --verbose
 ```
 
 ---
@@ -462,9 +462,9 @@ AI is OFF by default. Use it for explanations, sentiment classification, and str
 Default provider is `deepseek`.
 
 ```bash
-saham analyze risk BBCA --explain
-saham analyze risk BBCA --explain --provider ollama --model llama3:8b
-saham analyze sentiment BBCA --ai-classify --provider claude
+saham inspect risk BBCA --explain
+saham inspect risk BBCA --explain --provider ollama --model llama3:8b
+saham inspect sentiment BBCA --ai-classify --provider claude
 ```
 
 ### Local Ollama Setup
@@ -473,7 +473,7 @@ saham analyze sentiment BBCA --ai-classify --provider claude
 brew install ollama
 ollama serve
 ollama pull llama3:8b
-saham analyze risk BBCA --explain --provider ollama --model llama3:8b
+saham inspect risk BBCA --explain --provider ollama --model llama3:8b
 ```
 
 ---
@@ -492,11 +492,11 @@ Verdict-first swing analysis composing SignalEngine + RiskEngine into the final 
 | `pullback-continuation` | Uptrend pullback with foreign-flow support |
 
 ```bash
-saham analyze swing BBRI
-saham analyze swing BBRI --setup foreign-bounce --capital 10000000
-saham analyze swing BBRI --full                           # all evidence
-saham analyze swing BBRI --with-technical-gate             # enable technical gate
-saham analyze swing BBRI --with-market-context             # market context preview
+saham plan swing BBRI
+saham plan swing BBRI --setup foreign-bounce --capital 10000000
+saham plan swing BBRI --full                           # all evidence
+saham plan swing BBRI --with-technical-gate             # enable technical gate
+saham plan swing BBRI --with-market-context             # market context preview
 ```
 
 ---
@@ -514,7 +514,7 @@ saham screen pre-open --movers-json '[{"ticker":"BBCA","iev":150000}]'
 ```bash
 saham research pre-open capture
 saham research pre-open track
-saham analyze pre-open --session YYYY-MM-DD
+saham assess pre-open --session YYYY-MM-DD
 ```
 
 ### Step 3: Log & Review (paper notebook)
@@ -541,7 +541,7 @@ saham research pre-open evaluate
 saham research pre-open status
 
 # Human post-open (not cron; not a learning label)
-saham analyze pre-open --session YYYY-MM-DD
+saham assess pre-open --session YYYY-MM-DD
 saham trade pre-open log --observation-id … --opening-snapshot-id …
 ```
 
@@ -594,9 +594,9 @@ saham screen compare morning-watch              # diff against fresh screen
 ASCII charts for terminal use (requires `pip install plotext`).
 
 ```bash
-saham analyze chart price BBCA --sma 20 --ema 9 --days 120
-saham analyze chart rsi BBCA --period 9 --days 120
-saham analyze chart volume BBCA --days 30
+saham inspect chart price BBCA --sma 20 --ema 9 --days 120
+saham inspect chart rsi BBCA --period 9 --days 120
+saham inspect chart volume BBCA --days 30
 ```
 
 ---
@@ -613,11 +613,11 @@ saham fetch market BBCA --days 730
 saham indicator compute SMA BBCA --period 200
 
 # Step 3: Risk assessment
-saham analyze risk BBCA
-saham analyze risk BBCA --all          # compare all profiles
+saham inspect risk BBCA
+saham inspect risk BBCA --all          # compare all profiles
 
 # Step 4: Check news context
-saham analyze risk BBCA --with-sentiment
+saham inspect risk BBCA --with-sentiment
 ```
 
 ### Active Trader Workflow
@@ -630,10 +630,10 @@ saham fetch market BBRI --days 365 --refresh
 saham indicator snapshot BBRI --sma 10 --ema 9 --rsi 7
 
 # Step 3: Risk + AI explanation
-saham analyze risk BBRI --explain --provider ollama
+saham inspect risk BBRI --explain --provider ollama
 
 # Step 4: Sentiment
-saham analyze sentiment BBRI --days 1
+saham inspect sentiment BBRI --days 1
 ```
 
 ### Strategy Developer Workflow

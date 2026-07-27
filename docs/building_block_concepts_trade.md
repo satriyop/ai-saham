@@ -65,10 +65,10 @@ This document explains the conceptual building blocks of the trading system — 
   ┌───────────────────────────────────────────────────────────────────--------──┐
   │  RISK ASSESSMENT — evaluate rules against current state                     │
   │                                                                             │
-  │  saham analyze risk BBCA                      (configured risk gates)        │
-  │  saham analyze risk BBCA --rules-file custom.yaml (custom rule YAML)        │
-  │  saham analyze risk BBCA --with-sentiment    (adds news AI context)         │
-  │  saham analyze compare BBCA BBRI BMRI        (side-by-side across tickers)  │
+  │  saham inspect risk BBCA                      (configured risk gates)        │
+  │  saham inspect risk BBCA --rules-file custom.yaml (custom rule YAML)        │
+  │  saham inspect risk BBCA --with-sentiment    (adds news AI context)         │
+  │  # retired: analyze compare BBCA BBRI BMRI        (side-by-side across tickers)  │
   │                                                                             │
   │  Risk profiles are retired; risk behavior is configured through gates.       │
   │  ┌──────────────┬────────────┬──────────────┐                               │
@@ -100,9 +100,9 @@ This document explains the conceptual building blocks of the trading system — 
   ┌─────────────────────────────────────────────────────────────────────┐
   │  SENTIMENT — news analysis (separate data pipeline)                 │
   │                                                                     │
-  │  saham analyze sentiment BBCA               (fetch + classify news) │
-  │  saham analyze sentiment BBCA --ai-classify (AI sentiment analysis) │
-  │  saham analyze audit              (compare AI vs keyword rules)     │
+  │  saham inspect sentiment BBCA               (fetch + classify news) │
+  │  saham inspect sentiment BBCA --ai-classify (AI sentiment analysis) │
+  │  saham audit sentiment              (compare AI vs keyword rules)     │
   │                                                                     │
   │  Outputs that strategies can reference:                             │
   │  SENTIMENT_SCORE, SENTIMENT_LABEL, SENTIMENT_CATALYST               │
@@ -116,7 +116,7 @@ This document explains the conceptual building blocks of the trading system — 
   │  END-TO-END WORKFLOWS (multi-step)          │           │  MANAGEMENT / UTILITY         │
   │                                             │           │                               │
   │  SWING (5-20 day horizon)                   │           │  SESSION / PROVIDER           │
-  │  saham analyze swing BBCA                   │           │  saham fetch stockbit login   │
+  │  saham plan swing BBCA                   │           │  saham fetch stockbit login   │
   │    → accumulation screen                    │           │  saham fetch stockbit test    │
   │    → risk assessment                        │           │  saham fetch stockbit status  │
   │    → backtest (foreign-accum preset)        │           │                               │
@@ -124,17 +124,17 @@ This document explains the conceptual building blocks of the trading system — 
   │    → position sizing (ATR)                  │           │  UNIVERSE                     │
   │    → sentiment                              │           │  saham fetch universe list    │
   │  saham trade backtest-swing (walk-forward)  │           │                               │
-  │  saham analyze swing-compare (side-by-side) │           │  REGIME                       │
-  │  saham screen accum (accum CLI)             │           │  saham analyze regime         │
-  │  analyze swing --capital  # sizing (position sizing)         │           │                               │
+  │  saham plan swing-compare (side-by-side) │           │  REGIME                       │
+  │  saham screen accum (accum CLI)             │           │  saham inspect regime         │
+  │  plan swing --capital  # sizing (position sizing)         │           │                               │
   │                                             │           │  CHART                        │
-  │  INTRADAY (minutes horizon)                 │           │  saham analyze chart          │
+  │  INTRADAY (minutes horizon)                 │           │  saham inspect chart          │
   │  saham screen pre-open                      │           │                               │
   │    → 10-step pipeline (IEV → entry →        │           │  VERSION                      │
   │      stop → trend → accum → AI)             │           │  saham version                │
   │    → borrows ATR, RSI, FVWAP from           │           │                               │
   │      registry (NOT strategies)              │           └───────────────-----───────────┘
-  │  saham analyze pre-open                     │
+  │  saham assess pre-open                     │
   │    → 8-gate deterministic post-open assess  │
   │  saham trade pre-open log / review   │
   │  saham trade pre-open outcome                        │
@@ -234,7 +234,7 @@ These can be referenced in strategy YAML rules just like SMA or RSI.
 
 These are the three multi-step workflows that combine multiple building blocks. Critically, **each has its own independent decision logic** — they are NOT powered by the strategy engine.
 
-#### Swing (`saham analyze swing`)
+#### Swing (`saham plan swing`)
 
 Verdict-first composite: `SignalEngine + RiskEngine + MarketContextEngine → TradeSetup`. The core verdict panel condenses Action, Signal, Risk, Setup, and Market into one row. Supporting evidence panels (setup gates, strategy backtest, sentiment, broker attribution) are opt-in. RiskEngine now reports `OPEN` (no gate fired) or `BLOCKED (gate: Name)` instead of legacy risk levels.
 

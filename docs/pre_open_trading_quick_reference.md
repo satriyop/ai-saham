@@ -10,7 +10,7 @@ Ringkasan cepat lane **pre-open**. Sumber kebenaran operator:
 08:56–08:58  NCP LOCKED INPUT; baseline IEV 08:56, capture keputusan 08:57
 08:58–09:00  PRE-OPEN MATCHING; bukan window keputusan produksi
 09:00        sesi reguler; track opening samples
-09:00+       analyze pre-open (human); paper log opsional
+09:00+       assess pre-open (human); paper log opsional
 09:36–09:37  labels + evaluate (cron)
 ```
 
@@ -20,12 +20,12 @@ Ringkasan cepat lane **pre-open**. Sumber kebenaran operator:
 |------|----------|
 | Signal / plan | `screen pre-open` (live), `research pre-open capture` (write) |
 | Learning | `track` → `labels` → `evaluate` / `status` |
-| Human (bukan learning) | `analyze pre-open`, `trade pre-open log` |
+| Human (bukan learning) | `assess pre-open`, `trade pre-open log` |
 
 | Artifact | Owner |
 |----------|--------|
 | NCP observation | `learning_observations` via capture |
-| Post-open assess | `analyze pre-open` (stdout only) |
+| Post-open assess | `assess pre-open` (stdout only) |
 | open_30m label | `research pre-open labels` |
 
 ## Command table
@@ -36,7 +36,7 @@ Ringkasan cepat lane **pre-open**. Sumber kebenaran operator:
 | Screen live (no write) | `saham screen pre-open --top 5` |
 | Capture NCP decision | `saham research pre-open capture` |
 | Track open | `saham research pre-open track` |
-| Post-open assess | `saham analyze pre-open --session YYYY-MM-DD` |
+| Post-open assess | `saham assess pre-open --session YYYY-MM-DD` |
 | Paper log | `saham trade pre-open log --observation-id … --opening-snapshot-id …` |
 | Paper review | `saham trade pre-open review` |
 | Outcome paper | `saham trade pre-open outcome TICKER --entry … --exit …` |

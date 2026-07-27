@@ -78,7 +78,7 @@ CLEANED=$(echo "$EXISTING" | awk '
     /# --- saham-cron-begin ---/ { skip=1 }
     /# --- saham-cron-end ---/   { skip=0; next }
     skip                         { next }
-    /saham (fetch|learn|trade|screen|analyze|research)/  { next }
+    /saham (fetch|trade|screen|inspect|plan|assess|research|audit)/  { next }
     /# (Multi-tick IEV|IEV NCP|IEV collector|Sole decision|Same-day ops|open_30m|Opening.*learning|Opening learning|Optional paper|Session scorecard|Non-authoritative|Persist observation-linked|Generate labels once|Swing EOD|Optional multi-day|Optional research)/  { next }
     { print }
 ')

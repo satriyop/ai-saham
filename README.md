@@ -32,7 +32,7 @@ saham today
 
 # Discover and inspect swing candidates
 saham screen accum --universe lq45 --multi
-saham analyze swing BBRI --capital 10000000
+saham plan swing BBRI --capital 10000000
 ```
 
 `saham today` is deliberately read-only. It summarizes cached data, the current
@@ -113,21 +113,21 @@ saham research pre-open evaluate
 saham research pre-open status
 
 # Human post-open assess + optional paper notebook (not learning)
-saham analyze pre-open --session YYYY-MM-DD
+saham assess pre-open --session YYYY-MM-DD
 saham trade pre-open log --observation-id … --opening-snapshot-id …
 ```
 
 The pre-open workflow is session-specific: NCP capture freezes the plan in
 SQLite, track samples the open, labels write `open_30m` once, and evaluate
-reads labels only (never rereads tracks). `analyze pre-open` is a separate
+reads labels only (never rereads tracks). `assess pre-open` is a separate
 read-only post-open assess of the frozen plan.
 
 ### Swing discovery and analysis
 
 ```bash
 saham screen accum --universe lq45 --multi
-saham analyze swing TICKER --with-signal-detail --with-market-context
-saham analyze swing TICKER --capital 10000000
+saham plan swing TICKER --with-signal-detail --with-market-context
+saham plan swing TICKER --capital 10000000
 saham policy accum backtest --help
 saham trade accum log --ticker TICKER --from-analysis
 ```
@@ -211,7 +211,7 @@ The live top-level groups are registered in `src/adapters/cli/main.py`:
 | `saham research pre-open` | Pre-open learning lifecycle | capture, track, labels, evaluate, status |
 | `saham view` | Cached-data inspection | ticker, universe, broker, market context |
 | `saham indicator` | Indicator/formula operations | compute, snapshot, create, list, show, delete |
-| `saham analyze` | Deeper deterministic analysis | risk, swing, regime, **pre-open** (post-open assess), signal, charts |
+| `saham inspect` / `plan` / `assess` | Live lenses, TradeSetup plan, frozen assess | inspect risk/signal/…; plan swing; assess pre-open |
 | `saham strategy` | Strategy lifecycle | initialize, validate, create, backtest, skill docs |
 | `saham trade` | Paper trading and calibration | log/review (pre-open + swing), outcome, sizing, backtests, guarded swing tuning |
 

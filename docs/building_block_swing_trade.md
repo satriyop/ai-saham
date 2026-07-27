@@ -8,15 +8,15 @@ The swing trade feature is a **unified composite workflow** that combines accumu
 
 | Command | Purpose | Delegates To |
 |---------|---------|-------------|
-| `saham analyze swing TICKER` | Unified multi-section composite view | Internal orchestration |
-| `analyze swing --capital  # sizing TICKER` | ATR-based position sizing calculator | `PositionSizer` service |
+| `saham plan swing TICKER` | Unified multi-section composite view | Internal orchestration |
+| `plan swing --capital  # sizing TICKER` | ATR-based position sizing calculator | `PositionSizer` service |
 | `saham trade backtest-swing` | Portfolio walk-forward backtest | `SwingBacktestUseCase` |
-| `saham analyze swing-compare` | Compare variants across regimes | `SwingBacktestUseCase` × N variants |
+| `saham plan swing-compare` | Compare variants across regimes | `SwingBacktestUseCase` × N variants |
 | `saham screen accum` | Accumulation screener (find candidates) | `AccumulationScreenUseCase` |
 | `saham research accum evaluate` | Audit accumulation broker data | `AccumulationAuditUseCase` |
 | `saham trade log swing` | Log a candidate to journal | `AccumulationJournal` service |
 | `saham trade accum review` | Review journal performance | `AccumulationJournal` + SQLite |
-| `saham analyze regime` | Market regime context (standalone) | `MarketRegimeUseCase` |
+| `saham inspect regime` | Market regime context (standalone) | `MarketRegimeUseCase` |
 
 ---
 
@@ -26,8 +26,8 @@ The swing trade feature is a **unified composite workflow** that combines accumu
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                          CLI LAYER (lifecycle routers + swing impl)      │
 │                                                                          │
-│  analyze swing       trade size       trade backtest-swing                  │
-│  analyze swing-compare                                                       │
+│  plan swing       trade size       trade backtest-swing                  │
+│  plan swing-compare                                                       │
 │  screen accum       ───► accumulation_run                                   │
 │  research accum evaluate ───► accumulation_audit                      │
 │  trade log swing    ───► accumulation_log                                   │
@@ -115,11 +115,11 @@ The swing trade feature is a **unified composite workflow** that combines accumu
 
 ## `swing analyze` — Internal Flow (Core Verdict + Evidence)
 
-The single-ticker `saham analyze swing BBCA` command centers the core deterministic verdict on `SignalEngine + RiskEngine -> TradeSetup`. Market context, setup gates, strategy backtest, sentiment, and detailed broker attribution are optional evidence modules for human inspection and learning-loop attribution; they do not independently alter `TradeSetup.action`.
+The single-ticker `saham plan swing BBCA` command centers the core deterministic verdict on `SignalEngine + RiskEngine -> TradeSetup`. Market context, setup gates, strategy backtest, sentiment, and detailed broker attribution are optional evidence modules for human inspection and learning-loop attribution; they do not independently alter `TradeSetup.action`.
 
 ```
 ┌─────────────┐
-│   ENTRY     │  saham analyze swing BBCA --capital 10000000
+│   ENTRY     │  saham plan swing BBCA --capital 10000000
 └──────┬──────┘
        │
        ▼
@@ -299,7 +299,7 @@ The single-ticker `saham analyze swing BBCA` command centers the core determinis
 
 ```
 ┌─────────────┐
-│   ENTRY     │  saham analyze swing-compare --universe idx30 --variants baseline,sideways_only
+│   ENTRY     │  saham plan swing-compare --universe idx30 --variants baseline,sideways_only
 └──────┬──────┘
        │
        ▼
@@ -324,7 +324,7 @@ The single-ticker `saham analyze swing BBCA` command centers the core determinis
 
 ```
 ┌─────────────┐
-│   ENTRY     │  analyze swing --capital  # sizing BBCA --capital 10000000 --risk-pct 1
+│   ENTRY     │  plan swing --capital  # sizing BBCA --capital 10000000 --risk-pct 1
 └──────┬──────┘
        │
        ▼
@@ -411,7 +411,7 @@ Classification:
 ## Data Dependencies
 
 ```
-analyze swing BBCA needs in SQLite:
+plan swing BBCA needs in SQLite:
   ├── candles.BBCA       (from: saham fetch market)
   └── broker_flow.BBCA   (from: saham fetch broker BBCA / saham fetch market)
 
@@ -433,4 +433,4 @@ analyze regime  needs: candles.* + broker_flow.* (for breadth)
 3. **Regime awareness is a filter, not a signal** — market regime only blocks entries, it doesn't generate them.
 4. **Setup logic is in the application layer, calibration is in config** — setup gates load from `config/swing_setups.yaml`, TP/SL targets from `config/swing_targets.yaml`, and broker-quality inputs from `config/accumulation_screener.yaml`.
 5. **Position sizer is pure math** — no I/O, no ports. Works purely from Decimal inputs.
-6. **Auto-refresh is the default** — every `analyze swing` refetches candles + broker data before analyzing, unless `--no-refresh`.
+6. **Auto-refresh is the default** — every `plan swing` refetches candles + broker data before analyzing, unless `--no-refresh`.

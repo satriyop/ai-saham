@@ -37,7 +37,7 @@ saham fetch market --universe lq45
 ### 2. Cek Regime
 
 ```bash
-saham analyze regime
+saham inspect regime
 ```
 
 - [ ] Catat label, confidence/stability bila ditampilkan, benchmark trend,
@@ -71,7 +71,7 @@ saham screen accum BBCA BBRI BMRI TLKM --multi
 ### 4. Analyze Candidates
 
 ```bash
-saham analyze swing TICKER \
+saham plan swing TICKER \
   --setup foreign-bounce \
   --capital 10000000
 ```
@@ -79,11 +79,11 @@ saham analyze swing TICKER \
 Opsi sesuai kebutuhan:
 
 ```bash
-saham analyze swing TICKER --with-flow-detail --explain
-saham analyze swing TICKER --with-technical-gate
-saham analyze swing TICKER --with-market-context
-saham analyze swing TICKER --strategy foreign-accumulation
-saham analyze swing TICKER --format json
+saham plan swing TICKER --with-flow-detail --explain
+saham plan swing TICKER --with-technical-gate
+saham plan swing TICKER --with-market-context
+saham plan swing TICKER --strategy foreign-accumulation
+saham plan swing TICKER --format json
 ```
 
 - [ ] Pilih `--setup` secara eksplisit jika mengevaluasi lensa setup tertentu.
@@ -95,9 +95,9 @@ saham analyze swing TICKER --format json
 ### 5. Chart Confirmation
 
 ```bash
-saham analyze chart price TICKER --sma 20 --days 90
-saham analyze chart rsi TICKER --days 90
-saham analyze chart volume TICKER --days 30
+saham inspect chart price TICKER --sma 20 --days 90
+saham inspect chart rsi TICKER --days 90
+saham inspect chart volume TICKER --days 30
 ```
 
 - [ ] Struktur harga berupa base, higher low, atau pullback sehat.
@@ -112,7 +112,7 @@ saham analyze chart volume TICKER --days 30
 Gunakan output analisis atau sizing standalone:
 
 ```bash
-analyze swing --capital  # sizing TICKER --capital 10000000 --risk-pct 1
+plan swing --capital  # sizing TICKER --capital 10000000 --risk-pct 1
 ```
 
 - [ ] Tetapkan planned entry, stop, target, max hold, dan jumlah lot.
@@ -217,7 +217,7 @@ saham trade backtest-swing \
 ### Compare Variant
 
 ```bash
-saham analyze swing-compare --universe lq45 --start 2025-01-01
+saham plan swing-compare --universe lq45 --start 2025-01-01
 ```
 
 ### Broker Quality Audit

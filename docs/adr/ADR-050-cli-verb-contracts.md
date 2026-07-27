@@ -2,7 +2,7 @@
 
 [Architecture decision index](../../ARCHITECTURE_DECISIONS.md)
 
-**Status:** Accepted (decision recorded; implementation pending clean-break slices)
+**Status:** Accepted — implementation landed 2026-07-27
 **Date:** 2026-07-27
 **Depends on:** [ADR-011](ADR-011-offline-capable-cli-as-primary-interface.md),
 [ADR-020](ADR-020-cli-adapter-file-naming-convention.md),

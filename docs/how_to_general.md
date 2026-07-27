@@ -38,17 +38,17 @@
  Phase 3 — Risk Assessment
 
  # Gate-based risk assessment
- saham analyze risk BBCA
+ saham inspect risk BBCA
 
  # Custom rules (your own YAML logic)
- saham analyze risk BBCA --rules-file config/custom_rules.yaml.example
+ saham inspect risk BBCA --rules-file config/custom_rules.yaml.example
 
  # With AI explanation (default provider: deepseek)
- saham analyze risk BBCA --explain                            # Uses deepseek (default)
- saham analyze risk BBCA --explain --provider claude           # Or specify another provider
+ saham inspect risk BBCA --explain                            # Uses deepseek (default)
+ saham inspect risk BBCA --explain --provider claude           # Or specify another provider
 
  # With news sentiment appended
- saham analyze risk BBCA --with-sentiment
+ saham inspect risk BBCA --with-sentiment
 
  ---
  Phase 4 — Broker & Foreign Flow Analysis
@@ -60,10 +60,10 @@
  ---
  Phase 5 — Sentiment
 
- saham analyze sentiment BBCA                          # Keyword classifier (offline-capable after fetch)
- saham analyze sentiment BBCA --days 7 --max 30        # Wider window
- saham analyze sentiment BBCA --ai-classify                          # Uses deepseek (default)
- saham analyze sentiment BBCA --ai-classify --provider claude         # Or specify another provider
+ saham inspect sentiment BBCA                          # Keyword classifier (offline-capable after fetch)
+ saham inspect sentiment BBCA --days 7 --max 30        # Wider window
+ saham inspect sentiment BBCA --ai-classify                          # Uses deepseek (default)
+ saham inspect sentiment BBCA --ai-classify --provider claude         # Or specify another provider
 
  ---
  Phase 6 — Backtest with a Strategy
@@ -86,7 +86,7 @@
  # Step 3: After capture+track, post-open assess of NCP plan (read-only)
  saham research pre-open capture
  saham research pre-open track
- saham analyze pre-open --session YYYY-MM-DD
+ saham assess pre-open --session YYYY-MM-DD
  # Paper notebook (optional):
  # saham trade pre-open log --observation-id OBS --opening-snapshot-id SNAP
 
@@ -103,16 +103,16 @@
  Phase 9 — Swing Trade Analysis
 
  # Full composite view (accumulation + risk + sizing + backtest + sentiment)
- saham analyze swing BBCA --capital 100000000
+ saham plan swing BBCA --capital 100000000
 
  # Position sizing based on ATR
- analyze swing --capital  # sizing BBCA --capital 100000000 --risk-pct 1 --entry 8875
+ plan swing --capital  # sizing BBCA --capital 100000000 --risk-pct 1 --entry 8875
 
  # Walk-forward backtest across universe
  saham trade backtest-swing --universe idx30 --capital 100000000 --with-regime
 
  # Compare regime variants side-by-side
- saham analyze swing-compare --universe idx30 --variants bull,neutral,bear
+ saham plan swing-compare --universe idx30 --variants bull,neutral,bear
 
  # Accumulation screener (same as screen accumulation)
  saham screen accum --universe idx30 --window 5
@@ -121,17 +121,17 @@
  Phase 10 — Market Regime Context
 
  # Current regime across universe
- saham analyze regime --universe idx30
+ saham inspect regime --universe idx30
 
  # Regime as of a specific date
- saham analyze regime --universe idx30 --as-of 2024-06-01 --format json
+ saham inspect regime --universe idx30 --as-of 2024-06-01 --format json
 
  ---
  Phase 11 — Terminal Charts
 
- saham analyze chart price BBCA --sma 20 --ema 50     # Price + moving averages
- saham analyze chart rsi BBCA --period 14              # RSI with overbought/oversold
- saham analyze chart volume BBCA                       # Daily volume bars
+ saham inspect chart price BBCA --sma 20 --ema 50     # Price + moving averages
+ saham inspect chart rsi BBCA --period 14              # RSI with overbought/oversold
+ saham inspect chart volume BBCA                       # Daily volume bars
 
  ---
  Phase 12 — Batch Data & Universe Management

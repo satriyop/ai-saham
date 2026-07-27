@@ -24,7 +24,7 @@ saham version
 saham fetch market BBCA --days 365
 
 # Risk assessment across all profiles
-saham analyze risk BBCA --all
+saham inspect risk BBCA --all
 
 # Create and test a strategy
 saham strategy init momentum
@@ -47,7 +47,7 @@ saham strategy backtest BBCA --strategy my_rsi
 
 ### When to Use Each
 
-- **I need the exact flags for `saham analyze swing`** → `CLI_REFERENCE.md`
+- **I need the exact flags for `saham plan swing`** → `CLI_REFERENCE.md`
 - **I want to understand what RSI means** → `CLI_GUIDE.md`
 - **`saham fetch stockbit login` failed** → `CLI_TROUBLESHOOTING.md`
 

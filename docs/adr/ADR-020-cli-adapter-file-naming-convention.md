@@ -34,8 +34,8 @@ sub-apps.
 
 | Public command | Adapter file |
 |----------------|--------------|
-| `saham analyze swing` | `analyze_swing_commands.py` |
-| `saham analyze regime` | `analyze_regime_commands.py` |
+| `saham plan swing` | `plan_swing_commands.py` |
+| `saham analyze regime` | `inspect_regime_commands.py` |
 | `saham screen accum` | `screen_accum_commands.py` |
 | `saham screen pre-open` | `screen_pre_open_commands.py` |
 | `saham research pre-open capture` | `research_pre_open_capture_commands.py` |
@@ -56,7 +56,7 @@ corpus).
 
 * New command files must follow this convention from creation.
 * A file serving only one command group gets exactly one top-command prefix
-  (e.g. `analyze_swing_commands.py`, not `shared_swing_commands.py`).
+  (e.g. `plan_swing_commands.py`, not `shared_swing_commands.py`).
 * A display file paired with a command file mirrors its prefix
   (e.g. `policy_accum_backtest_display.py`).
 * When a public command **moves** between top-level groups, rename adapters in

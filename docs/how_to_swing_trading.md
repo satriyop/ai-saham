@@ -19,18 +19,18 @@ In IHSG specifically, swing trading works well because:
 DAILY ROUTINE (10 minutes)
 ──────────────────────────────────────────────────────────────────
 Step 1 → Update data        saham fetch market --universe lq45
-Step 2 → Check market       saham analyze regime
+Step 2 → Check market       saham inspect regime
 Step 3 → Find candidates    saham screen accum --universe lq45 --multi
-Step 4 → Deep-dive          saham analyze swing BBRI --setup foreign-bounce --capital N
-Step 5 → Confirm chart      saham analyze chart price BBRI --sma 20 --days 90
-Step 6 → Size the trade     analyze swing --capital  # sizing BBRI --capital N    (if not using setup)
+Step 4 → Deep-dive          saham plan swing BBRI --setup foreign-bounce --capital N
+Step 5 → Confirm chart      saham inspect chart price BBRI --sma 20 --days 90
+Step 6 → Size the trade     plan swing --capital  # sizing BBRI --capital N    (if not using setup)
 Step 7 → Log the decision   saham trade log swing --ticker BBRI --from-analysis --with-regime
 ──────────────────────────────────────────────────────────────────
 After 10–20 trading days: review what the setup actually delivered
 Step 8 → Review outcomes    saham trade accum review
 ```
 
-Steps 3–6 collapse what previously required 6+ separate commands into one primary command (`saham analyze swing`) for each candidate, plus chart confirmation before logging or entry.
+Steps 3–6 collapse what previously required 6+ separate commands into one primary command (`saham plan swing`) for each candidate, plus chart confirmation before logging or entry.
 
 ---
 
@@ -51,8 +51,8 @@ After the first full download (~90 seconds for LQ45), daily incremental updates 
 ## Step 2 — Check the Market Regime
 
 ```bash
-saham analyze regime
-saham analyze regime --universe lq45
+saham inspect regime
+saham inspect regime --universe lq45
 ```
 
 Before looking at individual stocks, check whether IHSG itself supports swing entries. The regime command evaluates seven deterministic signals — benchmark trend vs SMA20/50, benchmark returns, universe breadth, and foreign flow breadth — and classifies the market into one of four labels based on a **0–7 composite score**:
@@ -65,7 +65,7 @@ Before looking at individual stocks, check whether IHSG itself supports swing en
 | `RISK_OFF` | 0–1 | Mass selling (Panic/Crash) | Pause new entries |
 
 ```
-saham analyze regime --universe idx80
+saham inspect regime --universe idx80
 ```
 
 **Reading the output:**
@@ -73,7 +73,7 @@ saham analyze regime --universe idx80
 - **Breadth 5d change**: Whether breadth is improving or deteriorating. A negative change with a SIDEWAYS label is a warning.
 - **Foreign flow breadth**: % of universe stocks with positive net foreign flow. Falling sharply = institutions are selling, not buying.
 
-`saham analyze swing` by default shows the core verdict only (SignalEngine + RiskEngine → TradeSetup). Market context is an opt-in evidence panel — add `--with-market-context` to see IHSG breadth, benchmark trend, and regime impact on the TradeSetup.
+`saham plan swing` by default shows the core verdict only (SignalEngine + RiskEngine → TradeSetup). Market context is an opt-in evidence panel — add `--with-market-context` to see IHSG breadth, benchmark trend, and regime impact on the TradeSetup.
 
 ---
 
@@ -123,23 +123,23 @@ A stock that scores 75 on 7 sessions, 72 on 30 sessions, and 68 on 90 sessions i
 
 ---
 
-## Step 4 — Deep-Dive with `saham analyze swing`
+## Step 4 — Deep-Dive with `saham plan swing`
 
-`saham analyze swing` is the cornerstone command. By default it gives a deterministic core verdict: `SignalEngine + RiskEngine -> TradeSetup`. Market context, backtest, sentiment, setup gates, and detailed broker attribution are evidence panels you opt into when you need them.
+`saham plan swing` is the cornerstone command. By default it gives a deterministic core verdict: `SignalEngine + RiskEngine -> TradeSetup`. Market context, backtest, sentiment, setup gates, and detailed broker attribution are evidence panels you opt into when you need them.
 
 ### Basic usage
 
 ```bash
-saham analyze swing BBRI
-saham analyze swing BBRI --strategy foreign-accumulation          # strategy/backtest evidence
-saham analyze swing BBRI --with-sentiment                         # news evidence
-saham analyze swing BBRI --with-flow-detail --explain             # detailed evidence panels
-saham analyze swing BBRI --no-refresh                             # cached-only core read
-saham analyze swing BBRI --force-refresh                         # force provider refresh
-saham analyze swing BBRI --sentiment-verbose                     # debug news provider issues
+saham plan swing BBRI
+saham plan swing BBRI --strategy foreign-accumulation          # strategy/backtest evidence
+saham plan swing BBRI --with-sentiment                         # news evidence
+saham plan swing BBRI --with-flow-detail --explain             # detailed evidence panels
+saham plan swing BBRI --no-refresh                             # cached-only core read
+saham plan swing BBRI --force-refresh                         # force provider refresh
+saham plan swing BBRI --sentiment-verbose                     # debug news provider issues
 ```
 
-By default, `saham analyze swing` checks and refreshes only the requested ticker's candles and broker flow if local data is behind today. The `DATA` section shows whether refresh used current cache, fetched new rows, checked the provider but found no newer trading rows, failed, or was disabled.
+By default, `saham plan swing` checks and refreshes only the requested ticker's candles and broker flow if local data is behind today. The `DATA` section shows whether refresh used current cache, fetched new rows, checked the provider but found no newer trading rows, failed, or was disabled.
 
 Sentiment is optional context and is off by default. Provider/RSS errors are suppressed into a concise warning so deterministic gates stay readable. Use `--with-sentiment --sentiment-verbose` only when debugging the news provider.
 
@@ -148,9 +148,9 @@ Sentiment is optional context and is off by default. Provider/RSS errors are sup
 The `foreign-bounce` setup applies a structured gate checklist to determine whether this specific setup meets entry criteria. When capital is provided, it also computes the exact lot size using regime-adaptive TP/SL from `config/swing_targets.yaml`.
 
 ```bash
-saham analyze swing BBRI --setup foreign-bounce
-saham analyze swing BBRI --setup foreign-bounce --capital 10000000
-saham analyze swing BBRI --setup foreign-bounce --capital 50000000 --risk-pct 2
+saham plan swing BBRI --setup foreign-bounce
+saham plan swing BBRI --setup foreign-bounce --capital 10000000
+saham plan swing BBRI --setup foreign-bounce --capital 50000000 --risk-pct 2
 ```
 
 **Setup gates for `foreign-bounce`:**
@@ -199,8 +199,8 @@ Note: `--rr` and `--atr-mult` flags are only active when no setup is used. When 
 ### Market regime context
 
 ```bash
-saham analyze swing BBRI --setup foreign-bounce --with-market-context
-saham analyze swing BBRI --setup foreign-bounce --with-market-context --regime-universe lq45
+saham plan swing BBRI --setup foreign-bounce --with-market-context
+saham plan swing BBRI --setup foreign-bounce --with-market-context --regime-universe lq45
 ```
 
 Market context is an opt-in evidence panel. By default it is not shown. Add `--with-market-context` to see IHSG breadth, benchmark trend, and the regime's impact on TradeSetup signal/risk scores.
@@ -210,8 +210,8 @@ Market context is an opt-in evidence panel. By default it is not shown. Add `--w
 If you are using your own entry/exit logic rather than the setup, omit `--setup` and provide sizing parameters manually:
 
 ```bash
-saham analyze swing BBRI --capital 10000000 --risk-pct 1 --atr-mult 1.5 --rr 2.0
-saham analyze swing BBRI --capital 10000000 --entry 4825 --rr 2.5
+saham plan swing BBRI --capital 10000000 --risk-pct 1 --atr-mult 1.5 --rr 2.0
+saham plan swing BBRI --capital 10000000 --entry 4825 --rr 2.5
 ```
 
 This uses ATR(14) to calculate the stop distance (`stop = entry − 1.5 × ATR`) and positions size from fixed-fractional risk.
@@ -324,9 +324,9 @@ All signals are pre-warmed by `saham fetch market --universe lq45` and served fr
 Before sizing or logging a paper entry, confirm that price structure agrees with the numeric gates. This uses existing chart commands and does not change the deterministic signal.
 
 ```bash
-saham analyze chart price BBRI --sma 20 --days 90
-saham analyze chart rsi BBRI --days 90
-saham analyze chart volume BBRI --days 30
+saham inspect chart price BBRI --sma 20 --days 90
+saham inspect chart rsi BBRI --days 90
+saham inspect chart volume BBRI --days 30
 ```
 
 | Check | Prefer | Avoid |
@@ -337,19 +337,19 @@ saham analyze chart volume BBRI --days 30
 
 Decision rule:
 
-- `ENTER` from `saham analyze swing` plus constructive chart = eligible for sizing/logging.
+- `ENTER` from `saham plan swing` plus constructive chart = eligible for sizing/logging.
 - `ENTER` plus breakdown chart = downgrade to `WATCH`; wait for structure to repair.
 - `WATCH` plus constructive chart = keep on shortlist and rerun tomorrow.
 - `AVOID` stays `AVOID`; charts are not used to override failed deterministic gates.
 
 ## Step 6 — Size the Trade
 
-When you need position sizing independently (without the full swing view), use `analyze swing --capital  # sizing`. It uses ATR-based fixed-fractional sizing.
+When you need position sizing independently (without the full swing view), use `plan swing --capital  # sizing`. It uses ATR-based fixed-fractional sizing.
 
 ```bash
-analyze swing --capital  # sizing BBRI --capital 10000000
-analyze swing --capital  # sizing BBRI --capital 50000000 --risk-pct 2 --entry 4825
-analyze swing --capital  # sizing BBRI --capital 10000000 --atr-mult 2.0 --rr 3.0
+plan swing --capital  # sizing BBRI --capital 10000000
+plan swing --capital  # sizing BBRI --capital 50000000 --risk-pct 2 --entry 4825
+plan swing --capital  # sizing BBRI --capital 10000000 --atr-mult 2.0 --rr 3.0
 ```
 
 **Output:**
@@ -565,13 +565,13 @@ saham research accum evaluate --universe lq45 --setup foreign-bounce --start 202
 
 The grouped output includes `broker_quality` buckets (`smart+`, `noise+`, `smart-`, `noise-`, `mixed`, `no_detail`) with forward returns and win rate. Treat these rows as evidence for whether broker quality should stay a warning, become a downgrade, or become a future setup gate.
 
-### `saham analyze swing-compare` — Regime filter variants side-by-side
+### `saham plan swing-compare` — Regime filter variants side-by-side
 
 Instead of running `swing backtest` three times with different `--allow-regimes`, `swing compare` runs all variants in one pass:
 
 ```bash
-saham analyze swing-compare --universe lq45 --start 2025-01-01
-saham analyze swing-compare --universe lq45 --start 2025-01-01 --variants baseline,sideways_only
+saham plan swing-compare --universe lq45 --start 2025-01-01
+saham plan swing-compare --universe lq45 --start 2025-01-01 --variants baseline,sideways_only
 ```
 
 **Built-in variants:**
@@ -608,24 +608,24 @@ If `sideways_only` shows better risk-adjusted returns (higher PF, lower drawdown
 saham fetch market --universe lq45
 
 # 2. Check market regime
-saham analyze regime
+saham inspect regime
 
 # 3. Scan for candidates
 saham screen accum --universe lq45 --multi --min-foreign-flow-score 50
 # → Shortlist: BBRI (sustained, 7s=74.1), TLKM (building, 7s=61.3)
 
 # 4. Deep-dive on top candidate
-saham analyze swing BBRI --setup foreign-bounce --capital 10000000
+saham plan swing BBRI --setup foreign-bounce --capital 10000000
 # → PLAN: ENTER setup passed. Consider 4 lots at 4,840; TP 5,082; SL 4,598
 
 # 5. Confirm chart structure before paper entry
-saham analyze chart price BBRI --sma 20 --days 90
-saham analyze chart rsi BBRI --days 90
-saham analyze chart volume BBRI --days 30
+saham inspect chart price BBRI --sma 20 --days 90
+saham inspect chart rsi BBRI --days 90
+saham inspect chart volume BBRI --days 30
 # → Confirm sideways base / support, RSI room, and volume participation
 
 # 6. Check second candidate
-saham analyze swing TLKM --setup foreign-bounce --capital 10000000
+saham plan swing TLKM --setup foreign-bounce --capital 10000000
 # → PLAN: WATCH only. vwap_disc: 1.2% (required >= 3%)
 
 # 7. Log BBRI decision and plan to journal
@@ -642,7 +642,7 @@ saham trade accum review --horizon 10
 
 ## Exit Signals
 
-The application identifies entries. Monitor these signals on open positions by re-running `saham analyze swing` daily on positions you hold:
+The application identifies entries. Monitor these signals on open positions by re-running `saham plan swing` daily on positions you hold:
 
 | Signal | Action |
 |---|---|
@@ -655,7 +655,7 @@ The application identifies entries. Monitor these signals on open positions by r
 | Price hits 3× ATR above entry | Swing likely complete |
 | Market regime turns `RISK_OFF` | Close all positions |
 
-The discipline is: run `saham analyze swing TICKER --setup foreign-bounce` on every open position every morning. If the final action moves to `AVOID`, the trade is over regardless of your P&L.
+The discipline is: run `saham plan swing TICKER --setup foreign-bounce` on every open position every morning. If the final action moves to `AVOID`, the trade is over regardless of your P&L.
 
 ---
 
@@ -664,15 +664,15 @@ The discipline is: run `saham analyze swing TICKER --setup foreign-bounce` on ev
 | Command | Purpose |
 |---|---|
 | `saham fetch market --universe lq45` | Fetch today's candle + broker data |
-| `saham analyze regime` | IHSG market regime: BULLISH / SIDEWAYS / WEAK / RISK_OFF |
+| `saham inspect regime` | IHSG market regime: BULLISH / SIDEWAYS / WEAK / RISK_OFF |
 | `saham screen accum --universe lq45 --multi` | Multi-window accumulation screener |
-| `saham analyze swing TICKER` | Core TradeSetup verdict: SignalEngine + RiskEngine + default MCE |
-| `saham analyze swing TICKER --setup foreign-bounce` | Gate-checked entry decision with structured plan |
-| `saham analyze swing TICKER --setup foreign-bounce --capital N` | Full plan + lot sizing |
-| `saham analyze swing TICKER --strategy foreign-accumulation` | Add strategy/backtest evidence without changing the TradeSetup action |
-| `analyze swing --capital  # sizing TICKER --capital N` | Standalone ATR-based position sizing |
+| `saham plan swing TICKER` | Core TradeSetup verdict: SignalEngine + RiskEngine + default MCE |
+| `saham plan swing TICKER --setup foreign-bounce` | Gate-checked entry decision with structured plan |
+| `saham plan swing TICKER --setup foreign-bounce --capital N` | Full plan + lot sizing |
+| `saham plan swing TICKER --strategy foreign-accumulation` | Add strategy/backtest evidence without changing the TradeSetup action |
+| `plan swing --capital  # sizing TICKER --capital N` | Standalone ATR-based position sizing |
 | `saham trade backtest-swing --universe lq45` | Walk-forward portfolio backtest of the setup |
-| `saham analyze swing-compare --universe lq45` | Compare baseline vs regime-filtered variants |
+| `saham plan swing-compare --universe lq45` | Compare baseline vs regime-filtered variants |
 | `saham trade log swing --ticker BBRI --from-analysis --with-regime` | Log candidate, setup decision, failed gates, regime, and plan |
 | `saham trade accum review` | Review journal: did ENTER beat WATCH and did high-score setups deliver? |
 

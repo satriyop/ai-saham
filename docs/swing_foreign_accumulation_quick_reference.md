@@ -10,14 +10,14 @@ SETUP / REFRESH
   saham fetch market --universe lq45
 
 SETIAP HARI
-  saham analyze regime
+  saham inspect regime
   saham screen accum --universe lq45 --multi
 
 PER KANDIDAT
-  saham analyze swing TICKER --setup foreign-bounce --capital 10000000
-  saham analyze chart price TICKER --sma 20 --days 90
-  saham analyze chart rsi TICKER --days 90
-  saham analyze chart volume TICKER --days 30
+  saham plan swing TICKER --setup foreign-bounce --capital 10000000
+  saham inspect chart price TICKER --sma 20 --days 90
+  saham inspect chart rsi TICKER --days 90
+  saham inspect chart volume TICKER --days 30
 
 JOURNAL / REVIEW
   saham trade log swing --ticker TICKER --from-analysis --with-regime
@@ -25,7 +25,7 @@ JOURNAL / REVIEW
 
 BACKTEST
   saham trade backtest-swing --universe lq45 --start 2025-01-01 --with-regime
-  saham analyze swing-compare --universe lq45 --start 2025-01-01
+  saham plan swing-compare --universe lq45 --start 2025-01-01
 ```
 
 ## Key Commands
@@ -33,16 +33,16 @@ BACKTEST
 | Tujuan | Command |
 |---|---|
 | Refresh market + broker flow | `saham fetch market --universe lq45` |
-| Cek regime | `saham analyze regime` |
+| Cek regime | `saham inspect regime` |
 | Screen satu window | `saham screen accum --universe lq45` |
 | Screen multi-window | `saham screen accum --universe lq45 --multi` |
 | Filter squeeze | `saham screen accum --universe lq45 --squeeze-only` |
 | Filter foreign underwater | `saham screen accum --universe lq45 --vwap-only` |
 | Tampilkan definisi run | `saham screen accum --universe lq45 --explain` |
-| Analisis setup | `saham analyze swing TICKER --setup foreign-bounce` |
-| Flow detail | `saham analyze swing TICKER --with-flow-detail --explain` |
+| Analisis setup | `saham plan swing TICKER --setup foreign-bounce` |
+| Flow detail | `saham plan swing TICKER --with-flow-detail --explain` |
 | Broker flow harian | `saham view ticker flow TICKER --days 30` |
-| Sizing standalone | `analyze swing --capital  # sizing TICKER --capital 10000000` |
+| Sizing standalone | `plan swing --capital  # sizing TICKER --capital 10000000` |
 | Audit accumulation | `saham research accum evaluate --universe lq45` |
 
 Gunakan `--help` untuk nama option dan default yang berlaku saat ini.
@@ -57,7 +57,7 @@ Gunakan `--help` untuk nama option dan default yang berlaku saat ini.
 | `RISK_OFF` | Hindari entry swing baru kecuali policy runtime secara eksplisit mengizinkan |
 
 Regime adalah constraint/context, bukan alasan mengubah score secara manual.
-Baca output `saham analyze regime`, config, dan alasan decision dari CLI.
+Baca output `saham inspect regime`, config, dan alasan decision dari CLI.
 
 ## Score Interpretation Summary
 
@@ -131,7 +131,7 @@ Pastikan candle dan broker data tersedia/fresh serta window memiliki cukup sesi.
 ### Skor Tinggi tetapi `WATCH`/`AVOID`
 
 ```bash
-saham analyze swing TICKER --setup foreign-bounce --with-flow-detail
+saham plan swing TICKER --setup foreign-bounce --with-flow-detail
 ```
 
 Periksa failed gates, coverage, conviction, setup phase, regime constraints,
@@ -160,7 +160,7 @@ Jangan membuka posisi baru hanya karena score tinggi. Pantau regime dan validita
 posisi aktif:
 
 ```bash
-saham analyze regime
+saham inspect regime
 saham screen accum TICKER1 TICKER2 --multi
 ```
 

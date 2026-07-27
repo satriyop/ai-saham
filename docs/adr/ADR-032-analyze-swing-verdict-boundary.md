@@ -1,4 +1,4 @@
-# ADR-032: `analyze swing` Verdict Boundary
+# ADR-032: `plan swing` Verdict Boundary
 
 [Architecture decision index](../../ARCHITECTURE_DECISIONS.md)
 
@@ -8,7 +8,7 @@
 
 ## Decision
 
-`saham analyze swing` may display setup, strategy, sentiment, flow, signal,
+`saham plan swing` may display setup, strategy, sentiment, flow, signal,
 risk, market-context, and backtest evidence, but those panels do not create
 independent trade verdicts.
 
@@ -30,6 +30,6 @@ canonical SignalAssessment + RiskAssessment
 
 ## Current contract source
 
-Use `saham analyze swing --help`, current workflow source, and tests for the
+Use `saham plan swing --help`, current workflow source, and tests for the
 available flags and default display. Retired preview-only signal rules and old
 flag inventories remain in git history rather than this active ADR.

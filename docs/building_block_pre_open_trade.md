@@ -11,7 +11,7 @@ End-to-end **pre-open** workflow: live screen, NCP capture, opening track, post-
 | `saham screen pre-open` | 1 | Screen IDX morning movers → entry range, stop, trend, accumulation, FVWAP |
 | `saham research pre-open capture` | 1b | Persist NCP observation (decision authority) |
 | `saham research pre-open track` | 1c | Persist opening track snapshots |
-| `saham analyze pre-open` | 2 | Post-open ENTER/WAIT/SKIP from observation + track (read-only) |
+| `saham assess pre-open` | 2 | Post-open ENTER/WAIT/SKIP from observation + track (read-only) |
 | `saham trade pre-open log` | 3 | Paper journal from exact observation + opening snapshot IDs |
 | `saham trade pre-open review` | 5 | Review pre-open paper journal buckets by decision + context |
 | `saham research pre-open evaluate` | 5 | Cohort outcome evaluation (labels), not post-open assess |
@@ -27,7 +27,7 @@ End-to-end **pre-open** workflow: live screen, NCP capture, opening track, post-
 ┌───────────────────────────────────────────────────────────────────────────┐
 │                         CLI LAYER (screen_pre_open / research_pre_open / analyze_pre_open / trade_pre_open)        │
 │                                                                           │
-│  screen/capture/track │ analyze pre-open │ log pre-open │ review pre-open │
+│  screen/capture/track │ assess pre-open │ log pre-open │ review pre-open │
 │  outcome   │  backtest-intraday  │  research pre-open labels/evaluate             │
 │                                                                           │
 │  Display: _display_results, _display_pre_open_post_open_assessments, _display_review       │
@@ -199,7 +199,7 @@ CLI: saham screen pre-open [--movers-json ...] [--order-books-json ...]
  │    ├── AI summaries (if --with-ai)
  │    ├── Data freshness warnings
  │    ├── Market regime context
- │    └── Action summary with analyze pre-open next-step template
+ │    └── Action summary with assess pre-open next-step template
  │
  └─ _write_sidecar() → journals/.last-session.json
 ```
@@ -207,7 +207,7 @@ CLI: saham screen pre-open [--movers-json ...] [--order-books-json ...]
 ### Phase 2: Confirm at Opening Auction (09:00+)
 
 ```
-CLI: saham analyze pre-open --session YYYY-MM-DD
+CLI: saham assess pre-open --session YYYY-MM-DD
  │
  ├─ _load_confirmation_candidates()
  │    └── Read journals/.last-session.json → PreOpenPostOpenCandidate[]
@@ -450,4 +450,4 @@ All tuning parameters loaded into `PreOpenScreenConfig` at runtime:
 
 6. **Backtest reuses the same logic** — `IntradayBacktestUseCase` calls the same trend/accum/confirm functions as the live pipeline, ensuring backtest accuracy.
 
-7. **Database identity for assess** — `analyze pre-open` binds exact `observation_id` + `opening_snapshot_id`. Confirmation sidecars are not assess authority.
+7. **Database identity for assess** — `assess pre-open` binds exact `observation_id` + `opening_snapshot_id`. Confirmation sidecars are not assess authority.

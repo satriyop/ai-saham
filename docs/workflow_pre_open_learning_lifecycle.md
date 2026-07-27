@@ -20,7 +20,7 @@ NCP-locked capture
 saham fetch iev
 saham research pre-open capture
 saham research pre-open track
-saham analyze pre-open                    # post-open assess (human, not cron)
+saham assess pre-open                    # post-open assess (human, not cron)
 saham trade pre-open log \         # paper notebook (human)
   --observation-id … --opening-snapshot-id …
 saham research pre-open labels
@@ -33,7 +33,7 @@ saham research pre-open status
 `observation_id` in `learning_track_snapshots`. `labels` generates immutable
 `price_path.open_30m.v1` outcomes in `learning_outcome_labels`.
 
-`analyze pre-open` is **not** a learning write: it re-reads observation + track
+`assess pre-open` is **not** a learning write: it re-reads observation + track
 for post-open ENTER/WAIT/SKIP. Paper log is a personal notebook, not a label.
 
 `evaluate` reads persisted labels only. It never rereads track snapshots or

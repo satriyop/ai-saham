@@ -22,7 +22,7 @@ Governing: [ADR-048](adr/ADR-048-pre-open-signal-evidence-and-observation-identi
 
 | Action | Command | Writes |
 |--------|---------|--------|
-| Post-open assess of frozen plan | `saham analyze pre-open` | **Nothing** (stdout only) |
+| Post-open assess of frozen plan | `saham assess pre-open` | **Nothing** (stdout only) |
 | Paper notebook | `saham trade pre-open log` | CSV + `trades.jsonl` only |
 
 ---
@@ -55,7 +55,7 @@ log      →  paper notebook only
 | **08:57** | `saham research pre-open capture` (must finish before 08:58) | Cron |
 | 08:58–09:00 | Matching — **not** production decision window | — |
 | **09:00** | `saham research pre-open track` (samples ~09:00–09:30) | Cron |
-| 09:00+ | `saham analyze pre-open` then optional paper log | **Human** (no cron) |
+| 09:00+ | `saham assess pre-open` then optional paper log | **Human** (no cron) |
 | **09:36** | `saham research pre-open labels` | Cron |
 | **09:37** | `saham research pre-open evaluate` | Cron |
 
@@ -87,7 +87,7 @@ saham research pre-open status
 ### Human post-open
 
 ```bash
-saham analyze pre-open --session YYYY-MM-DD
+saham assess pre-open --session YYYY-MM-DD
 # or: --observation-id … [--opening-snapshot-id …]
 # JSON: --format json
 
@@ -130,7 +130,7 @@ research pre-open grade | prompt | tune
   - `READY_TO_ANALYZE` = has explicit open  
   - `MISSING_OPEN` = track without `opening_price` (do not invent mid)  
   - `NO_TRACK` = re-run track  
-- [ ] Human: `saham analyze pre-open` (use IDs from status/capture) → optional paper log  
+- [ ] Human: `saham assess pre-open` (use IDs from status/capture) → optional paper log  
 - [ ] After 09:37: labels + evaluate; status shows `LABELED`
 
 ---

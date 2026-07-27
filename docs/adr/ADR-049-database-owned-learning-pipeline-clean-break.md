@@ -11,7 +11,7 @@ and ADR-048. Public CLI tree ownership for adapters remains
 
 ### Amendment (post-open assess)
 
-- Post-open assessment of an NCP pre-open plan is **`saham analyze pre-open`**
+- Post-open assessment of an NCP pre-open plan is **`saham assess pre-open`**
   (read-only over `learning_observations` + linked `learning_track_snapshots`).
 - It is **not** a learning outcome label and does **not** write learning tables.
 - Paper notebook: `saham trade pre-open log` with exact
