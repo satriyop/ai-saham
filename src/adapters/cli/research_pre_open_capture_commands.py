@@ -190,15 +190,30 @@ def pre_open_capture(
         typer.echo(f"Capture failed: {e}", err=True)
         raise typer.Exit(1)
 
+    observation_rows = [
+        {
+            "observation_id": row.observation_id,
+            "ticker": row.ticker,
+            "screen_result": row.screen_result,
+            "inserted": row.inserted,
+        }
+        for row in result.observations
+    ]
+    session = (
+        run_date.isoformat()
+        if run_date is not None
+        else str(result.response.result.screened_date)
+    )
     payload = {
         "artifact_type": "pre_open_observation_capture",
-        "session": run_date.isoformat(),
+        "session": session,
         "recorded_count": result.recorded_count,
         "candidate_count": len(result.response.result.candidates),
         "filter_reject_count": len(result.response.filter_rejects),
         "source_status": result.response.source_status.value,
         "workflow": "screen_pre_open",
         "observation_contract": PRE_OPEN_OBSERVATION_CONTRACT,
+        "observations": observation_rows,
     }
     if fmt == "json":
         typer.echo(json.dumps(payload, indent=2))
@@ -211,6 +226,19 @@ def pre_open_capture(
     typer.echo(f"  filter_rejects:    {payload['filter_reject_count']}")
     typer.echo(f"  source_status:     {payload['source_status']}")
     typer.echo(f"  contract:          {PRE_OPEN_OBSERVATION_CONTRACT}")
+    if observation_rows:
+        typer.echo("  observations:")
+        for row in observation_rows:
+            flag = "new" if row["inserted"] else "exists"
+            typer.echo(
+                f"    {row['ticker']:6}  {row['observation_id']}  "
+                f"{row['screen_result'] or '-'}  ({flag})"
+            )
     typer.echo(
-        "  Next: research pre-open track → research pre-open labels → evaluate"
+        "  Next: research pre-open track → analyze pre-open "
+        "→ labels → evaluate"
+    )
+    typer.echo(
+        "  Analyze: saham analyze pre-open --observation-id <id> "
+        "[--opening-snapshot-id <id>]"
     )

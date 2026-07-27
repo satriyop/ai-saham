@@ -156,22 +156,27 @@ def test_persists_database_owned_observation_idempotently(tmp_path: Path) -> Non
         run_date=date(2026, 6, 18),
     )
 
-    assert (
-        persister.persist(
-            _response(),
-            request,
-            captured_at=datetime(2026, 6, 18, 8, 57, tzinfo=WIB),
-        )
-        == 1
+    first = persister.persist(
+        _response(),
+        request,
+        captured_at=datetime(2026, 6, 18, 8, 57, tzinfo=WIB),
     )
-    assert (
-        persister.persist(
-            _response(),
-            request,
-            captured_at=datetime(2026, 6, 18, 8, 57, tzinfo=WIB),
-        )
-        == 0
+    assert first.recorded_count == 1
+    assert len(first.observations) == 1
+    assert first.observations[0].ticker == "BBCA"
+    assert first.observations[0].inserted is True
+    assert first.observations[0].observation_id
+
+    second = persister.persist(
+        _response(),
+        request,
+        captured_at=datetime(2026, 6, 18, 8, 57, tzinfo=WIB),
     )
+    assert second.recorded_count == 0
+    assert len(second.observations) == 1
+    assert second.observations[0].inserted is False
+    assert second.observations[0].observation_id == first.observations[0].observation_id
+
     rows = repository.list_observations(
         AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION
     )
@@ -231,7 +236,7 @@ def test_persists_hard_filter_rejects(tmp_path: Path) -> None:
         run_date=date(2026, 6, 18),
     )
 
-    count = PreOpenObservationPersister(repository).persist(
+    result = PreOpenObservationPersister(repository).persist(
         _response(rejects=(reject,)),
         request,
         captured_at=datetime(2026, 6, 18, 8, 57, tzinfo=WIB),
@@ -240,7 +245,8 @@ def test_persists_hard_filter_rejects(tmp_path: Path) -> None:
     rows = repository.list_observations(
         AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION
     )
-    assert count == 2
+    assert result.recorded_count == 2
+    assert {r.ticker for r in result.observations} == {"BBCA", "XYZ"}
     assert {
         row.decision_payload["screen_result"] for row in rows
     } == {"pass", "rejected_filter_speculative"}
@@ -264,4 +270,6 @@ def test_no_repository_is_noop() -> None:
         config=PreOpenScreenConfig(fast_mode=True),
         run_date=date(2026, 6, 18),
     )
-    assert PreOpenObservationPersister(None).persist(response, request) == 0
+    empty = PreOpenObservationPersister(None).persist(response, request)
+    assert empty.recorded_count == 0
+    assert empty.observations == ()

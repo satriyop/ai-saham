@@ -594,3 +594,221 @@ class GetLearningStatusUseCase:
                 sorted({observation.compatibility_id for observation in observations})
             ),
         )
+
+
+@dataclass(frozen=True)
+class PreOpenSessionObservationLine:
+    observation_id: str
+    ticker: str
+    screen_result: str | None
+    track_count: int
+    has_opening_price: bool
+    opening_snapshot_id: str | None
+    label_available: bool
+    readiness: str  # NO_TRACK | MISSING_OPEN | READY_TO_ANALYZE | LABELED
+
+
+@dataclass(frozen=True)
+class PreOpenSessionStatus:
+    """Session-scoped readiness for pre-open capture → track → analyze → labels."""
+
+    session_date: date
+    observation_count: int
+    with_opening_price: int
+    missing_opening_price: int
+    labeled_count: int
+    lines: tuple[PreOpenSessionObservationLine, ...]
+    next_actions: tuple[str, ...]
+    corpus: LearningStatus
+
+
+class GetPreOpenSessionStatusUseCase:
+    """Session readiness: capture present, tracks, explicit open, labels."""
+
+    def __init__(
+        self,
+        *,
+        observations: LearningObservationRepository,
+        tracks: LearningTrackSnapshotRepository,
+        labels: LearningOutcomeLabelRepository,
+        evaluations: LearningEvaluationRepository,
+    ) -> None:
+        self._observations = observations
+        self._tracks = tracks
+        self._labels = labels
+        self._evaluations = evaluations
+
+    def execute(self, session_date: date) -> PreOpenSessionStatus:
+        from src.domain.value_objects.idx_market import IDX_TIMEZONE, REGULAR_OPEN
+
+        corpus = GetLearningStatusUseCase(
+            observations=self._observations,
+            labels=self._labels,
+            evaluations=self._evaluations,
+        ).execute(AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION)
+
+        all_obs = tuple(
+            self._observations.list_observations(
+                AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION
+            )
+        )
+        session_obs = tuple(
+            o
+            for o in all_obs
+            if o.cutoff_at.astimezone(IDX_TIMEZONE).date() == session_date
+        )
+        labels_by_obs = {
+            label.observation_id: label
+            for label in self._labels.list_labels(
+                [o.observation_id for o in session_obs]
+            )
+        }
+
+        lines: list[PreOpenSessionObservationLine] = []
+        with_open = 0
+        missing_open = 0
+        labeled = 0
+
+        for obs in sorted(session_obs, key=lambda o: (o.window_id, o.observation_id)):
+            try:
+                ticker = _observation_ticker(obs)
+            except LearningContractError:
+                ticker = str(obs.window_id).split(":", 1)[0].upper()
+            screen_result = obs.decision_payload.get("screen_result")
+            if screen_result is not None:
+                screen_result = str(screen_result)
+            snaps = list(self._tracks.list_track_snapshots(obs.observation_id))
+            open_window = [
+                s
+                for s in snaps
+                if s.sampled_at.astimezone(IDX_TIMEZONE).date() == session_date
+                and s.sampled_at.astimezone(IDX_TIMEZONE)
+                .timetz()
+                .replace(tzinfo=None)
+                >= REGULAR_OPEN
+            ]
+            open_window.sort(key=lambda s: (s.sampled_at, s.snapshot_id))
+            opening_snapshot_id: str | None = None
+            has_open = False
+            for snap in open_window:
+                payload = snap.snapshot_payload or {}
+                if "opening_price" not in payload:
+                    continue
+                try:
+                    if float(payload["opening_price"]) > 0:
+                        has_open = True
+                        opening_snapshot_id = snap.snapshot_id
+                        break
+                except (TypeError, ValueError):
+                    continue
+            if not has_open and open_window:
+                opening_snapshot_id = open_window[0].snapshot_id
+
+            label = labels_by_obs.get(obs.observation_id)
+            label_ok = (
+                label is not None
+                and label.availability is LabelAvailability.AVAILABLE
+            )
+            if has_open:
+                with_open += 1
+            elif snaps:
+                missing_open += 1
+            if label_ok:
+                labeled += 1
+
+            if not snaps:
+                readiness = "NO_TRACK"
+            elif not has_open:
+                readiness = "MISSING_OPEN"
+            elif label_ok:
+                readiness = "LABELED"
+            else:
+                readiness = "READY_TO_ANALYZE"
+
+            lines.append(
+                PreOpenSessionObservationLine(
+                    observation_id=obs.observation_id,
+                    ticker=ticker,
+                    screen_result=screen_result,
+                    track_count=len(snaps),
+                    has_opening_price=has_open,
+                    opening_snapshot_id=opening_snapshot_id,
+                    label_available=label_ok,
+                    readiness=readiness,
+                )
+            )
+
+        next_actions = self._next_actions(
+            session_date=session_date,
+            observation_count=len(session_obs),
+            with_open=with_open,
+            missing_open=missing_open,
+            labeled=labeled,
+            lines=lines,
+        )
+        return PreOpenSessionStatus(
+            session_date=session_date,
+            observation_count=len(session_obs),
+            with_opening_price=with_open,
+            missing_opening_price=missing_open,
+            labeled_count=labeled,
+            lines=tuple(lines),
+            next_actions=next_actions,
+            corpus=corpus,
+        )
+
+    @staticmethod
+    def _next_actions(
+        *,
+        session_date: date,
+        observation_count: int,
+        with_open: int,
+        missing_open: int,
+        labeled: int,
+        lines: Sequence[PreOpenSessionObservationLine],
+    ) -> tuple[str, ...]:
+        actions: list[str] = []
+        day = session_date.isoformat()
+        if observation_count == 0:
+            actions.append(
+                f"No capture for {day}: run `saham research pre-open capture` "
+                "(NCP window) or check cron/logs."
+            )
+            return tuple(actions)
+        no_track = sum(1 for line in lines if line.readiness == "NO_TRACK")
+        if no_track:
+            actions.append(
+                f"{no_track} observation(s) have no track: "
+                "`saham research pre-open track`."
+            )
+        if missing_open:
+            actions.append(
+                f"{missing_open} observation(s) have track but MISSING_OPEN "
+                "(no explicit opening_price): re-run track after open or wait "
+                "for last_price; analyze will not invent mid."
+            )
+        ready = [line for line in lines if line.readiness == "READY_TO_ANALYZE"]
+        if ready:
+            actions.append(
+                f"{len(ready)} ready to analyze: "
+                "`saham analyze pre-open --session "
+                f"{day}` (or --observation-id …)."
+            )
+            sample = ready[0]
+            actions.append(
+                f"Example log: saham trade log --type pre-open "
+                f"--observation-id {sample.observation_id} "
+                f"--opening-snapshot-id {sample.opening_snapshot_id or '…'}"
+            )
+        if with_open and labeled < with_open:
+            actions.append(
+                f"Labels incomplete ({labeled}/{with_open} with open): "
+                "`saham research pre-open labels` then `evaluate`."
+            )
+        if labeled and labeled == observation_count:
+            actions.append(
+                "Session labels present: `saham research pre-open evaluate`."
+            )
+        if not actions:
+            actions.append("Session looks complete for captured observations.")
+        return tuple(actions)

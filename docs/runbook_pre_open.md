@@ -124,11 +124,14 @@ research pre-open grade | prompt | tune
 
 - [ ] Cron installed (`./install_cron.sh`); host TZ Asia/Jakarta  
 - [ ] Stockbit session valid (`saham fetch stockbit status`)  
-- [ ] After 08:57: capture log green (`logs/pre-open-capture.log`)  
-- [ ] After 09:00: track has samples (`logs/pre-open-track.log`)  
-- [ ] Human: `saham analyze pre-open` → copy IDs → optional paper log  
-- [ ] After 09:37: labels + evaluate logs green  
-- [ ] `saham research pre-open status` looks sane  
+- [ ] After 08:57: capture log green; print shows **observation_id** per ticker  
+- [ ] After 09:00: track log green  
+- [ ] **`saham research pre-open status`** → readiness lines  
+  - `READY_TO_ANALYZE` = has explicit open  
+  - `MISSING_OPEN` = track without `opening_price` (do not invent mid)  
+  - `NO_TRACK` = re-run track  
+- [ ] Human: `saham analyze pre-open` (use IDs from status/capture) → optional paper log  
+- [ ] After 09:37: labels + evaluate; status shows `LABELED`
 
 ---
 

@@ -133,10 +133,6 @@ class OpeningTrackUseCase:
                 try:
                     ob = self._order_book_provider.fetch_snapshot(ticker)
                     entry["order_book"] = ob.to_dict() if ob else None
-                    if ob and ob.last_price:
-                        entry["opening_price"] = ob.last_price
-                        entry["opening_price_source"] = "order_book_lastprice"
-                        entry["opening_price_confidence"] = "MEDIUM"
                 except Exception:
                     entry["order_book"] = None
 
@@ -161,6 +157,9 @@ class OpeningTrackUseCase:
                 except Exception:
                     entry["broker_signal"] = None
 
+            # Promote explicit opening_price only (never mid_price as open).
+            self._promote_opening_price(entry, sampled_at=now)
+
             ticker_data[ticker] = entry if entry else None
 
         return {
@@ -181,6 +180,58 @@ class OpeningTrackUseCase:
                     captured_at=sampled_at,
                 )
             )
+
+    @staticmethod
+    def _promote_opening_price(entry: dict, *, sampled_at: datetime) -> None:
+        """Set top-level opening_price from order_book last trade when valid.
+
+        Assess/analyze require an explicit ``opening_price`` key. Nested
+        ``order_book.last_price`` alone is not enough. Mid-of-book must never
+        be promoted as open.
+        """
+        if not entry or entry.get("error"):
+            return
+        if entry.get("opening_price") is not None:
+            try:
+                if float(entry["opening_price"]) > 0:
+                    entry.setdefault(
+                        "opening_price_source",
+                        entry.get("opening_price_source") or "order_book_lastprice",
+                    )
+                    entry.setdefault("opening_price_confidence", "MEDIUM")
+                    entry.setdefault(
+                        "opening_price_timestamp", sampled_at.isoformat()
+                    )
+                    return
+            except (TypeError, ValueError):
+                entry.pop("opening_price", None)
+
+        candidates: list[object] = []
+        order_book = entry.get("order_book")
+        if isinstance(order_book, dict):
+            for key in ("last_price", "lastprice", "close"):
+                if order_book.get(key) is not None:
+                    candidates.append(order_book.get(key))
+        # Already on entry from a future producer path
+        for key in ("last_price", "lastprice"):
+            if entry.get(key) is not None:
+                candidates.append(entry.get(key))
+
+        for raw in candidates:
+            try:
+                price = float(raw)  # type: ignore[arg-type]
+            except (TypeError, ValueError):
+                continue
+            if price <= 0:
+                continue
+            entry["opening_price"] = price
+            entry["opening_price_source"] = "order_book_lastprice"
+            entry["opening_price_confidence"] = "MEDIUM"
+            entry["opening_price_timestamp"] = sampled_at.isoformat()
+            return
+
+        # Explicit absence for status/consumers (mid may still be present)
+        entry["opening_price_status"] = "MISSING"
 
     @staticmethod
     def _seconds_to_next_interval(now: datetime) -> int:

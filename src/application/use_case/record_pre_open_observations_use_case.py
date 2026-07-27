@@ -13,6 +13,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from src.application.services.pre_open_observation_persister import (
+    PreOpenPersistedObservation,
+    PreOpenPersistResult,
+)
 from src.domain.value_objects.pre_open_signal_evidence import AuctionNcpProvenance
 
 if TYPE_CHECKING:
@@ -30,6 +34,7 @@ if TYPE_CHECKING:
 class RecordPreOpenObservationsResult:
     response: "PreOpenWorkflowResponse"
     recorded_count: int
+    observations: tuple[PreOpenPersistedObservation, ...] = ()
 
 
 class RecordPreOpenObservationsUseCase:
@@ -64,16 +69,17 @@ class RecordPreOpenObservationsUseCase:
                 "session's 08:56–08:58 NCP_LOCKED input phase, and a snapshot "
                 "reference."
             )
-        count = self._persister.persist(response, request)
+        persist_result = self._persister.persist(response, request)
         return RecordPreOpenObservationsResult(
             response=response,
-            recorded_count=count,
+            recorded_count=persist_result.recorded_count,
+            observations=persist_result.observations,
         )
 
     def persist_only(
         self,
         response: "PreOpenWorkflowResponse",
         request: "PreOpenWorkflowRequest",
-    ) -> int:
+    ) -> PreOpenPersistResult:
         """Save an already-built workflow response without re-running the screen."""
         return self._persister.persist(response, request)

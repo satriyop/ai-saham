@@ -8,6 +8,7 @@ Layer: Application
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -40,6 +41,22 @@ if TYPE_CHECKING:
     )
 
 
+@dataclass(frozen=True)
+class PreOpenPersistedObservation:
+    """One observation row after capture persist (inserted or idempotent)."""
+
+    observation_id: str
+    ticker: str
+    screen_result: str
+    inserted: bool
+
+
+@dataclass(frozen=True)
+class PreOpenPersistResult:
+    recorded_count: int
+    observations: tuple[PreOpenPersistedObservation, ...]
+
+
 class PreOpenObservationPersister:
     """Write observation payloads for every screened pre-open candidate."""
 
@@ -59,14 +76,14 @@ class PreOpenObservationPersister:
         request: "PreOpenWorkflowRequest",
         *,
         captured_at: datetime | None = None,
-    ) -> int:
-        """Save observations for this session. Returns count written. Fail closed."""
+    ) -> PreOpenPersistResult:
+        """Save observations for this session. Returns IDs + insert counts. Fail closed."""
         if self._repo is None:
-            return 0
+            return PreOpenPersistResult(recorded_count=0, observations=())
         candidates = response.result.candidates
         filter_rejects = list(response.filter_rejects or ())
         if not candidates and not filter_rejects:
-            return 0
+            return PreOpenPersistResult(recorded_count=0, observations=())
 
         now = captured_at or datetime.now(tz=IDX_TIMEZONE)
         if now.tzinfo is None:
@@ -207,4 +224,28 @@ class PreOpenObservationPersister:
                 )
             )
 
-        return sum(self._repo.add_observation(observation) for observation in observations)
+        rows: list[PreOpenPersistedObservation] = []
+        inserted_count = 0
+        for observation in observations:
+            inserted = bool(self._repo.add_observation(observation))
+            if inserted:
+                inserted_count += 1
+            ticker = str(
+                observation.decision_payload.get("ticker")
+                or observation.window_id.split(":", 1)[0]
+            ).upper()
+            screen_result = str(
+                observation.decision_payload.get("screen_result") or ""
+            )
+            rows.append(
+                PreOpenPersistedObservation(
+                    observation_id=observation.observation_id,
+                    ticker=ticker,
+                    screen_result=screen_result,
+                    inserted=inserted,
+                )
+            )
+        return PreOpenPersistResult(
+            recorded_count=inserted_count,
+            observations=tuple(rows),
+        )

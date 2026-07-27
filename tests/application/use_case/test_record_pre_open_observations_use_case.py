@@ -106,7 +106,28 @@ def test_capture_accepts_proven_same_session_ncp():
     )
     workflow.execute.return_value = response
     persister = MagicMock()
-    persister.persist.return_value = 2
+    from src.application.services.pre_open_observation_persister import (
+        PreOpenPersistedObservation,
+        PreOpenPersistResult,
+    )
+
+    persister.persist.return_value = PreOpenPersistResult(
+        recorded_count=2,
+        observations=(
+            PreOpenPersistedObservation(
+                observation_id="obs-1",
+                ticker="BBCA",
+                screen_result="pass",
+                inserted=True,
+            ),
+            PreOpenPersistedObservation(
+                observation_id="obs-2",
+                ticker="BBRI",
+                screen_result="pass",
+                inserted=True,
+            ),
+        ),
+    )
     use_case = RecordPreOpenObservationsUseCase(workflow, persister)
     workflow_request = _request()
 
@@ -114,5 +135,6 @@ def test_capture_accepts_proven_same_session_ncp():
 
     assert result.response is response
     assert result.recorded_count == 2
+    assert result.observations[0].observation_id == "obs-1"
     workflow.execute.assert_called_once_with(workflow_request)
     persister.persist.assert_called_once_with(response, workflow_request)
