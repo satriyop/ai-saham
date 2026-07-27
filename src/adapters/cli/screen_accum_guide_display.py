@@ -194,7 +194,7 @@ def print_column_guide() -> None:
         "  • Run --multi first for the daily overview — one command, three windows.\n"
         "  • Use --squeeze-only to surface 'coiled spring' setups.\n"
         "  • Deep-dive: saham view ticker flow <TICKER> --days 30\n"
-        "               saham analyze risk <TICKER> --with-sentiment",
+        "               saham inspect risk <TICKER> --with-sentiment",
         style="cyan"
     )
 

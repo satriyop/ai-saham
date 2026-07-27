@@ -177,6 +177,7 @@ class TestAlphaTriggerPanel:
         _call_print(include_signal_detail=True, signal_assessment=sa)
 
         out = capsys.readouterr().out
-        assert "company_quality_context" in out
+        # Rich table truncates long group names (company_quality_context → company_qua…).
+        assert "company_qua" in out
         assert "DIAGNOSTIC" in out
         assert "no weight" in out

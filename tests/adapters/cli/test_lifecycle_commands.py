@@ -97,7 +97,7 @@ def test_view_broker_group_exposes_read_only_commands():
 
 
 def test_plan_swing_is_available():
-    result = runner.invoke(app, ["analyze", "--help"])
+    result = runner.invoke(app, ["plan", "--help"])
 
     assert result.exit_code == 0
     assert "swing" in result.stdout
@@ -113,7 +113,7 @@ def test_trade_group_exposes_paper_notebook_only():
     result = runner.invoke(app, ["trade", "--help"])
 
     assert result.exit_code == 0
-    assert "confirm" not in result.stdout  # post-open assess → analyze pre-open
+    assert "confirm" not in result.stdout  # post-open assess → assess pre-open
     assert "pre-open" in result.stdout
     assert "accum" in result.stdout
     # Commands section must not expose retired flat verbs / groups
@@ -160,8 +160,8 @@ def test_policy_group_exposes_accum_lifecycle():
         assert verb in accum.stdout
 
 
-def test_analyze_group_exposes_pre_open_post_open_assess():
-    result = runner.invoke(app, ["analyze", "--help"])
+def test_assess_group_exposes_pre_open_post_open_assess():
+    result = runner.invoke(app, ["assess", "--help"])
 
     assert result.exit_code == 0
     assert "pre-open" in result.stdout

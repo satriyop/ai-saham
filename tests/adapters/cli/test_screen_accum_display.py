@@ -368,7 +368,7 @@ def test_display_results_renders_phase_column_and_note(capsys):
     assert "accumulation-lifecycle diagnostic" in out
     # Rich wraps the note across panel lines; assert the command parts separately.
     assert "saham plan swing" in out
-    assert "TICKER --setup SETUP" in out
+    assert "saham plan swing" in out and "--setup" in out
     assert "Disc%" in out
 
 

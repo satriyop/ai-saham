@@ -940,7 +940,8 @@ def test_setup_lens_impact_warning_cell_renders_warning_not_action():
     result = type("R", (), {"rows": (row,)})()
 
     text = _render_to_text(_setup_lens_impact_elements(result))
-    assert "warning: no broker_detail" in text
+    # Rich table wrap can split the warning cell across lines/columns.
+    assert "warning:" in text and "broker_detail" in text
     # Warning cell must not appear as a Next follow-up.
     assert f"saham plan swing BBRI --setup {first}" not in text
 

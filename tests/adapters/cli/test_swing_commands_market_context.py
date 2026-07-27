@@ -10,7 +10,7 @@ def test_regime_command_accepts_explicit_ticker_with_empty_cache(tmp_path: Path)
     result = runner.invoke(
         app,
         [
-            "analyze",
+            "inspect",
             "regime",
             "BBCA",
             "--universe",

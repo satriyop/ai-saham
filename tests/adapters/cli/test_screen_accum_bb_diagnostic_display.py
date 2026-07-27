@@ -147,7 +147,11 @@ def test_guide_text_states_bb_is_diagnostic_not_default_flow_score(capsys):
     print_column_guide()
     out = capsys.readouterr().out
 
-    assert "not scored in default foreign-flow score" in out.lower()
-    assert "not scored by default" in out.lower()
+    import re
+
+    plain = re.sub(r"[─│╭╮╰╯├┤┬┴┼]", " ", out.lower())
+    flat = " ".join(plain.split())
+    assert "not scored in default foreign-flow score" in flat
+    assert "not scored by default" in flat
     # Stale wording implying BB is part of the composite score must be gone.
     assert "BB width, and BCI into a single score" not in out
