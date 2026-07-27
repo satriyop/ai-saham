@@ -1,4 +1,4 @@
-"""CLI tests for saham analyze pre-open."""
+"""CLI tests for saham assess pre-open."""
 
 from __future__ import annotations
 
@@ -71,19 +71,19 @@ def _seed(db: Path) -> tuple[str, str]:
     return obs.observation_id, snap.snapshot_id
 
 
-def test_analyze_pre_open_help() -> None:
-    result = runner.invoke(app, ["analyze", "pre-open", "--help"])
+def test_assess_pre_open_help() -> None:
+    result = runner.invoke(app, ["assess", "pre-open", "--help"])
     assert result.exit_code == 0
     assert "Post-open assessment of NCP pre-open plan" in result.stdout
 
 
-def test_analyze_pre_open_json(tmp_path: Path) -> None:
+def test_assess_pre_open_json(tmp_path: Path) -> None:
     db = tmp_path / "learn.db"
     obs_id, snap_id = _seed(db)
     result = runner.invoke(
         app,
         [
-            "analyze",
+            "assess",
             "pre-open",
             "--session",
             SESSION.isoformat(),
@@ -102,13 +102,13 @@ def test_analyze_pre_open_json(tmp_path: Path) -> None:
     assert payload["lines"][0]["opening_snapshot_id"] == snap_id
 
 
-def test_analyze_pre_open_missing_obs(tmp_path: Path) -> None:
+def test_assess_pre_open_missing_obs(tmp_path: Path) -> None:
     db = tmp_path / "learn.db"
     SQLiteLearningArtifactRepository(db)  # create empty schema
     result = runner.invoke(
         app,
         [
-            "analyze",
+            "assess",
             "pre-open",
             "--observation-id",
             "missing",
@@ -120,7 +120,7 @@ def test_analyze_pre_open_missing_obs(tmp_path: Path) -> None:
 
 
 def test_command_boundary_no_sidecar_writes() -> None:
-    source = Path("src/adapters/cli/analyze_pre_open_commands.py").read_text(
+    source = Path("src/adapters/cli/assess_pre_open_commands.py").read_text(
         encoding="utf-8"
     )
     assert "write_intraday_confirmation" not in source

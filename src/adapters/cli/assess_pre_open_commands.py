@@ -1,4 +1,4 @@
-"""CLI: saham analyze pre-open
+"""CLI: saham assess pre-open
 
 Post-open assessment of an immutable NCP pre-open plan.
 Reads learning_observations + linked track snapshots only — no live prices,
@@ -15,7 +15,7 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.analyze_pre_open_display import display_analyze_pre_open, echo_json
+from src.adapters.cli.assess_pre_open_display import display_assess_pre_open, echo_json
 from src.adapters.cli.research_pre_open_paths import parse_session_date
 from src.application.dto.analyze_pre_open import (
     AnalyzePreOpenAmbiguityError,
@@ -100,4 +100,4 @@ def pre_open(
     if fmt == "json":
         echo_json(result)
         return
-    display_analyze_pre_open(result)
+    display_assess_pre_open(result)

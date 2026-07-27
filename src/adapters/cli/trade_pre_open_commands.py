@@ -40,14 +40,14 @@ def pre_open_paper_log(
         str,
         typer.Option(
             "--observation-id",
-            help="Learning observation id (from `saham analyze pre-open`)",
+            help="Learning observation id (from `saham assess pre-open`)",
         ),
     ],
     opening_snapshot_id: Annotated[
         str,
         typer.Option(
             "--opening-snapshot-id",
-            help="Opening track snapshot id (from `saham analyze pre-open`)",
+            help="Opening track snapshot id (from `saham assess pre-open`)",
         ),
     ],
     journal: Annotated[

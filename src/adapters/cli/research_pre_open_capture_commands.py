@@ -98,7 +98,7 @@ def pre_open_capture(
 
     Sole decision authority write for the opening learning loop (clean break).
     Does not write trade-confirm sidecars. Does not generate open_30m labels
-    (use ``research pre-open labels``). Post-open assess: ``saham analyze pre-open``.
+    (use ``research pre-open labels``). Post-open assess: ``saham assess pre-open``.
 
     Examples:
         saham research pre-open capture
@@ -239,6 +239,6 @@ def pre_open_capture(
         "→ labels → evaluate"
     )
     typer.echo(
-        "  Analyze: saham analyze pre-open --observation-id <id> "
+        "  Analyze: saham assess pre-open --observation-id <id> "
         "[--opening-snapshot-id <id>]"
     )

@@ -1,4 +1,4 @@
-"""Display helpers for `saham analyze pre-open`.
+"""Display helpers for `saham assess pre-open`.
 
 Layer: Adapter
 """
@@ -71,7 +71,7 @@ def _short_id(value: str | None) -> str:
     return value[:12] + "…"
 
 
-def display_analyze_pre_open(result: AnalyzePreOpenResult) -> None:
+def display_assess_pre_open(result: AnalyzePreOpenResult) -> None:
     """Rich table: pre-open state vs post-open action."""
     summary = compact_table(show_header=False)
     summary.add_column("Metric", style="bold")

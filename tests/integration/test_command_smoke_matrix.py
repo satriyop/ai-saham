@@ -232,7 +232,7 @@ def _retired_pre_open_file_sidecar_contract(temp_workspace, monkeypatch):
     analyze = runner.invoke(
         app,
         [
-            "analyze", "pre-open",
+            "assess", "pre-open",
             "--session", "2026-06-12",
             "--db", str(db_path),
             "--format", "json",
@@ -240,7 +240,7 @@ def _retired_pre_open_file_sidecar_contract(temp_workspace, monkeypatch):
     )
     assert analyze.exit_code == 0, analyze.output
     payload = _json_stdout(analyze)
-    assert payload["artifact_type"] == "analyze_pre_open_result"
+    assert payload["artifact_type"] == "assess_pre_open_result"
     assert payload["lines"][0]["post_open_action"] == "ENTER"
 
 

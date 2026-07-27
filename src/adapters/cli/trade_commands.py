@@ -8,7 +8,7 @@ Commands (all under `saham trade`):
 Not here:
   corpus / labels     → saham research pre-open|accum …
   config proposals    → saham policy accum …
-  live plan / assess → saham plan swing --capital | saham analyze pre-open
+  live plan / assess → saham plan swing --capital | saham assess pre-open
 
 Layer: Adapter (routing only).
 """
@@ -30,7 +30,7 @@ trade_app = typer.Typer(
         "Paper trading notebook only (pre-open, accum). "
         "Corpus: `saham research`. Policy apply: `saham policy accum`. "
         "Sizing: `saham plan swing --capital`. "
-        "Post-open assess: `saham analyze pre-open`."
+        "Post-open assess: `saham assess pre-open`."
     ),
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},
