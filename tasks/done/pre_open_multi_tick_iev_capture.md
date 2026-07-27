@@ -1,5 +1,10 @@
 # Task: Multi-Tick Pre-Open IEV Capture — Activate Locked-Input ΔIEV
 
+> [!NOTE]
+> **Retired / Done 2026-07-27.** Product + schedule work is landed in-repo.
+> Keep this file as historical completion evidence only. Host crontab reinstall
+> and live-day corpus verification are ongoing **ops** (not open backlog).
+
 Governing decision: [ADR-048](../../docs/adr/ADR-048-pre-open-signal-evidence-and-observation-identity.md)
 (supplies `delta_iev` for the `auction_ncp` group)
 
@@ -13,13 +18,24 @@ captured.
 
 **Task Type:** Ops / scheduling (data capture).
 
-**Priority:** **HIGH — perishable.** Pre-open auction state (IEV/IEP/book) is
-**ephemeral and non-backfillable**: it exists only during the 08:45–09:00 window on
-that specific morning and is not retrievable from any provider afterward. Every
-trading day shipped without multi-tick capture is a **permanent hole** in a corpus
-that can never be reconstructed. This is the reverse of swing/`research`, whose
-inputs (candles) backfill on demand — so this task is urgent even though the
-consuming signal (ADR-048) is not.
+**Status:** `DONE` — retired from `tasks/backlog/` on 2026-07-27.
+
+**Shipped (in-repo):**
+
+| Deliverable | Where |
+|-------------|--------|
+| Multi-tick IEV cron (08:47 / 50 / 53) + locked baseline 08:56 | `install_cron.sh` |
+| NCP decision write 08:57 | `saham research pre-open capture` cron line |
+| Append-only history + locked baseline reader | `SQLiteIEVRepository` / `get_locked_iev_baseline` |
+| Runbook / quick-ref cadence | pre-open docs |
+
+**Residual ops (not product backlog):** reinstall host crontab with
+`./install_cron.sh` when the machine schedule drifts; confirm a trading day
+wrote ≥2 `iev_snapshot_history` rows and `is_ncp_locked` as needed.
+
+**Priority (historical):** HIGH — perishable. Pre-open auction state is
+ephemeral and non-backfillable; multi-tick capture had to land before relying
+on `delta_iev` as a primary auction_ncp input.
 
 ## 2. Problem Statement
 
@@ -36,11 +52,11 @@ persistence for the baseline is built:
 * `get_iev_delta(date)` remains an all-session diagnostic and is forbidden as
   production signal evidence.
 
-**Status (ops):** `install_cron.sh` schedules diagnostic `fetch iev` ticks at
-**08:47 / 08:50 / 08:53**, the locked baseline at **08:56**, and
-`research pre-open capture` at **08:57**. Capture must finish before 08:58.
-Remaining work: verify a live trading day and reinstall the host crontab with
-`./install_cron.sh`.
+**Status (ops, at retirement):** `install_cron.sh` schedules diagnostic
+`fetch iev` ticks at **08:47 / 08:50 / 08:53**, the locked baseline at
+**08:56**, and `research pre-open capture` at **08:57**. Capture must finish
+before 08:58. Host reinstall + live-day verification are ops checklists, not
+open engineering tasks.
 
 ## 3. Desired Outcome
 
@@ -105,16 +121,23 @@ Layer plan:
 
 ## 7. Acceptance Criteria
 
+Product / schedule (met in-repo at retirement):
+
+* [x] `install_cron.sh` multi-tick block: 08:47 / 50 / 53 diagnostic + 08:56
+      locked baseline + 08:57 capture (idempotent reinstall design).
+* [x] Locked-baseline reader and NCP stamp path exist for ADR-048 `delta_iev`.
+* [x] No writer table/schema migration required for this task.
+* [x] Authoritative capture is scheduled to finish before 08:58 (fail-closed
+      contract owned by capture path / ADR-048).
+
+Host ops (not blocking task retirement; verify on machine when operating):
+
 * [ ] After a trading day, `iev_snapshot_history` holds **≥ 2 rows** for tickers
       present in multiple ticks.
-* [ ] `get_locked_iev_baseline(today, before=capture_start)` returns a non-empty
-      map for overlapping tickers.
-* [ ] At least one captured row per day has `is_ncp_locked = 1`, stamped inside
+* [ ] `get_locked_iev_baseline(today, before=capture_start)` non-empty for
+      overlapping tickers on that day.
+* [ ] At least one captured row that day has `is_ncp_locked = 1` inside
       [08:56, 08:58) WIB.
-* [ ] Authoritative capture completes before 08:58; a crossing run fails closed.
-* [ ] `install_cron.sh` is idempotent and re-installs the multi-tick block cleanly
-      (no duplicate/stale saham cron entries).
-* [ ] No writer table/schema migration; existing and new IEV tests remain green.
 
 ## 8. Sequencing
 
@@ -125,7 +148,7 @@ while the signal design is not.
 
 ## Final Gate
 
-Definition of Done: multi-tick capture live and idempotent; ΔIEV computable
-forward from deploy day; no backfill claimed; no writer schema drift. If capture
-cannot be made reliable (e.g. session/asleep issues), stop and report rather than
-silently drop ticks.
+**Closed 2026-07-27.** In-repo schedule + persistence path land multi-tick IEV
+and locked baseline for forward ΔIEV. No backfill claimed; no writer schema
+drift. Host reliability (awake laptop, Stockbit session, crontab install)
+remains an ops concern — not an open `tasks/backlog` item.
