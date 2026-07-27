@@ -27,81 +27,43 @@ if ! "$PROJECT_DIR/.venv/bin/saham" --help > /dev/null 2>&1; then
     exit 1
 fi
 
-# ── Manage Environment Secrets (.env) ──────────────────────────────────
-ENV_FILE="$PROJECT_DIR/.env"
-KEYS_TO_EXPORT=(
-    "DEEPSEEK_API_KEY"
-    "ANTHROPIC_API_KEY"
-    "OPENAI_API_KEY"
-    "GEMINI_API_KEY"
-    "OLLAMA_HOST"
-)
-
-for KEY in "${KEYS_TO_EXPORT[@]}"; do
-    VAL=$(eval echo \${$KEY:-})
-    if [[ -n "$VAL" ]]; then
-        if [[ ! -f "$ENV_FILE" ]]; then
-            echo "Creating $ENV_FILE..."
-            touch "$ENV_FILE"
-            chmod 600 "$ENV_FILE"
-        fi
-        if ! grep -q "^${KEY}=" "$ENV_FILE" 2>/dev/null; then
-            echo "Saving $KEY from active shell environment to $ENV_FILE"
-            echo "${KEY}=${VAL}" >> "$ENV_FILE"
-        fi
-    fi
-done
-
-if [[ ! -f "$ENV_FILE" ]] || ! grep -q "^DEEPSEEK_API_KEY=" "$ENV_FILE" 2>/dev/null; then
-    if [[ -z "${DEEPSEEK_API_KEY:-}" ]]; then
-        echo "NOTICE: DEEPSEEK_API_KEY is not set in current environment or $ENV_FILE."
-        echo "        You can add it to $ENV_FILE to configure AI tuning."
-        echo ""
-    fi
-fi
-
 mkdir -p "$LOG_DIR"
 echo "Project : $PROJECT_DIR"
 echo "Logs    : $LOG_DIR"
 echo ""
 
 # ── Cron entries (host local time; expected host timezone: Asia/Jakarta) ─────
-# Pre-open product shape (ADR-048 + command families):
+# Database-owned pre-open lifecycle (ADR-049):
 #   screen = live only (optional keyboard loop; not in cron)
 #   multi-tick fetch iev = ΔIEV + NCP stamp (perishable; SQLite history)
-#   research pre-open capture = sole decision write (DB + ops_session + sidecar)
-#   research pre-open track / grade / tune = same-day ops
-#   research pre-open labels = open_30m outcomes (day-file)
+#   research pre-open capture = sole observation decision write
+#   research pre-open track = immutable observation-linked samples
+#   research pre-open labels/evaluate = database labels and cohort evaluation
 # Playwright: discovery/baseline ticks are ≥3 minutes apart. The final decision
 # capture begins at 08:57 and must finish before 08:58 or it fails closed.
-# Swing EOD: fetch market on by default. Swing research capture/labels stay
+# Swing EOD: fetch market is on by default. Accumulation capture/labels stay
 # commented until an always-on multi-day corpus is wanted.
 read -r -d '' SAHAM_CRON << ENTRIES || true
 # --- saham-cron-begin ---
 # Multi-tick IEV discovery (diagnostic all-session ΔIEV)
-47 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham fetch iev' >> $LOG_DIR/iev-collector.log 2>&1
-50 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham fetch iev' >> $LOG_DIR/iev-collector.log 2>&1
-53 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham fetch iev' >> $LOG_DIR/iev-collector.log 2>&1
+47 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham fetch iev' >> $LOG_DIR/iev-collector.log 2>&1
+50 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham fetch iev' >> $LOG_DIR/iev-collector.log 2>&1
+53 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham fetch iev' >> $LOG_DIR/iev-collector.log 2>&1
 # Locked-input IEV baseline — existing orders cannot be withdrawn/amended
-56 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham fetch iev' >> $LOG_DIR/iev-collector.log 2>&1
+56 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham fetch iev' >> $LOG_DIR/iev-collector.log 2>&1
 # Final live decision — must finish before 08:58 matching; current IEV minus the
 # 08:56 baseline supplies locked-input delta_iev.
-57 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham research pre-open capture' >> $LOG_DIR/pre-open-capture.log 2>&1
-# Same-day ops — orderbook tracker 09:00–09:30 (tickers from saved observations)
-0 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && PYTHONUNBUFFERED=1 saham research pre-open track --broker-confirm' >> $LOG_DIR/opening-track.log 2>&1
-# Optional paper confirm from first track file (sidecar also written by capture)
-31 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham trade confirm --track-file data/opening/\$(date +\%Y\%m\%d)/track_0900.json && saham trade log intraday' >> $LOG_DIR/trade-confirm-log.log 2>&1
-# Session scorecard over saved observations + tracks (fail closed without capture)
-35 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham research pre-open grade' >> $LOG_DIR/opening-grade.log 2>&1
-# open_30m corpus outcomes (day-file; needs capture + tracks)
-36 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham research pre-open labels' >> $LOG_DIR/pre-open-labels.log 2>&1
-# Non-authoritative AI tune from grade (optional)
-40 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham research pre-open tune' >> $LOG_DIR/opening-tune.log 2>&1
+57 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham research pre-open capture' >> $LOG_DIR/pre-open-capture.log 2>&1
+# Persist observation-linked order-book/broker samples from 09:00–09:30
+0 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && PYTHONUNBUFFERED=1 saham research pre-open track --broker-confirm' >> $LOG_DIR/pre-open-track.log 2>&1
+# Generate labels once after tracking completes, then evaluate persisted labels
+36 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham research pre-open labels --format json' >> $LOG_DIR/pre-open-labels.log 2>&1
+37 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham research pre-open evaluate --format json' >> $LOG_DIR/pre-open-evaluate.log 2>&1
 # Swing EOD — refresh LQ45 candles after EOD data should be available 18:30 WIB
-30 18 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham fetch market --universe lq45' >> $LOG_DIR/swing-fetch-market.log 2>&1
+30 18 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham fetch market --universe lq45' >> $LOG_DIR/swing-fetch-market.log 2>&1
 # Optional multi-day research corpus (not pre-open). Uncomment when wanted.
-#15 19 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham research signal capture --contract accumulation-discovery --universe lq45 --session $(date +\%Y-\%m-\%d) --format json' >> $LOG_DIR/swing-observe-lq45.log 2>&1
-#45 19 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR && [ -f .env ] && set -a && source .env && set +a && source .venv/bin/activate && saham research signal labels --eligible-dates --horizon SWING_10D --generate-all --format json' >> $LOG_DIR/swing-labels.log 2>&1
+#15 19 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham research accumulation capture --universe lq45 --session \$(date +\%Y-\%m-\%d) --format json' >> $LOG_DIR/accumulation-capture-lq45.log 2>&1
+#45 19 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham research accumulation labels --label-contract price_path.accum_20d.v1 --format json' >> $LOG_DIR/accumulation-labels.log 2>&1
 # --- saham-cron-end ---
 ENTRIES
 
@@ -117,7 +79,7 @@ CLEANED=$(echo "$EXISTING" | awk '
     /# --- saham-cron-end ---/   { skip=0; next }
     skip                         { next }
     /saham (fetch|learn|trade|screen|analyze|research)/  { next }
-    /# (Multi-tick IEV|IEV NCP|IEV collector|Sole decision|Same-day ops|open_30m|Opening.*learning|Opening learning|Optional paper|Session scorecard|Non-authoritative|Swing EOD|Optional multi-day|Optional research)/  { next }
+    /# (Multi-tick IEV|IEV NCP|IEV collector|Sole decision|Same-day ops|open_30m|Opening.*learning|Opening learning|Optional paper|Session scorecard|Non-authoritative|Persist observation-linked|Generate labels once|Swing EOD|Optional multi-day|Optional research)/  { next }
     { print }
 ')
 
