@@ -30,9 +30,30 @@ def test_cron_uses_database_owned_pre_open_lifecycle_only() -> None:
         "data/opening/",
         "saham research signal",
         "AI tuning",
+        "saham trade confirm",
+        "trade log intraday",
     )
     for removed_route in forbidden:
         assert removed_route not in SCRIPT
+
+
+def test_cron_activates_accumulation_capture_and_labels() -> None:
+    assert any(
+        line.startswith("15 19 * * 1-5 ")
+        and "saham research accumulation capture" in line
+        and "--universe lq45" in line
+        for line in ACTIVE_CRON_LINES
+    )
+    assert any(
+        line.startswith("45 19 * * 1-5 ")
+        and "saham research accumulation labels" in line
+        and "price_path.accum_20d.v1" in line
+        for line in ACTIVE_CRON_LINES
+    )
+    # Active lines must not be commented
+    for line in ACTIVE_CRON_LINES:
+        if "research accumulation" in line:
+            assert not line.lstrip().startswith("#")
 
 
 def test_cron_does_not_require_dotenv_to_activate_project() -> None:
