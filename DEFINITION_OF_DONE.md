@@ -96,6 +96,21 @@ A feature is done when:
 
 ---
 
+## 7b. Lint Requirements (Ruff)
+
+A code change is done when:
+
+* Touched Python under `src/` and `tests/` passes `ruff check` and
+  `ruff format --check` under the current `pyproject.toml` rule set (see
+  Lint Gate in `AGENT_QUICKSTART.md`)
+* After the repository-wide baseline is restored
+  (`tasks/backlog/restore_repository_ruff_baseline.md`), whole-repo
+  `ruff check src/ tests/` and `ruff format --check src/ tests/` pass
+* Ruff config is not weakened to land the change (no new blanket ignores or
+  drive-by `# noqa` outside an explicit lint task)
+
+---
+
 ## 8. Documentation
 
 Every completed feature must include:

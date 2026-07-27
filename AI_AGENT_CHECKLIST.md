@@ -207,6 +207,9 @@ docs.
 * Tests do not require network access
 * Test data can be local or generated
 * Adapter tests do not substitute for application use-case tests when workflow logic changes
+* **Lint Gate** planned: for Python under `src/`/`tests/`, I will run
+  `ruff check` and `ruff format --check` on every path I edit (whole-repo after
+  baseline restore). I will not weaken Ruff config to pass CI.
 
 ---
 
@@ -233,6 +236,14 @@ If any answer is unclear, stop.
 ---
 
 ## 14. Code Convention
+
+### Lint (Ruff)
+
+* Configured in `pyproject.toml`; enforced in CI (`.github/workflows/ci.yml`).
+* Agent close criterion: Lint Gate in `AGENT_QUICKSTART.md` (path-scoped until
+  `tasks/backlog/restore_repository_ruff_baseline.md` lands; then whole-repo).
+* Do not add blanket rule ignores, unreviewed repo-wide autofix, or per-file
+  exemptions as a substitute for fixing touched code.
 
 ### File Size Rules
 
