@@ -5,13 +5,13 @@ catatan desain workflow intraday `ai-saham`.
 
 ## Dokumen Aktif
 
-- [Quick Reference Intraday](intraday_trading_quick_reference.md) — istilah,
+- [Quick Reference Intraday](pre_open_trading_quick_reference.md) — istilah,
   waktu sesi IDX, perintah utama, cara membaca output, aturan risiko, dan
   kesalahan umum.
-- [Checklist Operasional Intraday](intraday_trading_operational_checklist.md) —
+- [Checklist Operasional Intraday](pre_open_trading_operational_checklist.md) —
   workflow harian dari persiapan, pre-open, confirmation, journal, review,
   sampai validasi backtest.
-- [Catatan Desain Intraday](intraday_trading_design_notes.md) — penjelasan
+- [Catatan Desain Intraday](pre_open_trading_design_notes.md) — penjelasan
   indikator, IEV/IEP, liquidity, speculative filter, FVWAP, Stockbit adapter,
   dan endpoint yang digunakan.
 

@@ -144,6 +144,6 @@ max saham = 200.000 / 296 = 675 -> 6 lot
 
 ## Dokumen Terkait
 
-- [Checklist Operasional](intraday_trading_operational_checklist.md)
-- [Catatan Desain](intraday_trading_design_notes.md)
-- [Indeks Panduan](how_to_intraday_trading.md)
+- [Checklist Operasional](pre_open_trading_operational_checklist.md)
+- [Catatan Desain](pre_open_trading_design_notes.md)
+- [Indeks Panduan](how_to_pre_open_trading.md)

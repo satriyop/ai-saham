@@ -274,20 +274,20 @@ def test_trade_log_intraday_type_removed():
     assert "pre-open" in (result.stdout + result.stderr).lower()
 
 
-def test_confirm_review_pre_open_outputs_bucket_tables(tmp_path):
-    from src.infrastructure.persistence.intraday_confirmation_csv import (
-        IntradayConfirmationCsvStore,
+def test_pre_open_paper_review_pre_open_outputs_bucket_tables(tmp_path):
+    from src.infrastructure.persistence.pre_open_paper_journal_csv import (
+        PreOpenPaperJournalCsvStore,
     )
-    from src.domain.value_objects.intraday_confirmation import (
-        IntradayConfirmationJournalEntry,
+    from src.domain.value_objects.pre_open_post_open_assessment import (
+        PreOpenPaperJournalEntry,
     )
 
     journal = tmp_path / "confirmations.csv"
     db_path = tmp_path / "data.db"
-    store = IntradayConfirmationCsvStore(journal)
+    store = PreOpenPaperJournalCsvStore(journal)
     store.append(
         [
-            IntradayConfirmationJournalEntry(
+            PreOpenPaperJournalEntry(
                 confirmed_at=date(2026, 6, 12),
                 ticker="BBCA",
                 decision="ENTER",
@@ -330,23 +330,23 @@ def test_confirm_review_pre_open_outputs_bucket_tables(tmp_path):
     )
 
     assert result.exit_code == 0, result.output
-    assert "INTRADAY CONFIRMATION REVIEW" in result.stdout
+    assert "PRE-OPEN PAPER JOURNAL REVIEW" in result.stdout
     assert "decision:ENTER" in result.stdout
 
 
 def test_trade_outcome_updates_logged_confirmation(tmp_path):
-    from src.infrastructure.persistence.intraday_confirmation_csv import (
-        IntradayConfirmationCsvStore,
+    from src.infrastructure.persistence.pre_open_paper_journal_csv import (
+        PreOpenPaperJournalCsvStore,
     )
-    from src.domain.value_objects.intraday_confirmation import (
-        IntradayConfirmationJournalEntry,
+    from src.domain.value_objects.pre_open_post_open_assessment import (
+        PreOpenPaperJournalEntry,
     )
 
     journal = tmp_path / "confirmations.csv"
-    store = IntradayConfirmationCsvStore(journal)
+    store = PreOpenPaperJournalCsvStore(journal)
     store.append(
         [
-            IntradayConfirmationJournalEntry(
+            PreOpenPaperJournalEntry(
                 confirmed_at=date(2026, 6, 12),
                 ticker="BBCA",
                 decision="ENTER",

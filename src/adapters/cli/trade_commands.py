@@ -21,8 +21,8 @@ import typer
 
 from src.adapters.cli.trade_accum_commands import accumulation_review
 from src.adapters.cli.trade_intraday_commands import (
-    confirm_outcome,
-    confirm_review,
+    pre_open_paper_outcome,
+    pre_open_paper_review,
     intraday_backtest,
 )
 from src.adapters.cli.trade_journal_migration_commands import trade_migrate_journal
@@ -52,7 +52,7 @@ trade_review_app = typer.Typer(
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},
 )
-trade_review_app.command("pre-open")(confirm_review)
+trade_review_app.command("pre-open")(pre_open_paper_review)
 trade_review_app.command("swing")(accumulation_review)
 
 trade_swing_app = typer.Typer(
@@ -69,7 +69,7 @@ trade_swing_app.command("apply")(swing_apply)
 trade_swing_app.command("status")(swing_status)
 
 trade_app.add_typer(trade_review_app, name="review")
-trade_app.command("outcome")(confirm_outcome)
+trade_app.command("outcome")(pre_open_paper_outcome)
 trade_app.command("size")(size)
 trade_app.add_typer(trade_swing_app, name="swing")
 trade_app.command("backtest-intraday")(intraday_backtest)

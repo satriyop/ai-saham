@@ -253,10 +253,6 @@ def test_pre_open_format_json_emits_envelope(monkeypatch):
             ai_warnings=[],
         ),
     )
-    monkeypatch.setattr(
-        "src.adapters.cli.screen_pre_open_commands.write_pre_open_sidecar",
-        lambda **kwargs: None,
-    )
 
     result = runner.invoke(
         app,
@@ -392,15 +388,6 @@ def test_pre_open_missing_provider_outside_window_with_snapshot_skips_browser_pl
             provider=None, autonomous=False, session_missing=True
         ),
     )
-    monkeypatch.setattr(
-        "src.adapters.cli.screen_pre_open_commands._default_sidecar_path",
-        lambda: tmp_path / "sidecar.json",
-    )
-    sidecar_calls = []
-    monkeypatch.setattr(
-        "src.adapters.cli.screen_pre_open_commands.write_pre_open_sidecar",
-        lambda **kwargs: sidecar_calls.append(kwargs),
-    )
 
     result = runner.invoke(app, ["screen", "pre-open", "--db", str(db_path)])
 
@@ -409,7 +396,6 @@ def test_pre_open_missing_provider_outside_window_with_snapshot_skips_browser_pl
     assert snapshot_date.isoformat() in result.output
     assert "BROWSER ACTION PLAN" not in result.output
     assert "Playwright installed but no session found." not in result.output
-    assert sidecar_calls == []
 
 
 def test_pre_open_missing_provider_outside_window_no_snapshot_skips_browser_plan(
@@ -436,15 +422,6 @@ def test_pre_open_missing_provider_outside_window_no_snapshot_skips_browser_plan
             provider=None, autonomous=False, session_missing=True
         ),
     )
-    monkeypatch.setattr(
-        "src.adapters.cli.screen_pre_open_commands._default_sidecar_path",
-        lambda: tmp_path / "sidecar.json",
-    )
-    sidecar_calls = []
-    monkeypatch.setattr(
-        "src.adapters.cli.screen_pre_open_commands.write_pre_open_sidecar",
-        lambda **kwargs: sidecar_calls.append(kwargs),
-    )
 
     result = runner.invoke(app, ["screen", "pre-open", "--db", str(db_path)])
 
@@ -452,75 +429,6 @@ def test_pre_open_missing_provider_outside_window_no_snapshot_skips_browser_plan
     assert "OUTSIDE WINDOW" in result.output
     assert "BROWSER ACTION PLAN" not in result.output
     assert "Playwright installed but no session found." not in result.output
-    assert sidecar_calls == []
-
-
-def test_pre_open_delegates_workflow_construction_and_writes_sidecar(monkeypatch, tmp_path):
-    monkeypatch.setattr(
-        "src.adapters.cli.screen_pre_open_commands.resolve_pre_open_market_status",
-        lambda: _BYPASS_GUARD_STATUS,
-    )
-    monkeypatch.setattr(
-        "src.adapters.cli.screen_pre_open_commands.resolve_pre_open_browser_plan",
-        lambda **kwargs: PreOpenBrowserPlan(
-            provider=object(), autonomous=False, session_missing=False
-        ),
-    )
-
-    fake_response = PreOpenWorkflowResponse(
-        result=PreOpenScreenResult(
-            screened_date=date(2026, 6, 12),
-            iev_min=100_000,
-            total_movers_seen=1,
-            candidates=[_candidate("BBCA")],
-        ),
-        warnings=[],
-        raw_movers=[],
-        data_freshness=PreOpenDataFreshness(
-            analysis_date=date(2026, 6, 12),
-            candle_end=None,
-            broker_end=None,
-        ),
-    )
-
-    calls = {"factory": None, "execute": 0, "sidecar": None}
-
-    class _FakeWorkflow:
-        def execute(self, request):
-            calls["execute"] += 1
-            return fake_response
-
-    def _fake_create_pre_open_cli_workflow(**kwargs):
-        calls["factory"] = kwargs
-        return PreOpenCliWorkflow(
-            workflow=_FakeWorkflow(),
-            market_repository=None,
-            broker_repository=None,
-        )
-
-    monkeypatch.setattr(
-        "src.adapters.cli.screen_pre_open_commands.create_pre_open_cli_workflow",
-        _fake_create_pre_open_cli_workflow,
-    )
-
-    def _fake_write_sidecar(**kwargs):
-        calls["sidecar"] = kwargs
-
-    monkeypatch.setattr(
-        "src.adapters.cli.screen_pre_open_commands.write_pre_open_sidecar",
-        _fake_write_sidecar,
-    )
-
-    result = runner.invoke(
-        app,
-        ["screen", "pre-open", "--movers-json", '[{"ticker":"BBCA","iev":150000}]'],
-    )
-
-    assert result.exit_code == 0, result.output
-    assert calls["factory"] is not None
-    assert calls["execute"] == 1
-    assert calls["sidecar"] is not None
-    assert calls["sidecar"]["candidates"] == fake_response.result.candidates
 
 
 def test_pre_open_browser_interaction_required_maps_to_exit_1(monkeypatch):
@@ -580,119 +488,14 @@ def _invoke_with_response(monkeypatch, response: PreOpenWorkflowResponse) -> tup
         ),
     )
 
-    calls = {"sidecar": None}
+    
 
-    def _fake_write_sidecar(**kwargs):
-        calls["sidecar"] = kwargs
-
-    monkeypatch.setattr(
-        "src.adapters.cli.screen_pre_open_commands.write_pre_open_sidecar",
-        _fake_write_sidecar,
-    )
 
     result = runner.invoke(
         app,
         ["screen", "pre-open", "--movers-json", '[{"ticker":"BBCA","iev":150000}]'],
     )
     return result, calls
-
-
-def test_pre_open_writes_sidecar_for_empty_confirmed(monkeypatch):
-    response = PreOpenWorkflowResponse(
-        result=PreOpenScreenResult(
-            screened_date=date(2026, 6, 12),
-            iev_min=100_000,
-            total_movers_seen=0,
-            candidates=[],
-        ),
-        warnings=[],
-        raw_movers=[],
-        data_freshness=PreOpenDataFreshness(
-            analysis_date=date(2026, 6, 12), candle_end=None, broker_end=None
-        ),
-        source_status=PreOpenSourceStatus.EMPTY_CONFIRMED,
-        source_message="Provider returned a valid empty mover list.",
-    )
-
-    result, calls = _invoke_with_response(monkeypatch, response)
-
-    assert result.exit_code == 0, result.output
-    assert calls["sidecar"] is not None
-    assert "EMPTY" in result.output
-
-
-def test_pre_open_suppresses_sidecar_for_unavailable(monkeypatch):
-    response = PreOpenWorkflowResponse(
-        result=PreOpenScreenResult(
-            screened_date=date(2026, 6, 12),
-            iev_min=100_000,
-            total_movers_seen=0,
-            candidates=[],
-        ),
-        warnings=[],
-        raw_movers=[],
-        data_freshness=PreOpenDataFreshness(
-            analysis_date=date(2026, 6, 12), candle_end=None, broker_end=None
-        ),
-        source_status=PreOpenSourceStatus.UNAVAILABLE,
-        source_message="connection reset",
-    )
-
-    result, calls = _invoke_with_response(monkeypatch, response)
-
-    assert result.exit_code == 0, result.output
-    assert calls["sidecar"] is None
-    assert "unavailable" in result.output.lower()
-    assert "No candidates passed the IEV filter." not in result.output
-
-
-def test_pre_open_suppresses_sidecar_for_outside_window(monkeypatch):
-    response = PreOpenWorkflowResponse(
-        result=PreOpenScreenResult(
-            screened_date=date(2026, 6, 12),
-            iev_min=100_000,
-            total_movers_seen=0,
-            candidates=[],
-        ),
-        warnings=[],
-        raw_movers=[],
-        data_freshness=PreOpenDataFreshness(
-            analysis_date=date(2026, 6, 12), candle_end=None, broker_end=None
-        ),
-        source_status=PreOpenSourceStatus.OUTSIDE_WINDOW,
-        source_message="Outside the pre-open live window.",
-    )
-
-    result, calls = _invoke_with_response(monkeypatch, response)
-
-    assert result.exit_code == 0, result.output
-    assert calls["sidecar"] is None
-    assert "outside" in result.output.lower()
-    assert "No candidates passed the IEV filter." not in result.output
-
-
-def test_pre_open_suppresses_sidecar_for_snapshot_success(monkeypatch):
-    response = PreOpenWorkflowResponse(
-        result=PreOpenScreenResult(
-            screened_date=date(2026, 6, 12),
-            iev_min=100_000,
-            total_movers_seen=1,
-            candidates=[_candidate("BBCA")],
-        ),
-        warnings=[],
-        raw_movers=[],
-        data_freshness=PreOpenDataFreshness(
-            analysis_date=date(2026, 6, 12), candle_end=None, broker_end=None
-        ),
-        source_status=PreOpenSourceStatus.SNAPSHOT_SUCCESS,
-        source_snapshot_ref="data/iev/20260714/iev.json",
-    )
-
-    result, calls = _invoke_with_response(monkeypatch, response)
-
-    assert result.exit_code == 0, result.output
-    assert calls["sidecar"] is None
-    assert "SNAPSHOT" in result.output
 
 
 def test_pre_open_outside_window_passed_to_workflow_request_for_autonomous_run(
@@ -747,10 +550,6 @@ def test_pre_open_outside_window_passed_to_workflow_request_for_autonomous_run(
             workflow=_FakeWorkflow(), market_repository=None, broker_repository=None
         ),
     )
-    monkeypatch.setattr(
-        "src.adapters.cli.screen_pre_open_commands.write_pre_open_sidecar",
-        lambda **kwargs: None,
-    )
 
     result = runner.invoke(app, ["screen", "pre-open"])
 
@@ -787,20 +586,10 @@ def test_pre_open_outside_window_with_saved_snapshot_yields_snapshot_success_end
             provider=object(), autonomous=True, session_missing=False
         ),
     )
-    monkeypatch.setattr(
-        "src.adapters.cli.screen_pre_open_commands._default_sidecar_path",
-        lambda: tmp_path / "sidecar.json",
-    )
 
-    sidecar_calls = []
-    monkeypatch.setattr(
-        "src.adapters.cli.screen_pre_open_commands.write_pre_open_sidecar",
-        lambda **kwargs: sidecar_calls.append(kwargs),
-    )
 
     result = runner.invoke(app, ["screen", "pre-open", "--db", str(db_path)])
 
     assert result.exit_code == 0, result.output
     assert "SNAPSHOT" in result.output
     assert snapshot_date.isoformat() in result.output
-    assert sidecar_calls == []

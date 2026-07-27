@@ -30,7 +30,7 @@ The intraday trade feature is an **end-to-end pre-open trading workflow** that s
 │  screen/capture/track │ analyze pre-open │ log pre-open │ review pre-open │
 │  outcome   │  backtest-intraday  │  research pre-open labels/evaluate             │
 │                                                                           │
-│  Display: _display_results, _display_confirmations, _display_review       │
+│  Display: _display_results, _display_pre_open_post_open_assessments, _display_review       │
 │           _display_intraday_backtest, _display_raw_movers, etc.           │
 │                                                                           │
 │  Helpers: _build_intraday_run_guard, _load_config, _build_data_freshness  │
@@ -49,11 +49,11 @@ The intraday trade feature is an **end-to-end pre-open trading workflow** that s
 │  │                               (fetch movers → context → entry →   │   │
 │  │                                stop → trend → accum → AI)          │   │
 │  │                                                                   │   │
-│  │  ConfirmIntradayOpenUseCase  8-gate deterministic confirmation    │   │
+│  │  PreOpenPostOpenGatesUseCase  8-gate deterministic confirmation    │   │
 │  │                               (deterministic, no AI, no network)  │   │
 │  │                                                                   │   │
 │  │  IntradayBacktestUseCase     Walk-forward replay over history     │   │
-│  │                               (uses ConfirmIntradayOpenUseCase)   │   │
+│  │                               (uses PreOpenPostOpenGatesUseCase)   │   │
 │  │                                                                   │   │
 │  │  MarketRegimeUseCase         Breadth + flow regime (shared)      │   │
 │  └───────────────────────────────────────────────────────────────────┘   │
@@ -61,7 +61,7 @@ The intraday trade feature is an **end-to-end pre-open trading workflow** that s
 │  ┌───────────────────────────────────────────────────────────────────┐   │
 │  │                       SERVICES                                   │   │
 │  │                                                                   │   │
-│  │  IntradayConfirmationJournal  Confirmation journal: log + review  │   │
+│  │  PreOpenPostOpenAssessmentJournal  Confirmation journal: log + review  │   │
 │  │                                + record_outcome                    │   │
 │  │  OpeningGradeUseCase          Pre-open prediction validation       │   │
 │  │  ClaudeTickerResearcher      AI research per ticker               │   │
@@ -74,9 +74,9 @@ The intraday trade feature is an **end-to-end pre-open trading workflow** that s
 │  │  PreOpenScreenResult     screened_date + candidates               │   │
 │  │  ScreenerCandidate       ticker, iev, entry_range, stop, trend    │   │
 │  │                          rsi, sma, accum_*, foreign_vwap, ai      │   │
-│  │  IntradayConfirmation    decision + reasons + prices              │   │
-│  │  IntradayConfirmationResult  ENTER/WATCH/SKIP groups             │   │
-│  │  IntradayConfirmationJournalEntry  + outcome fields               │   │
+│  │  PreOpenPostOpenAssessment    decision + reasons + prices              │   │
+│  │  PreOpenPostOpenResult  ENTER/WATCH/SKIP groups             │   │
+│  │  PreOpenPaperJournalEntry  + outcome fields               │   │
 │  │  IntradayBacktestRequest/Response  portfolio metrics + trades    │   │
 │  │  IntradayDataFreshness    candle/broker recency + warnings        │   │
 │  └───────────────────────────────────────────────────────────────────┘   │
@@ -93,9 +93,9 @@ The intraday trade feature is an **end-to-end pre-open trading workflow** that s
 │  │  BrokerSummary    │  │  OrderBookBid         │  │ MarketDataRepo  │  │
 │  │                   │  │  MoverWithOrderBook   │  │ BrokerDataRepo  │  │
 │  │                   │  │  ScreenerCandidate    │  │ BrowserDataProv │  │
-│  │                   │  │  IntradayConfirmation │  │ AIExplainer     │  │
-│  │                   │  │  IntradayDecision(Enum)│  │                 │  │
-│  │                   │  │  IntradayOutcome      │  │                 │  │
+│  │                   │  │  PreOpenPostOpenAssessment │  │ AIExplainer     │  │
+│  │                   │  │  PreOpenPostOpenDecision(Enum)│  │                 │  │
+│  │                   │  │  PreOpenPaperOutcome      │  │                 │  │
 │  └───────────────────┘  └───────────────────────┘  └─────────────────┘  │
 └────────────────────────────────┬──────────────────────────────────────────┘
                                  │
@@ -210,9 +210,9 @@ CLI: saham screen pre-open [--movers-json ...] [--order-books-json ...]
 CLI: saham analyze pre-open --session YYYY-MM-DD
  │
  ├─ _load_confirmation_candidates()
- │    └── Read journals/.last-session.json → IntradayConfirmationCandidate[]
+ │    └── Read journals/.last-session.json → PreOpenPostOpenCandidate[]
  │
- ├─ ConfirmIntradayOpenUseCase.execute():
+ ├─ PreOpenPostOpenGatesUseCase.execute():
  │    └── For each candidate with opening_price:
  │         │
  │         ├── 1. opening_price is None?     → SKIP_INSUFFICIENT_DATA
@@ -224,7 +224,7 @@ CLI: saham analyze pre-open --session YYYY-MM-DD
  │         ├── 7. trend == BULLISH?          → ENTER
  │         └── 8. else                       → WAIT
  │
- ├─ _display_confirmations()
+ ├─ _display_pre_open_post_open_assessments()
  │    └── Groups: ENTER / WATCH / SKIP with price ranges
  │
  └─ _write_confirmation_sidecar() → journals/.last-confirmation.json
@@ -235,7 +235,7 @@ CLI: saham analyze pre-open --session YYYY-MM-DD
 ```
 CLI: saham trade log --type pre-open --observation-id … --opening-snapshot-id …
  │
- └─ IntradayConfirmationCsvStore.append(confirmations)
+ └─ PreOpenPaperJournalCsvStore.append(confirmations)
       └── Writes → journals/intraday-confirmations.csv
 ```
 
@@ -244,7 +244,7 @@ CLI: saham trade log --type pre-open --observation-id … --opening-snapshot-id 
 ```
 CLI: saham trade outcome BBCA --entry 9050 --exit 9200 --result target
  │
- └─ IntradayConfirmationJournalService.record_outcome()
+ └─ PreOpenPaperJournalService.record_outcome()
       └── Matches row by (confirmed_at, ticker)
       └── Updates: actual_entry_price, actual_exit_price, outcome_result, outcome_r, notes
       └── Rewrites CSV row
@@ -261,7 +261,7 @@ CLI: saham research pre-open grade
 
 CLI: saham trade review pre-open
  │
- └─ IntradayConfirmationJournalService.review()
+ └─ PreOpenPaperJournalService.review()
       ├── Decision buckets: ENTER / WAIT / SKIP_* (count + outcome stats)
       └── Context buckets: gap (high/medium/low), RSI (high/neutral/low),
            stop (tight/normal/wide), accum, fvwap
@@ -284,7 +284,7 @@ CLI: saham trade backtest-intraday --universe lq45 --start 2026-01-01
            │    └── accum_score + FVWAP from broker signals
            │
            ├── 2. Simulate opening confirmation using candle.open on date d
-           │    └── Reuses ConfirmIntradayOpenUseCase logic
+           │    └── Reuses PreOpenPostOpenGatesUseCase logic
            │
            ├── 3. Rank ENTER candidates by (accum_score desc, fvwap desc, stop asc)
            │    └── Cap at max_daily_positions
@@ -307,7 +307,7 @@ CLI: saham trade backtest-intraday --universe lq45 --start 2026-01-01
 
 ## Confirmation Decision Gates
 
-The `ConfirmIntradayOpenUseCase` applies 8 deterministic gates in order:
+The `PreOpenPostOpenGatesUseCase` applies 8 deterministic gates in order:
 
 ```
 ┌─────────────────────┬──────────────────┬──────────────────────────────┐
@@ -364,16 +364,16 @@ The `ConfirmIntradayOpenUseCase` applies 8 deterministic gates in order:
 | `adapters/cli/trade_intraday_commands.py` | ~600 | Intraday trade CLI entry points (confirm, log, review, outcome) |
 | `adapters/cli/intraday_workflow_commands.py` | ~1200 | Shared display and workflow helpers behind lifecycle command modules |
 | `application/use_case/pre_open_screen.py` | 611 | 10-step pre-open analysis pipeline |
-| `application/use_case/confirm_intraday_open.py` | 254 | 8-gate deterministic confirmation |
+| `application/use_case/pre_open_post_open_gates_use_case.py` | 254 | 8-gate deterministic confirmation |
 | `application/use_case/intraday_backtest.py` | 953 | Walk-forward backtest over history |
-| `application/services/intraday_confirmation_journal.py` | 305 | Confirmation journal log + review + outcome |
+| `application/services/pre_open_paper_journal.py` | 305 | Confirmation journal log + review + outcome |
 | `application/services/ai_research.py` | 88 | Claude-based AI ticker research |
 | `infrastructure/browser/playwright_stockbit.py` + `playwright_stockbit_browser.py` | 2232 combined | Playwright browser automation + session management for Stockbit |
 | `infrastructure/browser/stockbit_browser.py` | 191 | Manual + instruction-based browser providers |
-| `infrastructure/persistence/intraday_confirmation_csv.py` | 229 | Confirmation journal CSV persistence |
+| `infrastructure/persistence/pre_open_paper_journal_csv.py` | 229 | Confirmation journal CSV persistence |
 | `domain/ports/browser_data_provider.py` | 90 | Browser data provider interface |
 | `domain/value_objects/screener_result.py` | 184 | MoverData, ScreenerCandidate, etc. |
-| `domain/value_objects/intraday_confirmation.py` | 149 | IntradayDecision, Confirmation, Outcome |
+| `domain/value_objects/pre_open_post_open_assessment.py` | 149 | PreOpenPostOpenDecision, Confirmation, Outcome |
 | `config/pre_open_screener.yaml` | ~60 | Tuning parameters (IEV, ATR, accum, FVWAP) |
 
 ---
@@ -395,10 +395,10 @@ screen_pre_open_commands.py / trade_intraday_commands.py (CLI entry points)
   │     ├── IndicatorRegistry → sma.py, rsi.py, atr.py, foreign_vwap.py
   │     └── AIExplainer (port, optional) → ClaudeTickerResearcher
   │
-  ├── ConfirmIntradayOpenUseCase (no deps)
+  ├── PreOpenPostOpenGatesUseCase (no deps)
   │
-  ├── IntradayConfirmationJournalService
-  │     ├── IntradayConfirmationStore (protocol) → IntradayConfirmationCsvStore
+  ├── PreOpenPaperJournalService
+  │     ├── PreOpenPaperJournalStore (protocol) → PreOpenPaperJournalCsvStore
   │     │                                             (journals/intraday-confirmations.csv)
   │     └── MarketDataRepository → SQLiteMarketRepository
   │
@@ -406,7 +406,7 @@ screen_pre_open_commands.py / trade_intraday_commands.py (CLI entry points)
   │     ├── MarketDataRepository
   │     ├── BrokerDataRepository
   │     ├── IndicatorRegistry
-  │     └── ConfirmIntradayOpenUseCase
+  │     └── PreOpenPostOpenGatesUseCase
   │
   └── MarketRegimeUseCase
 ```
@@ -442,7 +442,7 @@ All tuning parameters loaded into `PreOpenScreenConfig` at runtime:
 
 2. **Three browser data paths** — The system degrades gracefully: autonomous Playwright → manual JSON → printed browser instructions. Each path is handled by a separate implementation of `BrowserDataProvider`.
 
-3. **Post-open assess is fully deterministic** — `ConfirmIntradayOpenUseCase` (via `AnalyzePreOpenUseCase`) has zero AI, zero network, zero randomness. All 8 gates are hardcoded rules over frozen observation + track snapshot data.
+3. **Post-open assess is fully deterministic** — `PreOpenPostOpenGatesUseCase` (via `AnalyzePreOpenUseCase`) has zero AI, zero network, zero randomness. All 8 gates are hardcoded rules over frozen observation + track snapshot data.
 
 4. **AI is read-only auxiliary** — `--with-ai` appends research summaries but never influences entry/stop/trend decisions.
 

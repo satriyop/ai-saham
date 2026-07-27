@@ -18,7 +18,7 @@ Governing decisions:
 | 2 | **Keep** paper journal: `trade log` + `trade review` + `trade outcome` for the pre-open paper book. |
 | 3 | **Prerequisite first:** implement only after (or immediately after producers fix so) `research pre-open capture` + `track` reliably persist observation IDs and linked track snapshots. |
 | 4 | **Opening price rules:** reuse existing confirm-policy arithmetic; change only **transport** (load from immutable track snapshot ID, not sidecar/live). |
-| 5 | **`loop_intraday.sh`:** remove confirm phase / do not preserve script merely for confirm (no new screen-only loop unless a later task asks). |
+| 5 | **`loop_pre_open_screen.sh`:** remove confirm phase / do not preserve script merely for confirm (no new screen-only loop unless a later task asks). |
 | 6 | **Cron:** no auto `analyze` and no auto `trade log`; human runs assess then log. Remove `trade confirm` / confirmation-sidecar cron lines. |
 | 7 | **ADR:** small amendment to ADR-049 and/or ADR-033 in the **same implementation PR** (command ownership + sidecar retirement). |
 
@@ -29,7 +29,7 @@ Unique value of `trade log` (retained on purpose): personal paper notebook — n
 - Task type: Refactor / clean-break CLI migration
 - Priority: High (blocked until pre-open capture+track write DB IDs reliably)
 - Semantic classification: `NON_SEMANTIC` only if equivalent fixtures prove
-  that `ConfirmIntradayOpenUseCase` arithmetic and decisions are unchanged.
+  that `PreOpenPostOpenGatesUseCase` arithmetic and decisions are unchanged.
   Escalate to `SEMANTIC_ENGINE`, `EVIDENCE_CONTRACT`, or `CONFIG_MATERIAL`
   before editing if opening-price authority, gates, thresholds, or canonical
   output meaning changes.
@@ -65,7 +65,7 @@ The current `saham trade confirm` command mixes three responsibilities:
 It reads `data/session/.last-session.json`, may use file/manual/live fallbacks,
 writes another “last confirmation” file, and presents a second verdict without
 making its relationship to the persisted pre-open observation explicit.
-`loop_intraday.sh` compounds the ambiguity by rerunning the command every 30
+`loop_pre_open_screen.sh` compounds the ambiguity by rerunning the command every 30
 seconds and overwriting the same sidecar.
 
 The database-owned lifecycle already has immutable pre-open observations and
@@ -186,7 +186,7 @@ path for this journal; do not leave “intraday” as the user-facing strategy n
 - Do not make `analyze` write a trade journal.
 - Do not make `trade log` reread a live provider after the user inspected an
   immutable snapshot.
-- Do not preserve `loop_intraday.sh` merely to call the removed command (a
+- Do not preserve `loop_pre_open_screen.sh` merely to call the removed command (a
   separate display-only screen loop is out of scope unless requested later).
 
 ## 6. Architecture Impact Assessment
@@ -228,7 +228,7 @@ No AI involved.
 ## 8. Risk, Signal, and Evidence Authority
 
 - The 08:57 persisted signal and `TradeSetup` remain unchanged and immutable.
-- `ConfirmIntradayOpenUseCase` (or its extracted pure policy) remains the sole
+- `PreOpenPostOpenGatesUseCase` (or its extracted pure policy) remains the sole
   post-open action policy.
 - Pre-open output must be presented as the earlier directional/setup state;
   post-open `ENTER` / `WAIT` / `SKIP_*` is a later execution assessment.
@@ -277,7 +277,7 @@ Retire (non-exhaustive checklist — delete production references):
 - confirmation sidecar loading/writing and “last confirmation” defaults
   (`intraday_confirmation_session_store` confirmation write path, related
   factories/displays);
-- `loop_intraday.sh` confirm phase (or the script if only used for that);
+- `loop_pre_open_screen.sh` confirm phase (or the script if only used for that);
 - `install_cron.sh` (and runbooks) lines that call `trade confirm`, write
   confirmation sidecars, or auto-journal from last-confirmation files;
 - `--type intraday` (and docs/examples) for this strategy path;
@@ -290,7 +290,7 @@ Do not delete unrelated historical trade journals.
 - [x] `saham analyze pre-open` is mounted under `analyze`; help first line states
       post-open assessment of NCP pre-open plan.
 - [x] `saham trade confirm` and all its flags are absent from help and routing.
-- [x] `loop_intraday.sh` confirm loop and mutable confirmation/session analysis
+- [x] `loop_pre_open_screen.sh` confirm loop and mutable confirmation/session analysis
       sidecars are no longer production transport.
 - [x] Cron/runbook no longer invoke `trade confirm` or last-session sidecars for
       this purpose.
@@ -370,5 +370,5 @@ full tests pass, and `git diff --check` is clean.
 - Commit: `7026759` feat(analyze): replace trade confirm with database-identified pre-open assess
 - Public surface: `saham analyze pre-open`; `trade log --type pre-open`; `trade review pre-open`
 - Retired: `trade confirm`, `--type intraday`, loop confirm phase, capture→confirm sidecar authority
-- Residual (non-blocking): dead modules `trade_intraday_confirm_*` / `RunIntradayConfirmationWorkflowUseCase` may still exist for pure-policy/backtest reuse; not CLI-mounted. Optional follow-up cleanup.
+- Residual (non-blocking): dead modules `trade_intraday_confirm_*` / `RunPreOpenPostOpenAssessmentWorkflowUseCase` may still exist for pure-policy/backtest reuse; not CLI-mounted. Optional follow-up cleanup.
 - Full suite at ship: 5168 passed; 4 unrelated display assertion failures

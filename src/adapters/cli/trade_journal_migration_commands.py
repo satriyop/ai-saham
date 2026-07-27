@@ -40,8 +40,8 @@ def trade_migrate_journal(
     from src.infrastructure.persistence.accumulation_journal_csv_writer import (
         AccumulationJournalCsvWriter,
     )
-    from src.infrastructure.persistence.intraday_confirmation_csv import (
-        IntradayConfirmationCsvStore,
+    from src.infrastructure.persistence.pre_open_paper_journal_csv import (
+        PreOpenPaperJournalCsvStore,
     )
     from src.infrastructure.persistence.trade_journal_jsonl_writer import (
         TradeJournalJsonlWriter,
@@ -52,7 +52,7 @@ def trade_migrate_journal(
     cfg = load_app_config()
     output_path = trades_journal or Path(cfg.storage.trade_journal)
     accum_path = accum_csv or Path(cfg.storage.accum_journal)
-    intraday_path = intraday_csv or Path(cfg.storage.intraday_confirmation_journal)
+    intraday_path = intraday_csv or Path(cfg.storage.pre_open_paper_journal)
 
     swing_entries = (
         AccumulationJournalCsvWriter(accum_path).read_all()
@@ -60,7 +60,7 @@ def trade_migrate_journal(
         else []
     )
     intraday_entries = (
-        IntradayConfirmationCsvStore(intraday_path).read_all()
+        PreOpenPaperJournalCsvStore(intraday_path).read_all()
         if intraday_path.exists()
         else []
     )

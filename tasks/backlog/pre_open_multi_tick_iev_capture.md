@@ -90,7 +90,7 @@ Layer plan:
 * **Browser churn.** Each `saham fetch iev` boots a Playwright/Stockbit session.
   Keep ticks **≥ 2–3 minutes apart** so a slow run does not overlap the next. If
   session startup cost is high, prefer a **single pre-open loop** (see existing
-  `loop_intraday.sh`) that reuses one session and captures at intervals, over N
+  `loop_pre_open_screen.sh`) that reuses one session and captures at intervals, over N
   independent cron lines. Trade-off: cron-per-tick is simpler and crash-isolated;
   a loop is cleaner and lighter on session setup.
 * **Locked-input baseline.** Capture at least one tick inside [08:56, 08:58).

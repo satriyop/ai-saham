@@ -1,5 +1,5 @@
 """
-RecordIntradayConfirmationOutcomeUseCase — record a manual trade outcome.
+RecordPreOpenPaperOutcomeUseCase — record a manual paper outcome.
 
 Layer: Application
 """
@@ -10,13 +10,13 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
-from src.application.services.intraday_confirmation_journal import (
-    IntradayConfirmationJournalService,
+from src.application.services.pre_open_paper_journal import (
+    PreOpenPaperJournalService,
 )
 
 
 @dataclass(frozen=True)
-class RecordIntradayConfirmationOutcomeRequest:
+class RecordPreOpenPaperOutcomeRequest:
     confirmed_at: date
     ticker: str
     actual_entry_price: Decimal
@@ -26,21 +26,21 @@ class RecordIntradayConfirmationOutcomeRequest:
 
 
 @dataclass(frozen=True)
-class RecordIntradayConfirmationOutcomeResponse:
+class RecordPreOpenPaperOutcomeResponse:
     updated: bool
     outcome_r: Decimal | None
 
 
-class RecordIntradayConfirmationOutcomeUseCase:
-    """Record a manual trade outcome for a logged intraday confirmation."""
+class RecordPreOpenPaperOutcomeUseCase:
+    """Record a manual outcome on a pre-open paper journal row."""
 
-    def __init__(self, journal_service: IntradayConfirmationJournalService) -> None:
+    def __init__(self, journal_service: PreOpenPaperJournalService) -> None:
         self._journal_service = journal_service
 
     def execute(
         self,
-        request: RecordIntradayConfirmationOutcomeRequest,
-    ) -> RecordIntradayConfirmationOutcomeResponse:
+        request: RecordPreOpenPaperOutcomeRequest,
+    ) -> RecordPreOpenPaperOutcomeResponse:
         updated, outcome_r = self._journal_service.record_outcome(
             confirmed_at=request.confirmed_at,
             ticker=request.ticker,
@@ -49,6 +49,6 @@ class RecordIntradayConfirmationOutcomeUseCase:
             outcome_result=request.outcome_result,
             notes=request.notes,
         )
-        return RecordIntradayConfirmationOutcomeResponse(
+        return RecordPreOpenPaperOutcomeResponse(
             updated=updated, outcome_r=outcome_r,
         )

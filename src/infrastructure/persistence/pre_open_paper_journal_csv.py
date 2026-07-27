@@ -9,8 +9,8 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
-from src.domain.value_objects.intraday_confirmation import (
-    IntradayConfirmationJournalEntry,
+from src.domain.value_objects.pre_open_post_open_assessment import (
+    PreOpenPaperJournalEntry,
 )
 
 _COLUMNS = [
@@ -56,13 +56,13 @@ def _int_or_none(value: str) -> int | None:
     return int(value) if value else None
 
 
-class IntradayConfirmationCsvStore:
+class PreOpenPaperJournalCsvStore:
     """CSV store for intraday confirmation journal entries."""
 
     def __init__(self, path: Path) -> None:
         self._path = path
 
-    def append(self, entries: list[IntradayConfirmationJournalEntry]) -> int:
+    def append(self, entries: list[PreOpenPaperJournalEntry]) -> int:
         existing_keys: set[tuple[str, str]] = set()
         if self._path.exists():
             with open(self._path, newline="") as f:
@@ -110,16 +110,16 @@ class IntradayConfirmationCsvStore:
                 )
         return len(new_entries)
 
-    def read_all(self) -> list[IntradayConfirmationJournalEntry]:
+    def read_all(self) -> list[PreOpenPaperJournalEntry]:
         if not self._path.exists():
             return []
 
-        entries: list[IntradayConfirmationJournalEntry] = []
+        entries: list[PreOpenPaperJournalEntry] = []
         with open(self._path, newline="") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 entries.append(
-                    IntradayConfirmationJournalEntry(
+                    PreOpenPaperJournalEntry(
                         confirmed_at=date.fromisoformat(row["confirmed_at"]),
                         ticker=row["ticker"],
                         decision=row["decision"],
@@ -163,14 +163,14 @@ class IntradayConfirmationCsvStore:
     ) -> bool:
         entries = self.read_all()
         updated = False
-        next_entries: list[IntradayConfirmationJournalEntry] = []
+        next_entries: list[PreOpenPaperJournalEntry] = []
         ticker_upper = ticker.upper()
 
         for entry in entries:
             if entry.confirmed_at == confirmed_at and entry.ticker.upper() == ticker_upper:
                 updated = True
                 next_entries.append(
-                    IntradayConfirmationJournalEntry(
+                    PreOpenPaperJournalEntry(
                         confirmed_at=entry.confirmed_at,
                         ticker=entry.ticker,
                         decision=entry.decision,

@@ -1,4 +1,4 @@
-"""Adapter helpers for intraday confirmation journal commands."""
+"""Adapter helpers for pre-open paper journal review/outcome commands."""
 from __future__ import annotations
 
 from datetime import date
@@ -7,36 +7,36 @@ from pathlib import Path
 
 import typer
 
-from src.adapters.cli.trade_intraday_display import display_intraday_review
-from src.application.services.intraday_confirmation_journal import (
-    IntradayConfirmationJournalService,
+from src.adapters.cli.trade_pre_open_display import display_pre_open_paper_review
+from src.application.services.pre_open_paper_journal import (
+    PreOpenPaperJournalService,
 )
-from src.application.use_case.record_intraday_confirmation_outcome_use_case import (
-    RecordIntradayConfirmationOutcomeRequest,
-    RecordIntradayConfirmationOutcomeUseCase,
+from src.application.use_case.record_pre_open_paper_outcome_use_case import (
+    RecordPreOpenPaperOutcomeRequest,
+    RecordPreOpenPaperOutcomeUseCase,
 )
-from src.infrastructure.persistence.intraday_confirmation_csv import (
-    IntradayConfirmationCsvStore,
+from src.infrastructure.persistence.pre_open_paper_journal_csv import (
+    PreOpenPaperJournalCsvStore,
 )
 from src.infrastructure.persistence.sqlite_market_repository import (
     SQLiteMarketRepository,
 )
 
 
-def run_confirm_review(journal_path: Path, db_path: Path) -> None:
+def run_pre_open_paper_review(journal_path: Path, db_path: Path) -> None:
     if not journal_path.exists():
         typer.echo(
             f"No confirmation journal at '{journal_path}'.\n"
             "Run `saham trade log --type pre-open` after analyze first.", err=True,
         )
         raise typer.Exit(1)
-    store = IntradayConfirmationCsvStore(journal_path)
+    store = PreOpenPaperJournalCsvStore(journal_path)
     repository = SQLiteMarketRepository(db_path=db_path)
-    report = IntradayConfirmationJournalService(store=store, repository=repository).review()
-    display_intraday_review(report, journal_path)
+    report = PreOpenPaperJournalService(store=store, repository=repository).review()
+    display_pre_open_paper_review(report, journal_path)
 
 
-def run_confirm_outcome(
+def run_pre_open_paper_outcome(
     *,
     ticker: str,
     entry: float,
@@ -67,12 +67,12 @@ def run_confirm_outcome(
     except ValueError:
         typer.echo("Error: --date must use YYYY-MM-DD format.", err=True)
         raise typer.Exit(1)
-    service = IntradayConfirmationJournalService(
-        store=IntradayConfirmationCsvStore(journal_path),
+    service = PreOpenPaperJournalService(
+        store=PreOpenPaperJournalCsvStore(journal_path),
         repository=SQLiteMarketRepository(db_path=db_path),
     )
-    response = RecordIntradayConfirmationOutcomeUseCase(journal_service=service).execute(
-        RecordIntradayConfirmationOutcomeRequest(
+    response = RecordPreOpenPaperOutcomeUseCase(journal_service=service).execute(
+        RecordPreOpenPaperOutcomeRequest(
             confirmed_at=target_date, ticker=ticker.upper(),
             actual_entry_price=Decimal(str(entry)),
             actual_exit_price=Decimal(str(exit_price)),

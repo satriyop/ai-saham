@@ -1,5 +1,5 @@
 """
-Value objects for intraday post-open confirmation.
+Value objects for pre-open strategy post-open assessment.
 
 Layer: Domain
 """
@@ -10,7 +10,7 @@ from decimal import Decimal
 from enum import Enum
 
 
-class IntradayDecision(str, Enum):
+class PreOpenPostOpenDecision(str, Enum):
     """Deterministic post-open decision labels."""
 
     ENTER = "ENTER"
@@ -24,7 +24,7 @@ class IntradayDecision(str, Enum):
 
 
 @dataclass(frozen=True)
-class IntradayConfirmationCandidate:
+class PreOpenPostOpenCandidate:
     """Pre-open candidate plus actual opening price for confirmation."""
 
     ticker: str
@@ -47,11 +47,11 @@ class IntradayConfirmationCandidate:
 
 
 @dataclass(frozen=True)
-class IntradayConfirmation:
+class PreOpenPostOpenAssessment:
     """Final confirmation result for one ticker."""
 
     ticker: str
-    decision: IntradayDecision
+    decision: PreOpenPostOpenDecision
     opening_price: Decimal | None
     planned_entry: Decimal | None
     stop_loss_price: Decimal | None
@@ -71,16 +71,16 @@ class IntradayConfirmation:
 
 
 @dataclass(frozen=True)
-class IntradayConfirmationResult:
+class PreOpenPostOpenResult:
     """Full result of a post-open confirmation run."""
 
     confirmed_date: date
     max_stop_pct: Decimal
-    confirmations: tuple[IntradayConfirmation, ...]
+    confirmations: tuple[PreOpenPostOpenAssessment, ...]
 
 
 @dataclass(frozen=True)
-class IntradayConfirmationJournalEntry:
+class PreOpenPaperJournalEntry:
     """One logged post-open confirmation row."""
 
     confirmed_at: date

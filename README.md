@@ -313,7 +313,7 @@ deterministic workflows must remain usable when AI or the network is absent.
 | Signal output contract | [docs/signal_engine_output_contract.md](docs/signal_engine_output_contract.md) |
 | IDX data sources | [docs/data_sources.md](docs/data_sources.md) |
 | Database schema | [docs/data_database_erd.md](docs/data_database_erd.md) |
-| Intraday workflow | [docs/workflow_intraday_opening.md](docs/workflow_intraday_opening.md) |
+| Intraday workflow | [docs/workflow_pre_open_learning_lifecycle.md](docs/workflow_pre_open_learning_lifecycle.md) |
 | Swing workflow | [docs/workflow_swing_foreign_accumulation.md](docs/workflow_swing_foreign_accumulation.md) |
 | Contribution and verification | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Change history | [CHANGELOG.md](CHANGELOG.md) |

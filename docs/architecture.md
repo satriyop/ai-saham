@@ -74,7 +74,7 @@ Orchestrates domain logic to fulfill user requests. All I/O is abstracted behind
 | Directory | Responsibility | Key Files |
 |-----------|----------------|-----------|
 | `use_case/` | Business operations (22 use cases) | `FetchMarketData`, `ComputeSMA/EMA/RSI`, `AssessRisk`, `ExplainRisk`, `Backtest`, `SwingBacktest`, `MarketRegime`, `PreOpenScreen`, `FetchSentiment`, `AuditSentiment`, `FetchBrokerData`, `AccumulationScreen`, `AccumulationAudit`, `CreateIndicatorFromIntent`, `CreateStrategyFromIntent`, etc. |
-| `services/` | Cross-cutting application logic | `indicator_registry.py`, `strategy_loader.py`, `universe_loader.py`, `position_sizer.py`, `skill_generator.py`, `intraday_confirmation_journal.py`, `accumulation_journal.py`, `bootstrap.py` |
+| `services/` | Cross-cutting application logic | `indicator_registry.py`, `strategy_loader.py`, `universe_loader.py`, `position_sizer.py`, `skill_generator.py`, `pre_open_paper_journal.py`, `accumulation_journal.py`, `bootstrap.py` |
 | `ports/` | Application-level interfaces | `formula_translator.py`, `strategy_translator.py`, `indicator_plugin.py`, `skill_writer.py` |
 | `formula/` | Formula DSL engine | `ast_nodes.py`, `tokenizer.py`, `parser.py`, `evaluator.py`, `validator.py` |
 | `rules/` | Formula-based rule system | `schema.py`, `interpreter.py`, `exceptions.py` |

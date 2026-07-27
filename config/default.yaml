@@ -33,9 +33,7 @@ storage:
   trade_journal: "journals/trades.jsonl"     # Portfolio trade log (JSON Lines format)
   stockbit_profile_dir: ".stockbit_profile"   # Playwright browser profile directory
   stockbit_session_file: "stockbit_session.json"  # Session marker and credentials file
-  intraday_sidecar: "data/session/.last-session.json"  # Last intraday session state sidecar
-  intraday_confirmation: "data/session/.last-confirmation.json"  # Last intraday order confirmation temp file
-  intraday_confirmation_journal: "journals/intraday_confirmations.csv"  # Intraday trades execution journal
+  pre_open_paper_journal: "journals/pre_open_paper.csv"  # Pre-open paper notebook (CSV)
 
 # ── Config Paths ───────────────────────────────────────────────────────────
 config_paths:

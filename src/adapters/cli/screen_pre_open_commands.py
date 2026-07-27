@@ -13,7 +13,6 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.pre_open_sidecar_writer import write_pre_open_sidecar
 from src.adapters.cli.screen_contract_cli import echo_json, resolve_output_format
 from src.adapters.cli.screen_pre_open_display import (
     display_raw_movers,
@@ -42,18 +41,8 @@ from src.infrastructure.browser.stockbit_browser_provider import ManualBrowserDa
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.pre_open_config import load_pre_open_screen_config
 
-_SIDECAR_ELIGIBLE_STATUSES = (
-    PreOpenSourceStatus.LIVE_SUCCESS,
-    PreOpenSourceStatus.EMPTY_CONFIRMED,
-)
-
-
 def _default_pre_open_config_path() -> Path:
     return Path(load_app_config().config_paths.pre_open_screener)
-
-
-def _default_sidecar_path() -> Path:
-    return Path(load_app_config().storage.intraday_sidecar)
 
 
 def pre_open(
@@ -334,14 +323,6 @@ def pre_open(
                 ncp_authoritative=response.ncp_authoritative,
                 collection_started_at=response.collection_started_at,
                 decision_at=response.decision_at,
-            )
-
-        if response.source_status in _SIDECAR_ELIGIBLE_STATUSES:
-            write_pre_open_sidecar(
-                candidates=result.candidates,
-                screened_date=result.screened_date,
-                sidecar_path=_default_sidecar_path(),
-                market_regime=response.market_regime,
             )
 
     except BrowserInteractionRequired as e:

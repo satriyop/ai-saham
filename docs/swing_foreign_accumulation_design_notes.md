@@ -251,4 +251,4 @@ Contoh output lengkap dan threshold historis dipertahankan di
 - [Quick Reference](swing_foreign_accumulation_quick_reference.md)
 - [Checklist Operasional](swing_foreign_accumulation_operational_checklist.md)
 - [Indeks Workflow](workflow_swing_foreign_accumulation.md)
-- [Konsep Dasar ATR/RSI/FVWAP](how_to_intraday_trading.md)
+- [Konsep Dasar ATR/RSI/FVWAP](how_to_pre_open_trading.md)

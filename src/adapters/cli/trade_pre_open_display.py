@@ -1,5 +1,5 @@
 """
-Display helpers for intraday confirmation CLI output.
+Display helpers for pre-open post-open assess and paper journal CLI output.
 
 Layer: Adapter
 """
@@ -15,7 +15,7 @@ from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, console, panel
 from src.application.use_case.resolve_opening_prices_use_case import OpeningPriceObservation
-from src.domain.value_objects.intraday_confirmation import IntradayConfirmation
+from src.domain.value_objects.pre_open_post_open_assessment import PreOpenPostOpenAssessment
 
 
 def format_ticker_preview(tickers: list[str], *, limit: int = 8) -> str:
@@ -48,8 +48,8 @@ def format_opening_observation_status(
     return f"{prefix}: unresolved - {reason}"
 
 
-def display_confirmations(
-    confirmations: tuple[IntradayConfirmation, ...],
+def display_pre_open_post_open_assessments(
+    confirmations: tuple[PreOpenPostOpenAssessment, ...],
     confirmed_date: date,
     max_stop_pct: Decimal,
     extras: dict[str, dict] | None = None,
@@ -63,7 +63,7 @@ def display_confirmations(
         empty.add_row("Date", confirmed_date.isoformat())
         empty.add_row("Candidates", "0")
         empty.add_row("Next", "Run saham screen pre-open first")
-        console().print(panel(empty, title="INTRADAY CONFIRMATION"))
+        console().print(panel(empty, title="PRE-OPEN POST-OPEN ASSESS"))
         return
 
     enters = [c for c in confirmations if c.decision.value == "ENTER"]
@@ -86,7 +86,7 @@ def display_confirmations(
 
     sections = [Text("Session Summary", style="bold cyan"), summary]
 
-    def add_decision_table(title: str, rows: list[IntradayConfirmation]) -> None:
+    def add_decision_table(title: str, rows: list[PreOpenPostOpenAssessment]) -> None:
         if not rows:
             return
         table = compact_table()
@@ -134,13 +134,13 @@ def display_confirmations(
     console().print(
         panel(
             Group(*sections),
-            title="INTRADAY CONFIRMATION",
+            title="PRE-OPEN POST-OPEN ASSESS",
             subtitle=confirmed_date.isoformat(),
         )
     )
 
 
-def display_intraday_review(report, journal_path: Path) -> None:
+def display_pre_open_paper_review(report, journal_path: Path) -> None:
     summary = compact_table(show_header=False)
     summary.add_column("Metric", style="bold")
     summary.add_column("Value")
@@ -153,7 +153,7 @@ def display_intraday_review(report, journal_path: Path) -> None:
         "Next",
         "saham trade log --type pre-open --observation-id … --opening-snapshot-id …",
     )
-        console().print(panel(summary, title="INTRADAY CONFIRMATION REVIEW"))
+        console().print(panel(summary, title="PRE-OPEN PAPER JOURNAL REVIEW"))
         return
 
     sections = [Text("Review Summary", style="bold cyan"), summary]
@@ -198,6 +198,6 @@ def display_intraday_review(report, journal_path: Path) -> None:
     console().print(
         panel(
             Group(*sections),
-            title="INTRADAY CONFIRMATION REVIEW",
+            title="PRE-OPEN PAPER JOURNAL REVIEW",
         )
     )

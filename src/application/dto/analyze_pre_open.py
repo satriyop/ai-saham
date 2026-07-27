@@ -11,7 +11,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any, Mapping
 
-from src.domain.value_objects.intraday_confirmation import IntradayConfirmation
+from src.domain.value_objects.pre_open_post_open_assessment import PreOpenPostOpenAssessment
 
 
 class AnalyzePreOpenStatus(str, Enum):
@@ -39,7 +39,7 @@ class AnalyzePreOpenLine:
     opening_snapshot_id: str | None
     ticker: str
     pre_open: Mapping[str, Any]
-    confirmation: IntradayConfirmation
+    confirmation: PreOpenPostOpenAssessment
     price_provenance: Mapping[str, Any]
     cutoff_at: datetime
     compatibility_id: str

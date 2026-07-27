@@ -41,9 +41,7 @@ class StorageConfig:
     trade_journal: str = "journals/trades.jsonl"
     stockbit_profile_dir: str = ".stockbit_profile"
     stockbit_session_file: str = "stockbit_session.json"
-    intraday_sidecar: str = "data/session/.last-session.json"
-    intraday_confirmation: str = "data/session/.last-confirmation.json"
-    intraday_confirmation_journal: str = "journals/intraday_confirmations.csv"
+    pre_open_paper_journal: str = "journals/pre_open_paper.csv"
 
 
 @dataclass(frozen=True)

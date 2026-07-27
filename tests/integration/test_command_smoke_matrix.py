@@ -156,13 +156,6 @@ def _retired_screen_accum_pre_learning_json_contract(temp_workspace, monkeypatch
 
 def _retired_pre_open_file_sidecar_contract(temp_workspace, monkeypatch):
     db_path = _seed_db(temp_workspace)
-    session_path = temp_workspace / "pre-open.json"
-    confirm_path = temp_workspace / "confirm.json"
-    default_sidecar = temp_workspace / "default-pre-open.json"
-    monkeypatch.setattr(
-        screen_pre_open_commands, "_default_sidecar_path", lambda: default_sidecar
-    )
-
     pre_open = runner.invoke(
         app,
         [

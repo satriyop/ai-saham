@@ -103,7 +103,7 @@ Risk and edge cases:
 ### 3. High: `src/adapters/cli/trade_intraday_confirm_commands.py` still owns confirmation workflow orchestration and live provider setup — DONE (2026-07-14)
 
 Resolution:
-- `confirm_open()` no longer owns sidecar/track-file loading, opening-price resolution, Stockbit provider construction, confirmation assembly, or sidecar persistence inline; orchestration moved into `RunIntradayConfirmationWorkflowUseCase` (`src/application/use_case/run_intraday_confirmation_workflow_use_case.py`), invoked via `RunIntradayConfirmationWorkflowRequest` (`src/application/dto/intraday_confirmation_workflow.py`).
+- `confirm_open()` no longer owns sidecar/track-file loading, opening-price resolution, Stockbit provider construction, confirmation assembly, or sidecar persistence inline; orchestration moved into `RunPreOpenPostOpenAssessmentWorkflowUseCase` (`src/application/use_case/run_intraday_confirmation_workflow_use_case.py`), invoked via `RunPreOpenPostOpenAssessmentWorkflowRequest` (`src/application/dto/intraday_confirmation_workflow.py`).
 - The use case emits typed progress events (`EVENT_STARTED`, `EVENT_MANUAL_PRICES`, `EVENT_TRACK_PRICES`, `EVENT_AUTO_RESOLUTION_NEEDED`, `EVENT_OBSERVATION`, `EVENT_RESOLUTION_SUMMARY`, `EVENT_REGIME_WARNING`) so the adapter's `_make_confirm_progress_printer()` callback reproduces the exact original CLI output ordering without any printing inside application code.
 - Stockbit session/provider construction now lives in `src/adapters/cli/trade_intraday_confirm_factory.py` (`create_run_intraday_confirmation_workflow`), wired as a lazy callable invoked only when live auto-resolution is actually needed — manual/track-file-only confirmations never touch Stockbit.
 - Track-file parse errors are scoped to a dedicated `IntradayTrackFileParseError` instead of a broad except around the whole workflow.
@@ -113,7 +113,7 @@ Resolution:
 Pointer (historical, pre-fix):
 - `src/adapters/cli/trade_intraday_confirm_commands.py:50-213` parses opening JSON, reads sidecar files, decides manual/track/live resolution, creates Stockbit providers, resolves prices, confirms candidates, renders, and writes the confirmation sidecar.
 - `src/adapters/cli/trade_intraday_confirm_commands.py:135-153` imports concrete Stockbit providers and calls `get_stockbit_session()` inside the command.
-- `src/adapters/cli/trade_intraday_confirm_commands.py:187-208` maps config and sidecar-derived regime into `ConfirmIntradayOpenRequest`.
+- `src/adapters/cli/trade_intraday_confirm_commands.py:187-208` maps config and sidecar-derived regime into `PreOpenPostOpenGatesRequest`.
 - `src/adapters/cli/trade_intraday_confirm_commands.py:210-213` writes the confirmation sidecar from the command.
 
 Rationale:
@@ -122,7 +122,7 @@ Rationale:
 - The direct session/provider construction makes the command hard to test without patching concrete infrastructure paths.
 
 Recommendation:
-- Create `RunIntradayConfirmationWorkflowUseCase` in application.
+- Create `RunPreOpenPostOpenAssessmentWorkflowUseCase` in application.
 - Request fields should include sidecar path, optional opening JSON mapping already parsed by adapter, optional track file path, output path, max stop, and a boolean for live auto-resolution.
 - Result fields should include observations, confirmations, confirmed date, max stop, extras, warnings, and output path.
 - Move sidecar reading, track-file resolution, regime loading, opening-price resolution, confirmation request assembly, and sidecar writing into the workflow/use-case layer through existing services and injected ports.

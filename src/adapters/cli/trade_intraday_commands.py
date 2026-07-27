@@ -1,24 +1,18 @@
-"""
-CLI commands for active intraday trading workflows.
-Compatibility-only re-export module.
+"""CLI re-exports for trade workspace helpers.
+
+Backtest remains horizon-named (intraday). Paper journal is pre-open contextual.
 
 Layer: Adapter
 """
 
 from src.adapters.cli.trade_intraday_backtest_commands import intraday_backtest
-from src.adapters.cli.trade_intraday_confirm_commands import (
-    _confirm_log_impl,
-    confirm_log,
-    confirm_open,
-    confirm_outcome,
-    confirm_review,
+from src.adapters.cli.trade_pre_open_journal_commands import (
+    pre_open_paper_outcome,
+    pre_open_paper_review,
 )
 
 __all__ = [
-    "_confirm_log_impl",
-    "confirm_open",
-    "confirm_log",
-    "confirm_review",
-    "confirm_outcome",
+    "pre_open_paper_review",
+    "pre_open_paper_outcome",
     "intraday_backtest",
 ]

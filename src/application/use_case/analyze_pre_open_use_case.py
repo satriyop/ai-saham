@@ -1,7 +1,7 @@
 """AnalyzePreOpenUseCase — post-open assessment of an NCP pre-open plan.
 
 Reads immutable learning observations + linked track snapshots, reconstructs
-IntradayConfirmationCandidate rows, and applies ConfirmIntradayOpenUseCase.
+PreOpenPostOpenCandidate rows, and applies PreOpenPostOpenGatesUseCase.
 
 Does not write journals, sidecars, or live-fetch prices.
 
@@ -24,27 +24,27 @@ from src.application.dto.analyze_pre_open import (
     AnalyzePreOpenSnapshotError,
     AnalyzePreOpenStatus,
 )
-from src.application.services.pre_open_confirm_candidate_mapper import (
+from src.application.services.pre_open_post_open_candidate_mapper import (
     extract_market_regime_label,
     extract_opening_price_from_track_payload,
     format_sampled_at_iso,
     project_pre_open_state,
-    reconstruct_intraday_confirmation_candidate,
+    reconstruct_pre_open_post_open_candidate,
 )
 from src.application.services.pre_open_screen_config import PreOpenScreenConfig
-from src.application.use_case.confirm_intraday_open_use_case import (
-    ConfirmIntradayOpenRequest,
-    ConfirmIntradayOpenUseCase,
+from src.application.use_case.pre_open_post_open_gates_use_case import (
+    PreOpenPostOpenGatesRequest,
+    PreOpenPostOpenGatesUseCase,
 )
 from src.domain.ports.learning_artifact_repositories import (
     LearningObservationRepository,
     LearningTrackSnapshotRepository,
 )
 from src.domain.value_objects.idx_market import IDX_TIMEZONE, REGULAR_OPEN
-from src.domain.value_objects.intraday_confirmation import (
-    IntradayConfirmation,
-    IntradayConfirmationCandidate,
-    IntradayDecision,
+from src.domain.value_objects.pre_open_post_open_assessment import (
+    PreOpenPostOpenAssessment,
+    PreOpenPostOpenCandidate,
+    PreOpenPostOpenDecision,
 )
 from src.domain.value_objects.learning_artifacts import (
     AssessmentPurpose,
@@ -66,13 +66,13 @@ class AnalyzePreOpenUseCase:
         tracks: LearningTrackSnapshotRepository,
         *,
         pre_open_config: PreOpenScreenConfig | None = None,
-        confirm_use_case: ConfirmIntradayOpenUseCase | None = None,
+        confirm_use_case: PreOpenPostOpenGatesUseCase | None = None,
         clock_date: date | None = None,
     ) -> None:
         self._observations = observations
         self._tracks = tracks
         self._config = pre_open_config or PreOpenScreenConfig()
-        self._confirm = confirm_use_case or ConfirmIntradayOpenUseCase()
+        self._confirm = confirm_use_case or PreOpenPostOpenGatesUseCase()
         self._clock_date = clock_date
 
     def execute(self, request: AnalyzePreOpenRequest) -> AnalyzePreOpenResult:
@@ -110,7 +110,7 @@ class AnalyzePreOpenUseCase:
             candidates.append(candidate)
 
         confirm_result = self._confirm.execute(
-            ConfirmIntradayOpenRequest(
+            PreOpenPostOpenGatesRequest(
                 candidates=candidates,
                 run_date=session,
                 max_stop_pct=self._config.max_stop_pct,
@@ -227,7 +227,7 @@ class AnalyzePreOpenUseCase:
         *,
         session: date,
         opening_snapshot_id: str | None,
-    ) -> tuple[AnalyzePreOpenLine, IntradayConfirmationCandidate]:
+    ) -> tuple[AnalyzePreOpenLine, PreOpenPostOpenCandidate]:
         snapshot = self._resolve_opening_snapshot(
             obs, session=session, opening_snapshot_id=opening_snapshot_id
         )
@@ -244,17 +244,17 @@ class AnalyzePreOpenUseCase:
             )
 
         ts = format_sampled_at_iso(sampled_at)
-        candidate = reconstruct_intraday_confirmation_candidate(
+        candidate = reconstruct_pre_open_post_open_candidate(
             obs,
             opening_price=price,
             opening_price_source=source,
             opening_price_confidence=confidence,
             opening_price_timestamp=ts,
         )
-        # Placeholder replaced after bulk ConfirmIntradayOpenUseCase run.
-        placeholder = IntradayConfirmation(
+        # Placeholder replaced after bulk PreOpenPostOpenGatesUseCase run.
+        placeholder = PreOpenPostOpenAssessment(
             ticker=candidate.ticker,
-            decision=IntradayDecision.SKIP_INSUFFICIENT_DATA,
+            decision=PreOpenPostOpenDecision.SKIP_INSUFFICIENT_DATA,
             opening_price=candidate.opening_price,
             planned_entry=None,
             stop_loss_price=None,

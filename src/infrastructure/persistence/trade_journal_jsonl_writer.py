@@ -72,7 +72,7 @@ def accumulation_entry_to_record(entry) -> dict:
 
 
 def intraday_entry_to_record(entry) -> dict:
-    """Convert IntradayConfirmationJournalEntry → trade journal dict."""
+    """Convert PreOpenPaperJournalEntry → trade journal dict."""
     return {
         "trade_type": "intraday",
         "logged_at": str(entry.confirmed_at),

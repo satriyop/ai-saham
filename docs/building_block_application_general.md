@@ -253,9 +253,9 @@ Each Big block decomposes into Medium modules:
 | Module | File(s) | Lines | What It Does |
 |--------|---------|-------|-------------|
 | Pre-Open Screen Use Case | `application/use_case/pre_open_screen_use_case.py` | ~400 | 10-step pre-open analysis |
-| Intraday Confirm Use Case | `application/use_case/confirm_intraday_open_use_case.py` | ~100 | Opening auction confirmation |
+| Intraday Confirm Use Case | `application/use_case/pre_open_post_open_gates_use_case.py` | ~100 | Opening auction confirmation |
 | Position Sizer | `application/services/position_sizer.py` | ~150 | ATR-based position sizing |
-| Intraday Conf Journal | `application/services/intraday_confirmation_journal.py` | ~80 | Confirmation journal |
+| Intraday Conf Journal | `application/services/pre_open_paper_journal.py` | ~80 | Confirmation journal |
 | Accumulation Journal | `application/services/accumulation_journal.py` | ~80 | Accumulation candidate journal |
 | Intraday Backtest | `application/use_case/intraday_backtest_use_case.py` | ~100 | Intraday strategy evaluation |
 
@@ -267,7 +267,7 @@ Each Big block decomposes into Medium modules:
 | SQLite Broker Repository | `infrastructure/persistence/sqlite_broker_repository.py` | ~250 | BrokerSummary CRUD |
 | Sentiment Repository | `infrastructure/persistence/sentiment_repository.py` | ~120 | Sentiment record persistence |
 | Accumulation CSV Writer | `infrastructure/persistence/accumulation_journal_csv_writer.py` | ~80 | Accumulation journal CSV |
-| Intraday Conf CSV | `infrastructure/persistence/intraday_confirmation_csv.py` | ~60 | Confirmation CSV |
+| Intraday Conf CSV | `infrastructure/persistence/pre_open_paper_journal_csv.py` | ~60 | Confirmation CSV |
 | SQLite Base | `infrastructure/persistence/sqlite.py` | ~60 | DB setup + schema |
 
 #### Plugin System
@@ -321,7 +321,7 @@ Each Big block decomposes into Medium modules:
 | `BacktestResult` | `domain/value_objects/backtest_result.py` | Aggregate backtest metrics |
 | `TradeAction` | `domain/value_objects/trade_action.py` | Buy/sell/hold signal |
 | `ScreenerResult` | `domain/value_objects/screener_result.py` | Pre-open screen output |
-| `IntradayConfirmation` | `domain/value_objects/intraday_confirmation.py` | Confirmation decision |
+| `PreOpenPostOpenAssessment` | `domain/value_objects/pre_open_post_open_assessment.py` | Confirmation decision |
 | `Sentiment` | `domain/value_objects/sentiment.py` | Classified headline + score |
 | `SkillAnnotation` | `domain/value_objects/skill_annotation.py` | Skill metadata from code |
 | `AnalystConsensus` | `domain/value_objects/analyst_consensus.py` | Analyst ratings + price target |
@@ -379,7 +379,7 @@ Each Big block decomposes into Medium modules:
 | `SwingBacktestUseCase` | `use_case/swing_backtest_use_case.py` | universe, capital, preset | Portfolio report |
 | `BuildMarketContextUseCase` | `use_case/build_market_context_use_case.py` | universe, as_of | Market context factors |
 | `PreOpenScreenUseCase` | `use_case/pre_open_screen_use_case.py` | movers, order books, caps | Screened candidates |
-| `ConfirmIntradayOpenUseCase` | `use_case/confirm_intraday_open_use_case.py` | opening data, session | ENTER/WAIT/SKIP |
+| `PreOpenPostOpenGatesUseCase` | `use_case/pre_open_post_open_gates_use_case.py` | opening data, session | ENTER/WAIT/SKIP |
 | `FetchSentimentUseCase` | `use_case/fetch_sentiment_use_case.py` | ticker, days, classifier | Sentiment summary |
 | `AuditSentimentUseCase` | `use_case/audit_sentiment_use_case.py` | ticker | Accuracy audit |
 | `FetchBrokerDataUseCase` | `use_case/fetch_broker_data_use_case.py` | ticker, date range | BrokerSummary list |
@@ -415,7 +415,7 @@ Each Big block decomposes into Medium modules:
 | `PositionSizer` | `services/position_sizer.py` | ATR-based position sizing |
 | `SkillGenerator` | `services/skill_generator.py` | Auto-generates SKILL.md from artifacts |
 | `AccumulationJournal` | `services/accumulation_journal.py` | CSV-based accumulation candidate journal |
-| `IntradayConfirmationJournal` | `services/intraday_confirmation_journal.py` | CSV-based confirmation journal |
+| `PreOpenPostOpenAssessmentJournal` | `services/pre_open_paper_journal.py` | CSV-based confirmation journal |
 | `Bootstrap` | `services/bootstrap.py` | System initialization |
 | `GroupMapping` | `services/group_mapping.py` | Stock sector/group classification |
 | `AIResearch` | `services/ai_research.py` | AI research orchestration |
@@ -505,7 +505,7 @@ Each Big block decomposes into Medium modules:
 | `persistence/sqlite_system_status_provider.py` | Provider health + staleness |
 | `persistence/sentiment_repository.py` | Sentiment record persistence |
 | `persistence/accumulation_journal_csv_writer.py` | Accumulation CSV |
-| `persistence/intraday_confirmation_csv.py` | Confirmation CSV |
+| `persistence/pre_open_paper_journal_csv.py` | Confirmation CSV |
 | `persistence/formula_storage.py` | Formula YAML persistence |
 | `persistence/iev_json_sidecar.py` | IEV JSON sidecar management |
 | `persistence/trade_journal_jsonl_writer.py` | Unified trade journal (JSONL) |
@@ -604,7 +604,7 @@ Each Big block decomposes into Medium modules:
 | View Ticker Display | `cli/view_ticker_display.py` | Rich-formatted ticker dashboard |
 | View Universe Display | `cli/view_universe_display.py` | Rich-formatted universe overview |
 | Intraday Pre-Open Display | `cli/intraday_pre_open_display.py` | Rich-formatted pre-open table |
-| Intraday Confirmation Display | `cli/intraday_confirmation_display.py` | Rich-formatted confirmation view |
+| Pre-open post-open display | `cli/trade_pre_open_display.py` / `analyze_pre_open_display.py` | Rich-formatted post-open assess + paper review |
 | Intraday Backtest Display | `cli/intraday_backtest_display.py` | Rich-formatted intraday backtest |
 | Accumulation Journal Display | `cli/accumulation_journal_display.py` | Rich-formatted journal review |
 | Rich Display Utilities | `cli/rich_display.py` | Shared Rich render helpers |

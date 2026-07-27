@@ -4,10 +4,10 @@ from datetime import date, datetime
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from src.application.services.pre_open_confirm_candidate_mapper import (
+from src.application.services.pre_open_post_open_candidate_mapper import (
     extract_market_regime_label,
     extract_opening_price_from_track_payload,
-    reconstruct_intraday_confirmation_candidate,
+    reconstruct_pre_open_post_open_candidate,
 )
 from src.domain.value_objects.learning_artifacts import (
     AssessmentPurpose,
@@ -50,7 +50,7 @@ def test_reconstruct_maps_plan_field_aliases() -> None:
             },
         }
     )
-    cand = reconstruct_intraday_confirmation_candidate(
+    cand = reconstruct_pre_open_post_open_candidate(
         obs,
         opening_price=Decimal("10000"),
         opening_price_source="order_book_lastprice",

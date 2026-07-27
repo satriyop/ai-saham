@@ -3,16 +3,16 @@
 from datetime import date
 from decimal import Decimal
 
-from src.domain.value_objects.intraday_confirmation import (
-    IntradayConfirmationJournalEntry,
+from src.domain.value_objects.pre_open_post_open_assessment import (
+    PreOpenPaperJournalEntry,
 )
-from src.infrastructure.persistence.intraday_confirmation_csv import (
-    IntradayConfirmationCsvStore,
+from src.infrastructure.persistence.pre_open_paper_journal_csv import (
+    PreOpenPaperJournalCsvStore,
 )
 
 
-def _entry(ticker="BBCA") -> IntradayConfirmationJournalEntry:
-    return IntradayConfirmationJournalEntry(
+def _entry(ticker="BBCA") -> PreOpenPaperJournalEntry:
+    return PreOpenPaperJournalEntry(
         confirmed_at=date(2026, 6, 12),
         ticker=ticker,
         decision="ENTER",
@@ -32,7 +32,7 @@ def _entry(ticker="BBCA") -> IntradayConfirmationJournalEntry:
 
 def test_append_and_read_round_trip(tmp_path):
     path = tmp_path / "confirmations.csv"
-    store = IntradayConfirmationCsvStore(path)
+    store = PreOpenPaperJournalCsvStore(path)
 
     assert store.append([_entry()]) == 1
 
@@ -50,7 +50,7 @@ def test_append_and_read_round_trip(tmp_path):
 
 def test_append_is_idempotent_by_date_and_ticker(tmp_path):
     path = tmp_path / "confirmations.csv"
-    store = IntradayConfirmationCsvStore(path)
+    store = PreOpenPaperJournalCsvStore(path)
 
     assert store.append([_entry()]) == 1
     assert store.append([_entry()]) == 0
@@ -59,7 +59,7 @@ def test_append_is_idempotent_by_date_and_ticker(tmp_path):
 
 def test_update_outcome_enriches_existing_row(tmp_path):
     path = tmp_path / "confirmations.csv"
-    store = IntradayConfirmationCsvStore(path)
+    store = PreOpenPaperJournalCsvStore(path)
     store.append([_entry()])
 
     updated = store.update_outcome(

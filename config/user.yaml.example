@@ -34,9 +34,9 @@ swing:
 #   trade_journal: "~/.ai-saham/journals/trades.jsonl"
 #   stockbit_profile_dir: "~/.ai-saham/.stockbit_profile"
 #   stockbit_session_file: "~/.ai-saham/stockbit_session.json"
-#   intraday_sidecar: "~/.ai-saham/journals/.last-session.json"
-#   intraday_confirmation: "~/.ai-saham/journals/.last-confirmation.json"
-#   intraday_confirmation_journal: "~/.ai-saham/journals/intraday-confirmations.csv"
+#   # retired: intraday_sidecar: "~/.ai-saham/journals/.last-session.json"
+#   # retired confirm sidecars (do not use)
+#   pre_open_paper_journal: "~/.ai-saham/journals/pre_open_paper.csv"
 
 # config_paths:
 #   pre_open_screener: "~/.ai-saham/config/pre_open_screener.yaml"

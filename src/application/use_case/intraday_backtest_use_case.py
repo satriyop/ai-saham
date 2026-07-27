@@ -3,7 +3,7 @@
 Uses daily OHLC as a proxy for intraday execution (Option A).
 
 Layer: Application
-Depends on: ConfirmIntradayOpenUseCase, IndicatorRegistry, market+broker repositories
+Depends on: PreOpenPostOpenGatesUseCase, IndicatorRegistry, market+broker repositories
 """
 
 from datetime import date

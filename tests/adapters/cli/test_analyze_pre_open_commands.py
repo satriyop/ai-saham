@@ -125,5 +125,5 @@ def test_command_boundary_no_sidecar_writes() -> None:
     )
     assert "write_intraday_confirmation" not in source
     assert "write_pre_open_sidecar" not in source
-    assert "ConfirmIntradayOpenUseCase" not in source
-    assert "RunIntradayConfirmationWorkflowUseCase" not in source
+    assert "PreOpenPostOpenGatesUseCase" not in source
+    assert "RunPreOpenPostOpenAssessmentWorkflowUseCase" not in source

@@ -17,7 +17,7 @@ To separate concerns and avoid polluting the repository root:
 * Miscellaneous raw payloads, spy outputs, and developer debug dumps must live under `data/debug/`.
 * Running trade/order book learning tracks were historically organized under
   `data/opening/YYYYMMDD/`; ADR-049 retires that path.
-* Journal files (e.g., `journals/intraday_confirmations.csv`, `journals/pre_open.csv`, `journals/trades.jsonl`) must be stored under the `journals/` directory and use snake_case naming.
+* Journal files (e.g., `journals/pre_open_paper.csv`, `journals/pre_open.csv`, `journals/trades.jsonl`) must be stored under the `journals/` directory and use snake_case naming.
 
 **File Naming Standards**
 * **Application Layer**: To explicitly identify the layer and purpose of business logic modules, all use case files under `src/application/use_case/` must use the suffix `_use_case.py` (e.g., `pre_open_screen_use_case.py`, `assess_risk_use_case.py`).

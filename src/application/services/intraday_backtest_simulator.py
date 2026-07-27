@@ -19,15 +19,15 @@ from src.application.services.intraday_backtest_execution import (
     compute_intraday_pnl,
     size_intraday_position,
 )
-from src.application.use_case.confirm_intraday_open_use_case import (
-    ConfirmIntradayOpenRequest,
-    ConfirmIntradayOpenUseCase,
+from src.application.use_case.pre_open_post_open_gates_use_case import (
+    PreOpenPostOpenGatesRequest,
+    PreOpenPostOpenGatesUseCase,
 )
 from src.domain.entities.candle import Candle
 from src.domain.ports.market_data_repository import MarketDataRepository
-from src.domain.value_objects.intraday_confirmation import (
-    IntradayConfirmationCandidate,
-    IntradayDecision,
+from src.domain.value_objects.pre_open_post_open_assessment import (
+    PreOpenPostOpenCandidate,
+    PreOpenPostOpenDecision,
 )
 
 
@@ -51,12 +51,12 @@ class IntradayBacktestSimulator:
         *,
         market_repository: MarketDataRepository,
         candidate_builder: IntradayBacktestCandidateBuilder,
-        confirm_use_case: ConfirmIntradayOpenUseCase | None = None,
+        confirm_use_case: PreOpenPostOpenGatesUseCase | None = None,
         iev_repository=None,
     ) -> None:
         self._market_repo = market_repository
         self._candidate_builder = candidate_builder
-        self._confirm = confirm_use_case or ConfirmIntradayOpenUseCase()
+        self._confirm = confirm_use_case or PreOpenPostOpenGatesUseCase()
         self._iev_repo = iev_repository
 
     def run(
@@ -107,7 +107,7 @@ class IntradayBacktestSimulator:
                 today_candle = raw[0]
                 today_candles[cand.ticker] = today_candle
                 candidate_map[cand.ticker] = cand
-                conf_candidates.append(IntradayConfirmationCandidate(
+                conf_candidates.append(PreOpenPostOpenCandidate(
                     ticker=cand.ticker,
                     opening_price=today_candle.open,
                     iev=None,
@@ -129,7 +129,7 @@ class IntradayBacktestSimulator:
                 equity_curve.append(cash)
                 continue
 
-            confirm_result = self._confirm.execute(ConfirmIntradayOpenRequest(
+            confirm_result = self._confirm.execute(PreOpenPostOpenGatesRequest(
                 candidates=conf_candidates,
                 run_date=d,
                 max_stop_pct=request.max_stop_pct,
@@ -138,9 +138,9 @@ class IntradayBacktestSimulator:
             ))
 
             # ── Step 3: filter, rank, and cap ────────────────────────────────
-            accepted_decisions = {IntradayDecision.ENTER}
+            accepted_decisions = {PreOpenPostOpenDecision.ENTER}
             if request.include_wait:
-                accepted_decisions.add(IntradayDecision.WAIT)
+                accepted_decisions.add(PreOpenPostOpenDecision.WAIT)
 
             entries = [
                 conf for conf in confirm_result.confirmations

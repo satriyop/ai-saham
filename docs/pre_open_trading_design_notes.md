@@ -265,7 +265,7 @@ Jika profile tidak dapat menghasilkan token valid, ulangi login manual.
 
 ## Dokumen Terkait
 
-- [Quick Reference](intraday_trading_quick_reference.md)
-- [Checklist Operasional](intraday_trading_operational_checklist.md)
-- [Indeks Panduan](how_to_intraday_trading.md)
+- [Quick Reference](pre_open_trading_quick_reference.md)
+- [Checklist Operasional](pre_open_trading_operational_checklist.md)
+- [Indeks Panduan](how_to_pre_open_trading.md)
 - [Panduan Lengkap Arsip](archive/how_to_intraday_trading_full_guide.md)

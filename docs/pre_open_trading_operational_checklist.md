@@ -204,6 +204,6 @@ saham trade backtest-intraday \
 
 ## Dokumen Terkait
 
-- [Quick Reference](intraday_trading_quick_reference.md)
-- [Catatan Desain](intraday_trading_design_notes.md)
-- [Indeks Panduan](how_to_intraday_trading.md)
+- [Quick Reference](pre_open_trading_quick_reference.md)
+- [Catatan Desain](pre_open_trading_design_notes.md)
+- [Indeks Panduan](how_to_pre_open_trading.md)

@@ -1,7 +1,7 @@
 """
-Intraday confirmation journal service.
+Pre-open paper journal service.
 
-Logs post-open confirmation decisions and reviews their next-session outcomes.
+Logs post-open assess decisions and reviews their next-session outcomes.
 
 Layer: Application
 """
@@ -12,17 +12,17 @@ from decimal import Decimal
 from typing import Protocol
 
 from src.domain.ports.market_data_repository import MarketDataRepository
-from src.domain.value_objects.intraday_confirmation import (
-    IntradayConfirmation,
-    IntradayConfirmationJournalEntry,
+from src.domain.value_objects.pre_open_post_open_assessment import (
+    PreOpenPostOpenAssessment,
+    PreOpenPaperJournalEntry,
 )
 
 
-class IntradayConfirmationStore(Protocol):
-    def append(self, entries: list[IntradayConfirmationJournalEntry]) -> int:
+class PreOpenPaperJournalStore(Protocol):
+    def append(self, entries: list[PreOpenPaperJournalEntry]) -> int:
         """Append entries and return count written."""
 
-    def read_all(self) -> list[IntradayConfirmationJournalEntry]:
+    def read_all(self) -> list[PreOpenPaperJournalEntry]:
         """Read all entries."""
 
     def update_outcome(
@@ -40,8 +40,8 @@ class IntradayConfirmationStore(Protocol):
 
 
 @dataclass(frozen=True)
-class IntradayOutcome:
-    entry: IntradayConfirmationJournalEntry
+class PreOpenPaperOutcome:
+    entry: PreOpenPaperJournalEntry
     actual_open: Decimal
     actual_high: Decimal
     actual_low: Decimal
@@ -60,7 +60,7 @@ class IntradayOutcome:
 
 
 @dataclass(frozen=True)
-class IntradayBucketStats:
+class PreOpenPaperBucketStats:
     bucket: str
     total: int
     with_data: int
@@ -72,31 +72,31 @@ class IntradayBucketStats:
 
 
 @dataclass(frozen=True)
-class IntradayConfirmationReview:
+class PreOpenPaperReview:
     total_entries: int
     entries_with_data: int
-    decision_buckets: list[IntradayBucketStats] = field(default_factory=list)
-    context_buckets: dict[str, list[IntradayBucketStats]] = field(default_factory=dict)
+    decision_buckets: list[PreOpenPaperBucketStats] = field(default_factory=list)
+    context_buckets: dict[str, list[PreOpenPaperBucketStats]] = field(default_factory=dict)
 
 
-class IntradayConfirmationJournalService:
-    """Log and review post-open intraday confirmation decisions."""
+class PreOpenPaperJournalService:
+    """Log and review pre-open paper journal decisions."""
 
     def __init__(
         self,
-        store: IntradayConfirmationStore,
+        store: PreOpenPaperJournalStore,
         repository: MarketDataRepository,
     ) -> None:
         self._store = store
         self._repository = repository
 
-    def log_confirmations(
+    def log_assessments(
         self,
-        confirmations: tuple[IntradayConfirmation, ...],
+        confirmations: tuple[PreOpenPostOpenAssessment, ...],
         confirmed_at,
     ) -> int:
         entries = [
-            IntradayConfirmationJournalEntry(
+            PreOpenPaperJournalEntry(
                 confirmed_at=confirmed_at,
                 ticker=confirmation.ticker,
                 decision=confirmation.decision.value,
@@ -116,13 +116,13 @@ class IntradayConfirmationJournalService:
         ]
         return self._store.append(entries)
 
-    def review(self) -> IntradayConfirmationReview:
+    def review(self) -> PreOpenPaperReview:
         entries = self._store.read_all()
         if not entries:
-            return IntradayConfirmationReview(total_entries=0, entries_with_data=0)
+            return PreOpenPaperReview(total_entries=0, entries_with_data=0)
 
         outcomes = [outcome for entry in entries if (outcome := self._outcome(entry))]
-        return IntradayConfirmationReview(
+        return PreOpenPaperReview(
             total_entries=len(entries),
             entries_with_data=len(outcomes),
             decision_buckets=self._bucket(
@@ -182,7 +182,7 @@ class IntradayConfirmationJournalService:
         )
         return updated, outcome_r
 
-    def _outcome(self, entry: IntradayConfirmationJournalEntry) -> IntradayOutcome | None:
+    def _outcome(self, entry: PreOpenPaperJournalEntry) -> PreOpenPaperOutcome | None:
         if entry.has_manual_outcome:
             actual_entry = entry.actual_entry_price
             actual_exit = entry.actual_exit_price
@@ -190,7 +190,7 @@ class IntradayConfirmationJournalService:
                 return None
             stop_hit = entry.outcome_result == "stop"
             target_hit = entry.outcome_result == "target"
-            return IntradayOutcome(
+            return PreOpenPaperOutcome(
                 entry=entry,
                 actual_open=actual_entry,
                 actual_high=max(actual_entry, actual_exit),
@@ -230,7 +230,7 @@ class IntradayConfirmationJournalService:
                 stop_hit = candle.low <= entry.stop_loss_price
                 target_hit = candle.high >= entry.planned_entry + risk
 
-        return IntradayOutcome(
+        return PreOpenPaperOutcome(
             entry=entry,
             actual_open=actual_open,
             actual_high=candle.high,
@@ -244,7 +244,7 @@ class IntradayConfirmationJournalService:
     @staticmethod
     def _compute_outcome_r(
         *,
-        entry: IntradayConfirmationJournalEntry,
+        entry: PreOpenPaperJournalEntry,
         actual_entry_price: Decimal,
         actual_exit_price: Decimal,
     ) -> Decimal | None:
@@ -258,16 +258,16 @@ class IntradayConfirmationJournalService:
 
     @staticmethod
     def _bucket(
-        entries: list[IntradayConfirmationJournalEntry],
-        outcomes: list[IntradayOutcome],
+        entries: list[PreOpenPaperJournalEntry],
+        outcomes: list[PreOpenPaperOutcome],
         key_fn,
-    ) -> list[IntradayBucketStats]:
-        outcomes_by_key: dict[tuple, IntradayOutcome] = {
+    ) -> list[PreOpenPaperBucketStats]:
+        outcomes_by_key: dict[tuple, PreOpenPaperOutcome] = {
             (outcome.entry.confirmed_at, outcome.entry.ticker): outcome
             for outcome in outcomes
         }
         all_keys = sorted({key_fn(entry) for entry in entries})
-        stats: list[IntradayBucketStats] = []
+        stats: list[PreOpenPaperBucketStats] = []
 
         for key in all_keys:
             group_entries = [entry for entry in entries if key_fn(entry) == key]
@@ -286,7 +286,7 @@ class IntradayConfirmationJournalService:
                 ).quantize(Decimal("0.01"))
 
             stats.append(
-                IntradayBucketStats(
+                PreOpenPaperBucketStats(
                     bucket=key,
                     total=len(group_entries),
                     with_data=len(group_outcomes),

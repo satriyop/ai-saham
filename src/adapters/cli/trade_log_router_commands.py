@@ -23,8 +23,8 @@ from src.application.use_case.log_pre_open_trade_use_case import (
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.pre_open_config import load_pre_open_screen_config
-from src.infrastructure.persistence.intraday_confirmation_csv import (
-    IntradayConfirmationCsvStore,
+from src.infrastructure.persistence.pre_open_paper_journal_csv import (
+    PreOpenPaperJournalCsvStore,
 )
 from src.infrastructure.persistence.trade_journal_jsonl_writer import (
     TradeJournalJsonlWriter,
@@ -130,7 +130,7 @@ def trade_log(
         _log_pre_open(
             observation_id=observation_id,
             opening_snapshot_id=opening_snapshot_id,
-            journal=journal or Path(cfg.storage.intraday_confirmation_journal),
+            journal=journal or Path(cfg.storage.pre_open_paper_journal),
             db_path=db_path or Path(cfg.storage.db_path),
         )
     elif trade_type == "intraday":
@@ -175,7 +175,7 @@ def _log_pre_open(
         pre_open_config=load_pre_open_screen_config(),
         clock_date=datetime.now(IDX_TIMEZONE).date(),
     )
-    csv_store = IntradayConfirmationCsvStore(journal)
+    csv_store = PreOpenPaperJournalCsvStore(journal)
     jsonl_store = TradeJournalJsonlWriter(journal.parent / "trades.jsonl")
     use_case = LogPreOpenTradeUseCase(
         analyze=analyze,

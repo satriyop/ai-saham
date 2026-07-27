@@ -1,5 +1,5 @@
 """
-ConfirmIntradayOpenUseCase — convert pre-open candidates into post-open decisions.
+PreOpenPostOpenGatesUseCase — pure post-open gates for pre-open plan candidates.
 
 Layer: Application
 """
@@ -9,19 +9,19 @@ from datetime import date
 from decimal import Decimal
 
 from src.domain.value_objects import tick_size as tick_size_module
-from src.domain.value_objects.intraday_confirmation import (
-    IntradayConfirmation,
-    IntradayConfirmationCandidate,
-    IntradayConfirmationResult,
-    IntradayDecision,
+from src.domain.value_objects.pre_open_post_open_assessment import (
+    PreOpenPostOpenAssessment,
+    PreOpenPostOpenCandidate,
+    PreOpenPostOpenResult,
+    PreOpenPostOpenDecision,
 )
 
 
 @dataclass(frozen=True)
-class ConfirmIntradayOpenRequest:
+class PreOpenPostOpenGatesRequest:
     """Request DTO for confirming pre-open candidates after auction clears."""
 
-    candidates: list[IntradayConfirmationCandidate]
+    candidates: list[PreOpenPostOpenCandidate]
     run_date: date | None = None
     max_stop_pct: Decimal = Decimal("0.07")
     # Tick-friction gate (Phase 1.2)
@@ -36,16 +36,16 @@ class ConfirmIntradayOpenRequest:
     require_backed_in_weak: bool = True
 
 
-class ConfirmIntradayOpenUseCase:
+class PreOpenPostOpenGatesUseCase:
     """Apply deterministic post-open gates to pre-open candidates."""
 
-    def execute(self, request: ConfirmIntradayOpenRequest) -> IntradayConfirmationResult:
+    def execute(self, request: PreOpenPostOpenGatesRequest) -> PreOpenPostOpenResult:
         confirmed_date = request.run_date or date.today()
         confirmations = tuple(
             self._confirm_candidate(candidate, request)
             for candidate in request.candidates
         )
-        return IntradayConfirmationResult(
+        return PreOpenPostOpenResult(
             confirmed_date=confirmed_date,
             max_stop_pct=request.max_stop_pct,
             confirmations=confirmations,
@@ -53,16 +53,16 @@ class ConfirmIntradayOpenUseCase:
 
     def _confirm_candidate(
         self,
-        candidate: IntradayConfirmationCandidate,
-        request: ConfirmIntradayOpenRequest,
-    ) -> IntradayConfirmation:
+        candidate: PreOpenPostOpenCandidate,
+        request: PreOpenPostOpenGatesRequest,
+    ) -> PreOpenPostOpenAssessment:
         max_stop_pct = request.max_stop_pct
         reasons: list[str] = []
 
         if candidate.opening_price is None:
             return self._result(
                 candidate,
-                IntradayDecision.SKIP_INSUFFICIENT_DATA,
+                PreOpenPostOpenDecision.SKIP_INSUFFICIENT_DATA,
                 planned_entry=None,
                 stop_pct=None,
                 reasons=("missing opening price",),
@@ -76,7 +76,7 @@ class ConfirmIntradayOpenUseCase:
         ):
             return self._result(
                 candidate,
-                IntradayDecision.SKIP_INSUFFICIENT_DATA,
+                PreOpenPostOpenDecision.SKIP_INSUFFICIENT_DATA,
                 planned_entry=None,
                 stop_pct=None,
                 reasons=("missing entry range, suggested entry, or stop",),
@@ -104,7 +104,7 @@ class ConfirmIntradayOpenUseCase:
             if request.require_backed_in_weak and candidate.opening_broker_backing_tag not in ("BACKED",):
                 return self._result(
                     candidate,
-                    IntradayDecision.SKIP_BEARISH_CONTEXT,
+                    PreOpenPostOpenDecision.SKIP_BEARISH_CONTEXT,
                     planned_entry=opening,
                     stop_pct=self._stop_pct(opening, candidate.atr_stop),
                     reasons=tuple(
@@ -118,7 +118,7 @@ class ConfirmIntradayOpenUseCase:
         if opening > effective_range_high:
             return self._result(
                 candidate,
-                IntradayDecision.SKIP_GAP_UP,
+                PreOpenPostOpenDecision.SKIP_GAP_UP,
                 planned_entry=opening,
                 stop_pct=self._stop_pct(opening, candidate.atr_stop),
                 reasons=tuple(
@@ -129,7 +129,7 @@ class ConfirmIntradayOpenUseCase:
         if opening < effective_range_low:
             return self._result(
                 candidate,
-                IntradayDecision.SKIP_GAP_DOWN,
+                PreOpenPostOpenDecision.SKIP_GAP_DOWN,
                 planned_entry=opening,
                 stop_pct=self._stop_pct(opening, candidate.atr_stop),
                 reasons=tuple(
@@ -142,7 +142,7 @@ class ConfirmIntradayOpenUseCase:
         if candidate.trend in ("BEARISH", "GAP_OUT"):
             return self._result(
                 candidate,
-                IntradayDecision.SKIP_BEARISH_CONTEXT,
+                PreOpenPostOpenDecision.SKIP_BEARISH_CONTEXT,
                 planned_entry=opening,
                 stop_pct=self._stop_pct(opening, candidate.atr_stop),
                 reasons=tuple(reasons + [f"pre-open trend is {candidate.trend}"]),
@@ -151,7 +151,7 @@ class ConfirmIntradayOpenUseCase:
         if candidate.opening_broker_backing_tag == "DISTRIBUTING":
             return self._result(
                 candidate,
-                IntradayDecision.SKIP_BEARISH_CONTEXT,
+                PreOpenPostOpenDecision.SKIP_BEARISH_CONTEXT,
                 planned_entry=opening,
                 stop_pct=self._stop_pct(opening, candidate.atr_stop),
                 reasons=tuple(reasons + ["broker context is DISTRIBUTING"]),
@@ -161,7 +161,7 @@ class ConfirmIntradayOpenUseCase:
         if stop_pct is None:
             return self._result(
                 candidate,
-                IntradayDecision.SKIP_INSUFFICIENT_DATA,
+                PreOpenPostOpenDecision.SKIP_INSUFFICIENT_DATA,
                 planned_entry=opening,
                 stop_pct=None,
                 reasons=tuple(reasons + ["invalid stop price"]),
@@ -170,7 +170,7 @@ class ConfirmIntradayOpenUseCase:
         if stop_pct > max_stop_pct * Decimal("100"):
             return self._result(
                 candidate,
-                IntradayDecision.SKIP_RISK_TOO_WIDE,
+                PreOpenPostOpenDecision.SKIP_RISK_TOO_WIDE,
                 planned_entry=opening,
                 stop_pct=stop_pct,
                 reasons=tuple(
@@ -191,7 +191,7 @@ class ConfirmIntradayOpenUseCase:
             if stop_ticks < request.min_stop_ticks or target_ticks < request.min_target_ticks:
                 return self._result(
                     candidate,
-                    IntradayDecision.SKIP_LOW_VOLATILITY,
+                    PreOpenPostOpenDecision.SKIP_LOW_VOLATILITY,
                     planned_entry=opening,
                     stop_pct=stop_pct,
                     reasons=tuple(
@@ -204,10 +204,10 @@ class ConfirmIntradayOpenUseCase:
                 )
 
         if candidate.trend == "BULLISH":
-            decision = IntradayDecision.ENTER
+            decision = PreOpenPostOpenDecision.ENTER
             reasons.append("pre-open trend is BULLISH")
         else:
-            decision = IntradayDecision.WAIT
+            decision = PreOpenPostOpenDecision.WAIT
             reasons.append("pre-open trend is not bullish")
 
         return self._result(
@@ -226,13 +226,13 @@ class ConfirmIntradayOpenUseCase:
 
     @staticmethod
     def _result(
-        candidate: IntradayConfirmationCandidate,
-        decision: IntradayDecision,
+        candidate: PreOpenPostOpenCandidate,
+        decision: PreOpenPostOpenDecision,
         planned_entry: Decimal | None,
         stop_pct: Decimal | None,
         reasons: tuple[str, ...],
-    ) -> IntradayConfirmation:
-        return IntradayConfirmation(
+    ) -> PreOpenPostOpenAssessment:
+        return PreOpenPostOpenAssessment(
             ticker=candidate.ticker,
             decision=decision,
             opening_price=candidate.opening_price,

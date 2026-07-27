@@ -17,13 +17,13 @@ from src.application.dto.analyze_pre_open import (
     AnalyzePreOpenStatus,
 )
 from src.application.use_case.analyze_pre_open_use_case import AnalyzePreOpenUseCase
-from src.application.use_case.confirm_intraday_open_use_case import (
-    ConfirmIntradayOpenRequest,
-    ConfirmIntradayOpenUseCase,
+from src.application.use_case.pre_open_post_open_gates_use_case import (
+    PreOpenPostOpenGatesRequest,
+    PreOpenPostOpenGatesUseCase,
 )
-from src.domain.value_objects.intraday_confirmation import (
-    IntradayConfirmationCandidate,
-    IntradayDecision,
+from src.domain.value_objects.pre_open_post_open_assessment import (
+    PreOpenPostOpenCandidate,
+    PreOpenPostOpenDecision,
 )
 from src.domain.value_objects.learning_artifacts import (
     AssessmentPurpose,
@@ -136,15 +136,15 @@ def test_happy_path_matches_pure_confirm(tmp_path: Path) -> None:
     line = result.lines[0]
     assert line.observation_id == obs.observation_id
     assert line.opening_snapshot_id == snap.snapshot_id
-    assert line.confirmation.decision is IntradayDecision.ENTER
+    assert line.confirmation.decision is PreOpenPostOpenDecision.ENTER
     assert line.pre_open["direction"] == "BULLISH"
     assert line.price_provenance["opening_price_source"] == "order_book_lastprice"
 
-    # Golden: same as hand-built ConfirmIntradayOpenUseCase
-    pure = ConfirmIntradayOpenUseCase().execute(
-        ConfirmIntradayOpenRequest(
+    # Golden: same as hand-built PreOpenPostOpenGatesUseCase
+    pure = PreOpenPostOpenGatesUseCase().execute(
+        PreOpenPostOpenGatesRequest(
             candidates=[
-                IntradayConfirmationCandidate(
+                PreOpenPostOpenCandidate(
                     ticker="BBCA",
                     opening_price=Decimal("10050"),
                     iev=200_000,
@@ -178,7 +178,7 @@ def test_mid_only_snapshot_does_not_masquerade_as_open(tmp_path: Path) -> None:
         AnalyzePreOpenRequest(observation_id=obs.observation_id)
     )
     assert result.status is AnalyzePreOpenStatus.UNAVAILABLE_OPENING
-    assert result.lines[0].confirmation.decision is IntradayDecision.SKIP_INSUFFICIENT_DATA
+    assert result.lines[0].confirmation.decision is PreOpenPostOpenDecision.SKIP_INSUFFICIENT_DATA
     assert result.lines[0].price_provenance["opening_price"] is None
 
 

@@ -16,13 +16,13 @@ from src.application.dto.analyze_pre_open import (
     AnalyzePreOpenRequest,
     AnalyzePreOpenResult,
 )
-from src.application.services.intraday_confirmation_journal import (
-    IntradayConfirmationStore,
+from src.application.services.pre_open_paper_journal import (
+    PreOpenPaperJournalStore,
 )
 from src.application.use_case.analyze_pre_open_use_case import AnalyzePreOpenUseCase
 from src.domain.ports.trade_journal_store import TradeJournalStore
-from src.domain.value_objects.intraday_confirmation import (
-    IntradayConfirmationJournalEntry,
+from src.domain.value_objects.pre_open_post_open_assessment import (
+    PreOpenPaperJournalEntry,
 )
 
 
@@ -50,7 +50,7 @@ class LogPreOpenTradeUseCase:
     def __init__(
         self,
         analyze: AnalyzePreOpenUseCase,
-        confirmation_store: IntradayConfirmationStore,
+        confirmation_store: PreOpenPaperJournalStore,
         trade_journal_store: TradeJournalStore | None = None,
     ) -> None:
         self._analyze = analyze
@@ -70,7 +70,7 @@ class LogPreOpenTradeUseCase:
             )
         )
         entries = [
-            IntradayConfirmationJournalEntry(
+            PreOpenPaperJournalEntry(
                 confirmed_at=result.session_date,
                 ticker=line.confirmation.ticker,
                 decision=line.confirmation.decision.value,
@@ -124,7 +124,7 @@ class LogPreOpenTradeUseCase:
 
     @staticmethod
     def _entry_to_record(
-        entry: IntradayConfirmationJournalEntry,
+        entry: PreOpenPaperJournalEntry,
         *,
         observation_id: str,
         opening_snapshot_id: str | None,

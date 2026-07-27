@@ -1,6 +1,6 @@
 """Map immutable pre-open learning artifacts → confirm candidates.
 
-Field aliases (observation candidate → IntradayConfirmationCandidate):
+Field aliases (observation candidate → PreOpenPostOpenCandidate):
   entry_price        → suggested_entry
   stop_loss_price    → atr_stop
   trend_signal       → trend
@@ -18,7 +18,7 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any, Mapping
 
-from src.domain.value_objects.intraday_confirmation import IntradayConfirmationCandidate
+from src.domain.value_objects.pre_open_post_open_assessment import PreOpenPostOpenCandidate
 from src.domain.value_objects.learning_artifacts import LearningObservation
 
 _KNOWN_REGIMES = frozenset(
@@ -108,14 +108,14 @@ def extract_opening_price_from_track_payload(
     )
 
 
-def reconstruct_intraday_confirmation_candidate(
+def reconstruct_pre_open_post_open_candidate(
     observation: LearningObservation,
     *,
     opening_price: Decimal | None,
     opening_price_source: str | None = None,
     opening_price_confidence: str | None = None,
     opening_price_timestamp: str | None = None,
-) -> IntradayConfirmationCandidate:
+) -> PreOpenPostOpenCandidate:
     """Rebuild a confirm candidate from a frozen pre-open observation + open price."""
     payload = dict(observation.decision_payload or {})
     cand = payload.get("candidate") if isinstance(payload.get("candidate"), Mapping) else {}
@@ -127,7 +127,7 @@ def reconstruct_intraday_confirmation_candidate(
         # window_id form ticker:YYYY-MM-DD
         ticker = ticker.split(":", 1)[0]
 
-    return IntradayConfirmationCandidate(
+    return PreOpenPostOpenCandidate(
         ticker=ticker,
         opening_price=opening_price,
         iev=_int_or_none(cand.get("iev")),

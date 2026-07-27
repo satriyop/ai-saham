@@ -16,7 +16,7 @@ swing berbasis foreign accumulation.
 ## Konsep Dasar
 
 Untuk pengantar ATR, RSI, FVWAP, liquidity, dan istilah execution, gunakan
-[indeks panduan intraday](how_to_intraday_trading.md), lalu buka catatan desain
+[indeks panduan intraday](how_to_pre_open_trading.md), lalu buka catatan desain
 yang relevan dari sana.
 
 ## Arsip

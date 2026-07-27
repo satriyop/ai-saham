@@ -4,12 +4,12 @@ from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock
 
-from src.application.services.intraday_confirmation_journal import (
-    IntradayConfirmationJournalService,
+from src.application.services.pre_open_paper_journal import (
+    PreOpenPaperJournalService,
 )
 from src.domain.entities.candle import Candle
-from src.domain.value_objects.intraday_confirmation import (
-    IntradayConfirmationJournalEntry,
+from src.domain.value_objects.pre_open_post_open_assessment import (
+    PreOpenPaperJournalEntry,
 )
 
 
@@ -24,8 +24,8 @@ def _entry(
     gap=Decimal("0.6"),
     accum="BACKED",
     fvwap=Decimal("2.4"),
-) -> IntradayConfirmationJournalEntry:
-    return IntradayConfirmationJournalEntry(
+) -> PreOpenPaperJournalEntry:
+    return PreOpenPaperJournalEntry(
         confirmed_at=confirmed_at,
         ticker=ticker,
         decision=decision,
@@ -68,7 +68,7 @@ def test_review_groups_by_decision_and_context_buckets():
     repo = MagicMock()
     repo.get_candles.return_value = [_candle()]
 
-    service = IntradayConfirmationJournalService(store=store, repository=repo)
+    service = PreOpenPaperJournalService(store=store, repository=repo)
     report = service.review()
 
     assert report.total_entries == 1
@@ -87,7 +87,7 @@ def test_review_counts_stop_hit_from_daily_low_proxy():
     repo = MagicMock()
     repo.get_candles.return_value = [_candle(low="8890", close="8950")]
 
-    service = IntradayConfirmationJournalService(store=store, repository=repo)
+    service = PreOpenPaperJournalService(store=store, repository=repo)
     report = service.review()
 
     assert report.decision_buckets[0].stop_hit_count == 1
@@ -99,7 +99,7 @@ def test_review_handles_empty_store_without_repository_calls():
     store.read_all.return_value = []
     repo = MagicMock()
 
-    service = IntradayConfirmationJournalService(store=store, repository=repo)
+    service = PreOpenPaperJournalService(store=store, repository=repo)
     report = service.review()
 
     assert report.total_entries == 0
@@ -114,7 +114,7 @@ def test_record_outcome_updates_matching_entry_with_r_multiple():
     store.update_outcome.return_value = True
     repo = MagicMock()
 
-    service = IntradayConfirmationJournalService(store=store, repository=repo)
+    service = PreOpenPaperJournalService(store=store, repository=repo)
     updated, outcome_r = service.record_outcome(
         confirmed_at=date(2026, 6, 12),
         ticker="BBCA",
@@ -131,7 +131,7 @@ def test_record_outcome_updates_matching_entry_with_r_multiple():
 
 def test_review_prefers_manual_outcome_without_repository_call():
     entry = _entry()
-    manual_entry = IntradayConfirmationJournalEntry(
+    manual_entry = PreOpenPaperJournalEntry(
         confirmed_at=entry.confirmed_at,
         ticker=entry.ticker,
         decision=entry.decision,
@@ -155,7 +155,7 @@ def test_review_prefers_manual_outcome_without_repository_call():
     store.read_all.return_value = [manual_entry]
     repo = MagicMock()
 
-    service = IntradayConfirmationJournalService(store=store, repository=repo)
+    service = PreOpenPaperJournalService(store=store, repository=repo)
     report = service.review()
 
     assert report.entries_with_data == 1

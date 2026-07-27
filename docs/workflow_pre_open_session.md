@@ -3,7 +3,7 @@
 
 > Dokumen ini adalah **playbook harian** — fokus pada apa yang kamu lakukan dan
 > kapan, bukan teori. Untuk penjelasan indikator dan konsep, lihat
-> [`intraday_trading_design_notes.md`](intraday_trading_design_notes.md).
+> [`pre_open_trading_design_notes.md`](pre_open_trading_design_notes.md).
 
 ---
 
@@ -839,4 +839,4 @@ Tanpa data IEV: `saham trade backtest-intraday` tetap bisa jalan dengan universe
 ---
 
 *Untuk penjelasan lengkap setiap indikator dan sinyal, lihat
-[`intraday_trading_design_notes.md`](intraday_trading_design_notes.md).*
+[`pre_open_trading_design_notes.md`](pre_open_trading_design_notes.md).*

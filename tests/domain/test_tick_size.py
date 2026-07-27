@@ -56,13 +56,13 @@ class TestTicksBetween:
 
 
 class TestTickFrictionGateIntegration:
-    """Test tick-friction gate inside ConfirmIntradayOpenUseCase."""
+    """Test tick-friction gate inside PreOpenPostOpenGatesUseCase."""
 
     def _make_candidate(self, opening, atr_stop):
         from decimal import Decimal
 
-        from src.domain.value_objects.intraday_confirmation import IntradayConfirmationCandidate
-        return IntradayConfirmationCandidate(
+        from src.domain.value_objects.pre_open_post_open_assessment import PreOpenPostOpenCandidate
+        return PreOpenPostOpenCandidate(
             ticker="BBCA",
             opening_price=Decimal(str(opening)),
             entry_range_low=Decimal(str(opening - 100)),
@@ -74,12 +74,12 @@ class TestTickFrictionGateIntegration:
         )
 
     def _run(self, opening, atr_stop, tick_friction_gate=True, min_target_ticks=3, min_stop_ticks=2):
-        from src.application.use_case.confirm_intraday_open_use_case import (
-            ConfirmIntradayOpenRequest,
-            ConfirmIntradayOpenUseCase,
+        from src.application.use_case.pre_open_post_open_gates_use_case import (
+            PreOpenPostOpenGatesRequest,
+            PreOpenPostOpenGatesUseCase,
         )
-        uc = ConfirmIntradayOpenUseCase()
-        request = ConfirmIntradayOpenRequest(
+        uc = PreOpenPostOpenGatesUseCase()
+        request = PreOpenPostOpenGatesRequest(
             candidates=[self._make_candidate(opening, atr_stop)],
             tick_friction_gate=tick_friction_gate,
             min_target_ticks=min_target_ticks,
@@ -90,18 +90,18 @@ class TestTickFrictionGateIntegration:
     def test_sufficient_ticks_enters(self):
         # Entry=5000, stop=4925 → 3 ticks stop, 3 ticks target (25×3=75) → ENTER
         result = self._run(5000, 4925)
-        from src.domain.value_objects.intraday_confirmation import IntradayDecision
-        assert result.decision == IntradayDecision.ENTER
+        from src.domain.value_objects.pre_open_post_open_assessment import PreOpenPostOpenDecision
+        assert result.decision == PreOpenPostOpenDecision.ENTER
 
     def test_insufficient_ticks_skips(self):
         # Entry=5000, stop=4990 → only 0.4 ticks stop/target → SKIP_LOW_VOLATILITY
         result = self._run(5000, 4990)
-        from src.domain.value_objects.intraday_confirmation import IntradayDecision
-        assert result.decision == IntradayDecision.SKIP_LOW_VOLATILITY
+        from src.domain.value_objects.pre_open_post_open_assessment import PreOpenPostOpenDecision
+        assert result.decision == PreOpenPostOpenDecision.SKIP_LOW_VOLATILITY
         assert "tick-friction" in result.reasons[-1]
 
     def test_gate_disabled_bypasses_check(self):
         # Same tight setup but gate disabled → ENTER
         result = self._run(5000, 4990, tick_friction_gate=False)
-        from src.domain.value_objects.intraday_confirmation import IntradayDecision
-        assert result.decision == IntradayDecision.ENTER
+        from src.domain.value_objects.pre_open_post_open_assessment import PreOpenPostOpenDecision
+        assert result.decision == PreOpenPostOpenDecision.ENTER
