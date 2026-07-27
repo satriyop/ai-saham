@@ -62,7 +62,7 @@ view_app = typer.Typer(
         "Needs data: `saham fetch …`.\n"
         "Stock overview: `saham view BBCA` or `saham view ticker show BBCA`.\n"
         "Stock deep-dives: `saham view ticker <verb> <TICKER>` "
-        "(top-brokers | flow | foreign-history | distribution).\n"
+        "(top-brokers | flow | foreign-history | distribution | financials).\n"
         "Desk / universe: `saham view broker <verb> …` "
         "(top-foreign ranking cache after `fetch broker-top-foreign`).\n"
         "Decisions: `saham plan swing` / `saham assess pre-open`. "

@@ -15,6 +15,9 @@ from src.application.use_case.get_ticker_dashboard_use_case import GetTickerDash
 from src.application.use_case.view_ticker_distribution_use_case import (
     ViewTickerDistributionUseCase,
 )
+from src.application.use_case.view_ticker_financials_use_case import (
+    ViewTickerFinancialsUseCase,
+)
 from src.application.use_case.view_ticker_flow_use_case import ViewTickerFlowUseCase
 from src.application.use_case.view_ticker_foreign_history_use_case import (
     ViewTickerForeignHistoryUseCase,
@@ -24,6 +27,7 @@ from src.application.use_case.view_ticker_top_brokers_use_case import (
 )
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.broker_distribution_provider import BrokerDistributionProvider
+from src.domain.ports.financials_repository import FinancialsRepository
 
 
 @dataclass(frozen=True)
@@ -33,12 +37,14 @@ class ViewTickerDeps:
     db_path: Path
     broker_repository: BrokerDataRepository
     distribution_provider: BrokerDistributionProvider
+    financials_repository: FinancialsRepository
     foreign_broker_codes: frozenset[str]
     dashboard: GetTickerDashboardUseCase
     top_brokers: ViewTickerTopBrokersUseCase
     flow: ViewTickerFlowUseCase
     foreign_history: ViewTickerForeignHistoryUseCase
     distribution: ViewTickerDistributionUseCase
+    financials: ViewTickerFinancialsUseCase
 
 
 def build_view_ticker_deps(db_path: Path | str) -> ViewTickerDeps:
@@ -51,12 +57,16 @@ def build_view_ticker_deps(db_path: Path | str) -> ViewTickerDeps:
         load_institutional_accumulation_config,
     )
     from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
+    from src.infrastructure.persistence.sqlite_company_financials_repository import (
+        SQLiteCompanyFinancialsRepository,
+    )
     from src.infrastructure.persistence.sqlite_ticker_dashboard_source import (
         SQLiteTickerDashboardSource,
     )
 
     resolved = Path(db_path)
     repo = SQLiteBrokerRepository(resolved)
+    financials_repo = SQLiteCompanyFinancialsRepository(resolved)
     foreign = load_institutional_accumulation_config().foreign_broker_codes
     dist_provider = StockbitBrokerDistributionProvider(
         api_client=None,
@@ -67,10 +77,12 @@ def build_view_ticker_deps(db_path: Path | str) -> ViewTickerDeps:
         db_path=resolved,
         broker_repository=repo,
         distribution_provider=dist_provider,
+        financials_repository=financials_repo,
         foreign_broker_codes=foreign,
         dashboard=GetTickerDashboardUseCase(SQLiteTickerDashboardSource(resolved)),
         top_brokers=ViewTickerTopBrokersUseCase(repo, foreign_broker_codes=foreign),
         flow=ViewTickerFlowUseCase(repo),
         foreign_history=ViewTickerForeignHistoryUseCase(repo),
         distribution=ViewTickerDistributionUseCase(dist_provider),
+        financials=ViewTickerFinancialsUseCase(financials_repo),
     )

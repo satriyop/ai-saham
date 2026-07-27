@@ -13,4 +13,6 @@ def test_build_view_ticker_deps_exposes_all_use_cases(tmp_path: Path):
     assert deps.flow is not None
     assert deps.foreign_history is not None
     assert deps.distribution is not None
+    assert deps.financials is not None
     assert deps.broker_repository is not None
+    assert deps.financials_repository is not None
