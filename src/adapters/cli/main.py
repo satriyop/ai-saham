@@ -11,7 +11,8 @@ Command groups:
   saham research   — research corpus / ML feeder (pre-open, accum)
   saham view       — read-only local data browsing
   saham indicator  — technical indicators (compute, snapshot, create, list, show, delete)
-  saham analyze    — live analysis (risk, compare, sentiment, audit, regime, chart, signal inspect)
+  saham analyze    — transitional lenses (risk, sentiment, regime, chart, signal, pre-open)
+  saham plan       — live trade plan composition (plan swing → TradeSetup)
   saham strategy   — strategy management (init, validate, list, create, backtest)
   saham policy     — guarded setup-config lifecycle (policy accum …)
   saham trade      — paper trading notebook only (pre-open, accum)
@@ -25,6 +26,7 @@ import typer
 
 from src import __version__
 from src.adapters.cli.analyze_commands import analyze_app
+from src.adapters.cli.plan_commands import plan_app
 from src.adapters.cli.audit_commands import audit_app
 from src.adapters.cli.fetch_commands import fetch_app
 from src.adapters.cli.indicator_commands import indicator_app
@@ -66,6 +68,7 @@ app.add_typer(fetch_app, name="fetch", rich_help_panel=_PANEL_DATA)
 app.command("today", rich_help_panel=_PANEL_ANALYSIS)(today)
 app.add_typer(screen_app, name="screen", rich_help_panel=_PANEL_ANALYSIS)
 app.add_typer(analyze_app, name="analyze", rich_help_panel=_PANEL_ANALYSIS)
+app.add_typer(plan_app, name="plan", rich_help_panel=_PANEL_ANALYSIS)
 app.add_typer(research_app, name="research", rich_help_panel=_PANEL_ANALYSIS)
 app.add_typer(trade_app, name="trade", rich_help_panel=_PANEL_ANALYSIS)
 app.add_typer(view_app, name="view", rich_help_panel=_PANEL_INSPECT)

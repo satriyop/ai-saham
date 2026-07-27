@@ -3,7 +3,7 @@
 import logging
 import sys
 
-from src.adapters.cli.analyze_swing_commands import _fetch_swing_sentiment
+from src.adapters.cli.plan_swing_commands import _fetch_swing_sentiment
 
 
 class NoisyNewsProvider:
@@ -21,11 +21,11 @@ def test_fetch_swing_sentiment_suppresses_provider_noise_by_default(
     capsys,
 ):
     monkeypatch.setattr(
-        "src.adapters.cli.analyze_swing_optional_fetchers.SentimentFactory.create_news_provider",
+        "src.adapters.cli.plan_swing_optional_fetchers.SentimentFactory.create_news_provider",
         lambda: NoisyNewsProvider(),
     )
     monkeypatch.setattr(
-        "src.adapters.cli.analyze_swing_optional_fetchers.SentimentFactory.create_classifier",
+        "src.adapters.cli.plan_swing_optional_fetchers.SentimentFactory.create_classifier",
         lambda use_ai=False: object(),
     )
 
@@ -43,11 +43,11 @@ def test_fetch_swing_sentiment_verbose_keeps_provider_details(
     capsys,
 ):
     monkeypatch.setattr(
-        "src.adapters.cli.analyze_swing_optional_fetchers.SentimentFactory.create_news_provider",
+        "src.adapters.cli.plan_swing_optional_fetchers.SentimentFactory.create_news_provider",
         lambda: NoisyNewsProvider(),
     )
     monkeypatch.setattr(
-        "src.adapters.cli.analyze_swing_optional_fetchers.SentimentFactory.create_classifier",
+        "src.adapters.cli.plan_swing_optional_fetchers.SentimentFactory.create_classifier",
         lambda use_ai=False: object(),
     )
 

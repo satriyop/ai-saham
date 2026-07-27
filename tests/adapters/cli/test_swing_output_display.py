@@ -4,8 +4,8 @@ from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
 
-from src.adapters.cli.analyze_swing_commands import FOREIGN_BOUNCE_SETUP_NAME
-from src.adapters.cli.analyze_swing_display import (
+from src.adapters.cli.plan_swing_commands import FOREIGN_BOUNCE_SETUP_NAME
+from src.adapters.cli.plan_swing_display import (
     SwingOutputDisplayContext,
     SwingOutputDisplayOptions,
     print_swing_output,
@@ -355,20 +355,27 @@ def test_swing_flow_detail_calls_out_conflicted_negative_flow(capsys):
     )
     print_swing_output(ctx)
 
+    import re
+
     out = capsys.readouterr().out
-    assert "WATCH-ZONE / FLOW NEGATIVE" in out
-    assert "current foreign flow is not confirming" in out
-    assert "Bandar detector shows distribution" in out
-    assert "Flow ratio" in out
-    assert "0.0" in out
-    assert "lacks foreign-flow" in out
-    assert "confirmation" in out
-    assert "recent signal-window accumulation is occurring" not in out
+    # Strip ANSI/box glyphs and collapse wrap so Rich layout cannot break
+    # multi-word substring asserts.
+    plain = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", out)
+    plain = re.sub(r"[─│╭╮╰╯├┤┬┴┼┌┐└┘━┃┏┓┗┛]", " ", plain)
+    flat = " ".join(plain.split())
+    assert "WATCH-ZONE / FLOW NEGATIVE" in flat
+    assert "current foreign flow is not confirming" in flat
+    assert "Bandar detector shows distribution" in flat
+    assert "Flow ratio" in flat
+    assert "0.0" in flat
+    assert "lacks foreign-flow" in flat
+    assert "confirmation" in flat
+    assert "recent signal-window accumulation is occurring" not in flat
 
 
 def test_cli_rendering_of_unavailable_reasons():
     from rich.console import Console
-    from src.adapters.cli.analyze_swing_overview_panels import _signal_label, _build_signal_panel
+    from src.adapters.cli.plan_swing_overview_panels import _signal_label, _build_signal_panel
 
     reasons_map = [
         (SignalAssessmentUnavailableReason.NO_PRODUCTION_SIGNAL_EVIDENCE, "no production signal evidence"),
@@ -398,7 +405,7 @@ def test_cli_rendering_of_unavailable_reasons():
 
 
 def test_cli_rendering_missing_availability_raises_type_error():
-    from src.adapters.cli.analyze_swing_overview_panels import _signal_label, _build_signal_panel
+    from src.adapters.cli.plan_swing_overview_panels import _signal_label, _build_signal_panel
     import pytest
 
     with pytest.raises(TypeError):

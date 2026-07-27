@@ -1,6 +1,6 @@
 """Backtest command validation tests for swing commands."""
 
-from src.adapters.cli.analyze_swing_commands import FOREIGN_BOUNCE_SETUP_NAME
+from src.adapters.cli.plan_swing_commands import FOREIGN_BOUNCE_SETUP_NAME
 from src.adapters.cli.main import app
 from tests.adapters.cli.swing_command_fixtures import runner
 

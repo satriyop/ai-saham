@@ -20,7 +20,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
-from src.adapters.cli.analyze_swing_formatters import SwingDisplayConfig
+from src.adapters.cli.plan_swing_formatters import SwingDisplayConfig
 from src.application.dto.swing_analysis import SwingDiagnostics, SwingEvidence, SwingVerdict
 from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSession,

@@ -14,26 +14,26 @@ from typing import Any
 from rich.console import Group
 from rich.text import Text
 
-from src.adapters.cli.analyze_swing_corporate_calendar_display import (
+from src.adapters.cli.plan_swing_corporate_calendar_display import (
     print_corporate_calendar_panel,
 )
-from src.adapters.cli.analyze_swing_flow_detail_display import print_flow_detail_panel
-from src.adapters.cli.analyze_swing_formatters import fmt_pct
-from src.adapters.cli.analyze_swing_institutional_display import (
+from src.adapters.cli.plan_swing_flow_detail_display import print_flow_detail_panel
+from src.adapters.cli.plan_swing_formatters import fmt_pct
+from src.adapters.cli.plan_swing_institutional_display import (
     print_institutional_accumulation_section,
 )
-from src.adapters.cli.analyze_swing_output_context import SwingOutputDisplayContext
-from src.adapters.cli.analyze_swing_overview_display import (
+from src.adapters.cli.plan_swing_output_context import SwingOutputDisplayContext
+from src.adapters.cli.plan_swing_overview_display import (
     print_swing_rich_overview,
     setup_gates_group,
 )
-from src.adapters.cli.analyze_swing_sector_context_display import print_sector_context_panel
-from src.adapters.cli.analyze_swing_sentiment_display import print_sentiment_evidence_panel
-from src.adapters.cli.analyze_swing_signal_detail_display import (
+from src.adapters.cli.plan_swing_sector_context_display import print_sector_context_panel
+from src.adapters.cli.plan_swing_sentiment_display import print_sentiment_evidence_panel
+from src.adapters.cli.plan_swing_signal_detail_display import (
     print_alpha_trigger_detail_panel,
     print_signal_detail_panel,
 )
-from src.adapters.cli.analyze_swing_strategy_evidence_display import (
+from src.adapters.cli.plan_swing_strategy_evidence_display import (
     print_strategy_evidence_panel,
 )
 from src.adapters.cli.rich_display import compact_table, console, panel

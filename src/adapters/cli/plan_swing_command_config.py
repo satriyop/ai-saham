@@ -1,10 +1,7 @@
 """
 Shared swing command configuration and setup-catalog helper.
 
-Neutral adapter module: both analyze_swing_commands.py (`saham analyze
-swing`) and analyze_swing_compare_commands.py (`saham analyze
-swing-compare`) import config and the setup catalog builder from here.
-Neither command module owns the other's dependencies.
+Adapter module for `saham plan swing` config loading and setup catalog.
 
 Layer: Adapter
 """
@@ -29,7 +26,7 @@ from src.infrastructure.config.swing_config import SwingConfig, load_swing_confi
 
 
 @dataclass(frozen=True)
-class AnalyzeSwingCommandConfig:
+class PlanSwingCommandConfig:
     swing_config: SwingConfig
     swing_backtest_config: SwingBacktestConfig
     analyze_swing_config: AnalyzeSwingConfig
@@ -37,9 +34,10 @@ class AnalyzeSwingCommandConfig:
     setup_config: SwingSetupCatalogConfig
 
 
-def load_analyze_swing_command_config() -> AnalyzeSwingCommandConfig:
+def load_plan_swing_command_config() -> PlanSwingCommandConfig:
+    """Load all configs needed by plan swing command adapters."""
     swing_config = load_swing_config()
-    return AnalyzeSwingCommandConfig(
+    return PlanSwingCommandConfig(
         swing_config=swing_config,
         swing_backtest_config=load_swing_backtest_config(),
         analyze_swing_config=load_analyze_swing_config(),

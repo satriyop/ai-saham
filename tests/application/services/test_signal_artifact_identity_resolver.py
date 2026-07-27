@@ -352,7 +352,7 @@ class TestProvenanceIsolation:
         )
 
     def test_invocation_command(self) -> None:
-        self._assert_ids_unchanged(invocation_command="saham analyze swing")
+        self._assert_ids_unchanged(invocation_command="saham plan swing")
 
     def test_invocation_actor(self) -> None:
         self._assert_ids_unchanged(invocation_actor="different_user")

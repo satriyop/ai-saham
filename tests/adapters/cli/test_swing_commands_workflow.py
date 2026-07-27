@@ -5,7 +5,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 
-from src.adapters.cli import analyze_swing_commands as swing_cli
+from src.adapters.cli import plan_swing_commands as swing_cli
 from src.adapters.cli.main import app
 from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSession,
@@ -111,7 +111,7 @@ def test_swing_command_delegates_workflow_construction_to_builder(monkeypatch):
 
     result = runner.invoke(
         app,
-        ["analyze", "swing", "BBCA", "--setup", "foreign-bounce", "--format", "json"],
+        ["plan", "swing", "BBCA", "--setup", "foreign-bounce", "--format", "json"],
     )
 
     assert result.exit_code == 0
@@ -135,7 +135,7 @@ def test_swing_command_threads_as_of_to_request_today(monkeypatch):
 
     result = runner.invoke(
         app,
-        ["analyze", "swing", "BBCA", "--as-of", "2026-07-23", "--format", "json"],
+        ["plan", "swing", "BBCA", "--as-of", "2026-07-23", "--format", "json"],
     )
 
     assert result.exit_code == 0, result.output
@@ -150,7 +150,7 @@ def test_swing_command_rejects_invalid_as_of(monkeypatch):
 
     result = runner.invoke(
         app,
-        ["analyze", "swing", "BBCA", "--as-of", "not-a-date"],
+        ["plan", "swing", "BBCA", "--as-of", "not-a-date"],
     )
 
     assert result.exit_code == 1
@@ -170,7 +170,7 @@ def test_swing_json_includes_effective_session(monkeypatch):
 
     result = runner.invoke(
         app,
-        ["analyze", "swing", "BBCA", "--as-of", "2026-07-23", "--format", "json"],
+        ["plan", "swing", "BBCA", "--as-of", "2026-07-23", "--format", "json"],
     )
 
     assert result.exit_code == 0, result.output
@@ -179,8 +179,8 @@ def test_swing_json_includes_effective_session(monkeypatch):
     assert payload["effective_session"]["is_eod_pending"] is False
 
 
-def test_analyze_swing_help_exposes_as_of():
-    result = runner.invoke(app, ["analyze", "swing", "--help"])
+def test_plan_swing_help_exposes_as_of():
+    result = runner.invoke(app, ["plan", "swing", "--help"])
 
     assert result.exit_code == 0
     assert "--as-of" in result.stdout
@@ -267,7 +267,7 @@ def test_swing_display_path_prefers_grouped_response_contracts(monkeypatch):
         lambda ctx: captured.update({"ctx": ctx}),
     )
 
-    result = runner.invoke(app, ["analyze", "swing", "BBCA"])
+    result = runner.invoke(app, ["plan", "swing", "BBCA"])
 
     assert result.exit_code == 0
     ctx = captured["ctx"]

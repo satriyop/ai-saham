@@ -77,7 +77,7 @@ def test_related_actions_for_accum_includes_view_analyze_and_compare():
     assert actions[1] == {
         "verb": "analyze",
         "label": "Analyze BBCA",
-        "command": "saham analyze swing BBCA",
+        "command": "saham plan swing BBCA",
     }
     assert actions[2]["command"] == "saham view BBRI"
     assert actions[-1] == {

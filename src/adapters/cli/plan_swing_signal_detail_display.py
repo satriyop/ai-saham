@@ -13,8 +13,8 @@ from __future__ import annotations
 from rich.console import Group
 from rich.text import Text
 
-from src.adapters.cli.analyze_swing_output_context import SwingOutputDisplayContext
-from src.adapters.cli.analyze_swing_overview_display import flow_trigger_blocked_text
+from src.adapters.cli.plan_swing_output_context import SwingOutputDisplayContext
+from src.adapters.cli.plan_swing_overview_display import flow_trigger_blocked_text
 from src.adapters.cli.rich_display import compact_table, console, panel
 from src.domain.value_objects.alpha_trigger_score import AlphaTriggerScore, EvidenceAuthorityStatus
 

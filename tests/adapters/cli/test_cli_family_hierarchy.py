@@ -79,3 +79,13 @@ def test_removed_learning_flags_are_absent() -> None:
     assert "--no-persist" not in pre_open_labels.stdout
     assert "--export-patch" not in policy_tune.stdout
     assert "--journal" not in policy_tune.stdout
+
+
+def test_plan_family_exposes_swing_and_retires_analyze_swing() -> None:
+    plan = runner.invoke(app, ["plan", "--help"])
+    assert plan.exit_code == 0
+    assert "swing" in plan.stdout
+    assert runner.invoke(app, ["plan", "swing", "--help"]).exit_code == 0
+    assert runner.invoke(app, ["analyze", "swing", "--help"]).exit_code != 0
+    assert runner.invoke(app, ["analyze", "swing-compare", "--help"]).exit_code != 0
+    assert runner.invoke(app, ["analyze", "compare", "--help"]).exit_code != 0

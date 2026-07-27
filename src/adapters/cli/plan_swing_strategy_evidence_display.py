@@ -13,7 +13,7 @@ from __future__ import annotations
 from rich.console import Group
 from rich.text import Text
 
-from src.adapters.cli.analyze_swing_output_context import SwingOutputDisplayContext
+from src.adapters.cli.plan_swing_output_context import SwingOutputDisplayContext
 from src.adapters.cli.rich_display import compact_table, console, panel
 
 

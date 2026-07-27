@@ -3,12 +3,12 @@ Factory for the saham analyze swing workflow.
 
 Layer: Adapter
 
-This module owns CLI/infrastructure wiring so analyze_swing_commands.py can stay
+This module owns CLI/infrastructure wiring so plan_swing_commands.py can stay
 focused on flag parsing, request construction, execution, and rendering.
 
 Dependency/candidate/fetcher composition lives in dedicated sibling modules:
-analyze_swing_dependency_factory, analyze_swing_candidate_builder, and
-analyze_swing_optional_fetchers.
+plan_swing_dependency_factory, plan_swing_candidate_builder, and
+plan_swing_optional_fetchers.
 """
 
 from __future__ import annotations
@@ -16,10 +16,10 @@ from __future__ import annotations
 from decimal import Decimal
 from pathlib import Path
 
-from src.adapters.cli.analyze_swing_candidate_builder import (
+from src.adapters.cli.plan_swing_candidate_builder import (
     create_accumulation_candidate_builder,
 )
-from src.adapters.cli.analyze_swing_dependency_factory import (
+from src.adapters.cli.plan_swing_dependency_factory import (
     create_broker_detail_builder,
     create_corporate_action_risk_use_case,
     create_execution_gates,
@@ -27,7 +27,7 @@ from src.adapters.cli.analyze_swing_dependency_factory import (
     create_structural_gates,
     create_workflow_registry,
 )
-from src.adapters.cli.analyze_swing_optional_fetchers import (
+from src.adapters.cli.plan_swing_optional_fetchers import (
     auto_refresh_swing_data,
     fetch_swing_sentiment,
 )

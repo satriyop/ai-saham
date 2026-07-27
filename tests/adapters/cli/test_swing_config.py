@@ -1,4 +1,4 @@
-"""Tests for _SwingConfig YAML loader in analyze_swing_commands."""
+"""Tests for _SwingConfig YAML loader in plan_swing_commands."""
 
 from decimal import Decimal
 from pathlib import Path
@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from src.adapters.cli.analyze_swing_command_config import load_analyze_swing_command_config
+from src.adapters.cli.plan_swing_command_config import load_plan_swing_command_config
 from src.infrastructure.config.swing_config import (
     SetupTargetConfig as _SetupTargetConfig,
 )
@@ -251,7 +251,7 @@ def test_live_config_loads_without_error():
 # ── Module-level constants wired correctly ────────────────────────────────
 
 def test_module_constants_populated():
-    cfg = load_analyze_swing_command_config()
+    cfg = load_plan_swing_command_config()
     smart_money_brokers = set(cfg.swing_config.smart_money_brokers)
     noise_brokers = set(cfg.swing_config.noise_brokers)
     broker_weights = {
@@ -266,7 +266,7 @@ def test_module_constants_populated():
 
 
 def test_broker_weights_derived_from_sc():
-    cfg = load_analyze_swing_command_config()
+    cfg = load_plan_swing_command_config()
     smart_money_brokers = set(cfg.swing_config.smart_money_brokers)
     noise_brokers = set(cfg.swing_config.noise_brokers)
     broker_weights = {
@@ -313,7 +313,7 @@ def test_tier1_falls_back_to_defaults_when_empty(tmp_path):
 
 def test_cs_not_in_tier1_brokers():
     """CS (Credit Suisse) was wound down — must not appear in any broker set."""
-    cfg = load_analyze_swing_command_config()
+    cfg = load_plan_swing_command_config()
     assert "CS" not in cfg.swing_config.smart_money_brokers
     assert "CS" not in cfg.swing_config.noise_brokers
     assert "CS" not in cfg.swing_config.tier1_broker_codes

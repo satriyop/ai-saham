@@ -903,7 +903,7 @@ def test_setup_lens_impact_renders_all_four_columns_and_next_block():
         assert setup_name in text
     # Next block includes actual ticker and setup name; never a literal placeholder.
     assert "Next:" in text
-    assert f"saham analyze swing BBRI --setup {AVAILABLE_SWING_SETUPS[0]}" in text
+    assert f"saham plan swing BBRI --setup {AVAILABLE_SWING_SETUPS[0]}" in text
     assert "TICKER" not in text
 
 
@@ -942,7 +942,7 @@ def test_setup_lens_impact_warning_cell_renders_warning_not_action():
     text = _render_to_text(_setup_lens_impact_elements(result))
     assert "warning: no broker_detail" in text
     # Warning cell must not appear as a Next follow-up.
-    assert f"saham analyze swing BBRI --setup {first}" not in text
+    assert f"saham plan swing BBRI --setup {first}" not in text
 
 
 def test_today_no_candidates_shows_setup_lens_empty_message(tmp_path: Path):
@@ -1035,7 +1035,7 @@ def test_setup_lens_next_commands_suppress_footer():
 
         result = runner.invoke(app, ["today", "--universe", "lq45", "--date", "2026-06-19"])
         assert result.exit_code == 0
-        assert "saham analyze swing BBCA --setup" in result.stdout
+        assert "saham plan swing BBCA --setup" in result.stdout
         assert "Next: saham screen accum" not in result.stdout
         assert "TICKER" not in result.stdout
 
@@ -1085,7 +1085,7 @@ def test_today_fallback_next_uses_first_accumulation_candidate():
 
         result = runner.invoke(app, ["today", "--universe", "lq45", "--date", "2026-06-19"])
         assert result.exit_code == 0
-        assert "Next: saham analyze swing BBCA" in result.stdout
+        assert "Next: saham plan swing BBCA" in result.stdout
 
 
 def test_today_fallback_next_fetches_when_not_ready():

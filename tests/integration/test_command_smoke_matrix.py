@@ -73,13 +73,13 @@ def _json_stdout(result) -> dict:
     return json.loads(result.stdout)
 
 
-def test_analyze_swing_table_and_json_contracts(temp_workspace, monkeypatch):
+def test_plan_swing_table_and_json_contracts(temp_workspace, monkeypatch):
     monkeypatch.chdir(temp_workspace)
     db_path = _seed_db(temp_workspace)
 
     table = runner.invoke(
         app,
-        ["analyze", "swing", "BBCA", "--no-refresh", "--db", str(db_path)],
+        ["plan", "swing", "BBCA", "--no-refresh", "--db", str(db_path)],
     )
     assert table.exit_code == 0, table.output
     assert "Swing Analysis - BBCA" in table.stdout
@@ -89,7 +89,7 @@ def test_analyze_swing_table_and_json_contracts(temp_workspace, monkeypatch):
     js = runner.invoke(
         app,
         [
-            "analyze", "swing", "BBCA",
+            "plan", "swing", "BBCA",
             "--no-refresh",
             "--format", "json",
             "--db", str(db_path),

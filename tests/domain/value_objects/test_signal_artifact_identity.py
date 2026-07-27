@@ -598,7 +598,7 @@ class TestProvenanceIsolation:
 
     def test_changing_invocation_command_changes_provenance_only(self) -> None:
         a = _valid_provenance(invocation_command="saham screen accum")
-        b = _valid_provenance(invocation_command="saham analyze swing")
+        b = _valid_provenance(invocation_command="saham plan swing")
         assert a.to_canonical_json() != b.to_canonical_json()
 
     def test_equivalent_timezone_instants_serialize_identically(self) -> None:

@@ -4,7 +4,7 @@ Shared dependency bundle for stock-analysis CLI workflow factories.
 Layer: Adapter
 
 Consolidates the duplicated repository/provider/engine wiring that was
-previously repeated across analyze_swing, screen_accum, trade_accum, and
+previously repeated across plan_swing, screen_accum, trade_accum, and
 backtest factory modules into a single typed composition bundle.
 
 No global singleton. No service locator. No workflow/policy.

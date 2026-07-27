@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from src.adapters.cli.analyze_swing_display import SwingDisplayConfig, swing_plan_text
+from src.adapters.cli.plan_swing_display import SwingDisplayConfig, swing_plan_text
 
 
 def _config() -> SwingDisplayConfig:

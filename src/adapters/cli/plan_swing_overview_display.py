@@ -23,13 +23,13 @@ if TYPE_CHECKING:
 from rich.console import Group
 from rich.text import Text
 
-from src.adapters.cli.analyze_swing_formatters import (
+from src.adapters.cli.plan_swing_formatters import (
     SwingDisplayConfig,
     fmt_pct,
     signal_label,
 )
 from src.adapters.cli.effective_session_display import format_effective_session_label
-from src.adapters.cli.analyze_swing_overview_panels import (
+from src.adapters.cli.plan_swing_overview_panels import (
     _build_data_panel,
     _build_market_context_panel,
     _build_plan_panel,

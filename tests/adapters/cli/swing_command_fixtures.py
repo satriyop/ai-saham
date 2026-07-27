@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from typer.testing import CliRunner
 
-from src.adapters.cli.analyze_swing_commands import FOREIGN_BOUNCE_SETUP_NAME
+from src.adapters.cli.plan_swing_commands import FOREIGN_BOUNCE_SETUP_NAME
 from src.application.dto.accumulation_screen import AccumulationCandidate
 from src.application.services.swing_backtest_attribution import (
     AttributionGroupStat,
@@ -51,8 +51,8 @@ runner = CliRunner()
 
 
 def _build_broker_detail(*args, **kwargs):
-    from src.adapters.cli.analyze_swing_command_config import load_analyze_swing_command_config
-    cfg = load_analyze_swing_command_config()
+    from src.adapters.cli.plan_swing_command_config import load_plan_swing_command_config
+    cfg = load_plan_swing_command_config()
     smart_money_brokers = set(cfg.swing_config.smart_money_brokers)
     noise_brokers = set(cfg.swing_config.noise_brokers)
     broker_weights = {

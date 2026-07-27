@@ -313,7 +313,7 @@ def test_screen_accum_json_includes_related_actions(monkeypatch):
     assert {
         "verb": "analyze",
         "label": "Analyze BBRI",
-        "command": "saham analyze swing BBRI",
+        "command": "saham plan swing BBRI",
     } in payload["related_actions"]
 
 

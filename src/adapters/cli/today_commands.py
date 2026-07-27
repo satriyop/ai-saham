@@ -14,10 +14,10 @@ import typer
 from rich.console import Console, Group
 from rich.text import Text
 
-from src.adapters.cli.analyze_swing_command_config import (
-    load_analyze_swing_command_config,
+from src.adapters.cli.plan_swing_command_config import (
+    load_plan_swing_command_config,
 )
-from src.adapters.cli.analyze_swing_workflow_factory import (
+from src.adapters.cli.plan_swing_workflow_factory import (
     create_swing_analysis_workflow,
 )
 from src.adapters.cli.rich_display import compact_table, panel
@@ -172,10 +172,10 @@ def _build_setup_lens_impact_use_case(
     """Adapter wiring: build the 4 canonical setup-bound swing workflows and
     inject them (plus typed request defaults) into the read-only impact use case.
 
-    This mirrors analyze_swing_commands.py construction exactly; it introduces no
+    This mirrors plan_swing_commands.py construction exactly; it introduces no
     fetch/cache/scoring policy of its own.
     """
-    swing_cmd_cfg = load_analyze_swing_command_config()
+    swing_cmd_cfg = load_plan_swing_command_config()
     swing_config = swing_cmd_cfg.swing_config
     analyze_config = swing_cmd_cfg.analyze_swing_config
 
@@ -271,7 +271,7 @@ def _setup_lens_impact_elements(setup_lens_impact) -> SetupLensImpactRender:
         for cell in row.cells:
             if cell.warning is None and cell.action in ("ENTER", "WATCH"):
                 next_lines.append(
-                    f"  saham analyze swing {row.ticker} --setup {cell.setup_name}"
+                    f"  saham plan swing {row.ticker} --setup {cell.setup_name}"
                 )
     rendered_next = bool(next_lines)
     if next_lines:
@@ -288,7 +288,7 @@ def _fallback_next_command(response) -> str:
 
     if response.daily_accumulation_candidates:
         ticker = response.daily_accumulation_candidates[0].ticker
-        return f"Next: saham analyze swing {ticker}"
+        return f"Next: saham plan swing {ticker}"
 
     return f"Next: saham screen accum --universe {response.universe}"
 

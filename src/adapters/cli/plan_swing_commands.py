@@ -1,8 +1,8 @@
 """
-CLI implementation functions for saham analyze swing.
+CLI implementation functions for saham plan swing.
 
 Public command registration lives in lifecycle routers:
-  saham analyze swing
+  saham plan swing
 
 Layer: Adapter
 """
@@ -15,21 +15,21 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.analyze_swing_command_config import (
-    AnalyzeSwingCommandConfig,
-    load_analyze_swing_command_config,
+from src.adapters.cli.plan_swing_command_config import (
+    PlanSwingCommandConfig,
+    load_plan_swing_command_config,
 )
-from src.adapters.cli.analyze_swing_display import (
+from src.adapters.cli.plan_swing_display import (
     SwingDisplayConfig,
     SwingOutputDisplayContext,
     SwingOutputDisplayOptions,
     print_swing_output,
 )
 from src.adapters.cli.effective_session_display import parse_as_of_option
-from src.adapters.cli.analyze_swing_optional_fetchers import (
+from src.adapters.cli.plan_swing_optional_fetchers import (
     fetch_swing_sentiment as _fetch_swing_sentiment_with_config,
 )
-from src.adapters.cli.analyze_swing_workflow_factory import (
+from src.adapters.cli.plan_swing_workflow_factory import (
     create_swing_analysis_workflow,
 )
 from src.application.dto.accumulation_screen import AccumulationCandidate
@@ -60,7 +60,7 @@ def _fetch_swing_sentiment(
     sentiment_verbose: bool,
 ):
     """Compatibility wrapper for tests and helper imports."""
-    cfg = load_analyze_swing_command_config()
+    cfg = load_plan_swing_command_config()
     return _fetch_swing_sentiment_with_config(
         ticker=ticker,
         sentiment_verbose=sentiment_verbose,
@@ -72,11 +72,11 @@ def _evaluate_swing_setup(
     setup_name: str,
     accum: AccumulationCandidate | None,
     broker_detail: BrokerDetail | None = None,
-    cfg: AnalyzeSwingCommandConfig | None = None,
+    cfg: PlanSwingCommandConfig | None = None,
 ) -> SetupEvaluation:
     """Evaluate audited setup fit for one accumulation candidate."""
     if cfg is None:
-        cfg = load_analyze_swing_command_config()
+        cfg = load_plan_swing_command_config()
     return EvaluateSwingSetupUseCase().execute(
         EvaluateSwingSetupRequest(
             setup_name=setup_name,
@@ -90,7 +90,7 @@ def _evaluate_swing_setup(
 def _evaluate_foreign_bounce_setup(
     accum: "AccumulationCandidate | None",
     broker_detail: "BrokerDetail | None" = None,
-    cfg: AnalyzeSwingCommandConfig | None = None,
+    cfg: PlanSwingCommandConfig | None = None,
 ) -> "SetupEvaluation":
     """Convenience wrapper: evaluate the foreign-bounce setup for one candidate."""
     return _evaluate_swing_setup(FOREIGN_BOUNCE_SETUP_NAME, accum, broker_detail, cfg)
@@ -239,13 +239,13 @@ def swing(
       saham trade backtest-swing, saham analyze sentiment — all in one.
 
     Examples:
-        saham analyze swing BBRI
-        saham analyze swing BBRI --setup foreign-bounce --capital 10000000
-        saham analyze swing BBRI --capital 10000000 --risk-pct 1
-        saham analyze swing BBRI --strategy foreign-accumulation
-        saham analyze swing BBRI --with-flow-detail --explain
-        saham analyze swing BBRI --force-refresh
-        saham analyze swing BBRI --capital 10000000 --entry 4825 --rr 2.5
+        saham plan swing BBRI
+        saham plan swing BBRI --setup foreign-bounce --capital 10000000
+        saham plan swing BBRI --capital 10000000 --risk-pct 1
+        saham plan swing BBRI --strategy foreign-accumulation
+        saham plan swing BBRI --with-flow-detail --explain
+        saham plan swing BBRI --force-refresh
+        saham plan swing BBRI --capital 10000000 --entry 4825 --rr 2.5
     """
     app_cfg = load_app_config()
     resolved_db = db_path or Path(app_cfg.storage.db_path)
@@ -259,7 +259,7 @@ def swing(
     ticker_upper = ticker.upper()
     today = parse_as_of_option(as_of) or date.today()
 
-    cfg = load_analyze_swing_command_config()
+    cfg = load_plan_swing_command_config()
 
     resolved_flow_window = (
         flow_window

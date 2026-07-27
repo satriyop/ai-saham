@@ -96,7 +96,7 @@ def test_view_broker_group_exposes_read_only_commands():
         assert cmd in result.stdout
 
 
-def test_analyze_swing_is_available():
+def test_plan_swing_is_available():
     result = runner.invoke(app, ["analyze", "--help"])
 
     assert result.exit_code == 0

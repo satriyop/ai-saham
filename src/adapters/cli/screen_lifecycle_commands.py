@@ -453,5 +453,5 @@ def _display_compare_result(result: ScreenCompareResult) -> None:
             )
         )
 
-    typer.echo("\n  Next: saham view <TICKER>  ·  saham analyze swing <TICKER>")
+    typer.echo("\n  Next: saham view <TICKER>  ·  saham plan swing <TICKER>")
     typer.echo("")

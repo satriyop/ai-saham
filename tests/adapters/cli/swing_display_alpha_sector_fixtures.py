@@ -2,7 +2,7 @@ from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
 
-from src.adapters.cli.analyze_swing_display import (
+from src.adapters.cli.plan_swing_display import (
     SwingOutputDisplayContext,
     SwingOutputDisplayOptions,
     print_swing_output,

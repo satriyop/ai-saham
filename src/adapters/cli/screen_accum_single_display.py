@@ -424,7 +424,7 @@ def display_results(
                 action_table,
                 Text(
                     "\nPhase is accumulation-lifecycle diagnostic; use "
-                    "saham analyze swing TICKER --setup SETUP for setup gates "
+                    "saham plan swing TICKER --setup SETUP for setup gates "
                     "and entry validation.",
                     style="dim",
                 ),
@@ -461,7 +461,7 @@ def display_results(
                 ),
                 Text(
                     "\nTechnicalGate is not evaluated by screen accum. Use "
-                    "saham analyze swing TICKER --with-technical-gate for "
+                    "saham plan swing TICKER --with-technical-gate for "
                     "technical execution-gate diagnostics.",
                     style="dim",
                 ),

@@ -155,7 +155,7 @@ def related_actions_for_accum(
             ScreenRelatedAction(
                 verb="analyze",
                 label=f"Analyze {ticker}",
-                command=f"saham analyze swing {ticker}",
+                command=f"saham plan swing {ticker}",
             )
         )
     if saved_watchlist_name:

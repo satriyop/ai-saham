@@ -3,7 +3,7 @@ Panel builders for the saham analyze swing verdict-first overview.
 
 Owns per-section Rich panel construction (Signal, Risk, Market Context,
 Plan, Data) and the label/style/detail helpers that feed them.
-print_swing_rich_overview() in analyze_swing_overview_display.py owns the
+print_swing_rich_overview() in plan_swing_overview_display.py owns the
 Verdict table, overall panel assembly, and printing; it calls into this
 module for each section panel.
 
@@ -20,7 +20,7 @@ from typing import Any
 from rich.console import Group
 from rich.text import Text
 
-from src.adapters.cli.analyze_swing_formatters import fmt_date, notation_detail
+from src.adapters.cli.plan_swing_formatters import fmt_date, notation_detail
 from src.adapters.cli.rich_display import compact_table, panel
 from src.adapters.cli.view_market_context_display import (
     REGIME_DISPLAY_LABEL,

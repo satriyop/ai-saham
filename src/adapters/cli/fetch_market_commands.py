@@ -113,7 +113,7 @@ def fetch_market(
 
     When a Stockbit session is available, also pre-fetches ticker notation/status,
     analyst consensus, insider activity, seasonality, and corporate actions into SQLite so that
-    `saham analyze swing` runs without needing Playwright at analysis time.
+    `saham plan swing` runs without needing Playwright at analysis time.
     Use --no-enrichment to skip this step.
 
     Examples:

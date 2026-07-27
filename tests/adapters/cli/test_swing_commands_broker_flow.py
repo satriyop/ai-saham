@@ -3,11 +3,11 @@
 from datetime import date
 from decimal import Decimal
 
-from src.adapters.cli.analyze_swing_commands import (
+from src.adapters.cli.plan_swing_commands import (
     FOREIGN_BOUNCE_SETUP_NAME,
     _evaluate_swing_setup,
 )
-from src.adapters.cli.analyze_swing_display import (
+from src.adapters.cli.plan_swing_display import (
     format_failed_gates_summary as _format_failed_gates_summary,
 )
 from src.application.services.swing_broker_detail_builder import (
