@@ -34,7 +34,8 @@ _READ_ONLY_NOTE = (
     "Read-only inspection: no observation, label, tuning, or promotion writes."
 )
 _PROVISIONAL_CLI_NOTE = (
-    "Provisional surface until CLI-002 remounts as 'saham analyze signal inspect'."
+    "CLI surface: saham inspect signal accum "
+    "(accumulation-flow contract only; not pre-open or swing TradeSetup)."
 )
 _LEGACY_NOTE = (
     "legacy_conditioned_score is regime conditioning on the canonical path, "

@@ -106,6 +106,11 @@ def test_inspect_family_and_analyze_retired() -> None:
         assert cmd in inspect.stdout
     assert runner.invoke(app, ["inspect", "risk", "--help"]).exit_code == 0
     assert runner.invoke(app, ["inspect", "signal", "--help"]).exit_code == 0
+    assert "accum" in runner.invoke(app, ["inspect", "signal", "--help"]).stdout
+    assert runner.invoke(app, ["inspect", "signal", "accum", "--help"]).exit_code == 0
+    # Bare inspect signal TICKER is retired (purpose required).
+    bare = runner.invoke(app, ["inspect", "signal", "BBCA"])
+    assert bare.exit_code != 0
     assert runner.invoke(app, ["audit", "sentiment", "--help"]).exit_code == 0
     assert runner.invoke(app, ["analyze", "--help"]).exit_code != 0
     for retired in (
@@ -115,3 +120,11 @@ def test_inspect_family_and_analyze_retired() -> None:
         ["analyze", "signal", "inspect", "--help"],
     ):
         assert runner.invoke(app, retired).exit_code != 0, retired
+
+
+def test_inspect_signal_accum_help_names_accumulation_flow() -> None:
+    result = runner.invoke(app, ["inspect", "signal", "accum", "--help"])
+    assert result.exit_code == 0
+    lower = result.stdout.lower()
+    assert "accumulation-flow" in lower or "accumulation flow" in lower or "accum" in lower
+    assert "pre-open" in lower or "not pre-open" in lower or "plan swing" in lower

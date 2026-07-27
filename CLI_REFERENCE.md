@@ -766,18 +766,26 @@ saham plan swing BBRI --setup foreign-bounce --capital 10000000 --full
 Removed. No replacement route.
 
 
-## saham inspect signal
+## saham inspect signal accum
 
-Live read-only SignalEngine inspection for a ticker — see every factor score.
+Live read-only SignalEngine inspection for the **accumulation-flow** contract only
+(same boundary as `screen accum`). Not pre-open auction signal; not swing
+TradeSetup (`plan swing`).
 
 ```
-saham inspect signal TICKER [OPTIONS]
+saham inspect signal accum TICKER [OPTIONS]
+saham inspect signal accum BBCA
+saham inspect signal accum BBCA --window-days 30 --as-of 2026-07-27 --format json
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
+| `--window-days` | 7 | Accumulation window sessions |
+| `--as-of` | today | Point-in-time as-of date |
 | `--format` | table | Output format: table, json |
 | `--db` | ./data.db | SQLite database path |
+
+Retired: bare `saham inspect signal TICKER` (must name the purpose: `accum`).
 
 ---
 

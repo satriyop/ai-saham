@@ -81,7 +81,7 @@ view     = browse stored facts
 ```text
 saham fetch …
 saham screen pre-open|accum …
-saham inspect risk|sentiment|regime|signal|chart …
+saham inspect risk|sentiment|regime|signal accum|chart …
 saham plan swing TICKER
 saham assess pre-open …
 saham research pre-open|accum …
@@ -106,7 +106,7 @@ saham version
 | `analyze risk` | **`inspect risk`** | Live capability lens |
 | `analyze sentiment` | **`inspect sentiment`** | Live capability lens |
 | `analyze regime` | **`inspect regime`** | Live capability lens |
-| `analyze signal inspect` | **`inspect signal`** | Live scorer inspection (drop redundant `inspect` leaf if tree is already `inspect`) |
+| `analyze signal inspect` | **`inspect signal accum`** | Accumulation-flow SignalEngine inspect only (not pre-open/swing) |
 | `analyze chart …` | **`inspect chart …`** | Visualization lens |
 | `analyze audit` | **`audit sentiment`** | Historical sentiment accuracy (see §5) |
 | `analyze swing-compare` | **retired** | Removed; no alias |
@@ -185,7 +185,7 @@ does not affect `plan swing` authority.
 | `inspect risk` | `inspect_commands.py`, `inspect_risk_commands.py`, … |
 | `inspect sentiment` | `inspect_sentiment_commands.py`, … |
 | `inspect regime` | `inspect_regime_commands.py`, … |
-| `inspect signal` | `inspect_signal_commands.py` / router under `inspect` |
+| `inspect signal accum` | `inspect_signal_commands.py` (group) + `inspect_signal_accum_commands.py` |
 | `inspect chart` | `inspect_chart_commands.py` |
 | `audit sentiment` | `audit_sentiment_commands.py` (alongside existing `audit_commands.py` / data nodes) |
 
