@@ -226,4 +226,6 @@ Rules:
 - Full suite: `5754 passed, 3 failed`; failures are the three independently scoped blockers above
 - `git diff --check`: passed
 - Final status: `DONE_NOT_RELEASED`
-- Follow-up tasks: `fix_accumulation_audit_factory_test_contract.md`, `fix_multi_window_forward_label_generation.md`, and `restore_repository_ruff_baseline.md`
+- Follow-up tasks (historical): factory-config and multi-window label backlog
+  items retired 2026-07-27 (suite green; production no longer matches those
+  failure modes); Ruff baseline restored under `tasks/done/restore_repository_ruff_baseline.md`
