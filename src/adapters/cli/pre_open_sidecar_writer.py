@@ -21,7 +21,10 @@ def write_pre_open_sidecar(
     sidecar_path: Path,
     market_regime: MarketContext | None = None,
 ) -> None:
-    """Write session sidecar JSON so `saham trade confirm` can read it."""
+    """Write optional session sidecar JSON for live screen packaging (not assess authority).
+
+    Post-open assess is ``saham analyze pre-open`` over learning DB IDs.
+    """
     sidecar_path.parent.mkdir(parents=True, exist_ok=True)
     data = {
         "schema_version": 1,

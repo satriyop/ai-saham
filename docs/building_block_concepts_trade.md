@@ -134,9 +134,9 @@ This document explains the conceptual building blocks of the trading system — 
   │      stop → trend → accum → AI)             │           │  saham version                │
   │    → borrows ATR, RSI, FVWAP from           │           │                               │
   │      registry (NOT strategies)              │           └───────────────-----───────────┘
-  │  saham trade confirm                        │ 
-  │    → 8-gate deterministic decision          │
-  │  saham trade log intraday / review          │
+  │  saham analyze pre-open                     │
+  │    → 8-gate deterministic post-open assess  │
+  │  saham trade log --type pre-open / review   │
   │  saham trade outcome                        │
   │  saham trade backtest-intraday              │
   │                                             │

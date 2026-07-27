@@ -98,14 +98,14 @@ Malam        Refresh data / gap-fill lokal                saham fetch market
 08:56        Capture locked-input IEV baseline             saham fetch iev
 08:57        Capture keputusan kanonis                     saham research pre-open capture
 08:58–09:00  Pre-opening matching — bukan window keputusan produksi
-09:00        Pasar buka — lihat opening price aktual
-09:00–09:05  ★ KONFIRMASI ENTRY ★                        saham trade confirm
+09:00        Pasar buka — track sample                     saham research pre-open track
+09:00+       ★ POST-OPEN ASSESS ★                          saham analyze pre-open
 09:05+       Eksekusi order (di Stockbit/broker kamu)
 Siang        Catat outcome kalau ada posisi               saham trade outcome
-Sore         Log sesi ke journal                          saham trade log intraday
+Sore         Log sesi ke journal                          saham trade log --type pre-open
 ```
 
-**Tiga momen paling kritis:** 08:45 (fetch iev), 08:47 (pre-open screener), dan 09:00–09:05 (opening confirmation).
+**Tiga momen paling kritis:** multi-tick IEV, 08:57 capture, dan post-open `analyze pre-open` setelah track.
 
 ---
 
@@ -371,7 +371,7 @@ VERDICT    TICKER      IEV    GAP%   SPRD%     ENTRY-RANGE   STOP%   RSI  SIGNAL
  SKIP       BBRI  BBCA  CUAN
 
  At 09:00, fill opening prices and run:
-   saham trade confirm \
+   saham analyze pre-open \
      --opening-json '{"BNBR":___,"BUMI":___}'
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ==========================================================================================
@@ -475,13 +475,13 @@ Tepat saat pasar buka (09:00 WIB), tool otomatis mengambil opening price aktual 
 
 ```bash
 # Auto-resolve — baca opening price dari Stockbit running trade + order book
-saham trade confirm
+saham analyze pre-open
 ```
 
 Kalau mau override harga tertentu (misalnya karena delay data):
 ```bash
 # Manual override untuk ticker tertentu, sisanya auto-resolve
-saham trade confirm \
+saham analyze pre-open \
   --opening-json '{"BUMI": 158}'
 ```
 
@@ -531,7 +531,7 @@ Output dikelompokkan per aksi:
    BBRI    regime WEAK: BACKED accumulation required (got DISTRIBUTING)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- saham trade log intraday   (record this session)
+ saham trade log --type pre-open   (record this session)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
@@ -600,7 +600,7 @@ Harga sidewalk 30+ menit:
 
 ```bash
 # Log hasil opening confirmation (termasuk semua keputusan)
-saham trade log intraday
+saham trade log --type pre-open
 ```
 
 Perintah ini mencatat hasil `opening confirmation` terakhir ke `journals/intraday-confirmations.csv`.
@@ -630,10 +630,10 @@ saham trade outcome BBRI \
 saham research pre-open grade
 
 # Akurasi keputusan (win rate per decision type)
-saham trade review intraday
+saham trade review pre-open
 ```
 
-`saham trade review intraday` menganalisis keputusan opening confirmation. Review memakai manual outcome jika sudah dicatat dengan `saham trade outcome`; jika belum ada, tool memakai daily OHLC lokal sebagai proxy, bukan urutan tick intraday.
+`saham trade review pre-open` menganalisis paper journal post-open assess. Review memakai manual outcome jika sudah dicatat dengan `saham trade outcome`; jika belum ada, tool memakai daily OHLC lokal sebagai proxy, bukan urutan tick intraday.
 
 Contoh output review yang berguna:
 ```
@@ -693,7 +693,7 @@ Potong dan tempel di terminal kamu.
 │    ? NO_DATA → saham fetch market TICKER --days 365 malam ini │
 ├──────────────────────────────────────────────────────────────┤
 │  09:00  Isi opening prices dari WATCHLIST template           │
-│    saham trade confirm \                       │
+│    saham analyze pre-open \                       │
 │      --opening-json '{"BNBR":___,"BUMI":___}'  │
 ├──────────────────────────────────────────────────────────────┤
 │  09:00–09:05  Eksekusi dari output opening confirmation              │
@@ -702,7 +702,7 @@ Potong dan tempel di terminal kamu.
 │    ✗ SKIP  → tidak masuk, tanpa pengecualian                 │
 ├──────────────────────────────────────────────────────────────┤
 │  Setelah sesi                                                │
-│    saham trade log intraday                                  │
+│    saham trade log --type pre-open                                  │
 │    saham trade outcome TICKER --entry X --exit Y    │
 │    saham trade backtest-intraday (setelah 3+ bulan data)     │
 └──────────────────────────────────────────────────────────────┘
@@ -833,7 +833,7 @@ Tanpa data IEV: `saham trade backtest-intraday` tetap bisa jalan dengan universe
 - Jangan eksekusi berdasarkan pre-open output setelah 09:30 — konteks sudah berubah
 - Tool memberikan analisis deterministik, bukan jaminan profit
 - Paper trade minimal 20 sesi sebelum menggunakan uang sungguhan
-- Gunakan `saham trade review intraday` secara berkala untuk validasi apakah sinyal-sinyal ini bekerja di kondisi pasar saat ini
+- Gunakan `saham trade review pre-open` secara berkala untuk validasi apakah sinyal-sinyal ini bekerja di kondisi pasar saat ini
 - Kumpulkan data IEV tiap hari via `saham fetch iev` — setelah 3+ bulan, backtest jadi lebih akurat
 
 ---

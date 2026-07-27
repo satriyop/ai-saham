@@ -79,7 +79,10 @@ def display_confirmations(
     summary.add_row("WAIT", str(len(waits)))
     summary.add_row("SKIP", str(len(skips)))
     summary.add_row("Max stop", f"{max_stop_pct:.2%}")
-    summary.add_row("Next", "saham trade log intraday")
+    summary.add_row(
+        "Next",
+        "saham trade log --type pre-open --observation-id … --opening-snapshot-id …",
+    )
 
     sections = [Text("Session Summary", style="bold cyan"), summary]
 
@@ -146,7 +149,10 @@ def display_intraday_review(report, journal_path: Path) -> None:
     summary.add_row("Entries with outcome", str(report.entries_with_data))
 
     if report.total_entries == 0:
-        summary.add_row("Next", "saham trade log intraday")
+        summary.add_row(
+        "Next",
+        "saham trade log --type pre-open --observation-id … --opening-snapshot-id …",
+    )
         console().print(panel(summary, title="INTRADAY CONFIRMATION REVIEW"))
         return
 

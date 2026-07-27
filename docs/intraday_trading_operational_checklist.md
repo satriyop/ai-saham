@@ -105,14 +105,14 @@ saham screen pre-open \
   --allow-non-trading-day
 ```
 
-## 09:00–09:05 — Opening Confirmation
+## 09:00+ — Post-open assess (setelah track sample)
 
-- [ ] Ambil opening price aktual, bukan bid terakhir pre-open.
-- [ ] Masukkan semua kandidat:
+- [ ] Pastikan `research pre-open capture` + `research pre-open track` sudah menulis observation + track snapshot.
+- [ ] Assess plan NCP (read-only, database-identified):
 
   ```bash
-  saham trade confirm \
-    --opening-json '{"BBCA":5175,"BMRI":4290,"TLKM":2820}'
+  saham analyze pre-open --session YYYY-MM-DD
+  # atau: --observation-id … --opening-snapshot-id …
   ```
 
 - [ ] Ikuti decision deterministik:
@@ -125,10 +125,12 @@ saham screen pre-open \
 
 ## Setelah Trading — Journal dan Outcome
 
-- [ ] Log confirmation terakhir:
+- [ ] Log paper notebook dari ID yang sama dengan analyze:
 
   ```bash
-  saham trade log intraday
+  saham trade log --type pre-open \
+    --observation-id OBS \
+    --opening-snapshot-id SNAP
   ```
 
 - [ ] Setelah posisi ditutup, catat outcome aktual:
@@ -147,8 +149,8 @@ saham screen pre-open \
 Setelah minimal sekitar 20 sesi paper trade:
 
 ```bash
-saham research pre-open grade
-saham trade review intraday
+saham research pre-open evaluate
+saham trade review pre-open
 ```
 
 Periksa:
@@ -195,7 +197,7 @@ saham trade backtest-intraday \
 ```text
 1. Jalankan backtest historis dan cari edge setelah biaya.
 2. Paper trade minimal 20 sesi dan catat outcome aktual.
-3. Jalankan review intraday.
+3. Jalankan `saham trade review pre-open`.
 4. Bandingkan paper result dengan ekspektasi backtest.
 5. Naikkan modal bertahap hanya jika hasil selaras dan risiko terkontrol.
 ```

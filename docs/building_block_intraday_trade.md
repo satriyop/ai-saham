@@ -12,9 +12,9 @@ The intraday trade feature is an **end-to-end pre-open trading workflow** that s
 | `saham research pre-open capture` | 1b | Persist NCP observation (decision authority) |
 | `saham research pre-open track` | 1c | Persist opening track snapshots |
 | `saham analyze pre-open` | 2 | Post-open ENTER/WAIT/SKIP from observation + track (read-only) |
-| `saham trade log intraday` | 3 | Log confirmation decisions to CSV journal |
-| `saham trade review intraday` | 5 | Review confirmation buckets by decision + context |
-| `saham research pre-open grade` | 5 | Review pre-open prediction accuracy from the learning loop |
+| `saham trade log --type pre-open` | 3 | Paper journal from exact observation + opening snapshot IDs |
+| `saham trade review pre-open` | 5 | Review pre-open paper journal buckets by decision + context |
+| `saham research pre-open evaluate` | 5 | Cohort outcome evaluation (labels), not post-open assess |
 | `saham trade outcome` | 4 | Record actual trade result (target/stop/manual) |
 | `saham trade backtest-intraday` | 6 | Walk-forward backtest of the pre-open workflow |
 | `saham fetch stockbit login` | — | Login & save Stockbit browser session (prerequisite for `saham screen pre-open`) |
@@ -27,8 +27,8 @@ The intraday trade feature is an **end-to-end pre-open trading workflow** that s
 ┌───────────────────────────────────────────────────────────────────────────┐
 │                         CLI LAYER (trade_intraday_commands.py + intraday_workflow_commands.py)        │
 │                                                                           │
-│  pre-open  │  confirm  │  log intraday  │  review intraday              │
-│  outcome   │  backtest-intraday  │  research pre-open grade                       │
+│  screen/capture/track │ analyze pre-open │ log pre-open │ review pre-open │
+│  outcome   │  backtest-intraday  │  research pre-open labels/evaluate             │
 │                                                                           │
 │  Display: _display_results, _display_confirmations, _display_review       │
 │           _display_intraday_backtest, _display_raw_movers, etc.           │
@@ -207,7 +207,7 @@ CLI: saham screen pre-open [--movers-json ...] [--order-books-json ...]
 ### Phase 2: Confirm at Opening Auction (09:00+)
 
 ```
-CLI: saham trade confirm --opening-json '{"BBCA":9050,"BBRI":4120}'
+CLI: saham analyze pre-open --session YYYY-MM-DD
  │
  ├─ _load_confirmation_candidates()
  │    └── Read journals/.last-session.json → IntradayConfirmationCandidate[]
@@ -233,7 +233,7 @@ CLI: saham trade confirm --opening-json '{"BBCA":9050,"BBRI":4120}'
 ### Phase 3: Log Confirmation to Journal
 
 ```
-CLI: saham trade log intraday
+CLI: saham trade log --type pre-open --observation-id … --opening-snapshot-id …
  │
  └─ IntradayConfirmationCsvStore.append(confirmations)
       └── Writes → journals/intraday-confirmations.csv
@@ -259,7 +259,7 @@ CLI: saham research pre-open grade
       ├── Reads opening snapshots and tracking files
       └── Computes pre-open prediction accuracy
 
-CLI: saham trade review intraday
+CLI: saham trade review pre-open
  │
  └─ IntradayConfirmationJournalService.review()
       ├── Decision buckets: ENTER / WAIT / SKIP_* (count + outcome stats)
@@ -442,12 +442,12 @@ All tuning parameters loaded into `PreOpenScreenConfig` at runtime:
 
 2. **Three browser data paths** — The system degrades gracefully: autonomous Playwright → manual JSON → printed browser instructions. Each path is handled by a separate implementation of `BrowserDataProvider`.
 
-3. **Confirmation is fully deterministic** — `ConfirmIntradayOpenUseCase` has zero AI, zero network, zero randomness. All 8 gates are hardcoded rules over pre-computed data.
+3. **Post-open assess is fully deterministic** — `ConfirmIntradayOpenUseCase` (via `AnalyzePreOpenUseCase`) has zero AI, zero network, zero randomness. All 8 gates are hardcoded rules over frozen observation + track snapshot data.
 
 4. **AI is read-only auxiliary** — `--with-ai` appends research summaries but never influences entry/stop/trend decisions.
 
-5. **CSV-based journal persistence** — Pre-open and confirmation journals use CSV files, not SQLite. Allows manual inspection and editing.
+5. **Paper journal is CSV/JSONL** — Pre-open paper notebook uses CSV + `trades.jsonl`. Learning observations/tracks remain SQLite (ADR-049).
 
 6. **Backtest reuses the same logic** — `IntradayBacktestUseCase` calls the same trend/accum/confirm functions as the live pipeline, ensuring backtest accuracy.
 
-7. **Sidecar files for state** — `journals/.last-session.json` and `journals/.last-confirmation.json` bridge the gap between phases (pre-open → confirm → log), avoiding database writes for transient state.
+7. **Database identity for assess** — `analyze pre-open` binds exact `observation_id` + `opening_snapshot_id`. Confirmation sidecars are not assess authority.

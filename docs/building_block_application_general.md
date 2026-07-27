@@ -156,7 +156,7 @@ The same layers with their actual components visible:
 | 6 | **Formula DSL** | Custom indicator language with tokenizer, parser, evaluator, and validator. Supports nesting and series operations. | `indicator create`, `indicator show`, `indicator compute <formula>` | 6 files in `application/formula/`, `formula_storage.py` |
 | 7 | **AI Integration** | 6 AI providers for explanation, formula translation, strategy creation, and sentiment classification. | `--explain`, `--ai-classify`, `indicator create`, `strategy create` | `factory.py`, 6 explainers, 2 translators, `sentiment_analyzer.py` |
 | 8 | **Backtest Engine** | Signal generation from rules/strategies and portfolio simulation (single + walk-forward). | `strategy backtest`, `trade backtest-swing` | `backtest_engine.py` (domain), `swing_backtest.py` (app), `backtest.py` (use case) |
-| 9 | **Trading Workflow** | End-to-end trade lifecycle: pre-open screen → confirm at auction → journal → review → outcome. | `screen pre-open`, `trade confirm`, `trade log`, `trade review`, `analyze swing`, `trade size` | `intraday_workflow_commands.py`, `position_sizer.py`, 3 journal services |
+| 9 | **Trading Workflow** | End-to-end trade lifecycle: pre-open capture/track → analyze pre-open → journal → review → outcome. | `screen pre-open`, `analyze pre-open`, `trade log`, `trade review`, `analyze swing`, `trade size` | `analyze_pre_open_commands.py`, `position_sizer.py`, journal services |
 | 10 | **Persistence** | All data storage: SQLite (market, broker, sentiment), CSV journals, YAML config, formula storage. | All commands via `--db`, `--formulas-file`, `--journal` | 3 SQLite repos, 3 CSV writers, `formula_storage.py`, `yaml_loader.py` |
 
 ---

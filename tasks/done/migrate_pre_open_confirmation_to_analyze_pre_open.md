@@ -1,6 +1,6 @@
 # Migrate Pre-Open Confirmation to `saham analyze pre-open`
 
-Status: `IN_PROGRESS` — **implementation landed 2026-07-27** (verify full suite + ops day; then move to done)
+Status: `DONE` — landed in `7026759` (2026-07-27); residual docs scrubbed when retiring task
 
 Governing decisions:
 
@@ -287,25 +287,25 @@ Do not delete unrelated historical trade journals.
 
 ## 10. Acceptance Criteria
 
-- [ ] `saham analyze pre-open` is mounted under `analyze`; help first line states
+- [x] `saham analyze pre-open` is mounted under `analyze`; help first line states
       post-open assessment of NCP pre-open plan.
-- [ ] `saham trade confirm` and all its flags are absent from help and routing.
-- [ ] `loop_intraday.sh` confirm loop and mutable confirmation/session analysis
+- [x] `saham trade confirm` and all its flags are absent from help and routing.
+- [x] `loop_intraday.sh` confirm loop and mutable confirmation/session analysis
       sidecars are no longer production transport.
-- [ ] Cron/runbook no longer invoke `trade confirm` or last-session sidecars for
+- [x] Cron/runbook no longer invoke `trade confirm` or last-session sidecars for
       this purpose.
-- [ ] The command reads the exact persisted pre-open observation and one linked
+- [x] The command reads the exact persisted pre-open observation and one linked
       immutable opening track snapshot (§3.1).
-- [ ] Equivalent fixtures preserve existing post-open decision arithmetic.
-- [ ] Pre-open direction/setup and post-open action are visibly distinct.
-- [ ] `--format json` writes stdout only.
-- [ ] Analysis performs no database, filesystem, journal, YAML, provider, or SDK
+- [x] Equivalent fixtures preserve existing post-open decision arithmetic.
+- [x] Pre-open direction/setup and post-open action are visibly distinct.
+- [x] `--format json` writes stdout only.
+- [x] Analysis performs no database, filesystem, journal, YAML, provider, or SDK
       I/O directly from the application layer.
-- [ ] `trade log --type pre-open` consumes exact immutable IDs and cannot
+- [x] `trade log --type pre-open` consumes exact immutable IDs and cannot
       reread live state; uses the same use case as analyze; `--type intraday`
       and `--confirmation` are gone for this path.
-- [ ] Pre-open labels/evaluations remain unchanged; not confused with analyze.
-- [ ] Documentation and CLI examples contain no removed route or sidecar path.
+- [x] Pre-open labels/evaluations remain unchanged; not confused with analyze.
+- [x] Documentation and CLI examples contain no removed route or sidecar path.
 
 ## 11. Testing Expectations
 
@@ -362,3 +362,13 @@ The task is complete only when analysis is read-only and database-identified,
 the old command and file transport are impossible, explicit journal writes use
 the same immutable inputs, deterministic decisions are unchanged, focused and
 full tests pass, and `git diff --check` is clean.
+
+
+## Completion Record
+
+- Completed: 2026-07-27
+- Commit: `7026759` feat(analyze): replace trade confirm with database-identified pre-open assess
+- Public surface: `saham analyze pre-open`; `trade log --type pre-open`; `trade review pre-open`
+- Retired: `trade confirm`, `--type intraday`, loop confirm phase, capture→confirm sidecar authority
+- Residual (non-blocking): dead modules `trade_intraday_confirm_*` / `RunIntradayConfirmationWorkflowUseCase` may still exist for pure-policy/backtest reuse; not CLI-mounted. Optional follow-up cleanup.
+- Full suite at ship: 5168 passed; 4 unrelated display assertion failures

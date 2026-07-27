@@ -537,11 +537,17 @@ def display_results(
         footer_elements.append(Text("  " + skip_labels, style="dim"))
 
         tickers_json = ",".join(f'"{c.ticker}":___' for c in watchlist)
-        footer_elements.append(Text("\nAt 09:00, fill opening prices and run:", style="bold"))
         footer_elements.append(
             Text(
-                f"   saham trade confirm \\\n"
-                f"     --opening-json '{{{tickers_json}}}'",
+                "\nAfter capture+track (post-open), assess the NCP plan:",
+                style="bold",
+            )
+        )
+        footer_elements.append(
+            Text(
+                "   saham analyze pre-open --session YYYY-MM-DD\n"
+                "   saham trade log --type pre-open "
+                "--observation-id … --opening-snapshot-id …",
                 style="cyan",
             )
         )
