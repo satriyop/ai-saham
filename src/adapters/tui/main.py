@@ -90,7 +90,7 @@ class CockpitApp(App[None]):
         self._detail_text = ""
         self._error_text = ""
         self._evidence_text = ""
-        self._meta = "Phase 1 chrome · local-first · no silent network"
+        self._meta = "local-first · Ctrl+P · no silent network"
         self._board_title = "Cockpit · shell"
 
     def compose(self) -> ComposeResult:

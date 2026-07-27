@@ -170,7 +170,7 @@ row.
 | [048](docs/adr/ADR-048-pre-open-signal-evidence-and-observation-identity.md) | Pre-open signal evidence + observation identity | Accepted; v3 is the unused first cohort and `pre_open_directional_baseline.v1` is its deterministic long-only champion |
 | [049](docs/adr/ADR-049-database-owned-learning-pipeline-clean-break.md) | Database-owned learning pipeline clean break | Accepted; supersedes ADR-023 learning persistence; amends ADR-027/033/041/042/048; public CLI family tree (trade/research/policy) |
 | [050](docs/adr/ADR-050-cli-verb-contracts.md) | CLI verb contracts (`plan` / `inspect` / `assess`) | Accepted; implementation landed; amends 020/032/033/049 command paths |
-| [051](docs/adr/ADR-051-tui-opencode-cockpit-clean-break.md) | TUI OpenCode daily cockpit clean break | Accepted; Phase 0 shell; supersedes multi-route research TUI UX |
+| [051](docs/adr/ADR-051-tui-opencode-cockpit-clean-break.md) | TUI OpenCode daily cockpit clean break | Accepted; Phases 0–5 implemented; supersedes multi-route research TUI UX |
 
 ## Adding or changing a decision
 

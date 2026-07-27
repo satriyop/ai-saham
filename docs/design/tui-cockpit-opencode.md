@@ -1,6 +1,6 @@
 # Daily Cockpit TUI — OpenCode visual standard
 
-**Status:** design mock + ADR-051 Phase 0 shell in tree  
+**Status:** design mock + ADR-051 cockpit implemented (Phases 0–5)  
 **Mock:** [`tui-cockpit-opencode.html`](./tui-cockpit-opencode.html)  
 **ADR:** [`ADR-051`](../adr/ADR-051-tui-opencode-cockpit-clean-break.md)  
 **Reference:** OpenCode command palette + full stage + right context rail

@@ -89,3 +89,22 @@ def test_plan_blocked_when_empty():
             assert not type(app.screen).__name__.endswith("PlanConfirmModal")
 
     asyncio.run(scenario())
+
+
+def test_supported_terminal_sizes_mount():
+    """Phase 5: 80x24 navigable shell; 120x40 reference layout."""
+
+    async def scenario(size: tuple[int, int]) -> None:
+        app = CockpitApp()
+        async with app.run_test(size=size) as pilot:
+            await pilot.pause()
+            assert app.query_one("#main")
+            assert app.query_one("#status")
+            await pilot.press("ctrl+p")
+            await pilot.pause()
+            assert isinstance(app.screen, CommandPalette)
+            await pilot.press("escape")
+            await pilot.pause()
+
+    asyncio.run(scenario((80, 24)))
+    asyncio.run(scenario((120, 40)))

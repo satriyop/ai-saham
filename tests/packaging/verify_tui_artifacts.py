@@ -16,6 +16,10 @@ REQUIRED_TUI_FILES = (
     "src/adapters/tui/commands.py",
     "src/adapters/tui/theme.py",
     "src/adapters/tui/screens/palette.py",
+    "src/adapters/tui/screens/plan_confirm.py",
+    "src/adapters/tui/controllers/board_controller.py",
+    "src/adapters/tui/presenters/accum_presenter.py",
+    "src/adapters/tui/presenters/preopen_presenter.py",
 )
 
 

@@ -2,7 +2,7 @@
 
 [Architecture decision index](../../ARCHITECTURE_DECISIONS.md)
 
-**Status:** Accepted — Phase 0 scaffolding  
+**Status:** Accepted — Phases 0–5 implemented (2026-07-28)  
 **Date:** 2026-07-28  
 **Depends on:** [ADR-011](ADR-011-offline-capable-cli-as-primary-interface.md),
 [ADR-040](ADR-040-manual-dependency-injection-and-composition-roots.md),
