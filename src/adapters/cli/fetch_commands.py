@@ -13,6 +13,7 @@ from src.adapters.cli.fetch_broker_import_commands import broker_import
 from src.adapters.cli.fetch_broker_summary_commands import broker_fetch
 from src.adapters.cli.fetch_calendar_commands import fetch_calendar
 from src.adapters.cli.fetch_enrichment_history_commands import fetch_enrichment_history
+from src.adapters.cli.fetch_financials_commands import fetch_financials
 from src.adapters.cli.fetch_iev_commands import collect_iev
 from src.adapters.cli.fetch_market_commands import fetch_market
 from src.adapters.cli.fetch_status_commands import status
@@ -22,8 +23,8 @@ from src.adapters.cli.fetch_universe_commands import universe_app
 fetch_app = typer.Typer(
     name="fetch",
     help=(
-        "Data ingestion — market data, broker flow, IEV, Stockbit, and universes. "
-        "Writes local caches only. Browse: `saham view`. "
+        "Data ingestion — market data, broker flow, financials, IEV, Stockbit, "
+        "and universes. Writes local caches only. Browse: `saham view`. "
         "Decisions: `saham plan` / `saham assess` (not fetch)."
     ),
     no_args_is_help=True,
@@ -32,6 +33,7 @@ fetch_app = typer.Typer(
 
 fetch_app.command("market")(fetch_market)
 fetch_app.command("enrichment-history")(fetch_enrichment_history)
+fetch_app.command("financials")(fetch_financials)
 fetch_app.command("broker")(broker_fetch)
 fetch_app.command("broker-import")(broker_import)
 fetch_app.command("broker-history")(broker_history)
