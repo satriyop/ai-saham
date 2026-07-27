@@ -4,9 +4,11 @@ from datetime import date
 from decimal import Decimal
 
 from src.adapters.cli.view_ticker_flow_display import (
-    _select_foreign_flow_points,
     _window_buy_sell_days,
     _window_net,
+)
+from src.application.services.ticker_dashboard_flow import (
+    select_foreign_flow_points as _select_foreign_flow_points,
 )
 from src.domain.entities.broker_flow import ForeignFlowPoint
 

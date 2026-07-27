@@ -131,8 +131,8 @@ class TestDateRoleRowReplacement:
         with repo._get_connection() as conn:
             rows = conn.execute(
                 (
-                    "SELECT date_role, event_date FROM corporate_action_event_dates WHERE"
-                    "source_event_id=?"
+                    "SELECT date_role, event_date FROM corporate_action_event_dates "
+                    "WHERE source_event_id=?"
                 ),
                 ("ev1",),
             ).fetchall()
@@ -167,8 +167,8 @@ class TestDateRoleRowReplacement:
         with repo._get_connection() as conn:
             b_row = conn.execute(
                 (
-                    "SELECT date_role, event_date FROM corporate_action_event_dates WHERE"
-                    "source_event_id=?"
+                    "SELECT date_role, event_date FROM corporate_action_event_dates "
+                    "WHERE source_event_id=?"
                 ),
                 ("B",),
             ).fetchone()
