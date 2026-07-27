@@ -141,8 +141,13 @@ def build_pre_open_observation_payload(
     iev_min: int,
     horizon: str = PRE_OPEN_HORIZON,
     evidence_contract: str = PRE_OPEN_SIGNAL_EVIDENCE_CONTRACT,
+    market_regime: Any | None = None,
 ) -> dict:
-    """Schema-versioned decision payload for one pre-open name (as saved on capture)."""
+    """Schema-versioned decision payload for one pre-open name (as saved on capture).
+
+    ``market_regime`` is the session MarketContext (or dict) frozen at capture so
+    post-open assess can apply regime gates without live MCE or sidecars.
+    """
     candidate_dict: dict[str, Any]
     if hasattr(candidate, "to_dict") and callable(candidate.to_dict):
         candidate_dict = _jsonable(candidate.to_dict())
@@ -151,6 +156,16 @@ def build_pre_open_observation_payload(
         candidate_dict = _jsonable(asdict(candidate))
     else:
         candidate_dict = {"ticker": ticker}
+
+    regime_payload: Any | None
+    if market_regime is None:
+        regime_payload = None
+    elif hasattr(market_regime, "to_dict") and callable(market_regime.to_dict):
+        regime_payload = _jsonable(market_regime.to_dict())
+    elif isinstance(market_regime, dict):
+        regime_payload = _jsonable(market_regime)
+    else:
+        regime_payload = str(market_regime)
 
     return {
         "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
@@ -177,4 +192,5 @@ def build_pre_open_observation_payload(
         "signal": _jsonable(signal_summary.to_dict()) if signal_summary is not None else None,
         "risk": _jsonable(risk_summary.to_dict()) if risk_summary is not None else None,
         "trade_setup": _jsonable(trade_setup.to_dict()) if trade_setup is not None else None,
+        "market_regime": regime_payload,
     }

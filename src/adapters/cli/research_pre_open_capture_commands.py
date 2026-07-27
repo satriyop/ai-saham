@@ -17,7 +17,6 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.pre_open_sidecar_writer import write_pre_open_sidecar
 from src.adapters.cli.research_pre_open_paths import parse_session_date
 from src.adapters.cli.screen_pre_open_workflow_factory import (
     create_pre_open_cli_workflow,
@@ -98,8 +97,8 @@ def pre_open_capture(
     Save pre-open decisions into database-owned learning observations.
 
     Sole decision authority write for the opening learning loop (clean break).
-    Also writes the unrelated trade-confirm sidecar. Does not generate open_30m labels
-    (use ``research pre-open labels``).
+    Does not write trade-confirm sidecars. Does not generate open_30m labels
+    (use ``research pre-open labels``). Post-open assess: ``saham analyze pre-open``.
 
     Examples:
         saham research pre-open capture
@@ -190,18 +189,6 @@ def pre_open_capture(
     except Exception as e:
         typer.echo(f"Capture failed: {e}", err=True)
         raise typer.Exit(1)
-
-    # Same-run trade-confirm sidecar (ops packaging; not decision authority)
-    try:
-        sidecar_path = Path(cfg.storage.intraday_sidecar)
-        write_pre_open_sidecar(
-            candidates=list(result.response.result.candidates),
-            screened_date=result.response.result.screened_date,
-            sidecar_path=sidecar_path,
-            market_regime=result.response.market_regime,
-        )
-    except Exception as e:
-        typer.echo(f"Warning: trade-confirm sidecar not written: {e}", err=True)
 
     payload = {
         "artifact_type": "pre_open_observation_capture",

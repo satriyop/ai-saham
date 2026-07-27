@@ -134,6 +134,7 @@ class PreOpenObservationPersister:
                 source_status=response.source_status.value,
                 source_snapshot_ref=response.source_snapshot_ref,
                 iev_min=response.result.iev_min,
+                market_regime=response.market_regime,
             )
             payload["observation_contract"] = (
                 LearningContractId.PRE_OPEN_OBSERVATION.value

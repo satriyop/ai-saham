@@ -2,11 +2,21 @@
 
 [Architecture decision index](../../ARCHITECTURE_DECISIONS.md)
 
-**Status:** Accepted
+**Status:** Accepted — amended 2026-07-27 for post-open assess ownership
 **Date:** 2026-07-27
 **Supersedes:** [ADR-023](ADR-023-codebase-directory-and-use-case-file-naming-standards.md)
 for learning-artifact persistence; amends ADR-027, ADR-033, ADR-041, ADR-042,
 and ADR-048.
+
+### Amendment (post-open assess)
+
+- Post-open assessment of an NCP pre-open plan is **`saham analyze pre-open`**
+  (read-only over `learning_observations` + linked `learning_track_snapshots`).
+- It is **not** a learning outcome label and does **not** write learning tables.
+- Paper notebook: `saham trade log --type pre-open` with exact
+  `--observation-id` and `--opening-snapshot-id` (same assess use case).
+- Retired: `saham trade confirm`, confirmation sidecars as assess authority,
+  and `--type intraday` for this strategy path.
 
 ## Context
 

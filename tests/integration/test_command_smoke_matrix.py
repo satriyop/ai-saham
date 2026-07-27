@@ -177,47 +177,78 @@ def _retired_pre_open_file_sidecar_contract(temp_workspace, monkeypatch):
     assert "PRE-OPEN OPENING SETUP" in pre_open.stdout
     assert "VERDICT:" not in pre_open.stdout
 
-    # Write an explicit sidecar path for the confirm step; screen pre-open uses
-    # the configured default path, so this compact fixture keeps the smoke stable.
-    session_path.write_text(json.dumps({
-        "schema_version": 1,
-        "artifact_type": "pre_open_session",
-        "screened_at": "2026-06-12",
-        "market_regime": None,
-        "candidates": [{
-            "ticker": "BBCA",
-            "iev": 150000,
-            "gap_pct": "1.0",
-            "entry_range_low": "900",
-            "entry_range_high": "1100",
-            "suggested_entry": "1000",
-            "atr_stop": "950",
-            "trend": "BULLISH",
-            "rsi": "55",
-            "opening_broker_backing_tag": "BACKED",
-            "opening_broker_backing_score": 70.0,
-            "opening_broker_buy_streak": 3,
-            "foreign_vwap": "980",
-            "fvwap_discount_pct": 2.0,
-            "prev_high": 1100,
-            "prev_low": 900,
-        }],
-    }))
+    # Database-identified post-open assess (replaces retired trade confirm sidecars)
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
 
-    confirm = runner.invoke(
+    from src.domain.value_objects.learning_artifacts import (
+        AssessmentPurpose,
+        LearningObservation,
+        LearningTrackSnapshot,
+    )
+    from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
+        SQLiteLearningArtifactRepository,
+    )
+
+    wib = ZoneInfo("Asia/Jakarta")
+    learn = SQLiteLearningArtifactRepository(db_path)
+    obs = LearningObservation.create(
+        purpose=AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION,
+        policy_contract="pre_open_directional_baseline.v1",
+        horizon_contract="open_30m",
+        compatibility_id="smoke-compat",
+        cutoff_at=datetime(2026, 6, 12, 8, 57, tzinfo=wib),
+        universe_id="iev:2026-06-12",
+        window_id="BBCA:2026-06-12",
+        decision_payload={
+            "ticker": "BBCA",
+            "screen_result": "pass",
+            "market_regime": {"regime": "NEUTRAL"},
+            "candidate": {
+                "ticker": "BBCA",
+                "iev": 150000,
+                "entry_price": "1000",
+                "stop_loss_price": "950",
+                "trend_signal": "BULLISH",
+                "rsi": "55",
+                "gap_pct": "1.0",
+                "entry_range_low": "900",
+                "entry_range_high": "1100",
+                "opening_broker_backing_tag": "BACKED",
+            },
+            "signal": {"direction": "BULLISH", "entry_quality": "ENTER", "score": 72},
+            "trade_setup": {"action": "ENTER"},
+        },
+        captured_at=datetime(2026, 6, 12, 8, 57, tzinfo=wib),
+    )
+    assert learn.add_observation(obs)
+    assert learn.add_track_snapshot(
+        LearningTrackSnapshot.create(
+            observation_id=obs.observation_id,
+            sampled_at=datetime(2026, 6, 12, 9, 0, 5, tzinfo=wib),
+            source="stockbit.opening_track",
+            snapshot_payload={
+                "opening_price": "1000",
+                "opening_price_source": "order_book_lastprice",
+                "opening_price_confidence": "MEDIUM",
+            },
+            captured_at=datetime(2026, 6, 12, 9, 0, 5, tzinfo=wib),
+        )
+    )
+
+    analyze = runner.invoke(
         app,
         [
-            "trade", "confirm",
-            "--session", str(session_path),
-            "--output", str(confirm_path),
-            "--opening-json", '{"BBCA":1000}',
+            "analyze", "pre-open",
+            "--session", "2026-06-12",
+            "--db", str(db_path),
+            "--format", "json",
         ],
     )
-    assert confirm.exit_code == 0, confirm.output
-    assert "INTRADAY CONFIRMATION" in confirm.stdout
-    saved = json.loads(confirm_path.read_text())
-    assert saved["artifact_type"] == "intraday_confirmation"
-    assert saved["confirmations"][0]["decision"] == "ENTER"
+    assert analyze.exit_code == 0, analyze.output
+    payload = _json_stdout(analyze)
+    assert payload["artifact_type"] == "analyze_pre_open_result"
+    assert payload["lines"][0]["post_open_action"] == "ENTER"
 
 
 def test_backtest_json_contracts(temp_workspace, monkeypatch):

@@ -181,6 +181,41 @@ def test_persists_database_owned_observation_idempotently(tmp_path: Path) -> Non
     assert row.decision_payload["signal"]["score"] == 72
     assert row.decision_payload["trade_setup"]["action"] == "ENTER"
     assert row.decision_payload["candidate"]["iep"] == 10100
+    # Absent MarketContext on test response → null market_regime (gate inert for analyze)
+    assert row.decision_payload.get("market_regime") is None
+
+
+def test_persists_market_regime_when_present(tmp_path: Path) -> None:
+    from src.domain.value_objects.market_context import MarketContext, MarketRegime
+
+    repository = SQLiteLearningArtifactRepository(tmp_path / "data.db")
+    request = PreOpenWorkflowRequest(
+        config=PreOpenScreenConfig(iev_min=100_000, top_n=5, fast_mode=True),
+        run_date=date(2026, 6, 18),
+    )
+    base = _response()
+    response = PreOpenWorkflowResponse(
+        **{
+            **base.__dict__,
+            "market_regime": MarketContext(
+                as_of_date=date(2026, 6, 18),
+                regime=MarketRegime.RISK_ON,
+                conviction=0.8,
+                factors=(),
+                signal_multiplier=1.0,
+                gate_tightening=False,
+            ),
+        }
+    )
+    PreOpenObservationPersister(repository).persist(
+        response,
+        request,
+        captured_at=datetime(2026, 6, 18, 8, 57, tzinfo=WIB),
+    )
+    row = repository.list_observations(
+        AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION
+    )[0]
+    assert row.decision_payload["market_regime"]["regime"] == "RISK_ON"
 
 
 def test_persists_hard_filter_rejects(tmp_path: Path) -> None:

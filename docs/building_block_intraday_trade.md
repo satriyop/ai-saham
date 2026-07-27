@@ -9,7 +9,9 @@ The intraday trade feature is an **end-to-end pre-open trading workflow** that s
 | Command | Phase | Purpose |
 |---------|-------|---------|
 | `saham screen pre-open` | 1 | Screen IDX morning movers → entry range, stop, trend, accumulation, FVWAP |
-| `saham trade confirm` | 2 | Confirm ENTER/WAIT/SKIP after opening auction clears |
+| `saham research pre-open capture` | 1b | Persist NCP observation (decision authority) |
+| `saham research pre-open track` | 1c | Persist opening track snapshots |
+| `saham analyze pre-open` | 2 | Post-open ENTER/WAIT/SKIP from observation + track (read-only) |
 | `saham trade log intraday` | 3 | Log confirmation decisions to CSV journal |
 | `saham trade review intraday` | 5 | Review confirmation buckets by decision + context |
 | `saham research pre-open grade` | 5 | Review pre-open prediction accuracy from the learning loop |

@@ -509,17 +509,20 @@ saham analyze swing BBRI --with-market-context             # market context prev
 saham screen pre-open --movers-json '[{"ticker":"BBCA","iev":150000}]'
 ```
 
-### Step 2: Confirm at Opening
+### Step 2: Post-open assess (after capture + track)
 
 ```bash
-saham trade confirm --opening-json '{"BBCA":9050,"BMRI":5875}'
+saham research pre-open capture
+saham research pre-open track
+saham analyze pre-open --session YYYY-MM-DD
 ```
 
-### Step 3: Log & Review
+### Step 3: Log & Review (paper notebook)
 
 ```bash
-saham trade log --type intraday
-saham trade review intraday
+saham trade log --type pre-open \
+  --observation-id OBS --opening-snapshot-id SNAP
+saham trade review pre-open
 saham trade outcome BBCA --entry 9000 --exit 9500 --result target
 ```
 

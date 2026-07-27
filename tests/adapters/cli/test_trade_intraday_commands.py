@@ -260,302 +260,49 @@ def _write_confirmation(path: Path, include_context: bool = False) -> None:
     )
 
 
-def test_confirm_open_outputs_decisions_and_writes_sidecar(tmp_path):
-    session = tmp_path / "last-session.json"
-    output = tmp_path / "last-confirmation.json"
-    _write_sidecar(session)
 
-    result = runner.invoke(
-        app,
-        [
-            "trade", "confirm",
-            "--session", str(session),
-            "--output", str(output),
-            "--opening-json", '{"BBCA":9050,"GOTO":245}',
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "INTRADAY CONFIRMATION" in result.stdout
-    assert "BBCA" in result.stdout
-    assert "ENTER" in result.stdout
-    assert "GOTO" in result.stdout
-    assert "SKIP" in result.stdout
-
-    saved = json.loads(output.read_text())
-    assert saved["schema_version"] == 1
-    assert saved["artifact_type"] == "intraday_confirmation"
-    assert saved["confirmed_at"] == "2026-06-12"
-    assert saved["confirmations"][0]["decision"] == "ENTER"
-    assert saved["confirmations"][1]["decision"] == "SKIP_GAP_UP"
+def test_trade_confirm_command_removed():
+    """Clean break: post-open assess is analyze pre-open, not trade confirm."""
+    result = runner.invoke(app, ["trade", "confirm", "--help"])
+    assert result.exit_code != 0
+    assert "No such command" in result.output or "No such command" in (result.stdout + result.stderr)
 
 
-def test_confirm_open_rejects_non_object_opening_json(tmp_path):
-    session = tmp_path / "last-session.json"
-    _write_sidecar(session)
-
-    result = runner.invoke(
-        app,
-        [
-            "trade", "confirm",
-            "--session", str(session),
-            "--opening-json", '[{"BBCA":9050}]',
-        ],
-    )
-
+def test_trade_log_intraday_type_removed():
+    result = runner.invoke(app, ["trade", "log", "--type", "intraday"])
     assert result.exit_code == 1
-    assert "--opening-json must be a JSON object" in result.output
+    assert "pre-open" in (result.stdout + result.stderr).lower()
 
 
-def test_confirm_open_rejects_invalid_opening_json(tmp_path):
-    session = tmp_path / "last-session.json"
-    _write_sidecar(session)
-
-    result = runner.invoke(
-        app,
-        [
-            "trade", "confirm",
-            "--session", str(session),
-            "--opening-json", "{not valid json",
-        ],
+def test_confirm_review_pre_open_outputs_bucket_tables(tmp_path):
+    from src.infrastructure.persistence.intraday_confirmation_csv import (
+        IntradayConfirmationCsvStore,
+    )
+    from src.domain.value_objects.intraday_confirmation import (
+        IntradayConfirmationJournalEntry,
     )
 
-    assert result.exit_code == 1
-    assert "Error: Invalid --opening-json:" in result.output
-
-
-def test_confirm_open_rejects_non_numeric_opening_json(tmp_path):
-    session = tmp_path / "last-session.json"
-    _write_sidecar(session)
-
-    result = runner.invoke(
-        app,
-        [
-            "trade", "confirm",
-            "--session", str(session),
-            "--opening-json", '{"BBCA":"not-a-number"}',
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "Error: opening prices must be numeric:" in result.output
-
-
-def test_confirm_open_rejects_non_positive_max_stop(tmp_path):
-    session = tmp_path / "last-session.json"
-    _write_sidecar(session)
-
-    result = runner.invoke(
-        app,
-        [
-            "trade", "confirm",
-            "--session", str(session),
-            "--opening-json", '{"BBCA":9050,"GOTO":245}',
-            "--max-stop", "0",
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "Error: --max-stop must be positive." in result.output
-
-
-def test_confirm_open_missing_sidecar_shows_error(tmp_path):
-    session = tmp_path / "does-not-exist.json"
-
-    result = runner.invoke(
-        app,
-        ["trade", "confirm", "--session", str(session)],
-    )
-
-    assert result.exit_code == 1
-    assert f"No session sidecar at '{session}'" in result.output
-    assert "saham screen pre-open" in result.output
-
-
-def test_confirm_open_missing_track_file_shows_error(tmp_path):
-    session = tmp_path / "last-session.json"
-    _write_sidecar(session)
-    track_file = tmp_path / "does-not-exist-track.json"
-
-    result = runner.invoke(
-        app,
-        [
-            "trade", "confirm",
-            "--session", str(session),
-            "--track-file", str(track_file),
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert f"Error: Track file not found at '{track_file}'" in result.output
-
-
-def test_confirm_open_missing_stockbit_auto_confirm_shows_error(tmp_path, monkeypatch):
-    session = tmp_path / "last-session.json"
-    _write_sidecar(session)
-
-    import src.infrastructure.composition.stockbit_session_factory as _session_svc
-
-    monkeypatch.setattr(_session_svc, "get_stockbit_session", lambda stockbit_config=None: None)
-
-    result = runner.invoke(
-        app,
-        ["trade", "confirm", "--session", str(session)],
-    )
-
-    assert result.exit_code == 1
-    assert "No authenticated Stockbit profile for auto confirm." in result.output
-
-
-def test_confirm_open_delegates_to_workflow_use_case(tmp_path, monkeypatch):
-    session = tmp_path / "last-session.json"
-    output = tmp_path / "last-confirmation.json"
-    _write_sidecar(session)
-
-    from src.adapters.cli import trade_intraday_confirm_commands as command_module
-    from src.application.use_case import run_intraday_confirmation_workflow_use_case as wf_mod
-
-    captured = {}
-    original_init = wf_mod.RunIntradayConfirmationWorkflowUseCase.__init__
-
-    def spy_init(self, *args, **kwargs):
-        captured["called"] = True
-        original_init(self, *args, **kwargs)
-
-    monkeypatch.setattr(
-        wf_mod.RunIntradayConfirmationWorkflowUseCase, "__init__", spy_init
-    )
-
-    result = runner.invoke(
-        app,
-        [
-            "trade", "confirm",
-            "--session", str(session),
-            "--output", str(output),
-            "--opening-json", '{"BBCA":9050,"GOTO":245}',
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    assert captured.get("called") is True
-    assert command_module is not None
-
-
-def test_intraday_confirm_open_auto_uses_stockbit_provider_stubs(tmp_path, monkeypatch):
-    session = tmp_path / "last-session.json"
-    output = tmp_path / "last-confirmation.json"
-    _write_sidecar(session)
-
-    class FakeBrokerProvider:
-        def __init__(self, *args, **kwargs):
-            pass
-
-        def is_authenticated(self):
-            return True
-
-    class FakeRunningTradeProvider:
-        def __init__(self, api_client, stockbit_config=None):
-            pass
-
-        def fetch_running_trade(self, ticker: str, limit: int = 80):
-            if ticker != "BBCA":
-                return []
-            return [
-                TradeTick(
-                    ticker="BBCA",
-                    timestamp=datetime(2026, 6, 12, 9, 1, tzinfo=ZoneInfo("Asia/Jakarta")),
-                    price=9050,
-                    lot=10,
-                    buyer_broker_code="AK",
-                    seller_broker_code="YP",
-                    trade_type="RG",
-                )
-            ]
-
-    class FakeOrderBookProvider:
-        def __init__(self, api_client, stockbit_config=None):
-            pass
-
-        def fetch_snapshot(self, ticker: str):
-            return None
-
-    import src.infrastructure.browser.stockbit_api_client as _stockbit_api_client
-    import src.infrastructure.browser.stockbit_order_book as stockbit_order_book
-    import src.infrastructure.browser.stockbit_running_trade as stockbit_running_trade
-    import src.infrastructure.composition.stockbit_session_factory as _session_svc
-    from src.application.services.stockbit_session import StockbitSession
-
-    _fake_client = object.__new__(_stockbit_api_client.StockbitApiClient)
-    monkeypatch.setattr(
-        _session_svc, "get_stockbit_session",
-        lambda stockbit_config=None: StockbitSession(api_client=_fake_client, authenticated=True),
-    )
-    monkeypatch.setattr(
-        stockbit_running_trade,
-        "StockbitRunningTradeProvider",
-        FakeRunningTradeProvider,
-    )
-    monkeypatch.setattr(stockbit_order_book, "StockbitOrderBookProvider", FakeOrderBookProvider)
-
-    result = runner.invoke(
-        app,
-        [
-            "trade", "confirm",
-            "--session", str(session),
-            "--output", str(output),
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "Confirming 2 pre-open candidate(s)" in result.stdout
-    assert "Resolving missing opening prices from Stockbit: BBCA, GOTO" in result.stdout
-    assert "[1/2] BBCA: 9,050 via running_trade_first_tick/HIGH" in result.stdout
-    assert "[2/2] GOTO: unresolved - no regular-board trade tick at or after 09:00" in result.stdout
-    assert "Opening prices resolved: 1/2" in result.stdout
-    assert "Unresolved opening prices:" in result.stdout
-    assert "GOTO: no regular-board trade tick at or after 09:00" in result.stdout
-    saved = json.loads(output.read_text())
-    first = saved["confirmations"][0]
-    assert first["ticker"] == "BBCA"
-    assert first["opening_price"] == "9050"
-    assert first["opening_price_source"] == "running_trade_first_tick"
-    assert first["opening_price_confidence"] == "HIGH"
-    assert first["auto_confirmed"] is True
-    assert first["manual_override"] is False
-
-
-def test_trade_log_intraday_writes_confirmation_sidecar(tmp_path):
-    confirmation = tmp_path / "last-confirmation.json"
-    journal = tmp_path / "confirmations.csv"
-    _write_confirmation(confirmation)
-
-    result = runner.invoke(
-        app,
-        [
-            "trade", "log", "--type", "intraday",
-            "--confirmation", str(confirmation),
-            "--journal", str(journal),
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "Logged 1 confirmation" in result.stdout
-    assert "BBCA" in journal.read_text()
-
-
-def test_confirm_review_outputs_bucket_tables(tmp_path):
     journal = tmp_path / "confirmations.csv"
     db_path = tmp_path / "data.db"
-    confirmation = tmp_path / "last-confirmation.json"
-    _write_confirmation(confirmation, include_context=True)
-
-    runner.invoke(
-        app,
+    store = IntradayConfirmationCsvStore(journal)
+    store.append(
         [
-            "trade", "log", "--type", "intraday",
-            "--confirmation", str(confirmation),
-            "--journal", str(journal),
-        ],
+            IntradayConfirmationJournalEntry(
+                confirmed_at=date(2026, 6, 12),
+                ticker="BBCA",
+                decision="ENTER",
+                reason_codes=("open inside entry range",),
+                opening_price=Decimal("9050"),
+                planned_entry=Decimal("9050"),
+                stop_loss_price=Decimal("8900"),
+                stop_pct=Decimal("1.7"),
+                iev=450000,
+                trend="BULLISH",
+                rsi=Decimal("52"),
+                gap_pct=Decimal("0.5"),
+                opening_broker_backing_tag="BACKED",
+            )
+        ]
     )
 
     repo = SQLiteMarketRepository(db_path=db_path)
@@ -576,7 +323,7 @@ def test_confirm_review_outputs_bucket_tables(tmp_path):
     result = runner.invoke(
         app,
         [
-            "trade", "review", "intraday",
+            "trade", "review", "pre-open",
             "--journal", str(journal),
             "--db", str(db_path),
         ],
@@ -585,20 +332,31 @@ def test_confirm_review_outputs_bucket_tables(tmp_path):
     assert result.exit_code == 0, result.output
     assert "INTRADAY CONFIRMATION REVIEW" in result.stdout
     assert "decision:ENTER" in result.stdout
-    assert "gap:0-1" in result.stdout
 
 
 def test_trade_outcome_updates_logged_confirmation(tmp_path):
+    from src.infrastructure.persistence.intraday_confirmation_csv import (
+        IntradayConfirmationCsvStore,
+    )
+    from src.domain.value_objects.intraday_confirmation import (
+        IntradayConfirmationJournalEntry,
+    )
+
     journal = tmp_path / "confirmations.csv"
-    confirmation = tmp_path / "last-confirmation.json"
-    _write_confirmation(confirmation)
-    runner.invoke(
-        app,
+    store = IntradayConfirmationCsvStore(journal)
+    store.append(
         [
-            "trade", "log", "--type", "intraday",
-            "--confirmation", str(confirmation),
-            "--journal", str(journal),
-        ],
+            IntradayConfirmationJournalEntry(
+                confirmed_at=date(2026, 6, 12),
+                ticker="BBCA",
+                decision="ENTER",
+                reason_codes=("open inside entry range",),
+                opening_price=Decimal("9050"),
+                planned_entry=Decimal("9050"),
+                stop_loss_price=Decimal("8900"),
+                stop_pct=Decimal("1.7"),
+            )
+        ]
     )
 
     result = runner.invoke(
@@ -617,57 +375,6 @@ def test_trade_outcome_updates_logged_confirmation(tmp_path):
 
     assert result.exit_code == 0, result.output
     assert "Recorded outcome for BBCA" in result.stdout
-    assert "R=+1.00R" in result.stdout
     csv_text = journal.read_text()
     assert "manual exit" in csv_text
     assert "target" in csv_text
-
-
-def test_confirm_open_with_track_file(tmp_path):
-    session = tmp_path / "last-session.json"
-    output = tmp_path / "last-confirmation.json"
-    track_file = tmp_path / "track_0900.json"
-    _write_sidecar(session)
-
-    # Let's write the track file
-    track_file.write_text(json.dumps({
-        "captured_at": "2026-06-12T09:00:05+07:00",
-        "tickers": {
-            "BBCA": {
-                "mid_price": 9000,
-                "order_book": {
-                    "last_price": 9050,
-                    "bid_pressure_ratio": 0.7,
-                    "fnet_intraday": 1000000,
-                }
-            },
-            "GOTO": {
-                "mid_price": 245,
-                "order_book": {
-                    "last_price": 245,
-                }
-            }
-        }
-    }))
-
-    result = runner.invoke(
-        app,
-        [
-            "trade", "confirm",
-            "--session", str(session),
-            "--output", str(output),
-            "--track-file", str(track_file),
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "INTRADAY CONFIRMATION" in result.stdout
-    assert "BBCA" in result.stdout
-    assert "ENTER" in result.stdout
-    assert "GOTO" in result.stdout
-    assert "SKIP" in result.stdout
-
-    saved = json.loads(output.read_text())
-    assert saved["confirmed_at"] == "2026-06-12"
-    assert saved["confirmations"][0]["decision"] == "ENTER"
-    assert saved["confirmations"][1]["decision"] == "SKIP_GAP_UP"

@@ -2,15 +2,18 @@
 # Intraday manual monitoring loop — run this at the keyboard before market open.
 #
 # Crontab (./install_cron.sh) owns the unattended pre-open learning path:
-#   08:47 / 08:50 / 08:53 / 08:57  fetch iev   (multi-tick ΔIEV + NCP stamp)
-#   08:58                          research pre-open capture  (sole decision write)
-#   09:00–09:30                    research pre-open track
-#   09:35 / 09:36 / 09:40          research pre-open grade / research pre-open labels / research pre-open tune
+#   08:47 / 08:50 / 08:53 / 08:56  fetch iev   (multi-tick ΔIEV + NCP stamp)
+#   08:57                          research pre-open capture  (sole decision write)
+#   09:00                          research pre-open track
+#   09:36 / 09:37                  research pre-open labels / evaluate
 #
-# This script is live display + confirm only (screen = live; no observation write):
+# This script is live display only (screen = live; no observation write):
 #   08:45–08:46 → optional early screen pre-open rounds (Playwright)
 #   08:46       → release Playwright so multi-tick cron can run without contention
-#   09:00–09:05 → trade confirm (no Playwright — sidecar from capture)
+#
+# After open (human, not this loop):
+#   saham analyze pre-open
+#   saham trade log --type pre-open --observation-id … --opening-snapshot-id …
 
 VENV=".venv/bin/python"
 LOGDIR="logs/intraday_loop_$(TZ=Asia/Jakarta date +%Y%m%d)"
@@ -45,30 +48,12 @@ while [[ $CURRENT -lt 0846 ]]; do
     fi
 done
 
-echo "  [$(TZ=Asia/Jakarta date '+%H:%M:%S')] Playwright released — cron multi-tick IEV from 08:47, capture 08:58." | tee -a "$LOGDIR/timeline.log"
-echo "  Waiting for market open (09:00)..." | tee -a "$LOGDIR/timeline.log"
-
-# ── Phase 2: Confirm gate (09:00 → 09:05 WIB) ────────────────────────
-# No Playwright — trade confirm reads sidecar written by research pre-open capture.
-# research pre-open track (cron, 09:00–09:30) holds Playwright during this window.
-echo "" | tee -a "$LOGDIR/timeline.log"
-echo "─── Phase 2: Opening Auction Confirm Gate (no Playwright) ───" | tee -a "$LOGDIR/timeline.log"
-
-while [[ $(TZ=Asia/Jakarta date +%H%M) -lt 0900 ]]; do
-    sleep 10
-done
-
-CURRENT=$(TZ=Asia/Jakarta date +%H%M)
-while [[ $CURRENT -lt 0905 ]]; do
-    echo "  [$(TZ=Asia/Jakarta date '+%H:%M:%S')] trade confirm..." | tee -a "$LOGDIR/timeline.log"
-    $VENV -m src.adapters.cli.main trade confirm 2>&1 | tee -a "$LOGDIR/confirm_$(TZ=Asia/Jakarta date +%H%M%S).txt"
-    CURRENT=$(TZ=Asia/Jakarta date +%H%M)
-    if [[ $CURRENT -lt 0905 ]]; then
-        sleep 30
-    fi
-done
+echo "  [$(TZ=Asia/Jakarta date '+%H:%M:%S')] Playwright released — cron multi-tick IEV from 08:47, capture 08:57." | tee -a "$LOGDIR/timeline.log"
 
 echo "" | tee -a "$LOGDIR/timeline.log"
 echo "─── Done at $(TZ=Asia/Jakarta date '+%H:%M:%S WIB') ───" | tee -a "$LOGDIR/timeline.log"
 echo "All logs saved to: $LOGDIR"
-echo "Unattended path: multi-tick iev → research pre-open capture → research pre-open track → grade/labels (see install_cron.sh)"
+echo "After open (human):"
+echo "  saham analyze pre-open"
+echo "  saham trade log --type pre-open --observation-id … --opening-snapshot-id …"
+echo "Unattended path: multi-tick iev → research pre-open capture → track → labels/evaluate (see install_cron.sh)"

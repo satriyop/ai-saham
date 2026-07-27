@@ -2,16 +2,17 @@
 CLI commands for active trading workflows.
 
 Commands (all under `saham trade`):
-  saham trade confirm             — opening confirmation gate
-  saham trade log --type swing    — log swing accumulation candidate
-  saham trade log --type intraday — log intraday confirmation decisions
-  saham trade review intraday     — review intraday confirmation journal
-  saham trade review swing        — review swing accumulation journal
-  saham trade outcome             — record intraday outcome
-  saham trade size                — ATR-based swing position sizing
-  saham trade swing ...           — database-owned swing policy learning
-  saham trade backtest-intraday   — intraday workflow daily-OHLC proxy simulation
-  saham trade migrate-journal     — one-time migration of CSV journals to trades.jsonl
+  saham trade log --type swing     — log swing accumulation candidate
+  saham trade log --type pre-open  — log post-open assess (immutable IDs)
+  saham trade review pre-open      — review pre-open paper journal
+  saham trade review swing         — review swing accumulation journal
+  saham trade outcome              — record pre-open paper outcome
+  saham trade size                 — ATR-based swing position sizing
+  saham trade swing ...            — database-owned swing policy learning
+  saham trade backtest-intraday    — pre-open workflow daily-OHLC proxy simulation
+  saham trade migrate-journal      — one-time migration of CSV journals to trades.jsonl
+
+Post-open assessment: `saham analyze pre-open` (not under trade).
 
 Layer: Adapter
 """
@@ -20,7 +21,6 @@ import typer
 
 from src.adapters.cli.trade_accum_commands import accumulation_review
 from src.adapters.cli.trade_intraday_commands import (
-    confirm_open,
     confirm_outcome,
     confirm_review,
     intraday_backtest,
@@ -38,7 +38,10 @@ from src.adapters.cli.trade_swing_learning_commands import (
 
 trade_app = typer.Typer(
     name="trade",
-    help="Paper trading workspace — confirmation, journals, sizing, and workflow backtests.",
+    help=(
+        "Paper trading workspace — journals, sizing, and workflow backtests. "
+        "Post-open assess: `saham analyze pre-open`."
+    ),
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},
 )
@@ -49,7 +52,7 @@ trade_review_app = typer.Typer(
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},
 )
-trade_review_app.command("intraday")(confirm_review)
+trade_review_app.command("pre-open")(confirm_review)
 trade_review_app.command("swing")(accumulation_review)
 
 trade_swing_app = typer.Typer(
@@ -65,7 +68,6 @@ trade_swing_app.command("validate")(swing_validate)
 trade_swing_app.command("apply")(swing_apply)
 trade_swing_app.command("status")(swing_status)
 
-trade_app.command("confirm")(confirm_open)
 trade_app.add_typer(trade_review_app, name="review")
 trade_app.command("outcome")(confirm_outcome)
 trade_app.command("size")(size)

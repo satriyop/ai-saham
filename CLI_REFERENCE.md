@@ -1491,20 +1491,25 @@ saham strategy skill index
 
 ---
 
-## saham trade confirm
+## saham analyze pre-open
 
-Confirm pre-open screening candidates against actual opening auction prices.
+Post-open assessment of an immutable NCP pre-open plan (read-only).
+Reads `learning_observations` + linked track snapshots — no live prices, no journal write.
 
 ```
-saham trade confirm [OPTIONS]
-saham trade confirm --opening-json '{"BBCA":9050,"BMRI":5875}'
-saham trade confirm --track-file data/opening/20260617/track_0900.json
+saham analyze pre-open [OPTIONS]
+saham analyze pre-open --session 2026-06-18
+saham analyze pre-open --observation-id OBS --opening-snapshot-id SNAP
+saham analyze pre-open --format json
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--opening-json` | — | JSON map of ticker→opening price |
-| `--track-file` | — | Learn tracking file for auto-resolve |
+| `--session` | today (IDX) | Session date YYYY-MM-DD |
+| `--observation-id` | — | Exact observation id (required if multiple cohorts) |
+| `--opening-snapshot-id` | earliest open-window | Exact linked track snapshot id |
+| `--format` | table | table or json |
+| `--db` | config | Learning SQLite path |
 
 ---
 
@@ -1515,28 +1520,30 @@ Log a paper-trade decision to the journal.
 ```
 saham trade log --type TYPE [OPTIONS]
 saham trade log --type swing --ticker BBRI --window 7
-saham trade log --type intraday
+saham trade log --type pre-open --observation-id OBS --opening-snapshot-id SNAP
 ```
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
-| `--type` | | required | Journal type: swing, intraday |
+| `--type` | | required | Journal type: swing, pre-open |
 | `--ticker` | | — | Ticker(s) for swing log |
 | `--window` | `-w` | 7 | Window for swing log |
+| `--observation-id` | | — | Required for `--type pre-open` |
+| `--opening-snapshot-id` | | — | Required for `--type pre-open` |
 
 ---
 
-## saham trade review intraday
+## saham trade review pre-open
 
-Review intraday confirmation journal.
+Review pre-open paper confirmation journal.
 
 ```
-saham trade review intraday [OPTIONS]
+saham trade review pre-open [OPTIONS]
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--journal` | ./trades.jsonl | Journal file path |
+| `--journal` | config | Pre-open CSV journal path |
 | `--db` | ./data.db | SQLite database path |
 
 ---

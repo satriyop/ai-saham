@@ -83,9 +83,12 @@
    --movers-json '[{"ticker":"BBCA","iev":180000}]' \
    --order-books-json '{"BBCA":{"price":8875,"volume":300000}}'
 
- # Step 3: After opening auction, confirm entry decision
- saham trade confirm \
-   --opening-json '{"BBCA":{"open":8875,"high":8925,"low":8850,"close":8900}}'
+ # Step 3: After capture+track, post-open assess of NCP plan (read-only)
+ saham research pre-open capture
+ saham research pre-open track
+ saham analyze pre-open --session YYYY-MM-DD
+ # Paper notebook (optional):
+ # saham trade log --type pre-open --observation-id OBS --opening-snapshot-id SNAP
 
  ---
  Phase 8 — Strategy / Indicator Authoring

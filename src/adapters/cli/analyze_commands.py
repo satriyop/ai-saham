@@ -22,6 +22,7 @@ import typer
 
 from src.adapters.cli.analyze_chart_commands import chart_app
 from src.adapters.cli.analyze_compare_commands import compare as _compare_fn
+from src.adapters.cli.analyze_pre_open_commands import pre_open as _pre_open_fn
 from src.adapters.cli.analyze_regime_commands import regime as _regime_fn
 from src.adapters.cli.analyze_risk_commands import risk as _risk_fn
 from src.adapters.cli.analyze_sentiment_commands import sentiment as _sentiment_fn
@@ -34,7 +35,8 @@ analyze_app = typer.Typer(
     name="analyze",
     help=(
         "Live analysis and insights — risk, sentiment, regime, swing, "
-        "signal inspect, charts. Corpus workflows: `saham research`."
+        "pre-open (post-open assess of NCP plan), signal inspect, charts. "
+        "Corpus workflows: `saham research`."
     ),
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},
@@ -50,3 +52,4 @@ analyze_app.command("audit")(_sentiment_audit_fn)
 analyze_app.command("regime")(_regime_fn)
 analyze_app.command("swing")(_swing_fn)
 analyze_app.command("swing-compare")(_swing_compare_fn)
+analyze_app.command("pre-open")(_pre_open_fn)

@@ -4,6 +4,7 @@ CLI command for unified trade journal logging.
 Layer: Adapter
 """
 
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -13,14 +14,27 @@ from src.adapters.cli.trade_accum_commands import (
     FOREIGN_BOUNCE_SETUP,
     run_accumulation_log_command,
 )
-from src.adapters.cli.trade_intraday_commands import _confirm_log_impl
+from src.application.dto.analyze_pre_open import AnalyzePreOpenError
+from src.application.use_case.analyze_pre_open_use_case import AnalyzePreOpenUseCase
+from src.application.use_case.log_pre_open_trade_use_case import (
+    LogPreOpenTradeRequest,
+    LogPreOpenTradeUseCase,
+)
+from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.infrastructure.config.app_config import load_app_config
+from src.infrastructure.config.pre_open_config import load_pre_open_screen_config
+from src.infrastructure.persistence.intraday_confirmation_csv import (
+    IntradayConfirmationCsvStore,
+)
+from src.infrastructure.persistence.trade_journal_jsonl_writer import (
+    TradeJournalJsonlWriter,
+)
 
 
 def trade_log(
     trade_type: Annotated[
         str,
-        typer.Option("--type", help="Trade type: swing or intraday"),
+        typer.Option("--type", help="Trade type: swing or pre-open"),
     ],
     # swing options
     ticker: Annotated[
@@ -58,10 +72,20 @@ def trade_log(
         str,
         typer.Option("--benchmark", help="Benchmark ticker for regime context"),
     ] = "IHSG",
-    # intraday options
-    confirmation: Annotated[
-        Optional[Path],
-        typer.Option("--confirmation", help="Confirmation sidecar JSON path (intraday only)"),
+    # pre-open options (immutable IDs from analyze pre-open)
+    observation_id: Annotated[
+        Optional[str],
+        typer.Option(
+            "--observation-id",
+            help="Learning observation id (required for --type pre-open)",
+        ),
+    ] = None,
+    opening_snapshot_id: Annotated[
+        Optional[str],
+        typer.Option(
+            "--opening-snapshot-id",
+            help="Opening track snapshot id (required for --type pre-open)",
+        ),
     ] = None,
     # shared
     journal: Annotated[
@@ -82,8 +106,8 @@ def trade_log(
     Examples:
         saham trade log --type swing --ticker BBRI --window 7
         saham trade log --type swing --ticker BBCA --from-analysis --with-regime
-        saham trade log --type intraday
-        saham trade log --type intraday --confirmation journals/.last-confirmation.json
+        saham trade log --type pre-open \\
+          --observation-id OBS --opening-snapshot-id SNAP
     """
     cfg = load_app_config()
     if trade_type == "swing":
@@ -102,14 +126,81 @@ def trade_log(
             journal_path=journal or Path(cfg.storage.accum_journal),
             db_path=db_path or Path(cfg.storage.db_path),
         )
-    elif trade_type == "intraday":
-        _confirm_log_impl(
-            confirmation_path=confirmation or Path(cfg.storage.intraday_confirmation),
-            journal_path=journal or Path(cfg.storage.intraday_confirmation_journal),
+    elif trade_type == "pre-open":
+        _log_pre_open(
+            observation_id=observation_id,
+            opening_snapshot_id=opening_snapshot_id,
+            journal=journal or Path(cfg.storage.intraday_confirmation_journal),
+            db_path=db_path or Path(cfg.storage.db_path),
         )
-    else:
+    elif trade_type == "intraday":
         typer.echo(
-            f"Unknown --type '{trade_type}'. Valid values: swing, intraday",
+            "Unknown --type 'intraday'. Use --type pre-open with "
+            "--observation-id and --opening-snapshot-id "
+            "(from `saham analyze pre-open`).",
             err=True,
         )
         raise typer.Exit(1)
+    else:
+        typer.echo(
+            f"Unknown --type '{trade_type}'. Valid values: swing, pre-open",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+
+def _log_pre_open(
+    *,
+    observation_id: str | None,
+    opening_snapshot_id: str | None,
+    journal: Path,
+    db_path: Path,
+) -> None:
+    if not observation_id or not opening_snapshot_id:
+        typer.echo(
+            "--observation-id and --opening-snapshot-id are required for "
+            "--type pre-open (copy from `saham analyze pre-open`).",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
+        SQLiteLearningArtifactRepository,
+    )
+
+    repository = SQLiteLearningArtifactRepository(db_path)
+    analyze = AnalyzePreOpenUseCase(
+        observations=repository,
+        tracks=repository,
+        pre_open_config=load_pre_open_screen_config(),
+        clock_date=datetime.now(IDX_TIMEZONE).date(),
+    )
+    csv_store = IntradayConfirmationCsvStore(journal)
+    jsonl_store = TradeJournalJsonlWriter(journal.parent / "trades.jsonl")
+    use_case = LogPreOpenTradeUseCase(
+        analyze=analyze,
+        confirmation_store=csv_store,
+        trade_journal_store=jsonl_store,
+    )
+    try:
+        response = use_case.execute(
+            LogPreOpenTradeRequest(
+                observation_id=observation_id,
+                opening_snapshot_id=opening_snapshot_id,
+                journal_path=journal,
+            )
+        )
+    except (AnalyzePreOpenError, ValueError, FileNotFoundError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
+
+    if response.duplicate:
+        typer.echo(
+            f"Already logged for {response.confirmed_at} — "
+            f"no new rows added ({response.journal_path})"
+        )
+    else:
+        typer.echo(
+            f"Logged {response.logged_count} pre-open confirmation(s) "
+            f"for {response.confirmed_at} → {response.journal_path}"
+        )

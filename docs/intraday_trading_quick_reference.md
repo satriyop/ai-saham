@@ -33,10 +33,10 @@ tentu menjadi clearing price.
 | Screen pre-open autonomous | `saham screen pre-open --top 5` |
 | Regime + risk (always-on; opt-out with flags) | `saham screen pre-open --top 5` |
 | Fast mode manual | `saham screen pre-open --movers-json '…' --fast` |
-| Konfirmasi harga pembukaan | `saham trade confirm --opening-json '{"BBCA":5175}'` |
-| Log confirmation | `saham trade log intraday` |
+| Post-open assess NCP plan | `saham analyze pre-open --session YYYY-MM-DD` |
+| Log paper assess | `saham trade log --type pre-open --observation-id … --opening-snapshot-id …` |
 | Catat outcome aktual | `saham trade outcome BBCA --entry 5200 --exit 5375` |
-| Review journal | `saham trade review intraday` |
+| Review journal | `saham trade review pre-open` |
 | Grade prediksi | `saham research pre-open grade` |
 | Backtest intraday | `saham trade backtest-intraday --universe lq45` |
 

@@ -1,7 +1,6 @@
 # Migrate Pre-Open Confirmation to `saham analyze pre-open`
 
-Status: `BACKLOG` — **product decisions finalized 2026-07-27** (ready to implement
-when producer prerequisite is met)
+Status: `IN_PROGRESS` — **implementation landed 2026-07-27** (verify full suite + ops day; then move to done)
 
 Governing decisions:
 

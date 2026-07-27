@@ -25,7 +25,8 @@ Canonical artifact ownership:
 | `saham analyze swing TICKER` | Single-ticker swing decision | `TradeSetup` | Authoritative swing action from `SignalEngine + RiskEngine` |
 | `saham screen accum` | Candidate discovery | `AccumulationCandidate` with optional `TradeSetup` | Ranked candidates; final action exists only when both signal and risk are present |
 | `saham screen pre-open` | Intraday pre-open planning | `PreOpenScreenResult` | Conditional pre-open candidate list and entry ranges |
-| `saham trade confirm` | Intraday post-open confirmation | `IntradayConfirmationResult` | ENTER/WAIT/SKIP decision after actual opening price is known |
+| `saham analyze pre-open` | Post-open assessment of NCP pre-open plan | `AnalyzePreOpenResult` / `IntradayConfirmationResult` | Read-only ENTER/WAIT/SKIP after opening track snapshot; database-identified (replaces retired `trade confirm` sidecars) |
+| `saham trade log --type pre-open` | Paper journal for pre-open strategy | journal row with observation_id + opening_snapshot_id | Explicit notebook write via same assess use case; not a learning label |
 | `saham trade swing backtest` | Historical replay | typed learning evaluation | Walk-forward performance artifact, not a live verdict |
 | `saham trade backtest-intraday` | Historical proxy simulation | `IntradayBacktestResponse` | Daily-OHLC proxy performance artifact, not exact intraday replay |
 | `saham analyze accum-audit` | Learning/audit replay | `AccumulationAuditResponse` | Forward-return audit of foreign-flow score evidence |

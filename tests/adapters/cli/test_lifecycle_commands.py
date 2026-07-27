@@ -113,7 +113,7 @@ def test_trade_group_exposes_shallow_workspace_commands():
     result = runner.invoke(app, ["trade", "--help"])
 
     assert result.exit_code == 0
-    assert "confirm" in result.stdout
+    assert "confirm" not in result.stdout  # post-open assess → analyze pre-open
     assert "log" in result.stdout
     assert "review" in result.stdout
     assert "outcome" in result.stdout
@@ -126,7 +126,7 @@ def test_trade_group_exposes_shallow_workspace_commands():
 
 
 def test_removed_legacy_trade_groups_are_not_callable():
-    for group in ("intraday", "opening"):
+    for group in ("intraday", "opening", "confirm"):
         result = runner.invoke(app, ["trade", group, "--help"])
 
         assert result.exit_code != 0
@@ -136,16 +136,24 @@ def test_trade_log_group_keeps_journals_distinct():
     result = runner.invoke(app, ["trade", "log", "--help"])
 
     assert result.exit_code == 0
-    assert "intraday" in result.stdout
+    assert "pre-open" in result.stdout
     assert "swing" in result.stdout
+    assert "intraday" not in result.stdout
 
 
 def test_trade_review_group_keeps_journals_distinct():
     result = runner.invoke(app, ["trade", "review", "--help"])
 
     assert result.exit_code == 0
-    assert "intraday" in result.stdout
+    assert "pre-open" in result.stdout
     assert "swing" in result.stdout
+
+
+def test_analyze_group_exposes_pre_open_post_open_assess():
+    result = runner.invoke(app, ["analyze", "--help"])
+
+    assert result.exit_code == 0
+    assert "pre-open" in result.stdout
 
 
 def test_strategy_group_exposes_skill_commands():
