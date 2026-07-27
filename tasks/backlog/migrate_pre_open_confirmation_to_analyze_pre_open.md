@@ -1,29 +1,59 @@
 # Migrate Pre-Open Confirmation to `saham analyze pre-open`
 
-Status: `BACKLOG`
+Status: `BACKLOG` — **product decisions finalized 2026-07-27** (ready to implement
+when producer prerequisite is met)
 
 Governing decisions:
 
 - [ADR-026](../../docs/adr/ADR-026-risk-plus-signal-pipeline-composition.md)
 - [ADR-033](../../docs/adr/ADR-033-workflow-composition-artifact-boundaries.md)
+- [ADR-046](../../docs/adr/ADR-046-cli-response-envelope.md) (JSON envelope adopt-on-touch)
 - [ADR-048](../../docs/adr/ADR-048-pre-open-signal-evidence-and-observation-identity.md)
 - [ADR-049](../../docs/adr/ADR-049-database-owned-learning-pipeline-clean-break.md)
+
+## 0. Finalized product decisions (do not re-litigate)
+
+| # | Decision |
+|---|----------|
+| 1 | Journal type for this strategy: **`--type pre-open`** (retire `--type intraday` for this path; **no** alias). |
+| 2 | **Keep** paper journal: `trade log` + `trade review` + `trade outcome` for the pre-open paper book. |
+| 3 | **Prerequisite first:** implement only after (or immediately after producers fix so) `research pre-open capture` + `track` reliably persist observation IDs and linked track snapshots. |
+| 4 | **Opening price rules:** reuse existing confirm-policy arithmetic; change only **transport** (load from immutable track snapshot ID, not sidecar/live). |
+| 5 | **`loop_intraday.sh`:** remove confirm phase / do not preserve script merely for confirm (no new screen-only loop unless a later task asks). |
+| 6 | **Cron:** no auto `analyze` and no auto `trade log`; human runs assess then log. Remove `trade confirm` / confirmation-sidecar cron lines. |
+| 7 | **ADR:** small amendment to ADR-049 and/or ADR-033 in the **same implementation PR** (command ownership + sidecar retirement). |
+
+Unique value of `trade log` (retained on purpose): personal paper notebook — not learning capture, not assess, not outcome labels.
 
 ## 1. Task Metadata
 
 - Task type: Refactor / clean-break CLI migration
-- Priority: High
+- Priority: High (blocked until pre-open capture+track write DB IDs reliably)
 - Semantic classification: `NON_SEMANTIC` only if equivalent fixtures prove
   that `ConfirmIntradayOpenUseCase` arithmetic and decisions are unchanged.
   Escalate to `SEMANTIC_ENGINE`, `EVIDENCE_CONTRACT`, or `CONFIG_MATERIAL`
   before editing if opening-price authority, gates, thresholds, or canonical
   output meaning changes.
 - Chosen decision: retire `saham trade confirm` and expose the deterministic
-  post-open assessment as `saham analyze pre-open`. Implement this option only.
+  post-open assessment as **`saham analyze pre-open`**. Implement this option
+  only. **Single release; no alias window.**
 
-The name `pre-open` identifies the originating strategy and persisted 08:57
-observation. The command itself runs after the market opens; its help and output
-must state that explicitly. Do not rename it to `analyze opening`.
+### Locked public name (anti-confusion)
+
+| Token | Meaning |
+|-------|---------|
+| **`saham analyze pre-open`** | **Post-open** assessment of an immutable **pre-open strategy** plan |
+| `saham screen pre-open` | Live discovery only (no learning write) |
+| `saham research pre-open capture\|track\|labels\|evaluate\|status` | Learning lifecycle for the same strategy |
+| `saham research pre-open evaluate` | Session/cohort **outcome** evaluation (labels), **not** post-open execution assessment |
+
+- **`pre-open` names the strategy / cohort identity**, not the wall-clock phase
+  of this command. The command **runs after the market opens** (typically after
+  09:00 once an opening track sample exists).
+- Help **first line** and result header **must** say: *post-open assessment of
+  NCP pre-open plan* (or equivalent plain language).
+- Do **not** rename to `analyze opening`, `analyze open-confirm`, or any other
+  public path. Do **not** keep `trade confirm` as an alias or deprecation shim.
 
 ## 2. Problem Statement
 
@@ -61,31 +91,69 @@ The command:
 
 - reads the exact immutable 08:57
   `learning_observation.pre_open_auction_direction.v1` observation;
-- reads an observation-linked persisted opening snapshot;
+- reads an observation-linked persisted **opening track snapshot** (see
+  §3.1);
 - reuses the existing deterministic post-open confirmation policy;
-- projects the pre-open direction/setup separately from the post-open
-  `ENTER` / `WAIT` / `SKIP_*` assessment;
-- writes nothing; JSON output is stdout-only;
+- projects the pre-open direction/setup (from the observation) separately from
+  the post-open `ENTER` / `WAIT` / `SKIP_*` assessment;
+- writes nothing; JSON output is stdout-only (ADR-046 envelope adopt-on-touch
+  if analyze family is not already on the shared envelope);
 - prints the consumed `observation_id`, `opening_snapshot_id`, cutoff,
   compatibility identity, opening-price provenance, and policy identity.
 
 Default selection is the current IDX session. It may analyze all compatible
 pre-open observations for that session only when there is exactly one
-unambiguous compatible cohort. Ambiguous cohorts fail closed and require
-`--observation-id`. An explicit snapshot must belong to the selected
-observation; cross-observation substitution is a hard contract error.
+unambiguous compatible cohort (same purpose + contract_id + session cutoff).
+Ambiguous cohorts fail closed and require `--observation-id`. An explicit
+snapshot must belong to the selected observation; cross-observation
+substitution is a hard contract error.
 
-Paper-trade logging remains an explicit, separate action:
+### 3.1 Opening snapshot and price authority (locked)
+
+**Opening snapshot** = one row in `learning_track_snapshots` linked to the
+chosen observation.
+
+Default when `--opening-snapshot-id` is omitted:
+
+1. Among track snapshots for that `observation_id`, select the **earliest**
+   sample with `sampled_at` in the regular open window on the observation’s
+   session date (local IDX calendar), typically the first post-09:00 sample
+   written by `research pre-open track`.
+2. If none exist, result is **unavailable** (typed), never fabricated and never
+   live-fetched as a substitute.
+3. If multiple candidates share the same earliest timestamp, fail closed and
+   require `--opening-snapshot-id`.
+
+**Opening price** = the track snapshot’s explicit opening-price field(s) as
+already defined by the confirmation policy / track contract (last trade / open
+proxy with confidence). Do **not** silently substitute mid-of-book or another
+source as “opening” without a separate, approved semantic change. Provenance
+must appear in the analyze output.
+
+Paper-trade logging remains an explicit, separate action under the unified
+`trade log` router. **Type name is strategy-contextual:**
 
 ```text
-saham trade log --type intraday \
+saham trade log --type pre-open \
   --observation-id OBSERVATION_ID \
   --opening-snapshot-id SNAPSHOT_ID
 ```
 
-That command must recompute from those exact immutable IDs through the same
-application use case before writing the existing trade journal. It must never
-reread live data or accept a mutable “last confirmation” sidecar.
+- Retire **`--type intraday`** for this path (no alias to `pre-open`).
+- Retire **`--confirmation`** sidecar flag for this path.
+- Journal files/config may keep internal path names temporarily if needed, but
+  the **CLI type** and user docs must say `pre-open`. Prefer renaming
+  journal config keys to `pre_open_*` in the same cut when nothing else shares
+  the old `intraday_confirmation_*` paths.
+
+That command must recompute from those exact immutable IDs through the **same**
+application use case (`AnalyzePreOpenUseCase`) before writing the paper journal.
+It must never reread live data or accept a mutable “last confirmation” sidecar.
+
+`trade review` / `trade outcome` for this book: use **pre-open** naming in help
+and subcommands where they currently say only “intraday” for this strategy
+(e.g. `trade review pre-open` if that is a clean rename of the intraday review
+path for this journal; do not leave “intraday” as the user-facing strategy name).
 
 ## 4. Non-Goals
 
@@ -100,16 +168,17 @@ reread live data or accept a mutable “last confirmation” sidecar.
 - No replacement of `price_path.open_30m.v1`; outcome labeling remains a later
   truth artifact.
 - No mutable JSON/JSONL/Markdown analysis sidecar.
+- No merge with `research pre-open evaluate` (cohort outcome evaluation).
+- No half-ship: do not leave `trade confirm` callable while analyze is live.
 
 ## 5. Do Not Interpret This As
 
 - Do not keep `saham trade confirm` as an alias, hidden route, compatibility
   wrapper, or deprecation shim.
-- Do not add `saham analyze opening`; the locked public name is
-  `saham analyze pre-open`.
+- Do not add `saham analyze opening` or any alternate public name.
 - Do not run pre-open capture at 09:00.
-- Do not treat post-open assessment as a forward label or walk-forward
-  evaluation.
+- Do not treat post-open assessment as a forward label, walk-forward evaluation,
+  or as `research pre-open evaluate`.
 - Do not recompute the 08:57 signal, risk, or `TradeSetup`; consume the exact
   persisted decision payload.
 - Do not select “latest” across dates, compatibility cohorts, or observations.
@@ -118,7 +187,8 @@ reread live data or accept a mutable “last confirmation” sidecar.
 - Do not make `analyze` write a trade journal.
 - Do not make `trade log` reread a live provider after the user inspected an
   immutable snapshot.
-- Do not preserve `loop_intraday.sh` merely to call the removed command.
+- Do not preserve `loop_intraday.sh` merely to call the removed command (a
+  separate display-only screen loop is out of scope unless requested later).
 
 ## 6. Architecture Impact Assessment
 
@@ -148,6 +218,10 @@ Layer plan:
 - Adapter: thin analyze command, removed confirm route, explicit trade-log wiring
 ```
 
+Prerequisite before implementation: `research pre-open capture` and
+`research pre-open track` must already persist observation IDs and linked track
+snapshots that this command can address. If not, stop and fix producers first.
+
 ## 7. AI Usage Declaration
 
 No AI involved.
@@ -155,7 +229,8 @@ No AI involved.
 ## 8. Risk, Signal, and Evidence Authority
 
 - The 08:57 persisted signal and `TradeSetup` remain unchanged and immutable.
-- `ConfirmIntradayOpenUseCase` remains the sole post-open action policy.
+- `ConfirmIntradayOpenUseCase` (or its extracted pure policy) remains the sole
+  post-open action policy.
 - Pre-open output must be presented as the earlier directional/setup state;
   post-open `ENTER` / `WAIT` / `SKIP_*` is a later execution assessment.
 - No post-open fact may flow backward into the pre-open observation or its
@@ -168,7 +243,7 @@ Single source of truth:
 
 ```text
 learning_observations row
-  + exact linked learning_track_snapshots row
+  + exact linked learning_track_snapshots row (opening snapshot)
   → AnalyzePreOpenUseCase
   → typed AnalyzePreOpenResult
   → analyze adapter display/stdout JSON
@@ -194,75 +269,89 @@ Required failure behavior:
 - malformed persisted canonical payload: propagate and fail closed;
 - expected absence must not be converted into `ENTER`.
 
-Retire:
+Retire (non-exhaustive checklist — delete production references):
 
-- `saham trade confirm`;
+- `saham trade confirm` and all its flags;
 - `--track-file`, `--output`, live/manual price flags, and the old
   `--session PATH` sidecar meaning owned by the removed command; the new
   `--session YYYY-MM-DD` selector is a distinct database-session contract;
-- confirmation sidecar loading/writing and “last confirmation” defaults;
-- `loop_intraday.sh`;
-- obsolete confirmation-sidecar tests, displays, factories, documentation, and
-  cron references.
+- confirmation sidecar loading/writing and “last confirmation” defaults
+  (`intraday_confirmation_session_store` confirmation write path, related
+  factories/displays);
+- `loop_intraday.sh` confirm phase (or the script if only used for that);
+- `install_cron.sh` (and runbooks) lines that call `trade confirm`, write
+  confirmation sidecars, or auto-journal from last-confirmation files;
+- `--type intraday` (and docs/examples) for this strategy path;
+- obsolete confirmation-sidecar tests, documentation, and examples.
 
 Do not delete unrelated historical trade journals.
 
 ## 10. Acceptance Criteria
 
-- [ ] `saham analyze pre-open` is mounted under `analyze` and documented as a
-      post-open assessment of an immutable pre-open plan.
+- [ ] `saham analyze pre-open` is mounted under `analyze`; help first line states
+      post-open assessment of NCP pre-open plan.
 - [ ] `saham trade confirm` and all its flags are absent from help and routing.
-- [ ] `loop_intraday.sh` and mutable confirmation/session analysis sidecars are
-      no longer production transport.
+- [ ] `loop_intraday.sh` confirm loop and mutable confirmation/session analysis
+      sidecars are no longer production transport.
+- [ ] Cron/runbook no longer invoke `trade confirm` or last-session sidecars for
+      this purpose.
 - [ ] The command reads the exact persisted pre-open observation and one linked
-      immutable opening snapshot.
+      immutable opening track snapshot (§3.1).
 - [ ] Equivalent fixtures preserve existing post-open decision arithmetic.
 - [ ] Pre-open direction/setup and post-open action are visibly distinct.
 - [ ] `--format json` writes stdout only.
 - [ ] Analysis performs no database, filesystem, journal, YAML, provider, or SDK
       I/O directly from the application layer.
-- [ ] Explicit intraday trade logging consumes exact immutable IDs and cannot
-      reread live state.
-- [ ] Pre-open labels/evaluations remain unchanged.
+- [ ] `trade log --type pre-open` consumes exact immutable IDs and cannot
+      reread live state; uses the same use case as analyze; `--type intraday`
+      and `--confirmation` are gone for this path.
+- [ ] Pre-open labels/evaluations remain unchanged; not confused with analyze.
 - [ ] Documentation and CLI examples contain no removed route or sidecar path.
 
 ## 11. Testing Expectations
 
 - Unit: exact observation/snapshot binding, unavailable opening state,
-  compatibility ambiguity, and unchanged confirmation gates.
+  compatibility ambiguity, default opening-snapshot selection, and unchanged
+  confirmation gates.
 - Integration: persisted observation + linked track → typed analysis result.
 - Producer-to-consumer: the exact snapshot ID shown by `analyze` is the one
   consumed by explicit trade logging; assert repository call counts.
 - Negative CLI: removed command and every removed flag/path fail.
 - Architecture: application imports no SQLite, filesystem, YAML, Typer, Rich,
   Stockbit SDK, or browser implementation.
-- Regression: pre-open capture, track, labels, and evaluate suites remain green.
+- Regression: pre-open capture, track, labels, evaluate, and status suites
+  remain green.
 - All tests offline; run the full suite and `git diff --check`.
 
 ## 12. Documentation Impact
 
 - Update CLI overview, intraday workflow, quick reference, building blocks,
   architecture index/ADR amendments, and cron/runbook references.
-- Clearly state that `pre-open` names the originating strategy even though the
-  analysis runs after 09:00.
+- Clearly state that `analyze pre-open` uses **strategy name** `pre-open` and
+  runs **after** open.
 - Document the three distinct artifacts:
-  pre-open observation, post-open assessment, and later outcome label.
+  1. pre-open observation (NCP decision),
+  2. post-open assessment (`analyze pre-open`),
+  3. later outcome label (`price_path.open_30m.v1` / evaluate).
 
 ## 13. Delivery Sequence
 
-1. Amend governing ADRs for command ownership and removal of sidecar transport.
-2. Add typed application request/result and exact lineage tests.
+1. Confirm producers persist observation IDs + linked track snapshots; amend
+   governing ADRs for command ownership and removal of sidecar transport.
+2. Add typed application request/result and exact lineage tests (including
+   §3.1 default selection).
 3. Add repository-port reads and producer-to-consumer integration test.
-4. Mount `saham analyze pre-open`.
-5. Migrate explicit intraday trade logging to immutable IDs.
-6. Remove `saham trade confirm`, sidecars, loop script, and compatibility tests.
+4. Mount `saham analyze pre-open` (help text anti-confusion).
+5. Migrate explicit intraday trade logging to immutable IDs (same use case).
+6. Remove `saham trade confirm`, sidecars, loop confirm phase, cron refs, and
+   compatibility tests **in the same cut**.
 7. Update documentation, run focused/full verification, and commit scoped files.
 
 ## 14. Agent Execution Instructions
 
 Before implementation, read `AGENT_QUICKSTART.md`, `AGENTS.md`,
-`TASK_TEMPLATE.md`, `DEFINITION_OF_DONE.md`, ADR-026, ADR-033, ADR-048,
-ADR-049, and the current executable CLI/application/repository paths.
+`TASK_TEMPLATE.md`, `DEFINITION_OF_DONE.md`, ADR-026, ADR-033, ADR-046,
+ADR-048, ADR-049, and the current executable CLI/application/repository paths.
 
 State the semantic classification and exact transport design before editing.
 If equivalent decision behavior cannot be proven, stop and request approval for
