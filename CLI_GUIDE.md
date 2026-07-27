@@ -530,26 +530,22 @@ saham trade outcome BBCA --entry 9000 --exit 9500 --result target
 
 ## 15. Opening Session Learning Loop
 
-Same-day ops loop for opening scalping. Decisions are saved to the observation
-DB via `research pre-open capture`; then `research pre-open track`/`grade`/`tune`/`prompt`
-run the same-day accuracy and tuning ritual.
+Full operator path: [`docs/runbook_pre_open.md`](docs/runbook_pre_open.md).
 
 ```bash
-# Step 1: Save pre-open decisions to observation DB
+# Cron-owned learning (also install via ./install_cron.sh)
 saham research pre-open capture
-
-# Step 2: Track every 5 minutes
 saham research pre-open track
+saham research pre-open labels
+saham research pre-open evaluate
+saham research pre-open status
 
-# Step 3: Grade accuracy
-saham research pre-open grade
-
-# Step 4: Generate AI prompt
-saham research pre-open prompt | pbcopy
-
-# Step 5: Tune via AI
-saham research pre-open tune
+# Human post-open (not cron; not a learning label)
+saham analyze pre-open --session YYYY-MM-DD
+saham trade log --type pre-open --observation-id … --opening-snapshot-id …
 ```
+
+Retired: `research pre-open grade|prompt|tune`, `trade confirm`.
 
 ---
 

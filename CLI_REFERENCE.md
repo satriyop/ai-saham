@@ -9,25 +9,27 @@ Troubleshooting → `CLI_TROUBLESHOOTING.md`
 
 Same shape for every screen scenario (pre-open, accum, …):
 
-| Family | Role | Writes research corpus? |
-|--------|------|-------------------------|
-| **`screen`** | **Live** discovery / operator display | **No** observation rows |
-| **`research <scenario> capture`** | **Save decisions** into `candidate_observations` | **Yes** (explicit corpus write) |
-| **`research <scenario> labels`** | **Outcomes** joined to saved decisions | Labels/artifacts only |
-| **`research pre-open` same-day** | **track / grade / prompt / tune** after capture | Day files under `data/opening/` (not multi-day corpus) |
+| Family | Role | Writes learning DB? |
+|--------|------|---------------------|
+| **`screen`** | **Live** discovery / operator display | **No** |
+| **`research <scenario> capture`** | **Save decisions** (observations) | **Yes** |
+| **`research pre-open track`** | Opening samples linked to observation | Track snapshots |
+| **`research <scenario> labels`** | **Outcomes** on saved decisions | Labels |
+| **`research pre-open evaluate`** | Cohort summary over labels | Evaluations |
+| **`analyze pre-open`** | Post-open assess of frozen plan | **No** (stdout only) |
 
 Examples:
 
-- Live open: `saham screen pre-open` → no DB observation write  
+- Live open: `saham screen pre-open` → no observation write  
 - **Save decisions:** `saham research pre-open capture`  
-- Same-day follow-through: `saham research pre-open track|grade|prompt|tune`  
-- Session outcomes: `saham research pre-open labels` (`open_30m`)  
+- Same-day learning: `track` → `labels` → `evaluate` / `status`  
+- Post-open assess: `saham analyze pre-open`  
+- Paper notebook: `saham trade log --type pre-open --observation-id … --opening-snapshot-id …`  
 - Live accum: `saham screen accum` → no observation write  
-- Accum corpus: `saham research signal capture` → `… labels`
 
 Do **not** auto-write observations from live `screen`.  
-Do **not** use day-file exports as a second decision source for grade/labels.  
-There is **no** top-level `learn` group.
+**Retired:** `research pre-open grade|prompt|tune`, `trade confirm`, `trade log --type intraday`.  
+Operator runbook: `docs/runbook_pre_open.md`.
 
 ---
 
@@ -1188,33 +1190,11 @@ saham research pre-open track --force BBCA BBRI  # manual dry-run
 
 ---
 
-## saham research pre-open grade
-
-**Same-day ops** session scorecard (not multi-day corpus labels). Joins **saved
-DB observations only** (`screen_pre_open`) to `track_*.json` prices. Fail closed
-without capture. Champion metrics: plan + signal bands + screen_result / TradeSetup
-slices. PRIME strata are **legacy secondary**. Does not recompute signal scores.
-Writes `grade.json` + `grade.md` for tune/prompt.
-For `open_30m` corpus outcomes use `research pre-open labels`.
-
-```
-saham research pre-open grade [OPTIONS]
-```
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--date` | today | Grade date (YYYY-MM-DD) |
-| `--db` | config | SQLite path for saved observations |
-
----
-
 ## saham research pre-open labels
 
-Generate **open_30m** outcome labels from **saved** pre-open observations + tracks
-(session-horizon twin of `research signal labels`). Fail closed without capture.
-Writes `data/opening/YYYYMMDD/open_30m_labels.json`.
-
-Not `research signal labels` (multi-day horizons only).
+Generate immutable **open_30m** outcome labels from saved observations + track
+snapshots (SQLite). Fail closed without capture. Cohort evaluation is a separate
+command (`research pre-open evaluate`).
 
 ```
 saham research pre-open labels [OPTIONS]
@@ -1222,40 +1202,35 @@ saham research pre-open labels [OPTIONS]
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--date` | today | Session date (YYYY-MM-DD) |
-| `--db` | config | SQLite path for saved observations |
-| `--no-persist` | false | Compute only; do not write JSON |
+| `--compatibility-id` | auto if unique | Exact cohort identity |
+| `--db` | config | Learning SQLite path |
+| `--format` | table | table or json |
 
 ---
 
-## saham research pre-open tune
+## saham research pre-open evaluate
 
-Generate AI config tuning recommendations from today's grade via DeepSeek.
+Evaluate a compatible pre-open label cohort (reads labels only; never rereads tracks).
 
 ```
-saham research pre-open tune [OPTIONS]
-saham research pre-open tune --allow-invalid-snapshot
+saham research pre-open evaluate [OPTIONS]
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--allow-invalid-snapshot` | false | Tune from low-confidence/out-of-window snapshot |
-| `--api-key` | DEEPSEEK_API_KEY | DeepSeek API key |
+| `--compatibility-id` | auto if unique | Exact cohort identity |
+| `--db` | config | Learning SQLite path |
+| `--format` | table | table or json |
 
 ---
 
-## saham research pre-open prompt
+## saham research pre-open status
 
-Generate a structured AI prompt from today's predictions and accuracy metrics. Pipe to clipboard or save.
+Inspect learning lifecycle readiness for pre-open observations / tracks / labels.
 
 ```
-saham research pre-open prompt [OPTIONS]
-saham research pre-open prompt | pbcopy
+saham research pre-open status [OPTIONS]
 ```
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--print` | false | Print to stdout instead of saving |
 
 ---
 

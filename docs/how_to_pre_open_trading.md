@@ -1,7 +1,7 @@
 # Panduan Intraday Trading dengan ai-saham
 
 Panduan ini menjadi indeks singkat untuk referensi, checklist operasional, dan
-catatan desain workflow intraday `ai-saham`.
+catatan desain workflow **pre-open** `ai-saham`. Operator: [runbook_pre_open.md](runbook_pre_open.md).
 
 ## Dokumen Aktif
 

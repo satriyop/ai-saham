@@ -101,18 +101,26 @@ warnings before treating any candidate list as current.
 
 ### Pre-open and opening session
 
+Operator runbook: [`docs/runbook_pre_open.md`](docs/runbook_pre_open.md).
+
 ```bash
+# Learning + decision write (cron owns most of this)
 saham fetch iev
 saham research pre-open capture
 saham research pre-open track
 saham research pre-open labels
 saham research pre-open evaluate
 saham research pre-open status
+
+# Human post-open assess + optional paper notebook (not learning)
+saham analyze pre-open --session YYYY-MM-DD
+saham trade log --type pre-open --observation-id … --opening-snapshot-id …
 ```
 
-The pre-open workflow is session-specific: it snapshots indicative equilibrium
-data into SQLite, tracks the opening there, generates the `open_30m` label once,
-and evaluates compatible persisted sessions. Evaluation never rereads tracks.
+The pre-open workflow is session-specific: NCP capture freezes the plan in
+SQLite, track samples the open, labels write `open_30m` once, and evaluate
+reads labels only (never rereads tracks). `analyze pre-open` is a separate
+read-only post-open assess of the frozen plan.
 
 ### Swing discovery and analysis
 
@@ -199,12 +207,12 @@ The live top-level groups are registered in `src/adapters/cli/main.py`:
 | `saham today` | Read-only daily orientation | freshness, regime, saved pre-open, accumulation candidates |
 | `saham fetch` | Ingestion and data health | market, broker, IEV, calendar, enrichment history, status, audit, Stockbit, universes |
 | `saham screen` | Candidate discovery | pre-open, accumulation, watchlists, comparisons |
-| `saham research pre-open` | Pre-open research + same-day ritual | capture, track, grade, labels, prompt, tune |
+| `saham research pre-open` | Pre-open learning lifecycle | capture, track, labels, evaluate, status |
 | `saham view` | Cached-data inspection | ticker, universe, broker, market context |
 | `saham indicator` | Indicator/formula operations | compute, snapshot, create, list, show, delete |
-| `saham analyze` | Deeper deterministic analysis | risk, swing, regime, replay/audit/readiness, sentiment, charts |
+| `saham analyze` | Deeper deterministic analysis | risk, swing, regime, **pre-open** (post-open assess), signal, charts |
 | `saham strategy` | Strategy lifecycle | initialize, validate, create, backtest, skill docs |
-| `saham trade` | Paper trading and calibration | confirm, outcomes, sizing, backtests, guarded tuning, journals, reviews |
+| `saham trade` | Paper trading and calibration | log/review (pre-open + swing), outcome, sizing, backtests, guarded swing tuning |
 
 Run `saham GROUP --help` for the current subcommands. Do not maintain another
 exhaustive command tree here; live Typer help is the source of truth.

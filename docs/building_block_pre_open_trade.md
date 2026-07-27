@@ -1,6 +1,6 @@
-# Intraday Trade — Building Block
+# Pre-Open Trade — Building Block
 
-The intraday trade feature is an **end-to-end pre-open trading workflow** that screens morning movers, confirms entry at auction, journals decisions, records outcomes, and reviews performance — all backed by a deterministic rule engine with optional AI research.
+End-to-end **pre-open** workflow: live screen, NCP capture, opening track, post-open assess, paper journal, and open_30m learning — deterministic engine first. Operator path: [runbook_pre_open.md](runbook_pre_open.md).
 
 ---
 
@@ -25,7 +25,7 @@ The intraday trade feature is an **end-to-end pre-open trading workflow** that s
 
 ```
 ┌───────────────────────────────────────────────────────────────────────────┐
-│                         CLI LAYER (trade_intraday_commands.py + intraday_workflow_commands.py)        │
+│                         CLI LAYER (screen_pre_open / research_pre_open / analyze_pre_open / trade_pre_open)        │
 │                                                                           │
 │  screen/capture/track │ analyze pre-open │ log pre-open │ review pre-open │
 │  outcome   │  backtest-intraday  │  research pre-open labels/evaluate             │
@@ -34,7 +34,7 @@ The intraday trade feature is an **end-to-end pre-open trading workflow** that s
 │           _display_intraday_backtest, _display_raw_movers, etc.           │
 │                                                                           │
 │  Helpers: _build_intraday_run_guard, _load_config, _build_data_freshness  │
-│           _verdict, _signal_col, _write_sidecar, _load_confirmation_...   │
+│           _verdict, _signal_col, pre_open helpers   │
 │           _build_ai_researcher, _build_market_regime, _decimal_or_none    │
 └────────────────────────────────┬──────────────────────────────────────────┘
                                  │
@@ -236,7 +236,7 @@ CLI: saham analyze pre-open --session YYYY-MM-DD
 CLI: saham trade log --type pre-open --observation-id … --opening-snapshot-id …
  │
  └─ PreOpenPaperJournalCsvStore.append(confirmations)
-      └── Writes → journals/intraday-confirmations.csv
+      └── Writes → journals/pre_open_paper.csv
 ```
 
 ### Phase 4: Record Outcome
@@ -253,7 +253,7 @@ CLI: saham trade outcome BBCA --entry 9050 --exit 9200 --result target
 ### Phase 5: Review
 
 ```
-CLI: saham research pre-open grade
+CLI: saham research pre-open labels / evaluate
  │
  └─ OpeningGradeUseCase
       ├── Reads opening snapshots and tracking files
@@ -399,7 +399,7 @@ screen_pre_open_commands.py / trade_intraday_commands.py (CLI entry points)
   │
   ├── PreOpenPaperJournalService
   │     ├── PreOpenPaperJournalStore (protocol) → PreOpenPaperJournalCsvStore
-  │     │                                             (journals/intraday-confirmations.csv)
+  │     │                                             (journals/pre_open_paper.csv)
   │     └── MarketDataRepository → SQLiteMarketRepository
   │
   ├── IntradayBacktestUseCase

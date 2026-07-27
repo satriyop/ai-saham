@@ -3,6 +3,9 @@
 The pre-open learning lifecycle is deterministic and SQLite-owned. Production
 decisions use NCP-locked evidence collected wholly inside 08:56–08:58 WIB.
 
+**Operator day path:** [runbook_pre_open.md](runbook_pre_open.md)
+(two lanes, three artifacts, cron clock, retired commands).
+
 ## Workflow
 
 ```text
@@ -29,6 +32,9 @@ saham research pre-open status
 `learning_observations`. `track` links samples to their stable
 `observation_id` in `learning_track_snapshots`. `labels` generates immutable
 `price_path.open_30m.v1` outcomes in `learning_outcome_labels`.
+
+`analyze pre-open` is **not** a learning write: it re-reads observation + track
+for post-open ENTER/WAIT/SKIP. Paper log is a personal notebook, not a label.
 
 `evaluate` reads persisted labels only. It never rereads track snapshots or
 recomputes a label outcome. One-session results are descriptive; compatible

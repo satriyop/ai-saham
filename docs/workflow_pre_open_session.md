@@ -1,4 +1,6 @@
 # Workflow Pre-Opening Intraday Trading
+
+**Operator runbook:** [runbook_pre_open.md](runbook_pre_open.md).
 ## Panduan Operasional Step-by-Step
 
 > Dokumen ini adalah **playbook harian** — fokus pada apa yang kamu lakukan dan
@@ -603,7 +605,7 @@ Harga sidewalk 30+ menit:
 saham trade log --type pre-open
 ```
 
-Perintah ini mencatat hasil `opening confirmation` terakhir ke `journals/intraday-confirmations.csv`.
+Perintah ini mencatat hasil `opening confirmation` terakhir ke `journals/pre_open_paper.csv`.
 
 ### Catat Outcome Aktual
 
@@ -627,7 +629,7 @@ saham trade outcome BBRI \
 
 ```bash
 # Akurasi prediksi pre-open
-saham research pre-open grade
+saham research pre-open evaluate
 
 # Akurasi keputusan (win rate per decision type)
 saham trade review pre-open

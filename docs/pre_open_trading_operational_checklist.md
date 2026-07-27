@@ -1,7 +1,7 @@
-# Checklist Operasional Intraday Trading
+# Checklist Operasional Pre-Open
 
-Checklist harian untuk workflow pre-open sampai evaluasi. Perilaku CLI dan
-config saat ini adalah sumber kebenaran jika dokumentasi drift.
+Checklist harian pre-open. Ringkas: [runbook_pre_open.md](runbook_pre_open.md).
+CLI `--help` menang jika drift.
 
 ## Setup Awal
 
