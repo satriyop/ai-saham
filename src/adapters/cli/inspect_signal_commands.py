@@ -1,7 +1,7 @@
 """
 CLI: provisional read-only canonical signal inspection (DQ-007).
 
-Permanent hierarchy ``saham analyze signal inspect`` is owned by CLI-002.
+Permanent hierarchy ``saham inspect signal`` is owned by CLI-002.
 This provisional command wires the verified use case only.
 
 Layer: Adapter (parse, wire, format, map errors). No PIT/score policy.
@@ -65,7 +65,7 @@ def signal_inspect(
     """Inspect live canonical SignalEngine scoring for one ticker (read-only).
 
     Contract: accumulation-flow (same boundary as the accumulation screen).
-    Provisional name until CLI-002 remounts as ``signal inspect``.
+    Public path: ``saham inspect signal``.
     """
     cfg = load_app_config()
     resolved_db = db_path or Path(cfg.storage.db_path)

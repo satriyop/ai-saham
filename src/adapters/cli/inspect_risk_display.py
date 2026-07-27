@@ -1,5 +1,5 @@
 """
-Display rendering for the `saham analyze risk` command.
+Display rendering for the `saham inspect risk` command.
 
 Layer: Adapter
 

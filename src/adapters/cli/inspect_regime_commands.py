@@ -1,5 +1,5 @@
 """
-CLI implementation for saham analyze regime command.
+CLI implementation for saham inspect regime command.
 
 Delegates to MarketContextEngine (ADR-029). The old MarketRegimeUseCase
 (7 binary signals, IDX-internal only) has been replaced.

@@ -97,3 +97,21 @@ def test_assess_family_exposes_pre_open_and_retires_analyze_pre_open() -> None:
     assert "pre-open" in assess.stdout
     assert runner.invoke(app, ["assess", "pre-open", "--help"]).exit_code == 0
     assert runner.invoke(app, ["analyze", "pre-open", "--help"]).exit_code != 0
+
+
+def test_inspect_family_and_analyze_retired() -> None:
+    inspect = runner.invoke(app, ["inspect", "--help"])
+    assert inspect.exit_code == 0
+    for cmd in ("risk", "sentiment", "regime", "signal", "chart"):
+        assert cmd in inspect.stdout
+    assert runner.invoke(app, ["inspect", "risk", "--help"]).exit_code == 0
+    assert runner.invoke(app, ["inspect", "signal", "--help"]).exit_code == 0
+    assert runner.invoke(app, ["audit", "sentiment", "--help"]).exit_code == 0
+    assert runner.invoke(app, ["analyze", "--help"]).exit_code != 0
+    for retired in (
+        ["analyze", "risk", "--help"],
+        ["analyze", "sentiment", "--help"],
+        ["analyze", "audit", "--help"],
+        ["analyze", "signal", "inspect", "--help"],
+    ):
+        assert runner.invoke(app, retired).exit_code != 0, retired

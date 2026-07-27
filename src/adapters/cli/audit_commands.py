@@ -96,7 +96,7 @@ data_app = typer.Typer(
 
 audit_app = typer.Typer(
     name="audit",
-    help="Read-only audits — data-quality baseline manifest and source-field contracts.",
+    help="Offline audits — data quality (`audit data`) and historical sentiment accuracy (`audit sentiment`).",
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},
 )
@@ -283,6 +283,9 @@ data_app.command("contract-gate")(contract_gate)
 data_app.command("seasonality-cleanup-plan")(seasonality_cleanup_plan)
 data_app.command("repair-seasonality-cache")(repair_seasonality_cache)
 audit_app.add_typer(data_app, name="data")
+
+from src.adapters.cli.audit_sentiment_commands import sentiment_audit as _sentiment_audit_fn
+audit_app.command("sentiment")(_sentiment_audit_fn)
 
 
 def _run_manifest(

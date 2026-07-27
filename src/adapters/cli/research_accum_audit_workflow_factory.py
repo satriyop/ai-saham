@@ -4,7 +4,7 @@ Factory for the `saham research accum evaluate` workflow.
 Layer: Adapter
 
 Owns CLI/infrastructure wiring (config loaders, SQLite repositories, indicator
-registry, rules loader, and universe resolution) so analyze_accum_commands.py
+registry, rules loader, and universe resolution) so research_accum_audit_commands.py
 can stay focused on flag parsing, request construction, execution, and
 rendering.
 """

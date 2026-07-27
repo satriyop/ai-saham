@@ -1,5 +1,5 @@
 """
-CLI command for `saham analyze risk` — rule-based risk assessment.
+CLI command for `saham inspect risk` — rule-based risk assessment.
 
 Layer: Adapter
 """
@@ -10,8 +10,8 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli import analyze_risk_display as display
-from src.adapters.cli.analyze_risk_workflow_factory import (
+from src.adapters.cli import inspect_risk_display as display
+from src.adapters.cli.inspect_risk_workflow_factory import (
     create_explain_risk_use_case,
     create_run_risk_analysis_workflow,
 )
@@ -79,10 +79,10 @@ def risk(
       BLOCKED   A configured gate fired
 
     Examples:
-        saham analyze risk BBCA
-        saham analyze risk BBCA --rules-file config/my_rules.yaml
-        saham analyze risk BBCA --explain
-        saham analyze risk BBCA --with-sentiment
+        saham inspect risk BBCA
+        saham inspect risk BBCA --rules-file config/my_rules.yaml
+        saham inspect risk BBCA --explain
+        saham inspect risk BBCA --with-sentiment
     """
     cfg = load_app_config()
     resolved_db = db_path or Path(cfg.storage.db_path)
@@ -138,7 +138,7 @@ def risk(
             display.render_risk_trend(result.trend_response, trend)
 
         if with_sentiment and result.sentiment_snapshot:
-            from src.adapters.cli.analyze_sentiment_display import display_sentiment_brief
+            from src.adapters.cli.inspect_sentiment_display import display_sentiment_brief
 
             display_sentiment_brief(snapshot=result.sentiment_snapshot)
 

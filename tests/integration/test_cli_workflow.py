@@ -560,7 +560,7 @@ class TestCLIRiskAssessment:
         result = runner.invoke(
             app,
             [
-                "analyze", "risk",
+                "inspect", "risk",
                 "RISK_TEST",
                 "--db",
                 str(db_path),
@@ -585,7 +585,7 @@ class TestCLIRiskAssessment:
         result = runner.invoke(
             app,
             [
-                "analyze", "risk",
+                "inspect", "risk",
                 "RISK_JSON",
                 "--format", "json",
                 "--db",
@@ -613,7 +613,7 @@ class TestCLIRiskAssessment:
         result = runner.invoke(
             app,
             [
-                "analyze", "risk",
+                "inspect", "risk",
                 "ALL_PROF",
                 "--all",
                 "--db",
@@ -642,7 +642,7 @@ class TestCLIRiskAssessment:
         result = runner.invoke(
             app,
             [
-                "analyze", "risk",
+                "inspect", "risk",
                 "CUST_RISK",
                 "--rules-file",
                 str(rules_file),

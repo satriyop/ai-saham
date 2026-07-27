@@ -1,5 +1,5 @@
 """
-Factory for the `saham analyze sentiment` and `saham analyze audit` workflows.
+Factory for the `saham inspect sentiment` and `saham audit sentiment` workflows.
 
 Layer: Adapter
 

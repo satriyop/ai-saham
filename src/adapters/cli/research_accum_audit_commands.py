@@ -13,8 +13,8 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.analyze_accum_csv_writer import write_accumulation_audit_csv
-from src.adapters.cli.analyze_accum_workflow_factory import (
+from src.adapters.cli.research_accum_audit_csv_writer import write_accumulation_audit_csv
+from src.adapters.cli.research_accum_audit_workflow_factory import (
     create_run_accumulation_audit_workflow,
 )
 from src.application.services.universe_loader import UniverseNotFoundError
@@ -27,7 +27,7 @@ from src.infrastructure.config.app_config import load_app_config
 
 
 def _display_audit_summary(response: AccumulationAuditResponse, top_groups: int) -> None:
-    from src.adapters.cli.analyze_accum_display import display_audit_summary
+    from src.adapters.cli.research_accum_audit_display import display_audit_summary
     display_audit_summary(response=response, top_groups=top_groups)
 
 

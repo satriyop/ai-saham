@@ -1,7 +1,7 @@
 """
 CLI commands for terminal ASCII charting.
 
-Provides the 'saham analyze chart' command group with three sub-commands:
+Provides the 'saham inspect chart' command group with three sub-commands:
   price   — Close price line with optional SMA/EMA overlays
   rsi     — RSI line with overbought/oversold bands
   volume  — Daily volume bar chart
@@ -80,9 +80,9 @@ def chart_price(
     Plot close price with SMA/EMA overlays.
 
     Examples:
-        saham analyze chart price BBCA
-        saham analyze chart price BBCA --sma 20 --ema 9 --days 120
-        saham analyze chart price BBCA --sma 50 --days 365
+        saham inspect chart price BBCA
+        saham inspect chart price BBCA --sma 20 --ema 9 --days 120
+        saham inspect chart price BBCA --sma 50 --days 365
     """
     plt = _require_plotext()
     resolved_db = db_path or _default_db_path()
@@ -138,8 +138,8 @@ def chart_rsi(
     Plot RSI with overbought (70) and oversold (30) reference lines.
 
     Examples:
-        saham analyze chart rsi BBCA
-        saham analyze chart rsi BBCA --period 9 --days 120
+        saham inspect chart rsi BBCA
+        saham inspect chart rsi BBCA --period 9 --days 120
     """
     plt = _require_plotext()
     resolved_db = db_path or _default_db_path()
@@ -189,8 +189,8 @@ def chart_volume(
     Plot daily volume as a bar chart.
 
     Examples:
-        saham analyze chart volume BBCA
-        saham analyze chart volume BBCA --days 30
+        saham inspect chart volume BBCA
+        saham inspect chart volume BBCA --days 30
     """
     plt = _require_plotext()
     resolved_db = db_path or _default_db_path()

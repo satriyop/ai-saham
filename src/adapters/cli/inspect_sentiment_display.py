@@ -1,5 +1,5 @@
 """
-Rich rendering for `saham analyze sentiment` and `saham analyze audit`.
+Rich rendering for `saham inspect sentiment` and `saham audit sentiment`.
 
 Layer: Adapter
 """

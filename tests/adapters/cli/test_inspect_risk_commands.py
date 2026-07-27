@@ -1,4 +1,4 @@
-"""Tests for the `saham analyze risk` CLI command."""
+"""Tests for the `saham inspect risk` CLI command."""
 
 import json
 from datetime import date
@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 
 from typer.testing import CliRunner
 
-from src.adapters.cli import analyze_risk_commands
-from src.adapters.cli.analyze_commands import analyze_app
+from src.adapters.cli import inspect_risk_commands
+from src.adapters.cli.main import app
 from src.application.dto.assess_risk import AssessRiskResponse
 from src.application.rules.exceptions import RulesFileError
 from src.application.use_case.run_risk_analysis_workflow_use_case import (
@@ -55,7 +55,7 @@ class FakeWorkflow:
 def _patch_workflow(monkeypatch, outcome) -> FakeWorkflow:
     workflow = FakeWorkflow(outcome)
     monkeypatch.setattr(
-        analyze_risk_commands, "create_run_risk_analysis_workflow", lambda db_path: workflow
+        inspect_risk_commands, "create_run_risk_analysis_workflow", lambda db_path: workflow
     )
     return workflow
 
@@ -66,7 +66,7 @@ def test_risk_command_delegates_to_factory_workflow(monkeypatch):
     )
     workflow = _patch_workflow(monkeypatch, result)
 
-    res = runner.invoke(analyze_app, ["risk", "BBCA"])
+    res = runner.invoke(app, ["inspect", "risk", "BBCA"])
 
     assert res.exit_code == 0
     assert len(workflow.requests) == 1
@@ -80,7 +80,7 @@ def test_risk_command_json_format_preserves_schema(monkeypatch):
     )
     _patch_workflow(monkeypatch, result)
 
-    res = runner.invoke(analyze_app, ["risk", "BBCA", "--format", "json"])
+    res = runner.invoke(app, ["inspect", "risk", "BBCA", "--format", "json"])
 
     assert res.exit_code == 0
     payload = json.loads(res.stdout)
@@ -101,7 +101,7 @@ def test_risk_command_json_format_preserves_schema(monkeypatch):
 def test_risk_command_no_data_error_mapping(monkeypatch):
     _patch_workflow(monkeypatch, RuntimeError("no such table: candles"))
 
-    res = runner.invoke(analyze_app, ["risk", "BBCA"])
+    res = runner.invoke(app, ["inspect", "risk", "BBCA"])
 
     assert res.exit_code == 1
     assert "No cached data for BBCA" in res.output
@@ -110,7 +110,7 @@ def test_risk_command_no_data_error_mapping(monkeypatch):
 def test_risk_command_rules_file_error_mapping(monkeypatch):
     _patch_workflow(monkeypatch, RulesFileError("bad rules file"))
 
-    res = runner.invoke(analyze_app, ["risk", "BBCA", "--rules-file", "x.yaml"])
+    res = runner.invoke(app, ["inspect", "risk", "BBCA", "--rules-file", "x.yaml"])
 
     assert res.exit_code == 1
     assert "[error] bad rules file" in res.output
@@ -126,7 +126,7 @@ def test_risk_command_prints_warning_from_workflow(monkeypatch):
     )
     _patch_workflow(monkeypatch, result)
 
-    res = runner.invoke(analyze_app, ["risk", "BBCA", "--with-sentiment"])
+    res = runner.invoke(app, ["inspect", "risk", "BBCA", "--with-sentiment"])
 
     assert res.exit_code == 0
     assert "Warning: Could not fetch sentiment: boom" in res.output
@@ -139,9 +139,9 @@ def test_risk_command_calls_display_in_table_mode(monkeypatch):
     )
     _patch_workflow(monkeypatch, result)
     mock_render = MagicMock()
-    monkeypatch.setattr(analyze_risk_commands.display, "render_risk_assessment_table", mock_render)
+    monkeypatch.setattr(inspect_risk_commands.display, "render_risk_assessment_table", mock_render)
 
-    res = runner.invoke(analyze_app, ["risk", "BBCA"])
+    res = runner.invoke(app, ["inspect", "risk", "BBCA"])
 
     assert res.exit_code == 0
     mock_render.assert_called_once_with(response)

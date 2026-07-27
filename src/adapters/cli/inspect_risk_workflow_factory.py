@@ -1,5 +1,5 @@
 """
-Factory for the `saham analyze risk` and `saham analyze compare` workflows.
+Factory for the `saham inspect risk` and `saham analyze compare` workflows.
 
 Layer: Adapter
 

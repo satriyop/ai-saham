@@ -1,4 +1,4 @@
-"""Tests for the `saham analyze sentiment` / `saham analyze audit` CLI split."""
+"""Tests for the `saham inspect sentiment` / `saham analyze audit` CLI split."""
 
 from datetime import datetime
 from pathlib import Path
@@ -6,10 +6,10 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from src.adapters.cli import (
-    analyze_sentiment_commands,
-    analyze_sentiment_workflow_factory,
+    inspect_sentiment_commands,
+    inspect_sentiment_workflow_factory,
 )
-from src.adapters.cli.analyze_commands import analyze_app
+from src.adapters.cli.main import app
 from src.application.use_case.audit_sentiment_use_case import AuditSentimentResponse
 from src.application.use_case.fetch_sentiment_use_case import FetchSentimentResponse
 from src.domain.value_objects.sentiment import Sentiment, SentimentSnapshot
@@ -61,7 +61,7 @@ def _private_display_helper_names() -> list[str]:
 
 
 def test_command_module_has_no_display_or_infra_imports():
-    source = Path(analyze_sentiment_commands.__file__).read_text()
+    source = Path(inspect_sentiment_commands.__file__).read_text()
     forbidden = [
         "Console",
         "Panel",
@@ -74,7 +74,7 @@ def test_command_module_has_no_display_or_infra_imports():
         *_private_display_helper_names(),
     ]
     for token in forbidden:
-        assert token not in source, f"{token} should not appear in analyze_sentiment_commands.py"
+        assert token not in source, f"{token} should not appear in inspect_sentiment_commands.py"
 
 
 def test_no_private_display_helper_remains_in_cli_modules():
@@ -105,17 +105,17 @@ def test_fetch_factory_wires_expected_dependencies(monkeypatch):
         return FakeClassifier()
 
     monkeypatch.setattr(
-        analyze_sentiment_workflow_factory.SentimentFactory,
+        inspect_sentiment_workflow_factory.SentimentFactory,
         "create_news_provider",
         _fake_create_news_provider,
     )
     monkeypatch.setattr(
-        analyze_sentiment_workflow_factory.SentimentFactory,
+        inspect_sentiment_workflow_factory.SentimentFactory,
         "create_classifier",
         _fake_create_classifier,
     )
     monkeypatch.setattr(
-        analyze_sentiment_workflow_factory,
+        inspect_sentiment_workflow_factory,
         "create_group_mapping_service",
         lambda: object(),
     )
@@ -127,11 +127,11 @@ def test_fetch_factory_wires_expected_dependencies(monkeypatch):
             captured_repo_db_path["db_path"] = db_path
 
     monkeypatch.setattr(
-        analyze_sentiment_workflow_factory, "SQLiteSentimentRepository", FakeSentimentRepo
+        inspect_sentiment_workflow_factory, "SQLiteSentimentRepository", FakeSentimentRepo
     )
 
     db_path = Path("/tmp/test.db")
-    use_case = analyze_sentiment_workflow_factory.create_fetch_sentiment_use_case(
+    use_case = inspect_sentiment_workflow_factory.create_fetch_sentiment_use_case(
         db_path=db_path,
         news_provider_name="mock",
         use_ai=False,
@@ -160,14 +160,14 @@ def test_audit_factory_wires_both_repositories_with_same_db_path(monkeypatch):
             seen_db_paths.append(("market", db_path))
 
     monkeypatch.setattr(
-        analyze_sentiment_workflow_factory, "SQLiteSentimentRepository", FakeSentimentRepo
+        inspect_sentiment_workflow_factory, "SQLiteSentimentRepository", FakeSentimentRepo
     )
     monkeypatch.setattr(
-        analyze_sentiment_workflow_factory, "SQLiteMarketRepository", FakeMarketRepo
+        inspect_sentiment_workflow_factory, "SQLiteMarketRepository", FakeMarketRepo
     )
 
     db_path = Path("/tmp/audit.db")
-    analyze_sentiment_workflow_factory.create_audit_sentiment_use_case(db_path=db_path)
+    inspect_sentiment_workflow_factory.create_audit_sentiment_use_case(db_path=db_path)
 
     assert seen_db_paths == [("sentiment", db_path), ("market", db_path)]
 
@@ -183,13 +183,13 @@ def test_sentiment_command_delegates_to_factory_and_prints_header(monkeypatch):
     fake_use_case = FakeFetchUseCase(response)
 
     monkeypatch.setattr(
-        analyze_sentiment_commands,
+        inspect_sentiment_commands,
         "create_fetch_sentiment_use_case",
         lambda **kwargs: fake_use_case,
     )
 
     result = runner.invoke(
-        analyze_app, ["sentiment", "BBCA", "--news-provider", "mock", "--no-ai"]
+        app, ["inspect", "sentiment", "BBCA", "--news-provider", "mock", "--no-ai"]
     )
 
     assert result.exit_code == 0
@@ -209,13 +209,15 @@ def test_audit_command_delegates_to_factory_and_prints_header(monkeypatch):
     )
     fake_use_case = FakeAuditUseCase(response)
 
+    from src.adapters.cli import audit_sentiment_commands
+
     monkeypatch.setattr(
-        analyze_sentiment_commands,
+        audit_sentiment_commands,
         "create_audit_sentiment_use_case",
         lambda **kwargs: fake_use_case,
     )
 
-    result = runner.invoke(analyze_app, ["audit"])
+    result = runner.invoke(app, ["audit", "sentiment"])
 
     assert result.exit_code == 0
     assert "Auditing past sentiment predictions..." in result.stdout

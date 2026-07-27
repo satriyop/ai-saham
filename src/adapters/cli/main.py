@@ -6,12 +6,12 @@ Entry point for the command-line interface.
 Command groups:
   saham today      — read-only daily briefing
   saham fetch      — data ingestion lifecycle commands
-  saham audit      — read-only audits (data-quality baseline manifest, source-field contracts)
+  saham audit      — offline audits (data quality, sentiment accuracy)
   saham screen     — candidate discovery (live only)
   saham research   — research corpus / ML feeder (pre-open, accum)
   saham view       — read-only local data browsing
   saham indicator  — technical indicators (compute, snapshot, create, list, show, delete)
-  saham analyze    — transitional lenses (risk, sentiment, regime, chart, signal)
+  saham inspect    — live capability/evidence lenses (risk, sentiment, regime, signal, chart)
   saham plan       — live trade plan composition (plan swing → TradeSetup)
   saham assess     — frozen-plan confirmation (assess pre-open)
   saham strategy   — strategy management (init, validate, list, create, backtest)
@@ -26,7 +26,7 @@ Layer: Adapter
 import typer
 
 from src import __version__
-from src.adapters.cli.analyze_commands import analyze_app
+from src.adapters.cli.inspect_commands import inspect_app
 from src.adapters.cli.plan_commands import plan_app
 from src.adapters.cli.assess_commands import assess_app
 from src.adapters.cli.audit_commands import audit_app
@@ -69,7 +69,7 @@ _PANEL_GENERAL = "General"  # meta / entry points
 app.add_typer(fetch_app, name="fetch", rich_help_panel=_PANEL_DATA)
 app.command("today", rich_help_panel=_PANEL_ANALYSIS)(today)
 app.add_typer(screen_app, name="screen", rich_help_panel=_PANEL_ANALYSIS)
-app.add_typer(analyze_app, name="analyze", rich_help_panel=_PANEL_ANALYSIS)
+app.add_typer(inspect_app, name="inspect", rich_help_panel=_PANEL_ANALYSIS)
 app.add_typer(plan_app, name="plan", rich_help_panel=_PANEL_ANALYSIS)
 app.add_typer(assess_app, name="assess", rich_help_panel=_PANEL_ANALYSIS)
 app.add_typer(research_app, name="research", rich_help_panel=_PANEL_ANALYSIS)
