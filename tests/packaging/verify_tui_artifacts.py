@@ -13,6 +13,9 @@ REQUIRED_TUI_FILES = (
     "src/adapters/tui/composition.py",
     "src/adapters/tui/state.py",
     "src/adapters/tui/worker_lifecycle.py",
+    "src/adapters/tui/commands.py",
+    "src/adapters/tui/theme.py",
+    "src/adapters/tui/screens/palette.py",
 )
 
 
