@@ -18,6 +18,7 @@ from src.adapters.cli.screen_contract_cli import (
     resolve_output_format,
 )
 from src.adapters.cli.screen_pre_open_commands import pre_open
+from src.adapters.composition.screen_accum_request import build_screen_accum_request
 from src.adapters.composition.screen_deps import build_screen_deps
 from src.application.dto.screen_contract import (
     ScreenResultStatus,
@@ -35,9 +36,6 @@ from src.application.use_case.compare_screen_watchlist_use_case import (
 )
 from src.application.use_case.list_screen_watchlists_use_case import (
     ListScreenWatchlistsRequest,
-)
-from src.application.use_case.run_accumulation_screen_workflow_use_case import (
-    RunAccumulationScreenWorkflowRequest,
 )
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
@@ -283,26 +281,14 @@ def screen_compare(
         )
         raise typer.Exit(1)
 
-    screen_request = RunAccumulationScreenWorkflowRequest(
+    # Compare path sorts by Accum (score) by design — explicit override, same builder.
+    screen_request = build_screen_accum_request(
         tickers=list(ticker_list),
         universe_label=run_universe,
         universe_name=run_universe,
         window=window,
-        min_streak=0,
-        min_accum_score=None,
-        min_signal_score=None,
-        min_piotroski=0,
-        strategy_name=None,
-        include_strategy_overlay=False,
-        multi=False,
-        windows=[],
         top=top,
-        save_name=None,
-        save_enabled=False,
-        vwap_only=False,
-        squeeze_only=False,
         sort_by="score",
-        as_of_date=None,
     )
 
     try:

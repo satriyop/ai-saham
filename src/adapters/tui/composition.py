@@ -16,14 +16,16 @@ from pathlib import Path
 from threading import Lock
 from typing import Any
 
+from src.adapters.composition.screen_accum_request import (
+    DEFAULT_WINDOW,
+    build_default_screen_accum_request,
+    build_screen_accum_request,
+)
 from src.adapters.composition.screen_deps import ScreenDeps, build_screen_deps
 from src.adapters.tui.controllers.board_controller import BoardController
 from src.adapters.tui.main import CockpitApp
 from src.adapters.tui.presenters.accum_presenter import AccumPresenter
 from src.adapters.tui.presenters.preopen_presenter import PreOpenPresenter
-from src.application.use_case.run_accumulation_screen_workflow_use_case import (
-    RunAccumulationScreenWorkflowRequest,
-)
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 
@@ -94,32 +96,17 @@ class _ScreenAccumLoader:
         if not tickers:
             return _EmptyAccumResult()
 
-        request = RunAccumulationScreenWorkflowRequest(
+        request = build_default_screen_accum_request(
             tickers=tickers,
-            universe_label=universe,
-            universe_name=universe,
-            window=7,
-            min_streak=0,
-            min_accum_score=None,
-            min_signal_score=None,
-            min_piotroski=0,
-            strategy_name=None,
-            include_strategy_overlay=False,
-            multi=False,
-            windows=[],
-            top=40,
-            save_name=None,
-            save_enabled=False,
-            vwap_only=False,
-            squeeze_only=False,
-            sort_by="signal",
-            as_of_date=None,
+            universe=universe,
         )
         return use_case.execute(request)
 
 
 class _EmptyAccumResult:
-    single_projection = type("P", (), {"candidates": (), "window_days": 7, "data_as_of": {}})()
+    single_projection = type(
+        "P", (), {"candidates": (), "window_days": DEFAULT_WINDOW, "data_as_of": {}}
+    )()
     multi_projection = None
     warnings: tuple[str, ...] = ("No tickers in local universe/cache",)
 
@@ -238,26 +225,12 @@ class _LocalPlanRunner:
             use_case = self._use_case
 
         universe = (self._config.analysis.universe or "lq45").lower()
-        request = RunAccumulationScreenWorkflowRequest(
+        # Same request shape as screen accum; top=5 is a plan-path override only.
+        request = build_screen_accum_request(
             tickers=[ticker.upper()],
             universe_label=universe,
             universe_name=universe,
-            window=7,
-            min_streak=0,
-            min_accum_score=None,
-            min_signal_score=None,
-            min_piotroski=0,
-            strategy_name=None,
-            include_strategy_overlay=False,
-            multi=False,
-            windows=[],
             top=5,
-            save_name=None,
-            save_enabled=False,
-            vwap_only=False,
-            squeeze_only=False,
-            sort_by="signal",
-            as_of_date=None,
         )
         result = use_case.execute(request)
         projection = result.single_projection

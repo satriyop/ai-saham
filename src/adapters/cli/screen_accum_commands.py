@@ -23,6 +23,7 @@ from src.adapters.cli.screen_accum_formatters import (
     accumulation_display_config_from_screener,
 )
 from src.adapters.cli.screen_contract_cli import echo_json, resolve_output_format
+from src.adapters.composition.screen_accum_request import build_screen_accum_request
 from src.adapters.composition.screen_deps import build_screen_deps
 from src.application.dto.screen_accum_payload import (
     build_accum_multi_envelope,
@@ -34,9 +35,6 @@ from src.application.services.screen_accum_result_projector import (
 from src.application.services.universe_loader import (
     UniverseNotFoundError,
     resolve_tickers,
-)
-from src.application.use_case.run_accumulation_screen_workflow_use_case import (
-    RunAccumulationScreenWorkflowRequest,
 )
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
@@ -266,7 +264,7 @@ def accumulation_run(
 
     try:
         result = workflow_uc.execute(
-            RunAccumulationScreenWorkflowRequest(
+            build_screen_accum_request(
                 tickers=ticker_list,
                 universe_label=universe_label,
                 universe_name=universe,
