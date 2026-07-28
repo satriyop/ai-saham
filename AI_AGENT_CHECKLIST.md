@@ -130,6 +130,9 @@ If an adapter needs any forbidden logic, create or reuse an application use case
 * Blocking risk gates remain separate from bullish signal scoring
 * Diagnostic evidence remains non-authoritative unless promotion guardrails are explicitly satisfied
 * I did not introduce adapter-local labels, thresholds, rankings, buckets, scores, pseudo-actions, or recommendation language. Every displayed decision concept is sourced from domain/application/config/ADR.
+* Multi-surface jobs (CLI + TUI): I followed **Multi-surface parity** in
+  `AGENT_QUICKSTART.md` — one request builder, one board field extractor, one
+  display vocabulary; no hardcoded window/top/sort or inventing "Score" for Accum.
 
 ---
 

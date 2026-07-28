@@ -38,6 +38,30 @@ Read this before every task. This is the mandatory entry point for agents. The l
   `pyproject.toml` Ruff config, add blanket ignores, or expand per-file
   exemptions to land a task.
 
+## Multi-surface parity (CLI / TUI)
+
+When the same product job is exposed on more than one adapter (e.g. `screen accum`
+and `saham tui` accum board):
+
+- **Engine logic is single:** scoring, risk, TradeSetup, setup readiness live in
+  domain/application only. Adapters never re-threshold or invent actions.
+- **Request shape is single:** build `RunAccumulationScreenWorkflowRequest` only
+  via `src/adapters/composition/screen_accum_request.py`
+  (`build_screen_accum_request` / `build_default_screen_accum_request`).
+  Do not hardcode window/top/sort defaults in CLI or TUI modules.
+- **Board field mapping is single:** Signal/Accum/Action/Phase/Gate (and desk
+  columns) via `src/adapters/shared/screen_accum_board_fields.py`.
+  Do not invent generic labels like "Score" for Accum (ADR-043).
+- **Display vocabulary is single:** `src/adapters/shared/score_display_labels.py`.
+- **Intentional deltas must be explicit** (e.g. TUI pre-open = IEV snapshot only;
+  TUI plan = thin local confirm). Document in the change; do not silently diverge.
+- **Verification:** when changing request defaults or board columns, run/extend
+  parity tests under `tests/adapters/composition/` and
+  `tests/adapters/shared/test_screen_accum_board_fields.py`.
+
+See also ADR-051 (TUI cockpit clean break) and
+`docs/design/tui-cockpit-opencode.md` for product locks, not scoring rules.
+
 ## Before Editing
 
 1. Identify the task type.
@@ -366,6 +390,15 @@ For user-facing CLI/output/workflow changes, also read:
 
 - Relevant `README.md` sections
 - Relevant CLI docs such as `CLI_README.md`, if touched
+- **Multi-surface parity** (this file) when the job also exists on TUI (or vice
+  versa): `screen_accum_request.py`, `screen_accum_board_fields.py`,
+  `score_display_labels.py`
+
+For TUI / cockpit adapter changes, also read:
+
+- Multi-surface parity (this file)
+- `docs/adr/ADR-051-tui-opencode-cockpit-clean-break.md`
+- `docs/design/tui-cockpit-opencode.md` when changing layout or interaction locks
 
 For task scoping, ambiguous requirements, or handoff tasks, also read:
 
@@ -384,6 +417,10 @@ For documentation-only edits:
   `git diff --check`, and **Lint Gate** (whole-repo Ruff).
 - Shared scoring/risk/signal/tuning/persistence/config change: run focused tests, architecture boundary tests, and the full test suite unless explicitly deferred; **Lint Gate** (whole-repo Ruff).
 - CLI/output change: run command contract or display tests, and manually inspect representative output when practical; **Lint Gate** (whole-repo Ruff).
+- CLI↔TUI shared job (screen accum request defaults, board columns, score labels):
+  run parity tests in `tests/adapters/composition/test_screen_accum_request.py` and
+  `tests/adapters/shared/test_screen_accum_board_fields.py` (extend them if the
+  contract changes); **Lint Gate** (whole-repo Ruff).
 - Data ingestion, persistence, source mapping, observations, labels, replay,
   readiness, tuning, market-context evidence, or data-safety claims: apply the
   Data Contract Audit Gate in `AI_AGENT_CHECKLIST.md` and report relevant
