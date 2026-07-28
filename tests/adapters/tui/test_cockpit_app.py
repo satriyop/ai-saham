@@ -295,9 +295,9 @@ def test_plan_blocked_when_empty():
             await pilot.pause()
             app._run_command("plan-swing")
             await pilot.pause()
-            # Still empty — plan modal must not open without focus
+            # Still empty — plan stage must not open without focus
             assert app._stage == "empty"
-            assert not type(app.screen).__name__.endswith("PlanConfirmModal")
+            assert app._stage != "plan"
 
     asyncio.run(scenario())
 

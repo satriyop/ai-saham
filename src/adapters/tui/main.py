@@ -86,7 +86,8 @@ class CockpitApp(App[None]):
         self._preopen_presenter = preopen_presenter
 
         self._sidebar_visible = True
-        self._stage = "shell"  # shell | empty | accum | preopen | detail | loading | error
+        # shell | empty | accum | preopen | detail | plan | loading | error
+        self._stage = "shell"
         self._board_kind: BoardKind = "none"
         self._detail_return_stage: DetailReturnStage = "shell"
         self._mode = "local-first"
@@ -104,6 +105,9 @@ class CockpitApp(App[None]):
         self._market_context: Any | None = None
         self._preopen_snapshot_date: str = ""
         self._preopen_warnings: tuple[str, ...] = ()
+        self._plan_ticker: str = ""
+        self._plan_result: str = ""
+        self._plan_running: bool = False
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="workspace"):
@@ -182,6 +186,8 @@ class CockpitApp(App[None]):
             )
         if self._stage == "detail":
             return "esc back · p plan · Ctrl+P commands"
+        if self._stage == "plan":
+            return "esc back to board · p re-run · Ctrl+P · no broker order"
         return "Ctrl+P commands · ? help · q quit"
 
     def _shell_body(self) -> str:
@@ -254,6 +260,11 @@ class CockpitApp(App[None]):
             body.update(self._detail_text)
             table.display = False
             evidence.display = False
+        elif self._stage == "plan":
+            body.display = True
+            body.update(self._plan_body_text())
+            table.display = False
+            evidence.display = False
         elif self._stage in {"accum", "preopen"}:
             body.display = False
             table.display = True
@@ -290,7 +301,7 @@ class CockpitApp(App[None]):
     def action_go_back(self) -> None:
         if self._modal_blocks_board_keys():
             return
-        if self._stage == "detail":
+        if self._stage in {"detail", "plan"}:
             # Explicit return stage — never infer only from detail title.
             target = self._detail_return_stage
             if target in {"accum", "preopen"} and self._rows:
@@ -301,6 +312,7 @@ class CockpitApp(App[None]):
             else:
                 self._stage = "shell"
                 self._board_kind = "none"
+            self._plan_running = False
             self._refresh_chrome()
             if self._stage in {"accum", "preopen"}:
                 self._render_board_table()
@@ -435,7 +447,7 @@ class CockpitApp(App[None]):
             self._open_detail()
             return
         if command_id == "plan-swing":
-            self._open_plan_confirm()
+            self._open_plan_stage()
             return
         if command_id == "fetch":
             self._open_fetch_confirm()
@@ -866,60 +878,62 @@ class CockpitApp(App[None]):
         lines.append("[dim]esc back · Ctrl+P[/]")
         return "\n".join(lines)
 
-    def _open_plan_confirm(self) -> None:
+    def _open_plan_stage(self) -> None:
+        """Variant A: p switches main stage to Plan and auto-runs local re-check.
+
+        No confirm modal. esc returns to the board. No broker order.
+        """
         if self._stage == "empty" or self._focus_ticker in {"—", ""}:
             self.notify("Nothing to plan — fetch / screen first", timeout=1.5)
             return
-        from src.adapters.tui.presenters.accum_presenter import build_accum_focus
-        from src.adapters.tui.presenters.preopen_presenter import format_preopen_why
-        from src.adapters.tui.screens.plan_confirm import PlanConfirmModal
+        if self._stage in {"accum", "preopen"}:
+            self._detail_return_stage = self._stage  # type: ignore[assignment]
+        elif self._stage == "detail" and self._detail_return_stage == "shell":
+            if self._board_kind in {"accum", "preopen"}:
+                self._detail_return_stage = self._board_kind  # type: ignore[assignment]
+        elif self._stage not in {"detail", "plan"} and self._board_kind in {
+            "accum",
+            "preopen",
+        }:
+            self._detail_return_stage = self._board_kind  # type: ignore[assignment]
 
         ticker = self._focus_ticker
-        on_preopen = self._stage == "preopen" or self._board_kind == "preopen"
-        source = "screen pre-open" if on_preopen else "screen accum"
-        row = self._rows[self._row_index] if self._rows else None
-        signal = str(getattr(row, "signal", "—")) if row else "—"
-        accum = str(getattr(row, "accum", "—")) if row else "—"
-        action = str(getattr(row, "action", "—")) if row else "—"
-        gate = str(getattr(row, "gate", "—")) if row else "—"
-        why = ""
-        if row is not None and self._is_accum_row(row):
-            why = build_accum_focus(
-                row,
-                rank=self._row_index + 1,
-                total=len(self._rows),
-            ).why
-        elif row is not None and self._is_preopen_row(row):
-            why = format_preopen_why(row)
-            action = f"grade {getattr(row, 'grade', '—')}"
-            gate = str(getattr(row, "risk", "—") or "—")
+        self._plan_ticker = ticker
+        self._plan_result = ""
+        self._plan_running = True
+        self._stage = "plan"
+        self._board_title = f"Plan · {ticker} · swing"
+        self._meta = "auto-run · local only · no broker order"
+        self._status_note = "plan running"
+        self._refresh_chrome()
 
-        def _on_dismiss(confirmed: bool | None) -> None:
-            if not confirmed:
-                return
-            if self._plan_runner is None:
-                self.notify(
-                    f"Plan swing · {ticker} recorded (stub)",
-                    timeout=2.0,
-                )
-                return
-            self._stage = "loading"
+        if self._plan_runner is None:
+            self._plan_running = False
+            self._plan_result = "no plan runner wired · stub only"
+            self._status_note = "plan stub"
             self._refresh_chrome()
-            self._execute_plan(ticker)
+            self.notify(f"Plan · {ticker} · stub (no runner)", timeout=2.0)
+            return
+        self._execute_plan(ticker)
 
-        self.push_screen(
-            PlanConfirmModal(
-                ticker=ticker,
-                source=source,
-                setup="swing",
-                signal=signal,
-                accum=accum,
-                action=action,
-                gate=gate,
-                why=why,
-            ),
-            _on_dismiss,
+    def _plan_body_text(self) -> str:
+        from src.adapters.tui.presenters.plan_stage_presenter import present_plan_stage
+
+        row = None
+        if self._rows and 0 <= self._row_index < len(self._rows):
+            row = self._rows[self._row_index]
+        on_preopen = self._detail_return_stage == "preopen" or self._board_kind == "preopen"
+        source = "Screen · pre-open" if on_preopen else "Screen · accumulation"
+        view = present_plan_stage(
+            row,
+            ticker=self._plan_ticker or self._focus_ticker,
+            source=source,
+            rank=self._row_index + 1,
+            total=max(len(self._rows), 1),
+            result_line=self._plan_result,
+            running=self._plan_running,
         )
+        return view.text
 
     @work(thread=True, exclusive=True, group="plan")
     def _execute_plan(self, ticker: str) -> None:
@@ -928,19 +942,20 @@ class CockpitApp(App[None]):
             msg = f"Plan swing · {ticker}"
             if result is not None:
                 summary = getattr(result, "summary", None) or str(result)[:120]
-                msg = f"Plan swing · {ticker} · {summary}"
-            dispatch_if_active(self, self._on_plan_done, msg)
+                msg = f"{summary}"
+            dispatch_if_active(self, self._on_plan_done, ticker, msg)
         except Exception as exc:
-            dispatch_if_active(self, self._on_board_error, f"plan: {exc}")
+            dispatch_if_active(self, self._on_plan_done, ticker, f"error: {exc}")
 
-    def _on_plan_done(self, msg: str) -> None:
-        if self._rows:
-            self._stage = "preopen" if "pre-open" in self._board_title else "accum"
-            self._render_board_table()
-        else:
-            self._stage = "shell"
-        self._refresh_chrome()
-        self.notify(msg, timeout=2.5)
+    def _on_plan_done(self, ticker: str, msg: str) -> None:
+        self._plan_running = False
+        self._plan_result = msg
+        self._status_note = "plan done"
+        # Stay on plan stage so the page is the result surface (variant A).
+        if self._stage == "plan" and self._plan_ticker == ticker:
+            self._meta = "local result · no broker order"
+            self._refresh_chrome()
+        self.notify(f"Plan · {ticker} · {msg}", timeout=2.5)
 
     def _open_fetch_confirm(self) -> None:
         from src.adapters.tui.screens.fetch_confirm import FetchConfirmModal
