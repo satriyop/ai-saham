@@ -9,6 +9,9 @@ if TYPE_CHECKING:
         CompanyQualityContextEvidence,
     )
     from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
+    from src.domain.value_objects.sector_macro_context_evidence import (
+        SectorMacroContextEvidence,
+    )
     from src.domain.value_objects.ticker_profile_snapshot import TickerProfileSnapshot
 
 
@@ -79,6 +82,31 @@ def _sc_fingerprint(
         "sc_ticker_vs_sector_rs": sc.ticker_vs_sector_rs,
         "sc_sector_regime": sc.sector_regime,
         "sc_coverage_score": sc.coverage_score,
+    }
+
+
+def _smc_fingerprint(
+    smc: "SectorMacroContextEvidence | None",
+) -> dict:
+    _none: dict = {
+        "smc_sector_group": None,
+        "smc_macro_regime": None,
+        "smc_composite_score": None,
+        "smc_coverage_score": None,
+        "smc_factor_summary": None,
+    }
+    if smc is None:
+        return _none
+    summary_parts = []
+    for f in smc.factors:
+        if f.score is not None:
+            summary_parts.append(f"{f.name}:{f.score:.2f}")
+    return {
+        "smc_sector_group": smc.sector_group,
+        "smc_macro_regime": smc.macro_regime,
+        "smc_composite_score": smc.composite_score,
+        "smc_coverage_score": smc.coverage_score,
+        "smc_factor_summary": ",".join(summary_parts) if summary_parts else None,
     }
 
 

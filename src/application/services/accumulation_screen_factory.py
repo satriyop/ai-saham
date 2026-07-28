@@ -51,6 +51,7 @@ def create_accumulation_screen_use_case(
     ticker_profile_classifier_factory: Any | None = None,
     institutional_accumulation_config_factory: Any | None = None,
     sector_context_builder_factory: Any | None = None,
+    sector_macro_context_builder_factory: Any | None = None,
     company_quality_context_builder_factory: Any | None = None,
 ) -> AccumulationScreenUseCase:
     """Build AccumulationScreenUseCase with consistent optional enrichment wiring.
@@ -86,6 +87,7 @@ def create_accumulation_screen_use_case(
         ticker_profile_classifier_factory=ticker_profile_classifier_factory,
         institutional_accumulation_config_factory=institutional_accumulation_config_factory,
         sector_context_builder_factory=sector_context_builder_factory,
+        sector_macro_context_builder_factory=sector_macro_context_builder_factory,
         company_quality_context_builder_factory=company_quality_context_builder_factory,
     )
 
@@ -127,6 +129,7 @@ def create_accumulation_screen_use_case_bundle(
     ticker_profile_classifier_factory: Any | None = None,
     institutional_accumulation_config_factory: Any | None = None,
     sector_context_builder_factory: Any | None = None,
+    sector_macro_context_builder_factory: Any | None = None,
     company_quality_context_builder_factory: Any | None = None,
 ) -> AccumulationScreenUseCaseBundle:
     """Build the screen use case together with its canonical observation recorder.
@@ -161,6 +164,7 @@ def create_accumulation_screen_use_case_bundle(
         ticker_profile_classifier_factory=ticker_profile_classifier_factory,
         institutional_accumulation_config_factory=institutional_accumulation_config_factory,
         sector_context_builder_factory=sector_context_builder_factory,
+        sector_macro_context_builder_factory=sector_macro_context_builder_factory,
         company_quality_context_builder_factory=company_quality_context_builder_factory,
     )
 
@@ -178,6 +182,7 @@ def create_accumulation_screen_use_case_bundle(
         ticker_profile_classifier_factory=ticker_profile_classifier_factory,
         institutional_accumulation_config_factory=institutional_accumulation_config_factory,
         sector_context_builder_factory=sector_context_builder_factory,
+        sector_macro_context_builder_factory=sector_macro_context_builder_factory,
         company_quality_context_builder_factory=company_quality_context_builder_factory,
     )
     observation_persister = AccumulationCandidateObservationPersister(

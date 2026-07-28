@@ -163,6 +163,29 @@ def _parse_sector_context_fields(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+# --- SECTOR MACRO CONTEXT FIELDS (ADR-053) ---
+
+
+def _serialize_sector_macro_context_fields(fp: "SignalObservationFingerprint") -> dict[str, Any]:
+    return {
+        "smc_sector_group": fp.smc_sector_group,
+        "smc_macro_regime": fp.smc_macro_regime,
+        "smc_composite_score": fp.smc_composite_score,
+        "smc_coverage_score": fp.smc_coverage_score,
+        "smc_factor_summary": fp.smc_factor_summary,
+    }
+
+
+def _parse_sector_macro_context_fields(data: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "smc_sector_group": data.get("smc_sector_group"),
+        "smc_macro_regime": data.get("smc_macro_regime"),
+        "smc_composite_score": _optional_float(data.get("smc_composite_score")),
+        "smc_coverage_score": _optional_float(data.get("smc_coverage_score")),
+        "smc_factor_summary": data.get("smc_factor_summary"),
+    }
+
+
 # --- COMPANY QUALITY FIELDS ---
 
 

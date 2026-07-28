@@ -79,6 +79,12 @@ def test_to_dict_contains_all_section_keys():
         # sector context
         "sc_sector",
         "sc_coverage_score",
+        # sector macro context (ADR-053)
+        "smc_sector_group",
+        "smc_macro_regime",
+        "smc_composite_score",
+        "smc_coverage_score",
+        "smc_factor_summary",
         # company quality
         "cq_valuation_score",
         "cq_coverage_score",

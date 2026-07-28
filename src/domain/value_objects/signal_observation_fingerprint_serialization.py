@@ -12,10 +12,12 @@ from src.domain.value_objects.signal_fingerprint_context_serialization import (
     _parse_company_quality_fields,
     _parse_institutional_accumulation_fields,
     _parse_sector_context_fields,
+    _parse_sector_macro_context_fields,
     _parse_ticker_profile_fields,
     _serialize_company_quality_fields,
     _serialize_institutional_accumulation_fields,
     _serialize_sector_context_fields,
+    _serialize_sector_macro_context_fields,
     _serialize_ticker_profile_fields,
 )
 from src.domain.value_objects.signal_fingerprint_flow_serialization import (
@@ -83,6 +85,7 @@ def signal_observation_fingerprint_to_dict(
     data.update(_serialize_institutional_accumulation_fields(fingerprint))
     data.update(_serialize_ticker_profile_fields(fingerprint))
     data.update(_serialize_sector_context_fields(fingerprint))
+    data.update(_serialize_sector_macro_context_fields(fingerprint))
     data.update(_serialize_company_quality_fields(fingerprint))
     data.update(_serialize_alpha_trigger_fields(fingerprint))
     data.update(_serialize_volatility_fields(fingerprint))
@@ -122,6 +125,7 @@ def signal_observation_fingerprint_from_dict(cls, data: dict[str, Any]) -> Any:
     kwargs.update(_parse_institutional_accumulation_fields(data))
     kwargs.update(_parse_ticker_profile_fields(data))
     kwargs.update(_parse_sector_context_fields(data))
+    kwargs.update(_parse_sector_macro_context_fields(data))
     kwargs.update(_parse_company_quality_fields(data))
     kwargs.update(_parse_alpha_trigger_fields(data))
     kwargs.update(_parse_volatility_fields(data))

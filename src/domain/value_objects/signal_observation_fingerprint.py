@@ -138,6 +138,12 @@ class SignalObservationFingerprint:
     sc_ticker_vs_sector_rs: float | None = None
     sc_sector_regime: str | None = None
     sc_coverage_score: float | None = None
+    # ADR-053: sector macro context fingerprint (DIAGNOSTIC)
+    smc_sector_group: str | None = None
+    smc_macro_regime: str | None = None
+    smc_composite_score: float | None = None
+    smc_coverage_score: float | None = None
+    smc_factor_summary: str | None = None  # e.g. "coal_futures:1.00,usd_idr:0.40"
     # Phase G producer: company quality context evidence fingerprint (DIAGNOSTIC)
     cq_valuation_score: float | None = None
     cq_earnings_trend_score: float | None = None

@@ -53,6 +53,13 @@ class SectorContextInputs:
     ihsg_20d_return: float | None
 
 
+@dataclass(frozen=True)
+class SectorMacroContextInputs:
+    """Preloaded macro series candles keyed by series ticker (e.g. MTF=F)."""
+
+    series_candles: dict[str, tuple["Candle", ...]]
+
+
 class CandidateEvidenceDataLoader:
     """Loads point-in-time repository data shared across evidence assemblers."""
 
@@ -158,3 +165,22 @@ class CandidateEvidenceDataLoader:
             peer_candles=peer_candles,
             ihsg_20d_return=ihsg_20d_return,
         )
+
+    def load_sector_macro_context_inputs(
+        self,
+        *,
+        series_tickers: tuple[str, ...] | list[str],
+        snapshot_date: date,
+    ) -> SectorMacroContextInputs:
+        """Load macro series candles bounded by snapshot_date (PIT-safe)."""
+        series_candles: dict[str, tuple] = {}
+        for series in series_tickers:
+            key = str(series).upper().strip()
+            if not key:
+                continue
+            try:
+                candles = self._market_repo.get_candles(key, end_date=snapshot_date)
+                series_candles[key] = tuple(candles) if candles else ()
+            except Exception:
+                series_candles[key] = ()
+        return SectorMacroContextInputs(series_candles=series_candles)

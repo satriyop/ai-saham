@@ -162,6 +162,7 @@ class SwingAnalysisOptionalEvidenceRunner:
             ),
             ticker_profile_snapshot=evidence_build.ticker_profile_snapshot,
             sector_context_evidence=evidence_build.sector_context_evidence,
+            sector_macro_context_evidence=evidence_build.sector_macro_context_evidence,
             company_quality_context_evidence=evidence_build.company_quality_context_evidence,
             corporate_action_risk=evidence_build.corporate_action_risk,
         )

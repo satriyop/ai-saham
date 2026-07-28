@@ -163,6 +163,10 @@ class AccumulationCandidateObservationPersister:
                 snapshot_date,
                 tp_snapshot,
             )
+            smc_evidence = self._candidate_evidence_builder.build_candidate_sector_macro_context(
+                c,
+                snapshot_date,
+            )
             cq_evidence = self._candidate_evidence_builder.build_candidate_company_quality_context(
                 c,
                 snapshot_date,
@@ -183,6 +187,7 @@ class AccumulationCandidateObservationPersister:
                 ia_evidence=ia_evidence,
                 tp_snapshot=tp_snapshot,
                 sc_evidence=sc_evidence,
+                smc_evidence=smc_evidence,
                 cq_evidence=cq_evidence,
                 setup_family_result=setup_family_result,
                 volatility_context=volatility_context,

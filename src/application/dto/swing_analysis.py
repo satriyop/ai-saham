@@ -69,6 +69,9 @@ if TYPE_CHECKING:
     )
     from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
+    from src.domain.value_objects.sector_macro_context_evidence import (
+        SectorMacroContextEvidence,
+    )
     from src.domain.value_objects.setup_evidence import SetupEvidence
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
     from src.domain.value_objects.strategy_evidence import StrategyEvidence
@@ -189,6 +192,7 @@ class SwingEvidence:
     institutional_accumulation_evidence: "InstitutionalAccumulationEvidence | None" = None
     ticker_profile_snapshot: "TickerProfileSnapshot | None" = None
     sector_context_evidence: "SectorContextEvidence | None" = None
+    sector_macro_context_evidence: "SectorMacroContextEvidence | None" = None
     company_quality_context_evidence: "CompanyQualityContextEvidence | None" = None
     corporate_action_risk: "CorporateActionRiskAssessment | None" = None
 
@@ -280,6 +284,11 @@ class SwingEvidence:
             ),
             "sector_context_evidence": (
                 self.sector_context_evidence.to_dict() if self.sector_context_evidence else None
+            ),
+            "sector_macro_context_evidence": (
+                self.sector_macro_context_evidence.to_dict()
+                if self.sector_macro_context_evidence
+                else None
             ),
             "company_quality_context_evidence": (
                 self.company_quality_context_evidence.to_dict()

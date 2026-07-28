@@ -28,6 +28,9 @@ from src.application.services.candidate_institutional_accumulation_evidence_asse
 from src.application.services.candidate_sector_context_evidence_assembler import (
     CandidateSectorContextEvidenceAssembler,
 )
+from src.application.services.candidate_sector_macro_context_evidence_assembler import (
+    CandidateSectorMacroContextEvidenceAssembler,
+)
 from src.application.services.candidate_setup_phase_evidence_assembler import (
     CandidateSetupPhaseEvidenceAssembler,
 )
@@ -57,6 +60,9 @@ if TYPE_CHECKING:
     from src.application.services.sector_context_evidence_builder import (
         SectorContextEvidenceBuilder,
     )
+    from src.application.services.sector_macro_context_evidence_builder import (
+        SectorMacroContextEvidenceBuilder,
+    )
     from src.application.services.signal_engine import SignalEngine
     from src.application.services.ticker_profile_classifier import (
         TickerProfileClassifier,
@@ -78,6 +84,9 @@ if TYPE_CHECKING:
         InstitutionalAccumulationEvidence,
     )
     from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
+    from src.domain.value_objects.sector_macro_context_evidence import (
+        SectorMacroContextEvidence,
+    )
     from src.domain.value_objects.setup_evaluation import SetupEvaluation
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
     from src.domain.value_objects.strategy_evidence import StrategyEvidence
@@ -108,6 +117,9 @@ class AccumulationCandidateEvidenceBuilder:
             Callable[[], InstitutionalAccumulationConfig] | None
         ) = None,
         sector_context_builder_factory: Callable[[], SectorContextEvidenceBuilder] | None = None,
+        sector_macro_context_builder_factory: (
+            Callable[[], SectorMacroContextEvidenceBuilder] | None
+        ) = None,
         company_quality_context_builder_factory: (
             Callable[[], CompanyQualityContextEvidenceBuilder] | None
         ) = None,
@@ -125,6 +137,10 @@ class AccumulationCandidateEvidenceBuilder:
         self._sector_context_builder_factory = _normalize_sector_context_factory(
             sector_context_builder_factory
         )
+        self._sector_macro_context_builder_factory = _normalize_sector_macro_context_factory(
+            sector_macro_context_builder_factory
+        )
+        self._sector_macro_context_assembler = CandidateSectorMacroContextEvidenceAssembler()
 
         self._data_loader = CandidateEvidenceDataLoader(market_repository, broker_repository)
         self._setup_phase_assembler = CandidateSetupPhaseEvidenceAssembler(
@@ -348,6 +364,30 @@ class AccumulationCandidateEvidenceBuilder:
         except Exception:
             return None
 
+    def build_candidate_sector_macro_context(
+        self,
+        candidate: "accumulation_dto.AccumulationCandidate",
+        snapshot_date: date,
+    ) -> "SectorMacroContextEvidence | None":
+        try:
+            smc_builder = self._sector_macro_context_builder_factory()
+            sc_builder = self._sector_context_builder_factory()
+            sector_group = sc_builder.sector_group_for_ticker(candidate.ticker)
+            series_tickers = smc_builder.config.series_for_group(sector_group)
+            inputs = self._data_loader.load_sector_macro_context_inputs(
+                series_tickers=series_tickers,
+                snapshot_date=snapshot_date,
+            )
+            return self._sector_macro_context_assembler.assemble(
+                builder=smc_builder,
+                ticker=candidate.ticker,
+                snapshot_date=snapshot_date,
+                sector_group=sector_group,
+                inputs=inputs,
+            )
+        except Exception:
+            return None
+
     def build_candidate_company_quality_context(
         self,
         candidate: "accumulation_dto.AccumulationCandidate",
@@ -415,6 +455,40 @@ def _normalize_sector_context_factory(
         )
 
         return SectorContextEvidenceBuilder(SectorContextConfig.from_mapping({}), {})
+
+    return _build
+
+
+def _normalize_sector_macro_context_factory(
+    builder_factory: "Callable[[], SectorMacroContextEvidenceBuilder] | None",
+) -> "Callable[[], SectorMacroContextEvidenceBuilder]":
+    if builder_factory is not None:
+        return builder_factory
+
+    def _build() -> "SectorMacroContextEvidenceBuilder":
+        from src.application.services.sector_macro_context_evidence_builder import (
+            SectorMacroContextConfig,
+            SectorMacroContextEvidenceBuilder,
+        )
+
+        return SectorMacroContextEvidenceBuilder(
+            SectorMacroContextConfig.from_mapping(
+                {
+                    "sector_macro_context": {
+                        "factor_library": {
+                            "_placeholder": {
+                                "series": "MTF=F",
+                                "thresholds": {
+                                    "supportive_min": 0.05,
+                                    "headwind_max": -0.05,
+                                },
+                            }
+                        },
+                        "sector_maps": {},
+                    }
+                }
+            )
+        )
 
     return _build
 

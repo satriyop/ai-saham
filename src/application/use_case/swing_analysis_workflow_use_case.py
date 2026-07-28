@@ -112,6 +112,7 @@ class SwingAnalysisWorkflowUseCase:
             Callable[[], InstitutionalAccumulationConfig] | None
         ) = None,
         sector_context_builder_factory: Callable[[], SectorContextEvidenceBuilder] | None = None,
+        sector_macro_context_builder_factory: Callable[..., Any] | None = None,
         company_quality_context_builder_factory: (
             Callable[[], CompanyQualityContextEvidenceBuilder] | None
         ) = None,
@@ -163,6 +164,7 @@ class SwingAnalysisWorkflowUseCase:
             ticker_profile_classifier_factory=ticker_profile_classifier_factory,
             institutional_accumulation_config_factory=institutional_accumulation_config_factory,
             sector_context_builder_factory=sector_context_builder_factory,
+            sector_macro_context_builder_factory=sector_macro_context_builder_factory,
             company_quality_context_builder_factory=company_quality_context_builder_factory,
         )
         self._input_collector = SwingAnalysisInputCollector(

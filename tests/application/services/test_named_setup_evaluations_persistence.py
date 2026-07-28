@@ -66,7 +66,7 @@ def _catalog_match_coiled() -> SwingSetupCatalogConfig:
 
 
 def test_schema_version_is_8():
-    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 8
+    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 9
 
 
 def test_fingerprint_serializes_named_setup_evaluations_lean_dict():
@@ -133,7 +133,7 @@ def test_fingerprint_serializes_named_setup_evaluations_lean_dict():
         captured_at=datetime(2026, 7, 1, 10, 30, 0),
         request=request,
     )
-    assert payload["schema_version"] == 8
+    assert payload["schema_version"] == CANDIDATE_OBSERVATION_SCHEMA_VERSION
     lean = payload["sub_signal_fingerprint"]["named_setup_evaluations"]
     assert lean["coiled-spring"] == {
         "match": "MATCH",

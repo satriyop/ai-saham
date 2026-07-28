@@ -97,6 +97,7 @@ def create_accumulation_screen_workflow(
         ticker_profile_classifier_factory=deps.ticker_profile_classifier_factory,
         institutional_accumulation_config_factory=(deps.institutional_accumulation_config_factory),
         sector_context_builder_factory=deps.sector_context_builder_factory,
+        sector_macro_context_builder_factory=deps.sector_macro_context_builder_factory,
         company_quality_context_builder_factory=(deps.company_quality_context_builder_factory),
     )
 
@@ -150,6 +151,7 @@ def create_accumulation_screen_workflow_bundle(
         ticker_profile_classifier_factory=deps.ticker_profile_classifier_factory,
         institutional_accumulation_config_factory=(deps.institutional_accumulation_config_factory),
         sector_context_builder_factory=deps.sector_context_builder_factory,
+        sector_macro_context_builder_factory=deps.sector_macro_context_builder_factory,
         company_quality_context_builder_factory=(deps.company_quality_context_builder_factory),
     )
 

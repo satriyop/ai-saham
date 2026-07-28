@@ -39,6 +39,9 @@ from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.config.sector_context_config_loader import (
     create_sector_context_evidence_builder,
 )
+from src.infrastructure.config.sector_macro_context_config_loader import (
+    create_sector_macro_context_evidence_builder,
+)
 from src.infrastructure.config.ticker_profile_config_loader import (
     create_ticker_profile_classifier,
 )
@@ -60,6 +63,9 @@ if TYPE_CHECKING:
     from src.application.services.risk_engine import RiskEngine
     from src.application.services.sector_context_evidence_builder import (
         SectorContextEvidenceBuilder,
+    )
+    from src.application.services.sector_macro_context_evidence_builder import (
+        SectorMacroContextEvidenceBuilder,
     )
     from src.application.services.signal_engine import SignalEngine
     from src.application.services.signal_scoring_config import SignalScoringConfig
@@ -93,6 +99,7 @@ class StockAnalysisWorkflowDependencies:
     ticker_profile_classifier_factory: Callable[..., TickerProfileClassifier]
     institutional_accumulation_config_factory: Callable[..., InstitutionalAccumulationConfig]
     sector_context_builder_factory: Callable[..., SectorContextEvidenceBuilder]
+    sector_macro_context_builder_factory: Callable[..., SectorMacroContextEvidenceBuilder]
     company_quality_context_builder_factory: Callable[..., CompanyQualityContextEvidenceBuilder]
     create_risk_engine: Callable[[], RiskEngine]
     create_signal_engine: Callable[[], SignalEngine]
@@ -153,6 +160,13 @@ def create_stock_analysis_workflow_dependencies(
             universes_path=universes_path or config_paths.universes,
         )
 
+    def _create_sector_macro_context_evidence_builder(
+        config_path: str | Path | None = None,
+    ) -> SectorMacroContextEvidenceBuilder:
+        return create_sector_macro_context_evidence_builder(
+            config_path=config_path or config_paths.sector_macro_context,
+        )
+
     def _create_company_quality_context_evidence_builder(
         config_path: str | Path | None = None,
         scoring: SignalScoringConfig | None = None,
@@ -175,6 +189,7 @@ def create_stock_analysis_workflow_dependencies(
         ticker_profile_classifier_factory=_create_ticker_profile_classifier,
         institutional_accumulation_config_factory=(_load_institutional_accumulation_config),
         sector_context_builder_factory=_create_sector_context_evidence_builder,
+        sector_macro_context_builder_factory=_create_sector_macro_context_evidence_builder,
         company_quality_context_builder_factory=(_create_company_quality_context_evidence_builder),
         create_risk_engine=_make_risk_engine,
         create_signal_engine=_make_signal_engine,

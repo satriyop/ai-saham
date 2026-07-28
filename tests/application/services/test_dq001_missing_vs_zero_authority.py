@@ -226,7 +226,7 @@ def test_schema_versions_bumped_for_dq001():
     # Current cohort after named setup match persistence
     # (v8 / engine 1.4 / evidence 1.5). OBSERVATION_SCHEMA only — scoring
     # authority contracts unchanged from v7.
-    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 8
+    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 9
     assert SIGNAL_FORWARD_LABEL_SCHEMA_VERSION == 3
     assert EVIDENCE_CONTRACT_VERSION == "1.5"
     assert SEMANTIC_ENGINE_VERSION == "1.4"

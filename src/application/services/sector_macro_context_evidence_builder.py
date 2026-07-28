@@ -158,6 +158,15 @@ class SectorMacroContextConfig:
                 tickers.add(entry.series)
         return frozenset(tickers)
 
+    def series_for_group(self, group: str | None) -> tuple[str, ...]:
+        """Series required for one universe group map (empty if unmapped)."""
+        if not group:
+            return ()
+        refs = self.sector_maps.get(group)
+        if not refs:
+            return ()
+        return tuple(self.factor_library[r.ref].series for r in refs)
+
     def all_library_series_tickers(self) -> frozenset[str]:
         return frozenset(e.series for e in self.factor_library.values())
 

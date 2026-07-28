@@ -18,6 +18,7 @@ from src.application.services.accumulation_observation_metadata import (
 from src.application.services.accumulation_observation_profile_fingerprint import (
     _cq_fingerprint,
     _sc_fingerprint,
+    _smc_fingerprint,
     _tp_fingerprint,
 )
 from src.application.services.accumulation_observation_setup_fingerprint import (
@@ -49,6 +50,9 @@ if TYPE_CHECKING:
     )
     from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
+    from src.domain.value_objects.sector_macro_context_evidence import (
+        SectorMacroContextEvidence,
+    )
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
     from src.domain.value_objects.strategy_evidence import StrategyEvidence
     from src.domain.value_objects.ticker_profile_snapshot import TickerProfileSnapshot
@@ -114,6 +118,7 @@ def build_candidate_observation_payload(
     ia_evidence: "InstitutionalAccumulationEvidence | None" = None,
     tp_snapshot: "TickerProfileSnapshot | None" = None,
     sc_evidence: "SectorContextEvidence | None" = None,
+    smc_evidence: "SectorMacroContextEvidence | None" = None,
     cq_evidence: "CompanyQualityContextEvidence | None" = None,
     setup_family_result: "PrimarySetupFamilyResult | None" = None,
     volatility_context: "VolatilityContext | None" = None,
@@ -160,6 +165,7 @@ def build_candidate_observation_payload(
         ia_evidence=ia_evidence,
         tp_snapshot=tp_snapshot,
         sc_evidence=sc_evidence,
+        smc_evidence=smc_evidence,
         cq_evidence=cq_evidence,
         setup_family_result=setup_family_result,
         volatility_context=volatility_context,
@@ -203,6 +209,7 @@ def _sub_signal_fingerprint(
     ia_evidence: "InstitutionalAccumulationEvidence | None" = None,
     tp_snapshot: "TickerProfileSnapshot | None" = None,
     sc_evidence: "SectorContextEvidence | None" = None,
+    smc_evidence: "SectorMacroContextEvidence | None" = None,
     cq_evidence: "CompanyQualityContextEvidence | None" = None,
     setup_family_result: "PrimarySetupFamilyResult | None" = None,
     volatility_context: "VolatilityContext | None" = None,
@@ -230,6 +237,7 @@ def _sub_signal_fingerprint(
     ia_dict = _ia_evidence_fingerprint(ia_evidence)
     tp_dict = _tp_fingerprint(tp_snapshot)
     sc_dict = _sc_fingerprint(sc_evidence)
+    smc_dict = _smc_fingerprint(smc_evidence)
     cq_dict = _cq_fingerprint(cq_evidence)
     alpha_trigger_dict = _alpha_trigger_fingerprint(signal)
     validate_current_alpha_trigger_identity(
@@ -271,6 +279,7 @@ def _sub_signal_fingerprint(
         **ia_dict,
         **tp_dict,
         **sc_dict,
+        **smc_dict,
         **cq_dict,
         **alpha_trigger_dict,
         **volatility_dict,

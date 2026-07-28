@@ -227,6 +227,14 @@ class TestSubSignalFingerprintSections:
         assert fp["sc_sector_regime"] is None
         assert fp["sc_coverage_score"] is None
 
+    def test_sector_macro_section_keys_present(self):
+        fp = self._build_fingerprint()
+        assert fp["smc_sector_group"] is None
+        assert fp["smc_macro_regime"] is None
+        assert fp["smc_composite_score"] is None
+        assert fp["smc_coverage_score"] is None
+        assert fp["smc_factor_summary"] is None
+
     def test_company_quality_section_keys_present(self):
         fp = self._build_fingerprint()
         assert fp["cq_valuation_score"] is None
