@@ -1484,3 +1484,81 @@ def test_market_regime_text_no_flag_above_threshold():
     text = _market_regime_text(_regime_ctx(confidence=0.57, days=1))
     assert "confidence 0.57" in text
     assert "⚠ low" not in text
+
+
+# ── ADR-052 Commit 5: honesty fixes (A2 local_clock caveat, A3 broker gap) ────
+
+
+def test_fallback_next_command_names_blocking_dataset():
+    from types import SimpleNamespace
+
+    from src.adapters.cli.today_commands import _fallback_next_command
+
+    response = SimpleNamespace(
+        overall_authority="NOT_READY",
+        universe="lq45",
+        readiness_items=[
+            SimpleNamespace(dataset="candles", status="READY", coverage_count=45, total_count=45),
+            SimpleNamespace(
+                dataset="broker_flow", status="NOT_READY", coverage_count=5, total_count=45
+            ),
+        ],
+        daily_accumulation_candidates=[],
+    )
+    text = _fallback_next_command(response)
+    assert "broker_flow 5/45 stale" in text
+    assert "candles" not in text  # the complete dataset is not blamed
+
+
+def test_today_local_clock_shows_holiday_caveat(tmp_path: Path):
+    from datetime import datetime
+    from unittest.mock import patch
+
+    from src.domain.value_objects.market_status import MarketStatus
+
+    fake_status = MarketStatus(
+        status="STATUS_OPEN",
+        session_name="Regular",
+        is_open=True,
+        session_open="09:00",
+        session_close="15:00",
+        fetched_at=datetime.now(),
+        source="local_clock",
+    )
+    with patch(
+        "src.infrastructure.browser.stockbit_market_time.get_display_market_status",
+        return_value=fake_status,
+    ):
+        result = runner.invoke(
+            app,
+            ["today", "--offline", "--universe", "lq45", "--db", str(tmp_path / "m.db")],
+        )
+    assert result.exit_code == 0
+    assert "clock-inferred" in result.stdout
+
+
+def test_today_stockbit_source_has_no_holiday_caveat(tmp_path: Path):
+    from datetime import datetime
+    from unittest.mock import patch
+
+    from src.domain.value_objects.market_status import MarketStatus
+
+    fake_status = MarketStatus(
+        status="STATUS_OPEN",
+        session_name="Regular",
+        is_open=True,
+        session_open="09:00",
+        session_close="15:00",
+        fetched_at=datetime.now(),
+        source="stockbit",
+    )
+    with patch(
+        "src.infrastructure.browser.stockbit_market_time.get_display_market_status",
+        return_value=fake_status,
+    ):
+        result = runner.invoke(
+            app,
+            ["today", "--offline", "--universe", "lq45", "--db", str(tmp_path / "m.db")],
+        )
+    assert result.exit_code == 0
+    assert "clock-inferred" not in result.stdout

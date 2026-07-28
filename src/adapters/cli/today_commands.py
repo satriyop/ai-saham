@@ -379,7 +379,15 @@ def _setup_lens_impact_elements(setup_lens_impact) -> SetupLensImpactRender:
 
 def _fallback_next_command(response) -> str:
     if response.overall_authority == "NOT_READY":
-        return f"Next: saham fetch market --universe {response.universe}"
+        # A3: name the dataset actually blocking readiness so the user isn't told to
+        # re-fetch candles that are already complete.
+        gaps = [
+            f"{item.dataset} {item.coverage_count}/{item.total_count}"
+            for item in response.readiness_items
+            if item.status in ("NOT_READY", "UNAVAILABLE")
+        ]
+        gap_note = f"  ({', '.join(gaps)} stale)" if gaps else ""
+        return f"Next: saham fetch market --universe {response.universe}{gap_note}"
 
     if response.daily_accumulation_candidates:
         ticker = response.daily_accumulation_candidates[0].ticker
@@ -637,6 +645,10 @@ def today(
         market_text.append(f"[{market_status.source}]")
         if market_status.is_open:
             market_text.append("  ⚠ open")
+        if market_status.source == "local_clock":
+            # A2: the session was inferred from the local clock (no live market feed),
+            # which has no IDX-holiday awareness — say so instead of implying certainty.
+            market_text.append("  · clock-inferred; unverified on IDX holidays", style="dim yellow")
         summary.add_row("Market", market_text)
     else:
         summary.add_row("Mode", f"HISTORICAL — {response.live_session_date.isoformat()}")
