@@ -42,7 +42,7 @@ from src.infrastructure.config.accumulation_screener_config import (
 )
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.market_context_factory import evaluate_market_context
-from src.infrastructure.config.swing_config import load_swing_config
+from src.infrastructure.config.swing_policy_config_loader import load_swing_policy_config
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.ihsg_trading_session_calendar_provider import (
     IHSGTradingSessionCalendarProvider,
@@ -116,14 +116,14 @@ def run_signal_observation_corpus_write(
 
     market_repo = SQLiteMarketRepository(resolved_db)
     accumulation_config = load_accumulation_screener_config()
-    swing_config = load_swing_config()
+    swing_policy = load_swing_policy_config()
     screen_bundle = create_accumulation_screen_workflow_bundle(
         db_path=resolved_db,
         screener_config=accumulation_config,
-        swing_config=swing_config,
+        swing_policy=swing_policy,
     )
     screen_request_builder = BuildSignalObservationScreenRequest.from_configs(
-        swing_config=swing_config,
+        swing_policy=swing_policy,
         accumulation_screener_config=accumulation_config,
         min_net_buy_days=1,
         disable_score_filters=True,

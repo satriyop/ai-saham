@@ -6,8 +6,8 @@ Layer: Infrastructure
 
 from decimal import Decimal
 
-from src.application.dto.swing_config import SwingConfig
-from src.infrastructure.config.swing_config_primitives import (
+from src.application.dto.swing_policy_config import SwingPolicyConfig
+from src.infrastructure.config.swing_policy_config_primitives import (
     bool_or_default,
     float_or_default,
     int_or_default,
@@ -18,7 +18,7 @@ from src.infrastructure.config.swing_config_primitives import (
 
 def parse_setup_family_fields(
     data: dict,
-    defaults: SwingConfig,
+    defaults: SwingPolicyConfig,
 ) -> dict[str, object]:
     setups = data.get("setups") or {}
     fb = setups.get("foreign-bounce") or data.get("foreign_bounce") or {}

@@ -15,6 +15,7 @@ from src.adapters.composition.stock_analysis_workflow_dependencies import (
     StockAnalysisWorkflowDependencies,
     create_stock_analysis_workflow_dependencies,
 )
+from src.application.dto.swing_policy_config import SwingPolicyConfig
 from src.application.services.swing_backtest_attribution import AttributionBucketPolicy
 from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
 from src.application.services.universe_loader import (
@@ -41,26 +42,27 @@ from src.infrastructure.config.swing_backtest_config import (
 from src.infrastructure.config.swing_backtest_config import (
     load_swing_backtest_config as _load_swing_backtest_config,
 )
-from src.infrastructure.config.swing_config import SwingConfig
-from src.infrastructure.config.swing_config import load_swing_config as _load_swing_config
+from src.infrastructure.config.swing_policy_config_loader import (
+    load_swing_policy_config as _load_swing_policy_config,
+)
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 
 
 @dataclass(frozen=True)
 class SwingBacktestRunnerConfig:
-    swing_config: SwingConfig
+    swing_policy: SwingPolicyConfig
     backtest_config: SwingBacktestConfig
     accumulation_config: AccumulationScreenerConfig
     setup_config: SwingSetupCatalogConfig
 
 
 def load_swing_backtest_runner_config() -> SwingBacktestRunnerConfig:
-    swing_config = _load_swing_config()
+    swing_policy = _load_swing_policy_config()
     return SwingBacktestRunnerConfig(
-        swing_config=swing_config,
+        swing_policy=swing_policy,
         backtest_config=_load_swing_backtest_config(),
         accumulation_config=load_accumulation_screener_config(),
-        setup_config=build_swing_setup_catalog_config(swing_config),
+        setup_config=build_swing_setup_catalog_config(swing_policy),
     )
 
 
@@ -176,11 +178,11 @@ def _run_swing_backtest(
                 include_regime=with_regime or bool(allowed_regimes),
                 benchmark_ticker=benchmark,
                 allowed_regimes=allowed_regimes,
-                setup_targets=runner_config.swing_config.setup_targets,
+                setup_targets=runner_config.swing_policy.setup_targets,
                 setup_config=runner_config.setup_config,
-                resistance_gate_enabled=runner_config.swing_config.resistance_gate_enabled,
-                resistance_headroom_min_pct=runner_config.swing_config.resistance_headroom_min_pct,
-                ex_date_warning_days=runner_config.swing_config.ex_date_warning_days,
+                resistance_gate_enabled=runner_config.swing_policy.resistance_gate_enabled,
+                resistance_headroom_min_pct=runner_config.swing_policy.resistance_headroom_min_pct,
+                ex_date_warning_days=runner_config.swing_policy.ex_date_warning_days,
                 forward_data_lookahead_days=runner_config.backtest_config.forward_data_lookahead_days,
                 same_day_exit_priority=runner_config.backtest_config.same_day_exit_priority,
                 attribution_bucket_policy=AttributionBucketPolicy(

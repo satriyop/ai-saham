@@ -40,7 +40,7 @@ def run_fresh_accumulation_screen_for_compare(
     top: int,
     db_path: Path,
     screener_config,
-    swing_config,
+    swing_policy,
 ) -> FreshAccumulationScreenForCompareResult:
     """Run the accumulation screen silently and return the top candidates.
 
@@ -66,7 +66,7 @@ def run_fresh_accumulation_screen_for_compare(
             db_path=db_path,
             screener_config=screener_config,
             with_risk=False,
-            swing_config=swing_config,
+            swing_policy=swing_policy,
         )
         use_case = workflow.use_case
 
@@ -84,12 +84,12 @@ def run_fresh_accumulation_screen_for_compare(
                 min_net_buy_days=1,
                 min_accum_score=0.0,
                 min_accum_score_enabled=False,
-                tier1_broker_codes=swing_config.tier1_broker_codes,
-                bci_cluster_min_count=swing_config.bci_cluster_min_count,
-                bci_stable_min_count=swing_config.bci_stable_min_count,
-                resistance_gate_enabled=swing_config.resistance_gate_enabled,
-                resistance_headroom_min_pct=swing_config.resistance_headroom_min_pct,
-                ex_date_warning_days=swing_config.ex_date_warning_days,
+                tier1_broker_codes=swing_policy.tier1_broker_codes,
+                bci_cluster_min_count=swing_policy.bci_cluster_min_count,
+                bci_stable_min_count=swing_policy.bci_stable_min_count,
+                resistance_gate_enabled=swing_policy.resistance_gate_enabled,
+                resistance_headroom_min_pct=swing_policy.resistance_headroom_min_pct,
+                ex_date_warning_days=swing_policy.ex_date_warning_days,
             ),
             execution_context=execution_context,
         )

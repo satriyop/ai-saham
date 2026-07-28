@@ -24,11 +24,11 @@ def _merge_section(data: dict, raw: dict, key: str) -> None:
         data[key] = section
 
 
-def read_single_swing_config(config_path: Path | None) -> dict:
+def read_single_swing_policy_config(config_path: Path | None) -> dict:
     return _read_yaml(config_path) if config_path else {}
 
 
-def read_split_swing_config(
+def read_split_swing_policy_config(
     accumulation_screener_path: Path,
     swing_setups_path: Path,
     swing_targets_path: Path,

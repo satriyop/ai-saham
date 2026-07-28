@@ -305,7 +305,7 @@ def test_swing_evidence_builder_never_queries_broker_repository():
         setup_eval=None,
         setup_name=None,
         strategy_name=None,
-        swing_config=None,
+        swing_policy=None,
     )
 
     # No AssertionError was raised -> broker repository was never queried.
@@ -391,7 +391,7 @@ def test_swing_evidence_builder_propagates_duplicate_row_violation_not_a_warning
             setup_eval=None,
             setup_name=None,
             strategy_name=None,
-            swing_config=None,
+            swing_policy=None,
         )
 
 
@@ -690,7 +690,7 @@ def parity_boundaries() -> _ParityBoundaryResult:
         setup_eval=None,
         setup_name=None,
         strategy_name=None,
-        swing_config=None,
+        swing_policy=None,
     )
 
     # --- Swing canonical/scoring boundary: recompose_after_evidence() ---

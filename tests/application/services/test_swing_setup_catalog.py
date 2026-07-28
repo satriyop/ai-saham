@@ -1,11 +1,11 @@
 from decimal import Decimal
 
-from src.application.dto.swing_config import SwingConfig
+from src.application.dto.swing_policy_config import SwingPolicyConfig
 from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
 
 
-def test_build_swing_setup_catalog_config_maps_loaded_swing_config():
-    swing_config = SwingConfig(
+def test_build_swing_setup_catalog_config_maps_loaded_swing_policy():
+    swing_policy = SwingPolicyConfig(
         foreign_bounce_enabled=False,
         gate_min_accum_score=65.0,
         coiled_spring_gate_max_bb_width_pctile=0.15,
@@ -13,7 +13,7 @@ def test_build_swing_setup_catalog_config_maps_loaded_swing_config():
         pullback_continuation_gate_required_trend="SIDE",
     )
 
-    catalog = build_swing_setup_catalog_config(swing_config)
+    catalog = build_swing_setup_catalog_config(swing_policy)
 
     assert catalog.foreign_bounce.enabled is False
     assert catalog.foreign_bounce.gate_min_accum_score == 65.0

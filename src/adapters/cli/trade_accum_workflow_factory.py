@@ -27,7 +27,7 @@ from src.application.use_case.log_swing_candidate_use_case import (
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.market_context_factory import create_market_context_engine
 from src.infrastructure.config.swing_backtest_config import load_swing_backtest_config
-from src.infrastructure.config.swing_config import load_swing_config
+from src.infrastructure.config.swing_policy_config_loader import load_swing_policy_config
 from src.infrastructure.persistence.accumulation_journal_csv_writer import (
     AccumulationJournalCsvWriter,
 )
@@ -49,11 +49,11 @@ def create_log_accumulation_trade_workflow(
     warnings: list[str] = []
 
     # Load configuration
-    swing_config = load_swing_config()
+    swing_policy = load_swing_policy_config()
     backtest_config = load_swing_backtest_config()
 
     # Build policy DTO
-    policy = build_log_accumulation_trade_policy(swing_config, backtest_config)
+    policy = build_log_accumulation_trade_policy(swing_policy, backtest_config)
 
     # Build screen use case
     screen_uc = create_accumulation_screen_use_case(

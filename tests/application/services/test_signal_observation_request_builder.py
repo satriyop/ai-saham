@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from src.application.dto.swing_config import SwingConfig
+from src.application.dto.swing_policy_config import SwingPolicyConfig
 from src.application.services.signal_observation_request_builder import (
     BuildSignalObservationScreenRequest,
 )
@@ -14,7 +14,7 @@ from src.infrastructure.config.accumulation_screener_config import (
 
 
 def test_builder_maps_swing_and_accumulation_config_to_screen_request():
-    swing_config = SwingConfig(
+    swing_policy = SwingPolicyConfig(
         min_market_cap_idr=500_000_000_000,
         tier1_broker_codes=frozenset({"AK", "BK"}),
         bci_cluster_min_count=4,
@@ -33,7 +33,7 @@ def test_builder_maps_swing_and_accumulation_config_to_screen_request():
     )
 
     request = BuildSignalObservationScreenRequest.from_configs(
-        swing_config=swing_config,
+        swing_policy=swing_policy,
         accumulation_screener_config=accumulation_config,
         min_net_buy_days=3,
         min_piotroski=6,
@@ -64,7 +64,7 @@ def test_builder_maps_swing_and_accumulation_config_to_screen_request():
 
 def test_builder_can_disable_score_filters_for_multi_observation_capture():
     builder = BuildSignalObservationScreenRequest.from_configs(
-        swing_config=SwingConfig(),
+        swing_policy=SwingPolicyConfig(),
         accumulation_screener_config=AccumulationScreenerConfig(
             min_accum_score=ScoreFilterConfig(enabled=True, value=70.0),
             min_signal_score=ScoreFilterConfig(enabled=True, value=45.0),
@@ -85,7 +85,7 @@ def test_builder_can_disable_score_filters_for_multi_observation_capture():
 
 def test_builder_passes_market_context_through_by_identity():
     builder = BuildSignalObservationScreenRequest.from_configs(
-        swing_config=SwingConfig(),
+        swing_policy=SwingPolicyConfig(),
         accumulation_screener_config=AccumulationScreenerConfig(
             min_accum_score=ScoreFilterConfig(enabled=True, value=70.0),
             min_signal_score=ScoreFilterConfig(enabled=True, value=45.0),
@@ -117,7 +117,7 @@ def test_builder_passes_market_context_through_by_identity():
 
 def test_builder_defaults_market_context_to_none_when_not_supplied():
     builder = BuildSignalObservationScreenRequest.from_configs(
-        swing_config=SwingConfig(),
+        swing_policy=SwingPolicyConfig(),
         accumulation_screener_config=AccumulationScreenerConfig(
             min_accum_score=ScoreFilterConfig(enabled=True, value=70.0),
             min_signal_score=ScoreFilterConfig(enabled=True, value=45.0),

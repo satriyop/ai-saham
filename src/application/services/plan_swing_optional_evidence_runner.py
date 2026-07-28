@@ -129,7 +129,7 @@ class PlanSwingOptionalEvidenceRunner:
             setup_eval=state.setup_eval,
             setup_name=request.setup_name,
             strategy_name=request.strategy_name,
-            swing_config=state.swing_config,
+            swing_policy=state.swing_policy,
             as_of_fetched_at=as_of_fetched_at,
         )
         state.warnings.extend(evidence_build.warnings)

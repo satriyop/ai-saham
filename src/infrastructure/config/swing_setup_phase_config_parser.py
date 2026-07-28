@@ -6,7 +6,7 @@ Layer: Infrastructure
 
 from typing import Any
 
-from src.application.dto.swing_config import SwingConfig
+from src.application.dto.swing_policy_config import SwingPolicyConfig
 from src.application.services.setup_phase_config import (
     SetupPhaseConfig,
     SetupPhaseRequirementConfig,
@@ -14,7 +14,7 @@ from src.application.services.setup_phase_config import (
     VolumeTriggerValidityConfig,
 )
 from src.domain.value_objects.setup_phase import SetupPhaseState
-from src.infrastructure.config.swing_config_primitives import (
+from src.infrastructure.config.swing_policy_config_primitives import (
     bool_or_default,
     float_or_default,
     int_or_default,
@@ -24,7 +24,7 @@ from src.infrastructure.config.swing_config_primitives import (
 def parse_setup_phase_config(
     raw: Any,
     setups: dict,
-    defaults: SwingConfig,
+    defaults: SwingPolicyConfig,
 ) -> SetupPhaseConfig:
     if not isinstance(raw, dict):
         return defaults.setup_phase_config

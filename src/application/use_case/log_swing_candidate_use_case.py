@@ -56,7 +56,7 @@ class LogSwingCandidateRequest:
     regime_universe: list[str]  # pre-resolved ticker list
     benchmark_ticker: str
     logged_at: date
-    # Screen config (passed from SwingConfig — adapter owns _SC)
+    # Screen config (passed from SwingPolicyConfig — adapter owns _SC)
     tier1_broker_codes: frozenset[str]
     sector_breadth_enabled: bool
     sector_breadth_threshold: float

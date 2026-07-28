@@ -8,6 +8,7 @@ Layer: Adapter
 
 from dataclasses import dataclass
 
+from src.application.dto.swing_policy_config import SwingPolicyConfig
 from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
 from src.application.use_case.evaluate_swing_setup_use_case import SwingSetupCatalogConfig
 from src.infrastructure.config.accumulation_screener_config import (
@@ -22,12 +23,12 @@ from src.infrastructure.config.swing_backtest_config import (
     SwingBacktestConfig,
     load_swing_backtest_config,
 )
-from src.infrastructure.config.swing_config import SwingConfig, load_swing_config
+from src.infrastructure.config.swing_policy_config_loader import load_swing_policy_config
 
 
 @dataclass(frozen=True)
 class PlanSwingCommandConfig:
-    swing_config: SwingConfig
+    swing_policy: SwingPolicyConfig
     swing_backtest_config: SwingBacktestConfig
     plan_swing_config: PlanSwingConfig
     accumulation_screener_config: AccumulationScreenerConfig
@@ -36,11 +37,11 @@ class PlanSwingCommandConfig:
 
 def load_plan_swing_command_config() -> PlanSwingCommandConfig:
     """Load all configs needed by plan swing command adapters."""
-    swing_config = load_swing_config()
+    swing_policy = load_swing_policy_config()
     return PlanSwingCommandConfig(
-        swing_config=swing_config,
+        swing_policy=swing_policy,
         swing_backtest_config=load_swing_backtest_config(),
         plan_swing_config=load_plan_swing_config(),
         accumulation_screener_config=load_accumulation_screener_config(),
-        setup_config=build_swing_setup_catalog_config(swing_config),
+        setup_config=build_swing_setup_catalog_config(swing_policy),
     )

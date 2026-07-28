@@ -30,11 +30,11 @@ class PlanSwingSizingService:
     def __init__(
         self,
         registry: Any,
-        load_swing_config: Callable[[], Any],
+        load_swing_policy_config: Callable[[], Any],
         resolve_setup_targets: Callable[[str | None, Any], tuple[Decimal, Decimal]],
     ) -> None:
         self._registry = registry
-        self._load_swing_config = load_swing_config
+        self._load_swing_policy_config = load_swing_policy_config
         self._resolve_setup_targets = resolve_setup_targets
 
     def compute_atr(
@@ -81,11 +81,11 @@ class PlanSwingSizingService:
         request: plan_swing_dto.PlanSwingWorkflowRequest,
         state: PlanSwingWorkflowState,
     ) -> PlanSwingWorkflowState:
-        swing_config = self._load_swing_config()
+        swing_policy = self._load_swing_policy_config()
         regime_label = state.market_regime.regime.value if state.market_regime else None
         take_profit_pct, stop_loss_pct = self._resolve_setup_targets(
             regime_label,
-            swing_config,
+            swing_policy,
         )
 
         setup_sizing = None
@@ -101,7 +101,7 @@ class PlanSwingSizingService:
             except ValueError as exc:
                 state.warnings.append(f"Setup sizing unavailable: {exc}")
 
-        state.swing_config = swing_config
+        state.swing_policy = swing_policy
         state.regime_label = regime_label
         state.take_profit_pct = take_profit_pct
         state.stop_loss_pct = stop_loss_pct

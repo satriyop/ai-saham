@@ -1,10 +1,10 @@
 from decimal import Decimal
 from pathlib import Path
 
-from src.application.dto.swing_config import SwingConfig
+from src.application.dto.swing_policy_config import SwingPolicyConfig
 from src.infrastructure.config.swing_broker_quality_config_parser import parse_broker_quality_fields
-from src.infrastructure.config.swing_config_composer import read_single_swing_config
-from src.infrastructure.config.swing_config_primitives import (
+from src.infrastructure.config.swing_policy_config_composer import read_single_swing_policy_config
+from src.infrastructure.config.swing_policy_config_primitives import (
     bool_or_default,
     broker_codes_or_default,
     float_or_default,
@@ -53,7 +53,7 @@ def test_primitives_brokers():
 
 
 def test_parse_setup_targets():
-    defaults = SwingConfig()
+    defaults = SwingPolicyConfig()
     raw = {
         "risk_on": {
             "take_profit_pct": 10.0,
@@ -66,7 +66,7 @@ def test_parse_setup_targets():
 
 
 def test_parse_broker_quality_fields():
-    defaults = SwingConfig()
+    defaults = SwingPolicyConfig()
     data = {
         "broker_quality": {
             "smart_money": {
@@ -89,7 +89,7 @@ def test_parse_broker_quality_fields():
 
 
 def test_parse_setup_family_fields():
-    defaults = SwingConfig()
+    defaults = SwingPolicyConfig()
     data = {
         "setups": {
             "foreign-bounce": {
@@ -111,5 +111,5 @@ def test_parse_setup_family_fields():
     assert fields["gate_min_accum_score"] == 50.0
 
 
-def test_read_single_swing_config_non_existent():
-    assert read_single_swing_config(Path("non_existent_file.yaml")) == {}
+def test_read_single_swing_policy_config_non_existent():
+    assert read_single_swing_policy_config(Path("non_existent_file.yaml")) == {}

@@ -7,10 +7,10 @@ Layer: Infrastructure
 from decimal import Decimal
 from typing import Any
 
-from src.application.dto.swing_config import SetupTargetConfig, SwingConfig
+from src.application.dto.swing_policy_config import SetupTargetConfig, SwingPolicyConfig
 
 
-def parse_setup_targets(raw: Any, defaults: SwingConfig) -> dict[str, SetupTargetConfig]:
+def parse_setup_targets(raw: Any, defaults: SwingPolicyConfig) -> dict[str, SetupTargetConfig]:
     if not isinstance(raw, dict):
         return defaults.setup_targets
     parsed: dict[str, SetupTargetConfig] = {}

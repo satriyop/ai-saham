@@ -12,7 +12,7 @@ def test_screen_accum_commands_uses_shared_deps_and_passes_display_config():
     """Clean break: config and workflow come from build_screen_deps."""
     pkg = "src.adapters.cli.screen_accum_commands"
     deps = MagicMock()
-    deps.swing_config = MagicMock()
+    deps.swing_policy = MagicMock()
     deps.screener_config = MagicMock()
     deps.broker_repository = MagicMock()
     mock_wf = MagicMock()

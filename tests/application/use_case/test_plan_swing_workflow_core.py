@@ -81,7 +81,7 @@ def test_swing_workflow_records_accumulation_failure_warning():
         evaluate_setup=lambda candidate, broker_detail: None,
         build_broker_quality_note=lambda **kwargs: None,
         fetch_sentiment=lambda **kwargs: (None, None),
-        load_swing_config=lambda: {},
+        load_swing_policy_config=lambda: {},
         resolve_setup_targets=lambda regime, config: (Decimal("5"), Decimal("5")),
         rules_loader=RulesYamlLoader(),
         signal_evidence_context_builder=_fake_signal_evidence_context_builder(),

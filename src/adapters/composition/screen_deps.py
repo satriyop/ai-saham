@@ -39,7 +39,7 @@ from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
 )
 from src.infrastructure.config.app_config import load_app_config
-from src.infrastructure.config.swing_config import load_swing_config
+from src.infrastructure.config.swing_policy_config_loader import load_swing_policy_config
 from src.infrastructure.persistence.sqlite_watchlist_repository import (
     SQLiteWatchlistRepository,
 )
@@ -57,13 +57,13 @@ class ScreenDeps:
     list_watchlists: ListScreenWatchlistsUseCase
     save_watchlist: SaveScreenWatchlistUseCase
     screener_config: AccumulationScreenerConfig
-    swing_config: Any
+    swing_policy: Any
 
     def build_accum_workflow_use_case(self) -> RunAccumulationScreenWorkflowUseCase:
         return create_run_accumulation_screen_workflow_use_case(
             db_path=self.db_path,
             screener_config=self.screener_config,
-            swing_config=self.swing_config,
+            swing_policy=self.swing_policy,
             dependencies=self.stock_dependencies,
         )
 
@@ -72,7 +72,7 @@ class ScreenDeps:
             db_path=self.db_path,
             screener_config=self.screener_config,
             with_risk=with_risk,
-            swing_config=self.swing_config,
+            swing_policy=self.swing_policy,
             dependencies=self.stock_dependencies,
         )
 
@@ -100,5 +100,5 @@ def build_screen_deps(db_path: Path | str | None = None) -> ScreenDeps:
         screener_config=load_accumulation_screener_config(
             Path(cfg.config_paths.accumulation_screener)
         ),
-        swing_config=load_swing_config(),
+        swing_policy=load_swing_policy_config(),
     )

@@ -70,13 +70,13 @@ def create_accumulation_screen_workflow(
     db_path: Path,
     screener_config: AccumulationScreenerConfig,
     with_risk: bool = True,
-    swing_config: Any | None = None,
+    swing_policy: Any | None = None,
     dependencies: StockAnalysisWorkflowDependencies | None = None,
 ) -> AccumulationScreenWorkflow:
     """Build accumulation screen workflow dependencies for reconciliation."""
     deps = dependencies or create_stock_analysis_workflow_dependencies(db_path)
     swing_setup_catalog = (
-        build_swing_setup_catalog_config(swing_config) if swing_config is not None else None
+        build_swing_setup_catalog_config(swing_policy) if swing_policy is not None else None
     )
 
     risk_use_case = (
@@ -120,7 +120,7 @@ def create_accumulation_screen_workflow_bundle(
     db_path: Path,
     screener_config: AccumulationScreenerConfig,
     with_risk: bool = True,
-    swing_config: Any | None = None,
+    swing_policy: Any | None = None,
     dependencies: StockAnalysisWorkflowDependencies | None = None,
 ) -> AccumulationScreenUseCaseBundle:
     """Build the screen use case together with its canonical observation recorder.
@@ -131,7 +131,7 @@ def create_accumulation_screen_workflow_bundle(
     """
     deps = dependencies or create_stock_analysis_workflow_dependencies(db_path)
     swing_setup_catalog = (
-        build_swing_setup_catalog_config(swing_config) if swing_config is not None else None
+        build_swing_setup_catalog_config(swing_policy) if swing_policy is not None else None
     )
 
     risk_use_case = (
@@ -192,7 +192,7 @@ def create_run_accumulation_screen_workflow_use_case(
     *,
     db_path: Path,
     screener_config: AccumulationScreenerConfig,
-    swing_config: Any,
+    swing_policy: Any,
     dependencies: StockAnalysisWorkflowDependencies | None = None,
 ) -> RunAccumulationScreenWorkflowUseCase:
     """Build the accumulation screen workflow use case with all dependencies wired."""
@@ -200,7 +200,7 @@ def create_run_accumulation_screen_workflow_use_case(
     base = create_accumulation_screen_workflow(
         db_path=db_path,
         screener_config=screener_config,
-        swing_config=swing_config,
+        swing_policy=swing_policy,
         dependencies=deps,
     )
 
@@ -219,14 +219,14 @@ def create_run_accumulation_screen_workflow_use_case(
 
     collect_deep = _build_deep_evidence_collector(
         deps=deps,
-        swing_config=swing_config,
+        swing_policy=swing_policy,
     )
 
     return RunAccumulationScreenWorkflowUseCase(
         screen_use_case=base.use_case,
         broker_repository=deps.broker_repository,
         market_repository=deps.market_repository,
-        swing_config=swing_config,
+        swing_policy=swing_policy,
         accumulation_screener_config=screener_config,
         rules_loader=deps.rules_loader_factory(),
         indicator_registry_factory=deps.indicator_registry_factory,
@@ -242,7 +242,7 @@ def create_run_accumulation_screen_workflow_use_case(
 def _build_deep_evidence_collector(
     *,
     deps: StockAnalysisWorkflowDependencies,
-    swing_config: Any,
+    swing_policy: Any,
 ):
     """Wire optional analysis evidence for screen single-ticker (ADR-054 S1).
 
@@ -265,7 +265,7 @@ def _build_deep_evidence_collector(
     )
     from src.infrastructure.config.plan_swing_config import load_plan_swing_config
 
-    setup_catalog = build_swing_setup_catalog_config(swing_config)
+    setup_catalog = build_swing_setup_catalog_config(swing_policy)
     setup_uc = EvaluateSwingSetupUseCase()
     plan_cfg = load_plan_swing_config()
 

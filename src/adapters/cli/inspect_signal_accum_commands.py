@@ -39,7 +39,7 @@ from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
 )
 from src.infrastructure.config.app_config import load_app_config
-from src.infrastructure.config.swing_config_loader import load_swing_config
+from src.infrastructure.config.swing_policy_config_loader import load_swing_policy_config
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 
@@ -75,10 +75,10 @@ def accum(
     day = parse_as_of_option(as_of_date)
 
     try:
-        swing_cfg = load_swing_config()
+        swing_cfg = load_swing_policy_config()
         accum_cfg = load_accumulation_screener_config()
         request_builder = BuildSignalObservationScreenRequest.from_configs(
-            swing_config=swing_cfg,
+            swing_policy=swing_cfg,
             accumulation_screener_config=accum_cfg,
             min_net_buy_days=max(1, int(window_days)),
             disable_score_filters=True,
@@ -86,7 +86,7 @@ def accum(
         screen_bundle = create_accumulation_screen_workflow_bundle(
             db_path=resolved_db,
             screener_config=accum_cfg,
-            swing_config=swing_cfg,
+            swing_policy=swing_cfg,
         )
         market_repo = SQLiteMarketRepository(resolved_db)
         response = InspectCanonicalSignalUseCase(

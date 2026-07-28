@@ -203,7 +203,7 @@ class TestInstitutionalAccumulationDelegation:
             setup_eval=None,
             setup_name=None,
             strategy_name=None,
-            swing_config=None,
+            swing_policy=None,
         )
 
         assert result.institutional_accumulation_evidence is not None
@@ -247,7 +247,7 @@ class TestTickerProfileDelegation:
             setup_eval=None,
             setup_name=None,
             strategy_name=None,
-            swing_config=None,
+            swing_policy=None,
         )
 
         assert classifier.last_request is not None
@@ -282,7 +282,7 @@ class TestSectorContextDelegation:
             setup_eval=None,
             setup_name=None,
             strategy_name=None,
-            swing_config=None,
+            swing_policy=None,
         )
 
         assert sector_builder.last_request is not None
@@ -315,7 +315,7 @@ class TestCompanyQualityDelegation:
             setup_eval=None,
             setup_name=None,
             strategy_name=None,
-            swing_config=None,
+            swing_policy=None,
         )
 
         assert cq_builder.last_request is not None
@@ -351,7 +351,7 @@ class TestWarningStringsExact:
             setup_eval=None,
             setup_name=None,
             strategy_name=None,
-            swing_config=None,
+            swing_policy=None,
         )
 
         assert "Institutional accumulation evidence unavailable: broker down" in result.warnings
@@ -385,7 +385,7 @@ class TestWarningStringsExact:
             setup_eval=setup_eval,
             setup_name="foreign-bounce",
             strategy_name=None,
-            swing_config=None,
+            swing_policy=None,
         )
 
         assert "Ticker profile classification unavailable: tp down" in result.warnings

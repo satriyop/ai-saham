@@ -7,16 +7,16 @@ Layer: Infrastructure
 import logging
 from pathlib import Path
 
-from src.application.dto.swing_config import SwingConfig
+from src.application.dto.swing_policy_config import SwingPolicyConfig
 from src.infrastructure.config.app_config import AppConfig, load_app_config
 from src.infrastructure.config.swing_broker_quality_config_parser import (
     parse_broker_quality_fields,
 )
-from src.infrastructure.config.swing_config_composer import (
-    read_single_swing_config,
-    read_split_swing_config,
+from src.infrastructure.config.swing_policy_config_composer import (
+    read_single_swing_policy_config,
+    read_split_swing_policy_config,
 )
-from src.infrastructure.config.swing_config_primitives import (
+from src.infrastructure.config.swing_policy_config_primitives import (
     bool_or_default,
     float_or_default,
     int_or_default,
@@ -34,18 +34,18 @@ from src.infrastructure.config.swing_targets_config_parser import (
 logger = logging.getLogger(__name__)
 
 
-def load_swing_config(
+def load_swing_policy_config(
     config_path: Path | None = None,
     config: AppConfig | None = None,
-) -> SwingConfig:
+) -> SwingPolicyConfig:
     """Load swing workflow calibration params from YAML. Returns defaults on any error."""
-    defaults = SwingConfig()
+    defaults = SwingPolicyConfig()
     try:
         if config_path:
-            data = read_single_swing_config(config_path)
+            data = read_single_swing_policy_config(config_path)
         else:
             app_cfg = config or load_app_config()
-            data = read_split_swing_config(
+            data = read_split_swing_policy_config(
                 accumulation_screener_path=Path(app_cfg.config_paths.accumulation_screener),
                 swing_setups_path=Path(app_cfg.config_paths.swing_setups),
                 swing_targets_path=Path(app_cfg.config_paths.swing_targets),
@@ -71,7 +71,7 @@ def load_swing_config(
         setup_phase_config = parse_setup_phase_config(setup_phase, setups, defaults)
         setup_targets = parse_setup_targets(data.get("setup_targets"), defaults)
 
-        return SwingConfig(
+        return SwingPolicyConfig(
             min_market_cap_idr=int_or_default(
                 sc, "min_market_cap_idr", defaults.min_market_cap_idr
             ),

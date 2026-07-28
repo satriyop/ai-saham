@@ -282,14 +282,14 @@ def _build_setup_lens_impact_use_case(
     fetch/cache/scoring policy of its own.
     """
     swing_cmd_cfg = load_plan_swing_command_config()
-    swing_config = swing_cmd_cfg.swing_config
+    swing_policy = swing_cmd_cfg.swing_policy
     plan_swing_config = swing_cmd_cfg.plan_swing_config
 
-    smart_money_brokers = set(swing_config.smart_money_brokers)
-    noise_brokers = set(swing_config.noise_brokers)
+    smart_money_brokers = set(swing_policy.smart_money_brokers)
+    noise_brokers = set(swing_policy.noise_brokers)
     broker_weights: dict[str, Decimal] = {
-        **{code: swing_config.smart_weight for code in smart_money_brokers},
-        **{code: swing_config.noise_weight for code in noise_brokers},
+        **{code: swing_policy.smart_weight for code in smart_money_brokers},
+        **{code: swing_policy.noise_weight for code in noise_brokers},
     }
 
     deps = create_stock_analysis_workflow_dependencies(db_path)
@@ -297,7 +297,7 @@ def _build_setup_lens_impact_use_case(
         setup_name: create_plan_swing_workflow(
             db_path=db_path,
             setup_name=setup_name,
-            swing_config=swing_config,
+            swing_policy=swing_policy,
             plan_swing_config=plan_swing_config,
             smart_money_brokers=smart_money_brokers,
             noise_brokers=noise_brokers,

@@ -192,7 +192,7 @@ class PlanSwingEvidenceBuilder:
         setup_eval: Any | None,
         setup_name: str | None,
         strategy_name: str | None,
-        swing_config: Any,
+        swing_policy: Any,
         as_of_fetched_at: str | None = None,
     ) -> PlanSwingEvidenceBuildResult:
         """`as_of_fetched_at` (ISO timestamp, DQ-002G): the workflow's
@@ -253,7 +253,7 @@ class PlanSwingEvidenceBuilder:
                 from src.application.services.setup_phase_detector import SetupPhaseConfig
 
                 setup_phase_config = getattr(
-                    swing_config,
+                    swing_policy,
                     "setup_phase_config",
                     SetupPhaseConfig(),
                 )

@@ -98,7 +98,7 @@ def test_plan_swing_evidence_builder_no_factory():
         setup_eval=None,
         setup_name=None,
         strategy_name=None,
-        swing_config=None,
+        swing_policy=None,
     )
     assert res.ticker_profile_snapshot is None
 
@@ -137,7 +137,7 @@ def test_plan_swing_evidence_builder_with_fake_factory():
         setup_eval=None,
         setup_name=None,
         strategy_name=None,
-        swing_config=None,
+        swing_policy=None,
     )
     assert res.ticker_profile_snapshot is mock_snapshot
     mock_classifier.classify.assert_called_once()

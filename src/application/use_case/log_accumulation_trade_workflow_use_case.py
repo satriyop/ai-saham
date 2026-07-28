@@ -9,7 +9,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Protocol
 
-from src.application.dto.swing_config import SwingConfig
+from src.application.dto.swing_policy_config import SwingPolicyConfig
 from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
 from src.application.use_case.evaluate_swing_setup_use_case import SwingSetupCatalogConfig
 from src.application.use_case.log_swing_candidate_use_case import (
@@ -77,11 +77,11 @@ class LogAccumulationTradeWorkflowBundle:
 
 
 def build_log_accumulation_trade_policy(
-    swing_config: SwingConfig,
+    swing_policy: SwingPolicyConfig,
     backtest_config: SwingBacktestConfig,
 ) -> LogAccumulationTradePolicy:
     """Build the workflow policy from swing config and backtest defaults."""
-    default_target = swing_config.setup_targets.get("default")
+    default_target = swing_policy.setup_targets.get("default")
 
     take_profit = (
         default_target.take_profit_pct
@@ -94,18 +94,18 @@ def build_log_accumulation_trade_policy(
         else Decimal(str(backtest_config.stop_loss_pct))
     )
 
-    setup_config = build_swing_setup_catalog_config(swing_config)
+    setup_config = build_swing_setup_catalog_config(swing_policy)
 
     return LogAccumulationTradePolicy(
-        tier1_broker_codes=swing_config.tier1_broker_codes,
-        sector_breadth_enabled=swing_config.sector_breadth_enabled,
-        sector_breadth_threshold=swing_config.sector_breadth_threshold,
-        sector_breadth_bonus_pts=swing_config.sector_breadth_bonus_pts,
-        sector_breadth_min_tickers=swing_config.sector_breadth_min_tickers,
+        tier1_broker_codes=swing_policy.tier1_broker_codes,
+        sector_breadth_enabled=swing_policy.sector_breadth_enabled,
+        sector_breadth_threshold=swing_policy.sector_breadth_threshold,
+        sector_breadth_bonus_pts=swing_policy.sector_breadth_bonus_pts,
+        sector_breadth_min_tickers=swing_policy.sector_breadth_min_tickers,
         setup_config=setup_config,
-        resistance_gate_enabled=swing_config.resistance_gate_enabled,
-        resistance_headroom_min_pct=swing_config.resistance_headroom_min_pct,
-        ex_date_warning_days=swing_config.ex_date_warning_days,
+        resistance_gate_enabled=swing_policy.resistance_gate_enabled,
+        resistance_headroom_min_pct=swing_policy.resistance_headroom_min_pct,
+        ex_date_warning_days=swing_policy.ex_date_warning_days,
         take_profit_pct=take_profit,
         stop_loss_pct=stop_loss,
         max_hold_days=backtest_config.max_hold_days,

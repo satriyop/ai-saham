@@ -121,7 +121,7 @@ def test_returns_top_candidates(monkeypatch):
     )
     monkeypatch.setattr(
         "src.adapters.cli.screen_accum_compare_factory.create_accumulation_screen_workflow",
-        lambda *, db_path, screener_config, with_risk, swing_config: SimpleNamespace(
+        lambda *, db_path, screener_config, with_risk, swing_policy: SimpleNamespace(
             use_case=FakeUseCase(), market_repository=sentinel_market_repository
         ),
     )
@@ -137,7 +137,7 @@ def test_returns_top_candidates(monkeypatch):
         top=2,
         db_path=Path("/tmp/fake.db"),
         screener_config=_FAKE_ASC,
-        swing_config=_FAKE_SC,
+        swing_policy=_FAKE_SC,
     )
 
     assert result.ok
@@ -166,7 +166,7 @@ def test_returns_specific_error_on_empty_universe(monkeypatch):
         top=10,
         db_path=Path("/tmp/fake.db"),
         screener_config=_FAKE_ASC,
-        swing_config=_FAKE_SC,
+        swing_policy=_FAKE_SC,
     )
 
     assert not result.ok
@@ -189,7 +189,7 @@ def test_returns_specific_error_on_exception(monkeypatch):
         top=10,
         db_path=Path("/tmp/fake.db"),
         screener_config=_FAKE_ASC,
-        swing_config=_FAKE_SC,
+        swing_policy=_FAKE_SC,
     )
 
     assert not result.ok
@@ -203,10 +203,10 @@ def test_builds_workflow_with_risk_false(monkeypatch):
     def fake_resolve(*, universe, explicit, db_path, loader, repository):
         return ["BBCA"]
 
-    def fake_workflow(*, db_path, screener_config, with_risk, swing_config):
+    def fake_workflow(*, db_path, screener_config, with_risk, swing_policy):
         captured["with_risk"] = with_risk
         captured["screener_config"] = screener_config
-        captured["swing_config"] = swing_config
+        captured["swing_policy"] = swing_policy
         return SimpleNamespace(
             use_case=SimpleNamespace(
                 execute=lambda req, *, execution_context: AccumulationScreenResponse(
@@ -236,12 +236,12 @@ def test_builds_workflow_with_risk_false(monkeypatch):
         top=10,
         db_path=Path("/tmp/fake.db"),
         screener_config=_FAKE_ASC,
-        swing_config=_FAKE_SC,
+        swing_policy=_FAKE_SC,
     )
 
     assert captured["with_risk"] is False
     assert captured["screener_config"] is _FAKE_ASC
-    assert captured["swing_config"] is _FAKE_SC
+    assert captured["swing_policy"] is _FAKE_SC
 
 
 def test_compare_writes_zero_candidate_observations(monkeypatch):
@@ -270,7 +270,7 @@ def test_compare_writes_zero_candidate_observations(monkeypatch):
     )
     monkeypatch.setattr(
         "src.adapters.cli.screen_accum_compare_factory.create_accumulation_screen_workflow",
-        lambda *, db_path, screener_config, with_risk, swing_config: SimpleNamespace(
+        lambda *, db_path, screener_config, with_risk, swing_policy: SimpleNamespace(
             use_case=real_use_case, market_repository=fake_market_repository
         ),
     )
@@ -281,7 +281,7 @@ def test_compare_writes_zero_candidate_observations(monkeypatch):
         top=10,
         db_path=Path("/tmp/fake.db"),
         screener_config=_FAKE_ASC,
-        swing_config=_FAKE_SC,
+        swing_policy=_FAKE_SC,
     )
 
     assert result.ok, result.error

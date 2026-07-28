@@ -5,7 +5,7 @@ from decimal import Decimal
 
 import pytest
 
-from src.application.dto.swing_config import SetupTargetConfig, SwingConfig
+from src.application.dto.swing_policy_config import SetupTargetConfig, SwingPolicyConfig
 from src.application.use_case.evaluate_swing_setup_use_case import SwingSetupCatalogConfig
 from src.application.use_case.log_accumulation_trade_workflow_use_case import (
     LogAccumulationTradePolicy,
@@ -52,7 +52,7 @@ def dummy_response():
 
 
 def test_build_log_accumulation_trade_policy_resolves_from_default_setup_target():
-    swing_config = SwingConfig(
+    swing_policy = SwingPolicyConfig(
         setup_targets={
             "default": SetupTargetConfig(take_profit_pct=Decimal("8"), stop_loss_pct=Decimal("4"))
         }
@@ -60,18 +60,18 @@ def test_build_log_accumulation_trade_policy_resolves_from_default_setup_target(
     backtest_config = MockSwingBacktestConfig(
         take_profit_pct=5.0, stop_loss_pct=5.0, max_hold_days=10
     )
-    policy = build_log_accumulation_trade_policy(swing_config, backtest_config)
+    policy = build_log_accumulation_trade_policy(swing_policy, backtest_config)
     assert policy.take_profit_pct == Decimal("8")
     assert policy.stop_loss_pct == Decimal("4")
     assert policy.max_hold_days == 10
 
 
 def test_build_log_accumulation_trade_policy_falls_back_to_backtest():
-    swing_config = SwingConfig(setup_targets={})
+    swing_policy = SwingPolicyConfig(setup_targets={})
     backtest_config = MockSwingBacktestConfig(
         take_profit_pct=5.5, stop_loss_pct=6.5, max_hold_days=12
     )
-    policy = build_log_accumulation_trade_policy(swing_config, backtest_config)
+    policy = build_log_accumulation_trade_policy(swing_policy, backtest_config)
     assert policy.take_profit_pct == Decimal("5.5")
     assert policy.stop_loss_pct == Decimal("6.5")
     assert policy.max_hold_days == 12

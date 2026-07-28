@@ -19,7 +19,7 @@ from src.application.dto.accumulation_screen import (
     AccumulationCandidateEvaluationResult,
     AccumulationScreenRequest,
 )
-from src.application.dto.swing_config import SwingConfig
+from src.application.dto.swing_policy_config import SwingPolicyConfig
 from src.application.services.accumulation_screen_factory import (
     create_accumulation_screen_use_case,
 )
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 def create_accumulation_candidate_builder(
     *,
     deps: StockAnalysisWorkflowDependencies,
-    swing_config: SwingConfig,
+    swing_policy: SwingPolicyConfig,
     plan_swing_config: PlanSwingConfig,
     accumulation_config: AccumulationScreenerConfig,
     signal_engine: "SignalEngine",
@@ -79,12 +79,12 @@ def create_accumulation_candidate_builder(
                 min_net_buy_days=plan_swing_config.candidate_min_net_buy_days,
                 min_accum_score=plan_swing_config.candidate_min_accum_score,
                 min_accum_score_enabled=True,
-                tier1_broker_codes=swing_config.tier1_broker_codes,
-                bci_cluster_min_count=swing_config.bci_cluster_min_count,
-                bci_stable_min_count=swing_config.bci_stable_min_count,
-                resistance_gate_enabled=swing_config.resistance_gate_enabled,
-                resistance_headroom_min_pct=swing_config.resistance_headroom_min_pct,
-                ex_date_warning_days=swing_config.ex_date_warning_days,
+                tier1_broker_codes=swing_policy.tier1_broker_codes,
+                bci_cluster_min_count=swing_policy.bci_cluster_min_count,
+                bci_stable_min_count=swing_policy.bci_stable_min_count,
+                resistance_gate_enabled=swing_policy.resistance_gate_enabled,
+                resistance_headroom_min_pct=swing_policy.resistance_headroom_min_pct,
+                ex_date_warning_days=swing_policy.ex_date_warning_days,
             ),
             execution_context=execution_context,
         )

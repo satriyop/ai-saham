@@ -96,7 +96,7 @@ class PlanSwingWorkflowUseCase:
         evaluate_setup: Callable[[Any | None, Any | None], Any | None],
         build_broker_quality_note: Callable[..., Any | None],
         fetch_sentiment: Callable[..., tuple[Any | None, str | None]],
-        load_swing_config: Callable[[], Any],
+        load_swing_policy_config: Callable[[], Any],
         resolve_setup_targets: Callable[[str | None, Any], tuple[Decimal, Decimal]],
         rules_loader: RulesLoader,
         signal_evidence_context_builder: "SignalEvidenceExecutionContextBuilder",
@@ -131,7 +131,7 @@ class PlanSwingWorkflowUseCase:
         self._evaluate_setup = evaluate_setup
         self._build_broker_quality_note = build_broker_quality_note
         self._fetch_sentiment = fetch_sentiment
-        self._load_swing_config = load_swing_config
+        self._load_swing_policy_config = load_swing_policy_config
         self._resolve_setup_targets = resolve_setup_targets
         self._rules_loader = rules_loader
         self._evaluate_market_context = evaluate_market_context
@@ -197,7 +197,7 @@ class PlanSwingWorkflowUseCase:
         )
         self._sizing_service = PlanSwingSizingService(
             registry=registry,
-            load_swing_config=load_swing_config,
+            load_swing_policy_config=load_swing_policy_config,
             resolve_setup_targets=resolve_setup_targets,
         )
         self._response_assembler = PlanSwingResponseAssembler()

@@ -121,7 +121,7 @@ class RunAccumulationScreenWorkflowUseCase:
         screen_use_case,
         broker_repository,
         market_repository,
-        swing_config,
+        swing_policy,
         accumulation_screener_config,
         rules_loader,
         indicator_registry_factory,
@@ -133,7 +133,7 @@ class RunAccumulationScreenWorkflowUseCase:
         self._screen_use_case = screen_use_case
         self._broker_repository = broker_repository
         self._market_repository = market_repository
-        self._swing_config = swing_config
+        self._swing_policy = swing_policy
         self._accumulation_screener_config = accumulation_screener_config
         self._rules_loader = rules_loader
         self._indicator_registry_factory = indicator_registry_factory
@@ -154,7 +154,7 @@ class RunAccumulationScreenWorkflowUseCase:
         warnings: list[str] = []
 
         request_builder = BuildSignalObservationScreenRequest.from_configs(
-            swing_config=self._swing_config,
+            swing_policy=self._swing_policy,
             accumulation_screener_config=self._accumulation_screener_config,
             min_net_buy_days=_BASELINE_MIN_NET_BUY_DAYS,
             min_accum_score=request.min_accum_score,
@@ -370,8 +370,8 @@ class RunAccumulationScreenWorkflowUseCase:
         tracked_broker_flow = compute_tracked_broker_flow_batch(
             tickers=request.tickers,
             broker_repo=self._broker_repository,
-            smart_money_brokers=self._swing_config.smart_money_brokers,
-            noise_brokers=self._swing_config.noise_brokers,
+            smart_money_brokers=self._swing_policy.smart_money_brokers,
+            noise_brokers=self._swing_policy.noise_brokers,
             as_of_date=screened_at,
         )
 

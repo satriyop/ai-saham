@@ -29,9 +29,9 @@ from src.application.services.effective_market_session_resolver import (
 
 def default_swing_display_config() -> SwingDisplayConfig:
     # Rescaled 0-120 -> 0-100 (see ADR-039). Note: these literals already
-    # didn't match swing_config.py's canonical defaults before the rescale
+    # didn't match swing_policy.py's canonical defaults before the rescale
     # (a pre-existing drift, not introduced here) — converted proportionally
-    # but not unified with swing_config.py, which is unrelated cleanup.
+    # but not unified with swing_policy.py, which is unrelated cleanup.
     return SwingDisplayConfig(
         enter_min_score=58.3,
         watch_min_score=41.7,

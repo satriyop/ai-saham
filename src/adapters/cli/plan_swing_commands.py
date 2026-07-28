@@ -297,17 +297,17 @@ def swing(
     include_risk_detail = full
     include_market_detail = full or with_market_context
 
-    smart_money_brokers = set(cfg.swing_config.smart_money_brokers)
-    noise_brokers = set(cfg.swing_config.noise_brokers)
+    smart_money_brokers = set(cfg.swing_policy.smart_money_brokers)
+    noise_brokers = set(cfg.swing_policy.noise_brokers)
     broker_weights: dict[str, Decimal] = {
-        **{code: cfg.swing_config.smart_weight for code in smart_money_brokers},
-        **{code: cfg.swing_config.noise_weight for code in noise_brokers},
+        **{code: cfg.swing_policy.smart_weight for code in smart_money_brokers},
+        **{code: cfg.swing_policy.noise_weight for code in noise_brokers},
     }
 
     workflow = create_plan_swing_workflow(
         db_path=resolved_db,
         setup_name=setup_name,
-        swing_config=cfg.swing_config,
+        swing_policy=cfg.swing_policy,
         plan_swing_config=cfg.plan_swing_config,
         smart_money_brokers=smart_money_brokers,
         noise_brokers=noise_brokers,
@@ -387,14 +387,14 @@ def swing(
         return
 
     display_config = SwingDisplayConfig(
-        enter_min_score=cfg.swing_config.enter_min_score,
-        watch_min_score=cfg.swing_config.watch_min_score,
-        coiled_spring_bb_pctile=cfg.swing_config.coiled_spring_bb_pctile,
-        coiled_spring_min_score=cfg.swing_config.coiled_spring_min_score,
-        strong_min_score=cfg.swing_config.strong_min_score,
-        strong_min_streak=cfg.swing_config.strong_min_streak,
-        building_min_score=cfg.swing_config.building_min_score,
-        building_min_streak=cfg.swing_config.building_min_streak,
+        enter_min_score=cfg.swing_policy.enter_min_score,
+        watch_min_score=cfg.swing_policy.watch_min_score,
+        coiled_spring_bb_pctile=cfg.swing_policy.coiled_spring_bb_pctile,
+        coiled_spring_min_score=cfg.swing_policy.coiled_spring_min_score,
+        strong_min_score=cfg.swing_policy.strong_min_score,
+        strong_min_streak=cfg.swing_policy.strong_min_streak,
+        building_min_score=cfg.swing_policy.building_min_score,
+        building_min_streak=cfg.swing_policy.building_min_streak,
         foreign_bounce_max_hold_days=cfg.swing_backtest_config.max_hold_days,
     )
 

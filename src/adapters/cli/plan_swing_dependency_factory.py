@@ -17,7 +17,7 @@ from pathlib import Path
 from src.adapters.composition.stock_analysis_workflow_dependencies import (
     StockAnalysisWorkflowDependencies,
 )
-from src.application.dto.swing_config import SwingConfig
+from src.application.dto.swing_policy_config import SwingPolicyConfig
 from src.application.services.swing_broker_detail_builder import build_broker_detail
 from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
 from src.application.use_case.assess_corporate_action_event_risk_use_case import (
@@ -70,7 +70,7 @@ def create_broker_detail_builder(
     smart_money_brokers: set[str],
     noise_brokers: set[str],
     broker_weights: dict[str, Decimal],
-    swing_config: SwingConfig,
+    swing_policy: SwingPolicyConfig,
 ):
     def _build_broker_detail(ticker, broker_repo, window_sessions=5, as_of_date=None):
         return build_broker_detail(
@@ -81,7 +81,7 @@ def create_broker_detail_builder(
             smart_money_brokers=smart_money_brokers,
             noise_brokers=noise_brokers,
             broker_weights=broker_weights,
-            smart_share_threshold_pct=swing_config.smart_share_threshold_pct,
+            smart_share_threshold_pct=swing_policy.smart_share_threshold_pct,
         )
 
     return _build_broker_detail
@@ -90,9 +90,9 @@ def create_broker_detail_builder(
 def create_setup_evaluator(
     *,
     setup_name: str | None,
-    swing_config: SwingConfig,
+    swing_policy: SwingPolicyConfig,
 ):
-    config = build_swing_setup_catalog_config(swing_config)
+    config = build_swing_setup_catalog_config(swing_policy)
 
     def _evaluate_swing_setup(candidate, broker_detail=None):
         return EvaluateSwingSetupUseCase().execute(

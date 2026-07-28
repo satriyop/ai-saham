@@ -4,10 +4,10 @@ import pytest
 
 from src.application.services.setup_phase_detector import SetupPhaseConfig
 from src.domain.value_objects.setup_phase import SetupPhaseState
-from src.infrastructure.config.swing_config import load_swing_config
+from src.infrastructure.config.swing_policy_config_loader import load_swing_policy_config
 
 
-def test_load_swing_config_parses_setup_phase_section(tmp_path: Path):
+def test_load_swing_policy_config_parses_setup_phase_section(tmp_path: Path):
     path = tmp_path / "swing_setups.yaml"
     path.write_text(
         """
@@ -37,7 +37,7 @@ setup_phase:
         encoding="utf-8",
     )
 
-    cfg = load_swing_config(path)
+    cfg = load_swing_policy_config(path)
 
     assert cfg.setup_phase_config.thresholds.compression_max_bb_width_pctile == 0.15
     assert cfg.setup_phase_config.thresholds.breakout_min_volume_ratio == 1.5
@@ -57,7 +57,7 @@ setup_phase:
     assert not hasattr(cfg.setup_phase_config, "rs_policy_by_setup_family")
 
 
-def test_load_swing_config_parses_setup_phase_requirements(tmp_path: Path):
+def test_load_swing_policy_config_parses_setup_phase_requirements(tmp_path: Path):
     path = tmp_path / "swing_setups.yaml"
     path.write_text(
         """
@@ -74,7 +74,7 @@ setup_phase:
         encoding="utf-8",
     )
 
-    cfg = load_swing_config(path)
+    cfg = load_swing_policy_config(path)
 
     assert cfg.setup_phase_config.requirement_for("breakout").required_sequence == (
         SetupPhaseState.COMPRESSION,
@@ -83,7 +83,7 @@ setup_phase:
     assert cfg.setup_phase_config.requirement_for("pullback").requires_reclaim_or_pivot is True
 
 
-def test_load_swing_config_invalid_phase_name_raises(tmp_path: Path):
+def test_load_swing_policy_config_invalid_phase_name_raises(tmp_path: Path):
     # A typo'd phase name in setup_phase.requirements must fail loudly, not
     # silently degrade to default phase requirements/entry-authority rules —
     # a misconfigured setup-phase guardrail that "looks like it loaded" is
@@ -102,10 +102,10 @@ setup_phase:
     )
 
     with pytest.raises(ValueError, match="invalid setup phase name"):
-        load_swing_config(path)
+        load_swing_policy_config(path)
 
 
-def test_load_swing_config_missing_requirements_key_uses_defaults(tmp_path: Path):
+def test_load_swing_policy_config_missing_requirements_key_uses_defaults(tmp_path: Path):
     path = tmp_path / "swing_setups.yaml"
     path.write_text(
         """
@@ -118,7 +118,7 @@ setup_phase:
         encoding="utf-8",
     )
 
-    cfg = load_swing_config(path)
+    cfg = load_swing_policy_config(path)
 
     assert (
         cfg.setup_phase_config.requirements_by_family == SetupPhaseConfig().requirements_by_family
@@ -128,7 +128,7 @@ setup_phase:
     ) == SetupPhaseConfig().requirement_for("accumulation")
 
 
-def test_load_swing_config_derives_setup_name_alias_from_family(tmp_path: Path):
+def test_load_swing_policy_config_derives_setup_name_alias_from_family(tmp_path: Path):
     path = tmp_path / "swing_setups.yaml"
     path.write_text(
         """
@@ -148,7 +148,7 @@ setup_phase:
         encoding="utf-8",
     )
 
-    cfg = load_swing_config(path)
+    cfg = load_swing_policy_config(path)
 
     assert (
         cfg.setup_phase_config.requirement_for("coiled-spring").required_sequence
@@ -156,13 +156,13 @@ setup_phase:
     )
 
 
-def test_load_swing_config_production_split_config_loads_setup_phase_requirements():
+def test_load_swing_policy_config_production_split_config_loads_setup_phase_requirements():
     # Regression guard for the merge-gap fix: SWING_SETUPS_CONFIG_PATH's
     # "setup_phase" key was previously never merged into the split-config
     # dict, so setup_phase.requirements silently never loaded in production.
-    # Calling load_swing_config() with no argument exercises the real
+    # Calling load_swing_policy_config() with no argument exercises the real
     # split-config path against the actual repo config/swing_setups.yaml.
-    cfg = load_swing_config()
+    cfg = load_swing_policy_config()
 
     assert cfg.setup_phase_config.requirement_for("coiled-spring").required_sequence == (
         SetupPhaseState.COMPRESSION,

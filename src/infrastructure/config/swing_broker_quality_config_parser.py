@@ -6,8 +6,8 @@ Layer: Infrastructure
 
 from decimal import Decimal
 
-from src.application.dto.swing_config import SwingConfig
-from src.infrastructure.config.swing_config_primitives import (
+from src.application.dto.swing_policy_config import SwingPolicyConfig
+from src.infrastructure.config.swing_policy_config_primitives import (
     broker_codes_or_default,
     float_or_default,
     int_or_default,
@@ -16,7 +16,7 @@ from src.infrastructure.config.swing_config_primitives import (
 
 def parse_broker_quality_fields(
     data: dict,
-    defaults: SwingConfig,
+    defaults: SwingPolicyConfig,
 ) -> dict[str, object]:
     bq = data.get("broker_quality") or {}
     sm = bq.get("smart_money") or {}

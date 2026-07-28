@@ -1,4 +1,4 @@
-"""Tests for _SwingConfig YAML loader in plan_swing_commands."""
+"""Tests for _SwingPolicyConfig YAML loader in plan_swing_commands."""
 
 from decimal import Decimal
 from pathlib import Path
@@ -7,14 +7,14 @@ import pytest
 import yaml
 
 from src.adapters.cli.plan_swing_command_config import load_plan_swing_command_config
-from src.infrastructure.config.swing_config import (
+from src.application.dto.swing_policy_config import (
     SetupTargetConfig as _SetupTargetConfig,
 )
-from src.infrastructure.config.swing_config import (
-    SwingConfig as _SwingConfig,
+from src.application.dto.swing_policy_config import (
+    SwingPolicyConfig as _SwingPolicyConfig,
 )
-from src.infrastructure.config.swing_config import (
-    load_swing_config as _load_swing_config,
+from src.infrastructure.config.swing_policy_config_loader import (
+    load_swing_policy_config as _load_swing_policy_config,
 )
 
 
@@ -34,7 +34,7 @@ def test_loads_smart_money_brokers_from_yaml(tmp_path):
             "broker_quality": {"smart_money": {"brokers": ["AK", "ZP"], "weight": 1.5}},
         },
     )
-    result = _load_swing_config(cfg)
+    result = _load_swing_policy_config(cfg)
     assert result.smart_money_brokers == ("AK", "ZP")
 
 
@@ -45,7 +45,7 @@ def test_loads_noise_brokers_from_yaml(tmp_path):
             "broker_quality": {"noise": {"brokers": ["YP"], "weight": 0.5}},
         },
     )
-    result = _load_swing_config(cfg)
+    result = _load_swing_policy_config(cfg)
     assert result.noise_brokers == ("YP",)
 
 
@@ -59,7 +59,7 @@ def test_loads_broker_weights_from_yaml(tmp_path):
             },
         },
     )
-    result = _load_swing_config(cfg)
+    result = _load_swing_policy_config(cfg)
     assert result.smart_weight == Decimal("2.0")
     assert result.noise_weight == Decimal("0.3")
 
@@ -80,7 +80,7 @@ def test_loads_gate_thresholds_from_yaml(tmp_path):
             },
         },
     )
-    result = _load_swing_config(cfg)
+    result = _load_swing_policy_config(cfg)
     assert result.gate_min_accum_score == 65.0
     assert result.gate_max_rsi == 55.0
     assert result.gate_required_trend == "UP"
@@ -111,7 +111,7 @@ def test_loads_setup_catalog_thresholds_from_yaml(tmp_path):
             },
         },
     )
-    result = _load_swing_config(cfg)
+    result = _load_swing_policy_config(cfg)
 
     assert result.coiled_spring_enabled is False
     assert result.coiled_spring_gate_min_accum_score == 61.0
@@ -144,7 +144,7 @@ def test_loads_setup_entry_authority_metadata_from_yaml(tmp_path):
             },
         },
     )
-    result = _load_swing_config(cfg)
+    result = _load_swing_policy_config(cfg)
 
     assert result.foreign_bounce_family == "accumulation"
     assert result.foreign_bounce_entry_authority is True
@@ -161,7 +161,7 @@ def test_setup_entry_authority_metadata_falls_back_to_defaults_when_absent(tmp_p
             "setups": {"foreign-bounce": {"gates": {"max_rsi": 55}}},
         },
     )
-    result = _load_swing_config(cfg)
+    result = _load_swing_policy_config(cfg)
 
     assert result.foreign_bounce_family == "unknown"
     assert result.foreign_bounce_entry_authority is True
@@ -171,7 +171,7 @@ def test_setup_entry_authority_metadata_falls_back_to_defaults_when_absent(tmp_p
 def test_live_config_setups_are_explicit_entry_authority_metadata():
     """The shipped config/swing_setups.yaml must declare explicit metadata for
     every setup — defaults exist only for backward compatibility."""
-    result = _load_swing_config()
+    result = _load_swing_policy_config()
     assert result.foreign_bounce_family == "accumulation"
     assert result.foreign_bounce_entry_authority is True
     assert result.foreign_bounce_can_enter_from_phases == ("BREAKOUT_CONFIRMATION",)
@@ -193,7 +193,7 @@ def test_loads_verdict_thresholds_from_yaml(tmp_path):
             "verdicts": {"enter_min_score": 75, "watch_min_score": 45},
         },
     )
-    result = _load_swing_config(cfg)
+    result = _load_swing_policy_config(cfg)
     assert result.enter_min_score == 75.0
     assert result.watch_min_score == 45.0
 
@@ -205,7 +205,7 @@ def test_loads_signal_thresholds_from_yaml(tmp_path):
             "verdicts": {"signals": {"strong_min_streak": 10, "building_min_score": 55.0}},
         },
     )
-    result = _load_swing_config(cfg)
+    result = _load_swing_policy_config(cfg)
     assert result.strong_min_streak == 10
     assert result.building_min_score == 55.0
 
@@ -223,22 +223,22 @@ def test_loads_resistance_and_corporate_action_thresholds_from_yaml(tmp_path):
             },
         },
     )
-    result = _load_swing_config(cfg)
+    result = _load_swing_policy_config(cfg)
     assert result.resistance_gate_enabled is False
     assert result.resistance_headroom_min_pct == 7.5
     assert result.ex_date_warning_days == 15
 
 
 def test_falls_back_to_defaults_when_file_missing():
-    result = _load_swing_config(Path("/nonexistent/swing_config.yaml"))
-    assert result == _SwingConfig()
+    result = _load_swing_policy_config(Path("/nonexistent/swing_policy.yaml"))
+    assert result == _SwingPolicyConfig()
 
 
 def test_falls_back_to_defaults_when_yaml_invalid(tmp_path):
     bad = tmp_path / "s.yaml"
     bad.write_text("{ bad yaml: :")
-    result = _load_swing_config(bad)
-    assert result == _SwingConfig()
+    result = _load_swing_policy_config(bad)
+    assert result == _SwingPolicyConfig()
 
 
 def test_falls_back_to_defaults_when_broker_codes_empty(tmp_path):
@@ -248,9 +248,9 @@ def test_falls_back_to_defaults_when_broker_codes_empty(tmp_path):
             "broker_quality": {"smart_money": {"brokers": []}},
         },
     )
-    result = _load_swing_config(cfg)
+    result = _load_swing_policy_config(cfg)
     # Empty list → fall back to hardcoded defaults
-    assert result.smart_money_brokers == _SwingConfig().smart_money_brokers
+    assert result.smart_money_brokers == _SwingPolicyConfig().smart_money_brokers
 
 
 def test_strips_and_uppercases_codes(tmp_path):
@@ -260,7 +260,7 @@ def test_strips_and_uppercases_codes(tmp_path):
             "broker_quality": {"smart_money": {"brokers": ["ak", " zp "]}},
         },
     )
-    result = _load_swing_config(cfg)
+    result = _load_swing_policy_config(cfg)
     assert result.smart_money_brokers == ("AK", "ZP")
 
 
@@ -272,15 +272,15 @@ def test_partial_yaml_uses_defaults_for_missing_sections(tmp_path):
             "verdicts": {"enter_min_score": 75},
         },
     )
-    result = _load_swing_config(cfg)
+    result = _load_swing_policy_config(cfg)
     assert result.enter_min_score == 75.0
-    assert result.smart_money_brokers == _SwingConfig().smart_money_brokers
-    assert result.gate_min_accum_score == _SwingConfig().gate_min_accum_score
+    assert result.smart_money_brokers == _SwingPolicyConfig().smart_money_brokers
+    assert result.gate_min_accum_score == _SwingPolicyConfig().gate_min_accum_score
 
 
 def test_live_config_loads_without_error():
     """Smoke test: split swing workflow config is valid and matches expected values."""
-    result = _load_swing_config()
+    result = _load_swing_policy_config()
     assert len(result.smart_money_brokers) > 0
     assert len(result.noise_brokers) > 0
     assert result.gate_min_accum_score == 58.3
@@ -298,31 +298,31 @@ def test_live_config_loads_without_error():
 
 def test_module_constants_populated():
     cfg = load_plan_swing_command_config()
-    smart_money_brokers = set(cfg.swing_config.smart_money_brokers)
-    noise_brokers = set(cfg.swing_config.noise_brokers)
+    smart_money_brokers = set(cfg.swing_policy.smart_money_brokers)
+    noise_brokers = set(cfg.swing_policy.noise_brokers)
     broker_weights = {
-        **{code: cfg.swing_config.smart_weight for code in smart_money_brokers},
-        **{code: cfg.swing_config.noise_weight for code in noise_brokers},
+        **{code: cfg.swing_policy.smart_weight for code in smart_money_brokers},
+        **{code: cfg.swing_policy.noise_weight for code in noise_brokers},
     }
     assert "AK" in smart_money_brokers
     assert "YP" in noise_brokers
     assert "AK" not in noise_brokers
-    assert broker_weights["AK"] == cfg.swing_config.smart_weight
-    assert broker_weights["YP"] == cfg.swing_config.noise_weight
+    assert broker_weights["AK"] == cfg.swing_policy.smart_weight
+    assert broker_weights["YP"] == cfg.swing_policy.noise_weight
 
 
 def test_broker_weights_derived_from_sc():
     cfg = load_plan_swing_command_config()
-    smart_money_brokers = set(cfg.swing_config.smart_money_brokers)
-    noise_brokers = set(cfg.swing_config.noise_brokers)
+    smart_money_brokers = set(cfg.swing_policy.smart_money_brokers)
+    noise_brokers = set(cfg.swing_policy.noise_brokers)
     broker_weights = {
-        **{code: cfg.swing_config.smart_weight for code in smart_money_brokers},
-        **{code: cfg.swing_config.noise_weight for code in noise_brokers},
+        **{code: cfg.swing_policy.smart_weight for code in smart_money_brokers},
+        **{code: cfg.swing_policy.noise_weight for code in noise_brokers},
     }
     for code in smart_money_brokers:
-        assert broker_weights[code] == cfg.swing_config.smart_weight
+        assert broker_weights[code] == cfg.swing_policy.smart_weight
     for code in noise_brokers:
-        assert broker_weights[code] == cfg.swing_config.noise_weight
+        assert broker_weights[code] == cfg.swing_policy.noise_weight
 
 
 # ── Tier1 broker codes ────────────────────────────────────────────────────
@@ -337,7 +337,7 @@ def test_loads_tier1_brokers_from_yaml(tmp_path):
             },
         },
     )
-    result = _load_swing_config(cfg)
+    result = _load_swing_policy_config(cfg)
     assert result.tier1_broker_codes == frozenset({"AK", "BK"})
 
 
@@ -350,7 +350,7 @@ def test_loads_bci_count_thresholds(tmp_path):
             },
         },
     )
-    result = _load_swing_config(cfg)
+    result = _load_swing_policy_config(cfg)
     assert result.bci_cluster_min_count == 4
     assert result.bci_stable_min_count == 2
 
@@ -362,16 +362,16 @@ def test_tier1_falls_back_to_defaults_when_empty(tmp_path):
             "broker_quality": {"tier1": {"brokers": []}},
         },
     )
-    result = _load_swing_config(cfg)
-    assert result.tier1_broker_codes == _SwingConfig().tier1_broker_codes
+    result = _load_swing_policy_config(cfg)
+    assert result.tier1_broker_codes == _SwingPolicyConfig().tier1_broker_codes
 
 
 def test_cs_not_in_tier1_brokers():
     """CS (Credit Suisse) was wound down — must not appear in any broker set."""
     cfg = load_plan_swing_command_config()
-    assert "CS" not in cfg.swing_config.smart_money_brokers
-    assert "CS" not in cfg.swing_config.noise_brokers
-    assert "CS" not in cfg.swing_config.tier1_broker_codes
+    assert "CS" not in cfg.swing_policy.smart_money_brokers
+    assert "CS" not in cfg.swing_policy.noise_brokers
+    assert "CS" not in cfg.swing_policy.tier1_broker_codes
 
 
 # ── Setup targets ─────────────────────────────────────────────────────────
@@ -387,14 +387,14 @@ def test_loads_setup_targets_from_yaml(tmp_path):
             },
         },
     )
-    result = _load_swing_config(cfg)
+    result = _load_swing_policy_config(cfg)
     assert result.setup_targets["risk_on"].take_profit_pct == Decimal("9.0")
     assert result.setup_targets["risk_on"].stop_loss_pct == Decimal("4.5")
     assert result.setup_targets["default"].take_profit_pct == Decimal("6.0")
 
 
 def test_live_config_loads_tier1_and_setup_targets():
-    result = _load_swing_config()
+    result = _load_swing_policy_config()
     assert "AK" in result.tier1_broker_codes
     assert "CS" not in result.tier1_broker_codes
     assert set(result.setup_targets) == {"risk_on", "neutral", "volatile", "risk_off", "default"}
@@ -402,39 +402,20 @@ def test_live_config_loads_tier1_and_setup_targets():
     assert result.bci_cluster_min_count == 3
 
 
-# ── Import / facade compatibility tests ─────────────────────────────────
+# ── Import / loader contract tests ───────────────────────────────────────
 
 
-def test_dto_import_matches_facade_defaults():
-    """DTO import produces the same default SwingConfig as the facade."""
-    from src.application.dto.swing_config import (
+def test_dto_and_loader_module_export_same_defaults():
+    """Canonical DTO import is the source of default SwingPolicyConfig values."""
+    from src.application.dto.swing_policy_config import (
         SetupTargetConfig as DtoSetupTargetConfig,
     )
-    from src.application.dto.swing_config import (
-        SwingConfig as DtoSwingConfig,
+    from src.application.dto.swing_policy_config import (
+        SwingPolicyConfig as DtoSwingPolicyConfig,
     )
 
-    dto = DtoSwingConfig()
-    facade = _SwingConfig()
-    assert dto == facade
+    assert DtoSwingPolicyConfig() == _SwingPolicyConfig()
     assert DtoSetupTargetConfig() == _SetupTargetConfig()
-
-
-def test_facade_still_re_exports_everything():
-    """The compatibility facade still exports all public names."""
-    from src.infrastructure.config.swing_config import (
-        SetupTargetConfig as FacadeSetupTargetConfig,
-    )
-    from src.infrastructure.config.swing_config import (
-        SwingConfig as FacadeSwingConfig,
-    )
-    from src.infrastructure.config.swing_config import (
-        load_swing_config as facade_load,
-    )
-
-    assert FacadeSwingConfig is _SwingConfig
-    assert FacadeSetupTargetConfig is _SetupTargetConfig
-    assert facade_load is _load_swing_config
 
 
 def test_loader_reraises_programmer_errors_instead_of_silent_default(tmp_path, monkeypatch):
@@ -456,7 +437,10 @@ def test_loader_reraises_programmer_errors_instead_of_silent_default(tmp_path, m
     def _boom(*args, **kwargs):
         raise AttributeError("simulated renamed-field bug")
 
-    monkeypatch.setattr("src.infrastructure.config.swing_config_loader.parse_setup_targets", _boom)
+    monkeypatch.setattr(
+        "src.infrastructure.config.swing_policy_config_loader.parse_setup_targets",
+        _boom,
+    )
 
     with pytest.raises(AttributeError):
-        _load_swing_config(cfg)
+        _load_swing_policy_config(cfg)

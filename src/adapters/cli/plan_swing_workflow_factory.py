@@ -35,7 +35,7 @@ from src.adapters.composition.stock_analysis_workflow_dependencies import (
     StockAnalysisWorkflowDependencies,
     create_stock_analysis_workflow_dependencies,
 )
-from src.application.dto.swing_config import SwingConfig
+from src.application.dto.swing_policy_config import SwingPolicyConfig
 from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSessionResolver,
 )
@@ -66,7 +66,7 @@ def create_plan_swing_workflow(
     *,
     db_path: Path,
     setup_name: str | None,
-    swing_config: SwingConfig,
+    swing_policy: SwingPolicyConfig,
     plan_swing_config: PlanSwingConfig,
     smart_money_brokers: set[str],
     noise_brokers: set[str],
@@ -80,7 +80,7 @@ def create_plan_swing_workflow(
 
     build_accumulation_candidate_evaluation = create_accumulation_candidate_builder(
         deps=deps,
-        swing_config=swing_config,
+        swing_policy=swing_policy,
         plan_swing_config=plan_swing_config,
         accumulation_config=accumulation_config,
         signal_engine=signal_engine,
@@ -89,9 +89,9 @@ def create_plan_swing_workflow(
         smart_money_brokers=smart_money_brokers,
         noise_brokers=noise_brokers,
         broker_weights=broker_weights,
-        swing_config=swing_config,
+        swing_policy=swing_policy,
     )
-    evaluate_setup = create_setup_evaluator(setup_name=setup_name, swing_config=swing_config)
+    evaluate_setup = create_setup_evaluator(setup_name=setup_name, swing_policy=swing_policy)
 
     return PlanSwingWorkflowUseCase(
         market_repository=deps.market_repository,
@@ -111,14 +111,14 @@ def create_plan_swing_workflow(
         build_broker_quality_note=lambda broker_detail, setup_eval: build_broker_quality_note(
             broker_detail,
             setup_eval,
-            smart_sell_min_share_pct=swing_config.smart_sell_min_share_pct,
+            smart_sell_min_share_pct=swing_policy.smart_sell_min_share_pct,
         ),
         fetch_sentiment=lambda ticker, sentiment_verbose: fetch_swing_sentiment(
             ticker=ticker,
             sentiment_verbose=sentiment_verbose,
             plan_swing_config=plan_swing_config,
         ),
-        load_swing_config=lambda: swing_config,
+        load_swing_policy_config=lambda: swing_policy,
         resolve_setup_targets=resolve_setup_targets,
         rules_loader=deps.rules_loader_factory(),
         evaluate_market_context=evaluate_market_context,

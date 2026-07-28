@@ -54,11 +54,11 @@ def _build_broker_detail(*args, **kwargs):
     from src.adapters.cli.plan_swing_command_config import load_plan_swing_command_config
 
     cfg = load_plan_swing_command_config()
-    smart_money_brokers = set(cfg.swing_config.smart_money_brokers)
-    noise_brokers = set(cfg.swing_config.noise_brokers)
+    smart_money_brokers = set(cfg.swing_policy.smart_money_brokers)
+    noise_brokers = set(cfg.swing_policy.noise_brokers)
     broker_weights = {
-        **{code: cfg.swing_config.smart_weight for code in smart_money_brokers},
-        **{code: cfg.swing_config.noise_weight for code in noise_brokers},
+        **{code: cfg.swing_policy.smart_weight for code in smart_money_brokers},
+        **{code: cfg.swing_policy.noise_weight for code in noise_brokers},
     }
     return _build_broker_detail_base(
         *args,
@@ -66,7 +66,7 @@ def _build_broker_detail(*args, **kwargs):
         smart_money_brokers=smart_money_brokers,
         noise_brokers=noise_brokers,
         broker_weights=broker_weights,
-        smart_share_threshold_pct=cfg.swing_config.smart_share_threshold_pct,
+        smart_share_threshold_pct=cfg.swing_policy.smart_share_threshold_pct,
     )
 
 

@@ -17,7 +17,7 @@ class SetupTargetConfig:
 
 
 @dataclass(frozen=True)
-class SwingConfig:
+class SwingPolicyConfig:
     """Swing workflow calibration params. All fields carry hardcoded defaults so
     the system works even when optional YAML policy files are absent or malformed."""
 

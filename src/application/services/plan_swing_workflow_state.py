@@ -76,7 +76,7 @@ class PlanSwingWorkflowState:
     market_context_signal_preview: "AssessSignalResponse | None" = None
     market_context_risk_preview: Any | None = None
     market_context_trade_setup_preview: "TradeSetup | None" = None
-    swing_config: Any = None
+    swing_policy: Any = None
     regime_label: str | None = None
     take_profit_pct: Decimal | None = None
     stop_loss_pct: Decimal | None = None

@@ -222,7 +222,7 @@ class TestPublicBuildFlowWithoutInjectedFactories:
             setup_eval=None,
             setup_name=None,
             strategy_name=None,
-            swing_config=None,
+            swing_policy=None,
         )
 
         # Institutional accumulation evidence is attempted/built via the pure
