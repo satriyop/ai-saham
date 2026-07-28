@@ -79,6 +79,7 @@ def accumulation_labels(
             "inserted_count": result.inserted_count,
             "idempotent_count": result.idempotent_count,
             "unavailable_count": result.unavailable_count,
+            "skipped_count": result.skipped_count,
             "label_ids": [label.label_id for label in result.labels],
         },
         fmt,

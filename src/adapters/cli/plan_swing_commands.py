@@ -149,22 +149,6 @@ def swing(
         bool,
         typer.Option("--with-flow-detail", help="Include broker flow and attribution evidence"),
     ] = False,
-    with_signal_detail: Annotated[
-        bool,
-        typer.Option("--with-signal-detail", help="Include signal factor detail"),
-    ] = False,
-    with_risk_detail: Annotated[
-        bool,
-        typer.Option("--with-risk-detail", help="Include risk indicator and gate detail"),
-    ] = False,
-    with_market_detail: Annotated[
-        bool,
-        typer.Option("--with-market-detail", help="Include full market-context factor detail"),
-    ] = False,
-    explain: Annotated[
-        bool,
-        typer.Option("--explain", help="Shortcut for signal, risk, and market details"),
-    ] = False,
     full: Annotated[
         bool,
         typer.Option(
@@ -232,8 +216,9 @@ def swing(
     """
     Unified composite swing trade analysis for a single stock.
 
-    Core verdict: SignalEngine + RiskEngine -> TradeSetup.
-    Market context, strategy, setup, sentiment, and detailed flow panels are opt-in evidence.
+    Core verdict: SignalEngine + RiskEngine -> TradeSetup, with signal, risk,
+    and market-context engine detail panels always included.
+    Strategy, setup, sentiment, and flow panels remain opt-in evidence.
 
     Replaces the multi-command morning workflow:
       saham screen accum, saham analyze risk, saham indicator compute,
@@ -244,7 +229,8 @@ def swing(
         saham plan swing BBRI --setup foreign-bounce --capital 10000000
         saham plan swing BBRI --capital 10000000 --risk-pct 1
         saham plan swing BBRI --strategy foreign-accumulation
-        saham plan swing BBRI --with-flow-detail --explain
+        saham plan swing BBRI --with-flow-detail
+        saham plan swing BBRI --full
         saham plan swing BBRI --force-refresh
         saham plan swing BBRI --capital 10000000 --entry 4825 --rr 2.5
     """
@@ -284,9 +270,10 @@ def swing(
 
     include_sentiment = with_sentiment or full
     include_flow_detail = with_flow_detail or full
-    include_signal_detail = with_signal_detail or explain or full
-    include_risk_detail = with_risk_detail or explain or full
-    include_market_detail = with_market_detail or explain or full
+    # Plan default is full core-engine detail (former --explain behavior).
+    include_signal_detail = True
+    include_risk_detail = True
+    include_market_detail = True
 
     smart_money_brokers = set(cfg.swing_config.smart_money_brokers)
     noise_brokers = set(cfg.swing_config.noise_brokers)

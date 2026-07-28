@@ -64,8 +64,8 @@ read -r -d '' SAHAM_CRON << ENTRIES || true
 # Swing EOD — refresh LQ45 candles after EOD data should be available 18:30 WIB
 30 18 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham fetch market --universe lq45' >> $LOG_DIR/swing-fetch-market.log 2>&1
 # Accumulation learning corpus (X then y; labels fail closed if horizon incomplete)
-15 19 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham research accumulation capture --universe lq45 --session \$(date +\%Y-\%m-\%d) --format json' >> $LOG_DIR/accumulation-capture-lq45.log 2>&1
-45 19 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham research accumulation labels --label-contract price_path.accum_20d.v1 --format json' >> $LOG_DIR/accumulation-labels.log 2>&1
+15 19 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham research accum capture --universe lq45 --session \$(date +\%Y-\%m-\%d) --format json' >> $LOG_DIR/accumulation-capture-lq45.log 2>&1
+45 19 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham research accum labels --label-contract price_path.accum_20d.v1 --format json' >> $LOG_DIR/accumulation-labels.log 2>&1
 # --- saham-cron-end ---
 ENTRIES
 

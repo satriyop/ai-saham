@@ -59,8 +59,8 @@ log      →  paper notebook only
 | **09:36** | `saham research pre-open labels` | Cron |
 | **09:37** | `saham research pre-open evaluate` | Cron |
 | **18:30** | `saham fetch market --universe lq45` | Cron (swing/accum candles) |
-| **19:15** | `saham research accumulation capture` | Cron (accum X) |
-| **19:45** | `saham research accumulation labels` | Cron (accum y when horizon allows) |
+| **19:15** | `saham research accum capture` | Cron (accum X) |
+| **19:45** | `saham research accum labels` | Cron (accum y when horizon allows) |
 
 Install/refresh cron: `./install_cron.sh` (replaces the tagged saham block).
 

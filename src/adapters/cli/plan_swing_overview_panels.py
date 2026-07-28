@@ -241,7 +241,7 @@ def _build_market_context_panel(
     table.add_row("Signal", signal_summary, signal_detail)
 
     if market_regime.gate_tightening:
-        table.add_row("Gates", "tightened", "see --with-market-detail")
+        table.add_row("Gates", "tightened", "see Market Context detail")
     else:
         table.add_row("Gates", "open", "gates unchanged")
 

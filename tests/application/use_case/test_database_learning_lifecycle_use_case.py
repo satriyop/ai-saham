@@ -161,41 +161,66 @@ def test_evaluation_fails_closed_for_missing_labels(tmp_path) -> None:
         )
 
 
-def test_accumulation_price_path_labels_preserve_corporate_action_guard(
-    tmp_path,
-) -> None:
-    repository = SQLiteLearningArtifactRepository(tmp_path / "data.db")
-    observation = LearningObservation.create(
+def _accum_observation(
+    *,
+    current_price: object = "100",
+    day: int = 27,
+    compatibility_id: str = "compat-1",
+) -> LearningObservation:
+    at = datetime(2026, 7, day, 1, 0, tzinfo=timezone.utc)
+    candidate: dict = {}
+    if current_price is not None:
+        candidate["current_price"] = current_price
+    return LearningObservation.create(
         purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
         policy_contract="accumulation_discovery.policy.v1",
         horizon_contract="accum_20d",
-        compatibility_id="compat-1",
-        cutoff_at=NOW,
+        compatibility_id=compatibility_id,
+        cutoff_at=at,
         universe_id="idx30",
-        window_id="BBCA:2026-07-27:20",
+        window_id=f"BBCA:2026-07-{day:02d}:20",
         decision_payload={
             "ticker": "BBCA",
-            "candidate": {"entry_price": 100},
+            "candidate": candidate,
             "screen_result": "pass",
         },
-        captured_at=NOW,
+        captured_at=at,
     )
-    repository.add_observation(observation)
+
+
+def _forward_candles(ticker: str, signal_day: date, count: int) -> list[Candle]:
+    return [
+        Candle(
+            ticker=ticker,
+            date=signal_day + timedelta(days=index),
+            open=Decimal("100"),
+            high=Decimal("102"),
+            low=Decimal("99"),
+            close=Decimal("101"),
+            volume=100,
+        )
+        for index in range(1, count + 1)
+    ]
+
+
+class _CoveredCorporateActions:
+    def has_any_sync_marker(self):
+        return True
+
+    def get_events_for_ticker(self, *args, **kwargs):
+        return ()
+
+
+def test_accumulation_price_path_skips_when_corporate_action_coverage_missing(
+    tmp_path,
+) -> None:
+    """Missing calendar coverage is provisional: no label row is written."""
+    repository = SQLiteLearningArtifactRepository(tmp_path / "data.db")
+    repository.add_observation(_accum_observation(current_price="100"))
 
     class Market:
         def get_candles(self, ticker, start_date=None, end_date=None):
-            return [
-                Candle(
-                    ticker=ticker,
-                    date=date(2026, 7, 27) + timedelta(days=index),
-                    open=Decimal("100"),
-                    high=Decimal("102"),
-                    low=Decimal("99"),
-                    close=Decimal("101"),
-                    volume=100,
-                )
-                for index in range(1, 21)
-            ]
+            return _forward_candles(ticker, date(2026, 7, 27), 20)
 
     class CorporateActions:
         def has_any_sync_marker(self):
@@ -218,5 +243,174 @@ def test_accumulation_price_path_labels_preserve_corporate_action_guard(
         )
     )
 
-    assert result.unavailable_count == 1
-    assert result.labels[0].metrics["unavailable_reason"] == "corporate_action_coverage_unavailable"
+    assert result.observation_count == 1
+    assert result.skipped_count == 1
+    assert result.inserted_count == 0
+    assert result.unavailable_count == 0
+    assert result.labels == ()
+    obs_id = repository.list_observations(AssessmentPurpose.ACCUMULATION_DISCOVERY)[
+        0
+    ].observation_id
+    assert repository.list_labels([obs_id]) == ()
+
+
+def test_accumulation_price_path_uses_candidate_current_price_as_entry(
+    tmp_path,
+) -> None:
+    """Production capture freezes candidate.current_price (session close)."""
+    repository = SQLiteLearningArtifactRepository(tmp_path / "data.db")
+    repository.add_observation(_accum_observation(current_price="1000"))
+
+    class Market:
+        def get_candles(self, ticker, start_date=None, end_date=None):
+            return _forward_candles(ticker, date(2026, 7, 27), 20)
+
+    result = GenerateAccumulationPricePathLabelsUseCase(
+        observations=repository,
+        labels=repository,
+        market_data=Market(),
+        corporate_actions=_CoveredCorporateActions(),
+    ).execute(
+        GenerateLearningLabelsRequest(
+            purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+            compatibility_id="compat-1",
+            label_contract=LearningContractId.ACCUMULATION_LABEL,
+            labeled_at=NOW,
+        )
+    )
+
+    assert result.skipped_count == 0
+    assert result.inserted_count == 1
+    assert result.unavailable_count == 0
+    assert len(result.labels) == 1
+    assert result.labels[0].availability.value == "AVAILABLE"
+    assert result.labels[0].metrics["entry_reference_price"] == 1000.0
+
+
+def test_accumulation_price_path_skips_incomplete_forward_window(
+    tmp_path,
+) -> None:
+    """Incomplete horizon must not permanently lock an UNAVAILABLE row."""
+    repository = SQLiteLearningArtifactRepository(tmp_path / "data.db")
+    repository.add_observation(_accum_observation(current_price="100"))
+
+    class Market:
+        def get_candles(self, ticker, start_date=None, end_date=None):
+            return _forward_candles(ticker, date(2026, 7, 27), 5)
+
+    result = GenerateAccumulationPricePathLabelsUseCase(
+        observations=repository,
+        labels=repository,
+        market_data=Market(),
+        corporate_actions=_CoveredCorporateActions(),
+    ).execute(
+        GenerateLearningLabelsRequest(
+            purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+            compatibility_id="compat-1",
+            label_contract=LearningContractId.ACCUMULATION_LABEL,
+            labeled_at=NOW,
+        )
+    )
+
+    assert result.skipped_count == 1
+    assert result.inserted_count == 0
+    assert result.labels == ()
+    obs_id = repository.list_observations(AssessmentPurpose.ACCUMULATION_DISCOVERY)[
+        0
+    ].observation_id
+    assert repository.list_labels([obs_id]) == ()
+
+    # Later run with full horizon can insert AVAILABLE (no immutable conflict).
+    class FullMarket:
+        def get_candles(self, ticker, start_date=None, end_date=None):
+            return _forward_candles(ticker, date(2026, 7, 27), 20)
+
+    later = GenerateAccumulationPricePathLabelsUseCase(
+        observations=repository,
+        labels=repository,
+        market_data=FullMarket(),
+        corporate_actions=_CoveredCorporateActions(),
+    ).execute(
+        GenerateLearningLabelsRequest(
+            purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+            compatibility_id="compat-1",
+            label_contract=LearningContractId.ACCUMULATION_LABEL,
+            labeled_at=NOW,
+        )
+    )
+    assert later.inserted_count == 1
+    assert later.labels[0].availability.value == "AVAILABLE"
+
+
+def test_accumulation_price_path_skips_missing_current_price(
+    tmp_path,
+) -> None:
+    repository = SQLiteLearningArtifactRepository(tmp_path / "data.db")
+    repository.add_observation(_accum_observation(current_price=None))
+
+    class Market:
+        def get_candles(self, ticker, start_date=None, end_date=None):
+            return _forward_candles(ticker, date(2026, 7, 27), 20)
+
+    result = GenerateAccumulationPricePathLabelsUseCase(
+        observations=repository,
+        labels=repository,
+        market_data=Market(),
+        corporate_actions=_CoveredCorporateActions(),
+    ).execute(
+        GenerateLearningLabelsRequest(
+            purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+            compatibility_id="compat-1",
+            label_contract=LearningContractId.ACCUMULATION_LABEL,
+            labeled_at=NOW,
+        )
+    )
+
+    assert result.skipped_count == 1
+    assert result.inserted_count == 0
+    assert result.labels == ()
+
+
+def test_accumulation_price_path_ignores_legacy_entry_price_alias(
+    tmp_path,
+) -> None:
+    """Only candidate.current_price is supported — not entry_price/close aliases."""
+    repository = SQLiteLearningArtifactRepository(tmp_path / "data.db")
+    at = datetime(2026, 7, 27, 1, 0, tzinfo=timezone.utc)
+    repository.add_observation(
+        LearningObservation.create(
+            purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+            policy_contract="accumulation_discovery.policy.v1",
+            horizon_contract="accum_20d",
+            compatibility_id="compat-1",
+            cutoff_at=at,
+            universe_id="idx30",
+            window_id="BBCA:2026-07-27:20",
+            decision_payload={
+                "ticker": "BBCA",
+                "candidate": {"entry_price": 100},
+                "screen_result": "pass",
+            },
+            captured_at=at,
+        )
+    )
+
+    class Market:
+        def get_candles(self, ticker, start_date=None, end_date=None):
+            return _forward_candles(ticker, date(2026, 7, 27), 20)
+
+    result = GenerateAccumulationPricePathLabelsUseCase(
+        observations=repository,
+        labels=repository,
+        market_data=Market(),
+        corporate_actions=_CoveredCorporateActions(),
+    ).execute(
+        GenerateLearningLabelsRequest(
+            purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+            compatibility_id="compat-1",
+            label_contract=LearningContractId.ACCUMULATION_LABEL,
+            labeled_at=NOW,
+        )
+    )
+    assert result.skipped_count == 1
+    assert result.inserted_count == 0

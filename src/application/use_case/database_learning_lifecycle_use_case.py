@@ -66,6 +66,8 @@ class GenerateLearningLabelsResult:
     idempotent_count: int
     unavailable_count: int
     labels: tuple[LearningOutcomeLabel, ...]
+    # Observations not labeled yet (horizon/coverage/entry not ready). No row written.
+    skipped_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -101,21 +103,26 @@ def _observation_ticker(observation: LearningObservation) -> str:
 
 
 def _entry_reference(payload: dict[str, Any] | Any) -> Decimal | None:
+    """Signal-day entry for accumulation price-path labels.
+
+    Production capture freezes ``AccumulationCandidate.current_price``, which is
+    the latest daily close as of the screen session (not a live tick). That is
+    the sole supported entry reference for ACCUMULATION_DISCOVERY observations.
+    """
     if not isinstance(payload, dict):
         return None
     candidate = payload.get("candidate")
     if not isinstance(candidate, dict):
         return None
-    for key in ("entry_price", "close", "last_price", "price"):
-        raw = candidate.get(key)
-        if raw is None:
-            continue
-        try:
-            value = Decimal(str(raw))
-        except Exception:
-            continue
-        if value > 0:
-            return value
+    raw = candidate.get("current_price")
+    if raw is None:
+        return None
+    try:
+        value = Decimal(str(raw))
+    except Exception:
+        return None
+    if value > 0:
+        return value
     return None
 
 
@@ -124,7 +131,17 @@ def _pct_change(value: Any, base: Decimal) -> float:
 
 
 class GenerateAccumulationPricePathLabelsUseCase:
-    """Generate immutable forward price-path labels from saved observations."""
+    """Generate immutable forward price-path labels from saved observations.
+
+    Terminal labels only are persisted:
+    - AVAILABLE outcomes (SUCCESS/FAILURE/NEUTRAL)
+    - UNAVAILABLE when a mechanical corporate action invalidates the window
+
+    Provisional conditions (missing entry, incomplete horizon, missing corporate-
+    action coverage) skip without writing a row so a later run can insert the
+    terminal label when data is ready. That avoids immutable UNAVAILABLE rows
+    permanently blocking AVAILABLE outcomes for the same observation/contract.
+    """
 
     def __init__(
         self,
@@ -154,6 +171,7 @@ class GenerateAccumulationPricePathLabelsUseCase:
         labels: list[LearningOutcomeLabel] = []
         inserted = 0
         unavailable = 0
+        skipped = 0
         coverage_available = self._corporate_actions.has_any_sync_marker()
         for observation in observations:
             label = self._label_one(
@@ -163,6 +181,9 @@ class GenerateAccumulationPricePathLabelsUseCase:
                 labeled_at=request.labeled_at,
                 coverage_available=coverage_available,
             )
+            if label is None:
+                skipped += 1
+                continue
             labels.append(label)
             if label.availability is LabelAvailability.UNAVAILABLE:
                 unavailable += 1
@@ -173,6 +194,7 @@ class GenerateAccumulationPricePathLabelsUseCase:
             inserted_count=inserted,
             idempotent_count=len(labels) - inserted,
             unavailable_count=unavailable,
+            skipped_count=skipped,
             labels=tuple(labels),
         )
 
@@ -184,7 +206,7 @@ class GenerateAccumulationPricePathLabelsUseCase:
         horizon_days: int,
         labeled_at: datetime,
         coverage_available: bool,
-    ) -> LearningOutcomeLabel:
+    ) -> LearningOutcomeLabel | None:
         ticker = _observation_ticker(observation)
         signal_date = observation.cutoff_at.date()
         entry = _entry_reference(dict(observation.decision_payload))
@@ -195,35 +217,20 @@ class GenerateAccumulationPricePathLabelsUseCase:
         }
         fingerprint = artifact_digest(fingerprint_payload)
         if entry is None:
-            return self._unavailable(
-                observation,
-                contract_id,
-                fingerprint,
-                labeled_at,
-                "missing_entry_reference_price",
-            )
+            # Provisional: capture bug or incomplete payload — do not lock a row.
+            return None
         candles = self._market.get_candles(ticker, start_date=signal_date)
         forward = sorted(
             (c for c in candles if c.date > signal_date),
             key=lambda candle: candle.date,
         )
         if len(forward) < horizon_days:
-            return self._unavailable(
-                observation,
-                contract_id,
-                fingerprint,
-                labeled_at,
-                f"incomplete_forward_window:{len(forward)}/{horizon_days}",
-            )
+            # Provisional: wait for more sessions.
+            return None
         window = forward[:horizon_days]
         if not coverage_available:
-            return self._unavailable(
-                observation,
-                contract_id,
-                fingerprint,
-                labeled_at,
-                "corporate_action_coverage_unavailable",
-            )
+            # Provisional: calendar may appear later.
+            return None
         if self._has_mechanical_corporate_action(ticker, window[0].date, window[-1].date):
             return self._unavailable(
                 observation,
@@ -352,6 +359,7 @@ class GeneratePreOpenOutcomeLabelsUseCase:
             inserted_count=inserted,
             idempotent_count=len(output) - inserted,
             unavailable_count=unavailable,
+            skipped_count=0,
             labels=tuple(output),
         )
 

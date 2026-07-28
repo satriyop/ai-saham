@@ -94,7 +94,7 @@ def _market_context_preview_group(
 
     # ADR-037: canonical signal already includes regime conditioning.
     # preview_signal == canonical_signal — no separate "signal delta" to show.
-    # Regime impact is visible in signal rationale (see --with-signal-detail).
+    # Regime impact is visible in the default signal-detail panel.
     if canonical_signal is not None:
         score = canonical_signal.assessment.score
         eq = canonical_signal.assessment.entry_quality.value

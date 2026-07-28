@@ -239,7 +239,7 @@ The single-ticker `saham plan swing BBCA` command centers the core deterministic
 │  print_swing_output()  [opt-in evidence panels below core]     │
 │    ├── Market Context Preview (if preview data available)      │
 │    ├── SETUP EVIDENCE (MATCH/PARTIAL/NO_MATCH + gate details) │
-│    ├── ENGINE DETAIL panels (signal/risk/market w/ --explain) │
+│    ├── ENGINE DETAIL panels (signal/risk/market; default on) │
 │    ├── FLOW / BROKER DETAIL (w/ --with-flow-detail)            │
 │    ├── STRATEGY EVIDENCE (win rate, PF, max DD w/ --strategy) │
 │    └── SENTIMENT EVIDENCE (call, distribution, w/ --sentiment)│

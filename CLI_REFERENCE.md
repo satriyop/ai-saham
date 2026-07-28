@@ -726,6 +726,8 @@ saham inspect regime --as-of 2026-06-01 --verbose
 
 Unified swing analysis — verdict-first with SignalEngine + RiskEngine, optional setup gates, market context, and position sizing.
 
+Default output always includes core engine detail panels (signal factors, risk gates/indicators, and market-context factors). Flow, sentiment, strategy, and setup remain opt-in.
+
 ```
 saham plan swing TICKER [OPTIONS]
 saham plan swing BBRI
@@ -745,12 +747,8 @@ saham plan swing BBRI --setup foreign-bounce --capital 10000000 --full
 | `--rr` | | 2.0 | Reward:risk ratio |
 | `--with-sentiment` | | false | Include news sentiment evidence |
 | `--with-flow-detail` | | false | Include broker flow attribution |
-| `--with-signal-detail` | | false | Include SignalEngine factor detail |
-| `--with-risk-detail` | | false | Include RiskEngine gate detail |
-| `--with-market-context` | | false | Include MarketContextEngine preview |
-| `--with-market-detail` | | false | Full MCE factor detail |
+| `--with-market-context` | | false | Build MCE and condition signal/setup with market regime |
 | `--with-technical-gate` | | false | Enable SMA/EMA/RSI execution gate |
-| `--explain` | | false | Shortcut for signal + risk + market detail |
 | `--full` | | false | All optional evidence except named setup |
 | `--no-sentiment` | | false | Deprecated no-op |
 | `--sentiment-verbose` | | false | Show sentiment provider errors |
@@ -1030,7 +1028,7 @@ saham screen accum --universe lq45 --save morning-watch
 | `--windows` | | 7,30,90 | Windows for --multi |
 | `--sort-by` | | avg | Sort for --multi: avg, max, 7s, 30s, 90s |
 | `--top-broker` | | false | Show top broker-code detail |
-| `--explain` | | false | Show scoring definitions |
+| `--detail` | | false | Append run context and scoring definitions |
 | `--strategy` | `-S` | — | Optional backtest strategy for signal context |
 | `--save` | | none | Persist to named watchlist |
 | `--format` | | table | Output format: table, json |
