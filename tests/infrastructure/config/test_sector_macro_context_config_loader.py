@@ -18,14 +18,16 @@ def test_create_builder_from_repo_config():
     cfg = builder.config
     assert "energy" in cfg.sector_maps
     assert "plantation" in cfg.sector_maps
-    assert cfg.required_series_tickers() >= frozenset({"CL=F", "IDR=X", "CPO=F"})
+    assert "metals" in cfg.sector_maps
+    assert cfg.required_series_tickers() >= frozenset({"CL=F", "IDR=X", "CPO=F", "HG=F"})
 
 
 def test_required_series_from_repo_config():
     series = required_sector_macro_series_tickers()
     assert "CL=F" in series
     assert "IDR=X" in series
-    assert "CPO=F" in series  # live plantation map
+    assert "CPO=F" in series  # plantation
+    assert "HG=F" in series  # metals — also auto-fetched via fetch market context
 
 
 def test_load_rejects_non_diagnostic(tmp_path):

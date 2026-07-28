@@ -56,9 +56,18 @@ sector_macro_context:
         supportive_min: 0.05
         headwind_max: -0.05
 
+    # COMEX copper — Yahoo-live. Prefer dedicated metals cohort, not full basic_materials.
+    copper:
+      series: "HG=F"
+      kind: return_sessions
+      invert: false
+      thresholds:
+        supportive_min: 0.05
+        headwind_max: -0.05
+
   # Primary keys = universes.yaml group names (same as L2a sector context).
   # Live maps only for groups with ≥2 real drivers. Prefer dedicated cohorts
-  # (energy, plantation) over broad bags (consumer_goods).
+  # (energy, plantation, metals) over broad bags (consumer_goods, basic_materials).
   sector_maps:
     energy:
       factors:
@@ -68,3 +77,7 @@ sector_macro_context:
       factors:
         - { ref: cpo, weight: 0.70 }
         - { ref: usd_idr, weight: 0.30 }
+    metals:
+      factors:
+        - { ref: copper, weight: 0.55 }
+        - { ref: usd_idr, weight: 0.45 }

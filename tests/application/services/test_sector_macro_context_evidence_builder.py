@@ -196,6 +196,32 @@ class TestResolveSectorGroup:
         assert builder.resolve_sector_group(("bank",)) == "bank"  # fallback first
         assert builder.resolve_sector_group(()) is None
 
+    def test_prefers_metals_over_basic_materials(self):
+        raw = {
+            "sector_macro_context": {
+                "factor_library": {
+                    "copper": {
+                        "series": "HG=F",
+                        "thresholds": {"supportive_min": 0.05, "headwind_max": -0.05},
+                    },
+                    "usd_idr": {
+                        "series": "IDR=X",
+                        "thresholds": {"supportive_min": 0.01, "headwind_max": -0.01},
+                    },
+                },
+                "sector_maps": {
+                    "metals": {
+                        "factors": [
+                            {"ref": "copper", "weight": 0.55},
+                            {"ref": "usd_idr", "weight": 0.45},
+                        ]
+                    },
+                },
+            }
+        }
+        builder = SectorMacroContextEvidenceBuilder(SectorMacroContextConfig.from_mapping(raw))
+        assert builder.resolve_sector_group(("basic_materials", "metals", "bumn20")) == "metals"
+
 
 class TestBuilder:
     def test_supportive_energy(self):

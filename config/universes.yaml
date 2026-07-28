@@ -1643,3 +1643,37 @@ plantation:
   - TLDN
   - UNSP
   updated: '2026-07-28'
+
+# Dedicated metals/miners cohort for sector-macro routing (ADR-053).
+# Narrow list — do not use full basic_materials (plastics/packaging mixed in).
+# Multi-membership: macro resolve prefers live sector_maps (metals over basic_materials).
+metals:
+  tickers:
+  - ALKA
+  - ALMI
+  - AMMN
+  - ANTM
+  - BAJA
+  - BRMS
+  - CITA
+  - CTBN
+  - DAAZ
+  - DKFT
+  - GDST
+  - HRUM
+  - IFSH
+  - INCO
+  - ISSP
+  - JKSW
+  - KRAS
+  - LMSH
+  - MDKA
+  - NCKL
+  - NICL
+  - NIKL
+  - PBID
+  - PSAB
+  - TBMS
+  - TINS
+  - ZINC
+  updated: '2026-07-28'

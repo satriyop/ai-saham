@@ -73,7 +73,7 @@ def test_get_global_context_tickers_returns_defaults_without_fallback_exception(
 
     tickers = get_global_context_tickers()
     # MCE globals + ADR-053 sector macro live-map series (even if commodity off)
-    assert {"^VIX", "EIDO", "IDR=X", "CL=F", "CPO=F"}.issubset(tickers)
+    assert {"^VIX", "EIDO", "IDR=X", "CL=F", "CPO=F", "HG=F"}.issubset(tickers)
 
 
 def test_get_global_context_tickers_includes_commodities_when_enabled(tmp_path):

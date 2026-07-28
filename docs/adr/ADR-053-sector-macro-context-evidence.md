@@ -92,22 +92,12 @@ Builders must not hardcode sector→series routing. Adapters must not own policy
 | Concern | Decision |
 |---------|----------|
 | Config multi-map ready | Yes from day one |
-| Live sector map | **`energy` only** |
-| Live series | energy: `CL=F` + `IDR=X`; plantation: `CPO=F` + `IDR=X` |
-| Dedicated groups | `energy`, `plantation` (not broad `consumer_goods`) |
+| Live sector maps | `energy`, `plantation`, `metals` |
+| Live series | energy: `CL=F`+`IDR=X`; plantation: `CPO=F`+`IDR=X`; metals: `HG=F`+`IDR=X` |
+| Dedicated groups | `energy`, `plantation`, `metals` (not broad `consumer_goods` / `basic_materials`) |
 | Dead Yahoo symbols (do not map live) | `MTF=F` (Newcastle coal), `KO=F` (old CPO) — return no data as of 2026-07 smoke |
-| Oil | **Promoted into v1 energy map** after smoke proved `CL=F` fetchable offline |
-| Thin multi-sector maps (e.g. banks → 100% USDIDR) | **Forbidden** in v1 |
-
-Energy map intent (weights may be tuned in config without code):
-
-```text
-energy → coal_futures (MTF=F) high weight + usd_idr (IDR=X) secondary weight
-```
-
-Next live map after energy works end-to-end: a **CPO-heavy** universe group once
-the correct group key is confirmed. Banks only when a second real driver
-(rates/bond proxy) exists.
+| Thin multi-sector maps (e.g. banks → 100% USDIDR) | **Forbidden** until rates proxy is product-approved |
+| Auto-fetch | Live-map series refresh on every `saham fetch market` (`sector_macro` context labels) |
 
 ### 6. Output contract (intent)
 
