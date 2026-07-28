@@ -1,12 +1,15 @@
 """
-Adapter wiring for MarketContextEngine global context ticker refresh.
+Adapter wiring for MarketContextEngine + sector-macro global context refresh.
 
 Loads market-context config, resolves which global context tickers
-(^VIX, EIDO, IDR=X, etc.) are enabled, constructs the no-suffix Yahoo
-provider and SQLite market repository exactly once, and drives
-RefreshMarketContextInputsUseCase with an injected per-ticker refresh
-callable. This module owns all infrastructure construction so the
-use case itself never imports from src.infrastructure.
+(^VIX, EIDO, IDR=X, etc.) are enabled, appends ADR-053 sector-macro
+*live-map* series (e.g. CL=F, CPO=F) even when MCE commodity_composite is
+off, constructs the no-suffix Yahoo provider and SQLite market repository
+exactly once, and drives RefreshMarketContextInputsUseCase with an injected
+per-ticker refresh callable.
+
+This module owns all infrastructure construction so the use case itself
+never imports from src.infrastructure.
 
 Global context tickers are not IDX stocks and must never receive the
 `.JK` suffix applied to regular IDX tickers — enforced here via
@@ -43,37 +46,47 @@ DEFAULT_GLOBAL_CONTEXT_DAYS: int = 180
 def refresh_market_context_inputs(
     db_path: Path, days: int = DEFAULT_GLOBAL_CONTEXT_DAYS
 ) -> RefreshMarketContextInputsResponse:
-    """Refresh all enabled MCE global context tickers for `saham fetch market`."""
+    """Refresh MCE + sector-macro global series for `saham fetch market`."""
     cfg_app = load_app_config()
     market_start_tolerance_days = cfg_app.fetch.start_tolerance_days
 
     cfg = load_market_context_config()
+    end_tol = cfg.fetch.global_context_end_tolerance_days
     ticker_inputs: list[GlobalContextTickerInput] = []
+    seen: set[str] = set()
+
+    def _add(ticker: str, factor: str) -> None:
+        key = str(ticker).upper().strip()
+        if not key or key in seen:
+            return
+        seen.add(key)
+        ticker_inputs.append(
+            GlobalContextTickerInput(
+                ticker=key,
+                factor=factor,
+                end_tolerance_days=end_tol,
+            )
+        )
 
     if cfg.vix.enabled:
-        ticker_inputs.append(
-            GlobalContextTickerInput(
-                ticker=cfg.vix.ticker,
-                factor="vix",
-                end_tolerance_days=cfg.fetch.global_context_end_tolerance_days,
-            )
-        )
+        _add(cfg.vix.ticker, "vix")
     if cfg.eido.enabled:
-        ticker_inputs.append(
-            GlobalContextTickerInput(
-                ticker=cfg.eido.ticker,
-                factor="eido",
-                end_tolerance_days=cfg.fetch.global_context_end_tolerance_days,
-            )
-        )
+        _add(cfg.eido.ticker, "eido")
     if cfg.usd_idr.enabled:
-        ticker_inputs.append(
-            GlobalContextTickerInput(
-                ticker=cfg.usd_idr.ticker,
-                factor="usd_idr",
-                end_tolerance_days=cfg.fetch.global_context_end_tolerance_days,
-            )
+        _add(cfg.usd_idr.ticker, "usd_idr")
+
+    # ADR-053: always hydrate live sector-macro map series (CL=F, CPO=F, …)
+    # so plan swing energy/plantation macro does not depend on a manual
+    # explicit ticker fetch. Dedupes against MCE tickers (e.g. IDR=X).
+    try:
+        from src.infrastructure.config.sector_macro_context_config_loader import (
+            required_sector_macro_series_tickers,
         )
+
+        for series in sorted(required_sector_macro_series_tickers()):
+            _add(series, "sector_macro")
+    except Exception:
+        pass
 
     if not ticker_inputs:
         return RefreshMarketContextInputsResponse(statuses=())

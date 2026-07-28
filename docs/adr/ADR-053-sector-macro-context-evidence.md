@@ -235,7 +235,7 @@ Diagnostic status alone never grants DecisionPolicy authority.
 | Config | `config/sector_macro_context.yaml` |
 | Fingerprint | `smc_*` on `SignalObservationFingerprint` (observation schema v9) |
 | Adapter | `src/adapters/cli/plan_swing_sector_macro_context_display.py` |
-| Fetch | `get_global_context_tickers()` merges live-map series (MTF=F) even when MCE commodity is off |
+| Fetch | `get_global_context_tickers()` marks live-map series non-`.JK`; `refresh_market_context_inputs()` auto-refreshes them on every `saham fetch market` (factor label `sector_macro`), even when MCE commodity is off |
 | Tests | builder/VO/loader + authority firewall + CLI panel unit tests |
 
 Promotion and additional sector maps remain future work (see Non-goals).
