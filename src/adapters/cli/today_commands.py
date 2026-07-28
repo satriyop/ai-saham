@@ -62,6 +62,7 @@ from src.infrastructure.config.market_context_config import load_market_context_
 from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
+from src.infrastructure.persistence.sqlite_iev_repository import SQLiteIEVRepository
 from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
     SQLiteLearningArtifactRepository,
 )
@@ -78,38 +79,83 @@ def _parse_date(value: str | None) -> date | None:
         raise typer.Exit(1)
 
 
-def _opening_table(candidates: list[OpeningBriefingCandidate]):
+def _action_style(opening_setup) -> tuple[str, str]:
+    """Return (label, rich-style) for a pre-open TradeSetup action."""
     from src.domain.value_objects.trade_setup import SetupAction
 
-    table = compact_table()
-    table.add_column("Ticker", style="bold")
-    table.add_column("Action")
-    table.add_column("IEV", justify="right")
-    table.add_column("IEP", justify="right")
-    table.add_column("Trend")
+    action = SetupAction.from_value(opening_setup)
+    if action is SetupAction.ENTER:
+        style = "green"
+    elif action is SetupAction.WATCH:
+        style = "yellow"
+    elif action is not None and action.is_blocked:
+        style = "red"
+    else:
+        style = "dim"
+    label = action.value if action is not None else str(opening_setup or "?")
+    return label, style
+
+
+def _gap_pct_text(gap: str | None) -> str:
+    if gap is None:
+        return ""
+    sign = "" if gap.startswith(("-", "+")) else "+"
+    return f" ({sign}{gap}%)"
+
+
+def _opening_candidate_lines(candidate: OpeningBriefingCandidate) -> list[Text]:
+    """Compact multi-line pre-open decision context from the capture corpus."""
+    label, style = _action_style(candidate.opening_setup)
+
+    # Line 1 — verdict: ticker · action [· blocking gates] · signal · trend
+    head = Text()
+    head.append(f"{candidate.ticker}  ", style="bold")
+    head.append(label, style=style)
+    if candidate.blocking_gates:
+        head.append(f" · {', '.join(candidate.blocking_gates)}", style="red")
+    if candidate.signal_score is not None:
+        strength = f" {candidate.signal_strength}" if candidate.signal_strength else ""
+        head.append(f"  sig {candidate.signal_score}{strength}", style="cyan")
+    if candidate.trend_signal:
+        trend_style = {"BULLISH": "green", "BEARISH": "red"}.get(
+            str(candidate.trend_signal).upper(), "yellow"
+        )
+        head.append(f"  {candidate.trend_signal}", style=trend_style)
+
+    # Line 2 — auction: IEV (+ Δ vs 08:56 lock) · IEP (+ gap%)
+    auction = Text("  ")
+    if candidate.iev is not None:
+        auction.append(f"IEV {candidate.iev:,}")
+        if candidate.delta_iev is not None:
+            auction.append(f" (Δ{candidate.delta_iev:+,} vs 08:56)", style="magenta")
+    if candidate.iep is not None:
+        auction.append(f"  IEP {candidate.iep:,}{_gap_pct_text(candidate.iep_gap_pct)}")
+
+    # Line 3 — microstructure: imbalance · entry/stop · broker backing
+    micro_parts: list[str] = []
+    if candidate.bid_offer_imbalance is not None:
+        arrow = "▲bid" if candidate.bid_offer_imbalance >= 0.5 else "▼offer"
+        micro_parts.append(f"imbalance {candidate.bid_offer_imbalance:.2f} {arrow}")
+    if candidate.entry_price is not None and candidate.stop_loss_price is not None:
+        micro_parts.append(f"entry {candidate.entry_price}/stop {candidate.stop_loss_price}")
+    if candidate.broker_backing_score is not None:
+        tag = f" {candidate.broker_backing_tag}" if candidate.broker_backing_tag else ""
+        micro_parts.append(f"backing {candidate.broker_backing_score:.0f}{tag}")
+
+    lines = [head]
+    if str(auction).strip():
+        lines.append(auction)
+    if micro_parts:
+        lines.append(Text("  " + " · ".join(micro_parts), style="dim"))
+    return lines
+
+
+def _opening_table(candidates: list[OpeningBriefingCandidate]):
+    """Render pre-open candidates as compact multi-line decision blocks."""
+    elements: list = []
     for candidate in candidates:
-        iev = f"{candidate.iev:,}" if candidate.iev is not None else "-"
-        iep = f"{candidate.iep:,}" if candidate.iep is not None else "-"
-
-        # TradeSetup.action from ops_session export
-        action = SetupAction.from_value(candidate.opening_setup)
-        if action is SetupAction.ENTER:
-            setup_style = "green"
-        elif action is SetupAction.WATCH:
-            setup_style = "yellow"
-        elif action is not None and action.is_blocked:
-            setup_style = "red"
-        else:
-            setup_style = "dim"
-        label = action.value if action is not None else str(candidate.opening_setup or "?")
-        setup_text = f"[{setup_style}]{label}[/{setup_style}]"
-
-        trend_map = {"UP": "green", "DOWN": "red", "SIDE": "yellow"}
-        trend_style = trend_map.get(str(candidate.trend).upper(), "white")
-        trend_text = f"[{trend_style}]{candidate.trend or '-'}[/{trend_style}]"
-
-        table.add_row(candidate.ticker, setup_text, iev, iep, trend_text)
-    return table
+        elements.extend(_opening_candidate_lines(candidate))
+    return Group(*elements)
 
 
 _RISK_STATUS_STYLE = {"OPEN": "green", "BLOCK": "red", "UNKNOWN": "white"}
@@ -506,6 +552,7 @@ def today(
             db_path=db_path,
             cfg=cfg,
         ),
+        iev_baseline_repository=SQLiteIEVRepository(db_path),
     )
 
     resolution = _resolve_briefing_response(

@@ -1346,3 +1346,66 @@ def test_resolve_live_failure_falls_back_to_cache_with_warning():
     assert res.data_source == "CACHED"
     assert res.response is cached
     assert res.extra_warnings and "ConnectionError" in res.extra_warnings[0]
+
+
+# ── ADR-052 Commit 2: pre-open compact enrichment render ──────────────────────
+
+
+def test_opening_candidate_lines_render_decision_context():
+    from rich.console import Console
+
+    from src.adapters.cli.today_commands import _opening_candidate_lines
+    from src.application.use_case.daily_briefing_use_case import OpeningBriefingCandidate
+
+    candidate = OpeningBriefingCandidate(
+        ticker="BUMI",
+        opening_setup="BLOCKED_EXECUTION",
+        iev=796_137,
+        iep=172,
+        iep_gap_pct="1.18",
+        bid_offer_imbalance=0.969,
+        broker_backing_score=20.0,
+        broker_backing_tag="UNCONFIRMED",
+        trend_signal="BULLISH",
+        entry_price="171",
+        stop_loss_price="168",
+        signal_score=55,
+        signal_strength="MODERATE",
+        blocking_gates=("BandarGate",),
+        ncp_baseline_iev=715_997,
+        delta_iev=80_140,
+    )
+
+    console = Console(width=120)
+    with console.capture() as cap:
+        for line in _opening_candidate_lines(candidate):
+            console.print(line)
+    out = cap.get()
+
+    assert "BUMI" in out
+    assert "BLOCKED_EXECUTION" in out
+    assert "BandarGate" in out
+    assert "sig 55 MODERATE" in out
+    assert "BULLISH" in out
+    assert "IEV 796,137" in out
+    assert "Δ+80,140 vs 08:56" in out
+    assert "IEP 172 (+1.18%)" in out
+    assert "imbalance 0.97 ▲bid" in out
+    assert "entry 171/stop 168" in out
+    assert "backing 20 UNCONFIRMED" in out
+
+
+def test_opening_candidate_lines_minimal_when_fields_absent():
+    from rich.console import Console
+
+    from src.adapters.cli.today_commands import _opening_candidate_lines
+    from src.application.use_case.daily_briefing_use_case import OpeningBriefingCandidate
+
+    candidate = OpeningBriefingCandidate(ticker="PADI", opening_setup="?")
+    console = Console(width=120)
+    with console.capture() as cap:
+        for line in _opening_candidate_lines(candidate):
+            console.print(line)
+    out = cap.get()
+    assert "PADI" in out
+    assert "IEV" not in out  # no auction line when IEV/IEP absent

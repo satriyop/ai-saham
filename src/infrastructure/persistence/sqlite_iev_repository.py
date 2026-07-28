@@ -287,6 +287,15 @@ class SQLiteIEVRepository:
             for r in rows
         ]
 
+    def ncp_baseline_iev(self, snapshot_date: date) -> dict[str, int]:
+        """Return {ticker: baseline_iev} from the latest 08:56 NCP-locked batch.
+
+        Read projection over get_ncp_snapshot for the IEVBaselineReadPort — lets the
+        daily briefing compute delta_iev without leaking the IEVSnapshot type across
+        the application boundary. Empty when no locked baseline exists.
+        """
+        return {snap.ticker: snap.iev for snap in self.get_ncp_snapshot(snapshot_date)}
+
     def get_iev_delta(self, snapshot_date: date) -> dict[str, int]:
         """Return diagnostic all-session ΔIEV per ticker for snapshot_date.
 

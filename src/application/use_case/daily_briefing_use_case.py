@@ -49,10 +49,16 @@ from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
 from src.domain.value_objects.learning_artifacts import AssessmentPurpose
 
 if TYPE_CHECKING:
+    from src.application.ports.iev_snapshot_repository import IEVBaselineReadPort
     from src.domain.value_objects.market_context import MarketContext
 
 ReadinessStatus = Literal["READY", "PARTIAL", "NOT_READY", "UNAVAILABLE"]
 OverallAuthority = Literal["READY", "PARTIAL", "NOT_READY"]
+
+
+def _opt_str(value: object) -> str | None:
+    """Normalize a corpus value (often a serialized Decimal) to str, preserving None."""
+    return None if value is None else str(value)
 
 
 @dataclass(frozen=True)
@@ -82,6 +88,23 @@ class OpeningBriefingCandidate:
     iep: int | None = None
     trend: str | None = None
     accum_score: float | None = None
+    # ── Pre-open decision context surfaced from the capture corpus ──
+    prev_close: str | None = None
+    iep_gap_pct: str | None = None
+    iev_intensity: float | None = None
+    bid_offer_imbalance: float | None = None
+    broker_backing_score: float | None = None
+    broker_backing_tag: str | None = None
+    trend_signal: str | None = None
+    entry_price: str | None = None
+    stop_loss_price: str | None = None
+    signal_score: int | None = None
+    signal_strength: str | None = None
+    blocking_gates: tuple[str, ...] = ()
+    rationale: str | None = None
+    # ── Locked-input signal (decision_iev - 08:56 NCP baseline) ──
+    ncp_baseline_iev: int | None = None
+    delta_iev: int | None = None
 
 
 @dataclass(frozen=True)
@@ -134,6 +157,7 @@ class DailyBriefingUseCase:
         learning_observation_repository: LearningObservationRepository | None = None,
         setup_lens_impact_use_case: DailySetupLensImpactUseCase | None = None,
         session_resolver: EffectiveMarketSessionResolver | None = None,
+        iev_baseline_repository: "IEVBaselineReadPort | None" = None,
     ) -> None:
         self._market_repo = market_repository
         self._broker_repo = broker_repository
@@ -142,6 +166,7 @@ class DailyBriefingUseCase:
         self._universe_loader = universe_loader
         self._learning_observation_repository = learning_observation_repository
         self._setup_lens_impact_uc = setup_lens_impact_use_case
+        self._iev_baseline_repo = iev_baseline_repository
         self._session_resolver = session_resolver or EffectiveMarketSessionResolver(
             market_repository
         )
@@ -207,11 +232,16 @@ class DailyBriefingUseCase:
         if latest_completed_eod_date is not None and universe_tickers:
             regime = self._regime_uc.evaluate(as_of_date=latest_completed_eod_date)
 
+        ncp_baseline: dict[str, int] = {}
+        if self._iev_baseline_repo is not None:
+            ncp_baseline = self._iev_baseline_repo.ncp_baseline_iev(live_session_date)
+
         snapshot = self._opening_snapshot(
             request=request,
             live_session_date=live_session_date,
             universe_tickers=universe_tickers,
             warnings=warnings,
+            ncp_baseline=ncp_baseline,
         )
         opening_candidates = snapshot.candidates
         market_wide_opening_observations = snapshot.market_wide_observations
@@ -509,6 +539,7 @@ class DailyBriefingUseCase:
         live_session_date: date,
         universe_tickers: list[str],
         warnings: list[str],
+        ncp_baseline: dict[str, int] | None = None,
     ) -> OpeningBriefingSnapshot:
         if self._learning_observation_repository is None:
             warnings.append(
@@ -538,6 +569,7 @@ class DailyBriefingUseCase:
             return OpeningBriefingSnapshot([], [], None)
 
         universe_set = {ticker.upper() for ticker in universe_tickers}
+        baseline = ncp_baseline or {}
         candidates = []
         market_wide_observations = []
 
@@ -549,13 +581,38 @@ class DailyBriefingUseCase:
             candidate_payload = row.get("candidate") or {}
             trade_setup = row.get("trade_setup") or {}
             action_label = trade_setup.get("action") or "?"
+
+            decision_iev = candidate_payload.get("iev")
+            baseline_iev = baseline.get(ticker_upper)
+            delta_iev = (
+                decision_iev - baseline_iev
+                if isinstance(decision_iev, int) and isinstance(baseline_iev, int)
+                else None
+            )
+            gates = trade_setup.get("blocking_gates") or ()
+
             candidate = OpeningBriefingCandidate(
                 ticker=ticker_upper,
                 opening_setup=str(action_label),
-                iev=candidate_payload.get("iev"),
+                iev=decision_iev,
                 iep=candidate_payload.get("iep"),
                 trend=candidate_payload.get("trend"),
                 accum_score=candidate_payload.get("accum_score"),
+                prev_close=_opt_str(candidate_payload.get("prev_close")),
+                iep_gap_pct=_opt_str(candidate_payload.get("iep_gap_pct")),
+                iev_intensity=candidate_payload.get("iev_intensity"),
+                bid_offer_imbalance=candidate_payload.get("bid_offer_imbalance"),
+                broker_backing_score=candidate_payload.get("opening_broker_backing_score"),
+                broker_backing_tag=candidate_payload.get("opening_broker_backing_tag"),
+                trend_signal=candidate_payload.get("trend_signal"),
+                entry_price=_opt_str(candidate_payload.get("entry_price")),
+                stop_loss_price=_opt_str(candidate_payload.get("stop_loss_price")),
+                signal_score=trade_setup.get("signal_score"),
+                signal_strength=trade_setup.get("signal_strength"),
+                blocking_gates=tuple(gates),
+                rationale=trade_setup.get("rationale"),
+                ncp_baseline_iev=baseline_iev,
+                delta_iev=delta_iev,
             )
             if ticker_upper in universe_set:
                 candidates.append(candidate)

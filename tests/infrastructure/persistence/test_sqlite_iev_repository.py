@@ -402,3 +402,19 @@ def test_get_ncp_snapshot_top_n(tmp_path):
     assert len(result) == 2
     assert result[0].ticker == "BBCA"
     assert result[1].ticker == "BBRI"
+
+
+def test_ncp_baseline_iev_projects_locked_snapshot(repo):
+    """ncp_baseline_iev returns {ticker: iev} from the 08:56 NCP-locked batch."""
+    locked_at = datetime(2026, 6, 19, 8, 56, 30)
+    repo.save_snapshot(
+        date(2026, 6, 19),
+        [MoverData("BUMI", 715_997, iep=172), MoverData("PADI", 271_384, iep=80)],
+        collected_at=locked_at,
+    )
+    baseline = repo.ncp_baseline_iev(date(2026, 6, 19))
+    assert baseline == {"BUMI": 715_997, "PADI": 271_384}
+
+
+def test_ncp_baseline_iev_empty_when_no_data(repo):
+    assert repo.ncp_baseline_iev(date(2026, 6, 19)) == {}
