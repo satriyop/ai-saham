@@ -244,8 +244,9 @@ saham trade accum log …                    # paper notebook
 |-------|--------|
 | **S0** (this ADR) | Done |
 | **S1** judgment desk | **Shipped 2026-07-28** — single-ticker `screen accum`: Judgment strip, JSON `trade_setup`, pattern board, explicit-ticker refresh; universe stays cache-cheap |
-| **S2** plan messaging | **Shipped 2026-07-28** — `plan` / `plan swing` help, footers, and CLI_REFERENCE frame structure desk; analysis panels still present until S4 |
-| **S3–S5** | Pending — shared judgment composer; plan UI structure-first; optional `SwingTradeStructure` |
+| **S2** plan messaging | **Shipped 2026-07-28** — structure-desk help/footers/docs |
+| **S3** judgment authority | **Shipped 2026-07-28** — default plan Action inherits screen `candidate.trade_setup`; swing re-score / Action recompute only with `--with-market-context` or `--with-technical-gate` (`swing_judgment_authority`) |
+| **S4–S5** | Pending — plan UI structure-first; optional `SwingTradeStructure` |
 
 **Trust this ADR for product contract; trust live `--help` and code for shipped depth.**
 Verify with source before claiming a later slice is done.

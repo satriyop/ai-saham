@@ -418,6 +418,10 @@ def _echo_structure_desk_footer(
         return
     typer.echo("")
     typer.echo("Structure desk (ADR-054): horizon / SL / TP / lots — not a second analysis desk.")
+    typer.echo(
+        "  Default Action inherits screen judgment; recompute only with "
+        "--with-market-context or --with-technical-gate (S3)."
+    )
     typer.echo(f"  Judgment case file:  saham screen accum {ticker}")
     if capital is None:
         typer.echo(

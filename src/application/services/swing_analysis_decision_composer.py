@@ -24,6 +24,10 @@ from src.application.services.signal_context_builder import (
 from src.application.services.swing_analysis_workflow_state import (
     SwingAnalysisWorkflowState,
 )
+from src.application.services.swing_judgment_authority import (
+    allow_action_recompute,
+    resolve_authoritative_trade_setup,
+)
 from src.domain.value_objects.canonical_signal_evidence_input import (
     CanonicalSignalEvidenceInput,
     FlowEvidenceGroupInput,
@@ -140,6 +144,18 @@ class SwingAnalysisDecisionComposer:
         )
         state.warnings.extend(mce_preview_warnings)
 
+        # ADR-054 S3: default Action is screen TradeSetup when present.
+        trade_setup, authority_note = resolve_authoritative_trade_setup(
+            state.accumulation_candidate,
+            plan_recomputed=trade_setup,
+            allow_recompute=allow_action_recompute(
+                with_market_context=request.with_market_context,
+                with_technical_gate=request.with_technical_gate,
+            ),
+        )
+        if authority_note:
+            state.warnings.append(authority_note)
+
         state.trade_setup = trade_setup
         state.market_context_signal_preview = market_context_signal_preview
         state.market_context_risk_preview = market_context_risk_preview
@@ -161,6 +177,25 @@ class SwingAnalysisDecisionComposer:
         request: swing_analysis_dto.SwingAnalysisWorkflowRequest,
         state: SwingAnalysisWorkflowState,
     ) -> SwingAnalysisWorkflowState:
+        # ADR-054 S3: without explicit re-judge flags, freeze screen Action —
+        # do not overwrite with swing-purpose re-score.
+        if not allow_action_recompute(
+            with_market_context=request.with_market_context,
+            with_technical_gate=request.with_technical_gate,
+        ):
+            trade_setup, authority_note = resolve_authoritative_trade_setup(
+                state.accumulation_candidate,
+                plan_recomputed=state.trade_setup,
+                allow_recompute=False,
+            )
+            if authority_note and authority_note not in state.warnings:
+                state.warnings.append(authority_note)
+            if trade_setup is not state.trade_setup:
+                state.trade_setup = trade_setup
+                if state.verdict is not None:
+                    state.verdict = replace(state.verdict, trade_setup=trade_setup)
+            return state
+
         evidence = state.evidence
         canonical_evidence = self._build_canonical_evidence(state)
 
@@ -242,12 +277,27 @@ class SwingAnalysisDecisionComposer:
                 )
                 state.warnings.extend(recompose_warnings)
 
+                # Explicit recompute path still runs authority for consistency.
+                _new_trade_setup, authority_note = resolve_authoritative_trade_setup(
+                    state.accumulation_candidate,
+                    plan_recomputed=_new_trade_setup,
+                    allow_recompute=True,
+                )
+                if authority_note:
+                    state.warnings.append(authority_note)
+                else:
+                    state.warnings.append(
+                        "Action recomputed for structure-time flags "
+                        "(market context and/or technical gate; ADR-054 S3)"
+                    )
+
                 state.signal_assessment = signal_assessment
                 state.signal_assessment_availability = (
                     swing_analysis_dto.SignalAssessmentAvailability(
                         status=swing_analysis_dto.SignalAssessmentStatus.AVAILABLE,
                     )
                 )
+                state.trade_setup = _new_trade_setup
                 state.verdict = replace(
                     state.verdict,
                     signal_assessment=signal_assessment,

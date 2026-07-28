@@ -9,6 +9,7 @@ separate post-score availability assembly/attachment.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date, datetime
 from decimal import Decimal
 from types import SimpleNamespace
@@ -59,10 +60,11 @@ TICKER = "BBCA"
 SNAP = date(2026, 7, 17)
 
 
-def _request():
+def _request(**overrides):
+    """Default enables market-context so re-score path stays testable (ADR-054 S3)."""
     from pathlib import Path
 
-    return swing_analysis_dto.SwingAnalysisWorkflowRequest(
+    params = dict(
         ticker=TICKER,
         today=SNAP,
         strategy_name=None,
@@ -82,11 +84,15 @@ def _request():
         sentiment_verbose=False,
         auto_refresh=False,
         force_refresh=False,
-        with_market_context=False,
+        # Re-score / Action recompute allowed only with explicit flags (S3).
+        with_market_context=True,
         regime_universe="lq45",
         benchmark="COMPOSITE",
         db_path=Path("/tmp/does-not-exist.db"),
+        with_technical_gate=False,
     )
+    params.update(overrides)
+    return swing_analysis_dto.SwingAnalysisWorkflowRequest(**params)
 
 
 def _no_excess_return() -> BenchmarkExcessReturn:
@@ -568,6 +574,131 @@ def test_recompose_after_evidence_forwards_market_context_to_signal_engine():
 
     assert len(engine.calls) == 1
     assert engine.calls[0].get("market_context") is _RISK_OFF_CONTEXT
+
+
+def test_compose_trade_setup_inherits_screen_action_by_default():
+    """ADR-054 S3: initial plan TradeSetup defers to screen candidate."""
+    from src.application.services.swing_judgment_authority import SCREEN_JUDGMENT_WARNING
+    from src.domain.value_objects.signal_assessment import SignalStrength
+    from src.domain.value_objects.trade_setup import SetupAction, TradeSetup
+
+    screen_setup = TradeSetup(
+        ticker=TICKER,
+        snapshot_date=SNAP,
+        action=SetupAction.WATCH,
+        signal_score=55,
+        signal_score_raw=55,
+        signal_strength=SignalStrength.MODERATE,
+        blocking_gates=(),
+        regime=None,
+        signal_multiplier=1.0,
+        gate_tightening=False,
+        rationale="screen",
+    )
+    plan_setup = TradeSetup(
+        ticker=TICKER,
+        snapshot_date=SNAP,
+        action=SetupAction.ENTER,
+        signal_score=90,
+        signal_score_raw=90,
+        signal_strength=SignalStrength.STRONG,
+        blocking_gates=(),
+        regime=None,
+        signal_multiplier=1.0,
+        gate_tightening=False,
+        rationale="plan",
+    )
+
+    class _ComposerRisk:
+        def compose_trade_setup(self, **kwargs):
+            return plan_setup, []
+
+        def compose_market_context_preview(self, **kwargs):
+            return None, None, None, []
+
+    candidate = SimpleNamespace(
+        trade_setup=screen_setup,
+        signal_assessment=_signal_response(50),
+    )
+    state = SwingAnalysisWorkflowState()
+    state.accumulation_evaluation = SimpleNamespace(candidate=candidate)
+    state.signal_assessment = candidate.signal_assessment
+    state.signal_assessment_availability = swing_analysis_dto.SignalAssessmentAvailability(
+        status=swing_analysis_dto.SignalAssessmentStatus.AVAILABLE
+    )
+    state.risk_response = SimpleNamespace()
+
+    composer = SwingAnalysisDecisionComposer(
+        risk_trade_setup_composer=_ComposerRisk(),
+        signal_engine=_RecordingSignalEngine(),
+    )
+    result = composer.compose_trade_setup_and_preview(
+        _request(with_market_context=False, with_technical_gate=False),
+        state,
+    )
+    assert result.trade_setup is screen_setup
+    assert result.verdict.trade_setup is screen_setup
+    assert result.trade_setup.action == SetupAction.WATCH
+    assert SCREEN_JUDGMENT_WARNING in result.warnings
+
+
+def test_recompose_skips_rescore_when_action_recompute_not_allowed():
+    """ADR-054 S3: default plan freezes screen TradeSetup Action."""
+    from src.application.services.swing_judgment_authority import SCREEN_JUDGMENT_WARNING
+    from src.domain.value_objects.signal_assessment import SignalStrength
+    from src.domain.value_objects.trade_setup import SetupAction, TradeSetup
+
+    engine = _RecordingSignalEngine()
+    composer = SwingAnalysisDecisionComposer(
+        risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(),
+        signal_engine=engine,
+    )
+    screen_setup = TradeSetup(
+        ticker=TICKER,
+        snapshot_date=SNAP,
+        action=SetupAction.WATCH,
+        signal_score=60,
+        signal_score_raw=60,
+        signal_strength=SignalStrength.MODERATE,
+        blocking_gates=(),
+        regime=None,
+        signal_multiplier=1.0,
+        gate_tightening=False,
+        rationale="screen",
+    )
+    plan_temp = TradeSetup(
+        ticker=TICKER,
+        snapshot_date=SNAP,
+        action=SetupAction.ENTER,
+        signal_score=99,
+        signal_score_raw=99,
+        signal_strength=SignalStrength.STRONG,
+        blocking_gates=(),
+        regime=None,
+        signal_multiplier=1.0,
+        gate_tightening=False,
+        rationale="plan-temp",
+    )
+    state = _state(
+        built_setup_evidence=_built_setup_evidence(),
+        built_flow_evidence=_built_flow_evidence(),
+        source_availability_use_case=_source_availability_use_case(),
+    )
+    # Screen candidate carries authoritative TradeSetup.
+    state.accumulation_evaluation.candidate.trade_setup = screen_setup
+    state.trade_setup = plan_temp
+    state.verdict = replace(state.verdict, trade_setup=plan_temp)
+
+    result = composer.recompose_after_evidence(
+        _request(with_market_context=False, with_technical_gate=False),
+        state,
+    )
+
+    assert engine.calls == []
+    assert result.trade_setup is screen_setup
+    assert result.trade_setup.action == SetupAction.WATCH
+    assert result.verdict.trade_setup is screen_setup
+    assert SCREEN_JUDGMENT_WARNING in result.warnings
 
 
 def test_recompose_after_evidence_failure_clears_pre_existing_trade_setup():

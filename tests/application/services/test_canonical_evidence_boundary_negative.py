@@ -567,7 +567,8 @@ def _swing_request_for(today: date, ticker: str) -> swing_analysis_dto.SwingAnal
         sentiment_verbose=False,
         auto_refresh=False,
         force_refresh=False,
-        with_market_context=False,
+        # Enable recompute so recompose_after_evidence still exercises swing re-score.
+        with_market_context=True,
         regime_universe="lq45",
         benchmark="IHSG",
         db_path=Path("/tmp/does-not-exist.db"),
