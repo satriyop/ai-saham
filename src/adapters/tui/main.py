@@ -93,6 +93,7 @@ class CockpitApp(App[None]):
         self._meta = "local-first · Ctrl+P · no silent network"
         self._board_title = "Cockpit · shell"
         self._board_summary = ""
+        self._effective_session: Any | None = None
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="workspace"):
@@ -511,6 +512,8 @@ class CockpitApp(App[None]):
 
     def _on_accum_payload(self, payload: Any) -> None:
         summary = ""
+        # Workflow result carries effective_session; projection-only fakes do not.
+        self._effective_session = getattr(payload, "effective_session", None)
         if self._accum_presenter is not None:
             view = self._accum_presenter.present(payload)
             self._rows = list(view.rows)
@@ -675,10 +678,13 @@ class CockpitApp(App[None]):
             self.notify("No row focused", timeout=1.5)
             return
         ticker = self._focus_ticker
-        # Prefer lean row detail; optional loader deepens
         row = self._rows[self._row_index] if self._rows else None
         base = self._format_row_detail(ticker, row)
-        if self._ticker_detail_loader is not None:
+        # Accum path: present-only inspect — never re-run engines via loader.
+        is_accum_row = row is not None and all(
+            hasattr(row, k) for k in ("signal", "accum", "action", "gate")
+        )
+        if self._ticker_detail_loader is not None and not is_accum_row:
             self._stage = "loading"
             self._board_title = f"View · {ticker}"
             self._refresh_chrome()
@@ -686,9 +692,13 @@ class CockpitApp(App[None]):
             return
         self._detail_text = base
         self._stage = "detail"
-        self._board_title = f"View · {ticker}"
-        self._meta = "inspect surface · Enter was view, not plan"
-        self._status_note = "view"
+        if is_accum_row:
+            self._board_title = f"Screen · accum · {ticker}"
+            self._meta = "inspect · present-only · same object as board"
+        else:
+            self._board_title = f"View · {ticker}"
+            self._meta = "inspect surface · Enter was view, not plan"
+        self._status_note = "inspect"
         self._refresh_chrome()
 
     @work(thread=True, exclusive=True, group="detail")
@@ -710,38 +720,35 @@ class CockpitApp(App[None]):
         self._stage = "detail"
         self._board_title = f"View · {ticker}"
         self._meta = "inspect surface · Enter was view, not plan"
-        self._status_note = "view"
+        self._status_note = "inspect"
         self._refresh_chrome()
 
     def _format_row_detail(self, ticker: str, row: Any) -> str:
         if row is None:
             return f"[bold]{ticker}[/]\n\n[dim]No row payload[/]"
-        lines = [f"[bold #e8e8e8]{ticker}[/]", ""]
 
-        # Reuse focus Why + breakdown for one-ticker desk (accum rows)
+        # Screen accum: structured engine inspect (present-only)
         if all(hasattr(row, k) for k in ("signal", "accum", "action", "gate")):
-            from src.adapters.tui.presenters.accum_presenter import build_accum_focus
+            from src.adapters.tui.presenters.accum_engine_inspect_presenter import (
+                present_accum_engine_inspect,
+            )
 
-            focus = build_accum_focus(row, rank=self._row_index + 1, total=max(len(self._rows), 1))
-            # Plain text for detail stage (drop rich markers lightly)
-            for line in focus.strip.split("\n"):
-                lines.append(line)
-            lines.append("")
+            view = present_accum_engine_inspect(
+                row,
+                rank=self._row_index + 1,
+                total=max(len(self._rows), 1),
+                board_summary=self._board_summary,
+                effective_session=self._effective_session,
+            )
+            return view.text
 
+        # Pre-open / other boards: lean field dump
+        lines = [f"[bold #e8e8e8]{ticker}[/]", ""]
         for key, label in (
-            ("signal", "Signal"),
-            ("accum", "Accum"),
-            ("action", "Action"),
-            ("phase", "Phase"),
-            ("streak", "Streak"),
-            ("rsi", "RSI"),
-            ("net_pct", "Net%"),
-            ("disc_pct", "Disc%"),
-            ("price", "Price"),
-            ("gate", "Gate"),
             ("iep", "IEP"),
             ("delta_pct", "Δ%"),
             ("iev", "IEV"),
+            ("ncp", "NCP"),
             ("grade", "Grade"),
             ("risk", "Risk"),
             ("name", "Name"),
@@ -750,34 +757,8 @@ class CockpitApp(App[None]):
                 val = getattr(row, key)
                 if val is not None and val != "":
                     lines.append(f"[dim]{label:10}[/] {val}")
-
-        source = getattr(row, "source", None)
-        if source is not None:
-            lines.append("")
-            lines.append("[#9b8fb8]TradeSetup / risk[/]")
-            ts = getattr(source, "trade_setup", None)
-            if ts is not None:
-                rationale = getattr(ts, "rationale", None)
-                if rationale:
-                    lines.append(f"[dim]rationale[/]  {rationale}")
-            risk = getattr(source, "risk_assessment", None)
-            if risk is not None:
-                rat = getattr(risk, "rationale", None)
-                if rat:
-                    if isinstance(rat, (list, tuple)):
-                        rat = ", ".join(str(x) for x in rat)
-                    lines.append(f"[dim]risk[/]       {rat}")
-            sig = getattr(source, "signal_assessment", None)
-            if sig is not None:
-                assessment = getattr(sig, "assessment", None)
-                if assessment is not None:
-                    strength = getattr(getattr(assessment, "strength", None), "value", "")
-                    lines.append(
-                        f"[dim]sig str[/]    {getattr(assessment, 'score', '—')} {strength}"
-                    )
-
         lines.append("")
-        lines.append("[dim]Plan is deliberate — press p (not Enter)[/]")
+        lines.append("[dim]esc back · Ctrl+P[/]")
         return "\n".join(lines)
 
     def _open_plan_confirm(self) -> None:

@@ -157,7 +157,7 @@ def build_accum_focus(
 
     lag = _lag_from_candidate(source)
     why = _action_why(source, gate=gate)
-    breakdown = _accum_breakdown(source, accum_display=accum)
+    breakdown = format_accum_breakdown(source, accum_display=accum)
     disc_note = _disc_gloss(source, disc_pct)
 
     line1 = (
@@ -378,8 +378,14 @@ def _coverage_pct(candidate: Any) -> float | None:
     return None
 
 
-def _accum_breakdown(candidate: Any, *, accum_display: str) -> str:
-    """Accum total as sum of component points (AccumScoreBreakdown)."""
+def format_accum_breakdown(candidate: Any, *, accum_display: str = "") -> str:
+    """Accum total as sum of component points (AccumScoreBreakdown).
+
+    Shared by focus strip and Enter engine-inspect (single formatting path).
+    """
+    if not accum_display and candidate is not None:
+        raw = getattr(candidate, "accum_score", None)
+        accum_display = f"{float(raw):.1f}" if isinstance(raw, (int, float)) else "—"
     if candidate is None:
         return f"{accum_display} (no breakdown)"
     bd = getattr(candidate, "accum_score_breakdown", None)
