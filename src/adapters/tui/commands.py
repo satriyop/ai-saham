@@ -44,8 +44,8 @@ COCKPIT_COMMANDS: tuple[CockpitCommand, ...] = (
         "Daily",
         "view-ticker",
         "View ticker",
-        "enter",
-        "Open focused row (Enter = view, not plan)",
+        "",
+        "CLI parity: saham view ticker show · cache dashboard (not board inspect)",
     ),
     CockpitCommand(
         "Daily",

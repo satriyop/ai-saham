@@ -10,8 +10,10 @@ Layer: Adapter
 from __future__ import annotations
 
 import json
+from io import StringIO
 from pathlib import Path
 
+from rich.console import Console
 from rich.text import Text
 
 from src.adapters.cli.rich_display import console
@@ -75,16 +77,38 @@ def render_ticker_dashboard(
         print(json.dumps(ticker_dashboard_to_json_dict(dashboard), indent=2, default=str))
         return
 
-    _render_ticker_dashboard_table(dashboard)
+    _render_ticker_dashboard_table(dashboard, out=console())
 
 
-def _render_ticker_dashboard_table(dashboard: TickerDashboard) -> None:
+def format_ticker_dashboard_text(dashboard: TickerDashboard, *, width: int = 100) -> str:
+    """Same CLI table panels as plain text (for TUI detail stage / capture).
+
+    Uses the identical panel builders as ``saham view ticker show``; only the
+    Console target differs (StringIO vs stdout).
+    """
+    buf = StringIO()
+    out = Console(
+        file=buf,
+        width=width,
+        highlight=False,
+        force_terminal=True,
+        color_system=None,
+    )
+    _render_ticker_dashboard_table(dashboard, out=out)
+    return buf.getvalue()
+
+
+def _render_ticker_dashboard_table(
+    dashboard: TickerDashboard,
+    *,
+    out: Console | None = None,
+) -> None:
     """Pure table renderer over an assembled TickerDashboard DTO."""
     panels = set(dashboard.panel_keys)
     fetch_hint = dashboard.fetch_hint
     brief = dashboard.mode == "brief"
 
-    c = console()
+    c = out if out is not None else console()
     c.print()
     if "identity" in panels:
         c.print(_identity_panel(dashboard.ticker, dashboard.notation, empty_hint=fetch_hint))

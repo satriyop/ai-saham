@@ -258,7 +258,7 @@ def test_enter_opens_inspect_and_esc_returns():
                     break
             assert app._stage == "accum"
             assert app._effective_session is not None
-            app._run_command("view-ticker")
+            app._open_detail()  # board Enter inspect (not palette view-ticker)
             await pilot.pause()
             assert app._stage == "detail"
             assert "Screen · accum ·" in app._board_title

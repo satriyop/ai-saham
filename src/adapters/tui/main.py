@@ -343,9 +343,10 @@ class CockpitApp(App[None]):
         self._run_command("plan-swing")
 
     def action_view_ticker(self) -> None:
+        """Board Enter → engine inspect (present-only), not CLI view ticker."""
         if self._modal_blocks_board_keys():
             return
-        self._run_command("view-ticker")
+        self._open_detail()
 
     def _modal_blocks_board_keys(self) -> bool:
         """True when a modal (palette/confirm/help) is on top — do not steal keys."""
@@ -444,7 +445,7 @@ class CockpitApp(App[None]):
             self._load_preopen()
             return
         if command_id == "view-ticker":
-            self._open_detail()
+            self._open_view_ticker_dashboard()
             return
         if command_id == "plan-swing":
             self._open_plan_stage()
@@ -749,32 +750,27 @@ class CockpitApp(App[None]):
                 self._status_note = f"{base} · {focus.lag_label}" if base else focus.lag_label
             self.query_one("#status", Static).update(self._status_text())
 
+    def _remember_return_stage(self) -> None:
+        if self._stage in {"accum", "preopen"}:
+            self._detail_return_stage = self._stage  # type: ignore[assignment]
+        elif self._board_kind in {"accum", "preopen"}:
+            self._detail_return_stage = self._board_kind  # type: ignore[assignment]
+        elif self._stage not in {"detail", "plan"}:
+            self._detail_return_stage = "shell"
+
     def _open_detail(self) -> None:
+        """Board Enter: present-only engine inspect (screen row object)."""
         if self._stage == "empty" or self._focus_ticker in {"—", ""}:
-            self.notify("Nothing to view — run a screen first", timeout=1.5)
+            self.notify("Nothing to inspect — run a screen first", timeout=1.5)
             return
         if not self._rows and self._stage != "detail":
             self.notify("No row focused", timeout=1.5)
             return
         ticker = self._focus_ticker
         row = self._rows[self._row_index] if self._rows else None
-        # Remember where to return — never depend on detail title alone.
-        if self._stage in {"accum", "preopen"}:
-            self._detail_return_stage = self._stage  # type: ignore[assignment]
-        elif self._board_kind in {"accum", "preopen"}:
-            self._detail_return_stage = self._board_kind  # type: ignore[assignment]
-        else:
-            self._detail_return_stage = "shell"
+        self._remember_return_stage()
 
-        is_board_inspect = self._is_accum_row(row) or self._is_preopen_row(row)
         base = self._format_row_detail(ticker, row)
-        # Present-only board inspect: never re-run engines via ticker_detail_loader.
-        if self._ticker_detail_loader is not None and not is_board_inspect:
-            self._stage = "loading"
-            self._board_title = f"View · {ticker}"
-            self._refresh_chrome()
-            self._execute_detail(ticker, base)
-            return
         self._detail_text = base
         self._stage = "detail"
         if self._is_accum_row(row):
@@ -784,31 +780,53 @@ class CockpitApp(App[None]):
             self._board_title = f"Screen · pre-open · {ticker}"
             self._meta = "inspect · present-only · same object as board"
         else:
-            self._board_title = f"View · {ticker}"
-            self._meta = "inspect surface · Enter was view, not plan"
+            self._board_title = f"Inspect · {ticker}"
+            self._meta = "present-only · board row"
         self._status_note = "inspect"
         self._refresh_chrome()
 
+    def _open_view_ticker_dashboard(self) -> None:
+        """Ctrl+P View ticker: CLI-equivalent cache dashboard (GetTickerDashboard)."""
+        if self._focus_ticker in {"—", ""}:
+            self.notify("Nothing to view — focus a ticker first", timeout=1.5)
+            return
+        ticker = str(self._focus_ticker).upper()
+        self._remember_return_stage()
+        self._stage = "loading"
+        self._board_title = f"View · ticker show · {ticker}"
+        self._meta = "CLI parity · cache-only dashboard"
+        self._status_note = "view ticker"
+        self._refresh_chrome()
+        self._execute_view_ticker(ticker)
+
     @work(thread=True, exclusive=True, group="detail")
-    def _execute_detail(self, ticker: str, base: str) -> None:
+    def _execute_view_ticker(self, ticker: str) -> None:
         try:
-            extra = self._ticker_detail_loader(ticker) if self._ticker_detail_loader else ""
-            text = base if not extra else f"{base}\n\n{extra}"
-            dispatch_if_active(self, self._on_detail_ready, ticker, text)
+            if self._ticker_detail_loader is not None:
+                text = str(self._ticker_detail_loader(ticker) or "")
+            else:
+                text = f"[bold]{ticker}[/]\n\n[dim]view ticker loader not wired (composition)[/]"
+            if not text.strip():
+                text = f"[bold]{ticker}[/]\n\n[dim]empty dashboard[/]"
+            header = (
+                f"[bold #e8e8e8]View · ticker show · {ticker}[/]\n"
+                f"[dim]same job as: saham view ticker show {ticker} · local cache[/]\n\n"
+            )
+            dispatch_if_active(self, self._on_view_ticker_ready, ticker, header + text)
         except Exception as exc:
             dispatch_if_active(
                 self,
-                self._on_detail_ready,
+                self._on_view_ticker_ready,
                 ticker,
-                f"{base}\n\n[dim]detail: {exc}[/]",
+                f"[bold]View · ticker show · {ticker}[/]\n\n[dim]error: {exc}[/]",
             )
 
-    def _on_detail_ready(self, ticker: str, text: str) -> None:
+    def _on_view_ticker_ready(self, ticker: str, text: str) -> None:
         self._detail_text = text
         self._stage = "detail"
-        self._board_title = f"View · {ticker}"
-        self._meta = "inspect surface · Enter was view, not plan"
-        self._status_note = "inspect"
+        self._board_title = f"View · ticker show · {ticker}"
+        self._meta = "CLI parity · cache-only · esc back"
+        self._status_note = "view ticker"
         self._refresh_chrome()
 
     @staticmethod

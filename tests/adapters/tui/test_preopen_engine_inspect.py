@@ -122,7 +122,7 @@ def test_enter_opens_preopen_inspect_and_esc_returns():
                     break
             assert app._stage == "preopen"
             assert app._board_kind == "preopen"
-            app._run_command("view-ticker")
+            app._open_detail()  # board Enter inspect (not palette view-ticker)
             await pilot.pause()
             assert app._stage == "detail"
             assert app._detail_return_stage == "preopen"

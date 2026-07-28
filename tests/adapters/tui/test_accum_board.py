@@ -171,7 +171,7 @@ def test_cockpit_loads_accum_from_injected_loader():
             assert app._focus_ticker == "PGEO"
             assert app._rows[0].signal == "79"
             assert app._rows[0].accum == "62.2"
-            app._run_command("view-ticker")
+            app._open_detail()  # board Enter inspect (not palette view-ticker)
             await pilot.pause()
             assert app._stage == "detail"
             assert "PGEO" in app._detail_text

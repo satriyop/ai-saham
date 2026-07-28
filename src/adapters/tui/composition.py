@@ -53,6 +53,8 @@ def create_tui_app(
         fetch_previewer = _build_fetch_previewer(db_path)
     if fetch_runner is None:
         fetch_runner = _build_fetch_runner(db_path)
+    if ticker_detail_loader is None:
+        ticker_detail_loader = _ViewTickerDashboardLoader(db_path)
 
     return CockpitApp(
         accum_loader=accum_loader,
@@ -203,6 +205,29 @@ class _PreOpenSnapshotLoader:
             snapshot_date=snapshot_date,
             warnings=tuple(response.warnings or ()),
         )
+
+
+# ── View ticker (CLI view ticker show parity — cache dashboard) ─
+
+
+class _ViewTickerDashboardLoader:
+    """Load GetTickerDashboardUseCase and format like ``saham view ticker show``."""
+
+    def __init__(self, db_path: Path) -> None:
+        self._db_path = db_path
+        self._lock = Lock()
+
+    def __call__(self, ticker: str) -> str:
+        with self._lock:
+            from src.adapters.cli.view_ticker_display import format_ticker_dashboard_text
+            from src.application.dto.ticker_dashboard import GetTickerDashboardRequest
+            from src.infrastructure.composition.view_ticker_deps import build_view_ticker_deps
+
+            deps = build_view_ticker_deps(self._db_path)
+            dashboard = deps.dashboard.execute(
+                GetTickerDashboardRequest(ticker=str(ticker).upper(), brief=False)
+            )
+            return format_ticker_dashboard_text(dashboard)
 
 
 # ── Plan (structure desk — same engine as CLI plan swing) ───
