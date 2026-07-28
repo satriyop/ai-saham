@@ -1776,3 +1776,15 @@ telco:
   - TLKM
   - TOWR
   updated: '2026-07-28'
+
+# Poultry / feed integrators (ADR-053). Parent consumer_goods/noncyc kept.
+# Not plantation (CPO) and not branded FMCG.
+poultry:
+  tickers:
+  - BISI
+  - CPIN
+  - JPFA
+  - MAIN
+  - SIPD
+  - WAPO
+  updated: '2026-07-28'

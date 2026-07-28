@@ -93,6 +93,24 @@ sector_macro_context:
         supportive_min: 0.05
         headwind_max: -0.05
 
+    # CBOT corn / soy — feed-cost stress for poultry integrators (not agri-bull map).
+    # invert=true: rising grain = headwind for CPIN/JPFA-style feeders.
+    corn:
+      series: "ZC=F"
+      kind: return_sessions
+      invert: true
+      thresholds:
+        supportive_min: 0.03
+        headwind_max: -0.03
+
+    soy:
+      series: "ZS=F"
+      kind: return_sessions
+      invert: true
+      thresholds:
+        supportive_min: 0.03
+        headwind_max: -0.03
+
   # Primary keys = universes.yaml group names (same as L2a sector context).
   # Live maps only for groups with ≥2 real drivers. Prefer dedicated cohorts
   # over broad bags (consumer_goods, basic_materials, finance-without-bank-key).
@@ -134,6 +152,11 @@ sector_macro_context:
       factors:
         - { ref: oil_proxy, weight: 0.60 }
         - { ref: usd_idr, weight: 0.40 }
+    # Poultry / feed: corn+soy cost stress (not chicken-price model; no free DOC series).
+    poultry:
+      factors:
+        - { ref: corn, weight: 0.55 }
+        - { ref: soy, weight: 0.45 }
     # Telco / towers: rates + FX risk (domestic funding & risk appetite).
     telco:
       factors:

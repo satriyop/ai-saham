@@ -369,6 +369,76 @@ class TestResolveSectorGroup:
         assert builder.resolve_sector_group(("logistics",)) == "logistics"
         assert builder.resolve_sector_group(("telecommunication", "telco")) == "telco"
 
+    def test_prefers_poultry_over_consumer_goods(self):
+        raw = {
+            "sector_macro_context": {
+                "factor_library": {
+                    "corn": {
+                        "series": "ZC=F",
+                        "invert": True,
+                        "thresholds": {"supportive_min": 0.03, "headwind_max": -0.03},
+                    },
+                    "soy": {
+                        "series": "ZS=F",
+                        "invert": True,
+                        "thresholds": {"supportive_min": 0.03, "headwind_max": -0.03},
+                    },
+                },
+                "sector_maps": {
+                    "poultry": {
+                        "factors": [
+                            {"ref": "corn", "weight": 0.55},
+                            {"ref": "soy", "weight": 0.45},
+                        ]
+                    },
+                },
+            }
+        }
+        builder = SectorMacroContextEvidenceBuilder(SectorMacroContextConfig.from_mapping(raw))
+        assert builder.resolve_sector_group(("consumer_goods", "noncyc", "poultry")) == "poultry"
+
+    def test_poultry_rising_feed_is_headwind(self):
+        raw = {
+            "sector_macro_context": {
+                "lookback_sessions": 10,
+                "min_valid_sessions": 5,
+                "min_coverage_to_label": 0.5,
+                "factor_library": {
+                    "corn": {
+                        "series": "ZC=F",
+                        "invert": True,
+                        "thresholds": {"supportive_min": 0.03, "headwind_max": -0.03},
+                    },
+                    "soy": {
+                        "series": "ZS=F",
+                        "invert": True,
+                        "thresholds": {"supportive_min": 0.03, "headwind_max": -0.03},
+                    },
+                },
+                "sector_maps": {
+                    "poultry": {
+                        "factors": [
+                            {"ref": "corn", "weight": 0.55},
+                            {"ref": "soy", "weight": 0.45},
+                        ]
+                    }
+                },
+            }
+        }
+        builder = SectorMacroContextEvidenceBuilder(SectorMacroContextConfig.from_mapping(raw))
+        corn_up = _make_candles("ZC=F", [400.0] * 5 + [440.0])  # +10%
+        soy_up = _make_candles("ZS=F", [1000.0] * 5 + [1100.0])  # +10%
+        ev = builder.build(
+            SectorMacroContextRequest(
+                ticker="CPIN",
+                snapshot_date=date(2026, 5, 20),
+                sector_group="poultry",
+                series_candles={"ZC=F": corn_up, "ZS=F": soy_up},
+            )
+        )
+        assert ev.macro_regime == "HEADWIND"
+        assert all(f.score is not None and f.score <= 0.35 for f in ev.factors)
+
 
 class TestBuilder:
     def test_supportive_energy(self):

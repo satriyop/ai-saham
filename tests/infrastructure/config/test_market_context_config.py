@@ -82,6 +82,8 @@ def test_get_global_context_tickers_returns_defaults_without_fallback_exception(
         "HG=F",
         "GC=F",
         "^TNX",
+        "ZC=F",
+        "ZS=F",
     }.issubset(tickers)
 
 
