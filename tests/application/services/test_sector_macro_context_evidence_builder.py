@@ -222,6 +222,34 @@ class TestResolveSectorGroup:
         builder = SectorMacroContextEvidenceBuilder(SectorMacroContextConfig.from_mapping(raw))
         assert builder.resolve_sector_group(("basic_materials", "metals", "bumn20")) == "metals"
 
+    def test_prefers_bank_over_finance(self):
+        raw = {
+            "sector_macro_context": {
+                "factor_library": {
+                    "us_10y": {
+                        "series": "^TNX",
+                        "invert": True,
+                        "thresholds": {"supportive_min": 0.01, "headwind_max": -0.01},
+                    },
+                    "usd_idr_risk": {
+                        "series": "IDR=X",
+                        "invert": True,
+                        "thresholds": {"supportive_min": 0.01, "headwind_max": -0.01},
+                    },
+                },
+                "sector_maps": {
+                    "bank": {
+                        "factors": [
+                            {"ref": "us_10y", "weight": 0.55},
+                            {"ref": "usd_idr_risk", "weight": 0.45},
+                        ]
+                    },
+                },
+            }
+        }
+        builder = SectorMacroContextEvidenceBuilder(SectorMacroContextConfig.from_mapping(raw))
+        assert builder.resolve_sector_group(("bank", "finance")) == "bank"
+
 
 class TestBuilder:
     def test_supportive_energy(self):
@@ -387,3 +415,60 @@ class TestBuilder:
         )
         assert ev.macro_regime == "UNKNOWN"
         assert ev.coverage_score == 0.0
+
+    def test_bank_risk_map_rising_rates_and_idr_are_headwind(self):
+        """Defensive bank policy: invert both series so up = headwind."""
+        raw = {
+            "sector_macro_context": {
+                "lookback_sessions": 10,
+                "min_valid_sessions": 5,
+                "min_coverage_to_label": 0.5,
+                "factor_library": {
+                    "us_10y": {
+                        "series": "^TNX",
+                        "invert": True,
+                        "thresholds": {"supportive_min": 0.01, "headwind_max": -0.01},
+                    },
+                    "usd_idr_risk": {
+                        "series": "IDR=X",
+                        "invert": True,
+                        "thresholds": {"supportive_min": 0.01, "headwind_max": -0.01},
+                    },
+                },
+                "sector_maps": {
+                    "bank": {
+                        "factors": [
+                            {"ref": "us_10y", "weight": 0.55},
+                            {"ref": "usd_idr_risk", "weight": 0.45},
+                        ]
+                    }
+                },
+            }
+        }
+        builder = SectorMacroContextEvidenceBuilder(SectorMacroContextConfig.from_mapping(raw))
+        # Rising yields + weaker IDR → both inverted → headwind
+        rates_up = _make_candles("^TNX", [4.0] * 5 + [4.2])  # +5%
+        idr_up = _make_candles("IDR=X", [16000.0] * 5 + [16320.0])  # +2%
+        ev = builder.build(
+            SectorMacroContextRequest(
+                ticker="BBCA",
+                snapshot_date=date(2026, 5, 20),
+                sector_group="bank",
+                series_candles={"^TNX": rates_up, "IDR=X": idr_up},
+            )
+        )
+        assert ev.macro_regime == "HEADWIND"
+        assert all(f.score is not None and f.score <= 0.35 for f in ev.factors)
+
+        # Falling yields + stronger IDR → supportive
+        rates_dn = _make_candles("^TNX", [4.2] * 5 + [4.0])
+        idr_dn = _make_candles("IDR=X", [16320.0] * 5 + [16000.0])
+        ev2 = builder.build(
+            SectorMacroContextRequest(
+                ticker="BBCA",
+                snapshot_date=date(2026, 5, 20),
+                sector_group="bank",
+                series_candles={"^TNX": rates_dn, "IDR=X": idr_dn},
+            )
+        )
+        assert ev2.macro_regime == "SUPPORTIVE"

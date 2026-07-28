@@ -39,10 +39,29 @@ sector_macro_context:
     usd_idr:
       series: "IDR=X"
       kind: return_sessions
-      # Rising IDR=X = weaker Rupiah; often supportive for USD-linked energy exporters.
+      # Rising IDR=X = weaker Rupiah; often supportive for USD-linked exporters.
       # invert=false: higher return → higher score (commodity-like).
-      # invert=true would mean VIX-like (higher return → lower score).
       invert: false
+      thresholds:
+        supportive_min: 0.01
+        headwind_max: -0.01
+
+    # Bank / risk-context FX: weaker Rupiah (higher USDIDR) = financial-conditions headwind.
+    # Separate library entry so commodity maps keep invert=false on usd_idr.
+    usd_idr_risk:
+      series: "IDR=X"
+      kind: return_sessions
+      invert: true
+      thresholds:
+        supportive_min: 0.01
+        headwind_max: -0.01
+
+    # US 10Y yield — financial-conditions proxy for bank risk context (not NIM model).
+    # invert=true: rising yields → lower score (tighter conditions / risk-off).
+    us_10y:
+      series: "^TNX"
+      kind: return_sessions
+      invert: true
       thresholds:
         supportive_min: 0.01
         headwind_max: -0.01
@@ -67,7 +86,7 @@ sector_macro_context:
 
   # Primary keys = universes.yaml group names (same as L2a sector context).
   # Live maps only for groups with ≥2 real drivers. Prefer dedicated cohorts
-  # (energy, plantation, metals) over broad bags (consumer_goods, basic_materials).
+  # over broad bags (consumer_goods, basic_materials, finance-without-bank-key).
   sector_maps:
     energy:
       factors:
@@ -81,3 +100,9 @@ sector_macro_context:
       factors:
         - { ref: copper, weight: 0.55 }
         - { ref: usd_idr, weight: 0.45 }
+    # Defensive bank risk context (not NIM expansion model). Both rising rates and
+    # weaker IDR score as headwind. Uses existing universes.yaml `bank` group.
+    bank:
+      factors:
+        - { ref: us_10y, weight: 0.55 }
+        - { ref: usd_idr_risk, weight: 0.45 }

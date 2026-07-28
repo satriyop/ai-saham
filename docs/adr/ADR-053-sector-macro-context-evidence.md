@@ -92,11 +92,12 @@ Builders must not hardcode sector→series routing. Adapters must not own policy
 | Concern | Decision |
 |---------|----------|
 | Config multi-map ready | Yes from day one |
-| Live sector maps | `energy`, `plantation`, `metals` |
-| Live series | energy: `CL=F`+`IDR=X`; plantation: `CPO=F`+`IDR=X`; metals: `HG=F`+`IDR=X` |
-| Dedicated groups | `energy`, `plantation`, `metals` (not broad `consumer_goods` / `basic_materials`) |
+| Live sector maps | `energy`, `plantation`, `metals`, `bank` |
+| Live series | energy: `CL=F`+`IDR=X`; plantation: `CPO=F`+`IDR=X`; metals: `HG=F`+`IDR=X`; bank: `^TNX`+`IDR=X` (risk invert) |
+| Dedicated groups | `energy`, `plantation`, `metals`; banks use existing `bank` key |
+| Bank policy | Defensive financial-conditions map (rising rates / weaker IDR = headwind), not NIM expansion |
 | Dead Yahoo symbols (do not map live) | `MTF=F` (Newcastle coal), `KO=F` (old CPO) — return no data as of 2026-07 smoke |
-| Thin multi-sector maps (e.g. banks → 100% USDIDR) | **Forbidden** until rates proxy is product-approved |
+| Thin multi-sector maps (e.g. banks → 100% USDIDR) | **Forbidden** |
 | Auto-fetch | Live-map series refresh on every `saham fetch market` (`sector_macro` context labels) |
 
 ### 6. Output contract (intent)
