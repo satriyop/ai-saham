@@ -397,6 +397,56 @@ class TestResolveSectorGroup:
         builder = SectorMacroContextEvidenceBuilder(SectorMacroContextConfig.from_mapping(raw))
         assert builder.resolve_sector_group(("consumer_goods", "noncyc", "poultry")) == "poultry"
 
+    def test_prefers_insurance_multifinance_packaging(self):
+        raw = {
+            "sector_macro_context": {
+                "factor_library": {
+                    "us_10y": {
+                        "series": "^TNX",
+                        "invert": True,
+                        "thresholds": {"supportive_min": 0.01, "headwind_max": -0.01},
+                    },
+                    "usd_idr_risk": {
+                        "series": "IDR=X",
+                        "invert": True,
+                        "thresholds": {"supportive_min": 0.01, "headwind_max": -0.01},
+                    },
+                    "oil_proxy": {
+                        "series": "CL=F",
+                        "thresholds": {"supportive_min": 0.05, "headwind_max": -0.05},
+                    },
+                    "usd_idr": {
+                        "series": "IDR=X",
+                        "thresholds": {"supportive_min": 0.01, "headwind_max": -0.01},
+                    },
+                },
+                "sector_maps": {
+                    "insurance": {
+                        "factors": [
+                            {"ref": "us_10y", "weight": 0.55},
+                            {"ref": "usd_idr_risk", "weight": 0.45},
+                        ]
+                    },
+                    "multifinance": {
+                        "factors": [
+                            {"ref": "us_10y", "weight": 0.55},
+                            {"ref": "usd_idr_risk", "weight": 0.45},
+                        ]
+                    },
+                    "packaging": {
+                        "factors": [
+                            {"ref": "oil_proxy", "weight": 0.60},
+                            {"ref": "usd_idr", "weight": 0.40},
+                        ]
+                    },
+                },
+            }
+        }
+        builder = SectorMacroContextEvidenceBuilder(SectorMacroContextConfig.from_mapping(raw))
+        assert builder.resolve_sector_group(("finance", "insurance")) == "insurance"
+        assert builder.resolve_sector_group(("finance", "multifinance")) == "multifinance"
+        assert builder.resolve_sector_group(("basic_materials", "packaging")) == "packaging"
+
     def test_poultry_rising_feed_is_headwind(self):
         raw = {
             "sector_macro_context": {

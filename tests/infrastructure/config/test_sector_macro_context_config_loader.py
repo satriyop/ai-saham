@@ -26,6 +26,9 @@ def test_create_builder_from_repo_config():
     assert "logistics" in cfg.sector_maps
     assert "telco" in cfg.sector_maps
     assert "poultry" in cfg.sector_maps
+    assert "insurance" in cfg.sector_maps
+    assert "multifinance" in cfg.sector_maps
+    assert "packaging" in cfg.sector_maps
     assert "bank" in cfg.sector_maps
     assert cfg.required_series_tickers() >= frozenset(
         {"CL=F", "IDR=X", "CPO=F", "HG=F", "GC=F", "^TNX", "ZC=F", "ZS=F"}

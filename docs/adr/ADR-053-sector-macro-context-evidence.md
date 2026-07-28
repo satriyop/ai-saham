@@ -92,10 +92,11 @@ Builders must not hardcode sector→series routing. Adapters must not own policy
 | Concern | Decision |
 |---------|----------|
 | Config multi-map ready | Yes from day one |
-| Live sector maps | `energy`, `plantation`, `metals`, `gold`, `cement`, `chemicals`, `property_dev`, `logistics`, `poultry`, `telco`, `bank` |
+| Live sector maps | commodity/BM/consumer + `property_dev`/`telco`/`poultry` + `insurance`/`multifinance`/`packaging` + `bank`/`logistics` |
 | Live series | oil: `CL=F`; soft: `CPO=F`; metals: `HG=F`; gold: `GC=F`; feed: `ZC=F`+`ZS=F` (invert); rates-risk: `^TNX`+`IDR=X` (invert) |
-| Dedicated groups | commodity/BM/consumer splits + `property_dev`/`telco`/`poultry`; `logistics`/`bank` use existing keys |
+| Dedicated groups | most maps use dedicated cohorts; `insurance`/`logistics`/`bank` reuse existing universe keys |
 | Poultry policy | Feed-cost stress (rising corn/soy = headwind); not chicken-price model (no free DOC series) |
+| Finance residual | `insurance` + `multifinance` (rates/FX risk); packaging = oil+FX BM residual |
 | Bank policy | Defensive financial-conditions map (rising rates / weaker IDR = headwind), not NIM expansion |
 | Dead Yahoo symbols (do not map live) | `MTF=F` (Newcastle coal), `KO=F` (old CPO) — return no data as of 2026-07 smoke |
 | Thin multi-sector maps (e.g. banks → 100% USDIDR) | **Forbidden** |

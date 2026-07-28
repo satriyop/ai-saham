@@ -1788,3 +1788,36 @@ poultry:
   - SIPD
   - WAPO
   updated: '2026-07-28'
+
+# Multifinance / consumer finance lenders (ADR-053). Parent finance kept.
+# Not banks, not insurance.
+multifinance:
+  tickers:
+  - ADMF
+  - BFIN
+  - BPFI
+  - CFIN
+  - DEFI
+  - HDFA
+  - TIFA
+  - VRNA
+  - WOMF
+  updated: '2026-07-28'
+
+# Plastics / flexible packaging (ADR-053). Parent basic_materials kept.
+# Exclude chem-primary names already in chemicals (FPNI/INCI/IPOL).
+packaging:
+  tickers:
+  - AKPI
+  - APLI
+  - BTON
+  - IGAR
+  - INTD
+  - KDSI
+  - PACK
+  - PICO
+  - PURE
+  - TALF
+  - TRST
+  - YPAS
+  updated: '2026-07-28'

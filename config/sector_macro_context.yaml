@@ -162,6 +162,22 @@ sector_macro_context:
       factors:
         - { ref: us_10y, weight: 0.55 }
         - { ref: usd_idr_risk, weight: 0.45 }
+    # Non-life/life insurers — uses existing universes.yaml `insurance` group.
+    # Same defensive rates/FX family as banks (float + equity risk context).
+    insurance:
+      factors:
+        - { ref: us_10y, weight: 0.55 }
+        - { ref: usd_idr_risk, weight: 0.45 }
+    # Multifinance / consumer lenders (not banks). Funding + risk-off stress.
+    multifinance:
+      factors:
+        - { ref: us_10y, weight: 0.55 }
+        - { ref: usd_idr_risk, weight: 0.45 }
+    # Plastics / packaging: resin/feedstock via oil + FX (export-friendly IDR).
+    packaging:
+      factors:
+        - { ref: oil_proxy, weight: 0.60 }
+        - { ref: usd_idr, weight: 0.40 }
     # Defensive bank risk context (not NIM expansion model). Both rising rates and
     # weaker IDR score as headwind. Uses existing universes.yaml `bank` group.
     bank:
