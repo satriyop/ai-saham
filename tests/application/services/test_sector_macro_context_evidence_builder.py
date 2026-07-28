@@ -276,6 +276,49 @@ class TestResolveSectorGroup:
         builder = SectorMacroContextEvidenceBuilder(SectorMacroContextConfig.from_mapping(raw))
         assert builder.resolve_sector_group(("basic_materials", "gold", "bumn20")) == "gold"
 
+    def test_prefers_cement_and_chemicals_over_basic_materials(self):
+        raw = {
+            "sector_macro_context": {
+                "factor_library": {
+                    "us_10y": {
+                        "series": "^TNX",
+                        "invert": True,
+                        "thresholds": {"supportive_min": 0.01, "headwind_max": -0.01},
+                    },
+                    "usd_idr_risk": {
+                        "series": "IDR=X",
+                        "invert": True,
+                        "thresholds": {"supportive_min": 0.01, "headwind_max": -0.01},
+                    },
+                    "oil_proxy": {
+                        "series": "CL=F",
+                        "thresholds": {"supportive_min": 0.05, "headwind_max": -0.05},
+                    },
+                    "usd_idr": {
+                        "series": "IDR=X",
+                        "thresholds": {"supportive_min": 0.01, "headwind_max": -0.01},
+                    },
+                },
+                "sector_maps": {
+                    "cement": {
+                        "factors": [
+                            {"ref": "us_10y", "weight": 0.55},
+                            {"ref": "usd_idr_risk", "weight": 0.45},
+                        ]
+                    },
+                    "chemicals": {
+                        "factors": [
+                            {"ref": "oil_proxy", "weight": 0.60},
+                            {"ref": "usd_idr", "weight": 0.40},
+                        ]
+                    },
+                },
+            }
+        }
+        builder = SectorMacroContextEvidenceBuilder(SectorMacroContextConfig.from_mapping(raw))
+        assert builder.resolve_sector_group(("basic_materials", "cement")) == "cement"
+        assert builder.resolve_sector_group(("basic_materials", "chemicals")) == "chemicals"
+
 
 class TestBuilder:
     def test_supportive_energy(self):

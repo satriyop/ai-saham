@@ -1685,3 +1685,42 @@ gold:
   - MDKA
   - PSAB
   updated: '2026-07-28'
+
+# Cement / building materials — domestic capex & property cycle (ADR-053).
+# Parent bag basic_materials kept; multi-membership prefers live sector_maps.
+cement:
+  tickers:
+  - CMNT
+  - INTP
+  - PDPP
+  - SMBR
+  - SMCB
+  - SMGA
+  - SMGR
+  - SMKL
+  - SMLE
+  - TDPM
+  - WSBP
+  - WTON
+  updated: '2026-07-28'
+
+# Basic chemicals / petrochemicals / industrial chem (ADR-053).
+# Feedstock + FX story via oil_proxy + usd_idr. Not packaging bag.
+chemicals:
+  tickers:
+  - AVIA
+  - BRNA
+  - BRPT
+  - CHEM
+  - CLPI
+  - DPNS
+  - EKAD
+  - ESSA
+  - FPNI
+  - INCI
+  - IPOL
+  - MDKI
+  - SAMF
+  - SOLA
+  - TPIA
+  updated: '2026-07-28'

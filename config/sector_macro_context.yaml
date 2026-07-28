@@ -113,6 +113,17 @@ sector_macro_context:
       factors:
         - { ref: gold_proxy, weight: 0.65 }
         - { ref: usd_idr, weight: 0.35 }
+    # Cement / building materials: domestic rates + FX cost (defensive).
+    # Rising yields / weaker IDR → headwind for property-capex and energy costs.
+    cement:
+      factors:
+        - { ref: us_10y, weight: 0.55 }
+        - { ref: usd_idr_risk, weight: 0.45 }
+    # Basic chemicals / petrochem: energy complex + export-friendly FX.
+    chemicals:
+      factors:
+        - { ref: oil_proxy, weight: 0.60 }
+        - { ref: usd_idr, weight: 0.40 }
     # Defensive bank risk context (not NIM expansion model). Both rising rates and
     # weaker IDR score as headwind. Uses existing universes.yaml `bank` group.
     bank:
