@@ -134,6 +134,15 @@ class CockpitApp(App[None]):
         table.display = False
         self.query_one("#evidence-strip", Static).display = False
         self._refresh_chrome()
+        # Live cockpit: open on local accumulation board (not a design manifesto).
+        # Still local-first — no network until explicit Fetch.
+        if self._accum_controller is not None or self._accum_loader is not None:
+            self._load_accum()
+        else:
+            self._stage = "shell"
+            self._board_title = "Cockpit"
+            self._meta = "no loader · Ctrl+P for commands"
+            self._refresh_chrome()
 
     # ── chrome ─────────────────────────────────────────────
 
@@ -157,18 +166,10 @@ class CockpitApp(App[None]):
 
     def _shell_body(self) -> str:
         return (
-            "[bold #e8e8e8]Daily cockpit[/]  [dim]OpenCode layout B[/]\n\n"
-            "Navigation is the command palette — [bold]no scenario tabs[/].\n\n"
-            "  [bold]Ctrl+P[/]  open commands\n"
-            "  [bold]Enter[/]   view ticker\n"
-            "  [bold]p[/]       plan swing — deliberate confirm\n"
-            "  [bold]r[/]       refresh local board\n"
-            "  [bold]Ctrl+B[/]  toggle sidebar\n"
-            "  [bold]?[/]       help\n"
-            "  [bold]q[/]       quit\n\n"
-            "[#9b8fb8]Suggested[/]\n"
-            "  Screen accumulation · Screen pre-open · Plan swing\n\n"
-            "[dim]docs/design/tui-cockpit-opencode.md · ADR-051[/]"
+            "[bold #e8e8e8]Starting cockpit…[/]\n\n"
+            "Loading [bold]Screen · accumulation[/] from local cache.\n"
+            "No network on open — Fetch is explicit via Ctrl+P.\n\n"
+            "[dim]Ctrl+P commands · ? help · q quit[/]"
         )
 
     def _empty_body(self) -> str:
@@ -214,7 +215,11 @@ class CockpitApp(App[None]):
             self.query_one("#side-cache", Static).update("Cache    empty")
         elif self._stage == "loading":
             body.display = True
-            body.update("[#d4b06a]Loading…[/]  local recompute")
+            body.update(
+                "[#d4b06a]Loading local board…[/]\n\n"
+                f"{self._board_title}\n"
+                "[dim]Reading SQLite cache · same use cases as CLI[/]"
+            )
             table.display = False
             evidence.display = False
         elif self._stage == "error":
@@ -506,19 +511,24 @@ class CockpitApp(App[None]):
         else:
             self._rows = list(payload) if payload else []
             self._meta = f"local · {len(self._rows)} names"
-        self._stage = "accum" if self._rows else "empty"
         self._board_title = "Screen · accumulation"
         self._mode = "local-first"
         self._row_index = 0
         self._status_note = f"{len(self._rows)} rows"
-        if self._rows:
-            self._focus_ticker = self._rows[0].ticker
-            self._render_board_table()
-        self._refresh_chrome()
         if not self._rows:
             self._show_empty()
             self._board_title = "Screen · accumulation"
+            self._meta = self._meta or "local · 0 candidates"
             self._refresh_chrome()
+            self.notify("Accumulation · 0 candidates (local)", timeout=2.0)
+            return
+        self._stage = "accum"
+        self._focus_ticker = self._rows[0].ticker
+        self._render_board_table()
+        self._refresh_chrome()
+        table = self.query_one("#board-table", DataTable)
+        table.focus()
+        self.notify(f"Accumulation · {len(self._rows)} candidates (local)", timeout=2.0)
 
     def _on_preopen_payload(self, payload: Any) -> None:
         if self._preopen_presenter is not None:
@@ -530,16 +540,23 @@ class CockpitApp(App[None]):
         else:
             self._rows = list(payload) if payload else []
             self._meta = f"pre-open · {len(self._rows)}"
-        self._stage = "preopen" if self._rows else "empty"
         self._board_title = "Screen · pre-open"
         self._mode = "local-first"
         self._row_index = 0
         self._status_note = f"{len(self._rows)} graded"
-        if self._rows:
-            self._focus_ticker = self._rows[0].ticker
-            self._render_board_table()
-            self._update_preopen_evidence()
+        if not self._rows:
+            self._stage = "empty"
+            self._meta = self._meta or "no IEP candidates"
+            self._refresh_chrome()
+            self.notify("Pre-open · no local IEP candidates", timeout=2.0)
+            return
+        self._stage = "preopen"
+        self._focus_ticker = self._rows[0].ticker
+        self._render_board_table()
+        self._update_preopen_evidence()
         self._refresh_chrome()
+        self.query_one("#board-table", DataTable).focus()
+        self.notify(f"Pre-open · {len(self._rows)} graded (local snapshot)", timeout=2.0)
 
     def _render_board_table(self) -> None:
         table = self.query_one("#board-table", DataTable)
@@ -656,6 +673,41 @@ class CockpitApp(App[None]):
                 val = getattr(row, key)
                 if val is not None and val != "":
                     lines.append(f"[dim]{key:12}[/] {val}")
+
+        source = getattr(row, "source", None)
+        if source is not None:
+            lines.append("")
+            lines.append("[#9b8fb8]From local screen payload[/]")
+            price = getattr(source, "current_price", None)
+            if price is not None:
+                lines.append(f"[dim]price[/]       {price}")
+            accum = getattr(source, "accum_score", None)
+            if accum is not None:
+                lines.append(f"[dim]accum_score[/] {accum}")
+            sig = getattr(source, "signal_assessment", None)
+            if sig is not None:
+                assessment = getattr(sig, "assessment", None)
+                if assessment is not None:
+                    lines.append(
+                        f"[dim]signal[/]      {getattr(assessment, 'score', '—')} "
+                        f"{getattr(getattr(assessment, 'strength', None), 'value', '')}"
+                    )
+            ts = getattr(source, "trade_setup", None)
+            if ts is not None:
+                action = getattr(ts, "action", None)
+                action_s = getattr(action, "value", action)
+                lines.append(f"[dim]TradeSetup[/]  {action_s}")
+                rationale = getattr(ts, "rationale", None)
+                if rationale:
+                    lines.append(f"[dim]rationale[/]   {rationale}")
+            risk = getattr(source, "risk_assessment", None)
+            if risk is not None:
+                rat = getattr(risk, "rationale", None)
+                if rat:
+                    if isinstance(rat, (list, tuple)):
+                        rat = ", ".join(str(x) for x in rat)
+                    lines.append(f"[dim]risk[/]        {rat}")
+
         lines.append("")
         lines.append("[dim]Plan is deliberate — press p (not Enter)[/]")
         return "\n".join(lines)

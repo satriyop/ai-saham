@@ -29,6 +29,7 @@ def test_filter_commands_empty_returns_all():
 
 def test_cockpit_mounts_layout_b_and_opens_palette():
     async def scenario() -> None:
+        # No loaders → stays shell (unit isolation). Real app auto-loads accum.
         app = CockpitApp()
         async with app.run_test(size=(100, 32)) as pilot:
             assert app.query_one("#main")
@@ -40,6 +41,44 @@ def test_cockpit_mounts_layout_b_and_opens_palette():
             await pilot.press("escape")
             await pilot.pause()
             assert not isinstance(app.screen, CommandPalette)
+
+    asyncio.run(scenario())
+
+
+def test_mount_with_loader_auto_starts_accum():
+    async def scenario() -> None:
+        from types import SimpleNamespace
+
+        from src.adapters.tui.controllers.board_controller import BoardController
+        from src.adapters.tui.presenters.accum_presenter import AccumPresenter
+
+        cand = SimpleNamespace(
+            ticker="BBRI",
+            accum_score=80.0,
+            rsi=50.0,
+            volume_ratio=1.2,
+            setup_phase=None,
+            trade_setup=None,
+            risk_assessment=None,
+            name="BBRI",
+        )
+        projection = SimpleNamespace(
+            candidates=[cand], window_days=7, data_as_of={"latest_candle_date": "2026-07-25"}
+        )
+        result = SimpleNamespace(single_projection=projection, multi_projection=None, warnings=())
+        loader = lambda: result  # noqa: E731
+        app = CockpitApp(
+            accum_loader=loader,
+            accum_controller=BoardController(loader),
+            accum_presenter=AccumPresenter(),
+        )
+        async with app.run_test(size=(120, 36)) as pilot:
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if app._stage == "accum" and len(app._rows) == 1:
+                    break
+            assert app._stage == "accum"
+            assert app._rows[0].ticker == "BBRI"
 
     asyncio.run(scenario())
 

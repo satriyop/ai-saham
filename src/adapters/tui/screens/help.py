@@ -11,13 +11,12 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
-HELP_BODY = """[#9b8fb8]Product locks[/]
-· Cockpit, not IDE — no scenario tabs
-· Ctrl+P is navigation
-· Enter = view ticker (never plan)
-· Plan is deliberate (p + confirm)
-· Pre-open and accum are equal
-· Online only via explicit Fetch
+HELP_BODY = """[#9b8fb8]What this app does[/]
+· Opens on [bold]Screen · accumulation[/] from local SQLite
+· Pre-open reads cached IEV snapshots (fetch iev)
+· Enter = inspect focused ticker (not plan)
+· p = plan swing (confirm modal · local re-score)
+· Fetch = explicit online (never on open)
 
 [#9b8fb8]Keys[/]
   ctrl+p   commands
@@ -30,9 +29,9 @@ HELP_BODY = """[#9b8fb8]Product locks[/]
   ?        this help
   q        quit
 
-[#9b8fb8]Design[/]
-  docs/design/tui-cockpit-opencode.md
-  ADR-051 clean break
+[#9b8fb8]Same engine as CLI[/]
+  saham screen accum · screen pre-open · plan swing
+  Lab backtests stay CLI for now (palette shows hint)
 """
 
 
