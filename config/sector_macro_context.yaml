@@ -28,6 +28,10 @@ sector_macro_context:
   factor_library:
     # WTI crude — Yahoo-live (2026-07 smoke). Newcastle coal (MTF=F) and old
     # CPO (KO=F) return no data on Yahoo; do not map dead symbols into live maps.
+    #
+    # Two economic signs (same series, different invert):
+    #   oil_proxy  invert=false → price↑ supportive (upstream energy, export)
+    #   oil_cost   invert=true  → price↑ headwind (fuel/feedstock cost maps)
     oil_proxy:
       series: "CL=F"
       kind: return_sessions
@@ -35,6 +39,14 @@ sector_macro_context:
       thresholds:
         supportive_min: 0.05   # +5% over lookback → score 1.0
         headwind_max: -0.05    # -5% → score 0.0
+
+    oil_cost:
+      series: "CL=F"
+      kind: return_sessions
+      invert: true
+      thresholds:
+        supportive_min: 0.05
+        headwind_max: -0.05
 
     usd_idr:
       series: "IDR=X"
@@ -137,21 +149,21 @@ sector_macro_context:
       factors:
         - { ref: us_10y, weight: 0.55 }
         - { ref: usd_idr_risk, weight: 0.45 }
-    # Basic chemicals / petrochem: energy complex + export-friendly FX.
+    # Basic chemicals / petrochem: feedstock cost stress (P1a), not oil-bull map.
     chemicals:
       factors:
-        - { ref: oil_proxy, weight: 0.60 }
-        - { ref: usd_idr, weight: 0.40 }
+        - { ref: oil_cost, weight: 0.60 }
+        - { ref: usd_idr_risk, weight: 0.40 }
     # Property developers: same defensive rates/FX family as cement.
     property_dev:
       factors:
         - { ref: us_10y, weight: 0.55 }
         - { ref: usd_idr_risk, weight: 0.45 }
-    # Logistics / shipping: fuel + FX (uses existing universes.yaml `logistics`).
+    # Logistics / shipping: fuel cost + FX stress (P1a; not oil-bull map).
     logistics:
       factors:
-        - { ref: oil_proxy, weight: 0.60 }
-        - { ref: usd_idr, weight: 0.40 }
+        - { ref: oil_cost, weight: 0.60 }
+        - { ref: usd_idr_risk, weight: 0.40 }
     # Poultry / feed: corn+soy cost stress (not chicken-price model; no free DOC series).
     poultry:
       factors:
@@ -173,11 +185,11 @@ sector_macro_context:
       factors:
         - { ref: us_10y, weight: 0.55 }
         - { ref: usd_idr_risk, weight: 0.45 }
-    # Plastics / packaging: resin/feedstock via oil + FX (export-friendly IDR).
+    # Plastics / packaging: resin/feedstock cost + FX stress (P1a).
     packaging:
       factors:
-        - { ref: oil_proxy, weight: 0.60 }
-        - { ref: usd_idr, weight: 0.40 }
+        - { ref: oil_cost, weight: 0.60 }
+        - { ref: usd_idr_risk, weight: 0.40 }
     # Defensive bank risk context (not NIM expansion model). Both rising rates and
     # weaker IDR score as headwind. Uses existing universes.yaml `bank` group.
     bank:

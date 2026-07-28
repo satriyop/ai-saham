@@ -447,6 +447,88 @@ class TestResolveSectorGroup:
         assert builder.resolve_sector_group(("finance", "multifinance")) == "multifinance"
         assert builder.resolve_sector_group(("basic_materials", "packaging")) == "packaging"
 
+    def test_oil_cost_rising_is_headwind_energy_proxy_still_supportive(self):
+        """P1a: oil_cost invert=true (cost maps) vs oil_proxy invert=false (energy)."""
+        oil_up = _make_candles("CL=F", [70.0] * 5 + [80.0])
+        idr_up = _make_candles("IDR=X", [16000.0] * 5 + [16320.0])
+
+        cost_cfg = {
+            "sector_macro_context": {
+                "lookback_sessions": 10,
+                "min_valid_sessions": 5,
+                "min_coverage_to_label": 0.5,
+                "factor_library": {
+                    "oil_cost": {
+                        "series": "CL=F",
+                        "invert": True,
+                        "thresholds": {"supportive_min": 0.05, "headwind_max": -0.05},
+                    },
+                    "usd_idr_risk": {
+                        "series": "IDR=X",
+                        "invert": True,
+                        "thresholds": {"supportive_min": 0.01, "headwind_max": -0.01},
+                    },
+                },
+                "sector_maps": {
+                    "packaging": {
+                        "factors": [
+                            {"ref": "oil_cost", "weight": 0.60},
+                            {"ref": "usd_idr_risk", "weight": 0.40},
+                        ]
+                    }
+                },
+            }
+        }
+        cost_ev = SectorMacroContextEvidenceBuilder(
+            SectorMacroContextConfig.from_mapping(cost_cfg)
+        ).build(
+            SectorMacroContextRequest(
+                ticker="PACK",
+                snapshot_date=date(2026, 5, 20),
+                sector_group="packaging",
+                series_candles={"CL=F": oil_up, "IDR=X": idr_up},
+            )
+        )
+        assert cost_ev.macro_regime == "HEADWIND"
+
+        energy_cfg = {
+            "sector_macro_context": {
+                "lookback_sessions": 10,
+                "min_valid_sessions": 5,
+                "factor_library": {
+                    "oil_proxy": {
+                        "series": "CL=F",
+                        "invert": False,
+                        "thresholds": {"supportive_min": 0.05, "headwind_max": -0.05},
+                    },
+                    "usd_idr": {
+                        "series": "IDR=X",
+                        "invert": False,
+                        "thresholds": {"supportive_min": 0.01, "headwind_max": -0.01},
+                    },
+                },
+                "sector_maps": {
+                    "energy": {
+                        "factors": [
+                            {"ref": "oil_proxy", "weight": 0.65},
+                            {"ref": "usd_idr", "weight": 0.35},
+                        ]
+                    }
+                },
+            }
+        }
+        energy_ev = SectorMacroContextEvidenceBuilder(
+            SectorMacroContextConfig.from_mapping(energy_cfg)
+        ).build(
+            SectorMacroContextRequest(
+                ticker="ADRO",
+                snapshot_date=date(2026, 5, 20),
+                sector_group="energy",
+                series_candles={"CL=F": oil_up, "IDR=X": idr_up},
+            )
+        )
+        assert energy_ev.macro_regime == "SUPPORTIVE"
+
     def test_poultry_rising_feed_is_headwind(self):
         raw = {
             "sector_macro_context": {

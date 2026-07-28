@@ -96,7 +96,8 @@ Builders must not hardcode sector→series routing. Adapters must not own policy
 | Live series | oil: `CL=F`; soft: `CPO=F`; metals: `HG=F`; gold: `GC=F`; feed: `ZC=F`+`ZS=F` (invert); rates-risk: `^TNX`+`IDR=X` (invert) |
 | Dedicated groups | most maps use dedicated cohorts; `insurance`/`logistics`/`bank` reuse existing universe keys |
 | Poultry policy | Feed-cost stress (rising corn/soy = headwind); not chicken-price model (no free DOC series) |
-| Finance residual | `insurance` + `multifinance` (rates/FX risk); packaging = oil+FX BM residual |
+| Finance residual | `insurance` + `multifinance` (rates/FX risk) |
+| Oil sign split (P1a) | `oil_proxy` (↑ supportive) for energy; `oil_cost` (↑ headwind) for chemicals/logistics/packaging |
 | Bank policy | Defensive financial-conditions map (rising rates / weaker IDR = headwind), not NIM expansion |
 | Dead Yahoo symbols (do not map live) | `MTF=F` (Newcastle coal), `KO=F` (old CPO) — return no data as of 2026-07 smoke |
 | Thin multi-sector maps (e.g. banks → 100% USDIDR) | **Forbidden** |
