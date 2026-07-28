@@ -45,6 +45,72 @@ def test_cockpit_mounts_layout_b_and_opens_palette():
     asyncio.run(scenario())
 
 
+def test_board_enter_opens_accum_inspect():
+    """Enter on focused DataTable must open inspect (not be swallowed as no-op)."""
+
+    async def scenario() -> None:
+        from types import SimpleNamespace
+
+        from src.adapters.tui.controllers.board_controller import BoardController
+        from src.adapters.tui.presenters.accum_presenter import AccumPresenter
+
+        def make_accum():
+            c = SimpleNamespace(
+                ticker="BBCA",
+                accum_score=50.0,
+                signal_assessment=SimpleNamespace(
+                    assessment=SimpleNamespace(
+                        score=72,
+                        strength=SimpleNamespace(value="STRONG"),
+                    )
+                ),
+                trade_setup=SimpleNamespace(
+                    action=SimpleNamespace(value="WATCH", short="WATCH"),
+                    rationale="x",
+                ),
+                risk_assessment=SimpleNamespace(gate_triggered=None, rationale=()),
+                setup_phase=SimpleNamespace(current_phase=SimpleNamespace(value="ACCUMULATION")),
+                consecutive_streak=1,
+                rsi=50,
+                net_buy_ratio=0.5,
+                vwap_discount_pct=1.0,
+                current_price=1000,
+                name="BBCA",
+            )
+            return SimpleNamespace(
+                single_projection=SimpleNamespace(
+                    candidates=[c],
+                    window_days=7,
+                    data_as_of={},
+                    applied_filters=SimpleNamespace(sort_by="signal", top=20),
+                ),
+                effective_session=None,
+                market_context=None,
+                multi_projection=None,
+                warnings=(),
+            )
+
+        app = CockpitApp(
+            accum_loader=make_accum,
+            accum_controller=BoardController(make_accum),
+            accum_presenter=AccumPresenter(),
+        )
+        async with app.run_test(size=(120, 40)) as pilot:
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if app._stage == "accum" and app._rows:
+                    break
+            assert app._stage == "accum"
+            app.query_one("#board-table").focus()
+            await pilot.pause()
+            await pilot.press("enter")
+            await pilot.pause(0.2)
+            assert app._stage == "detail"
+            assert "Screen · accum ·" in app._board_title or "BBCA" in app._board_title
+
+    asyncio.run(scenario())
+
+
 def test_palette_enter_runs_preopen_not_view_ticker():
     """Regression: app Enter must not steal palette run (priority/Input bug)."""
 

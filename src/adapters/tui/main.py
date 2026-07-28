@@ -367,6 +367,24 @@ class CockpitApp(App[None]):
             self._row_index = event.cursor_row
             self._update_focus_from_row()
 
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        """Enter on the board table selects a row — open present-only inspect.
+
+        DataTable binds Enter to ``select_cursor`` and consumes the key, so the
+        app-level ``view_ticker`` binding never fires while the table is focused.
+        (We cannot use priority Enter on the app without breaking the palette.)
+        """
+        if self._modal_blocks_board_keys():
+            return
+        if self._stage not in {"accum", "preopen"}:
+            return
+        if event.cursor_row is None or event.cursor_row < 0:
+            return
+        if event.cursor_row < len(self._rows):
+            self._row_index = event.cursor_row
+            self._update_focus_from_row()
+        self._open_detail()
+
     def _sync_table_cursor(self) -> None:
         table = self.query_one("#board-table", DataTable)
         if table.row_count:
