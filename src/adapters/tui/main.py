@@ -158,7 +158,12 @@ class CockpitApp(App[None]):
     def _footer_hint(self) -> str:
         if self._stage == "empty":
             return "ctrl+p → Fetch market data (explicit) · no invented rows"
-        if self._stage in {"accum", "preopen"}:
+        if self._stage == "accum":
+            return (
+                "↑↓ move · Enter view · p plan · r refresh · Ctrl+P  ·  "
+                "ranked by Signal (not Accum) · strip = why Action + recipe + lag"
+            )
+        if self._stage == "preopen":
             return "↑↓ move · Enter view · p plan · r refresh · Ctrl+P commands"
         if self._stage == "detail":
             return "esc back · p plan · Ctrl+P commands"
@@ -627,24 +632,24 @@ class CockpitApp(App[None]):
         ev.update(self._evidence_text)
 
     def _update_accum_evidence(self) -> None:
-        """Focus strip for option-B accum board (selected row)."""
+        """Focus strip: why Action, Accum recipe, lag (P0–P2)."""
         if not self._rows or self._stage != "accum":
             return
+        from src.adapters.tui.presenters.accum_presenter import build_accum_focus
+
         row = self._rows[self._row_index]
-        self._evidence_text = (
-            f"[#9b8fb8]Focus · {row.ticker}[/]  "
-            f"Signal {getattr(row, 'signal', '—')} · "
-            f"Accum {getattr(row, 'accum', '—')} · "
-            f"{getattr(row, 'action', '—')} · "
-            f"phase {getattr(row, 'phase', '—')} · "
-            f"streak {getattr(row, 'streak', '—')} · "
-            f"net {getattr(row, 'net_pct', '—')} · "
-            f"disc {getattr(row, 'disc_pct', '—')} · "
-            f"gate {getattr(row, 'gate', '—')}"
+        focus = build_accum_focus(
+            row,
+            rank=self._row_index + 1,
+            total=len(self._rows),
         )
+        self._evidence_text = focus.strip
         ev = self.query_one("#evidence-strip", Static)
         ev.display = True
         ev.update(self._evidence_text)
+        # P2: sidebar lag + compact why
+        self.query_one("#side-cache", Static).update(f"Cache    {focus.lag_label}")
+        self.query_one("#side-focus", Static).update(focus.focus_sidebar)
 
     def _open_detail(self) -> None:
         if self._stage == "empty" or self._focus_ticker in {"—", ""}:
