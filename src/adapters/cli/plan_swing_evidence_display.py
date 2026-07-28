@@ -28,6 +28,9 @@ from src.adapters.cli.plan_swing_overview_display import (
     setup_gates_group,
 )
 from src.adapters.cli.plan_swing_sector_context_display import print_sector_context_panel
+from src.adapters.cli.plan_swing_sector_macro_context_display import (
+    print_sector_macro_context_panel,
+)
 from src.adapters.cli.plan_swing_sentiment_display import print_sentiment_evidence_panel
 from src.adapters.cli.plan_swing_signal_detail_display import (
     print_alpha_trigger_detail_panel,
@@ -286,6 +289,7 @@ def print_swing_output(ctx: SwingOutputDisplayContext) -> None:
     print_risk_detail_panel(ctx)
     print_market_detail_panel(ctx)
     print_sector_context_panel(ctx)
+    print_sector_macro_context_panel(ctx)
 
     if (
         ctx.options.include_flow_detail

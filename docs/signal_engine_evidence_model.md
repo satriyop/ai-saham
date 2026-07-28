@@ -201,6 +201,14 @@ Sector context begins diagnostic or low-authority until replay attribution
 supports promotion. It conditions eligibility/context; it does not silently
 rewrite raw setup evidence.
 
+### Sector Macro Context (ADR-053)
+
+Sibling diagnostic evidence (L2b), not peer technicals: routes external macro
+series (e.g. coal futures, USD/IDR) per `universes.yaml` group. v1 live map is
+`energy` only; authority is DIAGNOSTIC; fingerprints use `smc_*` fields
+(observation schema v9). Does not reweight Signal or Risk. Independent of MCE
+global `commodity_composite` (which stays optional and off by default).
+
 ## Regime Detection Evidence
 
 Market regime is deterministic, replayable evidence upstream of ticker scoring.

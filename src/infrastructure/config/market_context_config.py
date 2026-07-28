@@ -262,7 +262,12 @@ def load_market_context_config(
 
 
 def get_global_context_tickers(config_path: Path | None = None) -> set[str]:
-    """Return all global context tickers configured in market_context_engine.yaml."""
+    """Return global context tickers for fetch (MCE + ADR-053 sector macro series).
+
+    Sector macro live-map series are included even when MCE commodity_composite
+    is disabled, so energy macro evidence can hydrate offline without enabling
+    the global commodity market factor.
+    """
     try:
         cfg = load_market_context_config(config_path)
         tickers = set()
@@ -277,7 +282,15 @@ def get_global_context_tickers(config_path: Path | None = None) -> set[str]:
                 tickers.add(cfg.commodity.cpo_ticker.upper().strip())
             if cfg.commodity.coal_ticker:
                 tickers.add(cfg.commodity.coal_ticker.upper().strip())
+        try:
+            from src.infrastructure.config.sector_macro_context_config_loader import (
+                required_sector_macro_series_tickers,
+            )
+
+            tickers.update(required_sector_macro_series_tickers())
+        except Exception:
+            pass
         return tickers
     except Exception:
-        # Fallback to defaults on error
-        return {"^VIX", "EIDO", "IDR=X"}
+        # Fallback to defaults on error (include common sector-macro series).
+        return {"^VIX", "EIDO", "IDR=X", "MTF=F"}

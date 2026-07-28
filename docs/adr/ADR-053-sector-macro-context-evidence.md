@@ -2,7 +2,7 @@
 
 [Architecture decision index](../../ARCHITECTURE_DECISIONS.md)
 
-**Status:** Accepted — design locked; implementation not started
+**Status:** Accepted — S1–S3 implemented (DIAGNOSTIC; schema v9 fingerprints)
 **Date:** 2026-07-28
 **Depends on:** [ADR-009](ADR-009-config-driven-behavior.md),
 [ADR-029](ADR-029-market-context-engine-mce-third-first-class-application-service.md),
@@ -223,15 +223,18 @@ Diagnostic status alone never grants DecisionPolicy authority.
 - **Follow-up:** implementation tasks S1–S4; optional CPO sector map; oil
   series probe; promotion ADR only after attribution proof.
 
-## Implementation pointers (planned; not yet required to exist)
+## Implementation pointers
 
-| Layer | Planned artifact |
-|-------|------------------|
+| Layer | Artifact |
+|-------|----------|
 | Domain | `src/domain/value_objects/sector_macro_context_evidence.py` |
 | Application | `src/application/services/sector_macro_context_evidence_builder.py` |
+| Application | `src/application/services/candidate_sector_macro_context_evidence_assembler.py` |
 | Infrastructure | `src/infrastructure/config/sector_macro_context_config_loader.py` |
 | Config | `config/sector_macro_context.yaml` |
-| Adapter | plan/detail panel next to existing sector context display |
-| Tests | domain VO + builder unit tests; config load contract tests |
+| Fingerprint | `smc_*` on `SignalObservationFingerprint` (observation schema v9) |
+| Adapter | `src/adapters/cli/plan_swing_sector_macro_context_display.py` |
+| Fetch | `get_global_context_tickers()` merges live-map series (MTF=F) even when MCE commodity is off |
+| Tests | builder/VO/loader + authority firewall + CLI panel unit tests |
 
-Verify against source after implementation; this ADR states intent until code lands.
+Promotion and additional sector maps remain future work (see Non-goals).
