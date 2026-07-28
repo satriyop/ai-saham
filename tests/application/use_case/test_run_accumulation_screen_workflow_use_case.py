@@ -139,6 +139,7 @@ def _make_uc(
     market_repo=None,
     save_uc=None,
     live_context_use_case=None,
+    evaluate_market_context=None,
 ) -> RunAccumulationScreenWorkflowUseCase:
     return RunAccumulationScreenWorkflowUseCase(
         screen_use_case=screen_use_case or MagicMock(),
@@ -152,6 +153,7 @@ def _make_uc(
             live_context_use_case or RecordingLiveContextUseCase(_fake_execution_context())
         ),
         save_watchlist_use_case=save_uc,
+        evaluate_market_context=evaluate_market_context,
     )
 
 
@@ -323,6 +325,56 @@ def test_single_mode_zero_min_streak_keeps_all():
     assert result.response is not None
     assert result.single_projection is not None
     assert len(result.single_projection.candidates) == 2
+
+
+def test_display_market_context_attached_without_scoring_leak():
+    """B-MCE-display: result.market_context set; screen request untouched."""
+    c = _candidate(ticker="BBCA", accum_score=70.0)
+    screen_mock = MagicMock()
+    screen_mock.execute.return_value = _screen_response(candidates=[c])
+    fixed_mc = SimpleNamespace(regime="RISK_ON", conviction=0.7)
+    calls: list[dict] = []
+
+    def fake_mce(*, as_of_date, universe):
+        calls.append({"as_of_date": as_of_date, "universe": universe})
+        return fixed_mc
+
+    uc = _make_uc(screen_use_case=screen_mock, evaluate_market_context=fake_mce)
+    result = uc.execute(_single_request(universe_name="lq45"))
+
+    assert result.market_context is fixed_mc
+    assert len(calls) == 1
+    assert calls[0]["as_of_date"] == date(2026, 7, 13)
+    assert calls[0]["universe"] == "lq45"
+    # Must not pass market_context into AccumulationScreenRequest (score freeze)
+    screen_request = screen_mock.execute.call_args[0][0]
+    assert getattr(screen_request, "market_context", None) is None
+    assert result.single_projection is not None
+    assert result.single_projection.candidates[0].accum_score == 70.0
+
+
+def test_display_market_context_failure_soft_warns():
+    screen_mock = MagicMock()
+    screen_mock.execute.return_value = _screen_response()
+
+    def boom(*, as_of_date, universe):
+        raise RuntimeError("mce offline")
+
+    uc = _make_uc(screen_use_case=screen_mock, evaluate_market_context=boom)
+    result = uc.execute(_single_request())
+
+    assert result.market_context is None
+    assert any("Market context unavailable" in w for w in result.warnings)
+    # Screen still succeeds
+    assert result.single_projection is not None
+
+
+def test_display_market_context_none_when_not_injected():
+    screen_mock = MagicMock()
+    screen_mock.execute.return_value = _screen_response()
+    uc = _make_uc(screen_use_case=screen_mock)
+    result = uc.execute(_single_request())
+    assert result.market_context is None
 
 
 # ---------------------------------------------------------------------------

@@ -10,9 +10,10 @@ Layer: Application
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from src.application.dto.accumulation_screen import AccumulationScreenResponse
 from src.application.services.effective_market_session_resolver import (
@@ -26,6 +27,7 @@ if TYPE_CHECKING:
     from src.application.use_case.build_live_signal_evidence_execution_context_use_case import (
         BuildLiveSignalEvidenceExecutionContextUseCase,
     )
+    from src.domain.value_objects.market_context import MarketContext
 from src.application.services.screen_accum_result_projector import (
     ScreenAccumMultiProjection,
     ScreenAccumSingleProjection,
@@ -83,6 +85,10 @@ class RunAccumulationScreenWorkflowResult:
     save_result: SaveScreenWatchlistResult | None = None
     warnings: tuple[str, ...] = ()
     effective_session: EffectiveMarketSession | None = None
+    # Display-only market regime for inspect/CLI context panels. Must NOT be
+    # passed into AccumulationScreenRequest.market_context / DecisionPolicy
+    # without an explicit B-MCE-policy task (scoring would change silently).
+    market_context: Any | None = None
 
 
 # Baseline broker-data-availability floor for the raw screen request. This is
@@ -111,6 +117,7 @@ class RunAccumulationScreenWorkflowUseCase:
         indicator_registry_factory,
         live_signal_evidence_context_use_case: BuildLiveSignalEvidenceExecutionContextUseCase,
         save_watchlist_use_case=None,
+        evaluate_market_context: Callable[..., MarketContext] | None = None,
     ) -> None:
         self._screen_use_case = screen_use_case
         self._broker_repository = broker_repository
@@ -121,6 +128,8 @@ class RunAccumulationScreenWorkflowUseCase:
         self._indicator_registry_factory = indicator_registry_factory
         self._live_signal_evidence_context_uc = live_signal_evidence_context_use_case
         self._save_watchlist_use_case = save_watchlist_use_case
+        # Display-only MCE. Never thread into screen scoring request here.
+        self._evaluate_market_context = evaluate_market_context
         # Every mode here (single-window and --multi) is diagnostic/read-only.
         # Canonical observation recording is a separate, explicit workflow
         # (signal-backfill) — see RecordAccumulationObservationsUseCase.
@@ -146,11 +155,45 @@ class RunAccumulationScreenWorkflowUseCase:
         else:
             run_at = datetime.now(IDX_TIMEZONE)
         execution_context = self._live_signal_evidence_context_uc.execute(run_at=run_at)
+        market_context = self._evaluate_display_market_context(
+            request,
+            execution_context,
+            warnings,
+        )
 
         if request.multi:
-            return self._execute_multi(request, request_builder, warnings, execution_context)
+            return self._execute_multi(
+                request,
+                request_builder,
+                warnings,
+                execution_context,
+                market_context=market_context,
+            )
 
-        return self._execute_single(request, request_builder, warnings, execution_context)
+        return self._execute_single(
+            request,
+            request_builder,
+            warnings,
+            execution_context,
+            market_context=market_context,
+        )
+
+    def _evaluate_display_market_context(
+        self,
+        request: RunAccumulationScreenWorkflowRequest,
+        execution_context: SignalEvidenceExecutionContext,
+        warnings: list[str],
+    ) -> MarketContext | None:
+        """Evaluate MCE once per run for display only (not scoring)."""
+        if self._evaluate_market_context is None:
+            return None
+        as_of = execution_context.effective_session.analysis_as_of
+        universe = request.universe_name or request.universe_label or "lq45"
+        try:
+            return self._evaluate_market_context(as_of_date=as_of, universe=universe)
+        except Exception as exc:
+            warnings.append(f"Market context unavailable (display-only): {exc}")
+            return None
 
     @staticmethod
     def _screen_as_of_date(
@@ -173,12 +216,15 @@ class RunAccumulationScreenWorkflowUseCase:
         request_builder: BuildSignalObservationScreenRequest,
         warnings: list[str],
         execution_context: SignalEvidenceExecutionContext,
+        *,
+        market_context: MarketContext | None = None,
     ) -> RunAccumulationScreenWorkflowResult:
         screen_request = request_builder.build(
             tickers=request.tickers,
             window_days=request.window,
             as_of_date=self._screen_as_of_date(request, execution_context),
         )
+        # Intentionally do NOT set screen_request.market_context (B-MCE-display).
         response = self._screen_use_case.execute(
             screen_request,
             execution_context=execution_context,
@@ -247,6 +293,7 @@ class RunAccumulationScreenWorkflowUseCase:
             save_result=save_result,
             warnings=tuple(warnings),
             effective_session=execution_context.effective_session,
+            market_context=market_context,
         )
 
     def _execute_multi(
@@ -255,6 +302,8 @@ class RunAccumulationScreenWorkflowUseCase:
         request_builder: BuildSignalObservationScreenRequest,
         warnings: list[str],
         execution_context: SignalEvidenceExecutionContext,
+        *,
+        market_context: MarketContext | None = None,
     ) -> RunAccumulationScreenWorkflowResult:
         validate_multi_window_request(request.windows, request.sort_by)
 
@@ -315,4 +364,5 @@ class RunAccumulationScreenWorkflowUseCase:
             tracked_broker_flow=tracked_broker_flow,
             warnings=tuple(warnings),
             effective_session=execution_context.effective_session,
+            market_context=market_context,
         )
