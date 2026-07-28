@@ -74,6 +74,13 @@ class LogSwingCandidateRequest:
     take_profit_pct: Decimal = Decimal("5")
     stop_loss_pct: Decimal = Decimal("5")
     max_hold_days: int = 10
+    # ADR-054 S5: geometry frozen from swing_trade_plan (--from-plan)
+    from_plan: bool = False
+    plan_entry: Decimal | None = None
+    plan_stop: Decimal | None = None
+    plan_target: Decimal | None = None
+    plan_setup_match: str | None = None
+    plan_max_hold_days: int | None = None
 
 
 @dataclass(frozen=True)
@@ -193,15 +200,25 @@ class LogSwingCandidateUseCase:
         else:
             resolved_entry = Decimal("0")
 
-        # 4. Setup evaluation + trade plan (only when from_analysis=True)
+        # 4. Setup evaluation + trade plan (from_analysis or frozen --from-plan)
         setup_match: str | None = None
         failed_gates: tuple[str, ...] = ()
         planned_stop: Decimal | None = None
         planned_target: Decimal | None = None
         active_max_hold: int | None = None
         journal_setup: str | None = None
+        record_plan = request.from_analysis or request.from_plan
 
-        if request.from_analysis:
+        if request.from_plan:
+            # Geometry frozen from swing_trade_plan — do not recompute stop/target.
+            journal_setup = request.setup
+            setup_match = request.plan_setup_match
+            if request.plan_entry is not None:
+                resolved_entry = request.plan_entry
+            planned_stop = request.plan_stop
+            planned_target = request.plan_target
+            active_max_hold = request.plan_max_hold_days or request.max_hold_days
+        elif request.from_analysis:
             journal_setup = request.setup
             setup_eval = EvaluateSwingSetupUseCase().execute(
                 EvaluateSwingSetupRequest(
@@ -217,9 +234,9 @@ class LogSwingCandidateUseCase:
             )
             active_max_hold = request.max_hold_days
 
-        # 5. Regime (only when from_analysis=True and regime_use_case wired)
+        # 5. Regime (when journaling a plan/analysis and regime_use_case wired)
         regime: str | None = None
-        if request.from_analysis and request.with_regime and self._regime is not None:
+        if record_plan and request.with_regime and self._regime is not None:
             try:
                 ctx = self._regime.evaluate(as_of_date=request.logged_at)
                 regime = ctx.regime.value
@@ -227,7 +244,7 @@ class LogSwingCandidateUseCase:
                 pass
 
         # 6. CSV journal write
-        planned_entry = resolved_entry if request.from_analysis else None
+        planned_entry = resolved_entry if record_plan else None
         written_count = self._journal.log_candidate(
             ticker=ticker,
             entry_price=resolved_entry,

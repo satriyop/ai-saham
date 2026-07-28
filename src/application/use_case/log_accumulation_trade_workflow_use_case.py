@@ -37,6 +37,13 @@ class LogAccumulationTradeWorkflowRequest:
     with_regime: bool
     benchmark: str
     logged_at: date
+    # ADR-054 S5: frozen geometry from swing_trade_plan
+    from_plan: bool = False
+    plan_entry: Decimal | None = None
+    plan_stop: Decimal | None = None
+    plan_target: Decimal | None = None
+    plan_setup_match: str | None = None
+    plan_max_hold_days: int | None = None
 
 
 @dataclass(frozen=True)
@@ -123,13 +130,15 @@ class LogAccumulationTradeWorkflowUseCase:
         ticker_upper = request.ticker.upper()
         setup_name = request.setup.lower()
 
-        if request.from_analysis:
+        if request.from_analysis and not request.from_plan:
             if setup_name not in self._available_setups:
                 raise ValueError(
                     f"Unknown swing setup '{request.setup}'. "
                     f"Available setups: {', '.join(self._available_setups)}"
                 )
             setup_val = setup_name
+        elif request.from_plan:
+            setup_val = setup_name if setup_name in self._available_setups else request.setup
         else:
             setup_val = None
 
@@ -137,7 +146,7 @@ class LogAccumulationTradeWorkflowUseCase:
             ticker=ticker_upper,
             window_days=request.window,
             entry_price=request.entry_price,
-            from_analysis=request.from_analysis,
+            from_analysis=request.from_analysis and not request.from_plan,
             setup=setup_val,
             with_regime=request.with_regime,
             regime_universe=[],
@@ -155,12 +164,23 @@ class LogAccumulationTradeWorkflowUseCase:
             take_profit_pct=self._policy.take_profit_pct,
             stop_loss_pct=self._policy.stop_loss_pct,
             max_hold_days=self._policy.max_hold_days,
+            from_plan=request.from_plan,
+            plan_entry=request.plan_entry,
+            plan_stop=request.plan_stop,
+            plan_target=request.plan_target,
+            plan_setup_match=request.plan_setup_match,
+            plan_max_hold_days=request.plan_max_hold_days,
         )
 
         response = self._log_use_case.execute(candidate_request)
+        hold = (
+            request.plan_max_hold_days
+            if request.from_plan and request.plan_max_hold_days is not None
+            else self._policy.max_hold_days
+        )
         return LogAccumulationTradeWorkflowResult(
             response=response,
             setup_name=setup_name,
             logged_at=request.logged_at,
-            max_hold_days=self._policy.max_hold_days,
+            max_hold_days=hold,
         )

@@ -32,11 +32,67 @@ def run_accumulation_log_command(
     benchmark: str,
     journal_path: Optional[Path] = None,
     db_path: Optional[Path] = None,
+    from_plan: Optional[str] = None,
 ) -> None:
     """Public helper to run the log accumulation workflow and format CLI output."""
     cfg = load_app_config()
     resolved_journal = journal_path or Path(cfg.storage.accum_journal)
     resolved_db = db_path or Path(cfg.storage.db_path)
+
+    plan_fields: dict = {
+        "from_plan": False,
+        "plan_entry": None,
+        "plan_stop": None,
+        "plan_target": None,
+        "plan_setup_match": None,
+        "plan_max_hold_days": None,
+    }
+    # Typer may pass False for a bare flag store; treat any non-None as from-plan.
+    if from_plan is not None and from_plan is not False:
+        from src.application.services.swing_trade_plan_store import (
+            load_swing_trade_plan,
+            plans_dir_from_journal_path,
+            resolve_from_plan_path,
+        )
+
+        plans_dir = plans_dir_from_journal_path(resolved_journal)
+        plan_token = "latest" if from_plan is True or from_plan == "" else str(from_plan)
+        try:
+            plan_path = resolve_from_plan_path(
+                ticker=ticker, from_plan=plan_token, plans_dir=plans_dir
+            )
+            plan = load_swing_trade_plan(plan_path)
+        except (OSError, ValueError, FileNotFoundError) as exc:
+            typer.echo(f"Error loading swing trade plan: {exc}", err=True)
+            raise typer.Exit(1)
+        if plan.ticker.upper() != ticker.upper():
+            typer.echo(
+                f"Error: plan ticker {plan.ticker} does not match --ticker {ticker.upper()}",
+                err=True,
+            )
+            raise typer.Exit(1)
+        if not plan.is_complete:
+            typer.echo(
+                "Error: plan geometry incomplete "
+                f"({plan.incomplete_reason or 'missing entry/stop/target/lots'}). "
+                "Re-run: saham plan swing TICKER --capital …",
+                err=True,
+            )
+            raise typer.Exit(1)
+        plan_fields = {
+            "from_plan": True,
+            "plan_entry": plan.entry_price,
+            "plan_stop": plan.stop_price,
+            "plan_target": plan.target_price,
+            "plan_setup_match": plan.setup_match,
+            "plan_max_hold_days": plan.max_hold_days,
+        }
+        if plan.setup_name:
+            setup = plan.setup_name
+        if entry_price is None and plan.entry_price is not None:
+            entry_price = float(plan.entry_price)
+        from_analysis = True  # journal shows plan geometry fields
+        typer.echo(f"Using swing_trade_plan {plan.plan_id} from {plan_path}", err=True)
 
     bundle = create_log_accumulation_trade_workflow(
         db_path=resolved_db,
@@ -59,6 +115,7 @@ def run_accumulation_log_command(
         with_regime=with_regime,
         benchmark=benchmark,
         logged_at=date.today(),
+        **plan_fields,
     )
 
     try:
@@ -91,11 +148,12 @@ def run_accumulation_log_command(
         f"{result.candidate_accum_score:.1f}" if result.candidate_accum_score is not None else "N/A"
     )
     pattern_str = f" | pattern: {result.pattern}" if result.pattern else ""
-    decision_str = f" | setup={setup_name} | match={result.setup_match}" if from_analysis else ""
+    show_plan = from_analysis or bool(plan_fields.get("from_plan"))
+    decision_str = f" | setup={setup_name} | match={result.setup_match}" if show_plan else ""
     plan_str = (
         f" | plan entry={result.entry_price:,.0f} stop={result.planned_stop:,.0f} "
         f"target={result.planned_target:,.0f} hold={workflow_result.max_hold_days}d"
-        if from_analysis and result.planned_stop is not None and result.planned_target is not None
+        if show_plan and result.planned_stop is not None and result.planned_target is not None
         else ""
     )
     regime_str = f" | regime={result.regime}" if result.regime else ""
@@ -126,9 +184,19 @@ def accumulation_log(
         bool,
         typer.Option(
             "--from-analysis",
-            help="Record setup match, failed gates, and trade plan fields",
+            help="Record setup match, failed gates, and trade plan fields (recomputes geometry)",
         ),
     ] = False,
+    from_plan: Annotated[
+        Optional[str],
+        typer.Option(
+            "--from-plan",
+            help=(
+                "Log frozen geometry from swing_trade_plan (ADR-054 S5). "
+                "Use 'latest' for journals/plans/TICKER_latest.json, or a plan JSON path"
+            ),
+        ),
+    ] = None,
     setup: Annotated[
         str,
         typer.Option("--setup", help="Swing setup to journal with --from-analysis"),
@@ -165,6 +233,8 @@ def accumulation_log(
         saham trade accum log --ticker BBRI --window 7
         saham trade accum log --ticker BBCA --entry-price 9450
         saham trade accum log --ticker BBRI --from-analysis --with-regime
+        saham plan swing BBRI --capital 10000000
+        saham trade accum log --ticker BBRI --from-plan
     """
     run_accumulation_log_command(
         ticker=ticker,
@@ -177,6 +247,7 @@ def accumulation_log(
         benchmark=benchmark,
         journal_path=journal,
         db_path=db_path,
+        from_plan=from_plan,
     )
 
 

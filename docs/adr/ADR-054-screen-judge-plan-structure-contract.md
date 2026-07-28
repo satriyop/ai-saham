@@ -246,8 +246,8 @@ saham trade accum log …                    # paper notebook
 | **S1** judgment desk | **Shipped 2026-07-28** — single-ticker `screen accum`: Judgment strip, JSON `trade_setup`, pattern board, explicit-ticker refresh; universe stays cache-cheap |
 | **S2** plan messaging | **Shipped 2026-07-28** — structure-desk help/footers/docs |
 | **S3** judgment authority | **Shipped 2026-07-28** — default plan Action inherits screen `candidate.trade_setup`; recompute only with explicit flags |
-| **S4** structure-first UI | **Shipped 2026-07-29** — plan overview leads with Structure panel; engine detail panels only with `--full` (market detail also with `--with-market-context`); title `Swing Structure` |
-| **S5** | Pending — optional typed `SwingTradeStructure` |
+| **S4** structure-first UI | **Shipped 2026-07-29** — Structure panel first; detail with `--full` |
+| **S5** swing_trade_plan | **Shipped 2026-07-29** — typed `swing_trade_plan` artifact on plan swing (JSON + `journals/plans/TICKER_latest.json`); `trade accum log --from-plan` freezes geometry |
 
 **Trust this ADR for product contract; trust live `--help` and code for shipped depth.**
 Verify with source before claiming a later slice is done.

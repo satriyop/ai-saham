@@ -352,12 +352,26 @@ def swing(
     sizing = workflow_response.sizing
     setup_sizing = workflow_response.setup_sizing
 
+    trade_plan, plan_file = _build_and_persist_swing_trade_plan(
+        ticker=ticker_upper,
+        today=today,
+        workflow_response=workflow_response,
+        capital=capital,
+        risk_pct=risk_pct,
+        setup_name=setup_name,
+        max_hold_days=cfg.swing_backtest_config.max_hold_days,
+        with_market_context=with_market_context,
+        with_technical_gate=with_technical_gate,
+    )
+
     if output_format == "json":
         out = workflow_response.to_dict(
             strategy_name=strategy_evidence_name,
             max_hold_days=cfg.swing_backtest_config.max_hold_days,
             include_sentiment=include_sentiment,
         )
+        out["swing_trade_plan"] = trade_plan.to_dict()
+        out["swing_trade_plan_path"] = str(plan_file)
         typer.echo(json.dumps(out, indent=2, default=str))
         return
 
@@ -404,7 +418,53 @@ def swing(
         capital=capital,
         setup_name=setup_name,
         output_format=output_format or "table",
+        plan_path=plan_file if trade_plan.is_complete else None,
+        plan_id=trade_plan.plan_id,
     )
+
+
+def _build_and_persist_swing_trade_plan(
+    *,
+    ticker: str,
+    today,
+    workflow_response,
+    capital: int | None,
+    risk_pct: float | None,
+    setup_name: str | None,
+    max_hold_days: int | None,
+    with_market_context: bool,
+    with_technical_gate: bool,
+):
+    """Build ADR-054 S5 artifact and persist latest plan file for --from-plan."""
+    from src.application.services.swing_trade_plan_builder import build_swing_trade_plan
+    from src.application.services.swing_trade_plan_store import (
+        plans_dir_from_journal_path,
+        save_swing_trade_plan,
+    )
+    from src.infrastructure.config.app_config import load_app_config
+
+    cfg = load_app_config()
+    plan = build_swing_trade_plan(
+        ticker=ticker,
+        as_of=today,
+        trade_setup=workflow_response.trade_setup
+        or (workflow_response.verdict.trade_setup if workflow_response.verdict else None),
+        setup_eval=workflow_response.setup_eval,
+        setup_name=setup_name,
+        sizing=workflow_response.sizing,
+        setup_sizing=workflow_response.setup_sizing,
+        capital=capital,
+        risk_pct=risk_pct,
+        take_profit_pct=workflow_response.take_profit_pct,
+        stop_loss_pct=workflow_response.stop_loss_pct,
+        max_hold_days=max_hold_days,
+        with_market_context=with_market_context,
+        with_technical_gate=with_technical_gate,
+        latest_close=workflow_response.latest_close,
+    )
+    plans_dir = plans_dir_from_journal_path(Path(cfg.storage.accum_journal))
+    plan_file = save_swing_trade_plan(plan, plans_dir)
+    return plan, plan_file
 
 
 def _echo_structure_desk_footer(
@@ -413,8 +473,10 @@ def _echo_structure_desk_footer(
     capital: int | None,
     setup_name: str | None,
     output_format: str,
+    plan_path=None,
+    plan_id: str | None = None,
 ) -> None:
-    """ADR-054 S2: plan is structure desk; point judgment back to screen."""
+    """ADR-054: structure desk footer + S5 plan handoff."""
     if output_format == "json":
         return
     typer.echo("")
@@ -430,4 +492,6 @@ def _echo_structure_desk_footer(
             + (f" --setup {setup_name}" if setup_name else "")
         )
     else:
-        typer.echo(f"  Paper notebook:      saham trade accum log --ticker {ticker} …")
+        typer.echo(f"  Paper notebook:      saham trade accum log --ticker {ticker} --from-plan")
+    if plan_path is not None:
+        typer.echo(f"  Plan artifact:       {plan_path}" + (f"  id={plan_id}" if plan_id else ""))
