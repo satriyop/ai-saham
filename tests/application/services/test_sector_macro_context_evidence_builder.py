@@ -319,6 +319,56 @@ class TestResolveSectorGroup:
         assert builder.resolve_sector_group(("basic_materials", "cement")) == "cement"
         assert builder.resolve_sector_group(("basic_materials", "chemicals")) == "chemicals"
 
+    def test_prefers_property_dev_logistics_telco(self):
+        raw = {
+            "sector_macro_context": {
+                "factor_library": {
+                    "us_10y": {
+                        "series": "^TNX",
+                        "invert": True,
+                        "thresholds": {"supportive_min": 0.01, "headwind_max": -0.01},
+                    },
+                    "usd_idr_risk": {
+                        "series": "IDR=X",
+                        "invert": True,
+                        "thresholds": {"supportive_min": 0.01, "headwind_max": -0.01},
+                    },
+                    "oil_proxy": {
+                        "series": "CL=F",
+                        "thresholds": {"supportive_min": 0.05, "headwind_max": -0.05},
+                    },
+                    "usd_idr": {
+                        "series": "IDR=X",
+                        "thresholds": {"supportive_min": 0.01, "headwind_max": -0.01},
+                    },
+                },
+                "sector_maps": {
+                    "property_dev": {
+                        "factors": [
+                            {"ref": "us_10y", "weight": 0.55},
+                            {"ref": "usd_idr_risk", "weight": 0.45},
+                        ]
+                    },
+                    "logistics": {
+                        "factors": [
+                            {"ref": "oil_proxy", "weight": 0.60},
+                            {"ref": "usd_idr", "weight": 0.40},
+                        ]
+                    },
+                    "telco": {
+                        "factors": [
+                            {"ref": "us_10y", "weight": 0.55},
+                            {"ref": "usd_idr_risk", "weight": 0.45},
+                        ]
+                    },
+                },
+            }
+        }
+        builder = SectorMacroContextEvidenceBuilder(SectorMacroContextConfig.from_mapping(raw))
+        assert builder.resolve_sector_group(("property", "property_dev")) == "property_dev"
+        assert builder.resolve_sector_group(("logistics",)) == "logistics"
+        assert builder.resolve_sector_group(("telecommunication", "telco")) == "telco"
+
 
 class TestBuilder:
     def test_supportive_energy(self):

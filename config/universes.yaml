@@ -1724,3 +1724,55 @@ chemicals:
   - SOLA
   - TPIA
   updated: '2026-07-28'
+
+# Property developers (ADR-053) — rates/FX cycle. Parent `property` bag kept.
+property_dev:
+  tickers:
+  - APLN
+  - ASRI
+  - BAPA
+  - BEST
+  - BSDE
+  - CTRA
+  - DILD
+  - DMAS
+  - DUTI
+  - EMDE
+  - FMII
+  - GPRA
+  - JRPT
+  - KIJA
+  - LPCK
+  - LPKR
+  - MKPI
+  - MTLA
+  - NIRO
+  - PAMG
+  - PLIN
+  - PPRO
+  - PWON
+  - RDTX
+  - REAL
+  - SMRA
+  - URBN
+  updated: '2026-07-28'
+
+# Core telco / tower (ADR-053). Parent `telecommunication` bag kept.
+telco:
+  tickers:
+  - BTEL
+  - CENT
+  - EXCL
+  - FREN
+  - GHON
+  - IBST
+  - INET
+  - ISAT
+  - LINK
+  - MORA
+  - MTEL
+  - SUPR
+  - TBIG
+  - TLKM
+  - TOWR
+  updated: '2026-07-28'

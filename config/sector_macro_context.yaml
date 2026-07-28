@@ -124,6 +124,21 @@ sector_macro_context:
       factors:
         - { ref: oil_proxy, weight: 0.60 }
         - { ref: usd_idr, weight: 0.40 }
+    # Property developers: same defensive rates/FX family as cement.
+    property_dev:
+      factors:
+        - { ref: us_10y, weight: 0.55 }
+        - { ref: usd_idr_risk, weight: 0.45 }
+    # Logistics / shipping: fuel + FX (uses existing universes.yaml `logistics`).
+    logistics:
+      factors:
+        - { ref: oil_proxy, weight: 0.60 }
+        - { ref: usd_idr, weight: 0.40 }
+    # Telco / towers: rates + FX risk (domestic funding & risk appetite).
+    telco:
+      factors:
+        - { ref: us_10y, weight: 0.55 }
+        - { ref: usd_idr_risk, weight: 0.45 }
     # Defensive bank risk context (not NIM expansion model). Both rising rates and
     # weaker IDR score as headwind. Uses existing universes.yaml `bank` group.
     bank:
