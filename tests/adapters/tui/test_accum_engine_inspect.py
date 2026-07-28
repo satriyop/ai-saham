@@ -144,7 +144,7 @@ def test_inspect_sections_and_board_parity():
     text = inspect.text
     assert "Screen · accum · INDF" in text
     for section in (
-        "Why",
+        "Decision",
         "Signal",
         "Risk",
         "TradeSetup",
@@ -154,15 +154,18 @@ def test_inspect_sections_and_board_parity():
         "Market context",
     ):
         assert section in text
-    assert "not on this screen candidate" in text
-    assert "not attached on this assessment" in text
+    assert "Action WATCH · Gate OPEN" in text or "Action" in text
+    assert "← Signal" in text
+    assert "← Why:" in text
+    assert "not evaluated for this screen run" in text
+    assert "flow-only" in text  # readiness None + no family
     assert "AFTER_CLOSE" in text
     assert "Accum breakdown" in text or "breakdown:" in text
     assert "recipe" not in text.lower()
 
     fields = extract_screen_accum_board_fields(row.source, phase_style="short")
-    assert f"Signal {fields.signal}" in text
-    assert f"Accum {fields.accum}" in text
+    assert f"Signal {fields.signal}" in text or f"← Signal {fields.signal}" in text
+    assert f"Accum {fields.accum}" in text or f"total {fields.accum}" in text
     assert fields.action in text
     assert fields.gate in text
 
@@ -172,6 +175,24 @@ def test_inspect_readiness_when_present():
     text = present_accum_engine_inspect(row).text
     assert "UNAVAILABLE" in text
     assert "setup_evidence" in text
+
+
+def test_inspect_display_market_context():
+    row, _ = _row()
+    mc = SimpleNamespace(
+        regime=SimpleNamespace(value="NEUTRAL"),
+        conviction=0.5,
+        regime_confidence=0.4,
+        regime_stability="STABLE",
+        days_in_regime=2,
+        staleness_warning=None,
+        coverage_warning=None,
+        transition_warning=None,
+    )
+    text = present_accum_engine_inspect(row, market_context=mc).text
+    assert "regime NEUTRAL" in text
+    assert "stability STABLE" in text
+    assert "not evaluated for this screen run" not in text
 
 
 def test_inspect_sparse_no_crash():
@@ -192,6 +213,7 @@ def test_inspect_sparse_no_crash():
     text = present_accum_engine_inspect(row).text  # type: ignore[arg-type]
     assert "Signal" in text
     assert "Risk" in text
+    assert "Decision" in text
 
 
 def test_enter_opens_inspect_and_esc_returns():
@@ -209,6 +231,16 @@ def test_enter_opens_inspect_and_esc_returns():
                 analysis_as_of=date(2026, 7, 28),
                 latest_completed_session=date(2026, 7, 28),
                 resolution_source="test",
+            ),
+            market_context=SimpleNamespace(
+                regime=SimpleNamespace(value="RISK_ON"),
+                conviction=0.8,
+                regime_confidence=None,
+                regime_stability=None,
+                days_in_regime=None,
+                staleness_warning=None,
+                coverage_warning=None,
+                transition_warning=None,
             ),
             multi_projection=None,
             warnings=(),
@@ -230,8 +262,10 @@ def test_enter_opens_inspect_and_esc_returns():
             await pilot.pause()
             assert app._stage == "detail"
             assert "Screen · accum ·" in app._board_title
+            assert "Decision" in app._detail_text
             assert "Signal" in app._detail_text
             assert "Risk" in app._detail_text
+            assert "regime RISK_ON" in app._detail_text
             assert "present-only" in app._meta
             await pilot.press("escape")
             await pilot.pause()

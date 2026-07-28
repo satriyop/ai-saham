@@ -1,7 +1,8 @@
 """Present-only Enter inspect for screen-accum candidates.
 
 Renders Signal / Risk / TradeSetup / Accum / Data / Session / Market context
-from the board row's ``source`` candidate — no engine re-run, no network.
+from the board row's ``source`` candidate plus optional workflow-level
+display-only market context — no engine re-run, no network.
 
 Layer: Adapter (pure display)
 """
@@ -11,12 +12,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from src.adapters.shared.screen_accum_board_fields import extract_screen_accum_board_fields
-from src.adapters.tui.presenters.accum_presenter import (
-    AccumRowView,
-    build_accum_focus,
+from src.adapters.shared.decision_display import (
     format_accum_breakdown,
+    format_action_why,
+    format_decision_stack,
+    format_market_context_lines,
+    format_setup_readiness,
+    readiness_and_family,
 )
+from src.adapters.shared.screen_accum_board_fields import extract_screen_accum_board_fields
+from src.adapters.tui.presenters.accum_presenter import AccumRowView, build_accum_focus
 
 
 @dataclass(frozen=True)
@@ -34,6 +39,7 @@ def present_accum_engine_inspect(
     total: int = 1,
     board_summary: str = "",
     effective_session: Any | None = None,
+    market_context: Any | None = None,
 ) -> AccumEngineInspectView:
     """Build structured inspect view from board row (present-only)."""
     source = getattr(row, "source", None)
@@ -53,19 +59,25 @@ def present_accum_engine_inspect(
         gate = str(getattr(row, "gate", "—"))
 
     focus = build_accum_focus(row, rank=rank, total=total)
-    why = focus.why or "—"
+    why = focus.why or format_action_why(source, gate=gate) or "—"
     breakdown = format_accum_breakdown(source, accum_display=accum)
 
     lines: list[str] = [
         f"[bold #e8e8e8]Screen · accum · {ticker}[/]",
-        f"Action {action} · Gate {gate} · Signal {signal} · Accum {accum}",
         f"#{rank}/{total} by Signal",
     ]
     if board_summary:
         lines.append(f"[dim]Board[/]  {board_summary}")
     lines.append("")
-    lines.append(f"[#d4b06a]Why {action}[/]")
-    lines.append(f"  {why}")
+    lines.extend(
+        format_decision_stack(
+            source,
+            action=action,
+            gate=gate,
+            signal=signal,
+            why=why if why != "—" else "",
+        )
+    )
     lines.append("")
     lines.extend(_section_signal(source))
     lines.append("")
@@ -79,7 +91,7 @@ def present_accum_engine_inspect(
     lines.append("")
     lines.extend(_section_session(effective_session))
     lines.append("")
-    lines.extend(_section_market_context(source))
+    lines.extend(format_market_context_lines(market_context, candidate=source))
     lines.append("")
     lines.append("[dim]esc back · p plan · Ctrl+P · present-only (same object as board)[/]")
 
@@ -131,11 +143,10 @@ def _section_signal(source: Any) -> list[str]:
             parts = [f"{k}={v}" for k, v in breakdown]
         lines.append(f"  groups: {', '.join(parts)}")
 
-    # setup readiness on AssessSignalResponse
-    readiness = getattr(sa, "setup_readiness", None)
-    if readiness is None and assessment is not None:
-        readiness = getattr(assessment, "setup_readiness", None)
-    lines.append(f"  setup readiness: {_format_readiness(readiness)}")
+    readiness, family = readiness_and_family(source)
+    lines.append(
+        "  setup readiness: " + format_setup_readiness(readiness, setup_family=family, style="full")
+    )
 
     constraints = getattr(assessment, "decision_constraints", None) if assessment else None
     if constraints is not None:
@@ -259,44 +270,6 @@ def _section_session(effective_session: Any | None) -> list[str]:
     if src:
         lines.append(f"  resolution {src}")
     return lines
-
-
-def _section_market_context(source: Any) -> list[str]:
-    lines = ["[#9b8fb8]Market context[/]"]
-    mc = getattr(source, "market_context", None) if source is not None else None
-    if mc is not None:
-        regime = getattr(mc, "regime", None)
-        regime_s = str(getattr(regime, "value", regime) or regime)
-        lines.append(f"  regime {regime_s}")
-        return lines
-
-    # Regime only if already on decision constraints (do not invent MCE)
-    sa = getattr(source, "signal_assessment", None) if source is not None else None
-    assessment = getattr(sa, "assessment", None) if sa is not None else None
-    constraints = getattr(assessment, "decision_constraints", None) if assessment else None
-    regime = getattr(constraints, "regime", None) if constraints else None
-    if regime is not None:
-        lines.append(f"  regime (from decision constraints) {regime}")
-        lines.append("  [dim]full MarketContext not on this screen candidate[/]")
-    else:
-        lines.append("  not on this screen candidate")
-    return lines
-
-
-def _format_readiness(readiness: Any) -> str:
-    if readiness is None:
-        return "not attached on this assessment"
-    status = getattr(readiness, "status", None)
-    status_s = str(getattr(status, "value", status) or "—")
-    missing = tuple(getattr(readiness, "missing_required_inputs", ()) or ())
-    failed = tuple(getattr(readiness, "failed_requirements", ()) or ())
-    family = getattr(readiness, "setup_family", None)
-    family_s = f" [{family}]" if family else ""
-    if missing:
-        return f"{status_s}{family_s} (missing: {', '.join(str(m) for m in missing[:5])})"
-    if failed:
-        return f"{status_s}{family_s} ({', '.join(str(f) for f in failed[:4])})"
-    return f"{status_s}{family_s}"
 
 
 def _fmt_coverage(raw: Any) -> str:

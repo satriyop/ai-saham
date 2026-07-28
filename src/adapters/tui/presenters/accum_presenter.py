@@ -12,9 +12,23 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from src.adapters.shared.decision_display import (
+    format_accum_breakdown,
+    format_action_why,
+)
 from src.adapters.shared.screen_accum_board_fields import (
     BOARD_COLUMN_LABELS,
     extract_screen_accum_board_fields,
+)
+
+# Re-export for callers that imported from this module historically.
+__all__ = (
+    "AccumBoardView",
+    "AccumFocusView",
+    "AccumPresenter",
+    "AccumRowView",
+    "build_accum_focus",
+    "format_accum_breakdown",
 )
 
 
@@ -156,7 +170,7 @@ def build_accum_focus(
     price = str(getattr(row, "price", "—"))
 
     lag = _lag_from_candidate(source)
-    why = _action_why(source, gate=gate)
+    why = format_action_why(source, gate=gate)
     breakdown = format_accum_breakdown(source, accum_display=accum)
     disc_note = _disc_gloss(source, disc_pct)
 
@@ -246,170 +260,6 @@ def _lag_from_candidate(candidate: Any) -> str:
     if align_s:
         return f"candle {c_s} · broker {b_s} · {align_s}"
     return f"candle {c_s} · broker {b_s}"
-
-
-def _action_why(candidate: Any, *, gate: str) -> str:
-    """P0: why Action is not a clean enter despite scores/gates."""
-    if candidate is None:
-        return ""
-    bits: list[str] = []
-
-    # Coverage
-    cov = _coverage_pct(candidate)
-    if cov is not None:
-        if cov < 70.0:
-            bits.append(f"authority {cov:.0f}% (<70%)")
-        else:
-            bits.append(f"authority {cov:.0f}%")
-
-    sa = getattr(candidate, "signal_assessment", None)
-    assessment = getattr(sa, "assessment", None) if sa is not None else None
-
-    # Typed setup readiness first (concrete missing inputs / failed requirements).
-    readiness = getattr(assessment, "setup_readiness", None) if assessment else None
-    if readiness is None and sa is not None:
-        readiness = getattr(sa, "setup_readiness", None)
-    readiness_bit = _setup_readiness_detail(readiness)
-    if readiness_bit:
-        bits.append(readiness_bit)
-
-    # Decision constraints — skip phrases already covered by structured fields.
-    constraints = getattr(assessment, "decision_constraints", None) if assessment else None
-    if constraints is not None:
-        for reason in getattr(constraints, "constraint_reasons", ()) or ():
-            text = str(reason)
-            low = text.lower()
-            if "signal_authority_coverage" in low or "authority_coverage" in low:
-                if not any(b.startswith("authority") for b in bits):
-                    bits.append("authority thin")
-                continue
-            if "setup readiness" in low or "setup_readiness" in low:
-                # Prefer structured readiness_bit; only fall back if absent.
-                if not any(b.startswith("setup readiness") for b in bits):
-                    bits.append(_fallback_setup_readiness_phrase(text))
-                continue
-            if text and text not in bits:
-                bits.append(text if len(text) < 52 else text[:49] + "…")
-
-    # Gate
-    if gate == "BLOCKED":
-        risk = getattr(candidate, "risk_assessment", None)
-        which = getattr(risk, "gate_triggered", None) if risk else None
-        bits.append(f"gate blocked ({which})" if which else "gate blocked")
-    elif gate == "OPEN":
-        bits.append("gate open")
-
-    if not bits:
-        ts = getattr(candidate, "trade_setup", None)
-        rat = getattr(ts, "rationale", None) if ts else None
-        if rat:
-            return str(rat)[:80]
-        return "no constraint detail"
-    return " · ".join(bits)
-
-
-def _setup_readiness_detail(readiness: Any) -> str:
-    """Concrete setup-readiness line: status + missing/failed inputs."""
-    if readiness is None:
-        return ""
-    status = getattr(readiness, "status", None)
-    status_s = str(getattr(status, "value", status) or "").upper()
-    if not status_s or status_s == "READY":
-        return ""
-
-    missing = tuple(getattr(readiness, "missing_required_inputs", ()) or ())
-    failed = tuple(getattr(readiness, "failed_requirements", ()) or ())
-    family = getattr(readiness, "setup_family", None)
-    family_s = f" [{family}]" if family else ""
-
-    if status_s == "UNAVAILABLE":
-        if missing:
-            miss = ", ".join(str(m) for m in missing[:5])
-            if len(missing) > 5:
-                miss += ", …"
-            return f"setup readiness UNAVAILABLE{family_s} (missing: {miss})"
-        return f"setup readiness UNAVAILABLE{family_s}"
-
-    if status_s == "INCOMPLETE":
-        if failed:
-            fail = ", ".join(str(f) for f in failed[:4])
-            return f"setup readiness INCOMPLETE{family_s} ({fail})"
-        return f"setup readiness INCOMPLETE{family_s}"
-
-    if status_s == "INELIGIBLE":
-        if failed:
-            fail = ", ".join(str(f) for f in failed[:4])
-            return f"setup readiness INELIGIBLE{family_s} ({fail})"
-        phase = getattr(readiness, "current_phase", None)
-        phase_s = getattr(phase, "value", phase) if phase is not None else None
-        if phase_s:
-            return f"setup readiness INELIGIBLE{family_s} (phase {phase_s})"
-        return f"setup readiness INELIGIBLE{family_s}"
-
-    return f"setup readiness {status_s}{family_s}"
-
-
-def _fallback_setup_readiness_phrase(constraint_text: str) -> str:
-    """When VO is missing, compress constraint string without inventing inputs."""
-    low = constraint_text.lower()
-    if "unavailable" in low:
-        return "setup readiness UNAVAILABLE"
-    if "incomplete" in low:
-        return "setup readiness INCOMPLETE"
-    if "ineligible" in low:
-        return "setup readiness INELIGIBLE"
-    return constraint_text if len(constraint_text) < 52 else constraint_text[:49] + "…"
-
-
-def _coverage_pct(candidate: Any) -> float | None:
-    sa = getattr(candidate, "signal_assessment", None)
-    if sa is None:
-        return None
-    assessment = getattr(sa, "assessment", None)
-    raw = None
-    if assessment is not None:
-        raw = getattr(assessment, "signal_authority_coverage", None)
-    if raw is None:
-        raw = getattr(sa, "signal_authority_coverage", None)
-    if isinstance(raw, (int, float)):
-        # Engine may store 0–1 or 0–100
-        val = float(raw)
-        return val * 100.0 if val <= 1.0 else val
-    return None
-
-
-def format_accum_breakdown(candidate: Any, *, accum_display: str = "") -> str:
-    """Accum total as sum of component points (AccumScoreBreakdown).
-
-    Shared by focus strip and Enter engine-inspect (single formatting path).
-    """
-    if not accum_display and candidate is not None:
-        raw = getattr(candidate, "accum_score", None)
-        accum_display = f"{float(raw):.1f}" if isinstance(raw, (int, float)) else "—"
-    if candidate is None:
-        return f"{accum_display} (no breakdown)"
-    bd = getattr(candidate, "accum_score_breakdown", None)
-    if bd is None:
-        return f"{accum_display} (no breakdown)"
-    parts: list[str] = []
-    for comp in getattr(bd, "components", ()) or ():
-        key = getattr(comp, "key", "?")
-        status = getattr(comp, "status", None)
-        status_s = str(getattr(status, "value", status) or "")
-        if status_s == "DISABLED":
-            parts.append(f"{key} off")
-            continue
-        if status_s == "MISSING":
-            parts.append(f"{key} miss")
-            continue
-        pts = getattr(comp, "score_points", None)
-        if pts is None:
-            parts.append(f"{key} —")
-        else:
-            parts.append(f"{key} {float(pts):.1f}")
-    if not parts:
-        return f"{accum_display}"
-    return f"{accum_display} = " + " + ".join(parts)
 
 
 def _disc_gloss(candidate: Any, disc_display: str) -> str:

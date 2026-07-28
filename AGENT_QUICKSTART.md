@@ -53,6 +53,12 @@ and `saham tui` accum board):
   columns) via `src/adapters/shared/screen_accum_board_fields.py`.
   Do not invent generic labels like "Score" for Accum (ADR-043).
 - **Display vocabulary is single:** `src/adapters/shared/score_display_labels.py`.
+- **Decision display is single:** Why / setup readiness / Accum breakdown /
+  decision stack via `src/adapters/shared/decision_display.py`. Do not invent
+  READY; do not re-format Why in TUI-only code.
+- **Screen-accum MCE:** workflow result may carry display-only
+  `market_context` for inspect. Do **not** pass MCE into screen scoring /
+  DecisionPolicy without an explicit B-MCE-policy task.
 - **Intentional deltas must be explicit** (e.g. TUI pre-open = IEV snapshot only;
   TUI plan = thin local confirm). Document in the change; do not silently diverge.
 - **Verification:** when changing request defaults or board columns, run/extend

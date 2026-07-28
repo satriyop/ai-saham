@@ -94,6 +94,7 @@ class CockpitApp(App[None]):
         self._board_title = "Cockpit · shell"
         self._board_summary = ""
         self._effective_session: Any | None = None
+        self._market_context: Any | None = None
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="workspace"):
@@ -512,8 +513,9 @@ class CockpitApp(App[None]):
 
     def _on_accum_payload(self, payload: Any) -> None:
         summary = ""
-        # Workflow result carries effective_session; projection-only fakes do not.
+        # Workflow result carries session + display-only MCE; projection fakes may not.
         self._effective_session = getattr(payload, "effective_session", None)
+        self._market_context = getattr(payload, "market_context", None)
         if self._accum_presenter is not None:
             view = self._accum_presenter.present(payload)
             self._rows = list(view.rows)
@@ -739,6 +741,7 @@ class CockpitApp(App[None]):
                 total=max(len(self._rows), 1),
                 board_summary=self._board_summary,
                 effective_session=self._effective_session,
+                market_context=self._market_context,
             )
             return view.text
 
