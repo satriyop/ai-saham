@@ -26,8 +26,10 @@ sector_macro_context:
     headwind_max: 0.35
 
   factor_library:
-    coal_futures:
-      series: "MTF=F"
+    # WTI crude — Yahoo-live (2026-07 smoke). Newcastle coal (MTF=F) and old
+    # CPO (KO=F) return no data on Yahoo; do not map dead symbols into live maps.
+    oil_proxy:
+      series: "CL=F"
       kind: return_sessions
       invert: false
       thresholds:
@@ -45,9 +47,9 @@ sector_macro_context:
         supportive_min: 0.01
         headwind_max: -0.01
 
-    # Library-only for a future CPO-heavy map — not attached to any sector_maps entry.
+    # Library-only for a future CPO-heavy map — Yahoo symbol CPO=F (not KO=F).
     cpo:
-      series: "KO=F"
+      series: "CPO=F"
       kind: return_sessions
       invert: false
       thresholds:
@@ -59,5 +61,5 @@ sector_macro_context:
   sector_maps:
     energy:
       factors:
-        - { ref: coal_futures, weight: 0.65 }
+        - { ref: oil_proxy, weight: 0.65 }
         - { ref: usd_idr, weight: 0.35 }

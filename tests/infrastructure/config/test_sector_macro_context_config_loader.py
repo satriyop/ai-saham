@@ -17,15 +17,15 @@ def test_create_builder_from_repo_config():
     assert isinstance(builder, SectorMacroContextEvidenceBuilder)
     cfg = builder.config
     assert "energy" in cfg.sector_maps
-    assert cfg.required_series_tickers() >= frozenset({"MTF=F", "IDR=X"})
+    assert cfg.required_series_tickers() >= frozenset({"CL=F", "IDR=X"})
 
 
 def test_required_series_from_repo_config():
     series = required_sector_macro_series_tickers()
-    assert "MTF=F" in series
+    assert "CL=F" in series
     assert "IDR=X" in series
     # library-only CPO must not be required for fetch of live maps only
-    # (still may appear in all_library — not asserted here)
+    assert "CPO=F" not in series
 
 
 def test_load_rejects_non_diagnostic(tmp_path):

@@ -293,4 +293,4 @@ def get_global_context_tickers(config_path: Path | None = None) -> set[str]:
         return tickers
     except Exception:
         # Fallback to defaults on error (include common sector-macro series).
-        return {"^VIX", "EIDO", "IDR=X", "MTF=F"}
+        return {"^VIX", "EIDO", "IDR=X", "CL=F"}

@@ -93,9 +93,10 @@ Builders must not hardcode sector→series routing. Adapters must not own policy
 |---------|----------|
 | Config multi-map ready | Yes from day one |
 | Live sector map | **`energy` only** |
-| Live series | Reuse already-declared MCE series: `MTF=F` (coal), `IDR=X` |
-| Library-only (not required on energy) | `KO=F` (CPO) for a future map |
-| Oil / `CL=F` | **Deferred** until fetch density and offline storage are proven |
+| Live series (as shipped after smoke) | `CL=F` (WTI oil proxy), `IDR=X` |
+| Library-only (not required on energy) | `CPO=F` for a future map |
+| Dead Yahoo symbols (do not map live) | `MTF=F` (Newcastle coal), `KO=F` (old CPO) — return no data as of 2026-07 smoke |
+| Oil | **Promoted into v1 energy map** after smoke proved `CL=F` fetchable offline |
 | Thin multi-sector maps (e.g. banks → 100% USDIDR) | **Forbidden** in v1 |
 
 Energy map intent (weights may be tuned in config without code):
