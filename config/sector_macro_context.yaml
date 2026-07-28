@@ -84,6 +84,15 @@ sector_macro_context:
         supportive_min: 0.05
         headwind_max: -0.05
 
+    # COMEX gold — Yahoo-live. Dedicated gold cohort only (not bolted onto metals).
+    gold_proxy:
+      series: "GC=F"
+      kind: return_sessions
+      invert: false
+      thresholds:
+        supportive_min: 0.05
+        headwind_max: -0.05
+
   # Primary keys = universes.yaml group names (same as L2a sector context).
   # Live maps only for groups with ≥2 real drivers. Prefer dedicated cohorts
   # over broad bags (consumer_goods, basic_materials, finance-without-bank-key).
@@ -100,6 +109,10 @@ sector_macro_context:
       factors:
         - { ref: copper, weight: 0.55 }
         - { ref: usd_idr, weight: 0.45 }
+    gold:
+      factors:
+        - { ref: gold_proxy, weight: 0.65 }
+        - { ref: usd_idr, weight: 0.35 }
     # Defensive bank risk context (not NIM expansion model). Both rising rates and
     # weaker IDR score as headwind. Uses existing universes.yaml `bank` group.
     bank:

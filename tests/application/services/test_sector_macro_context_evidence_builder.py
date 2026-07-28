@@ -250,6 +250,32 @@ class TestResolveSectorGroup:
         builder = SectorMacroContextEvidenceBuilder(SectorMacroContextConfig.from_mapping(raw))
         assert builder.resolve_sector_group(("bank", "finance")) == "bank"
 
+    def test_prefers_gold_over_basic_materials(self):
+        raw = {
+            "sector_macro_context": {
+                "factor_library": {
+                    "gold_proxy": {
+                        "series": "GC=F",
+                        "thresholds": {"supportive_min": 0.05, "headwind_max": -0.05},
+                    },
+                    "usd_idr": {
+                        "series": "IDR=X",
+                        "thresholds": {"supportive_min": 0.01, "headwind_max": -0.01},
+                    },
+                },
+                "sector_maps": {
+                    "gold": {
+                        "factors": [
+                            {"ref": "gold_proxy", "weight": 0.65},
+                            {"ref": "usd_idr", "weight": 0.35},
+                        ]
+                    },
+                },
+            }
+        }
+        builder = SectorMacroContextEvidenceBuilder(SectorMacroContextConfig.from_mapping(raw))
+        assert builder.resolve_sector_group(("basic_materials", "gold", "bumn20")) == "gold"
+
 
 class TestBuilder:
     def test_supportive_energy(self):

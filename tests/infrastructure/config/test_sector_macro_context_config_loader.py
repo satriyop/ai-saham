@@ -19,9 +19,10 @@ def test_create_builder_from_repo_config():
     assert "energy" in cfg.sector_maps
     assert "plantation" in cfg.sector_maps
     assert "metals" in cfg.sector_maps
+    assert "gold" in cfg.sector_maps
     assert "bank" in cfg.sector_maps
     assert cfg.required_series_tickers() >= frozenset(
-        {"CL=F", "IDR=X", "CPO=F", "HG=F", "^TNX"}
+        {"CL=F", "IDR=X", "CPO=F", "HG=F", "GC=F", "^TNX"}
     )
 
 
@@ -31,7 +32,8 @@ def test_required_series_from_repo_config():
     assert "IDR=X" in series
     assert "CPO=F" in series  # plantation
     assert "HG=F" in series  # metals
-    assert "^TNX" in series  # bank rates — auto-fetched via fetch market context
+    assert "GC=F" in series  # gold — auto-fetched via fetch market context
+    assert "^TNX" in series  # bank rates
 
 
 def test_load_rejects_non_diagnostic(tmp_path):
