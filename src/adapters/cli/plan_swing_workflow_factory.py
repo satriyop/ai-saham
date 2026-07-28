@@ -31,6 +31,9 @@ from src.adapters.cli.plan_swing_optional_fetchers import (
     auto_refresh_swing_data,
     fetch_swing_sentiment,
 )
+from src.adapters.composition.screen_accum_workflow_factory import (
+    create_live_signal_evidence_execution_context_use_case,
+)
 from src.adapters.composition.stock_analysis_workflow_dependencies import (
     StockAnalysisWorkflowDependencies,
     create_stock_analysis_workflow_dependencies,
@@ -143,5 +146,8 @@ def create_plan_swing_workflow(
                 coverage_start=start,
                 coverage_end=end,
             )
+        ),
+        live_signal_evidence_context_use_case=(
+            create_live_signal_evidence_execution_context_use_case(deps.market_repository)
         ),
     )

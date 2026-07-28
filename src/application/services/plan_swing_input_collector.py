@@ -61,6 +61,7 @@ class PlanSwingInputCollector:
         signal_evidence_context_builder: "SignalEvidenceExecutionContextBuilder",
         evaluate_market_context: Callable[..., "MarketContext"] | None,
         session_resolver: EffectiveMarketSessionResolver | None = None,
+        live_signal_evidence_context_use_case: Any | None = None,
     ) -> None:
         self._market_repo = market_repository
         self._broker_repo = broker_repository
@@ -74,6 +75,8 @@ class PlanSwingInputCollector:
         self._session_resolver = session_resolver or EffectiveMarketSessionResolver(
             market_repository
         )
+        # Same live context authority as screen accum (ADR-054 S3 Action parity).
+        self._live_signal_evidence_context_uc = live_signal_evidence_context_use_case
 
     def collect(self, request: "plan_swing_dto.PlanSwingWorkflowRequest") -> PlanSwingWorkflowState:
         warnings: list[str] = []
@@ -139,24 +142,32 @@ class PlanSwingInputCollector:
             raise PlanSwingDataUnavailable(request.ticker)
         latest_close = candles[-1].close
 
-        coverage_end = (
-            effective_session.latest_completed_session if effective_session else None
-        ) or request.today
-
-        eligible_candle_dates = sorted(
-            {candle.date for candle in candles if candle.date <= coverage_end}
-        )
-
-        coverage_start = eligible_candle_dates[0] if eligible_candle_dates else coverage_end
-
-        execution_context = self._signal_evidence_context_builder.build(
-            effective_session=effective_session,
-            coverage_start=coverage_start,
-            coverage_end=coverage_end,
-        )
+        # ADR-054 S3: use the same live signal-evidence context as
+        # `saham screen accum` (gap-free IHSG window). Building coverage from
+        # the ticker's full candle history widens the authority window and can
+        # flip TradeSetup.action for the same score.
+        if self._live_signal_evidence_context_uc is not None:
+            execution_context = self._live_signal_evidence_context_uc.execute(run_at=run_at)
+            effective_session = execution_context.effective_session
+        else:
+            coverage_end = (
+                effective_session.latest_completed_session if effective_session else None
+            ) or request.today
+            eligible_candle_dates = sorted(
+                {candle.date for candle in candles if candle.date <= coverage_end}
+            )
+            coverage_start = eligible_candle_dates[0] if eligible_candle_dates else coverage_end
+            execution_context = self._signal_evidence_context_builder.build(
+                effective_session=effective_session,
+                coverage_start=coverage_start,
+                coverage_end=coverage_end,
+            )
 
         accumulation_evaluation = None
         try:
+            # Live runs: as_of still request.today (date.today()); parity comes
+            # from live_signal_evidence_context matching screen. Historical
+            # --as-of pins request.today to the replay date.
             accumulation_evaluation = self._build_accumulation_candidate_evaluation(
                 ticker=request.ticker,
                 window=request.window,

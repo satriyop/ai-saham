@@ -119,6 +119,7 @@ class PlanSwingWorkflowUseCase:
         ) = None,
         macro_calendar_repository: "MacroCalendarRepository | None" = None,
         session_resolver: EffectiveMarketSessionResolver | None = None,
+        live_signal_evidence_context_use_case: Any | None = None,
     ) -> None:
         self._market_repo = market_repository
         self._broker_repo = broker_repository
@@ -181,6 +182,7 @@ class PlanSwingWorkflowUseCase:
             evaluate_market_context=evaluate_market_context,
             signal_evidence_context_builder=signal_evidence_context_builder,
             session_resolver=session_resolver or EffectiveMarketSessionResolver(market_repository),
+            live_signal_evidence_context_use_case=live_signal_evidence_context_use_case,
         )
         self._decision_composer = PlanSwingDecisionComposer(
             risk_trade_setup_composer=self._risk_trade_setup_composer,

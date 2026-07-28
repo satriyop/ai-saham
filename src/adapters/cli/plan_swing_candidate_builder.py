@@ -12,6 +12,9 @@ from __future__ import annotations
 from datetime import date
 from typing import TYPE_CHECKING
 
+from src.adapters.composition.accumulation_risk_workflow_factory import (
+    create_accumulation_assess_risk_use_case,
+)
 from src.adapters.composition.stock_analysis_workflow_dependencies import (
     StockAnalysisWorkflowDependencies,
 )
@@ -53,12 +56,20 @@ def create_accumulation_candidate_builder(
         *,
         execution_context: SignalEvidenceExecutionContext,
     ) -> AccumulationCandidateEvaluationResult | None:
+        # ADR-054 S3: plan must load the same screen risk funnel so
+        # candidate.trade_setup matches `saham screen accum TICKER` Action.
+        # Without risk_use_case, trade_setup is None and plan falls back to a
+        # recomposed Action while still labeling it "screen_judgment".
+        risk_use_case = create_accumulation_assess_risk_use_case(
+            market_repository=deps.market_repository,
+        )
         accum_uc = create_accumulation_screen_use_case(
             broker_repository=deps.broker_repository,
             market_repository=deps.market_repository,
             indicator_registry=deps.indicator_registry_factory(),
             rules_loader=deps.rules_loader_factory(),
             stockbit_providers=deps.stockbit_providers,
+            risk_use_case=risk_use_case,
             signal_engine=signal_engine,
             accum_score_policy=accumulation_config.accum_score_policy,
             derived_feature_policy=accumulation_config.derived_features,
