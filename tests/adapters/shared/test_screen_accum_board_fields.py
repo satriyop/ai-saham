@@ -80,9 +80,7 @@ def test_tui_presenter_uses_shared_extractor():
                 candidates=[c],
                 window_days=DEFAULT_WINDOW,
                 data_as_of={},
-                applied_filters=SimpleNamespace(
-                    sort_by=DEFAULT_SORT_BY, top=DEFAULT_TOP
-                ),
+                applied_filters=SimpleNamespace(sort_by=DEFAULT_SORT_BY, top=DEFAULT_TOP),
             )
         )
     )
