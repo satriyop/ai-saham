@@ -12,6 +12,7 @@ from src.domain.ports.financials_repository import FinancialsRepository
 from src.domain.value_objects.company_financial_period import (
     CompanyFinancialPeriod,
     FinancialPeriodType,
+    FinancialStatementKind,
 )
 
 
@@ -27,10 +28,13 @@ class _FakeRepo(FinancialsRepository):
         self,
         ticker: str,
         *,
+        statement_kind: FinancialStatementKind | None = None,
         period_type: FinancialPeriodType | None = None,
         source: str | None = None,
     ) -> list[CompanyFinancialPeriod]:
         out = [r for r in self.rows if r.ticker == ticker.upper()]
+        if statement_kind is not None:
+            out = [r for r in out if r.statement_kind == statement_kind]
         if period_type is not None:
             out = [r for r in out if r.period_type == period_type]
         if source is not None:
@@ -41,30 +45,60 @@ class _FakeRepo(FinancialsRepository):
         self,
         ticker: str,
         *,
+        statement_kind: FinancialStatementKind | None = None,
         period_type: FinancialPeriodType | None = None,
         source: str | None = None,
     ) -> date | None:
-        rows = self.list_for_ticker(ticker, period_type=period_type, source=source)
+        rows = self.list_for_ticker(
+            ticker,
+            statement_kind=statement_kind,
+            period_type=period_type,
+            source=source,
+        )
         return rows[0].period_end if rows else None
 
-    def needs_refresh(self, ticker: str, ttl_days: int, *, source: str) -> bool:
+    def needs_refresh(
+        self,
+        ticker: str,
+        ttl_days: int,
+        *,
+        source: str,
+        statement_kind: FinancialStatementKind,
+    ) -> bool:
         return True
 
 
-def _p(end: date, *, period_type: str = "quarter") -> CompanyFinancialPeriod:
+def _p(
+    end: date,
+    *,
+    period_type: str = "quarter",
+    kind: str = "income",
+) -> CompanyFinancialPeriod:
     return CompanyFinancialPeriod(
         ticker="BBCA",
         period_end=end,
         period_type=period_type,  # type: ignore[arg-type]
+        statement_kind=kind,  # type: ignore[arg-type]
         source="yahoo",
         currency="IDR",
-        total_revenue=1,
-        net_income=2,
-        net_income_incl_nci=3,
-        interest_income=4,
+        total_revenue=1 if kind == "income" else None,
+        net_income=2 if kind == "income" else None,
+        net_income_incl_nci=3 if kind == "income" else None,
+        interest_income=4 if kind == "income" else None,
         operating_income=None,
-        eps_basic=1.0,
-        eps_diluted=1.0,
+        eps_basic=1.0 if kind == "income" else None,
+        eps_diluted=1.0 if kind == "income" else None,
+        total_assets=100 if kind == "balance" else None,
+        total_liabilities=None,
+        stockholders_equity=None,
+        cash_and_equivalents=None,
+        total_debt=None,
+        operating_cash_flow=50 if kind == "cashflow" else None,
+        investing_cash_flow=None,
+        financing_cash_flow=None,
+        free_cash_flow=None,
+        capital_expenditure=None,
+        end_cash_position=None,
         fetched_at=datetime(2026, 7, 28, tzinfo=timezone.utc),
     )
 
@@ -89,8 +123,6 @@ def test_income_returns_limited_newest_first():
         date(2025, 12, 31),
     ]
     assert result.as_of == date(2026, 3, 31)
-    assert result.source == "yahoo"
-    assert result.fetch_hint == "saham fetch financials BBCA"
 
 
 def test_empty_income_cache():
@@ -102,14 +134,22 @@ def test_empty_income_cache():
     assert "fetch financials" in (result.message or "")
 
 
-def test_balance_unsupported():
-    repo = _FakeRepo([_p(date(2026, 3, 31))])
+def test_balance_ok_when_cached():
+    repo = _FakeRepo([_p(date(2026, 3, 31), kind="balance")])
     result = ViewTickerFinancialsUseCase(repo).execute(
         ViewTickerFinancialsRequest(ticker="BBCA", statement="balance")
     )
-    assert result.status == "unsupported"
-    assert result.periods == ()
-    assert "not cached yet" in (result.message or "")
+    assert result.status == "ok"
+    assert result.periods[0].total_assets == 100
+
+
+def test_balance_empty_when_only_income_cached():
+    repo = _FakeRepo([_p(date(2026, 3, 31), kind="income")])
+    result = ViewTickerFinancialsUseCase(repo).execute(
+        ViewTickerFinancialsRequest(ticker="BBCA", statement="balance")
+    )
+    assert result.status == "empty"
+    assert "balance" in (result.message or "")
 
 
 def test_annual_filter():

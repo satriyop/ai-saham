@@ -12,6 +12,7 @@ from datetime import date
 from src.domain.value_objects.company_financial_period import (
     CompanyFinancialPeriod,
     FinancialPeriodType,
+    FinancialStatementKind,
 )
 
 
@@ -28,6 +29,7 @@ class FinancialsRepository(ABC):
         self,
         ticker: str,
         *,
+        statement_kind: FinancialStatementKind | None = None,
         period_type: FinancialPeriodType | None = None,
         source: str | None = None,
     ) -> list[CompanyFinancialPeriod]:
@@ -39,6 +41,7 @@ class FinancialsRepository(ABC):
         self,
         ticker: str,
         *,
+        statement_kind: FinancialStatementKind | None = None,
         period_type: FinancialPeriodType | None = None,
         source: str | None = None,
     ) -> date | None:
@@ -46,6 +49,13 @@ class FinancialsRepository(ABC):
         ...
 
     @abstractmethod
-    def needs_refresh(self, ticker: str, ttl_days: int, *, source: str) -> bool:
-        """True when ticker has no rows for source or last fetch is older than TTL."""
+    def needs_refresh(
+        self,
+        ticker: str,
+        ttl_days: int,
+        *,
+        source: str,
+        statement_kind: FinancialStatementKind,
+    ) -> bool:
+        """True when kind has no rows for source or last fetch is older than TTL."""
         ...

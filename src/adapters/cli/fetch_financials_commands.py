@@ -1,9 +1,9 @@
 """
 CLI command for multi-period financial statement fetch.
 
-`saham fetch financials` — pulls quarterly/annual income-statement line items
-from yfinance into local SQLite. Thin adapter: parse input, wire ports, call
-use case, format output. Freshness policy lives in FetchFinancialsUseCase.
+`saham fetch financials` — pulls income / balance / cashflow line items from
+yfinance into local SQLite. Thin adapter: parse input, wire ports, call use
+case, format output. Freshness policy lives in FetchFinancialsUseCase.
 
 Layer: Adapter
 """
@@ -25,6 +25,10 @@ from src.application.use_case.fetch_financials_use_case import (
     FetchFinancialsTickerResult,
     FetchFinancialsUseCase,
 )
+from src.domain.value_objects.company_financial_period import (
+    ALL_STATEMENT_KINDS,
+    FinancialStatementKind,
+)
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.data_providers.yahoo_financials import YahooFinancialsProvider
@@ -32,6 +36,8 @@ from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBroker
 from src.infrastructure.persistence.sqlite_company_financials_repository import (
     SQLiteCompanyFinancialsRepository,
 )
+
+_STATEMENT_CHOICES = ("all", "income", "balance", "cashflow")
 
 
 def fetch_financials(
@@ -47,6 +53,14 @@ def fetch_financials(
             help="Universe name or 'cached' — see `saham fetch universe list`",
         ),
     ] = None,
+    statement: Annotated[
+        str,
+        typer.Option(
+            "--statement",
+            "-s",
+            help="Statement kind: all (default), income, balance, cashflow",
+        ),
+    ] = "all",
     refresh: Annotated[
         bool,
         typer.Option("--refresh", "-r", help="Force provider fetch even if cache is fresh"),
@@ -74,19 +88,30 @@ def fetch_financials(
 ) -> None:
     """Fetch multi-period financial statements into the local cache.
 
-    Primary source: Yahoo Finance (yfinance). Stores income-statement line
-    items (revenue, net income, interest income, EPS) per quarter/year.
-    Distinct from Stockbit keystats ratios in `company_fundamentals`.
+    Primary source: Yahoo Finance (yfinance). Stores income, balance sheet,
+    and cash-flow line items per quarter/year. Distinct from Stockbit keystats
+    ratios in `company_fundamentals`.
 
     Examples:
         saham fetch financials BBCA BBRI
         saham fetch financials --universe lq45
+        saham fetch financials BBCA --statement balance
         saham fetch financials BBCA --refresh
         saham fetch financials BBCA --no-annual
     """
     if not quarterly and not annual:
         typer.echo("Error: enable at least one of --quarterly or --annual.", err=True)
         raise typer.Exit(1)
+
+    statement_key = statement.strip().lower()
+    if statement_key not in _STATEMENT_CHOICES:
+        typer.echo(
+            f"Invalid --statement. Choose from: {', '.join(_STATEMENT_CHOICES)}",
+            err=True,
+        )
+        raise typer.Exit(2)
+
+    kinds = _resolve_kinds(statement_key)
 
     cfg = load_app_config()
     resolved_db = db_path or Path(cfg.storage.db_path)
@@ -124,6 +149,7 @@ def fetch_financials(
             ttl_days=ttl_days,
             include_quarterly=quarterly,
             include_annual=annual,
+            statement_kinds=kinds,
         )
     )
 
@@ -140,12 +166,22 @@ def fetch_financials(
         raise typer.Exit(1)
 
 
+def _resolve_kinds(statement_key: str) -> frozenset[FinancialStatementKind]:
+    if statement_key == "all":
+        return ALL_STATEMENT_KINDS
+    return frozenset({statement_key})  # type: ignore[arg-type]
+
+
 def _format_row(result: FetchFinancialsTickerResult) -> str:
     latest = result.latest_period_end.isoformat() if result.latest_period_end else "-"
+    kinds = ",".join(result.kinds_fetched) if result.kinds_fetched else "-"
     if result.status == "cached":
         return f"  {result.ticker}: cached  periods={result.periods_stored}  latest={latest}"
     if result.status == "fetched":
-        return f"  {result.ticker}: fetched periods={result.periods_stored}  latest={latest}"
+        return (
+            f"  {result.ticker}: fetched periods={result.periods_stored}  "
+            f"kinds={kinds}  latest={latest}"
+        )
     if result.status == "empty":
         return f"  {result.ticker}: empty   {result.error or 'no data'}"
     return f"  {result.ticker}: error   {result.error or 'unknown'}"

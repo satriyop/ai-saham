@@ -1,9 +1,7 @@
 """
 View ticker financials — read multi-period statement rows from local cache.
 
-Income statement is supported (yahoo cache via `saham fetch financials`).
-Balance sheet and cash flow are accepted as filters but return an explicit
-unsupported status until those statement kinds are persisted.
+Supports income, balance, and cashflow kinds from `saham fetch financials`.
 
 Layer: Application
 """
@@ -18,12 +16,10 @@ from src.domain.ports.financials_repository import FinancialsRepository
 from src.domain.value_objects.company_financial_period import (
     CompanyFinancialPeriod,
     FinancialPeriodType,
+    FinancialStatementKind,
 )
 
-FinancialStatementKind = Literal["income", "balance", "cashflow"]
-FinancialsViewStatus = Literal["ok", "empty", "unsupported"]
-
-_SUPPORTED_STATEMENTS: frozenset[str] = frozenset({"income"})
+FinancialsViewStatus = Literal["ok", "empty"]
 
 
 @dataclass(frozen=True)
@@ -69,23 +65,9 @@ class ViewTickerFinancialsUseCase:
         limit = max(1, min(int(request.limit), 40))
         source = request.source
 
-        if statement not in _SUPPORTED_STATEMENTS:
-            return ViewTickerFinancialsResult(
-                ticker=ticker,
-                statement=statement,
-                period_type=period_type,
-                source=source,
-                status="unsupported",
-                periods=(),
-                message=(
-                    f"{statement} statement is not cached yet "
-                    "(Phase A stores income only). "
-                    f"Use --statement income after `{self._hint(ticker)}`."
-                ),
-            )
-
         rows = self._repository.list_for_ticker(
             ticker,
+            statement_kind=statement,
             period_type=period_type,
             source=source,
         )
@@ -99,7 +81,7 @@ class ViewTickerFinancialsUseCase:
                 status="empty",
                 periods=(),
                 message=(
-                    f"No {period_type} income periods cached for {ticker}. "
+                    f"No {period_type} {statement} periods cached for {ticker}. "
                     f"Run: {self._hint(ticker)}"
                 ),
             )

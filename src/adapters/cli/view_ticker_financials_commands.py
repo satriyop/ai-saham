@@ -72,14 +72,13 @@ def ticker_financials(
 ) -> None:
     """Show cached multi-period financial statements for a stock.
 
-    Primary path today: income statement from `saham fetch financials`
-    (yfinance). Balance sheet and cash flow flags are reserved and report
-    unsupported until those statement kinds are stored.
+    Requires prior `saham fetch financials`. Supports income, balance sheet,
+    and cash flow (yahoo-mapped metric subsets).
 
     Examples:
         saham view ticker financials BBCA
-        saham view ticker financials BBCA --period annual
-        saham view ticker financials BBCA --limit 4
+        saham view ticker financials BBCA --statement balance
+        saham view ticker financials BBCA -s cashflow --period annual
         saham view ticker financials BBCA --format json
     """
     statement_key = statement.strip().lower()
@@ -114,11 +113,7 @@ def ticker_financials(
     )
 
     if output_format == "json":
-        status = {
-            "ok": ViewResultStatus.OK,
-            "empty": ViewResultStatus.EMPTY,
-            "unsupported": ViewResultStatus.EMPTY,
-        }[result.status]
+        status = ViewResultStatus.OK if result.status == "ok" else ViewResultStatus.EMPTY
         echo_json(
             build_view_envelope(
                 subject_id=result.ticker,

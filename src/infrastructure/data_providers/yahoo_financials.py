@@ -1,9 +1,8 @@
 """
 Yahoo Finance implementation of FinancialsProvider.
 
-Reads yfinance quarterly/annual income statements and maps a stable subset
-of line items into CompanyFinancialPeriod rows. Source field is always
-``yahoo``.
+Maps yfinance income / balance / cashflow frames into sparse
+CompanyFinancialPeriod rows. Source field is always ``yahoo``.
 
 Layer: Infrastructure
 """
@@ -21,6 +20,8 @@ from src.domain.ports.financials_provider import FinancialsProvider
 from src.domain.value_objects.company_financial_period import (
     CompanyFinancialPeriod,
     FinancialPeriodType,
+    FinancialStatementKind,
+    fields_for,
 )
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,7 @@ _DEFAULT_MARKET_SUFFIX = ".JK"
 
 # Prefer exact yfinance row labels; first match wins.
 _ROW_ALIASES: dict[str, tuple[str, ...]] = {
+    # income
     "total_revenue": ("Total Revenue", "Operating Revenue"),
     "net_income": (
         "Net Income Common Stockholders",
@@ -44,11 +46,64 @@ _ROW_ALIASES: dict[str, tuple[str, ...]] = {
     "operating_income": ("Operating Income", "Total Operating Income As Reported"),
     "eps_basic": ("Basic EPS",),
     "eps_diluted": ("Diluted EPS",),
+    # balance
+    "total_assets": ("Total Assets",),
+    "total_liabilities": (
+        "Total Liabilities Net Minority Interest",
+        "Total Liabilities",
+    ),
+    "stockholders_equity": ("Stockholders Equity", "Common Stock Equity"),
+    "cash_and_equivalents": (
+        "Cash And Cash Equivalents",
+        "Cash Cash Equivalents And Federal Funds Sold",
+    ),
+    "total_debt": ("Total Debt",),
+    # cashflow
+    "operating_cash_flow": (
+        "Operating Cash Flow",
+        "Cash Flowsfromusedin Operating Activities Direct",
+    ),
+    "investing_cash_flow": ("Investing Cash Flow",),
+    "financing_cash_flow": ("Financing Cash Flow",),
+    "free_cash_flow": ("Free Cash Flow",),
+    "capital_expenditure": ("Capital Expenditure",),
+    "end_cash_position": ("End Cash Position",),
 }
+
+_FRAME_ATTRS: dict[tuple[FinancialStatementKind, FinancialPeriodType], str] = {
+    ("income", "quarter"): "quarterly_income_stmt",
+    ("income", "annual"): "income_stmt",
+    ("balance", "quarter"): "quarterly_balance_sheet",
+    ("balance", "annual"): "balance_sheet",
+    ("cashflow", "quarter"): "quarterly_cashflow",
+    ("cashflow", "annual"): "cashflow",
+}
+
+_MONEY_FIELDS = frozenset(
+    {
+        "total_revenue",
+        "net_income",
+        "net_income_incl_nci",
+        "interest_income",
+        "operating_income",
+        "total_assets",
+        "total_liabilities",
+        "stockholders_equity",
+        "cash_and_equivalents",
+        "total_debt",
+        "operating_cash_flow",
+        "investing_cash_flow",
+        "financing_cash_flow",
+        "free_cash_flow",
+        "capital_expenditure",
+        "end_cash_position",
+    }
+)
+_FLOAT_FIELDS = frozenset({"eps_basic", "eps_diluted"})
 
 
 class YahooFinancialsProvider(FinancialsProvider):
-    """Fetch multi-period income statements via yfinance."""
+    """Fetch multi-period statements via yfinance."""
 
     def __init__(self, market_suffix: str | None = None) -> None:
         if market_suffix is None:
@@ -63,35 +118,47 @@ class YahooFinancialsProvider(FinancialsProvider):
         *,
         include_quarterly: bool = True,
         include_annual: bool = True,
+        statement_kinds: frozenset[FinancialStatementKind],
     ) -> list[CompanyFinancialPeriod]:
+        if not statement_kinds:
+            return []
+
         symbol = ticker.upper().strip()
         yahoo_sym = self._to_yahoo_ticker(symbol)
         fetched_at = datetime.now(tz=timezone.utc)
         stock = yf.Ticker(yahoo_sym)
         currency = self._currency_from_info(stock)
 
-        periods: list[CompanyFinancialPeriod] = []
+        period_types: list[FinancialPeriodType] = []
         if include_quarterly:
-            periods.extend(
-                self._map_frame(
-                    stock.quarterly_income_stmt,
-                    ticker=symbol,
-                    period_type="quarter",
-                    currency=currency,
-                    fetched_at=fetched_at,
-                )
-            )
+            period_types.append("quarter")
         if include_annual:
-            periods.extend(
-                self._map_frame(
-                    stock.income_stmt,
-                    ticker=symbol,
-                    period_type="annual",
-                    currency=currency,
-                    fetched_at=fetched_at,
+            period_types.append("annual")
+
+        periods: list[CompanyFinancialPeriod] = []
+        for kind in sorted(statement_kinds):
+            for period_type in period_types:
+                attr = _FRAME_ATTRS[(kind, period_type)]
+                try:
+                    frame = getattr(stock, attr, None)
+                except Exception as exc:
+                    logger.debug("yfinance %s failed for %s: %s", attr, symbol, exc)
+                    continue
+                periods.extend(
+                    self._map_frame(
+                        frame,
+                        ticker=symbol,
+                        statement_kind=kind,
+                        period_type=period_type,
+                        currency=currency,
+                        fetched_at=fetched_at,
+                    )
                 )
-            )
-        periods.sort(key=lambda p: (p.period_type, p.period_end), reverse=True)
+
+        periods.sort(
+            key=lambda p: (p.statement_kind, p.period_type, p.period_end),
+            reverse=True,
+        )
         return periods
 
     def _to_yahoo_ticker(self, ticker: str) -> str:
@@ -115,6 +182,7 @@ class YahooFinancialsProvider(FinancialsProvider):
         frame: Any,
         *,
         ticker: str,
+        statement_kind: FinancialStatementKind,
         period_type: FinancialPeriodType,
         currency: str | None,
         fetched_at: datetime,
@@ -128,28 +196,49 @@ class YahooFinancialsProvider(FinancialsProvider):
             return []
 
         out: list[CompanyFinancialPeriod] = []
+        metric_names = fields_for(statement_kind)
         for col in frame.columns:
             period_end = self._to_date(col)
             if period_end is None:
                 continue
             series = frame[col]
-            out.append(
-                CompanyFinancialPeriod(
-                    ticker=ticker,
-                    period_end=period_end,
-                    period_type=period_type,
-                    source=_SOURCE,
-                    currency=currency,
-                    total_revenue=self._int_field(series, "total_revenue"),
-                    net_income=self._int_field(series, "net_income"),
-                    net_income_incl_nci=self._int_field(series, "net_income_incl_nci"),
-                    interest_income=self._int_field(series, "interest_income"),
-                    operating_income=self._int_field(series, "operating_income"),
-                    eps_basic=self._float_field(series, "eps_basic"),
-                    eps_diluted=self._float_field(series, "eps_diluted"),
-                    fetched_at=fetched_at,
-                )
+            metrics: dict[str, Any] = {name: None for name in _MONEY_FIELDS | _FLOAT_FIELDS}
+            for name in metric_names:
+                raw = self._lookup(series, name)
+                if name in _FLOAT_FIELDS:
+                    metrics[name] = self._as_float(raw)
+                else:
+                    metrics[name] = self._as_int(raw)
+
+            period = CompanyFinancialPeriod(
+                ticker=ticker,
+                period_end=period_end,
+                period_type=period_type,
+                statement_kind=statement_kind,
+                source=_SOURCE,
+                currency=currency,
+                total_revenue=metrics["total_revenue"],
+                net_income=metrics["net_income"],
+                net_income_incl_nci=metrics["net_income_incl_nci"],
+                interest_income=metrics["interest_income"],
+                operating_income=metrics["operating_income"],
+                eps_basic=metrics["eps_basic"],
+                eps_diluted=metrics["eps_diluted"],
+                total_assets=metrics["total_assets"],
+                total_liabilities=metrics["total_liabilities"],
+                stockholders_equity=metrics["stockholders_equity"],
+                cash_and_equivalents=metrics["cash_and_equivalents"],
+                total_debt=metrics["total_debt"],
+                operating_cash_flow=metrics["operating_cash_flow"],
+                investing_cash_flow=metrics["investing_cash_flow"],
+                financing_cash_flow=metrics["financing_cash_flow"],
+                free_cash_flow=metrics["free_cash_flow"],
+                capital_expenditure=metrics["capital_expenditure"],
+                end_cash_position=metrics["end_cash_position"],
+                fetched_at=fetched_at,
             )
+            if period.has_any_metric():
+                out.append(period)
         return out
 
     @staticmethod
@@ -168,14 +257,6 @@ class YahooFinancialsProvider(FinancialsProvider):
         except ValueError:
             logger.debug("Skipping unparseable financial period column: %r", value)
             return None
-
-    def _int_field(self, series: Any, field: str) -> int | None:
-        raw = self._lookup(series, field)
-        return self._as_int(raw)
-
-    def _float_field(self, series: Any, field: str) -> float | None:
-        raw = self._lookup(series, field)
-        return self._as_float(raw)
 
     @staticmethod
     def _lookup(series: Any, field: str) -> Any:
@@ -199,7 +280,6 @@ class YahooFinancialsProvider(FinancialsProvider):
         if value is None:
             return None
         try:
-            # pandas / numpy NA
             if value != value:  # noqa: PLR0124 — NaN check
                 return None
         except Exception:
