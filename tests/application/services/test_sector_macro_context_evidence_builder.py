@@ -1,0 +1,319 @@
+"""Tests for SectorMacroContextEvidenceBuilder (ADR-053)."""
+
+from datetime import date, timedelta
+from decimal import Decimal
+
+import pytest
+
+from src.application.services.sector_macro_context_evidence_builder import (
+    SectorMacroContextConfig,
+    SectorMacroContextEvidenceBuilder,
+    SectorMacroContextRequest,
+    _piecewise_score,
+    _session_return_fraction,
+)
+from src.domain.entities.candle import Candle
+from src.domain.value_objects.institutional_accumulation_evidence import EvidenceStatus
+
+
+def _candle(ticker: str, dt: date, close: float) -> Candle:
+    return Candle(
+        ticker=ticker,
+        date=dt,
+        open=Decimal(str(close)),
+        high=Decimal(str(close)),
+        low=Decimal(str(close)),
+        close=Decimal(str(close)),
+        volume=1_000,
+    )
+
+
+def _make_candles(ticker: str, closes: list[float], start: date | None = None) -> list[Candle]:
+    base = start or date(2026, 5, 1)
+    return [_candle(ticker, base + timedelta(days=i), c) for i, c in enumerate(closes)]
+
+
+def _energy_config(**overrides) -> SectorMacroContextConfig:
+    raw = {
+        "sector_macro_context": {
+            "evidence_status": "DIAGNOSTIC",
+            "lookback_sessions": 10,
+            "min_valid_sessions": 5,
+            "min_coverage_to_label": 0.5,
+            "score_labels": {"favorable_min": 0.65, "neutral_min": 0.35},
+            "regime_thresholds": {"supportive_min": 0.65, "headwind_max": 0.35},
+            "factor_library": {
+                "coal_futures": {
+                    "series": "MTF=F",
+                    "kind": "return_sessions",
+                    "invert": False,
+                    "thresholds": {"supportive_min": 0.05, "headwind_max": -0.05},
+                },
+                "usd_idr": {
+                    "series": "IDR=X",
+                    "kind": "return_sessions",
+                    "invert": False,
+                    "thresholds": {"supportive_min": 0.01, "headwind_max": -0.01},
+                },
+            },
+            "sector_maps": {
+                "energy": {
+                    "factors": [
+                        {"ref": "coal_futures", "weight": 0.65},
+                        {"ref": "usd_idr", "weight": 0.35},
+                    ]
+                }
+            },
+        }
+    }
+    # shallow merge overrides into root
+    if overrides:
+        raw["sector_macro_context"].update(overrides)
+    return SectorMacroContextConfig.from_mapping(raw)
+
+
+class TestConfigValidation:
+    def test_rejects_non_diagnostic(self):
+        with pytest.raises(ValueError, match="DIAGNOSTIC"):
+            SectorMacroContextConfig.from_mapping(
+                {
+                    "sector_macro_context": {
+                        "evidence_status": "PRODUCTION",
+                        "factor_library": {
+                            "x": {
+                                "series": "MTF=F",
+                                "thresholds": {"supportive_min": 0.05, "headwind_max": -0.05},
+                            }
+                        },
+                        "sector_maps": {"energy": {"factors": [{"ref": "x", "weight": 1.0}]}},
+                    }
+                }
+            )
+
+    def test_rejects_unknown_ref(self):
+        with pytest.raises(ValueError, match="unknown factor_library"):
+            SectorMacroContextConfig.from_mapping(
+                {
+                    "sector_macro_context": {
+                        "factor_library": {
+                            "coal_futures": {
+                                "series": "MTF=F",
+                                "thresholds": {"supportive_min": 0.05, "headwind_max": -0.05},
+                            }
+                        },
+                        "sector_maps": {"energy": {"factors": [{"ref": "missing", "weight": 1.0}]}},
+                    }
+                }
+            )
+
+    def test_required_series_tickers_live_maps_only(self):
+        cfg = _energy_config()
+        # inject library-only factor via raw rebuild
+        raw = {
+            "sector_macro_context": {
+                "factor_library": {
+                    "coal_futures": {
+                        "series": "MTF=F",
+                        "thresholds": {"supportive_min": 0.05, "headwind_max": -0.05},
+                    },
+                    "cpo": {
+                        "series": "KO=F",
+                        "thresholds": {"supportive_min": 0.05, "headwind_max": -0.05},
+                    },
+                },
+                "sector_maps": {"energy": {"factors": [{"ref": "coal_futures", "weight": 1.0}]}},
+            }
+        }
+        cfg = SectorMacroContextConfig.from_mapping(raw)
+        assert cfg.required_series_tickers() == frozenset({"MTF=F"})
+        assert "KO=F" in cfg.all_library_series_tickers()
+
+
+class TestSessionReturn:
+    def test_positive_return(self):
+        candles = _make_candles("MTF=F", [100.0] * 5 + [110.0])
+        assert _session_return_fraction(candles, lookback=10, min_valid=5) == pytest.approx(
+            0.10, abs=0.001
+        )
+
+    def test_insufficient(self):
+        candles = _make_candles("MTF=F", [100.0, 110.0])
+        assert _session_return_fraction(candles, lookback=10, min_valid=5) is None
+
+
+class TestPiecewiseScore:
+    def test_supportive_boundary(self):
+        assert _piecewise_score(0.05, supportive_min=0.05, headwind_max=-0.05) == 1.0
+
+    def test_headwind_boundary(self):
+        assert _piecewise_score(-0.05, supportive_min=0.05, headwind_max=-0.05) == 0.0
+
+    def test_midpoint(self):
+        mid = _piecewise_score(0.0, supportive_min=0.05, headwind_max=-0.05)
+        assert mid == pytest.approx(0.5)
+
+
+class TestBuilder:
+    def test_supportive_energy(self):
+        # coal +10% and weaker rupiah (+2% IDR=X) both supportive for energy (invert=false).
+        coal = _make_candles("MTF=F", [100.0] * 5 + [110.0])
+        usd = _make_candles("IDR=X", [16000.0] * 5 + [16320.0])  # +2% raw
+        builder = SectorMacroContextEvidenceBuilder(_energy_config())
+        ev = builder.build(
+            SectorMacroContextRequest(
+                ticker="ADRO",
+                snapshot_date=date(2026, 5, 20),
+                sector_group="energy",
+                series_candles={"MTF=F": coal, "IDR=X": usd},
+            )
+        )
+        assert ev.macro_regime == "SUPPORTIVE"
+        assert ev.coverage_score == pytest.approx(1.0)
+        assert ev.composite_score is not None and ev.composite_score >= 0.65
+        assert ev.evidence_status == EvidenceStatus.DIAGNOSTIC
+        assert len(ev.factors) == 2
+
+    def test_headwind_energy(self):
+        coal = _make_candles("MTF=F", [100.0] * 5 + [90.0])  # -10%
+        usd = _make_candles("IDR=X", [16000.0] * 5 + [15680.0])  # -2% stronger rupiah headwind
+        builder = SectorMacroContextEvidenceBuilder(_energy_config())
+        ev = builder.build(
+            SectorMacroContextRequest(
+                ticker="ADRO",
+                snapshot_date=date(2026, 5, 20),
+                sector_group="energy",
+                series_candles={"MTF=F": coal, "IDR=X": usd},
+            )
+        )
+        assert ev.macro_regime == "HEADWIND"
+        assert ev.composite_score is not None and ev.composite_score <= 0.35
+
+    def test_invert_flag_vix_like(self):
+        # invert=true: higher series return → lower score (risk series).
+        raw = {
+            "sector_macro_context": {
+                "lookback_sessions": 10,
+                "min_valid_sessions": 5,
+                "min_coverage_to_label": 0.5,
+                "factor_library": {
+                    "risk_proxy": {
+                        "series": "IDR=X",
+                        "invert": True,
+                        "thresholds": {"supportive_min": 0.01, "headwind_max": -0.01},
+                    }
+                },
+                "sector_maps": {"energy": {"factors": [{"ref": "risk_proxy", "weight": 1.0}]}},
+            }
+        }
+        cfg = SectorMacroContextConfig.from_mapping(raw)
+        builder = SectorMacroContextEvidenceBuilder(cfg)
+        # +2% raw with invert → effective -2% → score 0 → HEADWIND
+        usd_up = _make_candles("IDR=X", [16000.0] * 5 + [16320.0])
+        ev_up = builder.build(
+            SectorMacroContextRequest(
+                ticker="ADRO",
+                snapshot_date=date(2026, 5, 20),
+                sector_group="energy",
+                series_candles={"IDR=X": usd_up},
+            )
+        )
+        assert ev_up.factors[0].score == pytest.approx(0.0)
+        assert ev_up.macro_regime == "HEADWIND"
+
+        # -2% raw with invert → effective +2% → score 1 → SUPPORTIVE
+        usd_dn = _make_candles("IDR=X", [16000.0] * 5 + [15680.0])
+        ev_dn = builder.build(
+            SectorMacroContextRequest(
+                ticker="ADRO",
+                snapshot_date=date(2026, 5, 20),
+                sector_group="energy",
+                series_candles={"IDR=X": usd_dn},
+            )
+        )
+        assert ev_dn.factors[0].score == pytest.approx(1.0)
+        assert ev_dn.macro_regime == "SUPPORTIVE"
+
+    def test_missing_one_series_partial_coverage(self):
+        coal = _make_candles("MTF=F", [100.0] * 5 + [110.0])
+        builder = SectorMacroContextEvidenceBuilder(_energy_config())
+        ev = builder.build(
+            SectorMacroContextRequest(
+                ticker="ADRO",
+                snapshot_date=date(2026, 5, 20),
+                sector_group="energy",
+                series_candles={"MTF=F": coal},  # no IDR=X
+            )
+        )
+        assert ev.coverage_score == pytest.approx(0.5)
+        # coverage == min_coverage_to_label 0.5 → still labels
+        assert ev.macro_regime == "SUPPORTIVE"
+        assert any("usd_idr" in r for r in ev.unavailable_reasons)
+        assert sum(1 for f in ev.factors if f.score is not None) == 1
+
+    def test_zero_series_unknown(self):
+        builder = SectorMacroContextEvidenceBuilder(_energy_config())
+        ev = builder.build(
+            SectorMacroContextRequest(
+                ticker="ADRO",
+                snapshot_date=date(2026, 5, 20),
+                sector_group="energy",
+                series_candles={},
+            )
+        )
+        assert ev.macro_regime == "UNKNOWN"
+        assert ev.coverage_score == 0.0
+        assert ev.composite_score is None
+
+    def test_no_map_unknown(self):
+        builder = SectorMacroContextEvidenceBuilder(_energy_config())
+        ev = builder.build(
+            SectorMacroContextRequest(
+                ticker="BBCA",
+                snapshot_date=date(2026, 5, 20),
+                sector_group="bank",
+                series_candles={},
+            )
+        )
+        assert ev.macro_regime == "UNKNOWN"
+        assert "sector_map:missing:bank" in ev.unavailable_reasons[0]
+
+    def test_unresolved_group(self):
+        builder = SectorMacroContextEvidenceBuilder(_energy_config())
+        ev = builder.build(
+            SectorMacroContextRequest(
+                ticker="ZZZZ",
+                snapshot_date=date(2026, 5, 20),
+                sector_group=None,
+                series_candles={},
+            )
+        )
+        assert "sector_group:unresolved" in ev.unavailable_reasons[0]
+
+    def test_weight_renorm_when_partial(self):
+        # Only coal available: composite should equal coal score (1.0), not 0.65*1.0
+        coal = _make_candles("MTF=F", [100.0] * 5 + [110.0])
+        builder = SectorMacroContextEvidenceBuilder(_energy_config())
+        ev = builder.build(
+            SectorMacroContextRequest(
+                ticker="ADRO",
+                snapshot_date=date(2026, 5, 20),
+                sector_group="energy",
+                series_candles={"MTF=F": coal},
+            )
+        )
+        assert ev.composite_score == pytest.approx(1.0)
+
+    def test_insufficient_candles_unknown_coverage(self):
+        coal = _make_candles("MTF=F", [100.0, 110.0])  # too few
+        usd = _make_candles("IDR=X", [16000.0, 16100.0])
+        builder = SectorMacroContextEvidenceBuilder(_energy_config())
+        ev = builder.build(
+            SectorMacroContextRequest(
+                ticker="ADRO",
+                snapshot_date=date(2026, 5, 20),
+                sector_group="energy",
+                series_candles={"MTF=F": coal, "IDR=X": usd},
+            )
+        )
+        assert ev.macro_regime == "UNKNOWN"
+        assert ev.coverage_score == 0.0

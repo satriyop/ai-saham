@@ -1,0 +1,63 @@
+# Sector Macro Context Evidence (ADR-053)
+#
+# Evidence authority: DIAGNOSTIC (v1)
+# Routes external macro series to universe groups (universes.yaml keys).
+# Sibling of peer-relative SectorContextEvidence — does NOT score Signal/Risk.
+#
+# Return units: fractional session returns (0.05 = +5%).
+# Promotion requires a future ADR + walk-forward proof.
+
+sector_macro_context:
+  evidence_status: DIAGNOSTIC
+
+  lookback_sessions: 20
+  min_valid_sessions: 15
+  # Below this coverage, macro_regime is UNKNOWN even if partial scores exist.
+  min_coverage_to_label: 0.5
+
+  # Score → factor label anchors (same family as MCE score labels).
+  score_labels:
+    favorable_min: 0.65
+    neutral_min: 0.35
+
+  # Composite → macro_regime anchors.
+  regime_thresholds:
+    supportive_min: 0.65
+    headwind_max: 0.35
+
+  factor_library:
+    coal_futures:
+      series: "MTF=F"
+      kind: return_sessions
+      invert: false
+      thresholds:
+        supportive_min: 0.05   # +5% over lookback → score 1.0
+        headwind_max: -0.05    # -5% → score 0.0
+
+    usd_idr:
+      series: "IDR=X"
+      kind: return_sessions
+      # Rising IDR=X = weaker Rupiah; often supportive for USD-linked energy exporters.
+      # invert=false: higher return → higher score (commodity-like).
+      # invert=true would mean VIX-like (higher return → lower score).
+      invert: false
+      thresholds:
+        supportive_min: 0.01
+        headwind_max: -0.01
+
+    # Library-only for a future CPO-heavy map — not attached to any sector_maps entry.
+    cpo:
+      series: "KO=F"
+      kind: return_sessions
+      invert: false
+      thresholds:
+        supportive_min: 0.05
+        headwind_max: -0.05
+
+  # Primary keys = universes.yaml group names (same as L2a sector context).
+  # v1 live map: energy only. Do not add thin single-factor maps.
+  sector_maps:
+    energy:
+      factors:
+        - { ref: coal_futures, weight: 0.65 }
+        - { ref: usd_idr, weight: 0.35 }
