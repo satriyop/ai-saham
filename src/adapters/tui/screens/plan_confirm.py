@@ -1,6 +1,8 @@
 """Deliberate Plan swing confirmation (OpenCode dialog language).
 
 Enter confirms only inside this modal — never on the board list.
+Shows the same desk facts as the board (Signal/Accum/Action/Why) so plan
+does not feel like a different product.
 
 Layer: Adapter
 """
@@ -20,26 +22,46 @@ class PlanConfirmModal(ModalScreen[bool | None]):
         Binding("enter", "confirm", "Confirm", show=False, priority=True),
     ]
 
-    def __init__(self, *, ticker: str, source: str, setup: str = "swing") -> None:
+    def __init__(
+        self,
+        *,
+        ticker: str,
+        source: str,
+        setup: str = "swing",
+        signal: str = "—",
+        accum: str = "—",
+        action: str = "—",
+        gate: str = "—",
+        why: str = "",
+    ) -> None:
         super().__init__()
         self._ticker = ticker
         self._source = source
         self._setup = setup
+        self._signal = signal
+        self._accum = accum
+        self._action = action
+        self._gate = gate
+        self._why = why
 
     def compose(self) -> ComposeResult:
         with Vertical(id="confirm-card", classes="dialog-card narrow"):
             with Horizontal(id="confirm-head"):
                 yield Static("Plan swing", id="confirm-title")
                 yield Static("esc cancel", id="confirm-esc")
+            why_line = f"[#d4b06a]Why {self._action}[/]  {self._why}\n" if self._why else ""
             body = (
                 f"[bold #e8e8e8]Plan {self._ticker} · {self._setup}[/]\n"
-                f"[dim]Deliberate action — Enter on a row only views.[/]\n\n"
+                f"[dim]Deliberate — Enter on a row only views.[/]\n\n"
                 f"[dim]Ticker[/]   {self._ticker}\n"
-                f"[dim]Profile[/]  {self._setup}\n"
+                f"[dim]Signal[/]   {self._signal}\n"
+                f"[dim]Accum[/]    {self._accum}\n"
+                f"[dim]Action[/]   {self._action}\n"
+                f"[dim]Gate[/]     {self._gate}\n"
                 f"[dim]Source[/]   {self._source} · local\n"
-                f"[dim]Horizon[/]  5–15 sessions\n\n"
-                f"[#d4b06a]No broker order.[/] Plan records intent + setup\n"
-                f"snapshot for audit. Discard later from Lab/CLI."
+                f"{why_line}"
+                f"\n[#d4b06a]No broker order.[/] Records intent + setup snapshot\n"
+                f"for audit only. Not a live order."
             )
             yield Static(body, id="confirm-body")
             yield Static("↵ confirm · esc cancel", id="confirm-foot")

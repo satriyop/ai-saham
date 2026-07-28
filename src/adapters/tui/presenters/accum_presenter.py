@@ -40,6 +40,8 @@ class AccumBoardView:
     rows: tuple[AccumRowView, ...]
     meta: str
     cache_label: str
+    # One-line triage after load (counts only — no new scoring)
+    summary: str = ""
     # Header labels for DataTable (ADR-043 vocabulary)
     columns: tuple[str, ...] = BOARD_COLUMN_LABELS
 
@@ -81,7 +83,13 @@ class AccumPresenter:
         if lag:
             meta_bits.append(lag)
         cache = lag if lag else (f"local · {as_of}" if as_of else "local")
-        return AccumBoardView(rows=rows, meta=" · ".join(meta_bits), cache_label=cache)
+        summary = _board_summary(rows)
+        return AccumBoardView(
+            rows=rows,
+            meta=" · ".join(meta_bits),
+            cache_label=cache,
+            summary=summary,
+        )
 
 
 def _unwrap_single_projection(payload: Any) -> Any:
@@ -115,7 +123,7 @@ def _row(candidate: Any) -> AccumRowView:
     )
 
 
-# ── Focus strip (P0 why-action · P1 Accum recipe · P2 lag) ─
+# ── Focus strip (why Action · Accum breakdown · lag) ───────
 
 
 @dataclass(frozen=True)
@@ -125,6 +133,7 @@ class AccumFocusView:
     strip: str
     lag_label: str
     focus_sidebar: str
+    why: str = ""
 
 
 def build_accum_focus(
@@ -133,7 +142,7 @@ def build_accum_focus(
     rank: int = 1,
     total: int = 1,
 ) -> AccumFocusView:
-    """Build honest focus text: action reasons, Accum recipe, data lag."""
+    """Build honest focus text: action reasons, Accum breakdown, data lag."""
     source = getattr(row, "source", None)
     ticker = str(getattr(row, "ticker", "?"))
     signal = str(getattr(row, "signal", "—"))
@@ -148,7 +157,7 @@ def build_accum_focus(
 
     lag = _lag_from_candidate(source)
     why = _action_why(source, gate=gate)
-    recipe = _accum_recipe(source, accum_display=accum)
+    breakdown = _accum_breakdown(source, accum_display=accum)
     disc_note = _disc_gloss(source, disc_pct)
 
     line1 = (
@@ -158,7 +167,7 @@ def build_accum_focus(
         f"{action} · gate {gate}"
     )
     line2 = f"[#d4b06a]Why {action}[/]  {why}" if why else f"Why {action}  —"
-    line3 = f"[#9b8fb8]Accum recipe[/]  {recipe}"
+    line3 = f"[#9b8fb8]Accum breakdown[/]  {breakdown}"
     line4_bits = [f"phase {phase}", f"streak {streak}", f"net {net_pct}"]
     if disc_note:
         line4_bits.append(disc_note)
@@ -176,7 +185,32 @@ def build_accum_focus(
     else:
         sidebar = f"{ticker} · Enter view · p plan"
 
-    return AccumFocusView(strip=strip, lag_label=lag or "—", focus_sidebar=sidebar)
+    return AccumFocusView(
+        strip=strip,
+        lag_label=lag or "—",
+        focus_sidebar=sidebar,
+        why=why,
+    )
+
+
+def _board_summary(rows: tuple[AccumRowView, ...]) -> str:
+    """Triage counts for the loaded board (presentation only)."""
+    if not rows:
+        return "0 names"
+    n = len(rows)
+    by_action: dict[str, int] = {}
+    by_gate: dict[str, int] = {}
+    for row in rows:
+        a = str(getattr(row, "action", "—") or "—")
+        g = str(getattr(row, "gate", "—") or "—")
+        by_action[a] = by_action.get(a, 0) + 1
+        by_gate[g] = by_gate.get(g, 0) + 1
+    # Prefer stable order: common action labels first, then rest
+    action_items = sorted(by_action.items(), key=lambda kv: (-kv[1], kv[0]))
+    gate_items = sorted(by_gate.items(), key=lambda kv: (-kv[1], kv[0]))
+    action_parts = [f"{k} {v}" for k, v in action_items]
+    gate_parts = [f"{k} {v}" for k, v in gate_items]
+    return f"{n} names · Action: {', '.join(action_parts)} · Gate: {', '.join(gate_parts)}"
 
 
 def _board_lag_label(candidates: list[Any]) -> str:
@@ -344,8 +378,8 @@ def _coverage_pct(candidate: Any) -> float | None:
     return None
 
 
-def _accum_recipe(candidate: Any, *, accum_display: str) -> str:
-    """P1: Accum total as sum of component points."""
+def _accum_breakdown(candidate: Any, *, accum_display: str) -> str:
+    """Accum total as sum of component points (AccumScoreBreakdown)."""
     if candidate is None:
         return f"{accum_display} (no breakdown)"
     bd = getattr(candidate, "accum_score_breakdown", None)

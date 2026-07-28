@@ -33,6 +33,9 @@ def test_plan_confirm_modal_requires_enter():
             app._run_command("plan-swing")
             await pilot.pause()
             assert isinstance(app.screen, PlanConfirmModal)
+            # Modal should echo desk vocabulary when row has fields
+            body = str(app.screen.query_one("#confirm-body").render())
+            assert "Signal" in body or "BBRI" in body
             # Confirm path: dismiss(True) mirrors ↵ on the modal
             app.screen.dismiss(True)
             for _ in range(50):

@@ -77,7 +77,7 @@ Screen {
 
 #evidence-strip {
     height: auto;
-    max-height: 12;
+    max-height: 14;
     border-top: solid #181818;
     padding-top: 1;
     color: #7a7a7a;

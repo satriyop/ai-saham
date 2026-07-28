@@ -103,6 +103,8 @@ def test_build_accum_focus_why_recipe_lag():
     assert "missing: setup_evidence" in focus.strip
     assert "pullback" in focus.strip
     assert "gate open" in focus.strip
+    assert "Accum breakdown" in focus.strip
+    assert "recipe" not in focus.strip.lower()
     assert "cons 28.5" in focus.strip
     assert "vwap 0.0" in focus.strip or "vwap 0" in focus.strip
     assert "bb off" in focus.strip
@@ -161,6 +163,33 @@ def test_gate_blocked_in_why():
     )
     focus = build_accum_focus(row)
     assert "gate blocked" in focus.strip
+
+
+def test_board_summary_counts_actions_and_gates():
+    from src.adapters.tui.presenters.accum_presenter import AccumPresenter
+
+    c1 = _candidate()
+    c2 = _candidate(gate_triggered="BandarGate", action_value="BLOCKED_STRUCTURAL")
+    # second candidate needs different ticker for clarity
+    c2.ticker = "SCMA"
+    c2.trade_setup = SimpleNamespace(
+        action=SimpleNamespace(value="BLOCKED_STRUCTURAL", short="BLOCKED(struct)"),
+        rationale="x",
+    )
+    view = AccumPresenter().present(
+        SimpleNamespace(
+            single_projection=SimpleNamespace(
+                candidates=[c1, c2],
+                window_days=7,
+                data_as_of={},
+                applied_filters=SimpleNamespace(sort_by="signal", top=20),
+            )
+        )
+    )
+    assert "2 names" in view.summary
+    assert "Action:" in view.summary
+    assert "Gate:" in view.summary
+    assert "OPEN" in view.summary or "BLOCKED" in view.summary
 
 
 def test_setup_readiness_shows_missing_inputs_not_only_generic():

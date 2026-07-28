@@ -92,6 +92,7 @@ class CockpitApp(App[None]):
         self._evidence_text = ""
         self._meta = "local-first · Ctrl+P · no silent network"
         self._board_title = "Cockpit · shell"
+        self._board_summary = ""
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="workspace"):
@@ -161,13 +162,13 @@ class CockpitApp(App[None]):
         if self._stage == "accum":
             return (
                 "↑↓ move · Enter view · p plan · r refresh · Ctrl+P  ·  "
-                "ranked by Signal (not Accum) · strip = why Action + recipe + lag"
+                "ranked by Signal (not Accum) · strip = Why + Accum breakdown + lag"
             )
         if self._stage == "preopen":
             return "↑↓ move · Enter view · p plan · r refresh · Ctrl+P commands"
         if self._stage == "detail":
             return "esc back · p plan · Ctrl+P commands"
-        return "Ctrl+P commands · ? help · q quit · no scenario tabs"
+        return "Ctrl+P commands · ? help · q quit"
 
     def _shell_body(self) -> str:
         return (
@@ -509,23 +510,28 @@ class CockpitApp(App[None]):
         self._on_preopen_payload(state.payload)
 
     def _on_accum_payload(self, payload: Any) -> None:
+        summary = ""
         if self._accum_presenter is not None:
             view = self._accum_presenter.present(payload)
             self._rows = list(view.rows)
             self._meta = view.meta
+            summary = getattr(view, "summary", "") or ""
+            self._board_summary = summary
             self.query_one("#side-accum", Static).update(f"Accum    {len(self._rows)}")
             self.query_one("#side-cache", Static).update(f"Cache    {view.cache_label}")
         else:
             self._rows = list(payload) if payload else []
             self._meta = f"local · {len(self._rows)} names"
+            self._board_summary = ""
         self._board_title = "Screen · accumulation"
         self._mode = "local-first"
         self._row_index = 0
-        self._status_note = f"{len(self._rows)} rows"
+        self._status_note = summary if summary else f"{len(self._rows)} rows"
         if not self._rows:
             self._show_empty()
             self._board_title = "Screen · accumulation"
             self._meta = self._meta or "local · 0 candidates"
+            self._board_summary = ""
             self._refresh_chrome()
             self.notify("Accumulation · 0 candidates (local)", timeout=2.0)
             return
@@ -536,7 +542,8 @@ class CockpitApp(App[None]):
         self._refresh_chrome()
         table = self.query_one("#board-table", DataTable)
         table.focus()
-        self.notify(f"Accumulation · {len(self._rows)} candidates (local)", timeout=2.0)
+        note = summary if summary else f"{len(self._rows)} candidates"
+        self.notify(f"Accumulation · {note}", timeout=2.5)
 
     def _on_preopen_payload(self, payload: Any) -> None:
         if self._preopen_presenter is not None:
@@ -632,7 +639,7 @@ class CockpitApp(App[None]):
         ev.update(self._evidence_text)
 
     def _update_accum_evidence(self) -> None:
-        """Focus strip: why Action, Accum recipe, lag (P0–P2)."""
+        """Focus strip: Why Action, Accum breakdown, lag + board summary."""
         if not self._rows or self._stage != "accum":
             return
         from src.adapters.tui.presenters.accum_presenter import build_accum_focus
@@ -643,13 +650,22 @@ class CockpitApp(App[None]):
             rank=self._row_index + 1,
             total=len(self._rows),
         )
-        self._evidence_text = focus.strip
+        parts: list[str] = []
+        if self._board_summary:
+            parts.append(f"[#9b8fb8]Board[/]  {self._board_summary}")
+        parts.append(focus.strip)
+        self._evidence_text = "\n".join(parts)
         ev = self.query_one("#evidence-strip", Static)
         ev.display = True
         ev.update(self._evidence_text)
-        # P2: sidebar lag + compact why
         self.query_one("#side-cache", Static).update(f"Cache    {focus.lag_label}")
         self.query_one("#side-focus", Static).update(focus.focus_sidebar)
+        if focus.lag_label and focus.lag_label != "—":
+            # Keep summary in status; append lag posture when present
+            base = self._board_summary or self._status_note
+            if "LAG" in focus.lag_label or "ALIGNED" in focus.lag_label:
+                self._status_note = f"{base} · {focus.lag_label}" if base else focus.lag_label
+            self.query_one("#status", Static).update(self._status_text())
 
     def _open_detail(self) -> None:
         if self._stage == "empty" or self._focus_ticker in {"—", ""}:
@@ -701,7 +717,17 @@ class CockpitApp(App[None]):
         if row is None:
             return f"[bold]{ticker}[/]\n\n[dim]No row payload[/]"
         lines = [f"[bold #e8e8e8]{ticker}[/]", ""]
-        # Board B fields first (same vocabulary as table)
+
+        # Reuse focus Why + breakdown for one-ticker desk (accum rows)
+        if all(hasattr(row, k) for k in ("signal", "accum", "action", "gate")):
+            from src.adapters.tui.presenters.accum_presenter import build_accum_focus
+
+            focus = build_accum_focus(row, rank=self._row_index + 1, total=max(len(self._rows), 1))
+            # Plain text for detail stage (drop rich markers lightly)
+            for line in focus.strip.split("\n"):
+                lines.append(line)
+            lines.append("")
+
         for key, label in (
             ("signal", "Signal"),
             ("accum", "Accum"),
@@ -758,10 +784,23 @@ class CockpitApp(App[None]):
         if self._stage == "empty" or self._focus_ticker in {"—", ""}:
             self.notify("Nothing to plan — fetch / screen first", timeout=1.5)
             return
+        from src.adapters.tui.presenters.accum_presenter import build_accum_focus
         from src.adapters.tui.screens.plan_confirm import PlanConfirmModal
 
         ticker = self._focus_ticker
         source = "screen pre-open" if self._stage == "preopen" else "screen accum"
+        row = self._rows[self._row_index] if self._rows else None
+        signal = str(getattr(row, "signal", "—")) if row else "—"
+        accum = str(getattr(row, "accum", "—")) if row else "—"
+        action = str(getattr(row, "action", "—")) if row else "—"
+        gate = str(getattr(row, "gate", "—")) if row else "—"
+        why = ""
+        if row is not None and self._stage == "accum":
+            why = build_accum_focus(
+                row,
+                rank=self._row_index + 1,
+                total=len(self._rows),
+            ).why
 
         def _on_dismiss(confirmed: bool | None) -> None:
             if not confirmed:
@@ -777,7 +816,16 @@ class CockpitApp(App[None]):
             self._execute_plan(ticker)
 
         self.push_screen(
-            PlanConfirmModal(ticker=ticker, source=source, setup="swing"),
+            PlanConfirmModal(
+                ticker=ticker,
+                source=source,
+                setup="swing",
+                signal=signal,
+                accum=accum,
+                action=action,
+                gate=gate,
+                why=why,
+            ),
             _on_dismiss,
         )
 
