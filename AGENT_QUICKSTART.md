@@ -59,11 +59,19 @@ and `saham tui` accum board):
 - **Screen-accum MCE:** workflow result may carry display-only
   `market_context` for inspect. Do **not** pass MCE into screen scoring /
   DecisionPolicy without an explicit B-MCE-policy task.
+- **TUI Enter inspect is present-only** on both boards: accum uses
+  `accum_engine_inspect_presenter`; pre-open uses
+  `preopen_engine_inspect_presenter` (board row only — no engine re-run).
+  Pre-open land path remains Ctrl+P (`screen-preopen`); default open is accum.
 - **Intentional deltas must be explicit** (e.g. TUI pre-open = IEV snapshot only;
   TUI plan = thin local confirm). Document in the change; do not silently diverge.
 - **Verification:** when changing request defaults or board columns, run/extend
   parity tests under `tests/adapters/composition/` and
-  `tests/adapters/shared/test_screen_accum_board_fields.py`.
+  `tests/adapters/shared/test_screen_accum_board_fields.py`. When changing Why /
+  readiness / Accum breakdown copy, also run
+  `tests/adapters/shared/test_decision_display.py` and CLI
+  `tests/adapters/cli/test_screen_accum_display.py` (CLI must call
+  `decision_display`, not re-implement).
 
 See also ADR-051 (TUI cockpit clean break) and
 `docs/design/tui-cockpit-opencode.md` for product locks, not scoring rules.

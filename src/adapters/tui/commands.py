@@ -31,7 +31,7 @@ COCKPIT_COMMANDS: tuple[CockpitCommand, ...] = (
         "screen-preopen",
         "Screen pre-open",
         "s p",
-        "IEP / pre-open dense board",
+        "IEP board from local IEV snapshot · Enter inspect",
     ),
     CockpitCommand(
         "Suggested",

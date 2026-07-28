@@ -126,3 +126,49 @@ def _risk(tag: str, gap: float | None) -> str:
     if gap is not None and abs(gap) >= 4:
         return "watch"
     return "clear"
+
+
+def format_preopen_why(row: PreOpenRowView) -> str:
+    """One-line Why for focus strip, Enter inspect, and plan confirm.
+
+    Prefer ``row.evidence`` so all surfaces stay board-identical (no re-grade).
+    """
+    evidence = str(getattr(row, "evidence", "") or "").strip()
+    if evidence:
+        return evidence
+    grade = str(getattr(row, "grade", "—") or "—")
+    risk = str(getattr(row, "risk", "—") or "—")
+    return f"grade {grade} · risk {risk}"
+
+
+@dataclass(frozen=True)
+class PreOpenFocusView:
+    """Focus strip + sidebar for one pre-open row."""
+
+    strip: str
+    focus_sidebar: str
+    why: str = ""
+
+
+def build_preopen_focus(
+    row: PreOpenRowView,
+    *,
+    rank: int = 1,
+    total: int = 1,
+) -> PreOpenFocusView:
+    """Present-only focus text aligned with board cells."""
+    ticker = str(getattr(row, "ticker", "?"))
+    why = format_preopen_why(row)
+    grade = str(getattr(row, "grade", "—") or "—")
+    risk = str(getattr(row, "risk", "—") or "—")
+    iep = str(getattr(row, "iep", "—") or "—")
+    delta = str(getattr(row, "delta_pct", "—") or "—")
+    line1 = f"[#9b8fb8]Focus · {ticker}[/]  #{rank}/{total}  ·  grade {grade} · risk {risk}"
+    line2 = f"[#d4b06a]Why[/]  {why}" if why else "Why  —"
+    iev = getattr(row, "iev", "—")
+    ncp = getattr(row, "ncp", "—")
+    line3 = f"IEP {iep} · Δ% {delta} · IEV {iev} · NCP {ncp}"
+    strip = "\n".join([line1, line2, line3])
+    short_why = why if len(why) <= 42 else why[:39] + "…"
+    sidebar = f"{ticker} · grade {grade}\n{short_why}"
+    return PreOpenFocusView(strip=strip, focus_sidebar=sidebar, why=why)

@@ -9,7 +9,7 @@ Layer: Adapter
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Literal
 
 from textual import work
 from textual.app import App, ComposeResult
@@ -30,6 +30,9 @@ PlanRunner = Callable[[str], Any]
 FetchPreviewer = Callable[[], Any]
 FetchRunner = Callable[[], Any]
 TickerDetailLoader = Callable[[str], Any]
+
+BoardKind = Literal["accum", "preopen", "none"]
+DetailReturnStage = Literal["accum", "preopen", "shell"]
 
 
 class CockpitApp(App[None]):
@@ -82,6 +85,8 @@ class CockpitApp(App[None]):
 
         self._sidebar_visible = True
         self._stage = "shell"  # shell | empty | accum | preopen | detail | loading | error
+        self._board_kind: BoardKind = "none"
+        self._detail_return_stage: DetailReturnStage = "shell"
         self._mode = "local-first"
         self._focus_ticker = "—"
         self._status_note = "ctrl+p commands"
@@ -95,6 +100,8 @@ class CockpitApp(App[None]):
         self._board_summary = ""
         self._effective_session: Any | None = None
         self._market_context: Any | None = None
+        self._preopen_snapshot_date: str = ""
+        self._preopen_warnings: tuple[str, ...] = ()
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="workspace"):
@@ -164,10 +171,13 @@ class CockpitApp(App[None]):
         if self._stage == "accum":
             return (
                 "↑↓ move · Enter view · p plan · r refresh · Ctrl+P  ·  "
-                "ranked by Signal (not Accum) · strip = Why + Accum breakdown + lag"
+                "ranked by Signal (not Accum) · Ctrl+P pre-open to switch board"
             )
         if self._stage == "preopen":
-            return "↑↓ move · Enter view · p plan · r refresh · Ctrl+P commands"
+            return (
+                "↑↓ move · Enter view · p plan · r refresh · Ctrl+P  ·  "
+                "IEV snapshot board · Enter = present-only inspect"
+            )
         if self._stage == "detail":
             return "esc back · p plan · Ctrl+P commands"
         return "Ctrl+P commands · ? help · q quit"
@@ -277,23 +287,34 @@ class CockpitApp(App[None]):
 
     def action_go_back(self) -> None:
         if self._stage == "detail":
-            # Return to last board if any
-            if self._rows and self._board_title.startswith("Screen · pre-open"):
-                self._stage = "preopen"
-            elif self._rows:
-                self._stage = "accum"
+            # Explicit return stage — never infer only from detail title.
+            target = self._detail_return_stage
+            if target in {"accum", "preopen"} and self._rows:
+                self._stage = target
+                self._board_kind = target  # type: ignore[assignment]
+            elif self._rows and self._board_kind in {"accum", "preopen"}:
+                self._stage = self._board_kind
             else:
                 self._stage = "shell"
+                self._board_kind = "none"
             self._refresh_chrome()
             if self._stage in {"accum", "preopen"}:
                 self._render_board_table()
+                if self._stage == "preopen":
+                    self._update_preopen_evidence()
+                else:
+                    self._update_accum_evidence()
 
     def action_refresh_local(self) -> None:
-        if self._stage == "preopen" or self._board_title.startswith("Screen · pre-open"):
+        # Prefer board_kind over title heuristics (detail titles include ticker).
+        kind = self._board_kind
+        if self._stage == "detail":
+            kind = self._detail_return_stage if self._detail_return_stage != "shell" else kind
+        if kind == "preopen" or self._stage == "preopen":
             self._run_command("screen-preopen")
-        elif self._stage in {"accum", "detail", "error"} or self._board_title.startswith(
-            "Screen · accumulation"
-        ):
+        elif kind == "accum" or self._stage in {"accum", "error"}:
+            self._run_command("screen-accum")
+        elif self._board_title.startswith("Screen · accumulation"):
             self._run_command("screen-accum")
         else:
             self.notify("Nothing to refresh — open a screen via Ctrl+P", timeout=1.5)
@@ -513,6 +534,7 @@ class CockpitApp(App[None]):
 
     def _on_accum_payload(self, payload: Any) -> None:
         summary = ""
+        self._board_kind = "accum"
         # Workflow result carries session + display-only MCE; projection fakes may not.
         self._effective_session = getattr(payload, "effective_session", None)
         self._market_context = getattr(payload, "market_context", None)
@@ -551,6 +573,10 @@ class CockpitApp(App[None]):
         self.notify(f"Accumulation · {note}", timeout=2.5)
 
     def _on_preopen_payload(self, payload: Any) -> None:
+        self._board_kind = "preopen"
+        self._preopen_snapshot_date = str(getattr(payload, "snapshot_date", "") or "")
+        raw_warn = getattr(payload, "warnings", ()) or ()
+        self._preopen_warnings = tuple(str(w) for w in raw_warn)
         if self._preopen_presenter is not None:
             view = self._preopen_presenter.present(payload)
             self._rows = list(view.rows)
@@ -581,7 +607,8 @@ class CockpitApp(App[None]):
     def _render_board_table(self) -> None:
         table = self.query_one("#board-table", DataTable)
         table.clear(columns=True)
-        if self._stage == "preopen" or self._board_title.startswith("Screen · pre-open"):
+        is_preopen = self._stage == "preopen" or self._board_kind == "preopen"
+        if is_preopen:
             table.add_columns("Tkr", "IEP", "Δ%", "IEV", "NCP", "ΔIEV", "Grd", "Risk")
             for row in self._rows:
                 table.add_row(
@@ -630,18 +657,19 @@ class CockpitApp(App[None]):
         if not self._rows or self._stage != "preopen":
             self._evidence_text = ""
             return
+        from src.adapters.tui.presenters.preopen_presenter import build_preopen_focus
+
         row = self._rows[self._row_index]
-        evidence = getattr(row, "evidence", None)
-        if evidence:
-            self._evidence_text = f"[#9b8fb8]Evidence · {row.ticker}[/]\n{evidence}"
-        else:
-            self._evidence_text = (
-                f"[#9b8fb8]Evidence · {row.ticker}[/]\n"
-                f"grade {row.grade} · risk {row.risk} · NCP {row.ncp}"
-            )
+        focus = build_preopen_focus(
+            row,
+            rank=self._row_index + 1,
+            total=len(self._rows),
+        )
+        self._evidence_text = focus.strip
         ev = self.query_one("#evidence-strip", Static)
         ev.display = True
         ev.update(self._evidence_text)
+        self.query_one("#side-focus", Static).update(focus.focus_sidebar)
 
     def _update_accum_evidence(self) -> None:
         """Focus strip: Why Action, Accum breakdown, lag + board summary."""
@@ -681,12 +709,18 @@ class CockpitApp(App[None]):
             return
         ticker = self._focus_ticker
         row = self._rows[self._row_index] if self._rows else None
+        # Remember where to return — never depend on detail title alone.
+        if self._stage in {"accum", "preopen"}:
+            self._detail_return_stage = self._stage  # type: ignore[assignment]
+        elif self._board_kind in {"accum", "preopen"}:
+            self._detail_return_stage = self._board_kind  # type: ignore[assignment]
+        else:
+            self._detail_return_stage = "shell"
+
+        is_board_inspect = self._is_accum_row(row) or self._is_preopen_row(row)
         base = self._format_row_detail(ticker, row)
-        # Accum path: present-only inspect — never re-run engines via loader.
-        is_accum_row = row is not None and all(
-            hasattr(row, k) for k in ("signal", "accum", "action", "gate")
-        )
-        if self._ticker_detail_loader is not None and not is_accum_row:
+        # Present-only board inspect: never re-run engines via ticker_detail_loader.
+        if self._ticker_detail_loader is not None and not is_board_inspect:
             self._stage = "loading"
             self._board_title = f"View · {ticker}"
             self._refresh_chrome()
@@ -694,8 +728,11 @@ class CockpitApp(App[None]):
             return
         self._detail_text = base
         self._stage = "detail"
-        if is_accum_row:
+        if self._is_accum_row(row):
             self._board_title = f"Screen · accum · {ticker}"
+            self._meta = "inspect · present-only · same object as board"
+        elif self._is_preopen_row(row):
+            self._board_title = f"Screen · pre-open · {ticker}"
             self._meta = "inspect · present-only · same object as board"
         else:
             self._board_title = f"View · {ticker}"
@@ -725,27 +762,55 @@ class CockpitApp(App[None]):
         self._status_note = "inspect"
         self._refresh_chrome()
 
+    @staticmethod
+    def _is_accum_row(row: Any) -> bool:
+        if row is None:
+            return False
+        return all(hasattr(row, k) for k in ("signal", "accum", "action", "gate"))
+
+    @staticmethod
+    def _is_preopen_row(row: Any) -> bool:
+        if row is None:
+            return False
+        return all(hasattr(row, k) for k in ("iep", "grade", "risk", "delta_pct"))
+
     def _format_row_detail(self, ticker: str, row: Any) -> str:
         if row is None:
             return f"[bold]{ticker}[/]\n\n[dim]No row payload[/]"
 
-        # Screen accum: structured engine inspect (present-only)
-        if all(hasattr(row, k) for k in ("signal", "accum", "action", "gate")):
-            from src.adapters.tui.presenters.accum_engine_inspect_presenter import (
-                present_accum_engine_inspect,
-            )
+        if self._is_accum_row(row) or self._board_kind == "accum":
+            if self._is_accum_row(row):
+                from src.adapters.tui.presenters.accum_engine_inspect_presenter import (
+                    present_accum_engine_inspect,
+                )
 
-            view = present_accum_engine_inspect(
-                row,
-                rank=self._row_index + 1,
-                total=max(len(self._rows), 1),
-                board_summary=self._board_summary,
-                effective_session=self._effective_session,
-                market_context=self._market_context,
-            )
-            return view.text
+                view = present_accum_engine_inspect(
+                    row,
+                    rank=self._row_index + 1,
+                    total=max(len(self._rows), 1),
+                    board_summary=self._board_summary,
+                    effective_session=self._effective_session,
+                    market_context=self._market_context,
+                )
+                return view.text
 
-        # Pre-open / other boards: lean field dump
+        if self._is_preopen_row(row) or self._board_kind == "preopen":
+            if self._is_preopen_row(row):
+                from src.adapters.tui.presenters.preopen_engine_inspect_presenter import (
+                    present_preopen_engine_inspect,
+                )
+
+                view = present_preopen_engine_inspect(
+                    row,
+                    rank=self._row_index + 1,
+                    total=max(len(self._rows), 1),
+                    snapshot_date=self._preopen_snapshot_date,
+                    board_meta=self._meta,
+                    warnings=self._preopen_warnings,
+                )
+                return view.text
+
+        # Unknown row shape: lean field dump
         lines = [f"[bold #e8e8e8]{ticker}[/]", ""]
         for key, label in (
             ("iep", "IEP"),
@@ -769,22 +834,28 @@ class CockpitApp(App[None]):
             self.notify("Nothing to plan — fetch / screen first", timeout=1.5)
             return
         from src.adapters.tui.presenters.accum_presenter import build_accum_focus
+        from src.adapters.tui.presenters.preopen_presenter import format_preopen_why
         from src.adapters.tui.screens.plan_confirm import PlanConfirmModal
 
         ticker = self._focus_ticker
-        source = "screen pre-open" if self._stage == "preopen" else "screen accum"
+        on_preopen = self._stage == "preopen" or self._board_kind == "preopen"
+        source = "screen pre-open" if on_preopen else "screen accum"
         row = self._rows[self._row_index] if self._rows else None
         signal = str(getattr(row, "signal", "—")) if row else "—"
         accum = str(getattr(row, "accum", "—")) if row else "—"
         action = str(getattr(row, "action", "—")) if row else "—"
         gate = str(getattr(row, "gate", "—")) if row else "—"
         why = ""
-        if row is not None and self._stage == "accum":
+        if row is not None and self._is_accum_row(row):
             why = build_accum_focus(
                 row,
                 rank=self._row_index + 1,
                 total=len(self._rows),
             ).why
+        elif row is not None and self._is_preopen_row(row):
+            why = format_preopen_why(row)
+            action = f"grade {getattr(row, 'grade', '—')}"
+            gate = str(getattr(row, "risk", "—") or "—")
 
         def _on_dismiss(confirmed: bool | None) -> None:
             if not confirmed:
