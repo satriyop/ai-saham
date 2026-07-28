@@ -135,6 +135,13 @@ def _opening_candidate_lines(candidate: OpeningBriefingCandidate) -> list[Text]:
             auction.append(f" (Δ{candidate.delta_iev:+,} vs 08:56)", style="magenta")
     if candidate.iep is not None:
         auction.append(f"  IEP {candidate.iep:,}{_gap_pct_text(candidate.iep_gap_pct)}")
+    if candidate.realized_open is not None:
+        # V4: how the session actually opened vs the predicted IEP.
+        realized = f"  → opened {candidate.realized_open}"
+        if candidate.realized_vs_iep_pct is not None:
+            realized += f" ({candidate.realized_vs_iep_pct:+.2f}%)"
+        style = "green" if (candidate.realized_vs_iep_pct or 0) >= 0 else "red"
+        auction.append(realized, style=style)
 
     # Line 3 — microstructure: imbalance · entry/stop · broker backing
     micro_parts: list[str] = []

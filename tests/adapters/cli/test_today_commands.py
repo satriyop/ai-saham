@@ -1562,3 +1562,27 @@ def test_today_stockbit_source_has_no_holiday_caveat(tmp_path: Path):
         )
     assert result.exit_code == 0
     assert "clock-inferred" not in result.stdout
+
+
+# ── ADR-052 Commit 6: realized-open-vs-IEP render ─────────────────────────────
+
+
+def test_opening_candidate_lines_render_realized_open():
+    from rich.console import Console
+
+    from src.adapters.cli.today_commands import _opening_candidate_lines
+    from src.application.use_case.daily_briefing_use_case import OpeningBriefingCandidate
+
+    candidate = OpeningBriefingCandidate(
+        ticker="BUMI",
+        opening_setup="WATCH",
+        iep=172,
+        realized_open="174",
+        realized_vs_iep_pct=1.16,
+    )
+    console = Console(width=120)
+    with console.capture() as cap:
+        for line in _opening_candidate_lines(candidate):
+            console.print(line)
+    out = cap.get()
+    assert "→ opened 174 (+1.16%)" in out

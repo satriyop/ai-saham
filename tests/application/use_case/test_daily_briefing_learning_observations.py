@@ -198,3 +198,85 @@ def test_daily_briefing_delta_iev_none_when_no_baseline(monkeypatch) -> None:
     assert candidate.iev == 796_137
     assert candidate.delta_iev is None
     assert candidate.ncp_baseline_iev is None
+
+
+def _preopen_observation(day, iep=172):
+    return LearningObservation.create(
+        purpose=AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION,
+        policy_contract="pre_open_directional_baseline.v1",
+        horizon_contract="open_30m",
+        compatibility_id="cohort",
+        cutoff_at=datetime(day.year, day.month, day.day, 8, 57, tzinfo=IDX_TIMEZONE),
+        universe_id=f"iev:{day.isoformat()}",
+        window_id=f"BUMI:{day.isoformat()}",
+        decision_payload={
+            "ticker": "BUMI",
+            "candidate": {"iev": 796_137, "iep": iep},
+            "trade_setup": {"action": "WATCH"},
+        },
+        captured_at=datetime(day.year, day.month, day.day, 8, 57, tzinfo=IDX_TIMEZONE),
+    )
+
+
+def test_daily_briefing_reconciles_realized_open_vs_iep(monkeypatch):
+    """ADR-052 Commit 6: when the session candle is cached, show realized open vs IEP."""
+    from decimal import Decimal
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        "src.application.use_case.daily_briefing_use_case.load_universe",
+        lambda *args, **kwargs: ["BUMI"],
+    )
+    day = date(2026, 6, 19)
+    learning_repository = MagicMock()
+    learning_repository.list_observations.return_value = [_preopen_observation(day, iep=172)]
+    market_repository = MagicMock()
+    market_repository.get_date_range.return_value = None
+    market_repository.get_candles.return_value = [SimpleNamespace(date=day, open=Decimal("174"))]
+    broker_repository = MagicMock()
+    broker_repository.get_date_range.return_value = None
+    accumulation = MagicMock()
+    accumulation.execute.return_value = MagicMock(candidates=[])
+
+    response = DailyBriefingUseCase(
+        market_repository=market_repository,
+        broker_repository=broker_repository,
+        regime_use_case=MagicMock(),
+        accumulation_use_case=accumulation,
+        universe_loader=MagicMock(),
+        learning_observation_repository=learning_repository,
+    ).execute(DailyBriefingRequest(as_of_date=day))
+
+    candidate = response.opening_candidates[0]
+    assert candidate.realized_open == "174"
+    assert candidate.realized_vs_iep_pct == round((174 - 172) / 172 * 100, 2)  # 1.16
+
+
+def test_daily_briefing_realized_open_none_when_no_candle(monkeypatch):
+    monkeypatch.setattr(
+        "src.application.use_case.daily_briefing_use_case.load_universe",
+        lambda *args, **kwargs: ["BUMI"],
+    )
+    day = date(2026, 6, 19)
+    learning_repository = MagicMock()
+    learning_repository.list_observations.return_value = [_preopen_observation(day)]
+    market_repository = MagicMock()
+    market_repository.get_date_range.return_value = None
+    market_repository.get_candles.return_value = []  # session candle not cached
+    broker_repository = MagicMock()
+    broker_repository.get_date_range.return_value = None
+    accumulation = MagicMock()
+    accumulation.execute.return_value = MagicMock(candidates=[])
+
+    response = DailyBriefingUseCase(
+        market_repository=market_repository,
+        broker_repository=broker_repository,
+        regime_use_case=MagicMock(),
+        accumulation_use_case=accumulation,
+        universe_loader=MagicMock(),
+        learning_observation_repository=learning_repository,
+    ).execute(DailyBriefingRequest(as_of_date=day))
+
+    candidate = response.opening_candidates[0]
+    assert candidate.realized_open is None
+    assert candidate.realized_vs_iep_pct is None

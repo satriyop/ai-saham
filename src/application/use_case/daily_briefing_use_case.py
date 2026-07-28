@@ -7,6 +7,7 @@ AI usage: None
 
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -123,6 +124,9 @@ class OpeningBriefingCandidate:
     # ── Locked-input signal (decision_iev - 08:56 NCP baseline) ──
     ncp_baseline_iev: int | None = None
     delta_iev: int | None = None
+    # ── Realized open vs the predicted IEP (when the session candle exists) ──
+    realized_open: str | None = None
+    realized_vs_iep_pct: float | None = None
 
 
 @dataclass(frozen=True)
@@ -599,6 +603,31 @@ class DailyBriefingUseCase:
         rows.sort(key=lambda row: (row.event_date, row.ticker))
         return rows
 
+    def _realized_vs_iep(
+        self,
+        ticker: str,
+        live_session_date: date,
+        iep: object,
+    ) -> tuple[str | None, float | None]:
+        """Reconcile the predicted IEP against the realized session open.
+
+        Returns (realized_open, pct vs IEP) when the session candle is cached
+        (post-refresh / historical), else (None, None) — e.g. pre-open or offline.
+        """
+        if not isinstance(iep, (int, float)) or iep == 0:
+            return None, None
+        candles = self._market_repo.get_candles(
+            ticker,
+            start_date=live_session_date,
+            end_date=live_session_date,
+        )
+        if not candles:
+            return None, None
+        open_price = candles[-1].open
+        iep_dec = Decimal(str(iep))
+        pct = round(float((Decimal(str(open_price)) - iep_dec) / iep_dec * 100), 2)
+        return str(open_price), pct
+
     def _opening_snapshot(
         self,
         request: DailyBriefingRequest,
@@ -656,6 +685,9 @@ class DailyBriefingUseCase:
                 else None
             )
             gates = trade_setup.get("blocking_gates") or ()
+            realized_open, realized_vs_iep_pct = self._realized_vs_iep(
+                ticker_upper, live_session_date, candidate_payload.get("iep")
+            )
 
             candidate = OpeningBriefingCandidate(
                 ticker=ticker_upper,
@@ -679,6 +711,8 @@ class DailyBriefingUseCase:
                 rationale=trade_setup.get("rationale"),
                 ncp_baseline_iev=baseline_iev,
                 delta_iev=delta_iev,
+                realized_open=realized_open,
+                realized_vs_iep_pct=realized_vs_iep_pct,
             )
             if ticker_upper in universe_set:
                 candidates.append(candidate)
