@@ -5,7 +5,6 @@ Layer: Adapter
 
 from __future__ import annotations
 
-from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -16,11 +15,10 @@ from src.adapters.cli.research_learning_helpers import (
     evaluate_cohort,
     repository,
 )
-from src.adapters.cli.research_pre_open_paths import parse_session_date
+from src.adapters.cli.research_pre_open_paths import resolve_session_date
 from src.application.use_case.database_learning_lifecycle_use_case import (
     GetPreOpenSessionStatusUseCase,
 )
-from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.domain.value_objects.learning_artifacts import AssessmentPurpose
 
 
@@ -52,7 +50,7 @@ def pre_open_status(
 ) -> None:
     """Show pre-open session readiness (capture / track open / labels)."""
 
-    session_date = parse_session_date(session) or datetime.now(IDX_TIMEZONE).date()
+    session_date = resolve_session_date(session)
     _, repo = repository(db_path)
     status = GetPreOpenSessionStatusUseCase(
         observations=repo,

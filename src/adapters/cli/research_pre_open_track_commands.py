@@ -11,7 +11,7 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.research_pre_open_paths import parse_session_date
+from src.adapters.cli.research_pre_open_paths import resolve_session_date
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.domain.value_objects.learning_artifacts import AssessmentPurpose
 from src.infrastructure.config.app_config import load_app_config
@@ -25,7 +25,13 @@ def track(
         Optional[list[str]],
         typer.Argument(help="Explicit tickers (overrides saved observations)"),
     ] = None,
-    date_str: Annotated[Optional[str], typer.Option("--date")] = None,
+    date_str: Annotated[
+        Optional[str],
+        typer.Option(
+            "--date",
+            help="Session date YYYY-MM-DD (default: today Asia/Jakarta)",
+        ),
+    ] = None,
     headless: Annotated[bool, typer.Option("--headless/--no-headless")] = True,
     broker_confirm: Annotated[
         bool,
@@ -50,7 +56,8 @@ def track(
         saham research pre-open track --broker-confirm              # with broker attribution
     """
     cfg = load_app_config()
-    run_date = parse_session_date(date_str)
+    # Cron omits --date; must default to today WIB or observation filter matches nothing.
+    run_date = resolve_session_date(date_str)
     db_path = Path(cfg.storage.db_path)
 
     if tickers:
