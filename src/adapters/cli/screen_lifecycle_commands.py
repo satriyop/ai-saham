@@ -43,13 +43,14 @@ from src.infrastructure.config.universe_config_loader import YamlUniverseConfigL
 screen_app = typer.Typer(
     name="screen",
     help=(
-        "Live candidate discovery — pre-open movers and accumulation screens. "
+        "Live candidate discovery and judgment (ADR-054). "
         "Does not write research observations (use research * capture).\n\n"
-        "Discover: `pre-open`, `accum`.\n"
+        "Discover: `pre-open`, `accum --universe …`.\n"
+        "Judge: `accum TICKER` (Action / Why / pattern — the analysis desk).\n"
         "Lifecycle: `watchlist`, `compare`.\n"
-        "Next: `saham plan swing TICKER` · `saham inspect signal accum TICKER` · "
-        "`saham inspect risk TICKER` · `saham research … capture` · "
-        "`saham view BBCA` (browse only)."
+        "Next: `saham plan swing TICKER --capital …` (structure) · "
+        "`saham trade accum log --from-plan` · "
+        "`saham inspect signal accum|risk TICKER` · `saham view BBCA`."
     ),
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},

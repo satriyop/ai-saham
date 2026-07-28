@@ -14,9 +14,9 @@ from src.infrastructure.config.accumulation_screener_config import (
     AccumulationScreenerConfig,
     load_accumulation_screener_config,
 )
-from src.infrastructure.config.analyze_swing_config import (
-    AnalyzeSwingConfig,
-    load_analyze_swing_config,
+from src.infrastructure.config.plan_swing_config import (
+    PlanSwingConfig,
+    load_plan_swing_config,
 )
 from src.infrastructure.config.swing_backtest_config import (
     SwingBacktestConfig,
@@ -29,7 +29,7 @@ from src.infrastructure.config.swing_config import SwingConfig, load_swing_confi
 class PlanSwingCommandConfig:
     swing_config: SwingConfig
     swing_backtest_config: SwingBacktestConfig
-    analyze_swing_config: AnalyzeSwingConfig
+    plan_swing_config: PlanSwingConfig
     accumulation_screener_config: AccumulationScreenerConfig
     setup_config: SwingSetupCatalogConfig
 
@@ -40,7 +40,7 @@ def load_plan_swing_command_config() -> PlanSwingCommandConfig:
     return PlanSwingCommandConfig(
         swing_config=swing_config,
         swing_backtest_config=load_swing_backtest_config(),
-        analyze_swing_config=load_analyze_swing_config(),
+        plan_swing_config=load_plan_swing_config(),
         accumulation_screener_config=load_accumulation_screener_config(),
         setup_config=build_swing_setup_catalog_config(swing_config),
     )

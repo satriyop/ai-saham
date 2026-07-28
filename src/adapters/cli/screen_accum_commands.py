@@ -60,7 +60,7 @@ def accumulation_run(
         typer.Option(
             "--window",
             "-w",
-            help="Analysis window in broker sessions (7, 30, or 90)",
+            help="Judgment window in broker sessions (7, 30, or 90)",
             min=3,
         ),
     ] = 7,
@@ -201,35 +201,38 @@ def accumulation_run(
     ] = False,
 ) -> None:
     """
-    Screen stocks for foreign accumulation patterns (ADR-054 judgment desk).
+    Find and judge foreign-accumulation candidates (ADR-054 judgment desk).
 
-    Computes composite foreign-flow score 0-100 based on: consistency of daily foreign buying,
-    consecutive buy streak, whether foreigners are underwater (VWAP vs price),
-    RSI headroom, and foreign flow as % of total turnover. BB Width is shown as a
-    setup/phase diagnostic and does not contribute to the score by default.
+    Product job: rank a universe or deep-judge one ticker. Owns Action / Why /
+    pattern match / signal+risk display. Does **not** design trade geometry —
+    that is ``saham plan swing TICKER`` (horizon / SL / TP / lots).
+
+    Scoring (universe board): composite foreign-flow 0–100 from buy consistency,
+    streak, underwater VWAP, RSI headroom, and foreign % of turnover. BB width is
+    phase/setup diagnostic only (not in the default score).
 
     Modes:
-      --universe / list  → shortlist many names (cheap board)
-      TICKER             → single-name judgment case file (Action, Why, pattern,
-                           signal/risk). Structure (horizon/SL/TP/lots) is
-                           ``saham plan swing TICKER``, not this command.
+      --universe / list  → cheap shortlist board (filters, multi-window, patterns)
+      TICKER             → single-name judgment case file (Action, Why, named
+                           setups, signal/risk). Explicit tickers auto-refresh
+                           candles/broker by default (``--no-refresh`` to skip).
 
-    Run `saham fetch market --universe lq45` first to ensure fresh data.
+    Next after judgment:
+        saham plan swing TICKER --capital 10000000
+        saham trade accum log --ticker TICKER --from-plan
+
+    Run ``saham fetch market --universe lq45`` first if the board is cold.
 
     Examples:
         saham screen accum --universe lq45
-        saham screen accum BBCA
-        saham screen accum BBCA --format json
-        saham screen accum --universe lq45 --window 30
         saham screen accum --universe lq45 --multi
-        saham screen accum --universe lq45 --multi --sort-by 30s
-        saham screen accum --universe lq45 --sort-by score
-        saham screen accum --universe lq45 --vwap-only
-        saham screen accum --universe lq45 --squeeze-only
-        saham screen accum --universe lq45 --top-broker
-        saham screen accum --universe lq45 --detail
+        saham screen accum BBRI
+        saham screen accum BBRI --format json
+        saham screen accum --universe lq45 --window 30 --sort-by score
+        saham screen accum --universe lq45 --vwap-only --squeeze-only
+        saham screen accum --universe lq45 --top-broker --detail
+        saham screen accum --universe lq45 --save morning-watch
         saham screen accum --guide
-        saham screen accum --universe lq45 --format json
     """
     if guide:
         print_column_guide()
@@ -468,16 +471,16 @@ def _refresh_explicit_tickers_for_screen(
     cannot diverge. Failures are warnings; screen continues on existing cache.
     """
     from src.adapters.cli.plan_swing_optional_fetchers import auto_refresh_swing_data
-    from src.infrastructure.config.analyze_swing_config import load_analyze_swing_config
+    from src.infrastructure.config.plan_swing_config import load_plan_swing_config
 
-    analyze_config = load_analyze_swing_config()
+    plan_swing_config = load_plan_swing_config()
     for ticker in tickers:
         try:
             notes = auto_refresh_swing_data(
                 ticker=ticker,
                 db_path=db_path,
                 force_refresh=force_refresh,
-                analyze_config=analyze_config,
+                plan_swing_config=plan_swing_config,
             )
             if not quiet:
                 joined = ", ".join(notes) if notes else "ok"

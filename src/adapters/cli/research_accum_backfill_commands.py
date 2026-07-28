@@ -59,7 +59,7 @@ _SCORING_CONFIG_PATH_ATTRS = (
     "swing_setups",
     "swing_targets",
     "swing_risk_policy",
-    "analyze_swing",
+    "plan_swing",
     "signal_engine",
     "institutional_accumulation",
     "ticker_profile",

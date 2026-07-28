@@ -1,13 +1,13 @@
 from pathlib import Path
 
-from src.infrastructure.config.analyze_swing_config import load_analyze_swing_config
+from src.infrastructure.config.plan_swing_config import load_plan_swing_config
 
 
-def test_load_analyze_swing_config_reads_workflow_defaults(tmp_path: Path):
-    config = tmp_path / "analyze_swing.yaml"
+def test_load_plan_swing_config_reads_workflow_defaults(tmp_path: Path):
+    config = tmp_path / "plan_swing.yaml"
     config.write_text(
         """
-analyze_swing:
+plan_swing:
   auto_refresh:
     market_days: 250
     broker_days: 60
@@ -23,7 +23,7 @@ analyze_swing:
         encoding="utf-8",
     )
 
-    loaded = load_analyze_swing_config(config)
+    loaded = load_plan_swing_config(config)
 
     assert loaded.market_refresh_days == 250
     assert loaded.broker_refresh_days == 60

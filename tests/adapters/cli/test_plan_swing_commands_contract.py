@@ -4,7 +4,7 @@ import inspect
 
 from src.adapters.cli import plan_swing_commands as swing_cli
 from src.adapters.cli.main import app
-from tests.adapters.cli.swing_command_fixtures import runner
+from tests.adapters.cli.plan_swing_command_fixtures import runner
 
 
 def test_swing_command_defaults_do_not_apply_setup_and_include_regime():

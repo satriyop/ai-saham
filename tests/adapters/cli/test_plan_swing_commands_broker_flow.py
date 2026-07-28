@@ -18,7 +18,7 @@ from src.application.services.swing_broker_detail_builder import (
 )
 from src.domain.entities.broker_flow import BrokerType
 from src.domain.value_objects.setup_evaluation import SetupMatch
-from tests.adapters.cli.swing_command_fixtures import (
+from tests.adapters.cli.plan_swing_command_fixtures import (
     FakeBrokerSummaryRepository,
     _build_broker_detail,
     _candidate,

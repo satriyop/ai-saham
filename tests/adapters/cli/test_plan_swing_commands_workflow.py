@@ -10,7 +10,7 @@ from src.adapters.cli.main import app
 from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSession,
 )
-from tests.adapters.cli.swing_command_fixtures import runner
+from tests.adapters.cli.plan_swing_command_fixtures import runner
 
 _FAKE_SESSION = EffectiveMarketSession(
     run_at=datetime(2026, 7, 23, 16, 0),

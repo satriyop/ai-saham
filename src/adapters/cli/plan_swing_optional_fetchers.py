@@ -1,5 +1,5 @@
 """
-Optional refresh/sentiment fetchers for the saham analyze swing workflow.
+Optional refresh/sentiment fetchers for the saham plan swing workflow.
 
 Layer: Adapter
 
@@ -19,7 +19,7 @@ from src.application.use_case.fetch_sentiment_use_case import (
     FetchSentimentRequest,
     FetchSentimentUseCase,
 )
-from src.infrastructure.config.analyze_swing_config import AnalyzeSwingConfig
+from src.infrastructure.config.plan_swing_config import PlanSwingConfig
 from src.infrastructure.sentiment import SentimentFactory
 
 
@@ -28,7 +28,7 @@ def auto_refresh_swing_data(
     ticker: str,
     db_path: Path,
     force_refresh: bool,
-    analyze_config: AnalyzeSwingConfig,
+    plan_swing_config: PlanSwingConfig,
 ) -> tuple[str, ...]:
     from src.adapters.cli.fetch_market_provider_factory import create_broker_provider
     from src.infrastructure.composition.fetch_market.fetch_market_broker_refresh import fetch_broker
@@ -40,8 +40,8 @@ def auto_refresh_swing_data(
         ticker=ticker,
         db_path=db_path,
         force_refresh=force_refresh,
-        market_refresh_days=analyze_config.market_refresh_days,
-        broker_refresh_days=analyze_config.broker_refresh_days,
+        market_refresh_days=plan_swing_config.market_refresh_days,
+        broker_refresh_days=plan_swing_config.broker_refresh_days,
         fetch_candles=fetch_candles,
         create_broker_provider=create_broker_provider,
         fetch_broker=fetch_broker,
@@ -70,7 +70,7 @@ def fetch_swing_sentiment(
     *,
     ticker: str,
     sentiment_verbose: bool,
-    analyze_config: AnalyzeSwingConfig,
+    plan_swing_config: PlanSwingConfig,
 ):
     """Fetch optional sentiment context without leaking provider noise by default."""
     try:
@@ -84,8 +84,8 @@ def fetch_swing_sentiment(
             response = sent_uc.execute(
                 FetchSentimentRequest(
                     ticker=ticker,
-                    max_headlines=analyze_config.sentiment_max_headlines,
-                    days=analyze_config.sentiment_days,
+                    max_headlines=plan_swing_config.sentiment_max_headlines,
+                    days=plan_swing_config.sentiment_days,
                 )
             )
         return response, response.warning

@@ -11,9 +11,9 @@ Verb dictionary (ADR-050): first token is the behavior contract.
 
 | Family | Role | Writes learning DB? | Final action words? |
 |--------|------|---------------------|---------------------|
-| **`screen`** | Live multi-candidate discovery | **No** | provisional only |
+| **`screen`** | Live discovery **and** single-ticker judgment (`screen accum`; ADR-054) | **No** | Action on single-ticker judgment; provisional on board |
 | **`inspect`** | Live single-subject capability/evidence lens | **No** | **No** |
-| **`plan`** | Trade structure for a chosen candidate (`plan swing`; ADR-054) | **No** | **Yes** |
+| **`plan`** | Trade structure for a chosen candidate (`plan swing`; ADR-054) | **No** | inherits screen Action by default |
 | **`assess`** | Frozen-plan confirmation (`assess pre-open`) | **No** | relative to frozen plan |
 | **`research`** | Learning corpus (capture/labels/evaluate/…) | **Yes** | no |
 | **`backtest`** | Offline historical performance sim | **No** | no live action |
@@ -38,7 +38,10 @@ Examples:
 - Same-day learning: `track` → `labels` → `evaluate` / `status`  
 - Post-open assess: `saham assess pre-open`  
 - Paper notebook: `saham trade pre-open log --observation-id … --opening-snapshot-id …`
-- Live accum: `saham screen accum` → no observation write  
+- Live accum: `saham screen accum --universe …` → shortlist (no observation write)
+- Judge: `saham screen accum TICKER` → Action / Why / pattern (no observation write)
+- Structure: `saham plan swing TICKER --capital …` → `swing_trade_plan` artifact
+- Paper: `saham trade accum log --ticker TICKER --from-plan`
 
 Do **not** auto-write observations from live `screen`.  
 **Retired:** `research pre-open grade|prompt|tune`, `trade confirm`, `trade pre-open log (intraday type removed)`.
@@ -749,20 +752,25 @@ saham inspect regime --as-of 2026-06-01 --verbose
 
 ## saham plan swing
 
-**Trade structure desk (ADR-054 S4).** Design horizon / stop / target / lots for a
+**Trade structure desk (ADR-054).** Design horizon / stop / target / lots for a
 candidate you already judged with `saham screen accum TICKER`. Not a second
 analysis screener.
 
-Default output leads with a **Structure** panel (Action from screen judgment,
-entry/stop/target/lots when `--capital` is set). Compact context strip follows;
-full signal/risk/engine detail panels only with `--full` (market detail also with
-`--with-market-context`). Flow, sentiment, strategy stay opt-in.
+Default **Action** inherits screen judgment. Recompute Signal+Risk Action only
+with `--with-market-context` and/or `--with-technical-gate`. Output leads with a
+**Structure** panel (entry/stop/target/lots when `--capital` is set). Compact
+context strip follows; full engine detail with `--full`. Flow / sentiment /
+strategy stay opt-in and never override Action.
+
+Complete geometry writes `swing_trade_plan` under `journals/plans/` for
+`saham trade accum log --ticker TICKER --from-plan`.
 
 ```
 saham screen accum BBRI                         # judgment first
 saham plan swing TICKER [OPTIONS]
 saham plan swing BBRI --capital 10000000
 saham plan swing BBRI --setup foreign-bounce --capital 10000000
+saham trade accum log --ticker BBRI --from-plan
 ```
 
 | Option | Short | Default | Description |
@@ -778,8 +786,8 @@ saham plan swing BBRI --setup foreign-bounce --capital 10000000
 | `--rr` | | 2.0 | Reward:risk ratio for target |
 | `--with-sentiment` | | false | Include news sentiment evidence |
 | `--with-flow-detail` | | false | Include broker flow attribution |
-| `--with-market-context` | | false | Build MCE and condition signal/setup with market regime |
-| `--with-technical-gate` | | false | Enable SMA/EMA/RSI execution gate |
+| `--with-market-context` | | false | Build MCE; **allows Action recompute** with regime |
+| `--with-technical-gate` | | false | Enable TechnicalGate; **allows Action recompute** |
 | `--full` | | false | All optional evidence except named setup |
 | `--no-sentiment` | | false | Deprecated no-op |
 | `--sentiment-verbose` | | false | Show sentiment provider errors |
@@ -1033,21 +1041,24 @@ saham view broker list
 
 ## saham screen accum
 
-**Live** foreign accumulation screener — rank stocks by institutional accumulation
-evidence (SignalAssessment 0–100). **Does not** write research observations —
-use `research signal capture` for corpus decisions (`--save` is watchlist only).
+**Judgment desk (ADR-054).** Find candidates on a universe board **or** deep-judge
+one ticker (Action / Why / pattern / signal+risk). Owns judgment; does **not**
+design horizon/SL/TP/lots — use `saham plan swing`. **Does not** write research
+observations (`--save` is watchlist only; corpus = `research accum …`).
 
 ```
-saham screen accum [OPTIONS]
+saham screen accum [OPTIONS] [TICKERS...]
 saham screen accum --universe lq45
 saham screen accum --universe idx80 --window 30 --multi
+saham screen accum BBRI                            # single-ticker judgment
 saham screen accum --universe lq45 --save morning-watch
+saham plan swing BBRI --capital 10000000           # structure next
 ```
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
 | `--universe` | `-u` | — | Universe: lq45, idx80, idxcomp100, cached |
-| `--window` | `-w` | 7 | Analysis window in broker sessions (7, 30, 90) |
+| `--window` | `-w` | 7 | Judgment window in broker sessions (7, 30, 90) |
 | `--min-streak` | | 0 | Minimum consecutive buy days |
 | `--min-foreign-flow-score` | | config | Minimum accum score (0-100) |
 | `--min-signal-score` | | config | Minimum SignalEngine score (0-100) |
@@ -1057,10 +1068,13 @@ saham screen accum --universe lq45 --save morning-watch
 | `--top` | | 20 | Show top N results |
 | `--multi` | | false | Multi-window side-by-side (7, 30, 90) |
 | `--windows` | | 7,30,90 | Windows for --multi |
-| `--sort-by` | | avg | Sort for --multi: avg, max, 7s, 30s, 90s |
+| `--sort-by` | | signal | Sort: signal (default), score, vwap; multi: avg/max/7s/… |
 | `--top-broker` | | false | Show top broker-code detail |
 | `--detail` | | false | Append run context and scoring definitions |
 | `--strategy` | `-S` | — | Optional backtest strategy for signal context |
+| `--auto-refresh` / `--no-refresh` | | refresh on | Explicit tickers: refresh candles/broker before screen |
+| `--force-refresh` | | false | Force provider refresh (explicit tickers only) |
+| `--as-of` | | live | Point-in-time as-of date YYYY-MM-DD |
 | `--save` | | none | Persist to named watchlist |
 | `--format` | | table | Output format: table, json |
 | `--guide` | | false | Column reference guide |

@@ -53,7 +53,7 @@ class ConfigPathsConfig:
     swing_setups: str = "config/swing_setups.yaml"
     swing_targets: str = "config/swing_targets.yaml"
     swing_backtest: str = "config/swing_backtest.yaml"
-    analyze_swing: str = "config/analyze_swing.yaml"
+    plan_swing: str = "config/plan_swing.yaml"
     swing_risk_policy: str = "config/swing_risk_policy.yaml"
     risk_engine: str = "config/risk_engine.yaml"
     signal_engine: str = "config/signal_engine.yaml"

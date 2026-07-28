@@ -29,7 +29,7 @@ from src.domain.value_objects.setup_evaluation import (
     SetupGate,
     SetupMatch,
 )
-from tests.adapters.cli.swing_command_fixtures import _candidate
+from tests.adapters.cli.plan_swing_command_fixtures import _candidate
 
 
 def test_swing_output_renders_rich_decision_overview(capsys):

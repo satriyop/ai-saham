@@ -293,7 +293,7 @@ CLI option > config/user.yaml > config/default.yaml > code default
 | `config/swing_setups.yaml` | named setup definitions and entry authority |
 | `config/swing_targets.yaml` | regime/setup target policy |
 | `config/swing_backtest.yaml` | replay assumptions |
-| `config/analyze_swing.yaml` | swing analysis workflow defaults |
+| `config/plan_swing.yaml` | plan swing workflow defaults |
 
 Config changes can alter analysis even when code does not change. Treat them as
 behavior changes: validate, replay, and document them.

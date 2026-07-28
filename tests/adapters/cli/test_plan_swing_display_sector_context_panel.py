@@ -1,4 +1,4 @@
-from tests.adapters.cli.swing_display_alpha_sector_fixtures import (
+from tests.adapters.cli.plan_swing_display_alpha_sector_fixtures import (
     _call_print,
     _sector_context_evidence_full,
     _sector_context_unavailable,

@@ -1,5 +1,5 @@
 from src.domain.value_objects.alpha_trigger_score import AlphaTriggerScore
-from tests.adapters.cli.swing_display_alpha_sector_fixtures import (
+from tests.adapters.cli.plan_swing_display_alpha_sector_fixtures import (
     _alpha_trigger_score,
     _call_print,
     _diagnostic_contribution,

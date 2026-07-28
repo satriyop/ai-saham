@@ -43,7 +43,7 @@ config_paths:
   swing_setups: "config/swing_setups.yaml"
   swing_targets: "config/swing_targets.yaml"
   swing_backtest: "config/swing_backtest.yaml"
-  analyze_swing: "config/analyze_swing.yaml"
+  plan_swing: "config/plan_swing.yaml"
   swing_risk_policy: "config/swing_risk_policy.yaml"
   risk_engine: "config/risk_engine.yaml"
   signal_engine: "config/signal_engine.yaml"

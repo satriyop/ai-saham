@@ -1,10 +1,11 @@
 """
-CLI: live trade plan composition.
+CLI: live trade structure design (ADR-054).
 
   saham plan swing TICKER
 
-Authority: TradeSetup from SignalEngine + RiskEngine (ADR-032/050).
-Not learning corpus (`research`). Not paper notebook (`trade`).
+Product job: horizon / stop / target / lots for a name already judged on
+`saham screen accum TICKER`. Not a second screener. Not learning corpus
+(`research`). Not paper notebook (`trade`) — use `trade accum log --from-plan`.
 
 Layer: Adapter (routing only).
 """
@@ -19,10 +20,12 @@ plan_app = typer.Typer(
     name="plan",
     help=(
         "Trade structure for a chosen candidate (ADR-054). "
-        "`plan swing` designs horizon/SL/TP/lots and still shows TradeSetup; "
-        "deep judgment is `saham screen accum TICKER` (not a second screener). "
-        "Evidence lenses: `saham inspect risk|regime|signal accum|sentiment`. "
-        "Paper: `saham trade accum log`. Not a research write (`research`). "
+        "`plan swing` designs horizon / SL / TP / lots and writes a "
+        "`swing_trade_plan` artifact; Action defaults to screen judgment "
+        "(recompute only with `--with-market-context` / `--with-technical-gate`). "
+        "Judge first: `saham screen accum TICKER`. "
+        "Paper: `saham trade accum log --from-plan`. "
+        "Lenses: `saham inspect risk|regime|signal accum|sentiment`. "
         "Frozen pre-open: `saham assess pre-open` (not this command)."
     ),
     no_args_is_help=True,

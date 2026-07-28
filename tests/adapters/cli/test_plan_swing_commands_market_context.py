@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from src.adapters.cli.main import app
-from tests.adapters.cli.swing_command_fixtures import runner
+from tests.adapters.cli.plan_swing_command_fixtures import runner
 
 
 def test_regime_command_accepts_explicit_ticker_with_empty_cache(tmp_path: Path):

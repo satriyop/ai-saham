@@ -45,7 +45,7 @@ swing:
 #   swing_setups: "~/.ai-saham/config/swing_setups.yaml"
 #   swing_targets: "~/.ai-saham/config/swing_targets.yaml"
 #   swing_backtest: "~/.ai-saham/config/swing_backtest.yaml"
-#   analyze_swing: "~/.ai-saham/config/analyze_swing.yaml"
+#   plan_swing: "~/.ai-saham/config/plan_swing.yaml"
 #   swing_risk_policy: "~/.ai-saham/config/swing_risk_policy.yaml"
 #   risk_engine: "~/.ai-saham/config/risk_engine.yaml"
 #   signal_engine: "~/.ai-saham/config/signal_engine.yaml"

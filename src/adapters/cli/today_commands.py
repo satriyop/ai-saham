@@ -283,7 +283,7 @@ def _build_setup_lens_impact_use_case(
     """
     swing_cmd_cfg = load_plan_swing_command_config()
     swing_config = swing_cmd_cfg.swing_config
-    analyze_config = swing_cmd_cfg.analyze_swing_config
+    plan_swing_config = swing_cmd_cfg.plan_swing_config
 
     smart_money_brokers = set(swing_config.smart_money_brokers)
     noise_brokers = set(swing_config.noise_brokers)
@@ -298,7 +298,7 @@ def _build_setup_lens_impact_use_case(
             db_path=db_path,
             setup_name=setup_name,
             swing_config=swing_config,
-            analyze_config=analyze_config,
+            plan_swing_config=plan_swing_config,
             smart_money_brokers=smart_money_brokers,
             noise_brokers=noise_brokers,
             broker_weights=broker_weights,
@@ -309,7 +309,7 @@ def _build_setup_lens_impact_use_case(
 
     request_defaults = SwingLensRequestDefaults(
         window=cfg.swing.window,
-        flow_window=analyze_config.flow_detail_window_sessions,
+        flow_window=plan_swing_config.flow_detail_window_sessions,
         risk_pct=cfg.swing.risk_pct,
         atr_mult=cfg.swing.atr_mult,
         rr=cfg.swing.rr,

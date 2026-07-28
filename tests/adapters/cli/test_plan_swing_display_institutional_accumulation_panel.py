@@ -7,7 +7,7 @@ from src.domain.value_objects.institutional_accumulation_evidence import (
     ForeignInstitutionalTrack,
     InstitutionalAccumulationEvidence,
 )
-from tests.adapters.cli.swing_display_alpha_sector_fixtures import _call_print
+from tests.adapters.cli.plan_swing_display_alpha_sector_fixtures import _call_print
 
 
 def _ia_evidence_full() -> InstitutionalAccumulationEvidence:

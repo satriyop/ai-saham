@@ -1,5 +1,5 @@
 """
-Analyze swing workflow defaults loaded from config/analyze_swing.yaml.
+Plan swing workflow defaults loaded from config/plan_swing.yaml.
 
 Layer: Infrastructure
 """
@@ -13,14 +13,14 @@ import yaml
 from src.infrastructure.config.app_config import AppConfig, load_app_config
 
 
-def default_analyze_swing_config_path(config: AppConfig | None = None) -> Path:
+def default_plan_swing_config_path(config: AppConfig | None = None) -> Path:
     cfg = config or load_app_config()
-    return Path(cfg.config_paths.analyze_swing)
+    return Path(cfg.config_paths.plan_swing)
 
 
 @dataclass(frozen=True)
-class AnalyzeSwingConfig:
-    """Tunable workflow defaults for saham analyze swing."""
+class PlanSwingConfig:
+    """Tunable workflow defaults for saham plan swing."""
 
     market_refresh_days: int = 365
     broker_refresh_days: int = 90
@@ -31,10 +31,10 @@ class AnalyzeSwingConfig:
     candidate_min_accum_score: float = 0.0
 
 
-def load_analyze_swing_config(config_path: Path | None = None) -> AnalyzeSwingConfig:
-    defaults = AnalyzeSwingConfig()
-    raw = _read_yaml(config_path or default_analyze_swing_config_path())
-    root = raw.get("analyze_swing") or raw
+def load_plan_swing_config(config_path: Path | None = None) -> PlanSwingConfig:
+    defaults = PlanSwingConfig()
+    raw = _read_yaml(config_path or default_plan_swing_config_path())
+    root = raw.get("plan_swing") or raw
     if not isinstance(root, dict):
         return defaults
     refresh = root.get("auto_refresh") or {}
@@ -43,10 +43,10 @@ def load_analyze_swing_config(config_path: Path | None = None) -> AnalyzeSwingCo
     candidate = root.get("candidate") or {}
     if "min_foreign_flow_score" in candidate:
         raise ValueError(
-            "analyze_swing.candidate.min_foreign_flow_score was renamed to "
+            "plan_swing.candidate.min_foreign_flow_score was renamed to "
             "candidate.min_accum_score (ADR-043)."
         )
-    return AnalyzeSwingConfig(
+    return PlanSwingConfig(
         market_refresh_days=_int(refresh, "market_days", defaults.market_refresh_days),
         broker_refresh_days=_int(refresh, "broker_days", defaults.broker_refresh_days),
         sentiment_max_headlines=_int(

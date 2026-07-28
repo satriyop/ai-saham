@@ -1,4 +1,4 @@
-from tests.adapters.cli.swing_display_alpha_sector_fixtures import (
+from tests.adapters.cli.plan_swing_display_alpha_sector_fixtures import (
     _alpha_trigger_score,
     _call_print,
     _minimal_signal_assessment,

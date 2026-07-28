@@ -64,7 +64,7 @@ def _fetch_swing_sentiment(
     return _fetch_swing_sentiment_with_config(
         ticker=ticker,
         sentiment_verbose=sentiment_verbose,
-        analyze_config=cfg.analyze_swing_config,
+        plan_swing_config=cfg.plan_swing_config,
     )
 
 
@@ -188,14 +188,20 @@ def swing(
         bool,
         typer.Option(
             "--with-market-context",
-            help="Build MCE and condition the canonical signal/trade setup with market regime",
+            help=(
+                "Build MCE and allow Action recompute with market regime "
+                "(default: inherit screen judgment Action)"
+            ),
         ),
     ] = False,
     with_technical_gate: Annotated[
         bool,
         typer.Option(
             "--with-technical-gate",
-            help="Enable the optional TechnicalGate (SMA/EMA/RSI) execution gate. Off by default.",
+            help=(
+                "Enable TechnicalGate (SMA/EMA/RSI) and allow Action recompute "
+                "(default: inherit screen judgment Action)"
+            ),
         ),
     ] = False,
     regime_universe: Annotated[
@@ -224,25 +230,30 @@ def swing(
     ] = None,
 ) -> None:
     """
-    Trade structure for a chosen swing candidate (ADR-054).
+    Design trade structure for a chosen swing candidate (ADR-054).
 
-    Product job: design horizon / stop / target / lots for a name you already
-    judged. Deep judgment (Action, Why, pattern match) is
+    Product job: horizon / stop / target / lots (and risk budget when
+    ``--capital`` is set). Deep judgment (Action, Why, pattern) belongs on
     ``saham screen accum TICKER`` — do not use plan as a second screener.
 
-    Still composes SignalEngine + RiskEngine -> TradeSetup (shared judgment path
-    during migration). Core engine panels remain for context; strategy,
-    sentiment, and flow detail stay opt-in evidence and do not override action.
+    Action authority (default): inherit screen judgment. Recompute Signal+Risk
+    Action only when ``--with-market-context`` and/or ``--with-technical-gate``
+    are set. Opt-in evidence (strategy, sentiment, flow) never overrides Action.
 
-    Structure-first examples:
+    On a complete structure, writes a ``swing_trade_plan`` under
+    ``journals/plans/`` for paper logging via
+    ``saham trade accum log --ticker TICKER --from-plan``.
+
+    Recommended path:
+        saham screen accum BBRI
+        saham plan swing BBRI --capital 10000000
+        saham trade accum log --ticker BBRI --from-plan
+
+    Structure examples:
         saham plan swing BBRI --capital 10000000
         saham plan swing BBRI --setup foreign-bounce --capital 10000000
         saham plan swing BBRI --capital 10000000 --risk-pct 1 --entry 4825 --rr 2.5
-        saham plan swing BBRI --setup foreign-bounce --capital 10000000 --with-market-context
-
-    Judgment first (recommended):
-        saham screen accum BBRI
-        saham plan swing BBRI --capital 10000000
+        saham plan swing BBRI --capital 10000000 --with-market-context
     """
     app_cfg = load_app_config()
     resolved_db = db_path or Path(app_cfg.storage.db_path)
@@ -261,7 +272,7 @@ def swing(
     resolved_flow_window = (
         flow_window
         if flow_window is not None
-        else cfg.analyze_swing_config.flow_detail_window_sessions
+        else cfg.plan_swing_config.flow_detail_window_sessions
     )
 
     if capital is None:
@@ -297,7 +308,7 @@ def swing(
         db_path=resolved_db,
         setup_name=setup_name,
         swing_config=cfg.swing_config,
-        analyze_config=cfg.analyze_swing_config,
+        plan_swing_config=cfg.plan_swing_config,
         smart_money_brokers=smart_money_brokers,
         noise_brokers=noise_brokers,
         broker_weights=broker_weights,

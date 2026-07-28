@@ -1,6 +1,6 @@
 version: 1
 
-analyze_swing:
+plan_swing:
   auto_refresh:
     market_days: 365
     broker_days: 90
@@ -13,7 +13,8 @@ analyze_swing:
     flow_detail_window_sessions: 30
 
   candidate:
-    # Internal candidate construction for single-ticker analysis. Keep permissive
-    # by default so SignalEngine/RiskEngine decide the final assessment.
+    # Internal candidate construction for single-ticker plan structure.
+    # Keep permissive by default so SignalEngine/RiskEngine decide assessment
+    # when Action recompute flags are enabled.
     min_net_buy_days: 0
     min_accum_score: 0.0
