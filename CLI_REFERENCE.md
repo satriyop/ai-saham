@@ -246,6 +246,8 @@ saham fetch market BBCA BBRI BMRI
 | `--broker-provider` | | auto | Broker provider: idx, stockbit |
 | `--no-meta` | | false | Skip sector/industry metadata |
 | `--no-enrichment` | | false | Skip Stockbit enrichment |
+| `--no-calendar` | | false | Skip market-wide corporate action calendar |
+| `--no-macro-calendar` | | false | Skip market-wide macro economic calendar |
 | `--refresh` | `-r` | false | Force refresh all |
 | `--db` | | ./data.db | SQLite database path |
 
@@ -747,14 +749,14 @@ saham inspect regime --as-of 2026-06-01 --verbose
 
 ## saham plan swing
 
-**Trade structure desk (ADR-054).** Design horizon / stop / target / lots for a
+**Trade structure desk (ADR-054 S4).** Design horizon / stop / target / lots for a
 candidate you already judged with `saham screen accum TICKER`. Not a second
 analysis screener.
 
-Still composes SignalEngine + RiskEngine → TradeSetup (migration path). Core
-engine panels remain for context; flow, sentiment, strategy stay opt-in and do
-not override action. Prefer structure flags (`--capital`, `--setup`, `--entry`,
-`--rr`).
+Default output leads with a **Structure** panel (Action from screen judgment,
+entry/stop/target/lots when `--capital` is set). Compact context strip follows;
+full signal/risk/engine detail panels only with `--full` (market detail also with
+`--with-market-context`). Flow, sentiment, strategy stay opt-in.
 
 ```
 saham screen accum BBRI                         # judgment first

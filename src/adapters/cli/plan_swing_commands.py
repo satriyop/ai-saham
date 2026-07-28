@@ -280,10 +280,11 @@ def swing(
 
     include_sentiment = with_sentiment or full
     include_flow_detail = with_flow_detail or full
-    # Plan default is full core-engine detail (former --explain behavior).
-    include_signal_detail = True
-    include_risk_detail = True
-    include_market_detail = True
+    # ADR-054 S4: structure-first — engine detail panels only with --full
+    # (market detail also when --with-market-context for regime structure).
+    include_signal_detail = full
+    include_risk_detail = full
+    include_market_detail = full or with_market_context
 
     smart_money_brokers = set(cfg.swing_config.smart_money_brokers)
     noise_brokers = set(cfg.swing_config.noise_brokers)

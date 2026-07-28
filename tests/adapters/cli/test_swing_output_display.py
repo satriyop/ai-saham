@@ -94,12 +94,12 @@ def test_swing_output_renders_rich_decision_overview(capsys):
     print_swing_output(ctx)
 
     out = capsys.readouterr().out
-    assert "Swing Analysis - BBCA" in out
-    assert "Verdict" in out
-    assert "Signal" in out
-    assert "Risk" in out
+    # ADR-054 S4: structure desk first
+    assert "Swing Structure - BBCA" in out
+    assert "Structure" in out
+    assert "Context (judgment)" in out
+    assert "screen accum BBCA" in out or "screen accum" in out
     assert "SETUP EVIDENCE" in out
-    assert "Plan" in out
     assert "Setup is partial" in out
     assert "Data" in out
 

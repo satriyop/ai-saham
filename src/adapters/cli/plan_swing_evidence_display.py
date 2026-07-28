@@ -282,14 +282,18 @@ def print_swing_output(ctx: SwingOutputDisplayContext) -> None:
         effective_session=ctx.effective_session,
     )
 
-    print_market_context_preview_panel(ctx)
+    # ADR-054 S4: structure is in overview; detail evidence is opt-in.
     print_setup_evidence_panel(ctx)
-    print_signal_detail_panel(ctx)
-    print_alpha_trigger_detail_panel(ctx)
-    print_risk_detail_panel(ctx)
-    print_market_detail_panel(ctx)
-    print_sector_context_panel(ctx)
-    print_sector_macro_context_panel(ctx)
+    if ctx.options.include_signal_detail:
+        print_signal_detail_panel(ctx)
+        print_alpha_trigger_detail_panel(ctx)
+    if ctx.options.include_risk_detail:
+        print_risk_detail_panel(ctx)
+    if ctx.options.include_market_detail:
+        print_market_context_preview_panel(ctx)
+        print_market_detail_panel(ctx)
+        print_sector_context_panel(ctx)
+        print_sector_macro_context_panel(ctx)
 
     if (
         ctx.options.include_flow_detail
@@ -301,11 +305,9 @@ def print_swing_output(ctx: SwingOutputDisplayContext) -> None:
     print_strategy_evidence_panel(ctx)
     print_sentiment_evidence_panel(ctx)
     print_corporate_calendar_panel(ctx)
-    # ADR-054 S2: analysis panels remain during migration; structure is the job.
     console().print(
         Text(
-            f"Next: structure with --capital / --setup / --entry / --rr · "
-            f"judgment: saham screen accum {ctx.ticker}",
+            f"Structure desk · judgment: saham screen accum {ctx.ticker} · engine detail: --full",
             style="dim",
         )
     )

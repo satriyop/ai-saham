@@ -1,5 +1,5 @@
 """
-Verdict-first overview panel construction for saham analyze swing.
+Structure-first overview for saham plan swing (ADR-054 S4).
 
 Layer: Adapter
 
@@ -32,9 +32,9 @@ from src.adapters.cli.plan_swing_formatters import (
 from src.adapters.cli.plan_swing_overview_panels import (
     _build_data_panel,
     _build_market_context_panel,
-    _build_plan_panel,
     _build_risk_panel,
     _build_signal_panel,
+    _build_structure_panel,
     _market_label,
     _risk_label,
     _signal_label,
@@ -403,31 +403,54 @@ def print_swing_rich_overview(
     risk_value, risk_style, _ = _risk_label(risk_resp)
     market_value, market_style, _ = _market_label(market_regime)
 
-    # Verdict table (no Accum column)
-    verdict = compact_table()
-    verdict.add_column("Action")
-    verdict.add_column("Price", justify="right")
-    verdict.add_column("Signal")
-    verdict.add_column("Risk")
-    verdict.add_column("Market")
-    verdict.add_column("Setup")
-    verdict.add_row(
-        Text(action_value, style=action_style),
-        price,
+    chosen_sizing = setup_sizing or sizing
+
+    # Compact context strip (secondary to Structure — ADR-054 S4)
+    context = compact_table()
+    context.add_column("Signal")
+    context.add_column("Risk")
+    context.add_column("Market")
+    context.add_column("Setup")
+    context.add_row(
         Text(signal_value, style=signal_style),
         Text(risk_value, style=risk_style),
         Text(market_value, style=market_style),
         Text(setup_value, style=setup_style),
     )
 
-    chosen_sizing = setup_sizing or sizing
-
     sections = [
-        panel(verdict, title="Verdict"),
-        _build_signal_panel(signal_source, signal_assessment_availability),
-        _build_risk_panel(risk_resp, with_technical_gate),
+        _build_structure_panel(
+            action_value=action_value,
+            action_style=action_style,
+            action_detail=action_detail,
+            price=price,
+            plan_text=plan_text,
+            plan_style=plan_style,
+            capital=capital,
+            chosen_sizing=chosen_sizing,
+            setup_value=setup_value,
+            setup_style=setup_style,
+            ticker=ticker,
+        ),
+        panel(
+            Group(
+                context,
+                Text(
+                    "\nContext only — deep judgment: "
+                    f"saham screen accum {ticker}. "
+                    "Detail panels: --full (or market-context when enabled).",
+                    style="dim",
+                ),
+            ),
+            title="Context (judgment)",
+        ),
     ]
-    if market_regime is not None:
+    # Optional compact engine summaries only when detail flags request them
+    if include_signal_detail:
+        sections.append(_build_signal_panel(signal_source, signal_assessment_availability))
+    if include_risk_detail:
+        sections.append(_build_risk_panel(risk_resp, with_technical_gate))
+    if market_regime is not None and include_market_detail:
         sections.append(
             _build_market_context_panel(
                 market_regime,
@@ -436,10 +459,9 @@ def print_swing_rich_overview(
                 canonical_signal=signal_source,
             )
         )
-    sections += [
-        _build_plan_panel(plan_text, plan_style, capital, chosen_sizing),
+    sections.append(
         _build_data_panel(data_freshness, broker_detail, broker_quality_note, accum),
-    ]
+    )
 
     if effective_session is not None:
         subtitle = f"{today.isoformat()} · {format_effective_session_label(effective_session)}"
@@ -449,7 +471,7 @@ def print_swing_rich_overview(
     console().print(
         panel(
             Group(*sections),
-            title=f"Swing Analysis - {ticker}",
+            title=f"Swing Structure - {ticker}",
             subtitle=subtitle,
         )
     )

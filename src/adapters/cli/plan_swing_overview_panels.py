@@ -1,11 +1,10 @@
 """
-Panel builders for the saham analyze swing verdict-first overview.
+Panel builders for saham plan swing structure-first overview (ADR-054 S4).
 
-Owns per-section Rich panel construction (Signal, Risk, Market Context,
-Plan, Data) and the label/style/detail helpers that feed them.
-print_swing_rich_overview() in plan_swing_overview_display.py owns the
-Verdict table, overall panel assembly, and printing; it calls into this
-module for each section panel.
+Owns per-section Rich panel construction (Structure, Signal, Risk, Market,
+Data) and the label/style/detail helpers that feed them.
+print_swing_rich_overview() owns assembly and printing.
+
 
 Layer: Adapter
 
@@ -249,8 +248,9 @@ def _build_market_context_panel(
 
 
 def _build_plan_panel(plan_text, plan_style, capital, chosen_sizing) -> Any:
+    """Legacy Plan panel — prefer structure panel (ADR-054 S4)."""
     if not capital or chosen_sizing is None:
-        return panel(Text(plan_text, style=f"bold {plan_style}"), title="Plan")
+        return panel(Text(plan_text, style=f"bold {plan_style}"), title="Structure")
 
     table = compact_table(show_header=False)
     table.add_column("Key", style="bold")
@@ -264,7 +264,59 @@ def _build_plan_panel(plan_text, plan_style, capital, chosen_sizing) -> Any:
         f"Lots {chosen_sizing.lots:,} | "
         f"Capital {capital:,.0f}",
     )
-    return panel(table, title="Plan")
+    return panel(table, title="Structure")
+
+
+def _build_structure_panel(
+    *,
+    action_value: str,
+    action_style: str,
+    action_detail: str,
+    price: str,
+    plan_text: str,
+    plan_style: str,
+    capital: int | None,
+    chosen_sizing: Any,
+    setup_value: str,
+    setup_style: str,
+    ticker: str,
+) -> Any:
+    """ADR-054 S4: structure desk headline (entry/stop/target/lots + Action)."""
+    table = compact_table(show_header=False)
+    table.add_column("Key", style="bold cyan", width=14)
+    table.add_column("Value")
+    table.add_row("Action", Text(action_value, style=action_style))
+    table.add_row(
+        "Action source",
+        "screen judgment (default) · recompute with --with-market-context / --with-technical-gate",
+    )
+    if action_detail:
+        table.add_row("Why", action_detail[:160] + ("…" if len(action_detail) > 160 else ""))
+    table.add_row("Horizon", "swing (multi-day)")
+    table.add_row("Price / entry ref", price)
+    table.add_row("Setup lens", Text(setup_value, style=setup_style))
+
+    if capital and chosen_sizing is not None:
+        table.add_row("Entry", f"{float(chosen_sizing.entry_price):,.0f}")
+        table.add_row("Stop", f"{float(chosen_sizing.stop_price):,.0f}")
+        table.add_row("Target", f"{float(chosen_sizing.target_price):,.0f}")
+        table.add_row("Lots", f"{chosen_sizing.lots:,}")
+        table.add_row("Capital", f"{capital:,.0f}")
+        risk_amt = getattr(chosen_sizing, "risk_amount", None)
+        if risk_amt is not None:
+            try:
+                table.add_row("Risk amount", f"{float(risk_amt):,.0f}")
+            except (TypeError, ValueError):
+                pass
+    else:
+        table.add_row(
+            "Sizing",
+            "add --capital for lots / stop / target (structure)",
+        )
+
+    table.add_row("Guidance", Text(plan_text, style=f"bold {plan_style}"))
+    table.add_row("Judgment desk", f"saham screen accum {ticker}")
+    return panel(table, title="Structure")
 
 
 def _build_data_panel(
