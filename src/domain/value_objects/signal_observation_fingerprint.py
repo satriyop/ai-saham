@@ -162,7 +162,7 @@ class SignalObservationFingerprint:
     flow_trigger_allowed: bool | None = None
     alpha_trigger_route_metadata: tuple[dict[str, Any], ...] = ()
     alpha_trigger_unavailable_reasons: tuple[str, ...] = ()
-    # Volatility context fingerprint (shared with analyze swing diagnostics)
+    # Volatility context fingerprint (shared with plan swing diagnostics)
     atr_at_signal: float | None = None
     atr_pct_at_signal: float | None = None
     volatility_bucket_at_signal: str | None = None

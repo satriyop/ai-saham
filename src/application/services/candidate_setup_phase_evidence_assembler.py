@@ -2,7 +2,7 @@
 
 Layer: Application
 
-`SwingAnalysisEvidenceBuilder` and `AccumulationCandidateEvidenceBuilder` both
+`PlanSwingEvidenceBuilder` and `AccumulationCandidateEvidenceBuilder` both
 build a `SetupEvidence` snapshot and feed it into `SetupPhaseDetector`, using
 the same candle-provenance lookup and persisted-phase history. Swing analysis
 already has a `setup_eval` (from `evaluate_swing_setup`) and a resolved

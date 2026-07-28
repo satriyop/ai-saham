@@ -23,7 +23,9 @@ inspect_app = typer.Typer(
     help=(
         "Live single-subject capability/evidence lenses. "
         "No ENTER/WATCH/AVOID authority. "
-        "Decision: `saham plan swing` or `saham assess pre-open`. "
+        "Judgment: `saham screen accum TICKER`. "
+        "Structure: `saham plan swing`. "
+        "Frozen: `saham assess pre-open`. "
         "Browse raw stored series: `saham view`. "
         "Signal: `inspect signal accum` (accumulation-flow only)."
     ),

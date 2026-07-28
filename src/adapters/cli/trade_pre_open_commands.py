@@ -15,8 +15,8 @@ from src.adapters.cli.trade_pre_open_actions import (
     run_pre_open_paper_outcome,
     run_pre_open_paper_review,
 )
-from src.application.dto.analyze_pre_open import AnalyzePreOpenError
-from src.application.use_case.analyze_pre_open_use_case import AnalyzePreOpenUseCase
+from src.application.dto.assess_pre_open import AssessPreOpenError
+from src.application.use_case.assess_pre_open_use_case import AssessPreOpenUseCase
 from src.application.use_case.log_pre_open_trade_use_case import (
     LogPreOpenTradeRequest,
     LogPreOpenTradeUseCase,
@@ -74,7 +74,7 @@ def pre_open_paper_log(
     resolved_db = db_path or Path(cfg.storage.db_path)
 
     repository = SQLiteLearningArtifactRepository(resolved_db)
-    analyze = AnalyzePreOpenUseCase(
+    analyze = AssessPreOpenUseCase(
         observations=repository,
         tracks=repository,
         pre_open_config=load_pre_open_screen_config(),
@@ -95,7 +95,7 @@ def pre_open_paper_log(
                 journal_path=journal_path,
             )
         )
-    except (AnalyzePreOpenError, ValueError, FileNotFoundError) as exc:
+    except (AssessPreOpenError, ValueError, FileNotFoundError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(1) from exc
 

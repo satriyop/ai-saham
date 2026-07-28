@@ -1,5 +1,5 @@
 """
-AnalyzeRunningTradeUseCase — compute institutional broker absorption from trade ticks.
+RunningTradeAnalysisUseCase — compute institutional broker absorption from trade ticks.
 
 Pure use case: takes list[TradeTick] + set of institutional broker codes.
 Returns RunningTradeSignal summarising whether institutions are net buyers or sellers.
@@ -23,13 +23,13 @@ from src.domain.value_objects.running_trade_signal import RunningTradeSignal
 
 
 @dataclass(frozen=True)
-class AnalyzeRunningTradeRequest:
+class RunningTradeAnalysisRequest:
     ticker: str
     ticks: list[TradeTick]
     institutional_broker_codes: frozenset[str]
 
 
-def analyze_running_trade(request: AnalyzeRunningTradeRequest) -> RunningTradeSignal | None:
+def analyze_running_trade_signal(request: RunningTradeAnalysisRequest) -> RunningTradeSignal | None:
     """Compute RunningTradeSignal from raw ticks. Returns None if no ticks provided."""
     ticks = request.ticks
     if not ticks:

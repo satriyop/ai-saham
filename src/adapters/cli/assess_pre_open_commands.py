@@ -17,15 +17,15 @@ import typer
 
 from src.adapters.cli.assess_pre_open_display import display_assess_pre_open, echo_json
 from src.adapters.cli.research_pre_open_paths import parse_session_date
-from src.application.dto.analyze_pre_open import (
-    AnalyzePreOpenAmbiguityError,
-    AnalyzePreOpenContractError,
-    AnalyzePreOpenError,
-    AnalyzePreOpenNotFoundError,
-    AnalyzePreOpenRequest,
-    AnalyzePreOpenSnapshotError,
+from src.application.dto.assess_pre_open import (
+    AssessPreOpenAmbiguityError,
+    AssessPreOpenContractError,
+    AssessPreOpenError,
+    AssessPreOpenNotFoundError,
+    AssessPreOpenRequest,
+    AssessPreOpenSnapshotError,
 )
-from src.application.use_case.analyze_pre_open_use_case import AnalyzePreOpenUseCase
+from src.application.use_case.assess_pre_open_use_case import AssessPreOpenUseCase
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.pre_open_config import load_pre_open_screen_config
@@ -72,7 +72,7 @@ def pre_open(
     )
 
     repository = SQLiteLearningArtifactRepository(resolved_db)
-    use_case = AnalyzePreOpenUseCase(
+    use_case = AssessPreOpenUseCase(
         observations=repository,
         tracks=repository,
         pre_open_config=load_pre_open_screen_config(),
@@ -81,18 +81,18 @@ def pre_open(
 
     try:
         result = use_case.execute(
-            AnalyzePreOpenRequest(
+            AssessPreOpenRequest(
                 session_date=session_date,
                 observation_id=observation_id,
                 opening_snapshot_id=opening_snapshot_id,
             )
         )
     except (
-        AnalyzePreOpenNotFoundError,
-        AnalyzePreOpenAmbiguityError,
-        AnalyzePreOpenSnapshotError,
-        AnalyzePreOpenContractError,
-        AnalyzePreOpenError,
+        AssessPreOpenNotFoundError,
+        AssessPreOpenAmbiguityError,
+        AssessPreOpenSnapshotError,
+        AssessPreOpenContractError,
+        AssessPreOpenError,
     ) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(1) from exc

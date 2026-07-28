@@ -8,8 +8,8 @@ from unittest.mock import MagicMock
 from src.application.services.accumulation_candidate_evidence_builder import (
     AccumulationCandidateEvidenceBuilder,
 )
-from src.application.services.swing_analysis_evidence_builder import (
-    SwingAnalysisEvidenceBuilder,
+from src.application.services.plan_swing_evidence_builder import (
+    PlanSwingEvidenceBuilder,
 )
 from src.domain.value_objects.ticker_profile_snapshot import TickerProfileSnapshot
 from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
@@ -77,8 +77,8 @@ def test_accumulation_candidate_evidence_builder_with_fake_factory():
     mock_classifier.classify.assert_called_once()
 
 
-def test_swing_analysis_evidence_builder_no_factory():
-    builder = SwingAnalysisEvidenceBuilder(
+def test_plan_swing_evidence_builder_no_factory():
+    builder = PlanSwingEvidenceBuilder(
         market_repository=MagicMock(),
         broker_repository=MagicMock(),
         registry=MagicMock(),
@@ -103,8 +103,8 @@ def test_swing_analysis_evidence_builder_no_factory():
     assert res.ticker_profile_snapshot is None
 
 
-def test_swing_analysis_evidence_builder_with_fake_factory():
-    # 3. swing_analysis_evidence_builder.py uses injected fake classifier factory.
+def test_plan_swing_evidence_builder_with_fake_factory():
+    # 3. plan_swing_evidence_builder.py uses injected fake classifier factory.
     mock_snapshot = MagicMock(spec=TickerProfileSnapshot)
     mock_classifier = MagicMock()
     mock_classifier.classify.return_type = mock_snapshot
@@ -117,7 +117,7 @@ def test_swing_analysis_evidence_builder_with_fake_factory():
     broker_mock.get_broker_daily_flows.return_value = ()
     broker_mock.get_broker_summaries.return_value = ()
 
-    builder = SwingAnalysisEvidenceBuilder(
+    builder = PlanSwingEvidenceBuilder(
         market_repository=MagicMock(),
         broker_repository=broker_mock,
         registry=MagicMock(),

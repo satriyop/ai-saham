@@ -1,6 +1,6 @@
 """Pinned as-of determinism for accumulation screen scoring.
 
-Cross-command equality (screen accum vs analyze swing) is not duplicated here
+Cross-command equality (screen accum vs plan swing) is not duplicated here
 with a full swing workflow harness: both paths share the same pinned
 ``as_of_date``, ``MARKET_CLOSE`` WIB ``run_at``, and
 ``SignalEvidenceExecutionContext`` when ``--as-of`` is set. This module proves

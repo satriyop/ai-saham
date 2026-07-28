@@ -1,8 +1,8 @@
 """
-Display context for `saham analyze swing`'s full-output rendering.
+Display context for `saham plan swing`'s full-output rendering.
 
 Bundles the swing analysis workflow's verdict/evidence/diagnostics DTOs
-(src/application/dto/swing_analysis.py) with display-only extras (position
+(src/application/dto/plan_swing.py) with display-only extras (position
 sizing, plan window, display config, and which optional panels to render)
 so print_swing_output() and its panel builders take one object instead of
 30+ individual parameters.
@@ -21,7 +21,7 @@ from decimal import Decimal
 from typing import Any
 
 from src.adapters.cli.plan_swing_formatters import SwingDisplayConfig
-from src.application.dto.swing_analysis import SwingDiagnostics, SwingEvidence, SwingVerdict
+from src.application.dto.plan_swing import SwingDiagnostics, SwingEvidence, SwingVerdict
 from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSession,
 )

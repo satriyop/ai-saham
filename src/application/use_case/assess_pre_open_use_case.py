@@ -1,4 +1,4 @@
-"""AnalyzePreOpenUseCase — post-open assessment of an NCP pre-open plan.
+"""AssessPreOpenUseCase — post-open assessment of an NCP pre-open plan.
 
 Reads immutable learning observations + linked track snapshots, reconstructs
 PreOpenPostOpenCandidate rows, and applies PreOpenPostOpenGatesUseCase.
@@ -14,15 +14,15 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Sequence
 
-from src.application.dto.analyze_pre_open import (
-    AnalyzePreOpenAmbiguityError,
-    AnalyzePreOpenContractError,
-    AnalyzePreOpenLine,
-    AnalyzePreOpenNotFoundError,
-    AnalyzePreOpenRequest,
-    AnalyzePreOpenResult,
-    AnalyzePreOpenSnapshotError,
-    AnalyzePreOpenStatus,
+from src.application.dto.assess_pre_open import (
+    AssessPreOpenAmbiguityError,
+    AssessPreOpenContractError,
+    AssessPreOpenLine,
+    AssessPreOpenNotFoundError,
+    AssessPreOpenRequest,
+    AssessPreOpenResult,
+    AssessPreOpenSnapshotError,
+    AssessPreOpenStatus,
 )
 from src.application.services.pre_open_post_open_candidate_mapper import (
     extract_market_regime_label,
@@ -57,7 +57,7 @@ _PRE_OPEN_PURPOSE = AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION
 _PRE_OPEN_CONTRACT = LearningContractId.PRE_OPEN_OBSERVATION
 
 
-class AnalyzePreOpenUseCase:
+class AssessPreOpenUseCase:
     """Database-identified post-open assess of pre-open plan(s)."""
 
     def __init__(
@@ -75,11 +75,11 @@ class AnalyzePreOpenUseCase:
         self._confirm = confirm_use_case or PreOpenPostOpenGatesUseCase()
         self._clock_date = clock_date
 
-    def execute(self, request: AnalyzePreOpenRequest) -> AnalyzePreOpenResult:
+    def execute(self, request: AssessPreOpenRequest) -> AssessPreOpenResult:
         session = request.session_date or self._clock_date or date.today()
         selected = self._select_observations(request, session)
         if not selected:
-            raise AnalyzePreOpenNotFoundError(
+            raise AssessPreOpenNotFoundError(
                 f"No pre-open observations for session {session.isoformat()}"
             )
 
@@ -91,11 +91,11 @@ class AnalyzePreOpenUseCase:
 
         # Explicit snapshot only valid for a single observation target
         if request.opening_snapshot_id and len(selected) != 1:
-            raise AnalyzePreOpenSnapshotError(
+            raise AssessPreOpenSnapshotError(
                 "--opening-snapshot-id requires exactly one observation (pass --observation-id)"
             )
 
-        lines: list[AnalyzePreOpenLine] = []
+        lines: list[AssessPreOpenLine] = []
         candidates = []
         for obs in selected:
             line, candidate = self._build_line(
@@ -123,14 +123,14 @@ class AnalyzePreOpenUseCase:
         )
 
         by_ticker = {c.ticker: c for c in confirm_result.confirmations}
-        final_lines: list[AnalyzePreOpenLine] = []
+        final_lines: list[AssessPreOpenLine] = []
         for line in lines:
             conf = by_ticker.get(line.ticker)
             if conf is None:
                 # Should not happen; fail closed with insufficient data shape
                 conf = line.confirmation
             final_lines.append(
-                AnalyzePreOpenLine(
+                AssessPreOpenLine(
                     observation_id=line.observation_id,
                     opening_snapshot_id=line.opening_snapshot_id,
                     ticker=line.ticker,
@@ -144,7 +144,7 @@ class AnalyzePreOpenUseCase:
             )
 
         status = self._status(final_lines)
-        return AnalyzePreOpenResult(
+        return AssessPreOpenResult(
             session_date=session,
             status=status,
             market_regime=regime_label,
@@ -163,19 +163,17 @@ class AnalyzePreOpenUseCase:
 
     def _select_observations(
         self,
-        request: AnalyzePreOpenRequest,
+        request: AssessPreOpenRequest,
         session: date,
     ) -> list[LearningObservation]:
         if request.observation_id:
             obs = self._observations.get_observation(request.observation_id)
             if obs is None:
-                raise AnalyzePreOpenNotFoundError(
-                    f"Observation not found: {request.observation_id}"
-                )
+                raise AssessPreOpenNotFoundError(f"Observation not found: {request.observation_id}")
             self._assert_pre_open_contract(obs)
             obs_session = obs.cutoff_at.astimezone(IDX_TIMEZONE).date()
             if request.session_date is not None and obs_session != request.session_date:
-                raise AnalyzePreOpenContractError(
+                raise AssessPreOpenContractError(
                     f"Observation session {obs_session.isoformat()} does not match "
                     f"--session {request.session_date.isoformat()}"
                 )
@@ -191,7 +189,7 @@ class AnalyzePreOpenUseCase:
 
         compat_ids = {o.compatibility_id for o in session_rows}
         if len(compat_ids) > 1:
-            raise AnalyzePreOpenAmbiguityError(
+            raise AssessPreOpenAmbiguityError(
                 "Multiple pre-open compatibility cohorts for session "
                 f"{session.isoformat()}; pass --observation-id. "
                 f"Found: {sorted(compat_ids)}"
@@ -200,12 +198,12 @@ class AnalyzePreOpenUseCase:
 
     def _assert_pre_open_contract(self, obs: LearningObservation) -> None:
         if obs.purpose is not _PRE_OPEN_PURPOSE:
-            raise AnalyzePreOpenContractError(
+            raise AssessPreOpenContractError(
                 f"Observation {obs.observation_id} purpose is {obs.purpose.value}, "
                 f"expected {_PRE_OPEN_PURPOSE.value}"
             )
         if obs.contract_id is not _PRE_OPEN_CONTRACT:
-            raise AnalyzePreOpenContractError(
+            raise AssessPreOpenContractError(
                 f"Observation {obs.observation_id} contract is {obs.contract_id.value}, "
                 f"expected {_PRE_OPEN_CONTRACT.value}"
             )
@@ -216,7 +214,7 @@ class AnalyzePreOpenUseCase:
         *,
         session: date,
         opening_snapshot_id: str | None,
-    ) -> tuple[AnalyzePreOpenLine, PreOpenPostOpenCandidate]:
+    ) -> tuple[AssessPreOpenLine, PreOpenPostOpenCandidate]:
         snapshot = self._resolve_opening_snapshot(
             obs, session=session, opening_snapshot_id=opening_snapshot_id
         )
@@ -250,7 +248,7 @@ class AnalyzePreOpenUseCase:
             stop_pct=None,
             reasons=(),
         )
-        line = AnalyzePreOpenLine(
+        line = AssessPreOpenLine(
             observation_id=obs.observation_id,
             opening_snapshot_id=snap_id,
             ticker=candidate.ticker,
@@ -283,7 +281,7 @@ class AnalyzePreOpenUseCase:
             matches = [s for s in snaps if s.snapshot_id == opening_snapshot_id]
             if not matches:
                 # May belong to another observation — hard error
-                raise AnalyzePreOpenSnapshotError(
+                raise AssessPreOpenSnapshotError(
                     f"Opening snapshot {opening_snapshot_id} is not linked to "
                     f"observation {obs.observation_id}"
                 )
@@ -297,7 +295,7 @@ class AnalyzePreOpenUseCase:
         earliest_ts = open_window[0].sampled_at
         ties = [s for s in open_window if s.sampled_at == earliest_ts]
         if len(ties) > 1:
-            raise AnalyzePreOpenSnapshotError(
+            raise AssessPreOpenSnapshotError(
                 f"Ambiguous earliest open-window snapshots for "
                 f"{obs.observation_id} at {earliest_ts.isoformat()}; "
                 "pass --opening-snapshot-id"
@@ -312,12 +310,12 @@ class AnalyzePreOpenUseCase:
         return local.timetz().replace(tzinfo=None) >= REGULAR_OPEN
 
     @staticmethod
-    def _status(lines: Sequence[AnalyzePreOpenLine]) -> AnalyzePreOpenStatus:
+    def _status(lines: Sequence[AssessPreOpenLine]) -> AssessPreOpenStatus:
         if not lines:
-            return AnalyzePreOpenStatus.UNAVAILABLE_OPENING
+            return AssessPreOpenStatus.UNAVAILABLE_OPENING
         has_price = [line.price_provenance.get("opening_price") is not None for line in lines]
         if all(has_price):
-            return AnalyzePreOpenStatus.OK
+            return AssessPreOpenStatus.OK
         if any(has_price):
-            return AnalyzePreOpenStatus.PARTIAL
-        return AnalyzePreOpenStatus.UNAVAILABLE_OPENING
+            return AssessPreOpenStatus.PARTIAL
+        return AssessPreOpenStatus.UNAVAILABLE_OPENING

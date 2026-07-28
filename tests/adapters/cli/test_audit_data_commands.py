@@ -1436,7 +1436,7 @@ def _retired_candidate_observation_identity_legacy_latest_returns_fail(tmp_path:
             "2026-07-14T00:00:00+00:00",
             1,
             "{}",
-            "swing_analysis",
+            "plan_swing",
             7,
             "2026-07-14",
             "canonical123",

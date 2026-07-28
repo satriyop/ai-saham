@@ -1,4 +1,4 @@
-"""Unit tests for AnalyzePreOpenUseCase (database-identified post-open assess)."""
+"""Unit tests for AssessPreOpenUseCase (database-identified post-open assess)."""
 
 from __future__ import annotations
 
@@ -9,14 +9,14 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from src.application.dto.analyze_pre_open import (
-    AnalyzePreOpenAmbiguityError,
-    AnalyzePreOpenNotFoundError,
-    AnalyzePreOpenRequest,
-    AnalyzePreOpenSnapshotError,
-    AnalyzePreOpenStatus,
+from src.application.dto.assess_pre_open import (
+    AssessPreOpenAmbiguityError,
+    AssessPreOpenNotFoundError,
+    AssessPreOpenRequest,
+    AssessPreOpenSnapshotError,
+    AssessPreOpenStatus,
 )
-from src.application.use_case.analyze_pre_open_use_case import AnalyzePreOpenUseCase
+from src.application.use_case.assess_pre_open_use_case import AssessPreOpenUseCase
 from src.application.use_case.pre_open_post_open_gates_use_case import (
     PreOpenPostOpenGatesRequest,
     PreOpenPostOpenGatesUseCase,
@@ -105,8 +105,8 @@ def _add_track(
     return snap
 
 
-def _uc(repo: SQLiteLearningArtifactRepository) -> AnalyzePreOpenUseCase:
-    return AnalyzePreOpenUseCase(
+def _uc(repo: SQLiteLearningArtifactRepository) -> AssessPreOpenUseCase:
+    return AssessPreOpenUseCase(
         observations=repo,
         tracks=repo,
         clock_date=SESSION,
@@ -128,8 +128,8 @@ def test_happy_path_matches_pure_confirm(tmp_path: Path) -> None:
         },
     )
 
-    result = _uc(repo).execute(AnalyzePreOpenRequest(observation_id=obs.observation_id))
-    assert result.status is AnalyzePreOpenStatus.OK
+    result = _uc(repo).execute(AssessPreOpenRequest(observation_id=obs.observation_id))
+    assert result.status is AssessPreOpenStatus.OK
     assert len(result.lines) == 1
     line = result.lines[0]
     assert line.observation_id == obs.observation_id
@@ -172,16 +172,16 @@ def test_mid_only_snapshot_does_not_masquerade_as_open(tmp_path: Path) -> None:
         sampled_at=datetime(2026, 6, 18, 9, 1, tzinfo=WIB),
         payload={"mid_price": "10050", "best_bid": "10000", "best_offer": "10100"},
     )
-    result = _uc(repo).execute(AnalyzePreOpenRequest(observation_id=obs.observation_id))
-    assert result.status is AnalyzePreOpenStatus.UNAVAILABLE_OPENING
+    result = _uc(repo).execute(AssessPreOpenRequest(observation_id=obs.observation_id))
+    assert result.status is AssessPreOpenStatus.UNAVAILABLE_OPENING
     assert result.lines[0].confirmation.decision is PreOpenPostOpenDecision.SKIP_INSUFFICIENT_DATA
     assert result.lines[0].price_provenance["opening_price"] is None
 
 
 def test_missing_observation_fails(tmp_path: Path) -> None:
     repo = SQLiteLearningArtifactRepository(tmp_path / "learn.db")
-    with pytest.raises(AnalyzePreOpenNotFoundError):
-        _uc(repo).execute(AnalyzePreOpenRequest(observation_id="does-not-exist"))
+    with pytest.raises(AssessPreOpenNotFoundError):
+        _uc(repo).execute(AssessPreOpenRequest(observation_id="does-not-exist"))
 
 
 def test_no_post_open_track_unavailable(tmp_path: Path) -> None:
@@ -196,8 +196,8 @@ def test_no_post_open_track_unavailable(tmp_path: Path) -> None:
             "opening_price_source": "order_book_lastprice",
         },
     )
-    result = _uc(repo).execute(AnalyzePreOpenRequest(observation_id=obs.observation_id))
-    assert result.status is AnalyzePreOpenStatus.UNAVAILABLE_OPENING
+    result = _uc(repo).execute(AssessPreOpenRequest(observation_id=obs.observation_id))
+    assert result.status is AssessPreOpenStatus.UNAVAILABLE_OPENING
     assert result.lines[0].opening_snapshot_id is None
 
 
@@ -224,7 +224,7 @@ def test_default_picks_earliest_open_window_sample(tmp_path: Path) -> None:
         },
         source="stockbit.opening_track.b",
     )
-    result = _uc(repo).execute(AnalyzePreOpenRequest(observation_id=obs.observation_id))
+    result = _uc(repo).execute(AssessPreOpenRequest(observation_id=obs.observation_id))
     assert result.lines[0].opening_snapshot_id == early.snapshot_id
     assert result.lines[0].confirmation.opening_price == Decimal("10000")
 
@@ -233,8 +233,8 @@ def test_ambiguous_cohort_requires_observation_id(tmp_path: Path) -> None:
     repo = SQLiteLearningArtifactRepository(tmp_path / "learn.db")
     _add_observation(repo, ticker="BBCA", compatibility_id="compat-a")
     _add_observation(repo, ticker="BBRI", compatibility_id="compat-b")
-    with pytest.raises(AnalyzePreOpenAmbiguityError):
-        _uc(repo).execute(AnalyzePreOpenRequest(session_date=SESSION))
+    with pytest.raises(AssessPreOpenAmbiguityError):
+        _uc(repo).execute(AssessPreOpenRequest(session_date=SESSION))
 
 
 def test_unlinked_snapshot_id_fails(tmp_path: Path) -> None:
@@ -250,9 +250,9 @@ def test_unlinked_snapshot_id_fails(tmp_path: Path) -> None:
             "opening_price_source": "order_book_lastprice",
         },
     )
-    with pytest.raises(AnalyzePreOpenSnapshotError):
+    with pytest.raises(AssessPreOpenSnapshotError):
         _uc(repo).execute(
-            AnalyzePreOpenRequest(
+            AssessPreOpenRequest(
                 observation_id=obs_a.observation_id,
                 opening_snapshot_id=snap_b.snapshot_id,
             )
@@ -271,13 +271,13 @@ def test_session_selects_single_cohort(tmp_path: Path) -> None:
             "opening_price_source": "order_book_lastprice",
         },
     )
-    result = _uc(repo).execute(AnalyzePreOpenRequest(session_date=SESSION))
-    assert result.status is AnalyzePreOpenStatus.OK
+    result = _uc(repo).execute(AssessPreOpenRequest(session_date=SESSION))
+    assert result.status is AssessPreOpenStatus.OK
     assert result.lines[0].ticker == "BBCA"
 
 
 def test_application_layer_imports_are_clean() -> None:
-    source = Path("src/application/use_case/analyze_pre_open_use_case.py").read_text(
+    source = Path("src/application/use_case/assess_pre_open_use_case.py").read_text(
         encoding="utf-8"
     )
     for forbidden in (

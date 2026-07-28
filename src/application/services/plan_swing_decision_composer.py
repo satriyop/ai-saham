@@ -5,7 +5,7 @@ Layer: Application
 Owns gate context, initial risk assessment, initial signal assessment,
 initial TradeSetup composition, market-context preview, and the
 evidence-enriched signal re-score with recomposition. Extracted from
-`SwingAnalysisWorkflowUseCase` to keep the use case as orchestration only.
+`PlanSwingWorkflowUseCase` to keep the use case as orchestration only.
 """
 
 from __future__ import annotations
@@ -13,16 +13,16 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
-from src.application.dto import swing_analysis as swing_analysis_dto
+from src.application.dto import plan_swing as plan_swing_dto
 from src.application.exceptions import NoProductionSignalEvidenceError
 from src.application.services.evidence_source_availability_assembler import (
     EvidenceSourceAvailabilityAssembler,
 )
+from src.application.services.plan_swing_workflow_state import (
+    PlanSwingWorkflowState,
+)
 from src.application.services.signal_context_builder import (
     build_signal_context_from_candidate,
-)
-from src.application.services.swing_analysis_workflow_state import (
-    SwingAnalysisWorkflowState,
 )
 from src.application.services.swing_judgment_authority import (
     allow_action_recompute,
@@ -35,18 +35,18 @@ from src.domain.value_objects.canonical_signal_evidence_input import (
 )
 
 if TYPE_CHECKING:
-    from src.application.services.signal_engine import SignalEngine
-    from src.application.services.swing_analysis_risk_trade_setup import (
-        SwingAnalysisRiskTradeSetupComposer,
+    from src.application.services.plan_swing_risk_trade_setup import (
+        PlanSwingRiskTradeSetupComposer,
     )
+    from src.application.services.signal_engine import SignalEngine
 
 
-class SwingAnalysisDecisionComposer:
+class PlanSwingDecisionComposer:
     """Owns risk/signal/trade-setup decisions and evidence-enriched re-score."""
 
     def __init__(
         self,
-        risk_trade_setup_composer: "SwingAnalysisRiskTradeSetupComposer",
+        risk_trade_setup_composer: "PlanSwingRiskTradeSetupComposer",
         signal_engine: "SignalEngine | None",
     ) -> None:
         self._risk_trade_setup_composer = risk_trade_setup_composer
@@ -54,9 +54,9 @@ class SwingAnalysisDecisionComposer:
 
     def compose_initial_risk_and_signal(
         self,
-        request: swing_analysis_dto.SwingAnalysisWorkflowRequest,
-        state: SwingAnalysisWorkflowState,
-    ) -> SwingAnalysisWorkflowState:
+        request: plan_swing_dto.PlanSwingWorkflowRequest,
+        state: PlanSwingWorkflowState,
+    ) -> PlanSwingWorkflowState:
         gate_ctx = self._risk_trade_setup_composer.build_gate_context(
             ticker=request.ticker,
             snapshot_date=request.today,
@@ -75,9 +75,9 @@ class SwingAnalysisDecisionComposer:
         availability = None
 
         if self._signal_engine is None:
-            availability = swing_analysis_dto.SignalAssessmentAvailability(
-                status=swing_analysis_dto.SignalAssessmentStatus.UNAVAILABLE,
-                unavailable_reason=swing_analysis_dto.SignalAssessmentUnavailableReason.SIGNAL_ENGINE_UNAVAILABLE,
+            availability = plan_swing_dto.SignalAssessmentAvailability(
+                status=plan_swing_dto.SignalAssessmentStatus.UNAVAILABLE,
+                unavailable_reason=plan_swing_dto.SignalAssessmentUnavailableReason.SIGNAL_ENGINE_UNAVAILABLE,
             )
         else:
             try:
@@ -86,21 +86,21 @@ class SwingAnalysisDecisionComposer:
                     and state.accumulation_candidate.signal_assessment is not None
                 ):
                     signal_assessment = state.accumulation_candidate.signal_assessment
-                    availability = swing_analysis_dto.SignalAssessmentAvailability(
-                        status=swing_analysis_dto.SignalAssessmentStatus.AVAILABLE,
+                    availability = plan_swing_dto.SignalAssessmentAvailability(
+                        status=plan_swing_dto.SignalAssessmentStatus.AVAILABLE,
                     )
                 else:
-                    availability = swing_analysis_dto.SignalAssessmentAvailability(
-                        status=swing_analysis_dto.SignalAssessmentStatus.UNAVAILABLE,
-                        unavailable_reason=swing_analysis_dto.SignalAssessmentUnavailableReason.NO_PRODUCTION_SIGNAL_EVIDENCE,
+                    availability = plan_swing_dto.SignalAssessmentAvailability(
+                        status=plan_swing_dto.SignalAssessmentStatus.UNAVAILABLE,
+                        unavailable_reason=plan_swing_dto.SignalAssessmentUnavailableReason.NO_PRODUCTION_SIGNAL_EVIDENCE,
                     )
             except (NoProductionSignalEvidenceError, TypeError, ValueError):
                 raise
             except Exception as exc:
                 state.warnings.append(f"Signal assessment unavailable: {exc}")
-                availability = swing_analysis_dto.SignalAssessmentAvailability(
-                    status=swing_analysis_dto.SignalAssessmentStatus.UNAVAILABLE,
-                    unavailable_reason=swing_analysis_dto.SignalAssessmentUnavailableReason.ASSESSMENT_FAILED,
+                availability = plan_swing_dto.SignalAssessmentAvailability(
+                    status=plan_swing_dto.SignalAssessmentStatus.UNAVAILABLE,
+                    unavailable_reason=plan_swing_dto.SignalAssessmentUnavailableReason.ASSESSMENT_FAILED,
                 )
 
         state.gate_ctx = gate_ctx
@@ -111,14 +111,14 @@ class SwingAnalysisDecisionComposer:
 
     def compose_trade_setup_and_preview(
         self,
-        request: swing_analysis_dto.SwingAnalysisWorkflowRequest,
-        state: SwingAnalysisWorkflowState,
-    ) -> SwingAnalysisWorkflowState:
+        request: plan_swing_dto.PlanSwingWorkflowRequest,
+        state: PlanSwingWorkflowState,
+    ) -> PlanSwingWorkflowState:
         signal_assessment_to_pass = state.signal_assessment
         if (
             state.signal_assessment_availability is not None
             and state.signal_assessment_availability.status
-            == swing_analysis_dto.SignalAssessmentStatus.UNAVAILABLE
+            == plan_swing_dto.SignalAssessmentStatus.UNAVAILABLE
         ):
             signal_assessment_to_pass = None
 
@@ -160,7 +160,7 @@ class SwingAnalysisDecisionComposer:
         state.market_context_signal_preview = market_context_signal_preview
         state.market_context_risk_preview = market_context_risk_preview
         state.market_context_trade_setup_preview = market_context_trade_setup_preview
-        state.verdict = swing_analysis_dto.SwingVerdict(
+        state.verdict = plan_swing_dto.SwingVerdict(
             trade_setup=trade_setup,
             signal_assessment=signal_assessment_to_pass,
             risk_response=state.risk_response,
@@ -174,9 +174,9 @@ class SwingAnalysisDecisionComposer:
 
     def recompose_after_evidence(
         self,
-        request: swing_analysis_dto.SwingAnalysisWorkflowRequest,
-        state: SwingAnalysisWorkflowState,
-    ) -> SwingAnalysisWorkflowState:
+        request: plan_swing_dto.PlanSwingWorkflowRequest,
+        state: PlanSwingWorkflowState,
+    ) -> PlanSwingWorkflowState:
         # ADR-054 S3: without explicit re-judge flags, freeze screen Action —
         # do not overwrite with swing-purpose re-score.
         if not allow_action_recompute(
@@ -234,13 +234,11 @@ class SwingAnalysisDecisionComposer:
                 raise
             except Exception as exc:
                 state.warnings.append(f"Evidence-enriched signal re-score unavailable: {exc}")
-                state.signal_assessment_availability = (
-                    swing_analysis_dto.SignalAssessmentAvailability(
-                        status=swing_analysis_dto.SignalAssessmentStatus.UNAVAILABLE,
-                        unavailable_reason=(
-                            swing_analysis_dto.SignalAssessmentUnavailableReason.ASSESSMENT_FAILED
-                        ),
-                    )
+                state.signal_assessment_availability = plan_swing_dto.SignalAssessmentAvailability(
+                    status=plan_swing_dto.SignalAssessmentStatus.UNAVAILABLE,
+                    unavailable_reason=(
+                        plan_swing_dto.SignalAssessmentUnavailableReason.ASSESSMENT_FAILED
+                    ),
                 )
                 state.signal_assessment = None
                 state.trade_setup = None
@@ -292,10 +290,8 @@ class SwingAnalysisDecisionComposer:
                     )
 
                 state.signal_assessment = signal_assessment
-                state.signal_assessment_availability = (
-                    swing_analysis_dto.SignalAssessmentAvailability(
-                        status=swing_analysis_dto.SignalAssessmentStatus.AVAILABLE,
-                    )
+                state.signal_assessment_availability = plan_swing_dto.SignalAssessmentAvailability(
+                    status=plan_swing_dto.SignalAssessmentStatus.AVAILABLE,
                 )
                 state.trade_setup = _new_trade_setup
                 state.verdict = replace(
@@ -309,7 +305,7 @@ class SwingAnalysisDecisionComposer:
         return state
 
     def _build_canonical_evidence(
-        self, state: SwingAnalysisWorkflowState
+        self, state: PlanSwingWorkflowState
     ) -> "CanonicalSignalEvidenceInput | None":
         """Resolve availability once, pre-score, from exact provenance only,
         and bind it into the canonical evidence groups (ADR-041

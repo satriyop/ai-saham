@@ -1,6 +1,6 @@
-"""Shared ATR/volatility classification used by analyze swing and signal fingerprints.
+"""Shared ATR/volatility classification used by plan swing and signal fingerprints.
 
-Single source of truth so the two call sites cannot drift: analyze swing's
+Single source of truth so the two call sites cannot drift: plan swing's
 diagnostic volatility panel and the persisted SignalObservationFingerprint
 volatility fields must always agree on bucket/multiplier logic.
 """

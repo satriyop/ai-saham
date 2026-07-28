@@ -4,11 +4,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.application.dto.swing_analysis import SwingEvidence
+from src.application.dto.plan_swing import SwingEvidence
 from src.application.services.flow_confirmation_evidence_builder import (
     FlowConfirmationEvidenceBuilder,
 )
-from src.application.services.swing_analysis_serialization import signal_response_to_dict
+from src.application.services.plan_swing_serialization import signal_response_to_dict
 from src.domain.value_objects.accum_score_breakdown import (
     ForeignFlowComponentScore,
     ForeignFlowComponentStatus,

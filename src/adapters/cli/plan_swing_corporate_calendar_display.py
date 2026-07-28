@@ -1,5 +1,5 @@
 """
-Corporate Calendar panel for saham analyze swing.
+Corporate Calendar panel for saham plan swing.
 
 Layer: Adapter
 

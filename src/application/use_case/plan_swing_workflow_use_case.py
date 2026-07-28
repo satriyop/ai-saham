@@ -1,5 +1,5 @@
 """
-Application workflow coordinator for `saham analyze swing`.
+Application workflow coordinator for `saham plan swing`.
 
 Layer: Application
 AI usage: Optional sentiment provider, controlled by injected fetcher.
@@ -11,7 +11,7 @@ from collections.abc import Callable
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
-from src.application.dto import swing_analysis as swing_analysis_dto
+from src.application.dto import plan_swing as plan_swing_dto
 from src.application.ports.rules_loader import RulesLoader
 
 if TYPE_CHECKING:
@@ -44,27 +44,27 @@ from src.application.services.effective_market_session_resolver import (
 from src.application.services.flow_confirmation_evidence_builder import (
     FlowConfirmationEvidenceBuilder,
 )
-from src.application.services.swing_analysis_decision_composer import (
-    SwingAnalysisDecisionComposer,
+from src.application.services.plan_swing_decision_composer import (
+    PlanSwingDecisionComposer,
 )
-from src.application.services.swing_analysis_evidence_builder import (
-    SwingAnalysisEvidenceBuilder,
+from src.application.services.plan_swing_evidence_builder import (
+    PlanSwingEvidenceBuilder,
 )
-from src.application.services.swing_analysis_input_collector import (
-    SwingAnalysisDataUnavailable,
-    SwingAnalysisInputCollector,
+from src.application.services.plan_swing_input_collector import (
+    PlanSwingDataUnavailable,
+    PlanSwingInputCollector,
 )
-from src.application.services.swing_analysis_optional_evidence_runner import (
-    SwingAnalysisOptionalEvidenceRunner,
+from src.application.services.plan_swing_optional_evidence_runner import (
+    PlanSwingOptionalEvidenceRunner,
 )
-from src.application.services.swing_analysis_response_assembler import (
-    SwingAnalysisResponseAssembler,
+from src.application.services.plan_swing_response_assembler import (
+    PlanSwingResponseAssembler,
 )
-from src.application.services.swing_analysis_risk_trade_setup import (
-    SwingAnalysisRiskTradeSetupComposer,
+from src.application.services.plan_swing_risk_trade_setup import (
+    PlanSwingRiskTradeSetupComposer,
 )
-from src.application.services.swing_analysis_sizing_service import (
-    SwingAnalysisSizingService,
+from src.application.services.plan_swing_sizing_service import (
+    PlanSwingSizingService,
 )
 from src.application.use_case.score_accum_use_case import AccumScorePolicy
 from src.domain.ports.broker_data_repository import BrokerDataRepository
@@ -74,10 +74,10 @@ from src.domain.ports.learning_artifact_repositories import (
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.rules.risk_gate import RiskGate
 
-__all__ = ["SwingAnalysisWorkflowUseCase", "SwingAnalysisDataUnavailable"]
+__all__ = ["PlanSwingWorkflowUseCase", "PlanSwingDataUnavailable"]
 
 
-class SwingAnalysisWorkflowUseCase:
+class PlanSwingWorkflowUseCase:
     """Run deterministic swing analysis steps and return structured state."""
 
     def __init__(
@@ -146,7 +146,7 @@ class SwingAnalysisWorkflowUseCase:
         self._flow_confirmation_builder = FlowConfirmationEvidenceBuilder(
             accum_score_policy=accum_score_policy
         )
-        self._risk_trade_setup_composer = SwingAnalysisRiskTradeSetupComposer(
+        self._risk_trade_setup_composer = PlanSwingRiskTradeSetupComposer(
             market_repository=market_repository,
             registry=registry,
             structural_gates=self._structural_gates,
@@ -154,7 +154,7 @@ class SwingAnalysisWorkflowUseCase:
             signal_engine=signal_engine,
             risk_engine=risk_engine,
         )
-        self._evidence_builder = SwingAnalysisEvidenceBuilder(
+        self._evidence_builder = PlanSwingEvidenceBuilder(
             market_repository=market_repository,
             broker_repository=broker_repository,
             registry=registry,
@@ -170,7 +170,7 @@ class SwingAnalysisWorkflowUseCase:
             company_quality_context_builder_factory=company_quality_context_builder_factory,
             macro_calendar_repository=macro_calendar_repository,
         )
-        self._input_collector = SwingAnalysisInputCollector(
+        self._input_collector = PlanSwingInputCollector(
             market_repository=market_repository,
             broker_repository=broker_repository,
             refresh_data=refresh_data,
@@ -182,11 +182,11 @@ class SwingAnalysisWorkflowUseCase:
             signal_evidence_context_builder=signal_evidence_context_builder,
             session_resolver=session_resolver or EffectiveMarketSessionResolver(market_repository),
         )
-        self._decision_composer = SwingAnalysisDecisionComposer(
+        self._decision_composer = PlanSwingDecisionComposer(
             risk_trade_setup_composer=self._risk_trade_setup_composer,
             signal_engine=signal_engine,
         )
-        self._optional_evidence_runner = SwingAnalysisOptionalEvidenceRunner(
+        self._optional_evidence_runner = PlanSwingOptionalEvidenceRunner(
             market_repository=market_repository,
             registry=registry,
             rules_loader=rules_loader,
@@ -195,17 +195,17 @@ class SwingAnalysisWorkflowUseCase:
             fetch_sentiment=fetch_sentiment,
             evidence_builder=self._evidence_builder,
         )
-        self._sizing_service = SwingAnalysisSizingService(
+        self._sizing_service = PlanSwingSizingService(
             registry=registry,
             load_swing_config=load_swing_config,
             resolve_setup_targets=resolve_setup_targets,
         )
-        self._response_assembler = SwingAnalysisResponseAssembler()
+        self._response_assembler = PlanSwingResponseAssembler()
 
     def execute(
         self,
-        request: swing_analysis_dto.SwingAnalysisWorkflowRequest,
-    ) -> swing_analysis_dto.SwingAnalysisWorkflowResponse:
+        request: plan_swing_dto.PlanSwingWorkflowRequest,
+    ) -> plan_swing_dto.PlanSwingWorkflowResponse:
         state = self._input_collector.collect(request)
         state = self._decision_composer.compose_initial_risk_and_signal(request, state)
         state = self._sizing_service.compute_atr(request, state)

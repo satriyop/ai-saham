@@ -6,7 +6,7 @@ Coordinates the best-effort evidence sections (setup evidence, flow
 confirmation, setup phase, strategy evidence, institutional accumulation,
 ticker profile, sector context, company quality, corporate action risk).
 Each section is independent: a failure appends a warning and does not abort
-the workflow. Extracted from `SwingAnalysisWorkflowUseCase` to keep the use
+the workflow. Extracted from `PlanSwingWorkflowUseCase` to keep the use
 case as orchestration only. Repository data loading and per-family evidence
 assembly live in dedicated collaborators (`CandidateEvidenceDataLoader` and
 the `candidate_*_evidence_assembler` modules) shared with
@@ -98,7 +98,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
-class SwingAnalysisEvidenceBuildResult:
+class PlanSwingEvidenceBuildResult:
     # Complete built evidence (evidence + exact consumed-row provenance,
     # ADR-041 CANONICAL-EVIDENCE-BOUNDARY) — never unwrapped to a loose
     # evidence value here. Presentation/diagnostic DTOs may read
@@ -119,7 +119,7 @@ class SwingAnalysisEvidenceBuildResult:
     warnings: tuple[str, ...]
 
 
-class SwingAnalysisEvidenceBuilder:
+class PlanSwingEvidenceBuilder:
     """Builds optional, best-effort evidence sections for swing analysis."""
 
     def __init__(
@@ -194,11 +194,11 @@ class SwingAnalysisEvidenceBuilder:
         strategy_name: str | None,
         swing_config: Any,
         as_of_fetched_at: str | None = None,
-    ) -> SwingAnalysisEvidenceBuildResult:
+    ) -> PlanSwingEvidenceBuildResult:
         """`as_of_fetched_at` (ISO timestamp, DQ-002G): the workflow's
         resolved decision timestamp (`EffectiveMarketSession.decision_at`),
         forwarded to `AssessCorporateActionEventRiskUseCase` so a historical
-        `analyze swing` run cannot see a corporate-action calendar row that
+        `plan swing` run cannot see a corporate-action calendar row that
         was synced after that historical decision point. `None` (default)
         preserves prior unfiltered behavior."""
         warnings: list[str] = []
@@ -446,7 +446,7 @@ class SwingAnalysisEvidenceBuilder:
             except Exception as exc:
                 warnings.append(f"Corporate action event-risk unavailable: {exc}")
 
-        return SwingAnalysisEvidenceBuildResult(
+        return PlanSwingEvidenceBuildResult(
             built_setup_evidence=built_setup_evidence,
             built_flow_evidence=built_flow_evidence,
             setup_phase=setup_phase,

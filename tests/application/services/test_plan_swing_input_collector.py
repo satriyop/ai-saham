@@ -1,4 +1,4 @@
-"""Tests for SwingAnalysisInputCollector date threading and the reused
+"""Tests for PlanSwingInputCollector date threading and the reused
 AssessSourceAvailabilityUseCase construction (ADR-041 CANONICAL-EVIDENCE-
 BOUNDARY).
 """
@@ -11,12 +11,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.application.dto.swing_analysis import SwingAnalysisWorkflowRequest
+from src.application.dto.plan_swing import PlanSwingWorkflowRequest
+from src.application.services.plan_swing_input_collector import (
+    PlanSwingInputCollector,
+)
 from src.application.services.signal_evidence_execution_context_builder import (
     SignalEvidenceExecutionContextBuilder,
-)
-from src.application.services.swing_analysis_input_collector import (
-    SwingAnalysisInputCollector,
 )
 from src.domain.value_objects.canonical_signal_evidence_input import (
     CandleRowIdentity,
@@ -24,8 +24,8 @@ from src.domain.value_objects.canonical_signal_evidence_input import (
 )
 
 
-def _request(today: date) -> SwingAnalysisWorkflowRequest:
-    return SwingAnalysisWorkflowRequest(
+def _request(today: date) -> PlanSwingWorkflowRequest:
+    return PlanSwingWorkflowRequest(
         ticker="BBRI",
         today=today,
         strategy_name=None,
@@ -103,7 +103,7 @@ def _collector_for_availability_tests(
     builder = SignalEvidenceExecutionContextBuilder(
         trading_session_calendar_loader=trading_session_calendar_loader
     )
-    return SwingAnalysisInputCollector(
+    return PlanSwingInputCollector(
         market_repository=market_repo,
         broker_repository=SimpleNamespace(),
         refresh_data=lambda **kwargs: ("disabled",),
@@ -121,7 +121,7 @@ def _collector_for_availability_tests(
 
 def test_source_availability_use_case_built_when_collecting_input():
     # Actual per-source assessment now happens later, in
-    # SwingAnalysisDecisionComposer.recompose_after_evidence, gated on
+    # PlanSwingDecisionComposer.recompose_after_evidence, gated on
     # evidence actually existing — collect() only needs to build the reused
     # AssessSourceAvailabilityUseCase.
     today = date(2026, 7, 17)
@@ -346,7 +346,7 @@ def test_accumulation_builder_receives_request_today():
     # builder, not effective-session resolution — inject a fake resolver so
     # the real resolver's IHSG get_candles(end_date=...) lookup (which this
     # market_repo fake does not implement) is never invoked.
-    collector = SwingAnalysisInputCollector(
+    collector = PlanSwingInputCollector(
         market_repository=market_repo,
         broker_repository=SimpleNamespace(),
         refresh_data=lambda **kwargs: ("disabled",),
@@ -387,7 +387,7 @@ def test_collector_stores_exact_context_object_from_builder():
         candidate_builder_calls.append(kwargs)
         return _eval_result(broker_summary_date=historical)
 
-    collector = SwingAnalysisInputCollector(
+    collector = PlanSwingInputCollector(
         market_repository=market_repo,
         broker_repository=SimpleNamespace(),
         refresh_data=lambda **kwargs: ("disabled",),
@@ -418,12 +418,12 @@ def test_collector_stores_exact_context_object_from_builder():
 
 def _collector_with_accumulation_callback(
     *, build_accumulation_candidate_evaluation, today: date
-) -> SwingAnalysisInputCollector:
+) -> PlanSwingInputCollector:
     market_repo = SimpleNamespace(
         get_candles=lambda ticker, end_date=None: [SimpleNamespace(close=100.0, date=today)]
     )
     fake_session = _fake_effective_session(today)
-    return SwingAnalysisInputCollector(
+    return PlanSwingInputCollector(
         market_repository=market_repo,
         broker_repository=SimpleNamespace(),
         refresh_data=lambda **kwargs: ("disabled",),

@@ -7,7 +7,7 @@ fetch, and the evidence builder call (including `SwingEvidence`
 construction). Each section is independent and best-effort: a failure
 appends a warning and does not abort the workflow. Signal re-scoring is
 not performed here — that belongs to the decision composer, which runs
-after evidence exists. Extracted from `SwingAnalysisWorkflowUseCase` to
+after evidence exists. Extracted from `PlanSwingWorkflowUseCase` to
 keep the use case as orchestration only.
 """
 
@@ -17,22 +17,22 @@ from collections.abc import Callable
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
-from src.application.dto import swing_analysis as swing_analysis_dto
-from src.application.services.strategy_loader import StrategyLoader
-from src.application.services.swing_analysis_workflow_state import (
-    SwingAnalysisWorkflowState,
+from src.application.dto import plan_swing as plan_swing_dto
+from src.application.services.plan_swing_workflow_state import (
+    PlanSwingWorkflowState,
 )
+from src.application.services.strategy_loader import StrategyLoader
 from src.application.use_case.backtest_use_case import BacktestRequest, BacktestUseCase
 
 if TYPE_CHECKING:
     from src.application.ports.rules_loader import RulesLoader
-    from src.application.services.swing_analysis_evidence_builder import (
-        SwingAnalysisEvidenceBuilder,
+    from src.application.services.plan_swing_evidence_builder import (
+        PlanSwingEvidenceBuilder,
     )
     from src.domain.ports.market_data_repository import MarketDataRepository
 
 
-class SwingAnalysisOptionalEvidenceRunner:
+class PlanSwingOptionalEvidenceRunner:
     """Owns best-effort evidence assembly for swing analysis."""
 
     def __init__(
@@ -43,7 +43,7 @@ class SwingAnalysisOptionalEvidenceRunner:
         evaluate_setup: Callable[[Any | None, Any | None], Any | None],
         build_broker_quality_note: Callable[..., Any | None],
         fetch_sentiment: Callable[..., tuple[Any | None, str | None]],
-        evidence_builder: "SwingAnalysisEvidenceBuilder",
+        evidence_builder: "PlanSwingEvidenceBuilder",
     ) -> None:
         self._market_repo = market_repository
         self._registry = registry
@@ -55,9 +55,9 @@ class SwingAnalysisOptionalEvidenceRunner:
 
     def evaluate_setup_and_broker_quality(
         self,
-        request: swing_analysis_dto.SwingAnalysisWorkflowRequest,
-        state: SwingAnalysisWorkflowState,
-    ) -> SwingAnalysisWorkflowState:
+        request: plan_swing_dto.PlanSwingWorkflowRequest,
+        state: PlanSwingWorkflowState,
+    ) -> PlanSwingWorkflowState:
         setup_eval = None
         if request.setup_name is not None:
             setup_eval = self._evaluate_setup(state.accumulation_candidate, state.broker_detail)
@@ -73,9 +73,9 @@ class SwingAnalysisOptionalEvidenceRunner:
 
     def run_backtest_and_sentiment(
         self,
-        request: swing_analysis_dto.SwingAnalysisWorkflowRequest,
-        state: SwingAnalysisWorkflowState,
-    ) -> SwingAnalysisWorkflowState:
+        request: plan_swing_dto.PlanSwingWorkflowRequest,
+        state: PlanSwingWorkflowState,
+    ) -> PlanSwingWorkflowState:
         backtest_result = None
         if request.strategy_name is not None:
             try:
@@ -112,9 +112,9 @@ class SwingAnalysisOptionalEvidenceRunner:
 
     def build_evidence(
         self,
-        request: swing_analysis_dto.SwingAnalysisWorkflowRequest,
-        state: SwingAnalysisWorkflowState,
-    ) -> SwingAnalysisWorkflowState:
+        request: plan_swing_dto.PlanSwingWorkflowRequest,
+        state: PlanSwingWorkflowState,
+    ) -> PlanSwingWorkflowState:
         as_of_fetched_at = (
             state.effective_session.decision_at.isoformat()
             if state.effective_session is not None
@@ -136,7 +136,7 @@ class SwingAnalysisOptionalEvidenceRunner:
         state.built_setup_evidence = evidence_build.built_setup_evidence
         state.built_flow_evidence = evidence_build.built_flow_evidence
 
-        state.evidence = swing_analysis_dto.SwingEvidence(
+        state.evidence = plan_swing_dto.SwingEvidence(
             accumulation_candidate=state.accumulation_candidate,
             setup_eval=state.setup_eval,
             backtest_result=state.backtest_result,

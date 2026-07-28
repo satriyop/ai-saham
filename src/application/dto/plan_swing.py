@@ -12,8 +12,7 @@ from typing import TYPE_CHECKING, Any
 from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSession,
 )
-from src.application.services.position_sizer import PercentSizingResult, SizingResult
-from src.application.services.swing_analysis_serialization import (
+from src.application.services.plan_swing_serialization import (
     candidate_accumulation_to_dict,
     object_to_dict,
     risk_response_to_dict,
@@ -21,6 +20,7 @@ from src.application.services.swing_analysis_serialization import (
     signal_response_to_dict,
     volatility_context_to_dict,
 )
+from src.application.services.position_sizer import PercentSizingResult, SizingResult
 
 
 class SignalAssessmentStatus(str, Enum):
@@ -80,7 +80,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
-class SwingAnalysisWorkflowRequest:
+class PlanSwingWorkflowRequest:
     ticker: str
     today: date
     strategy_name: str | None
@@ -325,7 +325,7 @@ class SwingDiagnostics:
 
 
 @dataclass(frozen=True)
-class SwingAnalysisWorkflowResponse:
+class PlanSwingWorkflowResponse:
     ticker: str
     today: date
     refresh_actions: tuple[str, ...]
@@ -432,7 +432,7 @@ class SwingAnalysisWorkflowResponse:
 
         return {
             "schema_version": 1,
-            "artifact_type": "swing_analysis",
+            "artifact_type": "plan_swing",
             "json_contract": {
                 "canonical": ("verdict", "evidence", "diagnostics"),
             },

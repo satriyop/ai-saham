@@ -99,7 +99,7 @@ def test_plan_swing_table_and_json_contracts(temp_workspace, monkeypatch):
     )
     assert js.exit_code == 0, js.output
     payload = _json_stdout(js)
-    assert payload["artifact_type"] == "swing_analysis"
+    assert payload["artifact_type"] == "plan_swing"
     assert payload["schema_version"] == 1
     assert payload["json_contract"]["canonical"] == ["verdict", "evidence", "diagnostics"]
     assert "compatibility_aliases" not in payload["json_contract"]

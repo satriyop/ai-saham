@@ -1,5 +1,5 @@
 """
-Dependency and composition wiring for the saham analyze swing workflow.
+Dependency and composition wiring for the saham plan swing workflow.
 
 Layer: Adapter
 

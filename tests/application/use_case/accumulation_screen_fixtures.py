@@ -139,7 +139,7 @@ class RecordingInsiderProvider:
 
 
 class FakeATRRegistry:
-    """Mirrors FakeRegistry from test_swing_analysis_workflow.py: returns a
+    """Mirrors FakeRegistry from test_plan_swing_workflow.py: returns a
     fixed ATR(14) value so volatility-context fingerprint tests are
     deterministic regardless of the real indicator registry's plugin
     discovery/computation."""

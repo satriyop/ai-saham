@@ -3,11 +3,11 @@ from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 
-from src.application.dto.swing_analysis import SwingAnalysisWorkflowRequest
+from src.application.dto.plan_swing import PlanSwingWorkflowRequest
 from src.application.services.signal_evidence_execution_context_builder import (
     SignalEvidenceExecutionContextBuilder,
 )
-from src.application.use_case.swing_analysis_workflow_use_case import SwingAnalysisWorkflowUseCase
+from src.application.use_case.plan_swing_workflow_use_case import PlanSwingWorkflowUseCase
 from src.domain.entities.candle import Candle
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.domain.value_objects.learning_artifacts import (
@@ -137,7 +137,7 @@ def _breakout_candles() -> list[Candle]:
     return candles
 
 
-def _request(**overrides) -> SwingAnalysisWorkflowRequest:
+def _request(**overrides) -> PlanSwingWorkflowRequest:
     values = {
         "ticker": "BBCA",
         "today": date(2026, 6, 18),
@@ -165,7 +165,7 @@ def _request(**overrides) -> SwingAnalysisWorkflowRequest:
         "with_technical_gate": False,
     }
     values.update(overrides)
-    return SwingAnalysisWorkflowRequest(**values)
+    return PlanSwingWorkflowRequest(**values)
 
 
 def _fake_evaluation_result(ticker: str) -> SimpleNamespace:
@@ -180,8 +180,8 @@ def _fake_evaluation_result(ticker: str) -> SimpleNamespace:
     )
 
 
-def _workflow(market_repo, calls: list[str]) -> SwingAnalysisWorkflowUseCase:
-    return SwingAnalysisWorkflowUseCase(
+def _workflow(market_repo, calls: list[str]) -> PlanSwingWorkflowUseCase:
+    return PlanSwingWorkflowUseCase(
         market_repository=market_repo,
         broker_repository=FakeBrokerRepository(),
         registry=FakeRegistry(),

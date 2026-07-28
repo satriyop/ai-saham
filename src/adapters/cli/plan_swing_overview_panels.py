@@ -25,7 +25,7 @@ from src.adapters.cli.view_market_context_display import (
     REGIME_DISPLAY_LABEL,
     context_conviction_score,
 )
-from src.application.dto.swing_analysis import (
+from src.application.dto.plan_swing import (
     SignalAssessmentAvailability,
     SignalAssessmentStatus,
 )

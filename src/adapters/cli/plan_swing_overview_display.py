@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.application.dto.accumulation_screen import AccumulationCandidate
-    from src.application.dto.swing_analysis import SignalAssessmentAvailability
+    from src.application.dto.plan_swing import SignalAssessmentAvailability
     from src.application.services.position_sizer import SizingResult
     from src.application.services.swing_data_freshness import SwingDataFreshness
 
@@ -40,7 +40,7 @@ from src.adapters.cli.plan_swing_overview_panels import (
     _signal_label,
 )
 from src.adapters.cli.rich_display import compact_table, console, panel
-from src.application.dto.swing_analysis import SignalAssessmentAvailability
+from src.application.dto.plan_swing import SignalAssessmentAvailability
 from src.application.dto.swing_broker_detail import (
     BrokerDetail,
     BrokerQualityNote,

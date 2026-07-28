@@ -89,7 +89,7 @@ def _fake_workflow_response(*, request, effective_session=None):
     )
     response.to_dict = lambda **kwargs: {
         "schema_version": 1,
-        "artifact_type": "swing_analysis",
+        "artifact_type": "plan_swing",
         "effective_session": session.to_dict(),
     }
     return response
@@ -107,7 +107,7 @@ def test_swing_command_delegates_workflow_construction_to_builder(monkeypatch):
         captured["builder"] = kwargs
         return FakeWorkflow()
 
-    monkeypatch.setattr(swing_cli, "create_swing_analysis_workflow", fake_builder)
+    monkeypatch.setattr(swing_cli, "create_plan_swing_workflow", fake_builder)
 
     result = runner.invoke(
         app,
@@ -129,7 +129,7 @@ def test_swing_command_threads_as_of_to_request_today(monkeypatch):
 
     monkeypatch.setattr(
         swing_cli,
-        "create_swing_analysis_workflow",
+        "create_plan_swing_workflow",
         lambda **kwargs: FakeWorkflow(),
     )
 
@@ -146,7 +146,7 @@ def test_swing_command_rejects_invalid_as_of(monkeypatch):
     def fake_builder(**kwargs):
         raise AssertionError("workflow must not run when --as-of is invalid")
 
-    monkeypatch.setattr(swing_cli, "create_swing_analysis_workflow", fake_builder)
+    monkeypatch.setattr(swing_cli, "create_plan_swing_workflow", fake_builder)
 
     result = runner.invoke(
         app,
@@ -164,7 +164,7 @@ def test_swing_json_includes_effective_session(monkeypatch):
 
     monkeypatch.setattr(
         swing_cli,
-        "create_swing_analysis_workflow",
+        "create_plan_swing_workflow",
         lambda **kwargs: FakeWorkflow(),
     )
 
@@ -258,7 +258,7 @@ def test_swing_display_path_prefers_grouped_response_contracts(monkeypatch):
 
     monkeypatch.setattr(
         swing_cli,
-        "create_swing_analysis_workflow",
+        "create_plan_swing_workflow",
         lambda **kwargs: FakeWorkflow(),
     )
     monkeypatch.setattr(

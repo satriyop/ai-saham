@@ -14,7 +14,7 @@ from typing import Any, Mapping
 from src.domain.value_objects.pre_open_post_open_assessment import PreOpenPostOpenAssessment
 
 
-class AnalyzePreOpenStatus(str, Enum):
+class AssessPreOpenStatus(str, Enum):
     """Overall status of a post-open analyze run."""
 
     OK = "OK"
@@ -23,7 +23,7 @@ class AnalyzePreOpenStatus(str, Enum):
 
 
 @dataclass(frozen=True)
-class AnalyzePreOpenRequest:
+class AssessPreOpenRequest:
     """Select immutable observation(s) + optional opening track snapshot."""
 
     session_date: date | None = None
@@ -32,7 +32,7 @@ class AnalyzePreOpenRequest:
 
 
 @dataclass(frozen=True)
-class AnalyzePreOpenLine:
+class AssessPreOpenLine:
     """One ticker's frozen pre-open state + post-open confirmation."""
 
     observation_id: str
@@ -47,14 +47,14 @@ class AnalyzePreOpenLine:
 
 
 @dataclass(frozen=True)
-class AnalyzePreOpenResult:
+class AssessPreOpenResult:
     """Read-only post-open assessment result (no journal write)."""
 
     session_date: date
-    status: AnalyzePreOpenStatus
+    status: AssessPreOpenStatus
     market_regime: str | None
     max_stop_pct: Decimal
-    lines: tuple[AnalyzePreOpenLine, ...]
+    lines: tuple[AssessPreOpenLine, ...]
     warnings: tuple[str, ...] = ()
     policy_identity: Mapping[str, Any] = field(default_factory=dict)
 
@@ -69,21 +69,21 @@ class AnalyzePreOpenResult:
         )
 
 
-class AnalyzePreOpenError(Exception):
+class AssessPreOpenError(Exception):
     """Base fail-closed error for analyze pre-open selection/lineage."""
 
 
-class AnalyzePreOpenNotFoundError(AnalyzePreOpenError):
+class AssessPreOpenNotFoundError(AssessPreOpenError):
     """Observation or required artifact not found."""
 
 
-class AnalyzePreOpenContractError(AnalyzePreOpenError):
+class AssessPreOpenContractError(AssessPreOpenError):
     """Wrong purpose/contract or cross-observation snapshot substitution."""
 
 
-class AnalyzePreOpenAmbiguityError(AnalyzePreOpenError):
+class AssessPreOpenAmbiguityError(AssessPreOpenError):
     """Multiple compatible cohorts without explicit observation_id."""
 
 
-class AnalyzePreOpenSnapshotError(AnalyzePreOpenError):
+class AssessPreOpenSnapshotError(AssessPreOpenError):
     """Opening snapshot identity/linkage error (not mere missing open price)."""

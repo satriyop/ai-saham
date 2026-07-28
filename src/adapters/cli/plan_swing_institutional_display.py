@@ -1,5 +1,5 @@
 """
-Institutional accumulation evidence rendering for saham analyze swing.
+Institutional accumulation evidence rendering for saham plan swing.
 
 Owns the DIAGNOSTIC-only institutional accumulation panel (foreign
 institutional track, domestic bandar track, counterparty transfer) and the

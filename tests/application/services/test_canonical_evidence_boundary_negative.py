@@ -14,8 +14,8 @@
 13. Screen and swing produce equivalent canonical signal-evidence input at
     their real application boundaries. This executes
     `AccumulationCandidateSignalAssessor.assess()` (screen),
-    `SwingAnalysisEvidenceBuilder.build()` (swing evidence), and
-    `SwingAnalysisDecisionComposer.recompose_after_evidence()` (swing
+    `PlanSwingEvidenceBuilder.build()` (swing evidence), and
+    `PlanSwingDecisionComposer.recompose_after_evidence()` (swing
     canonical/scoring) — not the same builder invoked twice in the test
     body. It captures the complete `CanonicalSignalEvidenceInput` each real
     boundary hands to its own `SignalEngine.evaluate_accumulation_discovery()` call
@@ -34,7 +34,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.application.dto import swing_analysis as swing_analysis_dto
+from src.application.dto import plan_swing as plan_swing_dto
 from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationCandidateEvaluationResult,
@@ -57,16 +57,16 @@ from src.application.services.evidence_source_availability_assembler import (
 from src.application.services.flow_confirmation_evidence_builder import (
     FlowConfirmationEvidenceBuilder,
 )
+from src.application.services.plan_swing_decision_composer import (
+    PlanSwingDecisionComposer,
+)
+from src.application.services.plan_swing_evidence_builder import (
+    PlanSwingEvidenceBuilder,
+)
+from src.application.services.plan_swing_workflow_state import (
+    PlanSwingWorkflowState,
+)
 from src.application.services.signal_engine import SignalEngine
-from src.application.services.swing_analysis_decision_composer import (
-    SwingAnalysisDecisionComposer,
-)
-from src.application.services.swing_analysis_evidence_builder import (
-    SwingAnalysisEvidenceBuilder,
-)
-from src.application.services.swing_analysis_workflow_state import (
-    SwingAnalysisWorkflowState,
-)
 from src.application.use_case.assess_source_availability_use_case import (
     AssessSourceAvailabilityUseCase,
 )
@@ -249,7 +249,7 @@ class TestBuiltSetupEvidenceRejectsFutureRows:
 
 class _RaisingBrokerRepository:
     """Any broker query on this repository is a contract violation for
-    SwingAnalysisEvidenceBuilder — it must only use
+    PlanSwingEvidenceBuilder — it must only use
     AccumulationCandidateEvaluationResult.consumed_broker_summaries/
     consumed_broker_daily_flows, never re-query."""
 
@@ -271,8 +271,8 @@ class _MarketRepository:
         return None
 
 
-def _builder(broker_repository) -> SwingAnalysisEvidenceBuilder:
-    return SwingAnalysisEvidenceBuilder(
+def _builder(broker_repository) -> PlanSwingEvidenceBuilder:
+    return PlanSwingEvidenceBuilder(
         market_repository=_MarketRepository(),
         broker_repository=broker_repository,
         registry=None,
@@ -366,7 +366,7 @@ def test_flow_confirmation_evidence_builder_ticker_mismatch_escapes_as_valueerro
 
 
 def test_swing_evidence_builder_propagates_duplicate_row_violation_not_a_warning():
-    # SwingAnalysisEvidenceBuilder's flow-evidence try/except must re-raise a
+    # PlanSwingEvidenceBuilder's flow-evidence try/except must re-raise a
     # ValueError from a provenance contract violation — here, a duplicate
     # consumed broker-summary row (which AccumulationCandidateEvaluationResult
     # itself does not check for, but FlowProvenance does) — rather than
@@ -546,8 +546,8 @@ def _signal_response(score: int = 72) -> AssessSignalResponse:
     return AssessSignalResponse(ticker=TICKER, assessment=assessment)
 
 
-def _swing_request_for(today: date, ticker: str) -> swing_analysis_dto.SwingAnalysisWorkflowRequest:
-    return swing_analysis_dto.SwingAnalysisWorkflowRequest(
+def _swing_request_for(today: date, ticker: str) -> plan_swing_dto.PlanSwingWorkflowRequest:
+    return plan_swing_dto.PlanSwingWorkflowRequest(
         ticker=ticker,
         today=today,
         strategy_name=None,
@@ -661,7 +661,7 @@ def parity_boundaries() -> _ParityBoundaryResult:
     )
     screen_canonical = screen_signal_engine.calls[0]["kwargs"]["canonical_evidence"]
 
-    # --- Swing evidence boundary: SwingAnalysisEvidenceBuilder.build() ---
+    # --- Swing evidence boundary: PlanSwingEvidenceBuilder.build() ---
     # The exact candidate returned by screen and the exact shared row
     # tuples — never a second candidate, never reconstructed broker rows.
     evaluation_result = AccumulationCandidateEvaluationResult(
@@ -671,7 +671,7 @@ def parity_boundaries() -> _ParityBoundaryResult:
         consumed_broker_daily_flows=daily_flows,
         analysis_date=SNAP,
     )
-    swing_evidence_builder = SwingAnalysisEvidenceBuilder(
+    swing_evidence_builder = PlanSwingEvidenceBuilder(
         market_repository=_MarketRepository(),
         broker_repository=_EmptyBrokerRepository(),
         registry=None,
@@ -698,7 +698,7 @@ def parity_boundaries() -> _ParityBoundaryResult:
         effective_session=effective_session,
         source_availability_use_case=source_availability_use_case,
     )
-    state = SwingAnalysisWorkflowState()
+    state = PlanSwingWorkflowState()
     state.accumulation_evaluation = evaluation_result
     state.signal_evidence_execution_context = execution_context
     state.built_setup_evidence = None
@@ -710,19 +710,19 @@ def parity_boundaries() -> _ParityBoundaryResult:
     state.market_context_risk_preview = None
     state.market_context_trade_setup_preview = None
     state.market_regime = None
-    state.verdict = swing_analysis_dto.SwingVerdict(
+    state.verdict = plan_swing_dto.SwingVerdict(
         trade_setup=None,
         signal_assessment=state.signal_assessment,
         risk_response=None,
         market_regime=None,
-        signal_assessment_availability=swing_analysis_dto.SignalAssessmentAvailability(
-            status=swing_analysis_dto.SignalAssessmentStatus.AVAILABLE
+        signal_assessment_availability=plan_swing_dto.SignalAssessmentAvailability(
+            status=plan_swing_dto.SignalAssessmentStatus.AVAILABLE
         ),
     )
 
     swing_signal_engine = _CanonicalInputRecordingSignalEngine()
     risk_composer = _RecordingRiskTradeSetupComposer()
-    composer = SwingAnalysisDecisionComposer(
+    composer = PlanSwingDecisionComposer(
         risk_trade_setup_composer=risk_composer,
         signal_engine=swing_signal_engine,
     )

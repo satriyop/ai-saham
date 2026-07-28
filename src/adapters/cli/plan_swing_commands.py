@@ -30,10 +30,10 @@ from src.adapters.cli.plan_swing_optional_fetchers import (
     fetch_swing_sentiment as _fetch_swing_sentiment_with_config,
 )
 from src.adapters.cli.plan_swing_workflow_factory import (
-    create_swing_analysis_workflow,
+    create_plan_swing_workflow,
 )
 from src.application.dto.accumulation_screen import AccumulationCandidate
-from src.application.dto.swing_analysis import SwingAnalysisWorkflowRequest
+from src.application.dto.plan_swing import PlanSwingWorkflowRequest
 from src.application.dto.swing_broker_detail import BrokerDetail
 from src.application.use_case.evaluate_swing_setup_use_case import (
     AVAILABLE_SWING_SETUPS,
@@ -41,7 +41,7 @@ from src.application.use_case.evaluate_swing_setup_use_case import (
     EvaluateSwingSetupRequest,
     EvaluateSwingSetupUseCase,
 )
-from src.application.use_case.swing_analysis_workflow_use_case import SwingAnalysisDataUnavailable
+from src.application.use_case.plan_swing_workflow_use_case import PlanSwingDataUnavailable
 from src.domain.value_objects.setup_evaluation import SetupEvaluation
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.user_config import get_swing_default
@@ -304,7 +304,7 @@ def swing(
         **{code: cfg.swing_config.noise_weight for code in noise_brokers},
     }
 
-    workflow = create_swing_analysis_workflow(
+    workflow = create_plan_swing_workflow(
         db_path=resolved_db,
         setup_name=setup_name,
         swing_config=cfg.swing_config,
@@ -315,7 +315,7 @@ def swing(
     )
     try:
         workflow_response = workflow.execute(
-            SwingAnalysisWorkflowRequest(
+            PlanSwingWorkflowRequest(
                 ticker=ticker_upper,
                 today=today,
                 strategy_name=strategy_evidence_name,
@@ -342,7 +342,7 @@ def swing(
                 with_technical_gate=with_technical_gate,
             )
         )
-    except SwingAnalysisDataUnavailable:
+    except PlanSwingDataUnavailable:
         typer.echo(
             f"No data for {ticker_upper}. Run: saham fetch market {ticker_upper} --days 365",
             err=True,

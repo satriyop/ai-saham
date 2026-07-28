@@ -1,4 +1,4 @@
-"""Tests for SwingAnalysisDecisionComposer's canonical evidence construction
+"""Tests for PlanSwingDecisionComposer's canonical evidence construction
 (ADR-041 CANONICAL-EVIDENCE-BOUNDARY).
 
 Proves the composer resolves availability once, pre-score, from exact
@@ -14,17 +14,17 @@ from datetime import date, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 
-from src.application.dto import swing_analysis as swing_analysis_dto
+from src.application.dto import plan_swing as plan_swing_dto
 from src.application.dto.assess_signal import AssessSignalResponse
 from src.application.dto.built_evidence import BuiltFlowEvidence, BuiltSetupEvidence
 from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSession,
 )
-from src.application.services.swing_analysis_decision_composer import (
-    SwingAnalysisDecisionComposer,
+from src.application.services.plan_swing_decision_composer import (
+    PlanSwingDecisionComposer,
 )
-from src.application.services.swing_analysis_workflow_state import (
-    SwingAnalysisWorkflowState,
+from src.application.services.plan_swing_workflow_state import (
+    PlanSwingWorkflowState,
 )
 from src.application.use_case.assess_source_availability_use_case import (
     AssessSourceAvailabilityUseCase,
@@ -92,7 +92,7 @@ def _request(**overrides):
         with_technical_gate=False,
     )
     params.update(overrides)
-    return swing_analysis_dto.SwingAnalysisWorkflowRequest(**params)
+    return plan_swing_dto.PlanSwingWorkflowRequest(**params)
 
 
 def _no_excess_return() -> BenchmarkExcessReturn:
@@ -237,7 +237,7 @@ def _state(
     built_setup_evidence: BuiltSetupEvidence | None,
     built_flow_evidence: BuiltFlowEvidence | None,
     source_availability_use_case: AssessSourceAvailabilityUseCase | None,
-) -> SwingAnalysisWorkflowState:
+) -> PlanSwingWorkflowState:
     candidate = SimpleNamespace(
         bandar_detector=None,
         seasonal_edge=None,
@@ -247,7 +247,7 @@ def _state(
         accum_score=0.0,
         insider_net_buy_ratio=None,
     )
-    state = SwingAnalysisWorkflowState()
+    state = PlanSwingWorkflowState()
     state.accumulation_evaluation = SimpleNamespace(candidate=candidate)
     from src.application.dto.signal_evidence_execution_context import (
         SignalEvidenceExecutionContext,
@@ -260,7 +260,7 @@ def _state(
     state.candles = [SimpleNamespace(date=SNAP)]
     state.built_setup_evidence = built_setup_evidence
     state.built_flow_evidence = built_flow_evidence
-    state.evidence = swing_analysis_dto.SwingEvidence(
+    state.evidence = plan_swing_dto.SwingEvidence(
         accumulation_candidate=candidate,
         setup_eval=None,
         backtest_result=None,
@@ -277,13 +277,13 @@ def _state(
     state.market_context_signal_preview = None
     state.market_context_trade_setup_preview = None
     state.risk_response = None
-    state.verdict = swing_analysis_dto.SwingVerdict(
+    state.verdict = plan_swing_dto.SwingVerdict(
         trade_setup=None,
         signal_assessment=state.signal_assessment,
         risk_response=None,
         market_regime=None,
-        signal_assessment_availability=swing_analysis_dto.SignalAssessmentAvailability(
-            status=swing_analysis_dto.SignalAssessmentStatus.AVAILABLE
+        signal_assessment_availability=plan_swing_dto.SignalAssessmentAvailability(
+            status=plan_swing_dto.SignalAssessmentStatus.AVAILABLE
         ),
     )
     return state
@@ -291,7 +291,7 @@ def _state(
 
 def test_canonical_evidence_includes_both_groups_when_both_built():
     engine = _RecordingSignalEngine()
-    composer = SwingAnalysisDecisionComposer(
+    composer = PlanSwingDecisionComposer(
         risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
     )
     state = _state(
@@ -313,7 +313,7 @@ def test_canonical_evidence_includes_both_groups_when_both_built():
 
 def test_canonical_evidence_setup_stays_none_when_setup_evidence_not_built():
     engine = _RecordingSignalEngine()
-    composer = SwingAnalysisDecisionComposer(
+    composer = PlanSwingDecisionComposer(
         risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
     )
     state = _state(
@@ -333,7 +333,7 @@ def test_no_rescore_when_no_evidence_built():
     # No built evidence at all -> canonical_evidence is None -> the rescore
     # branch must not run (fast-path score stays untouched).
     engine = _RecordingSignalEngine()
-    composer = SwingAnalysisDecisionComposer(
+    composer = PlanSwingDecisionComposer(
         risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
     )
     state = _state(
@@ -350,7 +350,7 @@ def test_no_rescore_when_no_evidence_built():
 
 def test_missing_source_availability_use_case_rescores_with_unknown_shadow_availability():
     engine = _RecordingSignalEngine()
-    composer = SwingAnalysisDecisionComposer(
+    composer = PlanSwingDecisionComposer(
         risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
     )
     state = _state(
@@ -397,7 +397,7 @@ def test_missing_source_availability_use_case_rescores_with_unknown_shadow_avail
 
 def test_bandar_contributor_flows_into_flow_group_availability():
     engine = _RecordingSignalEngine()
-    composer = SwingAnalysisDecisionComposer(
+    composer = PlanSwingDecisionComposer(
         risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
     )
     state = _state(
@@ -415,7 +415,7 @@ def test_bandar_contributor_flows_into_flow_group_availability():
 
 def test_trade_setup_recomposition_runs_alongside_canonical_evidence():
     engine = _RecordingSignalEngine(response_score=91)
-    composer = SwingAnalysisDecisionComposer(
+    composer = PlanSwingDecisionComposer(
         risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
     )
     state = _state(
@@ -438,7 +438,7 @@ def test_rescores_when_availability_use_case_is_none():
     from src.application.services.signal_engine import SignalEngine
 
     engine = SignalEngine()
-    composer = SwingAnalysisDecisionComposer(
+    composer = PlanSwingDecisionComposer(
         risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
     )
     state = _state(
@@ -457,7 +457,7 @@ def test_operational_availability_failure_still_rescored():
     from src.application.services.signal_engine import SignalEngine
 
     engine = SignalEngine()
-    composer = SwingAnalysisDecisionComposer(
+    composer = PlanSwingDecisionComposer(
         risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
     )
 
@@ -494,7 +494,7 @@ def test_contract_value_error_escapes_in_swing():
     from src.application.services.signal_engine import SignalEngine
 
     engine = SignalEngine()
-    composer = SwingAnalysisDecisionComposer(
+    composer = PlanSwingDecisionComposer(
         risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
     )
 
@@ -520,7 +520,7 @@ def test_current_and_unknown_availability_produce_identical_directional_score_in
     from src.application.services.signal_engine import SignalEngine
 
     engine = SignalEngine()
-    composer = SwingAnalysisDecisionComposer(
+    composer = PlanSwingDecisionComposer(
         risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
     )
 
@@ -558,7 +558,7 @@ def test_recompose_after_evidence_forwards_market_context_to_signal_engine():
     )
 
     engine = _RecordingSignalEngine()
-    composer = SwingAnalysisDecisionComposer(
+    composer = PlanSwingDecisionComposer(
         risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(),
         signal_engine=engine,
     )
@@ -620,15 +620,15 @@ def test_compose_trade_setup_inherits_screen_action_by_default():
         trade_setup=screen_setup,
         signal_assessment=_signal_response(50),
     )
-    state = SwingAnalysisWorkflowState()
+    state = PlanSwingWorkflowState()
     state.accumulation_evaluation = SimpleNamespace(candidate=candidate)
     state.signal_assessment = candidate.signal_assessment
-    state.signal_assessment_availability = swing_analysis_dto.SignalAssessmentAvailability(
-        status=swing_analysis_dto.SignalAssessmentStatus.AVAILABLE
+    state.signal_assessment_availability = plan_swing_dto.SignalAssessmentAvailability(
+        status=plan_swing_dto.SignalAssessmentStatus.AVAILABLE
     )
     state.risk_response = SimpleNamespace()
 
-    composer = SwingAnalysisDecisionComposer(
+    composer = PlanSwingDecisionComposer(
         risk_trade_setup_composer=_ComposerRisk(),
         signal_engine=_RecordingSignalEngine(),
     )
@@ -649,7 +649,7 @@ def test_recompose_skips_rescore_when_action_recompute_not_allowed():
     from src.domain.value_objects.trade_setup import SetupAction, TradeSetup
 
     engine = _RecordingSignalEngine()
-    composer = SwingAnalysisDecisionComposer(
+    composer = PlanSwingDecisionComposer(
         risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(),
         signal_engine=engine,
     )
@@ -713,7 +713,7 @@ def test_recompose_after_evidence_failure_clears_pre_existing_trade_setup():
             raise RuntimeError("rescore boom")
 
     engine = FailingSignalEngine()
-    composer = SwingAnalysisDecisionComposer(
+    composer = PlanSwingDecisionComposer(
         risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(),
         signal_engine=engine,
     )
@@ -755,9 +755,9 @@ def test_recompose_after_evidence_failure_clears_pre_existing_trade_setup():
     assert state.verdict.market_context_trade_setup_preview is None
     assert (
         state.signal_assessment_availability.status
-        == swing_analysis_dto.SignalAssessmentStatus.UNAVAILABLE
+        == plan_swing_dto.SignalAssessmentStatus.UNAVAILABLE
     )
     assert (
         state.signal_assessment_availability.unavailable_reason
-        == swing_analysis_dto.SignalAssessmentUnavailableReason.ASSESSMENT_FAILED
+        == plan_swing_dto.SignalAssessmentUnavailableReason.ASSESSMENT_FAILED
     )

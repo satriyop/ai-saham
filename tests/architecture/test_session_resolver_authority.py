@@ -38,7 +38,7 @@ ADAPTER_FACTORY_FILES = (
 # themselves or receive it as an injected dependency.
 USE_CASE_FILES = (
     "src/application/use_case/accumulation_audit_use_case.py",
-    "src/application/use_case/swing_analysis_workflow_use_case.py",
+    "src/application/use_case/plan_swing_workflow_use_case.py",
     "src/application/use_case/swing_backtest_use_case.py",
     "src/application/use_case/log_swing_candidate_use_case.py",
     "src/application/use_case/backfill_signal_observations_use_case.py",

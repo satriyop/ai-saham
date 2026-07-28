@@ -5,7 +5,7 @@ Layer: Application
 Repository data loading and per-family evidence assembly live in dedicated
 collaborators (`CandidateEvidenceDataLoader` and the
 `candidate_*_evidence_assembler` modules) shared with
-`SwingAnalysisEvidenceBuilder`.
+`PlanSwingEvidenceBuilder`.
 """
 
 from __future__ import annotations

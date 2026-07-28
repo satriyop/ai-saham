@@ -1,5 +1,5 @@
 """
-Pure formatting/style helpers for saham analyze swing display modules.
+Pure formatting/style helpers for saham plan swing display modules.
 
 Layer: Adapter
 """

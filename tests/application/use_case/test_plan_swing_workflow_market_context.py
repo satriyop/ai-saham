@@ -2,9 +2,9 @@ from datetime import date
 from decimal import Decimal
 
 from src.application.services.volatility_context import build_volatility_context
-from src.application.use_case.swing_analysis_workflow_use_case import SwingAnalysisWorkflowUseCase
+from src.application.use_case.plan_swing_workflow_use_case import PlanSwingWorkflowUseCase
 from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
-from tests.application.use_case.swing_analysis_workflow_fixtures import (
+from tests.application.use_case.plan_swing_workflow_fixtures import (
     FakeBrokerRepository,
     FakeMarketRepository,
     FakeRegistry,
@@ -16,7 +16,7 @@ from tests.application.use_case.swing_analysis_workflow_fixtures import (
 
 
 def test_swing_workflow_diagnostics_volatility_context_matches_shared_helper():
-    workflow = SwingAnalysisWorkflowUseCase(
+    workflow = PlanSwingWorkflowUseCase(
         market_repository=FakeMarketRepository([_candle(date(2026, 6, 18))]),
         broker_repository=FakeBrokerRepository(),
         registry=FakeRegistry(),
@@ -89,4 +89,4 @@ def test_swing_workflow_preview_fields_are_none_without_market_context():
 
 
 # test_swing_workflow_mce_regime_forwarded_to_signal_engine removed and moved to
-# test_swing_analysis_decision_composer.py
+# test_plan_swing_decision_composer.py

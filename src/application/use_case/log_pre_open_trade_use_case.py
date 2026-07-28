@@ -1,6 +1,6 @@
 """LogPreOpenTradeUseCase — paper journal from immutable pre-open assess IDs.
 
-Re-runs AnalyzePreOpenUseCase for the exact observation + opening snapshot,
+Re-runs AssessPreOpenUseCase for the exact observation + opening snapshot,
 then appends to the paper confirmation journal (CSV + trades.jsonl). Never
 rereads live prices or confirmation sidecars.
 
@@ -12,14 +12,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from src.application.dto.analyze_pre_open import (
-    AnalyzePreOpenRequest,
-    AnalyzePreOpenResult,
+from src.application.dto.assess_pre_open import (
+    AssessPreOpenRequest,
+    AssessPreOpenResult,
 )
 from src.application.services.pre_open_paper_journal import (
     PreOpenPaperJournalStore,
 )
-from src.application.use_case.analyze_pre_open_use_case import AnalyzePreOpenUseCase
+from src.application.use_case.assess_pre_open_use_case import AssessPreOpenUseCase
 from src.domain.ports.trade_journal_store import TradeJournalStore
 from src.domain.value_objects.pre_open_post_open_assessment import (
     PreOpenPaperJournalEntry,
@@ -41,7 +41,7 @@ class LogPreOpenTradeResponse:
     duplicate: bool
     observation_id: str
     opening_snapshot_id: str
-    analyze_result: AnalyzePreOpenResult
+    analyze_result: AssessPreOpenResult
 
 
 class LogPreOpenTradeUseCase:
@@ -49,7 +49,7 @@ class LogPreOpenTradeUseCase:
 
     def __init__(
         self,
-        analyze: AnalyzePreOpenUseCase,
+        analyze: AssessPreOpenUseCase,
         confirmation_store: PreOpenPaperJournalStore,
         trade_journal_store: TradeJournalStore | None = None,
     ) -> None:
@@ -64,7 +64,7 @@ class LogPreOpenTradeUseCase:
                 "trade log --type pre-open"
             )
         result = self._analyze.execute(
-            AnalyzePreOpenRequest(
+            AssessPreOpenRequest(
                 observation_id=request.observation_id,
                 opening_snapshot_id=request.opening_snapshot_id,
             )

@@ -88,7 +88,7 @@ def test_plan_family_exposes_swing_and_retires_analyze_swing() -> None:
     assert runner.invoke(app, ["analyze", "compare", "--help"]).exit_code != 0
 
 
-def test_assess_family_exposes_pre_open_and_retires_analyze_pre_open() -> None:
+def test_assess_family_exposes_pre_open_and_retires_assess_pre_open() -> None:
     assess = runner.invoke(app, ["assess", "--help"])
     assert assess.exit_code == 0
     assert "pre-open" in assess.stdout

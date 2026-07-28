@@ -5,7 +5,7 @@ calendar already synced locally.
 
 Context only: this use case never touches SignalEngine, RiskEngine, or
 AssessTradeSetupUseCase. It is consumed exclusively as optional diagnostics
-in `saham analyze swing` (see ADR-032/ADR-033 verdict boundary).
+in `saham plan swing` (see ADR-032/ADR-033 verdict boundary).
 
 Layer: Application
 AI usage: None. Fully deterministic and config-driven.

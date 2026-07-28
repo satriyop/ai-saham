@@ -1,7 +1,7 @@
 """
 RunningTradeSignal — immutable summary of institutional broker activity in recent ticks.
 
-Produced by analyze_running_trade use case from a list of TradeTick objects.
+Produced by running_trade_analysis use case from a list of TradeTick objects.
 Used as a supplementary intraday confirmation signal during the opening session.
 
 Layer: Domain

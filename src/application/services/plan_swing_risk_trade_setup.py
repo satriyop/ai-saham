@@ -6,7 +6,7 @@ Owns the risk-response branch (technical gate opt-in, context-aware
 RiskEngine, fallback AssessRiskUseCase), canonical TradeSetup composition,
 market-context risk/trade-setup preview, and recomposition after the
 evidence-enriched signal re-score. Extracted from
-`SwingAnalysisWorkflowUseCase` to keep the use case as orchestration only.
+`PlanSwingWorkflowUseCase` to keep the use case as orchestration only.
 """
 
 from datetime import date
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from src.domain.value_objects.trade_setup import TradeSetup
 
 
-class SwingAnalysisRiskTradeSetupComposer:
+class PlanSwingRiskTradeSetupComposer:
     """Owns risk assessment and TradeSetup composition for swing analysis."""
 
     def __init__(

@@ -1,5 +1,5 @@
 """
-Flow / broker detail panel for saham analyze swing full output.
+Flow / broker detail panel for saham plan swing full output.
 
 Layer: Adapter
 

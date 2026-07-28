@@ -1,5 +1,5 @@
 """
-Strategy evidence panel for saham analyze swing full output.
+Strategy evidence panel for saham plan swing full output.
 
 Layer: Adapter
 

@@ -4,7 +4,7 @@ Layer: Application
 
 Owns auto-refresh, data freshness, optional flow/broker detail, candle
 loading, accumulation-candidate build, and market-context evaluation.
-Extracted from `SwingAnalysisWorkflowUseCase` to keep the use case as
+Extracted from `PlanSwingWorkflowUseCase` to keep the use case as
 orchestration only.
 """
 
@@ -17,14 +17,14 @@ from typing import TYPE_CHECKING, Any
 from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSessionResolver,
 )
-from src.application.services.swing_analysis_workflow_state import (
-    SwingAnalysisWorkflowState,
+from src.application.services.plan_swing_workflow_state import (
+    PlanSwingWorkflowState,
 )
 from src.domain.value_objects.benchmark_symbol import canonicalize_ticker
 from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
 
 if TYPE_CHECKING:
-    from src.application.dto import swing_analysis as swing_analysis_dto
+    from src.application.dto import plan_swing as plan_swing_dto
     from src.application.dto.accumulation_screen import (
         AccumulationCandidateEvaluationResult,
     )
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from src.domain.value_objects.market_context import MarketContext
 
 
-class SwingAnalysisDataUnavailable(Exception):
+class PlanSwingDataUnavailable(Exception):
     """Raised when a ticker has no local candle data for swing analysis."""
 
     def __init__(self, ticker: str) -> None:
@@ -44,7 +44,7 @@ class SwingAnalysisDataUnavailable(Exception):
         self.ticker = ticker
 
 
-class SwingAnalysisInputCollector:
+class PlanSwingInputCollector:
     """Collects raw inputs needed before decision composition."""
 
     def __init__(
@@ -75,9 +75,7 @@ class SwingAnalysisInputCollector:
             market_repository
         )
 
-    def collect(
-        self, request: "swing_analysis_dto.SwingAnalysisWorkflowRequest"
-    ) -> SwingAnalysisWorkflowState:
+    def collect(self, request: "plan_swing_dto.PlanSwingWorkflowRequest") -> PlanSwingWorkflowState:
         warnings: list[str] = []
 
         refresh_actions = ("disabled",)
@@ -131,14 +129,14 @@ class SwingAnalysisInputCollector:
 
         # Bounded by request.today: this is the same candle series later
         # passed as-is into the setup-evidence/phase-detector builders (see
-        # SwingAnalysisOptionalEvidenceRunner.build_evidence), so an
+        # PlanSwingOptionalEvidenceRunner.build_evidence), so an
         # unbounded read here would let a historical `--date` replay
         # consume (and score) candles dated after the decision date it
         # claims to represent — the exact leakage DQ-002G's temporal-leakage
         # tests guard against elsewhere in this codebase.
         candles = self._market_repo.get_candles(request.ticker, end_date=request.today)
         if not candles:
-            raise SwingAnalysisDataUnavailable(request.ticker)
+            raise PlanSwingDataUnavailable(request.ticker)
         latest_close = candles[-1].close
 
         coverage_end = (
@@ -186,7 +184,7 @@ class SwingAnalysisInputCollector:
             except Exception as exc:
                 warnings.append(f"Market regime unavailable: {exc}")
 
-        return SwingAnalysisWorkflowState(
+        return PlanSwingWorkflowState(
             warnings=warnings,
             refresh_actions=refresh_actions,
             data_freshness=data_freshness,

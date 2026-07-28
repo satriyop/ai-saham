@@ -2,11 +2,11 @@ from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
 
-from src.application.use_case.swing_analysis_workflow_use_case import SwingAnalysisWorkflowUseCase
+from src.application.use_case.plan_swing_workflow_use_case import PlanSwingWorkflowUseCase
 from src.domain.value_objects.setup_evaluation import SetupEvaluation, SetupGate, SetupMatch
 from src.domain.value_objects.setup_phase import SetupPhaseState
 from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
-from tests.application.use_case.swing_analysis_workflow_fixtures import (
+from tests.application.use_case.plan_swing_workflow_fixtures import (
     FakeBrokerRepository,
     FakeLearningObservationsRepository,
     FakeMarketRepository,
@@ -19,7 +19,7 @@ from tests.application.use_case.swing_analysis_workflow_fixtures import (
 )
 
 
-def test_swing_analysis_workflow_can_emit_breakout_confirmation_with_local_volume_source():
+def test_plan_swing_workflow_can_emit_breakout_confirmation_with_local_volume_source():
     candidate = SimpleNamespace(
         ticker="BBCA",
         trend="SIDE",
@@ -39,7 +39,7 @@ def test_swing_analysis_workflow_can_emit_breakout_confirmation_with_local_volum
         ),
         failed_reasons=(),
     )
-    workflow = SwingAnalysisWorkflowUseCase(
+    workflow = PlanSwingWorkflowUseCase(
         market_repository=FakeMarketRepository(_breakout_candles(), source="idx"),
         broker_repository=FakeBrokerRepository(),
         registry=FakeRegistry(),
@@ -108,7 +108,7 @@ rules:
 
 def test_swing_workflow_only_builds_optional_evidence_when_requested():
     calls: list[str] = []
-    workflow = SwingAnalysisWorkflowUseCase(
+    workflow = PlanSwingWorkflowUseCase(
         market_repository=FakeMarketRepository([_candle(date(2026, 6, 18))]),
         broker_repository=FakeBrokerRepository(),
         registry=FakeRegistry(),

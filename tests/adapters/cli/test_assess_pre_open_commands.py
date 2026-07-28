@@ -95,7 +95,7 @@ def test_assess_pre_open_json(tmp_path: Path) -> None:
     )
     assert result.exit_code == 0, result.stdout + result.stderr
     payload = json.loads(result.stdout)
-    assert payload["artifact_type"] == "analyze_pre_open_result"
+    assert payload["artifact_type"] == "assess_pre_open_result"
     assert payload["status"] == "OK"
     assert payload["lines"][0]["post_open_action"] == "ENTER"
     assert payload["lines"][0]["observation_id"] == obs_id

@@ -1,5 +1,5 @@
 """
-Sector context detail panel for saham analyze swing full output.
+Sector context detail panel for saham plan swing full output.
 
 Layer: Adapter
 

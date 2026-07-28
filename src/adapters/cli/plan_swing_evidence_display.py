@@ -1,5 +1,5 @@
 """
-Detailed evidence / full-output rendering for saham analyze swing.
+Detailed evidence / full-output rendering for saham plan swing.
 
 Layer: Adapter
 

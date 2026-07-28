@@ -1,5 +1,5 @@
 """
-Signal and Alpha/Trigger detail panels for saham analyze swing full output.
+Signal and Alpha/Trigger detail panels for saham plan swing full output.
 
 Layer: Adapter
 

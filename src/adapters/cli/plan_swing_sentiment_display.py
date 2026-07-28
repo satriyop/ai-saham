@@ -1,5 +1,5 @@
 """
-Sentiment evidence panel for saham analyze swing full output.
+Sentiment evidence panel for saham plan swing full output.
 
 Layer: Adapter
 

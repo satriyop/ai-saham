@@ -3,26 +3,26 @@
 Layer: Application
 
 Owns diagnostics construction, module flag assembly, and the final
-`SwingAnalysisWorkflowResponse` construction. Extracted from
-`SwingAnalysisWorkflowUseCase` to keep the use case as orchestration only.
+`PlanSwingWorkflowResponse` construction. Extracted from
+`PlanSwingWorkflowUseCase` to keep the use case as orchestration only.
 """
 
 from __future__ import annotations
 
-from src.application.dto import swing_analysis as swing_analysis_dto
-from src.application.services.swing_analysis_workflow_state import (
-    SwingAnalysisWorkflowState,
+from src.application.dto import plan_swing as plan_swing_dto
+from src.application.services.plan_swing_workflow_state import (
+    PlanSwingWorkflowState,
 )
 
 
-class SwingAnalysisResponseAssembler:
+class PlanSwingResponseAssembler:
     """Builds the final workflow response from accumulated pipeline state."""
 
     def assemble(
         self,
-        request: swing_analysis_dto.SwingAnalysisWorkflowRequest,
-        state: SwingAnalysisWorkflowState,
-    ) -> swing_analysis_dto.SwingAnalysisWorkflowResponse:
+        request: plan_swing_dto.PlanSwingWorkflowRequest,
+        state: PlanSwingWorkflowState,
+    ) -> plan_swing_dto.PlanSwingWorkflowResponse:
         verdict = state.verdict
         if verdict is None:
             raise ValueError("state.verdict is missing")
@@ -30,7 +30,7 @@ class SwingAnalysisResponseAssembler:
             raise ValueError("state.signal_assessment_availability is missing")
         if state.signal_assessment_availability != verdict.signal_assessment_availability:
             raise ValueError("state and verdict signal assessment availability differ")
-        diagnostics = swing_analysis_dto.SwingDiagnostics(
+        diagnostics = plan_swing_dto.SwingDiagnostics(
             data_freshness=state.data_freshness,
             flow_detail=state.flow_detail,
             broker_detail=state.broker_detail,
@@ -40,7 +40,7 @@ class SwingAnalysisResponseAssembler:
         )
         state.diagnostics = diagnostics
 
-        return swing_analysis_dto.SwingAnalysisWorkflowResponse(
+        return plan_swing_dto.PlanSwingWorkflowResponse(
             ticker=request.ticker,
             today=request.today,
             refresh_actions=state.refresh_actions,

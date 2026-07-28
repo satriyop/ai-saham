@@ -12,13 +12,13 @@ from rich.console import Group
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, console, panel
-from src.application.dto.analyze_pre_open import AnalyzePreOpenResult
+from src.application.dto.assess_pre_open import AssessPreOpenResult
 
 
-def result_to_json_dict(result: AnalyzePreOpenResult) -> dict[str, Any]:
+def result_to_json_dict(result: AssessPreOpenResult) -> dict[str, Any]:
     """Stdout JSON payload (no file write)."""
     return {
-        "artifact_type": "analyze_pre_open_result",
+        "artifact_type": "assess_pre_open_result",
         "session_date": result.session_date.isoformat(),
         "status": result.status.value,
         "market_regime": result.market_regime,
@@ -71,7 +71,7 @@ def _short_id(value: str | None) -> str:
     return value[:12] + "…"
 
 
-def display_assess_pre_open(result: AnalyzePreOpenResult) -> None:
+def display_assess_pre_open(result: AssessPreOpenResult) -> None:
     """Rich table: pre-open state vs post-open action."""
     summary = compact_table(show_header=False)
     summary.add_column("Metric", style="bold")
@@ -139,7 +139,7 @@ def display_assess_pre_open(result: AnalyzePreOpenResult) -> None:
     console().print(panel(Group(*sections), title="ANALYZE PRE-OPEN"))
 
 
-def echo_json(result: AnalyzePreOpenResult) -> None:
+def echo_json(result: AssessPreOpenResult) -> None:
     import typer
 
     typer.echo(json.dumps(result_to_json_dict(result), indent=2))

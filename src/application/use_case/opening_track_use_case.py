@@ -141,14 +141,14 @@ class OpeningTrackUseCase:
                 and not entry.get("error")
             ):
                 try:
-                    from src.application.use_case.analyze_running_trade_use_case import (
-                        AnalyzeRunningTradeRequest,
-                        analyze_running_trade,
+                    from src.application.use_case.running_trade_analysis_use_case import (
+                        RunningTradeAnalysisRequest,
+                        analyze_running_trade_signal,
                     )
 
                     ticks = self._running_trade_provider.fetch_running_trade(ticker)
-                    signal = analyze_running_trade(
-                        AnalyzeRunningTradeRequest(
+                    signal = analyze_running_trade_signal(
+                        RunningTradeAnalysisRequest(
                             ticker=ticker,
                             ticks=ticks,
                             institutional_broker_codes=request.institutional_broker_codes,

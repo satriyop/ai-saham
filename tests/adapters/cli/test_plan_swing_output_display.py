@@ -10,7 +10,7 @@ from src.adapters.cli.plan_swing_display import (
     SwingOutputDisplayOptions,
     print_swing_output,
 )
-from src.application.dto.swing_analysis import (
+from src.application.dto.plan_swing import (
     SignalAssessmentAvailability,
     SignalAssessmentStatus,
     SignalAssessmentUnavailableReason,

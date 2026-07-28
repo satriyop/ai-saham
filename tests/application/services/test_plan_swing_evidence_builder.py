@@ -1,4 +1,4 @@
-"""Coordinator tests for SwingAnalysisEvidenceBuilder.build().
+"""Coordinator tests for PlanSwingEvidenceBuilder.build().
 
 Focuses on the finding-3 refactor: evidence families must delegate to
 CandidateEvidenceDataLoader + the candidate_*_evidence_assembler modules
@@ -13,8 +13,8 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 from src.application.dto.accumulation_screen import AccumulationCandidate
-from src.application.services.swing_analysis_evidence_builder import (
-    SwingAnalysisEvidenceBuilder,
+from src.application.services.plan_swing_evidence_builder import (
+    PlanSwingEvidenceBuilder,
 )
 from src.domain.entities.candle import Candle
 from src.domain.value_objects.setup_evaluation import SetupEvaluation, SetupMatch
@@ -169,8 +169,8 @@ def _builder(
     company_quality_context_builder_factory=None,
     signal_engine=None,
     candidate_observations_repository=None,
-) -> SwingAnalysisEvidenceBuilder:
-    return SwingAnalysisEvidenceBuilder(
+) -> PlanSwingEvidenceBuilder:
+    return PlanSwingEvidenceBuilder(
         market_repository=market_repo,
         broker_repository=broker_repo,
         registry=None,

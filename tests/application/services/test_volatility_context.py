@@ -1,6 +1,6 @@
 """Tests for the shared ATR/volatility classification helper.
 
-This is the single source of truth used by both analyze swing's diagnostic
+This is the single source of truth used by both plan swing's diagnostic
 volatility panel and the persisted SignalObservationFingerprint volatility
 fields. Both call sites must agree on bucket/multiplier logic.
 """

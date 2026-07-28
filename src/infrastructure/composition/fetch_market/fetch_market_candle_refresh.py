@@ -46,7 +46,7 @@ from src.infrastructure.persistence.sqlite_market_repository import (
 )
 
 # Benchmark ticker always included in every market refresh run (first in list).
-# Required by: saham analyze regime, saham analyze swing (market context).
+# Required by: saham analyze regime, saham plan swing (market context).
 _BENCHMARK_TICKER = BENCHMARK_TICKER
 
 

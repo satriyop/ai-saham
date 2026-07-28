@@ -1,23 +1,23 @@
-"""Regression tests for SwingAnalysisResponseAssembler invariants.
+"""Regression tests for PlanSwingResponseAssembler invariants.
 
 Layer: Application (test)
 """
 
 import pytest
 
-from src.application.dto.swing_analysis import (
+from src.application.dto.plan_swing import (
     SignalAssessmentAvailability,
     SignalAssessmentStatus,
     SignalAssessmentUnavailableReason,
     SwingVerdict,
 )
-from src.application.services.swing_analysis_response_assembler import (
-    SwingAnalysisResponseAssembler,
+from src.application.services.plan_swing_response_assembler import (
+    PlanSwingResponseAssembler,
 )
-from src.application.services.swing_analysis_workflow_state import (
-    SwingAnalysisWorkflowState,
+from src.application.services.plan_swing_workflow_state import (
+    PlanSwingWorkflowState,
 )
-from tests.application.use_case.swing_analysis_workflow_fixtures import _request
+from tests.application.use_case.plan_swing_workflow_fixtures import _request
 
 
 def test_assemble_rejects_state_and_verdict_availability_mismatch():
@@ -31,7 +31,7 @@ def test_assemble_rejects_state_and_verdict_availability_mismatch():
         unavailable_reason=(SignalAssessmentUnavailableReason.NO_PRODUCTION_SIGNAL_EVIDENCE),
     )
 
-    state = SwingAnalysisWorkflowState(
+    state = PlanSwingWorkflowState(
         signal_assessment_availability=state_availability,
         verdict=SwingVerdict(
             trade_setup=None,
@@ -46,4 +46,4 @@ def test_assemble_rejects_state_and_verdict_availability_mismatch():
         ValueError,
         match="state and verdict signal assessment availability differ",
     ):
-        SwingAnalysisResponseAssembler().assemble(_request(), state)
+        PlanSwingResponseAssembler().assemble(_request(), state)

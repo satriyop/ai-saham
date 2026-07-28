@@ -4,7 +4,7 @@ Layer: Application
 
 Owns ATR calculation, ATR-based position sizing, setup entry selection,
 setup percent sizing, and swing target resolution. Extracted from
-`SwingAnalysisWorkflowUseCase` to keep the use case as orchestration only.
+`PlanSwingWorkflowUseCase` to keep the use case as orchestration only.
 """
 
 from __future__ import annotations
@@ -13,18 +13,18 @@ from collections.abc import Callable
 from decimal import Decimal
 from typing import Any
 
-from src.application.dto import swing_analysis as swing_analysis_dto
+from src.application.dto import plan_swing as plan_swing_dto
+from src.application.services.plan_swing_atr import compute_swing_atr
+from src.application.services.plan_swing_workflow_state import (
+    PlanSwingWorkflowState,
+)
 from src.application.services.position_sizer import (
     compute_percent_position_size,
     compute_position_size,
 )
-from src.application.services.swing_analysis_atr import compute_swing_atr
-from src.application.services.swing_analysis_workflow_state import (
-    SwingAnalysisWorkflowState,
-)
 
 
-class SwingAnalysisSizingService:
+class PlanSwingSizingService:
     """Owns ATR calculation, position sizing, and swing target resolution."""
 
     def __init__(
@@ -39,17 +39,17 @@ class SwingAnalysisSizingService:
 
     def compute_atr(
         self,
-        request: swing_analysis_dto.SwingAnalysisWorkflowRequest,
-        state: SwingAnalysisWorkflowState,
-    ) -> SwingAnalysisWorkflowState:
+        request: plan_swing_dto.PlanSwingWorkflowRequest,
+        state: PlanSwingWorkflowState,
+    ) -> PlanSwingWorkflowState:
         state.atr_value = compute_swing_atr(self._registry, state.candles)
         return state
 
     def compute_entry_sizing(
         self,
-        request: swing_analysis_dto.SwingAnalysisWorkflowRequest,
-        state: SwingAnalysisWorkflowState,
-    ) -> SwingAnalysisWorkflowState:
+        request: plan_swing_dto.PlanSwingWorkflowRequest,
+        state: PlanSwingWorkflowState,
+    ) -> PlanSwingWorkflowState:
         setup_entry: Decimal | None = None
         sizing = None
         if request.capital is not None and state.setup_eval is not None and state.setup_eval.passed:
@@ -78,9 +78,9 @@ class SwingAnalysisSizingService:
 
     def resolve_targets_and_percent_sizing(
         self,
-        request: swing_analysis_dto.SwingAnalysisWorkflowRequest,
-        state: SwingAnalysisWorkflowState,
-    ) -> SwingAnalysisWorkflowState:
+        request: plan_swing_dto.PlanSwingWorkflowRequest,
+        state: PlanSwingWorkflowState,
+    ) -> PlanSwingWorkflowState:
         swing_config = self._load_swing_config()
         regime_label = state.market_regime.regime.value if state.market_regime else None
         take_profit_pct, stop_loss_pct = self._resolve_setup_targets(

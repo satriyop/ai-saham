@@ -4,11 +4,11 @@ from decimal import Decimal
 import pytest
 
 from src.application.dto.assess_signal import AssessSignalResponse
-from src.application.dto.swing_analysis import (
+from src.application.dto.plan_swing import (
+    PlanSwingWorkflowResponse,
     SignalAssessmentAvailability,
     SignalAssessmentStatus,
     SignalAssessmentUnavailableReason,
-    SwingAnalysisWorkflowResponse,
     SwingVerdict,
 )
 from src.domain.value_objects.signal_assessment import (
@@ -193,7 +193,7 @@ def test_response_validation_types():
     with pytest.raises(
         TypeError, match="signal_assessment_availability must be a SignalAssessmentAvailability"
     ):
-        SwingAnalysisWorkflowResponse(
+        PlanSwingWorkflowResponse(
             ticker="BBCA",
             today=date(2026, 6, 18),
             refresh_actions=(),
@@ -223,7 +223,7 @@ def test_response_validation_types():
 def test_response_available_no_signal_raises_value_error():
     avail = SignalAssessmentAvailability(status=SignalAssessmentStatus.AVAILABLE)
     with pytest.raises(ValueError, match="AVAILABLE requires signal_assessment to be present"):
-        SwingAnalysisWorkflowResponse(
+        PlanSwingWorkflowResponse(
             ticker="BBCA",
             today=date(2026, 6, 18),
             refresh_actions=(),
@@ -257,7 +257,7 @@ def test_response_unavailable_with_signal_raises_value_error():
         unavailable_reason=SignalAssessmentUnavailableReason.NO_PRODUCTION_SIGNAL_EVIDENCE,
     )
     with pytest.raises(ValueError, match="UNAVAILABLE requires signal_assessment to be None"):
-        SwingAnalysisWorkflowResponse(
+        PlanSwingWorkflowResponse(
             ticker="BBCA",
             today=date(2026, 6, 18),
             refresh_actions=(),
@@ -301,7 +301,7 @@ def test_response_verdict_availability_mismatch_raises_value_error():
     )
 
     with pytest.raises(ValueError, match="Response availability must match verdict availability"):
-        SwingAnalysisWorkflowResponse(
+        PlanSwingWorkflowResponse(
             ticker="BBCA",
             today=date(2026, 6, 18),
             refresh_actions=(),
@@ -383,7 +383,7 @@ def test_response_to_dict_verdict_keys():
         market_regime=None,
         signal_assessment_availability=avail,
     )
-    resp = SwingAnalysisWorkflowResponse(
+    resp = PlanSwingWorkflowResponse(
         ticker="BBCA",
         today=date(2026, 6, 18),
         refresh_actions=(),

@@ -1,6 +1,6 @@
 from datetime import date
 
-from tests.application.use_case.swing_analysis_workflow_fixtures import (
+from tests.application.use_case.plan_swing_workflow_fixtures import (
     FakeMarketRepository,
     _candle,
     _request,

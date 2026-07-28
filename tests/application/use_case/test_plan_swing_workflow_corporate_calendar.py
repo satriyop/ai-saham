@@ -1,5 +1,5 @@
 """Integration tests: corporate calendar event-risk wiring into
-SwingAnalysisWorkflowUseCase.
+PlanSwingWorkflowUseCase.
 
 Verifies the optional `corporate_action_risk_use_case` kwarg attaches
 `SwingEvidence.corporate_action_risk` diagnostically, never influences
@@ -7,7 +7,7 @@ Verifies the optional `corporate_action_risk_use_case` kwarg attaches
 warnings rather than raising.
 
 Layer: Application. Mirrors the fixture pattern in
-test_swing_analysis_workflow.py (FakeMarketRepository, FakeBrokerRepository,
+test_plan_swing_workflow.py (FakeMarketRepository, FakeBrokerRepository,
 _request helper) rather than inventing a new one.
 """
 
@@ -17,12 +17,12 @@ from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
-from src.application.dto.swing_analysis import SwingAnalysisWorkflowRequest
+from src.application.dto.plan_swing import PlanSwingWorkflowRequest
 from src.application.use_case.assess_corporate_action_event_risk_use_case import (
     AssessCorporateActionEventRiskUseCase,
 )
-from src.application.use_case.swing_analysis_workflow_use_case import (
-    SwingAnalysisWorkflowUseCase,
+from src.application.use_case.plan_swing_workflow_use_case import (
+    PlanSwingWorkflowUseCase,
 )
 from src.domain.entities.candle import Candle
 from src.domain.value_objects.corporate_action_calendar import (
@@ -40,7 +40,7 @@ from src.infrastructure.config.corporate_action_policy_config import (
     load_corporate_action_policy_config,
 )
 from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
-from tests.application.use_case.swing_analysis_workflow_fixtures import (
+from tests.application.use_case.plan_swing_workflow_fixtures import (
     _fake_signal_evidence_context_builder,
 )
 
@@ -105,8 +105,8 @@ class FakeCalendarRepositoryRaising:
 class FakeCalendarRepositoryRecordingAsOfFetchedAt:
     """DQ-002G workflow-level regression: records every argument
     `get_events_for_ticker` was actually called with, so the exact resolved
-    decision timestamp propagated from `SwingAnalysisInputCollector` ->
-    `SwingAnalysisOptionalEvidenceRunner` -> `SwingAnalysisEvidenceBuilder` ->
+    decision timestamp propagated from `PlanSwingInputCollector` ->
+    `PlanSwingOptionalEvidenceRunner` -> `PlanSwingEvidenceBuilder` ->
     `AssessCorporateActionEventRiskUseCase` can be asserted end-to-end,
     rather than only at the use-case or repository unit-test boundary."""
 
@@ -139,7 +139,7 @@ def _candle(day: date) -> Candle:
     )
 
 
-def _request(**overrides) -> SwingAnalysisWorkflowRequest:
+def _request(**overrides) -> PlanSwingWorkflowRequest:
     values = {
         "ticker": "BBCA",
         "today": date(2026, 7, 13),
@@ -167,11 +167,11 @@ def _request(**overrides) -> SwingAnalysisWorkflowRequest:
         "with_technical_gate": False,
     }
     values.update(overrides)
-    return SwingAnalysisWorkflowRequest(**values)
+    return PlanSwingWorkflowRequest(**values)
 
 
-def _build_workflow(*, corporate_action_risk_use_case=None) -> SwingAnalysisWorkflowUseCase:
-    return SwingAnalysisWorkflowUseCase(
+def _build_workflow(*, corporate_action_risk_use_case=None) -> PlanSwingWorkflowUseCase:
+    return PlanSwingWorkflowUseCase(
         market_repository=FakeMarketRepository([_candle(date(2026, 7, 13))]),
         broker_repository=FakeBrokerRepository(),
         registry=FakeRegistry(),
@@ -256,15 +256,15 @@ def test_corporate_action_risk_failure_is_caught_and_recorded_as_warning():
 
 def test_workflow_passes_resolved_decision_timestamp_to_corporate_action_repository():
     """DQ-002G follow-up: proves the exact `effective_session.decision_at`
-    timestamp resolved by `SwingAnalysisInputCollector` for a historical
+    timestamp resolved by `PlanSwingInputCollector` for a historical
     `request.today` reaches `get_events_for_ticker`'s `as_of_fetched_at`
     argument, through every intermediate hop (state storage ->
     optional-evidence runner -> evidence builder -> use case -> repository).
 
-    Fails if: `SwingAnalysisInputCollector` stops storing `effective_session`
-    on state; `SwingAnalysisOptionalEvidenceRunner` stops deriving
+    Fails if: `PlanSwingInputCollector` stops storing `effective_session`
+    on state; `PlanSwingOptionalEvidenceRunner` stops deriving
     `as_of_fetched_at` from `state.effective_session.decision_at`; or
-    `SwingAnalysisEvidenceBuilder`/`AssessCorporateActionEventRiskUseCase`
+    `PlanSwingEvidenceBuilder`/`AssessCorporateActionEventRiskUseCase`
     stop forwarding it to the repository call.
     """
     recording_repo = FakeCalendarRepositoryRecordingAsOfFetchedAt()
@@ -281,7 +281,7 @@ def test_workflow_passes_resolved_decision_timestamp_to_corporate_action_reposit
     baseline_response = baseline_workflow.execute(request)
     wired_response = wired_workflow.execute(request)
 
-    # `SwingAnalysisInputCollector` builds a deterministic after-close WIB
+    # `PlanSwingInputCollector` builds a deterministic after-close WIB
     # decision timestamp for any `request.today` that isn't the real current
     # date — computed here from the same constants the production code uses,
     # not hardcoded, so this test tracks MARKET_CLOSE/IDX_TIMEZONE if they

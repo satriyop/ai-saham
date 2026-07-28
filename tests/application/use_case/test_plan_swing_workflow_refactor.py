@@ -1,4 +1,4 @@
-"""Characterization tests for the split SwingAnalysisWorkflowUseCase pipeline.
+"""Characterization tests for the split PlanSwingWorkflowUseCase pipeline.
 
 Layer: Application (test)
 
@@ -16,9 +16,9 @@ import pytest
 
 from src.application.dto.assess_signal import AssessSignalResponse
 from src.application.ports.rules_loader import RulesLoader
-from src.application.use_case.swing_analysis_workflow_use_case import (
-    SwingAnalysisDataUnavailable,
-    SwingAnalysisWorkflowUseCase,
+from src.application.use_case.plan_swing_workflow_use_case import (
+    PlanSwingDataUnavailable,
+    PlanSwingWorkflowUseCase,
 )
 from src.domain.value_objects.market_context import MarketContext, MarketRegime
 from src.domain.value_objects.signal_assessment import (
@@ -27,7 +27,7 @@ from src.domain.value_objects.signal_assessment import (
     SignalAssessment,
     SignalStrength,
 )
-from tests.application.use_case.swing_analysis_workflow_fixtures import (
+from tests.application.use_case.plan_swing_workflow_fixtures import (
     FakeBrokerRepository,
     FakeMarketRepository,
     FakeRegistry,
@@ -83,7 +83,7 @@ def _base_kwargs(market_repo, **overrides):
 def test_no_candles_raises_data_unavailable():
     workflow = _workflow(FakeMarketRepository([]), [])
 
-    with pytest.raises(SwingAnalysisDataUnavailable):
+    with pytest.raises(PlanSwingDataUnavailable):
         workflow.execute(_request())
 
 
@@ -91,7 +91,7 @@ def test_accumulation_build_failure_returns_exact_warning():
     def build_accumulation_candidate_evaluation(**kwargs):
         raise RuntimeError("no broker rows")
 
-    workflow = SwingAnalysisWorkflowUseCase(
+    workflow = PlanSwingWorkflowUseCase(
         **_base_kwargs(
             FakeMarketRepository([_candle(date(2026, 6, 18))]),
             build_accumulation_candidate_evaluation=build_accumulation_candidate_evaluation,
@@ -107,7 +107,7 @@ def test_market_context_failure_returns_exact_warning():
     def evaluate_market_context(**kwargs):
         raise RuntimeError("regime boom")
 
-    workflow = SwingAnalysisWorkflowUseCase(
+    workflow = PlanSwingWorkflowUseCase(
         **_base_kwargs(
             FakeMarketRepository([_candle(date(2026, 6, 18))]),
             evaluate_market_context=evaluate_market_context,
@@ -163,7 +163,7 @@ def test_signal_assessment_failure_returns_exact_warning():
         def evaluate_swing_trade_setup(self, ticker, signal_context, market_context=None, **kwargs):
             raise RuntimeError("signal boom")
 
-    workflow = SwingAnalysisWorkflowUseCase(
+    workflow = PlanSwingWorkflowUseCase(
         **_base_kwargs(
             FakeMarketRepository([_candle(date(2026, 6, 18))]),
             build_accumulation_candidate_evaluation=lambda **kwargs: _eval_result(
@@ -173,7 +173,8 @@ def test_signal_assessment_failure_returns_exact_warning():
         )
     )
 
-    response = workflow.execute(_request())
+    # Re-score path only runs with explicit re-judge flags (ADR-054 S3).
+    response = workflow.execute(_request(with_market_context=True))
 
     assert "Evidence-enriched signal re-score unavailable: signal boom" in response.warnings
 
@@ -263,7 +264,7 @@ def test_evidence_enriched_rescore_failure_returns_exact_warning():
     candidate = _MinimalCandidate()
     candidate.signal_assessment = _signal_response(40.0)
 
-    workflow = SwingAnalysisWorkflowUseCase(
+    workflow = PlanSwingWorkflowUseCase(
         **_base_kwargs(
             FakeMarketRepository([_candle(date(2026, 6, 18))]),
             build_accumulation_candidate_evaluation=lambda **kwargs: _eval_result(candidate),
@@ -272,13 +273,14 @@ def test_evidence_enriched_rescore_failure_returns_exact_warning():
         )
     )
 
-    response = workflow.execute(_request())
+    # Re-score path only runs with explicit re-judge flags (ADR-054 S3).
+    response = workflow.execute(_request(with_market_context=True))
 
     assert signal_engine.rescore_calls == 1
     assert "Evidence-enriched signal re-score unavailable: rescore boom" in response.warnings
     # Under the new availability-aware design, a failed rescore clears the signal assessment
     assert response.signal_assessment is None
-    from src.application.dto.swing_analysis import (
+    from src.application.dto.plan_swing import (
         SignalAssessmentStatus,
         SignalAssessmentUnavailableReason,
     )
@@ -302,7 +304,7 @@ def test_evidence_enriched_rescore_success_updates_response():
     candidate = _MinimalCandidate()
     candidate.signal_assessment = _signal_response(40.0)
 
-    workflow = SwingAnalysisWorkflowUseCase(
+    workflow = PlanSwingWorkflowUseCase(
         **_base_kwargs(
             FakeMarketRepository([_candle(date(2026, 6, 18))]),
             build_accumulation_candidate_evaluation=lambda **kwargs: _eval_result(candidate),
@@ -338,7 +340,7 @@ class _SignalEngineMustNotAssessWithoutEvidence:
 def test_no_candidate_reports_typed_unavailable_without_signal_assessment():
     signal_engine = _SignalEngineMustNotAssessWithoutEvidence()
 
-    workflow = SwingAnalysisWorkflowUseCase(
+    workflow = PlanSwingWorkflowUseCase(
         **_base_kwargs(
             FakeMarketRepository([_candle(date(2026, 6, 18))]),
             build_accumulation_candidate_evaluation=lambda **kwargs: None,
@@ -350,7 +352,7 @@ def test_no_candidate_reports_typed_unavailable_without_signal_assessment():
 
     assert signal_engine.evaluate_swing_trade_setup_calls == 0
 
-    from src.application.dto.swing_analysis import (
+    from src.application.dto.plan_swing import (
         SignalAssessmentStatus,
         SignalAssessmentUnavailableReason,
     )
@@ -387,7 +389,7 @@ class _PassingSetupEval:
 
 
 def test_setup_sizing_uses_explicit_entry_price():
-    workflow = SwingAnalysisWorkflowUseCase(
+    workflow = PlanSwingWorkflowUseCase(
         **_base_kwargs(
             FakeMarketRepository([_candle(date(2026, 6, 18))]),
             evaluate_setup=lambda candidate, broker_detail: _PassingSetupEval(),
@@ -404,7 +406,7 @@ def test_setup_sizing_uses_explicit_entry_price():
 
 
 def test_module_flags_unchanged_for_all_toggles_enabled():
-    workflow = SwingAnalysisWorkflowUseCase(
+    workflow = PlanSwingWorkflowUseCase(
         **_base_kwargs(
             FakeMarketRepository([_candle(date(2026, 6, 18))]),
             build_flow_detail=lambda **kwargs: {"flow": True},

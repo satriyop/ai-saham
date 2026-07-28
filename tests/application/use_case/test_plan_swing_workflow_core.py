@@ -3,13 +3,13 @@ from decimal import Decimal
 
 import pytest
 
-from src.application.services.swing_analysis_market_helpers import simple_return
-from src.application.use_case.swing_analysis_workflow_use_case import (
-    SwingAnalysisDataUnavailable,
-    SwingAnalysisWorkflowUseCase,
+from src.application.services.plan_swing_market_helpers import simple_return
+from src.application.use_case.plan_swing_workflow_use_case import (
+    PlanSwingDataUnavailable,
+    PlanSwingWorkflowUseCase,
 )
 from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
-from tests.application.use_case.swing_analysis_workflow_fixtures import (
+from tests.application.use_case.plan_swing_workflow_fixtures import (
     FakeBrokerRepository,
     FakeMarketRepository,
     FakeRegistry,
@@ -61,7 +61,7 @@ def test_swing_workflow_runs_without_auto_refresh():
 def test_swing_workflow_raises_when_candles_are_missing():
     workflow = _workflow(FakeMarketRepository([]), [])
 
-    with pytest.raises(SwingAnalysisDataUnavailable):
+    with pytest.raises(PlanSwingDataUnavailable):
         workflow.execute(_request())
 
 
@@ -69,7 +69,7 @@ def test_swing_workflow_records_accumulation_failure_warning():
     def build_accumulation_candidate_evaluation(**kwargs):
         raise RuntimeError("no broker rows")
 
-    workflow = SwingAnalysisWorkflowUseCase(
+    workflow = PlanSwingWorkflowUseCase(
         market_repository=FakeMarketRepository([_candle(date(2026, 6, 18))]),
         broker_repository=FakeBrokerRepository(),
         registry=FakeRegistry(),

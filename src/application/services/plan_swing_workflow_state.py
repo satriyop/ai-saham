@@ -3,7 +3,7 @@
 Layer: Application
 
 Carries values produced by one workflow collaborator and consumed by a
-later one. Extracted from `SwingAnalysisWorkflowUseCase` to keep the use
+later one. Extracted from `PlanSwingWorkflowUseCase` to keep the use
 case as orchestration only.
 """
 
@@ -20,14 +20,14 @@ if TYPE_CHECKING:
     )
     from src.application.dto.assess_signal import AssessSignalResponse
     from src.application.dto.built_evidence import BuiltFlowEvidence, BuiltSetupEvidence
-    from src.application.dto.signal_evidence_execution_context import (
-        SignalEvidenceExecutionContext,
-    )
-    from src.application.dto.swing_analysis import (
+    from src.application.dto.plan_swing import (
         SignalAssessmentAvailability,
         SwingDiagnostics,
         SwingEvidence,
         SwingVerdict,
+    )
+    from src.application.dto.signal_evidence_execution_context import (
+        SignalEvidenceExecutionContext,
     )
     from src.application.services.effective_market_session_resolver import (
         EffectiveMarketSession,
@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class SwingAnalysisWorkflowState:
+class PlanSwingWorkflowState:
     """Intermediate values threaded through the swing analysis pipeline."""
 
     warnings: list[str] = field(default_factory=list)

@@ -73,7 +73,7 @@ def select_broker_window(
     """Fetch and window-select the exact broker summary/daily-flow rows for
     one ticker, identically to `AccumulationCandidateEvaluator.evaluate()`.
 
-    Shared by the evaluator and `SwingAnalysisEvidenceBuilder` so both
+    Shared by the evaluator and `PlanSwingEvidenceBuilder` so both
     independently-computed flow evidence groups window the same way and
     never drift apart. Returns `(window_summaries, window_flows)`, both
     already future/ticker-filtered.

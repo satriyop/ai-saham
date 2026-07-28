@@ -17,8 +17,8 @@ from src.application.use_case.daily_setup_lens_impact_use_case import (
 from src.application.use_case.evaluate_swing_setup_use_case import (
     AVAILABLE_SWING_SETUPS,
 )
-from src.application.use_case.swing_analysis_workflow_use_case import (
-    SwingAnalysisDataUnavailable,
+from src.application.use_case.plan_swing_workflow_use_case import (
+    PlanSwingDataUnavailable,
 )
 
 DEFAULTS = SwingLensRequestDefaults(
@@ -34,7 +34,7 @@ DEFAULTS = SwingLensRequestDefaults(
 
 
 class FakeWorkflow:
-    """Scriptable stand-in for SwingAnalysisWorkflowUseCase.
+    """Scriptable stand-in for PlanSwingWorkflowUseCase.
 
     Records every request passed to execute(); returns a canned response object
     (or raises a scripted exception).
@@ -247,7 +247,7 @@ def test_one_setup_data_unavailable_produces_warning_cell_others_populate():
     setups = list(AVAILABLE_SWING_SETUPS)
     workflows = {
         setups[0]: FakeWorkflow(response=_response(action="WATCH")),
-        setups[1]: FakeWorkflow(exc=SwingAnalysisDataUnavailable("BBRI")),
+        setups[1]: FakeWorkflow(exc=PlanSwingDataUnavailable("BBRI")),
         setups[2]: FakeWorkflow(response=_response(action="ENTER")),
         setups[3]: FakeWorkflow(response=_response(action="AVOID")),
     }

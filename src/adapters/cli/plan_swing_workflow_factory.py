@@ -48,7 +48,7 @@ from src.application.services.swing_broker_detail_builder import (
 )
 from src.application.services.swing_data_freshness import build_swing_data_freshness
 from src.application.use_case.accumulation_screen_use_case import resolve_setup_targets
-from src.application.use_case.swing_analysis_workflow_use_case import SwingAnalysisWorkflowUseCase
+from src.application.use_case.plan_swing_workflow_use_case import PlanSwingWorkflowUseCase
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
 )
@@ -62,7 +62,7 @@ from src.infrastructure.persistence.sqlite_macro_calendar_repository import (
 )
 
 
-def create_swing_analysis_workflow(
+def create_plan_swing_workflow(
     *,
     db_path: Path,
     setup_name: str | None,
@@ -72,7 +72,7 @@ def create_swing_analysis_workflow(
     noise_brokers: set[str],
     broker_weights: dict[str, Decimal],
     dependencies: StockAnalysisWorkflowDependencies | None = None,
-) -> SwingAnalysisWorkflowUseCase:
+) -> PlanSwingWorkflowUseCase:
     """Build the composite plan swing workflow with CLI infrastructure."""
     deps = dependencies or create_stock_analysis_workflow_dependencies(db_path)
     accumulation_config = load_accumulation_screener_config()
@@ -93,7 +93,7 @@ def create_swing_analysis_workflow(
     )
     evaluate_setup = create_setup_evaluator(setup_name=setup_name, swing_config=swing_config)
 
-    return SwingAnalysisWorkflowUseCase(
+    return PlanSwingWorkflowUseCase(
         market_repository=deps.market_repository,
         broker_repository=deps.broker_repository,
         registry=create_workflow_registry(deps),

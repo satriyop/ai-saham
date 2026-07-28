@@ -83,7 +83,7 @@ def _allows_generic_screen_history(
         return True
     if expected_family in {"breakout", "coiled-spring"}:
         # `screen accum` is the only workflow that persists lifecycle-phase
-        # observations today (`analyze swing` never writes candidate
+        # observations today (`plan swing` never writes candidate
         # observations, only reads them) — without this, breakout/coiled-spring
         # required_sequence=[COMPRESSION, BREAKOUT_CONFIRMATION] could never
         # accumulate the prior COMPRESSION history it needs from normal use.

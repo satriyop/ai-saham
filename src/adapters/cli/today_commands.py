@@ -18,7 +18,7 @@ from src.adapters.cli.plan_swing_command_config import (
     load_plan_swing_command_config,
 )
 from src.adapters.cli.plan_swing_workflow_factory import (
-    create_swing_analysis_workflow,
+    create_plan_swing_workflow,
 )
 from src.adapters.cli.rich_display import compact_table, panel
 from src.adapters.cli.view_market_context_display import (
@@ -294,7 +294,7 @@ def _build_setup_lens_impact_use_case(
 
     deps = create_stock_analysis_workflow_dependencies(db_path)
     setup_workflows = {
-        setup_name: create_swing_analysis_workflow(
+        setup_name: create_plan_swing_workflow(
             db_path=db_path,
             setup_name=setup_name,
             swing_config=swing_config,

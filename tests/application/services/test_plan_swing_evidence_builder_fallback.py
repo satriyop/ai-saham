@@ -18,11 +18,11 @@ from src.application.services.company_quality_context_evidence_builder import (
 from src.application.services.institutional_accumulation_evidence_builder import (
     InstitutionalAccumulationEvidenceBuilder,
 )
+from src.application.services.plan_swing_evidence_builder import (
+    PlanSwingEvidenceBuilder,
+)
 from src.application.services.sector_context_evidence_builder import (
     SectorContextEvidenceBuilder,
-)
-from src.application.services.swing_analysis_evidence_builder import (
-    SwingAnalysisEvidenceBuilder,
 )
 from src.domain.entities.candle import Candle
 from src.domain.ports.broker_data_repository import BrokerDataRepository
@@ -30,8 +30,8 @@ from src.domain.ports.market_data_repository import MarketDataRepository
 from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 
 
-def _builder(**factory_overrides) -> SwingAnalysisEvidenceBuilder:
-    return SwingAnalysisEvidenceBuilder(
+def _builder(**factory_overrides) -> PlanSwingEvidenceBuilder:
+    return PlanSwingEvidenceBuilder(
         market_repository=None,
         broker_repository=None,
         registry=None,
@@ -201,7 +201,7 @@ class TestPublicBuildFlowWithoutInjectedFactories:
             FlowConfirmationEvidenceBuilder,
         )
 
-        builder = SwingAnalysisEvidenceBuilder(
+        builder = PlanSwingEvidenceBuilder(
             market_repository=_StubMarketRepository(candles),
             broker_repository=_StubBrokerRepository(),
             registry=None,

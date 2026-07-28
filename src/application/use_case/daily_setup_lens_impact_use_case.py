@@ -3,7 +3,7 @@ Bounded, read-only setup-lens impact use case for the CLI `today` command.
 
 For each accumulation candidate already selected by the daily briefing, evaluate
 every canonical swing setup lens in ``AVAILABLE_SWING_SETUPS`` using the SAME
-canonical ``SwingAnalysisWorkflowUseCase`` that ``saham analyze swing
+canonical ``PlanSwingWorkflowUseCase`` that ``saham plan swing
 TICKER --setup SETUP`` uses. The workflow is invoked in a bounded read-only mode
 (no auto/force refresh, no strategy backtest, no sentiment) so no fetch, write,
 journal, or AI side effects occur.
@@ -23,14 +23,14 @@ from datetime import date
 from pathlib import Path
 from typing import Mapping
 
-from src.application.dto.swing_analysis import (
-    SwingAnalysisWorkflowRequest,
-    SwingAnalysisWorkflowResponse,
+from src.application.dto.plan_swing import (
+    PlanSwingWorkflowRequest,
+    PlanSwingWorkflowResponse,
 )
 from src.application.use_case.evaluate_swing_setup_use_case import AVAILABLE_SWING_SETUPS
-from src.application.use_case.swing_analysis_workflow_use_case import (
-    SwingAnalysisDataUnavailable,
-    SwingAnalysisWorkflowUseCase,
+from src.application.use_case.plan_swing_workflow_use_case import (
+    PlanSwingDataUnavailable,
+    PlanSwingWorkflowUseCase,
 )
 
 # Only setup entry-authority / phase-gate constraint reasons justify a
@@ -59,7 +59,7 @@ def _entry_authority_constraint_reasons(reasons: tuple[str, ...]) -> list[str]:
 class SwingLensRequestDefaults:
     """Typed request-shaping config for building read-only swing requests.
 
-    These are the deterministic knobs that ``saham analyze swing`` sources from
+    These are the deterministic knobs that ``saham plan swing`` sources from
     app/analyze-swing config. They are injected once by the adapter so this use
     case never hardcodes numeric analysis parameters.
     """
@@ -113,7 +113,7 @@ class DailySetupLensImpactResult:
 class DailySetupLensImpactUseCase:
     """Evaluate canonical swing setup lenses for already-selected candidates.
 
-    Read-only: builds each ``SwingAnalysisWorkflowRequest`` with
+    Read-only: builds each ``PlanSwingWorkflowRequest`` with
     ``auto_refresh=False``, ``force_refresh=False``, ``strategy_name=None`` and
     ``include_sentiment=False`` so the canonical workflow performs no fetch,
     write, journal, or AI work.
@@ -121,7 +121,7 @@ class DailySetupLensImpactUseCase:
 
     def __init__(
         self,
-        setup_workflows: Mapping[str, SwingAnalysisWorkflowUseCase],
+        setup_workflows: Mapping[str, PlanSwingWorkflowUseCase],
         request_defaults: SwingLensRequestDefaults,
     ) -> None:
         expected = set(AVAILABLE_SWING_SETUPS)
@@ -169,7 +169,7 @@ class DailySetupLensImpactUseCase:
         req = self._build_request(ticker=ticker, setup_name=setup_name, as_of_date=as_of_date)
         try:
             response = workflow.execute(req)
-        except SwingAnalysisDataUnavailable as exc:
+        except PlanSwingDataUnavailable as exc:
             return DailySetupLensImpactCell(
                 setup_name=setup_name,
                 action=None,
@@ -187,9 +187,9 @@ class DailySetupLensImpactUseCase:
         ticker: str,
         setup_name: str,
         as_of_date: date,
-    ) -> SwingAnalysisWorkflowRequest:
+    ) -> PlanSwingWorkflowRequest:
         d = self._defaults
-        return SwingAnalysisWorkflowRequest(
+        return PlanSwingWorkflowRequest(
             ticker=ticker,
             today=as_of_date,
             strategy_name=None,
@@ -220,7 +220,7 @@ class DailySetupLensImpactUseCase:
         self,
         *,
         setup_name: str,
-        response: SwingAnalysisWorkflowResponse,
+        response: PlanSwingWorkflowResponse,
     ) -> DailySetupLensImpactCell:
         trade_setup = response.trade_setup
         signal_assessment = response.signal_assessment

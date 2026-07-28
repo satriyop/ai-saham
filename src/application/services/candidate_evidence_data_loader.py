@@ -2,7 +2,7 @@
 
 Layer: Application
 
-Both `SwingAnalysisEvidenceBuilder` and `AccumulationCandidateEvidenceBuilder`
+Both `PlanSwingEvidenceBuilder` and `AccumulationCandidateEvidenceBuilder`
 need the same broker/candle windows to assemble institutional accumulation,
 ticker profile, and sector context evidence. This loader centralizes those
 repository calls so the two coordinators stop duplicating the fetch logic.
@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
-from src.application.services.swing_analysis_market_helpers import (
+from src.application.services.plan_swing_market_helpers import (
     benchmark_return_from_repository,
 )
 
