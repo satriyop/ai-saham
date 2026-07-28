@@ -45,6 +45,91 @@ def test_cockpit_mounts_layout_b_and_opens_palette():
     asyncio.run(scenario())
 
 
+def test_view_broker_list_enter_show_and_esc():
+    """Ctrl+P View broker: list desks → Enter show → esc list → esc board."""
+
+    async def scenario() -> None:
+        from types import SimpleNamespace
+
+        from src.adapters.tui.controllers.board_controller import BoardController
+        from src.adapters.tui.presenters.accum_presenter import AccumPresenter
+
+        def make_accum():
+            c = SimpleNamespace(
+                ticker="BBCA",
+                accum_score=50.0,
+                signal_assessment=None,
+                trade_setup=None,
+                risk_assessment=None,
+                setup_phase=None,
+                consecutive_streak=1,
+                rsi=50,
+                net_buy_ratio=0.5,
+                vwap_discount_pct=1.0,
+                current_price=1000,
+                name="BBCA",
+            )
+            return SimpleNamespace(
+                single_projection=SimpleNamespace(
+                    candidates=[c],
+                    window_days=7,
+                    data_as_of={},
+                    applied_filters=SimpleNamespace(sort_by="signal", top=20),
+                ),
+                effective_session=None,
+                market_context=None,
+                multi_projection=None,
+                warnings=(),
+            )
+
+        desks = [
+            SimpleNamespace(code="AK", type_label="Foreign"),
+            SimpleNamespace(code="YP", type_label="Local"),
+        ]
+        shown: list[str] = []
+
+        def show_loader(code: str) -> str:
+            shown.append(code)
+            return f"DESK_SHOW_{code}\nDay net 1.0B"
+
+        app = CockpitApp(
+            accum_loader=make_accum,
+            accum_controller=BoardController(make_accum),
+            accum_presenter=AccumPresenter(),
+            broker_list_loader=lambda: desks,
+            broker_show_loader=show_loader,
+        )
+        async with app.run_test(size=(120, 40)) as pilot:
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if app._stage == "accum" and app._rows:
+                    break
+            app._run_command("view-broker")
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if app._stage == "broker-list":
+                    break
+            assert app._stage == "broker-list"
+            assert len(app._broker_rows) == 2
+            assert app._broker_list_return == "accum"
+            app._open_broker_desk_show()
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if app._stage == "detail" and shown:
+                    break
+            assert shown == ["AK"]
+            assert "View · broker show · AK" in app._board_title
+            assert "DESK_SHOW_AK" in app._detail_text
+            await pilot.press("escape")
+            await pilot.pause()
+            assert app._stage == "broker-list"
+            await pilot.press("escape")
+            await pilot.pause()
+            assert app._stage == "accum"
+
+    asyncio.run(scenario())
+
+
 def test_palette_view_ticker_is_dashboard_not_board_inspect():
     """Ctrl+P View ticker = cache dashboard; Enter still does engine inspect."""
 

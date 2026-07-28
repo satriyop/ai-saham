@@ -49,6 +49,13 @@ COCKPIT_COMMANDS: tuple[CockpitCommand, ...] = (
     ),
     CockpitCommand(
         "Daily",
+        "view-broker",
+        "View broker",
+        "",
+        "CLI parity: list tracked desks → Enter show · saham view broker",
+    ),
+    CockpitCommand(
+        "Daily",
         "assess-preopen",
         "Assess pre-open",
         "a",

@@ -63,6 +63,8 @@ def create_tui_app(
         fetch_previewer=fetch_previewer,
         fetch_runner=fetch_runner,
         ticker_detail_loader=ticker_detail_loader,
+        broker_list_loader=_BrokerListLoader(),
+        broker_show_loader=_BrokerShowLoader(db_path),
         accum_controller=BoardController(accum_loader),
         preopen_controller=BoardController(
             preopen_loader,
@@ -228,6 +230,70 @@ class _ViewTickerDashboardLoader:
                 GetTickerDashboardRequest(ticker=str(ticker).upper(), brief=False)
             )
             return format_ticker_dashboard_text(dashboard)
+
+
+# ── View broker (list → show) ───────────────────────────────
+
+
+class _BrokerListLoader:
+    """Tracked desks from config — same source as ``saham view broker list``."""
+
+    def __call__(self) -> list[Any]:
+        from types import SimpleNamespace
+
+        from src.application.services.broker_desk_from_daily_flow import classify_desk_type
+        from src.domain.entities.broker_flow import BrokerType
+        from src.infrastructure.config.institutional_accumulation_config_loader import (
+            load_institutional_accumulation_config,
+        )
+        from src.infrastructure.config.stockbit_config import load_stockbit_config
+
+        sb = load_stockbit_config()
+        ia = load_institutional_accumulation_config()
+        rows: list[Any] = []
+        for code in sb.tracked_broker_codes:
+            btype = classify_desk_type(code, ia.foreign_broker_codes)
+            if btype == BrokerType.FOREIGN:
+                label = "Foreign"
+            elif btype == BrokerType.LOCAL:
+                label = "Local"
+            else:
+                label = "unknown"
+            rows.append(SimpleNamespace(code=str(code).upper(), type_label=label))
+        return rows
+
+
+class _BrokerShowLoader:
+    """Desk show from cache — same use case as ``saham view broker show``."""
+
+    def __init__(self, db_path: Path) -> None:
+        self._db_path = db_path
+        self._lock = Lock()
+
+    def __call__(self, code: str) -> str:
+        with self._lock:
+            from src.adapters.cli.view_broker_desk_display import format_desk_show_text
+            from src.application.use_case.view_broker_desk_show_use_case import (
+                ViewBrokerDeskShowRequest,
+                ViewBrokerDeskShowUseCase,
+            )
+            from src.infrastructure.config.institutional_accumulation_config_loader import (
+                load_institutional_accumulation_config,
+            )
+            from src.infrastructure.persistence.sqlite_broker_repository import (
+                SQLiteBrokerRepository,
+            )
+
+            foreign = load_institutional_accumulation_config().foreign_broker_codes
+            result = ViewBrokerDeskShowUseCase(
+                SQLiteBrokerRepository(self._db_path),
+                foreign_broker_codes=foreign,
+            ).execute(ViewBrokerDeskShowRequest(broker_code=str(code).upper()))
+            if result is None:
+                return (
+                    f"{code.upper()}\n\nno broker_daily_flow for this desk · run broker fetch first"
+                )
+            return format_desk_show_text(result)
 
 
 # ── Plan (structure desk — same engine as CLI plan swing) ───

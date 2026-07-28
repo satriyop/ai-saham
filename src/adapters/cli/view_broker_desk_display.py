@@ -37,6 +37,50 @@ def _type_label(broker_type: BrokerType) -> str:
     return "—"
 
 
+def format_desk_show_text(result) -> str:
+    """Plain-text desk show for TUI (same facts as CLI display_desk_show)."""
+    lines = [
+        f"Broker Desk · {result.broker_code} ({result.broker_name})",
+        f"type {_type_label(result.broker_type)} · as of {result.as_of}",
+        (
+            f"Day net {format_value(result.day_net_value)} · "
+            f"lot {result.day_net_lot:,} · tickers {result.day_ticker_count}"
+        ),
+        str(result.scope_note),
+        "",
+        "Top buy stocks",
+    ]
+    for row in result.top_buy_stocks or ():
+        lines.append(f"  {row.ticker:6}  {format_value(row.net_value):>10}  lot {row.net_lot:,}")
+    if not result.top_buy_stocks:
+        lines.append("  —")
+    lines.append("")
+    lines.append("Top sell stocks")
+    for row in result.top_sell_stocks or ():
+        lines.append(f"  {row.ticker:6}  {format_value(row.net_value):>10}  lot {row.net_lot:,}")
+    if not result.top_sell_stocks:
+        lines.append("  —")
+    lines.append("")
+    lines.append("CLI: saham view broker show|top-stocks|flow|history " + result.broker_code)
+    return "\n".join(lines)
+
+
+def format_broker_list_text(desks: list[dict]) -> str:
+    """Plain-text tracked desk list for TUI / capture."""
+    lines = [
+        "Tracked broker desks (broker_daily_flow)",
+        "same job as: saham view broker list",
+        "",
+        f"{'Code':4}  Type",
+        "-" * 20,
+    ]
+    for row in desks:
+        lines.append(f"{row['code']:4}  {row['type']}")
+    lines.append("-" * 20)
+    lines.append("Enter a row to open desk show · esc back")
+    return "\n".join(lines)
+
+
 def display_desk_show(result) -> None:
     c = Console()
     c.print("")
