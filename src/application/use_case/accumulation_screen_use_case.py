@@ -410,6 +410,16 @@ class AccumulationScreenUseCase:
 
         candidates.sort(key=_screen_sort_key, reverse=True)
 
+        # ADR-054 judgment desk: attach sector-macro DIAGNOSTIC evidence only on
+        # single-ticker deep judgment (saham screen accum TICKER). Universe board
+        # skips this to keep latency low; fingerprints still build SMC on persist.
+        if len(request.tickers) == 1 and candidates:
+            smc = self._candidate_evidence_builder.build_candidate_sector_macro_context(
+                candidates[0], today
+            )
+            if smc is not None:
+                candidates[0].sector_macro_context_evidence = smc
+
         return accumulation_dto.AccumulationScreenResponse(
             candidates=candidates,
             screened_at=today,

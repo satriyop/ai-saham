@@ -28,6 +28,9 @@ if TYPE_CHECKING:
         GateEvaluationRecord,
     )
     from src.domain.value_objects.seasonal_edge import SeasonalEdge
+    from src.domain.value_objects.sector_macro_context_evidence import (
+        SectorMacroContextEvidence,
+    )
     from src.domain.value_objects.setup_evaluation import SetupEvaluation
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
     from src.domain.value_objects.shareholding_composition import ShareholdingComposition
@@ -255,6 +258,9 @@ class AccumulationCandidate:
     # Market-calendar-aware freshness/alignment (S3); None until the screen
     # accum projector computes it — table and JSON both render this field.
     freshness: "DataFreshnessStatus | None" = None
+    # ADR-053 / P2a DIAGNOSTIC — attached on single-ticker judgment desk only
+    # (saham screen accum TICKER). Not used by Signal/Risk/TradeSetup scoring.
+    sector_macro_context_evidence: "SectorMacroContextEvidence | None" = None
 
     def to_dict(self) -> dict:
         return {
@@ -385,6 +391,11 @@ class AccumulationCandidate:
                 else None
             ),
             "freshness": self.freshness.to_dict() if self.freshness else None,
+            "sector_macro_context_evidence": (
+                self.sector_macro_context_evidence.to_dict()
+                if self.sector_macro_context_evidence is not None
+                else None
+            ),
         }
 
 

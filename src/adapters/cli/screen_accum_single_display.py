@@ -30,6 +30,7 @@ from src.adapters.cli.screen_accum_formatters import (
     _risk_tier,
     format_disc_pct,
 )
+from src.adapters.cli.screen_accum_sector_macro_display import build_sector_macro_panel
 from src.adapters.shared.decision_display import (
     coverage_pct,
     format_accum_breakdown,
@@ -677,6 +678,13 @@ def display_results(
     mce_panel = _build_market_context_panel(market_context)
     if mce_panel is not None:
         sections.append(mce_panel)
+    # ADR-054: sector-macro lives on single-ticker judgment, not plan swing.
+    if judgment_single:
+        smc_panel = build_sector_macro_panel(
+            getattr(candidates[0], "sector_macro_context_evidence", None)
+        )
+        if smc_panel is not None:
+            sections.append(smc_panel)
     if has_detail_rows:
         sections.append(panel(details_table, title="Enrichment Details"))
 

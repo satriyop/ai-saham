@@ -1,85 +1,17 @@
 """
-Sector macro context detail panel for plan swing full output (ADR-053).
+Deprecated location for sector-macro panel.
+
+ADR-054: sector macro is shown on ``saham screen accum TICKER`` (judgment desk).
+See ``screen_accum_sector_macro_display.build_sector_macro_panel``.
+
+This module remains as a thin re-export so any stale import fails loudly in tests
+if still wired from plan swing — prefer deleting callers instead of using this.
 
 Layer: Adapter
-
-Renders facts already produced by SectorMacroContextEvidenceBuilder.
-DIAGNOSTIC-only: must not imply scoring impact and must not compute action.
 """
 
 from __future__ import annotations
 
-from rich.console import Group
-from rich.text import Text
+from src.adapters.cli.screen_accum_sector_macro_display import build_sector_macro_panel
 
-from src.adapters.cli.plan_swing_output_context import SwingOutputDisplayContext
-from src.adapters.cli.rich_display import compact_table, console, panel
-
-
-def _pct(v: float | None) -> str:
-    return f"{v * 100:+.1f}%" if v is not None else "—"
-
-
-def _factor_value_display(series: str, value: float | None) -> str:
-    """Policy series (BI_RATE) store net step counts, not fractional returns."""
-    if value is None:
-        return "—"
-    if series.upper() in {"BI_RATE"}:
-        return f"{value:+.0f} net"
-    return _pct(value)
-
-
-def print_sector_macro_context_panel(ctx: SwingOutputDisplayContext) -> None:
-    smc = getattr(ctx.evidence, "sector_macro_context_evidence", None)
-    lines: list = []
-    if not (ctx.options.include_market_detail and smc is not None):
-        return
-
-    if smc.macro_regime == "UNKNOWN" and not smc.factors and smc.unavailable_reasons:
-        for reason in list(smc.unavailable_reasons)[:2]:
-            lines.append(Text(f"Sector macro unavailable: {reason}", style="dim"))
-    else:
-        style = {
-            "SUPPORTIVE": "bold green",
-            "HEADWIND": "bold red",
-            "NEUTRAL": "yellow",
-            "UNKNOWN": "dim",
-        }.get(smc.macro_regime, "white")
-        header = Text()
-        header.append(f"Group: {smc.sector_group or '—'}  ", style="bold")
-        header.append("Macro: ")
-        header.append(smc.macro_regime, style=style)
-        if smc.composite_score is not None:
-            header.append(f"  Composite: {smc.composite_score:.2f}")
-        header.append(f"  Coverage: {smc.coverage_score:.2f}")
-        lines.append(header)
-
-        if smc.factors:
-            table = compact_table()
-            table.add_column("Factor")
-            table.add_column("Series")
-            table.add_column("Value")
-            table.add_column("Score")
-            table.add_column("Label")
-            for f in smc.factors:
-                table.add_row(
-                    f.name,
-                    f.series,
-                    _factor_value_display(f.series, f.value),
-                    f"{f.score:.2f}" if f.score is not None else "—",
-                    f.label,
-                )
-            lines.append(table)
-
-        lines.append(
-            Text(
-                "  DIAGNOSTIC — no scoring impact (ADR-053)",
-                style="dim",
-            )
-        )
-        for reason in list(smc.unavailable_reasons)[:2]:
-            lines.append(Text(f"  ⚠ {reason}", style="dim yellow"))
-
-    if lines:
-        console().print("")
-        console().print(panel(Group(*lines), title="SECTOR MACRO"))
+__all__ = ["build_sector_macro_panel"]
