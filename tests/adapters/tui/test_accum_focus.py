@@ -38,7 +38,13 @@ def _candidate(
         score=79,
         signal_authority_coverage=coverage,
         decision_constraints=constraints,
-        setup_readiness=SimpleNamespace(status=SimpleNamespace(value="UNAVAILABLE")),
+        setup_readiness=SimpleNamespace(
+            status=SimpleNamespace(value="UNAVAILABLE"),
+            setup_family="pullback",
+            missing_required_inputs=("setup_evidence",),
+            failed_requirements=(),
+            current_phase=None,
+        ),
         strength=SimpleNamespace(value="STRONG"),
     )
     return SimpleNamespace(
@@ -93,7 +99,9 @@ def test_build_accum_focus_why_recipe_lag():
     focus = build_accum_focus(row, rank=1, total=40)
     assert "Why" in focus.strip
     assert "authority 0%" in focus.strip
-    assert "setup readiness" in focus.strip.lower()
+    assert "setup readiness UNAVAILABLE" in focus.strip
+    assert "missing: setup_evidence" in focus.strip
+    assert "pullback" in focus.strip
     assert "gate open" in focus.strip
     assert "cons 28.5" in focus.strip
     assert "vwap 0.0" in focus.strip or "vwap 0" in focus.strip
@@ -153,3 +161,29 @@ def test_gate_blocked_in_why():
     )
     focus = build_accum_focus(row)
     assert "gate blocked" in focus.strip
+
+
+def test_setup_readiness_shows_missing_inputs_not_only_generic():
+    c = _candidate()
+    # Ensure VO carries concrete missing inputs
+    assert c.signal_assessment.assessment.setup_readiness.missing_required_inputs == (
+        "setup_evidence",
+    )
+    row = (
+        AccumPresenter()
+        .present(
+            SimpleNamespace(
+                single_projection=SimpleNamespace(
+                    candidates=[c],
+                    window_days=7,
+                    data_as_of={},
+                    applied_filters=SimpleNamespace(sort_by="signal", top=10),
+                )
+            )
+        )
+        .rows[0]
+    )
+    focus = build_accum_focus(row)
+    assert "missing: setup_evidence" in focus.strip
+    # Should not stop at vague line alone without the missing list
+    assert "setup readiness UNAVAILABLE [pullback] (missing: setup_evidence)" in focus.strip

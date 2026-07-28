@@ -366,38 +366,34 @@ def _action_why(candidate: Any, *, gate: str) -> str:
         else:
             bits.append(f"authority {cov:.0f}%")
 
-    # Decision constraints from Signal assessment
     sa = getattr(candidate, "signal_assessment", None)
     assessment = getattr(sa, "assessment", None) if sa is not None else None
+
+    # Typed setup readiness first (concrete missing inputs / failed requirements).
+    readiness = getattr(assessment, "setup_readiness", None) if assessment else None
+    if readiness is None and sa is not None:
+        readiness = getattr(sa, "setup_readiness", None)
+    readiness_bit = _setup_readiness_detail(readiness)
+    if readiness_bit:
+        bits.append(readiness_bit)
+
+    # Decision constraints — skip phrases already covered by structured fields.
     constraints = getattr(assessment, "decision_constraints", None) if assessment else None
     if constraints is not None:
         for reason in getattr(constraints, "constraint_reasons", ()) or ():
             text = str(reason)
-            # Compress long engine phrases
             low = text.lower()
             if "signal_authority_coverage" in low or "authority_coverage" in low:
-                if not any("authority" in b for b in bits):
+                if not any(b.startswith("authority") for b in bits):
                     bits.append("authority thin")
                 continue
             if "setup readiness" in low or "setup_readiness" in low:
-                bits.append("setup readiness unavailable")
-                continue
-            if "caps" in low or "cap" in low:
-                bits.append(text if len(text) < 48 else text[:45] + "…")
+                # Prefer structured readiness_bit; only fall back if absent.
+                if not any(b.startswith("setup readiness") for b in bits):
+                    bits.append(_fallback_setup_readiness_phrase(text))
                 continue
             if text and text not in bits:
                 bits.append(text if len(text) < 52 else text[:49] + "…")
-
-    # Setup readiness object if present
-    readiness = getattr(assessment, "setup_readiness", None) if assessment else None
-    if readiness is None and sa is not None:
-        readiness = getattr(sa, "setup_readiness", None)
-    if readiness is not None:
-        status = getattr(readiness, "status", None)
-        status_s = str(getattr(status, "value", status) or "")
-        if status_s and "UNAVAILABLE" in status_s.upper():
-            if not any("setup readiness" in b for b in bits):
-                bits.append("setup readiness unavailable")
 
     # Gate
     if gate == "BLOCKED":
@@ -407,12 +403,6 @@ def _action_why(candidate: Any, *, gate: str) -> str:
     elif gate == "OPEN":
         bits.append("gate open")
 
-    # Coverage warning string
-    warn = getattr(sa, "coverage_warning", None) if sa is not None else None
-    if warn and cov is not None and cov < 70:
-        # already have authority bit
-        pass
-
     if not bits:
         ts = getattr(candidate, "trade_setup", None)
         rat = getattr(ts, "rationale", None) if ts else None
@@ -420,6 +410,59 @@ def _action_why(candidate: Any, *, gate: str) -> str:
             return str(rat)[:80]
         return "no constraint detail"
     return " · ".join(bits)
+
+
+def _setup_readiness_detail(readiness: Any) -> str:
+    """Concrete setup-readiness line: status + missing/failed inputs."""
+    if readiness is None:
+        return ""
+    status = getattr(readiness, "status", None)
+    status_s = str(getattr(status, "value", status) or "").upper()
+    if not status_s or status_s == "READY":
+        return ""
+
+    missing = tuple(getattr(readiness, "missing_required_inputs", ()) or ())
+    failed = tuple(getattr(readiness, "failed_requirements", ()) or ())
+    family = getattr(readiness, "setup_family", None)
+    family_s = f" [{family}]" if family else ""
+
+    if status_s == "UNAVAILABLE":
+        if missing:
+            miss = ", ".join(str(m) for m in missing[:5])
+            if len(missing) > 5:
+                miss += ", …"
+            return f"setup readiness UNAVAILABLE{family_s} (missing: {miss})"
+        return f"setup readiness UNAVAILABLE{family_s}"
+
+    if status_s == "INCOMPLETE":
+        if failed:
+            fail = ", ".join(str(f) for f in failed[:4])
+            return f"setup readiness INCOMPLETE{family_s} ({fail})"
+        return f"setup readiness INCOMPLETE{family_s}"
+
+    if status_s == "INELIGIBLE":
+        if failed:
+            fail = ", ".join(str(f) for f in failed[:4])
+            return f"setup readiness INELIGIBLE{family_s} ({fail})"
+        phase = getattr(readiness, "current_phase", None)
+        phase_s = getattr(phase, "value", phase) if phase is not None else None
+        if phase_s:
+            return f"setup readiness INELIGIBLE{family_s} (phase {phase_s})"
+        return f"setup readiness INELIGIBLE{family_s}"
+
+    return f"setup readiness {status_s}{family_s}"
+
+
+def _fallback_setup_readiness_phrase(constraint_text: str) -> str:
+    """When VO is missing, compress constraint string without inventing inputs."""
+    low = constraint_text.lower()
+    if "unavailable" in low:
+        return "setup readiness UNAVAILABLE"
+    if "incomplete" in low:
+        return "setup readiness INCOMPLETE"
+    if "ineligible" in low:
+        return "setup readiness INELIGIBLE"
+    return constraint_text if len(constraint_text) < 52 else constraint_text[:49] + "…"
 
 
 def _coverage_pct(candidate: Any) -> float | None:
