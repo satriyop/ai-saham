@@ -19,6 +19,10 @@ from src.application.dto.accumulation_screen import AccumulationScreenResponse
 from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSession,
 )
+from src.application.services.screen_judgment_deep_evidence import (
+    ScreenJudgmentDeepEvidence,
+    ScreenJudgmentDeepEvidenceRequest,
+)
 
 if TYPE_CHECKING:
     from src.application.dto.signal_evidence_execution_context import (
@@ -72,6 +76,10 @@ class RunAccumulationScreenWorkflowRequest:
     squeeze_only: bool = False
     sort_by: str = "signal"
     as_of_date: date | None = None
+    # ADR-054 S1 deep judgment (explicit tickers only; adapter enforces gates).
+    deep_evidence: ScreenJudgmentDeepEvidenceRequest = field(
+        default_factory=ScreenJudgmentDeepEvidenceRequest
+    )
 
 
 @dataclass(frozen=True)
@@ -89,6 +97,8 @@ class RunAccumulationScreenWorkflowResult:
     # passed into AccumulationScreenRequest.market_context / DecisionPolicy
     # without an explicit B-MCE-policy task (scoring would change silently).
     market_context: Any | None = None
+    # Optional analysis evidence by ticker (ADR-054 S1 merge). Never Action.
+    deep_evidence_by_ticker: dict[str, ScreenJudgmentDeepEvidence] = field(default_factory=dict)
 
 
 # Baseline broker-data-availability floor for the raw screen request. This is
@@ -118,6 +128,7 @@ class RunAccumulationScreenWorkflowUseCase:
         live_signal_evidence_context_use_case: BuildLiveSignalEvidenceExecutionContextUseCase,
         save_watchlist_use_case=None,
         evaluate_market_context: Callable[..., MarketContext] | None = None,
+        collect_deep_evidence: Callable[..., ScreenJudgmentDeepEvidence] | None = None,
     ) -> None:
         self._screen_use_case = screen_use_case
         self._broker_repository = broker_repository
@@ -130,6 +141,8 @@ class RunAccumulationScreenWorkflowUseCase:
         self._save_watchlist_use_case = save_watchlist_use_case
         # Display-only MCE. Never thread into screen scoring request here.
         self._evaluate_market_context = evaluate_market_context
+        # Optional ADR-054 S1 deep evidence (must not mutate Action).
+        self._collect_deep_evidence = collect_deep_evidence
         # Every mode here (single-window and --multi) is diagnostic/read-only.
         # Canonical observation recording is a separate, explicit workflow
         # (signal-backfill) — see RecordAccumulationObservationsUseCase.
@@ -286,6 +299,29 @@ class RunAccumulationScreenWorkflowUseCase:
                 )
             )
 
+        deep_evidence_by_ticker: dict[str, ScreenJudgmentDeepEvidence] = {}
+        deep_flags = request.deep_evidence
+        if deep_flags.any_enabled and self._collect_deep_evidence is not None and not request.multi:
+            as_of = (
+                self._screen_as_of_date(request, execution_context)
+                or execution_context.effective_session.analysis_as_of
+                or date.today()
+            )
+            for candidate in projection.candidates:
+                try:
+                    bag = self._collect_deep_evidence(
+                        ticker=candidate.ticker,
+                        as_of_date=as_of,
+                        candidate=candidate,
+                        flags=deep_flags,
+                    )
+                except Exception as exc:
+                    warnings.append(f"Deep evidence failed for {candidate.ticker}: {exc}")
+                    continue
+                deep_evidence_by_ticker[candidate.ticker.upper()] = bag
+                if bag.warnings:
+                    warnings.extend(bag.warnings)
+
         return RunAccumulationScreenWorkflowResult(
             response=response,
             single_projection=projection,
@@ -294,6 +330,7 @@ class RunAccumulationScreenWorkflowUseCase:
             warnings=tuple(warnings),
             effective_session=execution_context.effective_session,
             market_context=market_context,
+            deep_evidence_by_ticker=deep_evidence_by_ticker,
         )
 
     def _execute_multi(

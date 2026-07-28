@@ -243,7 +243,7 @@ saham trade accum log …                    # paper notebook
 | Slice | Status |
 |-------|--------|
 | **S0** (this ADR) | Done |
-| **S1** judgment desk | **Shipped 2026-07-28** — single-ticker `screen accum`: Judgment strip, JSON `trade_setup`, pattern board, explicit-ticker refresh; universe stays cache-cheap |
+| **S1** judgment desk | **Complete 2026-07-29** — baseline (Judgment strip, `trade_setup`, pattern board, refresh) + **analysis merge**: explicit-ticker `--setup` / `--with-flow-detail` / `--with-sentiment` / `--full` via shared deep-evidence service (no Action mutation; structure stays plan-only); universe/multi hard-reject deep flags |
 | **S2** plan messaging | **Shipped 2026-07-28** — structure-desk help/footers/docs |
 | **S3** judgment authority | **Shipped 2026-07-28** — default plan Action inherits screen `candidate.trade_setup`; recompute only with explicit flags |
 | **S4** structure-first UI | **Shipped 2026-07-29** — Structure panel first; detail with `--full` |

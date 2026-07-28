@@ -309,6 +309,8 @@ def display_results(
     strategy_name: str | None = None,
     effective_session: EffectiveMarketSession | None = None,
     market_context: Any | None = None,
+    deep_evidence_by_ticker: dict | None = None,
+    deep_flags: Any | None = None,
 ) -> None:
     """Render accumulation screener results as terminal table.
 
@@ -699,6 +701,18 @@ def display_results(
             ),
         )
     )
+
+    # ADR-054 S1 complete: optional analysis evidence (never Action / structure).
+    if deep_evidence_by_ticker:
+        from src.adapters.cli.screen_accum_deep_evidence_display import (
+            print_screen_deep_evidence_panels,
+        )
+
+        print_screen_deep_evidence_panels(
+            deep_evidence_by_ticker=deep_evidence_by_ticker,
+            deep_flags=deep_flags,
+            candidates=candidates,
+        )
 
     if not include_detail:
         return

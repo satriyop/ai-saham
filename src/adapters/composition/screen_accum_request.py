@@ -10,6 +10,9 @@ from __future__ import annotations
 
 from datetime import date
 
+from src.application.services.screen_judgment_deep_evidence import (
+    ScreenJudgmentDeepEvidenceRequest,
+)
 from src.application.use_case.run_accumulation_screen_workflow_use_case import (
     RunAccumulationScreenWorkflowRequest,
 )
@@ -44,12 +47,14 @@ def build_screen_accum_request(
     squeeze_only: bool = False,
     sort_by: str = DEFAULT_SORT_BY,
     as_of_date: date | None = None,
+    deep_evidence: ScreenJudgmentDeepEvidenceRequest | None = None,
 ) -> RunAccumulationScreenWorkflowRequest:
     """Build the workflow request for one screen-accum run.
 
     CLI passes flag values; TUI passes defaults (or explicit overrides).
     ``include_strategy_overlay`` defaults to True when ``strategy_name`` is set.
     ``save_enabled`` defaults to True when ``save_name`` is set.
+    ``deep_evidence`` defaults to all-off (universe-safe).
     """
     if include_strategy_overlay is None:
         include_strategy_overlay = bool(strategy_name)
@@ -81,6 +86,7 @@ def build_screen_accum_request(
         squeeze_only=squeeze_only,
         sort_by=sort_by,
         as_of_date=as_of_date,
+        deep_evidence=deep_evidence or ScreenJudgmentDeepEvidenceRequest(),
     )
 
 

@@ -1041,16 +1041,23 @@ saham view broker list
 
 ## saham screen accum
 
-**Judgment desk (ADR-054).** Find candidates on a universe board **or** deep-judge
-one ticker (Action / Why / pattern / signal+risk). Owns judgment; does **not**
-design horizon/SL/TP/lots — use `saham plan swing`. **Does not** write research
-observations (`--save` is watchlist only; corpus = `research accum …`).
+**Judgment desk (ADR-054 S1 complete).** Find candidates on a universe board
+**or** deep-judge one ticker (Action / Why / pattern / signal+risk + optional
+analysis evidence). Owns judgment; does **not** design horizon/SL/TP/lots — use
+`saham plan swing`. **Does not** write research observations (`--save` is
+watchlist only; corpus = `research accum …`).
+
+Deep analysis flags require **explicit tickers** (rejected with universe-only
+or `--multi`): `--setup`, `--with-flow-detail`, `--flow-window`,
+`--with-sentiment`, `--full`. Evidence never changes Action.
 
 ```
 saham screen accum [OPTIONS] [TICKERS...]
 saham screen accum --universe lq45
 saham screen accum --universe idx80 --window 30 --multi
 saham screen accum BBRI                            # single-ticker judgment
+saham screen accum BBRI --with-flow-detail --with-sentiment
+saham screen accum BBRI --setup foreign-bounce --full
 saham screen accum --universe lq45 --save morning-watch
 saham plan swing BBRI --capital 10000000           # structure next
 ```

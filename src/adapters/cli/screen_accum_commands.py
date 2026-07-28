@@ -32,11 +32,15 @@ from src.application.dto.screen_accum_payload import (
 from src.application.services.screen_accum_result_projector import (
     ScreenAccumProjectionError,
 )
+from src.application.services.screen_judgment_deep_evidence import (
+    ScreenJudgmentDeepEvidenceRequest,
+)
 from src.application.services.universe_loader import (
     UniverseNotFoundError,
     resolve_tickers,
 )
 from src.infrastructure.config.app_config import load_app_config
+from src.infrastructure.config.plan_swing_config import load_plan_swing_config
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 
 FOREIGN_BOUNCE_SETUP = "foreign-bounce"
@@ -158,10 +162,60 @@ def accumulation_run(
             "--strategy",
             "-S",
             help=(
-                "Show strategy signal column alongside foreign-flow score (e.g. williams-r-bounce)"
+                "Board: strategy signal column. Explicit ticker + deep flags/--full: "
+                "also attach strategy backtest evidence (does not change Action)."
             ),
         ),
     ] = None,
+    setup: Annotated[
+        Optional[str],
+        typer.Option(
+            "--setup",
+            help=(
+                "Named setup lens for pattern gates (foreign-bounce, …). "
+                "Explicit tickers only; diagnostic (MATCH ≠ ENTER)."
+            ),
+        ),
+    ] = None,
+    with_flow_detail: Annotated[
+        bool,
+        typer.Option(
+            "--with-flow-detail",
+            help="Include broker flow detail evidence (explicit tickers only).",
+        ),
+    ] = False,
+    flow_window: Annotated[
+        Optional[int],
+        typer.Option(
+            "--flow-window",
+            help="Broker-flow detail window in sessions (default: plan_swing config).",
+            min=1,
+        ),
+    ] = None,
+    with_sentiment: Annotated[
+        bool,
+        typer.Option(
+            "--with-sentiment",
+            help="Include news sentiment evidence (explicit tickers only; fail-soft).",
+        ),
+    ] = False,
+    sentiment_verbose: Annotated[
+        bool,
+        typer.Option(
+            "--sentiment-verbose",
+            help="Show sentiment provider errors/noise.",
+        ),
+    ] = False,
+    full: Annotated[
+        bool,
+        typer.Option(
+            "--full",
+            help=(
+                "All optional analysis evidence panels for explicit tickers "
+                "(not structure/sizing — use plan swing --capital)."
+            ),
+        ),
+    ] = False,
     db_path: Annotated[
         Optional[Path],
         typer.Option("--db", help="SQLite database path"),
@@ -204,34 +258,28 @@ def accumulation_run(
     Find and judge foreign-accumulation candidates (ADR-054 judgment desk).
 
     Product job: rank a universe or deep-judge one ticker. Owns Action / Why /
-    pattern match / signal+risk display. Does **not** design trade geometry —
-    that is ``saham plan swing TICKER`` (horizon / SL / TP / lots).
-
-    Scoring (universe board): composite foreign-flow 0–100 from buy consistency,
-    streak, underwater VWAP, RSI headroom, and foreign % of turnover. BB width is
-    phase/setup diagnostic only (not in the default score).
+    pattern match / signal+risk + optional analysis evidence. Does **not**
+    design trade geometry — that is ``saham plan swing TICKER`` (horizon / SL /
+    TP / lots).
 
     Modes:
       --universe / list  → cheap shortlist board (filters, multi-window, patterns)
-      TICKER             → single-name judgment case file (Action, Why, named
-                           setups, signal/risk). Explicit tickers auto-refresh
-                           candles/broker by default (``--no-refresh`` to skip).
+      TICKER             → judgment case file. Deep analysis flags (explicit only):
+                           --setup, --with-flow-detail, --with-sentiment, --full.
+
+    Deep flags are rejected with --universe-only or --multi (keep board cheap).
 
     Next after judgment:
         saham plan swing TICKER --capital 10000000
         saham trade accum log --ticker TICKER --from-plan
 
-    Run ``saham fetch market --universe lq45`` first if the board is cold.
-
     Examples:
         saham screen accum --universe lq45
-        saham screen accum --universe lq45 --multi
         saham screen accum BBRI
+        saham screen accum BBRI --with-flow-detail --with-sentiment
+        saham screen accum BBRI --setup foreign-bounce --full
         saham screen accum BBRI --format json
-        saham screen accum --universe lq45 --window 30 --sort-by score
-        saham screen accum --universe lq45 --vwap-only --squeeze-only
-        saham screen accum --universe lq45 --top-broker --detail
-        saham screen accum --universe lq45 --save morning-watch
+        saham screen accum --universe lq45 --multi
         saham screen accum --guide
     """
     if guide:
@@ -300,6 +348,38 @@ def accumulation_run(
             quiet=output_format == "json",
         )
 
+    resolved_flow_window = (
+        flow_window
+        if flow_window is not None
+        else load_plan_swing_config().flow_detail_window_sessions
+    )
+    deep_flags = ScreenJudgmentDeepEvidenceRequest(
+        setup_name=setup.lower() if setup else None,
+        include_flow_detail=with_flow_detail,
+        flow_window=resolved_flow_window,
+        include_sentiment=with_sentiment,
+        sentiment_verbose=sentiment_verbose,
+        include_strategy_evidence=bool(strategy) and (full or with_flow_detail or with_sentiment),
+        strategy_name=strategy,
+        include_full=full,
+    )
+    if deep_flags.any_enabled:
+        if multi:
+            typer.echo(
+                "Error: deep analysis flags (--setup/--with-flow-detail/"
+                "--with-sentiment/--full) are not supported with --multi. "
+                "Use explicit tickers without --multi.",
+                err=True,
+            )
+            raise typer.Exit(1)
+        if not explicit_tickers:
+            typer.echo(
+                "Error: deep analysis flags require explicit ticker arguments "
+                "(not universe-only). Example: saham screen accum BBRI --full",
+                err=True,
+            )
+            raise typer.Exit(1)
+
     if multi:
         window_list = [int(w.strip()) for w in (windows or "7,30,90").split(",")]
         if output_format != "json":
@@ -336,6 +416,7 @@ def accumulation_run(
                 squeeze_only=squeeze_only,
                 sort_by=sort_by,
                 as_of_date=as_of_date,
+                deep_evidence=deep_flags,
             )
         )
     except ScreenAccumProjectionError as e:
@@ -363,6 +444,7 @@ def accumulation_run(
         detail=detail,
         strategy=strategy,
         display_config=display_config,
+        deep_flags=deep_flags,
     )
 
 
@@ -414,11 +496,14 @@ def _render_single(
     detail: bool,
     strategy: str | None,
     display_config: AccumulationDisplayConfig,
+    deep_flags: ScreenJudgmentDeepEvidenceRequest | None = None,
 ) -> None:
     response = result.response
     projection = result.single_projection
     if response is None or projection is None:
         return
+
+    deep_by_ticker = getattr(result, "deep_evidence_by_ticker", {}) or {}
 
     if output_format == "json":
         echo_json(
@@ -431,6 +516,7 @@ def _render_single(
                 strategy_name=strategy,
                 strategy_signals=result.strategy_signals,
                 save_result=result.save_result,
+                deep_evidence_by_ticker=deep_by_ticker,
             )
         )
         return
@@ -446,6 +532,8 @@ def _render_single(
         strategy_name=strategy,
         effective_session=result.effective_session,
         market_context=getattr(result, "market_context", None),
+        deep_evidence_by_ticker=deep_by_ticker,
+        deep_flags=deep_flags,
     )
 
     if result.save_result:

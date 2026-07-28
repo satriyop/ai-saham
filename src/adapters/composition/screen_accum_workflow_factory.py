@@ -217,6 +217,11 @@ def create_run_accumulation_screen_workflow_use_case(
             universe=universe,
         )
 
+    collect_deep = _build_deep_evidence_collector(
+        deps=deps,
+        swing_config=swing_config,
+    )
+
     return RunAccumulationScreenWorkflowUseCase(
         screen_use_case=base.use_case,
         broker_repository=deps.broker_repository,
@@ -230,4 +235,96 @@ def create_run_accumulation_screen_workflow_use_case(
         ),
         save_watchlist_use_case=SaveScreenWatchlistUseCase(SQLiteWatchlistRepository(db_path)),
         evaluate_market_context=_evaluate_display_market_context,
+        collect_deep_evidence=collect_deep,
     )
+
+
+def _build_deep_evidence_collector(
+    *,
+    deps: StockAnalysisWorkflowDependencies,
+    swing_config: Any,
+):
+    """Wire optional analysis evidence for screen single-ticker (ADR-054 S1).
+
+    Reuses plan refresh/sentiment helpers and accumulation setup evaluation.
+    Must not mutate TradeSetup.action.
+    """
+    from decimal import Decimal
+
+    from src.adapters.cli.plan_swing_optional_fetchers import fetch_swing_sentiment
+    from src.application.services.screen_judgment_deep_evidence import (
+        collect_screen_judgment_deep_evidence,
+    )
+    from src.application.services.strategy_loader import StrategyLoader
+    from src.application.services.swing_flow_detail_builder import build_flow_detail
+    from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
+    from src.application.use_case.backtest_use_case import BacktestRequest, BacktestUseCase
+    from src.application.use_case.evaluate_swing_setup_use_case import (
+        EvaluateSwingSetupRequest,
+        EvaluateSwingSetupUseCase,
+    )
+    from src.infrastructure.config.plan_swing_config import load_plan_swing_config
+
+    setup_catalog = build_swing_setup_catalog_config(swing_config)
+    setup_uc = EvaluateSwingSetupUseCase()
+    plan_cfg = load_plan_swing_config()
+
+    def _build_flow(*, ticker: str, window_sessions: int, as_of_date: date):
+        return build_flow_detail(
+            ticker=ticker,
+            broker_repo=deps.broker_repository,
+            window_sessions=window_sessions,
+            as_of_date=as_of_date,
+        )
+
+    def _evaluate_setup(setup_name: str, candidate: Any):
+        return setup_uc.execute(
+            EvaluateSwingSetupRequest(
+                setup_name=setup_name,
+                candidate=candidate,
+                config=setup_catalog,
+                broker_detail=None,
+            )
+        )
+
+    def _fetch_sentiment(*, ticker: str, sentiment_verbose: bool):
+        return fetch_swing_sentiment(
+            ticker=ticker,
+            sentiment_verbose=sentiment_verbose,
+            plan_swing_config=plan_cfg,
+        )
+
+    def _run_backtest(*, ticker: str, strategy_name: str):
+        registry = deps.indicator_registry_factory(
+            broker_repository=deps.broker_repository,
+            market_repository=deps.market_repository,
+        )
+        rules_loader = deps.rules_loader_factory()
+        loader = StrategyLoader(rules_loader=rules_loader, registry=registry)
+        rules_path = loader.resolve(strategy_name)
+        response = BacktestUseCase(
+            repository=deps.market_repository,
+            rules_loader=rules_loader,
+            registry=registry,
+        ).execute(
+            BacktestRequest(
+                ticker=ticker,
+                rules_file=rules_path,
+                initial_capital=Decimal("100000000"),
+            )
+        )
+        return response.result
+
+    def _collect(*, ticker: str, as_of_date: date, candidate: Any, flags: Any):
+        return collect_screen_judgment_deep_evidence(
+            ticker=ticker,
+            as_of_date=as_of_date,
+            candidate=candidate,
+            flags=flags,
+            build_flow_detail=_build_flow,
+            evaluate_setup=_evaluate_setup,
+            fetch_sentiment=_fetch_sentiment,
+            run_strategy_backtest=_run_backtest,
+        )
+
+    return _collect
