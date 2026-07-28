@@ -14,15 +14,15 @@ from textual.widgets import Static
 HELP_BODY = """[#9b8fb8]What this app does[/]
 · Opens on [bold]Screen · accumulation[/] from local SQLite
 · Pre-open reads cached IEV snapshots (fetch iev)
-· Enter = inspect focused ticker (not plan)
-· p = plan swing (confirm modal · local re-score)
+· Enter = inspect focused ticker (judgment, not plan)
+· p = plan structure desk (SL/TP/lots · inherits Action · no order)
 · Fetch = explicit online (never on open)
 
 [#9b8fb8]Keys[/]
   ctrl+p   commands
   ↑↓ j k   move rows
   enter    view focused ticker
-  p        plan swing (confirm)
+  p        plan structure (focused ticker)
   r        refresh local board
   esc      back / cancel
   ctrl+b   toggle sidebar

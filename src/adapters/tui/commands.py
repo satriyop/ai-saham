@@ -36,9 +36,9 @@ COCKPIT_COMMANDS: tuple[CockpitCommand, ...] = (
     CockpitCommand(
         "Suggested",
         "plan-swing",
-        "Plan swing",
+        "Plan swing structure",
         "p",
-        "Open Plan stage for focus · auto-run local · no order",
+        "Structure desk for focus · SL/TP/lots · inherit Action · no order",
     ),
     CockpitCommand(
         "Daily",

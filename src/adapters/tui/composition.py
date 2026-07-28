@@ -19,7 +19,6 @@ from typing import Any
 from src.adapters.composition.screen_accum_request import (
     DEFAULT_WINDOW,
     build_default_screen_accum_request,
-    build_screen_accum_request,
 )
 from src.adapters.composition.screen_deps import ScreenDeps, build_screen_deps
 from src.adapters.tui.controllers.board_controller import BoardController
@@ -49,7 +48,7 @@ def create_tui_app(
     if preopen_loader is None:
         preopen_loader = _PreOpenSnapshotLoader(db_path)
     if plan_runner is None:
-        plan_runner = _LocalPlanRunner(screen_deps, config)
+        plan_runner = _LocalPlanStructureRunner(db_path, config)
     if fetch_previewer is None:
         fetch_previewer = _build_fetch_previewer(db_path)
     if fetch_runner is None:
@@ -206,47 +205,158 @@ class _PreOpenSnapshotLoader:
         )
 
 
-# ── Plan (local screen-based summary — no broker order) ────
+# ── Plan (structure desk — same engine as CLI plan swing) ───
 
 
-class _LocalPlanRunner:
-    """Confirm path: re-score single ticker via accum screen; surface action."""
+class _LocalPlanStructureRunner:
+    """ADR-054 structure path for focused ticker (thin TUI surface).
 
-    def __init__(self, deps: ScreenDeps, config: Any) -> None:
-        self._deps = deps
+    Runs ``PlanSwingWorkflowUseCase`` with local cache defaults — inherits
+    screen judgment Action, sizes when capital is configured, persists
+    ``swing_trade_plan`` when geometry is complete. Never places orders.
+    """
+
+    def __init__(self, db_path: Path, config: Any) -> None:
+        self._db_path = db_path
         self._config = config
         self._lock = Lock()
-        self._use_case = None
 
     def __call__(self, ticker: str) -> Any:
-        with self._lock:
-            if self._use_case is None:
-                self._use_case = self._deps.build_accum_workflow_use_case()
-            use_case = self._use_case
+        from datetime import date
+        from pathlib import Path as PathType
 
-        universe = (self._config.analysis.universe or "lq45").lower()
-        # Same request shape as screen accum; top=5 is a plan-path override only.
-        request = build_screen_accum_request(
-            tickers=[ticker.upper()],
-            universe_label=universe,
-            universe_name=universe,
-            top=5,
+        from src.adapters.cli.plan_swing_command_config import load_plan_swing_command_config
+        from src.adapters.cli.plan_swing_workflow_factory import create_plan_swing_workflow
+        from src.application.dto.plan_swing import PlanSwingWorkflowRequest
+        from src.application.services.swing_trade_plan_builder import build_swing_trade_plan
+        from src.application.services.swing_trade_plan_store import (
+            plans_dir_from_journal_path,
+            save_swing_trade_plan,
         )
-        result = use_case.execute(request)
-        projection = result.single_projection
-        if projection is None or not projection.candidates:
-            return type("R", (), {"summary": "no local setup · cache thin"})()
-        cand = projection.candidates[0]
+        from src.application.use_case.plan_swing_workflow_use_case import (
+            PlanSwingDataUnavailable,
+        )
+
+        ticker_u = ticker.upper()
+        with self._lock:
+            cmd_cfg = load_plan_swing_command_config()
+            smart = set(cmd_cfg.swing_policy.smart_money_brokers)
+            noise = set(cmd_cfg.swing_policy.noise_brokers)
+            weights = {
+                **{c: cmd_cfg.swing_policy.smart_weight for c in smart},
+                **{c: cmd_cfg.swing_policy.noise_weight for c in noise},
+            }
+            workflow = create_plan_swing_workflow(
+                db_path=self._db_path,
+                setup_name=None,
+                swing_policy=cmd_cfg.swing_policy,
+                plan_swing_config=cmd_cfg.plan_swing_config,
+                smart_money_brokers=smart,
+                noise_brokers=noise,
+                broker_weights=weights,
+            )
+
+        capital = self._config.swing.capital
+        if capital is None:
+            capital = getattr(self._config.trading, "capital", None)
+
+        try:
+            response = workflow.execute(
+                PlanSwingWorkflowRequest(
+                    ticker=ticker_u,
+                    today=date.today(),
+                    strategy_name=None,
+                    setup_name=None,
+                    window=int(self._config.swing.window),
+                    flow_window=int(cmd_cfg.plan_swing_config.flow_detail_window_sessions),
+                    capital=int(capital) if capital is not None else None,
+                    risk_pct=float(self._config.swing.risk_pct),
+                    entry_price=None,
+                    atr_mult=float(self._config.swing.atr_mult),
+                    rr=float(self._config.swing.rr),
+                    include_sentiment=False,
+                    include_flow_detail=False,
+                    include_signal_detail=False,
+                    include_risk_detail=False,
+                    include_market_detail=False,
+                    sentiment_verbose=False,
+                    auto_refresh=False,
+                    force_refresh=False,
+                    with_market_context=False,
+                    regime_universe=str(self._config.analysis.regime_universe or "lq45"),
+                    benchmark=str(self._config.analysis.benchmark or "IHSG"),
+                    db_path=PathType(self._db_path),
+                    with_technical_gate=False,
+                )
+            )
+        except PlanSwingDataUnavailable:
+            return type(
+                "R",
+                (),
+                {"summary": f"structure {ticker_u} · no local candles · fetch market first"},
+            )()
+        except Exception as exc:
+            return type("R", (), {"summary": f"structure error · {exc}"})()
+
+        trade_setup = response.trade_setup
+        if trade_setup is None and response.verdict is not None:
+            trade_setup = response.verdict.trade_setup
         action = "—"
-        if cand.trade_setup is not None and cand.trade_setup.action is not None:
-            action = getattr(cand.trade_setup.action, "value", str(cand.trade_setup.action))
-        score = getattr(cand, "accum_score", None)
-        score_s = f"{float(score):.0f}" if isinstance(score, (int, float)) else "—"
-        return type(
-            "R",
-            (),
-            {"summary": f"local {action} · accum {score_s} · no broker order"},
-        )()
+        if trade_setup is not None and trade_setup.action is not None:
+            action = getattr(trade_setup.action, "value", str(trade_setup.action))
+
+        plan = build_swing_trade_plan(
+            ticker=ticker_u,
+            as_of=response.today,
+            trade_setup=trade_setup,
+            setup_eval=response.setup_eval,
+            setup_name=None,
+            sizing=response.sizing,
+            setup_sizing=response.setup_sizing,
+            capital=int(capital) if capital is not None else None,
+            risk_pct=float(self._config.swing.risk_pct),
+            take_profit_pct=response.take_profit_pct,
+            stop_loss_pct=response.stop_loss_pct,
+            max_hold_days=cmd_cfg.swing_backtest_config.max_hold_days,
+            with_market_context=False,
+            with_technical_gate=False,
+            latest_close=response.latest_close,
+        )
+        plan_note = ""
+        if plan.is_complete:
+            plans_dir = plans_dir_from_journal_path(PathType(self._config.storage.accum_journal))
+            save_swing_trade_plan(plan, plans_dir)
+            plan_note = f" · plan {plan.plan_id[:8]}"
+
+        chosen = response.setup_sizing or response.sizing
+        if chosen is not None and getattr(chosen, "lots", None):
+            entry = getattr(chosen, "entry_price", None)
+            stop = getattr(chosen, "stop_price", None)
+            target = getattr(chosen, "target_price", None)
+            lots = getattr(chosen, "lots", None)
+            summary = (
+                f"structure {action} · entry {_fmt_price(entry)} · "
+                f"stop {_fmt_price(stop)} · target {_fmt_price(target)} · "
+                f"{lots} lots{plan_note} · no order"
+            )
+        elif capital is None:
+            summary = (
+                f"structure {action} · no capital · "
+                f"set swing.capital in user.yaml or CLI --capital · no order"
+            )
+        else:
+            summary = f"structure {action} · sizing incomplete · no order"
+
+        return type("R", (), {"summary": summary})()
+
+
+def _fmt_price(value: Any) -> str:
+    if value is None:
+        return "—"
+    try:
+        return f"{int(round(float(value))):,}"
+    except (TypeError, ValueError):
+        return str(value)
 
 
 # ── Explicit fetch ─────────────────────────────────────────

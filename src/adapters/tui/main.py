@@ -879,7 +879,7 @@ class CockpitApp(App[None]):
         return "\n".join(lines)
 
     def _open_plan_stage(self) -> None:
-        """Variant A: p switches main stage to Plan and auto-runs local re-check.
+        """p switches main stage to Plan and auto-runs structure desk (ADR-054).
 
         No confirm modal. esc returns to the board. No broker order.
         """
@@ -902,8 +902,8 @@ class CockpitApp(App[None]):
         self._plan_result = ""
         self._plan_running = True
         self._stage = "plan"
-        self._board_title = f"Plan · {ticker} · swing"
-        self._meta = "auto-run · local only · no broker order"
+        self._board_title = f"Plan · {ticker} · structure"
+        self._meta = "structure desk · local · no broker order"
         self._status_note = "plan running"
         self._refresh_chrome()
 
@@ -953,7 +953,7 @@ class CockpitApp(App[None]):
         self._status_note = "plan done"
         # Stay on plan stage so the page is the result surface (variant A).
         if self._stage == "plan" and self._plan_ticker == ticker:
-            self._meta = "local result · no broker order"
+            self._meta = "structure result · no broker order"
             self._refresh_chrome()
         self.notify(f"Plan · {ticker} · {msg}", timeout=2.5)
 

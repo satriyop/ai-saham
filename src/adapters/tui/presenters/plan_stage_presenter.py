@@ -1,6 +1,6 @@
-"""Present-only Plan swing stage body (no modal).
+"""Present-only Plan swing stage body (ADR-054 structure desk).
 
-Builds context from the board row + runner result. Does not place orders.
+Board context (judgment) + structure-run result. Does not place orders.
 
 Layer: Adapter
 """
@@ -27,9 +27,9 @@ def present_plan_stage(
     result_line: str = "",
     running: bool = False,
 ) -> PlanStageView:
-    """Board-aware plan page: facts from row, then local-run status/result."""
+    """Board-aware plan page: judgment context from row, structure from runner."""
     lines: list[str] = [
-        f"[bold #e8e8e8]Plan · {ticker} · swing[/]",
+        f"[bold #e8e8e8]Plan · {ticker} · structure[/]",
         f"[dim]from {source}  ·  #{rank}/{total}[/]",
         "",
     ]
@@ -44,22 +44,23 @@ def present_plan_stage(
 
     lines.append("")
     lines.append("[#9b8fb8]On this page[/]")
-    lines.append("  Auto-runs a local re-check for this ticker (screen-accum path).")
-    lines.append("  [bold]No broker order.[/] Not full CLI plan swing panels.")
+    lines.append("  Structure desk (ADR-054): horizon / SL / TP / lots.")
+    lines.append("  Action inherits screen judgment · [bold]no broker order.[/]")
+    lines.append("  Deep judgment stays on the board / Enter inspect.")
     lines.append("")
 
     if running and not result_line:
         lines.append("[#d4b06a]Running…[/]")
-        lines.append("  Reading local cache · same use cases as CLI (thin)")
+        lines.append("  Local plan swing workflow (same engine as CLI, thin)")
     elif result_line:
-        lines.append("[#d4b06a]Result[/]")
+        lines.append("[#d4b06a]Structure result[/]")
         lines.append(f"  {result_line}")
     else:
-        lines.append("[#d4b06a]Result[/]")
+        lines.append("[#d4b06a]Structure result[/]")
         lines.append("  —")
 
     lines.append("")
-    lines.append("[dim]esc back to board · Ctrl+P · p re-run[/]")
+    lines.append("[dim]esc back to board · p re-run · CLI: saham plan swing TICKER --capital …[/]")
     return PlanStageView(text="\n".join(lines), ticker=ticker)
 
 
@@ -72,7 +73,7 @@ def _accum_facts(row: Any) -> list[str]:
     gate = str(getattr(row, "gate", "—") or "—")
     why = build_accum_focus(row).why or "—"
     return [
-        "[#9b8fb8]Board context (accum)[/]",
+        "[#9b8fb8]Board judgment (accum)[/]",
         f"  Action {action} · Gate {gate}",
         f"  Signal {signal} · Accum {accum}",
         f"  [#d4b06a]Why[/]  {why}",
