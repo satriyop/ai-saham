@@ -45,6 +45,100 @@ def test_cockpit_mounts_layout_b_and_opens_palette():
     asyncio.run(scenario())
 
 
+def test_palette_enter_runs_preopen_not_view_ticker():
+    """Regression: app Enter must not steal palette run (priority/Input bug)."""
+
+    async def scenario() -> None:
+        from decimal import Decimal
+        from types import SimpleNamespace
+
+        from src.adapters.tui.controllers.board_controller import BoardController
+        from src.adapters.tui.presenters.accum_presenter import AccumPresenter
+        from src.adapters.tui.presenters.preopen_presenter import PreOpenPresenter
+
+        def make_accum():
+            c = SimpleNamespace(
+                ticker="BBCA",
+                accum_score=50.0,
+                signal_assessment=None,
+                trade_setup=None,
+                risk_assessment=None,
+                setup_phase=None,
+                consecutive_streak=1,
+                rsi=50,
+                net_buy_ratio=0.5,
+                vwap_discount_pct=1.0,
+                current_price=1000,
+                name="BBCA",
+            )
+            return SimpleNamespace(
+                single_projection=SimpleNamespace(
+                    candidates=[c],
+                    window_days=7,
+                    data_as_of={},
+                    applied_filters=SimpleNamespace(sort_by="signal", top=20),
+                ),
+                effective_session=None,
+                market_context=None,
+                multi_projection=None,
+                warnings=(),
+            )
+
+        def make_preopen():
+            c = SimpleNamespace(
+                ticker="BBRI",
+                iep=1000,
+                iep_gap_pct=Decimal("1.0"),
+                gap_pct=Decimal("1.0"),
+                iev=1_000_000,
+                iev_intensity=1.2,
+                opening_broker_backing_tag="BACKED",
+                trend_signal="BULLISH",
+            )
+            return SimpleNamespace(
+                response=SimpleNamespace(
+                    result=SimpleNamespace(candidates=[c]),
+                    warnings=[],
+                ),
+                snapshot_date="2026-07-25",
+                warnings=(),
+            )
+
+        app = CockpitApp(
+            accum_loader=make_accum,
+            accum_controller=BoardController(make_accum),
+            accum_presenter=AccumPresenter(),
+            preopen_loader=make_preopen,
+            preopen_controller=BoardController(make_preopen, empty_when=lambda _p: False),
+            preopen_presenter=PreOpenPresenter(),
+        )
+        async with app.run_test(size=(120, 40)) as pilot:
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if app._stage == "accum" and app._rows:
+                    break
+            assert app._stage == "accum"
+            await pilot.press("ctrl+p")
+            await pilot.pause()
+            assert isinstance(app.screen, CommandPalette)
+            # Search focuses Input; Enter must run filtered command, not view-ticker.
+            for ch in "pre":
+                await pilot.press(ch)
+            await pilot.pause()
+            await pilot.press("enter")
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if app._stage == "preopen" and app._rows:
+                    break
+            assert not isinstance(app.screen, CommandPalette)
+            assert app._stage == "preopen"
+            assert app._board_kind == "preopen"
+            assert app._rows
+            assert app._rows[0].ticker == "BBRI"
+
+    asyncio.run(scenario())
+
+
 def test_mount_with_loader_auto_starts_accum():
     async def scenario() -> None:
         from types import SimpleNamespace

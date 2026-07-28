@@ -18,10 +18,11 @@ class CommandPalette(ModalScreen[str | None]):
     """Searchable command list. Dismisses with command_id or None."""
 
     BINDINGS = [
-        Binding("escape", "dismiss_palette", "Close", show=False),
-        Binding("up", "move_up", "Up", show=False),
-        Binding("down", "move_down", "Down", show=False),
-        Binding("enter", "run_selected", "Run", show=False),
+        Binding("escape", "dismiss_palette", "Close", show=False, priority=True),
+        Binding("up", "move_up", "Up", show=False, priority=True),
+        Binding("down", "move_down", "Down", show=False, priority=True),
+        # priority so app-level Enter (view ticker) cannot steal run.
+        Binding("enter", "run_selected", "Run", show=False, priority=True),
     ]
 
     def __init__(self) -> None:
@@ -50,6 +51,17 @@ class CommandPalette(ModalScreen[str | None]):
         self._filtered = filter_commands(event.value)
         self._index = 0
         self._render_list()
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Enter while search is focused must run the selected command.
+
+        Without this, Textual routes Enter to the Input and the palette never
+        dismisses with a command_id (board looks like palette 'does nothing').
+        """
+        if event.input.id != "palette-input":
+            return
+        event.stop()
+        self.action_run_selected()
 
     def action_dismiss_palette(self) -> None:
         self.dismiss(None)

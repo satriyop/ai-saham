@@ -48,7 +48,9 @@ class CockpitApp(App[None]):
         Binding("question_mark", "show_help", "Help", show=False),
         Binding("r", "refresh_local", "Refresh", show=False),
         Binding("p", "plan_swing", "Plan", show=False),
-        Binding("enter", "view_ticker", "View", show=False, priority=True),
+        # Do NOT use priority=True on Enter — it steals Enter from CommandPalette
+        # (and other modals) so palette commands never run.
+        Binding("enter", "view_ticker", "View", show=False),
         Binding("escape", "go_back", "Back", show=False),
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up", "Up", show=False),
@@ -286,6 +288,8 @@ class CockpitApp(App[None]):
         self.exit()
 
     def action_go_back(self) -> None:
+        if self._modal_blocks_board_keys():
+            return
         if self._stage == "detail":
             # Explicit return stage — never infer only from detail title.
             target = self._detail_return_stage
@@ -306,6 +310,8 @@ class CockpitApp(App[None]):
                     self._update_accum_evidence()
 
     def action_refresh_local(self) -> None:
+        if self._modal_blocks_board_keys():
+            return
         # Prefer board_kind over title heuristics (detail titles include ticker).
         kind = self._board_kind
         if self._stage == "detail":
@@ -320,12 +326,23 @@ class CockpitApp(App[None]):
             self.notify("Nothing to refresh — open a screen via Ctrl+P", timeout=1.5)
 
     def action_plan_swing(self) -> None:
+        if self._modal_blocks_board_keys():
+            return
         self._run_command("plan-swing")
 
     def action_view_ticker(self) -> None:
+        if self._modal_blocks_board_keys():
+            return
         self._run_command("view-ticker")
 
+    def _modal_blocks_board_keys(self) -> bool:
+        """True when a modal (palette/confirm/help) is on top — do not steal keys."""
+        # screen_stack[0] is the main CockpitApp screen; anything above is a modal.
+        return len(self.screen_stack) > 1
+
     def action_cursor_down(self) -> None:
+        if self._modal_blocks_board_keys():
+            return
         if self._stage not in {"accum", "preopen"} or not self._rows:
             return
         self._row_index = min(len(self._rows) - 1, self._row_index + 1)
@@ -333,6 +350,8 @@ class CockpitApp(App[None]):
         self._update_focus_from_row()
 
     def action_cursor_up(self) -> None:
+        if self._modal_blocks_board_keys():
+            return
         if self._stage not in {"accum", "preopen"} or not self._rows:
             return
         self._row_index = max(0, self._row_index - 1)
