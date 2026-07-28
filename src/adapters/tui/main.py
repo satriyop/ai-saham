@@ -14,7 +14,7 @@ from typing import Any, Literal
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import DataTable, Static
 
 from src.adapters.tui.screens.help import HelpModal
@@ -118,7 +118,8 @@ class CockpitApp(App[None]):
                         yield Static(f"· {self._meta}", id="view-meta")
                     yield Static(self._mode_label(), id="mode-pill")
                 with Vertical(id="stage"):
-                    yield Static(self._shell_body(), id="stage-body")
+                    with VerticalScroll(id="stage-scroll"):
+                        yield Static(self._shell_body(), id="stage-body")
                     yield DataTable(id="board-table")
                     yield Static("", id="evidence-strip")
                     yield Static(self._footer_hint(), id="board-footer")
@@ -185,9 +186,9 @@ class CockpitApp(App[None]):
                 "IEV snapshot board · Enter = present-only inspect"
             )
         if self._stage == "detail":
-            return "esc back · p plan · Ctrl+P commands"
+            return "↑↓/PgUp/PgDn scroll · esc back · p plan · Ctrl+P"
         if self._stage == "plan":
-            return "esc back to board · p re-run · Ctrl+P · no broker order"
+            return "↑↓ scroll · esc back · p re-run · Ctrl+P · no broker order"
         return "Ctrl+P commands · ? help · q quit"
 
     def _shell_body(self) -> str:
@@ -225,22 +226,23 @@ class CockpitApp(App[None]):
         )
 
         body = self.query_one("#stage-body", Static)
+        scroll = self.query_one("#stage-scroll", VerticalScroll)
         table = self.query_one("#board-table", DataTable)
         evidence = self.query_one("#evidence-strip", Static)
 
         if self._stage == "shell":
-            body.display = True
+            scroll.display = True
             body.update(self._shell_body())
             table.display = False
             evidence.display = False
         elif self._stage == "empty":
-            body.display = True
+            scroll.display = True
             body.update(self._empty_body())
             table.display = False
             evidence.display = False
             self.query_one("#side-cache", Static).update("Cache    empty")
         elif self._stage == "loading":
-            body.display = True
+            scroll.display = True
             body.update(
                 "[#d4b06a]Loading local board…[/]\n\n"
                 f"{self._board_title}\n"
@@ -249,24 +251,27 @@ class CockpitApp(App[None]):
             table.display = False
             evidence.display = False
         elif self._stage == "error":
-            body.display = True
+            scroll.display = True
             body.update(
                 f"[#c97a72]Error[/]\n{self._error_text}\n\n[dim]r retry · Ctrl+P commands[/]"
             )
             table.display = False
             evidence.display = False
         elif self._stage == "detail":
-            body.display = True
+            scroll.display = True
             body.update(self._detail_text)
             table.display = False
             evidence.display = False
+            # Focus scroll so ↑↓ / wheel / PgUp/PgDn work on long view-ticker pages.
+            scroll.focus()
         elif self._stage == "plan":
-            body.display = True
+            scroll.display = True
             body.update(self._plan_body_text())
             table.display = False
             evidence.display = False
+            scroll.focus()
         elif self._stage in {"accum", "preopen"}:
-            body.display = False
+            scroll.display = False
             table.display = True
             if self._evidence_text:
                 evidence.display = True

@@ -49,8 +49,16 @@ Screen {
     padding: 1 1;
 }
 
-#stage-body {
+/* Scrollable text stages (inspect, view ticker, plan, empty, loading). */
+#stage-scroll {
     height: 1fr;
+    scrollbar-color: #3a3a3a #121212;
+    scrollbar-size-vertical: 1;
+}
+
+#stage-body {
+    height: auto;
+    width: 100%;
     color: #7a7a7a;
 }
 
