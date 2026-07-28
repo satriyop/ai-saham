@@ -548,15 +548,20 @@ GET /corpaction/ipo
 **v1 supported (implemented 2026-07):** dividend, stocksplit → `stock_split`, reversesplit → `reverse_split`,
 rightissue → `rights_issue`, bonus, tenderoffer → `tender_offer`, rups, pubex, ipo.
 
-**Explicitly NOT fetched in v1:**
+**Explicitly NOT fetched by corporate-action calendar:**
 ```
 GET /corpaction/warrant   — per-ticker warrant series, not a calendar concept, out of scope
-GET /corpaction/economic  — macroeconomic calendar, unrelated to corporate actions, out of scope
+GET /corpaction/economic  — macroeconomic calendar; fetched by macro-calendar path (not CA tables)
 ```
 
 **Implementation:** `src/infrastructure/browser/stockbit_corporate_action_calendar.py`
 (`StockbitCorporateActionCalendarProvider`) + `src/infrastructure/persistence/sqlite_corporate_action_calendar_repository.py`.
 **Storage:** SQLite `corporate_action_events` / `corporate_action_event_dates` / `corporate_action_calendar_sync`
+
+**Macro economic calendar (sibling stream):** `GET /corpaction/economic` →
+`StockbitMacroCalendarProvider` + `SQLiteMacroCalendarRepository`
+(`macro_calendar_events` / `macro_calendar_sync`). CLI: `saham fetch macro-calendar`.
+See ADR-055.
 (market-wide — distinct from the per-ticker `corp_action_cache` table in §4 above).
 **CLI:** `saham fetch calendar`; also synced once per `saham fetch market` run (see `docs/data_sources.md`
 "Market-Wide Corporate Action Calendar" section for the full table/query/freshness reference).
@@ -899,4 +904,5 @@ data.broker_activity_transaction.brokers_sell[] → net selling stocks:
 | Market-wide broker ranking | `/order-trade/broker/top` | ✗ Not implemented |
 | Full broker list (codes + names) | `/findata-view/marketdetectors/brokers` | ✗ Not implemented |
 | Corporate action calendar (market-wide, 9 v1 types) | `/corpaction/dividend` etc. | ✓ Implemented |
+| Macro economic calendar | `/corpaction/economic` | ✓ Implemented (`saham fetch macro-calendar`) |
 | Insider buying scan (all tickers) | `/insider/company/majorholder` (no symbols param) | ✗ Not implemented |

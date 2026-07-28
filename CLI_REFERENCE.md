@@ -333,7 +333,9 @@ saham fetch broker-import data.csv --mapping rti_export
 
 ## saham fetch calendar
 
-Fetch the market-wide Stockbit corporate action calendar (dividends, rights issues, RUPS).
+Fetch the market-wide Stockbit **corporate action** calendar (dividends, rights issues, RUPS, IPO, etc.).
+
+Does **not** fetch macroeconomic events — use `saham fetch macro-calendar`.
 
 ```
 saham fetch calendar [OPTIONS]
@@ -341,7 +343,28 @@ saham fetch calendar [OPTIONS]
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--days` | 365 | Lookahead window |
+| `--types` | all 9 v1 types | Comma-separated event types |
+| `--refresh` | false | Force remote fetch, bypass day sync marker |
+| `--db` | app config | SQLite database path |
+
+---
+
+## saham fetch macro-calendar
+
+Fetch the Stockbit **macroeconomic** calendar (`/corpaction/economic`: BI rate, CPI, GDP, etc.).
+
+Sibling of `saham fetch calendar`. Stores into `macro_calendar_events` (not corporate-action tables). Categories are normalized via `config/macro_calendar.yaml`.
+
+```
+saham fetch macro-calendar [OPTIONS]
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--refresh` | false | Force remote fetch, bypass day sync marker |
+| `--db` | app config | SQLite database path |
+
+Requires Stockbit login (`saham fetch stockbit login`).
 
 ---
 

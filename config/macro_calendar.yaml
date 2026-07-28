@@ -1,0 +1,33 @@
+# Macro calendar category rules (title substring, first match wins, case-insensitive).
+# Unknown titles map to default_category — events are never dropped for category.
+#
+# Used by: Stockbit economic parser → MacroCalendarEvent.category
+# Consumers: P2 BI steps (bi_rate), future briefings / rates maps
+
+category_rules:
+  - category: bi_rate
+    title_contains:
+      - "BI Rate"
+      - "BI 7-Day"
+      - "Bank Indonesia Rate"
+      - "7-Day Reverse Repo"
+      - "BI-Rate"
+  - category: inflation
+    title_contains:
+      - "CPI"
+      - "Inflation"
+      - "Core Inflation"
+  - category: growth
+    title_contains:
+      - "GDP"
+      - "Industrial Production"
+  - category: trade
+    title_contains:
+      - "Trade Balance"
+      - "Trade Surplus"
+      - "Trade Deficit"
+      # Prefer specific trade phrases; bare "Export"/"Import" are too broad for car sales etc.
+      - "Exports "
+      - "Imports "
+
+default_category: other

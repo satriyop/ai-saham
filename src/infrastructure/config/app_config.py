@@ -60,6 +60,7 @@ class ConfigPathsConfig:
     market_context_engine: str = "config/market_context_engine.yaml"
     stockbit: str = "config/stockbit.yaml"
     corporate_action_policy: str = "config/corporate_action_policy.yaml"
+    macro_calendar: str = "config/macro_calendar.yaml"
     company_quality_context: str = "config/company_quality_context.yaml"
     sector_context: str = "config/sector_context.yaml"
     sector_macro_context: str = "config/sector_macro_context.yaml"

@@ -214,6 +214,13 @@ endpoints:
     url: "https://exodus.stockbit.com/screener/universe"
     # Returns: full universe ticker list from Stockbit screener.
 
+  # Macro economic calendar (NOT corporate actions).
+  # Consumed by: saham fetch macro-calendar → macro_calendar_events table.
+  calendar_economic:
+    url: "https://exodus.stockbit.com/corpaction/economic"
+    # Returns: data.economic[] with econcal_id/date/time/item/actual/previous/forecast.
+    # Distinct from per-ticker corp_action and market-wide CA calendar endpoints.
+
   corp_action:
     url: "https://exodus.stockbit.com/corpaction/{ticker}?limit=50"
     trigger_page: "https://stockbit.com/stocks/{ticker}"

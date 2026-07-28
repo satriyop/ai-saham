@@ -1,0 +1,63 @@
+{
+  "data": {
+    "today": "2026-07-10",
+    "timezone": 7,
+    "economic": [
+      {
+        "econcal_id": "1001",
+        "econcal_date": "2026-07-10",
+        "econcal_time": "14:30:00",
+        "econcal_month": "",
+        "econcal_item": "BI 7-Day Reverse Repo Rate",
+        "econcal_actual": "5.50%",
+        "econcal_previous": "5.75%",
+        "econcal_forecast": "5.50%",
+        "econcal_lastdate": "2026-07-10T21:00:06+07:00"
+      },
+      {
+        "econcal_id": "1002",
+        "econcal_date": "2026-07-01",
+        "econcal_time": "11:00:00",
+        "econcal_month": "JUN",
+        "econcal_item": "CPI YoY",
+        "econcal_actual": "2.1%",
+        "econcal_previous": "2.0%",
+        "econcal_forecast": "2.2%",
+        "econcal_lastdate": "2026-07-01T12:00:00+07:00"
+      },
+      {
+        "econcal_id": "1003",
+        "econcal_date": "2026-07-05",
+        "econcal_time": "07:00:00",
+        "econcal_month": "JUN",
+        "econcal_item": "Car Sales YoY",
+        "econcal_actual": "12.0%",
+        "econcal_previous": "14.0%",
+        "econcal_forecast": "",
+        "econcal_lastdate": "2026-07-05T08:00:00+07:00"
+      },
+      {
+        "econcal_id": "",
+        "econcal_date": "2026-06-15",
+        "econcal_time": "10:00:00",
+        "econcal_month": "Q1",
+        "econcal_item": "GDP Growth YoY",
+        "econcal_actual": "5.0%",
+        "econcal_previous": "4.9%",
+        "econcal_forecast": "5.1%",
+        "econcal_lastdate": "2026-06-15T11:00:00+07:00"
+      },
+      {
+        "econcal_id": "bad-row",
+        "econcal_date": "",
+        "econcal_time": "",
+        "econcal_month": "",
+        "econcal_item": "Missing Date Event",
+        "econcal_actual": "",
+        "econcal_previous": "",
+        "econcal_forecast": "",
+        "econcal_lastdate": ""
+      }
+    ]
+  }
+}

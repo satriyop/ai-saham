@@ -266,6 +266,33 @@ erDiagram
         event_types_json TEXT    "Requested event types, JSON array"
         status TEXT              "success | partial"
     }
+
+    macro_calendar_events {
+        source TEXT PK           "Always stockbit (v1)"
+        source_event_id TEXT PK  "econcal_id or SHA-256 fallback"
+        event_date TEXT          "ISO date"
+        event_time TEXT          "Release time if known"
+        timezone TEXT            "Timezone / offset string"
+        category TEXT            "bi_rate | inflation | growth | trade | other"
+        title TEXT               "Event name (econcal_item)"
+        country TEXT             "Default ID"
+        actual TEXT              "Raw string (e.g. 5.50%)"
+        previous TEXT            "Raw string"
+        forecast TEXT            "Raw string"
+        reference_period TEXT    "econcal_month / period label"
+        raw_payload_json TEXT    "Full source item"
+        fetched_at TEXT          "Fetch timestamp"
+        created_at TEXT          "Auto timestamp"
+        updated_at TEXT          "Auto timestamp"
+    }
+
+    macro_calendar_sync {
+        source TEXT PK           "Always stockbit"
+        sync_key TEXT PK         "Fixed 'economic' in v1"
+        synced_for_date TEXT PK  "Calendar date this sync covers"
+        fetched_at TEXT          "Fetch timestamp"
+        status TEXT              "success | partial"
+    }
 ```
 
 ## Table Groupings
@@ -350,6 +377,18 @@ MARKET-WIDE CORPORATE ACTION CALENDAR (distinct from per-ticker corp_action_cach
 │  wide calendar already been synced    │
 │  for this set of event types?         │
 └──────────────────────────────────────┘
+
+MARKET-WIDE MACRO CALENDAR (sibling; not corporate actions — ADR-055)
+┌──────────────────────────────────────┐
+│  macro_calendar_events                │
+│  one row per macro event              │
+│  (source, source_event_id)            │
+│  category: bi_rate | inflation | …    │
+└──────────────────────────────────────┘
+┌──────────────────────────────────────┐
+│  macro_calendar_sync                  │
+│  day sync marker for economic stream  │
+└──────────────────────────────────────┘
 ```
 
 ## Notes
@@ -365,3 +404,4 @@ MARKET-WIDE CORPORATE ACTION CALENDAR (distinct from per-ticker corp_action_cach
 - `corp_action_cache` has `ex_date` and `cum_date` as part of its composite PK even though they're nullable in the DDL — this is a SQLite quirk (PK columns don't auto-require NOT NULL there).
 - The 8 Stockbit enrichment tables (`ticker_notation_cache`, `analyst_cache`, `insider_cache`, `corp_action_cache`, `seasonality_cache`, `shareholding_composition`, `company_fundamentals`, `bandar_detector`) are each populated by independent providers during `saham fetch market` enrichment phase. All are read-only by analysis commands.
 - `corporate_action_events` / `corporate_action_event_dates` are also read (no new tables) by `AssessCorporateActionEventRiskUseCase` (`src/application/use_case/assess_corporate_action_event_risk_use_case.py`) via the existing `CorporateActionCalendarRepository.get_events_for_ticker()`, to compute the deterministic **Corporate Calendar** event-risk panel in `saham analyze swing TICKER`. Config-driven by `config/corporate_action_policy.yaml`; context/display only, no schema change. See `docs/data_sources.md`.
+- `macro_calendar_events` / `macro_calendar_sync` are populated by `saham fetch macro-calendar` (Stockbit `/corpaction/economic`). Distinct from corporate-action tables. Category rules: `config/macro_calendar.yaml`. See ADR-055.

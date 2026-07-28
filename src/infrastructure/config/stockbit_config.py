@@ -83,6 +83,8 @@ class StockbitConfig:
     calendar_rups_url: str = "https://exodus.stockbit.com/corpaction/rups"
     calendar_pubex_url: str = "https://exodus.stockbit.com/corpaction/pubex"
     calendar_ipo_url: str = "https://exodus.stockbit.com/corpaction/ipo"
+    # Macro calendar (not corporate actions) — sibling stream for rates/P2
+    calendar_economic_url: str = "https://exodus.stockbit.com/corpaction/economic"
     running_trade_url: str = (
         "https://exodus.stockbit.com/order-trade/running-trade"
         "?symbols[]={ticker}&sort=DESC&limit={limit}&order_by=RUNNING_TRADE_ORDER_BY_TIME"
@@ -220,6 +222,7 @@ def load_stockbit_config(
             calendar_rups_url=_url("calendar_rups", defaults.calendar_rups_url),
             calendar_pubex_url=_url("calendar_pubex", defaults.calendar_pubex_url),
             calendar_ipo_url=_url("calendar_ipo", defaults.calendar_ipo_url),
+            calendar_economic_url=_url("calendar_economic", defaults.calendar_economic_url),
             running_trade_url=_url("running_trade", defaults.running_trade_url),
             running_trade_chart_url=_url("running_trade_chart", defaults.running_trade_chart_url),
             intraday_broker_chart_url=_url(
