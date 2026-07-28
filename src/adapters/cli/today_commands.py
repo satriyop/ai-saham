@@ -234,14 +234,25 @@ def _accumulation_screen_table(candidates: list[DailyAccumulationCandidate]):
     return table
 
 
+# A regime call below this confidence is near a boundary — treat it as noise.
+LOW_REGIME_CONFIDENCE = 0.30
+
+
 def _market_regime_text(ctx) -> str:
-    parts = [
-        ctx.regime.value,
-        f"conviction {float(ctx.conviction):.2f}",
-    ]
+    head = ctx.regime.value
+    days_in_regime = getattr(ctx, "days_in_regime", None)
+    if days_in_regime is not None:
+        head = f"{head} for {days_in_regime}d"
+    parts = [head, f"conviction {float(ctx.conviction):.2f}"]
 
     if ctx.regime_confidence is not None:
-        parts.append(f"confidence {float(ctx.regime_confidence):.2f}")
+        conf = float(ctx.regime_confidence)
+        label = f"confidence {conf:.2f}"
+        if conf < LOW_REGIME_CONFIDENCE:
+            # Flag low-confidence regimes so a near-coin-flip call is not read
+            # with the same weight as a decisive one.
+            label += " ⚠ low"
+        parts.append(label)
 
     if ctx.regime_stability is not None:
         parts.append(f"stability {ctx.regime_stability}")

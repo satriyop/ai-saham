@@ -1451,3 +1451,36 @@ def test_corp_action_elements_empty_state():
             console.print(element)
     out = cap.get()
     assert "No upcoming corporate actions in window." in out
+
+
+# ── ADR-052 Commit 4: regime context + low-confidence flag ────────────────────
+
+
+def _regime_ctx(regime="RISK_ON", conviction=0.67, confidence=0.14, days=3):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(
+        regime=SimpleNamespace(value=regime),
+        conviction=conviction,
+        regime_confidence=confidence,
+        regime_stability="STABLE",
+        transition_warning=None,
+        days_in_regime=days,
+    )
+
+
+def test_market_regime_text_shows_days_and_low_confidence_flag():
+    from src.adapters.cli.today_commands import _market_regime_text
+
+    text = _market_regime_text(_regime_ctx(confidence=0.14, days=3))
+    assert "RISK_ON for 3d" in text
+    assert "confidence 0.14 ⚠ low" in text
+    assert "stability STABLE" in text
+
+
+def test_market_regime_text_no_flag_above_threshold():
+    from src.adapters.cli.today_commands import _market_regime_text
+
+    text = _market_regime_text(_regime_ctx(confidence=0.57, days=1))
+    assert "confidence 0.57" in text
+    assert "⚠ low" not in text
