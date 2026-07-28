@@ -68,15 +68,16 @@ saham screen accum BBCA BBRI BMRI TLKM --multi
 - [ ] Tandai `long-term only`, recent distribution, dan price chase sebagai
   warning.
 
-### 4. Analyze Candidates
+### 4. Judge then structure (ADR-054)
 
 ```bash
-saham plan swing TICKER \
-  --setup foreign-bounce \
-  --capital 10000000
+# Judgment case file first
+saham screen accum TICKER
+# Structure desk (horizon / SL / TP / lots)
+saham plan swing TICKER --setup foreign-bounce --capital 10000000
 ```
 
-Opsi sesuai kebutuhan:
+Opsi struktur / evidence sesuai kebutuhan:
 
 ```bash
 saham plan swing TICKER --with-flow-detail
@@ -86,6 +87,7 @@ saham plan swing TICKER --strategy foreign-accumulation
 saham plan swing TICKER --format json
 ```
 
+- [ ] Judge on `screen accum TICKER` (Action, Why, pattern) before sizing.
 - [ ] Pilih `--setup` secara eksplisit jika mengevaluasi lensa setup tertentu.
 - [ ] Baca decision, setup match, failed gates, phase/trigger, coverage,
   conviction, regime constraints, risk reasons, dan freshness.

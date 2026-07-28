@@ -79,7 +79,10 @@ saham inspect regime --universe idx80
 - **Breadth 5d change**: Whether breadth is improving or deteriorating. A negative change with a SIDEWAYS label is a warning.
 - **Foreign flow breadth**: % of universe stocks with positive net foreign flow. Falling sharply = institutions are selling, not buying.
 
-`saham plan swing` by default shows the core verdict only (SignalEngine + RiskEngine → TradeSetup). Market context is an opt-in evidence panel — add `--with-market-context` to see IHSG breadth, benchmark trend, and regime impact on the TradeSetup.
+After shortlist, **judge** with `saham screen accum TICKER` (Action / Why / pattern).
+Then **structure** with `saham plan swing TICKER --capital …` (SL / TP / lots).
+Plan still shows TradeSetup and engine panels during migration; it is not a
+second screener. Market context: `--with-market-context` on plan when needed.
 
 ---
 
@@ -157,8 +160,8 @@ Decide here whether the candidate is worth structuring a trade for.
 **Structure desk (ADR-054).** After judgment, use plan for horizon, stops,
 targets, and sizing — not as a second analysis clone.
 
-`saham plan swing` still exposes analysis panels during migration (S2–S4 will
-thin them). Prefer screen for judgment; use plan when you need capital/TP/SL.
+S2: plan help/footers say **structure desk**. Analysis panels remain until S4.
+Prefer screen for judgment; use plan when you need capital/TP/SL/lots.
 
 ### Basic usage
 
@@ -367,7 +370,7 @@ Before sizing or logging a paper entry, confirm that price structure agrees with
 
 Decision rule:
 
-- `ENTER` from `saham plan swing` plus constructive chart = eligible for sizing/logging.
+- `ENTER` from `saham screen accum TICKER` (or plan TradeSetup) plus constructive chart = eligible for structure/logging.
 - `ENTER` plus breakdown chart = downgrade to `WATCH`; wait for structure to repair.
 - `WATCH` plus constructive chart = keep on shortlist and rerun tomorrow.
 - `AVOID` stays `AVOID`; charts are not used to override failed deterministic gates.
@@ -696,10 +699,10 @@ The discipline is: run `saham plan swing TICKER --setup foreign-bounce` on every
 | `saham fetch market --universe lq45` | Fetch today's candle + broker data |
 | `saham inspect regime` | IHSG market regime: BULLISH / SIDEWAYS / WEAK / RISK_OFF |
 | `saham screen accum --universe lq45 --multi` | Multi-window accumulation screener |
-| `saham plan swing TICKER` | Core TradeSetup verdict: SignalEngine + RiskEngine + default MCE |
-| `saham plan swing TICKER --setup foreign-bounce` | Gate-checked entry decision with structured plan |
-| `saham plan swing TICKER --setup foreign-bounce --capital N` | Full plan + lot sizing |
-| `saham plan swing TICKER --strategy foreign-accumulation` | Add strategy/backtest evidence without changing the TradeSetup action |
+| `saham screen accum TICKER` | Judgment case file (Action, Why, pattern, signal/risk) |
+| `saham plan swing TICKER --capital N` | Structure desk: sizing / risk budget |
+| `saham plan swing TICKER --setup foreign-bounce --capital N` | Structure with named setup gates + lot sizing |
+| `saham plan swing TICKER --strategy foreign-accumulation` | Optional strategy/backtest evidence (does not set action) |
 | `plan swing --capital  # sizing TICKER --capital N` | Standalone ATR-based position sizing |
 | `saham trade backtest-swing --universe lq45` | Walk-forward portfolio backtest of the setup |
 | `saham plan swing-compare --universe lq45` | Compare baseline vs regime-filtered variants |

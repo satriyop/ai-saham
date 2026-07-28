@@ -240,6 +240,7 @@ The single-ticker `saham plan swing BBCA` command centers the core deterministic
 │    ├── Market Context Preview (if preview data available)      │
 │    ├── SETUP EVIDENCE (MATCH/PARTIAL/NO_MATCH + gate details) │
 │    ├── ENGINE DETAIL panels (signal/risk/market; default on) │
+│    │     (ADR-054: judgment primary path is screen accum TICKER) │
 │    ├── FLOW / BROKER DETAIL (w/ --with-flow-detail)            │
 │    ├── STRATEGY EVIDENCE (win rate, PF, max DD w/ --strategy) │
 │    └── SENTIMENT EVIDENCE (call, distribution, w/ --sentiment)│

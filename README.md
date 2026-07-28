@@ -128,8 +128,9 @@ read-only post-open assess of the frozen plan.
 
 ```bash
 saham screen accum --universe lq45 --multi
-saham plan swing TICKER --with-market-context
+saham screen accum TICKER
 saham plan swing TICKER --capital 10000000
+saham plan swing TICKER --with-market-context
 saham policy accum backtest --help
 saham trade accum log --ticker TICKER --from-analysis
 ```

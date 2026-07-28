@@ -301,4 +301,12 @@ def print_swing_output(ctx: SwingOutputDisplayContext) -> None:
     print_strategy_evidence_panel(ctx)
     print_sentiment_evidence_panel(ctx)
     print_corporate_calendar_panel(ctx)
+    # ADR-054 S2: analysis panels remain during migration; structure is the job.
+    console().print(
+        Text(
+            f"Next: structure with --capital / --setup / --entry / --rr · "
+            f"judgment: saham screen accum {ctx.ticker}",
+            style="dim",
+        )
+    )
     console().print("")

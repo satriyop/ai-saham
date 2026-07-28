@@ -111,7 +111,13 @@ def swing(
     ] = None,
     setup: Annotated[
         Optional[str],
-        typer.Option("--setup", help="Swing setup to evaluate; omitted means no setup lens"),
+        typer.Option(
+            "--setup",
+            help=(
+                "Named setup for structure gates / target template "
+                "(foreign-bounce, coiled-spring, …); omitted = no setup lens"
+            ),
+        ),
     ] = None,
     window: Annotated[
         Optional[int],
@@ -123,23 +129,27 @@ def swing(
     ] = None,
     capital: Annotated[
         Optional[int],
-        typer.Option("--capital", "-c", help="Capital in IDR — enables position sizing block"),
+        typer.Option(
+            "--capital",
+            "-c",
+            help="Capital in IDR — enables structure sizing (lots / risk budget)",
+        ),
     ] = None,
     risk_pct: Annotated[
         Optional[float],
-        typer.Option("--risk-pct", help="% of capital at risk per trade"),
+        typer.Option("--risk-pct", help="% of capital at risk per trade (structure)"),
     ] = None,
     entry_price: Annotated[
         Optional[float],
-        typer.Option("--entry", help="Entry price in IDR (default: latest close)"),
+        typer.Option("--entry", help="Structure entry price in IDR (default: latest close)"),
     ] = None,
     atr_mult: Annotated[
         Optional[float],
-        typer.Option("--atr-mult", help="ATR multiplier for stop distance"),
+        typer.Option("--atr-mult", help="ATR multiplier for stop distance (structure)"),
     ] = None,
     rr: Annotated[
         Optional[float],
-        typer.Option("--rr", help="Reward:risk ratio for target"),
+        typer.Option("--rr", help="Reward:risk ratio for target (structure)"),
     ] = None,
     with_sentiment: Annotated[
         bool,
@@ -167,7 +177,7 @@ def swing(
         bool,
         typer.Option(
             "--auto-refresh/--no-refresh",
-            help="Refresh this ticker's candles and broker flow before analysis",
+            help="Refresh this ticker's candles and broker flow before plan",
         ),
     ] = True,
     force_refresh: Annotated[
@@ -214,25 +224,25 @@ def swing(
     ] = None,
 ) -> None:
     """
-    Unified composite swing trade analysis for a single stock.
+    Trade structure for a chosen swing candidate (ADR-054).
 
-    Core verdict: SignalEngine + RiskEngine -> TradeSetup, with signal, risk,
-    and market-context engine detail panels always included.
-    Strategy, setup, sentiment, and flow panels remain opt-in evidence.
+    Product job: design horizon / stop / target / lots for a name you already
+    judged. Deep judgment (Action, Why, pattern match) is
+    ``saham screen accum TICKER`` — do not use plan as a second screener.
 
-    Replaces the multi-command morning workflow:
-      saham screen accum, saham analyze risk, saham indicator compute,
-      saham trade backtest-swing, saham analyze sentiment — all in one.
+    Still composes SignalEngine + RiskEngine -> TradeSetup (shared judgment path
+    during migration). Core engine panels remain for context; strategy,
+    sentiment, and flow detail stay opt-in evidence and do not override action.
 
-    Examples:
-        saham plan swing BBRI
+    Structure-first examples:
+        saham plan swing BBRI --capital 10000000
         saham plan swing BBRI --setup foreign-bounce --capital 10000000
-        saham plan swing BBRI --capital 10000000 --risk-pct 1
-        saham plan swing BBRI --strategy foreign-accumulation
-        saham plan swing BBRI --with-flow-detail
-        saham plan swing BBRI --full
-        saham plan swing BBRI --force-refresh
-        saham plan swing BBRI --capital 10000000 --entry 4825 --rr 2.5
+        saham plan swing BBRI --capital 10000000 --risk-pct 1 --entry 4825 --rr 2.5
+        saham plan swing BBRI --setup foreign-bounce --capital 10000000 --with-market-context
+
+    Judgment first (recommended):
+        saham screen accum BBRI
+        saham plan swing BBRI --capital 10000000
     """
     app_cfg = load_app_config()
     resolved_db = db_path or Path(app_cfg.storage.db_path)
@@ -388,3 +398,31 @@ def swing(
         capital=capital,
     )
     print_swing_output(ctx)
+    _echo_structure_desk_footer(
+        ticker=ticker_upper,
+        capital=capital,
+        setup_name=setup_name,
+        output_format=output_format or "table",
+    )
+
+
+def _echo_structure_desk_footer(
+    *,
+    ticker: str,
+    capital: int | None,
+    setup_name: str | None,
+    output_format: str,
+) -> None:
+    """ADR-054 S2: plan is structure desk; point judgment back to screen."""
+    if output_format == "json":
+        return
+    typer.echo("")
+    typer.echo("Structure desk (ADR-054): horizon / SL / TP / lots — not a second analysis desk.")
+    typer.echo(f"  Judgment case file:  saham screen accum {ticker}")
+    if capital is None:
+        typer.echo(
+            f"  Structure sizing:    saham plan swing {ticker} --capital <IDR>"
+            + (f" --setup {setup_name}" if setup_name else "")
+        )
+    else:
+        typer.echo(f"  Paper notebook:      saham trade accum log --ticker {ticker} …")

@@ -13,7 +13,7 @@ Verb dictionary (ADR-050): first token is the behavior contract.
 |--------|------|---------------------|---------------------|
 | **`screen`** | Live multi-candidate discovery | **No** | provisional only |
 | **`inspect`** | Live single-subject capability/evidence lens | **No** | **No** |
-| **`plan`** | Live TradeSetup / trade plan (`plan swing`) | **No** | **Yes** |
+| **`plan`** | Trade structure for a chosen candidate (`plan swing`; ADR-054) | **No** | **Yes** |
 | **`assess`** | Frozen-plan confirmation (`assess pre-open`) | **No** | relative to frozen plan |
 | **`research`** | Learning corpus (capture/labels/evaluate/…) | **Yes** | no |
 | **`backtest`** | Offline historical performance sim | **No** | no live action |
@@ -724,27 +724,33 @@ saham inspect regime --as-of 2026-06-01 --verbose
 
 ## saham plan swing
 
-Unified swing analysis — verdict-first with SignalEngine + RiskEngine, optional setup gates, market context, and position sizing.
+**Trade structure desk (ADR-054).** Design horizon / stop / target / lots for a
+candidate you already judged with `saham screen accum TICKER`. Not a second
+analysis screener.
 
-Default output always includes core engine detail panels (signal factors, risk gates/indicators, and market-context factors). Flow, sentiment, strategy, and setup remain opt-in.
+Still composes SignalEngine + RiskEngine → TradeSetup (migration path). Core
+engine panels remain for context; flow, sentiment, strategy stay opt-in and do
+not override action. Prefer structure flags (`--capital`, `--setup`, `--entry`,
+`--rr`).
 
 ```
+saham screen accum BBRI                         # judgment first
 saham plan swing TICKER [OPTIONS]
-saham plan swing BBRI
-saham plan swing BBRI --setup foreign-bounce --capital 10000000 --full
+saham plan swing BBRI --capital 10000000
+saham plan swing BBRI --setup foreign-bounce --capital 10000000
 ```
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
-| `--strategy` | `-S` | none | Optional backtest strategy name |
-| `--setup` | | none | Setup lens: foreign-bounce, coiled-spring, smart-money-confirmed, pullback-continuation |
+| `--strategy` | `-S` | none | Optional backtest strategy evidence (not action) |
+| `--setup` | | none | Named setup for structure gates/targets |
 | `--window` | `-w` | 7 | Accumulation window in broker sessions |
 | `--flow-window` | | 30 | Broker-flow detail window |
-| `--capital` | `-c` | — | Capital in IDR (enables sizing) |
+| `--capital` | `-c` | — | Capital in IDR (enables structure sizing) |
 | `--risk-pct` | | 1.0 | % of capital at risk per trade |
-| `--entry` | | — | Entry price override |
+| `--entry` | | — | Structure entry price override |
 | `--atr-mult` | | 1.5 | ATR multiplier for stop |
-| `--rr` | | 2.0 | Reward:risk ratio |
+| `--rr` | | 2.0 | Reward:risk ratio for target |
 | `--with-sentiment` | | false | Include news sentiment evidence |
 | `--with-flow-detail` | | false | Include broker flow attribution |
 | `--with-market-context` | | false | Build MCE and condition signal/setup with market regime |

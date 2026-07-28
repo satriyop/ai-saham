@@ -18,8 +18,9 @@ from src.adapters.cli.plan_swing_commands import swing as _swing_fn
 plan_app = typer.Typer(
     name="plan",
     help=(
-        "Live trade plan composition. "
-        "`plan swing` produces authoritative TradeSetup (action + plan fields). "
+        "Trade structure for a chosen candidate (ADR-054). "
+        "`plan swing` designs horizon/SL/TP/lots and still shows TradeSetup; "
+        "deep judgment is `saham screen accum TICKER` (not a second screener). "
         "Evidence lenses: `saham inspect risk|regime|signal accum|sentiment`. "
         "Paper: `saham trade accum log`. Not a research write (`research`). "
         "Frozen pre-open: `saham assess pre-open` (not this command)."
