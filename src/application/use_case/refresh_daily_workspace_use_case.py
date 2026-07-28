@@ -29,6 +29,7 @@ class RefreshDailyWorkspaceRequest:
     include_meta: bool = True
     include_enrichment: bool = True
     include_calendar: bool = True
+    include_macro_calendar: bool = True
     briefing_top: int = 3
 
 
@@ -50,6 +51,7 @@ class DailyWorkspaceRefreshPlan:
     include_meta: bool
     include_enrichment: bool
     include_calendar: bool
+    include_macro_calendar: bool
     local_write_disclosure: str
     warnings: tuple[str, ...] = ()
 
@@ -84,6 +86,7 @@ class PreviewDailyWorkspaceRefreshUseCase:
             include_meta=request.include_meta,
             include_enrichment=request.include_enrichment,
             include_calendar=request.include_calendar,
+            include_macro_calendar=request.include_macro_calendar,
             local_write_disclosure=(
                 "This operation fetches provider data and updateslocal cache storage."
             ),

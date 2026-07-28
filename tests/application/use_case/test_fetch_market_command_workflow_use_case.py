@@ -70,6 +70,7 @@ def test_no_tickers_raises_value_error(
         non_idx_tickers_loader=lambda: frozenset(),
         market_status_loader=lambda: FetchMarketStatusHeader("Open", True),
         calendar_refresh=lambda *_: "cached",
+        macro_calendar_refresh=lambda *_: "cached",
         context_refresh=lambda *_: RefreshMarketContextInputsResponse(statuses=()),
         market_freshness=mock_market_freshness,
         ticker_resolver=mock_resolver,
@@ -112,6 +113,7 @@ def test_provider_precondition_runs_before_refresh_and_fails(
         non_idx_tickers_loader=lambda: frozenset(),
         market_status_loader=lambda: FetchMarketStatusHeader("Open", True),
         calendar_refresh=lambda *_: "cached",
+        macro_calendar_refresh=lambda *_: "cached",
         context_refresh=lambda *_: RefreshMarketContextInputsResponse(statuses=()),
         market_freshness=mock_market_freshness,
         ticker_resolver=mock_resolver,
@@ -164,6 +166,7 @@ def test_broker_only_skips_precondition_and_context_refresh(
         non_idx_tickers_loader=lambda: frozenset(),
         market_status_loader=lambda: FetchMarketStatusHeader("Open", True),
         calendar_refresh=lambda *_: "cached",
+        macro_calendar_refresh=lambda *_: "cached",
         context_refresh=context_refresh,
         market_freshness=mock_market_freshness,
         ticker_resolver=mock_resolver,
@@ -220,6 +223,7 @@ def test_calendar_skip_priority_and_call_count(
         non_idx_tickers_loader=lambda: frozenset(),
         market_status_loader=lambda: FetchMarketStatusHeader("Open", True),
         calendar_refresh=calendar_refresh,
+        macro_calendar_refresh=lambda *_: "cached",
         context_refresh=lambda *_: RefreshMarketContextInputsResponse(statuses=()),
         market_freshness=mock_market_freshness,
         ticker_resolver=mock_resolver,
@@ -309,6 +313,94 @@ def test_calendar_skip_priority_and_call_count(
     calendar_refresh.assert_called_once_with(Path("dummy.db"), fake_broker.api_client, True)
 
 
+def test_macro_calendar_skip_and_call(
+    mock_refresh_use_case,
+    mock_provider_precondition,
+    mock_market_freshness,
+    mock_session_resolver,
+):
+    mock_resolver = Mock(return_value=["BBCA"])
+    mock_refresh_use_case.execute.return_value = FetchMarketRefreshResponse(
+        ticker_list=["IHSG", "BBCA"],
+        stock_tickers_only=["BBCA"],
+        ticker_results=[],
+        ok_count=1,
+        fail_count=0,
+    )
+    macro_refresh = Mock(return_value="stockbit bi_rate=1")
+
+    def _make_uc():
+        return FetchMarketCommandWorkflowUseCase(
+            refresh_use_case=mock_refresh_use_case,
+            provider_precondition=mock_provider_precondition,
+            non_idx_tickers_loader=lambda: frozenset(),
+            market_status_loader=lambda: FetchMarketStatusHeader("Open", True),
+            calendar_refresh=lambda *_: "cached",
+            macro_calendar_refresh=macro_refresh,
+            context_refresh=lambda *_: RefreshMarketContextInputsResponse(statuses=()),
+            market_freshness=mock_market_freshness,
+            ticker_resolver=mock_resolver,
+            session_resolver=mock_session_resolver,
+        )
+
+    base = dict(
+        tickers=["BBCA"],
+        universe=None,
+        days=30,
+        db_path=Path("dummy.db"),
+        candles_provider="yahoo",
+        candles_only=False,
+        broker_only=False,
+        no_meta=False,
+        no_enrichment=False,
+        no_calendar=False,
+    )
+
+    # Flag skip
+    res_skip = _make_uc().execute(
+        FetchMarketCommandWorkflowRequest(
+            **base,
+            broker_provider=Mock(),
+            broker_provider_name="stockbit",
+            refresh=False,
+            no_macro_calendar=True,
+        )
+    )
+    assert res_skip.macro_calendar_status == "skip:--no-macro-calendar"
+    macro_refresh.assert_not_called()
+
+    # Independent of no_enrichment: still runs
+    fake_broker = Mock()
+    fake_broker.api_client = object()
+    enrich_kwargs = {**base, "no_enrichment": True}
+    res_enrich = _make_uc().execute(
+        FetchMarketCommandWorkflowRequest(
+            **enrich_kwargs,
+            broker_provider=fake_broker,
+            broker_provider_name="stockbit",
+            refresh=False,
+            no_macro_calendar=False,
+        )
+    )
+    assert res_enrich.macro_calendar_status == "stockbit bi_rate=1"
+    assert res_enrich.calendar_status == "skip:--no-enrichment"
+    macro_refresh.assert_called_once_with(Path("dummy.db"), fake_broker.api_client, False)
+
+    # Non-stockbit skips
+    macro_refresh.reset_mock()
+    res_idx = _make_uc().execute(
+        FetchMarketCommandWorkflowRequest(
+            **base,
+            broker_provider=Mock(),
+            broker_provider_name="idx",
+            refresh=False,
+            no_macro_calendar=False,
+        )
+    )
+    assert res_idx.macro_calendar_status == "skip:no-stockbit"
+    macro_refresh.assert_not_called()
+
+
 def test_context_refresh_runs_only_when_not_broker_only(
     mock_refresh_use_case,
     mock_provider_precondition,
@@ -334,6 +426,7 @@ def test_context_refresh_runs_only_when_not_broker_only(
         non_idx_tickers_loader=lambda: frozenset(),
         market_status_loader=lambda: FetchMarketStatusHeader("Open", True),
         calendar_refresh=lambda *_: "cached",
+        macro_calendar_refresh=lambda *_: "cached",
         context_refresh=context_refresh,
         market_freshness=mock_market_freshness,
         ticker_resolver=mock_resolver,
@@ -383,6 +476,7 @@ def test_expected_trading_day_comes_from_freshness_service(
         non_idx_tickers_loader=lambda: frozenset(),
         market_status_loader=lambda: FetchMarketStatusHeader("Open", True),
         calendar_refresh=lambda *_: "cached",
+        macro_calendar_refresh=lambda *_: "cached",
         context_refresh=lambda *_: RefreshMarketContextInputsResponse(statuses=()),
         market_freshness=mock_market_freshness,
         ticker_resolver=mock_resolver,
@@ -438,6 +532,7 @@ def test_same_resolved_session_is_reused_for_refresh_and_expected_trading_day(
         non_idx_tickers_loader=lambda: frozenset(),
         market_status_loader=lambda: FetchMarketStatusHeader("Open", True),
         calendar_refresh=lambda *_: "cached",
+        macro_calendar_refresh=lambda *_: "cached",
         context_refresh=lambda *_: RefreshMarketContextInputsResponse(statuses=()),
         market_freshness=mock_market_freshness,
         ticker_resolver=mock_resolver,
@@ -497,6 +592,7 @@ def test_market_status_loader_called_once(
         non_idx_tickers_loader=lambda: frozenset(),
         market_status_loader=status_loader,
         calendar_refresh=lambda *_: "cached",
+        macro_calendar_refresh=lambda *_: "cached",
         context_refresh=lambda *_: RefreshMarketContextInputsResponse(statuses=()),
         market_freshness=mock_market_freshness,
         ticker_resolver=mock_resolver,
@@ -564,6 +660,7 @@ def test_per_ticker_callback_and_on_start_received(
         non_idx_tickers_loader=lambda: frozenset(),
         market_status_loader=lambda: FetchMarketStatusHeader("Open", True),
         calendar_refresh=lambda *_: "cached",
+        macro_calendar_refresh=lambda *_: "cached",
         context_refresh=lambda *_: RefreshMarketContextInputsResponse(statuses=()),
         market_freshness=mock_market_freshness,
         ticker_resolver=mock_resolver,
@@ -621,6 +718,7 @@ def test_inner_refresh_receives_universe_none(
         non_idx_tickers_loader=lambda: frozenset(),
         market_status_loader=lambda: FetchMarketStatusHeader("Open", True),
         calendar_refresh=lambda *_: "cached",
+        macro_calendar_refresh=lambda *_: "cached",
         context_refresh=lambda *_: RefreshMarketContextInputsResponse(statuses=()),
         market_freshness=mock_market_freshness,
         ticker_resolver=mock_resolver,

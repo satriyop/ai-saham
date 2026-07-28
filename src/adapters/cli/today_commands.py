@@ -461,6 +461,7 @@ def _build_refresh_workspace_use_case(*, use_case: DailyBriefingUseCase, db_path
             no_meta=not req.include_meta,
             no_enrichment=not req.include_enrichment,
             no_calendar=not req.include_calendar,
+            no_macro_calendar=not req.include_macro_calendar,
         )
         return workflow.execute(
             workflow_request,

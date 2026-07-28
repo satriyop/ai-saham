@@ -102,6 +102,13 @@ def fetch_market(
         bool,
         typer.Option("--no-calendar", help="Skip market-wide corporate action calendar sync"),
     ] = False,
+    no_macro_calendar: Annotated[
+        bool,
+        typer.Option(
+            "--no-macro-calendar",
+            help="Skip market-wide macro economic calendar sync (BI rate, CPI, etc.)",
+        ),
+    ] = False,
     db_path: Annotated[
         Optional[Path],
         typer.Option("--db", help="SQLite database path"),
@@ -229,6 +236,7 @@ def fetch_market(
             no_meta=no_meta,
             no_enrichment=no_enrichment,
             no_calendar=no_calendar,
+            no_macro_calendar=no_macro_calendar,
         )
         result = workflow_use_case.execute(
             req,
@@ -298,6 +306,7 @@ def fetch_market(
     )
 
     typer.echo(f"Calendar: {result.calendar_status}")
+    typer.echo(f"Macro calendar: {result.macro_calendar_status}")
 
     if response.pit_coverage:
         render_enrichment_pit_coverage(response.pit_coverage)

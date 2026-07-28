@@ -47,6 +47,7 @@ class FetchMarketCommandWorkflowRequest:
     no_meta: bool
     no_enrichment: bool
     no_calendar: bool
+    no_macro_calendar: bool = False
 
 
 @dataclass(frozen=True)
@@ -74,6 +75,7 @@ class FetchMarketCommandWorkflowResult:
     response: FetchMarketRefreshResponse
     header: FetchMarketStatusHeader | None
     calendar_status: str
+    macro_calendar_status: str
     expected_trading_day: date
     context_statuses: tuple[str, ...]
 
@@ -91,6 +93,7 @@ class FetchMarketCommandWorkflowUseCase:
         non_idx_tickers_loader: Callable[[], frozenset[str]],
         market_status_loader: Callable[[], FetchMarketStatusHeader | None],
         calendar_refresh: Callable[[Path, Any, bool], str],
+        macro_calendar_refresh: Callable[[Path, Any, bool], str],
         context_refresh: Callable[[Path, int], RefreshMarketContextInputsResponse],
         market_freshness: MarketFreshnessService,
         ticker_resolver: Callable[[str | None, list[str], Path], list[str]],
@@ -101,6 +104,7 @@ class FetchMarketCommandWorkflowUseCase:
         self._non_idx_tickers_loader = non_idx_tickers_loader
         self._market_status_loader = market_status_loader
         self._calendar_refresh = calendar_refresh
+        self._macro_calendar_refresh = macro_calendar_refresh
         self._context_refresh = context_refresh
         self._market_freshness = market_freshness
         self._ticker_resolver = ticker_resolver
@@ -198,7 +202,7 @@ class FetchMarketCommandWorkflowUseCase:
             on_ticker_complete=on_ticker_complete,
         )
 
-        # 7. Run calendar refresh
+        # 7. Run corporate-action calendar refresh
         if request.no_calendar:
             calendar_status = "skip:--no-calendar"
         elif request.no_enrichment:
@@ -207,6 +211,18 @@ class FetchMarketCommandWorkflowUseCase:
             calendar_status = "skip:no-stockbit"
         else:
             calendar_status = self._calendar_refresh(
+                request.db_path,
+                request.broker_provider.api_client,
+                request.refresh,
+            )
+
+        # 7b. Run macro calendar refresh (independent of --no-enrichment / CA flags)
+        if request.no_macro_calendar:
+            macro_calendar_status = "skip:--no-macro-calendar"
+        elif request.broker_provider_name != "stockbit":
+            macro_calendar_status = "skip:no-stockbit"
+        else:
+            macro_calendar_status = self._macro_calendar_refresh(
                 request.db_path,
                 request.broker_provider.api_client,
                 request.refresh,
@@ -228,6 +244,7 @@ class FetchMarketCommandWorkflowUseCase:
             response=response,
             header=header,
             calendar_status=calendar_status,
+            macro_calendar_status=macro_calendar_status,
             expected_trading_day=expected_trading_day,
             context_statuses=context_statuses,
         )

@@ -33,10 +33,12 @@ separate from continuous yield series (SBN / INDONIA).
   history without conflating corp-action risk.
 - Continuous rates remain a different future command (`fetch rates` or similar).
 - `saham fetch calendar` stays corp-actions only.
-- Optional later: include in `fetch market`, view/browse CLI, TUI panel.
+- Included in `saham fetch market` by default (Stockbit session required);
+  opt out with `--no-macro-calendar`. Independent of `--no-enrichment` /
+  `--no-calendar`.
+- Optional later: view/browse CLI, TUI panel.
 
 ## Non-goals (this ADR)
 
 - Continuous SBN / INDONIA series
 - CA risk wiring
-- Auto-sync inside `saham fetch market` (explicit follow-up)

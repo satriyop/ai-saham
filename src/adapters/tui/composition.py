@@ -328,6 +328,7 @@ def _build_fetch_runner(db_path: Path) -> Callable[[], Any]:
             no_meta=False,
             no_enrichment=False,
             no_calendar=False,
+            no_macro_calendar=False,
         )
         return workflow.execute(req)
 

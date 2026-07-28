@@ -25,6 +25,9 @@ from src.application.use_case.fetch_market_command_workflow_use_case import (
 from src.application.use_case.fetch_market_refresh_use_case import (
     FetchMarketRefreshUseCase,
 )
+from src.infrastructure.composition.fetch_market import (
+    fetch_market_macro_calendar_refresh as _macro_cal_mod,
+)
 from src.infrastructure.composition.fetch_market.fetch_market_broker_refresh import fetch_broker
 from src.infrastructure.composition.fetch_market.fetch_market_candle_refresh import fetch_candles
 from src.infrastructure.composition.fetch_market.fetch_market_enrichment_refresh import (
@@ -90,6 +93,13 @@ def create_workflow_use_case(
             refresh=refresh,
         )
 
+    def macro_calendar_refresh_wrapper(resolved_db: Path, api_client: Any, refresh: bool) -> str:
+        return _macro_cal_mod.refresh_market_macro_calendar(
+            db_path=resolved_db,
+            api_client=api_client,
+            refresh=refresh,
+        )
+
     def context_refresh_wrapper(resolved_db: Path, days: int):
         return _context_mod.refresh_market_context_inputs(resolved_db, days=days)
 
@@ -111,6 +121,7 @@ def create_workflow_use_case(
         non_idx_tickers_loader=non_idx_tickers_loader,
         market_status_loader=market_status_loader,
         calendar_refresh=calendar_refresh_wrapper,
+        macro_calendar_refresh=macro_calendar_refresh_wrapper,
         context_refresh=context_refresh_wrapper,
         market_freshness=market_freshness,
         ticker_resolver=ticker_resolver,
