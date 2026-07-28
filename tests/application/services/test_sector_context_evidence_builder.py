@@ -379,3 +379,14 @@ class TestSectorContextEvidenceBuilderIndex:
         )
         assert builder.sector_group_for_ticker("BBCA") == "bank"
         assert builder.sector_group_for_ticker("TLKM") is None
+
+    def test_sector_groups_for_ticker_multi_membership(self):
+        builder = SectorContextEvidenceBuilder(
+            config=_default_config(),
+            sector_universe_index={
+                "consumer_goods": ("AALI", "INDF"),
+                "plantation": ("AALI", "LSIP"),
+            },
+        )
+        assert builder.sector_groups_for_ticker("AALI") == ("consumer_goods", "plantation")
+        assert builder.sector_group_for_ticker("AALI") == "consumer_goods"

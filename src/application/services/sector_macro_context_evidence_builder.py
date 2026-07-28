@@ -189,6 +189,21 @@ class SectorMacroContextEvidenceBuilder:
     def config(self) -> SectorMacroContextConfig:
         return self._config
 
+    def resolve_sector_group(self, memberships: tuple[str, ...] | list[str]) -> str | None:
+        """Pick sector group for macro routing when a ticker has multi-membership.
+
+        Prefer a membership that has a live ``sector_maps`` entry (config key
+        order). Falls back to the first membership so unavailable reasons stay
+        informative (e.g. sector_map:missing:consumer_goods).
+        """
+        if not memberships:
+            return None
+        member_set = set(memberships)
+        for group in self._config.sector_maps:
+            if group in member_set:
+                return group
+        return memberships[0]
+
     def build(self, request: SectorMacroContextRequest) -> SectorMacroContextEvidence:
         try:
             return self._build(request)

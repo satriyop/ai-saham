@@ -372,7 +372,9 @@ class AccumulationCandidateEvidenceBuilder:
         try:
             smc_builder = self._sector_macro_context_builder_factory()
             sc_builder = self._sector_context_builder_factory()
-            sector_group = sc_builder.sector_group_for_ticker(candidate.ticker)
+            sector_group = smc_builder.resolve_sector_group(
+                sc_builder.sector_groups_for_ticker(candidate.ticker)
+            )
             series_tickers = smc_builder.config.series_for_group(sector_group)
             inputs = self._data_loader.load_sector_macro_context_inputs(
                 series_tickers=series_tickers,

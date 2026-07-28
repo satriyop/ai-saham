@@ -153,6 +153,50 @@ class TestPiecewiseScore:
         assert mid == pytest.approx(0.5)
 
 
+class TestResolveSectorGroup:
+    def test_prefers_mapped_membership_over_broad_bag(self):
+        raw = {
+            "sector_macro_context": {
+                "factor_library": {
+                    "oil_proxy": {
+                        "series": "CL=F",
+                        "thresholds": {"supportive_min": 0.05, "headwind_max": -0.05},
+                    },
+                    "cpo": {
+                        "series": "CPO=F",
+                        "thresholds": {"supportive_min": 0.05, "headwind_max": -0.05},
+                    },
+                    "usd_idr": {
+                        "series": "IDR=X",
+                        "thresholds": {"supportive_min": 0.01, "headwind_max": -0.01},
+                    },
+                },
+                "sector_maps": {
+                    "energy": {
+                        "factors": [
+                            {"ref": "oil_proxy", "weight": 0.65},
+                            {"ref": "usd_idr", "weight": 0.35},
+                        ]
+                    },
+                    "plantation": {
+                        "factors": [
+                            {"ref": "cpo", "weight": 0.70},
+                            {"ref": "usd_idr", "weight": 0.30},
+                        ]
+                    },
+                },
+            }
+        }
+        builder = SectorMacroContextEvidenceBuilder(SectorMacroContextConfig.from_mapping(raw))
+        # consumer_goods first in membership (YAML order style), plantation second
+        assert (
+            builder.resolve_sector_group(("consumer_goods", "noncyc", "plantation")) == "plantation"
+        )
+        assert builder.resolve_sector_group(("energy",)) == "energy"
+        assert builder.resolve_sector_group(("bank",)) == "bank"  # fallback first
+        assert builder.resolve_sector_group(()) is None
+
+
 class TestBuilder:
     def test_supportive_energy(self):
         # coal +10% and weaker rupiah (+2% IDR=X) both supportive for energy (invert=false).

@@ -1611,3 +1611,35 @@ transportation:
   - TRJA
   - WEHA
   updated: '2026-07-06'
+
+# Dedicated palm/plantation cohort for sector-macro routing (ADR-053).
+# Members may also appear in consumer_goods/noncyc; macro resolution prefers
+# groups that have a live sector_maps entry (see SectorMacroContextEvidenceBuilder.resolve_sector_group).
+plantation:
+  tickers:
+  - AALI
+  - AGAR
+  - ANDI
+  - ANJT
+  - ASHA
+  - BWPT
+  - CSRA
+  - DSNG
+  - FAPA
+  - GZCO
+  - JAWA
+  - LSIP
+  - MAGP
+  - MGRO
+  - PGUN
+  - PSGO
+  - SGRO
+  - SIMP
+  - SMAR
+  - SSMS
+  - STAA
+  - TAPG
+  - TBLA
+  - TLDN
+  - UNSP
+  updated: '2026-07-28'

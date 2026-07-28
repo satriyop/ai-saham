@@ -104,12 +104,20 @@ class SectorContextEvidenceBuilder:
     # --------------------------------------------------------- public helpers
 
     def sector_group_for_ticker(self, ticker: str) -> str | None:
-        """Return the universe group name that contains this ticker, or None."""
+        """Return the first universe group that contains this ticker, or None.
+
+        For multi-membership tickers, order follows universes.yaml key order.
+        Sector-macro routing should use ``sector_groups_for_ticker`` +
+        ``SectorMacroContextEvidenceBuilder.resolve_sector_group`` so live
+        macro maps (e.g. plantation) win over broad bags (consumer_goods).
+        """
+        groups = self.sector_groups_for_ticker(ticker)
+        return groups[0] if groups else None
+
+    def sector_groups_for_ticker(self, ticker: str) -> tuple[str, ...]:
+        """Return all universe groups containing this ticker (YAML key order)."""
         upper = ticker.upper()
-        for group, tickers in self._sector_index.items():
-            if upper in tickers:
-                return group
-        return None
+        return tuple(g for g, tickers in self._sector_index.items() if upper in tickers)
 
     def peers_for_ticker(self, ticker: str) -> tuple[str, ...]:
         """Return same-sector peer tickers (excluding the ticker itself), capped."""

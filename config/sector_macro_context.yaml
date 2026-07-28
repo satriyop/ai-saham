@@ -47,7 +47,7 @@ sector_macro_context:
         supportive_min: 0.01
         headwind_max: -0.01
 
-    # Library-only for a future CPO-heavy map — Yahoo symbol CPO=F (not KO=F).
+    # Palm oil futures — Yahoo-live (CPO=F). Not KO=F (dead).
     cpo:
       series: "CPO=F"
       kind: return_sessions
@@ -57,9 +57,14 @@ sector_macro_context:
         headwind_max: -0.05
 
   # Primary keys = universes.yaml group names (same as L2a sector context).
-  # v1 live map: energy only. Do not add thin single-factor maps.
+  # Live maps only for groups with ≥2 real drivers. Prefer dedicated cohorts
+  # (energy, plantation) over broad bags (consumer_goods).
   sector_maps:
     energy:
       factors:
         - { ref: oil_proxy, weight: 0.65 }
         - { ref: usd_idr, weight: 0.35 }
+    plantation:
+      factors:
+        - { ref: cpo, weight: 0.70 }
+        - { ref: usd_idr, weight: 0.30 }
