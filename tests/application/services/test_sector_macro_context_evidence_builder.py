@@ -447,6 +447,51 @@ class TestResolveSectorGroup:
         assert builder.resolve_sector_group(("finance", "multifinance")) == "multifinance"
         assert builder.resolve_sector_group(("basic_materials", "packaging")) == "packaging"
 
+    def test_prefers_coal_and_oil_gas_over_energy(self):
+        """P1b: map key order must prefer coal/oil_gas before residual energy."""
+        raw = {
+            "sector_macro_context": {
+                "factor_library": {
+                    "coal_proxy": {
+                        "series": "COAL",
+                        "thresholds": {"supportive_min": 0.05, "headwind_max": -0.05},
+                    },
+                    "oil_proxy": {
+                        "series": "CL=F",
+                        "thresholds": {"supportive_min": 0.05, "headwind_max": -0.05},
+                    },
+                    "usd_idr": {
+                        "series": "IDR=X",
+                        "thresholds": {"supportive_min": 0.01, "headwind_max": -0.01},
+                    },
+                },
+                "sector_maps": {
+                    "coal": {
+                        "factors": [
+                            {"ref": "coal_proxy", "weight": 0.65},
+                            {"ref": "usd_idr", "weight": 0.35},
+                        ]
+                    },
+                    "oil_gas": {
+                        "factors": [
+                            {"ref": "oil_proxy", "weight": 0.65},
+                            {"ref": "usd_idr", "weight": 0.35},
+                        ]
+                    },
+                    "energy": {
+                        "factors": [
+                            {"ref": "oil_proxy", "weight": 0.65},
+                            {"ref": "usd_idr", "weight": 0.35},
+                        ]
+                    },
+                },
+            }
+        }
+        builder = SectorMacroContextEvidenceBuilder(SectorMacroContextConfig.from_mapping(raw))
+        assert builder.resolve_sector_group(("energy", "coal")) == "coal"
+        assert builder.resolve_sector_group(("energy", "oil_gas")) == "oil_gas"
+        assert builder.resolve_sector_group(("energy",)) == "energy"
+
     def test_oil_cost_rising_is_headwind_energy_proxy_still_supportive(self):
         """P1a: oil_cost invert=true (cost maps) vs oil_proxy invert=false (energy)."""
         oil_up = _make_candles("CL=F", [70.0] * 5 + [80.0])

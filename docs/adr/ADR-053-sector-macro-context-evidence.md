@@ -97,7 +97,8 @@ Builders must not hardcode sector→series routing. Adapters must not own policy
 | Dedicated groups | most maps use dedicated cohorts; `insurance`/`logistics`/`bank` reuse existing universe keys |
 | Poultry policy | Feed-cost stress (rising corn/soy = headwind); not chicken-price model (no free DOC series) |
 | Finance residual | `insurance` + `multifinance` (rates/FX risk) |
-| Oil sign split (P1a) | `oil_proxy` (↑ supportive) for energy; `oil_cost` (↑ headwind) for chemicals/logistics/packaging |
+| Oil sign split (P1a) | `oil_proxy` (↑ supportive) for energy/oil_gas; `oil_cost` (↑ headwind) for chemicals/logistics/packaging |
+| Energy purity (P1b) | `coal` (COAL ETF proxy + IDR) and `oil_gas` (CL=F + IDR) preferred over residual `energy` map; parent energy bag kept |
 | Bank policy | Defensive financial-conditions map (rising rates / weaker IDR = headwind), not NIM expansion |
 | Dead Yahoo symbols (do not map live) | `MTF=F` (Newcastle coal), `KO=F` (old CPO) — return no data as of 2026-07 smoke |
 | Thin multi-sector maps (e.g. banks → 100% USDIDR) | **Forbidden** |

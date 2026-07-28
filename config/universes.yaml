@@ -1821,3 +1821,89 @@ packaging:
   - TRST
   - YPAS
   updated: '2026-07-28'
+
+# Thermal coal / coal-related (ADR-053 P1b). Parent energy kept as peer bag + fallback map.
+coal:
+  tickers:
+  - AADI
+  - ADMR
+  - ADRO
+  - ARII
+  - BOSS
+  - BSSR
+  - BUMI
+  - BYAN
+  - COAL
+  - DEWA
+  - DOID
+  - DSSA
+  - FIRE
+  - GEMS
+  - GTBO
+  - GTSI
+  - HUMI
+  - ITMG
+  - KKGI
+  - MBAP
+  - MYOH
+  - PKPK
+  - PTBA
+  - SMMT
+  - TOBA
+  updated: '2026-07-28'
+
+# Oil / gas / energy services (ADR-053 P1b). Parent energy kept.
+oil_gas:
+  tickers:
+  - ABMM
+  - AIMS
+  - AKRA
+  - ALII
+  - APEX
+  - ATLA
+  - BBRM
+  - BESS
+  - BIPI
+  - BOAT
+  - BORN
+  - BSML
+  - BULL
+  - CANI
+  - CBRE
+  - CGAS
+  - CNKO
+  - CUAN
+  - DWGL
+  - ELSA
+  - ENRG
+  - HILL
+  - HITS
+  - IATA
+  - INDY
+  - INPS
+  - ITMA
+  - JSKY
+  - LEAD
+  - MAHA
+  - MBSS
+  - MCOL
+  - MEDC
+  - MKAP
+  - MTFN
+  - PGAS
+  - PSAT
+  - PSSI
+  - PTIS
+  - PTRO
+  - RAJA
+  - RATU
+  - RGAS
+  - RIGS
+  - RMKE
+  - RMKO
+  - RUIS
+  - SEMA
+  - SHIP
+  - SOCI
+  - TPMA
+  updated: '2026-07-28'

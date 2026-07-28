@@ -16,6 +16,8 @@ def test_create_builder_from_repo_config():
     builder = create_sector_macro_context_evidence_builder()
     assert isinstance(builder, SectorMacroContextEvidenceBuilder)
     cfg = builder.config
+    assert "coal" in cfg.sector_maps
+    assert "oil_gas" in cfg.sector_maps
     assert "energy" in cfg.sector_maps
     assert "plantation" in cfg.sector_maps
     assert "metals" in cfg.sector_maps
@@ -31,7 +33,7 @@ def test_create_builder_from_repo_config():
     assert "packaging" in cfg.sector_maps
     assert "bank" in cfg.sector_maps
     assert cfg.required_series_tickers() >= frozenset(
-        {"CL=F", "IDR=X", "CPO=F", "HG=F", "GC=F", "^TNX", "ZC=F", "ZS=F"}
+        {"CL=F", "IDR=X", "CPO=F", "HG=F", "GC=F", "^TNX", "ZC=F", "ZS=F", "COAL"}
     )
 
 
@@ -45,6 +47,7 @@ def test_required_series_from_repo_config():
     assert "^TNX" in series  # bank rates
     assert "ZC=F" in series  # poultry corn
     assert "ZS=F" in series  # poultry soy
+    assert "COAL" in series  # coal proxy ETF
 
 
 def test_load_rejects_non_diagnostic(tmp_path):

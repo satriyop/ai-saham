@@ -48,6 +48,17 @@ sector_macro_context:
         supportive_min: 0.05
         headwind_max: -0.05
 
+    # Thermal coal complex proxy — Yahoo has no live Newcastle futures (MTF=F dead).
+    # Global X Coal ETF (COAL) is an imperfect but live stand-in until a better series exists.
+    # invert=false: higher coal complex → supportive for thermal coal exporters/miners.
+    coal_proxy:
+      series: "COAL"
+      kind: return_sessions
+      invert: false
+      thresholds:
+        supportive_min: 0.05
+        headwind_max: -0.05
+
     usd_idr:
       series: "IDR=X"
       kind: return_sessions
@@ -127,6 +138,17 @@ sector_macro_context:
   # Live maps only for groups with ≥2 real drivers. Prefer dedicated cohorts
   # over broad bags (consumer_goods, basic_materials, finance-without-bank-key).
   sector_maps:
+    # P1b: specific energy cohorts BEFORE parent `energy` so multi-membership
+    # resolve prefers coal/oil_gas over the residual oil-led energy fallback.
+    coal:
+      factors:
+        - { ref: coal_proxy, weight: 0.65 }
+        - { ref: usd_idr, weight: 0.35 }
+    oil_gas:
+      factors:
+        - { ref: oil_proxy, weight: 0.65 }
+        - { ref: usd_idr, weight: 0.35 }
+    # Residual energy names not in coal/oil_gas — oil+IDR fallback (imperfect).
     energy:
       factors:
         - { ref: oil_proxy, weight: 0.65 }
