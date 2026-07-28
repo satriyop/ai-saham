@@ -95,7 +95,7 @@ Builders must not hardcode sector→series routing. Adapters must not own policy
 | Live sector maps | commodity/BM/consumer + `property_dev`/`telco`/`poultry` + `insurance`/`multifinance`/`packaging` + `bank`/`logistics` |
 | Live series | oil: `CL=F`; soft: `CPO=F`; metals: `HG=F`; gold: `GC=F`; feed: `ZC=F`+`ZS=F` (invert); rates-risk: `^TNX`+`IDR=X` (invert) |
 | Dedicated groups | most maps use dedicated cohorts; `insurance`/`logistics`/`bank` reuse existing universe keys |
-| Poultry policy | Feed-cost stress (rising corn/soy = headwind); not chicken-price model (no free DOC series) |
+| Poultry policy | Feed-cost stress (corn+soy invert) + import FX (`usd_idr_risk`); not chicken-price model (P1c) |
 | Finance residual | `insurance` + `multifinance` (rates/FX risk) |
 | Oil sign split (P1a) | `oil_proxy` (↑ supportive) for energy/oil_gas; `oil_cost` (↑ headwind) for chemicals/logistics/packaging |
 | Energy purity (P1b) | `coal` (COAL ETF proxy + IDR) and `oil_gas` (CL=F + IDR) preferred over residual `energy` map; parent energy bag kept |

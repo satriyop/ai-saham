@@ -186,11 +186,12 @@ sector_macro_context:
       factors:
         - { ref: oil_cost, weight: 0.60 }
         - { ref: usd_idr_risk, weight: 0.40 }
-    # Poultry / feed: corn+soy cost stress (not chicken-price model; no free DOC series).
+    # Poultry / feed: grain cost + import FX (P1c). Still not a chicken-price model.
     poultry:
       factors:
-        - { ref: corn, weight: 0.55 }
-        - { ref: soy, weight: 0.45 }
+        - { ref: corn, weight: 0.40 }
+        - { ref: soy, weight: 0.35 }
+        - { ref: usd_idr_risk, weight: 0.25 }
     # Telco / towers: rates + FX risk (domestic funding & risk appetite).
     telco:
       factors:

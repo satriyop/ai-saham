@@ -574,7 +574,8 @@ class TestResolveSectorGroup:
         )
         assert energy_ev.macro_regime == "SUPPORTIVE"
 
-    def test_poultry_rising_feed_is_headwind(self):
+    def test_poultry_rising_feed_and_idr_is_headwind(self):
+        """P1c: corn+soy+IDR risk all invert so cost/FX up = headwind."""
         raw = {
             "sector_macro_context": {
                 "lookback_sessions": 10,
@@ -591,12 +592,18 @@ class TestResolveSectorGroup:
                         "invert": True,
                         "thresholds": {"supportive_min": 0.03, "headwind_max": -0.03},
                     },
+                    "usd_idr_risk": {
+                        "series": "IDR=X",
+                        "invert": True,
+                        "thresholds": {"supportive_min": 0.01, "headwind_max": -0.01},
+                    },
                 },
                 "sector_maps": {
                     "poultry": {
                         "factors": [
-                            {"ref": "corn", "weight": 0.55},
-                            {"ref": "soy", "weight": 0.45},
+                            {"ref": "corn", "weight": 0.40},
+                            {"ref": "soy", "weight": 0.35},
+                            {"ref": "usd_idr_risk", "weight": 0.25},
                         ]
                     }
                 },
@@ -605,15 +612,17 @@ class TestResolveSectorGroup:
         builder = SectorMacroContextEvidenceBuilder(SectorMacroContextConfig.from_mapping(raw))
         corn_up = _make_candles("ZC=F", [400.0] * 5 + [440.0])  # +10%
         soy_up = _make_candles("ZS=F", [1000.0] * 5 + [1100.0])  # +10%
+        idr_up = _make_candles("IDR=X", [16000.0] * 5 + [16320.0])  # +2%
         ev = builder.build(
             SectorMacroContextRequest(
                 ticker="CPIN",
                 snapshot_date=date(2026, 5, 20),
                 sector_group="poultry",
-                series_candles={"ZC=F": corn_up, "ZS=F": soy_up},
+                series_candles={"ZC=F": corn_up, "ZS=F": soy_up, "IDR=X": idr_up},
             )
         )
         assert ev.macro_regime == "HEADWIND"
+        assert len(ev.factors) == 3
         assert all(f.score is not None and f.score <= 0.35 for f in ev.factors)
 
 
