@@ -56,14 +56,26 @@ def test_mount_with_loader_auto_starts_accum():
             ticker="BBRI",
             accum_score=80.0,
             rsi=50.0,
-            volume_ratio=1.2,
-            setup_phase=None,
-            trade_setup=None,
-            risk_assessment=None,
+            consecutive_streak=3,
+            net_buy_ratio=0.75,
+            vwap_discount_pct=2.0,
+            current_price=5000,
+            setup_phase=SimpleNamespace(current_phase=SimpleNamespace(value="ACCUMULATION")),
+            trade_setup=SimpleNamespace(
+                action=SimpleNamespace(value="WATCH", short="WATCH"),
+                rationale="test",
+            ),
+            signal_assessment=SimpleNamespace(
+                assessment=SimpleNamespace(score=72, strength=SimpleNamespace(value="STRONG"))
+            ),
+            risk_assessment=SimpleNamespace(gate_triggered=None, rationale=()),
             name="BBRI",
         )
         projection = SimpleNamespace(
-            candidates=[cand], window_days=7, data_as_of={"latest_candle_date": "2026-07-25"}
+            candidates=[cand],
+            window_days=7,
+            data_as_of={"latest_candle_date": "2026-07-25"},
+            applied_filters=SimpleNamespace(sort_by="signal", top=20),
         )
         result = SimpleNamespace(single_projection=projection, multi_projection=None, warnings=())
         loader = lambda: result  # noqa: E731

@@ -333,6 +333,8 @@ class CockpitApp(App[None]):
         self._refresh_focus_only()
         if self._stage == "preopen":
             self._update_preopen_evidence()
+        elif self._stage == "accum":
+            self._update_accum_evidence()
 
     def _refresh_focus_only(self) -> None:
         self.query_one("#status", Static).update(self._status_text())
@@ -525,6 +527,7 @@ class CockpitApp(App[None]):
         self._stage = "accum"
         self._focus_ticker = self._rows[0].ticker
         self._render_board_table()
+        self._update_accum_evidence()
         self._refresh_chrome()
         table = self.query_one("#board-table", DataTable)
         table.focus()
@@ -575,15 +578,33 @@ class CockpitApp(App[None]):
                     row.risk,
                 )
         else:
-            table.add_columns("Ticker", "Score", "RSI", "Vol×", "Setup", "Status")
+            # Option B desk board — ADR-043 Signal/Accum vocabulary
+            table.add_columns(
+                "Ticker",
+                "Signal",
+                "Accum",
+                "Action",
+                "Phase",
+                "Streak",
+                "RSI",
+                "Net%",
+                "Disc%",
+                "Price",
+                "Gate",
+            )
             for row in self._rows:
                 table.add_row(
                     row.ticker,
-                    row.score,
-                    row.rsi,
-                    row.vol,
-                    row.setup,
-                    row.status,
+                    getattr(row, "signal", "—"),
+                    getattr(row, "accum", "—"),
+                    getattr(row, "action", "—"),
+                    getattr(row, "phase", "—"),
+                    getattr(row, "streak", "—"),
+                    getattr(row, "rsi", "—"),
+                    getattr(row, "net_pct", "—"),
+                    getattr(row, "disc_pct", "—"),
+                    getattr(row, "price", "—"),
+                    getattr(row, "gate", "—"),
                 )
         if self._rows:
             table.move_cursor(row=self._row_index, animate=False)
@@ -601,6 +622,26 @@ class CockpitApp(App[None]):
                 f"[#9b8fb8]Evidence · {row.ticker}[/]\n"
                 f"grade {row.grade} · risk {row.risk} · NCP {row.ncp}"
             )
+        ev = self.query_one("#evidence-strip", Static)
+        ev.display = True
+        ev.update(self._evidence_text)
+
+    def _update_accum_evidence(self) -> None:
+        """Focus strip for option-B accum board (selected row)."""
+        if not self._rows or self._stage != "accum":
+            return
+        row = self._rows[self._row_index]
+        self._evidence_text = (
+            f"[#9b8fb8]Focus · {row.ticker}[/]  "
+            f"Signal {getattr(row, 'signal', '—')} · "
+            f"Accum {getattr(row, 'accum', '—')} · "
+            f"{getattr(row, 'action', '—')} · "
+            f"phase {getattr(row, 'phase', '—')} · "
+            f"streak {getattr(row, 'streak', '—')} · "
+            f"net {getattr(row, 'net_pct', '—')} · "
+            f"disc {getattr(row, 'disc_pct', '—')} · "
+            f"gate {getattr(row, 'gate', '—')}"
+        )
         ev = self.query_one("#evidence-strip", Static)
         ev.display = True
         ev.update(self._evidence_text)
@@ -655,58 +696,54 @@ class CockpitApp(App[None]):
         if row is None:
             return f"[bold]{ticker}[/]\n\n[dim]No row payload[/]"
         lines = [f"[bold #e8e8e8]{ticker}[/]", ""]
-        for key in (
-            "score",
-            "rsi",
-            "vol",
-            "setup",
-            "status",
-            "iep",
-            "delta_pct",
-            "iev",
-            "ncp",
-            "grade",
-            "risk",
-            "name",
+        # Board B fields first (same vocabulary as table)
+        for key, label in (
+            ("signal", "Signal"),
+            ("accum", "Accum"),
+            ("action", "Action"),
+            ("phase", "Phase"),
+            ("streak", "Streak"),
+            ("rsi", "RSI"),
+            ("net_pct", "Net%"),
+            ("disc_pct", "Disc%"),
+            ("price", "Price"),
+            ("gate", "Gate"),
+            ("iep", "IEP"),
+            ("delta_pct", "Δ%"),
+            ("iev", "IEV"),
+            ("grade", "Grade"),
+            ("risk", "Risk"),
+            ("name", "Name"),
         ):
             if hasattr(row, key):
                 val = getattr(row, key)
                 if val is not None and val != "":
-                    lines.append(f"[dim]{key:12}[/] {val}")
+                    lines.append(f"[dim]{label:10}[/] {val}")
 
         source = getattr(row, "source", None)
         if source is not None:
             lines.append("")
-            lines.append("[#9b8fb8]From local screen payload[/]")
-            price = getattr(source, "current_price", None)
-            if price is not None:
-                lines.append(f"[dim]price[/]       {price}")
-            accum = getattr(source, "accum_score", None)
-            if accum is not None:
-                lines.append(f"[dim]accum_score[/] {accum}")
-            sig = getattr(source, "signal_assessment", None)
-            if sig is not None:
-                assessment = getattr(sig, "assessment", None)
-                if assessment is not None:
-                    lines.append(
-                        f"[dim]signal[/]      {getattr(assessment, 'score', '—')} "
-                        f"{getattr(getattr(assessment, 'strength', None), 'value', '')}"
-                    )
+            lines.append("[#9b8fb8]TradeSetup / risk[/]")
             ts = getattr(source, "trade_setup", None)
             if ts is not None:
-                action = getattr(ts, "action", None)
-                action_s = getattr(action, "value", action)
-                lines.append(f"[dim]TradeSetup[/]  {action_s}")
                 rationale = getattr(ts, "rationale", None)
                 if rationale:
-                    lines.append(f"[dim]rationale[/]   {rationale}")
+                    lines.append(f"[dim]rationale[/]  {rationale}")
             risk = getattr(source, "risk_assessment", None)
             if risk is not None:
                 rat = getattr(risk, "rationale", None)
                 if rat:
                     if isinstance(rat, (list, tuple)):
                         rat = ", ".join(str(x) for x in rat)
-                    lines.append(f"[dim]risk[/]        {rat}")
+                    lines.append(f"[dim]risk[/]       {rat}")
+            sig = getattr(source, "signal_assessment", None)
+            if sig is not None:
+                assessment = getattr(sig, "assessment", None)
+                if assessment is not None:
+                    strength = getattr(getattr(assessment, "strength", None), "value", "")
+                    lines.append(
+                        f"[dim]sig str[/]    {getattr(assessment, 'score', '—')} {strength}"
+                    )
 
         lines.append("")
         lines.append("[dim]Plan is deliberate — press p (not Enter)[/]")
