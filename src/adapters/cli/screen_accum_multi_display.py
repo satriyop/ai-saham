@@ -48,7 +48,7 @@ def display_multi(
     display_config: AccumulationDisplayConfig,
     total_tickers_checked: int = 0,
     provider: str = "",
-    include_explanation: bool = False,
+    include_detail: bool = False,
     canonical_window: int = 7,
     effective_session: EffectiveMarketSession | None = None,
 ) -> None:
@@ -89,7 +89,7 @@ def display_multi(
     table.add_column("Data")
     table.add_column("Next")
     # Short header: full "Tracked Broker Flow" overflows the 100-col console
-    # once Disc% is present; meaning stays in Run Context (--explain).
+    # once Disc% is present; meaning stays in Run Context (--detail).
     table.add_column("Tracked")
 
     for i, row in enumerate(rows, 1):
@@ -159,7 +159,7 @@ def display_multi(
         )
     )
 
-    if not include_explanation:
+    if not include_detail:
         return
 
     # Render run context cleanly in a second panel

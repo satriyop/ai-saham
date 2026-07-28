@@ -145,9 +145,12 @@ def accumulation_run(
         bool,
         typer.Option("--guide", help="Print column reference guide and exit (no screen needed)"),
     ] = False,
-    explain: Annotated[
+    detail: Annotated[
         bool,
-        typer.Option("--explain", help="Append run context and scoring definitions after results"),
+        typer.Option(
+            "--detail",
+            help="Append run context and scoring definitions after results",
+        ),
     ] = False,
     strategy: Annotated[
         Optional[str],
@@ -176,19 +179,47 @@ def accumulation_run(
             help="Point-in-time as-of date YYYY-MM-DD (pins effective session; default: live).",
         ),
     ] = None,
+    auto_refresh: Annotated[
+        bool,
+        typer.Option(
+            "--auto-refresh/--no-refresh",
+            help=(
+                "Refresh candles/broker for explicit ticker args before screen "
+                "(ADR-054 S1). Ignored for universe-only runs (keeps board cheap)."
+            ),
+        ),
+    ] = True,
+    force_refresh: Annotated[
+        bool,
+        typer.Option(
+            "--force-refresh",
+            help=(
+                "Force provider refresh for explicit tickers even if cache looks fresh. "
+                "Requires ticker arguments (not universe-only)."
+            ),
+        ),
+    ] = False,
 ) -> None:
     """
-    Screen stocks for foreign accumulation patterns.
+    Screen stocks for foreign accumulation patterns (ADR-054 judgment desk).
 
     Computes composite foreign-flow score 0-100 based on: consistency of daily foreign buying,
     consecutive buy streak, whether foreigners are underwater (VWAP vs price),
     RSI headroom, and foreign flow as % of total turnover. BB Width is shown as a
     setup/phase diagnostic and does not contribute to the score by default.
 
+    Modes:
+      --universe / list  → shortlist many names (cheap board)
+      TICKER             → single-name judgment case file (Action, Why, pattern,
+                           signal/risk). Structure (horizon/SL/TP/lots) is
+                           ``saham plan swing TICKER``, not this command.
+
     Run `saham fetch market --universe lq45` first to ensure fresh data.
 
     Examples:
         saham screen accum --universe lq45
+        saham screen accum BBCA
+        saham screen accum BBCA --format json
         saham screen accum --universe lq45 --window 30
         saham screen accum --universe lq45 --multi
         saham screen accum --universe lq45 --multi --sort-by 30s
@@ -196,7 +227,7 @@ def accumulation_run(
         saham screen accum --universe lq45 --vwap-only
         saham screen accum --universe lq45 --squeeze-only
         saham screen accum --universe lq45 --top-broker
-        saham screen accum --universe lq45 --explain
+        saham screen accum --universe lq45 --detail
         saham screen accum --guide
         saham screen accum --universe lq45 --format json
     """
@@ -235,6 +266,15 @@ def accumulation_run(
         raise typer.Exit(1)
 
     universe_label = universe or f"{len(ticker_list)} tickers"
+    explicit_tickers = [str(t).upper() for t in (tickers or ())]
+
+    if force_refresh and not explicit_tickers:
+        typer.echo(
+            "Error: --force-refresh requires explicit ticker arguments "
+            "(not universe-only). Universe screens stay cache-cheap.",
+            err=True,
+        )
+        raise typer.Exit(1)
 
     if strategy and multi:
         typer.echo("Error: --strategy is not supported with --multi.", err=True)
@@ -247,6 +287,15 @@ def accumulation_run(
         raise typer.Exit(1)
     save_enabled = bool(save_name)
     as_of_date = parse_as_of_option(as_of)
+
+    # ADR-054 S1: refresh only explicit tickers (judgment desk), never full universe.
+    if explicit_tickers and (auto_refresh or force_refresh):
+        _refresh_explicit_tickers_for_screen(
+            tickers=explicit_tickers,
+            db_path=resolved_db,
+            force_refresh=force_refresh,
+            quiet=output_format == "json",
+        )
 
     if multi:
         window_list = [int(w.strip()) for w in (windows or "7,30,90").split(",")]
@@ -298,7 +347,7 @@ def accumulation_run(
             result=result,
             universe_label=universe_label,
             output_format=output_format,
-            explain=explain,
+            detail=detail,
             display_config=display_config,
         )
         return
@@ -308,7 +357,7 @@ def accumulation_run(
         universe_label=universe_label,
         show_top_broker=show_top_broker,
         output_format=output_format,
-        explain=explain,
+        detail=detail,
         strategy=strategy,
         display_config=display_config,
     )
@@ -319,7 +368,7 @@ def _render_multi(
     result,
     universe_label: str,
     output_format: str,
-    explain: bool,
+    detail: bool,
     display_config: AccumulationDisplayConfig,
 ) -> None:
     projection = result.multi_projection
@@ -347,7 +396,7 @@ def _render_multi(
         display_config=display_config,
         total_tickers_checked=sample_resp.total_tickers_checked if sample_resp else 0,
         provider=sample_resp.provider if sample_resp else "",
-        include_explanation=explain,
+        include_detail=detail,
         canonical_window=projection.canonical_window,
         effective_session=result.effective_session,
     )
@@ -359,7 +408,7 @@ def _render_single(
     universe_label: str,
     show_top_broker: bool,
     output_format: str,
-    explain: bool,
+    detail: bool,
     strategy: str | None,
     display_config: AccumulationDisplayConfig,
 ) -> None:
@@ -389,10 +438,11 @@ def _render_single(
         universe_label=universe_label,
         show_top_broker=show_top_broker,
         display_config=display_config,
-        include_explanation=explain,
+        include_detail=detail,
         strategy_signals=result.strategy_signals or None,
         strategy_name=strategy,
         effective_session=result.effective_session,
+        market_context=getattr(result, "market_context", None),
     )
 
     if result.save_result:
@@ -403,3 +453,34 @@ def _render_single(
                 fg=typer.colors.GREEN,
             )
         )
+
+
+def _refresh_explicit_tickers_for_screen(
+    *,
+    tickers: list[str],
+    db_path: Path,
+    force_refresh: bool,
+    quiet: bool,
+) -> None:
+    """Refresh candles/broker for explicit tickers only (ADR-054 S1).
+
+    Reuses the same application refresh path as plan swing so cache policy
+    cannot diverge. Failures are warnings; screen continues on existing cache.
+    """
+    from src.adapters.cli.plan_swing_optional_fetchers import auto_refresh_swing_data
+    from src.infrastructure.config.analyze_swing_config import load_analyze_swing_config
+
+    analyze_config = load_analyze_swing_config()
+    for ticker in tickers:
+        try:
+            notes = auto_refresh_swing_data(
+                ticker=ticker,
+                db_path=db_path,
+                force_refresh=force_refresh,
+                analyze_config=analyze_config,
+            )
+            if not quiet:
+                joined = ", ".join(notes) if notes else "ok"
+                typer.echo(f"Refresh {ticker}: {joined}")
+        except Exception as exc:
+            typer.echo(f"⚠ Refresh {ticker} failed ({exc}); using cached data.", err=True)

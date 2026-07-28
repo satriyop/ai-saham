@@ -337,3 +337,19 @@ def test_candidate_to_dict_emits_canonical_signal_authority_coverage():
     assert sa_dict["signal_authority_coverage"] is not None
     assert "coverage_score" not in sa_dict
     assert "confidence_score" not in sa_dict
+    # Pattern board fields — always present keys; values may be None when unresolved.
+    assert "setup_family_result" in d
+    assert "named_setup_evaluations" in d
+    # ADR-054 S1: judgment package always exposes trade_setup key (value may be null).
+    assert "trade_setup" in d
+    if d["trade_setup"] is not None:
+        assert "action" in d["trade_setup"]
+        assert "ticker" in d["trade_setup"]
+    if d["setup_family_result"] is not None:
+        assert "primary_setup_family" in d["setup_family_result"]
+        assert "matched_setup_families" in d["setup_family_result"]
+        assert "setup_family_source" in d["setup_family_result"]
+    if d["named_setup_evaluations"] is not None:
+        for _name, evaluation in d["named_setup_evaluations"].items():
+            assert evaluation["match"] in {"MATCH", "PARTIAL", "NO_MATCH"}
+            assert "family" in evaluation

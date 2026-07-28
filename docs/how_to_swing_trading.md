@@ -16,21 +16,27 @@ In IHSG specifically, swing trading works well because:
 ## The Daily Workflow
 
 ```
-DAILY ROUTINE (10 minutes)
+DAILY ROUTINE (10 minutes) — ADR-054
 ──────────────────────────────────────────────────────────────────
 Step 1 → Update data        saham fetch market --universe lq45
 Step 2 → Check market       saham inspect regime
 Step 3 → Find candidates    saham screen accum --universe lq45 --multi
-Step 4 → Deep-dive          saham plan swing BBRI --setup foreign-bounce --capital N
-Step 5 → Confirm chart      # retired: inspect chart (TUI later)
-Step 6 → Size the trade     plan swing --capital  # sizing BBRI --capital N    (if not using setup)
-Step 7 → Log the decision   saham trade log swing --ticker BBRI --from-analysis --with-regime
+Step 4 → Judge candidate    saham screen accum BBRI
+                            # Judgment case file: Action, Why, pattern, signal/risk
+Step 5 → Structure trade    saham plan swing BBRI --capital N
+                            # Horizon / SL / TP / lots (not a second analysis desk)
+Step 6 → Confirm chart      # retired: inspect chart (TUI later)
+Step 7 → Log the decision   saham trade accum log …
 ──────────────────────────────────────────────────────────────────
 After 10–20 trading days: review what the setup actually delivered
 Step 8 → Review outcomes    saham trade accum review
 ```
 
-Steps 3–6 collapse what previously required 6+ separate commands into one primary command (`saham plan swing`) for each candidate, plus chart confirmation before logging or entry.
+**Screen finds and judges. Plan designs trade structure.**  
+Step 3 shortlists many names; Step 4 deep-judges one name with the same engines
+(`TradeSetup` when signal+risk compose). Step 5 is structure (capital, targets),
+not a re-run of discovery analysis.
+
 
 ---
 
@@ -117,26 +123,54 @@ A stock that scores 75 on 7 sessions, 72 on 30 sessions, and 68 on 90 sessions i
 | `mixed` | Named flow exists but is not led clearly by smart/noise tiers |
 | `n/a` | No named Stockbit broker detail in cache |
 
-**What you are looking for at this stage:** a shortlist of 3–5 tickers that score ≥ 60 on at least two windows. This feeds Step 4.
+**What you are looking for at this stage:** a shortlist of 3–5 tickers that score ≥ 60 on at least two windows. This feeds Step 4 (judgment), then Step 5 (structure).
 
 **Window semantics:** `--window 7`, `--window 30`, and `--window 90` use the latest 7/30/90 broker sessions available as of the analysis date. Use `NET_DAYS` / `STREAK` to see how much of that session window was net foreign buying.
 
 ---
 
-## Step 4 — Deep-Dive with `saham plan swing`
+## Step 4 — Judge a candidate with `saham screen accum TICKER`
 
-`saham plan swing` is the cornerstone command. By default it gives a deterministic core verdict: `SignalEngine + RiskEngine -> TradeSetup`. Market context, backtest, sentiment, setup gates, and detailed broker attribution are evidence panels you opt into when you need them.
+**Judgment desk (ADR-054 S1).** For a name from the shortlist, run single-ticker
+screen — not plan — for Action / Why / pattern / signal / risk.
+
+```bash
+saham screen accum BBRI
+saham screen accum BBRI --format json          # machine judgment package (incl. trade_setup)
+saham screen accum BBRI --no-refresh           # skip candle/broker refresh
+saham screen accum BBRI --force-refresh        # force provider refresh (explicit tickers only)
+```
+
+What you get:
+
+- **Judgment strip** — Action (composed `TradeSetup` when present), Gate, Signal, Accum, Authority, Phase, Family, Why
+- **Pattern match** — FB/CS/SM/PB MATCH / PARTIAL / NO_MATCH (diagnostic; MATCH ≠ ENTER)
+- Signal / Accum / Risk panels already used on the universe board
+- Explicit tickers auto-refresh by default (universe-only stays cache-cheap)
+
+Decide here whether the candidate is worth structuring a trade for.
+
+---
+
+## Step 5 — Structure the trade with `saham plan swing`
+
+**Structure desk (ADR-054).** After judgment, use plan for horizon, stops,
+targets, and sizing — not as a second analysis clone.
+
+`saham plan swing` still exposes analysis panels during migration (S2–S4 will
+thin them). Prefer screen for judgment; use plan when you need capital/TP/SL.
 
 ### Basic usage
 
 ```bash
-saham plan swing BBRI
-saham plan swing BBRI --strategy foreign-accumulation          # strategy/backtest evidence
-saham plan swing BBRI --with-sentiment                         # news evidence
-saham plan swing BBRI --with-flow-detail --explain             # detailed evidence panels
-saham plan swing BBRI --no-refresh                             # cached-only core read
-saham plan swing BBRI --force-refresh                         # force provider refresh
-saham plan swing BBRI --sentiment-verbose                     # debug news provider issues
+saham plan swing BBRI --capital 10000000
+saham plan swing BBRI --setup foreign-bounce --capital 10000000
+saham plan swing BBRI --strategy foreign-accumulation   # strategy/backtest evidence (optional)
+saham plan swing BBRI --with-sentiment                  # news evidence (optional)
+saham plan swing BBRI --with-flow-detail                # broker flow detail (optional)
+saham plan swing BBRI --full
+saham plan swing BBRI --no-refresh
+saham plan swing BBRI --force-refresh
 ```
 
 By default, `saham plan swing` checks and refreshes only the requested ticker's candles and broker flow if local data is behind today. The `DATA` section shows whether refresh used current cache, fetched new rows, checked the provider but found no newer trading rows, failed, or was disabled.
@@ -252,7 +286,7 @@ Output uses Rich panel-based rendering. The core verdict panel is always shown; 
 ╰──────────────────────────────────────────── 2026-06-12 ───────────────────────────────────────────╯
 ```
 
-RiskEngine now reports `OPEN` (no gate fired) or `BLOCKED (gate: Name)` — legacy risk level labels (`LOW_RISK`/`MODERATE`/`HIGH_RISK`) are no longer shown in swing output. Use `--with-risk-detail` for the full gate-by-gate breakdown with SMA/EMA/RSI values.
+RiskEngine now reports `OPEN` (no gate fired) or `BLOCKED (gate: Name)` — legacy risk level labels (`LOW_RISK`/`MODERATE`/`HIGH_RISK`) are no longer shown in swing output. The default plan output includes the full gate-by-gate risk breakdown with SMA/EMA/RSI values.
 
 An optional `--with-technical-gate` enables the SMA/EMA/RSI TechnicalGate in the Risk panel:
 ```
@@ -303,12 +337,8 @@ All signals are pre-warmed by `saham fetch market --universe lq45` and served fr
 | `--benchmark` | `^JKSE` | Benchmark ticker for regime |
 | `--with-sentiment` | off | Include news sentiment evidence |
 | `--with-flow-detail` | off | Include broker flow and attribution detail |
-| `--with-signal-detail` | off | Include SignalEngine factor detail |
-| `--with-risk-detail` | off | Include RiskEngine indicator/gate detail |
-| `--with-market-detail` | off | Include full MCE factor detail |
-| `--with-market-context` | off | Show MarketContextEngine factor detail |
+| `--with-market-context` | off | Build MCE and condition signal/setup with market regime |
 | `--with-technical-gate` | off | Enable optional TechnicalGate (SMA/EMA/RSI execution gate). Off by default. Adds "Technical" row to Risk panel. |
-| `--explain` | off | Shortcut for signal/risk/market detail |
 | `--full` | off | Include all optional evidence except named setup; uses `foreign-accumulation` if `--strategy` is omitted |
 | `--sentiment-verbose` | off | Show optional sentiment provider errors/noise |
 | `--no-sentiment` | off | Deprecated no-op; sentiment is off by default |

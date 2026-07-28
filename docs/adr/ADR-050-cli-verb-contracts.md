@@ -2,7 +2,8 @@
 
 [Architecture decision index](../../ARCHITECTURE_DECISIONS.md)
 
-**Status:** Accepted — implementation landed 2026-07-27
+**Status:** Accepted — implementation landed 2026-07-27; **product roles of
+`screen` / `plan` amended by [ADR-054](ADR-054-screen-judge-plan-structure-contract.md)**
 **Date:** 2026-07-27
 **Depends on:** [ADR-011](ADR-011-offline-capable-cli-as-primary-interface.md),
 [ADR-020](ADR-020-cli-adapter-file-naming-convention.md),
@@ -12,9 +13,11 @@
 [ADR-049](ADR-049-database-owned-learning-pipeline-clean-break.md)
 **Amends:** ADR-020 (examples), ADR-032 (command path), ADR-033 (command table),
 ADR-049 (public CLI family tree)
-**Current implementation:** Not yet on the public tree. Live `saham --help` still
-exposes the pre-rename `analyze …` surface until implementation slices land.
-Trust this ADR for target contracts; trust live help for shipped paths.
+**Amended by:** [ADR-054](ADR-054-screen-judge-plan-structure-contract.md) (`screen` =
+judge candidates; `plan` = trade structure, not a second analysis desk)
+**Current implementation:** Verb renames landed. ADR-054 screen/plan product split
+is phased — trust ADR-054 for target judgment vs structure jobs; trust live help
+for shipped depth of `screen accum TICKER` vs `plan swing`.
 
 ## Context
 
@@ -50,9 +53,9 @@ If a command does not fit, rename it; do not stretch an existing verb.
 | Verb | Meaning (invariant) | Learning DB write? | Final action words? | Typical input |
 |------|---------------------|--------------------|---------------------|---------------|
 | `fetch` | ingest external data into local store | no (market data only) | no | universe / ticker |
-| `screen` | live multi-candidate discovery / ranking | **no** | provisional display only; never final swing authority | universe / list |
+| `screen` | live multi-candidate discovery **and** single-ticker **judgment** (ADR-054) | **no** | may display composed `TradeSetup.action` when signal+risk present; canonical analysis desk after ADR-054 migration | universe / list / ticker |
 | `inspect` | live single-subject capability / evidence lens | **no** | **no** | ticker / as-of |
-| `plan` | live authoritative trade plan composition | **no** | **yes** (`TradeSetup.action` and plan fields) | ticker |
+| `plan` | live **trade-structure** design for a chosen candidate (horizon/SL/TP/geometry; ADR-054); may still show `TradeSetup.action` via shared judgment path during migration | **no** | **yes** (action only via shared composer; structure fields are plan’s headline job) | ticker |
 | `assess` | confirm a **frozen** plan against later reality | **no** | **yes**, relative to frozen plan only | observation / session ids |
 | `research` | learning corpus lifecycle | **yes** | no | scenario |
 | `trade` | human paper notebook | paper journal only | paper only; not engine authority | scenario |
@@ -65,9 +68,9 @@ If a command does not fit, rename it; do not stretch an existing verb.
 Agent-facing one-liners:
 
 ```text
-screen   = rank many; write nothing learning-related
+screen   = rank many OR deep-judge one candidate; no learning write (ADR-054)
 inspect  = explain one subject/capability; no ENTER/WATCH/AVOID
-plan     = produce live TradeSetup + plan fields
+plan     = design trade structure for a chosen candidate (horizon/SL/TP); not a second screener (ADR-054)
 assess   = confirm frozen plan after a later fact
 research = corpus write/read only
 trade    = paper notebook only
@@ -117,13 +120,17 @@ saham version
 
 ### 4. Why the second token is `swing`, not `accum`
 
-Operational path is often:
+Operational path (ADR-054):
 
 ```text
-screen accum  →  plan swing  →  (optional) trade accum log / research accum …
+screen accum --universe …  →  shortlist
+screen accum TICKER        →  deep judgment
+plan swing TICKER …        →  trade structure (horizon / SL / TP / sizing)
+(optional) trade accum log / research accum …
 ```
 
-That does **not** make the plan command “about accum.”
+That does **not** make the plan command “about accum,” and it does **not** make
+`plan` a second analysis desk (analysis deep-dive is single-ticker `screen`).
 
 Vocabulary (binding):
 

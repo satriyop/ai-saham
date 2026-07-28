@@ -45,7 +45,7 @@ bukan decision final. Komponen historis mencakup:
 | Sector breadth | Apakah pergerakan didukung rotasi/partisipasi sektor? |
 
 Bobot, scale, cap, bonus, threshold, dan status authority telah berubah sepanjang
-evolusi sistem. Gunakan `saham screen accum --explain`, config, code, dan tests
+evolusi sistem. Gunakan `saham screen accum --detail`, config, code, dan tests
 untuk kontrak runtime; jangan menyalin angka dari arsip ke implementasi baru.
 
 ### Membaca Evidence Bersama

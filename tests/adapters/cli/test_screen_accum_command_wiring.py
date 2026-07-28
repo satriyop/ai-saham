@@ -3,6 +3,9 @@
 import json
 from datetime import date
 from types import SimpleNamespace
+from unittest.mock import MagicMock
+
+import pytest
 
 from src.adapters.cli.main import app
 from src.application.dto.accumulation_screen import AccumulationScreenResponse
@@ -11,6 +14,15 @@ from tests.adapters.cli.screen_accum_test_fixtures import (
     _fake_workflow_result,
     runner,
 )
+
+
+@pytest.fixture(autouse=True)
+def _skip_network_refresh(monkeypatch):
+    """Keep wiring tests offline (ADR-054 S1 refresh is covered separately)."""
+    monkeypatch.setattr(
+        "src.adapters.cli.screen_accum_commands._refresh_explicit_tickers_for_screen",
+        MagicMock(),
+    )
 
 
 def _screen_payload(raw: dict) -> dict:

@@ -119,7 +119,7 @@ def test_bb_not_shown_as_scored_flow_points_when_disabled(capsys):
         universe_label="lq45",
         show_top_broker=False,
         display_config=_bb_disabled_config(),
-        include_explanation=False,
+        include_detail=False,
     )
 
     out = capsys.readouterr().out

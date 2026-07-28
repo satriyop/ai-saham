@@ -6,6 +6,8 @@ Layer: Adapter
 
 from __future__ import annotations
 
+from typing import Any
+
 from rich.console import Group
 from rich.text import Text
 
@@ -28,6 +30,16 @@ from src.adapters.cli.screen_accum_formatters import (
     _risk_tier,
     format_disc_pct,
 )
+from src.adapters.shared.decision_display import (
+    coverage_pct,
+    format_accum_breakdown,
+    format_action_why,
+    format_market_context_lines,
+    format_primary_setup_family,
+    format_setup_readiness,
+    named_setup_match_glyphs,
+    readiness_and_family,
+)
 from src.adapters.shared.score_display_labels import (
     ACCUM,
     ACCUM_DEFINITION,
@@ -38,6 +50,7 @@ from src.adapters.shared.score_display_labels import (
     SIGNAL,
     SIGNAL_DEFINITION,
 )
+from src.adapters.shared.screen_accum_board_fields import extract_screen_accum_board_fields
 from src.application.dto.accumulation_screen import (
     AccumulationScreenResponse,
 )
@@ -56,6 +69,132 @@ def _panel_subtitle(
     if effective_session is None:
         return base
     return f"{base} · {format_effective_session_label(effective_session)}"
+
+
+def _build_decision_why_table(candidates: list) -> Any:
+    """Per-candidate Action Why — same strings as TUI (decision_display)."""
+    table = compact_table()
+    table.add_column("#", justify="right", style="dim", width=3)
+    table.add_column("Ticker", style="bold", width=6)
+    table.add_column("Action", width=14)
+    table.add_column("Gate", width=8)
+    table.add_column("Why Action")
+    for i, c in enumerate(candidates, 1):
+        fields = extract_screen_accum_board_fields(c, phase_style="full")
+        why = format_action_why(c, gate=fields.gate) or "—"
+        table.add_row(str(i), fields.ticker, fields.action, fields.gate, why)
+    return table
+
+
+def _build_accum_breakdown_lines(candidates: list) -> list[Text]:
+    """One-line Accum recipe per candidate (shared format_accum_breakdown)."""
+    lines: list[Text] = [Text(f"\n{ACCUM} breakdown (same path as TUI)", style="bold cyan")]
+    for c in candidates:
+        fields = extract_screen_accum_board_fields(c, phase_style="short")
+        bd = format_accum_breakdown(c, accum_display=fields.accum)
+        lines.append(Text(f"  {fields.ticker}: {bd}", style="dim"))
+    return lines
+
+
+def _build_setup_readiness_lines(candidates: list) -> list[Text]:
+    """Setup-phase readiness (not data-freshness Ready column)."""
+    lines: list[Text] = [Text("\nSetup readiness (typed; never invent READY)", style="bold cyan")]
+    for c in candidates:
+        readiness, family = readiness_and_family(c)
+        phrase = format_setup_readiness(readiness, setup_family=family, style="full")
+        ticker = str(getattr(c, "ticker", "?") or "?")
+        lines.append(Text(f"  {ticker}: {phrase}", style="dim"))
+    return lines
+
+
+def _build_judgment_header(candidate: Any) -> Any:
+    """Single-ticker judgment strip (ADR-054 S1) — present-only, no re-score.
+
+    Reuses shared board field extraction + action-why formatters so CLI/TUI
+    cannot diverge on Action/Gate/Why.
+    """
+    fields = extract_screen_accum_board_fields(candidate, phase_style="full")
+    why = format_action_why(candidate, gate=fields.gate)
+    family = format_primary_setup_family(candidate)
+    cov = coverage_pct(candidate)
+    auth = f"{cov:.0f}%" if cov is not None else "—"
+
+    table = compact_table(show_header=False)
+    table.add_column("Key", style="bold cyan", width=12)
+    table.add_column("Value")
+    table.add_row("Ticker", fields.ticker)
+    table.add_row("Action", fields.action)
+    table.add_row("Gate", fields.gate)
+    table.add_row(SIGNAL, fields.signal)
+    table.add_row(ACCUM, fields.accum)
+    table.add_row("Authority", auth)
+    table.add_row("Phase", fields.phase)
+    table.add_row("Family", family)
+    table.add_row("Why", why or "—")
+    return table
+
+
+def _build_named_setup_match_table(candidates: list) -> Any:
+    """Compact pattern board: primary family + FB/CS/SM/PB match glyphs.
+
+    Diagnostic only — MATCH does not mean ENTER. Glyphs: M MATCH, ~ PARTIAL,
+    · NO_MATCH, - not evaluated.
+    """
+    table = compact_table()
+    table.add_column("Ticker", style="bold")
+    table.add_column("Primary")
+    table.add_column("FB", justify="center")
+    table.add_column("CS", justify="center")
+    table.add_column("SM", justify="center")
+    table.add_column("PB", justify="center")
+    table.add_column("Source")
+    for c in candidates:
+        glyphs = named_setup_match_glyphs(c)
+        sfr = getattr(c, "setup_family_result", None)
+        source = getattr(sfr, "setup_family_source", None) if sfr is not None else None
+        source_s = str(source or "-").replace("detected_screen_evidence", "screen")
+        source_s = source_s.replace("fallback_unknown", "unknown")
+        source_s = source_s.replace("strategy_evidence", "strategy")
+        source_s = source_s.replace("explicit_request", "explicit")
+        table.add_row(
+            str(getattr(c, "ticker", "?") or "?"),
+            format_primary_setup_family(c),
+            glyphs.get("FB", "-"),
+            glyphs.get("CS", "-"),
+            glyphs.get("SM", "-"),
+            glyphs.get("PB", "-"),
+            source_s,
+        )
+    return table
+
+
+def _build_market_context_panel(market_context: Any | None):
+    """Diagnostic-only market regime panel (does not move Action)."""
+    if market_context is None:
+        return None
+    body_lines = format_market_context_lines(market_context)
+    # Strip Rich markup tags from shared lines for plain CLI Text
+    plain = []
+    for line in body_lines[1:]:  # skip section header (panel title covers it)
+        plain.append(line.replace("[#9b8fb8]", "").replace("[/]", "").replace("[dim]", ""))
+    if not plain:
+        plain = ["not evaluated for this screen run"]
+    content = Text(
+        "\n".join(plain)
+        + "\n\nDiagnostic only — not applied to DecisionPolicy / Action on screen accum.",
+        style="dim",
+    )
+    return panel(content, title="Market context (diagnostic)")
+
+
+def _format_market_context_meta(market_context: Any | None) -> str:
+    if market_context is None:
+        return "not evaluated for this screen run · diagnostic only (does not move Action)"
+    regime = getattr(market_context, "regime", None)
+    regime_s = str(getattr(regime, "value", regime) or regime or "—")
+    conv = getattr(market_context, "conviction", None)
+    conv_s = f" conviction {float(conv):.2f}" if isinstance(conv, (int, float)) else ""
+    return f"{regime_s}{conv_s} · diagnostic only (does not move Action)"
 
 
 def _scoring_definitions_panel(display_config: AccumulationDisplayConfig):
@@ -164,16 +303,20 @@ def display_results(
     universe_label: str,
     show_top_broker: bool,
     display_config: AccumulationDisplayConfig,
-    include_explanation: bool = False,
+    include_detail: bool = False,
     strategy_signals: dict[str, str] | None = None,
     strategy_name: str | None = None,
     effective_session: EffectiveMarketSession | None = None,
+    market_context: Any | None = None,
 ) -> None:
     """Render accumulation screener results as terminal table.
 
     `candidates` is the already-filtered/limited projection from
     src.application.services.screen_accum_result_projector — this function
     must not independently filter, sort, or slice `response.candidates`.
+
+    ``market_context`` is display-only (diagnostic). It must not imply
+    DecisionPolicy used regime on this screen run (B-MCE-policy is separate).
     """
     show_context_ticker = len(candidates) > 1
 
@@ -416,58 +559,124 @@ def display_results(
         show_top_broker,
     )
 
-    sections = [
-        panel(
-            Group(
-                action_table,
-                Text(
-                    "\nPhase is accumulation-lifecycle diagnostic; use "
-                    "saham plan swing TICKER --setup SETUP for setup gates "
-                    "and entry validation.",
-                    style="dim",
+    decision_table = _build_decision_why_table(candidates)
+    named_setup_table = _build_named_setup_match_table(candidates)
+    accum_breakdown_lines = _build_accum_breakdown_lines(candidates)
+    setup_readiness_lines = _build_setup_readiness_lines(candidates)
+
+    # ADR-054 S1: single-candidate case file opens with a judgment strip.
+    judgment_single = len(candidates) == 1
+    sections: list[Any] = []
+    if judgment_single:
+        sections.append(
+            panel(
+                Group(
+                    _build_judgment_header(candidates[0]),
+                    Text(
+                        "\nJudgment case file (ADR-054). Action is composed "
+                        f"TradeSetup when signal+risk present. Structure "
+                        f"(horizon/SL/TP/lots): saham plan swing "
+                        f"{getattr(candidates[0], 'ticker', 'TICKER')}.",
+                        style="dim",
+                    ),
                 ),
+                title="Judgment",
+            )
+        )
+
+    sections.extend(
+        [
+            panel(
+                Group(
+                    action_table,
+                    Text(
+                        "\nPhase is accumulation-lifecycle diagnostic. Pattern match "
+                        "board is diagnostic (MATCH ≠ ENTER). "
+                        "Deep judgment: saham screen accum TICKER. "
+                        "Trade structure (horizon/SL/TP): saham plan swing TICKER.",
+                        style="dim",
+                    ),
+                ),
+                title="Candidate Actions",
             ),
-            title="Candidate Actions",
-        ),
-        panel(evidence_table, title=f"{ACCUM} score components"),
-        panel(
-            signal_table,
-            title=f"{SIGNAL} summary (SignalEngine — not {ACCUM})",
-        ),
-        panel(
-            Group(
-                flow_grp_table,
-                Text(
-                    f"\n{FLOW_GRP} detail mirrors Accum factors (Pts/Factor/Value/Means). "
-                    "RSI/BB are not in FlowGrp. Bandar blends when present; "
-                    "group_cap ceilings correlated broker evidence.",
-                    style="dim",
+            panel(
+                Group(
+                    named_setup_table,
+                    Text(
+                        "\nFB=foreign-bounce  CS=coiled-spring  SM=smart-money  "
+                        "PB=pullback-continuation\n"
+                        "M=MATCH  ~=PARTIAL  ·=NO_MATCH  -=not evaluated. "
+                        "Primary family from resolver; does not grant entry.",
+                        style="dim",
+                    ),
                 ),
+                title="Setup pattern match (diagnostic)",
             ),
-            title=f"{SIGNAL} · {FLOW_GRP} components",
-        ),
-        panel(
-            Group(
-                risk_table,
-                Text("\nWhy", style="bold cyan"),
-                *risk_detail_lines,
-                Text(
-                    "\nRiskEngine is gate-based: OPEN means no structural/execution "
-                    "risk gate fired; "
-                    "BLOCKED means a gate stopped or downgraded action.",
-                    style="dim",
+            panel(
+                Group(
+                    decision_table,
+                    Text(
+                        "\nWhy Action uses the same shared formatters as TUI focus/Enter "
+                        "(authority, setup readiness, constraints, gate). "
+                        "Does not re-score.",
+                        style="dim",
+                    ),
                 ),
-                Text(
-                    "\nTechnicalGate is not evaluated by screen accum. Use "
-                    "saham plan swing TICKER --with-technical-gate for "
-                    "technical execution-gate diagnostics.",
-                    style="dim",
-                ),
+                title="Decision · Action Why",
             ),
-            title="Risk Status",
-        ),
-        panel(data_table, title="Data Coverage"),
-    ]
+            panel(
+                Group(
+                    evidence_table,
+                    *accum_breakdown_lines,
+                ),
+                title=f"{ACCUM} score components",
+            ),
+            panel(
+                Group(
+                    signal_table,
+                    *setup_readiness_lines,
+                ),
+                title=f"{SIGNAL} summary (SignalEngine — not {ACCUM})",
+            ),
+            panel(
+                Group(
+                    flow_grp_table,
+                    Text(
+                        f"\n{FLOW_GRP} detail mirrors Accum factors "
+                        f"(Pts/Factor/Value/Means). "
+                        "RSI/BB are not in FlowGrp. Bandar blends when present; "
+                        "group_cap ceilings correlated broker evidence.",
+                        style="dim",
+                    ),
+                ),
+                title=f"{SIGNAL} · {FLOW_GRP} components",
+            ),
+            panel(
+                Group(
+                    risk_table,
+                    Text("\nGate detail", style="bold cyan"),
+                    *risk_detail_lines,
+                    Text(
+                        "\nRiskEngine is gate-based: OPEN means no "
+                        "structural/execution risk gate fired; "
+                        "BLOCKED means a gate stopped or downgraded action.",
+                        style="dim",
+                    ),
+                    Text(
+                        "\nTechnicalGate is not evaluated by screen accum "
+                        "(execution microstructure). Judgment Action above "
+                        "already includes structural/execution gates that fired.",
+                        style="dim",
+                    ),
+                ),
+                title="Risk Status",
+            ),
+            panel(data_table, title="Data Coverage"),
+        ]
+    )
+    mce_panel = _build_market_context_panel(market_context)
+    if mce_panel is not None:
+        sections.append(mce_panel)
     if has_detail_rows:
         sections.append(panel(details_table, title="Enrichment Details"))
 
@@ -483,7 +692,7 @@ def display_results(
         )
     )
 
-    if not include_explanation:
+    if not include_detail:
         return
 
     # Render run context cleanly in a second panel
@@ -496,6 +705,11 @@ def display_results(
             "Effective session",
             format_effective_session_label(effective_session),
         )
+
+    meta_table.add_row(
+        "Market context",
+        _format_market_context_meta(market_context),
+    )
 
     meta_table.add_row(
         "Stats",
@@ -522,6 +736,11 @@ def display_results(
 
     explain_lines = [
         "Candidate Actions is the screen summary. Context panels explain why.",
+        (
+            "Decision · Action Why matches TUI (shared decision_display). "
+            "Market context on this screen is diagnostic only — it does not "
+            "move Action until an explicit B-MCE-policy change."
+        ),
         (
             f"{ACCUM} = foreign-accumulation composite (0–100). "
             f"{SIGNAL} = SignalEngine total (0–100). Different engines — "

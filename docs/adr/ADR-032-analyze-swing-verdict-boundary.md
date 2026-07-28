@@ -2,9 +2,9 @@
 
 [Architecture decision index](../../ARCHITECTURE_DECISIONS.md)
 
-**Status:** Accepted — amended by ADR-037
+**Status:** Accepted — amended by ADR-037 (MCE); product role of `plan` amended by [ADR-054](ADR-054-screen-judge-plan-structure-contract.md)
 **Date:** 2026-06-26
-**Current implementation:** `TradeSetup.action` is authoritative. Requested MCE context conditions the canonical signal before composition; risk-side regime adjustment remains preview-only.
+**Current implementation:** `TradeSetup.action` is authoritative. Requested MCE context conditions the canonical signal before composition; risk-side regime adjustment remains preview-only. After ADR-054 migration, single-ticker `screen accum` is the canonical analysis surface; `plan swing` trends toward trade-structure design while still composing action only via the same judgment path.
 
 ## Decision
 

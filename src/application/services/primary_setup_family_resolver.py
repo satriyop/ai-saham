@@ -60,6 +60,15 @@ class PrimarySetupFamilyResult:
     setup_family_source: str
     rationale: tuple[str, ...] = ()
 
+    def to_dict(self) -> dict[str, object]:
+        """Lean serialisation for screen JSON / research fingerprints."""
+        return {
+            "primary_setup_family": self.primary_setup_family,
+            "matched_setup_families": list(self.matched_setup_families),
+            "setup_family_source": self.setup_family_source,
+            "rationale": list(self.rationale),
+        }
+
 
 def _normalize(value: str | None) -> str | None:
     if not value:

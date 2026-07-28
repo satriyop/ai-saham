@@ -1,9 +1,9 @@
 # ADR-033: Workflow Composition Artifact Boundaries
 
 [Architecture decision index](../../ARCHITECTURE_DECISIONS.md)
-**Status:** Accepted — amended by [ADR-049](ADR-049-database-owned-learning-pipeline-clean-break.md)
+**Status:** Accepted — amended by [ADR-049](ADR-049-database-owned-learning-pipeline-clean-break.md), [ADR-054](ADR-054-screen-judge-plan-structure-contract.md)
 **Date:** 2026-06-28
-**Current implementation:** Workflows compose domain/application capabilities; reusable evidence and artifacts cross boundaries through typed values rather than CLI display parsing.
+**Current implementation:** Workflows compose domain/application capabilities; reusable evidence and artifacts cross boundaries through typed values rather than CLI display parsing. ADR-054 retargets command ownership: `screen accum` judges candidates; `plan swing` designs trade structure (phased).
 
 ### Context
 
@@ -22,8 +22,9 @@ Canonical artifact ownership:
 
 | Command | Workflow family | Canonical artifact | Meaning |
 |---------|-----------------|--------------------|---------|
-| `saham plan swing TICKER` | Single-ticker swing decision | `TradeSetup` | Authoritative swing action from `SignalEngine + RiskEngine` |
-| `saham screen accum` | Candidate discovery | `AccumulationCandidate` with optional `TradeSetup` | Ranked candidates; final action exists only when both signal and risk are present |
+| `saham screen accum` (universe / list) | Candidate discovery | `AccumulationCandidate` (+ optional `TradeSetup`) | Ranked candidates; action only when signal + risk composed |
+| `saham screen accum TICKER` | Single-ticker **judgment** (target: ADR-054) | `AccumulationCandidate` + composed `TradeSetup` when present | Canonical analysis desk for a chosen name |
+| `saham plan swing TICKER` | Swing **structure** design (target: ADR-054); legacy also full analysis until migration | `TradeSetup` (action) + structure fields / future `SwingTradeStructure` | Structure (horizon/SL/TP/sizing); must not invent a competing action story |
 | `saham screen pre-open` | Intraday pre-open planning | `PreOpenScreenResult` | Conditional pre-open candidate list and entry ranges |
 | `saham assess pre-open` | Post-open assessment of NCP pre-open plan | `AnalyzePreOpenResult` / `PreOpenPostOpenResult` | Read-only ENTER/WAIT/SKIP after opening track snapshot; database-identified (replaces retired `trade confirm` sidecars) |
 | `saham trade pre-open log` | Paper journal for pre-open strategy | journal row with observation_id + opening_snapshot_id | Explicit notebook write via same assess use case; not a learning label |

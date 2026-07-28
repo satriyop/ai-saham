@@ -81,7 +81,7 @@ saham screen accum --universe lq45 --top 10           # show top 10 only
 # More detail
 saham screen accum --universe lq45 --guide            # explain columns and scoring components
 saham screen accum --universe lq45 --top-broker       # show top broker-code detail when available
-saham screen accum --universe lq45 --explain          # append run context and scoring definitions
+saham screen accum --universe lq45 --detail           # append run context and scoring definitions
 saham screen accum --universe lq45 --format json      # machine-readable output
 ```
 
@@ -323,9 +323,9 @@ The pattern label summarizes what the multi-window comparison reveals about the 
 
 ---
 
-## Scoring Definitions (`--explain` / `--guide`)
+## Scoring Definitions (`--detail` / `--guide`)
 
-Add `--explain` after a screen run to show run context and scoring definitions.
+Add `--detail` after a screen run to show run context and scoring definitions.
 Use `--guide` when you only want the column reference without running a screen.
 
 This shows GGRM earned:
@@ -383,14 +383,14 @@ Once you find a ticker worth researching (e.g. BBRI):
 
 ```bash
 # How does the current score break down?
-saham screen accum BBRI --window 7 --explain
-saham screen accum BBRI --window 30 --explain
+saham screen accum BBRI --window 7 --detail
+saham screen accum BBRI --window 30 --detail
 
 # What does the daily flow look like?
 saham view ticker flow BBRI --days 30
 
 # Swing decision and risk/signal context
-saham plan swing BBRI --with-risk-detail --with-signal-detail
+saham plan swing BBRI
 saham plan swing BBRI --with-sentiment   # add news context
 ```
 

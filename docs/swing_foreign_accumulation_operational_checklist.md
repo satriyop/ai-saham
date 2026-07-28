@@ -61,7 +61,7 @@ saham screen accum --universe idx80 --multi --top 15
 saham screen accum BBCA BBRI BMRI TLKM --multi
 ```
 
-- [ ] Gunakan `--explain` untuk score scale dan komponen runtime.
+- [ ] Gunakan `--detail` untuk score scale dan komponen runtime.
 - [ ] Pilih 2–4 kandidat; jangan hanya urut berdasarkan score.
 - [ ] Prioritaskan recent flow, phase, compression, VWAP context, trend, broker
   quality, coverage, dan regime yang saling mendukung.
@@ -79,7 +79,7 @@ saham plan swing TICKER \
 Opsi sesuai kebutuhan:
 
 ```bash
-saham plan swing TICKER --with-flow-detail --explain
+saham plan swing TICKER --with-flow-detail
 saham plan swing TICKER --with-technical-gate
 saham plan swing TICKER --with-market-context
 saham plan swing TICKER --strategy foreign-accumulation

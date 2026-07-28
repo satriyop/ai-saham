@@ -246,6 +246,26 @@ def format_market_context_lines(
     return lines
 
 
+# Stable column order for screen pattern-match boards (matches AVAILABLE_SWING_SETUPS).
+NAMED_SETUP_BOARD_ORDER: tuple[str, ...] = (
+    "foreign-bounce",
+    "coiled-spring",
+    "smart-money-confirmed",
+    "pullback-continuation",
+)
+NAMED_SETUP_SHORT_LABELS: dict[str, str] = {
+    "foreign-bounce": "FB",
+    "coiled-spring": "CS",
+    "smart-money-confirmed": "SM",
+    "pullback-continuation": "PB",
+}
+_MATCH_GLYPH: dict[str, str] = {
+    "MATCH": "M",
+    "PARTIAL": "~",
+    "NO_MATCH": "·",
+}
+
+
 def readiness_and_family(candidate: Any) -> tuple[Any, str | None]:
     """Extract setup_readiness VO and family from a screen candidate."""
     if candidate is None:
@@ -266,6 +286,39 @@ def readiness_and_family(candidate: Any) -> tuple[Any, str | None]:
     if family is not None:
         family = str(family) or None
     return readiness, family
+
+
+def named_setup_match_glyphs(candidate: Any) -> dict[str, str]:
+    """Compact MATCH/PARTIAL/NO_MATCH glyphs per named setup (diagnostic only).
+
+    Returns short-label → glyph. Missing evals render as ``-`` (not evaluated).
+    Glyphs: M=MATCH, ~=PARTIAL, ·=NO_MATCH. Does not grant entry authority.
+    """
+    evals = getattr(candidate, "named_setup_evaluations", None) or {}
+    out: dict[str, str] = {}
+    for name in NAMED_SETUP_BOARD_ORDER:
+        short = NAMED_SETUP_SHORT_LABELS.get(name, name[:2].upper())
+        evaluation = evals.get(name) if isinstance(evals, dict) else None
+        if evaluation is None:
+            out[short] = "-"
+            continue
+        match = getattr(evaluation, "match", None)
+        match_s = str(getattr(match, "value", match) or "")
+        out[short] = _MATCH_GLYPH.get(match_s, "?")
+    return out
+
+
+def format_primary_setup_family(candidate: Any) -> str:
+    """Primary setup family label for boards; ``-`` when unresolved."""
+    _, family = readiness_and_family(candidate)
+    if family:
+        return str(family)
+    sfr = getattr(candidate, "setup_family_result", None) if candidate is not None else None
+    if sfr is not None:
+        primary = getattr(sfr, "primary_setup_family", None)
+        if primary:
+            return str(primary)
+    return "-"
 
 
 def coverage_pct(candidate: Any) -> float | None:

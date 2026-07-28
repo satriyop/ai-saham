@@ -38,9 +38,9 @@ BACKTEST
 | Screen multi-window | `saham screen accum --universe lq45 --multi` |
 | Filter squeeze | `saham screen accum --universe lq45 --squeeze-only` |
 | Filter foreign underwater | `saham screen accum --universe lq45 --vwap-only` |
-| Tampilkan definisi run | `saham screen accum --universe lq45 --explain` |
+| Tampilkan definisi run | `saham screen accum --universe lq45 --detail` |
 | Analisis setup | `saham plan swing TICKER --setup foreign-bounce` |
-| Flow detail | `saham plan swing TICKER --with-flow-detail --explain` |
+| Flow detail | `saham plan swing TICKER --with-flow-detail` |
 | Broker flow harian | `saham view ticker flow TICKER --days 30` |
 | Sizing standalone | `plan swing --capital  # sizing TICKER --capital 10000000` |
 | Audit accumulation | `saham research accum evaluate --universe lq45` |
@@ -68,7 +68,7 @@ dan context lain yang diaktifkan config.
 Jangan mengandalkan angka/skala historis dari arsip. Gunakan:
 
 ```bash
-saham screen accum --universe lq45 --explain
+saham screen accum --universe lq45 --detail
 ```
 
 Interpretasi umum:

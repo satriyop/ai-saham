@@ -368,7 +368,22 @@ class AccumulationCandidate:
             "risk_status": self.risk_assessment.risk_level_name if self.risk_assessment else None,
             "risk_confidence": self.risk_assessment.confidence if self.risk_assessment else None,
             "risk_gate": self.risk_assessment.gate_triggered if self.risk_assessment else None,
+            # Composed judgment (ADR-054 S1): same TradeSetup memory field as the table Action.
+            "trade_setup": self.trade_setup.to_dict() if self.trade_setup is not None else None,
             "setup_phase": self.setup_phase.to_dict() if self.setup_phase else None,
+            # Pattern recognition already computed at screen time (diagnostic).
+            # Primary family + named setup MATCH/PARTIAL/NO_MATCH — not entry authority.
+            "setup_family_result": (
+                self.setup_family_result.to_dict() if self.setup_family_result is not None else None
+            ),
+            "named_setup_evaluations": (
+                {
+                    name: evaluation.to_dict()
+                    for name, evaluation in self.named_setup_evaluations.items()
+                }
+                if self.named_setup_evaluations
+                else None
+            ),
             "freshness": self.freshness.to_dict() if self.freshness else None,
         }
 
