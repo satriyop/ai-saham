@@ -48,6 +48,7 @@ def test_today_shows_market_source_tag(tmp_path: Path):
             app,
             [
                 "today",
+                "--offline",
                 "--universe",
                 "lq45",
                 "--db",
@@ -1213,3 +1214,135 @@ def test_daily_display():
     assert "Authority" in output
     # Assert output contains expected percentage
     assert "85%" in output
+
+
+# ── ADR-052: live-first resolution branching ──────────────────────────────────
+
+
+def _fake_briefing_use_case(sentinel):
+    """Use case whose execute() returns a sentinel cached response."""
+    from unittest.mock import MagicMock
+
+    uc = MagicMock()
+    uc.execute.return_value = sentinel
+    return uc
+
+
+def _req(offline_universe="lq45", as_of=None):
+    from src.application.use_case.daily_briefing_use_case import DailyBriefingRequest
+
+    return DailyBriefingRequest(universe=offline_universe, top=3, as_of_date=as_of)
+
+
+def test_resolve_offline_flag_skips_refresh():
+    from unittest.mock import patch
+
+    from src.adapters.cli import today_commands
+
+    cached = object()
+    uc = _fake_briefing_use_case(cached)
+    with patch.object(today_commands, "_build_refresh_workspace_use_case") as build:
+        res = today_commands._resolve_briefing_response(
+            use_case=uc, request=_req(), offline=True, db_path=Path("x.db")
+        )
+    assert res.data_source == "CACHED"
+    assert res.response is cached
+    build.assert_not_called()
+    uc.execute.assert_called_once()
+
+
+def test_resolve_historical_skips_refresh():
+    from unittest.mock import patch
+
+    from src.adapters.cli import today_commands
+
+    cached = object()
+    uc = _fake_briefing_use_case(cached)
+    with patch.object(today_commands, "_build_refresh_workspace_use_case") as build:
+        res = today_commands._resolve_briefing_response(
+            use_case=uc, request=_req(as_of=date(2026, 6, 19)), offline=False, db_path=Path("x.db")
+        )
+    assert res.data_source == "HISTORICAL"
+    assert res.response is cached
+    build.assert_not_called()
+
+
+def test_resolve_lock_window_prefers_committed_corpus():
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    from src.adapters.cli import today_commands
+
+    cached = object()
+    uc = _fake_briefing_use_case(cached)
+    pre_open = SimpleNamespace(is_pre_open=True)
+    with (
+        patch(
+            "src.infrastructure.browser.stockbit_market_time.get_display_market_status",
+            return_value=pre_open,
+        ),
+        patch.object(today_commands, "_build_refresh_workspace_use_case") as build,
+    ):
+        res = today_commands._resolve_briefing_response(
+            use_case=uc, request=_req(), offline=False, db_path=Path("x.db")
+        )
+    assert res.data_source == "LOCK_WINDOW"
+    assert res.response is cached
+    build.assert_not_called()
+
+
+def test_resolve_live_success_uses_refreshed_briefing():
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock, patch
+
+    from src.adapters.cli import today_commands
+
+    live_response = object()
+    refresh_uc = MagicMock()
+    refresh_uc.execute.return_value = SimpleNamespace(
+        briefing=live_response, warnings=("1 ticker(s) failed during refresh.",)
+    )
+    uc = _fake_briefing_use_case(object())
+    open_status = SimpleNamespace(is_pre_open=False)
+    with (
+        patch(
+            "src.infrastructure.browser.stockbit_market_time.get_display_market_status",
+            return_value=open_status,
+        ),
+        patch.object(today_commands, "_build_refresh_workspace_use_case", return_value=refresh_uc),
+    ):
+        res = today_commands._resolve_briefing_response(
+            use_case=uc, request=_req(), offline=False, db_path=Path("x.db")
+        )
+    assert res.data_source == "LIVE"
+    assert res.response is live_response
+    assert res.extra_warnings == ["1 ticker(s) failed during refresh."]
+    uc.execute.assert_not_called()  # live path did not fall back to cache
+
+
+def test_resolve_live_failure_falls_back_to_cache_with_warning():
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    from src.adapters.cli import today_commands
+
+    cached = object()
+    uc = _fake_briefing_use_case(cached)
+    open_status = SimpleNamespace(is_pre_open=False)
+
+    def _boom(**_kwargs):
+        raise ConnectionError("stockbit down")
+
+    with (
+        patch(
+            "src.infrastructure.browser.stockbit_market_time.get_display_market_status",
+            return_value=open_status,
+        ),
+        patch.object(today_commands, "_build_refresh_workspace_use_case", side_effect=_boom),
+    ):
+        res = today_commands._resolve_briefing_response(
+            use_case=uc, request=_req(), offline=False, db_path=Path("x.db")
+        )
+    assert res.data_source == "CACHED"
+    assert res.response is cached
+    assert res.extra_warnings and "ConnectionError" in res.extra_warnings[0]

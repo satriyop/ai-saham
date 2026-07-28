@@ -39,6 +39,7 @@ from src.application.use_case.daily_accumulation_projection import (
 )
 from src.application.use_case.daily_briefing_use_case import (
     DailyBriefingRequest,
+    DailyBriefingResponse,
     DailyBriefingUseCase,
     OpeningBriefingCandidate,
 )
@@ -291,6 +292,144 @@ def _fallback_next_command(response) -> str:
     return f"Next: saham screen accum --universe {response.universe}"
 
 
+# ── Live-first briefing resolution (ADR-052) ──────────────────────────────────
+#
+# `today` is a live-first adapter surface: it refreshes its own inputs by reusing
+# the existing RefreshDailyWorkspaceUseCase (fetch writes cache, briefing renders
+# from cache), then degrades to a cached render on failure/offline/lock-window.
+# The adapter owns NO fetch/cache policy — it only selects the path and maps errors.
+#
+# The refresh runs synchronously in the foreground: with refresh=False the fetch
+# workflow only pulls stale/missing tickers, so steady-state runs are quick and the
+# one-time backfill is the only slow run. Per-request HTTP timeouts (Stockbit/IDX)
+# bound total latency, so no wall-clock guard is needed; `--offline` skips it.
+
+
+@dataclass(frozen=True)
+class _BriefingResolution:
+    data_source: str  # LIVE | CACHED | LOCK_WINDOW | HISTORICAL
+    response: DailyBriefingResponse
+    extra_warnings: list[str]
+
+
+def _build_refresh_workspace_use_case(*, use_case: DailyBriefingUseCase, db_path: Path):
+    """Adapter wiring: adapt RefreshDailyWorkspaceRequest → the fetch-market workflow
+    and pair it with the already-constructed briefing use case. No fetch policy here.
+    """
+    from src.adapters.cli.fetch_market_provider_factory import create_broker_provider
+    from src.application.use_case.fetch_market_command_workflow_use_case import (
+        FetchMarketCommandWorkflowRequest,
+    )
+    from src.application.use_case.refresh_daily_workspace_use_case import (
+        RefreshDailyWorkspaceUseCase,
+    )
+    from src.infrastructure.composition.fetch_market.fetch_market_workflow_factory import (
+        create_workflow_use_case,
+    )
+    from src.infrastructure.config.data_sources_config import candle_source
+
+    broker_provider_obj, broker_provider_name = create_broker_provider(None)
+    workflow = create_workflow_use_case(
+        db_path=db_path,
+        broker_provider=broker_provider_obj,
+        broker_provider_name=broker_provider_name,
+    )
+
+    def refresh_capability(req, *, on_start=None, on_ticker_complete=None):
+        workflow_request = FetchMarketCommandWorkflowRequest(
+            tickers=list(req.tickers),
+            universe=req.universe,
+            days=req.days,
+            db_path=db_path,
+            candles_provider=candle_source(),
+            broker_provider=broker_provider_obj,
+            broker_provider_name=broker_provider_name,
+            refresh=req.force_refresh,
+            candles_only=req.components == "CANDLES_ONLY",
+            broker_only=req.components == "BROKER_ONLY",
+            no_meta=not req.include_meta,
+            no_enrichment=not req.include_enrichment,
+            no_calendar=not req.include_calendar,
+        )
+        return workflow.execute(
+            workflow_request,
+            on_ticker_complete=on_ticker_complete,
+            on_start=on_start,
+        )
+
+    return RefreshDailyWorkspaceUseCase(
+        refresh_market_data_capability=refresh_capability,
+        daily_briefing_use_case=use_case,
+    )
+
+
+def _resolve_briefing_response(
+    *,
+    use_case: DailyBriefingUseCase,
+    request: DailyBriefingRequest,
+    offline: bool,
+    db_path: Path,
+) -> _BriefingResolution:
+    """Decide LIVE vs cached render and return the briefing with its provenance.
+
+    Cache-only (no fetch) when: a historical `--date` is requested, `--offline` is
+    set, or the market is in the pre-open NCP lock window (prefer the committed
+    08:57 corpus decision). Otherwise refresh live and fall back to cache on any
+    failure/timeout.
+    """
+    if request.as_of_date is not None:
+        return _BriefingResolution("HISTORICAL", use_case.execute(request), [])
+    if offline:
+        return _BriefingResolution("CACHED", use_case.execute(request), [])
+
+    from src.infrastructure.browser.stockbit_market_time import get_display_market_status
+
+    pre_status = get_display_market_status()  # instant, no network
+    if getattr(pre_status, "is_pre_open", False):
+        # ADR-052 lock-window guard: do not probe live IEV during the NCP lock.
+        return _BriefingResolution("LOCK_WINDOW", use_case.execute(request), [])
+
+    typer.echo("⟳ Refreshing live data… (use --offline to skip)", err=True)
+    try:
+        refresh_uc = _build_refresh_workspace_use_case(use_case=use_case, db_path=db_path)
+        from src.application.use_case.refresh_daily_workspace_use_case import (
+            RefreshDailyWorkspaceRequest,
+        )
+
+        result = refresh_uc.execute(
+            RefreshDailyWorkspaceRequest(
+                universe=request.universe,
+                briefing_top=request.top,
+            )
+        )
+        return _BriefingResolution("LIVE", result.briefing, list(result.warnings))
+    except Exception as exc:  # noqa: BLE001 — degrade to cache on any refresh failure
+        return _BriefingResolution(
+            "CACHED",
+            use_case.execute(request),
+            [f"Live refresh failed ({type(exc).__name__}) — showing cached data."],
+        )
+
+
+_DATA_SOURCE_STYLE = {
+    "LIVE": "green",
+    "CACHED": "yellow",
+    "LOCK_WINDOW": "yellow",
+    "HISTORICAL": "cyan",
+}
+
+
+def _data_source_text(resolution: _BriefingResolution) -> Text:
+    label = {
+        "LIVE": "LIVE — refreshed from providers",
+        "CACHED": "CACHED — local data (⚠ may be stale)",
+        "LOCK_WINDOW": "LOCK_WINDOW — committed pre-open decision (no live probe)",
+        "HISTORICAL": "HISTORICAL — as-of date requested",
+    }[resolution.data_source]
+    style = _DATA_SOURCE_STYLE[resolution.data_source]
+    return Text(label, style=style)
+
+
 def today(
     universe: Annotated[
         Optional[str],
@@ -302,12 +441,24 @@ def today(
         Optional[Path],
         typer.Option("--db", help="Path to SQLite database"),
     ] = None,
+    offline: Annotated[
+        bool,
+        typer.Option(
+            "--offline/--no-offline",
+            "--no-fetch",
+            help="Skip the live refresh and render local cached data instantly.",
+        ),
+    ] = False,
 ) -> None:
     """
-    Read-only daily briefing dashboard from local cached data.
+    Live-first daily briefing cockpit (ADR-052).
+
+    Refreshes live-sensitive inputs (candles, broker flow, regime, calendar) then
+    renders; degrades to cached data with a ⚠ marker on failure/offline. Use
+    `--offline` for the instant cache-only read. During the pre-open NCP lock it
+    shows the committed 08:57 decision (no live probe).
 
     Not TradeSetup authority — use `saham plan swing TICKER` for decisions.
-    Does not fetch, tune, or write. Update inputs: `saham fetch …`, `saham screen …`.
     Regime detail: `saham inspect regime`.
     """
     cfg = load_app_config()
@@ -357,13 +508,17 @@ def today(
         ),
     )
 
-    response = use_case.execute(
-        DailyBriefingRequest(
+    resolution = _resolve_briefing_response(
+        use_case=use_case,
+        request=DailyBriefingRequest(
             universe=universe,
             top=top,
             as_of_date=as_of,
-        )
+        ),
+        offline=offline,
+        db_path=db_path,
     )
+    response = resolution.response
 
     fresh_count = response.universe_count - response.stale_count
     summary = compact_table(show_header=False)
@@ -388,6 +543,7 @@ def today(
     else:
         summary.add_row("Mode", f"HISTORICAL — {response.live_session_date.isoformat()}")
 
+    summary.add_row("Data source", _data_source_text(resolution))
     summary.add_row("Live session date", response.live_session_date.isoformat())
     latest_eod_str = (
         response.latest_completed_eod_date.isoformat()
@@ -535,10 +691,12 @@ def today(
     setup_lens_render = _setup_lens_impact_elements(response.setup_lens_impact)
     sections.extend(setup_lens_render.elements)
 
-    if response.warnings:
+    # Live-refresh warnings (ADR-052) lead so a fallback-to-cache is visible first.
+    all_warnings = resolution.extra_warnings + list(response.warnings)
+    if all_warnings:
         warnings = compact_table(show_header=False)
         warnings.add_column("Warning")
-        for warning in response.warnings[:5]:
+        for warning in all_warnings[:5]:
             warnings.add_row(f"- {warning}")
         sections.extend([Text("Warnings", style="bold yellow"), warnings])
 

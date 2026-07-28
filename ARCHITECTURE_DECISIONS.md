@@ -171,6 +171,7 @@ row.
 | [049](docs/adr/ADR-049-database-owned-learning-pipeline-clean-break.md) | Database-owned learning pipeline clean break | Accepted; supersedes ADR-023 learning persistence; amends ADR-027/033/041/042/048; public CLI family tree (trade/research/policy) |
 | [050](docs/adr/ADR-050-cli-verb-contracts.md) | CLI verb contracts (`plan` / `inspect` / `assess`) | Accepted; implementation landed; amends 020/032/033/049 command paths |
 | [051](docs/adr/ADR-051-tui-opencode-cockpit-clean-break.md) | TUI OpenCode daily cockpit clean break | Accepted; Phases 0–5 implemented; supersedes multi-route research TUI UX |
+| [052](docs/adr/ADR-052-today-live-first-adapter.md) | `saham today` live-first adapter with offline fallback | Accepted; implementation in progress; scopes ADR-011 (offline-first = engine/domain; `today` = live adapter) |
 
 ## Adding or changing a decision
 
