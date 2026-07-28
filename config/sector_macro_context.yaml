@@ -79,7 +79,7 @@ sector_macro_context:
         supportive_min: 0.01
         headwind_max: -0.01
 
-    # US 10Y yield — financial-conditions proxy for bank risk context (not NIM model).
+    # US 10Y yield — financial-conditions proxy for non-bank rates maps (cement, etc.).
     # invert=true: rising yields → lower score (tighter conditions / risk-off).
     us_10y:
       series: "^TNX"
@@ -88,6 +88,18 @@ sector_macro_context:
       thresholds:
         supportive_min: 0.01
         headwind_max: -0.01
+
+    # P2a: BI policy-rate steps from macro calendar (not continuous SBN/INDONIA).
+    # Virtual series BI_RATE — not Yahoo. invert=true: hike net → headwind (bank defensive).
+    # value = net step count (hike +1 / cut -1) over lookback_days.
+    bi_rate_policy:
+      series: "BI_RATE"
+      kind: policy_rate_steps
+      invert: true
+      lookback_days: 180
+      thresholds:
+        supportive_min: 1.0
+        headwind_max: -1.0
 
     # Palm oil futures — Yahoo-live (CPO=F). Not KO=F (dead).
     cpo:
@@ -213,9 +225,9 @@ sector_macro_context:
       factors:
         - { ref: oil_cost, weight: 0.60 }
         - { ref: usd_idr_risk, weight: 0.40 }
-    # Defensive bank risk context (not NIM expansion model). Both rising rates and
-    # weaker IDR score as headwind. Uses existing universes.yaml `bank` group.
+    # Defensive bank risk context (not NIM expansion model). P2a: local BI policy
+    # steps + IDR risk. Uses existing universes.yaml `bank` group.
     bank:
       factors:
-        - { ref: us_10y, weight: 0.55 }
+        - { ref: bi_rate_policy, weight: 0.55 }
         - { ref: usd_idr_risk, weight: 0.45 }

@@ -53,6 +53,7 @@ def create_accumulation_screen_use_case(
     sector_context_builder_factory: Any | None = None,
     sector_macro_context_builder_factory: Any | None = None,
     company_quality_context_builder_factory: Any | None = None,
+    macro_calendar_repository: Any | None = None,
 ) -> AccumulationScreenUseCase:
     """Build AccumulationScreenUseCase with consistent optional enrichment wiring.
 
@@ -89,6 +90,7 @@ def create_accumulation_screen_use_case(
         sector_context_builder_factory=sector_context_builder_factory,
         sector_macro_context_builder_factory=sector_macro_context_builder_factory,
         company_quality_context_builder_factory=company_quality_context_builder_factory,
+        macro_calendar_repository=macro_calendar_repository,
     )
 
 
@@ -131,6 +133,7 @@ def create_accumulation_screen_use_case_bundle(
     sector_context_builder_factory: Any | None = None,
     sector_macro_context_builder_factory: Any | None = None,
     company_quality_context_builder_factory: Any | None = None,
+    macro_calendar_repository: Any | None = None,
 ) -> AccumulationScreenUseCaseBundle:
     """Build the screen use case together with its canonical observation recorder.
 
@@ -166,6 +169,7 @@ def create_accumulation_screen_use_case_bundle(
         sector_context_builder_factory=sector_context_builder_factory,
         sector_macro_context_builder_factory=sector_macro_context_builder_factory,
         company_quality_context_builder_factory=company_quality_context_builder_factory,
+        macro_calendar_repository=macro_calendar_repository,
     )
 
     setup_family_resolver = PrimarySetupFamilyResolver()
@@ -184,6 +188,7 @@ def create_accumulation_screen_use_case_bundle(
         sector_context_builder_factory=sector_context_builder_factory,
         sector_macro_context_builder_factory=sector_macro_context_builder_factory,
         company_quality_context_builder_factory=company_quality_context_builder_factory,
+        macro_calendar_repository=macro_calendar_repository,
     )
     observation_persister = AccumulationCandidateObservationPersister(
         candidate_observations_repository=candidate_observations_repository,

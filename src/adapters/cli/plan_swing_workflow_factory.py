@@ -1,5 +1,5 @@
 """
-Factory for the saham analyze swing workflow.
+Factory for the saham plan swing workflow.
 
 Layer: Adapter
 
@@ -52,10 +52,13 @@ from src.application.use_case.swing_analysis_workflow_use_case import SwingAnaly
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
 )
-from src.infrastructure.config.analyze_swing_config import AnalyzeSwingConfig
 from src.infrastructure.config.market_context_factory import evaluate_market_context
+from src.infrastructure.config.plan_swing_config import PlanSwingConfig
 from src.infrastructure.persistence.ihsg_trading_session_calendar_provider import (
     IHSGTradingSessionCalendarProvider,
+)
+from src.infrastructure.persistence.sqlite_macro_calendar_repository import (
+    SQLiteMacroCalendarRepository,
 )
 
 
@@ -64,13 +67,13 @@ def create_swing_analysis_workflow(
     db_path: Path,
     setup_name: str | None,
     swing_config: SwingConfig,
-    analyze_config: AnalyzeSwingConfig,
+    plan_swing_config: PlanSwingConfig,
     smart_money_brokers: set[str],
     noise_brokers: set[str],
     broker_weights: dict[str, Decimal],
     dependencies: StockAnalysisWorkflowDependencies | None = None,
 ) -> SwingAnalysisWorkflowUseCase:
-    """Build the composite swing analysis workflow with CLI infrastructure."""
+    """Build the composite plan swing workflow with CLI infrastructure."""
     deps = dependencies or create_stock_analysis_workflow_dependencies(db_path)
     accumulation_config = load_accumulation_screener_config()
     signal_engine = deps.create_signal_engine()
@@ -78,7 +81,7 @@ def create_swing_analysis_workflow(
     build_accumulation_candidate_evaluation = create_accumulation_candidate_builder(
         deps=deps,
         swing_config=swing_config,
-        analyze_config=analyze_config,
+        plan_swing_config=plan_swing_config,
         accumulation_config=accumulation_config,
         signal_engine=signal_engine,
     )
@@ -98,7 +101,7 @@ def create_swing_analysis_workflow(
             ticker=ticker,
             db_path=db_path,
             force_refresh=force_refresh,
-            analyze_config=analyze_config,
+            plan_swing_config=plan_swing_config,
         ),
         build_data_freshness=build_swing_data_freshness,
         build_flow_detail=build_flow_detail,
@@ -113,7 +116,7 @@ def create_swing_analysis_workflow(
         fetch_sentiment=lambda ticker, sentiment_verbose: fetch_swing_sentiment(
             ticker=ticker,
             sentiment_verbose=sentiment_verbose,
-            analyze_config=analyze_config,
+            plan_swing_config=plan_swing_config,
         ),
         load_swing_config=lambda: swing_config,
         resolve_setup_targets=resolve_setup_targets,
@@ -131,6 +134,7 @@ def create_swing_analysis_workflow(
         sector_context_builder_factory=deps.sector_context_builder_factory,
         sector_macro_context_builder_factory=deps.sector_macro_context_builder_factory,
         company_quality_context_builder_factory=(deps.company_quality_context_builder_factory),
+        macro_calendar_repository=SQLiteMacroCalendarRepository(db_path),
         session_resolver=EffectiveMarketSessionResolver(deps.market_repository),
         signal_evidence_context_builder=SignalEvidenceExecutionContextBuilder(
             trading_session_calendar_loader=lambda start, end: IHSGTradingSessionCalendarProvider(

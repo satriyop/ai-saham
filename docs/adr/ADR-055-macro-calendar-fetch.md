@@ -36,9 +36,12 @@ separate from continuous yield series (SBN / INDONIA).
 - Included in `saham fetch market` by default (Stockbit session required);
   opt out with `--no-macro-calendar`. Independent of `--no-enrichment` /
   `--no-calendar`.
-- Optional later: view/browse CLI, TUI panel.
+- **P2a (done):** `policy_rate_steps` sector-macro factor kind scores BI hike/cut
+  net steps from `macro_calendar_events`. Bank map uses `bi_rate_policy`
+  (series `BI_RATE`) + `usd_idr_risk` instead of `^TNX`. Still DIAGNOSTIC.
+- Optional later: view/browse CLI, TUI panel; continuous SBN/INDONIA (P2b).
 
 ## Non-goals (this ADR)
 
-- Continuous SBN / INDONIA series
+- Continuous SBN / INDONIA series (P2b)
 - CA risk wiring

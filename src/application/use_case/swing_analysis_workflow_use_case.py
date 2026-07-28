@@ -15,6 +15,7 @@ from src.application.dto import swing_analysis as swing_analysis_dto
 from src.application.ports.rules_loader import RulesLoader
 
 if TYPE_CHECKING:
+    from src.application.ports.macro_calendar_repository import MacroCalendarRepository
     from src.application.services.company_quality_context_evidence_builder import (
         CompanyQualityContextEvidenceBuilder,
     )
@@ -116,6 +117,7 @@ class SwingAnalysisWorkflowUseCase:
         company_quality_context_builder_factory: (
             Callable[[], CompanyQualityContextEvidenceBuilder] | None
         ) = None,
+        macro_calendar_repository: "MacroCalendarRepository | None" = None,
         session_resolver: EffectiveMarketSessionResolver | None = None,
     ) -> None:
         self._market_repo = market_repository
@@ -166,6 +168,7 @@ class SwingAnalysisWorkflowUseCase:
             sector_context_builder_factory=sector_context_builder_factory,
             sector_macro_context_builder_factory=sector_macro_context_builder_factory,
             company_quality_context_builder_factory=company_quality_context_builder_factory,
+            macro_calendar_repository=macro_calendar_repository,
         )
         self._input_collector = SwingAnalysisInputCollector(
             market_repository=market_repository,

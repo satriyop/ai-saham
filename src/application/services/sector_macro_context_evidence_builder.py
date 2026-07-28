@@ -20,12 +20,14 @@ from typing import Any, Mapping
 
 from src.domain.entities.candle import Candle
 from src.domain.value_objects.institutional_accumulation_evidence import EvidenceStatus
+from src.domain.value_objects.policy_rate_step import PolicyRateStep
 from src.domain.value_objects.sector_macro_context_evidence import (
     MacroFactorScore,
     SectorMacroContextEvidence,
 )
 
-_ALLOWED_KINDS = frozenset({"return_sessions"})
+_ALLOWED_KINDS = frozenset({"return_sessions", "policy_rate_steps"})
+_DEFAULT_POLICY_LOOKBACK_DAYS = 180
 
 
 @dataclass(frozen=True)
@@ -41,6 +43,7 @@ class FactorLibraryEntry:
     kind: str
     invert: bool
     thresholds: FactorThresholds
+    lookback_days: int | None = None  # policy_rate_steps calendar-day window
 
 
 @dataclass(frozen=True)
@@ -90,13 +93,22 @@ class SectorMacroContextConfig:
             if kind not in _ALLOWED_KINDS:
                 raise ValueError(f"factor_library.{name}.kind unsupported: {kind!r}")
             thr = entry.get("thresholds", {}) or {}
-            supportive = float(thr.get("supportive_min", 0.05))
-            headwind = float(thr.get("headwind_max", -0.05))
+            if kind == "policy_rate_steps":
+                supportive = float(thr.get("supportive_min", 1.0))
+                headwind = float(thr.get("headwind_max", -1.0))
+            else:
+                supportive = float(thr.get("supportive_min", 0.05))
+                headwind = float(thr.get("headwind_max", -0.05))
             if headwind >= supportive:
                 raise ValueError(
                     f"factor_library.{name}: headwind_max ({headwind}) must be < "
                     f"supportive_min ({supportive})"
                 )
+            lookback_days: int | None = None
+            if kind == "policy_rate_steps":
+                lookback_days = int(entry.get("lookback_days", _DEFAULT_POLICY_LOOKBACK_DAYS))
+                if lookback_days <= 0:
+                    raise ValueError(f"factor_library.{name}.lookback_days must be > 0")
             factor_library[str(name)] = FactorLibraryEntry(
                 name=str(name),
                 series=str(entry.get("series") or "").upper().strip(),
@@ -106,6 +118,7 @@ class SectorMacroContextConfig:
                     supportive_min=supportive,
                     headwind_max=headwind,
                 ),
+                lookback_days=lookback_days,
             )
             if not factor_library[str(name)].series:
                 raise ValueError(f"factor_library.{name}.series is required")
@@ -150,25 +163,60 @@ class SectorMacroContextConfig:
         )
 
     def required_series_tickers(self) -> frozenset[str]:
-        """Series used by at least one live sector map (not library-only)."""
+        """Candle series used by at least one live map (excludes policy_rate_steps)."""
         tickers: set[str] = set()
         for refs in self.sector_maps.values():
             for ref in refs:
                 entry = self.factor_library[ref.ref]
-                tickers.add(entry.series)
+                if entry.kind == "return_sessions":
+                    tickers.add(entry.series)
         return frozenset(tickers)
 
     def series_for_group(self, group: str | None) -> tuple[str, ...]:
-        """Series required for one universe group map (empty if unmapped)."""
+        """Candle series required for one group map (excludes policy_rate_steps)."""
         if not group:
             return ()
         refs = self.sector_maps.get(group)
         if not refs:
             return ()
-        return tuple(self.factor_library[r.ref].series for r in refs)
+        return tuple(
+            self.factor_library[r.ref].series
+            for r in refs
+            if self.factor_library[r.ref].kind == "return_sessions"
+        )
+
+    def policy_series_for_group(self, group: str | None) -> tuple[str, ...]:
+        """Virtual policy series keys (e.g. BI_RATE) for one group map."""
+        if not group:
+            return ()
+        refs = self.sector_maps.get(group)
+        if not refs:
+            return ()
+        return tuple(
+            self.factor_library[r.ref].series
+            for r in refs
+            if self.factor_library[r.ref].kind == "policy_rate_steps"
+        )
+
+    def max_policy_lookback_days_for_group(self, group: str | None) -> int:
+        """Max lookback_days among policy factors on a map (default 180)."""
+        if not group:
+            return _DEFAULT_POLICY_LOOKBACK_DAYS
+        refs = self.sector_maps.get(group)
+        if not refs:
+            return _DEFAULT_POLICY_LOOKBACK_DAYS
+        days = [
+            self.factor_library[r.ref].lookback_days or _DEFAULT_POLICY_LOOKBACK_DAYS
+            for r in refs
+            if self.factor_library[r.ref].kind == "policy_rate_steps"
+        ]
+        return max(days) if days else _DEFAULT_POLICY_LOOKBACK_DAYS
 
     def all_library_series_tickers(self) -> frozenset[str]:
-        return frozenset(e.series for e in self.factor_library.values())
+        """All return_sessions series in the library (for fetch discovery)."""
+        return frozenset(
+            e.series for e in self.factor_library.values() if e.kind == "return_sessions"
+        )
 
 
 @dataclass(frozen=True)
@@ -177,6 +225,7 @@ class SectorMacroContextRequest:
     snapshot_date: date
     sector_group: str | None  # universes.yaml group key; None if unresolved
     series_candles: Mapping[str, tuple[Candle, ...] | list[Candle]]
+    policy_steps: Mapping[str, tuple[PolicyRateStep, ...] | list[PolicyRateStep]] | None = None
 
 
 class SectorMacroContextEvidenceBuilder:
@@ -244,8 +293,27 @@ class SectorMacroContextEvidenceBuilder:
         reasons: list[str] = []
         scored: list[tuple[float, float]] = []  # (score, weight)
 
+        policy_steps_map = request.policy_steps or {}
+
         for ref in map_refs:
             entry = cfg.factor_library[ref.ref]
+            if entry.kind == "policy_rate_steps":
+                factor, scored_pair, unavail, reason = _score_policy_factor(
+                    entry=entry,
+                    weight=ref.weight,
+                    steps=policy_steps_map.get(entry.series) or (),
+                    as_of=request.snapshot_date,
+                    favorable_min=cfg.favorable_min,
+                    neutral_min=cfg.neutral_min,
+                )
+                factors.append(factor)
+                if unavail:
+                    unavailable.append(unavail)
+                if scored_pair is not None:
+                    scored.append(scored_pair)
+                    reasons.append(reason)
+                continue
+
             candles = request.series_candles.get(entry.series) or ()
             raw_return = _session_return_fraction(
                 candles,
@@ -332,6 +400,69 @@ class SectorMacroContextEvidenceBuilder:
                 "available_factor_count": available_n,
             },
         )
+
+
+def _score_policy_factor(
+    *,
+    entry: FactorLibraryEntry,
+    weight: float,
+    steps: tuple[PolicyRateStep, ...] | list[PolicyRateStep],
+    as_of: date,
+    favorable_min: float,
+    neutral_min: float,
+) -> tuple[MacroFactorScore, tuple[float, float] | None, str | None, str]:
+    """Score a policy_rate_steps factor. Returns (factor, scored_pair, unavail, reason)."""
+    from datetime import timedelta
+
+    from src.application.services.policy_rate_steps import (
+        filter_steps_on_or_before,
+        net_step_delta,
+    )
+
+    lookback = entry.lookback_days or _DEFAULT_POLICY_LOOKBACK_DAYS
+    window_start = as_of - timedelta(days=lookback)
+    in_window = [s for s in filter_steps_on_or_before(steps, as_of) if s.event_date >= window_start]
+    net = net_step_delta(in_window)
+    if net is None:
+        unavail = f"{entry.name}:no_policy_steps:{entry.series}"
+        factor = MacroFactorScore(
+            name=entry.name,
+            series=entry.series,
+            value=None,
+            score=None,
+            weight=weight,
+            label="UNAVAILABLE",
+            rationale=(
+                f"no directional {entry.series} policy steps in {lookback}d lookback "
+                f"ending {as_of.isoformat()}"
+            ),
+        )
+        return factor, None, unavail, ""
+
+    # invert=true (bank defensive): hikes (net+) → headwind; cuts (net-) → supportive
+    effective = -net if entry.invert else net
+    score = _piecewise_score(
+        effective,
+        supportive_min=entry.thresholds.supportive_min,
+        headwind_max=entry.thresholds.headwind_max,
+    )
+    label = _score_label(score, favorable_min, neutral_min)
+    invert_note = " (invert: hike=headwind)" if entry.invert else ""
+    rationale = (
+        f"{entry.series} net steps {net:+.0f} over {lookback}d{invert_note} "
+        f"→ effective {effective:+.0f} → score {score:.2f}"
+    )
+    reason = f"{entry.name}:{label}:{score:.2f}"
+    factor = MacroFactorScore(
+        name=entry.name,
+        series=entry.series,
+        value=net,  # raw net hike/cut count (not a fractional return)
+        score=score,
+        weight=weight,
+        label=label,
+        rationale=rationale,
+    )
+    return factor, (score, weight), None, reason
 
 
 def _session_return_fraction(

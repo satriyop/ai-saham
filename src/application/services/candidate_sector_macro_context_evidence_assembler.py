@@ -43,5 +43,6 @@ class CandidateSectorMacroContextEvidenceAssembler:
                 snapshot_date=snapshot_date,
                 sector_group=sector_group,
                 series_candles=inputs.series_candles,
+                policy_steps=inputs.policy_steps,
             )
         )

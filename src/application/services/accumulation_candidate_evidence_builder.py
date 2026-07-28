@@ -40,6 +40,7 @@ from src.application.services.candidate_ticker_profile_evidence_assembler import
 from src.application.services.volatility_context import build_volatility_context
 
 if TYPE_CHECKING:
+    from src.application.ports.macro_calendar_repository import MacroCalendarRepository
     from src.application.services.benchmark_excess_return_calculator import (
         BenchmarkExcessReturnCalculator,
     )
@@ -123,6 +124,7 @@ class AccumulationCandidateEvidenceBuilder:
         company_quality_context_builder_factory: (
             Callable[[], CompanyQualityContextEvidenceBuilder] | None
         ) = None,
+        macro_calendar_repository: "MacroCalendarRepository | None" = None,
     ) -> None:
         self._market_repo = market_repository
         self._broker_repo = broker_repository
@@ -142,7 +144,11 @@ class AccumulationCandidateEvidenceBuilder:
         )
         self._sector_macro_context_assembler = CandidateSectorMacroContextEvidenceAssembler()
 
-        self._data_loader = CandidateEvidenceDataLoader(market_repository, broker_repository)
+        self._data_loader = CandidateEvidenceDataLoader(
+            market_repository,
+            broker_repository,
+            macro_calendar_repository=macro_calendar_repository,
+        )
         self._setup_phase_assembler = CandidateSetupPhaseEvidenceAssembler(
             market_repository, candidate_observations_repository
         )
@@ -376,9 +382,13 @@ class AccumulationCandidateEvidenceBuilder:
                 sc_builder.sector_groups_for_ticker(candidate.ticker)
             )
             series_tickers = smc_builder.config.series_for_group(sector_group)
+            policy_series = smc_builder.config.policy_series_for_group(sector_group)
+            policy_lookback = smc_builder.config.max_policy_lookback_days_for_group(sector_group)
             inputs = self._data_loader.load_sector_macro_context_inputs(
                 series_tickers=series_tickers,
                 snapshot_date=snapshot_date,
+                policy_series=policy_series,
+                policy_lookback_days=policy_lookback,
             )
             return self._sector_macro_context_assembler.assemble(
                 builder=smc_builder,

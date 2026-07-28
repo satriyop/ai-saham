@@ -1,5 +1,5 @@
 """
-Accumulation candidate construction for the saham analyze swing workflow.
+Accumulation candidate construction for the saham plan swing workflow.
 
 Layer: Adapter
 
@@ -26,7 +26,10 @@ from src.application.services.accumulation_screen_factory import (
 from src.infrastructure.config.accumulation_screener_config import (
     AccumulationScreenerConfig,
 )
-from src.infrastructure.config.analyze_swing_config import AnalyzeSwingConfig
+from src.infrastructure.config.plan_swing_config import PlanSwingConfig
+from src.infrastructure.persistence.sqlite_macro_calendar_repository import (
+    SQLiteMacroCalendarRepository,
+)
 
 if TYPE_CHECKING:
     from src.application.dto.signal_evidence_execution_context import (
@@ -39,7 +42,7 @@ def create_accumulation_candidate_builder(
     *,
     deps: StockAnalysisWorkflowDependencies,
     swing_config: SwingConfig,
-    analyze_config: AnalyzeSwingConfig,
+    plan_swing_config: PlanSwingConfig,
     accumulation_config: AccumulationScreenerConfig,
     signal_engine: "SignalEngine",
 ):
@@ -66,14 +69,15 @@ def create_accumulation_candidate_builder(
             sector_context_builder_factory=deps.sector_context_builder_factory,
             sector_macro_context_builder_factory=deps.sector_macro_context_builder_factory,
             company_quality_context_builder_factory=(deps.company_quality_context_builder_factory),
+            macro_calendar_repository=SQLiteMacroCalendarRepository(deps.db_path),
         )
         accum_resp = accum_uc.execute(
             AccumulationScreenRequest(
                 tickers=[ticker],
                 as_of_date=as_of_date,
                 window_days=window,
-                min_net_buy_days=analyze_config.candidate_min_net_buy_days,
-                min_accum_score=analyze_config.candidate_min_accum_score,
+                min_net_buy_days=plan_swing_config.candidate_min_net_buy_days,
+                min_accum_score=plan_swing_config.candidate_min_accum_score,
                 min_accum_score_enabled=True,
                 tier1_broker_codes=swing_config.tier1_broker_codes,
                 bci_cluster_min_count=swing_config.bci_cluster_min_count,

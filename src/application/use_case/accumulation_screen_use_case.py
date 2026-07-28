@@ -190,6 +190,7 @@ class AccumulationScreenUseCase:
         company_quality_context_builder_factory: (
             Callable[[], CompanyQualityContextEvidenceBuilder] | None
         ) = None,
+        macro_calendar_repository: object | None = None,
     ) -> None:
         from src.application.services.benchmark_excess_return_calculator import (
             BenchmarkExcessReturnCalculator as _BenchmarkExcessReturnCalculator,
@@ -236,6 +237,7 @@ class AccumulationScreenUseCase:
             sector_context_builder_factory=sector_context_builder_factory,
             sector_macro_context_builder_factory=sector_macro_context_builder_factory,
             company_quality_context_builder_factory=company_quality_context_builder_factory,
+            macro_calendar_repository=macro_calendar_repository,
         )
         self._assessment_pipeline = ScreenAssessmentPipeline(
             policy=ScreenPolicy.accumulation(),

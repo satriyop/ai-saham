@@ -50,6 +50,9 @@ from src.infrastructure.config.market_context_factory import evaluate_market_con
 from src.infrastructure.persistence.ihsg_trading_session_calendar_provider import (
     IHSGTradingSessionCalendarProvider,
 )
+from src.infrastructure.persistence.sqlite_macro_calendar_repository import (
+    SQLiteMacroCalendarRepository,
+)
 from src.infrastructure.persistence.sqlite_watchlist_repository import (
     SQLiteWatchlistRepository,
 )
@@ -102,6 +105,7 @@ def create_accumulation_screen_workflow(
         sector_context_builder_factory=deps.sector_context_builder_factory,
         sector_macro_context_builder_factory=deps.sector_macro_context_builder_factory,
         company_quality_context_builder_factory=(deps.company_quality_context_builder_factory),
+        macro_calendar_repository=SQLiteMacroCalendarRepository(db_path),
     )
 
     return AccumulationScreenWorkflow(
@@ -156,6 +160,7 @@ def create_accumulation_screen_workflow_bundle(
         sector_context_builder_factory=deps.sector_context_builder_factory,
         sector_macro_context_builder_factory=deps.sector_macro_context_builder_factory,
         company_quality_context_builder_factory=(deps.company_quality_context_builder_factory),
+        macro_calendar_repository=SQLiteMacroCalendarRepository(db_path),
     )
 
 

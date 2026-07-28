@@ -20,6 +20,15 @@ def _pct(v: float | None) -> str:
     return f"{v * 100:+.1f}%" if v is not None else "—"
 
 
+def _factor_value_display(series: str, value: float | None) -> str:
+    """Policy series (BI_RATE) store net step counts, not fractional returns."""
+    if value is None:
+        return "—"
+    if series.upper() in {"BI_RATE"}:
+        return f"{value:+.0f} net"
+    return _pct(value)
+
+
 def print_sector_macro_context_panel(ctx: SwingOutputDisplayContext) -> None:
     smc = getattr(ctx.evidence, "sector_macro_context_evidence", None)
     lines: list = []
@@ -49,14 +58,14 @@ def print_sector_macro_context_panel(ctx: SwingOutputDisplayContext) -> None:
             table = compact_table()
             table.add_column("Factor")
             table.add_column("Series")
-            table.add_column("Return")
+            table.add_column("Value")
             table.add_column("Score")
             table.add_column("Label")
             for f in smc.factors:
                 table.add_row(
                     f.name,
                     f.series,
-                    _pct(f.value),
+                    _factor_value_display(f.series, f.value),
                     f"{f.score:.2f}" if f.score is not None else "—",
                     f.label,
                 )
