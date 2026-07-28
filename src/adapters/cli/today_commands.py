@@ -38,6 +38,8 @@ from src.application.use_case.daily_accumulation_projection import (
     DailyAccumulationCandidate,
 )
 from src.application.use_case.daily_briefing_use_case import (
+    CORP_ACTION_LOOKAHEAD_DAYS,
+    CorpActionBriefingRow,
     DailyBriefingRequest,
     DailyBriefingResponse,
     DailyBriefingUseCase,
@@ -62,6 +64,9 @@ from src.infrastructure.config.market_context_config import load_market_context_
 from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
+from src.infrastructure.persistence.sqlite_corporate_action_calendar_repository import (
+    SQLiteCorporateActionCalendarRepository,
+)
 from src.infrastructure.persistence.sqlite_iev_repository import SQLiteIEVRepository
 from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
     SQLiteLearningArtifactRepository,
@@ -156,6 +161,40 @@ def _opening_table(candidates: list[OpeningBriefingCandidate]):
     for candidate in candidates:
         elements.extend(_opening_candidate_lines(candidate))
     return Group(*elements)
+
+
+def _corp_action_elements(
+    rows: list[CorpActionBriefingRow],
+    universe: str,
+    live_session_date: date,
+) -> list:
+    """Render the CORPORATE ACTIONS section, emphasizing today/tomorrow milestones."""
+    from datetime import timedelta
+
+    title = Text(
+        f"CORPORATE ACTIONS — {universe.upper()}, next {CORP_ACTION_LOOKAHEAD_DAYS}d",
+        style="bold cyan",
+    )
+    if not rows:
+        return [title, Text("No upcoming corporate actions in window.", style="dim")]
+
+    tomorrow = live_session_date + timedelta(days=1)
+    table = compact_table()
+    table.add_column("Ticker", style="bold")
+    table.add_column("Type")
+    table.add_column("Date-role")
+    table.add_column("Date")
+    table.add_column("Note")
+    for row in rows[:12]:
+        if row.event_date == live_session_date:
+            date_text = "[bold yellow]TODAY[/bold yellow]"
+        elif row.event_date == tomorrow:
+            date_text = "[yellow]tomorrow[/yellow]"
+        else:
+            date_text = row.event_date.isoformat()
+        note = (row.note or "-")[:40]
+        table.add_row(row.ticker, row.event_type, row.date_role, date_text, note)
+    return [title, table]
 
 
 _RISK_STATUS_STYLE = {"OPEN": "green", "BLOCK": "red", "UNKNOWN": "white"}
@@ -553,6 +592,7 @@ def today(
             cfg=cfg,
         ),
         iev_baseline_repository=SQLiteIEVRepository(db_path),
+        corp_action_repository=SQLiteCorporateActionCalendarRepository(db_path),
     )
 
     resolution = _resolve_briefing_response(
@@ -705,6 +745,14 @@ def today(
         readiness_table,
     ]
     sections.extend(pre_open_elements)
+
+    sections.extend(
+        _corp_action_elements(
+            response.upcoming_corp_actions,
+            response.universe,
+            response.live_session_date,
+        )
+    )
 
     # Section title for accumulation screen
     accum_title = Text("ACCUMULATION SCREEN", style="bold cyan")

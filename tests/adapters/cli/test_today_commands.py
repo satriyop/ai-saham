@@ -1049,6 +1049,7 @@ def test_setup_lens_next_commands_suppress_footer():
             "readiness_items": [],
             "overall_authority": "READY",
             "setup_lens_impact": result,
+            "upcoming_corp_actions": [],
         },
     )()
 
@@ -1409,3 +1410,44 @@ def test_opening_candidate_lines_minimal_when_fields_absent():
     out = cap.get()
     assert "PADI" in out
     assert "IEV" not in out  # no auction line when IEV/IEP absent
+
+
+# ── ADR-052 Commit 3: corporate-action calendar section ───────────────────────
+
+
+def test_corp_action_elements_highlight_today_and_tomorrow():
+    from datetime import timedelta
+
+    from rich.console import Console
+
+    from src.adapters.cli.today_commands import _corp_action_elements
+    from src.application.use_case.daily_briefing_use_case import CorpActionBriefingRow
+
+    day = date(2026, 6, 19)
+    rows = [
+        CorpActionBriefingRow("ICBP", "dividend", "payment_date", day),
+        CorpActionBriefingRow("INDF", "dividend", "cum_date", day + timedelta(days=1)),
+        CorpActionBriefingRow("AKRA", "dividend", "ex_date", day + timedelta(days=5)),
+    ]
+    console = Console(width=120)
+    with console.capture() as cap:
+        for element in _corp_action_elements(rows, "lq45", day):
+            console.print(element)
+    out = cap.get()
+    assert "CORPORATE ACTIONS — LQ45, next 14d" in out
+    assert "ICBP" in out and "TODAY" in out
+    assert "INDF" in out and "tomorrow" in out
+    assert "AKRA" in out and "2026-06-24" in out
+
+
+def test_corp_action_elements_empty_state():
+    from rich.console import Console
+
+    from src.adapters.cli.today_commands import _corp_action_elements
+
+    console = Console(width=120)
+    with console.capture() as cap:
+        for element in _corp_action_elements([], "lq45", date(2026, 6, 19)):
+            console.print(element)
+    out = cap.get()
+    assert "No upcoming corporate actions in window." in out

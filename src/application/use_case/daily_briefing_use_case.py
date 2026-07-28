@@ -6,7 +6,7 @@ AI usage: None
 """
 
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -49,6 +49,9 @@ from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
 from src.domain.value_objects.learning_artifacts import AssessmentPurpose
 
 if TYPE_CHECKING:
+    from src.application.ports.corporate_action_calendar_repository import (
+        CorporateActionCalendarRepository,
+    )
     from src.application.ports.iev_snapshot_repository import IEVBaselineReadPort
     from src.domain.value_objects.market_context import MarketContext
 
@@ -59,6 +62,21 @@ OverallAuthority = Literal["READY", "PARTIAL", "NOT_READY"]
 def _opt_str(value: object) -> str | None:
     """Normalize a corpus value (often a serialized Decimal) to str, preserving None."""
     return None if value is None else str(value)
+
+
+# Forward window for the daily-briefing corporate-action calendar section.
+CORP_ACTION_LOOKAHEAD_DAYS = 14
+
+
+@dataclass(frozen=True)
+class CorpActionBriefingRow:
+    """Flattened corporate-action milestone for the daily-briefing calendar."""
+
+    ticker: str
+    event_type: str
+    date_role: str
+    event_date: date
+    note: str | None = None
 
 
 @dataclass(frozen=True)
@@ -141,6 +159,7 @@ class DailyBriefingResponse:
     accumulation_summary: DailyAccumulationSummary | None = None
     daily_accumulation_candidates: list[DailyAccumulationCandidate] = field(default_factory=list)
     setup_lens_impact: DailySetupLensImpactResult | None = None
+    upcoming_corp_actions: list[CorpActionBriefingRow] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
 
@@ -158,6 +177,7 @@ class DailyBriefingUseCase:
         setup_lens_impact_use_case: DailySetupLensImpactUseCase | None = None,
         session_resolver: EffectiveMarketSessionResolver | None = None,
         iev_baseline_repository: "IEVBaselineReadPort | None" = None,
+        corp_action_repository: "CorporateActionCalendarRepository | None" = None,
     ) -> None:
         self._market_repo = market_repository
         self._broker_repo = broker_repository
@@ -167,6 +187,7 @@ class DailyBriefingUseCase:
         self._learning_observation_repository = learning_observation_repository
         self._setup_lens_impact_uc = setup_lens_impact_use_case
         self._iev_baseline_repo = iev_baseline_repository
+        self._corp_action_repo = corp_action_repository
         self._session_resolver = session_resolver or EffectiveMarketSessionResolver(
             market_repository
         )
@@ -246,6 +267,11 @@ class DailyBriefingUseCase:
         opening_candidates = snapshot.candidates
         market_wide_opening_observations = snapshot.market_wide_observations
         opening_snapshot_date = snapshot.snapshot_date
+
+        upcoming_corp_actions = self._upcoming_corp_actions(
+            universe_tickers=universe_tickers,
+            live_session_date=live_session_date,
+        )
 
         regime_available = regime is not None
         readiness_items = self._readiness_items(
@@ -366,6 +392,7 @@ class DailyBriefingUseCase:
             accumulation_summary=accumulation_summary,
             daily_accumulation_candidates=daily_accumulation_candidates,
             setup_lens_impact=setup_lens_impact,
+            upcoming_corp_actions=upcoming_corp_actions,
             warnings=warnings,
         )
 
@@ -532,6 +559,45 @@ class DailyBriefingUseCase:
                 )
             )
         return items
+
+    def _upcoming_corp_actions(
+        self,
+        *,
+        universe_tickers: list[str],
+        live_session_date: date,
+    ) -> list[CorpActionBriefingRow]:
+        """Flatten universe corporate-action milestones in the forward window.
+
+        Read-only calendar projection: no fetch/sync policy here (that is the
+        SyncCorporateActionCalendarUseCase's job). Live-first `today` refreshes the
+        calendar upstream via the fetch workflow.
+        """
+        if self._corp_action_repo is None or not universe_tickers:
+            return []
+
+        from_date = live_session_date
+        to_date = live_session_date + timedelta(days=CORP_ACTION_LOOKAHEAD_DAYS)
+        events = self._corp_action_repo.get_events_for_universe(
+            tuple(ticker.upper() for ticker in universe_tickers),
+            from_date=from_date,
+            to_date=to_date,
+        )
+
+        rows: list[CorpActionBriefingRow] = []
+        for event in events:
+            for milestone in event.dates:
+                if from_date <= milestone.event_date <= to_date:
+                    rows.append(
+                        CorpActionBriefingRow(
+                            ticker=event.ticker.upper(),
+                            event_type=event.event_type.value,
+                            date_role=milestone.date_role.value,
+                            event_date=milestone.event_date,
+                            note=event.event_note,
+                        )
+                    )
+        rows.sort(key=lambda row: (row.event_date, row.ticker))
+        return rows
 
     def _opening_snapshot(
         self,
