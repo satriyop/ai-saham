@@ -6,7 +6,7 @@ Layer: Adapter
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 from rich.console import Console
 from rich.panel import Panel
@@ -54,10 +54,52 @@ _COLUMNS: dict[FinancialStatementKind, tuple[_Column, ...]] = {
 
 
 def display_ticker_financials(result: ViewTickerFinancialsResult) -> None:
-    """Render financials deep-dive: status panel + period table when available."""
+    """Render one statement deep-dive."""
+    display_ticker_financials_many((result,))
+
+
+def display_ticker_financials_many(results: Sequence[ViewTickerFinancialsResult]) -> None:
+    """Render one or more statement panels (default view shows all three)."""
+    if not results:
+        return
+
     console = Console()
     console.print("")
+    multi = len(results) > 1
+    ticker = results[0].ticker
 
+    if multi:
+        console.print(f"[bold]{ticker} · Financial statements[/bold]")
+        console.print("")
+
+    any_ok = False
+    for result in results:
+        if result.status == "ok":
+            any_ok = True
+        _render_one(console, result, compact_footer=multi)
+
+    if multi:
+        console.print(
+            "[dim]Values in full currency units, abbreviated in display. "
+            "Yahoo-mapped metric subsets — not full statement dumps. "
+            "Income revenue definitions may differ across providers; "
+            "NI incl. NCI is the strongest cross-check line.[/dim]"
+        )
+        console.print("")
+        if not any_ok:
+            hint = results[0].fetch_hint
+            console.print(f"[dim]Hint: {hint}[/dim]")
+            console.print("")
+    elif results[0].status == "ok":
+        _print_single_footer(console, results[0].statement)
+
+
+def _render_one(
+    console: Console,
+    result: ViewTickerFinancialsResult,
+    *,
+    compact_footer: bool,
+) -> None:
     title = f"[bold]{result.ticker} · {result.statement.title()} · {result.period_type}[/bold]"
     subtitle_bits = []
     if result.source:
@@ -71,7 +113,7 @@ def display_ticker_financials(result: ViewTickerFinancialsResult) -> None:
         console.print(
             Panel(body, title=title, subtitle=subtitle, border_style="yellow", expand=False)
         )
-        if result.status == "empty" and result.fetch_hint:
+        if result.status == "empty" and result.fetch_hint and not compact_footer:
             console.print(f"[dim]Hint: {result.fetch_hint}[/dim]")
         console.print("")
         return
@@ -87,7 +129,10 @@ def display_ticker_financials(result: ViewTickerFinancialsResult) -> None:
     console.print("")
     console.print(_build_table(result.statement, result.periods))
     console.print("")
-    if result.statement == "income":
+
+
+def _print_single_footer(console: Console, statement: FinancialStatementKind) -> None:
+    if statement == "income":
         console.print(
             "[dim]Revenue definitions differ across providers; NI incl. NCI is the "
             "strongest cross-check line. Values in full currency units, abbreviated "
