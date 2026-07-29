@@ -49,7 +49,7 @@ def build_accum_single_data(
     strategy_name: str | None = None,
     strategy_signals: Mapping[str, str] | None = None,
     save_result: SaveScreenWatchlistResult | None = None,
-    deep_evidence_by_ticker: Mapping[str, Any] | None = None,
+    diagnostic_evidence_by_ticker: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Verb-specific ``data`` payload for a single-window accumulation screen."""
     saved_name = save_result.name if save_result is not None else None
@@ -80,10 +80,10 @@ def build_accum_single_data(
             "name": save_result.name,
             "saved_count": save_result.saved_count,
         }
-    if deep_evidence_by_ticker:
-        data["deep_evidence"] = {
+    if diagnostic_evidence_by_ticker:
+        data["diagnostic_evidence"] = {
             key: (val.to_dict() if hasattr(val, "to_dict") else val)
-            for key, val in deep_evidence_by_ticker.items()
+            for key, val in diagnostic_evidence_by_ticker.items()
         }
     return data
 
@@ -98,7 +98,7 @@ def build_accum_single_envelope(
     strategy_name: str | None = None,
     strategy_signals: Mapping[str, str] | None = None,
     save_result: SaveScreenWatchlistResult | None = None,
-    deep_evidence_by_ticker: Mapping[str, Any] | None = None,
+    diagnostic_evidence_by_ticker: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Full ADR-046 envelope for single-window ``screen accum`` JSON."""
     data = build_accum_single_data(
@@ -110,7 +110,7 @@ def build_accum_single_envelope(
         strategy_name=strategy_name,
         strategy_signals=strategy_signals,
         save_result=save_result,
-        deep_evidence_by_ticker=deep_evidence_by_ticker,
+        diagnostic_evidence_by_ticker=diagnostic_evidence_by_ticker,
     )
     return build_screen_envelope(
         verb="accum",

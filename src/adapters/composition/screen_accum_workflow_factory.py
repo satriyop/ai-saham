@@ -217,7 +217,7 @@ def create_run_accumulation_screen_workflow_use_case(
             universe=universe,
         )
 
-    collect_deep = _build_deep_evidence_collector(
+    collect_diagnostic = _build_diagnostic_evidence_collector(
         deps=deps,
         swing_policy=swing_policy,
     )
@@ -235,11 +235,11 @@ def create_run_accumulation_screen_workflow_use_case(
         ),
         save_watchlist_use_case=SaveScreenWatchlistUseCase(SQLiteWatchlistRepository(db_path)),
         evaluate_market_context=_evaluate_display_market_context,
-        collect_deep_evidence=collect_deep,
+        collect_diagnostic_evidence=collect_diagnostic,
     )
 
 
-def _build_deep_evidence_collector(
+def _build_diagnostic_evidence_collector(
     *,
     deps: StockAnalysisWorkflowDependencies,
     swing_policy: Any,
@@ -252,8 +252,8 @@ def _build_deep_evidence_collector(
     from decimal import Decimal
 
     from src.adapters.cli.plan_swing_optional_fetchers import fetch_swing_sentiment
-    from src.application.services.screen_judgment_deep_evidence import (
-        collect_screen_judgment_deep_evidence,
+    from src.application.services.screen_judgment_diagnostic_evidence import (
+        collect_screen_judgment_diagnostic_evidence,
     )
     from src.application.services.strategy_loader import StrategyLoader
     from src.application.services.swing_flow_detail_builder import build_flow_detail
@@ -316,7 +316,7 @@ def _build_deep_evidence_collector(
         return response.result
 
     def _collect(*, ticker: str, as_of_date: date, candidate: Any, flags: Any):
-        return collect_screen_judgment_deep_evidence(
+        return collect_screen_judgment_diagnostic_evidence(
             ticker=ticker,
             as_of_date=as_of_date,
             candidate=candidate,

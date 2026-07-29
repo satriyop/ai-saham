@@ -32,8 +32,8 @@ from src.application.dto.screen_accum_payload import (
 from src.application.services.screen_accum_result_projector import (
     ScreenAccumProjectionError,
 )
-from src.application.services.screen_judgment_deep_evidence import (
-    ScreenJudgmentDeepEvidenceRequest,
+from src.application.services.screen_judgment_diagnostic_evidence import (
+    ScreenJudgmentDiagnosticEvidenceRequest,
 )
 from src.application.services.universe_loader import (
     UniverseNotFoundError,
@@ -162,7 +162,7 @@ def accumulation_run(
             "--strategy",
             "-S",
             help=(
-                "Board: strategy signal column. Explicit ticker + deep flags/--full: "
+                "Board: strategy signal column. Explicit ticker + diagnostic flags/--full: "
                 "also attach strategy backtest diagnostic evidence (does not change Action)."
             ),
         ),
@@ -360,7 +360,7 @@ def accumulation_run(
         if flow_window is not None
         else load_plan_swing_config().flow_detail_window_sessions
     )
-    deep_flags = ScreenJudgmentDeepEvidenceRequest(
+    diagnostic_flags = ScreenJudgmentDiagnosticEvidenceRequest(
         setup_name=setup.lower() if setup else None,
         include_flow_detail=with_flow_detail,
         flow_window=resolved_flow_window,
@@ -370,10 +370,10 @@ def accumulation_run(
         strategy_name=strategy,
         include_full=full,
     )
-    if deep_flags.any_enabled:
+    if diagnostic_flags.any_enabled:
         if multi:
             typer.echo(
-                "Error: deep analysis flags (--setup/--with-flow-detail/"
+                "Error: diagnostic evidence flags (--setup/--with-flow-detail/"
                 "--with-sentiment/--full) are not supported with --multi. "
                 "Use explicit tickers without --multi.",
                 err=True,
@@ -381,7 +381,7 @@ def accumulation_run(
             raise typer.Exit(1)
         if not explicit_tickers:
             typer.echo(
-                "Error: deep analysis flags require explicit ticker arguments "
+                "Error: diagnostic evidence flags require explicit ticker arguments "
                 "(not universe-only). Example: saham screen accum BBRI --full",
                 err=True,
             )
@@ -423,7 +423,7 @@ def accumulation_run(
                 squeeze_only=squeeze_only,
                 sort_by=sort_by,
                 as_of_date=as_of_date,
-                deep_evidence=deep_flags,
+                diagnostic_evidence=diagnostic_flags,
             )
         )
     except ScreenAccumProjectionError as e:
@@ -451,7 +451,7 @@ def accumulation_run(
         detail=detail,
         strategy=strategy,
         display_config=display_config,
-        deep_flags=deep_flags,
+        diagnostic_flags=diagnostic_flags,
     )
 
 
@@ -503,14 +503,14 @@ def _render_single(
     detail: bool,
     strategy: str | None,
     display_config: AccumulationDisplayConfig,
-    deep_flags: ScreenJudgmentDeepEvidenceRequest | None = None,
+    diagnostic_flags: ScreenJudgmentDiagnosticEvidenceRequest | None = None,
 ) -> None:
     response = result.response
     projection = result.single_projection
     if response is None or projection is None:
         return
 
-    deep_by_ticker = getattr(result, "deep_evidence_by_ticker", {}) or {}
+    diagnostic_by_ticker = getattr(result, "diagnostic_evidence_by_ticker", {}) or {}
 
     if output_format == "json":
         echo_json(
@@ -523,7 +523,7 @@ def _render_single(
                 strategy_name=strategy,
                 strategy_signals=result.strategy_signals,
                 save_result=result.save_result,
-                deep_evidence_by_ticker=deep_by_ticker,
+                diagnostic_evidence_by_ticker=diagnostic_by_ticker,
             )
         )
         return
@@ -539,8 +539,8 @@ def _render_single(
         strategy_name=strategy,
         effective_session=result.effective_session,
         market_context=getattr(result, "market_context", None),
-        deep_evidence_by_ticker=deep_by_ticker,
-        deep_flags=deep_flags,
+        diagnostic_evidence_by_ticker=diagnostic_by_ticker,
+        diagnostic_flags=diagnostic_flags,
     )
 
     if result.save_result:

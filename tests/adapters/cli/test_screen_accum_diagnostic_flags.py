@@ -1,4 +1,4 @@
-"""CLI gates for screen accum deep analysis flags (ADR-054 S1 complete)."""
+"""CLI gates for screen accum diagnostic evidence flags (ADR-054 S1 complete)."""
 
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -42,7 +42,7 @@ def _patch_workflow(monkeypatch, captured: dict):
     )
 
 
-def test_deep_flags_rejected_for_universe_only(monkeypatch):
+def test_diagnostic_flags_rejected_for_universe_only(monkeypatch):
     captured: dict = {}
     _patch_workflow(monkeypatch, captured)
     result = runner.invoke(
@@ -56,7 +56,7 @@ def test_deep_flags_rejected_for_universe_only(monkeypatch):
     )
 
 
-def test_deep_flags_rejected_with_multi(monkeypatch):
+def test_diagnostic_flags_rejected_with_multi(monkeypatch):
     captured: dict = {}
     _patch_workflow(monkeypatch, captured)
     result = runner.invoke(
@@ -67,7 +67,7 @@ def test_deep_flags_rejected_with_multi(monkeypatch):
     assert "multi" in (result.output + result.stderr).lower() or result.exit_code == 1
 
 
-def test_deep_flags_accepted_for_explicit_ticker(monkeypatch):
+def test_diagnostic_flags_accepted_for_explicit_ticker(monkeypatch):
     captured: dict = {}
     _patch_workflow(monkeypatch, captured)
     result = runner.invoke(
@@ -87,9 +87,9 @@ def test_deep_flags_accepted_for_explicit_ticker(monkeypatch):
     )
     assert result.exit_code == 0, result.output
     req = captured["request"]
-    assert req.deep_evidence.include_flow_detail is True
-    assert req.deep_evidence.include_sentiment is True
-    assert req.deep_evidence.setup_name == "foreign-bounce"
+    assert req.diagnostic_evidence.include_flow_detail is True
+    assert req.diagnostic_evidence.include_sentiment is True
+    assert req.diagnostic_evidence.setup_name == "foreign-bounce"
 
 
 def test_full_flag_sets_include_full(monkeypatch):
@@ -100,10 +100,10 @@ def test_full_flag_sets_include_full(monkeypatch):
         ["screen", "accum", "BBRI", "--full", "--format", "json", "--no-refresh"],
     )
     assert result.exit_code == 0, result.output
-    assert captured["request"].deep_evidence.include_full is True
+    assert captured["request"].diagnostic_evidence.include_full is True
 
 
-def test_help_lists_deep_flags():
+def test_help_lists_diagnostic_flags():
     result = runner.invoke(app, ["screen", "accum", "--help"])
     assert result.exit_code == 0
     out = result.output

@@ -14,28 +14,28 @@ from rich.console import Group
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, console, panel
-from src.application.services.screen_judgment_deep_evidence import (
-    ScreenJudgmentDeepEvidence,
-    ScreenJudgmentDeepEvidenceRequest,
+from src.application.services.screen_judgment_diagnostic_evidence import (
+    ScreenJudgmentDiagnosticEvidence,
+    ScreenJudgmentDiagnosticEvidenceRequest,
 )
 
 
-def print_screen_deep_evidence_panels(
+def print_screen_diagnostic_evidence_panels(
     *,
-    deep_evidence_by_ticker: Mapping[str, ScreenJudgmentDeepEvidence],
-    deep_flags: ScreenJudgmentDeepEvidenceRequest | None,
+    diagnostic_evidence_by_ticker: Mapping[str, ScreenJudgmentDiagnosticEvidence],
+    diagnostic_flags: ScreenJudgmentDiagnosticEvidenceRequest | None,
     candidates: list[Any],
 ) -> None:
     """Print diagnostic evidence after judgment panels (explicit tickers only)."""
-    if not deep_evidence_by_ticker:
+    if not diagnostic_evidence_by_ticker:
         return
-    flags = deep_flags or ScreenJudgmentDeepEvidenceRequest()
+    flags = diagnostic_flags or ScreenJudgmentDiagnosticEvidenceRequest()
     if not flags.any_enabled:
         return
 
     for candidate in candidates:
         ticker = str(getattr(candidate, "ticker", "")).upper()
-        bag = deep_evidence_by_ticker.get(ticker)
+        bag = diagnostic_evidence_by_ticker.get(ticker)
         if bag is None:
             continue
         _print_one(bag=bag, flags=flags)
@@ -43,8 +43,8 @@ def print_screen_deep_evidence_panels(
 
 def _print_one(
     *,
-    bag: ScreenJudgmentDeepEvidence,
-    flags: ScreenJudgmentDeepEvidenceRequest,
+    bag: ScreenJudgmentDiagnosticEvidence,
+    flags: ScreenJudgmentDiagnosticEvidenceRequest,
 ) -> None:
     console().print("")
     console().print(
@@ -85,7 +85,7 @@ def _print_one(
     )
 
 
-def _print_setup_lens(bag: ScreenJudgmentDeepEvidence) -> None:
+def _print_setup_lens(bag: ScreenJudgmentDiagnosticEvidence) -> None:
     ev = bag.setup_eval
     match = getattr(getattr(ev, "match", None), "value", str(getattr(ev, "match", "?")))
     table = compact_table(show_header=True)
@@ -118,7 +118,7 @@ def _print_setup_lens(bag: ScreenJudgmentDeepEvidence) -> None:
     )
 
 
-def _print_flow(bag: ScreenJudgmentDeepEvidence) -> None:
+def _print_flow(bag: ScreenJudgmentDiagnosticEvidence) -> None:
     fd = bag.flow_detail
     if fd is None:
         console().print(panel(Text("Flow detail unavailable", style="dim"), title="Flow detail"))
@@ -140,7 +140,7 @@ def _print_flow(bag: ScreenJudgmentDeepEvidence) -> None:
     console().print(panel(table, title="Flow detail"))
 
 
-def _print_sentiment(bag: ScreenJudgmentDeepEvidence, verbose: bool) -> None:
+def _print_sentiment(bag: ScreenJudgmentDiagnosticEvidence, verbose: bool) -> None:
     resp = bag.sentiment_response
     warning = bag.sentiment_warning
     lines: list[Text] = []
@@ -168,7 +168,7 @@ def _print_sentiment(bag: ScreenJudgmentDeepEvidence, verbose: bool) -> None:
     console().print(panel(Group(*lines), title="Sentiment (diagnostic)"))
 
 
-def _print_strategy(bag: ScreenJudgmentDeepEvidence) -> None:
+def _print_strategy(bag: ScreenJudgmentDiagnosticEvidence) -> None:
     bt = bag.backtest_result
     if bt is None:
         console().print(

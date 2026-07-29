@@ -1,28 +1,28 @@
-"""Unit tests for screen deep evidence (ADR-054 S1) — no Action mutation."""
+"""Unit tests for screen diagnostic evidence (ADR-054 S1) — no Action mutation."""
 
 from datetime import date
 from types import SimpleNamespace
 
-from src.application.services.screen_judgment_deep_evidence import (
-    ScreenJudgmentDeepEvidenceRequest,
-    collect_screen_judgment_deep_evidence,
-    deep_evidence_action_fingerprint,
+from src.application.services.screen_judgment_diagnostic_evidence import (
+    ScreenJudgmentDiagnosticEvidenceRequest,
+    collect_screen_judgment_diagnostic_evidence,
+    diagnostic_evidence_action_fingerprint,
 )
 
 
-def test_deep_flags_any_enabled():
-    assert not ScreenJudgmentDeepEvidenceRequest().any_enabled
-    assert ScreenJudgmentDeepEvidenceRequest(include_flow_detail=True).any_enabled
-    assert ScreenJudgmentDeepEvidenceRequest(include_full=True).wants_flow
-    assert ScreenJudgmentDeepEvidenceRequest(include_full=True).wants_sentiment
+def test_diagnostic_flags_any_enabled():
+    assert not ScreenJudgmentDiagnosticEvidenceRequest().any_enabled
+    assert ScreenJudgmentDiagnosticEvidenceRequest(include_flow_detail=True).any_enabled
+    assert ScreenJudgmentDiagnosticEvidenceRequest(include_full=True).wants_flow
+    assert ScreenJudgmentDiagnosticEvidenceRequest(include_full=True).wants_sentiment
 
 
 def test_collect_does_not_require_candidate_trade_setup():
-    bag = collect_screen_judgment_deep_evidence(
+    bag = collect_screen_judgment_diagnostic_evidence(
         ticker="bbca",
         as_of_date=date(2026, 7, 1),
         candidate=None,
-        flags=ScreenJudgmentDeepEvidenceRequest(include_flow_detail=True),
+        flags=ScreenJudgmentDiagnosticEvidenceRequest(include_flow_detail=True),
         build_flow_detail=lambda **kw: SimpleNamespace(
             window_sessions=30, to_dict=lambda: {"window": 30}
         ),
@@ -33,13 +33,13 @@ def test_collect_does_not_require_candidate_trade_setup():
 
 
 def test_collect_setup_and_sentiment_fail_soft():
-    bag = collect_screen_judgment_deep_evidence(
+    bag = collect_screen_judgment_diagnostic_evidence(
         ticker="BBRI",
         as_of_date=date(2026, 7, 1),
         candidate=SimpleNamespace(
             trade_setup=SimpleNamespace(action=SimpleNamespace(value="WATCH"))
         ),
-        flags=ScreenJudgmentDeepEvidenceRequest(
+        flags=ScreenJudgmentDiagnosticEvidenceRequest(
             setup_name="foreign-bounce",
             include_sentiment=True,
         ),
@@ -53,18 +53,18 @@ def test_collect_setup_and_sentiment_fail_soft():
 
 def test_action_fingerprint_stable():
     cand = SimpleNamespace(trade_setup=SimpleNamespace(action=SimpleNamespace(value="WATCH")))
-    assert deep_evidence_action_fingerprint(cand) == "WATCH"
-    assert deep_evidence_action_fingerprint(None) is None
+    assert diagnostic_evidence_action_fingerprint(cand) == "WATCH"
+    assert diagnostic_evidence_action_fingerprint(None) is None
 
 
 def test_collect_preserves_action_fingerprint_when_evidence_runs():
     cand = SimpleNamespace(trade_setup=SimpleNamespace(action=SimpleNamespace(value="ENTER")))
-    before = deep_evidence_action_fingerprint(cand)
-    collect_screen_judgment_deep_evidence(
+    before = diagnostic_evidence_action_fingerprint(cand)
+    collect_screen_judgment_diagnostic_evidence(
         ticker="BBCA",
         as_of_date=date(2026, 7, 1),
         candidate=cand,
-        flags=ScreenJudgmentDeepEvidenceRequest(
+        flags=ScreenJudgmentDiagnosticEvidenceRequest(
             include_flow_detail=True,
             include_sentiment=True,
             setup_name="foreign-bounce",
@@ -78,4 +78,4 @@ def test_collect_preserves_action_fingerprint_when_evidence_runs():
         ),
         fetch_sentiment=lambda **kw: (None, "skip"),
     )
-    assert deep_evidence_action_fingerprint(cand) == before
+    assert diagnostic_evidence_action_fingerprint(cand) == before

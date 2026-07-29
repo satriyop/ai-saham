@@ -1,7 +1,7 @@
 """Optional diagnostic evidence for single-ticker screen judgment (ADR-054 S1).
 
-Merges plan-era *analysis* evidence onto the screen desk without mutating
-TradeSetup.action and without structure/sizing.
+Side-bag only: never mutates TradeSetup.action and never does structure/sizing.
+Vocabulary: ADR-057 diagnostic evidence (not production evidence, not corpus).
 
 Layer: Application
 """
@@ -15,8 +15,8 @@ from typing import Any
 
 
 @dataclass(frozen=True)
-class ScreenJudgmentDeepEvidence:
-    """Side-bag of optional judgment evidence for one ticker (not Action)."""
+class ScreenJudgmentDiagnosticEvidence:
+    """Side-bag of optional diagnostic evidence for one ticker (not Action)."""
 
     ticker: str
     setup_name: str | None = None
@@ -55,7 +55,7 @@ class ScreenJudgmentDeepEvidence:
 
 
 @dataclass(frozen=True)
-class ScreenJudgmentDeepEvidenceRequest:
+class ScreenJudgmentDiagnosticEvidenceRequest:
     """Flags for optional diagnostic evidence (defaults all off)."""
 
     setup_name: str | None = None
@@ -90,18 +90,18 @@ class ScreenJudgmentDeepEvidenceRequest:
         return bool(self.strategy_name) and (self.include_full or self.include_strategy_evidence)
 
 
-def collect_screen_judgment_deep_evidence(
+def collect_screen_judgment_diagnostic_evidence(
     *,
     ticker: str,
     as_of_date: date,
     candidate: Any | None,
-    flags: ScreenJudgmentDeepEvidenceRequest,
+    flags: ScreenJudgmentDiagnosticEvidenceRequest,
     build_flow_detail: Callable[..., Any | None] | None = None,
     evaluate_setup: Callable[..., Any | None] | None = None,
     fetch_sentiment: Callable[..., tuple[Any | None, str | None]] | None = None,
     run_strategy_backtest: Callable[..., Any | None] | None = None,
-) -> ScreenJudgmentDeepEvidence:
-    """Collect optional evidence. Never mutates candidate.trade_setup / Action."""
+) -> ScreenJudgmentDiagnosticEvidence:
+    """Collect optional diagnostic evidence. Never mutates candidate Action."""
     warnings: list[str] = []
     setup_eval = None
     flow_detail = None
@@ -144,7 +144,7 @@ def collect_screen_judgment_deep_evidence(
         except Exception as exc:
             warnings.append(f"Strategy diagnostic evidence unavailable: {exc}")
 
-    return ScreenJudgmentDeepEvidence(
+    return ScreenJudgmentDiagnosticEvidence(
         ticker=ticker.upper(),
         setup_name=flags.setup_name,
         setup_eval=setup_eval,
@@ -156,7 +156,7 @@ def collect_screen_judgment_deep_evidence(
     )
 
 
-def deep_evidence_action_fingerprint(candidate: Any | None) -> str | None:
+def diagnostic_evidence_action_fingerprint(candidate: Any | None) -> str | None:
     """Stable Action fingerprint for regression tests (no Action mutation)."""
     if candidate is None:
         return None
