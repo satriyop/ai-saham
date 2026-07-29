@@ -213,3 +213,97 @@ def test_successful_load_writes_snapshot(tmp_path: Path):
             assert "WRIT1" in path.read_text(encoding="utf-8")
 
     asyncio.run(scenario())
+
+
+def test_empty_live_recompute_invalidates_snapshot_for_next_open(tmp_path: Path):
+    """Criterion 4: successful 0-candidate recompute must not leave SNAP restorable."""
+    from src.adapters.tui.board_snapshot import read_accum_board_snapshot
+
+    planted = _result(["SNAP1", "SNAP2"])
+    view = AccumPresenter().present(planted)
+    identity = identity_from_live_payload(planted, view, universe="lq45")
+    snap_path = tmp_path / "tui_last_accum_board.json"
+    write_accum_board_snapshot(snap_path, snapshot_from_board_view(view, identity))
+    assert read_accum_board_snapshot(snap_path) is not None
+
+    empty = SimpleNamespace(
+        single_projection=SimpleNamespace(
+            candidates=[],
+            window_days=7,
+            data_as_of={"latest_candle_date": "2026-07-26"},
+            applied_filters=SimpleNamespace(sort_by="signal", top=20),
+        ),
+        multi_projection=None,
+        warnings=(),
+        effective_session=None,
+        market_context=None,
+    )
+    # Empty candidates → presenter yields 0 rows → invalidate via _on_accum_payload.
+    controller = BoardController(lambda: empty)
+
+    async def scenario() -> None:
+        app = CockpitApp(
+            accum_loader=lambda: empty,
+            accum_controller=controller,
+            accum_presenter=AccumPresenter(),
+            board_snapshot_path=snap_path,
+            snapshot_universe="lq45",
+        )
+        async with app.run_test(size=(140, 36)) as pilot:
+            # May briefly show SNAP then empty live replaces
+            for _ in range(80):
+                await pilot.pause(0.05)
+                if not app._recomputing and app._board_source == "live":
+                    break
+            # Snapshot must not be restorable after empty success
+            assert read_accum_board_snapshot(snap_path) is None
+            assert not snap_path.is_file()
+
+        # Second open: no SNAP paint
+        app2 = CockpitApp(
+            accum_loader=lambda: empty,
+            accum_controller=BoardController(lambda: empty),
+            accum_presenter=AccumPresenter(),
+            board_snapshot_path=snap_path,
+            snapshot_universe="lq45",
+        )
+        async with app2.run_test(size=(140, 36)) as pilot:
+            await pilot.pause(0.1)
+            # Without snapshot, never open with SNAP1/SNAP2 as restored source
+            assert app2._board_source != "snapshot"
+            tickers = [r.ticker for r in app2._rows] if app2._rows else []
+            assert "SNAP1" not in tickers
+            assert "SNAP2" not in tickers
+
+    asyncio.run(scenario())
+
+
+def test_controller_empty_status_also_invalidates_snapshot(tmp_path: Path):
+    """EMPTY status path (empty_when) must clear disk snapshot too."""
+    from src.adapters.tui.board_snapshot import read_accum_board_snapshot
+
+    planted = _result(["OLD1"])
+    view = AccumPresenter().present(planted)
+    identity = identity_from_live_payload(planted, view, universe="lq45")
+    snap_path = tmp_path / "snap.json"
+    write_accum_board_snapshot(snap_path, snapshot_from_board_view(view, identity))
+
+    # Default empty_when treats list/tuple empty as EMPTY
+    controller = BoardController(lambda: [])
+
+    async def scenario() -> None:
+        app = CockpitApp(
+            accum_loader=lambda: [],
+            accum_controller=controller,
+            accum_presenter=AccumPresenter(),
+            board_snapshot_path=snap_path,
+            snapshot_universe="lq45",
+        )
+        async with app.run_test(size=(140, 36)) as pilot:
+            for _ in range(80):
+                await pilot.pause(0.05)
+                if not app._recomputing:
+                    break
+            assert read_accum_board_snapshot(snap_path) is None
+
+    asyncio.run(scenario())

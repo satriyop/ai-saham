@@ -27,6 +27,7 @@ from src.adapters.tui.board_load_policy import (
 from src.adapters.tui.board_snapshot import (
     board_view_from_snapshot,
     identity_from_live_payload,
+    invalidate_accum_board_snapshot,
     read_accum_board_snapshot,
     snapshot_from_board_view,
     write_accum_board_snapshot,
@@ -1000,6 +1001,8 @@ class CockpitApp(App[None]):
             self._recomputing = False
             self._board_source = "live"
             self._snapshot_freshness = ""
+            # Live empty success must clear last-run snapshot (criterion 4).
+            invalidate_accum_board_snapshot(self._board_snapshot_path)
             self._show_empty()
             self._board_title = "Screen · accumulation"
             self._meta = "local · 0 candidates"
@@ -1053,6 +1056,8 @@ class CockpitApp(App[None]):
         self._row_index = 0
         self._status_note = summary if summary else f"{len(self._rows)} rows"
         if not self._rows:
+            # Successful 0-candidate live result: invalidate prior non-empty snapshot.
+            invalidate_accum_board_snapshot(self._board_snapshot_path)
             self._show_empty()
             self._board_title = "Screen · accumulation"
             self._meta = self._meta or "local · 0 candidates"

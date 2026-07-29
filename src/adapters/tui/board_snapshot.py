@@ -180,6 +180,25 @@ def write_accum_board_snapshot(path: Path, snapshot: AccumBoardSnapshot) -> None
     tmp.replace(path)
 
 
+def invalidate_accum_board_snapshot(path: Path | str | None) -> bool:
+    """Remove last-run snapshot so next open cannot restore stale non-empty board.
+
+    Called after a successful live recompute that yields EMPTY / 0 candidates
+    (criterion 4: replace what the next open restores).
+    Returns True if a file was removed.
+    """
+    if path is None:
+        return False
+    target = Path(path)
+    if not target.is_file():
+        return False
+    try:
+        target.unlink()
+        return True
+    except OSError:
+        return False
+
+
 def read_accum_board_snapshot(path: Path) -> AccumBoardSnapshot | None:
     """Return a restorable snapshot or None when missing/corrupt/incomplete."""
     path = Path(path)

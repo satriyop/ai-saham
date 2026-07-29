@@ -10,6 +10,7 @@ from src.adapters.tui.board_snapshot import (
     board_view_from_snapshot,
     default_accum_snapshot_path,
     identity_from_live_payload,
+    invalidate_accum_board_snapshot,
     read_accum_board_snapshot,
     snapshot_from_board_view,
     write_accum_board_snapshot,
@@ -96,3 +97,16 @@ def test_default_snapshot_path_beside_db(tmp_path: Path):
     p = default_accum_snapshot_path(db)
     assert p.name == "tui_last_accum_board.json"
     assert p.parent == db.parent.resolve()
+
+
+def test_invalidate_removes_restorable_snapshot(tmp_path: Path):
+    payload = _fake_result()
+    view = AccumPresenter().present(payload)
+    identity = identity_from_live_payload(payload, view, universe="lq45")
+    path = tmp_path / "snap.json"
+    write_accum_board_snapshot(path, snapshot_from_board_view(view, identity))
+    assert read_accum_board_snapshot(path) is not None
+    assert invalidate_accum_board_snapshot(path) is True
+    assert read_accum_board_snapshot(path) is None
+    assert invalidate_accum_board_snapshot(path) is False
+    assert invalidate_accum_board_snapshot(None) is False
