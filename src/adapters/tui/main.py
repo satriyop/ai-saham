@@ -9,6 +9,7 @@ Layer: Adapter
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any, Literal
 
 from textual import events, work
@@ -18,6 +19,18 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.timer import Timer
 from textual.widgets import DataTable, Static
 
+from src.adapters.tui.board_load_policy import (
+    recomputing_status_note,
+    should_blank_board_for_load,
+    snapshot_freshness_note,
+)
+from src.adapters.tui.board_snapshot import (
+    board_view_from_snapshot,
+    identity_from_live_payload,
+    read_accum_board_snapshot,
+    snapshot_from_board_view,
+    write_accum_board_snapshot,
+)
 from src.adapters.tui.screens.help import HelpModal
 from src.adapters.tui.screens.palette import CommandPalette
 from src.adapters.tui.state import ScreenState, ScreenStatus
@@ -100,6 +113,8 @@ class CockpitApp(App[None]):
         preopen_controller: Any | None = None,
         accum_presenter: Any | None = None,
         preopen_presenter: Any | None = None,
+        board_snapshot_path: Path | str | None = None,
+        snapshot_universe: str = "lq45",
     ) -> None:
         super().__init__()
         self._accum_loader = accum_loader
@@ -118,6 +133,10 @@ class CockpitApp(App[None]):
         self._preopen_controller = preopen_controller
         self._accum_presenter = accum_presenter
         self._preopen_presenter = preopen_presenter
+        self._board_snapshot_path = (
+            Path(board_snapshot_path) if board_snapshot_path is not None else None
+        )
+        self._snapshot_universe = (snapshot_universe or "lq45").strip().lower()
 
         self._sidebar_visible = True
         # shell | empty | accum | preopen | broker-list | detail | plan | loading | error
@@ -153,6 +172,10 @@ class CockpitApp(App[None]):
         self._plan_running: bool = False
         self._chord_prefix: str | None = None
         self._chord_timer: Timer | None = None
+        # Board load UX: keep prior rows while recomputing; snapshot on open.
+        self._recomputing = False
+        self._board_source: Literal["none", "live", "snapshot"] = "none"
+        self._snapshot_freshness = ""
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="workspace"):
@@ -198,8 +221,10 @@ class CockpitApp(App[None]):
         self._refresh_chrome()
         # Live cockpit: open on local accumulation board (not a design manifesto).
         # Still local-first — no network until explicit Fetch.
+        # Prefer last-run snapshot for instant paint, then recompute in background.
         if self._accum_controller is not None or self._accum_loader is not None:
-            self._load_accum()
+            restored = self._try_restore_accum_snapshot()
+            self._load_accum(keep_prior=restored)
         else:
             self._stage = "shell"
             self._board_title = "Cockpit"
@@ -209,22 +234,41 @@ class CockpitApp(App[None]):
     # ── chrome ─────────────────────────────────────────────
 
     def _mode_label(self) -> str:
+        if self._recomputing:
+            return "● recomputing"
+        if self._board_source == "snapshot" and self._stage == "accum":
+            return "● snapshot"
         return f"● {self._mode}"
 
     def _status_text(self) -> str:
+        mode = "recomputing" if self._recomputing else self._mode
+        if self._board_source == "snapshot" and not self._recomputing and self._stage == "accum":
+            mode = "snapshot"
         return (
             f"Cockpit · {self._stage} · {self._focus_ticker}  ·  "
-            f"{self._mode}  ·  {self._status_note}  ·  ai-saham tui"
+            f"{mode}  ·  {self._status_note}  ·  ai-saham tui"
         )
 
     def _footer_hint(self) -> str:
         if self._stage == "empty":
             return "ctrl+p → Fetch market data (explicit) · no invented rows"
+        if self._stage == "accum" and self._recomputing:
+            return (
+                "recomputing local board… · prior rows still shown · "
+                "↑↓ ok · r restarts refresh · Ctrl+P"
+            )
+        if self._stage == "accum" and self._board_source == "snapshot":
+            return (
+                "snapshot board · r recompute live · Enter view · p plan · Ctrl+P  ·  "
+                f"{self._snapshot_freshness or 'prior local run'}"
+            )
         if self._stage == "accum":
             return (
                 "↑↓ move · Enter view · p plan · r refresh · Ctrl+P  ·  "
                 "ranked by Signal (not Accum) · Ctrl+P pre-open to switch board"
             )
+        if self._stage == "preopen" and self._recomputing:
+            return "recomputing pre-open… · prior rows still shown · r restarts · Ctrl+P"
         if self._stage == "preopen":
             return (
                 "↑↓ move · Enter view · p plan · r refresh · Ctrl+P  ·  "
@@ -310,14 +354,24 @@ class CockpitApp(App[None]):
             evidence.display = False
             self.query_one("#side-cache", Static).update("Cache    empty")
         elif self._stage == "loading":
-            scroll.display = True
-            body.update(
-                "[#d4b06a]Loading local board…[/]\n\n"
-                f"{self._board_title}\n"
-                "[dim]Reading SQLite cache · same use cases as CLI[/]"
-            )
-            table.display = False
-            evidence.display = False
+            # Blank loading only when there is no prior board to keep (criterion 1).
+            if self._rows and self._board_kind in {"accum", "preopen"}:
+                scroll.display = False
+                table.display = True
+                if self._evidence_text:
+                    evidence.display = True
+                    evidence.update(self._evidence_text)
+                else:
+                    evidence.display = False
+            else:
+                scroll.display = True
+                body.update(
+                    "[#d4b06a]Loading local board…[/]\n\n"
+                    f"{self._board_title}\n"
+                    "[dim]Reading SQLite cache · same use cases as CLI[/]"
+                )
+                table.display = False
+                evidence.display = False
         elif self._stage == "error":
             scroll.display = True
             body.update(
@@ -801,6 +855,7 @@ class CockpitApp(App[None]):
         self.notify(f"{command_id} · not wired", timeout=1.5)
 
     def _show_empty(self) -> None:
+        self._recomputing = False
         self._stage = "empty"
         self._board_title = "Screen · —"
         self._meta = "waiting on local data"
@@ -813,7 +868,7 @@ class CockpitApp(App[None]):
 
     # ── accum / preopen load ───────────────────────────────
 
-    def _load_accum(self) -> None:
+    def _load_accum(self, *, keep_prior: bool | None = None) -> None:
         if self._accum_controller is None and self._accum_loader is None:
             self.notify("Screen accumulation — not wired (composition)", timeout=2.0)
             self._stage = "accum"
@@ -822,12 +877,41 @@ class CockpitApp(App[None]):
             self._rows = []
             self._refresh_chrome()
             return
-        self._stage = "loading"
+        blank = (
+            should_blank_board_for_load(
+                has_visible_rows=bool(self._rows),
+                current_stage=self._stage,
+                current_board_kind=self._board_kind,
+                target_board_kind="accum",
+            )
+            if keep_prior is None
+            else not keep_prior
+        )
         self._board_title = "Screen · accumulation"
-        self._meta = "local cache · recomputing"
+        self._recomputing = True
+        if blank:
+            self._stage = "loading"
+            self._meta = "local cache · recomputing"
+            self._status_note = "recomputing…"
+            # Do not clear rows if keep_prior was forced with empty stage edge;
+            # blank path means no prior same-kind board.
+            if self._board_kind != "accum":
+                self._rows = []
+                self._evidence_text = ""
+        else:
+            # Keep READY board visible (criterion 1).
+            self._stage = "accum"
+            self._board_kind = "accum"
+            self._status_note = recomputing_status_note(
+                row_count=len(self._rows),
+                summary=self._board_summary,
+            )
+            if "recomputing" not in self._meta:
+                self._meta = f"{self._meta} · recomputing" if self._meta else "recomputing"
         self._refresh_chrome()
         generation = 0
         if self._accum_controller is not None:
+            # begin() invalidates prior generation (criterion 2).
             generation = self._accum_controller.begin()
         self._execute_accum(generation)
 
@@ -840,9 +924,27 @@ class CockpitApp(App[None]):
             self._rows = []
             self._refresh_chrome()
             return
-        self._stage = "loading"
+        blank = should_blank_board_for_load(
+            has_visible_rows=bool(self._rows),
+            current_stage=self._stage,
+            current_board_kind=self._board_kind,
+            target_board_kind="preopen",
+        )
         self._board_title = "Screen · pre-open"
-        self._meta = "IEP / local · recomputing"
+        self._recomputing = True
+        if blank:
+            self._stage = "loading"
+            self._meta = "IEP / local · recomputing"
+            self._status_note = "recomputing…"
+            if self._board_kind != "preopen":
+                self._rows = []
+                self._evidence_text = ""
+        else:
+            self._stage = "preopen"
+            self._board_kind = "preopen"
+            self._status_note = recomputing_status_note(row_count=len(self._rows))
+            if "recomputing" not in self._meta:
+                self._meta = f"{self._meta} · recomputing" if self._meta else "recomputing"
         self._refresh_chrome()
         generation = 0
         if self._preopen_controller is not None:
@@ -882,6 +984,7 @@ class CockpitApp(App[None]):
             dispatch_if_active(self, self._on_board_error, str(exc))
 
     def _on_board_error(self, message: str) -> None:
+        self._recomputing = False
         self._stage = "error"
         self._error_text = message
         self._status_note = "error"
@@ -894,6 +997,9 @@ class CockpitApp(App[None]):
             self._on_board_error(f"{state.error_type}: {state.error_message}")
             return
         if state.status is ScreenStatus.EMPTY:
+            self._recomputing = False
+            self._board_source = "live"
+            self._snapshot_freshness = ""
             self._show_empty()
             self._board_title = "Screen · accumulation"
             self._meta = "local · 0 candidates"
@@ -909,6 +1015,7 @@ class CockpitApp(App[None]):
             self._on_board_error(f"{state.error_type}: {state.error_message}")
             return
         if state.status is ScreenStatus.EMPTY:
+            self._recomputing = False
             self._stage = "empty"
             self._board_title = "Screen · pre-open"
             self._meta = "no IEP / empty local"
@@ -921,10 +1028,14 @@ class CockpitApp(App[None]):
 
     def _on_accum_payload(self, payload: Any) -> None:
         summary = ""
+        self._recomputing = False
         self._board_kind = "accum"
+        self._board_source = "live"
+        self._snapshot_freshness = ""
         # Workflow result carries session + display-only MCE; projection fakes may not.
         self._effective_session = getattr(payload, "effective_session", None)
         self._market_context = getattr(payload, "market_context", None)
+        view = None
         if self._accum_presenter is not None:
             view = self._accum_presenter.present(payload)
             self._rows = list(view.rows)
@@ -958,9 +1069,14 @@ class CockpitApp(App[None]):
         table.focus()
         note = summary if summary else f"{len(self._rows)} candidates"
         self.notify(f"Accumulation · {note}", timeout=2.5)
+        if view is not None:
+            self._persist_accum_snapshot(payload, view)
 
     def _on_preopen_payload(self, payload: Any) -> None:
+        self._recomputing = False
         self._board_kind = "preopen"
+        self._board_source = "live"
+        self._snapshot_freshness = ""
         self._preopen_snapshot_date = str(getattr(payload, "snapshot_date", "") or "")
         raw_warn = getattr(payload, "warnings", ()) or ()
         self._preopen_warnings = tuple(str(w) for w in raw_warn)
@@ -990,6 +1106,66 @@ class CockpitApp(App[None]):
         self._refresh_chrome()
         self.query_one("#board-table", DataTable).focus()
         self.notify(f"Pre-open · {len(self._rows)} graded (local snapshot)", timeout=2.0)
+
+    def _try_restore_accum_snapshot(self) -> bool:
+        """Paint last-run accum board if present (no network). Returns True if painted."""
+        if self._board_snapshot_path is None:
+            return False
+        snap = read_accum_board_snapshot(self._board_snapshot_path)
+        if snap is None:
+            return False
+        view = board_view_from_snapshot(snap)
+        if not view.rows:
+            return False
+        self._board_kind = "accum"
+        self._board_source = "snapshot"
+        self._recomputing = False
+        self._rows = list(view.rows)
+        self._meta = view.meta
+        self._board_summary = view.summary
+        self._board_title = "Screen · accumulation"
+        self._mode = "local-first"
+        self._row_index = 0
+        self._stage = "accum"
+        self._focus_ticker = self._rows[0].ticker
+        ident = snap.identity
+        self._snapshot_freshness = snapshot_freshness_note(
+            as_of=ident.as_of,
+            captured_at=ident.captured_at,
+            universe=ident.universe,
+        )
+        self._status_note = self._snapshot_freshness
+        try:
+            self.query_one("#side-accum", Static).update(f"Accum    {len(self._rows)}")
+            self.query_one("#side-cache", Static).update(
+                f"Cache    snapshot · {ident.as_of or '—'}"
+            )
+        except Exception:
+            pass
+        self._render_board_table()
+        self._update_accum_evidence()
+        self._refresh_chrome()
+        try:
+            self.query_one("#board-table", DataTable).focus()
+        except Exception:
+            pass
+        self.notify(f"Restored snapshot · {len(self._rows)} names · recomputing…", timeout=2.0)
+        return True
+
+    def _persist_accum_snapshot(self, payload: Any, view: Any) -> None:
+        if self._board_snapshot_path is None:
+            return
+        try:
+            identity = identity_from_live_payload(
+                payload,
+                view,
+                universe=self._snapshot_universe,
+            )
+            snap = snapshot_from_board_view(view, identity)
+            write_accum_board_snapshot(self._board_snapshot_path, snap)
+        except Exception:
+            # Presentation cache must never break the live board.
+            return
 
     def _render_board_table(self) -> None:
         table = self.query_one("#board-table", DataTable)

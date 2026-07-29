@@ -58,10 +58,24 @@ class ScreenStateTracker:
         return self._state
 
     def begin(self) -> int:
+        """Enter LOADING for a new generation.
+
+        When the previous state was READY/EMPTY, retain that payload under
+        LOADING so UI layers can keep showing prior board rows while a
+        recompute is in flight. Stale workers are still rejected by generation.
+        """
         generation = self._state.generation + 1
+        retained: object | None = None
+        if self._state.status in {
+            ScreenStatus.READY,
+            ScreenStatus.EMPTY,
+            ScreenStatus.LOADING,
+        }:
+            retained = self._state.payload
         self._state = ScreenState(
             generation=generation,
             status=ScreenStatus.LOADING,
+            payload=retained,
         )
         return generation
 
@@ -69,9 +83,11 @@ class ScreenStateTracker:
         """Invalidate one loading generation without fabricating a result."""
         if self._state.status is not ScreenStatus.LOADING:
             return False
+        retained = self._state.payload
         self._state = ScreenState(
             generation=self._state.generation + 1,
             status=ScreenStatus.IDLE,
+            payload=retained,
         )
         return True
 

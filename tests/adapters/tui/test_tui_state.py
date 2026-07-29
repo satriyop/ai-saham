@@ -45,12 +45,21 @@ def test_cancel_current_invalidates_loading_generation_only():
     loading_generation = tracker.begin()
 
     assert tracker.cancel_current() is True
-    assert tracker.state == ScreenState(
-        generation=loading_generation + 1,
-        status=ScreenStatus.IDLE,
-    )
+    assert tracker.state.generation == loading_generation + 1
+    assert tracker.state.status is ScreenStatus.IDLE
     assert tracker.complete_current(loading_generation, payload=object()) is False
     assert tracker.cancel_current() is False
+
+
+def test_begin_retains_ready_payload_while_loading():
+    tracker = ScreenStateTracker()
+    g1 = tracker.begin()
+    payload = {"board": 1}
+    assert tracker.complete_current(g1, payload=payload) is True
+    g2 = tracker.begin()
+    assert tracker.state.generation == g2
+    assert tracker.state.status is ScreenStatus.LOADING
+    assert tracker.state.payload is payload
 
 
 def test_stale_completion_cannot_replace_newer_state_and_payload_identity_is_preserved():

@@ -21,6 +21,7 @@ from src.adapters.composition.screen_accum_request import (
     build_default_screen_accum_request,
 )
 from src.adapters.composition.screen_deps import ScreenDeps, build_screen_deps
+from src.adapters.tui.board_snapshot import default_accum_snapshot_path
 from src.adapters.tui.controllers.board_controller import BoardController
 from src.adapters.tui.main import CockpitApp
 from src.adapters.tui.presenters.accum_presenter import AccumPresenter
@@ -37,11 +38,13 @@ def create_tui_app(
     fetch_previewer: Callable[[], Any] | None = None,
     fetch_runner: Callable[[], Any] | None = None,
     ticker_detail_loader: Callable[[str], Any] | None = None,
+    board_snapshot_path: Path | None = None,
 ) -> CockpitApp:
     """Build cockpit with real local loaders unless tests inject fakes."""
     config = load_app_config()
     db_path = Path(config.storage.db_path)
     screen_deps = build_screen_deps(db_path)
+    universe = (config.analysis.universe or "lq45").lower()
 
     if accum_loader is None:
         accum_loader = _ScreenAccumLoader(screen_deps, config)
@@ -55,6 +58,8 @@ def create_tui_app(
         fetch_runner = _build_fetch_runner(db_path)
     if ticker_detail_loader is None:
         ticker_detail_loader = _ViewTickerDashboardLoader(db_path)
+    if board_snapshot_path is None:
+        board_snapshot_path = default_accum_snapshot_path(db_path)
 
     return CockpitApp(
         accum_loader=accum_loader,
@@ -76,6 +81,8 @@ def create_tui_app(
         ),
         accum_presenter=AccumPresenter(),
         preopen_presenter=PreOpenPresenter(),
+        board_snapshot_path=board_snapshot_path,
+        snapshot_universe=universe,
     )
 
 
