@@ -65,6 +65,9 @@ def create_tui_app(
         ticker_detail_loader=ticker_detail_loader,
         broker_list_loader=_BrokerListLoader(),
         broker_show_loader=_BrokerShowLoader(db_path),
+        broker_top_loader=_BrokerDeepLoader(db_path, "top"),
+        broker_flow_loader=_BrokerDeepLoader(db_path, "flow"),
+        broker_history_loader=_BrokerDeepLoader(db_path, "history"),
         accum_controller=BoardController(accum_loader),
         preopen_controller=BoardController(
             preopen_loader,
@@ -232,7 +235,19 @@ class _ViewTickerDashboardLoader:
             return format_ticker_dashboard_text(dashboard)
 
 
-# ── View broker (list → show) ───────────────────────────────
+# ── View broker (list → show → deep-dives) ──────────────────
+
+
+def _broker_repo_and_foreign(db_path: Path):
+    from src.infrastructure.config.institutional_accumulation_config_loader import (
+        load_institutional_accumulation_config,
+    )
+    from src.infrastructure.persistence.sqlite_broker_repository import (
+        SQLiteBrokerRepository,
+    )
+
+    foreign = load_institutional_accumulation_config().foreign_broker_codes
+    return SQLiteBrokerRepository(db_path), foreign
 
 
 class _BrokerListLoader:
@@ -264,36 +279,92 @@ class _BrokerListLoader:
 
 
 class _BrokerShowLoader:
-    """Desk show from cache — same use case as ``saham view broker show``."""
+    """Desk show from cache — same use case as ``saham view broker show``.
+
+    Returns SimpleNamespace(text=..., jump_ticker=...) for TUI hub + ``v`` jump.
+    """
 
     def __init__(self, db_path: Path) -> None:
         self._db_path = db_path
         self._lock = Lock()
 
-    def __call__(self, code: str) -> str:
+    def __call__(self, code: str) -> Any:
         with self._lock:
+            from types import SimpleNamespace
+
             from src.adapters.cli.view_broker_desk_display import format_desk_show_text
             from src.application.use_case.view_broker_desk_show_use_case import (
                 ViewBrokerDeskShowRequest,
                 ViewBrokerDeskShowUseCase,
             )
-            from src.infrastructure.config.institutional_accumulation_config_loader import (
-                load_institutional_accumulation_config,
+
+            repo, foreign = _broker_repo_and_foreign(self._db_path)
+            result = ViewBrokerDeskShowUseCase(repo, foreign_broker_codes=foreign).execute(
+                ViewBrokerDeskShowRequest(broker_code=str(code).upper())
             )
-            from src.infrastructure.persistence.sqlite_broker_repository import (
-                SQLiteBrokerRepository,
+            if result is None:
+                return SimpleNamespace(
+                    text=(
+                        f"{code.upper()}\n\n"
+                        "no broker_daily_flow for this desk · run broker fetch first"
+                    ),
+                    jump_ticker=None,
+                )
+            jump = None
+            if result.top_buy_stocks:
+                jump = str(result.top_buy_stocks[0].ticker).upper()
+            elif result.top_sell_stocks:
+                jump = str(result.top_sell_stocks[0].ticker).upper()
+            return SimpleNamespace(text=format_desk_show_text(result), jump_ticker=jump)
+
+
+class _BrokerDeepLoader:
+    """top-stocks / flow / history text loaders (CLI use cases)."""
+
+    def __init__(self, db_path: Path, page: str) -> None:
+        self._db_path = db_path
+        self._page = page  # top | flow | history
+        self._lock = Lock()
+
+    def __call__(self, code: str) -> str:
+        with self._lock:
+            from src.adapters.cli.view_broker_desk_display import (
+                format_desk_flow_text,
+                format_desk_history_text,
+                format_desk_top_stocks_text,
+            )
+            from src.application.use_case.view_broker_desk_flow_use_case import (
+                ViewBrokerDeskFlowRequest,
+                ViewBrokerDeskFlowUseCase,
+            )
+            from src.application.use_case.view_broker_desk_history_use_case import (
+                ViewBrokerDeskHistoryRequest,
+                ViewBrokerDeskHistoryUseCase,
+            )
+            from src.application.use_case.view_broker_desk_top_stocks_use_case import (
+                ViewBrokerDeskTopStocksRequest,
+                ViewBrokerDeskTopStocksUseCase,
             )
 
-            foreign = load_institutional_accumulation_config().foreign_broker_codes
-            result = ViewBrokerDeskShowUseCase(
-                SQLiteBrokerRepository(self._db_path),
-                foreign_broker_codes=foreign,
-            ).execute(ViewBrokerDeskShowRequest(broker_code=str(code).upper()))
-            if result is None:
-                return (
-                    f"{code.upper()}\n\nno broker_daily_flow for this desk · run broker fetch first"
+            code_u = str(code).upper()
+            repo, foreign = _broker_repo_and_foreign(self._db_path)
+            empty = f"{code_u}\n\nno broker_daily_flow for this desk · run broker fetch first"
+            if self._page == "top":
+                result = ViewBrokerDeskTopStocksUseCase(repo, foreign_broker_codes=foreign).execute(
+                    ViewBrokerDeskTopStocksRequest(broker_code=code_u, limit=20)
                 )
-            return format_desk_show_text(result)
+                return format_desk_top_stocks_text(result) if result else empty
+            if self._page == "flow":
+                result = ViewBrokerDeskFlowUseCase(repo, foreign_broker_codes=foreign).execute(
+                    ViewBrokerDeskFlowRequest(broker_code=code_u, days=10)
+                )
+                return format_desk_flow_text(result) if result else empty
+            if self._page == "history":
+                result = ViewBrokerDeskHistoryUseCase(repo, foreign_broker_codes=foreign).execute(
+                    ViewBrokerDeskHistoryRequest(broker_code=code_u, days=30)
+                )
+                return format_desk_history_text(result) if result else empty
+            return empty
 
 
 # ── Plan (structure desk — same engine as CLI plan swing) ───

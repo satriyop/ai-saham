@@ -81,6 +81,79 @@ def format_broker_list_text(desks: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def format_desk_top_stocks_text(result) -> str:
+    """Plain-text top-stocks for TUI (same facts as CLI display_desk_top_stocks)."""
+    lines = [
+        f"Desk Top Stocks · {result.broker_code} ({result.broker_name})",
+        f"type {_type_label(result.broker_type)} · date {result.date}",
+        str(result.scope_note),
+        "",
+        "Net buy (desk)",
+    ]
+    for row in result.top_buy_stocks or ():
+        lines.append(f"  {row.ticker:6}  {format_value(row.net_value):>10}  lot {row.net_lot:,}")
+    if not result.top_buy_stocks:
+        lines.append("  —")
+    lines.append("")
+    lines.append("Net sell (desk)")
+    for row in result.top_sell_stocks or ():
+        lines.append(f"  {row.ticker:6}  {format_value(row.net_value):>10}  lot {row.net_lot:,}")
+    if not result.top_sell_stocks:
+        lines.append("  —")
+    lines.append("")
+    lines.append(f"CLI: saham view broker top-stocks {result.broker_code}")
+    return "\n".join(lines)
+
+
+def format_desk_flow_text(result) -> str:
+    """Plain-text desk flow-by-day for TUI."""
+    lines = [
+        f"Desk Flow by Day · {result.broker_code} ({result.broker_name})",
+        f"type {_type_label(result.broker_type)}",
+        str(result.scope_note),
+        "",
+        f"{'Date':12}  {'Net':>10}  {'Lot':>10}  Tickers",
+        "-" * 44,
+    ]
+    for day in result.days or ():
+        lines.append(
+            f"{day.date.isoformat():12}  {format_value(day.net_value):>10}  "
+            f"{day.net_lot:>10,}  {day.ticker_count}"
+        )
+    if not result.days:
+        lines.append("  —")
+    lines.append("")
+    lines.append(f"CLI: saham view broker flow {result.broker_code}")
+    return "\n".join(lines)
+
+
+def format_desk_history_text(result, *, max_rows: int = 40) -> str:
+    """Plain-text desk history for TUI (row-capped)."""
+    pin = f" · ticker {result.pinned_ticker}" if result.pinned_ticker else ""
+    lines = [
+        f"Desk History · {result.broker_code} ({result.broker_name}){pin}",
+        f"type {_type_label(result.broker_type)}",
+        str(result.scope_note),
+        "",
+        f"{'Date':12}  {'Ticker':6}  {'Net':>10}  {'Lot':>8}",
+        "-" * 44,
+    ]
+    flows = list(result.flows or ())
+    shown = flows[:max_rows]
+    for flow in shown:
+        lines.append(
+            f"{flow.date.isoformat():12}  {flow.ticker:6}  "
+            f"{format_value(flow.net_value):>10}  {flow.net_lot:>8,}"
+        )
+    if not flows:
+        lines.append("  —")
+    elif len(flows) > max_rows:
+        lines.append(f"  … truncated {len(flows) - max_rows} more rows")
+    lines.append("")
+    lines.append(f"CLI: saham view broker history {result.broker_code}")
+    return "\n".join(lines)
+
+
 def display_desk_show(result) -> None:
     c = Console()
     c.print("")

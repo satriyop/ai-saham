@@ -63,6 +63,10 @@ and `saham tui` accum board):
   `accum_engine_inspect_presenter`; pre-open uses
   `preopen_engine_inspect_presenter` (board row only — no engine re-run).
   Pre-open land path remains Ctrl+P (`screen-preopen`); default open is accum.
+- **TUI Daily view axis (CLI parity):** Ctrl+P **View ticker** =
+  `saham view ticker show` (cache dashboard). Ctrl+P **View broker** =
+  list → Enter desk home → `t`/`f`/`h` deep-dives → optional `v` stock jump;
+  not board inspect and not plan.
 - **Intentional deltas must be explicit** (e.g. TUI pre-open = IEV snapshot only;
   TUI plan = thin local confirm). Document in the change; do not silently diverge.
 - **Verification:** when changing request defaults or board columns, run/extend
