@@ -113,3 +113,51 @@ def aggregate_desk_by_date(flows: list[BrokerDailyFlow]) -> tuple[DeskDayNet, ..
             )
         )
     return tuple(days)
+
+
+@dataclass(frozen=True)
+class DeskSessionPulse:
+    """Multi-session pulse for desk list/show (cache-derived, not a score)."""
+
+    as_of: date
+    day_net: Decimal
+    net5: Decimal  # sum of last min(5, n) session nets
+    sessions_in_net5: int
+    buy_streak: int  # consecutive net-buy sessions ending at as_of (0 if latest ≤ 0)
+    delta1: Decimal | None  # day_net − prior session net; None if only one session
+
+
+def desk_session_pulse(
+    flows: list[BrokerDailyFlow],
+    *,
+    net_window: int = 5,
+) -> DeskSessionPulse | None:
+    """Build DayNet / Net5 / buy-streak / Δ1 from distinct sessions with data.
+
+    Sessions = calendar dates present for the desk (not blank calendar days).
+    """
+    if net_window < 1:
+        raise ValueError("net_window must be >= 1")
+    days = aggregate_desk_by_date(flows)
+    if not days:
+        return None
+    latest = days[-1]
+    window = days[-net_window:]
+    net5 = sum((d.net_value for d in window), Decimal("0"))
+    streak = 0
+    for d in reversed(days):
+        if d.net_value > Decimal("0"):
+            streak += 1
+        else:
+            break
+    delta1: Decimal | None = None
+    if len(days) >= 2:
+        delta1 = days[-1].net_value - days[-2].net_value
+    return DeskSessionPulse(
+        as_of=latest.date,
+        day_net=latest.net_value,
+        net5=net5,
+        sessions_in_net5=len(window),
+        buy_streak=streak,
+        delta1=delta1,
+    )

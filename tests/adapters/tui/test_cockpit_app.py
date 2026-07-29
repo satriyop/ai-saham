@@ -88,6 +88,9 @@ def test_view_broker_list_enter_show_and_esc():
                 type_label="Foreign",
                 as_of="2026-07-28",
                 day_net="1.20B",
+                net5="3.80B",
+                streak="4",
+                delta1="+0.20B",
                 tickers="12",
                 top_buy="BBCA",
                 has_data=True,
@@ -97,6 +100,9 @@ def test_view_broker_list_enter_show_and_esc():
                 type_label="Local",
                 as_of="—",
                 day_net="—",
+                net5="—",
+                streak="—",
+                delta1="—",
                 tickers="—",
                 top_buy="—",
                 has_data=False,
@@ -130,6 +136,8 @@ def test_view_broker_list_enter_show_and_esc():
             assert app._broker_list_return == "accum"
             # Enriched radar columns present on row model
             assert app._broker_rows[0].day_net == "1.20B"
+            assert app._broker_rows[0].net5 == "3.80B"
+            assert app._broker_rows[0].streak == "4"
             assert app._broker_rows[0].top_buy == "BBCA"
             app._open_broker_desk_show()
             for _ in range(40):

@@ -821,14 +821,17 @@ class CockpitApp(App[None]):
         table = self.query_one("#board-table", DataTable)
         table.clear(columns=True)
         if self._stage == "broker-list":
-            # Desk radar: pulse from cache, not config-only codes
-            table.add_columns("Code", "Type", "AsOf", "DayNet", "#", "Top")
+            # Desk radar: DayNet + Net5 + buy-streak (+ Δ1) from cache
+            table.add_columns("Code", "Type", "AsOf", "DayNet", "Net5", "Stk", "Δ1", "#", "Top")
             for row in self._broker_rows:
                 table.add_row(
                     str(getattr(row, "code", "?")),
                     str(getattr(row, "type_label", "—")),
                     str(getattr(row, "as_of", "—") or "—"),
                     str(getattr(row, "day_net", "—") or "—"),
+                    str(getattr(row, "net5", "—") or "—"),
+                    str(getattr(row, "streak", "—") or "—"),
+                    str(getattr(row, "delta1", "—") or "—"),
                     str(getattr(row, "tickers", "—") or "—"),
                     str(getattr(row, "top_buy", "—") or "—"),
                 )
@@ -1029,7 +1032,7 @@ class CockpitApp(App[None]):
         with_data = sum(1 for r in self._broker_rows if getattr(r, "has_data", True))
         self._meta = (
             f"{len(self._broker_rows)} desks · {with_data} with flow · "
-            "Enter home · sorted |DayNet|"
+            "Enter home · sorted |Net5|"
         )
         self._status_note = "view broker list"
         self._render_board_table()

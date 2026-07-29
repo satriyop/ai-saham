@@ -251,10 +251,9 @@ def _broker_repo_and_foreign(db_path: Path):
 
 
 class _BrokerListLoader:
-    """Tracked desks + latest-session pulse from broker_daily_flow (cache-only).
+    """Tracked desks + multi-session pulse from broker_daily_flow (cache-only).
 
-    Columns beyond code/type so the list is a desk radar, not a config dump.
-    Per-desk read of daily flow (tracked set is small). No network.
+    Radar columns: AsOf, DayNet, Net5, Streak, #, Top — not config codes only.
     """
 
     def __init__(self, db_path: Path) -> None:
@@ -269,6 +268,7 @@ class _BrokerListLoader:
             from src.adapters.cli.view_broker_desk_display import format_value
             from src.application.services.broker_desk_from_daily_flow import (
                 classify_desk_type,
+                desk_session_pulse,
             )
             from src.domain.entities.broker_flow import BrokerType
             from src.infrastructure.config.institutional_accumulation_config_loader import (
@@ -291,7 +291,8 @@ class _BrokerListLoader:
                     label = "unknown"
 
                 flows = repo.get_broker_daily_flows_by_code(code_u)
-                if not flows:
+                pulse = desk_session_pulse(flows) if flows else None
+                if pulse is None:
                     rows.append(
                         SimpleNamespace(
                             code=code_u,
@@ -299,7 +300,11 @@ class _BrokerListLoader:
                             name="—",
                             as_of="—",
                             day_net="—",
+                            net5="—",
+                            streak="—",
+                            delta1="—",
                             day_net_sort=Decimal("0"),
+                            net5_sort=Decimal("0"),
                             tickers="—",
                             top_buy="—",
                             has_data=False,
@@ -307,12 +312,10 @@ class _BrokerListLoader:
                     )
                     continue
 
-                as_of = max(f.date for f in flows)
+                as_of = pulse.as_of
                 day_flows = [f for f in flows if f.date == as_of]
-                day_net = sum((f.net_value for f in day_flows), Decimal("0"))
                 ticker_n = len({f.ticker.upper() for f in day_flows})
                 name = (day_flows[0].broker_name or code_u) if day_flows else code_u
-                # Top buy ticker by net on as_of session
                 by_ticker: dict[str, Decimal] = {}
                 for f in day_flows:
                     t = f.ticker.upper()
@@ -323,9 +326,13 @@ class _BrokerListLoader:
                     if best[1] > 0:
                         top_buy = best[0]
                     else:
-                        # all selling — show biggest seller with − prefix marker
                         worst = min(by_ticker.items(), key=lambda kv: kv[1])
                         top_buy = f"−{worst[0]}"
+
+                delta1_s = "—"
+                if pulse.delta1 is not None:
+                    sign = "+" if pulse.delta1 > 0 else ""
+                    delta1_s = f"{sign}{format_value(pulse.delta1)}"
 
                 rows.append(
                     SimpleNamespace(
@@ -333,18 +340,23 @@ class _BrokerListLoader:
                         type_label=label,
                         name=str(name)[:16],
                         as_of=as_of.isoformat(),
-                        day_net=format_value(day_net),
-                        day_net_sort=day_net,
+                        day_net=format_value(pulse.day_net),
+                        net5=format_value(pulse.net5),
+                        streak=str(pulse.buy_streak),
+                        delta1=delta1_s,
+                        day_net_sort=pulse.day_net,
+                        net5_sort=pulse.net5,
                         tickers=str(ticker_n),
                         top_buy=top_buy,
                         has_data=True,
                     )
                 )
 
-            # Active desks first by |day net|, then no-data configs
+            # |Net5| first (short regime), then |DayNet|, empty last
             rows.sort(
                 key=lambda r: (
                     0 if getattr(r, "has_data", False) else 1,
+                    -abs(getattr(r, "net5_sort", Decimal("0"))),
                     -abs(getattr(r, "day_net_sort", Decimal("0"))),
                     r.code,
                 )
@@ -389,7 +401,36 @@ class _BrokerShowLoader:
                 jump = str(result.top_buy_stocks[0].ticker).upper()
             elif result.top_sell_stocks:
                 jump = str(result.top_sell_stocks[0].ticker).upper()
-            return SimpleNamespace(text=format_desk_show_text(result), jump_ticker=jump)
+            body = format_desk_show_text(result)
+            # Multi-session pulse (same pure helper as list Net5 / streak)
+            from src.adapters.cli.view_broker_desk_display import format_value
+            from src.application.services.broker_desk_from_daily_flow import (
+                desk_session_pulse,
+            )
+
+            flows = repo.get_broker_daily_flows_by_code(str(code).upper())
+            pulse = desk_session_pulse(flows) if flows else None
+            if pulse is not None:
+                d1 = "—"
+                if pulse.delta1 is not None:
+                    sign = "+" if pulse.delta1 > 0 else ""
+                    d1 = f"{sign}{format_value(pulse.delta1)}"
+                pulse_line = (
+                    f"\npulse: DayNet {format_value(pulse.day_net)} · "
+                    f"Net5 {format_value(pulse.net5)} "
+                    f"({pulse.sessions_in_net5}s) · buy-streak {pulse.buy_streak} · Δ1 {d1}\n"
+                )
+                # Insert after header block (after scope_note line in format_desk_show_text)
+                parts = body.split("\n", 4)
+                if len(parts) >= 4:
+                    body = (
+                        "\n".join(parts[:4])
+                        + pulse_line
+                        + ("\n".join(parts[4:]) if len(parts) > 4 else "")
+                    )
+                else:
+                    body = body + pulse_line
+            return SimpleNamespace(text=body, jump_ticker=jump)
 
 
 class _BrokerDeepLoader:
