@@ -53,11 +53,20 @@ def _type_label_for_broker(broker) -> str:
     return "Foreign" if getattr(broker, "is_foreign", False) else "Local"
 
 
-def _pulse_fields(pulse) -> dict:
-    """Map DeskSessionPulse → display strings (Net5 / Stk / Δ1)."""
+# Display NetX windows for stock→desks (must match STOCK_DESK_NET_WINDOWS).
+STOCK_DESK_DISPLAY_NET_WINDOWS: tuple[int, ...] = (3, 5, 7, 10, 20)
+
+
+def _format_netx(value) -> str:
+    return format_value(value) if value is not None else "—"
+
+
+def _pulse_fields(pulse, *, net_windows: tuple[int, ...] = STOCK_DESK_DISPLAY_NET_WINDOWS) -> dict:
+    """Map DeskSessionPulse → DayNet companion fields (NetX / Stk / Δ1)."""
+    empty_nets = {f"net{w}": "—" for w in net_windows}
     if pulse is None:
         return {
-            "net5": "—",
+            **empty_nets,
             "streak": "—",
             "delta1": "—",
             "sessions_in_net5": 0,
@@ -66,8 +75,11 @@ def _pulse_fields(pulse) -> dict:
     if pulse.delta1 is not None:
         sign = "+" if pulse.delta1 > 0 else ""
         delta1_s = f"{sign}{format_value(pulse.delta1)}"
+    nets = {}
+    for w in net_windows:
+        nets[f"net{w}"] = _format_netx(pulse.net_for(w))
     return {
-        "net5": format_value(pulse.net5),
+        **nets,
         "streak": str(pulse.buy_streak),
         "delta1": delta1_s,
         "sessions_in_net5": int(getattr(pulse, "sessions_in_net5", 0) or 0),
@@ -79,12 +91,13 @@ def format_ticker_top_brokers_rows(
     *,
     limit: int = 10,
     pulses: dict | None = None,
+    net_windows: tuple[int, ...] = STOCK_DESK_DISPLAY_NET_WINDOWS,
 ) -> list:
     """Build desk rows for TUI ticker→desks table from ViewTickerTopBrokersResult.
 
     Ranking stays single-session tops (buyers then sellers). Optional ``pulses``
-    map broker_code → DeskSessionPulse for stock-scoped multi-session Net5 /
-    streak / Δ1 from ``broker_daily_flow`` (same pure pulse as view broker list).
+    map broker_code → DeskSessionPulse for stock-scoped multi-session NetX /
+    streak / Δ1 from ``broker_daily_flow``. No broker name column (codes only).
     """
     from types import SimpleNamespace
 
@@ -96,7 +109,7 @@ def format_ticker_top_brokers_rows(
     def _row(broker, role: str):
         code = str(broker.broker_code).upper()
         pulse = pulse_map.get(code)
-        pf = _pulse_fields(pulse)
+        pf = _pulse_fields(pulse, net_windows=net_windows)
         # Prefer stock×desk session pulse when present (honest multi-day as_of).
         if pulse is not None:
             day_net = format_value(pulse.day_net)
@@ -104,19 +117,20 @@ def format_ticker_top_brokers_rows(
         else:
             day_net = format_value(broker.net_value)
             as_of = result.date.isoformat()
-        return SimpleNamespace(
-            code=code,
-            type_label=_type_label_for_broker(broker),
-            role=role,
-            day_net=day_net,
-            net5=pf["net5"],
-            streak=pf["streak"],
-            delta1=pf["delta1"],
-            sessions_in_net5=pf["sessions_in_net5"],
-            name=str(getattr(broker, "broker_name", "") or broker.broker_code)[:20],
-            as_of=as_of,
-            has_pulse=pulse is not None,
-        )
+        row_kw = {
+            "code": code,
+            "type_label": _type_label_for_broker(broker),
+            "role": role,
+            "day_net": day_net,
+            "streak": pf["streak"],
+            "delta1": pf["delta1"],
+            "sessions_in_net5": pf["sessions_in_net5"],
+            "as_of": as_of,
+            "has_pulse": pulse is not None,
+        }
+        for w in net_windows:
+            row_kw[f"net{w}"] = pf[f"net{w}"]
+        return SimpleNamespace(**row_kw)
 
     for b in buyers:
         rows.append(_row(b, "buy"))

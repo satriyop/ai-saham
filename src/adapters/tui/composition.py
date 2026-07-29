@@ -259,6 +259,7 @@ class _TickerTopBrokersLoader:
                 format_ticker_top_brokers_rows,
             )
             from src.application.services.broker_desk_from_daily_flow import (
+                STOCK_DESK_NET_WINDOWS,
                 desk_session_pulse,
             )
             from src.application.use_case.view_ticker_top_brokers_use_case import (
@@ -295,17 +296,26 @@ class _TickerTopBrokersLoader:
                 for flow in flows:
                     by_code.setdefault(str(flow.broker_code).upper(), []).append(flow)
                 for code in codes:
-                    pulse = desk_session_pulse(by_code.get(code, []))
+                    pulse = desk_session_pulse(
+                        by_code.get(code, []),
+                        net_windows=STOCK_DESK_NET_WINDOWS,
+                    )
                     if pulse is not None:
                         pulses[code] = pulse
 
-            rows = format_ticker_top_brokers_rows(result, limit=10, pulses=pulses)
+            rows = format_ticker_top_brokers_rows(
+                result,
+                limit=10,
+                pulses=pulses,
+                net_windows=STOCK_DESK_NET_WINDOWS,
+            )
             base_note = result.tops_scope_note or (
                 "summary tops" if result.tops_source == "summary" else "tracked flow fallback"
             )
             pulsed = sum(1 for r in rows if getattr(r, "has_pulse", False))
+            win_label = "/".join(str(w) for w in STOCK_DESK_NET_WINDOWS)
             if pulsed:
-                note = f"{base_note} · Net5 on stock sessions ({pulsed}/{len(rows)} desks)"
+                note = f"{base_note} · Net{win_label} stock sessions ({pulsed}/{len(rows)} desks)"
             else:
                 note = f"{base_note} · no multi-session flow for desks"
             return SimpleNamespace(

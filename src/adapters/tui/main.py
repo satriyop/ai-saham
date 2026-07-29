@@ -217,7 +217,7 @@ class CockpitApp(App[None]):
         if self._stage == "ticker-desks":
             return (
                 "↑↓ move · Enter desk home · esc → view ticker · Ctrl+P · "
-                "tops day · Net5 stock sessions"
+                "tops day · Net3/5/7/10/20 stock sessions"
             )
         if self._stage == "detail" and self._broker_page in {
             "show",
@@ -911,8 +911,21 @@ class CockpitApp(App[None]):
                 table.move_cursor(row=self._broker_row_index, animate=False)
             return
         if self._stage == "ticker-desks":
-            # Ranked by latest tops; Net5/Stk/Δ1 = stock×desk multi-session pulse
-            table.add_columns("Code", "Type", "Role", "AsOf", "DayNet", "Net5", "Stk", "Δ1", "Name")
+            # Ranked by latest tops; NetX = stock×desk last X sessions (no name col)
+            table.add_columns(
+                "Code",
+                "Type",
+                "Role",
+                "AsOf",
+                "DayNet",
+                "Net3",
+                "Net5",
+                "Net7",
+                "Net10",
+                "Net20",
+                "Stk",
+                "Δ1",
+            )
             for row in self._broker_rows:
                 table.add_row(
                     str(getattr(row, "code", "?")),
@@ -920,10 +933,13 @@ class CockpitApp(App[None]):
                     str(getattr(row, "role", "—")),
                     str(getattr(row, "as_of", "—") or "—"),
                     str(getattr(row, "day_net", "—") or "—"),
+                    str(getattr(row, "net3", "—") or "—"),
                     str(getattr(row, "net5", "—") or "—"),
+                    str(getattr(row, "net7", "—") or "—"),
+                    str(getattr(row, "net10", "—") or "—"),
+                    str(getattr(row, "net20", "—") or "—"),
                     str(getattr(row, "streak", "—") or "—"),
                     str(getattr(row, "delta1", "—") or "—"),
-                    str(getattr(row, "name", "—") or "—"),
                 )
             if self._broker_rows:
                 table.move_cursor(row=self._broker_row_index, animate=False)

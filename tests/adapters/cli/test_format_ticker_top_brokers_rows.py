@@ -47,15 +47,19 @@ def test_format_ticker_top_brokers_rows_buyers_and_sellers():
     assert buy.type_label == "Foreign"
     assert buy.day_net == "1.20B"
     assert buy.as_of == "2026-03-01"
+    assert buy.net3 == "—"
     assert buy.net5 == "—"
+    assert buy.net7 == "—"
+    assert buy.net10 == "—"
+    assert buy.net20 == "—"
     assert buy.streak == "—"
     assert buy.delta1 == "—"
     assert buy.has_pulse is False
+    assert not hasattr(buy, "name") or getattr(buy, "name", None) is None
     assert sell.code == "YP"
     assert sell.role == "sell"
     assert sell.type_label == "Local"
     assert sell.day_net == "-500.00M"
-    assert len(sell.name) <= 20
 
 
 def test_format_ticker_top_brokers_rows_with_stock_scoped_pulse():
@@ -66,6 +70,13 @@ def test_format_ticker_top_brokers_rows_with_stock_scoped_pulse():
         sessions_in_net5=5,
         buy_streak=3,
         delta1=Decimal("10000000"),
+        window_nets=(
+            (3, Decimal("60000000"), 3),
+            (5, Decimal("210000000"), 5),
+            (7, Decimal("250000000"), 6),
+            (10, Decimal("250000000"), 6),
+            (20, Decimal("250000000"), 6),
+        ),
     )
     rows = format_ticker_top_brokers_rows(
         _result(),
@@ -77,7 +88,11 @@ def test_format_ticker_top_brokers_rows_with_stock_scoped_pulse():
     assert buy.has_pulse is True
     assert buy.as_of == "2026-03-05"  # pulse as_of, not summary date
     assert buy.day_net == "30.00M"
+    assert buy.net3 == "60.00M"
     assert buy.net5 == "210.00M"
+    assert buy.net7 == "250.00M"
+    assert buy.net10 == "250.00M"
+    assert buy.net20 == "250.00M"
     assert buy.streak == "3"
     assert buy.delta1 == "+10.00M"
     # YP has no pulse — keeps summary day net
@@ -85,3 +100,4 @@ def test_format_ticker_top_brokers_rows_with_stock_scoped_pulse():
     assert sell.has_pulse is False
     assert sell.as_of == "2026-03-01"
     assert sell.net5 == "—"
+    assert sell.net20 == "—"

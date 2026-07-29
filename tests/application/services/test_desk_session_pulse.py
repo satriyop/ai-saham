@@ -67,3 +67,39 @@ def test_pulse_streak_zero_when_latest_sell():
 
 def test_pulse_empty():
     assert desk_session_pulse([]) is None
+
+
+def test_pulse_multi_window_netx():
+    from src.application.services.broker_desk_from_daily_flow import STOCK_DESK_NET_WINDOWS
+
+    # 20 sessions of +1 each → NetX == min(X, 20)
+    flows = [
+        _flow(date(2026, 6, d), "1")
+        for d in range(1, 21)  # June 1..20
+    ]
+    p = desk_session_pulse(flows, net_windows=STOCK_DESK_NET_WINDOWS)
+    assert p is not None
+    assert p.day_net == Decimal("1")
+    assert p.net_for(3) == Decimal("3")
+    assert p.net_for(5) == Decimal("5")
+    assert p.net5 == Decimal("5")
+    assert p.net_for(7) == Decimal("7")
+    assert p.net_for(10) == Decimal("10")
+    assert p.net_for(20) == Decimal("20")
+    assert p.sessions_for(20) == 20
+    assert [w for w, _n, _s in p.window_nets] == list(STOCK_DESK_NET_WINDOWS)
+
+
+def test_pulse_multi_window_partial_history():
+    flows = [
+        _flow(date(2026, 7, 23), "10"),
+        _flow(date(2026, 7, 24), "20"),
+        _flow(date(2026, 7, 25), "30"),
+    ]
+    p = desk_session_pulse(flows, net_windows=(3, 5, 7, 10, 20))
+    assert p is not None
+    # Only 3 sessions exist — NetX uses min(X, n)
+    assert p.net_for(3) == Decimal("60")
+    assert p.net_for(5) == Decimal("60")
+    assert p.net_for(20) == Decimal("60")
+    assert p.sessions_for(20) == 3
