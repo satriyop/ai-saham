@@ -37,6 +37,11 @@ Read this before every task. This is the mandatory entry point for agents. The l
     live Action authority.  
   Do not use vague “analysis evidence” in operator copy. Do not call
   display-only panels bare “evidence.”
+- **Setup phase history (ADR-058):** closed-session phase facts for sequence
+  validation live in `setup_phase_ledger` (production memory), not in the
+  observation corpus hot path. Assess writes ledger (window 7); corpus may copy
+  phase into fingerprints for research. After upgrade run
+  `saham research accum backfill-phase-ledger` once.
 - Trust current code during audits. Treat docs as intent, then verify against implementation.
 - Do not revert unrelated user or agent changes.
 - Do not run destructive git cleanup in a shared dirty worktree. `git reset`, `git checkout --`, `git restore`, `git clean`, and broad stash/cleanup commands require explicit user approval and a stated file scope.

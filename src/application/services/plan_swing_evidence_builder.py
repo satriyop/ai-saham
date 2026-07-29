@@ -79,6 +79,7 @@ if TYPE_CHECKING:
         LearningObservationRepository,
     )
     from src.domain.ports.market_data_repository import MarketDataRepository
+    from src.domain.ports.setup_phase_history_repository import SetupPhaseHistoryRepository
     from src.domain.value_objects.company_quality_context_evidence import (
         CompanyQualityContextEvidence,
     )
@@ -132,6 +133,7 @@ class PlanSwingEvidenceBuilder:
         candidate_observations_repository: "LearningObservationRepository | None",
         signal_engine: "SignalEngine | None",
         corporate_action_risk_use_case: "AssessCorporateActionEventRiskUseCase | None",
+        setup_phase_history_repository: "SetupPhaseHistoryRepository | None" = None,
         ticker_profile_classifier_factory: Callable[[], TickerProfileClassifier] | None = None,
         institutional_accumulation_config_factory: (
             Callable[[], InstitutionalAccumulationConfig] | None
@@ -151,6 +153,7 @@ class PlanSwingEvidenceBuilder:
         self._rules_loader = rules_loader
         self._flow_confirmation_builder = flow_confirmation_builder
         self._candidate_observations_repo = candidate_observations_repository
+        self._setup_phase_history_repo = setup_phase_history_repository
         self._signal_engine = signal_engine
         self._corporate_action_risk_use_case = corporate_action_risk_use_case
         self._ticker_profile_classifier_factory = ticker_profile_classifier_factory
@@ -167,7 +170,8 @@ class PlanSwingEvidenceBuilder:
             macro_calendar_repository=macro_calendar_repository,
         )
         self._setup_phase_assembler = CandidateSetupPhaseEvidenceAssembler(
-            market_repository, candidate_observations_repository
+            market_repository,
+            setup_phase_history_repository=setup_phase_history_repository,
         )
         self._institutional_assembler = CandidateInstitutionalAccumulationEvidenceAssembler(
             _normalize_institutional_accumulation_factory(institutional_accumulation_config_factory)

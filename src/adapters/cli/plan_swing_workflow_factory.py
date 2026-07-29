@@ -63,6 +63,9 @@ from src.infrastructure.persistence.ihsg_trading_session_calendar_provider impor
 from src.infrastructure.persistence.sqlite_macro_calendar_repository import (
     SQLiteMacroCalendarRepository,
 )
+from src.infrastructure.persistence.sqlite_setup_phase_ledger_repository import (
+    SQLiteSetupPhaseLedgerRepository,
+)
 
 
 def create_plan_swing_workflow(
@@ -130,6 +133,7 @@ def create_plan_swing_workflow(
         signal_engine=signal_engine,
         risk_engine=deps.create_risk_engine(),
         candidate_observations_repository=deps.learning_artifact_repository,
+        setup_phase_history_repository=SQLiteSetupPhaseLedgerRepository(db_path),
         accum_score_policy=accumulation_config.accum_score_policy,
         corporate_action_risk_use_case=create_corporate_action_risk_use_case(db_path),
         ticker_profile_classifier_factory=deps.ticker_profile_classifier_factory,

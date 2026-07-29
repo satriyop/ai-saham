@@ -24,7 +24,10 @@ from src.application.services.setup_phase_detector import (
     SetupPhaseConfig,
     SetupPhaseDetector,
 )
-from src.application.services.setup_phase_history import load_previous_setup_phases
+from src.application.services.setup_phase_history import (
+    SetupPhaseHistoryIndex,
+    load_previous_setup_phases,
+)
 from src.domain.value_objects.benchmark_symbol import CANONICAL_BENCHMARK_TICKER
 from src.domain.value_objects.canonical_signal_evidence_input import (
     CandleRowIdentity,
@@ -35,10 +38,8 @@ if TYPE_CHECKING:
     from src.application.services.benchmark_excess_return_calculator import (
         BenchmarkExcessReturnCalculator,
     )
-    from src.domain.ports.learning_artifact_repositories import (
-        LearningObservationRepository,
-    )
     from src.domain.ports.market_data_repository import MarketDataRepository
+    from src.domain.ports.setup_phase_history_repository import SetupPhaseHistoryRepository
     from src.domain.value_objects.flow_confirmation_evidence import FlowConfirmationEvidence
     from src.domain.value_objects.setup_evidence import SetupEvidence
     from src.domain.value_objects.setup_phase import SetupPhaseSnapshot
@@ -62,10 +63,20 @@ class CandidateSetupPhaseEvidenceAssembler:
     def __init__(
         self,
         market_repository: "MarketDataRepository",
-        candidate_observations_repository: "LearningObservationRepository | None",
+        setup_phase_history_repository: "SetupPhaseHistoryRepository | None" = None,
+        *,
+        # Legacy kwarg accepted for call-site compatibility during migration.
+        candidate_observations_repository: Any | None = None,
     ) -> None:
         self._market_repo = market_repository
-        self._candidate_observations_repo = candidate_observations_repository
+        # Prefer explicit history port; ignore learning observations for sequence.
+        self._setup_phase_history_repo = setup_phase_history_repository
+        self._history_index: SetupPhaseHistoryIndex | None = None
+        _ = candidate_observations_repository  # no longer used for phase history
+
+    def set_history_index(self, index: SetupPhaseHistoryIndex | None) -> None:
+        """Attach a run-scoped batch index (or clear after the run)."""
+        self._history_index = index
 
     def build_setup_evidence(
         self,
@@ -136,10 +147,11 @@ class CandidateSetupPhaseEvidenceAssembler:
         config: SetupPhaseConfig | None = None,
     ) -> "SetupPhaseSnapshot":
         previous_phases = load_previous_setup_phases(
-            self._candidate_observations_repo,
+            self._setup_phase_history_repo,
             ticker=ticker,
             before_date=snapshot_date,
             setup_family=setup_family,
+            history_index=self._history_index,
         )
         return SetupPhaseDetector().detect(
             candles=candles,

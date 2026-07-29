@@ -77,6 +77,7 @@ if TYPE_CHECKING:
         LearningObservationRepository,
     )
     from src.domain.ports.market_data_repository import MarketDataRepository
+    from src.domain.ports.setup_phase_history_repository import SetupPhaseHistoryRepository
     from src.domain.value_objects.company_quality_context_evidence import (
         CompanyQualityContextEvidence,
     )
@@ -113,6 +114,7 @@ class AccumulationCandidateEvidenceBuilder:
         benchmark_excess_return_calculator: "BenchmarkExcessReturnCalculator",
         indicator_registry: "IndicatorRegistry",
         rules_loader: RulesLoader,
+        setup_phase_history_repository: "SetupPhaseHistoryRepository | None" = None,
         ticker_profile_classifier_factory: Callable[[], TickerProfileClassifier] | None = None,
         institutional_accumulation_config_factory: (
             Callable[[], InstitutionalAccumulationConfig] | None
@@ -130,6 +132,7 @@ class AccumulationCandidateEvidenceBuilder:
         self._broker_repo = broker_repository
         self._signal_engine = signal_engine
         self._candidate_observations_repo = candidate_observations_repository
+        self._setup_phase_history_repo = setup_phase_history_repository
         self._swing_setup_catalog = swing_setup_catalog
         self._setup_family_resolver = primary_setup_family_resolver
         self._benchmark_excess_return_calculator = benchmark_excess_return_calculator
@@ -150,7 +153,8 @@ class AccumulationCandidateEvidenceBuilder:
             macro_calendar_repository=macro_calendar_repository,
         )
         self._setup_phase_assembler = CandidateSetupPhaseEvidenceAssembler(
-            market_repository, candidate_observations_repository
+            market_repository,
+            setup_phase_history_repository=setup_phase_history_repository,
         )
         self._institutional_assembler = CandidateInstitutionalAccumulationEvidenceAssembler(
             _normalize_institutional_accumulation_factory(institutional_accumulation_config_factory)
@@ -162,6 +166,18 @@ class AccumulationCandidateEvidenceBuilder:
         self._company_quality_assembler = CandidateCompanyQualityContextEvidenceAssembler(
             _normalize_company_quality_context_factory(company_quality_context_builder_factory)
         )
+
+    def set_phase_history_index(self, index: object | None) -> None:
+        """Attach run-scoped phase history batch (or clear)."""
+        from src.application.services.setup_phase_history import SetupPhaseHistoryIndex
+
+        if index is not None and not isinstance(index, SetupPhaseHistoryIndex):
+            raise TypeError("index must be SetupPhaseHistoryIndex | None")
+        self._setup_phase_assembler.set_history_index(index)
+
+    @property
+    def setup_phase_history_repository(self) -> "SetupPhaseHistoryRepository | None":
+        return self._setup_phase_history_repo
 
     def evaluate_named_setups_for_screen(
         self, candidate: "accumulation_dto.AccumulationCandidate"

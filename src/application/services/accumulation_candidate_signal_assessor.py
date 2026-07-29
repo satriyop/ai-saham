@@ -52,6 +52,7 @@ if TYPE_CHECKING:
     from src.application.use_case.assess_source_availability_use_case import (
         AssessSourceAvailabilityUseCase,
     )
+    from src.domain.ports.setup_phase_history_repository import SetupPhaseHistoryRepository
     from src.domain.value_objects.flow_confirmation_evidence import (
         FlowConfirmationEvidence,
     )
@@ -98,6 +99,7 @@ class AccumulationCandidateSignalAssessor:
         flow_confirmation_builder: FlowConfirmationEvidenceBuilder,
         candidate_evidence_builder: AccumulationCandidateEvidenceBuilder,
         accum_score_uc: ScoreAccumUseCase | None = None,
+        setup_phase_history_repository: "SetupPhaseHistoryRepository | None" = None,
         *,
         pipeline: ScreenAssessmentPipeline | None = None,
     ) -> None:
@@ -105,6 +107,11 @@ class AccumulationCandidateSignalAssessor:
         self._flow_confirmation_builder = flow_confirmation_builder
         self._candidate_evidence_builder = candidate_evidence_builder
         self._accum_score_uc = accum_score_uc or ScoreAccumUseCase()
+        self._setup_phase_history_repo = setup_phase_history_repository
+        if self._setup_phase_history_repo is None:
+            self._setup_phase_history_repo = (
+                candidate_evidence_builder.setup_phase_history_repository
+            )
         self._pipeline = pipeline or ScreenAssessmentPipeline(
             policy=ScreenPolicy.accumulation(),
             signal_engine=signal_engine,
@@ -120,6 +127,7 @@ class AccumulationCandidateSignalAssessor:
         effective_session: "EffectiveMarketSession",
         source_availability_use_case: "AssessSourceAvailabilityUseCase | None",
         market_context: "MarketContext | None" = None,
+        window_days: int | None = None,
     ) -> CanonicalFlowScoreResult:
         """Build flow-only canonical evidence and score via SignalEngine.
 
@@ -199,6 +207,20 @@ class AccumulationCandidateSignalAssessor:
         candidate.setup_phase = self._candidate_evidence_builder.detect_candidate_setup_phase(
             candidate, flow_ev, as_of_date, setup_family=setup_family
         )
+        # Production phase memory: canonical window only (ADR-056 window 7).
+        if candidate.setup_phase is not None:
+            from src.application.services.setup_phase_history import (
+                record_setup_phase_for_screen,
+            )
+
+            record_setup_phase_for_screen(
+                self._setup_phase_history_repo,
+                ticker=candidate.ticker,
+                as_of_date=as_of_date,
+                phase=candidate.setup_phase.current_phase,
+                setup_family=setup_family,
+                window_days=window_days,
+            )
 
         canonical_evidence: CanonicalSignalEvidenceInput | None = None
         if built_flow is not None:
@@ -265,6 +287,7 @@ class AccumulationCandidateSignalAssessor:
             effective_session=effective_session,
             source_availability_use_case=source_availability_use_case,
             market_context=request.market_context,
+            window_days=getattr(request, "window_days", None),
         )
         flow_ev = scored.flow_evidence
 

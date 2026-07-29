@@ -53,9 +53,16 @@ from src.infrastructure.persistence.ihsg_trading_session_calendar_provider impor
 from src.infrastructure.persistence.sqlite_macro_calendar_repository import (
     SQLiteMacroCalendarRepository,
 )
+from src.infrastructure.persistence.sqlite_setup_phase_ledger_repository import (
+    SQLiteSetupPhaseLedgerRepository,
+)
 from src.infrastructure.persistence.sqlite_watchlist_repository import (
     SQLiteWatchlistRepository,
 )
+
+
+def _setup_phase_history_repo(db_path: Path) -> SQLiteSetupPhaseLedgerRepository:
+    return SQLiteSetupPhaseLedgerRepository(db_path)
 
 
 @dataclass(frozen=True)
@@ -96,6 +103,7 @@ def create_accumulation_screen_workflow(
         risk_use_case=risk_use_case,
         signal_engine=signal_engine,
         candidate_observations_repository=deps.learning_artifact_repository,
+        setup_phase_history_repository=_setup_phase_history_repo(db_path),
         accum_score_policy=screener_config.accum_score_policy,
         derived_feature_policy=screener_config.derived_features,
         swing_setup_catalog=swing_setup_catalog,
@@ -151,6 +159,7 @@ def create_accumulation_screen_workflow_bundle(
         risk_use_case=risk_use_case,
         signal_engine=signal_engine,
         candidate_observations_repository=deps.learning_artifact_repository,
+        setup_phase_history_repository=_setup_phase_history_repo(db_path),
         accum_score_policy=screener_config.accum_score_policy,
         derived_feature_policy=screener_config.derived_features,
         swing_setup_catalog=swing_setup_catalog,

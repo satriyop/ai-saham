@@ -77,6 +77,7 @@ if TYPE_CHECKING:
     from src.domain.ports.learning_artifact_repositories import (
         LearningObservationRepository,
     )
+    from src.domain.ports.setup_phase_history_repository import SetupPhaseHistoryRepository
 
 # Default setup targets (1:1 R:R, regime-unaware fallback)
 _DEFAULT_TAKE_PROFIT = Decimal("5")
@@ -172,6 +173,7 @@ class AccumulationScreenUseCase:
         idx_groups: "dict[str, list[str]] | None" = None,
         risk_use_case: "AssessRiskUseCase | None" = None,
         candidate_observations_repository: "LearningObservationRepository | None" = None,
+        setup_phase_history_repository: "SetupPhaseHistoryRepository | None" = None,
         accum_score_use_case: ScoreAccumUseCase | None = None,
         derived_feature_policy: accumulation_dto.AccumulationDerivedFeaturePolicy | None = None,
         swing_setup_catalog: "SwingSetupCatalogConfig | None" = None,
@@ -207,6 +209,7 @@ class AccumulationScreenUseCase:
         self._risk_use_case = risk_use_case
         self._signal_engine = signal_engine
         self._candidate_observations_repo = candidate_observations_repository
+        self._setup_phase_history_repo = setup_phase_history_repository
         self._accum_score_uc = accum_score_use_case or ScoreAccumUseCase()
         self._derived_features = (
             derived_feature_policy or accumulation_dto.AccumulationDerivedFeaturePolicy()
@@ -227,6 +230,7 @@ class AccumulationScreenUseCase:
             broker_repository=self._broker_repo,
             signal_engine=self._signal_engine,
             candidate_observations_repository=self._candidate_observations_repo,
+            setup_phase_history_repository=self._setup_phase_history_repo,
             swing_setup_catalog=self._swing_setup_catalog,
             primary_setup_family_resolver=self._setup_family_resolver,
             benchmark_excess_return_calculator=self._benchmark_excess_return_calculator,
@@ -305,6 +309,7 @@ class AccumulationScreenUseCase:
             flow_confirmation_builder=self._flow_confirmation_builder,
             candidate_evidence_builder=self._candidate_evidence_builder,
             accum_score_uc=self._accum_score_uc,
+            setup_phase_history_repository=self._setup_phase_history_repo,
             pipeline=self._assessment_pipeline,
         )
 
@@ -328,6 +333,46 @@ class AccumulationScreenUseCase:
         effective_session = execution_context.effective_session
         source_availability_use_case = execution_context.source_availability_use_case
 
+        # Run-scoped phase history batch (Fix 2): one SQL read for the universe.
+        from src.application.services.setup_phase_history import (
+            build_setup_phase_history_index,
+        )
+
+        # Cutoff must match detect snapshot_date (``today`` / request.as_of_date).
+        history_index = build_setup_phase_history_index(
+            self._setup_phase_history_repo,
+            tickers=request.tickers,
+            before_date=today,
+        )
+        self._candidate_evidence_builder.set_phase_history_index(history_index)
+        try:
+            return self._execute_with_history(
+                request,
+                today=today,
+                candidates=candidates,
+                observation_candidates=observation_candidates,
+                skipped=skipped,
+                uses_stockbit=uses_stockbit,
+                effective_session=effective_session,
+                source_availability_use_case=source_availability_use_case,
+                execution_context=execution_context,
+            )
+        finally:
+            self._candidate_evidence_builder.set_phase_history_index(None)
+
+    def _execute_with_history(
+        self,
+        request: accumulation_dto.AccumulationScreenRequest,
+        *,
+        today: date,
+        candidates: list,
+        observation_candidates: list,
+        skipped: int,
+        uses_stockbit: bool,
+        effective_session: Any,
+        source_availability_use_case: Any,
+        execution_context: "SignalEvidenceExecutionContext",
+    ) -> accumulation_dto.AccumulationScreenResponse:
         for ticker in request.tickers:
             eval_result = self._candidate_evaluator.evaluate(
                 ticker=ticker,
