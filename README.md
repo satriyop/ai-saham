@@ -53,7 +53,9 @@ pip install -e ".[tui]"
 saham tui
 ```
 
-Design: `docs/design/tui-cockpit-opencode.md` · ADR-051 clean break.
+Design: `docs/design/tui-cockpit-opencode.md` · ADR-051 clean break.  
+End-to-end product journey (desk / pre-open / research / authority):  
+`docs/design/end-to-end-journey.html`.
 
 The cockpit is keyboard-first (`Ctrl+P` command palette). It defaults to local
 cache, does not auto-fetch on open, and never places broker orders. Explicit

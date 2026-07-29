@@ -1,0 +1,1143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ai-saham · End-to-end product journey</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0b0b0b;
+      --bg-elevated: #141414;
+      --bg-panel: #101010;
+      --bg-card: #121212;
+      --border: #1c1c1c;
+      --border-soft: #242424;
+
+      --text: #d8d8d8;
+      --text-dim: #7a7a7a;
+      --text-mute: #555555;
+      --text-faint: #3d3d3d;
+
+      --sel-bg: #c9a68a;
+      --sel-text: #1a120c;
+      --sel-dim: #a8896f;
+
+      --green: #6fbf8a;
+      --amber: #d4b06a;
+      --red: #c97a72;
+      --blue: #7aa2c4;
+      --purple: #9b8fb8;
+
+      --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      --font-ui: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+      --radius: 6px;
+      --max: 1080px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background: #050505;
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      min-height: 100%;
+      padding: 28px 18px 80px;
+    }
+
+    .page {
+      max-width: var(--max);
+      margin: 0 auto;
+    }
+
+    /* ── Hero ───────────────────────────────────────────── */
+    .hero {
+      border: 1px solid var(--border);
+      background: var(--bg);
+      border-radius: 10px;
+      padding: 28px 28px 22px;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.45);
+      margin-bottom: 18px;
+    }
+
+    .eyebrow {
+      font-family: var(--font-ui);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--purple);
+      margin-bottom: 10px;
+    }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 600;
+      color: #ececec;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+    }
+
+    .lede {
+      color: var(--text-dim);
+      max-width: 62ch;
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+
+    .lede strong { color: var(--text); font-weight: 500; }
+
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .pill {
+      border: 1px solid var(--border-soft);
+      background: var(--bg-elevated);
+      color: var(--text-dim);
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 11px;
+    }
+
+    .pill em {
+      font-style: normal;
+      color: var(--sel-dim);
+    }
+
+    .slogan {
+      margin-top: 16px;
+      padding: 12px 14px;
+      border-left: 3px solid var(--sel-bg);
+      background: #111;
+      color: var(--text-dim);
+      font-size: 12.5px;
+    }
+
+    .slogan strong { color: #e8e8e8; font-weight: 500; }
+
+    /* ── Sticky journey nav ─────────────────────────────── */
+    .journey-nav {
+      position: sticky;
+      top: 10px;
+      z-index: 20;
+      margin-bottom: 18px;
+      background: rgba(11,11,11,0.92);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+    }
+
+    .journey-nav .label {
+      font-family: var(--font-ui);
+      font-size: 10.5px;
+      color: var(--text-mute);
+      margin-bottom: 6px;
+    }
+
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .tabs button {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: #888;
+      background: #0c0c0c;
+      border: 1px solid #2a2a2a;
+      border-radius: 4px;
+      padding: 5px 10px;
+      cursor: pointer;
+    }
+
+    .tabs button:hover { color: #ccc; border-color: #3a3a3a; }
+    .tabs button.is-on {
+      color: var(--sel-text);
+      background: var(--sel-bg);
+      border-color: transparent;
+      font-weight: 500;
+    }
+
+    /* ── Sections ───────────────────────────────────────── */
+    section.block {
+      display: none;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      border-radius: 10px;
+      padding: 22px 24px 26px;
+      margin-bottom: 18px;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.28);
+    }
+
+    section.block.is-on { display: block; }
+
+    section.block h2 {
+      font-size: 15px;
+      font-weight: 600;
+      color: #ececec;
+      margin-bottom: 6px;
+    }
+
+    section.block .sub {
+      color: var(--text-dim);
+      font-size: 12px;
+      margin-bottom: 18px;
+      max-width: 70ch;
+    }
+
+    h3 {
+      font-size: 11px;
+      font-family: var(--font-ui);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--purple);
+      margin: 20px 0 10px;
+      font-weight: 600;
+    }
+
+    h3:first-of-type { margin-top: 4px; }
+
+    p { color: var(--text-dim); margin-bottom: 10px; max-width: 72ch; }
+    p strong { color: var(--text); font-weight: 500; }
+
+    /* ── Timeline / steps ───────────────────────────────── */
+    .timeline {
+      display: grid;
+      gap: 0;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--bg-panel);
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 88px 1fr;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+      min-height: 0;
+    }
+
+    .step:last-child { border-bottom: 0; }
+
+    .step .when {
+      padding: 14px 12px;
+      background: #0d0d0d;
+      border-right: 1px solid var(--border);
+      color: var(--text-mute);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    .step .when strong {
+      display: block;
+      color: var(--sel-dim);
+      font-weight: 500;
+      font-size: 11.5px;
+      margin-bottom: 2px;
+    }
+
+    .step .body {
+      padding: 14px 16px;
+    }
+
+    .step .body .title {
+      color: #e4e4e4;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
+    .step .body .why {
+      color: var(--text-mute);
+      font-size: 11.5px;
+      margin-bottom: 8px;
+    }
+
+    .cmds {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    code.cmd {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--sel-dim);
+      background: #0a0a0a;
+      border: 1px solid #2a2a2a;
+      border-radius: 4px;
+      padding: 3px 7px;
+    }
+
+    .tag {
+      display: inline-block;
+      font-size: 10px;
+      border-radius: 3px;
+      padding: 2px 6px;
+      margin-right: 4px;
+      border: 1px solid transparent;
+      vertical-align: middle;
+    }
+
+    .tag.cli { color: var(--blue); border-color: #2a3a48; background: #0e1418; }
+    .tag.tui { color: var(--sel-dim); border-color: #3a3028; background: #16120e; }
+    .tag.cron { color: var(--purple); border-color: #2e2840; background: #12101a; }
+    .tag.prod { color: var(--green); border-color: #24382c; background: #0e1610; }
+    .tag.diag { color: var(--amber); border-color: #3a3220; background: #16140e; }
+    .tag.corpus { color: var(--text-dim); border-color: #2a2a2a; background: #121212; }
+    .tag.paper { color: #b8a0a0; border-color: #3a2a2a; background: #161010; }
+
+    /* ── Flow diagram ───────────────────────────────────── */
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 8px;
+      margin: 12px 0 8px;
+    }
+
+    .flow-node {
+      border: 1px solid var(--border-soft);
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      padding: 12px 12px 10px;
+      min-height: 88px;
+    }
+
+    .flow-node .n {
+      font-size: 10px;
+      color: var(--text-mute);
+      margin-bottom: 4px;
+    }
+
+    .flow-node .t {
+      color: #e8e8e8;
+      font-weight: 500;
+      font-size: 12.5px;
+      margin-bottom: 4px;
+    }
+
+    .flow-node .d {
+      color: var(--text-mute);
+      font-size: 11px;
+    }
+
+    .flow-node.accent {
+      border-color: #3a3028;
+      box-shadow: inset 0 0 0 1px rgba(201,166,138,0.08);
+    }
+
+    .arrow-row {
+      text-align: center;
+      color: var(--text-faint);
+      font-size: 11px;
+      letter-spacing: 0.2em;
+      margin: 4px 0 10px;
+    }
+
+    /* ── Tables ─────────────────────────────────────────── */
+    table.map {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 8px;
+    }
+
+    table.map th,
+    table.map td {
+      text-align: left;
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    table.map th {
+      color: var(--text-mute);
+      font-weight: 500;
+      font-size: 10.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: #0d0d0d;
+    }
+
+    table.map td { color: var(--text-dim); }
+    table.map td:first-child { color: #e0e0e0; font-weight: 500; white-space: nowrap; }
+    table.map tr:hover td { background: #111; }
+
+    /* ── Callouts ───────────────────────────────────────── */
+    .callout {
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      margin: 12px 0;
+      background: #0e0e0e;
+    }
+
+    .callout.warn { border-color: #3a3220; }
+    .callout.ok { border-color: #24382c; }
+    .callout .h {
+      color: #e4e4e4;
+      font-weight: 500;
+      margin-bottom: 4px;
+      font-size: 12.5px;
+    }
+
+    ul.clean {
+      list-style: none;
+      margin: 8px 0 0;
+    }
+
+    ul.clean li {
+      position: relative;
+      padding: 4px 0 4px 14px;
+      color: var(--text-dim);
+      font-size: 12.5px;
+    }
+
+    ul.clean li::before {
+      content: "·";
+      position: absolute;
+      left: 2px;
+      color: var(--sel-dim);
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    @media (max-width: 760px) {
+      .two-col { grid-template-columns: 1fr; }
+      .step { grid-template-columns: 1fr; }
+      .step .when {
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+      }
+    }
+
+    .footer {
+      margin-top: 8px;
+      color: var(--text-faint);
+      font-size: 11px;
+      text-align: center;
+      padding: 16px;
+    }
+
+    .footer a { color: var(--sel-dim); text-decoration: none; }
+    .footer a:hover { color: var(--sel-bg); }
+
+    .kbd {
+      font-size: 10.5px;
+      color: var(--text-mute);
+      border: 1px solid #2a2a2a;
+      border-radius: 3px;
+      padding: 1px 5px;
+      background: #0c0c0c;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <div class="eyebrow">Product design · journey map</div>
+      <h1>ai-saham · end-to-end journey</h1>
+      <p class="lede">
+        How a human (or cron) moves from <strong>local data</strong> →
+        <strong>candidates</strong> → <strong>judgment</strong> →
+        <strong>structure</strong> → <strong>paper</strong>, with a parallel
+        <strong>research corpus</strong> that never owns Action.
+        Companion to the daily cockpit mock —
+        this document is the <strong>whole product spine</strong>, not only TUI chrome.
+      </p>
+      <div class="slogan">
+        <strong>Screen finds and judges.</strong>
+        Plan designs structure.
+        Assess confirms a frozen plan.
+        Trade is paper only.
+        Research is corpus only.
+        Fetch never decides.
+      </div>
+      <div class="meta-row">
+        <span class="pill">Status · <em>design contract</em></span>
+        <span class="pill">Surfaces · <em>CLI + TUI + cron</em></span>
+        <span class="pill">Market · <em>IDX · local-first</em></span>
+        <span class="pill">ADRs · <em>051 · 054 · 057 · 058</em></span>
+      </div>
+    </header>
+
+    <nav class="journey-nav" aria-label="Journey sections">
+      <div class="label">Jump · product journeys</div>
+      <div class="tabs" id="tabs">
+        <button type="button" class="is-on" data-tab="spine">1 · Day spine</button>
+        <button type="button" data-tab="desk">2 · Swing desk</button>
+        <button type="button" data-tab="preopen">3 · Pre-open</button>
+        <button type="button" data-tab="research">4 · Research</button>
+        <button type="button" data-tab="surfaces">5 · Surfaces</button>
+        <button type="button" data-tab="authority">6 · Authority</button>
+        <button type="button" data-tab="anti">7 · Anti-patterns</button>
+      </div>
+    </nav>
+
+    <!-- 1 SPINE -->
+    <section class="block is-on" id="spine">
+      <h2>1 · Day spine (operator timeline)</h2>
+      <p class="sub">
+        One trading day as the product experiences it. Times are WIB-oriented
+        and match cron intent; wall-clock may shift with data readiness.
+      </p>
+
+      <div class="timeline">
+        <div class="step">
+          <div class="when"><strong>Before open</strong>pre-session</div>
+          <div class="body">
+            <div class="title">Freeze pre-open universe (IEV / NCP lane)</div>
+            <div class="why">Capture is a learning + decision write for opening; not the swing board.</div>
+            <div class="cmds">
+              <span class="tag cron">cron</span>
+              <code class="cmd">saham fetch iev</code>
+              <code class="cmd">saham research pre-open capture</code>
+              <code class="cmd">saham research pre-open track</code>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="when"><strong>Open → +30m</strong>session live</div>
+          <div class="body">
+            <div class="title">Confirm frozen pre-open plan vs reality</div>
+            <div class="why">Assess is identity-bound confirmation — not a new discovery board.</div>
+            <div class="cmds">
+              <span class="tag cli">cli</span>
+              <code class="cmd">saham assess pre-open --session YYYY-MM-DD</code>
+              <code class="cmd">saham trade pre-open log …</code>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="when"><strong>Mid / any</strong>desk hours</div>
+          <div class="body">
+            <div class="title">Orient → discover → judge → structure → paper</div>
+            <div class="why">Main swing journey. Local-first; fetch only when cache is empty/stale.</div>
+            <div class="cmds">
+              <span class="tag cli">cli</span>
+              <span class="tag tui">tui</span>
+              <code class="cmd">saham fetch status</code>
+              <code class="cmd">saham today</code>
+              <code class="cmd">saham tui</code>
+              <code class="cmd">saham screen accum --universe lq45</code>
+              <code class="cmd">saham screen accum TICKER</code>
+              <code class="cmd">saham plan swing TICKER</code>
+              <code class="cmd">saham trade accum log …</code>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="when"><strong>~18:30</strong>after close</div>
+          <div class="body">
+            <div class="title">Refresh EOD market cache</div>
+            <div class="why">Data only. No Action authority.</div>
+            <div class="cmds">
+              <span class="tag cron">cron</span>
+              <code class="cmd">saham fetch market --universe lq45</code>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="when"><strong>~19:15–19:45</strong>evening</div>
+          <div class="body">
+            <div class="title">Accum corpus: capture then labels</div>
+            <div class="why">
+              Capture runs screen assess → writes setup_phase_ledger (window 7) +
+              learning observations. Labels attach outcomes later.
+            </div>
+            <div class="cmds">
+              <span class="tag cron">cron</span>
+              <span class="tag corpus">corpus</span>
+              <code class="cmd">saham research accum capture --universe lq45 --session …</code>
+              <code class="cmd">saham research accum labels …</code>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <h3>Mental model</h3>
+      <div class="flow">
+        <div class="flow-node">
+          <div class="n">01</div>
+          <div class="t">Data</div>
+          <div class="d">fetch · cache · freshness</div>
+        </div>
+        <div class="flow-node accent">
+          <div class="n">02</div>
+          <div class="t">Discover</div>
+          <div class="d">screen universe board</div>
+        </div>
+        <div class="flow-node accent">
+          <div class="n">03</div>
+          <div class="t">Judge</div>
+          <div class="d">screen ticker · Action</div>
+        </div>
+        <div class="flow-node">
+          <div class="n">04</div>
+          <div class="t">Structure</div>
+          <div class="d">plan swing · SL/TP</div>
+        </div>
+        <div class="flow-node">
+          <div class="n">05</div>
+          <div class="t">Paper</div>
+          <div class="d">trade log · notebook</div>
+        </div>
+        <div class="flow-node">
+          <div class="n">∥</div>
+          <div class="t">Corpus</div>
+          <div class="d">research · labels · eval</div>
+        </div>
+      </div>
+      <div class="arrow-row">parallel lanes · never merge Action with labels</div>
+    </section>
+
+    <!-- 2 DESK -->
+    <section class="block" id="desk">
+      <h2>2 · Swing desk journey (happy path)</h2>
+      <p class="sub">
+        The core operator loop after data exists. Encodes ADR-054:
+        screen judges; plan structures; trade papers.
+      </p>
+
+      <div class="timeline">
+        <div class="step">
+          <div class="when"><strong>0</strong>health</div>
+          <div class="body">
+            <div class="title">Is local cache usable?</div>
+            <div class="why">Empty cache must not invent candidates. Stale cache should warn, not lie.</div>
+            <div class="cmds">
+              <code class="cmd">saham fetch status</code>
+              <code class="cmd">saham fetch market --universe lq45</code>
+              <code class="cmd">saham fetch broker …</code>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="when"><strong>1</strong>orient</div>
+          <div class="body">
+            <div class="title">Daily briefing (read-only)</div>
+            <div class="why">Does not fetch, tune, or persist. Optional cockpit: <span class="kbd">saham tui</span>.</div>
+            <div class="cmds">
+              <code class="cmd">saham today --universe lq45 --top 5</code>
+              <code class="cmd">saham tui</code>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="when"><strong>2</strong>discover</div>
+          <div class="body">
+            <div class="title">Universe board — rank candidates</div>
+            <div class="why">
+              Signal / Accum / Action / Phase / Gate. Phase sequence uses
+              <em>setup_phase_ledger</em> (closed sessions), not observation full-scan.
+            </div>
+            <div class="cmds">
+              <span class="tag prod">production</span>
+              <code class="cmd">saham screen accum --universe lq45</code>
+              <code class="cmd">TUI · s a · r refresh</code>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="when"><strong>3</strong>judge</div>
+          <div class="body">
+            <div class="title">Single ticker judgment desk</div>
+            <div class="why">Deep judgment + optional diagnostic panels. Still screen, not plan.</div>
+            <div class="cmds">
+              <span class="tag prod">production</span>
+              <span class="tag diag">diagnostic ok</span>
+              <code class="cmd">saham screen accum TICKER</code>
+              <code class="cmd">saham screen accum TICKER --full</code>
+              <code class="cmd">TUI · Enter inspect (present-only)</code>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="when"><strong>4</strong>structure</div>
+          <div class="body">
+            <div class="title">Plan swing — geometry only (policy A)</div>
+            <div class="why">Inherits Action from screen judgment. No re-score of ENTER/WATCH/AVOID.</div>
+            <div class="cmds">
+              <span class="tag prod">production</span>
+              <code class="cmd">saham plan swing TICKER --capital 10000000</code>
+              <code class="cmd">TUI · p plan</code>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="when"><strong>5</strong>paper</div>
+          <div class="body">
+            <div class="title">Human notebook — no broker orders</div>
+            <div class="why">Paper only. Not corpus. Not policy apply.</div>
+            <div class="cmds">
+              <span class="tag paper">paper</span>
+              <code class="cmd">saham trade accum log --from-plan …</code>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="when"><strong>∥</strong>browse</div>
+          <div class="body">
+            <div class="title">Raw local data — not a decision surface</div>
+            <div class="why">View ticker / broker for facts. Never invent Action here.</div>
+            <div class="cmds">
+              <code class="cmd">saham view ticker show TICKER</code>
+              <code class="cmd">saham view broker list</code>
+              <code class="cmd">TUI · v t / v b</code>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout ok">
+        <div class="h">Success for this journey</div>
+        <ul class="clean">
+          <li>Operator can name why Action is ENTER/WATCH/AVOID from screen evidence</li>
+          <li>Plan numbers do not contradict screen Action</li>
+          <li>No silent network; fetch was explicit</li>
+          <li>Paper log is optional and human-owned</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 3 PREOPEN -->
+    <section class="block" id="preopen">
+      <h2>3 · Pre-open journey</h2>
+      <p class="sub">
+        Separate product lane from swing desk. Session-scoped, identity-bound,
+        opening-focused. Cron owns most of the machine path.
+      </p>
+
+      <div class="timeline">
+        <div class="step">
+          <div class="when"><strong>A</strong>capture</div>
+          <div class="body">
+            <div class="title">Freeze pre-open candidates from IEV / NCP</div>
+            <div class="cmds">
+              <span class="tag cron">cron</span>
+              <span class="tag corpus">corpus write</span>
+              <code class="cmd">saham fetch iev</code>
+              <code class="cmd">saham research pre-open capture</code>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="when"><strong>B</strong>track</div>
+          <div class="body">
+            <div class="title">Sample opening path (track files / confirm)</div>
+            <div class="cmds">
+              <code class="cmd">saham research pre-open track</code>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="when"><strong>C</strong>assess</div>
+          <div class="body">
+            <div class="title">Human post-open confirm of frozen plan</div>
+            <div class="why">Stdout / live assess — not a second research write.</div>
+            <div class="cmds">
+              <span class="tag cli">cli</span>
+              <code class="cmd">saham assess pre-open --session YYYY-MM-DD</code>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="when"><strong>D</strong>paper</div>
+          <div class="body">
+            <div class="title">Optional pre-open paper notebook</div>
+            <div class="cmds">
+              <span class="tag paper">paper</span>
+              <code class="cmd">saham trade pre-open log …</code>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="when"><strong>E</strong>labels</div>
+          <div class="body">
+            <div class="title">Outcomes + cohort evaluate (learning only)</div>
+            <div class="cmds">
+              <span class="tag corpus">corpus</span>
+              <code class="cmd">saham research pre-open labels</code>
+              <code class="cmd">saham research pre-open evaluate</code>
+              <code class="cmd">saham research pre-open status</code>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="when"><strong>TUI</strong>board</div>
+          <div class="body">
+            <div class="title">Pre-open board = IEV snapshot only (local)</div>
+            <div class="why">Intentional delta vs full CLI research path. Enter = present-only inspect.</div>
+            <div class="cmds">
+              <span class="tag tui">tui</span>
+              <code class="cmd">Ctrl+P · screen pre-open · s p</code>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout warn">
+        <div class="h">Do not conflate</div>
+        <ul class="clean">
+          <li>Pre-open capture ≠ screen accum board</li>
+          <li>Assess pre-open ≠ plan swing</li>
+          <li>Labels/evaluate never recompute live Action for the desk</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 4 RESEARCH -->
+    <section class="block" id="research">
+      <h2>4 · Research / learning journey</h2>
+      <p class="sub">
+        Parallel lane. Builds a point-in-time corpus for evaluation and guarded
+        policy work. Never a substitute for live screen judgment.
+      </p>
+
+      <div class="two-col">
+        <div class="callout">
+          <div class="h">Accum corpus</div>
+          <ul class="clean">
+            <li><code class="cmd">research accum capture</code> — session observations (runs assess)</li>
+            <li>Writes <strong>setup_phase_ledger</strong> (window 7) + learning_observations</li>
+            <li><code class="cmd">research accum labels</code> — forward outcomes</li>
+            <li><code class="cmd">research accum evaluate</code> — cohort study</li>
+            <li><code class="cmd">backfill-phase-ledger</code> — one-shot history migrate</li>
+          </ul>
+        </div>
+        <div class="callout">
+          <div class="h">Policy (guarded)</div>
+          <ul class="clean">
+            <li>Portfolio sim first: <code class="cmd">backtest portfolio swing</code></li>
+            <li><code class="cmd">policy accum tune → review → validate → apply</code></li>
+            <li>IS proposal, paired OOS validation, explicit apply</li>
+            <li>Not paper trading · not live TradeSetup</li>
+          </ul>
+        </div>
+      </div>
+
+      <h3>Capture vs live screen</h3>
+      <table class="map">
+        <thead>
+          <tr>
+            <th>Job</th>
+            <th>Live desk</th>
+            <th>Research capture</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Score / Action</td>
+            <td>Yes · production</td>
+            <td>Yes · same assess path</td>
+          </tr>
+          <tr>
+            <td>Write observations</td>
+            <td>No</td>
+            <td>Yes · corpus</td>
+          </tr>
+          <tr>
+            <td>Write phase ledger</td>
+            <td>Yes (window 7)</td>
+            <td>Yes (window 7, same assess)</td>
+          </tr>
+          <tr>
+            <td>Operator board</td>
+            <td>Primary</td>
+            <td>Secondary (cron/evening)</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout ok" style="margin-top:14px">
+        <div class="h">Capture before cron is valid</div>
+        <p style="margin:0">
+          Manual <code class="cmd">research accum capture</code> runs assess and can mint ledger +
+          observations. Cron order is the happy path, not a hard gate.
+        </p>
+      </div>
+    </section>
+
+    <!-- 5 SURFACES -->
+    <section class="block" id="surfaces">
+      <h2>5 · Surfaces map</h2>
+      <p class="sub">
+        Same engines, different adapters. CLI remains automation authority;
+        TUI is optional daily cockpit (ADR-051).
+      </p>
+
+      <table class="map">
+        <thead>
+          <tr>
+            <th>Product job</th>
+            <th>CLI</th>
+            <th>TUI</th>
+            <th>Cron</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Fetch / cache</td>
+            <td><code class="cmd">fetch …</code></td>
+            <td>Palette · explicit fetch</td>
+            <td>market · iev</td>
+          </tr>
+          <tr>
+            <td>Orient</td>
+            <td><code class="cmd">today</code></td>
+            <td>Open → local board</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>Screen accum board</td>
+            <td><code class="cmd">screen accum</code></td>
+            <td><span class="kbd">s a</span> · default open</td>
+            <td>via capture assess</td>
+          </tr>
+          <tr>
+            <td>Screen pre-open</td>
+            <td>research / screen pre-open paths</td>
+            <td><span class="kbd">s p</span> IEV snapshot</td>
+            <td>capture · track</td>
+          </tr>
+          <tr>
+            <td>Judge ticker</td>
+            <td><code class="cmd">screen accum TICKER</code></td>
+            <td>Enter present-only inspect</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>Plan structure</td>
+            <td><code class="cmd">plan swing</code></td>
+            <td><span class="kbd">p</span> thin structure</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>Browse data</td>
+            <td><code class="cmd">view …</code></td>
+            <td><span class="kbd">v t</span> / <span class="kbd">v b</span></td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>Paper notebook</td>
+            <td><code class="cmd">trade …</code></td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>Corpus / labels</td>
+            <td><code class="cmd">research …</code></td>
+            <td>—</td>
+            <td>evening · morning</td>
+          </tr>
+          <tr>
+            <td>Policy apply</td>
+            <td><code class="cmd">policy accum …</code></td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>TUI product locks (from cockpit design)</h3>
+      <ul class="clean">
+        <li>Local-first · no network on open</li>
+        <li>Palette is navigation · no scenario tabs</li>
+        <li>Enter = view/inspect · Plan is deliberate (<span class="kbd">p</span>)</li>
+        <li>Never places broker orders</li>
+      </ul>
+    </section>
+
+    <!-- 6 AUTHORITY -->
+    <section class="block" id="authority">
+      <h2>6 · Authority &amp; vocabulary</h2>
+      <p class="sub">
+        What may move Action, what is display-only, and what is learning material.
+      </p>
+
+      <table class="map">
+        <thead>
+          <tr>
+            <th>Kind</th>
+            <th>May affect Action?</th>
+            <th>Examples</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="tag prod">Evidence</span> production</td>
+            <td>Yes (when in engines / DecisionPolicy)</td>
+            <td>Signal flow · setup readiness · risk gates · phase sequence from ledger</td>
+          </tr>
+          <tr>
+            <td><span class="tag diag">Diagnostic</span></td>
+            <td>No</td>
+            <td>MCE display on board · <code class="cmd">--full</code> panels · inspect lenses</td>
+          </tr>
+          <tr>
+            <td><span class="tag corpus">Corpus</span></td>
+            <td>No (not live Action)</td>
+            <td>learning_observations · labels · evaluate · backfill scripts</td>
+          </tr>
+          <tr>
+            <td><span class="tag paper">Paper</span></td>
+            <td>No</td>
+            <td>trade journals · human notes</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Engine roles</h3>
+      <div class="flow">
+        <div class="flow-node accent">
+          <div class="n">Signal</div>
+          <div class="t">Evidence strength</div>
+          <div class="d">coverage · setup · flow</div>
+        </div>
+        <div class="flow-node accent">
+          <div class="n">Risk</div>
+          <div class="t">Block unsafe</div>
+          <div class="d">OPEN / BLOCKED</div>
+        </div>
+        <div class="flow-node accent">
+          <div class="n">TradeSetup</div>
+          <div class="t">Action verdict</div>
+          <div class="d">ENTER · WATCH · AVOID</div>
+        </div>
+        <div class="flow-node">
+          <div class="n">MCE</div>
+          <div class="t">Regime context</div>
+          <div class="d">display / policy A</div>
+        </div>
+        <div class="flow-node">
+          <div class="n">AI</div>
+          <div class="t">Optional author</div>
+          <div class="d">never score owner</div>
+        </div>
+      </div>
+
+      <h3>Phase history (ADR-058)</h3>
+      <p>
+        Sequence validation reads <strong>closed-session</strong> facts from
+        <code class="cmd">setup_phase_ledger</code>. Live detect still uses candles/broker.
+        One-shot migrate: <code class="cmd">saham research accum backfill-phase-ledger</code>.
+      </p>
+    </section>
+
+    <!-- 7 ANTI -->
+    <section class="block" id="anti">
+      <h2>7 · Anti-patterns (product bugs)</h2>
+      <p class="sub">If the journey feels wrong, it is often one of these confusions.</p>
+
+      <table class="map">
+        <thead>
+          <tr>
+            <th>Anti-pattern</th>
+            <th>Why it is wrong</th>
+            <th>Correct path</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Plan as second analysis</td>
+            <td>Re-scores Action; confuses structure with judgment</td>
+            <td>screen judge → plan structure only</td>
+          </tr>
+          <tr>
+            <td>Fetch on every open</td>
+            <td>Silent network; non-reproducible desk</td>
+            <td>local-first · explicit fetch</td>
+          </tr>
+          <tr>
+            <td>Research capture = only way to screen</td>
+            <td>Couples desk to corpus writes</td>
+            <td>live <code class="cmd">screen accum</code> for desk</td>
+          </tr>
+          <tr>
+            <td>Labels drive Action</td>
+            <td>Look-ahead / corpus authority leak</td>
+            <td>labels for evaluate/policy only</td>
+          </tr>
+          <tr>
+            <td>View as decision surface</td>
+            <td>Browse is facts, not TradeSetup</td>
+            <td>screen / plan for decisions</td>
+          </tr>
+          <tr>
+            <td>TUI invents rows on empty cache</td>
+            <td>Lies about readiness</td>
+            <td>empty state → explicit fetch</td>
+          </tr>
+          <tr>
+            <td>Broker orders from app</td>
+            <td>Out of product scope</td>
+            <td>paper notebook only</td>
+          </tr>
+          <tr>
+            <td>Mine observations every screen</td>
+            <td>Perf + wrong abstraction</td>
+            <td>phase ledger (ADR-058)</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout" style="margin-top:16px">
+        <div class="h">Related design artifacts</div>
+        <ul class="clean">
+          <li><a href="./tui-cockpit-opencode.html" style="color:var(--sel-dim)">tui-cockpit-opencode.html</a> — cockpit visual standard</li>
+          <li><a href="../adr/ADR-054-screen-judge-plan-structure-contract.md" style="color:var(--sel-dim)">ADR-054</a> — screen / plan contract</li>
+          <li><a href="../adr/ADR-057-evidence-diagnostic-evidence-corpus-vocabulary.md" style="color:var(--sel-dim)">ADR-057</a> — evidence vocabulary</li>
+          <li><a href="../adr/ADR-058-setup-phase-ledger-production-memory.md" style="color:var(--sel-dim)">ADR-058</a> — phase ledger</li>
+          <li><a href="../../README.md" style="color:var(--sel-dim)">README</a> — daily workflow snippets</li>
+        </ul>
+      </div>
+    </section>
+
+    <p class="footer">
+      ai-saham · end-to-end journey design ·
+      <a href="./tui-cockpit-opencode.html">cockpit mock</a> ·
+      deterministic-first · local-first · no broker orders
+    </p>
+  </div>
+
+  <script>
+    (function () {
+      const tabs = document.querySelectorAll("#tabs button");
+      const blocks = document.querySelectorAll("section.block");
+
+      function show(id) {
+        tabs.forEach((b) => b.classList.toggle("is-on", b.dataset.tab === id));
+        blocks.forEach((s) => s.classList.toggle("is-on", s.id === id));
+        history.replaceState(null, "", "#" + id);
+      }
+
+      tabs.forEach((btn) => {
+        btn.addEventListener("click", () => show(btn.dataset.tab));
+      });
+
+      const initial = (location.hash || "#spine").slice(1);
+      if (document.getElementById(initial)) show(initial);
+    })();
+  </script>
+</body>
+</html>
