@@ -215,6 +215,11 @@ class CockpitApp(App[None]):
         if self._stage == "broker-list":
             return "↑↓ move · Enter desk home · esc back · Ctrl+P · view broker list"
         if self._stage == "ticker-desks":
+            if any(getattr(r, "has_partial_netx", False) for r in self._broker_rows):
+                return (
+                    "↑↓ · Enter desk · esc ticker · "
+                    "* NetX partial = sessions < window (value*(used/X))"
+                )
             return (
                 "↑↓ move · Enter desk home · esc → view ticker · Ctrl+P · "
                 "tops day · Net3/5/7/10/20 stock sessions"
@@ -1232,6 +1237,10 @@ class CockpitApp(App[None]):
             return
         self._focus_ticker = str(getattr(self._broker_rows[0], "code", "—"))
         self._meta = f"as of {as_of_s} · {len(self._broker_rows)} desks · {note_s} · Enter home"
+        if any(getattr(r, "has_partial_netx", False) for r in self._broker_rows):
+            # Keep warning visible even if note was truncated in chrome width.
+            if "partial" not in self._meta.lower():
+                self._meta = f"{self._meta} · * NetX partial (used/X)"
         self._status_note = "view ticker desks"
         self._render_board_table()
         self._refresh_chrome()

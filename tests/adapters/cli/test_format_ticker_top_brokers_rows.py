@@ -6,7 +6,10 @@ from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
 
-from src.adapters.cli.view_ticker_top_brokers_display import format_ticker_top_brokers_rows
+from src.adapters.cli.view_ticker_top_brokers_display import (
+    format_netx_display,
+    format_ticker_top_brokers_rows,
+)
 from src.application.services.broker_desk_from_daily_flow import DeskSessionPulse
 from src.domain.entities.broker_flow import BrokerType
 
@@ -62,6 +65,12 @@ def test_format_ticker_top_brokers_rows_buyers_and_sellers():
     assert sell.day_net == "-500.00M"
 
 
+def test_format_netx_display_partial_marks_used_over_window():
+    assert format_netx_display(Decimal("60"), sessions_used=4, window=20) == "60.00*(4/20)"
+    assert format_netx_display(Decimal("60"), sessions_used=20, window=20) == "60.00"
+    assert format_netx_display(None, sessions_used=0, window=5) == "—"
+
+
 def test_format_ticker_top_brokers_rows_with_stock_scoped_pulse():
     pulse = DeskSessionPulse(
         as_of=date(2026, 3, 5),
@@ -86,18 +95,22 @@ def test_format_ticker_top_brokers_rows_with_stock_scoped_pulse():
     buy = rows[0]
     assert buy.code == "AK"
     assert buy.has_pulse is True
+    assert buy.has_partial_netx is True
     assert buy.as_of == "2026-03-05"  # pulse as_of, not summary date
     assert buy.day_net == "30.00M"
-    assert buy.net3 == "60.00M"
-    assert buy.net5 == "210.00M"
-    assert buy.net7 == "250.00M"
-    assert buy.net10 == "250.00M"
-    assert buy.net20 == "250.00M"
+    assert buy.net3 == "60.00M"  # full 3/3
+    assert buy.net5 == "210.00M"  # full 5/5
+    assert buy.net7 == "250.00M*(6/7)"
+    assert buy.net10 == "250.00M*(6/10)"
+    assert buy.net20 == "250.00M*(6/20)"
+    assert buy.partial_windows == (7, 10, 20)
+    assert buy.sessions_cached == 6
     assert buy.streak == "3"
     assert buy.delta1 == "+10.00M"
     # YP has no pulse — keeps summary day net
     sell = rows[1]
     assert sell.has_pulse is False
+    assert sell.has_partial_netx is False
     assert sell.as_of == "2026-03-01"
     assert sell.net5 == "—"
     assert sell.net20 == "—"

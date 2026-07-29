@@ -256,6 +256,7 @@ class _TickerTopBrokersLoader:
             from types import SimpleNamespace
 
             from src.adapters.cli.view_ticker_top_brokers_display import (
+                PARTIAL_NETX_LEGEND,
                 format_ticker_top_brokers_rows,
             )
             from src.application.services.broker_desk_from_daily_flow import (
@@ -313,15 +314,31 @@ class _TickerTopBrokersLoader:
                 "summary tops" if result.tops_source == "summary" else "tracked flow fallback"
             )
             pulsed = sum(1 for r in rows if getattr(r, "has_pulse", False))
+            partial = sum(1 for r in rows if getattr(r, "has_partial_netx", False))
             win_label = "/".join(str(w) for w in STOCK_DESK_NET_WINDOWS)
             if pulsed:
                 note = f"{base_note} · Net{win_label} stock sessions ({pulsed}/{len(rows)} desks)"
+                if partial:
+                    # Min sessions among partial desks (clearest shortage signal).
+                    min_sess = min(
+                        (
+                            int(getattr(r, "sessions_cached", 0) or 0)
+                            for r in rows
+                            if getattr(r, "has_partial_netx", False)
+                        ),
+                        default=0,
+                    )
+                    note = (
+                        f"{note} · {partial} desk(s) partial NetX "
+                        f"(as few as {min_sess} sessions) · {PARTIAL_NETX_LEGEND}"
+                    )
             else:
                 note = f"{base_note} · no multi-session flow for desks"
             return SimpleNamespace(
                 ticker=result.ticker,
                 as_of=result.date.isoformat(),
                 note=note,
+                has_partial_netx=partial > 0,
                 rows=tuple(rows),
             )
 

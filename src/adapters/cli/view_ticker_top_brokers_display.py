@@ -56,9 +56,26 @@ def _type_label_for_broker(broker) -> str:
 # Display NetX windows for stock→desks (must match STOCK_DESK_NET_WINDOWS).
 STOCK_DESK_DISPLAY_NET_WINDOWS: tuple[int, ...] = (3, 5, 7, 10, 20)
 
+# Partial NetX marker: value*(used/window) when sessions_cached < X.
+PARTIAL_NETX_LEGEND = "* NetX partial — sum of cached sessions only (not full window)"
 
-def _format_netx(value) -> str:
-    return format_value(value) if value is not None else "—"
+
+def format_netx_display(value, *, sessions_used: int, window: int) -> str:
+    """Format NetX; warn clearly when history is shorter than the window.
+
+    Full window: ``1.20B``
+    Partial:     ``60.00M*(4/20)``  (4 sessions cached, window wanted 20)
+    """
+    if value is None:
+        return "—"
+    base = format_value(value)
+    used = int(sessions_used or 0)
+    win = int(window)
+    if used <= 0:
+        return "—"
+    if used < win:
+        return f"{base}*({used}/{win})"
+    return base
 
 
 def _pulse_fields(pulse, *, net_windows: tuple[int, ...] = STOCK_DESK_DISPLAY_NET_WINDOWS) -> dict:
@@ -70,19 +87,35 @@ def _pulse_fields(pulse, *, net_windows: tuple[int, ...] = STOCK_DESK_DISPLAY_NE
             "streak": "—",
             "delta1": "—",
             "sessions_in_net5": 0,
+            "has_partial_netx": False,
+            "partial_windows": (),
+            "sessions_cached": 0,
         }
     delta1_s = "—"
     if pulse.delta1 is not None:
         sign = "+" if pulse.delta1 > 0 else ""
         delta1_s = f"{sign}{format_value(pulse.delta1)}"
-    nets = {}
+    nets: dict[str, str] = {}
+    partial_windows: list[int] = []
+    sessions_cached = 0
     for w in net_windows:
-        nets[f"net{w}"] = _format_netx(pulse.net_for(w))
+        used = int(pulse.sessions_for(w) or 0)
+        sessions_cached = max(sessions_cached, used)
+        nets[f"net{w}"] = format_netx_display(
+            pulse.net_for(w),
+            sessions_used=used,
+            window=w,
+        )
+        if 0 < used < w:
+            partial_windows.append(w)
     return {
         **nets,
         "streak": str(pulse.buy_streak),
         "delta1": delta1_s,
         "sessions_in_net5": int(getattr(pulse, "sessions_in_net5", 0) or 0),
+        "has_partial_netx": bool(partial_windows),
+        "partial_windows": tuple(partial_windows),
+        "sessions_cached": sessions_cached,
     }
 
 
@@ -98,6 +131,8 @@ def format_ticker_top_brokers_rows(
     Ranking stays single-session tops (buyers then sellers). Optional ``pulses``
     map broker_code → DeskSessionPulse for stock-scoped multi-session NetX /
     streak / Δ1 from ``broker_daily_flow``. No broker name column (codes only).
+
+    Incomplete NetX (sessions < X) is labeled ``value*(used/X)`` — never silent.
     """
     from types import SimpleNamespace
 
@@ -127,6 +162,9 @@ def format_ticker_top_brokers_rows(
             "sessions_in_net5": pf["sessions_in_net5"],
             "as_of": as_of,
             "has_pulse": pulse is not None,
+            "has_partial_netx": pf["has_partial_netx"],
+            "partial_windows": pf["partial_windows"],
+            "sessions_cached": pf["sessions_cached"],
         }
         for w in net_windows:
             row_kw[f"net{w}"] = pf[f"net{w}"]
