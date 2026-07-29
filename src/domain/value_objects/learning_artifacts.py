@@ -53,11 +53,13 @@ class ValidationStatus(str, Enum):
 
 
 class LearningContractId(str, Enum):
-    ACCUMULATION_OBSERVATION = "learning_observation.accumulation_discovery.v1"
+    # ADR-056: accum observation unit is ticker-session (v2 payload).
+    ACCUMULATION_OBSERVATION = "learning_observation.accumulation_discovery.v2"
     PRE_OPEN_OBSERVATION = "learning_observation.pre_open_auction_direction.v1"
-    TACTICAL_LABEL = "price_path.tactical_3d.v1"
-    SWING_LABEL = "price_path.swing_10d.v1"
-    ACCUMULATION_LABEL = "price_path.accum_20d.v1"
+    # Accum path labels only (no tactical/swing brand on this corpus).
+    ACCUM_3D_LABEL = "price_path.accum_3d.v1"
+    ACCUM_10D_LABEL = "price_path.accum_10d.v1"
+    ACCUM_20D_LABEL = "price_path.accum_20d.v1"
     PRE_OPEN_LABEL = "price_path.open_30m.v1"
     ACCUMULATION_EVALUATION = "forward_outcome_cohort.v1"
     PRE_OPEN_EVALUATION = "session_outcome_cohort.v1"
@@ -312,9 +314,9 @@ class LearningOutcomeLabel:
         labeled_at: datetime,
     ) -> LearningOutcomeLabel:
         if contract_id not in {
-            LearningContractId.TACTICAL_LABEL,
-            LearningContractId.SWING_LABEL,
-            LearningContractId.ACCUMULATION_LABEL,
+            LearningContractId.ACCUM_3D_LABEL,
+            LearningContractId.ACCUM_10D_LABEL,
+            LearningContractId.ACCUM_20D_LABEL,
             LearningContractId.PRE_OPEN_LABEL,
         }:
             raise LearningContractError("contract_id is not a label contract")

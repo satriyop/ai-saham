@@ -82,10 +82,10 @@ def test_accumulation_screen_use_case_does_not_build_its_own_recorder():
 
 
 def test_bundle_factory_supplies_screen_use_case_and_working_recorder():
-    session_dates = _weekdays(date(2026, 1, 1), 7)
+    session_dates = _weekdays(date(2026, 1, 1), 100)
     as_of = session_dates[-1]
     candles = [
-        _candle("BBCA", date(2025, 12, 1) + timedelta(days=i), Decimal("100")) for i in range(45)
+        _candle("BBCA", date(2025, 10, 1) + timedelta(days=i), Decimal("100")) for i in range(120)
     ]
     summaries = [_summary("BBCA", day, Decimal("110")) for day in session_dates]
     spy_repo = SpyCandidateObservationsRepository()
@@ -109,23 +109,37 @@ def test_bundle_factory_supplies_screen_use_case_and_working_recorder():
         min_net_buy_days=1,
         as_of_date=as_of,
     )
+    ctx = make_signal_evidence_execution_context(as_of)
 
     # screen_use_case.execute() is read-only — no persistence side effect.
     response = bundle.screen_use_case.execute(
         request,
-        execution_context=make_signal_evidence_execution_context(as_of),
+        execution_context=ctx,
     )
     assert len(response.candidates) == 1
     assert spy_repo.saved == []
 
-    # The bundle's recorder is the sole intentional persistence entrypoint.
-    result = bundle.record_observations_use_case.execute(
-        request,
-        execution_context=make_signal_evidence_execution_context(as_of),
+    # ADR-056: recorder persists only via multi-window merge (7/30/90).
+    window_results = {}
+    for window in (7, 30, 90):
+        req = AccumulationScreenRequest(
+            tickers=["BBCA"],
+            window_days=window,
+            min_net_buy_days=1,
+            as_of_date=as_of,
+        )
+        resp = bundle.record_observations_use_case.screen(req, execution_context=ctx)
+        window_results[window] = (req, list(resp.observation_candidates))
+    saved = bundle.record_observations_use_case.persist_multi_window(
+        window_results=window_results,
+        snapshot_date=as_of,
+        execution_context=ctx,
+        universe_tickers=["BBCA"],
     )
-    assert result.recorded_count == 1
+    assert saved == 1
     assert len(spy_repo.saved) == 1
     assert spy_repo.saved[0].decision_payload["ticker"] == "BBCA"
+    assert spy_repo.saved[0].window_id == f"BBCA:{as_of.isoformat()}"
 
 
 def test_bundle_factory_shares_one_signal_engine_instance_across_screen_and_persister():

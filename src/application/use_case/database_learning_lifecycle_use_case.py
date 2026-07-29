@@ -89,10 +89,13 @@ class LearningStatus:
 
 
 _HORIZON_DAYS = {
-    LearningContractId.TACTICAL_LABEL: 3,
-    LearningContractId.SWING_LABEL: 10,
-    LearningContractId.ACCUMULATION_LABEL: 20,
+    LearningContractId.ACCUM_3D_LABEL: 3,
+    LearningContractId.ACCUM_10D_LABEL: 10,
+    LearningContractId.ACCUM_20D_LABEL: 20,
 }
+
+# Primary path grade for ACCUMULATION_DISCOVERY (ADR-056).
+ACCUM_PRIMARY_LABEL_CONTRACT = LearningContractId.ACCUM_10D_LABEL
 
 
 def _observation_ticker(observation: LearningObservation) -> str:
@@ -118,26 +121,35 @@ def _observation_ids_with_contract(
 
 
 def _entry_reference(payload: dict[str, Any] | Any) -> Decimal | None:
-    """Signal-day entry for accumulation price-path labels.
+    """Signal-day entry for accumulation price-path labels (ADR-056).
 
-    Production capture freezes ``AccumulationCandidate.current_price``, which is
-    the latest daily close as of the screen session (not a live tick). That is
-    the sole supported entry reference for ACCUMULATION_DISCOVERY observations.
+    Authority order:
+    1. ``shared.current_price`` (v2 session observation — preferred)
+    2. ``candidate.current_price`` (legacy single-window payload; tests only until purge)
     """
     if not isinstance(payload, dict):
         return None
+    shared = payload.get("shared")
+    if isinstance(shared, dict):
+        raw = shared.get("current_price")
+        if raw is not None:
+            try:
+                value = Decimal(str(raw))
+            except Exception:
+                value = None
+            else:
+                if value is not None and value > 0:
+                    return value
     candidate = payload.get("candidate")
-    if not isinstance(candidate, dict):
-        return None
-    raw = candidate.get("current_price")
-    if raw is None:
-        return None
-    try:
-        value = Decimal(str(raw))
-    except Exception:
-        return None
-    if value > 0:
-        return value
+    if isinstance(candidate, dict):
+        raw = candidate.get("current_price")
+        if raw is not None:
+            try:
+                value = Decimal(str(raw))
+            except Exception:
+                return None
+            if value > 0:
+                return value
     return None
 
 
@@ -503,7 +515,7 @@ class EvaluateLearningCohortUseCase:
         expected_contract = (
             LearningContractId.PRE_OPEN_LABEL
             if request.purpose is AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION
-            else LearningContractId.ACCUMULATION_LABEL
+            else ACCUM_PRIMARY_LABEL_CONTRACT
         )
         labels = tuple(label for label in labels if label.contract_id is expected_contract)
         if not labels:

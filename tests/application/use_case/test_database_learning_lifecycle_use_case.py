@@ -298,7 +298,7 @@ def _accum_observation(
     return LearningObservation.create(
         purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
         policy_contract="accumulation_discovery.policy.v1",
-        horizon_contract="accum_20d",
+        horizon_contract="accum_10d",
         compatibility_id=compatibility_id,
         cutoff_at=at,
         universe_id="idx30",
@@ -362,7 +362,7 @@ def test_accumulation_price_path_skips_when_corporate_action_coverage_missing(
         GenerateLearningLabelsRequest(
             purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
             compatibility_id="compat-1",
-            label_contract=LearningContractId.ACCUMULATION_LABEL,
+            label_contract=LearningContractId.ACCUM_10D_LABEL,
             labeled_at=NOW,
         )
     )
@@ -398,7 +398,7 @@ def test_accumulation_price_path_uses_candidate_current_price_as_entry(
         GenerateLearningLabelsRequest(
             purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
             compatibility_id="compat-1",
-            label_contract=LearningContractId.ACCUMULATION_LABEL,
+            label_contract=LearningContractId.ACCUM_10D_LABEL,
             labeled_at=NOW,
         )
     )
@@ -431,7 +431,7 @@ def test_accumulation_price_path_skips_incomplete_forward_window(
         GenerateLearningLabelsRequest(
             purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
             compatibility_id="compat-1",
-            label_contract=LearningContractId.ACCUMULATION_LABEL,
+            label_contract=LearningContractId.ACCUM_10D_LABEL,
             labeled_at=NOW,
         )
     )
@@ -458,7 +458,7 @@ def test_accumulation_price_path_skips_incomplete_forward_window(
         GenerateLearningLabelsRequest(
             purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
             compatibility_id="compat-1",
-            label_contract=LearningContractId.ACCUMULATION_LABEL,
+            label_contract=LearningContractId.ACCUM_10D_LABEL,
             labeled_at=NOW,
         )
     )
@@ -485,7 +485,7 @@ def test_accumulation_price_path_skips_missing_current_price(
         GenerateLearningLabelsRequest(
             purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
             compatibility_id="compat-1",
-            label_contract=LearningContractId.ACCUMULATION_LABEL,
+            label_contract=LearningContractId.ACCUM_10D_LABEL,
             labeled_at=NOW,
         )
     )
@@ -505,7 +505,7 @@ def test_accumulation_price_path_ignores_legacy_entry_price_alias(
         LearningObservation.create(
             purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
             policy_contract="accumulation_discovery.policy.v1",
-            horizon_contract="accum_20d",
+            horizon_contract="accum_10d",
             compatibility_id="compat-1",
             cutoff_at=at,
             universe_id="idx30",
@@ -532,7 +532,7 @@ def test_accumulation_price_path_ignores_legacy_entry_price_alias(
         GenerateLearningLabelsRequest(
             purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
             compatibility_id="compat-1",
-            label_contract=LearningContractId.ACCUMULATION_LABEL,
+            label_contract=LearningContractId.ACCUM_10D_LABEL,
             labeled_at=NOW,
         )
     )

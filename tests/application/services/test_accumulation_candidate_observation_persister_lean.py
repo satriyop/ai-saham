@@ -1,13 +1,12 @@
-"""Negative-first tests for the lean-identity guardrails in
-AccumulationCandidateObservationPersister (DQ-003 Slice A).
+"""Negative-first tests for ADR-056 multi-window session persist guards.
 
-These prove the contract-rejection and fail-closed behavior without exercising
-the full evidence-building path: the guards run before the persistence body.
+Guards run before the evidence-building body.
 """
 
 from __future__ import annotations
 
 from datetime import date
+from types import SimpleNamespace
 
 import pytest
 
@@ -28,13 +27,12 @@ class _SpyRepo:
     def __init__(self) -> None:
         self.saved: list = []
 
-    def save_many(self, observations, *, risk_records=None) -> None:
-        self.saved.extend(observations)
+    def add_observation(self, observation) -> bool:
+        self.saved.append(observation)
+        return True
 
 
 def _persister(repo) -> AccumulationCandidateObservationPersister:
-    # The guards under test run before any collaborator is used, so None
-    # collaborators are safe here.
     return AccumulationCandidateObservationPersister(
         candidate_observations_repository=repo,
         candidate_evidence_builder=None,  # type: ignore[arg-type]
@@ -43,89 +41,73 @@ def _persister(repo) -> AccumulationCandidateObservationPersister:
     )
 
 
+def _session():
+    return SimpleNamespace(
+        decision_at=None,
+        latest_completed_session=date(2026, 7, 16),
+        analysis_as_of=date(2026, 7, 16),
+        market_session_name="REGULAR",
+        is_eod_pending=False,
+        resolution_source="test",
+        notes=(),
+    )
+
+
+def _call(persister, **kwargs):
+    base = dict(
+        window_results={
+            7: (object(), [object()]),
+            30: (object(), [object()]),
+            90: (object(), [object()]),
+        },
+        snapshot_date=date(2026, 7, 16),
+        effective_session=_session(),
+        observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
+        semantic_compatibility_id=_VALID_ID,
+        universe_tickers=["BBCA"],
+    )
+    base.update(kwargs)
+    return persister.persist_session_multi_window(**base)
+
+
 def test_persist_rejects_non_accumulation_discovery_contract() -> None:
     persister = _persister(_SpyRepo())
     with pytest.raises(ValueError, match="observation_contract"):
-        persister.persist(
-            [object()],  # sentinel candidate — never inspected before the raise
-            date(2026, 7, 16),
-            object(),  # sentinel request
-            observation_contract="named-swing-setup",
-            semantic_compatibility_id=_VALID_ID,
-        )
+        _call(persister, observation_contract="named-swing-setup")
 
 
 def test_persist_rejects_removed_unversioned_contract() -> None:
     persister = _persister(_SpyRepo())
     with pytest.raises(ValueError, match="observation_contract"):
-        persister.persist(
-            [object()],
-            date(2026, 7, 16),
-            object(),
-            observation_contract="accumulation-discovery",
-            semantic_compatibility_id=_VALID_ID,
-        )
+        _call(persister, observation_contract="accumulation-discovery")
 
 
 def test_persist_rejects_none_contract() -> None:
     persister = _persister(_SpyRepo())
     with pytest.raises(ValueError, match="observation_contract"):
-        persister.persist(
-            [object()],
-            date(2026, 7, 16),
-            object(),
-            observation_contract=None,
-            semantic_compatibility_id=_VALID_ID,
-        )
+        _call(persister, observation_contract=None)
 
 
 def test_canonical_write_with_none_compat_id_fails_closed() -> None:
     persister = _persister(_SpyRepo())
     with pytest.raises(ValueError, match="semantic_compatibility_id"):
-        persister.persist(
-            [object()],  # truthy candidates → this IS a canonical write
-            date(2026, 7, 16),
-            object(),
-            observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
-            semantic_compatibility_id=None,
-        )
+        _call(persister, semantic_compatibility_id=None)
 
 
 def test_none_repo_returns_zero_without_raising_on_none_compat_id() -> None:
-    """Read-only path: no repository means no canonical write, so a None
-    compatibility id must NOT raise — it returns 0."""
     persister = _persister(None)
-    result = persister.persist(
-        [object()],
-        date(2026, 7, 16),
-        object(),
-        observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
-        semantic_compatibility_id=None,
-    )
+    result = _call(persister, semantic_compatibility_id=None)
     assert result == 0
 
 
-def test_empty_candidates_returns_zero_without_raising_on_none_compat_id() -> None:
-    """No candidates means no canonical write — a None id must not raise."""
+def test_missing_required_window_raises() -> None:
     persister = _persister(_SpyRepo())
-    result = persister.persist(
-        [],
-        date(2026, 7, 16),
-        object(),
-        observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
-        semantic_compatibility_id=None,
-    )
-    assert result == 0
-
-
-def test_bad_contract_raises_even_with_empty_candidates() -> None:
-    """Contract rejection is unconditional — it precedes the no-op short-circuit."""
-    persister = _persister(_SpyRepo())
-    with pytest.raises(ValueError, match="observation_contract"):
-        persister.persist(
-            [],
-            date(2026, 7, 16),
-            object(),
-            observation_contract="named-swing-setup",
-            semantic_compatibility_id=None,
+    with pytest.raises(ValueError, match="missing required window"):
+        persister.persist_session_multi_window(
+            window_results={7: (object(), []), 30: (object(), [])},
+            snapshot_date=date(2026, 7, 16),
+            effective_session=_session(),
+            observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
+            semantic_compatibility_id=_VALID_ID,
+            universe_tickers=["BBCA"],
         )

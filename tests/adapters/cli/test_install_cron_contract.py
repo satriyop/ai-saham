@@ -45,16 +45,27 @@ def test_cron_activates_accumulation_capture_and_labels() -> None:
         for line in ACTIVE_CRON_LINES
     )
     assert any(
-        line.startswith("45 19 * * 1-5 ")
-        and "saham research accum labels" in line
-        and "price_path.accum_20d.v1" in line
+        line.startswith("45 19 * * 1-5 ") and "cron_accum_labels.sh" in line
         for line in ACTIVE_CRON_LINES
     )
     # Active lines must not be commented; old route name must be gone
     for line in ACTIVE_CRON_LINES:
-        if "research accum" in line:
+        if "research accum" in line or "cron_accum_labels" in line:
             assert not line.lstrip().startswith("#")
             assert "research accumulation" not in line
+            assert "tactical_3d" not in line
+            assert "swing_10d" not in line
+
+
+def test_cron_accum_labels_wrapper_covers_all_accum_horizons() -> None:
+    from pathlib import Path
+
+    wrapper = (Path(__file__).resolve().parents[3] / "scripts" / "cron_accum_labels.sh").read_text()
+    assert "price_path.accum_3d.v1" in wrapper
+    assert "price_path.accum_10d.v1" in wrapper
+    assert "price_path.accum_20d.v1" in wrapper
+    assert "tactical_3d" not in wrapper
+    assert "swing_10d" not in wrapper
 
 
 def test_cron_does_not_require_dotenv_to_activate_project() -> None:

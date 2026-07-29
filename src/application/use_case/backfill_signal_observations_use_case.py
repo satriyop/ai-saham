@@ -245,32 +245,43 @@ class BackfillSignalObservationsUseCase:
             context = self._build_execution_context(effective_session)
 
             evaluated_tickers_for_date: set[str] = set()
+            # ADR-056: screen each window, then merge into one session observation
+            # per ticker (features_by_window). Do not persist per-window rows.
+            window_results: dict = {}
             for window in request.windows:
-                record_result = self._record.execute(
-                    self._request_builder.build(
-                        tickers=list(tickers),
-                        window_days=int(window),
-                        as_of_date=trading_date,
-                        market_context=market_context,
-                    ),
+                screen_request = self._request_builder.build(
+                    tickers=list(tickers),
+                    window_days=int(window),
+                    as_of_date=trading_date,
+                    market_context=market_context,
+                )
+                response = self._record.screen(
+                    screen_request,
                     execution_context=context,
                 )
-                saved_count += record_result.recorded_count
+                window_results[int(window)] = (
+                    screen_request,
+                    list(response.observation_candidates),
+                )
 
-                # Per-capture-unit derivations from the screen result already in
-                # hand. `evaluated` = every ticker the screen evaluated;
-                # `selected` = survivors (`pass`); `rejected` = evaluated minus
-                # selected (0 under production config); `unavailable` = universe
-                # tickers the screen could not evaluate (missing source).
-                unit = record_result.response
+                unit = response
                 evaluated_unit = len(unit.observation_candidates)
                 selected_unit = len(unit.candidates)
+                # Count evaluations across windows; saved_count is ticker-sessions.
                 evaluated_count += evaluated_unit
                 selected_count += selected_unit
                 rejected_count += evaluated_unit - selected_unit
                 unavailable_count += unit.total_tickers_checked - evaluated_unit
                 for observation_candidate in unit.observation_candidates:
                     evaluated_tickers_for_date.add(observation_candidate.candidate.ticker)
+
+            saved_count += self._record.persist_multi_window(
+                window_results=window_results,
+                snapshot_date=trading_date,
+                execution_context=context,
+                universe_tickers=list(tickers),
+                canonical_window=7,
+            )
             processed.append(trading_date)
 
             # A universe ticker that produced no observation on this processed
@@ -324,10 +335,10 @@ class BackfillSignalObservationsUseCase:
             processed_dates=tuple(processed),
             skipped_dates=tuple(skipped),
             notes=(
-                "candidate_observations are upserted by canonical identity "
-                "(ticker, snapshot_date, workflow, window_sessions, "
-                "data_as_of_date, config_hash); reruns with the same identity "
-                "replace the existing row rather than appending a duplicate.",
+                "ADR-056: one learning_observation per ticker-session with "
+                "features_by_window[7|30|90]; identity is window_id=TICKER:YYYY-MM-DD "
+                "and horizon_contract=accum_10d. Reruns with the same identity and "
+                "digest are idempotent; digest changes raise an immutable conflict.",
                 *market_context_notes,
             ),
             universe_size=len(request.tickers),

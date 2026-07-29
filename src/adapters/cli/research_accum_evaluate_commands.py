@@ -39,9 +39,9 @@ def accumulation_labels(
         str,
         typer.Option(
             "--label-contract",
-            help="price_path.tactical_3d.v1, swing_10d.v1, or accum_20d.v1",
+            help="price_path.accum_3d.v1, accum_10d.v1 (primary), or accum_20d.v1",
         ),
-    ] = LearningContractId.ACCUMULATION_LABEL.value,
+    ] = LearningContractId.ACCUM_10D_LABEL.value,
     db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
     fmt: Annotated[str, typer.Option("--format")] = "table",
 ) -> None:

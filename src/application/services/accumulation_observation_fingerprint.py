@@ -199,6 +199,54 @@ def build_candidate_observation_payload(
     return payload
 
 
+def build_session_observation_payload(
+    *,
+    ticker: str,
+    session_date: date,
+    captured_at: datetime,
+    canonical_window: int,
+    features_by_window: dict[str, dict[str, Any]],
+    shared: dict[str, Any],
+    screen_results_by_window: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """ADR-056: one ticker-session observation with multi-window engine packs.
+
+    ``features_by_window`` keys are string window sizes (\"7\", \"30\", \"90\").
+    Each value is a full engine pack (candidate + signal + risk + contexts).
+    ``shared`` must include ``current_price`` (session close) for path labels.
+    """
+    required = {"7", "30", "90"}
+    keys = set(features_by_window)
+    if keys != required:
+        raise ValueError(
+            f"features_by_window must have keys {sorted(required)}, got {sorted(keys)}"
+        )
+    raw_price = shared.get("current_price")
+    try:
+        price_ok = raw_price is not None and float(raw_price) > 0
+    except (TypeError, ValueError):
+        price_ok = False
+    if not price_ok:
+        raise ValueError("shared.current_price must be a positive session close")
+    return {
+        "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+        "artifact_type": "accumulation_session_observation",
+        "ticker": ticker.upper(),
+        "session_date": session_date.isoformat(),
+        "captured_at": captured_at.isoformat(),
+        "workflow": "research_accum_capture",
+        "canonical_window": int(canonical_window),
+        "horizon_primary": "accum_10d",
+        "screen_results_by_window": dict(screen_results_by_window or {}),
+        "shared": dict(shared),
+        "features_by_window": {
+            "7": features_by_window["7"],
+            "30": features_by_window["30"],
+            "90": features_by_window["90"],
+        },
+    }
+
+
 def _sub_signal_fingerprint(
     *,
     candidate: "accumulation_dto.AccumulationCandidate",

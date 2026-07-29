@@ -24,7 +24,7 @@ def _observation(*, captured_at: datetime = NOW) -> LearningObservation:
     return LearningObservation.create(
         purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
         policy_contract="accumulation.policy.v1",
-        horizon_contract="accum_20d",
+        horizon_contract="accum_10d",
         compatibility_id="compat-1",
         cutoff_at=NOW,
         universe_id="idx30",
@@ -99,7 +99,7 @@ def test_purpose_and_evaluation_method_are_separate_and_compatible() -> None:
 def test_available_label_requires_outcome() -> None:
     with pytest.raises(LearningContractError, match="requires an outcome"):
         LearningOutcomeLabel.create(
-            contract_id=LearningContractId.ACCUMULATION_LABEL,
+            contract_id=LearningContractId.ACCUM_10D_LABEL,
             observation_id=_observation().observation_id,
             outcome_basis=OutcomeBasis.PRICE_PATH_ONLY,
             availability=LabelAvailability.AVAILABLE,

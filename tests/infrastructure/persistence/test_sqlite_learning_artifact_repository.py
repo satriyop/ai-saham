@@ -33,7 +33,7 @@ def _observation() -> LearningObservation:
     return LearningObservation.create(
         purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
         policy_contract="accumulation.policy.v1",
-        horizon_contract="accum_20d",
+        horizon_contract="accum_10d",
         compatibility_id="compat-1",
         cutoff_at=NOW,
         universe_id="idx30",
@@ -126,7 +126,7 @@ def test_tracks_and_labels_reject_orphan_observations(tmp_path: Path) -> None:
         captured_at=NOW,
     )
     label = LearningOutcomeLabel.create(
-        contract_id=LearningContractId.ACCUMULATION_LABEL,
+        contract_id=LearningContractId.ACCUM_10D_LABEL,
         observation_id="missing",
         outcome_basis=OutcomeBasis.PRICE_PATH_ONLY,
         availability=LabelAvailability.AVAILABLE,
@@ -154,7 +154,7 @@ def test_round_trip_observation_track_and_label(tmp_path: Path) -> None:
         captured_at=NOW,
     )
     label = LearningOutcomeLabel.create(
-        contract_id=LearningContractId.ACCUMULATION_LABEL,
+        contract_id=LearningContractId.ACCUM_10D_LABEL,
         observation_id=observation.observation_id,
         outcome_basis=OutcomeBasis.PRICE_PATH_ONLY,
         availability=LabelAvailability.AVAILABLE,
@@ -238,7 +238,7 @@ def test_delete_is_restricted_for_linked_artifacts(tmp_path: Path) -> None:
     repository.add_observation(observation)
     repository.add_label(
         LearningOutcomeLabel.create(
-            contract_id=LearningContractId.ACCUMULATION_LABEL,
+            contract_id=LearningContractId.ACCUM_10D_LABEL,
             observation_id=observation.observation_id,
             outcome_basis=OutcomeBasis.PRICE_PATH_ONLY,
             availability=LabelAvailability.UNAVAILABLE,

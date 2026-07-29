@@ -1,8 +1,8 @@
 """
 CLI: saham research signal capture
 
-Session-scoped authoritative observation capture for accumulation-discovery.v1.
-Writes candidate_observations; does not generate forward labels.
+Session-scoped authoritative observation capture for accumulation-discovery.v2.
+Writes learning_observations; does not generate forward labels.
 
 Layer: Adapter (parse, wire, format, map errors).
 """
@@ -43,7 +43,7 @@ def signal_capture_observations(
 ) -> None:
     """Capture canonical accumulation learning observations for one session.
 
-    Writes database-owned schema-v1 observations. Labels are a separate step.
+    Writes database-owned ADR-056 session observations. Labels are a separate step.
     """
     try:
         session_date = date.fromisoformat(session)
