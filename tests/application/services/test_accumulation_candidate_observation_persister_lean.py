@@ -5,13 +5,20 @@ Guards run before the evidence-building body.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from types import SimpleNamespace
 
 import pytest
 
 from src.application.services.accumulation_candidate_observation_persister import (
     AccumulationCandidateObservationPersister,
+)
+from src.domain.value_objects.idx_market import IDX_TIMEZONE
+from src.domain.value_objects.learning_artifacts import (
+    AssessmentPurpose,
+    LearningContractId,
+    artifact_digest,
+    stable_learning_id,
 )
 from src.domain.value_objects.signal_artifact_identity import (
     SemanticCompatibilityId,
@@ -26,10 +33,18 @@ _VALID_ID = SemanticCompatibilityId("sha256:" + "b" * 64)
 class _SpyRepo:
     def __init__(self) -> None:
         self.saved: list = []
+        self.existing_ids: set[str] = set()
+        self.get_calls: list[str] = []
 
     def add_observation(self, observation) -> bool:
         self.saved.append(observation)
         return True
+
+    def get_observation(self, observation_id: str):
+        self.get_calls.append(observation_id)
+        if observation_id in self.existing_ids:
+            return object()
+        return None
 
 
 def _persister(repo) -> AccumulationCandidateObservationPersister:
@@ -111,3 +126,54 @@ def test_missing_required_window_raises() -> None:
             semantic_compatibility_id=_VALID_ID,
             universe_tickers=["BBCA"],
         )
+
+
+def test_persist_skips_existing_observation_without_rebuild(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Re-backfill must skip existing observation_id (no digest conflict)."""
+    monkeypatch.setattr(
+        "src.application.services.accumulation_candidate_observation_persister."
+        "compute_accumulation_config_hash",
+        lambda _req: "cfghash",
+    )
+    repo = _SpyRepo()
+    session = _session()
+    session.decision_at = datetime(2026, 7, 16, 16, 0, tzinfo=IDX_TIMEZONE)
+    universe = ["BBCA"]
+    universe_id = artifact_digest({"tickers": sorted(universe)})
+    window_id = "BBCA:2026-07-16"
+    obs_id = stable_learning_id(
+        LearningContractId.ACCUMULATION_OBSERVATION,
+        {
+            "purpose": AssessmentPurpose.ACCUMULATION_DISCOVERY,
+            "policy_contract": "accumulation_discovery.policy.v1",
+            "horizon_contract": "accum_10d",
+            "compatibility_id": str(_VALID_ID),
+            "cutoff_at": session.decision_at,
+            "universe_id": universe_id,
+            "window_id": window_id,
+        },
+    )
+    repo.existing_ids.add(obs_id)
+    oc = SimpleNamespace(
+        candidate=SimpleNamespace(ticker="BBCA", current_price=1000),
+        screen_result="WATCH",
+        flow_evidence=None,
+    )
+    req = SimpleNamespace(market_context=None, window_days=7)
+    saved = _persister(repo).persist_session_multi_window(
+        window_results={
+            7: (req, [oc]),
+            30: (req, [oc]),
+            90: (req, [oc]),
+        },
+        snapshot_date=date(2026, 7, 16),
+        effective_session=session,
+        observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
+        semantic_compatibility_id=_VALID_ID,
+        universe_tickers=universe,
+    )
+    assert saved == 0
+    assert repo.saved == []
+    assert obs_id in repo.get_calls

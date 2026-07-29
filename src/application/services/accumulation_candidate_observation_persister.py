@@ -19,8 +19,10 @@ from src.application.services.accumulation_observation_fingerprint import (
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.domain.value_objects.learning_artifacts import (
     AssessmentPurpose,
+    LearningContractId,
     LearningObservation,
     artifact_digest,
+    stable_learning_id,
 )
 from src.domain.value_objects.risk_gate_audit import build_risk_assessment_capture_dict
 from src.domain.value_objects.signal_semantic_contract import (
@@ -85,6 +87,8 @@ class AccumulationCandidateObservationPersister:
 
         ``window_results`` maps window_days → (request, observation_candidates).
         Tickers missing any required window are skipped (not half-written).
+        Existing observation_ids are skipped (first write wins) so re-backfill
+        does not conflict when ``captured_at`` changes the artifact digest.
         """
         if observation_contract != ACCUMULATION_DISCOVERY_CONTRACT:
             raise ValueError(
@@ -129,6 +133,22 @@ class AccumulationCandidateObservationPersister:
         saved = 0
         for ticker, packs in sorted(by_ticker.items()):
             if any(w not in packs for w in _REQUIRED_WINDOWS):
+                continue
+            window_id = f"{ticker}:{snapshot_date.isoformat()}"
+            observation_id = stable_learning_id(
+                LearningContractId.ACCUMULATION_OBSERVATION,
+                {
+                    "purpose": AssessmentPurpose.ACCUMULATION_DISCOVERY,
+                    "policy_contract": "accumulation_discovery.policy.v1",
+                    "horizon_contract": "accum_10d",
+                    "compatibility_id": str(semantic_compatibility_id),
+                    "cutoff_at": effective_session.decision_at,
+                    "universe_id": universe_id,
+                    "window_id": window_id,
+                },
+            )
+            if self._candidate_observations_repo.get_observation(observation_id) is not None:
+                # First write wins; re-runs must not conflict on captured_at digest.
                 continue
             features_by_window: dict[str, dict[str, Any]] = {}
             screen_results: dict[str, str] = {}
@@ -186,7 +206,7 @@ class AccumulationCandidateObservationPersister:
                 compatibility_id=str(semantic_compatibility_id),
                 cutoff_at=effective_session.decision_at,
                 universe_id=universe_id,
-                window_id=f"{ticker}:{snapshot_date.isoformat()}",
+                window_id=window_id,
                 decision_payload=decision_payload,
                 captured_at=captured_at,
             )
