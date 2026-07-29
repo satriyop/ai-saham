@@ -7,12 +7,27 @@ from src.adapters.cli.main import app
 from tests.adapters.cli.plan_swing_command_fixtures import runner
 
 
-def test_swing_command_defaults_do_not_apply_setup_and_include_regime():
+def test_swing_command_is_structure_only_surface():
     params = inspect.signature(swing_cli.swing).parameters
 
     assert params["setup"].default is None
-    assert params["with_market_context"].default is False
-    assert params["strategy"].default is None
+    assert "capital" in params
+    assert "risk_pct" in params
+    assert "entry_price" in params
+    # Analysis / recompute flags removed (policy A + plan structure-only).
+    for gone in (
+        "strategy",
+        "with_sentiment",
+        "with_flow_detail",
+        "full",
+        "sentiment_verbose",
+        "with_market_context",
+        "with_technical_gate",
+        "regime_universe",
+        "benchmark",
+        "flow_window",
+    ):
+        assert gone not in params
     assert "profile" not in params
 
 
@@ -27,6 +42,21 @@ def test_old_regime_flags_fail_as_unknown_options():
 
     result_no = runner.invoke(app, ["plan", "swing", "BBCA", "--no-regime"])
     assert result_no.exit_code != 0
+
+
+def test_analysis_flags_removed_from_plan_cli():
+    for flag in (
+        "--with-market-context",
+        "--with-technical-gate",
+        "--with-flow-detail",
+        "--with-sentiment",
+        "--full",
+        "--strategy",
+        "--sentiment-verbose",
+        "--flow-window",
+    ):
+        result = runner.invoke(app, ["plan", "swing", "BBCA", flag])
+        assert result.exit_code != 0, flag
 
 
 def test_swing_deprecated_no_backtest_flag_is_removed():

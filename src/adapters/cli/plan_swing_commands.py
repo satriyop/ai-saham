@@ -101,31 +101,19 @@ def _evaluate_foreign_bounce_setup(
 
 def swing(
     ticker: Annotated[str, typer.Argument(help="Stock ticker symbol (e.g., BBRI)")],
-    strategy: Annotated[
-        Optional[str],
-        typer.Option(
-            "--strategy",
-            "-S",
-            help="Strategy/backtest evidence name; omitted means strategy evidence is skipped",
-        ),
-    ] = None,
     setup: Annotated[
         Optional[str],
         typer.Option(
             "--setup",
             help=(
-                "Named setup for structure gates / target template "
-                "(foreign-bounce, coiled-spring, …); omitted = no setup lens"
+                "Named setup for structure target template "
+                "(foreign-bounce, coiled-spring, …); omitted = no template"
             ),
         ),
     ] = None,
     window: Annotated[
         Optional[int],
-        typer.Option("--window", "-w", help="Accumulation analysis window in broker sessions"),
-    ] = None,
-    flow_window: Annotated[
-        Optional[int],
-        typer.Option("--flow-window", help="Broker-flow detail window in broker sessions", min=1),
+        typer.Option("--window", "-w", help="Accumulation window in broker sessions"),
     ] = None,
     capital: Annotated[
         Optional[int],
@@ -151,28 +139,6 @@ def swing(
         Optional[float],
         typer.Option("--rr", help="Reward:risk ratio for target (structure)"),
     ] = None,
-    with_sentiment: Annotated[
-        bool,
-        typer.Option("--with-sentiment", help="Include news sentiment evidence"),
-    ] = False,
-    with_flow_detail: Annotated[
-        bool,
-        typer.Option("--with-flow-detail", help="Include broker flow and attribution evidence"),
-    ] = False,
-    full: Annotated[
-        bool,
-        typer.Option(
-            "--full",
-            help=(
-                "Include all optional evidence except named setup; uses "
-                "foreign-accumulation for strategy evidence when --strategy is omitted"
-            ),
-        ),
-    ] = False,
-    sentiment_verbose: Annotated[
-        bool,
-        typer.Option("--sentiment-verbose", help="Show sentiment provider errors/noise"),
-    ] = False,
     auto_refresh: Annotated[
         bool,
         typer.Option(
@@ -184,34 +150,6 @@ def swing(
         bool,
         typer.Option("--force-refresh", help="Force provider refresh even if cached data is fresh"),
     ] = False,
-    with_market_context: Annotated[
-        bool,
-        typer.Option(
-            "--with-market-context",
-            help=(
-                "Build MCE and allow Action recompute with market regime "
-                "(default: inherit screen judgment Action)"
-            ),
-        ),
-    ] = False,
-    with_technical_gate: Annotated[
-        bool,
-        typer.Option(
-            "--with-technical-gate",
-            help=(
-                "Enable TechnicalGate (SMA/EMA/RSI) and allow Action recompute "
-                "(default: inherit screen judgment Action)"
-            ),
-        ),
-    ] = False,
-    regime_universe: Annotated[
-        Optional[str],
-        typer.Option("--regime-universe", help="Universe for breadth context"),
-    ] = None,
-    benchmark: Annotated[
-        Optional[str],
-        typer.Option("--benchmark", help="Benchmark ticker for regime context"),
-    ] = None,
     output_format: Annotated[
         Optional[str],
         typer.Option("--format", help="Output format: table or json"),
@@ -233,12 +171,11 @@ def swing(
     Design trade structure for a chosen swing candidate (ADR-054).
 
     Product job: horizon / stop / target / lots (and risk budget when
-    ``--capital`` is set). Deep judgment (Action, Why, pattern) belongs on
-    ``saham screen accum TICKER`` — do not use plan as a second screener.
+    ``--capital`` is set). Deep judgment (Action, Why, pattern, evidence)
+    belongs on ``saham screen accum TICKER`` — plan is not a second analysis desk.
 
-    Action authority (default): inherit screen judgment. Recompute Signal+Risk
-    Action only when ``--with-market-context`` and/or ``--with-technical-gate``
-    are set. Opt-in evidence (strategy, sentiment, flow) never overrides Action.
+    Action always inherits screen judgment (policy A: market regime stays
+    display-only on screen; plan never recomputes Action).
 
     On a complete structure, writes a ``swing_trade_plan`` under
     ``journals/plans/`` for paper logging via
@@ -246,6 +183,7 @@ def swing(
 
     Recommended path:
         saham screen accum BBRI
+        saham screen accum BBRI --full   # analysis evidence if needed
         saham plan swing BBRI --capital 10000000
         saham trade accum log --ticker BBRI --from-plan
 
@@ -253,7 +191,6 @@ def swing(
         saham plan swing BBRI --capital 10000000
         saham plan swing BBRI --setup foreign-bounce --capital 10000000
         saham plan swing BBRI --capital 10000000 --risk-pct 1 --entry 4825 --rr 2.5
-        saham plan swing BBRI --capital 10000000 --with-market-context
     """
     app_cfg = load_app_config()
     resolved_db = db_path or Path(app_cfg.storage.db_path)
@@ -261,19 +198,17 @@ def swing(
     risk_pct = risk_pct if risk_pct is not None else app_cfg.swing.risk_pct
     atr_mult = atr_mult if atr_mult is not None else app_cfg.swing.atr_mult
     rr = rr if rr is not None else app_cfg.swing.rr
-    regime_universe = regime_universe or app_cfg.analysis.regime_universe
-    benchmark = benchmark or app_cfg.analysis.benchmark
+    # Workflow request still carries regime fields for engine defaults; plan CLI
+    # never opts into MCE/TechnicalGate Action recompute (policy A).
+    regime_universe = app_cfg.analysis.regime_universe
+    benchmark = app_cfg.analysis.benchmark
     output_format = output_format or app_cfg.analysis.format
     ticker_upper = ticker.upper()
     today = parse_as_of_option(as_of) or date.today()
 
     cfg = load_plan_swing_command_config()
 
-    resolved_flow_window = (
-        flow_window
-        if flow_window is not None
-        else cfg.plan_swing_config.flow_detail_window_sessions
-    )
+    resolved_flow_window = cfg.plan_swing_config.flow_detail_window_sessions
 
     if capital is None:
         _cfg = get_swing_default("capital")
@@ -287,15 +222,17 @@ def swing(
             err=True,
         )
         raise typer.Exit(1)
-    strategy_evidence_name = strategy or ("foreign-accumulation" if full else None)
 
-    include_sentiment = with_sentiment or full
-    include_flow_detail = with_flow_detail or full
-    # ADR-054 S4: structure-first — engine detail panels only with --full
-    # (market detail also when --with-market-context for regime structure).
-    include_signal_detail = full
-    include_risk_detail = full
-    include_market_detail = full or with_market_context
+    # Structure-only CLI: no analysis evidence suite, no Action recompute.
+    strategy_evidence_name = None
+    include_sentiment = False
+    include_flow_detail = False
+    include_signal_detail = False
+    include_risk_detail = False
+    include_market_detail = False
+    sentiment_verbose = False
+    with_market_context = False
+    with_technical_gate = False
 
     smart_money_brokers = set(cfg.swing_policy.smart_money_brokers)
     noise_brokers = set(cfg.swing_policy.noise_brokers)
@@ -401,20 +338,20 @@ def swing(
     ctx = SwingOutputDisplayContext(
         ticker=ticker_upper,
         today=today,
-        strategy_name=strategy_evidence_name or "-",
+        strategy_name="-",
         window=window,
         verdict=verdict,
         evidence=evidence,
         diagnostics=diagnostics,
         options=SwingOutputDisplayOptions(
-            include_strategy=strategy_evidence_name is not None,
-            include_sentiment=include_sentiment,
-            include_flow_detail=include_flow_detail,
-            include_signal_detail=include_signal_detail,
-            include_risk_detail=include_risk_detail,
-            include_market_detail=include_market_detail,
-            with_technical_gate=with_technical_gate,
-            sentiment_verbose=sentiment_verbose,
+            include_strategy=False,
+            include_sentiment=False,
+            include_flow_detail=False,
+            include_signal_detail=False,
+            include_risk_detail=False,
+            include_market_detail=False,
+            with_technical_gate=False,
+            sentiment_verbose=False,
         ),
         config=display_config,
         atr_value=atr_value,
@@ -493,10 +430,10 @@ def _echo_structure_desk_footer(
     typer.echo("")
     typer.echo("Structure desk (ADR-054): horizon / SL / TP / lots — not a second analysis desk.")
     typer.echo(
-        "  Default Action inherits screen judgment; recompute only with "
-        "--with-market-context or --with-technical-gate (S3)."
+        "  Action always inherits screen judgment "
+        "(no plan recompute; regime display-only on screen — policy A)."
     )
-    typer.echo(f"  Judgment case file:  saham screen accum {ticker}")
+    typer.echo(f"  Judgment / evidence:  saham screen accum {ticker} [--full …]")
     if capital is None:
         typer.echo(
             f"  Structure sizing:    saham plan swing {ticker} --capital <IDR>"

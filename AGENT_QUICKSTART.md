@@ -56,9 +56,12 @@ and `saham tui` accum board):
 - **Decision display is single:** Why / setup readiness / Accum breakdown /
   decision stack via `src/adapters/shared/decision_display.py`. Do not invent
   READY; do not re-format Why in TUI-only code.
-- **Screen-accum MCE:** workflow result may carry display-only
-  `market_context` for inspect. Do **not** pass MCE into screen scoring /
-  DecisionPolicy without an explicit B-MCE-policy task.
+- **Screen-accum MCE (policy A, locked):** workflow result may carry
+  display-only `market_context` for inspect/UI. Do **not** pass MCE into
+  screen scoring / DecisionPolicy without a separate explicit B-MCE-policy
+  task. Plan never recomputes Action via MCE/TechnicalGate — structure only.
+  Analysis evidence lives on `screen accum TICKER` (`--full` / flow /
+  sentiment / setup).
 - **TUI Enter inspect is present-only** on both boards: accum uses
   `accum_engine_inspect_presenter`; pre-open uses
   `preopen_engine_inspect_presenter` (board row only — no engine re-run).

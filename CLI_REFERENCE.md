@@ -756,17 +756,19 @@ saham inspect regime --as-of 2026-06-01 --verbose
 candidate you already judged with `saham screen accum TICKER`. Not a second
 analysis screener.
 
-Default **Action** inherits screen judgment. Recompute Signal+Risk Action only
-with `--with-market-context` and/or `--with-technical-gate`. Output leads with a
-**Structure** panel (entry/stop/target/lots when `--capital` is set). Compact
-context strip follows; full engine detail with `--full`. Flow / sentiment /
-strategy stay opt-in and never override Action.
+**Structure-only CLI (policy A):** no analysis evidence flags; **Action always
+inherits screen judgment** (no plan MCE/TechnicalGate recompute). Analysis
+evidence belongs on `screen accum TICKER --full` / flow / sentiment / setup.
+
+Output leads with a **Structure** panel (entry/stop/target/lots when
+`--capital` is set). Compact context strip only.
 
 Complete geometry writes `swing_trade_plan` under `journals/plans/` for
 `saham trade accum log --ticker TICKER --from-plan`.
 
 ```
 saham screen accum BBRI                         # judgment first
+saham screen accum BBRI --full                  # analysis evidence if needed
 saham plan swing TICKER [OPTIONS]
 saham plan swing BBRI --capital 10000000
 saham plan swing BBRI --setup foreign-bounce --capital 10000000
@@ -775,30 +777,22 @@ saham trade accum log --ticker BBRI --from-plan
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
-| `--strategy` | `-S` | none | Optional backtest strategy evidence (not action) |
-| `--setup` | | none | Named setup for structure gates/targets |
+| `--setup` | | none | Named setup for structure target template |
 | `--window` | `-w` | 7 | Accumulation window in broker sessions |
-| `--flow-window` | | 30 | Broker-flow detail window |
 | `--capital` | `-c` | — | Capital in IDR (enables structure sizing) |
 | `--risk-pct` | | 1.0 | % of capital at risk per trade |
 | `--entry` | | — | Structure entry price override |
 | `--atr-mult` | | 1.5 | ATR multiplier for stop |
 | `--rr` | | 2.0 | Reward:risk ratio for target |
-| `--with-sentiment` | | false | Include news sentiment evidence |
-| `--with-flow-detail` | | false | Include broker flow attribution |
-| `--with-market-context` | | false | Build MCE; **allows Action recompute** with regime |
-| `--with-technical-gate` | | false | Enable TechnicalGate; **allows Action recompute** |
-| `--full` | | false | All optional evidence except named setup |
-| `--no-sentiment` | | false | Deprecated no-op |
-| `--sentiment-verbose` | | false | Show sentiment provider errors |
-| `--no-backtest` | | false | Deprecated compatibility |
 | `--no-refresh` | | false | Disable auto single-ticker refresh |
 | `--force-refresh` | | false | Force provider refresh |
-| `--regime-universe` | | — | Universe for regime breadth |
-| `--benchmark` | | ^JKSE | Benchmark ticker for regime |
-| `--risk-strategy` | | — | Risk strategy for alternative gate config |
+| `--as-of` | | live | Point-in-time as-of date |
 | `--format` | | table | Output format: table, json |
 | `--db` | | ./data.db | SQLite database path |
+
+**Removed from plan (use screen):** `--full`, `--with-flow-detail`,
+`--with-sentiment`, `--strategy`, `--with-market-context`,
+`--with-technical-gate`, `--flow-window`, `--regime-universe`, `--benchmark`.
 
 ---
 

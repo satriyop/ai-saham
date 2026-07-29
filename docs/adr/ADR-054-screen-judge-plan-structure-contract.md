@@ -248,6 +248,7 @@ saham trade accum log …                    # paper notebook
 | **S3** judgment authority | **Shipped 2026-07-28** — default plan Action inherits screen `candidate.trade_setup`; recompute only with explicit flags |
 | **S4** structure-first UI | **Shipped 2026-07-29** — Structure panel first; detail with `--full` |
 | **S5** swing_trade_plan | **Shipped 2026-07-29** — typed `swing_trade_plan` artifact on plan swing (JSON + `journals/plans/TICKER_latest.json`); `trade accum log --from-plan` freezes geometry |
+| **Policy A** (MCE) | **Locked** — screen MCE remains **display-only**; plan never recomputes Action via MCE/TechnicalGate; plan CLI is **structure-only** (analysis flags stripped). B-MCE into DecisionPolicy is a separate future task if wanted. |
 
 **Trust this ADR for product contract; trust live `--help` and code for shipped depth.**
 Verify with source before claiming a later slice is done.

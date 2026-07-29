@@ -20,13 +20,13 @@ plan_app = typer.Typer(
     name="plan",
     help=(
         "Trade structure for a chosen candidate (ADR-054). "
-        "`plan swing` designs horizon / SL / TP / lots and writes a "
-        "`swing_trade_plan` artifact; Action defaults to screen judgment "
-        "(recompute only with `--with-market-context` / `--with-technical-gate`). "
-        "Deep judgment + analysis evidence: prefer `saham screen accum TICKER` "
-        "(optional `--full` / flow / sentiment / setup). "
+        "`plan swing` is structure-only: capital / SL / TP / lots + "
+        "`swing_trade_plan`. Action always inherits screen judgment "
+        "(no analysis evidence flags; no Action recompute). "
+        "Judgment + evidence: `saham screen accum TICKER` "
+        "(`--full` / flow / sentiment / setup). "
         "Paper: `saham trade accum log --from-plan`. "
-        "Lenses: `saham inspect risk|regime|signal accum|sentiment`. "
+        "Regime lens only: `saham inspect regime` (display; not plan recompute). "
         "Frozen pre-open: `saham assess pre-open` (not this command)."
     ),
     no_args_is_help=True,

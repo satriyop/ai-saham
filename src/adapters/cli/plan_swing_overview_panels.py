@@ -74,7 +74,7 @@ def _risk_label(risk_resp: Any | None) -> tuple[str, str, str]:
 def _technical_label(risk_resp: Any | None, with_technical_gate: bool) -> tuple[str, str, str]:
     """Engine-summary row for the optional TechnicalGate."""
     if not with_technical_gate:
-        return "off", "bright_black", "use --with-technical-gate to enable"
+        return "off", "bright_black", "not on plan structure desk (policy A)"
     if risk_resp is None:
         return "on", "white", "gate: unavailable"
     snap = risk_resp.assessment.indicators
@@ -88,7 +88,7 @@ def _technical_label(risk_resp: Any | None, with_technical_gate: bool) -> tuple[
 
 def _market_label(market_regime: MarketContext | None) -> tuple[str, str, str]:
     if market_regime is None:
-        return "off", "bright_black", "run with --with-market-context for regime preview"
+        return "off", "bright_black", "display on screen / inspect regime (policy A)"
     label = REGIME_DISPLAY_LABEL.get(market_regime.regime.value, market_regime.regime.value)
     score = context_conviction_score(market_regime)
     style = {
@@ -288,7 +288,7 @@ def _build_structure_panel(
     table.add_row("Action", Text(action_value, style=action_style))
     table.add_row(
         "Action source",
-        "screen judgment (default) · recompute with --with-market-context / --with-technical-gate",
+        "screen judgment (always) · plan never recomputes Action (policy A)",
     )
     if action_detail:
         table.add_row("Why", action_detail[:160] + ("…" if len(action_detail) > 160 else ""))

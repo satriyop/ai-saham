@@ -26,5 +26,10 @@ def test_plan_swing_help_is_structure_first() -> None:
     assert "structure" in compact
     assert "screen" in compact and "accum" in compact
     assert "--capital" in out
+    # Analysis suite belongs on screen, not plan
+    assert "--with-market-context" not in out
+    assert "--with-technical-gate" not in out
+    assert "--with-flow-detail" not in out
+    assert "--full" not in out or "screen accum" in compact
     # Not sold as the multi-command morning deep-dive replacement
     assert "replaces the multi-command morning workflow" not in compact
