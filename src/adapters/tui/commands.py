@@ -44,14 +44,14 @@ COCKPIT_COMMANDS: tuple[CockpitCommand, ...] = (
         "Daily",
         "view-ticker",
         "View ticker",
-        "",
+        "v t",
         "CLI parity: saham view ticker show · cache dashboard (not board inspect)",
     ),
     CockpitCommand(
         "Daily",
         "view-broker",
         "View broker",
-        "",
+        "v b",
         "list → Enter desk home · t/f/h deep · v stock · saham view broker",
     ),
     CockpitCommand(

@@ -11,10 +11,11 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, Literal
 
-from textual import work
+from textual import events, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.timer import Timer
 from textual.widgets import DataTable, Static
 
 from src.adapters.tui.screens.help import HelpModal
@@ -60,10 +61,25 @@ class CockpitApp(App[None]):
         Binding("t", "broker_top", "Desk top", show=False),
         Binding("f", "broker_flow", "Desk flow", show=False),
         Binding("h", "broker_history", "Desk history", show=False),
-        Binding("v", "broker_jump_ticker", "Desk→ticker", show=False),
+        # `v` is chord prefix off desk hub (v t / v b); on desk hub = jump ticker
+        # (handled in on_key so prefix chords do not fight single-key v).
         Binding("b", "ticker_desks", "Ticker→desks", show=False),
         Binding("q", "quit", "Quit", show=True),
     ]
+
+    # Two-key chords (OpenCode-style labels in palette). Textual has no native
+    # sequences — first key arms a short prefix; second key dispatches.
+    _CHORD_HINTS = {
+        "s": "s a screen · s p pre-open",
+        "v": "v t ticker · v b broker",
+    }
+    _CHORD_MAP = {
+        ("s", "a"): "screen-accum",
+        ("s", "p"): "screen-preopen",
+        ("v", "t"): "view-ticker",
+        ("v", "b"): "view-broker",
+    }
+    _CHORD_TIMEOUT_S = 1.0
 
     def __init__(
         self,
@@ -135,6 +151,8 @@ class CockpitApp(App[None]):
         self._plan_ticker: str = ""
         self._plan_result: str = ""
         self._plan_running: bool = False
+        self._chord_prefix: str | None = None
+        self._chord_timer: Timer | None = None
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="workspace"):
@@ -336,11 +354,90 @@ class CockpitApp(App[None]):
     # ── actions ────────────────────────────────────────────
 
     def action_command_palette(self) -> None:
+        self._cancel_chord(silent=True)
+
         def _on_dismiss(command_id: str | None) -> None:
             if command_id:
                 self._run_command(command_id)
 
         self.push_screen(CommandPalette(), _on_dismiss)
+
+    # ── two-key chords (s a / s p / v t / v b) ─────────────
+
+    def on_key(self, event: events.Key) -> None:
+        """Prefix chords + desk-hub ``v`` (binding removed to avoid fights)."""
+        if self._modal_blocks_board_keys():
+            return
+
+        key = event.key
+        if key == "escape" and self._chord_prefix is not None:
+            event.prevent_default()
+            event.stop()
+            self._cancel_chord(silent=False)
+            return
+
+        if self._chord_prefix is not None:
+            event.prevent_default()
+            event.stop()
+            prefix = self._chord_prefix
+            self._clear_chord_state()
+            self._resolve_chord(prefix, key)
+            return
+
+        if key == "s":
+            event.prevent_default()
+            event.stop()
+            self._begin_chord("s")
+            return
+
+        if key == "v":
+            event.prevent_default()
+            event.stop()
+            if self._desk_hub_active():
+                # Single-key: desk → top stock (CLI parity trail)
+                self.action_broker_jump_ticker()
+            else:
+                self._begin_chord("v")
+            return
+
+    def _begin_chord(self, prefix: str) -> None:
+        self._clear_chord_state()
+        self._chord_prefix = prefix
+        hint = self._CHORD_HINTS.get(prefix, prefix)
+        self.notify(hint, timeout=self._CHORD_TIMEOUT_S)
+        self._chord_timer = self.set_timer(
+            self._CHORD_TIMEOUT_S,
+            self._on_chord_timeout,
+            name=f"chord-{prefix}",
+        )
+
+    def _on_chord_timeout(self) -> None:
+        if self._chord_prefix is not None:
+            prefix = self._chord_prefix
+            self._clear_chord_state()
+            self.notify(f"{prefix}… cancelled", timeout=0.8)
+
+    def _cancel_chord(self, *, silent: bool) -> None:
+        if self._chord_prefix is None:
+            return
+        prefix = self._chord_prefix
+        self._clear_chord_state()
+        if not silent:
+            self.notify(f"{prefix}… cancelled", timeout=0.8)
+
+    def _clear_chord_state(self) -> None:
+        if self._chord_timer is not None:
+            self._chord_timer.stop()
+            self._chord_timer = None
+        self._chord_prefix = None
+
+    def _resolve_chord(self, prefix: str, key: str) -> None:
+        # Character keys arrive as "a"/"t"; ignore modifiers.
+        cmd = self._CHORD_MAP.get((prefix, key))
+        if cmd is None:
+            self.notify(f"Unknown · {prefix} {key}", timeout=1.0)
+            return
+        self._run_command(cmd)
 
     def action_toggle_sidebar(self) -> None:
         self._sidebar_visible = not self._sidebar_visible

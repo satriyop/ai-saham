@@ -14,23 +14,30 @@ from textual.widgets import Static
 HELP_BODY = """[#9b8fb8]What this app does[/]
 · Opens on [bold]Screen · accumulation[/] from local SQLite
 · Pre-open reads cached IEV snapshots (fetch iev)
-· Enter = inspect focused ticker (judgment, not plan)
+· Enter = inspect focused row (present-only · not CLI view ticker)
 · p = plan structure desk (SL/TP/lots · inherits Action · no order)
 · Fetch = explicit online (never on open)
 
 [#9b8fb8]Keys[/]
   ctrl+p   commands
   ↑↓ j k   move rows
-  enter    view focused ticker
+  enter    board inspect (focused row)
+  s a      screen accumulation
+  s p      screen pre-open
+  v t      view ticker (CLI dashboard · needs focus)
+  v b      view broker list
   p        plan structure (focused ticker)
   r        refresh local board
-  esc      back / cancel
+  b        stock→desks (on view ticker only)
+  t/f/h/v  desk hub (on broker show · v = top stock)
+  esc      back / cancel · cancel chord prefix
   ctrl+b   toggle sidebar
   ?        this help
   q        quit
 
 [#9b8fb8]Same engine as CLI[/]
   saham screen accum · screen pre-open · plan swing
+  saham view ticker show · view broker …
   Lab backtests stay CLI for now (palette shows hint)
 """
 
