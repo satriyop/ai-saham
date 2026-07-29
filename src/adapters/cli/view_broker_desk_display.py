@@ -66,17 +66,26 @@ def format_desk_show_text(result) -> str:
 
 
 def format_broker_list_text(desks: list[dict]) -> str:
-    """Plain-text tracked desk list for TUI / capture."""
+    """Plain-text tracked desk list for TUI / capture.
+
+    Prefer enriched rows (as_of, day_net, tickers, top_buy) when present.
+    """
     lines = [
         "Tracked broker desks (broker_daily_flow)",
-        "same job as: saham view broker list",
+        "same job as: saham view broker list (+ latest session pulse when cached)",
         "",
-        f"{'Code':4}  Type",
-        "-" * 20,
+        f"{'Code':4}  {'Type':8}  {'AsOf':10}  {'DayNet':>10}  {'#':>3}  Top",
+        "-" * 56,
     ]
     for row in desks:
-        lines.append(f"{row['code']:4}  {row['type']}")
-    lines.append("-" * 20)
+        code = str(row.get("code", "?"))
+        typ = str(row.get("type", row.get("type_label", "—")))
+        as_of = str(row.get("as_of", "—"))
+        day_net = str(row.get("day_net", "—"))
+        tickers = str(row.get("tickers", "—"))
+        top = str(row.get("top_buy", "—"))
+        lines.append(f"{code:4}  {typ:8}  {as_of:10}  {day_net:>10}  {tickers:>3}  {top}")
+    lines.append("-" * 56)
     lines.append("Enter a row to open desk show · esc back")
     return "\n".join(lines)
 

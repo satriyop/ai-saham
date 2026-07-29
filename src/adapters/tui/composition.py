@@ -63,7 +63,7 @@ def create_tui_app(
         fetch_previewer=fetch_previewer,
         fetch_runner=fetch_runner,
         ticker_detail_loader=ticker_detail_loader,
-        broker_list_loader=_BrokerListLoader(),
+        broker_list_loader=_BrokerListLoader(db_path),
         broker_show_loader=_BrokerShowLoader(db_path),
         broker_top_loader=_BrokerDeepLoader(db_path, "top"),
         broker_flow_loader=_BrokerDeepLoader(db_path, "flow"),
@@ -251,31 +251,105 @@ def _broker_repo_and_foreign(db_path: Path):
 
 
 class _BrokerListLoader:
-    """Tracked desks from config — same source as ``saham view broker list``."""
+    """Tracked desks + latest-session pulse from broker_daily_flow (cache-only).
+
+    Columns beyond code/type so the list is a desk radar, not a config dump.
+    Per-desk read of daily flow (tracked set is small). No network.
+    """
+
+    def __init__(self, db_path: Path) -> None:
+        self._db_path = db_path
+        self._lock = Lock()
 
     def __call__(self) -> list[Any]:
-        from types import SimpleNamespace
+        with self._lock:
+            from decimal import Decimal
+            from types import SimpleNamespace
 
-        from src.application.services.broker_desk_from_daily_flow import classify_desk_type
-        from src.domain.entities.broker_flow import BrokerType
-        from src.infrastructure.config.institutional_accumulation_config_loader import (
-            load_institutional_accumulation_config,
-        )
-        from src.infrastructure.config.stockbit_config import load_stockbit_config
+            from src.adapters.cli.view_broker_desk_display import format_value
+            from src.application.services.broker_desk_from_daily_flow import (
+                classify_desk_type,
+            )
+            from src.domain.entities.broker_flow import BrokerType
+            from src.infrastructure.config.institutional_accumulation_config_loader import (
+                load_institutional_accumulation_config,
+            )
+            from src.infrastructure.config.stockbit_config import load_stockbit_config
 
-        sb = load_stockbit_config()
-        ia = load_institutional_accumulation_config()
-        rows: list[Any] = []
-        for code in sb.tracked_broker_codes:
-            btype = classify_desk_type(code, ia.foreign_broker_codes)
-            if btype == BrokerType.FOREIGN:
-                label = "Foreign"
-            elif btype == BrokerType.LOCAL:
-                label = "Local"
-            else:
-                label = "unknown"
-            rows.append(SimpleNamespace(code=str(code).upper(), type_label=label))
-        return rows
+            sb = load_stockbit_config()
+            ia = load_institutional_accumulation_config()
+            repo, foreign = _broker_repo_and_foreign(self._db_path)
+            rows: list[Any] = []
+            for code in sb.tracked_broker_codes:
+                code_u = str(code).upper()
+                btype = classify_desk_type(code_u, foreign or ia.foreign_broker_codes)
+                if btype == BrokerType.FOREIGN:
+                    label = "Foreign"
+                elif btype == BrokerType.LOCAL:
+                    label = "Local"
+                else:
+                    label = "unknown"
+
+                flows = repo.get_broker_daily_flows_by_code(code_u)
+                if not flows:
+                    rows.append(
+                        SimpleNamespace(
+                            code=code_u,
+                            type_label=label,
+                            name="—",
+                            as_of="—",
+                            day_net="—",
+                            day_net_sort=Decimal("0"),
+                            tickers="—",
+                            top_buy="—",
+                            has_data=False,
+                        )
+                    )
+                    continue
+
+                as_of = max(f.date for f in flows)
+                day_flows = [f for f in flows if f.date == as_of]
+                day_net = sum((f.net_value for f in day_flows), Decimal("0"))
+                ticker_n = len({f.ticker.upper() for f in day_flows})
+                name = (day_flows[0].broker_name or code_u) if day_flows else code_u
+                # Top buy ticker by net on as_of session
+                by_ticker: dict[str, Decimal] = {}
+                for f in day_flows:
+                    t = f.ticker.upper()
+                    by_ticker[t] = by_ticker.get(t, Decimal("0")) + f.net_value
+                top_buy = "—"
+                if by_ticker:
+                    best = max(by_ticker.items(), key=lambda kv: kv[1])
+                    if best[1] > 0:
+                        top_buy = best[0]
+                    else:
+                        # all selling — show biggest seller with − prefix marker
+                        worst = min(by_ticker.items(), key=lambda kv: kv[1])
+                        top_buy = f"−{worst[0]}"
+
+                rows.append(
+                    SimpleNamespace(
+                        code=code_u,
+                        type_label=label,
+                        name=str(name)[:16],
+                        as_of=as_of.isoformat(),
+                        day_net=format_value(day_net),
+                        day_net_sort=day_net,
+                        tickers=str(ticker_n),
+                        top_buy=top_buy,
+                        has_data=True,
+                    )
+                )
+
+            # Active desks first by |day net|, then no-data configs
+            rows.sort(
+                key=lambda r: (
+                    0 if getattr(r, "has_data", False) else 1,
+                    -abs(getattr(r, "day_net_sort", Decimal("0"))),
+                    r.code,
+                )
+            )
+            return rows
 
 
 class _BrokerShowLoader:

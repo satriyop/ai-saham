@@ -83,14 +83,30 @@ def test_view_broker_list_enter_show_and_esc():
             )
 
         desks = [
-            SimpleNamespace(code="AK", type_label="Foreign"),
-            SimpleNamespace(code="YP", type_label="Local"),
+            SimpleNamespace(
+                code="AK",
+                type_label="Foreign",
+                as_of="2026-07-28",
+                day_net="1.20B",
+                tickers="12",
+                top_buy="BBCA",
+                has_data=True,
+            ),
+            SimpleNamespace(
+                code="YP",
+                type_label="Local",
+                as_of="—",
+                day_net="—",
+                tickers="—",
+                top_buy="—",
+                has_data=False,
+            ),
         ]
         shown: list[str] = []
 
-        def show_loader(code: str) -> str:
+        def show_loader(code: str):
             shown.append(code)
-            return f"DESK_SHOW_{code}\nDay net 1.0B"
+            return SimpleNamespace(text=f"DESK_SHOW_{code}\nDay net 1.0B", jump_ticker="BBCA")
 
         app = CockpitApp(
             accum_loader=make_accum,
@@ -112,6 +128,9 @@ def test_view_broker_list_enter_show_and_esc():
             assert app._stage == "broker-list"
             assert len(app._broker_rows) == 2
             assert app._broker_list_return == "accum"
+            # Enriched radar columns present on row model
+            assert app._broker_rows[0].day_net == "1.20B"
+            assert app._broker_rows[0].top_buy == "BBCA"
             app._open_broker_desk_show()
             for _ in range(40):
                 await pilot.pause(0.05)
