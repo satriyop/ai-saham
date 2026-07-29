@@ -29,6 +29,14 @@ Read this before every task. This is the mandatory entry point for agents. The l
   remain parallel shadow results unless a newer explicit ADR changes that rule.
 - Do not bypass risk, signal, tuning, evidence-promotion, or architecture guardrails unless the user explicitly asks for an ADR/design change first.
 - Do not promote diagnostic evidence or tune patch-eligible config without out-of-sample proof and validator support.
+- **Evidence vocabulary (ADR-057):**  
+  - **Evidence** (production) = real data used by live engines for scoring/gates
+    (Signal, Risk, MCE only when in DecisionPolicy). Can affect Action.  
+  - **Diagnostic evidence** = real data for diagnosis only; never Action authority.  
+  - **Corpus** = stored learning material (observations, labels, evaluate) — not
+    live Action authority.  
+  Do not use vague “analysis evidence” in operator copy. Do not call
+  display-only panels bare “evidence.”
 - Trust current code during audits. Treat docs as intent, then verify against implementation.
 - Do not revert unrelated user or agent changes.
 - Do not run destructive git cleanup in a shared dirty worktree. `git reset`, `git checkout --`, `git restore`, `git clean`, and broad stash/cleanup commands require explicit user approval and a stated file scope.
@@ -57,11 +65,12 @@ and `saham tui` accum board):
   decision stack via `src/adapters/shared/decision_display.py`. Do not invent
   READY; do not re-format Why in TUI-only code.
 - **Screen-accum MCE (policy A, locked):** workflow result may carry
-  display-only `market_context` for inspect/UI. Do **not** pass MCE into
-  screen scoring / DecisionPolicy without a separate explicit B-MCE-policy
-  task. Plan never recomputes Action via MCE/TechnicalGate — structure only.
-  Analysis evidence lives on `screen accum TICKER` (`--full` / flow /
-  sentiment / setup).
+  **diagnostic evidence** `market_context` for inspect/UI. Do **not** pass MCE
+  into screen scoring / DecisionPolicy without a separate explicit B-MCE
+  promotion task (then it becomes production evidence). Plan never recomputes
+  Action via MCE/TechnicalGate — structure only. Optional **diagnostic
+  evidence** panels on `screen accum TICKER` (`--full` / flow / sentiment /
+  setup lens).
 - **TUI Enter inspect is present-only** on both boards: accum uses
   `accum_engine_inspect_presenter`; pre-open uses
   `preopen_engine_inspect_presenter` (board row only — no engine re-run).
