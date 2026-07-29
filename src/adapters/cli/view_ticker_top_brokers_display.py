@@ -42,6 +42,58 @@ def _broker_type_label(broker) -> str:
     return "Foreign" if getattr(broker, "is_foreign", False) else "Local"
 
 
+def format_ticker_top_brokers_rows(
+    result,
+    *,
+    limit: int = 10,
+) -> list:
+    """Build desk rows for TUI ticker→desks table from ViewTickerTopBrokersResult."""
+    from types import SimpleNamespace
+
+    from src.domain.entities.broker_flow import BrokerType
+
+    rows: list = []
+    buyers = list(result.top_buyers or ())[:limit]
+    sellers = list(result.top_sellers or ())[:limit]
+    for b in buyers:
+        btype = getattr(b, "broker_type", None)
+        if btype == BrokerType.FOREIGN:
+            typ = "Foreign"
+        elif btype == BrokerType.LOCAL:
+            typ = "Local"
+        else:
+            typ = "Foreign" if getattr(b, "is_foreign", False) else "Local"
+        rows.append(
+            SimpleNamespace(
+                code=str(b.broker_code).upper(),
+                type_label=typ,
+                role="buy",
+                day_net=format_value(b.net_value),
+                name=str(getattr(b, "broker_name", "") or b.broker_code)[:20],
+                as_of=result.date.isoformat(),
+            )
+        )
+    for s in sellers:
+        btype = getattr(s, "broker_type", None)
+        if btype == BrokerType.FOREIGN:
+            typ = "Foreign"
+        elif btype == BrokerType.LOCAL:
+            typ = "Local"
+        else:
+            typ = "Foreign" if getattr(s, "is_foreign", False) else "Local"
+        rows.append(
+            SimpleNamespace(
+                code=str(s.broker_code).upper(),
+                type_label=typ,
+                role="sell",
+                day_net=format_value(s.net_value),
+                name=str(getattr(s, "broker_name", "") or s.broker_code)[:20],
+                as_of=result.date.isoformat(),
+            )
+        )
+    return rows
+
+
 def display_ticker_top_brokers(
     ticker: str,
     summary,

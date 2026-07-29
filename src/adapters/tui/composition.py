@@ -68,6 +68,7 @@ def create_tui_app(
         broker_top_loader=_BrokerDeepLoader(db_path, "top"),
         broker_flow_loader=_BrokerDeepLoader(db_path, "flow"),
         broker_history_loader=_BrokerDeepLoader(db_path, "history"),
+        ticker_desks_loader=_TickerTopBrokersLoader(db_path),
         accum_controller=BoardController(accum_loader),
         preopen_controller=BoardController(
             preopen_loader,
@@ -236,6 +237,48 @@ class _ViewTickerDashboardLoader:
 
 
 # ── View broker (list → show → deep-dives) ──────────────────
+
+
+class _TickerTopBrokersLoader:
+    """Stock → desks: same use case as ``saham view ticker top-brokers``."""
+
+    def __init__(self, db_path: Path) -> None:
+        self._db_path = db_path
+        self._lock = Lock()
+
+    def __call__(self, ticker: str) -> Any:
+        with self._lock:
+            from types import SimpleNamespace
+
+            from src.adapters.cli.view_ticker_top_brokers_display import (
+                format_ticker_top_brokers_rows,
+            )
+            from src.application.use_case.view_ticker_top_brokers_use_case import (
+                ViewTickerTopBrokersRequest,
+            )
+            from src.infrastructure.composition.view_ticker_deps import build_view_ticker_deps
+
+            deps = build_view_ticker_deps(self._db_path)
+            result = deps.top_brokers.execute(
+                ViewTickerTopBrokersRequest(ticker=str(ticker).upper(), limit=10)
+            )
+            if result is None:
+                return SimpleNamespace(
+                    ticker=str(ticker).upper(),
+                    as_of=None,
+                    note="no broker summary · fetch market/broker first",
+                    rows=(),
+                )
+            rows = format_ticker_top_brokers_rows(result, limit=10)
+            note = result.tops_scope_note or (
+                "summary tops" if result.tops_source == "summary" else "tracked flow fallback"
+            )
+            return SimpleNamespace(
+                ticker=result.ticker,
+                as_of=result.date.isoformat(),
+                note=note,
+                rows=tuple(rows),
+            )
 
 
 def _broker_repo_and_foreign(db_path: Path):

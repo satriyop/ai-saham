@@ -61,6 +61,7 @@ class CockpitApp(App[None]):
         Binding("f", "broker_flow", "Desk flow", show=False),
         Binding("h", "broker_history", "Desk history", show=False),
         Binding("v", "broker_jump_ticker", "Desk→ticker", show=False),
+        Binding("b", "ticker_desks", "Ticker→desks", show=False),
         Binding("q", "quit", "Quit", show=True),
     ]
 
@@ -78,6 +79,7 @@ class CockpitApp(App[None]):
         broker_top_loader: Callable[[str], Any] | None = None,
         broker_flow_loader: Callable[[str], Any] | None = None,
         broker_history_loader: Callable[[str], Any] | None = None,
+        ticker_desks_loader: Callable[[str], Any] | None = None,
         accum_controller: Any | None = None,
         preopen_controller: Any | None = None,
         accum_presenter: Any | None = None,
@@ -95,6 +97,7 @@ class CockpitApp(App[None]):
         self._broker_top_loader = broker_top_loader
         self._broker_flow_loader = broker_flow_loader
         self._broker_history_loader = broker_history_loader
+        self._ticker_desks_loader = ticker_desks_loader
         self._accum_controller = accum_controller
         self._preopen_controller = preopen_controller
         self._accum_presenter = accum_presenter
@@ -110,6 +113,8 @@ class CockpitApp(App[None]):
         self._broker_page: str | None = None  # list|show|top|flow|history|None
         self._broker_jump_ticker: str | None = None
         self._view_from_desk: bool = False
+        self._desk_entry: str | None = None  # broker-list | ticker-desks
+        self._ticker_desks_stock: str | None = None  # stock for ticker→desks page
         self._mode = "local-first"
         self._focus_ticker = "—"
         self._status_note = "ctrl+p commands"
@@ -209,6 +214,8 @@ class CockpitApp(App[None]):
             )
         if self._stage == "broker-list":
             return "↑↓ move · Enter desk home · esc back · Ctrl+P · view broker list"
+        if self._stage == "ticker-desks":
+            return "↑↓ move · Enter desk home · esc → view ticker · Ctrl+P · stock top desks"
         if self._stage == "detail" and self._broker_page in {
             "show",
             "top",
@@ -218,6 +225,8 @@ class CockpitApp(App[None]):
             return (
                 "↑↓ scroll · t top · f flow · h history · v view ticker · esc desk trail · Ctrl+P"
             )
+        if self._stage == "detail" and self._status_note == "view ticker":
+            return "↑↓/PgUp/PgDn scroll · b top desks · esc back · p plan · Ctrl+P"
         if self._stage == "detail":
             return "↑↓/PgUp/PgDn scroll · esc back · p plan · Ctrl+P"
         if self._stage == "plan":
@@ -303,7 +312,7 @@ class CockpitApp(App[None]):
             table.display = False
             evidence.display = False
             scroll.focus()
-        elif self._stage == "broker-list":
+        elif self._stage in {"broker-list", "ticker-desks"}:
             scroll.display = False
             table.display = True
             evidence.display = False
@@ -343,6 +352,23 @@ class CockpitApp(App[None]):
     def action_go_back(self) -> None:
         if self._modal_blocks_board_keys():
             return
+        if self._stage == "ticker-desks":
+            # Back to view ticker for the stock (preserve board return stage).
+            stock = self._ticker_desks_stock
+            if not stock:
+                self._stage = "shell"
+                self._board_kind = "none"
+                self._clear_broker_axis()
+                self._ticker_desks_stock = None
+                self._refresh_chrome()
+                return
+            self._focus_ticker = stock
+            self._ticker_desks_stock = None
+            self._desk_entry = None
+            self._broker_page = None
+            self._broker_desk_code = None
+            self._open_view_ticker_dashboard(from_desk=False, preserve_return=True)
+            return
         if self._stage == "broker-list":
             self._clear_broker_axis()
             target = self._broker_list_return
@@ -361,14 +387,20 @@ class CockpitApp(App[None]):
                     self._update_accum_evidence()
             return
         if self._stage in {"detail", "plan"}:
-            # Desk trail: deep → show → list (not straight to board).
+            # Desk trail: deep → show → list or ticker-desks.
             if self._stage == "detail" and self._broker_page in {"top", "flow", "history"}:
                 if self._broker_desk_code:
-                    self._open_broker_desk_show(code=self._broker_desk_code)
+                    self._open_broker_desk_show(
+                        code=self._broker_desk_code,
+                        entry=self._desk_entry,
+                    )
                     return
             if self._stage == "detail" and self._broker_page == "show":
-                self._broker_page = "list"
                 self._view_from_desk = False
+                if self._desk_entry == "ticker-desks" and self._ticker_desks_stock:
+                    self._restore_ticker_desks_table()
+                    return
+                self._broker_page = "list"
                 self._stage = "broker-list"
                 self._plan_running = False
                 self._refresh_chrome()
@@ -378,7 +410,10 @@ class CockpitApp(App[None]):
             if self._stage == "detail" and self._view_from_desk and self._broker_desk_code:
                 # View ticker opened via desk ``v`` → back to desk home
                 self._view_from_desk = False
-                self._open_broker_desk_show(code=self._broker_desk_code)
+                self._open_broker_desk_show(
+                    code=self._broker_desk_code,
+                    entry=self._desk_entry,
+                )
                 return
             # Explicit return stage — never infer only from detail title.
             target = self._detail_return_stage
@@ -393,13 +428,16 @@ class CockpitApp(App[None]):
                 self._stage = target
                 self._board_kind = target  # type: ignore[assignment]
                 self._clear_broker_axis()
+                self._ticker_desks_stock = None
             elif self._rows and self._board_kind in {"accum", "preopen"}:
                 self._stage = self._board_kind
                 self._clear_broker_axis()
+                self._ticker_desks_stock = None
             else:
                 self._stage = "shell"
                 self._board_kind = "none"
                 self._clear_broker_axis()
+                self._ticker_desks_stock = None
             self._plan_running = False
             self._refresh_chrome()
             if self._stage in {"accum", "preopen"}:
@@ -414,6 +452,8 @@ class CockpitApp(App[None]):
         self._broker_page = None
         self._broker_jump_ticker = None
         self._view_from_desk = False
+        self._desk_entry = None
+        # _ticker_desks_stock cleared by callers leaving the stock→desk trail
 
     def _desk_hub_active(self) -> bool:
         return (
@@ -448,6 +488,18 @@ class CockpitApp(App[None]):
         self._view_from_desk = True
         self._open_view_ticker_dashboard(from_desk=True)
 
+    def action_ticker_desks(self) -> None:
+        """From view ticker: open top desks for this stock (CLI top-brokers)."""
+        if self._modal_blocks_board_keys():
+            return
+        if self._stage != "detail" or self._status_note != "view ticker":
+            return
+        stock = str(self._focus_ticker or "").upper()
+        if not stock or stock == "—":
+            self.notify("No ticker focused", timeout=1.5)
+            return
+        self._open_ticker_desks(stock)
+
     def action_refresh_local(self) -> None:
         if self._modal_blocks_board_keys():
             return
@@ -470,8 +522,14 @@ class CockpitApp(App[None]):
         self._run_command("plan-swing")
 
     def action_view_ticker(self) -> None:
-        """Board Enter → engine inspect (present-only), not CLI view ticker."""
+        """Enter: board inspect, or desk home from broker-list / ticker-desks."""
         if self._modal_blocks_board_keys():
+            return
+        if self._stage == "broker-list":
+            self._open_broker_desk_show(entry="broker-list")
+            return
+        if self._stage == "ticker-desks":
+            self._open_broker_desk_show(entry="ticker-desks")
             return
         self._open_detail()
 
@@ -483,7 +541,7 @@ class CockpitApp(App[None]):
     def action_cursor_down(self) -> None:
         if self._modal_blocks_board_keys():
             return
-        if self._stage == "broker-list":
+        if self._stage in {"broker-list", "ticker-desks"}:
             if not self._broker_rows:
                 return
             self._broker_row_index = min(len(self._broker_rows) - 1, self._broker_row_index + 1)
@@ -499,7 +557,7 @@ class CockpitApp(App[None]):
     def action_cursor_up(self) -> None:
         if self._modal_blocks_board_keys():
             return
-        if self._stage == "broker-list":
+        if self._stage in {"broker-list", "ticker-desks"}:
             if not self._broker_rows:
                 return
             self._broker_row_index = max(0, self._broker_row_index - 1)
@@ -515,7 +573,7 @@ class CockpitApp(App[None]):
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         if event.cursor_row is None or event.cursor_row < 0:
             return
-        if self._stage == "broker-list":
+        if self._stage in {"broker-list", "ticker-desks"}:
             if event.cursor_row < len(self._broker_rows):
                 self._broker_row_index = event.cursor_row
                 self._update_broker_focus()
@@ -529,7 +587,8 @@ class CockpitApp(App[None]):
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Enter on a table selects a row.
 
-        Board: present-only engine inspect. Broker list: desk show (CLI view broker).
+        Board: present-only engine inspect.
+        Broker list / ticker desks: desk show (CLI view broker show).
         """
         if self._modal_blocks_board_keys():
             return
@@ -539,7 +598,13 @@ class CockpitApp(App[None]):
             if event.cursor_row < len(self._broker_rows):
                 self._broker_row_index = event.cursor_row
                 self._update_broker_focus()
-            self._open_broker_desk_show()
+            self._open_broker_desk_show(entry="broker-list")
+            return
+        if self._stage == "ticker-desks":
+            if event.cursor_row < len(self._broker_rows):
+                self._broker_row_index = event.cursor_row
+                self._update_broker_focus()
+            self._open_broker_desk_show(entry="ticker-desks")
             return
         if self._stage not in {"accum", "preopen"}:
             return
@@ -552,7 +617,11 @@ class CockpitApp(App[None]):
         table = self.query_one("#board-table", DataTable)
         if not table.row_count:
             return
-        idx = self._broker_row_index if self._stage == "broker-list" else self._row_index
+        idx = (
+            self._broker_row_index
+            if self._stage in {"broker-list", "ticker-desks"}
+            else self._row_index
+        )
         table.move_cursor(row=idx, animate=False)
 
     def _update_broker_focus(self) -> None:
@@ -838,6 +907,19 @@ class CockpitApp(App[None]):
             if self._broker_rows:
                 table.move_cursor(row=self._broker_row_index, animate=False)
             return
+        if self._stage == "ticker-desks":
+            table.add_columns("Code", "Type", "Role", "Net", "Name")
+            for row in self._broker_rows:
+                table.add_row(
+                    str(getattr(row, "code", "?")),
+                    str(getattr(row, "type_label", "—")),
+                    str(getattr(row, "role", "—")),
+                    str(getattr(row, "day_net", "—")),
+                    str(getattr(row, "name", "—")),
+                )
+            if self._broker_rows:
+                table.move_cursor(row=self._broker_row_index, animate=False)
+            return
         is_preopen = self._stage == "preopen" or self._board_kind == "preopen"
         if is_preopen:
             table.add_columns("Tkr", "IEP", "Δ%", "IEV", "NCP", "ΔIEV", "Grd", "Risk")
@@ -966,7 +1048,12 @@ class CockpitApp(App[None]):
         self._status_note = "inspect"
         self._refresh_chrome()
 
-    def _open_view_ticker_dashboard(self, *, from_desk: bool = False) -> None:
+    def _open_view_ticker_dashboard(
+        self,
+        *,
+        from_desk: bool = False,
+        preserve_return: bool = False,
+    ) -> None:
         """Ctrl+P View ticker: CLI-equivalent cache dashboard (GetTickerDashboard)."""
         if self._focus_ticker in {"—", ""}:
             self.notify("Nothing to view — focus a ticker first", timeout=1.5)
@@ -977,7 +1064,8 @@ class CockpitApp(App[None]):
             # Keep desk code; do not rewrite board return via remember.
         else:
             self._view_from_desk = False
-            self._remember_return_stage()
+            if not preserve_return:
+                self._remember_return_stage()
             self._broker_page = None
         self._stage = "loading"
         self._board_title = f"View · ticker show · {ticker}"
@@ -994,12 +1082,53 @@ class CockpitApp(App[None]):
             self._broker_list_return = self._board_kind  # type: ignore[assignment]
         else:
             self._broker_list_return = "shell"
+        self._ticker_desks_stock = None
+        self._desk_entry = None
         self._stage = "loading"
         self._board_title = "View · broker list"
         self._meta = "CLI parity · saham view broker list"
         self._status_note = "view broker"
         self._refresh_chrome()
         self._execute_broker_list()
+
+    def _open_ticker_desks(self, stock: str) -> None:
+        """From view ticker: stock → top desks (CLI view ticker top-brokers)."""
+        stock = str(stock or "").upper()
+        if not stock or stock == "—":
+            self.notify("No ticker focused", timeout=1.5)
+            return
+        self._ticker_desks_stock = stock
+        self._view_from_desk = False
+        self._broker_desk_code = None
+        self._broker_page = None
+        self._desk_entry = None
+        self._stage = "loading"
+        self._board_title = f"View · ticker desks · {stock}"
+        self._meta = "CLI parity · saham view ticker top-brokers"
+        self._status_note = "view ticker desks"
+        self._refresh_chrome()
+        self._execute_ticker_desks(stock)
+
+    def _restore_ticker_desks_table(self) -> None:
+        """Return from desk show to the stock→desks table without re-fetch."""
+        stock = self._ticker_desks_stock or "—"
+        self._broker_page = None
+        self._broker_desk_code = None
+        self._view_from_desk = False
+        self._desk_entry = "ticker-desks"
+        self._stage = "ticker-desks"
+        self._plan_running = False
+        self._board_title = f"View · ticker desks · {stock}"
+        n = len(self._broker_rows)
+        self._meta = f"{n} desks · {stock} · Enter home · esc view ticker"
+        self._status_note = "view ticker desks"
+        if self._broker_rows and 0 <= self._broker_row_index < len(self._broker_rows):
+            self._focus_ticker = str(
+                getattr(self._broker_rows[self._broker_row_index], "code", "—")
+            )
+        self._render_board_table()
+        self._refresh_chrome()
+        self.query_one("#board-table", DataTable).focus()
 
     @work(thread=True, exclusive=True, group="detail")
     def _execute_broker_list(self) -> None:
@@ -1012,6 +1141,17 @@ class CockpitApp(App[None]):
         except Exception as exc:
             dispatch_if_active(self, self._on_board_error, f"view broker list: {exc}")
 
+    @work(thread=True, exclusive=True, group="detail")
+    def _execute_ticker_desks(self, stock: str) -> None:
+        try:
+            if self._ticker_desks_loader is not None:
+                payload = self._ticker_desks_loader(stock)
+            else:
+                payload = None
+            dispatch_if_active(self, self._on_ticker_desks_ready, stock, payload)
+        except Exception as exc:
+            dispatch_if_active(self, self._on_board_error, f"view ticker desks: {exc}")
+
     def _on_broker_list_ready(self, rows: Any) -> None:
         self._broker_rows = list(rows or [])
         self._broker_row_index = 0
@@ -1019,6 +1159,7 @@ class CockpitApp(App[None]):
         self._broker_desk_code = None
         self._broker_jump_ticker = None
         self._view_from_desk = False
+        self._desk_entry = "broker-list"
         if not self._broker_rows:
             self._stage = "empty"
             self._board_title = "View · broker list"
@@ -1031,8 +1172,7 @@ class CockpitApp(App[None]):
         self._board_title = "View · broker list"
         with_data = sum(1 for r in self._broker_rows if getattr(r, "has_data", True))
         self._meta = (
-            f"{len(self._broker_rows)} desks · {with_data} with flow · "
-            "Enter home · sorted |Net5|"
+            f"{len(self._broker_rows)} desks · {with_data} with flow · Enter home · sorted |Net5|"
         )
         self._status_note = "view broker list"
         self._render_board_table()
@@ -1040,7 +1180,49 @@ class CockpitApp(App[None]):
         self.query_one("#board-table", DataTable).focus()
         self.notify(f"View broker · {len(self._broker_rows)} desks", timeout=2.0)
 
-    def _open_broker_desk_show(self, code: str | None = None) -> None:
+    def _on_ticker_desks_ready(self, stock: str, payload: Any) -> None:
+        if self._ticker_desks_stock != stock:
+            return  # stale worker
+        rows = list(getattr(payload, "rows", ()) or ()) if payload is not None else []
+        as_of = getattr(payload, "as_of", None) if payload is not None else None
+        note = getattr(payload, "note", None) if payload is not None else None
+        self._broker_rows = rows
+        self._broker_row_index = 0
+        self._broker_page = None
+        self._broker_desk_code = None
+        self._broker_jump_ticker = None
+        self._view_from_desk = False
+        self._desk_entry = "ticker-desks"
+        self._stage = "ticker-desks"
+        self._board_title = f"View · ticker desks · {stock}"
+        as_of_s = str(as_of) if as_of else "—"
+        note_s = str(note) if note else "top buyers/sellers"
+        if not self._broker_rows:
+            self._meta = f"as of {as_of_s} · {note_s} · 0 desks"
+            self._status_note = "view ticker desks"
+            self._focus_ticker = stock
+            self._render_board_table()
+            self._refresh_chrome()
+            self.query_one("#board-table", DataTable).focus()
+            self.notify(f"Ticker desks · {stock} · empty", timeout=2.0)
+            return
+        self._focus_ticker = str(getattr(self._broker_rows[0], "code", "—"))
+        self._meta = f"as of {as_of_s} · {len(self._broker_rows)} desks · {note_s} · Enter home"
+        self._status_note = "view ticker desks"
+        self._render_board_table()
+        self._refresh_chrome()
+        self.query_one("#board-table", DataTable).focus()
+        self.notify(
+            f"Ticker desks · {stock} · {len(self._broker_rows)} · {note_s}",
+            timeout=2.0,
+        )
+
+    def _open_broker_desk_show(
+        self,
+        code: str | None = None,
+        *,
+        entry: str | None = None,
+    ) -> None:
         if code is None:
             if not self._broker_rows:
                 self.notify("No desk focused", timeout=1.5)
@@ -1050,13 +1232,23 @@ class CockpitApp(App[None]):
         code = str(code or "").upper()
         if not code:
             return
+        if entry is not None:
+            self._desk_entry = entry
+        elif self._stage == "ticker-desks":
+            self._desk_entry = "ticker-desks"
+        elif self._stage == "broker-list":
+            self._desk_entry = "broker-list"
+        # else keep existing _desk_entry (deep → show trail)
         self._broker_desk_code = code
         self._broker_page = "show"
         self._view_from_desk = False
-        self._detail_return_stage = "broker-list"
+        if self._desk_entry == "broker-list":
+            self._detail_return_stage = "broker-list"
+        # ticker-desks entry keeps board return in _detail_return_stage for later
+        esc_hint = "esc desks" if self._desk_entry == "ticker-desks" else "esc list"
         self._stage = "loading"
         self._board_title = f"View · broker show · {code}"
-        self._meta = "desk home · t/f/h deep · v stock · esc list"
+        self._meta = f"desk home · t/f/h deep · v stock · {esc_hint}"
         self._status_note = "view broker show"
         self._refresh_chrome()
         self._execute_broker_show(code)
@@ -1100,11 +1292,12 @@ class CockpitApp(App[None]):
                     f"[bold]{code}[/]\n\n"
                     "[dim]no broker_daily_flow for this desk · fetch broker data[/]"
                 )
+            esc_line = "  esc desks" if self._desk_entry == "ticker-desks" else "  esc list"
             actions = (
                 "\n\n[#9b8fb8]Actions (TUI)[/]\n"
                 "  t top-stocks · f flow · h history\n"
                 "  v view ticker (top buy stock)\n"
-                "  esc list\n"
+                f"{esc_line}\n"
             )
             header = (
                 f"[bold #e8e8e8]View · broker show · {code}[/]\n"
@@ -1218,15 +1411,21 @@ class CockpitApp(App[None]):
             )
 
     def _on_view_ticker_ready(self, ticker: str, text: str) -> None:
+        actions = "\n\n[#9b8fb8]Actions (TUI)[/]\n  b top desks for this stock\n" + (
+            "  esc → desk home\n" if self._view_from_desk else "  esc back\n"
+        )
+        if "Actions (TUI)" not in text:
+            text = text + actions
         self._detail_text = text
         self._stage = "detail"
         self._board_title = f"View · ticker show · {ticker}"
         if self._view_from_desk:
-            self._meta = "from desk · esc → desk home · cache-only"
+            self._meta = "from desk · b desks · esc → desk home · cache-only"
             self._broker_page = None  # not a desk page; trail via _view_from_desk
         else:
-            self._meta = "CLI parity · cache-only · esc back"
+            self._meta = "CLI parity · b top desks · cache-only · esc back"
         self._status_note = "view ticker"
+        self._focus_ticker = ticker
         self._refresh_chrome()
 
     @staticmethod
