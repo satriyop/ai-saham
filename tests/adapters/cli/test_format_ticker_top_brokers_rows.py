@@ -6,7 +6,7 @@ from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
 
-from src.adapters.cli.view_ticker_top_brokers_display import (
+from src.adapters.shared.view_ticker_top_brokers_rows import (
     format_netx_display,
     format_ticker_top_brokers_rows,
 )

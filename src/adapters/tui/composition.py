@@ -225,7 +225,9 @@ class _ViewTickerDashboardLoader:
 
     def __call__(self, ticker: str) -> str:
         with self._lock:
-            from src.adapters.cli.view_ticker_display import format_ticker_dashboard_text
+            from src.adapters.shared.view_ticker_dashboard_text import (
+                format_ticker_dashboard_text,
+            )
             from src.application.dto.ticker_dashboard import GetTickerDashboardRequest
             from src.infrastructure.composition.view_ticker_deps import build_view_ticker_deps
 
@@ -255,7 +257,7 @@ class _TickerTopBrokersLoader:
         with self._lock:
             from types import SimpleNamespace
 
-            from src.adapters.cli.view_ticker_top_brokers_display import (
+            from src.adapters.shared.view_ticker_top_brokers_rows import (
                 PARTIAL_NETX_LEGEND,
                 format_ticker_top_brokers_rows,
             )
@@ -370,7 +372,7 @@ class _BrokerListLoader:
             from decimal import Decimal
             from types import SimpleNamespace
 
-            from src.adapters.cli.view_broker_desk_display import format_value
+            from src.adapters.shared.view_number_format import format_value
             from src.application.services.broker_desk_from_daily_flow import (
                 classify_desk_type,
                 desk_session_pulse,
@@ -483,7 +485,7 @@ class _BrokerShowLoader:
         with self._lock:
             from types import SimpleNamespace
 
-            from src.adapters.cli.view_broker_desk_display import format_desk_show_text
+            from src.adapters.shared.view_broker_desk_text import format_desk_show_text
             from src.application.use_case.view_broker_desk_show_use_case import (
                 ViewBrokerDeskShowRequest,
                 ViewBrokerDeskShowUseCase,
@@ -508,7 +510,7 @@ class _BrokerShowLoader:
                 jump = str(result.top_sell_stocks[0].ticker).upper()
             body = format_desk_show_text(result)
             # Multi-session pulse (same pure helper as list Net5 / streak)
-            from src.adapters.cli.view_broker_desk_display import format_value
+            from src.adapters.shared.view_number_format import format_value
             from src.application.services.broker_desk_from_daily_flow import (
                 desk_session_pulse,
             )
@@ -548,7 +550,7 @@ class _BrokerDeepLoader:
 
     def __call__(self, code: str) -> str:
         with self._lock:
-            from src.adapters.cli.view_broker_desk_display import (
+            from src.adapters.shared.view_broker_desk_text import (
                 format_desk_flow_text,
                 format_desk_history_text,
                 format_desk_top_stocks_text,

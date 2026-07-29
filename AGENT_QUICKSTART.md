@@ -48,6 +48,12 @@ Read this before every task. This is the mandatory entry point for agents. The l
 
 ## Multi-surface parity (CLI / TUI)
 
+**Inventory (anti-drift):** dual-surface jobs are listed in
+`src/adapters/shared/multi_surface_inventory.py` (shared application path +
+intentional deltas). Tests under `tests/adapters/shared/test_multi_surface_inventory.py`
+fail if a required job is missing or unmarked. Prefer extending that inventory
+when adding a second surface for an existing CLI job.
+
 When the same product job is exposed on more than one adapter (e.g. `screen accum`
 and `saham tui` accum board):
 
@@ -80,7 +86,10 @@ and `saham tui` accum board):
   list → Enter desk home → `t`/`f`/`h` deep-dives → optional `v` stock jump;
   not board inspect and not plan.
 - **Intentional deltas must be explicit** (e.g. TUI pre-open = IEV snapshot only;
-  TUI plan = thin local confirm). Document in the change; do not silently diverge.
+  TUI plan = thin local confirm). Document in the inventory; do not silently diverge.
+- **Browse formatters (ADR-045):** pure multi-surface format helpers live under
+  `src/adapters/shared/view_*` (not CLI-only `view_*_display`). TUI must not
+  import `src.adapters.cli.view_*_display` for dual-surface jobs.
 - **Verification:** when changing request defaults or board columns, run/extend
   parity tests under `tests/adapters/composition/` and
   `tests/adapters/shared/test_screen_accum_board_fields.py`. When changing Why /

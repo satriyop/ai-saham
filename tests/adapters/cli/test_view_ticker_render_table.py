@@ -2,7 +2,9 @@
 
 from datetime import date
 
-from src.adapters.cli.view_ticker_display import _render_ticker_dashboard_table
+from src.adapters.shared.view_ticker_dashboard_text import (
+    render_ticker_dashboard_table as _render_ticker_dashboard_table,
+)
 from src.application.dto.ticker_dashboard import TickerDashboard
 from src.application.services.ticker_dashboard_layout import panel_keys_for_mode
 from src.application.services.ticker_dashboard_status import CacheStatus, FreshnessItem
