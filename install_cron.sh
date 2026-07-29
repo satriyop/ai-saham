@@ -66,7 +66,7 @@ read -r -d '' SAHAM_CRON << ENTRIES || true
 # Accumulation learning corpus (X then y; labels fail closed if horizon incomplete)
 # ADR-056: one session observation / ticker; labels accum_3d + accum_10d (primary) + accum_20d
 15 19 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham research accum capture --universe lq45 --session \$(date +\%Y-\%m-\%d) --format json' >> $LOG_DIR/accumulation-capture-lq45.log 2>&1
-45 19 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; /bin/bash $PROJECT_DIR/scripts/cron_accum_labels.sh' >> $LOG_DIR/accumulation-labels.log 2>&1
+45 19 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham research accum labels --all-label-contracts --format json' >> $LOG_DIR/accumulation-labels.log 2>&1
 # --- saham-cron-end ---
 ENTRIES
 

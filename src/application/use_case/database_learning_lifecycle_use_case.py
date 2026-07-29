@@ -97,6 +97,13 @@ _HORIZON_DAYS = {
 # Primary path grade for ACCUMULATION_DISCOVERY (ADR-056).
 ACCUM_PRIMARY_LABEL_CONTRACT = LearningContractId.ACCUM_10D_LABEL
 
+# All accum path label contracts (for CLI --all-label-contracts / cron).
+ACCUM_PATH_LABEL_CONTRACTS: tuple[LearningContractId, ...] = (
+    LearningContractId.ACCUM_3D_LABEL,
+    LearningContractId.ACCUM_10D_LABEL,
+    LearningContractId.ACCUM_20D_LABEL,
+)
+
 
 def _observation_ticker(observation: LearningObservation) -> str:
     ticker = observation.decision_payload.get("ticker")

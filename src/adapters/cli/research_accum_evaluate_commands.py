@@ -19,6 +19,8 @@ from src.adapters.cli.research_learning_helpers import (
     status_cohort,
 )
 from src.application.use_case.database_learning_lifecycle_use_case import (
+    ACCUM_PATH_LABEL_CONTRACTS,
+    ACCUM_PRIMARY_LABEL_CONTRACT,
     GenerateAccumulationPricePathLabelsUseCase,
     GenerateLearningLabelsRequest,
 )
@@ -36,16 +38,44 @@ from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarket
 def accumulation_labels(
     compatibility_id: Annotated[Optional[str], typer.Option("--compatibility-id")] = None,
     label_contract: Annotated[
-        str,
+        Optional[str],
         typer.Option(
             "--label-contract",
-            help="price_path.accum_3d.v1, accum_10d.v1 (primary), or accum_20d.v1",
+            help=(
+                "Single contract: price_path.accum_3d.v1, accum_10d.v1 (primary), "
+                "or accum_20d.v1. Default accum_10d when --all-label-contracts is off."
+            ),
         ),
-    ] = LearningContractId.ACCUM_10D_LABEL.value,
+    ] = None,
+    all_label_contracts: Annotated[
+        bool,
+        typer.Option(
+            "--all-label-contracts",
+            help=(
+                "Run all accum path label contracts (accum_3d, accum_10d, accum_20d). "
+                "Incompatible with an explicit --label-contract."
+            ),
+        ),
+    ] = False,
     db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
     fmt: Annotated[str, typer.Option("--format")] = "table",
 ) -> None:
     """Generate immutable price-path labels from accumulation observations."""
+
+    if all_label_contracts and label_contract is not None:
+        raise typer.BadParameter("use either --all-label-contracts or --label-contract, not both")
+    if all_label_contracts:
+        contracts: tuple[LearningContractId, ...] = ACCUM_PATH_LABEL_CONTRACTS
+    else:
+        raw = label_contract or ACCUM_PRIMARY_LABEL_CONTRACT.value
+        try:
+            contracts = (LearningContractId(raw),)
+        except ValueError as exc:
+            raise typer.BadParameter("unsupported label contract") from exc
+        if contracts[0] not in ACCUM_PATH_LABEL_CONTRACTS:
+            raise typer.BadParameter(
+                "accum labels only accept " + ", ".join(c.value for c in ACCUM_PATH_LABEL_CONTRACTS)
+            )
 
     resolved, repo = repository(db_path)
     cohort = resolve_compatibility_id(
@@ -53,37 +83,51 @@ def accumulation_labels(
         AssessmentPurpose.ACCUMULATION_DISCOVERY,
         compatibility_id,
     )
-    try:
-        contract = LearningContractId(label_contract)
-    except ValueError as exc:
-        raise typer.BadParameter("unsupported label contract") from exc
-    result = GenerateAccumulationPricePathLabelsUseCase(
+    use_case = GenerateAccumulationPricePathLabelsUseCase(
         observations=repo,
         labels=repo,
         market_data=SQLiteMarketRepository(resolved),
         corporate_actions=SQLiteCorporateActionCalendarRepository(resolved),
-    ).execute(
-        GenerateLearningLabelsRequest(
-            purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
-            compatibility_id=cohort,
-            label_contract=contract,
-            labeled_at=datetime.now(IDX_TIMEZONE),
+    )
+    labeled_at = datetime.now(IDX_TIMEZONE)
+    results = []
+    for contract in contracts:
+        result = use_case.execute(
+            GenerateLearningLabelsRequest(
+                purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+                compatibility_id=cohort,
+                label_contract=contract,
+                labeled_at=labeled_at,
+            )
         )
-    )
-    echo(
-        {
+        results.append(
+            {
+                "contract_id": contract.value,
+                "observation_count": result.observation_count,
+                "inserted_count": result.inserted_count,
+                "idempotent_count": result.idempotent_count,
+                "unavailable_count": result.unavailable_count,
+                "skipped_count": result.skipped_count,
+                "label_ids": [label.label_id for label in result.labels],
+            }
+        )
+
+    if len(results) == 1:
+        payload = {
             "artifact_type": "learning_label_generation",
-            "contract_id": contract.value,
             "compatibility_id": cohort,
-            "observation_count": result.observation_count,
-            "inserted_count": result.inserted_count,
-            "idempotent_count": result.idempotent_count,
-            "unavailable_count": result.unavailable_count,
-            "skipped_count": result.skipped_count,
-            "label_ids": [label.label_id for label in result.labels],
-        },
-        fmt,
-    )
+            **results[0],
+        }
+    else:
+        payload = {
+            "artifact_type": "learning_label_generation_batch",
+            "compatibility_id": cohort,
+            "contracts": [r["contract_id"] for r in results],
+            "results": results,
+            "inserted_count": sum(r["inserted_count"] for r in results),
+            "skipped_count": sum(r["skipped_count"] for r in results),
+        }
+    echo(payload, fmt)
 
 
 def accumulation_evaluate(
