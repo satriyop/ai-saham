@@ -82,6 +82,7 @@ def pre_open_labels(
         "inserted_count": result.inserted_count,
         "idempotent_count": result.idempotent_count,
         "unavailable_count": result.unavailable_count,
+        "skipped_count": result.skipped_count,
         "label_ids": [label.label_id for label in result.labels],
     }
     if fmt == "json":
@@ -90,5 +91,5 @@ def pre_open_labels(
     typer.echo(
         "open_30m labels: source=database_tracks  "
         f"n={result.observation_count}  labeled={result.inserted_count}  "
-        f"unavailable={result.unavailable_count}"
+        f"unavailable={result.unavailable_count}  skipped={result.skipped_count}"
     )

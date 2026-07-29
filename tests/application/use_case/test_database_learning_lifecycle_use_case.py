@@ -161,6 +161,130 @@ def test_evaluation_fails_closed_for_missing_labels(tmp_path) -> None:
         )
 
 
+def test_pre_open_labels_skip_missing_tracks_then_insert_when_ready(tmp_path) -> None:
+    """no_track_prices is provisional — do not lock UNAVAILABLE forever."""
+    repository = SQLiteLearningArtifactRepository(tmp_path / "data.db")
+    observation = _observation(day=27)
+    repository.add_observation(observation)
+
+    first = GeneratePreOpenOutcomeLabelsUseCase(
+        observations=repository,
+        tracks=repository,
+        labels=repository,
+    ).execute(
+        GenerateLearningLabelsRequest(
+            purpose=AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION,
+            compatibility_id="compat-1",
+            label_contract=LearningContractId.PRE_OPEN_LABEL,
+            labeled_at=NOW,
+        )
+    )
+    assert first.skipped_count == 1
+    assert first.inserted_count == 0
+    assert first.labels == ()
+    assert repository.list_labels([observation.observation_id]) == ()
+
+    repository.add_track_snapshot(
+        LearningTrackSnapshot.create(
+            observation_id=observation.observation_id,
+            sampled_at=observation.cutoff_at,
+            source="stockbit.opening_track",
+            snapshot_payload={"mid_price": 100.0},
+            captured_at=observation.cutoff_at,
+        )
+    )
+    repository.add_track_snapshot(
+        LearningTrackSnapshot.create(
+            observation_id=observation.observation_id,
+            sampled_at=observation.cutoff_at.replace(minute=30),
+            source="stockbit.opening_track",
+            snapshot_payload={"mid_price": 101.0},
+            captured_at=observation.cutoff_at.replace(minute=30),
+        )
+    )
+
+    later = GeneratePreOpenOutcomeLabelsUseCase(
+        observations=repository,
+        tracks=repository,
+        labels=repository,
+    ).execute(
+        GenerateLearningLabelsRequest(
+            purpose=AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION,
+            compatibility_id="compat-1",
+            label_contract=LearningContractId.PRE_OPEN_LABEL,
+            labeled_at=NOW + timedelta(hours=1),
+        )
+    )
+    assert later.inserted_count == 1
+    assert later.skipped_count == 0
+    assert later.labels[0].availability.value == "AVAILABLE"
+    assert later.labels[0].outcome in {"SUCCESS", "FAILURE", "NEUTRAL"}
+
+    # Re-run must not conflict on labeled_at; already labeled → skip.
+    rerun = GeneratePreOpenOutcomeLabelsUseCase(
+        observations=repository,
+        tracks=repository,
+        labels=repository,
+    ).execute(
+        GenerateLearningLabelsRequest(
+            purpose=AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION,
+            compatibility_id="compat-1",
+            label_contract=LearningContractId.PRE_OPEN_LABEL,
+            labeled_at=NOW + timedelta(hours=2),
+        )
+    )
+    assert rerun.inserted_count == 0
+    assert rerun.skipped_count == 1
+    assert len(repository.list_labels([observation.observation_id])) == 1
+
+
+def test_pre_open_labels_do_not_block_cohort_when_some_obs_untracked(
+    tmp_path,
+) -> None:
+    """Untracked obs are skipped; tracked peers still get AVAILABLE labels."""
+    repository = SQLiteLearningArtifactRepository(tmp_path / "data.db")
+    bare = _observation(day=26)
+    ready = _observation(day=27)
+    repository.add_observation(bare)
+    repository.add_observation(ready)
+    repository.add_track_snapshot(
+        LearningTrackSnapshot.create(
+            observation_id=ready.observation_id,
+            sampled_at=ready.cutoff_at,
+            source="stockbit.opening_track",
+            snapshot_payload={"opening_price": 200.0},
+            captured_at=ready.cutoff_at,
+        )
+    )
+    repository.add_track_snapshot(
+        LearningTrackSnapshot.create(
+            observation_id=ready.observation_id,
+            sampled_at=ready.cutoff_at.replace(minute=30),
+            source="stockbit.opening_track",
+            snapshot_payload={"mid_price": 201.0},
+            captured_at=ready.cutoff_at.replace(minute=30),
+        )
+    )
+
+    result = GeneratePreOpenOutcomeLabelsUseCase(
+        observations=repository,
+        tracks=repository,
+        labels=repository,
+    ).execute(
+        GenerateLearningLabelsRequest(
+            purpose=AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION,
+            compatibility_id="compat-1",
+            label_contract=LearningContractId.PRE_OPEN_LABEL,
+            labeled_at=NOW,
+        )
+    )
+    assert result.observation_count == 2
+    assert result.skipped_count == 1
+    assert result.inserted_count == 1
+    assert result.labels[0].observation_id == ready.observation_id
+    assert result.labels[0].availability.value == "AVAILABLE"
+
+
 def _accum_observation(
     *,
     current_price: object = "100",

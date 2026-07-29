@@ -102,6 +102,21 @@ def _observation_ticker(observation: LearningObservation) -> str:
     return ticker.strip().upper()
 
 
+def _observation_ids_with_contract(
+    labels: LearningOutcomeLabelRepository,
+    observation_ids: Sequence[str],
+    contract_id: LearningContractId,
+) -> set[str]:
+    """Return observation ids that already have a terminal label for contract_id."""
+    if not observation_ids:
+        return set()
+    return {
+        label.observation_id
+        for label in labels.list_labels(observation_ids)
+        if label.contract_id is contract_id
+    }
+
+
 def _entry_reference(payload: dict[str, Any] | Any) -> Decimal | None:
     """Signal-day entry for accumulation price-path labels.
 
@@ -168,12 +183,21 @@ class GenerateAccumulationPricePathLabelsUseCase:
                 compatibility_id=request.compatibility_id,
             )
         )
+        already_labeled = _observation_ids_with_contract(
+            self._labels,
+            [observation.observation_id for observation in observations],
+            request.label_contract,
+        )
         labels: list[LearningOutcomeLabel] = []
         inserted = 0
         unavailable = 0
         skipped = 0
         coverage_available = self._corporate_actions.has_any_sync_marker()
         for observation in observations:
+            if observation.observation_id in already_labeled:
+                # First write wins; re-runs must not conflict on labeled_at digest.
+                skipped += 1
+                continue
             label = self._label_one(
                 observation,
                 contract_id=request.label_contract,
@@ -320,7 +344,13 @@ class GenerateAccumulationPricePathLabelsUseCase:
 
 
 class GeneratePreOpenOutcomeLabelsUseCase:
-    """Generate open-30m labels once from persisted tracks and observations."""
+    """Generate open-30m labels once from persisted tracks and observations.
+
+    Terminal AVAILABLE outcomes are persisted only when track prices exist.
+    Missing tracks is provisional (skip, no row) so a later run can label after
+    track collection. Observations that already have a label for this contract
+    are skipped so daily cron re-runs do not conflict on labeled_at digests.
+    """
 
     def __init__(
         self,
@@ -344,11 +374,23 @@ class GeneratePreOpenOutcomeLabelsUseCase:
                 compatibility_id=request.compatibility_id,
             )
         )
+        already_labeled = _observation_ids_with_contract(
+            self._labels,
+            [observation.observation_id for observation in observations],
+            request.label_contract,
+        )
         output: list[LearningOutcomeLabel] = []
         inserted = 0
         unavailable = 0
+        skipped = 0
         for observation in observations:
+            if observation.observation_id in already_labeled:
+                skipped += 1
+                continue
             label = self._label_one(observation, request.labeled_at)
+            if label is None:
+                skipped += 1
+                continue
             output.append(label)
             if label.availability is LabelAvailability.UNAVAILABLE:
                 unavailable += 1
@@ -359,13 +401,13 @@ class GeneratePreOpenOutcomeLabelsUseCase:
             inserted_count=inserted,
             idempotent_count=len(output) - inserted,
             unavailable_count=unavailable,
-            skipped_count=0,
+            skipped_count=skipped,
             labels=tuple(output),
         )
 
     def _label_one(
         self, observation: LearningObservation, labeled_at: datetime
-    ) -> LearningOutcomeLabel:
+    ) -> LearningOutcomeLabel | None:
         tracks = tuple(self._tracks.list_track_snapshots(observation.observation_id))
         fingerprint = artifact_digest(
             {
@@ -377,16 +419,8 @@ class GeneratePreOpenOutcomeLabelsUseCase:
             price for track in tracks if (price := _track_price(track.snapshot_payload)) is not None
         ]
         if not prices:
-            return LearningOutcomeLabel.create(
-                contract_id=LearningContractId.PRE_OPEN_LABEL,
-                observation_id=observation.observation_id,
-                outcome_basis=OutcomeBasis.PRICE_PATH_ONLY,
-                availability=LabelAvailability.UNAVAILABLE,
-                outcome=None,
-                metrics={"unavailable_reason": "no_track_prices"},
-                fingerprint=fingerprint,
-                labeled_at=labeled_at,
-            )
+            # Provisional: tracks not collected yet — do not lock UNAVAILABLE.
+            return None
         opening = prices[0]
         close_proxy = prices[-1]
         close_return = round((close_proxy - opening) / opening * 100.0, 4)
