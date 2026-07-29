@@ -221,6 +221,21 @@ The live top-level groups are registered in `src/adapters/cli/main.py`:
 Run `saham GROUP --help` for the current subcommands. Do not maintain another
 exhaustive command tree here; live Typer help is the source of truth.
 
+## Sibling lab (`ml-saham`)
+
+Offline policy/factor **challenge** lives in a separate repo (`~/dev/ml-saham` by
+default). This repo owns production engines, ingest, and the **learning corpus**
+(`research accum` capture / labels / status). `ml-saham` is read-only on the
+SQLite DB and never auto-promotes config.
+
+| Job | Where |
+|-----|--------|
+| Observations + path labels (3d/10d/20d) | **this repo** — `saham research accum capture\|labels\|status` |
+| Accum scoring / policy tournament / factor KEEP·DEMOTE | **`ml-saham`** — `challenge run` / `challenge factor` |
+| Accum cohort evaluate (`research accum evaluate`) | **Dropped** — see [BOUNDARY.md](BOUNDARY.md) |
+
+Full ownership matrix and vocabulary: **[BOUNDARY.md](BOUNDARY.md)**.
+
 ## Architecture and boundaries
 
 The repository follows ports and adapters:
@@ -318,6 +333,7 @@ deterministic workflows must remain usable when AI or the network is absent.
 | Need | Document |
 |---|---|
 | Binding architecture decisions, amendments, and task routing | [ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md) |
+| Sibling boundary vs offline challenge lab (`ml-saham`) | [BOUNDARY.md](BOUNDARY.md) |
 | Agent constraints and task reading matrix | [AGENT_QUICKSTART.md](AGENT_QUICKSTART.md) |
 | CLI learning guide | [CLI_README.md](CLI_README.md) |
 | Signal engine model | [docs/signal_engine_design_overview.md](docs/signal_engine_design_overview.md) |

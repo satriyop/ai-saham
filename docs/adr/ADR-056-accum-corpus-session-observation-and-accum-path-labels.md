@@ -46,8 +46,8 @@ Forbidden for accum research defaults, cron, evaluate primary, and docs: `price_
 - Entry price: session close frozen as `shared.current_price` (same for all path horizons).
 - Provisional incomplete horizon: **skip** (no locked UNAVAILABLE).
 - Already labeled: **skip** (no `labeled_at` digest conflict on re-run).
-- Evaluate default / status headline: **`accum_10d`**.
 - Cron: capture once; labels for **3d, 10d, 20d** (independent runs or wrapper).
+- **Cohort evaluate (`research accum evaluate`): product-dropped** for accum — scoring authority is sibling **`ml-saham` challenge**. Primary path grade for corpus remains label contract **`accum_10d`**. See root [BOUNDARY.md](../../BOUNDARY.md).
 
 ### Pre-open
 

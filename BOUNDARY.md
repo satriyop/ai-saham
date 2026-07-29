@@ -1,0 +1,158 @@
+# Boundary — `ai-saham` ↔ `ml-saham`
+
+Sibling contract so the two repos do **not** re-own each other’s jobs.
+
+| Repo | Role |
+|------|------|
+| **`ai-saham` (this repo)** | Production engine + market ingest + **corpus authority** (observations + path labels) |
+| **`ml-saham`** | Offline **challenge lab** + curriculum — **owns accum scoring / policy evaluation** |
+
+Sibling path (maintainer default): `~/dev/ml-saham`  
+Full mirror of this contract: [`ml-saham/BOUNDARY.md`](../ml-saham/BOUNDARY.md) (if checked out next to this tree).
+
+---
+
+## One-liners
+
+| Ask | Answer in |
+|-----|-----------|
+| Capture decisions + path labels (3d/10d/20d)? | **`ai-saham`** — `research accum capture|backfill|labels|status` |
+| Score the accum book / stress policies / factors? | **`ml-saham`** — `challenge run` / `challenge factor` / engine |
+| Fetch / screen / plan / apply YAML | **`ai-saham` only** |
+
+---
+
+## Decision: drop accum cohort evaluate (ai-saham)
+
+**Status:** Accepted (product) — 2026-07-29  
+**Scope:** Accumulation discovery corpus only. **Not** pre-open evaluate; **not** swing/policy evaluation tables used by `policy accum`.
+
+### Why
+
+| Fact | Implication |
+|------|-------------|
+| ml-saham builds panels + metrics from `learning_observations` + `candles` | Does **not** need `research accum evaluate` or `learning_evaluations` for ACCUM |
+| Labels already freeze path outcomes per signal date | Real y for the corpus is **`learning_outcome_labels`**, not a rollup row |
+| Current `research accum evaluate` is one global pile of all AVAILABLE primary labels | Not time-bounded; weak research value; duplicates ml-saham’s job poorly |
+
+### What is dropped / not product for accum
+
+| Item | Decision |
+|------|----------|
+| **`saham research accum evaluate`** | **Dropped as product.** Do not require it in cron, runbooks, or agent checklists. CLI may still exist until removed; treat as **legacy / do not use**. |
+| **`saham research accum replay`** (evaluation catalog) | Same — legacy if present; not part of the accum pipeline. |
+| **Writing new ACCUM rows to `learning_evaluations`** | **Not required.** Existing rows are inert history; purge optional. |
+| **Automating multi-horizon evaluate (3/10/20)** | **No.** Not building time-bounded evaluate in ai-saham for accum. |
+
+### What stays required (accum)
+
+| Item | Owner |
+|------|--------|
+| Capture / backfill observations | ai-saham |
+| Labels `accum_3d` / `accum_10d` / `accum_20d` (cron OK) | ai-saham |
+| `status` (counts) | ai-saham |
+| Policy / factor evaluation (IC, folds, WIN·LOSE) | **ml-saham only** |
+
+### Pre-open (unchanged by this decision)
+
+`saham research pre-open evaluate` remains a separate short-horizon lifecycle (cron may keep it). Do not conflate with accum.
+
+---
+
+## Ownership matrix
+
+| Concern | ai-saham | ml-saham |
+|---------|:--------:|:--------:|
+| Market / broker / IEV fetch & cache | **write** | read |
+| Live screen / signal / risk / plan / TUI | **owns** | — |
+| `learning_observations` capture / backfill | **write** | **read** (features) |
+| `learning_outcome_labels` (`price_path.accum_*`, …) | **SSOT write** | optional join only; not default challenge y |
+| Accum **cohort evaluate** / ACCUM `learning_evaluations` | **dropped (legacy)** | **do not depend on** |
+| Policy tournament WIN / LOSE / rank IC / folds | — | **owns** |
+| Factor KEEP / DEMOTE / DROP_CANDIDATE | — | **owns** |
+| Curriculum explore / demo | light / optional | **primary onboarding** |
+| Decision memos for tuning | may link | **`docs/decisions/`** |
+| Auto-promote config into production | **never from ML; human `--yes` policy path only** | **never** |
+| Import the other repo’s Python packages | **no** | **no** |
+| Scrapers / Stockbit auth | **owns** | **forbidden** |
+
+---
+
+## Shared SQLite
+
+- Default DB: `data/db/data.db` (this repo).
+- `ml-saham` opens it **read-only** (`ML_SAHAM_DB` / `--db`).
+- **Only `ai-saham` migrates and writes** `learning_*` and market tables.
+- `ml-saham` may write **its own** artifacts under `ml-saham/artifacts/` (or optional learning store) — never into this DB’s learning tables.
+
+### ADR-056 corpus (accum)
+
+| Artifact | Owner | Notes |
+|----------|--------|--------|
+| 1 obs / ticker-session, features 7/30/90 | ai-saham write | `learning_observation.accumulation_discovery.v2` |
+| Labels 3d / **10d primary** / 20d | ai-saham write | SUCCESS / FAILURE / NEUTRAL; entry = `shared.current_price`; 10d = next 10 sessions **per signal date** |
+| Cohort evaluate | **dropped** | Scoring → ml-saham challenge |
+| Challenge panel | ml-saham | Features from observations; protocol y from candles (excess vs IHSG) by default |
+
+Horizons **3 / 10 / 20** (primary **10**) align by number.  
+**Label math is not the same product** as challenge excess (see vocabulary).
+
+---
+
+## Vocabulary (do not conflate)
+
+| Term | Means in **ai-saham** | Means in **ml-saham** |
+|------|----------------------|----------------------|
+| **label** | Row in `learning_outcome_labels` | Protocol panel target (often continuous excess) |
+| **evaluate (accum)** | **Dropped** — do not use as book authority | Prefer **`challenge run`** |
+| **evaluate (pre-open)** | Still valid short-horizon cohort tool | N/A unless a pre-open challenge protocol |
+| **WIN / LOSE** | N/A for research accum | Challenge verdict only |
+| **primary 10d** | `price_path.accum_10d.v1` path label contract | Protocol primary H=10 for IC |
+
+---
+
+## What this repo must **not** grow into
+
+- No production-vs-challenger **policy tournament** on research CLI  
+- No rank-IC fold engine as default research authority  
+- No factor KEEP/DEMOTE product surface  
+- No **revival** of accum cohort evaluate “to feed ml-saham” (ml-saham does not consume it)  
+- No silent rewrite of corpus labels from challenge artifacts  
+
+**Policy stress tests and promotion decision support** live in `ml-saham`.
+
+---
+
+## Operator flows
+
+```text
+# Corpus (this repo) — required
+saham research accum backfill|capture
+saham research accum labels --all-label-contracts
+saham research accum status
+
+# Do NOT rely on:
+# saham research accum evaluate
+# saham research accum replay
+
+# Policy / book scoring (sibling)
+cd ~/dev/ml-saham
+export ML_SAHAM_DB=~/dev/ai-saham/data/db/data.db
+ml-saham doctor --deep
+ml-saham challenge run screener.accum.score_weights --against equal_sleeves
+# Human may later change ai-saham config — never auto
+```
+
+---
+
+## Doc pointers
+
+| Need | Where |
+|------|--------|
+| This boundary (ai-saham) | [BOUNDARY.md](./BOUNDARY.md) |
+| Sibling boundary | `ml-saham/BOUNDARY.md` |
+| Accum observation/label contracts | [docs/adr/ADR-056-…](./docs/adr/ADR-056-accum-corpus-session-observation-and-accum-path-labels.md) |
+| Learning pipeline (historical evaluate language) | [docs/adr/ADR-049-…](./docs/adr/ADR-049-database-owned-learning-pipeline-clean-break.md) — **accum evaluate product superseded by this BOUNDARY** |
+| Challenge product (sibling) | `ml-saham/docs/challenge_product.md`, ADR-001/002 there |
+
+When this file and informal chat disagree, **this file + ADRs win** (this BOUNDARY wins over older “must evaluate cohort” copy for **accum**).

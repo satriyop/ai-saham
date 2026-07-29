@@ -448,6 +448,13 @@ For task scoping, ambiguous requirements, or handoff tasks, also read:
 
 - `TASK_TEMPLATE.md`
 
+For learning corpus vs offline policy challenge, or any work that might
+duplicate `ml-saham` (tournaments, rank IC, factor KEEP/DEMOTE):
+
+- `BOUNDARY.md` (sibling contract with `~/dev/ml-saham`)
+- **Accum:** do **not** require or extend `research accum evaluate` — scoring
+  authority is ml-saham challenge; ai-saham owns capture + path labels only
+
 For documentation-only edits:
 
 - Read the docs being edited.
