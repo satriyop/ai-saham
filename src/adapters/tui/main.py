@@ -215,7 +215,10 @@ class CockpitApp(App[None]):
         if self._stage == "broker-list":
             return "↑↓ move · Enter desk home · esc back · Ctrl+P · view broker list"
         if self._stage == "ticker-desks":
-            return "↑↓ move · Enter desk home · esc → view ticker · Ctrl+P · stock top desks"
+            return (
+                "↑↓ move · Enter desk home · esc → view ticker · Ctrl+P · "
+                "tops day · Net5 stock sessions"
+            )
         if self._stage == "detail" and self._broker_page in {
             "show",
             "top",
@@ -908,14 +911,19 @@ class CockpitApp(App[None]):
                 table.move_cursor(row=self._broker_row_index, animate=False)
             return
         if self._stage == "ticker-desks":
-            table.add_columns("Code", "Type", "Role", "Net", "Name")
+            # Ranked by latest tops; Net5/Stk/Δ1 = stock×desk multi-session pulse
+            table.add_columns("Code", "Type", "Role", "AsOf", "DayNet", "Net5", "Stk", "Δ1", "Name")
             for row in self._broker_rows:
                 table.add_row(
                     str(getattr(row, "code", "?")),
                     str(getattr(row, "type_label", "—")),
                     str(getattr(row, "role", "—")),
-                    str(getattr(row, "day_net", "—")),
-                    str(getattr(row, "name", "—")),
+                    str(getattr(row, "as_of", "—") or "—"),
+                    str(getattr(row, "day_net", "—") or "—"),
+                    str(getattr(row, "net5", "—") or "—"),
+                    str(getattr(row, "streak", "—") or "—"),
+                    str(getattr(row, "delta1", "—") or "—"),
+                    str(getattr(row, "name", "—") or "—"),
                 )
             if self._broker_rows:
                 table.move_cursor(row=self._broker_row_index, animate=False)

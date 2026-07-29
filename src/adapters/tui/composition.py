@@ -240,7 +240,12 @@ class _ViewTickerDashboardLoader:
 
 
 class _TickerTopBrokersLoader:
-    """Stock → desks: same use case as ``saham view ticker top-brokers``."""
+    """Stock → desks: top-brokers ranking + stock-scoped multi-session pulse.
+
+    Ranking: same use case as ``saham view ticker top-brokers`` (latest session).
+    Net5 / Stk / Δ1: ``desk_session_pulse`` on broker_daily_flow for that stock
+    only (not desk-wide across all tickers).
+    """
 
     def __init__(self, db_path: Path) -> None:
         self._db_path = db_path
@@ -253,26 +258,56 @@ class _TickerTopBrokersLoader:
             from src.adapters.cli.view_ticker_top_brokers_display import (
                 format_ticker_top_brokers_rows,
             )
+            from src.application.services.broker_desk_from_daily_flow import (
+                desk_session_pulse,
+            )
             from src.application.use_case.view_ticker_top_brokers_use_case import (
                 ViewTickerTopBrokersRequest,
             )
             from src.infrastructure.composition.view_ticker_deps import build_view_ticker_deps
 
+            ticker_u = str(ticker).upper()
             deps = build_view_ticker_deps(self._db_path)
             result = deps.top_brokers.execute(
-                ViewTickerTopBrokersRequest(ticker=str(ticker).upper(), limit=10)
+                ViewTickerTopBrokersRequest(ticker=ticker_u, limit=10)
             )
             if result is None:
                 return SimpleNamespace(
-                    ticker=str(ticker).upper(),
+                    ticker=ticker_u,
                     as_of=None,
                     note="no broker summary · fetch market/broker first",
                     rows=(),
                 )
-            rows = format_ticker_top_brokers_rows(result, limit=10)
-            note = result.tops_scope_note or (
+
+            # Stock-scoped sessions per desk code (one repo read for the ticker).
+            codes = {
+                str(b.broker_code).upper()
+                for b in list(result.top_buyers or ()) + list(result.top_sellers or ())
+            }
+            pulses: dict[str, Any] = {}
+            if codes:
+                repo, _foreign = _broker_repo_and_foreign(self._db_path)
+                flows = repo.get_broker_daily_flows(
+                    ticker_u,
+                    broker_codes=sorted(codes),
+                )
+                by_code: dict[str, list] = {}
+                for flow in flows:
+                    by_code.setdefault(str(flow.broker_code).upper(), []).append(flow)
+                for code in codes:
+                    pulse = desk_session_pulse(by_code.get(code, []))
+                    if pulse is not None:
+                        pulses[code] = pulse
+
+            rows = format_ticker_top_brokers_rows(result, limit=10, pulses=pulses)
+            base_note = result.tops_scope_note or (
                 "summary tops" if result.tops_source == "summary" else "tracked flow fallback"
             )
+            pulsed = sum(1 for r in rows if getattr(r, "has_pulse", False))
+            if pulsed:
+                note = f"{base_note} · Net5 on stock sessions ({pulsed}/{len(rows)} desks)"
+            else:
+                note = f"{base_note} · no multi-session flow for desks"
             return SimpleNamespace(
                 ticker=result.ticker,
                 as_of=result.date.isoformat(),

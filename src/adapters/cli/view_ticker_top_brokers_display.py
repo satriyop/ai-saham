@@ -42,55 +42,86 @@ def _broker_type_label(broker) -> str:
     return "Foreign" if getattr(broker, "is_foreign", False) else "Local"
 
 
+def _type_label_for_broker(broker) -> str:
+    from src.domain.entities.broker_flow import BrokerType
+
+    btype = getattr(broker, "broker_type", None)
+    if btype == BrokerType.FOREIGN:
+        return "Foreign"
+    if btype == BrokerType.LOCAL:
+        return "Local"
+    return "Foreign" if getattr(broker, "is_foreign", False) else "Local"
+
+
+def _pulse_fields(pulse) -> dict:
+    """Map DeskSessionPulse → display strings (Net5 / Stk / Δ1)."""
+    if pulse is None:
+        return {
+            "net5": "—",
+            "streak": "—",
+            "delta1": "—",
+            "sessions_in_net5": 0,
+        }
+    delta1_s = "—"
+    if pulse.delta1 is not None:
+        sign = "+" if pulse.delta1 > 0 else ""
+        delta1_s = f"{sign}{format_value(pulse.delta1)}"
+    return {
+        "net5": format_value(pulse.net5),
+        "streak": str(pulse.buy_streak),
+        "delta1": delta1_s,
+        "sessions_in_net5": int(getattr(pulse, "sessions_in_net5", 0) or 0),
+    }
+
+
 def format_ticker_top_brokers_rows(
     result,
     *,
     limit: int = 10,
+    pulses: dict | None = None,
 ) -> list:
-    """Build desk rows for TUI ticker→desks table from ViewTickerTopBrokersResult."""
+    """Build desk rows for TUI ticker→desks table from ViewTickerTopBrokersResult.
+
+    Ranking stays single-session tops (buyers then sellers). Optional ``pulses``
+    map broker_code → DeskSessionPulse for stock-scoped multi-session Net5 /
+    streak / Δ1 from ``broker_daily_flow`` (same pure pulse as view broker list).
+    """
     from types import SimpleNamespace
 
-    from src.domain.entities.broker_flow import BrokerType
-
+    pulse_map = {str(k).upper(): v for k, v in (pulses or {}).items()}
     rows: list = []
     buyers = list(result.top_buyers or ())[:limit]
     sellers = list(result.top_sellers or ())[:limit]
+
+    def _row(broker, role: str):
+        code = str(broker.broker_code).upper()
+        pulse = pulse_map.get(code)
+        pf = _pulse_fields(pulse)
+        # Prefer stock×desk session pulse when present (honest multi-day as_of).
+        if pulse is not None:
+            day_net = format_value(pulse.day_net)
+            as_of = pulse.as_of.isoformat()
+        else:
+            day_net = format_value(broker.net_value)
+            as_of = result.date.isoformat()
+        return SimpleNamespace(
+            code=code,
+            type_label=_type_label_for_broker(broker),
+            role=role,
+            day_net=day_net,
+            net5=pf["net5"],
+            streak=pf["streak"],
+            delta1=pf["delta1"],
+            sessions_in_net5=pf["sessions_in_net5"],
+            name=str(getattr(broker, "broker_name", "") or broker.broker_code)[:20],
+            as_of=as_of,
+            has_pulse=pulse is not None,
+        )
+
     for b in buyers:
-        btype = getattr(b, "broker_type", None)
-        if btype == BrokerType.FOREIGN:
-            typ = "Foreign"
-        elif btype == BrokerType.LOCAL:
-            typ = "Local"
-        else:
-            typ = "Foreign" if getattr(b, "is_foreign", False) else "Local"
-        rows.append(
-            SimpleNamespace(
-                code=str(b.broker_code).upper(),
-                type_label=typ,
-                role="buy",
-                day_net=format_value(b.net_value),
-                name=str(getattr(b, "broker_name", "") or b.broker_code)[:20],
-                as_of=result.date.isoformat(),
-            )
-        )
+        rows.append(_row(b, "buy"))
     for s in sellers:
-        btype = getattr(s, "broker_type", None)
-        if btype == BrokerType.FOREIGN:
-            typ = "Foreign"
-        elif btype == BrokerType.LOCAL:
-            typ = "Local"
-        else:
-            typ = "Foreign" if getattr(s, "is_foreign", False) else "Local"
-        rows.append(
-            SimpleNamespace(
-                code=str(s.broker_code).upper(),
-                type_label=typ,
-                role="sell",
-                day_net=format_value(s.net_value),
-                name=str(getattr(s, "broker_name", "") or s.broker_code)[:20],
-                as_of=result.date.isoformat(),
-            )
-        )
+        rows.append(_row(s, "sell"))
     return rows
 
 
