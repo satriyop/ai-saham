@@ -1,9 +1,9 @@
 """
-CLI: live capability / evidence lenses (no final TradeSetup action).
+CLI: live single-subject diagnostic capability lenses (no TradeSetup Action).
 
   saham inspect risk|sentiment|regime|signal …
 
-Not `plan` (TradeSetup). Not `assess` (frozen confirm). Not `research` (corpus).
+Not `plan` (structure). Not `assess` (frozen confirm). Not `research` (corpus).
 Terminal charts retired — use `indicator compute|snapshot` for values; TUI later for charts.
 
 Layer: Adapter (routing only).
@@ -21,12 +21,13 @@ from src.adapters.cli.inspect_signal_commands import signal_app
 inspect_app = typer.Typer(
     name="inspect",
     help=(
-        "Live single-subject capability/evidence lenses. "
-        "No ENTER/WATCH/AVOID authority. "
+        "Live single-subject diagnostic capability lenses "
+        "(ADR-057 diagnostic evidence; no ENTER/WATCH/AVOID). "
         "Judgment: `saham screen accum TICKER`. "
         "Structure: `saham plan swing`. "
         "Frozen: `saham assess pre-open`. "
         "Browse raw stored series: `saham view`. "
+        "Corpus / learning: `saham research`. "
         "Signal: `inspect signal accum` (accumulation-flow only)."
     ),
     no_args_is_help=True,

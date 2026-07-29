@@ -173,7 +173,7 @@ def print_setup_evidence_panel(ctx: SwingOutputDisplayContext) -> None:
         console().print(
             panel(
                 setup_gates_group(setup_eval, ctx.diagnostics.broker_quality_note),
-                title="SETUP EVIDENCE",
+                title="SETUP DIAGNOSTIC EVIDENCE",
             )
         )
 

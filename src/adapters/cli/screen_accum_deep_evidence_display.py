@@ -1,6 +1,7 @@
-"""Optional analysis evidence panels for screen accum judgment desk (ADR-054 S1).
+"""Optional diagnostic evidence panels for screen accum judgment desk (ADR-054 S1).
 
-Renders side-bag evidence only. Does not re-score Action or show structure/lots.
+Renders side-bag diagnostic evidence only (ADR-057). Does not re-score Action
+or show structure/lots.
 
 Layer: Adapter
 """
@@ -25,7 +26,7 @@ def print_screen_deep_evidence_panels(
     deep_flags: ScreenJudgmentDeepEvidenceRequest | None,
     candidates: list[Any],
 ) -> None:
-    """Print analysis evidence after judgment panels (explicit tickers only)."""
+    """Print diagnostic evidence after judgment panels (explicit tickers only)."""
     if not deep_evidence_by_ticker:
         return
     flags = deep_flags or ScreenJudgmentDeepEvidenceRequest()
@@ -48,7 +49,7 @@ def _print_one(
     console().print("")
     console().print(
         Text(
-            f"Analysis evidence · {bag.ticker} (diagnostic · does not change Action)",
+            f"Diagnostic evidence · {bag.ticker} (does not change Action)",
             style="bold cyan",
         )
     )
@@ -164,7 +165,7 @@ def _print_sentiment(bag: ScreenJudgmentDeepEvidence, verbose: bool) -> None:
         lines.append(Text(str(msg), style="dim"))
         if not verbose:
             lines.append(Text("Use --sentiment-verbose for provider details.", style="dim italic"))
-    console().print(panel(Group(*lines), title="Sentiment evidence"))
+    console().print(panel(Group(*lines), title="Sentiment (diagnostic)"))
 
 
 def _print_strategy(bag: ScreenJudgmentDeepEvidence) -> None:
@@ -172,8 +173,8 @@ def _print_strategy(bag: ScreenJudgmentDeepEvidence) -> None:
     if bt is None:
         console().print(
             panel(
-                Text("Strategy backtest evidence unavailable", style="dim"),
-                title="Strategy evidence",
+                Text("Strategy backtest diagnostic evidence unavailable", style="dim"),
+                title="Strategy (diagnostic)",
             )
         )
         return
@@ -200,8 +201,8 @@ def _print_strategy(bag: ScreenJudgmentDeepEvidence) -> None:
         panel(
             Group(
                 table,
-                Text("Evidence only — does not set Action.", style="dim"),
+                Text("Diagnostic evidence only — does not set Action.", style="dim"),
             ),
-            title="Strategy evidence",
+            title="Strategy (diagnostic)",
         )
     )

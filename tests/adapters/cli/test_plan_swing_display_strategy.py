@@ -2,7 +2,7 @@
 Regression tests for Phase D CLI adapter: strategy evidence display.
 
 Verifies that:
-  1. STRATEGY EVIDENCE panel renders when include_strategy=True and
+  1. STRATEGY DIAGNOSTIC EVIDENCE panel renders when include_strategy=True and
      strategy_evidence (StrategyEvidence VO) is present.
   2. Strategy name / rule name / outcome renders.
   3. MATCHED / NOT_MATCHED / UNAVAILABLE / INVALID display clearly.
@@ -162,14 +162,14 @@ class TestStrategyEvidencePanelGate:
         _call_print(include_strategy=True, strategy_evidence=se)
 
         out = capsys.readouterr().out
-        assert "STRATEGY EVIDENCE" in out
+        assert "STRATEGY DIAGNOSTIC EVIDENCE" in out
 
     def test_panel_absent_when_include_strategy_false(self, capsys):
         se = _make_strategy_evidence()
         _call_print(include_strategy=False, strategy_evidence=se)
 
         out = capsys.readouterr().out
-        assert "STRATEGY EVIDENCE" not in out
+        assert "STRATEGY DIAGNOSTIC EVIDENCE" not in out
 
     def test_strategy_evidence_vo_text_absent_when_evidence_none_and_no_backtest(self, capsys):
         # When include_strategy=True but strategy_evidence is None and backtest_result is None,
@@ -186,7 +186,7 @@ class TestStrategyEvidencePanelGate:
         _call_print(include_strategy=True, strategy_evidence=se, backtest_result=None)
 
         out = capsys.readouterr().out
-        assert "STRATEGY EVIDENCE" in out
+        assert "STRATEGY DIAGNOSTIC EVIDENCE" in out
 
 
 # ── Outcome display tests ──────────────────────────────────────────────────────
@@ -330,7 +330,7 @@ class TestStrategyEvidenceScores:
 
         out = capsys.readouterr().out
         # Panel still renders but no score rows
-        assert "STRATEGY EVIDENCE" in out
+        assert "STRATEGY DIAGNOSTIC EVIDENCE" in out
         assert "Coverage" not in out
         assert "Conviction" not in out
         assert "Freshness" not in out
@@ -363,7 +363,7 @@ class TestStrategyEvidenceUnavailable:
         _call_print(include_strategy=True, strategy_evidence=se)
 
         out = capsys.readouterr().out
-        assert "STRATEGY EVIDENCE" in out
+        assert "STRATEGY DIAGNOSTIC EVIDENCE" in out
         assert "MATCHED" in out
 
 
@@ -419,8 +419,8 @@ class TestStrategyEvidenceCoexistenceWithBacktest:
         _call_print(include_strategy=True, strategy_evidence=se, backtest_result=bt)
 
         out = capsys.readouterr().out
-        # One single STRATEGY EVIDENCE panel
-        assert out.count("STRATEGY EVIDENCE") == 1
+        # One single STRATEGY DIAGNOSTIC EVIDENCE panel
+        assert out.count("STRATEGY DIAGNOSTIC EVIDENCE") == 1
         # Backtest stats present
         assert "Win Rate" in out
         # Strategy VO present
@@ -431,7 +431,9 @@ class TestStrategyEvidenceCoexistenceWithBacktest:
         _call_print(include_strategy=True, strategy_evidence=None, backtest_result=bt)
 
         out = capsys.readouterr().out
-        assert "STRATEGY EVIDENCE" in out
-        # StrategyEvidence-specific fields should not appear
+        assert "STRATEGY DIAGNOSTIC EVIDENCE" in out
+        # StrategyEvidence VO-specific fields/footer should not appear (title still
+        # says DIAGNOSTIC under ADR-057).
         assert "Strategy Rule:" not in out
-        assert "DIAGNOSTIC" not in out
+        assert "does not control ENTER/WATCH/AVOID" not in out
+        assert "Historical Backtest" in out

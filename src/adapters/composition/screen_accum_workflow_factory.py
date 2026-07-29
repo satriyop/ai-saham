@@ -244,7 +244,7 @@ def _build_deep_evidence_collector(
     deps: StockAnalysisWorkflowDependencies,
     swing_policy: Any,
 ):
-    """Wire optional analysis evidence for screen single-ticker (ADR-054 S1).
+    """Wire optional diagnostic evidence for screen single-ticker (ADR-054 S1).
 
     Reuses plan refresh/sentiment helpers and accumulation setup evaluation.
     Must not mutate TradeSetup.action.

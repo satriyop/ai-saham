@@ -163,7 +163,7 @@ def accumulation_run(
             "-S",
             help=(
                 "Board: strategy signal column. Explicit ticker + deep flags/--full: "
-                "also attach strategy backtest evidence (does not change Action)."
+                "also attach strategy backtest diagnostic evidence (does not change Action)."
             ),
         ),
     ] = None,
@@ -181,7 +181,10 @@ def accumulation_run(
         bool,
         typer.Option(
             "--with-flow-detail",
-            help="Include broker flow detail evidence (explicit tickers only).",
+            help=(
+                "Include broker flow detail diagnostic evidence "
+                "(explicit tickers only; does not change Action)."
+            ),
         ),
     ] = False,
     flow_window: Annotated[
@@ -196,7 +199,10 @@ def accumulation_run(
         bool,
         typer.Option(
             "--with-sentiment",
-            help="Include news sentiment evidence (explicit tickers only; fail-soft).",
+            help=(
+                "Include news sentiment diagnostic evidence "
+                "(explicit tickers only; fail-soft; does not change Action)."
+            ),
         ),
     ] = False,
     sentiment_verbose: Annotated[
@@ -211,8 +217,8 @@ def accumulation_run(
         typer.Option(
             "--full",
             help=(
-                "All optional analysis evidence panels for explicit tickers "
-                "(not structure/sizing — use plan swing --capital)."
+                "All optional diagnostic evidence panels for explicit tickers "
+                "(does not change Action; not structure/sizing — use plan swing --capital)."
             ),
         ),
     ] = False,
@@ -258,14 +264,15 @@ def accumulation_run(
     Find and judge foreign-accumulation candidates (ADR-054 judgment desk).
 
     Product job: rank a universe or deep-judge one ticker. Owns Action / Why /
-    pattern match / signal+risk + optional analysis evidence. Does **not**
-    design trade geometry — that is ``saham plan swing TICKER`` (horizon / SL /
-    TP / lots).
+    pattern match / signal+risk (production evidence) + optional diagnostic
+    evidence panels. Does **not** design trade geometry — that is
+    ``saham plan swing TICKER`` (horizon / SL / TP / lots).
 
     Modes:
       --universe / list  → cheap shortlist board (filters, multi-window, patterns)
-      TICKER             → judgment case file. Deep analysis flags (explicit only):
-                           --setup, --with-flow-detail, --with-sentiment, --full.
+      TICKER             → judgment case file. Optional diagnostic evidence flags
+                           (explicit only): --setup, --with-flow-detail,
+                           --with-sentiment, --full.
 
     Deep flags are rejected with --universe-only or --multi (keep board cheap).
 

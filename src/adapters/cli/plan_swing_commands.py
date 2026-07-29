@@ -171,8 +171,9 @@ def swing(
     Design trade structure for a chosen swing candidate (ADR-054).
 
     Product job: horizon / stop / target / lots (and risk budget when
-    ``--capital`` is set). Deep judgment (Action, Why, pattern, evidence)
-    belongs on ``saham screen accum TICKER`` — plan is not a second analysis desk.
+    ``--capital`` is set). Deep judgment (Action, Why, pattern, production
+    evidence) belongs on ``saham screen accum TICKER`` — plan is not a second
+    analysis desk.
 
     Action always inherits screen judgment (policy A: market regime stays
     display-only on screen; plan never recomputes Action).
@@ -183,7 +184,7 @@ def swing(
 
     Recommended path:
         saham screen accum BBRI
-        saham screen accum BBRI --full   # analysis evidence if needed
+        saham screen accum BBRI --full   # diagnostic evidence if needed
         saham plan swing BBRI --capital 10000000
         saham trade accum log --ticker BBRI --from-plan
 
@@ -223,7 +224,7 @@ def swing(
         )
         raise typer.Exit(1)
 
-    # Structure-only CLI: no analysis evidence suite, no Action recompute.
+    # Structure-only CLI: no diagnostic evidence suite, no Action recompute.
     strategy_evidence_name = None
     include_sentiment = False
     include_flow_detail = False

@@ -99,7 +99,7 @@ def test_swing_output_renders_rich_decision_overview(capsys):
     assert "Structure" in out
     assert "Context (judgment)" in out
     assert "screen accum BBCA" in out or "screen accum" in out
-    assert "SETUP EVIDENCE" in out
+    assert "SETUP DIAGNOSTIC EVIDENCE" in out
     assert "Setup is partial" in out
     assert "Data" in out
 
@@ -223,9 +223,9 @@ def test_swing_output_renders_optional_evidence_as_separate_panels(capsys):
     assert "ENTER-ZONE / FLOW POSITIVE" in out
     assert "Longer-term flow context below is diagnostic only" in out
     assert "Foreign Flow Score" in out
-    assert "STRATEGY EVIDENCE" in out
+    assert "STRATEGY DIAGNOSTIC EVIDENCE" in out
     assert "2026-01-01 to 2026-06-18" in out
-    assert "SENTIMENT EVIDENCE" in out
+    assert "SENTIMENT DIAGNOSTIC EVIDENCE" in out
     assert "DETAILED HISTORY & SENTIMENT" not in out
 
 

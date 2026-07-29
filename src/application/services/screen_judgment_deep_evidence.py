@@ -1,4 +1,4 @@
-"""Optional analysis evidence for single-ticker screen judgment (ADR-054 S1).
+"""Optional diagnostic evidence for single-ticker screen judgment (ADR-054 S1).
 
 Merges plan-era *analysis* evidence onto the screen desk without mutating
 TradeSetup.action and without structure/sizing.
@@ -56,7 +56,7 @@ class ScreenJudgmentDeepEvidence:
 
 @dataclass(frozen=True)
 class ScreenJudgmentDeepEvidenceRequest:
-    """Flags for optional analysis evidence (defaults all off)."""
+    """Flags for optional diagnostic evidence (defaults all off)."""
 
     setup_name: str | None = None
     include_flow_detail: bool = False
@@ -142,7 +142,7 @@ def collect_screen_judgment_deep_evidence(
                 strategy_name=flags.strategy_name,
             )
         except Exception as exc:
-            warnings.append(f"Strategy evidence unavailable: {exc}")
+            warnings.append(f"Strategy diagnostic evidence unavailable: {exc}")
 
     return ScreenJudgmentDeepEvidence(
         ticker=ticker.upper(),

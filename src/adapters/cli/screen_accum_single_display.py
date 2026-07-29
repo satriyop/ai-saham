@@ -702,7 +702,7 @@ def display_results(
         )
     )
 
-    # ADR-054 S1 complete: optional analysis evidence (never Action / structure).
+    # ADR-054 S1 complete: optional diagnostic evidence (never Action / structure).
     if deep_evidence_by_ticker:
         from src.adapters.cli.screen_accum_deep_evidence_display import (
             print_screen_deep_evidence_panels,

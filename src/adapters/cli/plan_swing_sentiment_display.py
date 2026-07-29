@@ -1,5 +1,5 @@
 """
-Sentiment evidence panel for saham plan swing full output.
+Sentiment diagnostic evidence panel for residual plan swing full output (ADR-057).
 
 Layer: Adapter
 
@@ -55,6 +55,6 @@ def print_sentiment_evidence_panel(ctx: SwingOutputDisplayContext) -> None:
     console().print(
         panel(
             Group(*sentiment_group),
-            title="SENTIMENT EVIDENCE",
+            title="SENTIMENT DIAGNOSTIC EVIDENCE",
         )
     )

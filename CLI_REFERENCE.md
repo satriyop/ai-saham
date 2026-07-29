@@ -12,7 +12,7 @@ Verb dictionary (ADR-050): first token is the behavior contract.
 | Family | Role | Writes learning DB? | Final action words? |
 |--------|------|---------------------|---------------------|
 | **`screen`** | Live discovery **and** single-ticker judgment (`screen accum`; ADR-054) | **No** | Action on single-ticker judgment; provisional on board |
-| **`inspect`** | Live single-subject capability/evidence lens | **No** | **No** |
+| **`inspect`** | Live single-subject diagnostic capability lens (ADR-057) | **No** | **No** |
 | **`plan`** | Trade structure for a chosen candidate (`plan swing`; ADR-054) | **No** | inherits screen Action by default |
 | **`assess`** | Frozen-plan confirmation (`assess pre-open`) | **No** | relative to frozen plan |
 | **`research`** | Learning corpus (capture/labels/evaluate/…) | **Yes** | no |
@@ -756,8 +756,8 @@ saham inspect regime --as-of 2026-06-01 --verbose
 candidate you already judged with `saham screen accum TICKER`. Not a second
 analysis screener.
 
-**Structure-only CLI (policy A):** no analysis evidence flags; **Action always
-inherits screen judgment** (no plan MCE/TechnicalGate recompute). Analysis
+**Structure-only CLI (policy A):** no diagnostic evidence suite; **Action always
+inherits screen judgment** (no plan MCE/TechnicalGate recompute). Diagnostic
 evidence belongs on `screen accum TICKER --full` / flow / sentiment / setup.
 
 Output leads with a **Structure** panel (entry/stop/target/lots when
@@ -768,7 +768,7 @@ Complete geometry writes `swing_trade_plan` under `journals/plans/` for
 
 ```
 saham screen accum BBRI                         # judgment first
-saham screen accum BBRI --full                  # analysis evidence if needed
+saham screen accum BBRI --full                  # diagnostic evidence if needed
 saham plan swing TICKER [OPTIONS]
 saham plan swing BBRI --capital 10000000
 saham plan swing BBRI --setup foreign-bounce --capital 10000000
@@ -1036,14 +1036,14 @@ saham view broker list
 ## saham screen accum
 
 **Judgment desk (ADR-054 S1 complete).** Find candidates on a universe board
-**or** deep-judge one ticker (Action / Why / pattern / signal+risk + optional
-analysis evidence). Owns judgment; does **not** design horizon/SL/TP/lots — use
-`saham plan swing`. **Does not** write research observations (`--save` is
-watchlist only; corpus = `research accum …`).
+**or** deep-judge one ticker (Action / Why / pattern / signal+risk production
+evidence + optional diagnostic evidence). Owns judgment; does **not** design
+horizon/SL/TP/lots — use `saham plan swing`. **Does not** write research
+observations (`--save` is watchlist only; corpus = `research accum …`).
 
-Deep analysis flags require **explicit tickers** (rejected with universe-only
-or `--multi`): `--setup`, `--with-flow-detail`, `--flow-window`,
-`--with-sentiment`, `--full`. Evidence never changes Action.
+Diagnostic evidence flags require **explicit tickers** (rejected with
+universe-only or `--multi`): `--setup`, `--with-flow-detail`, `--flow-window`,
+`--with-sentiment`, `--full`. Diagnostic evidence never changes Action.
 
 ```
 saham screen accum [OPTIONS] [TICKERS...]

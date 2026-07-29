@@ -97,7 +97,7 @@ class RunAccumulationScreenWorkflowResult:
     # passed into AccumulationScreenRequest.market_context / DecisionPolicy
     # without an explicit B-MCE-policy task (scoring would change silently).
     market_context: Any | None = None
-    # Optional analysis evidence by ticker (ADR-054 S1 merge). Never Action.
+    # Optional diagnostic evidence by ticker (ADR-054 S1 merge). Never Action.
     deep_evidence_by_ticker: dict[str, ScreenJudgmentDeepEvidence] = field(default_factory=dict)
 
 

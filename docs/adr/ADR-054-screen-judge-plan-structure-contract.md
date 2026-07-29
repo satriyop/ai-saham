@@ -53,7 +53,7 @@ ENTER/WATCH/AVOID story.
 |------|----------------------------------------|
 | `screen` | Live discovery **and** single-subject **judgment** of candidates (evidence + engines → provisional/final display of action when composed) |
 | `plan` | Live **trade-structure investigation** for an already-chosen candidate (horizon, stops, targets, sizing-as-consequence-of-structure) |
-| `inspect` | Single capability/evidence lens; **no** ENTER/WATCH/AVOID (unchanged ADR-050) |
+| `inspect` | Single diagnostic capability lens; **no** ENTER/WATCH/AVOID (ADR-050; vocabulary ADR-057) |
 | `assess` | Confirm a **frozen** plan against later reality (unchanged) |
 | `trade` | Human paper notebook only (unchanged) |
 

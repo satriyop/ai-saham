@@ -236,14 +236,14 @@ The single-ticker `saham plan swing BBCA` command centers the core deterministic
 │    ├── Plan panel (action text, sizing summary)                │
 │    └── Data panel (candle/broker freshness, quality, notation) │
 │                                                                  │
-│  print_swing_output()  [opt-in evidence panels below core]     │
+│  print_swing_output()  [opt-in diagnostic evidence panels]     │
 │    ├── Market Context Preview (if preview data available)      │
-│    ├── SETUP EVIDENCE (MATCH/PARTIAL/NO_MATCH + gate details) │
+│    ├── SETUP DIAGNOSTIC EVIDENCE (MATCH/PARTIAL/NO_MATCH)      │
 │    ├── ENGINE DETAIL panels (signal/risk/market; default on) │
 │    │     (ADR-054: judgment primary path is screen accum TICKER) │
 │    ├── FLOW / BROKER DETAIL (w/ --with-flow-detail)            │
-│    ├── STRATEGY EVIDENCE (win rate, PF, max DD w/ --strategy) │
-│    └── SENTIMENT EVIDENCE (call, distribution, w/ --sentiment)│
+│    ├── STRATEGY DIAGNOSTIC EVIDENCE (backtest; --strategy)     │
+│    └── SENTIMENT DIAGNOSTIC EVIDENCE (call; --with-sentiment)  │
 │                                                                  │
 │  RiskEngine displays OPEN (no gate) or BLOCKED (gate: Name)    │
 │  instead of legacy LOW_RISK/MODERATE/HIGH_RISK labels.         │

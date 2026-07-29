@@ -292,7 +292,7 @@ class PlanSwingEvidenceBuilder:
                     )
                 )
             except Exception as exc:
-                warnings.append(f"Strategy evidence unavailable: {exc}")
+                warnings.append(f"Strategy diagnostic evidence unavailable: {exc}")
 
         broker_daily_flows: tuple = ()
         broker_summaries: tuple = ()

@@ -1,5 +1,5 @@
 """
-Strategy evidence panel for saham plan swing full output.
+Strategy diagnostic evidence panel for residual plan swing full output (ADR-057).
 
 Layer: Adapter
 
@@ -33,7 +33,10 @@ def print_strategy_evidence_panel(ctx: SwingOutputDisplayContext) -> None:
             )
         )
         history_group.append(
-            Text("Evidence only: this panel does not change TradeSetup.action.", style="dim")
+            Text(
+                "Diagnostic evidence only: this panel does not change TradeSetup.action.",
+                style="dim",
+            )
         )
         period_start = getattr(r, "start_date", None)
         period_end = getattr(r, "end_date", None)
@@ -147,7 +150,7 @@ def print_strategy_evidence_panel(ctx: SwingOutputDisplayContext) -> None:
 
         history_group.append(
             Text(
-                "  DIAGNOSTIC — strategy evidence does not control ENTER/WATCH/AVOID",
+                "  DIAGNOSTIC only — does not control ENTER/WATCH/AVOID",
                 style="dim",
             )
         )
@@ -157,6 +160,6 @@ def print_strategy_evidence_panel(ctx: SwingOutputDisplayContext) -> None:
         console().print(
             panel(
                 Group(*history_group),
-                title="STRATEGY EVIDENCE",
+                title="STRATEGY DIAGNOSTIC EVIDENCE",
             )
         )

@@ -79,12 +79,12 @@ saham inspect regime --universe idx80
 - **Breadth 5d change**: Whether breadth is improving or deteriorating. A negative change with a SIDEWAYS label is a warning.
 - **Foreign flow breadth**: % of universe stocks with positive net foreign flow. Falling sharply = institutions are selling, not buying.
 
-After shortlist, **judge** with `saham screen accum TICKER` (Action / Why / pattern).
-Optional analysis evidence on the same desk (explicit tickers only):
-`--with-flow-detail`, `--with-sentiment`, `--setup`, `--full` (does not change Action).
-Then **structure** with `saham plan swing TICKER --capital …` (SL / TP / lots).
-Plan still shows TradeSetup and engine panels during migration; it is not a
-second screener. Market context: `--with-market-context` on plan when needed.
+After shortlist, **judge** with `saham screen accum TICKER` (Action / Why / pattern;
+production evidence). Optional **diagnostic evidence** on the same desk
+(explicit tickers only): `--with-flow-detail`, `--with-sentiment`, `--setup`,
+`--full` (does not change Action; ADR-057). Then **structure** with
+`saham plan swing TICKER --capital …` (SL / TP / lots only — inherits Action;
+not a second analysis desk). Regime lens only: `saham inspect regime`.
 
 ---
 

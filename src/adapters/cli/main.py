@@ -11,8 +11,8 @@ Command groups:
   saham research   — research corpus / ML feeder (pre-open, accum)
   saham view       — read-only local data browsing
   saham indicator  — technical indicators (compute, snapshot, create, list, show, delete)
-  saham inspect    — live capability/evidence lenses (risk, sentiment, regime, signal accum)
-  saham plan       — live trade plan composition (plan swing → TradeSetup)
+  saham inspect    — live diagnostic capability lenses (risk, sentiment, regime, signal accum)
+  saham plan       — trade structure desk (plan swing → capital / SL / TP / lots)
   saham assess     — frozen-plan confirmation (assess pre-open)
   saham backtest   — offline historical sim (screen accum | portfolio swing)
   saham strategy   — strategy management (init, validate, list, create, backtest)
