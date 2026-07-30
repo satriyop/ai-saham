@@ -2439,10 +2439,10 @@
  <div class="fact"><span class="k">Stop / Target</span><span class="v">5,900 / 6,800</span></div>
  <div class="fact"><span class="k">Lots</span><span class="v">3</span></div>
  <div class="fact"><span class="k">Source</span><span class="v" id="cfSource">plan structure · local</span></div>
- <div class="fact"><span class="k">Authority</span><span class="v">paper only · not learning</span></div>
+            <div class="fact"><span class="k">Kind</span><span class="v">paper journal</span></div>
  </div>
  <div class="warn" id="confirmWarn">
- No broker order. Uses saved swing_trade_plan (CLI --from-plan). Not Action authority.
+            No broker order. Uses saved swing_trade_plan (CLI --from-plan).
  </div>
  </div>
  <div class="confirm-foot">
@@ -2984,7 +2984,7 @@
  $("statusRows").textContent = t;
  } else if (state.frame === "paper") {
  $("viewTitle").textContent = `Paper · ${t}`;
- $("viewMeta").innerHTML = `<span class="dot">·</span> notebook · from plan geometry · not learning`;
+        $("viewMeta").innerHTML = `<span class="dot">·</span> notebook · from plan geometry`;
  $("statusScreen").textContent = "paper";
  $("statusRows").textContent = t;
  } else if (state.frame === "preopen") {
