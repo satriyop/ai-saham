@@ -377,11 +377,13 @@ class CockpitApp(App[None]):
             table.display = False
             evidence.display = False
         elif self._stage == "empty":
+            # Session Cache is owned only by _paint_cache_health_sidebar above.
+            # Do not hardcode "Cache empty" — board can be 0-candidate while local
+            # candle/broker health is still ready/lag.
             scroll.display = True
             body.update(self._empty_body())
             table.display = False
             evidence.display = False
-            self.query_one("#side-cache", Static).update("Cache    empty")
         elif self._stage == "loading":
             # Blank loading only when there is no prior board to keep (criterion 1).
             if self._rows and self._board_kind in {"accum", "preopen"}:
@@ -903,12 +905,21 @@ class CockpitApp(App[None]):
         self._stage = "empty"
         self._board_title = "Screen · —"
         self._meta = "waiting on local data"
-        self._mode = "no cache"
         self._focus_ticker = "—"
         self._rows = []
         self._status_note = "empty · fetch explicit"
         # Re-read health so empty DB paints empty (not a stale ready line).
         self._refresh_local_cache_health()
+        # Mode follows session cache health — not "board has 0 rows".
+        # Ready/lag local dates ⇒ local-first; only true empty cache ⇒ no cache.
+        status = getattr(self._cache_health, "status", None)
+        if status in {"ready", "lag"}:
+            self._mode = "local-first"
+        elif status == "empty":
+            self._mode = "no cache"
+        else:
+            # unknown / loader missing: do not claim "no cache" over real disk state
+            self._mode = "local-first"
         self._refresh_chrome()
         self.notify("Empty cache state", timeout=1.2)
 
