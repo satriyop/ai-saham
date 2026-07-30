@@ -6,7 +6,7 @@
  <meta http-equiv="Pragma" content="no-cache" />
  <meta http-equiv="Expires" content="0" />
  <meta name="viewport" content="width=device-width, initial-scale=1" />
- <title>ai-saham · Daily Cockpit · OpenCode rev-20260730i</title>
+  <title>ai-saham · Daily Cockpit · OpenCode rev-20260730t</title>
  <link rel="preconnect" href="https://fonts.googleapis.com" />
  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -58,79 +58,71 @@
  overflow: hidden;
  }
 
- /* ── Demo frame switcher (design chrome only) ─────────── */
- .demo-bar {
- position: fixed;
- top: 10px;
- left: 10px;
- right: 10px;
- z-index: 100;
- display: flex;
- flex-wrap: wrap;
- align-items: center;
- gap: 8px;
- font-family: var(--font-ui);
- font-size: 11.5px;
- color: #999;
- pointer-events: none;
- }
+ /* Page · design tools ABOVE product shell (never fixed over app/sidebar) */
+    .page {
+      max-width: 1280px;
+      margin: 0 auto;
+      height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      min-height: 0;
+    }
 
- .demo-bar .card {
- pointer-events: auto;
- background: #111;
- border: 1px solid #2a2a2a;
- border-radius: 8px;
- padding: 8px 10px;
- box-shadow: 0 8px 24px rgba(0,0,0,0.35);
- }
+    /* Design-only stage switcher · not product chrome · not shipped TUI */
+    .design-tools {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 12px;
+      padding: 8px 10px 6px;
+      border-bottom: 1px solid #1a1a1a;
+      background: #080808;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-mute);
+    }
+    .design-tools .rev {
+      color: #4a4a4a;
+      font-size: 10px;
+      flex-shrink: 0;
+    }
+    .frame-switch {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      min-width: 0;
+    }
+    .frame-switch button {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      color: #888;
+      background: #0c0c0c;
+      border: 1px solid #2a2a2a;
+      border-radius: 4px;
+      padding: 3px 8px;
+      cursor: pointer;
+    }
+    .frame-switch button:hover { color: #ccc; border-color: #3a3a3a; }
+    .frame-switch button.is-on {
+      color: var(--sel-text);
+      background: var(--sel-bg);
+      border-color: transparent;
+      font-weight: 500;
+    }
 
- .demo-bar .card strong { color: #ddd; font-weight: 600; }
- .demo-bar code {
- font-family: var(--font-mono);
- font-size: 10.5px;
- color: var(--sel-dim);
- }
-
- .frame-switch {
- display: flex;
- flex-wrap: wrap;
- gap: 4px;
- margin-top: 6px;
- }
-
- .frame-switch button {
- font-family: var(--font-mono);
- font-size: 10.5px;
- color: #888;
- background: #0c0c0c;
- border: 1px solid #2a2a2a;
- border-radius: 4px;
- padding: 3px 8px;
- cursor: pointer;
- }
-
- .frame-switch button:hover { color: #ccc; border-color: #3a3a3a; }
- .frame-switch button.is-on {
- color: var(--sel-text);
- background: var(--sel-bg);
- border-color: transparent;
- font-weight: 500;
- }
-
- .demo-hint { color: #666; margin-top: 4px; font-size: 10.5px; }
-
- /* ── App shell ───────────────────────────────────────── */
+ /* ── App shell = real product chrome only ─────────────── */
  .app {
  display: grid;
  grid-template-rows: 1fr var(--prompt-h) var(--status-h);
- height: 100vh;
- max-width: 1280px;
- margin: 0 auto;
+ height: 100%;
+ min-height: 0;
+ max-width: none;
+ margin: 0;
  background: var(--bg);
  border-left: 1px solid var(--border);
  border-right: 1px solid var(--border);
  position: relative;
- box-shadow: 0 0 0 1px #000, 0 24px 80px rgba(0,0,0,0.55);
+ box-shadow: 0 0 0 1px #000;
  }
 
  .workspace {
@@ -1926,12 +1918,9 @@
  </style>
 </head>
 <body>
- <div class="demo-bar">
- <div class="card">
-      <strong>OpenCode visual = TUI bible</strong> · <span style="color:#6fbf8a" id="buildStamp">rev 2026-07-30s · judge d=detail · E2E 1–8</span>
-      · black-on-black · peach palette · mono density
-      · <em style="color:var(--sel-dim);font-style:normal">Journey = structure inspiration only</em>
-      (stages / authority / columns — not marketing night-ink skin)
+  <div class="page">
+    <!-- Design-only · not product chrome · not shipped TUI -->
+    <div class="design-tools" aria-label="Design stage switcher">
       <div class="frame-switch" id="frameSwitch" role="tablist" aria-label="Primary stages">
         <button type="button" data-frame="accum" class="is-on">1 Accum</button>
         <button type="button" data-frame="plan">2 Plan</button>
@@ -1942,20 +1931,11 @@
         <button type="button" data-frame="empty">7 Health</button>
         <button type="button" data-frame="palette">8 Palette</button>
       </div>
-      <div class="demo-hint">
-        Primary tabs land stages only · <strong style="color:var(--text);font-weight:500">Judge</strong> = Accum board <code>Enter</code> (not a tab · no digit hotkey)
-        · <code>p</code> Plan · <code>l</code> Paper · <code>v t</code> ticker · <code>v b</code> broker
-        · vision:
-        <a href="./tui-journey-hub.html" style="color:var(--sel-dim)">hub</a>
-        · <a href="./tui-judge-desk.html" style="color:var(--sel-dim)">judge</a>
-        · <a href="./tui-plan-desk.html" style="color:var(--sel-dim)">plan</a>
-        · <a href="./tui-ticker-desk.html" style="color:var(--sel-dim)">ticker</a>
-        · <a href="./tui-cockpit-opencode.md" style="color:var(--sel-dim)">design rules</a>
-      </div>
- </div>
- </div>
+      <span class="rev" id="buildStamp">design mock · 2026-07-30t</span>
+    </div>
 
- <div class="app" id="app" role="application" aria-label="ai-saham daily cockpit">
+    <!-- Product shell only · OpenCode bible for shipped TUI -->
+    <div class="app" id="app" role="application" aria-label="ai-saham daily cockpit">
  <div class="workspace" id="workspace">
  <main class="main">
  <header class="main-header">
@@ -3022,10 +3002,11 @@
  </div>
  </div>
 
- <div class="toast" id="toast" role="status"></div>
- </div>
+      <div class="toast" id="toast" role="status"></div>
+    </div><!-- /.app product shell -->
+  </div><!-- /.page -->
 
- <script>
+  <script>
  // 1:1 with BOARD_COLUMN_LABELS / CockpitApp._render_board_table (accum)
  const ACCUM = [
  { t: "BBRI", signal: 86, accum: 52.1, action: "ENTER", phase: "ACCUM", streak: 3, rsi: 52.1, net: 0.9, disc: -0.3, price: 4820, gate: "OPEN" },

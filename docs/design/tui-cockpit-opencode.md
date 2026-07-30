@@ -4,6 +4,14 @@
 **Mock:** [`tui-cockpit-opencode.html`](./tui-cockpit-opencode.html)  
 **Journey hub (IA inspiration only):** [`tui-journey-hub.html`](./tui-journey-hub.html)
 
+### What ships vs mock-only
+
+| Layer | Ships in Textual TUI? | Notes |
+|-------|----------------------|--------|
+| **`.app` shell** (header · stage · sidebar · prompt rail · status) | **Yes — product bible** | OpenCode black/peach · layout B |
+| **`.design-tools`** (1–8 stage buttons · rev stamp) | **No** | HTML mock only · above app · never over sidebar |
+| Journey night-ink desk HTML | No | IA / hierarchy inspiration only |
+
 ---
 
 ## Design authority
@@ -14,7 +22,7 @@
 | **Journey / desk HTML** | **Inspiration only** | Stage map, keys, Action vs browse, column contracts, hierarchy *ideas* |
 | **Shipped TUI code** | **Data richness** | When code DTOs are richer than primary stage, design uses **detail flags** (expand), not always-on walls |
 
-Ship Textual against **this cockpit mock**. Standalone journey HTML may stay “elevated web vision”; it is **not** the live TUI skin.
+Ship Textual against **`.app` inside this mock**. Design-tools strip is for reviewing frames in browser only.
 
 ---
 
