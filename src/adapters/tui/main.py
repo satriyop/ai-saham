@@ -120,6 +120,8 @@ class CockpitApp(App[None]):
         snapshot_universe: str = "lq45",
         ticker_judge_loader: Callable[[str], Any] | None = None,
         cache_health_loader: Callable[[], Any] | None = None,
+        paper_log_runner: Callable[[str], Any] | None = None,
+        phase_history_loader: Callable[[str, Any], Any] | None = None,
     ) -> None:
         super().__init__()
         self._accum_loader = accum_loader
@@ -136,6 +138,8 @@ class CockpitApp(App[None]):
         self._ticker_desks_loader = ticker_desks_loader
         self._ticker_judge_loader = ticker_judge_loader
         self._cache_health_loader = cache_health_loader
+        self._paper_log_runner = paper_log_runner
+        self._phase_history_loader = phase_history_loader
         self._accum_controller = accum_controller
         self._preopen_controller = preopen_controller
         self._accum_presenter = accum_presenter
@@ -328,7 +332,7 @@ class CockpitApp(App[None]):
         if self._stage == "detail":
             return "↑↓/PgUp/PgDn scroll · esc back · p plan · Ctrl+P"
         if self._stage == "plan":
-            return "↑↓ scroll · esc back · p re-run · Ctrl+P · no broker order"
+            return "↑↓ scroll · esc back · p re-run · l paper log · Ctrl+P · no broker order"
         return "Ctrl+P commands · ? help · q quit"
 
     def _shell_body(self) -> str:
@@ -482,6 +486,13 @@ class CockpitApp(App[None]):
             event.prevent_default()
             event.stop()
             self.action_rejudge_ticker()
+            return
+
+        # Plan stage: ``l`` = explicit paper notebook log (confirm first).
+        if key == "l" and self._stage == "plan":
+            event.prevent_default()
+            event.stop()
+            self.action_paper_log()
             return
 
         if key == "s":
@@ -886,6 +897,9 @@ class CockpitApp(App[None]):
             return
         if command_id == "plan-swing":
             self._open_plan_stage()
+            return
+        if command_id == "paper-log":
+            self.action_paper_log()
             return
         if command_id == "fetch":
             self._open_fetch_confirm()
@@ -1944,6 +1958,7 @@ class CockpitApp(App[None]):
                     present_accum_engine_inspect,
                 )
 
+                seq_facts, seq_unavail = self._load_phase_sequence_for_judge(ticker, row)
                 view = present_accum_engine_inspect(
                     row,
                     rank=self._row_index + 1,
@@ -1951,6 +1966,8 @@ class CockpitApp(App[None]):
                     board_summary=self._board_summary,
                     effective_session=self._effective_session,
                     market_context=self._market_context,
+                    phase_sequence=seq_facts,
+                    phase_sequence_unavailable=seq_unavail,
                 )
                 return view.text
 
@@ -2077,9 +2094,160 @@ class CockpitApp(App[None]):
         self._status_note = "plan done"
         # Stay on plan stage so the page is the result surface (variant A).
         if self._stage == "plan" and self._plan_ticker == ticker:
-            self._meta = "structure result · inherits Action · no broker order"
+            self._meta = "structure result · inherits Action · no broker order · l paper log"
             self._refresh_chrome()
         self.notify(f"Plan · {ticker} · {struct.summary}", timeout=2.5)
+
+    def action_paper_log(self) -> None:
+        """Explicit paper notebook log from plan stage (confirm first; no broker order)."""
+        if self._modal_blocks_board_keys():
+            return
+        if self._stage != "plan":
+            self.notify("Paper log is on plan stage (p · then l)", timeout=1.8)
+            return
+        if self._plan_running:
+            self.notify("Plan still running — wait for structure result", timeout=1.8)
+            return
+        ticker = str(self._plan_ticker or self._focus_ticker or "").strip().upper()
+        if not ticker or ticker == "—":
+            self.notify("No ticker to log", timeout=1.5)
+            return
+        struct = self._plan_structure
+        if struct is None:
+            self.notify("No structure yet — run plan (p) first", timeout=1.8)
+            return
+        incomplete = str(getattr(struct, "incomplete_reason", "") or "").strip()
+        if incomplete and not getattr(struct, "plan_id_short", ""):
+            self.notify(f"Cannot paper log · {incomplete}", timeout=2.5)
+            return
+        # Geometry summary for confirm body (from structure desk fields only).
+        entry = str(getattr(struct, "entry", "—") or "—")
+        stop = str(getattr(struct, "stop", "—") or "—")
+        target = str(getattr(struct, "target", "—") or "—")
+        lots = str(getattr(struct, "lots", "—") or "—")
+        plan_id = str(getattr(struct, "plan_id_short", "") or "")
+        plan_text = (
+            f"Ticker  {ticker}\n"
+            f"Entry   {entry}\n"
+            f"Stop    {stop}\n"
+            f"Target  {target}\n"
+            f"Lots    {lots}"
+            + (f"\nPlan    {plan_id}" if plan_id else "")
+            + "\n\nUses saved swing_trade_plan (CLI --from-plan) · paper only"
+        )
+        self._open_paper_log_confirm(ticker=ticker, plan_text=plan_text)
+
+    def _open_paper_log_confirm(self, *, ticker: str, plan_text: str) -> None:
+        from src.adapters.tui.screens.paper_log_confirm import PaperLogConfirmModal
+
+        def _on_dismiss(confirmed: bool | None) -> None:
+            if not confirmed:
+                return
+            if self._paper_log_runner is None:
+                self.notify(
+                    "Paper log not wired — use CLI: saham trade accum log --from-plan",
+                    timeout=2.5,
+                )
+                return
+            self._status_note = "paper logging"
+            self._refresh_chrome()
+            self._execute_paper_log(ticker)
+
+        self.push_screen(
+            PaperLogConfirmModal(plan_text=plan_text, ticker=ticker),
+            _on_dismiss,
+        )
+
+    @work(thread=True, exclusive=True, group="paper-log")
+    def _execute_paper_log(self, ticker: str) -> None:
+        try:
+            assert self._paper_log_runner is not None
+            result = self._paper_log_runner(ticker)
+            dispatch_if_active(self, self._on_paper_log_done, ticker, result, None)
+        except Exception as exc:
+            dispatch_if_active(self, self._on_paper_log_done, ticker, None, str(exc))
+
+    def _on_paper_log_done(self, ticker: str, result: Any, error: str | None) -> None:
+        if error is not None:
+            self._status_note = "plan done"
+            self._refresh_chrome()
+            self.notify(f"Paper log failed · {error[:100]}", timeout=2.5)
+            return
+        from src.adapters.tui.paper_log_result import PaperLogResult
+
+        if isinstance(result, PaperLogResult):
+            msg = result.message
+            if result.refused:
+                self._status_note = "plan done"
+                self._refresh_chrome()
+                self.notify(f"Paper log refused · {msg}", timeout=2.8)
+                return
+            if result.written:
+                self._status_note = "paper logged"
+                self._meta = f"paper notebook · {ticker} · logged · no order"
+                self._refresh_chrome()
+                self.notify(msg, timeout=3.0)
+                return
+            # Duplicate / 0-write
+            self._status_note = "plan done"
+            self._refresh_chrome()
+            self.notify(msg, timeout=2.8)
+            return
+        # Duck-typed result
+        written = bool(getattr(result, "written", False))
+        message = str(getattr(result, "message", result) or result)
+        self._status_note = "paper logged" if written else "plan done"
+        self._refresh_chrome()
+        self.notify(message[:160], timeout=2.8)
+
+    def _load_phase_sequence_for_judge(self, ticker: str, row: Any) -> tuple[Any, str | None]:
+        """Read-only ledger sequence for Judge; never network, never write."""
+        if self._phase_history_loader is None:
+            return (), "phase history loader not wired"
+        before = self._resolve_phase_before_date(row)
+        if before is None:
+            return (), "cannot load sequence without as_of"
+        try:
+            facts = self._phase_history_loader(str(ticker).upper(), before)
+        except Exception:
+            return (), "phase history read failed"
+        if facts is None:
+            return (), None
+        return facts, None
+
+    def _resolve_phase_before_date(self, row: Any) -> Any | None:
+        """Exclusive upper bound for ledger list_rows_before (local session only)."""
+        from datetime import date as date_cls
+
+        sess = self._effective_session
+        if sess is not None:
+            for attr in ("analysis_as_of", "latest_completed_session"):
+                val = getattr(sess, attr, None)
+                if isinstance(val, date_cls):
+                    return val
+                if val is not None:
+                    try:
+                        return date_cls.fromisoformat(str(val)[:10])
+                    except ValueError:
+                        pass
+        source = getattr(row, "source", None) if row is not None else None
+        if source is not None:
+            for attr in ("latest_candle_date",):
+                val = getattr(source, attr, None)
+                if isinstance(val, date_cls):
+                    # ledger uses strict < before_date; include candle day via +1 day
+                    from datetime import timedelta
+
+                    return val + timedelta(days=1)
+            fr = getattr(source, "freshness", None)
+            if fr is not None:
+                val = getattr(fr, "candle_as_of", None)
+                if isinstance(val, date_cls):
+                    from datetime import timedelta
+
+                    return val + timedelta(days=1)
+        # Live screen default matches accumulation UC (date.today as before_date).
+        return date_cls.today()
 
     def _refresh_local_cache_health(self) -> None:
         """Paint local-only cache health (no network). Safe on failure."""

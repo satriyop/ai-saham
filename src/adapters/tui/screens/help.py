@@ -18,6 +18,8 @@ HELP_BODY = """[#9b8fb8]What this app does[/]
 · j on Judge = re-judge single ticker (local screen · not full board r)
 · Snapshot board may open limited judge until j or live refresh
 · p = plan structure desk (SL/TP/lots · inherits Action · no order)
+· l on Plan = paper notebook log (confirm · trade accum log --from-plan)
+· Judge shows phase sequence from setup phase ledger (ADR-058 · read-only)
 · Fetch = explicit online (never on open)
 
 [#9b8fb8]Keys[/]
@@ -29,6 +31,7 @@ HELP_BODY = """[#9b8fb8]What this app does[/]
   v t      view ticker (CLI dashboard · needs focus)
   v b      view broker list
   p        plan structure (focused ticker)
+  l        paper log (on plan stage · confirm first)
   r        refresh local board
   b        stock→desks (on view ticker only)
   t/f/h/v  desk hub (on broker show · v = top stock)

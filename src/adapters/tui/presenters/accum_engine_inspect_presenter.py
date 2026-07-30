@@ -11,6 +11,7 @@ Layer: Adapter (pure display)
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -27,6 +28,10 @@ from src.adapters.shared.decision_display import (
 )
 from src.adapters.shared.score_display_labels import ACCUM, SIGNAL
 from src.adapters.shared.screen_accum_board_fields import extract_screen_accum_board_fields
+from src.adapters.tui.phase_sequence import (
+    PhaseSequenceFact,
+    format_phase_sequence_section,
+)
 from src.adapters.tui.presenters.accum_presenter import AccumRowView, build_accum_focus
 
 # Product-facing degradation when board row has no candidate object.
@@ -60,6 +65,8 @@ def present_accum_engine_inspect(
     board_summary: str = "",
     effective_session: Any | None = None,
     market_context: Any | None = None,
+    phase_sequence: Sequence[PhaseSequenceFact] | None = None,
+    phase_sequence_unavailable: str | None = None,
 ) -> AccumEngineInspectView:
     """Build ADR-054 judge view from board row (present-only by default)."""
     source = getattr(row, "source", None)
@@ -120,6 +127,15 @@ def present_accum_engine_inspect(
             why=why or "—",
             readiness=readiness_s,
             breakdown=breakdown,
+        )
+    )
+    lines.append("")
+    # ADR-058 production sequence memory (read-only; never re-scores Action).
+    lines.extend(
+        format_phase_sequence_section(
+            phase_sequence,
+            current_phase=phase,
+            unavailable_reason=phase_sequence_unavailable,
         )
     )
     lines.append("")

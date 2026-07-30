@@ -41,6 +41,13 @@ COCKPIT_COMMANDS: tuple[CockpitCommand, ...] = (
         "Structure desk for focus · SL/TP/lots · inherit Action · no order",
     ),
     CockpitCommand(
+        "Suggested",
+        "paper-log",
+        "Paper log from plan",
+        "l",
+        "Confirm paper notebook write · trade accum log --from-plan · no order",
+    ),
+    CockpitCommand(
         "Daily",
         "view-ticker",
         "View ticker",

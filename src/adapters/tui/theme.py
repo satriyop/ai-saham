@@ -132,7 +132,7 @@ Screen {
 }
 
 /* Overlays share OpenCode dialog language */
-CommandPalette, PlanConfirmModal, HelpModal, FetchConfirmModal {
+CommandPalette, PlanConfirmModal, HelpModal, FetchConfirmModal, PaperLogConfirmModal {
     align: center middle;
     background: rgba(0, 0, 0, 0.45);
 }

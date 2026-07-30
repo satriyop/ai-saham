@@ -43,6 +43,8 @@ def create_tui_app(
     board_snapshot_path: Path | None = None,
     ticker_judge_loader: Callable[[str], Any] | None = None,
     cache_health_loader: Callable[[], Any] | None = None,
+    paper_log_runner: Callable[[str], Any] | None = None,
+    phase_history_loader: Callable[[str, date], Any] | None = None,
 ) -> CockpitApp:
     """Build cockpit with real local loaders unless tests inject fakes."""
     config = load_app_config()
@@ -68,6 +70,10 @@ def create_tui_app(
         ticker_judge_loader = _TickerJudgeLoader(screen_deps, config)
     if cache_health_loader is None:
         cache_health_loader = _LocalCacheHealthLoader(db_path, universe)
+    if paper_log_runner is None:
+        paper_log_runner = _LocalPaperLogFromPlanRunner(db_path, config)
+    if phase_history_loader is None:
+        phase_history_loader = _LocalPhaseHistoryLoader(db_path)
 
     return CockpitApp(
         accum_loader=accum_loader,
@@ -84,6 +90,8 @@ def create_tui_app(
         ticker_desks_loader=_TickerTopBrokersLoader(db_path),
         ticker_judge_loader=ticker_judge_loader,
         cache_health_loader=cache_health_loader,
+        paper_log_runner=paper_log_runner,
+        phase_history_loader=phase_history_loader,
         accum_controller=BoardController(accum_loader),
         preopen_controller=BoardController(
             preopen_loader,
@@ -815,6 +823,156 @@ def _fmt_price(value: Any) -> str:
         return f"{int(round(float(value))):,}"
     except (TypeError, ValueError):
         return str(value)
+
+
+class _LocalPaperLogFromPlanRunner:
+    """CLI-parity paper log: load ``TICKER_latest.json`` then journal workflow.
+
+    Thin composition only — no journal schema fork. Requires complete plan on disk
+    (written by plan structure runner when geometry is complete).
+    """
+
+    def __init__(self, db_path: Path, config: Any) -> None:
+        self._db_path = Path(db_path)
+        self._config = config
+        self._lock = Lock()
+
+    def __call__(self, ticker: str) -> Any:
+        from datetime import date as date_cls
+
+        from src.adapters.cli.trade_accum_workflow_factory import (
+            create_log_accumulation_trade_workflow,
+        )
+        from src.adapters.tui.paper_log_result import PaperLogResult, refuse_paper_log
+        from src.application.services.swing_trade_plan_store import (
+            load_swing_trade_plan,
+            plans_dir_from_journal_path,
+            resolve_from_plan_path,
+        )
+        from src.application.use_case.evaluate_swing_setup_use_case import (
+            FOREIGN_BOUNCE_SETUP,
+        )
+        from src.application.use_case.log_accumulation_trade_workflow_use_case import (
+            LogAccumulationTradeWorkflowRequest,
+        )
+        from src.infrastructure.config.app_config import load_app_config
+
+        ticker_u = str(ticker or "").strip().upper()
+        if not ticker_u:
+            return refuse_paper_log("—", "no ticker · nothing to log")
+
+        journal_path = Path(self._config.storage.accum_journal)
+        plans_dir = plans_dir_from_journal_path(journal_path)
+        try:
+            plan_path = resolve_from_plan_path(
+                ticker=ticker_u, from_plan="latest", plans_dir=plans_dir
+            )
+            plan = load_swing_trade_plan(plan_path)
+        except FileNotFoundError:
+            return refuse_paper_log(
+                ticker_u,
+                "no saved plan · run structure desk (p) until complete, then log",
+            )
+        except (OSError, ValueError) as exc:
+            return refuse_paper_log(ticker_u, f"plan load failed · {exc}")
+
+        if plan.ticker.upper() != ticker_u:
+            return refuse_paper_log(
+                ticker_u,
+                f"plan ticker {plan.ticker} does not match focus {ticker_u}",
+            )
+        if not plan.is_complete:
+            return refuse_paper_log(
+                ticker_u,
+                plan.incomplete_reason or "plan geometry incomplete · need entry/stop/target/lots",
+            )
+
+        setup = plan.setup_name or FOREIGN_BOUNCE_SETUP
+        cfg = load_app_config()
+        window = int(getattr(self._config.swing, "window", 7) or 7)
+        with self._lock:
+            bundle = create_log_accumulation_trade_workflow(
+                db_path=self._db_path,
+                journal_path=journal_path,
+                with_regime=False,
+                regime_universe=None,
+                benchmark=str(cfg.analysis.benchmark or "IHSG"),
+            )
+            request = LogAccumulationTradeWorkflowRequest(
+                ticker=ticker_u,
+                window=window,
+                entry_price=plan.entry_price,
+                from_analysis=True,
+                setup=setup,
+                with_regime=False,
+                benchmark=str(cfg.analysis.benchmark or "IHSG"),
+                logged_at=date_cls.today(),
+                from_plan=True,
+                plan_entry=plan.entry_price,
+                plan_stop=plan.stop_price,
+                plan_target=plan.target_price,
+                plan_setup_match=plan.setup_match,
+                plan_max_hold_days=plan.max_hold_days,
+            )
+            try:
+                workflow_result = bundle.workflow.execute(request)
+            except ValueError as exc:
+                return refuse_paper_log(ticker_u, str(exc))
+            except Exception as exc:
+                return refuse_paper_log(ticker_u, f"journal write failed · {exc}")
+
+        resp = workflow_result.response
+        entry_s = _fmt_price(resp.entry_price)
+        stop_s = _fmt_price(resp.planned_stop)
+        target_s = _fmt_price(resp.planned_target)
+        plan_id = plan.plan_id[:8] if plan.plan_id else ""
+        if not resp.written:
+            return PaperLogResult(
+                ticker=ticker_u,
+                written=False,
+                message=(
+                    f"already logged {ticker_u} for {workflow_result.logged_at} "
+                    f"(window={window}) — no new row"
+                ),
+                planned_entry=entry_s,
+                planned_stop=stop_s,
+                planned_target=target_s,
+                refused=False,
+                plan_id=plan_id,
+            )
+        return PaperLogResult(
+            ticker=ticker_u,
+            written=True,
+            message=(
+                f"paper logged {ticker_u} · entry {entry_s} · "
+                f"stop {stop_s} · target {target_s}" + (f" · plan {plan_id}" if plan_id else "")
+            ),
+            planned_entry=entry_s,
+            planned_stop=stop_s,
+            planned_target=target_s,
+            refused=False,
+            plan_id=plan_id,
+        )
+
+
+class _LocalPhaseHistoryLoader:
+    """Read-only setup phase ledger rows before as_of (no network, no write)."""
+
+    def __init__(self, db_path: Path) -> None:
+        self._db_path = Path(db_path)
+
+    def __call__(self, ticker: str, before_date: date) -> Any:
+        from src.adapters.tui.phase_sequence import facts_from_ledger_rows
+        from src.infrastructure.persistence.sqlite_setup_phase_ledger_repository import (
+            SQLiteSetupPhaseLedgerRepository,
+        )
+
+        symbol = str(ticker or "").strip().upper()
+        if not symbol:
+            return ()
+        repo = SQLiteSetupPhaseLedgerRepository(self._db_path)
+        rows = repo.list_rows_before(ticker=symbol, before_date=before_date, limit=20)
+        return facts_from_ledger_rows(rows)
 
 
 class _LocalCacheHealthLoader:

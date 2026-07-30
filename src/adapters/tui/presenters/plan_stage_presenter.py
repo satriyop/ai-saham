@@ -54,6 +54,7 @@ def present_plan_stage(
     lines.append("[#9b8fb8]On this page[/]")
     lines.append("  Structure desk (ADR-054): horizon / SL / TP / lots.")
     lines.append("  Action inherits screen judgment · [bold]no broker order.[/]")
+    lines.append("  Paper notebook: [bold]l[/] after structure · confirm · no order.")
     lines.append("  Deep judgment: Enter judge · optional j re-judge.")
     lines.append("")
 
@@ -64,7 +65,9 @@ def present_plan_stage(
     lines.extend(structure_lines(struct, running=running))
 
     lines.append("")
-    lines.append("[dim]esc back to board · p re-run · CLI: saham plan swing TICKER --capital …[/]")
+    lines.append(
+        "[dim]esc board · p re-run · l paper log · CLI: plan swing · trade accum log --from-plan[/]"
+    )
     return PlanStageView(text="\n".join(lines), ticker=ticker)
 
 
