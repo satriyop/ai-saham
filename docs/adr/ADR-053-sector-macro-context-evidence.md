@@ -104,7 +104,8 @@ Builders must not hardcode sector→series routing. Adapters must not own policy
 | Oil sign split (P1a) | `oil_proxy` (↑ supportive) for energy/oil_gas; `oil_cost` (↑ headwind) for chemicals/logistics/packaging |
 | Energy purity (P1b) | `coal` (COAL ETF proxy + IDR) and `oil_gas` (CL=F + IDR) preferred over residual `energy` map; parent energy bag kept |
 | Bank / rates policy (P2a+B) | Defensive: BI `policy_rate_steps` (hike = headwind) + `usd_idr_risk`; not NIM expansion. Stockbit title **Interest Rate Decision** → `bi_rate` (facility rates excluded) |
-| Dead Yahoo symbols (do not map live) | `MTF=F` (Newcastle coal), `KO=F` (old CPO) — return no data as of 2026-07 smoke |
+| Dead Yahoo symbols (do not map live) | `MTF=F` (API2/Newcastle alt — no usable OHLCV bars), `KO=F` (legacy CPO — HTTP 404) as of 2026-07 smoke |
+| Series quality (Track DQ-1) | **Liquid cores:** `CL=F`, `IDR=X` (FX vol often 0 — expected), grains `ZC=F`/`ZS=F`, metals `HG=F`/`GC=F`. **Coal:** `COAL` ETF is a live basket proxy, not Newcastle FOB. **Palm:** `CPO=F` is thin ALTSYMBOL (mostly zero volume); still used for DIAGNOSTIC plantation returns until a better feed exists. Do not map `ZL=F` soy oil as palm without an explicit product decision. Full notes: `docs/data_sources.md` § Sector macro series quality |
 | Thin multi-sector maps (e.g. banks → 100% USDIDR) | **Forbidden** |
 | Auto-fetch | Live-map series refresh on every `saham fetch market` (`sector_macro` context labels) |
 

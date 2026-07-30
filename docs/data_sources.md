@@ -746,6 +746,50 @@ The system validates incoming data:
 | Missing days | Holidays/weekends excluded | Expected behavior |
 | Legacy candle provenance | Older databases may contain candle rows written before `source`, `volume_unit`, and `price_adjustment_policy` existed. Those rows are migrated with `unknown` provenance until refreshed. | Run `saham fetch audit` to identify unknown provenance, then refresh affected tickers. New Yahoo and IDX candle fetches persist volume in raw shares with explicit provider metadata. |
 
+### Sector macro series quality (ADR-053 / DIAGNOSTIC)
+
+Sector-macro drivers are Yahoo (or virtual) series routed by
+`config/sector_macro_context.yaml`. Authority is **DIAGNOSTIC only** — weak or
+proxy series must stay documented, not silently treated as cash-flow truth.
+
+Smoke reference: local `data/db/data.db` + Yahoo chart API (2026-07-30).
+
+| Series | Role in SMC | Quality notes | Do **not** use |
+|--------|-------------|---------------|----------------|
+| `CL=F` | Oil support (`oil_proxy`) and oil cost (`oil_cost`, invert) | Liquid NYMEX future; solid volume | — |
+| `IDR=X` | Exporter FX (`usd_idr`) or risk FX (`usd_idr_risk`, invert) | Live FX; volume often zero (normal for Yahoo FX) | — |
+| `COAL` | Thermal coal map (`coal_proxy`) | **Range Global Coal Index ETF** — liquid equity basket, not Newcastle FOB / API2. Imperfect for IDX thermal cash flows; best usable Yahoo stand-in after dead coal futures | `MTF=F` (API2 alt — no OHLCV bars), single US coal equities as the sole map driver without a product decision |
+| `CPO=F` | Plantation map (`cpo`) | CME **ALTSYMBOL** palm-linked series: OHLC usually present for session returns, **volume mostly zero** (thin/synthetic). Yahoo `regularMarketPrice` can disagree with chart last (feed quirk) | `KO=F` (legacy CPO — 404), treating prints as exchange-floor CPO |
+| `HG=F` / `GC=F` | Metals / gold | Liquid COMEX futures | — |
+| `ZC=F` / `ZS=F` | Poultry feed cost (invert) | Liquid CBOT grains | Chicken-price model (not a series we have) |
+| `BI_RATE` | Domestic rates maps (`bi_rate_policy`) | Virtual series from macro calendar steps (Stockbit economic), not Yahoo | Continuous SBN/INDONIA without a separate rates product (P2b) |
+| `^TNX` | Library only (`us_10y`) | Live after Track B **not** on live sector maps | Re-adding to domestic IDX maps without policy change |
+
+**Palm / CPO alternatives considered (not adopted):**
+
+| Candidate | Why not live-mapped |
+|-----------|---------------------|
+| `KO=F` | Dead / HTTP 404 on Yahoo |
+| `FCPO.KL` | Not available (404) |
+| `ZL=F` (soybean oil) | Liquid, but **different soft-oil complex** — would rebrand plantation driver from palm to veg-oil; needs explicit product decision |
+| KL equity proxies (e.g. SDG) | Single-name equity, not a commodity series |
+
+**Coal alternatives considered (not adopted):**
+
+| Candidate | Why not live-mapped |
+|-----------|---------------------|
+| `MTF=F` | No usable chart bars (stale ALTSYMBOL) |
+| `KOL` | No usable bars on Yahoo chart API (2026-07 smoke) |
+| `BTU` / miners | Single equities — more idiosyncratic than the `COAL` basket |
+
+**Operator impact:** plantation and coal SECTOR MACRO labels can be **noisy**.
+Fail-soft still applies (missing candles → factor UNAVAILABLE). Prefer reading
+composite + coverage, not a single thin factor, when judging names in those maps.
+
+**MCE note:** optional `commodity_composite` in `market_context_engine.yaml` may
+still list legacy `KO=F` / `MTF=F` while **disabled**. That factor stays off by
+default and is independent of sector-macro live maps (ADR-053).
+
 ---
 
 ## Adding New Providers

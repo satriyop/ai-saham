@@ -26,8 +26,9 @@ sector_macro_context:
     headwind_max: 0.35
 
   factor_library:
-    # WTI crude — Yahoo-live (2026-07 smoke). Newcastle coal (MTF=F) and old
-    # CPO (KO=F) return no data on Yahoo; do not map dead symbols into live maps.
+    # WTI crude — liquid NYMEX future (Yahoo CL=F). Preferred core oil driver.
+    # Dead / unusable on Yahoo (do not map live): MTF=F (API2/Newcastle alt),
+    # KO=F (legacy CPO, 404). See docs/data_sources.md "Sector macro series".
     #
     # Two economic signs (same series, different invert):
     #   oil_proxy  invert=false → price↑ supportive (upstream energy, export)
@@ -48,9 +49,12 @@ sector_macro_context:
         supportive_min: 0.05
         headwind_max: -0.05
 
-    # Thermal coal complex proxy — Yahoo has no live Newcastle futures (MTF=F dead).
-    # Global X Coal ETF (COAL) is an imperfect but live stand-in until a better series exists.
-    # invert=false: higher coal complex → supportive for thermal coal exporters/miners.
+    # Thermal coal complex proxy — not a Newcastle FOB or API2 future.
+    # Yahoo MTF=F (API2 CIF ARA alt) has no usable OHLCV bars (2026-07 smoke).
+    # Live stand-in: Range Global Coal Index ETF (COAL) — liquid equity basket
+    # of global coal names; imperfect for IDX thermal cash flows but honest and
+    # tradeable volume. Do not swap to single equities (e.g. BTU) without a
+    # dedicated product decision. invert=false: higher complex → supportive.
     coal_proxy:
       series: "COAL"
       kind: return_sessions
@@ -103,7 +107,13 @@ sector_macro_context:
         supportive_min: 1.0
         headwind_max: -1.0
 
-    # Palm oil futures — Yahoo-live (CPO=F). Not KO=F (dead).
+    # Palm oil — Yahoo CPO=F (CME ALTSYMBOL "USD Malaysian Crude Palm Oil Ca").
+    # Quality (2026-07 smoke): OHLC prints exist and are session-consistent for
+    # returns, but volume is mostly zero (thin/synthetic feed). KO=F is dead
+    # (HTTP 404). FCPO.KL not available on Yahoo. ZL=F (CBOT soybean oil) is
+    # liquid but is a *different* soft-oil complex — keep library-only unless
+    # product accepts veg-oil proxy instead of palm-specific. Plantation map
+    # remains DIAGNOSTIC; do not treat CPO=F as a tight cash-flow oracle.
     cpo:
       series: "CPO=F"
       kind: return_sessions

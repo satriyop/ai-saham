@@ -78,10 +78,13 @@ market_context_engine:
     commodity_composite:
       enabled: false        # off by default — toggle to true when commodity data available
       weight: 0.05
+      # Stale Yahoo symbols (2026-07 smoke): KO=F 404, MTF=F no OHLCV bars.
+      # Sector-macro live maps use CPO=F + COAL instead (ADR-053 / data_sources.md).
+      # Do not enable this factor until components are replaced with live series.
       components:
-        - ticker: "KO=F"   # CPO (crude palm oil) futures
+        - ticker: "KO=F"   # legacy CPO — dead on Yahoo; not SMC live series
           weight: 0.60
-        - ticker: "MTF=F"  # Newcastle coal futures
+        - ticker: "MTF=F"  # API2/Newcastle alt — unusable OHLCV; not SMC live series
           weight: 0.40
       thresholds:
         lookback_days: 20

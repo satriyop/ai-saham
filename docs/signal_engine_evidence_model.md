@@ -222,6 +222,11 @@ omitted on brief view and on universe board (latency). Plan structure desk does
 not host the panel (ADR-054). Macro calendar ingest: `saham fetch macro-calendar`
 / default `fetch market` (ADR-055).
 
+**Series quality:** liquid cores (`CL=F`, grains, metals, `IDR=X`); coal uses
+`COAL` ETF proxy (not Newcastle); plantation `CPO=F` is a thin Yahoo ALTSYMBOL
+(mostly zero volume) — DIAGNOSTIC only. See `docs/data_sources.md` § Sector
+macro series quality.
+
 ## Regime Detection Evidence
 
 Market regime is deterministic, replayable evidence upstream of ticker scoring.
