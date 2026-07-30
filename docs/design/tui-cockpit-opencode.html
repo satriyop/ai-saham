@@ -6,7 +6,7 @@
  <meta http-equiv="Pragma" content="no-cache" />
  <meta http-equiv="Expires" content="0" />
  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ai-saham · Daily Cockpit · OpenCode rev-20260730u</title>
+  <title>ai-saham · Daily Cockpit · OpenCode rev-20260730v</title>
  <link rel="preconnect" href="https://fonts.googleapis.com" />
  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -1931,7 +1931,7 @@
         <button type="button" data-frame="empty">7 Health</button>
         <button type="button" data-frame="palette">8 Palette</button>
       </div>
-      <span class="rev" id="buildStamp">mock · 30u</span>
+      <span class="rev" id="buildStamp">mock · 30v</span>
     </div>
 
     <!-- Product shell only · OpenCode bible for shipped TUI -->
@@ -2355,7 +2355,7 @@
  <!-- Stage B · Price hero (price is the landscape) -->
  <section class="price-hero" data-panel="price_structure" aria-label="Price hero">
  <div>
- <div class="lab">Last · local close · latest_close</div>
+ <div class="lab">Last · local close</div>
  <div class="price-row">
  <span class="ccy">Rp</span>
  <span class="price">6,275</span>
@@ -2363,7 +2363,7 @@
  </div>
  </div>
  <div aria-label="Horizons from price_structure">
- <div class="lab">Horizons · price_structure</div>
+ <div class="lab">Horizons</div>
  <div class="hz-row">
  <span class="h">1d</span>
  <span class="bar"><i style="width:28%"></i></span>
@@ -2467,27 +2467,10 @@
  </div>
  </div>
 
-               <div class="flag-row" data-flag-group="ticker" id="tickerDepthFlags">
-                <span class="flag-lab">Depth</span>
-                <button type="button" class="flag-chip" data-flag="depth" id="tickerDepthToggle">depth</button>
-                <button type="button" class="flag-chip is-dim" title="when DTO non-null">analyst+</button>
-                <button type="button" class="flag-chip is-dim">own+</button>
-                <button type="button" class="flag-chip is-dim">insider+</button>
-                <button type="button" class="flag-chip is-dim">candles+</button>
-                <span style="font-size:11px;color:var(--text-mute)"></span>
+               <div class="flag-row" data-flag-group="ticker" id="tickerDetailFlags">
+                <span class="flag-lab">More</span>
+                <button type="button" class="flag-chip" data-flag="detail" id="tickerDetailAll" title="Full panels · same idea as CLI without --brief / accum --detail">detail · d</button>
               </div>
-              <div class="section-label">Presence</div>
-              <div class="card" id="tickerPresence" style="margin-bottom:10px">
-                <div class="kv">
-                  <span class="k">Analyst</span><span class="v">— local</span>
-                  <span class="k">Ownership</span><span class="v">present</span>
-                  <span class="k">Insider</span><span class="v">stale</span>
-                  <span class="k">IEV</span><span class="v">present</span>
-                  <span class="k">Sentiment</span><span class="v">—</span>
-                  <span class="k">Candles</span><span class="v">present</span>
-                </div>
-              </div>
-              <div class="section-label">Depth</div>
               <div class="ticker-depth-body" id="tickerDepthBody">
 <div class="cli-stack">
  <section class="cli-panel" data-panel="analyst">
@@ -2640,7 +2623,7 @@
  <span><span class="kbd">b</span> top desks</span>
  <span><span class="kbd">p</span> plan</span>
  <span><span class="kbd">esc</span> board</span>
- <span class="dim">price hero · presence · depth flag · density ≠ chart</span>
+ <span><span class="kbd">d</span> detail</span>
  </div>
  </div>
 
@@ -3665,7 +3648,9 @@
  $("statusRows").textContent = "0 rows";
  } else if (state.frame === "detail") {
  $("viewTitle").textContent = `View · ticker · ${t}`;
- $("viewMeta").innerHTML = `<span class="dot">·</span> price hero · full fields`;
+ $("viewMeta").innerHTML = state.tickerDetailOpen
+          ? `<span class="dot">·</span> full · local cache`
+          : `<span class="dot">·</span> local cache · d detail`;
  $("statusScreen").textContent = "view ticker";
  $("statusRows").textContent = t;
  } else if (state.frame === "broker") {
@@ -4120,6 +4105,20 @@
  }
  }
 
+      if (state.frame === "detail") {
+        if (e.key.toLowerCase() === "d") {
+          e.preventDefault();
+          toggleTickerDetail();
+          return;
+        }
+        if (e.key.toLowerCase() === "p") { e.preventDefault(); showFrame("plan"); return; }
+        if (e.key.toLowerCase() === "b") {
+          e.preventDefault();
+          showFrame("broker");
+          return;
+        }
+      }
+
       if (state.frame === "preopen") {
         if (state.preopenMode === "inspect") {
           if (e.key.toLowerCase() === "p") { e.preventDefault(); showFrame("plan"); return; }
@@ -4244,8 +4243,26 @@
       setJudgeDetailOpen(!state.judgeDetailOpen);
       toast(
         state.judgeDetailOpen
-          ? "Judge detail on · all panels (CLI --detail)"
+          ? "Judge detail on · all panels"
           : "Judge detail off · compact"
+      );
+    }
+
+    function setTickerDetailOpen(open) {
+      state.tickerDetailOpen = !!open;
+      const btn = $("tickerDetailAll");
+      if (btn) btn.classList.toggle("is-on", state.tickerDetailOpen);
+      const body = $("tickerDepthBody");
+      if (body) body.classList.toggle("is-open", state.tickerDetailOpen);
+      if (state.frame === "detail") updateChrome();
+    }
+
+    function toggleTickerDetail() {
+      setTickerDetailOpen(!state.tickerDetailOpen);
+      toast(
+        state.tickerDetailOpen
+          ? "Ticker detail on · full panels"
+          : "Ticker detail off · dashboard"
       );
     }
 
@@ -4262,15 +4279,8 @@
             toggleJudgeDetail();
             return;
           }
-          if (flag === "depth") {
-            const on = !btn.classList.contains("is-on");
-            btn.classList.toggle("is-on", on);
-            const body = $("tickerDepthBody");
-            if (body) body.classList.toggle("is-open", on);
-            document.querySelectorAll("#tickerDepthFlags .flag-chip").forEach((c) => {
-              if (c.dataset.flag === "depth") return;
-              c.classList.toggle("is-dim", !on);
-            });
+          if (flag === "detail" && group === "ticker") {
+            toggleTickerDetail();
             return;
           }
           const panel = document.querySelector(

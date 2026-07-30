@@ -142,9 +142,9 @@ def test_detail_flags_present_for_code_richer_fields():
     # Preopen inspect flags
     assert 'data-flag="auction+"' in html or "auction+" in html
     assert 'data-flag="why"' in html
-    # Ticker depth flag
-    assert "tickerDepthBody" in html or "tickerDepthToggle" in html
-    assert "Secondary · presence" in html or "tickerPresence" in html
+    # Ticker detail (CLI full vs brief)
+    assert "tickerDepthBody" in html or "tickerDetailAll" in html
+    assert "toggleTickerDetail" in html or 'data-flag="detail"' in html
     # Broker flags
     assert "partial_net" in html
     assert "from_ticker" in html

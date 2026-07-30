@@ -92,7 +92,7 @@ Primary stage stays scannable. Richer DTO fields hang on **chips** (mono pills).
 | Accum | `snapshot` \| `live` badge | `board_source` / chrome_cues |
 | Judge | **`d` / `detail`** = all panels (CLI `--detail`) · singles: `stack` · `readiness` · `named` · `mce` · `phase+` · `limited` | `JudgeDeskModel` / `decision_display` · screen accum `--detail` |
 | Pre-open inspect | `why` · `auction+` · `warn` | `preopen_engine_inspect_presenter` |
-| Ticker | `depth` (+ analyst+ / own+ / … when non-null) | `TickerDeskModel` presence today; full panels when expanded |
+| Ticker | **`d` / `detail`** = full CLI panels (inverse of `view ticker --brief`) | Primary = dashboard hierarchy; detail = remaining FULL_PANEL_ORDER |
 | Broker list | `partial_net` · `from_ticker` | `has_partial_netx` · `ticker-desks` stage |
 | Broker home | `deep.t` · `deep.f` · `deep.h` | ViewBrokerDesk top/flow/history loaders |
 
@@ -135,9 +135,13 @@ Primary stage stays scannable. Richer DTO fields hang on **chips** (mono pills).
 - Primary: grade · risk · IEP · levels  
 - Flags: why · auction+ (trend · broker tag · backing_score · buy_streak) · warn  
 
-### Ticker
-- Primary: identity · freshness · price hero · ribbon · pulse · earnings · **presence**  
-- Flag `depth`: FULL_PANEL_ORDER panels (matches future code expand; code today presence-only)  
+### Ticker (`v t` · on par with `saham view ticker show`)
+- **Primary (default):** identity · freshness · last close · horizons · fundamentals · pulse · earnings  
+  — matches TUI desk / operational dashboard (CLI `--brief`-class density)  
+- **`d` (detail):** expand full panel inventory (analyst · ownership · sector · corp · insider · seasonality · iev · sentiment · profile · candles)  
+  — same idea as CLI **without** `--brief`, or accum/judge **`--detail` / `d`**  
+- Header meta: `local cache` or `full · local cache` — no design jargon  
+- Footer: `b` desks · `p` plan · `esc` · `d` detail
 
 ### Broker
 - Radar + Enter home (net hero · hub)  
