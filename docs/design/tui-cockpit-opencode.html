@@ -1433,7 +1433,7 @@
       gap: 4px;
     }
     .desk-cal .day {
-      min-height: 52px;
+      min-height: 62px;
       border: 1px solid var(--border-soft);
       border-radius: var(--radius-sm);
       background: var(--bg-elevated);
@@ -1448,8 +1448,19 @@
     .desk-cal .day .dn {
       color: var(--text-mute);
       font-size: 10px;
-      margin-bottom: 4px;
+      margin-bottom: 2px;
     }
+    .desk-cal .day .stk {
+      font-weight: 600;
+      font-size: 11px;
+      color: #ececec;
+      letter-spacing: 0.02em;
+      margin-bottom: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .desk-cal .day .stk.mute { color: var(--text-mute); font-weight: 500; }
     .desk-cal .day .net {
       font-weight: 600;
       font-size: 11px;
@@ -2882,7 +2893,7 @@
                   <div class="cal-head">
                     <div>
                       <div class="cal-title">Calendar · <span id="brokerCalCode">YP</span> · Jul 2026</div>
-                      <div class="cal-sub">Desk day net · buy/sell activity · this broker only · ~1 month</div>
+                      <div class="cal-sub">Per session: top stock collected (net buy) · desk net · this broker only</div>
                     </div>
                     <div class="cal-sub" id="brokerCalSummary">session days · tracked only</div>
                   </div>
@@ -2890,7 +2901,7 @@
                     <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
                   </div>
                   <div class="grid" id="brokerCalGrid"></div>
-                  <div class="legend">Green = desk net buy · red = desk net sell · empty = no session / weekend · not market foreign total</div>
+                  <div class="legend">Ticker = top stock this desk net-bought that day · net = desk day net · empty = no session</div>
                 </div>
               </div>
 
@@ -3614,16 +3625,16 @@
         const monthDays = 31;
         // Mon-start: Jul 2026 starts Wednesday → pad 2
         const pad = 2;
+        // [netB, buyB, sellB, topCollectTicker] — top stock this desk net-bought that day
         const sessionNets = {
-          1: [2.1, 4.2, 2.1], 2: [1.4, 3.0, 1.6], 3: [-0.8, 1.1, 1.9],
-          4: [3.2, 5.5, 2.3], 7: [0.6, 2.0, 1.4], 8: [-1.2, 0.9, 2.1],
-          9: [2.8, 4.0, 1.2], 10: [1.1, 2.5, 1.4], 11: [-2.4, 1.0, 3.4],
-          14: [4.0, 6.1, 2.1], 15: [2.2, 3.8, 1.6], 16: [-0.5, 1.5, 2.0],
-          17: [1.8, 3.2, 1.4], 18: [0.9, 2.1, 1.2], 21: [3.5, 5.0, 1.5],
-          22: [-1.8, 0.7, 2.5], 23: [9.8, 12.0, 2.2], 24: [-4.4, 1.2, 5.6],
-          25: [6.1, 8.0, 1.9], 28: [8.2, 10.5, 2.3], 29: [11.5, 14.2, 2.7],
+          1: [2.1, 4.2, 2.1, "BBRI"], 2: [1.4, 3.0, 1.6, "BMRI"], 3: [-0.8, 1.1, 1.9, "TLKM"],
+          4: [3.2, 5.5, 2.3, "AMMN"], 7: [0.6, 2.0, 1.4, "ANTM"], 8: [-1.2, 0.9, 2.1, "DEWA"],
+          9: [2.8, 4.0, 1.2, "BUMI"], 10: [1.1, 2.5, 1.4, "BBCA"], 11: [-2.4, 1.0, 3.4, "ADRO"],
+          14: [4.0, 6.1, 2.1, "AMMN"], 15: [2.2, 3.8, 1.6, "BBRI"], 16: [-0.5, 1.5, 2.0, "PTBA"],
+          17: [1.8, 3.2, 1.4, "ANTM"], 18: [0.9, 2.1, 1.2, "BUMI"], 21: [3.5, 5.0, 1.5, "DEWA"],
+          22: [-1.8, 0.7, 2.5, "CUAN"], 23: [9.8, 12.0, 2.2, "BUMI"], 24: [-4.4, 1.2, 5.6, "BBCA"],
+          25: [6.1, 8.0, 1.9, "AMMN"], 28: [8.2, 10.5, 2.3, "BUMI"], 29: [11.5, 14.2, 2.7, "AMMN"],
         };
-        // values: [netB, buyB, sellB]
         let html = "";
         for (let i = 0; i < pad; i++) html += `<div class="day empty"></div>`;
         let sessions = 0;
@@ -3635,13 +3646,16 @@
             continue;
           }
           sessions++;
-          const [net, buy, sell] = row;
+          const [net, buy, sell, topStk] = row;
           buySum += buy; sellSum += sell;
           const cls = net >= 0 ? "pos" : "neg";
           const sign = net >= 0 ? "+" : "";
           const isSess = d === 29 ? " is-session" : "";
-          html += `<div class="day${isSess}" title="Desk ${r.code} · ${d} Jul">
+          const stkClass = net >= 0 ? "stk" : "stk mute";
+          const stkLabel = topStk || "—";
+          html += `<div class="day${isSess}" title="Desk ${r.code} · ${d} Jul · top collect ${stkLabel}">
             <div class="dn">${d}</div>
+            <div class="${stkClass}">${stkLabel}</div>
             <div class="net ${cls}">${sign}${net.toFixed(1)}B</div>
             <div class="bs">B ${buy.toFixed(1)} · S ${sell.toFixed(1)}</div>
           </div>`;
