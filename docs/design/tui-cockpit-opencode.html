@@ -3442,7 +3442,11 @@
  $("brokerDaySign").className = "sign" + (sign === "−" || sign === "-" ? " neg" : "");
  }
  if ($("brokerDayAmt")) $("brokerDayAmt").textContent = r.dayAmt || String(r.dayNet).replace(/[^\d.]/g, "");
- if ($("brokerDaySub")) $("brokerDaySub").textContent = `lot ${r.lot || "—"} · not full market — tracked activity only`;
+ if ($("brokerDaySub")) {
+        $("brokerDaySub").textContent =
+          `lot ${r.lot || "—"} · desk ${r.code} only · tracked activity · not full market`;
+      }
+      if ($("brokerFlowCode")) $("brokerFlowCode").textContent = r.code;
 
  $("brokerNet5").textContent = r.net5;
  $("brokerNet5").className = "v " + (isNetNeg(r.net5) ? "neg" : "pos");
