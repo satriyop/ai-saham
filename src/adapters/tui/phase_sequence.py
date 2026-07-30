@@ -48,7 +48,8 @@ def format_phase_sequence_section(
     Empty facts + no unavailable_reason → honest empty history cue.
     unavailable_reason → cannot query (missing as_of / loader) without inventing.
     """
-    lines = ["[#9b8fb8]Phase sequence (ledger)[/]"]
+    # Timeline language (Verdict mast companion — ADR-058 read-only).
+    lines = ["[#9b8fb8]Phase sequence · ledger timeline[/]"]
     if unavailable_reason:
         lines.append(f"  {unavailable_reason}")
         lines.append("  [dim]production memory · not a re-score[/]")
@@ -60,8 +61,9 @@ def format_phase_sequence_section(
         lines.append("  [dim]production memory · not a re-score[/]")
         return lines
 
-    arrow = " → ".join(f.phase for f in items)
-    lines.append(f"  {arrow}")
+    # Arrow timeline (oldest → newest); last node is most recent ledger fact.
+    nodes = [f.phase for f in items]
+    lines.append("  " + " → ".join(nodes))
     for fact in items:
         if fact.as_of:
             lines.append(f"  · {fact.as_of}  {fact.phase}")
@@ -70,7 +72,7 @@ def format_phase_sequence_section(
 
     cur = (current_phase or "").strip()
     if cur and cur not in {"—", "-", "NONE", "none"}:
-        lines.append(f"  now {cur} (board · not ledger-written here)")
+        lines.append(f"  [bold]now[/] {cur}  [dim](board · not ledger-written here)[/]")
 
     lines.append("  [dim]production memory · not a re-score[/]")
     return lines

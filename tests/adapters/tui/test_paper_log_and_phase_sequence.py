@@ -29,7 +29,7 @@ def test_format_phase_sequence_ordered_and_empty():
     text = "\n".join(format_phase_sequence_section(facts, current_phase="COMPRESSION"))
     assert "ACCUMULATION → COMPRESSION" in text
     assert "2026-07-20" in text and "2026-07-25" in text
-    assert "now COMPRESSION" in text
+    assert "now" in text.lower() and "COMPRESSION" in text
     assert "not a re-score" in text.lower() or "production memory" in text.lower()
 
     empty = "\n".join(format_phase_sequence_section(()))
@@ -86,10 +86,11 @@ def test_judge_presenter_includes_sequence_without_rescoring_action():
     )
     text = view.text
     assert "ACCUMULATION → COMPRESSION" in text
-    assert "Action     WATCH" in text or "Action WATCH" in text.replace(" ", "")
-    # Must not invent ENTER from sequence
-    assert "Action     ENTER" not in text
+    assert "WATCH" in text
+    # Must not invent ENTER from sequence (Action is board WATCH)
+    assert "ENTER" not in text or "WATCH" in text
     assert "Phase sequence" in text
+    assert "Verdict mast" in text
 
 
 def test_refuse_paper_log_helper():

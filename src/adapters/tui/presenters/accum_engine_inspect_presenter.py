@@ -1,5 +1,8 @@
 """Present-only ADR-054 Judge stage for screen-accum board rows.
 
+Verdict Mast layout (design: docs/design/tui-judge-desk.html):
+Action/Gate as landscape, scores strip, Why, phase timeline, then stack.
+
 Default Enter path: no engine re-run, no network. Uses shared
 ``decision_display`` for Why / readiness / Accum breakdown / decision stack.
 
@@ -37,14 +40,15 @@ from src.adapters.tui.presenters.accum_presenter import AccumRowView, build_accu
 # Product-facing degradation when board row has no candidate object.
 LIMITED_JUDGE_BANNER = (
     "[#d4b06a]Limited judge[/]  snapshot / no candidate object · "
-    "scalars only · [bold]j[/] re-judge local for full desk"
+    "scalars only · [bold]j[/] re-judge or [bold]r[/] live for full desk"
 )
 
 JUDGE_FOOTER_FULL = (
-    "[dim]esc board · p plan · j re-judge local · Ctrl+P · present-only (same object as board)[/]"
+    "[dim]esc board · p plan · j re-judge local · Ctrl+P · "
+    "present-only · Verdict mast · same object as board[/]"
 )
 JUDGE_FOOTER_LIMITED = (
-    "[dim]esc board · p plan · j re-judge local · Ctrl+P · limited (no source)[/]"
+    "[dim]esc board · p plan · j re-judge · r live · Ctrl+P · limited (no source)[/]"
 )
 
 
@@ -106,31 +110,34 @@ def present_accum_engine_inspect(
 
     lines: list[str] = [
         f"[bold #e8e8e8]Judge · {ticker}[/]",
-        f"Screen · accumulation · #{rank}/{total} by Signal",
+        f"[dim]Screen · accumulation · #{rank}/{total} by Signal · present-only[/]",
     ]
     if board_summary:
         lines.append(f"[dim]Board[/]  {board_summary}")
     if limited:
         lines.append("")
         lines.append(LIMITED_JUDGE_BANNER)
+
+    # ── Verdict mast (Action is the landscape) ─────────────
     lines.append("")
     lines.extend(
-        _judgment_header(
-            ticker=ticker,
+        _verdict_mast(
             action=action,
             gate=gate,
             signal=signal,
             accum=accum,
-            phase=phase,
-            family=family,
             authority=auth,
+            family=family,
             why=why or "—",
             readiness=readiness_s,
+            phase=phase,
             breakdown=breakdown,
+            limited=limited,
         )
     )
-    lines.append("")
+
     # ADR-058 production sequence memory (read-only; never re-scores Action).
+    lines.append("")
     lines.extend(
         format_phase_sequence_section(
             phase_sequence,
@@ -138,11 +145,12 @@ def present_accum_engine_inspect(
             unavailable_reason=phase_sequence_unavailable,
         )
     )
+
     lines.append("")
     if limited:
         lines.extend(
             [
-                "[#d4b06a]Decision[/]",
+                "[#d4b06a]Decision stack[/]",
                 f"  Action {action} · Gate {gate}",
                 f"  ← Signal {signal} · coverage — · strength —",
                 "  ← Risk —",
@@ -159,6 +167,7 @@ def present_accum_engine_inspect(
                 why=why,
             )
         )
+
     lines.append("")
     if not limited:
         lines.extend(_section_named_setups(source))
@@ -200,35 +209,62 @@ def present_accum_engine_inspect(
 present_accum_judge = present_accum_engine_inspect
 
 
-def _judgment_header(
+def _action_markup(action: str) -> str:
+    """Color Action for Verdict mast (semantic only)."""
+    a = (action or "").strip().upper()
+    if a in {"ENTER", "BUY"}:
+        return f"[bold #6fbf8a]{action}[/]"
+    if a in {"AVOID", "BLOCK", "SELL"}:
+        return f"[bold #c97a72]{action}[/]"
+    if a in {"WATCH", "HOLD"}:
+        return f"[bold #d4b06a]{action}[/]"
+    return f"[bold #e8e8e8]{action or '—'}[/]"
+
+
+def _gate_markup(gate: str) -> str:
+    g = (gate or "").strip().upper()
+    if g in {"OPEN", "PASS", "CLEAR"}:
+        return f"[#6fbf8a]Gate {gate}[/]"
+    if g in {"BLOCK", "BLOCKED", "FAIL", "CLOSED"}:
+        return f"[#c97a72]Gate {gate}[/]"
+    return f"[#d4b06a]Gate {gate or '—'}[/]"
+
+
+def _verdict_mast(
     *,
-    ticker: str,
     action: str,
     gate: str,
     signal: str,
     accum: str,
-    phase: str,
-    family: str,
     authority: str,
+    family: str,
     why: str,
     readiness: str,
+    phase: str,
     breakdown: str,
+    limited: bool,
 ) -> list[str]:
-    """CLI-parity judgment strip fields (text form)."""
-    return [
-        "[#d4b06a]Judgment[/]",
-        f"  Ticker     {ticker}",
-        f"  Action     {action}",
-        f"  Gate       {gate}",
-        f"  {SIGNAL:<10} {signal}",
-        f"  {ACCUM:<10} {accum}",
-        f"  Authority  {authority}",
+    """Verdict mast: Action landscape + Gate seal + score strip + Why.
+
+    Replaces equal-weight Judgment field dump (design: tui-judge-desk.html).
+    """
+    lines = [
+        "[#d4b06a]Judgment · Verdict mast[/]",
+        f"  {_action_markup(action)}   {_gate_markup(gate)}",
+        "",
+        f"  {SIGNAL:<10} {signal}    {ACCUM:<10} {accum}",
+        f"  Authority  {authority}    Family     {family}",
         f"  Phase      {phase}",
-        f"  Family     {family}",
-        f"  Why        {why}",
         f"  Readiness  {readiness}",
-        f"  Accum brk  {breakdown}",
     ]
+    if limited:
+        lines.append(f"  Accum brk  {breakdown}")
+    else:
+        lines.append(f"  Accum brk  {breakdown}")
+    lines.append("")
+    why_line = why if why and why != "—" else "—"
+    lines.append(f"  [bold]Why {action or '—'}[/]  {why_line}")
+    return lines
 
 
 def _section_named_setups(source: Any) -> list[str]:
