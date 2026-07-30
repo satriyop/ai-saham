@@ -9,7 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
     /*
-      Design thesis — “Harga Mast / Night Tape”
+      Design thesis — “Price hero / Night Tape”
       ─────────────────────────────────────────
       Not OpenCode peach mono. Not CLI Rich boxes. Not generic acid-green cyber.
 
@@ -318,8 +318,8 @@
       border: 1px solid var(--line);
     }
 
-    /* ═══ HARGA MAST (signature) ═══════════════════════════ */
-    .mast {
+    /* ═══ PRICE HERO (signature) ═══════════════════════════ */
+    .price-hero {
       position: relative;
       display: grid;
       grid-template-columns: minmax(0, 1.15fr) minmax(180px, 0.75fr);
@@ -334,7 +334,7 @@
       overflow: hidden;
     }
 
-    .mast::before {
+    .price-hero::before {
       content: "";
       position: absolute;
       inset: 0;
@@ -350,10 +350,10 @@
     }
 
     @media (max-width: 700px) {
-      .mast { grid-template-columns: 1fr; }
+      .price-hero { grid-template-columns: 1fr; }
     }
 
-    .mast-label {
+    .hero-label {
       position: relative;
       font-family: var(--font-mono);
       font-size: 10px;
@@ -859,7 +859,7 @@
   <div class="vision-bar">
     <div class="thesis">
       <div class="eyebrow">Design vision · data-aligned · GetTickerDashboardUseCase</div>
-      <h1>Ticker Desk — Harga Mast</h1>
+      <h1>Ticker Desk — Price hero</h1>
       <p>
         Best presentation for one name: the <strong style="color:#e8dcc8;font-weight:500">price is the landscape</strong>,
         not a CLI panel stack. <strong style="color:#e8dcc8;font-weight:500">Same use case</strong> as
@@ -966,10 +966,10 @@
             </div>
           </div>
 
-          <!-- Harga Mast · latest_close + price_structure -->
-          <section class="mast" aria-label="Price mast">
+          <!-- Price hero · latest_close + price_structure -->
+          <section class="price-hero" aria-label="Price hero">
             <div>
-              <div class="mast-label">Last · local close · latest_close</div>
+              <div class="hero-label">Last · local close · latest_close</div>
               <div class="price-row">
                 <span class="currency">Rp</span>
                 <span class="price">6,275</span>

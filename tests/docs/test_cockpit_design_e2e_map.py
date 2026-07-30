@@ -55,12 +55,12 @@ def test_broker_is_first_class_not_toast_only():
 
 
 def test_broker_enter_opens_full_desk_home_not_strip():
-    """Radar → Enter → Net Mast home (tui-broker-desk IA), not a footer strip only."""
+    """Radar → Enter → Net hero home (tui-broker-desk IA), not a footer strip only."""
     html = _html()
     assert 'id="brokerRadar"' in html
     assert 'id="brokerHome"' in html
     assert "openBrokerHome" in html
-    assert "net-mast" in html
+    assert "net-hero" in html
     assert "Day net" in html or "Day net" in html.lower() or "day net" in html.lower()
     assert 'id="brokerHub"' in html
     assert 'data-deep="top"' in html
@@ -101,14 +101,14 @@ def test_md_states_opencode_bible_and_broker_in_cockpit():
     assert "linked out" not in text.lower() or "in-cockpit" in text.lower() or "7 |" in text
 
 
-def test_ticker_frame_is_harga_mast_hierarchy_not_flat_cli_only():
+def test_ticker_frame_is_price_hero_hierarchy_not_flat_cli_only():
     html = _html()
     assert "Secondary presence" not in html
     assert 'id="tickerFullPanels"' in html
     assert 'data-mode="full"' in html
-    assert 'data-hierarchy="harga-mast"' in html
-    assert "harga-mast" in html
-    assert "Harga Mast" in html or "Last · local close" in html
+    assert 'data-hierarchy="price-hero"' in html
+    assert "price-hero" in html
+    assert "Price hero" in html or "Last · local close" in html
     # Journey hierarchy markers
     assert "Horizons" in html or "price_structure" in html
     assert "Pulse" in html or "foreign_flow" in html

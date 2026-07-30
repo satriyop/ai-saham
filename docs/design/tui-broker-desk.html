@@ -9,11 +9,11 @@
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
     /*
-      Design thesis — “Desk Radar / Net Mast”
+      Design thesis — “Desk Radar / Net hero”
       ────────────────────────────────────────
-      Sibling of Harga Mast (ticker desk), same night-ink family.
+      Sibling of Price hero (ticker desk), same night-ink family.
       Subject: operator scanning tracked desks, then one desk home.
-      Signature: Net5 as radar amplitude; Day net as monumental mast on show.
+      Signature: Net5 as radar amplitude; Day net as monumental hero number on show.
       Not CLI tables-in-a-box. Not a generic admin list.
     */
     :root {
@@ -396,7 +396,7 @@
       color: var(--coral);
     }
 
-    /* ═══ DESK HOME · Net Mast ═════════════════════════════ */
+    /* ═══ DESK HOME · Net hero ═════════════════════════════ */
     .desk-id {
       display: flex;
       flex-wrap: wrap;
@@ -460,7 +460,7 @@
       font-weight: 500;
     }
 
-    .net-mast {
+    .net-hero {
       position: relative;
       display: grid;
       grid-template-columns: 1.15fr 0.85fr;
@@ -476,10 +476,10 @@
     }
 
     @media (max-width: 700px) {
-      .net-mast { grid-template-columns: 1fr; }
+      .net-hero { grid-template-columns: 1fr; }
     }
 
-    .net-mast .label {
+    .net-hero .label {
       font-family: var(--font-mono);
       font-size: 10px;
       letter-spacing: 0.16em;
@@ -862,18 +862,18 @@
 <body>
   <div class="vision-bar">
     <div class="eyebrow">Design vision · view broker family</div>
-    <h1>Broker Desk — Desk Radar / Net Mast</h1>
+    <h1>Broker Desk — Desk Radar / Net hero</h1>
     <p>
       Same night-ink family as
       <a href="./tui-ticker-desk.html">Ticker Desk</a>,
       different hero: <strong style="color:#e8dcc8;font-weight:500">Net is the landscape</strong>
-      (not price). Radar list for scouting tracked desks; Net Mast for one desk home;
+      (not price). Radar list for scouting tracked desks; Net hero for one desk home;
       hub for top / flow / history without CLI box dumps.
       <a href="./tui-cockpit-opencode.html">← Cockpit mock</a>
     </p>
     <div class="meta-tags">
       <span class="tag">list · <em>Desk Radar</em></span>
-      <span class="tag">show · <em>Net Mast</em></span>
+      <span class="tag">show · <em>Net hero</em></span>
       <span class="tag">hub · t / f / h / v</span>
       <span class="tag">data · YP CLI smoke + radar fiction</span>
     </div>
@@ -1037,7 +1037,7 @@
               </div>
             </div>
 
-            <section class="net-mast" aria-label="Day net mast">
+            <section class="net-hero" aria-label="Day net hero">
               <div>
                 <div class="label">Day net · desk</div>
                 <div class="net-row">
@@ -1111,7 +1111,7 @@
               <h3>Jump ticker</h3>
               <p style="color:var(--mist);font-size:13px;margin-bottom:10px">
                 From desk home, <kbd style="font-family:var(--font-mono);border:1px solid var(--line-strong);padding:1px 6px;border-radius:4px;background:var(--lift)">v</kbd>
-                opens top-buy stock in <strong style="color:var(--fog)">Ticker Desk</strong> (Harga Mast) — trail back with esc.
+                opens top-buy stock in <strong style="color:var(--fog)">Ticker Desk</strong> (Price hero) — trail back with esc.
               </p>
               <div class="stock-row" style="border:1px solid var(--line);border-radius:8px;margin:0">
                 <span class="t">AMMN</span>
@@ -1144,7 +1144,7 @@
         <h4>Focus</h4>
         <p class="note">
           <strong id="railFocus">Radar</strong>
-          <span id="railNote">Scout desks by |Net5|. Enter = Net Mast home.</span>
+          <span id="railNote">Scout desks by |Net5|. Enter = Net hero home.</span>
         </p>
 
         <h4>Session</h4>
@@ -1193,10 +1193,10 @@
       </ul>
     </article>
     <article>
-      <h2 class="good">Adopt · Radar + Net Mast + hub</h2>
+      <h2 class="good">Adopt · Radar + Net hero + hub</h2>
       <ul>
         <li>Net5 amplitude is the list’s signature</li>
-        <li>Day net monumental on desk home (parallel to harga)</li>
+        <li>Day net monumental on desk home (parallel to price hero)</li>
         <li>Buy/sell stocks as dual heat columns</li>
         <li>t/f/h stay on one desk instrument; v → ticker desk</li>
       </ul>
@@ -1205,8 +1205,8 @@
 
   <script>
     const crumbs = {
-      radar: ["View · broker · <strong>radar</strong>", "Radar", "Scout desks by |Net5|. Enter = Net Mast home.", "broker radar", "—"],
-      home: ["View · broker · <strong>YP</strong> · home", "YP", "Desk home · Net Mast · tracked daily flow.", "desk home · YP", "YP"],
+      radar: ["View · broker · <strong>radar</strong>", "Radar", "Scout desks by |Net5|. Enter = Net hero home.", "broker radar", "—"],
+      home: ["View · broker · <strong>YP</strong> · home", "YP", "Desk home · Net hero · tracked daily flow.", "desk home · YP", "YP"],
       flow: ["View · broker · <strong>YP</strong> · flow", "YP · flow", "Aggregate day net across tickers.", "desk flow · YP", "YP"],
       hist: ["View · broker · <strong>YP</strong> · history", "YP · history", "Per-ticker daily rows.", "desk history · YP", "YP"],
     };

@@ -6,7 +6,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ai-saham · Daily Cockpit · OpenCode rev-20260730g</title>
+  <title>ai-saham · Daily Cockpit · OpenCode rev-20260730h</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -1167,7 +1167,7 @@
       .val-grid { grid-template-columns: 1fr 1fr; }
     }
 
-    /* Broker · Desk Radar / Net Mast (OpenCode; IA from tui-broker-desk) */
+    /* Broker · Desk Radar / Net hero (OpenCode; IA from tui-broker-desk) */
     .net5-cell {
       display: flex;
       flex-direction: column;
@@ -1306,7 +1306,7 @@
     .flow-day .v.pos { color: var(--green); }
     .flow-day .v.neg { color: var(--red); }
 
-    .net-mast {
+    .net-hero {
       display: grid;
       grid-template-columns: 1.4fr 1fr;
       gap: 14px;
@@ -1317,44 +1317,44 @@
       background: var(--bg-elevated);
     }
     @media (max-width: 800px) {
-      .net-mast { grid-template-columns: 1fr; }
+      .net-hero { grid-template-columns: 1fr; }
     }
-    .net-mast .lab {
+    .net-hero .lab {
       font-size: 10px;
       letter-spacing: 0.12em;
       text-transform: uppercase;
       color: var(--text-mute);
       margin-bottom: 8px;
     }
-    .net-mast .net-row {
+    .net-hero .net-row {
       display: flex;
       align-items: baseline;
       gap: 6px;
       flex-wrap: wrap;
     }
-    .net-mast .sign {
+    .net-hero .sign {
       font-size: 1.6rem;
       font-weight: 600;
       color: var(--green);
     }
-    .net-mast .sign.neg { color: var(--red); }
-    .net-mast .amt {
+    .net-hero .sign.neg { color: var(--red); }
+    .net-hero .amt {
       font-size: 2rem;
       font-weight: 600;
       font-variant-numeric: tabular-nums;
       letter-spacing: -0.02em;
       color: var(--text);
     }
-    .net-mast .unit {
+    .net-hero .unit {
       font-size: 12px;
       color: var(--text-mute);
     }
-    .net-mast .net-sub {
+    .net-hero .net-sub {
       margin-top: 6px;
       font-size: 11.5px;
       color: var(--text-mute);
     }
-    .net-mast .side .stat-line {
+    .net-hero .side .stat-line {
       display: flex;
       justify-content: space-between;
       gap: 12px;
@@ -1363,11 +1363,11 @@
       border-bottom: 1px solid var(--border-soft);
       font-variant-numeric: tabular-nums;
     }
-    .net-mast .side .stat-line:last-child { border-bottom: 0; }
-    .net-mast .side .k { color: var(--text-mute); }
-    .net-mast .side .v { color: var(--text); font-weight: 500; }
-    .net-mast .side .v.pos { color: var(--green); }
-    .net-mast .side .v.neg { color: var(--red); }
+    .net-hero .side .stat-line:last-child { border-bottom: 0; }
+    .net-hero .side .k { color: var(--text-mute); }
+    .net-hero .side .v { color: var(--text); font-weight: 500; }
+    .net-hero .side .v.pos { color: var(--green); }
+    .net-hero .side .v.neg { color: var(--red); }
 
     /* Density bars = scalar sugar only (not charts / not plot engines) */
     .density-note {
@@ -1466,7 +1466,7 @@
       margin-bottom: 2px;
     }
 
-    .harga-mast {
+    .price-hero {
       display: grid;
       grid-template-columns: 1.35fr 1fr;
       gap: 14px;
@@ -1477,37 +1477,37 @@
       background: var(--bg-elevated);
     }
     @media (max-width: 800px) {
-      .harga-mast { grid-template-columns: 1fr; }
+      .price-hero { grid-template-columns: 1fr; }
     }
-    .harga-mast .lab {
+    .price-hero .lab {
       font-size: 10px;
       letter-spacing: 0.12em;
       text-transform: uppercase;
       color: var(--text-mute);
       margin-bottom: 8px;
     }
-    .harga-mast .price-row {
+    .price-hero .price-row {
       display: flex;
       align-items: baseline;
       flex-wrap: wrap;
       gap: 8px;
     }
-    .harga-mast .ccy { color: var(--text-mute); font-size: 1rem; }
-    .harga-mast .price {
+    .price-hero .ccy { color: var(--text-mute); font-size: 1rem; }
+    .price-hero .price {
       font-size: 2rem;
       font-weight: 600;
       font-variant-numeric: tabular-nums;
       letter-spacing: -0.02em;
       color: var(--text);
     }
-    .harga-mast .chg {
+    .price-hero .chg {
       font-size: 12px;
       padding: 2px 8px;
       border-radius: var(--radius-sm);
       border: 1px solid var(--border);
       color: var(--green);
     }
-    .harga-mast .chg.neg { color: var(--red); }
+    .price-hero .chg.neg { color: var(--red); }
 
     .desk-id {
       display: flex;
@@ -1589,7 +1589,7 @@
 <body>
   <div class="demo-bar">
     <div class="card">
-      <strong>OpenCode visual = TUI bible</strong> · <span style="color:#6fbf8a" id="buildStamp">rev 2026-07-30g · Harga Mast ticker · E2E 1–9</span>
+      <strong>OpenCode visual = TUI bible</strong> · <span style="color:#6fbf8a" id="buildStamp">rev 2026-07-30h · price hero · E2E 1–9</span>
       · black-on-black · peach palette · mono density
       · <em style="color:var(--sel-dim);font-style:normal">Journey = structure inspiration only</em>
       (stages / authority / columns — not marketing night-ink skin)
@@ -1665,14 +1665,14 @@
             </div>
           </div>
 
-          <!-- 2 JUDGE · Verdict mast (frame) · full vision tui-judge-desk.html -->
+          <!-- 2 JUDGE · Verdict hero (frame) · full vision tui-judge-desk.html -->
           <div class="list-view is-hidden" id="judgeView">
             <div class="oc-note">
               Action path · present-only board object ·
               <a href="./tui-judge-desk.html">tui-judge-desk.html</a>
               · not a re-score · not ticker desk
             </div>
-            <div class="section-label">Judgment · verdict mast</div>
+            <div class="section-label">Judgment · verdict hero</div>
             <div class="card" style="border-left:3px solid var(--amber);margin-bottom:10px">
               <div style="font-size:11px;color:var(--text-mute);letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px">Action is the landscape · Gate is the seal</div>
               <div style="display:flex;flex-wrap:wrap;gap:12px 20px;align-items:baseline">
@@ -1712,14 +1712,14 @@
             </div>
           </div>
 
-          <!-- 3 PLAN · Geometry mast · tui-plan-desk.html -->
+          <!-- 3 PLAN · Geometry hero · tui-plan-desk.html -->
           <div class="list-view is-hidden" id="planView">
             <div class="oc-note">
               Structure desk · inherits Action ·
               <a href="./tui-plan-desk.html">tui-plan-desk.html</a>
               · no broker order · not a second analysis
             </div>
-            <div class="section-label">Plan · structure · geometry mast</div>
+            <div class="section-label">Plan · structure · geometry hero</div>
             <div class="card" style="margin-bottom:10px">
               <div style="display:flex;gap:12px;align-items:center;margin-bottom:10px">
                 <span style="font-size:1.25rem;font-weight:600;color:var(--amber)" id="planInherit">WATCH</span>
@@ -1863,19 +1863,19 @@
             </div>
           </div>
 
-          <!-- 6 TICKER · Harga Mast hierarchy (IA: tui-ticker-desk) · OpenCode · full fields · not Action -->
+          <!-- 6 TICKER · Price hero hierarchy (IA: tui-ticker-desk) · OpenCode · full fields · not Action -->
           <div class="stage-block is-hidden" id="detailView" style="display:none">
             <div class="oc-note">
               Browse · <strong>not Action</strong> · GetTickerDashboardUseCase ·
               hierarchy from <a href="./tui-ticker-desk.html">ticker desk</a>
-              (Harga Mast first · full field inventory below) · OpenCode chrome ·
+              (Price hero first · full field inventory below) · OpenCode chrome ·
               density bars = scalar sugar only · <strong>not charts</strong> ·
               Judge stays board <span class="kbd">Enter</span>
             </div>
 
-            <div class="section-label">View · ticker · Harga Mast · <span id="detailTicker">BBCA</span></div>
+            <div class="section-label">View · ticker · Price hero · <span id="detailTicker">BBCA</span></div>
 
-            <div id="tickerFullPanels" data-mode="full" data-hierarchy="harga-mast">
+            <div id="tickerFullPanels" data-mode="full" data-hierarchy="price-hero">
               <!-- Stage A · Identity + freshness (journey primary) -->
               <div class="ticker-id" data-panel="identity">
                 <div>
@@ -1907,8 +1907,8 @@
                 <div class="fp miss"><span class="k">Sent</span><span class="v">—</span></div>
               </div>
 
-              <!-- Stage B · Harga Mast (price is the landscape) -->
-              <section class="harga-mast" data-panel="price_structure" aria-label="Harga mast">
+              <!-- Stage B · Price hero (price is the landscape) -->
+              <section class="price-hero" data-panel="price_structure" aria-label="Price hero">
                 <div>
                   <div class="lab">Last · local close · latest_close</div>
                   <div class="price-row">
@@ -2179,15 +2179,15 @@
               <span><span class="kbd">b</span> top desks</span>
               <span><span class="kbd">p</span> plan</span>
               <span><span class="kbd">esc</span> board</span>
-              <span class="dim">Harga Mast first · full fields · density ≠ chart · not Action</span>
+              <span class="dim">Price hero first · full fields · density ≠ chart · not Action</span>
             </div>
           </div>
 
-          <!-- 7 BROKER · Desk Radar → Enter Net Mast home · OpenCode (IA: tui-broker-desk) -->
+          <!-- 7 BROKER · Desk Radar → Enter Net hero home · OpenCode (IA: tui-broker-desk) -->
           <div class="stage-block is-hidden" id="brokerView">
             <div class="oc-note">
               Browse · <strong>not Action</strong> · tracked desks only ·
-              <strong>Enter</strong> opens full desk home (Net Mast + hub) — not a footer strip ·
+              <strong>Enter</strong> opens full desk home (Net hero + hub) — not a footer strip ·
               IA from <a href="./tui-broker-desk.html">broker desk</a> · OpenCode chrome
             </div>
 
@@ -2222,7 +2222,7 @@
               </table>
               <div class="footer-note">
                 <span><span class="kbd">↑↓</span> move</span>
-                <span><span class="kbd">Enter</span> desk home · Net Mast</span>
+                <span><span class="kbd">Enter</span> desk home · Net hero</span>
                 <span><span class="kbd">esc</span> board</span>
                 <span class="dim">loading chrome · “broker list” · not hung</span>
               </div>
@@ -2247,7 +2247,7 @@
                 </div>
               </div>
 
-              <section class="net-mast" aria-label="Day net mast">
+              <section class="net-hero" aria-label="Day net hero">
                 <div>
                   <div class="lab">Day net · desk · not judgment</div>
                   <div class="net-row">
@@ -2557,10 +2557,10 @@
     const COMMANDS = [
       { section: "Suggested", name: "Screen accumulation", desc: "Signal radar board · Action path start", shortcut: "s a", action: "screen-accum" },
       { section: "Suggested", name: "Screen pre-open", desc: "IEV auction board · not accum Judge", shortcut: "s p", action: "screen-preopen" },
-      { section: "Suggested", name: "Plan structure", desc: "Geometry mast · inherits Action · no order", shortcut: "p", action: "plan-swing" },
-      { section: "Daily", name: "Judge focus", desc: "Present-only Verdict mast (board Enter)", shortcut: "enter", action: "judge" },
-      { section: "Daily", name: "View ticker", desc: "Harga mast · cache dashboard · not Action", shortcut: "v t", action: "view" },
-      { section: "Daily", name: "View broker", desc: "Desk radar · Net mast", shortcut: "v b", action: "broker" },
+      { section: "Suggested", name: "Plan structure", desc: "Geometry hero · inherits Action · no order", shortcut: "p", action: "plan-swing" },
+      { section: "Daily", name: "Judge focus", desc: "Present-only Verdict hero (board Enter)", shortcut: "enter", action: "judge" },
+      { section: "Daily", name: "View ticker", desc: "Price hero · cache dashboard · not Action", shortcut: "v t", action: "view" },
+      { section: "Daily", name: "View broker", desc: "Desk radar · Net hero", shortcut: "v b", action: "broker" },
       { section: "Daily", name: "Paper log", desc: "Notebook from plan geometry · confirm", shortcut: "l", action: "paper" },
       { section: "Lab", name: "Backtest screen accum", desc: "Historical screen-filter audit", shortcut: "", action: "bt-accum" },
       { section: "Lab", name: "Backtest portfolio swing", desc: "Policy portfolio simulation", shortcut: "", action: "bt-swing" },
@@ -2847,7 +2847,7 @@
       paintBrokerHome();
       syncBrokerMode();
       updateChrome();
-      toast(`Desk home · ${ (BROKER[state.brokerIndex] || {}).code || "—" } · Net Mast`);
+      toast(`Desk home · ${ (BROKER[state.brokerIndex] || {}).code || "—" } · Net hero`);
     }
 
     function closeBrokerHome() {
@@ -2981,12 +2981,12 @@
         $("statusRows").textContent = `${ACCUM.length} rows`;
       } else if (state.frame === "judge") {
         $("viewTitle").textContent = `Judge · ${t}`;
-        $("viewMeta").innerHTML = `<span class="dot">·</span> present-only · Verdict mast · not re-score`;
+        $("viewMeta").innerHTML = `<span class="dot">·</span> present-only · Verdict hero · not re-score`;
         $("statusScreen").textContent = "judge";
         $("statusRows").textContent = t;
       } else if (state.frame === "plan") {
         $("viewTitle").textContent = `Plan · ${t} · structure`;
-        $("viewMeta").innerHTML = `<span class="dot">·</span> geometry mast · inherits Action · no order`;
+        $("viewMeta").innerHTML = `<span class="dot">·</span> geometry hero · inherits Action · no order`;
         $("statusScreen").textContent = "plan structure";
         $("statusRows").textContent = t;
       } else if (state.frame === "paper") {
@@ -3006,7 +3006,7 @@
         $("statusRows").textContent = "0 rows";
       } else if (state.frame === "detail") {
         $("viewTitle").textContent = `View · ticker · ${t}`;
-        $("viewMeta").innerHTML = `<span class="dot">·</span> Harga Mast · full fields · not Action`;
+        $("viewMeta").innerHTML = `<span class="dot">·</span> Price hero · full fields · not Action`;
         $("statusScreen").textContent = "view ticker";
         $("statusRows").textContent = t;
       } else if (state.frame === "broker") {
@@ -3014,7 +3014,7 @@
         if (state.brokerMode === "home") {
           const deep = state.brokerDeep === "top" ? "home" : state.brokerDeep;
           $("viewTitle").textContent = `View · broker · ${b.code || "—"} · ${deep}`;
-          $("viewMeta").innerHTML = `<span class="dot">·</span> Net Mast · hub t/f/h/v · not Action`;
+          $("viewMeta").innerHTML = `<span class="dot">·</span> Net hero · hub t/f/h/v · not Action`;
           $("statusScreen").textContent = deep === "home" ? `desk home · ${b.code || "—"}` : `desk ${deep} · ${b.code || "—"}`;
         } else {
           $("viewTitle").textContent = "View · broker · radar";
@@ -3032,9 +3032,9 @@
       } else if (state.frame === "broker") {
         const b = BROKER[state.brokerIndex] || {};
         if (state.brokerMode === "home") {
-          $("sideFocus").innerHTML = `<strong>${b.code || "—"}</strong> desk home<br />Net Mast · t/f/h deep · v ticker · esc radar`;
+          $("sideFocus").innerHTML = `<strong>${b.code || "—"}</strong> desk home<br />Net hero · t/f/h deep · v ticker · esc radar`;
         } else {
-          $("sideFocus").innerHTML = `<strong>Radar</strong><br />Scout by |Net5| · Enter = Net Mast home`;
+          $("sideFocus").innerHTML = `<strong>Radar</strong><br />Scout by |Net5| · Enter = Net hero home`;
         }
       } else if (state.frame === "judge") {
         $("sideFocus").innerHTML = `<strong>${t}</strong><br />j re-judge · p plan · esc board`;

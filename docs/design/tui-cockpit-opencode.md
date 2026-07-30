@@ -26,8 +26,8 @@ Ship Textual against **this cockpit mock**. Standalone journey HTML may stay “
 | 3 | Plan | Structure | Entry/Stop/Target · inherit Action · no order |
 | 4 | Paper | Notebook | Geometry confirm · paper only · not learning |
 | 5 | Pre-open | Auction | IEP board · inspect ≠ accum Judge |
-| 6 | Ticker | Browse | **Harga Mast** hierarchy (IA: ticker-desk) · full fields · not Action |
-| 7 | Broker | Browse | Desk **radar** → **Enter** **Net Mast** home (top/flow/hist hub) · not Action |
+| 6 | Ticker | Browse | **Price hero** hierarchy (IA: ticker-desk) · full fields · not Action |
+| 7 | Broker | Browse | Desk **radar** → **Enter** **Net hero** home (top/flow/hist hub) · not Action |
 | 8 | Health | Honesty | Empty / zero / lag / ready posters |
 | 9 | Palette | Nav | Ctrl+P · peach selection · no scenario tabs |
 
@@ -71,7 +71,7 @@ IA source: [`tui-ticker-desk.html`](./tui-ticker-desk.html) · chrome = OpenCode
 |-------|---------|
 | **Identity** | Code · name · board · sector · tradeable · as_of |
 | **Freshness** | ok / miss / stale pills from `freshness[]` |
-| **Harga Mast** | Monumental `latest_close` + 1d · horizons 1d/5d/20d · 52w **range position** |
+| **Price hero** | Monumental `latest_close` + 1d · horizons 1d/5d/20d · 52w **range position** |
 | **Ribbon** | PE · PBV · MCap · ROE · Div · F-Score (`fundamentals` or —) |
 | **Pulse trio** | Foreign flow · structure · bandar |
 | **Earnings** | ≤4Q EPS + YoY |
@@ -87,7 +87,7 @@ Parallel to broker: **price** is ticker landscape; **day net** is desk landscape
 | Mode | Keys | Stage |
 |------|------|--------|
 | **Radar** | `v b` land · `↑↓` · **Enter** | Tracked desk table · Net5 amp · cols 1:1 |
-| **Home** | Enter from radar | Net Mast (day net landscape) · identity · side stats |
+| **Home** | Enter from radar | Net hero (day net landscape) · identity · side stats |
 | **Hub** | `t` top · `f` flow · `h` history · `v` ticker | Buy/sell heat · day flow · hist table · jump ticker |
 | **Back** | `esc` on home → radar · `esc` on radar → board | Trail language |
 
@@ -98,7 +98,7 @@ IA source: [`tui-broker-desk.html`](./tui-broker-desk.html) · chrome = OpenCode
 ### Reject in this file
 - Night-ink / brass marketing CSS as primary stage skin (`desk-v2`, Fraunces body UI)  
 - Broker only as toast (“see other HTML”)  
-- Broker Enter only painting a footer strip (must open full Net Mast home)  
+- Broker Enter only painting a footer strip (must open full Net hero home)  
 - Enter on accum opening ticker  
 
 ---
