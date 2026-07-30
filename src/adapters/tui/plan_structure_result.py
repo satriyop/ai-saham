@@ -27,6 +27,9 @@ class PlanStructureResult:
     plan_id_short: str = ""
     inherits_action: bool = True
     no_order: bool = True
+    # Present-only meta for Geometry mast (never invent prices here).
+    risk_pct: str = "—"
+    horizon: str = "swing"
 
     def has_geometry(self) -> bool:
         vals = (self.entry, self.stop, self.target, self.lots)
@@ -81,4 +84,6 @@ def plan_structure_from_runner_object(obj: Any) -> PlanStructureResult:
         plan_id_short=str(getattr(obj, "plan_id_short", "") or ""),
         inherits_action=bool(getattr(obj, "inherits_action", True)),
         no_order=bool(getattr(obj, "no_order", True)),
+        risk_pct=str(getattr(obj, "risk_pct", "—") or "—"),
+        horizon=str(getattr(obj, "horizon", "swing") or "swing"),
     )

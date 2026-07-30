@@ -208,8 +208,10 @@ class CockpitApp(App[None]):
                     with VerticalScroll(id="stage-scroll"):
                         yield Static(self._shell_body(), id="stage-body")
                         from src.adapters.tui.widgets.judge_desk import JudgeDesk
+                        from src.adapters.tui.widgets.plan_desk import PlanDesk
 
                         yield JudgeDesk(id="judge-desk")
+                        yield PlanDesk(id="plan-desk")
                     yield DataTable(id="board-table")
                     yield Static("", id="evidence-strip")
                     yield Static(self._footer_hint(), id="board-footer")
@@ -242,6 +244,10 @@ class CockpitApp(App[None]):
         table.display = False
         try:
             self.query_one("#judge-desk").display = False
+        except Exception:
+            pass
+        try:
+            self.query_one("#plan-desk").display = False
         except Exception:
             pass
         self.query_one("#evidence-strip", Static).display = False
@@ -388,6 +394,17 @@ class CockpitApp(App[None]):
         except Exception:
             pass
 
+    def _hide_plan_desk(self) -> None:
+        try:
+            desk = self.query_one("#plan-desk")
+            desk.display = False
+        except Exception:
+            pass
+
+    def _hide_instrument_desks(self) -> None:
+        self._hide_judge_desk()
+        self._hide_plan_desk()
+
     def _paint_detail_stage(self, *, body: Static, scroll: VerticalScroll) -> None:
         """Detail stage: visual Judge desk for accum judge; text body otherwise."""
         from src.adapters.tui.widgets.judge_desk import JudgeDesk
@@ -405,6 +422,7 @@ class CockpitApp(App[None]):
             if row is not None and self._is_accum_row(row):
                 model = self._build_judge_model(row)
                 body.display = False
+                self._hide_plan_desk()
                 desk.display = True
                 desk.paint(model)
                 # Keep text for tests / scrapers that read _detail_text
@@ -414,8 +432,48 @@ class CockpitApp(App[None]):
                 )
                 return
         body.display = True
-        self._hide_judge_desk()
+        self._hide_instrument_desks()
         body.update(self._detail_text)
+
+    def _paint_plan_stage(self, *, body: Static) -> None:
+        """Plan stage: Geometry-mast widget; keep text body for scrapers/tests."""
+        from src.adapters.tui.widgets.plan_desk import PlanDesk
+
+        try:
+            desk = self.query_one("#plan-desk", PlanDesk)
+        except Exception:
+            desk = None
+
+        text = self._plan_body_text()
+        if desk is not None:
+            model = self._build_plan_model()
+            body.display = False
+            self._hide_judge_desk()
+            desk.display = True
+            desk.paint(model)
+            return
+        body.display = True
+        self._hide_instrument_desks()
+        body.update(text)
+
+    def _build_plan_model(self) -> Any:
+        from src.adapters.tui.plan_desk_model import build_plan_desk_model
+
+        row = None
+        if self._rows and 0 <= self._row_index < len(self._rows):
+            row = self._rows[self._row_index]
+        on_preopen = self._detail_return_stage == "preopen" or self._board_kind == "preopen"
+        source = "Screen · pre-open" if on_preopen else "Screen · accumulation"
+        return build_plan_desk_model(
+            row,
+            ticker=self._plan_ticker or self._focus_ticker,
+            source=source,
+            rank=self._row_index + 1,
+            total=max(len(self._rows), 1),
+            structure=self._plan_structure,
+            result_line=self._plan_result,
+            running=self._plan_running,
+        )
 
     def _build_judge_model(self, row: Any) -> Any:
         from src.adapters.tui.judge_desk_model import build_judge_desk_model
@@ -435,7 +493,13 @@ class CockpitApp(App[None]):
 
     def _refresh_chrome(self) -> None:
         self.query_one("#view-title", Static).update(self._board_title)
-        self.query_one("#view-meta", Static).update(f"· {self._meta}")
+        meta_line = f"· {self._meta}"
+        if self._stage == "accum" and self._board_summary:
+            from src.adapters.tui.board_cell_markup import format_triage_markup
+
+            # Design strip: meta facts + ENTER/WATCH/AVOID triage (present-only counts)
+            meta_line = f"· {self._meta}\n  {format_triage_markup(self._board_summary)}"
+        self.query_one("#view-meta", Static).update(meta_line)
         self.query_one("#mode-pill", Static).update(self._mode_label())
         self.query_one("#status", Static).update(self._status_text())
         self.query_one("#board-footer", Static).update(self._footer_hint())
@@ -455,7 +519,7 @@ class CockpitApp(App[None]):
         if self._stage == "shell":
             scroll.display = True
             body.display = True
-            self._hide_judge_desk()
+            self._hide_instrument_desks()
             body.update(self._shell_body())
             table.display = False
             evidence.display = False
@@ -465,7 +529,7 @@ class CockpitApp(App[None]):
             # candle/broker health is still ready/lag.
             scroll.display = True
             body.display = True
-            self._hide_judge_desk()
+            self._hide_instrument_desks()
             body.update(self._empty_body())
             table.display = False
             evidence.display = False
@@ -494,7 +558,7 @@ class CockpitApp(App[None]):
             else:
                 scroll.display = True
                 body.display = True
-                self._hide_judge_desk()
+                self._hide_instrument_desks()
                 body.update(
                     loading_stage_body(
                         board_title=self._board_title,
@@ -507,7 +571,7 @@ class CockpitApp(App[None]):
         elif self._stage == "error":
             scroll.display = True
             body.display = True
-            self._hide_judge_desk()
+            self._hide_instrument_desks()
             body.update(
                 f"[#c97a72]Error[/]\n{self._error_text}\n\n[dim]r retry · Ctrl+P commands[/]"
             )
@@ -522,21 +586,19 @@ class CockpitApp(App[None]):
             scroll.focus()
         elif self._stage == "plan":
             scroll.display = True
-            body.display = True
-            self._hide_judge_desk()
-            body.update(self._plan_body_text())
             table.display = False
             evidence.display = False
+            self._paint_plan_stage(body=body)
             scroll.focus()
         elif self._stage in {"broker-list", "ticker-desks"}:
             scroll.display = False
             table.display = True
             evidence.display = False
-            self._hide_judge_desk()
+            self._hide_instrument_desks()
         elif self._stage in {"accum", "preopen"}:
             scroll.display = False
             table.display = True
-            self._hide_judge_desk()
+            self._hide_instrument_desks()
             if self._evidence_text:
                 evidence.display = True
                 evidence.update(self._evidence_text)
@@ -1425,20 +1487,28 @@ class CockpitApp(App[None]):
             return
         is_preopen = self._stage == "preopen" or self._board_kind == "preopen"
         if is_preopen:
+            from src.adapters.tui.board_cell_markup import (
+                format_preopen_grade_cell,
+                format_preopen_risk_cell,
+                format_ticker_cell,
+            )
+
             table.add_columns("Tkr", "IEP", "Δ%", "IEV", "NCP", "ΔIEV", "Grd", "Risk")
             for row in self._rows:
                 table.add_row(
-                    row.ticker,
+                    format_ticker_cell(str(getattr(row, "ticker", "?") or "?")),
                     row.iep,
                     row.delta_pct,
                     row.iev,
                     row.ncp,
                     row.delta_iev,
-                    row.grade,
-                    row.risk,
+                    format_preopen_grade_cell(str(getattr(row, "grade", "—") or "—")),
+                    format_preopen_risk_cell(str(getattr(row, "risk", "—") or "—")),
                 )
         else:
-            # Option B desk board — ADR-043 Signal/Accum vocabulary
+            # Option B desk board — ADR-043 Signal/Accum + chip elevation
+            from src.adapters.tui.board_cell_markup import format_accum_board_cells
+
             table.add_columns(
                 "Ticker",
                 "Signal",
@@ -1453,19 +1523,7 @@ class CockpitApp(App[None]):
                 "Gate",
             )
             for row in self._rows:
-                table.add_row(
-                    row.ticker,
-                    getattr(row, "signal", "—"),
-                    getattr(row, "accum", "—"),
-                    getattr(row, "action", "—"),
-                    getattr(row, "phase", "—"),
-                    getattr(row, "streak", "—"),
-                    getattr(row, "rsi", "—"),
-                    getattr(row, "net_pct", "—"),
-                    getattr(row, "disc_pct", "—"),
-                    getattr(row, "price", "—"),
-                    getattr(row, "gate", "—"),
-                )
+                table.add_row(*format_accum_board_cells(row))
         if self._rows:
             table.move_cursor(row=self._row_index, animate=False)
 

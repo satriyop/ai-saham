@@ -64,6 +64,11 @@
     .status { grid-column: 1 / -1; display: flex; justify-content: space-between; padding: 0 16px; align-items: center; border-top: 1px solid var(--line); background: #06080e; font-family: var(--font-m); font-size: 11px; color: var(--ash); }
     .status .accent { color: var(--sky); }
     .nav { margin-top: 16px; font-size: 12.5px; color: var(--mist); }
+    .col-contract {
+      font-family: var(--font-m); font-size: 10.5px; color: var(--ash); margin: -4px 0 12px;
+      padding: 8px 10px; border-radius: 8px; border: 1px dashed var(--line-strong); background: rgba(8,11,18,.6);
+    }
+    .col-contract code { color: var(--sky); font-size: 10px; }
   </style>
 </head>
 <body>
@@ -74,6 +79,11 @@
       Signature: <strong style="color:#e8dcc8;font-weight:500">auction strip</strong> above a dense IEP board; Enter = short auction inspect (not accum Judge).
       Local IEV snapshot only — never silent live browser.
       <a href="./tui-journey-hub.html">← Journey hub</a>
+    </p>
+    <p class="col-contract">
+      TUI column contract · 1:1 with <code>CockpitApp._render_board_table</code> (preopen) ·
+      <strong style="color:var(--fog);font-weight:500">Tkr · IEP · Δ% · IEV · NCP · ΔIEV · Grd · Risk</strong>
+      · Flags live in focus strip / inspect body, not as a board column
     </p>
     <div class="app">
       <div class="main">
@@ -91,20 +101,41 @@
           <table>
             <thead>
               <tr>
-                <th>Ticker</th><th class="num">IEP</th><th class="num">Δ%</th><th class="num">IEV</th><th class="num">NCP</th>
-                <th>Grade</th><th>Flags</th><th>Risk</th>
+                <th>Tkr</th>
+                <th class="num">IEP</th>
+                <th class="num">Δ%</th>
+                <th class="num">IEV</th>
+                <th class="num">NCP</th>
+                <th class="num">ΔIEV</th>
+                <th>Grd</th>
+                <th>Risk</th>
               </tr>
             </thead>
             <tbody>
-              <tr class="is-on"><td class="t">BBRI</td><td class="num">4,820</td><td class="num pos">+1.8</td><td class="num">12.4M</td><td class="num">0.92</td><td class="gA">A</td><td>imb·gap</td><td class="pos">clear</td></tr>
-              <tr><td class="t">BMRI</td><td class="num">6,150</td><td class="num pos">+1.2</td><td class="num">9.1M</td><td class="num">0.88</td><td class="gA">A</td><td>imb</td><td class="pos">clear</td></tr>
-              <tr><td class="t">BBCA</td><td class="num">9,925</td><td class="num pos">+0.8</td><td class="num">6.2M</td><td class="num">0.81</td><td class="gB">B</td><td>—</td><td class="pos">clear</td></tr>
-              <tr><td class="t">ADRO</td><td class="num">2,680</td><td class="num pos">+3.1</td><td class="num">22.3M</td><td class="num">0.55</td><td class="gC">C</td><td>hot·gap</td><td class="neg">block</td></tr>
-              <tr><td class="t">TLKM</td><td class="num">3,180</td><td class="num neg">−0.6</td><td class="num">18.7M</td><td class="num">0.74</td><td class="gB">B</td><td>soft</td><td class="pos">clear</td></tr>
+              <tr class="is-on">
+                <td class="t">BBRI</td><td class="num">4,820</td><td class="num pos">+1.8</td><td class="num">12.4M</td>
+                <td class="num">0.92</td><td class="num pos">+2.1M</td><td class="gA">A</td><td class="pos">clear</td>
+              </tr>
+              <tr>
+                <td class="t">BMRI</td><td class="num">6,150</td><td class="num pos">+1.2</td><td class="num">9.1M</td>
+                <td class="num">0.88</td><td class="num pos">+0.8M</td><td class="gA">A</td><td class="pos">clear</td>
+              </tr>
+              <tr>
+                <td class="t">BBCA</td><td class="num">9,925</td><td class="num pos">+0.8</td><td class="num">6.2M</td>
+                <td class="num">0.81</td><td class="num pos">+0.3M</td><td class="gB">B</td><td class="pos">clear</td>
+              </tr>
+              <tr>
+                <td class="t">ADRO</td><td class="num">2,680</td><td class="num pos">+3.1</td><td class="num">22.3M</td>
+                <td class="num">0.55</td><td class="num pos">+4.5M</td><td class="gC">C</td><td class="neg">block</td>
+              </tr>
+              <tr>
+                <td class="t">TLKM</td><td class="num">3,180</td><td class="num neg">−0.6</td><td class="num">18.7M</td>
+                <td class="num">0.74</td><td class="num neg">−1.2M</td><td class="gB">B</td><td class="pos">clear</td>
+              </tr>
             </tbody>
           </table>
         </div>
-        <div class="evidence"><strong>BBRI focus</strong> · IEP 4,820 · grade A · imb+gap · risk clear · Enter = auction inspect (not accum Judge)</div>
+        <div class="evidence"><strong>BBRI focus</strong> · IEP 4,820 · ΔIEV +2.1M · grade A · risk clear · Enter = auction inspect (not accum Judge)</div>
         <div class="foot">
           <span><kbd>↑↓</kbd> move</span>
           <span><kbd>↵</kbd> inspect</span>

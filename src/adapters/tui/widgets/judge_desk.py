@@ -1,6 +1,6 @@
 """Verdict-mast Judge desk widget (design: tui-judge-desk.html).
 
-Composed surfaces + CSS — not a CLI text dump. Present-only data via JudgeDeskModel.
+Composed mast + phase + **per-section cards** (2-col grid). Present-only.
 
 Layer: Adapter (Textual widget)
 """
@@ -12,10 +12,17 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import Static
 
 from src.adapters.tui.judge_desk_model import (
+    CARD_ORDER_FULL,
+    CARD_SCALARS,
+    JudgeCard,
     JudgeDeskModel,
     action_css_class,
     gate_css_class,
 )
+
+# Max cards we pre-compose (full desk + limited scalars).
+_CARD_SLOT_KEYS: tuple[str, ...] = CARD_ORDER_FULL + (CARD_SCALARS,)
+_TONE_CLASSES = ("tone-open", "tone-block", "tone-watch", "tone-neutral")
 
 
 class JudgeDesk(Vertical):
@@ -29,11 +36,6 @@ class JudgeDesk(Vertical):
         background: #080b12;
     }
 
-    JudgeDesk .judge-chrome {
-        color: #5c6575;
-        margin-bottom: 1;
-    }
-
     JudgeDesk .judge-title {
         text-style: bold;
         color: #e8e8e8;
@@ -41,6 +43,7 @@ class JudgeDesk(Vertical):
 
     JudgeDesk .judge-sub {
         color: #5c6575;
+        margin-bottom: 1;
     }
 
     JudgeDesk .limited-banner {
@@ -63,7 +66,6 @@ class JudgeDesk(Vertical):
     JudgeDesk .verdict-lab {
         color: #e8b86d;
         text-style: bold;
-        margin-bottom: 0;
     }
 
     JudgeDesk .verdict-row {
@@ -78,21 +80,10 @@ class JudgeDesk(Vertical):
         padding-right: 2;
     }
 
-    JudgeDesk .verdict-action.action-enter {
-        color: #6fbf8a;
-    }
-
-    JudgeDesk .verdict-action.action-watch {
-        color: #d4b06a;
-    }
-
-    JudgeDesk .verdict-action.action-avoid {
-        color: #c97a72;
-    }
-
-    JudgeDesk .verdict-action.action-other {
-        color: #e8e8e8;
-    }
+    JudgeDesk .verdict-action.action-enter { color: #7ecfb8; }
+    JudgeDesk .verdict-action.action-watch { color: #d4b06a; }
+    JudgeDesk .verdict-action.action-avoid { color: #e87a6e; }
+    JudgeDesk .verdict-action.action-other { color: #e8e8e8; }
 
     JudgeDesk .verdict-gate {
         width: auto;
@@ -101,18 +92,16 @@ class JudgeDesk(Vertical):
     }
 
     JudgeDesk .verdict-gate.gate-open {
-        color: #6fbf8a;
+        color: #7ecfb8;
         background: #14241c;
     }
 
     JudgeDesk .verdict-gate.gate-block {
-        color: #c97a72;
+        color: #e87a6e;
         background: #241414;
     }
 
-    JudgeDesk .verdict-gate.gate-other {
-        color: #d4b06a;
-    }
+    JudgeDesk .verdict-gate.gate-other { color: #d4b06a; }
 
     JudgeDesk .score-strip {
         height: auto;
@@ -150,14 +139,14 @@ class JudgeDesk(Vertical):
     }
 
     JudgeDesk .phase-title {
-        color: #9b8fb8;
+        color: #5c6575;
         text-style: bold;
     }
 
     JudgeDesk .phase-arrow {
         color: #e8e8e8;
         text-style: bold;
-        margin: 1 0 0 0;
+        margin-top: 1;
         height: auto;
     }
 
@@ -168,12 +157,12 @@ class JudgeDesk(Vertical):
 
     JudgeDesk .phase-foot {
         color: #3a4252;
-        margin-top: 0;
     }
 
     JudgeDesk .decision-block {
         background: #0d121c;
         border: solid #1c2430;
+        border-left: solid #e8b86d;
         padding: 1 2;
         margin-bottom: 1;
         height: auto;
@@ -181,12 +170,19 @@ class JudgeDesk(Vertical):
     }
 
     JudgeDesk .decision-title {
-        color: #d4b06a;
+        color: #5c6575;
         text-style: bold;
+    }
+
+    JudgeDesk .cards-grid {
+        height: auto;
+        width: 100%;
+        margin-bottom: 0;
     }
 
     JudgeDesk .cards-row {
         height: auto;
+        width: 100%;
         margin-bottom: 1;
     }
 
@@ -194,21 +190,32 @@ class JudgeDesk(Vertical):
         width: 1fr;
         background: #0d121c;
         border: solid #1c2430;
+        border-left: solid #3a4252;
         padding: 1 1;
         margin-right: 1;
         height: auto;
         color: #8b92a0;
     }
 
-    JudgeDesk .judge-card-title {
-        color: #9b8fb8;
-        text-style: bold;
-        margin-bottom: 0;
+    JudgeDesk .judge-card.card-solo {
+        width: 1fr;
+        margin-right: 0;
     }
 
-    JudgeDesk .judge-card-body {
-        color: #c9c3b8;
-        height: auto;
+    JudgeDesk .judge-card.tone-open {
+        border-left: solid #7ecfb8;
+    }
+
+    JudgeDesk .judge-card.tone-block {
+        border-left: solid #e87a6e;
+    }
+
+    JudgeDesk .judge-card.tone-watch {
+        border-left: solid #d4b06a;
+    }
+
+    JudgeDesk .judge-card.tone-neutral {
+        border-left: solid #a89cc9;
     }
 
     JudgeDesk .judge-footer {
@@ -243,12 +250,21 @@ class JudgeDesk(Vertical):
             yield Static("", classes="phase-detail", id="jd-phase-detail")
             yield Static("", classes="phase-foot", id="jd-phase-foot")
         with Vertical(classes="decision-block", id="jd-decision"):
-            yield Static("Decision stack", classes="decision-title")
+            yield Static("DECISION STACK", classes="decision-title")
             yield Static("", id="jd-decision-body")
-        with Horizontal(classes="cards-row", id="jd-cards"):
-            yield Static("", classes="judge-card", id="jd-card-0")
-            yield Static("", classes="judge-card", id="jd-card-1")
-        yield Static("", classes="judge-card", id="jd-card-more")
+        # Fixed card slots: 2-col rows; each section has its own bordered card.
+        with Vertical(classes="cards-grid", id="jd-cards-grid"):
+            keys = list(_CARD_SLOT_KEYS)
+            for i in range(0, len(keys), 2):
+                left, right = keys[i], keys[i + 1] if i + 1 < len(keys) else None
+                with Horizontal(classes="cards-row", id=f"jd-row-{i // 2}"):
+                    yield Static("", classes="judge-card tone-neutral", id=f"jd-card-{left}")
+                    if right:
+                        yield Static(
+                            "",
+                            classes="judge-card tone-neutral",
+                            id=f"jd-card-{right}",
+                        )
         yield Static("", classes="judge-footer", id="jd-footer")
 
     def paint(self, model: JudgeDeskModel) -> None:
@@ -275,7 +291,6 @@ class JudgeDesk(Vertical):
             action_el.remove_class(c)
         action_el.add_class("verdict-action")
         action_el.add_class(action_css_class(model.action))
-        # Large-ish label via padded text (terminal type scale)
         action_el.update(f"  {model.action or '—'}  ")
 
         gate_el = self.query_one("#jd-gate", Static)
@@ -295,43 +310,119 @@ class JudgeDesk(Vertical):
                 self.query_one(f"#jd-score-v-{i}", Static).update("")
 
         why = model.why if model.why and model.why != "—" else "—"
-        self.query_one("#jd-why", Static).update(f"Why {model.action or '—'}  {why}")
+        self.query_one("#jd-why", Static).update(
+            f"[bold #c9c3b8]Why {model.action or '—'}[/]  {why}"
+        )
 
-        self.query_one("#jd-phase-title", Static).update(model.phase_section_title)
-        self.query_one("#jd-phase-arrow", Static).update(model.phase_arrow or "—")
-        detail_parts = [f"· {x}" if not x.startswith("·") else x for x in model.phase_detail_lines]
+        self.query_one("#jd-phase-title", Static).update(
+            model.phase_section_title.upper()
+            if model.phase_section_title
+            else "PHASE SEQUENCE · LEDGER"
+        )
+        self.query_one("#jd-phase-arrow", Static).update(
+            _format_phase_arrow(model.phase_arrow) if model.phase_arrow else "—"
+        )
+        detail_parts = [
+            f"· {x}" if not x.startswith("·") and not x.startswith("now") else x
+            for x in model.phase_detail_lines
+        ]
         self.query_one("#jd-phase-detail", Static).update("\n".join(detail_parts))
         self.query_one("#jd-phase-foot", Static).update(model.phase_footer)
 
-        # Drop section color headers from decision_lines if present
         body_lines = [ln for ln in model.decision_lines if not ln.startswith("[")]
         if body_lines and "Decision" in body_lines[0]:
             body_lines = body_lines[1:]
         self.query_one("#jd-decision-body", Static).update("\n".join(body_lines) or "—")
 
-        # Two primary cards + overflow
-        cards = list(model.cards)
-        for i, slot in enumerate(("jd-card-0", "jd-card-1")):
-            el = self.query_one(f"#{slot}", Static)
-            if i < len(cards):
-                title, lines = cards[i]
-                el.display = True
-                el.update(f"[bold #9b8fb8]{title}[/]\n" + "\n".join(lines))
-            else:
-                el.display = False
-                el.update("")
+        by_key = {c.key: c for c in model.cards}
+        # Paint slots + hide empties; solo cards expand when pair mate missing.
+        keys = list(_CARD_SLOT_KEYS)
+        for i in range(0, len(keys), 2):
+            left_k = keys[i]
+            right_k = keys[i + 1] if i + 1 < len(keys) else None
+            left_card = by_key.get(left_k)
+            right_card = by_key.get(right_k) if right_k else None
+            row = self.query_one(f"#jd-row-{i // 2}", Horizontal)
+            left_el = self.query_one(f"#jd-card-{left_k}", Static)
+            right_el = self.query_one(f"#jd-card-{right_k}", Static) if right_k else None
 
-        more = self.query_one("#jd-card-more", Static)
-        if len(cards) > 2:
-            chunks: list[str] = []
-            for title, lines in cards[2:]:
-                chunks.append(f"[bold #9b8fb8]{title}[/]")
-                chunks.extend(lines)
-                chunks.append("")
-            more.display = True
-            more.update("\n".join(chunks).rstrip())
-        else:
-            more.display = False
-            more.update("")
+            if left_card is None and right_card is None:
+                row.display = False
+                left_el.display = False
+                left_el.update("")
+                if right_el is not None:
+                    right_el.display = False
+                    right_el.update("")
+                continue
+
+            row.display = True
+            _paint_card_slot(left_el, left_card, solo=right_card is None and right_el is not None)
+            if right_el is not None:
+                _paint_card_slot(right_el, right_card, solo=left_card is None)
 
         self.query_one("#jd-footer", Static).update(model.footer)
+
+
+def _paint_card_slot(el: Static, card: JudgeCard | None, *, solo: bool) -> None:
+    for t in _TONE_CLASSES:
+        el.remove_class(t)
+    el.remove_class("card-solo")
+    if card is None:
+        el.display = False
+        el.update("")
+        return
+    el.display = True
+    tone = card.tone if card.tone in {"open", "block", "watch", "neutral"} else "neutral"
+    el.add_class(f"tone-{tone}")
+    if solo:
+        el.add_class("card-solo")
+    el.update(_format_card_markup(card))
+
+
+def _format_card_markup(card: JudgeCard) -> str:
+    """Title + headline + short body — design: uppercase label, bright value."""
+    title = card.title.upper()
+    lines = [f"[bold #5c6575]{title}[/]"]
+    if card.headline:
+        head_color = {
+            "open": "#7ecfb8",
+            "block": "#e87a6e",
+            "watch": "#d4b06a",
+            "neutral": "#f0ebe3",
+        }.get(card.tone, "#f0ebe3")
+        lines.append(f"[bold {head_color}]{card.headline}[/]")
+    for ln in card.lines:
+        if not ln:
+            continue
+        lines.append(_colorize_body_line(ln))
+    return "\n".join(lines)
+
+
+def _colorize_body_line(ln: str) -> str:
+    """Tint gate chips; leave plain body mist-grey."""
+    if "✓" in ln or "✗" in ln:
+        # Color each chip token
+        parts = ln.split()
+        out: list[str] = []
+        for p in parts:
+            if p.startswith("✓"):
+                out.append(f"[#7ecfb8]{p}[/]")
+            elif p.startswith("✗"):
+                out.append(f"[#e87a6e]{p}[/]")
+            else:
+                out.append(p)
+        return " ".join(out)
+    return f"[#8b92a0]{ln}[/]"
+
+
+def _format_phase_arrow(arrow: str) -> str:
+    """Highlight the last node (current phase) in brass."""
+    if "→" not in arrow:
+        return f"[bold #e8e8e8]{arrow}[/]"
+    parts = [p.strip() for p in arrow.split("→")]
+    if not parts:
+        return arrow
+    *head, last = parts
+    bits = [f"[#8b92a0]{h}[/]" for h in head]
+    bits.append(f"[bold #d4b06a]{last}[/]")
+    return " [dim]→[/] ".join(bits)

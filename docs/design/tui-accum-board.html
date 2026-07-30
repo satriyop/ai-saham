@@ -47,17 +47,23 @@
     }
     .strip b { color: var(--fog); font-weight: 500; }
     .stage { flex: 1; overflow: auto; padding: 0; }
-    table { width: 100%; border-collapse: collapse; font-family: var(--font-m); font-size: 12px; }
+    table { width: 100%; border-collapse: collapse; font-family: var(--font-m); font-size: 11px; }
     thead th {
-      text-align: left; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--ash);
-      padding: 10px 12px; border-bottom: 1px solid var(--line-strong); position: sticky; top: 0; background: rgba(8,11,18,.96); z-index: 1;
+      text-align: left; font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--ash);
+      padding: 8px 8px; border-bottom: 1px solid var(--line-strong); position: sticky; top: 0; background: rgba(8,11,18,.96); z-index: 1;
+      white-space: nowrap;
     }
     thead th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
     tbody tr { cursor: pointer; transition: background 80ms ease; }
     tbody tr:hover { background: rgba(255,255,255,.02); }
     tbody tr.is-on { background: linear-gradient(90deg, rgba(232,184,109,.12), transparent 65%); }
     tbody tr.is-on td:first-child { box-shadow: inset 2px 0 0 var(--brass); }
-    td { padding: 9px 12px; border-bottom: 1px solid var(--line); color: var(--fog); }
+    td { padding: 7px 8px; border-bottom: 1px solid var(--line); color: var(--fog); white-space: nowrap; }
+    .col-contract {
+      font-family: var(--font-m); font-size: 10.5px; color: var(--ash); margin: -6px 0 12px;
+      padding: 8px 10px; border-radius: 8px; border: 1px dashed var(--line-strong); background: rgba(8,11,18,.6);
+    }
+    .col-contract code { color: var(--brass); font-size: 10px; }
     .t { font-weight: 600; letter-spacing: .03em; color: #f4f0e8; }
     .sig { font-weight: 600; font-size: 13px; }
     .sig.hi { color: var(--mint); } .sig.mid { color: var(--brass); } .sig.lo { color: var(--mist); }
@@ -93,6 +99,12 @@
       Action chips, phase pills, snapshot vs live badge. Enter → Judge desk (Verdict Mast), not ticker dump.
       <a href="./tui-journey-hub.html">← Journey hub</a>
     </p>
+    <p class="col-contract">
+      TUI column contract · 1:1 with <code>BOARD_COLUMN_LABELS</code> /
+      <code>CockpitApp._render_board_table</code> (option B desk) ·
+      <strong style="color:var(--fog);font-weight:500">Ticker · Signal · Accum · Action · Phase · Streak · RSI · Net% · Disc% · Price · Gate</strong>
+      · no rank-# column (cursor owns focus)
+    </p>
 
     <div class="app">
       <div class="main">
@@ -111,25 +123,69 @@
           <table>
             <thead>
               <tr>
-                <th class="num">#</th>
                 <th>Ticker</th>
                 <th class="num">Signal</th>
                 <th class="num">Accum</th>
                 <th>Action</th>
-                <th>Gate</th>
                 <th>Phase</th>
+                <th class="num">Streak</th>
                 <th class="num">RSI</th>
                 <th class="num">Net%</th>
+                <th class="num">Disc%</th>
+                <th class="num">Price</th>
+                <th>Gate</th>
               </tr>
             </thead>
             <tbody>
-              <tr><td class="num rank">1</td><td class="t">ITMG</td><td class="num sig hi">91</td><td class="num">55.0</td><td><span class="act enter">ENTER</span></td><td class="gate open">OPEN</td><td><span class="phase">BREAKOUT</span></td><td class="num">42</td><td class="num">1.2</td></tr>
-              <tr class="is-on"><td class="num rank">2</td><td class="t">BBCA</td><td class="num sig hi">84</td><td class="num">48.2</td><td><span class="act watch">WATCH</span></td><td class="gate open">OPEN</td><td><span class="phase">COMPRESS</span></td><td class="num">48</td><td class="num">0.5</td></tr>
-              <tr><td class="num rank">3</td><td class="t">BBRI</td><td class="num sig mid">81</td><td class="num">52.1</td><td><span class="act enter">ENTER</span></td><td class="gate open">OPEN</td><td><span class="phase">ACCUM</span></td><td class="num">51</td><td class="num">0.9</td></tr>
-              <tr><td class="num rank">4</td><td class="t">BMRI</td><td class="num sig mid">78</td><td class="num">44.0</td><td><span class="act watch">WATCH</span></td><td class="gate open">OPEN</td><td><span class="phase">ACCUM</span></td><td class="num">55</td><td class="num">0.3</td></tr>
-              <tr><td class="num rank">5</td><td class="t">TLKM</td><td class="num sig mid">74</td><td class="num">41.2</td><td><span class="act watch">WATCH</span></td><td class="gate open">OPEN</td><td><span class="phase">NONE</span></td><td class="num">44</td><td class="num">0.1</td></tr>
-              <tr><td class="num rank">6</td><td class="t">ASII</td><td class="num sig lo">68</td><td class="num">38.0</td><td><span class="act avoid">AVOID</span></td><td class="gate block">BLOCK</td><td><span class="phase">NONE</span></td><td class="num">62</td><td class="num">-0.4</td></tr>
-              <tr><td class="num rank">7</td><td class="t">ADRO</td><td class="num sig lo">65</td><td class="num">50.5</td><td><span class="act watch">WATCH</span></td><td class="gate open">OPEN</td><td><span class="phase">ACCUM</span></td><td class="num">58</td><td class="num">1.8</td></tr>
+              <tr>
+                <td class="t">ITMG</td><td class="num sig hi">91</td><td class="num">55.0</td>
+                <td><span class="act enter">ENTER</span></td>
+                <td><span class="phase">BREAKOUT</span></td>
+                <td class="num">3</td><td class="num">42</td><td class="num">1.2</td><td class="num">-0.8</td><td class="num">28,500</td>
+                <td class="gate open">OPEN</td>
+              </tr>
+              <tr class="is-on">
+                <td class="t">BBCA</td><td class="num sig hi">84</td><td class="num">48.2</td>
+                <td><span class="act watch">WATCH</span></td>
+                <td><span class="phase">COMPRESS</span></td>
+                <td class="num">2</td><td class="num">48</td><td class="num">0.5</td><td class="num">0.2</td><td class="num">6,275</td>
+                <td class="gate open">OPEN</td>
+              </tr>
+              <tr>
+                <td class="t">BBRI</td><td class="num sig mid">81</td><td class="num">52.1</td>
+                <td><span class="act enter">ENTER</span></td>
+                <td><span class="phase">ACCUM</span></td>
+                <td class="num">4</td><td class="num">51</td><td class="num">0.9</td><td class="num">-0.3</td><td class="num">4,820</td>
+                <td class="gate open">OPEN</td>
+              </tr>
+              <tr>
+                <td class="t">BMRI</td><td class="num sig mid">78</td><td class="num">44.0</td>
+                <td><span class="act watch">WATCH</span></td>
+                <td><span class="phase">ACCUM</span></td>
+                <td class="num">2</td><td class="num">55</td><td class="num">0.3</td><td class="num">0.1</td><td class="num">6,150</td>
+                <td class="gate open">OPEN</td>
+              </tr>
+              <tr>
+                <td class="t">TLKM</td><td class="num sig mid">74</td><td class="num">41.2</td>
+                <td><span class="act watch">WATCH</span></td>
+                <td><span class="phase">NONE</span></td>
+                <td class="num">1</td><td class="num">44</td><td class="num">0.1</td><td class="num">0.0</td><td class="num">3,180</td>
+                <td class="gate open">OPEN</td>
+              </tr>
+              <tr>
+                <td class="t">ASII</td><td class="num sig lo">68</td><td class="num">38.0</td>
+                <td><span class="act avoid">AVOID</span></td>
+                <td><span class="phase">NONE</span></td>
+                <td class="num">0</td><td class="num">62</td><td class="num">-0.4</td><td class="num">1.2</td><td class="num">4,950</td>
+                <td class="gate block">BLOCK</td>
+              </tr>
+              <tr>
+                <td class="t">ADRO</td><td class="num sig lo">65</td><td class="num">50.5</td>
+                <td><span class="act watch">WATCH</span></td>
+                <td><span class="phase">ACCUM</span></td>
+                <td class="num">3</td><td class="num">58</td><td class="num">1.8</td><td class="num">-1.1</td><td class="num">2,680</td>
+                <td class="gate open">OPEN</td>
+              </tr>
             </tbody>
           </table>
         </div>

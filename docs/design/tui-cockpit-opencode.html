@@ -1252,27 +1252,31 @@
         <div class="stage" id="stage">
           <!-- 1 ACCUM -->
           <div class="list-view" id="accumView">
-            <div class="section-label">Candidates</div>
-            <table class="result-table" id="accumTable">
+            <div class="section-label">Candidates · option-B columns (1:1 TUI)</div>
+            <table class="result-table dense" id="accumTable">
               <thead>
                 <tr>
-                  <th style="width:72px">Ticker</th>
-                  <th>Name</th>
-                  <th class="num">Score</th>
+                  <th style="width:56px">Ticker</th>
+                  <th class="num">Signal</th>
+                  <th class="num">Accum</th>
+                  <th>Action</th>
+                  <th>Phase</th>
+                  <th class="num">Streak</th>
                   <th class="num">RSI</th>
-                  <th class="num">Vol×</th>
-                  <th>Setup</th>
-                  <th style="width:88px">Status</th>
+                  <th class="num">Net%</th>
+                  <th class="num">Disc%</th>
+                  <th class="num">Price</th>
+                  <th>Gate</th>
                 </tr>
               </thead>
               <tbody id="accumBody"></tbody>
             </table>
             <div class="footer-note">
               <span><span class="kbd">↑↓</span> move</span>
-              <span><span class="kbd">Enter</span> view</span>
+              <span><span class="kbd">Enter</span> judge</span>
               <span><span class="kbd">p</span> plan swing</span>
               <span><span class="kbd">Ctrl+P</span> commands</span>
-              <span class="dim">No scenario tabs — navigation is the palette.</span>
+              <span class="dim">Cols = BOARD_COLUMN_LABELS · ranked by Signal.</span>
             </div>
           </div>
 
@@ -1297,7 +1301,7 @@
               </div>
             </div>
 
-            <div class="section-label">IEP board · graded</div>
+            <div class="section-label">IEP board · graded · cols 1:1 TUI</div>
             <table class="result-table dense" id="preopenTable">
               <thead>
                 <tr>
@@ -1308,7 +1312,6 @@
                   <th class="num">NCP</th>
                   <th class="num">ΔIEV</th>
                   <th style="width:44px">Grd</th>
-                  <th>Flags</th>
                   <th style="width:56px">Risk</th>
                 </tr>
               </thead>
@@ -1589,34 +1592,36 @@
   </div>
 
   <script>
+    // 1:1 with BOARD_COLUMN_LABELS / CockpitApp._render_board_table (accum)
     const ACCUM = [
-      { t: "BBRI", name: "Bank Rakyat Indonesia", score: 86, rsi: 52.1, vol: 1.62, setup: "swing", status: "pass" },
-      { t: "BBCA", name: "Bank Central Asia", score: 84, rsi: 48.2, vol: 1.48, setup: "swing", status: "watch" },
-      { t: "BMRI", name: "Bank Mandiri", score: 81, rsi: 55.4, vol: 1.31, setup: "swing", status: "pass" },
-      { t: "TLKM", name: "Telkom Indonesia", score: 78, rsi: 44.0, vol: 1.22, setup: "swing", status: "pass" },
-      { t: "ASII", name: "Astra International", score: 76, rsi: 39.8, vol: 1.55, setup: "swing", status: "watch" },
-      { t: "ICBP", name: "Indofood CBP", score: 74, rsi: 51.6, vol: 1.18, setup: "swing", status: "pass" },
-      { t: "UNVR", name: "Unilever Indonesia", score: 71, rsi: 57.2, vol: 0.94, setup: "swing", status: "watch" },
-      { t: "ADRO", name: "Adaro Energy", score: 69, rsi: 61.0, vol: 1.88, setup: "swing", status: "block" },
-      { t: "PTBA", name: "Bukit Asam", score: 67, rsi: 46.5, vol: 1.41, setup: "swing", status: "pass" },
-      { t: "INDF", name: "Indofood Sukses", score: 65, rsi: 49.3, vol: 1.09, setup: "swing", status: "pass" },
-      { t: "KLBF", name: "Kalbe Farma", score: 64, rsi: 42.7, vol: 1.15, setup: "swing", status: "pass" },
-      { t: "EXCL", name: "XL Axiata", score: 62, rsi: 53.8, vol: 1.27, setup: "swing", status: "watch" },
+      { t: "BBRI", signal: 86, accum: 52.1, action: "ENTER", phase: "ACCUM", streak: 3, rsi: 52.1, net: 0.9, disc: -0.3, price: 4820, gate: "OPEN" },
+      { t: "BBCA", signal: 84, accum: 48.2, action: "WATCH", phase: "COMPRESS", streak: 2, rsi: 48.2, net: 0.5, disc: 0.2, price: 6275, gate: "OPEN" },
+      { t: "BMRI", signal: 81, accum: 44.0, action: "ENTER", phase: "ACCUM", streak: 2, rsi: 55.4, net: 0.3, disc: 0.1, price: 6150, gate: "OPEN" },
+      { t: "TLKM", signal: 78, accum: 41.2, action: "WATCH", phase: "NONE", streak: 1, rsi: 44.0, net: 0.1, disc: 0.0, price: 3180, gate: "OPEN" },
+      { t: "ASII", signal: 76, accum: 38.0, action: "WATCH", phase: "NONE", streak: 0, rsi: 39.8, net: -0.2, disc: 1.2, price: 4950, gate: "OPEN" },
+      { t: "ICBP", signal: 74, accum: 46.5, action: "ENTER", phase: "ACCUM", streak: 2, rsi: 51.6, net: 0.4, disc: -0.1, price: 11250, gate: "OPEN" },
+      { t: "UNVR", signal: 71, accum: 36.0, action: "WATCH", phase: "NONE", streak: 1, rsi: 57.2, net: -0.1, disc: 0.5, price: 2410, gate: "OPEN" },
+      { t: "ADRO", signal: 69, accum: 50.5, action: "AVOID", phase: "NONE", streak: 0, rsi: 61.0, net: 1.8, disc: -1.1, price: 2680, gate: "BLOCK" },
+      { t: "PTBA", signal: 67, accum: 42.0, action: "WATCH", phase: "ACCUM", streak: 2, rsi: 46.5, net: 0.6, disc: -0.4, price: 2890, gate: "OPEN" },
+      { t: "INDF", signal: 65, accum: 40.0, action: "WATCH", phase: "NONE", streak: 1, rsi: 49.3, net: 0.2, disc: 0.0, price: 6850, gate: "OPEN" },
+      { t: "KLBF", signal: 64, accum: 39.0, action: "WATCH", phase: "NONE", streak: 0, rsi: 42.7, net: 0.1, disc: 0.3, price: 1545, gate: "OPEN" },
+      { t: "EXCL", signal: 62, accum: 37.5, action: "WATCH", phase: "NONE", streak: 1, rsi: 53.8, net: 0.3, disc: -0.2, price: 2280, gate: "OPEN" },
     ];
 
+    // 1:1 with preopen board: Tkr IEP Δ% IEV NCP ΔIEV Grd Risk
     const PREOPEN = [
-      { t: "BBRI", iep: 4820, d: 1.8, iev: "12.4M", ncp: 0.92, diev: 1.34, grade: "A", flags: "imb·gap", risk: "clear" },
-      { t: "BMRI", iep: 6150, d: 1.2, iev: "9.1M", ncp: 0.88, diev: 1.21, grade: "A", flags: "imb", risk: "clear" },
-      { t: "BBCA", iep: 9925, d: 0.8, iev: "6.2M", ncp: 0.81, diev: 1.05, grade: "B", flags: "—", risk: "clear" },
-      { t: "TLKM", iep: 3180, d: -0.6, iev: "18.7M", ncp: 0.74, diev: 0.91, grade: "B", flags: "soft", risk: "clear" },
-      { t: "ASII", iep: 4720, d: 2.4, iev: "14.0M", ncp: 0.69, diev: 1.55, grade: "A", flags: "gap·vol", risk: "watch" },
-      { t: "ADRO", iep: 2680, d: 3.1, iev: "22.3M", ncp: 0.55, diev: 1.92, grade: "C", flags: "hot·gap", risk: "block" },
-      { t: "PTBA", iep: 2890, d: 1.5, iev: "5.4M", ncp: 0.71, diev: 1.18, grade: "B", flags: "imb", risk: "clear" },
-      { t: "ICBP", iep: 11250, d: 0.4, iev: "1.1M", ncp: 0.66, diev: 0.88, grade: "C", flags: "thin", risk: "watch" },
-      { t: "UNVR", iep: 2410, d: -1.1, iev: "3.8M", ncp: 0.60, diev: 0.79, grade: "C", flags: "soft", risk: "clear" },
-      { t: "EXCL", iep: 2280, d: 1.9, iev: "8.6M", ncp: 0.77, diev: 1.40, grade: "B", flags: "imb·vol", risk: "clear" },
-      { t: "KLBF", iep: 1545, d: 0.3, iev: "4.2M", ncp: 0.63, diev: 0.95, grade: "C", flags: "—", risk: "clear" },
-      { t: "INDF", iep: 6850, d: 0.9, iev: "2.0M", ncp: 0.70, diev: 1.02, grade: "B", flags: "—", risk: "clear" },
+      { t: "BBRI", iep: 4820, d: 1.8, iev: "12.4M", ncp: 0.92, diev: "+2.1M", grade: "A", risk: "clear" },
+      { t: "BMRI", iep: 6150, d: 1.2, iev: "9.1M", ncp: 0.88, diev: "+0.8M", grade: "A", risk: "clear" },
+      { t: "BBCA", iep: 9925, d: 0.8, iev: "6.2M", ncp: 0.81, diev: "+0.3M", grade: "B", risk: "clear" },
+      { t: "TLKM", iep: 3180, d: -0.6, iev: "18.7M", ncp: 0.74, diev: "−1.2M", grade: "B", risk: "clear" },
+      { t: "ASII", iep: 4720, d: 2.4, iev: "14.0M", ncp: 0.69, diev: "+1.5M", grade: "A", risk: "watch" },
+      { t: "ADRO", iep: 2680, d: 3.1, iev: "22.3M", ncp: 0.55, diev: "+4.5M", grade: "C", risk: "block" },
+      { t: "PTBA", iep: 2890, d: 1.5, iev: "5.4M", ncp: 0.71, diev: "+0.6M", grade: "B", risk: "clear" },
+      { t: "ICBP", iep: 11250, d: 0.4, iev: "1.1M", ncp: 0.66, diev: "−0.1M", grade: "C", risk: "watch" },
+      { t: "UNVR", iep: 2410, d: -1.1, iev: "3.8M", ncp: 0.60, diev: "−0.4M", grade: "C", risk: "clear" },
+      { t: "EXCL", iep: 2280, d: 1.9, iev: "8.6M", ncp: 0.77, diev: "+1.1M", grade: "B", risk: "clear" },
+      { t: "KLBF", iep: 1545, d: 0.3, iev: "4.2M", ncp: 0.63, diev: "+0.2M", grade: "C", risk: "clear" },
+      { t: "INDF", iep: 6850, d: 0.9, iev: "2.0M", ncp: 0.70, diev: "+0.3M", grade: "B", risk: "clear" },
     ];
 
     const COMMANDS = [
@@ -1651,9 +1656,10 @@
     const $ = (id) => document.getElementById(id);
 
     function badgeClass(s) {
-      if (s === "pass" || s === "clear") return "pass";
-      if (s === "watch") return "watch";
-      if (s === "block") return "block";
+      const u = String(s || "").toLowerCase();
+      if (u === "pass" || u === "clear" || u === "enter" || u === "open") return "pass";
+      if (u === "watch") return "watch";
+      if (u === "block" || u === "avoid" || u === "blocked") return "block";
       return "neutral";
     }
 
@@ -1670,12 +1676,16 @@
       $("accumBody").innerHTML = ACCUM.map((r, i) => `
         <tr data-i="${i}" class="${i === state.rowIndex ? "is-selected" : ""}">
           <td><span class="ticker">${r.t}</span></td>
-          <td class="dim">${r.name}</td>
-          <td class="num">${r.score}</td>
+          <td class="num">${r.signal}</td>
+          <td class="num dim">${r.accum.toFixed(1)}</td>
+          <td><span class="badge ${badgeClass(r.action)}">${r.action}</span></td>
+          <td class="dim">${r.phase}</td>
+          <td class="num dim">${r.streak}</td>
           <td class="num dim">${r.rsi.toFixed(1)}</td>
-          <td class="num dim">${r.vol.toFixed(2)}×</td>
-          <td class="dim">${r.setup}</td>
-          <td><span class="badge ${badgeClass(r.status)}">${r.status.toUpperCase()}</span></td>
+          <td class="num dim">${r.net.toFixed(1)}</td>
+          <td class="num dim">${r.disc.toFixed(1)}</td>
+          <td class="num">${r.price.toLocaleString("en-US")}</td>
+          <td><span class="badge ${badgeClass(r.gate)}">${r.gate}</span></td>
         </tr>
       `).join("");
       $("accumBody").querySelectorAll("tr").forEach((tr) => {
@@ -1699,9 +1709,8 @@
             <td class="num ${dCls}">${dStr}</td>
             <td class="num dim">${r.iev}</td>
             <td class="num dim">${r.ncp.toFixed(2)}</td>
-            <td class="num dim">${r.diev.toFixed(2)}×</td>
+            <td class="num dim">${r.diev}</td>
             <td><span class="badge ${gradeClass(r.grade)}">${r.grade}</span></td>
-            <td class="dim">${r.flags}</td>
             <td><span class="badge ${badgeClass(r.risk)}">${r.risk}</span></td>
           </tr>
         `;
@@ -1725,7 +1734,7 @@
         <div class="kv">
           <span class="k">Focus</span><span class="v"><strong style="color:var(--text)">${r.t}</strong> · grade ${r.grade}</span>
           <span class="k">Provenance</span><span class="v">verified NCP · Stockbit</span>
-          <span class="k">Auction imbalance</span><span class="v ${r.diev >= 1 ? "pos" : "dim"}">${r.diev >= 1 ? "buy-lean" : "sell-lean"} · ${r.diev.toFixed(2)}×</span>
+          <span class="k">ΔIEV</span><span class="v">${r.diev}</span>
           <span class="k">Prior close vs IEP</span><span class="v">gap ${r.d >= 0 ? "+" : ""}${r.d.toFixed(1)}% ${Math.abs(r.d) > 2 ? "wide" : "inside band"}</span>
           <span class="k">Risk gate</span><span class="v">${r.risk} · IEV ${r.iev}</span>
           <span class="k">Note</span><span class="v dim">assess pre-open for full grade trail</span>
@@ -1791,9 +1800,11 @@
         $("detailView").style.display = "block";
         const f = focusTicker();
         const t = f.t;
-        const name = f.name || (ACCUM.find((x) => x.t === t) || {}).name || t;
+        const sub = f.action
+          ? `${f.action} · Signal ${f.signal} · Gate ${f.gate}`
+          : `grade ${f.grade || "—"} · IEP ${(f.iep || 0).toLocaleString("en-US")}`;
         $("detailTicker").textContent = t;
-        $("detailSub").textContent = `${name} · inspect · signal context`;
+        $("detailSub").textContent = `${sub} · present-only`;
         setModeLocal();
       }
 
@@ -1951,10 +1962,10 @@
       }
       const f = focusTicker();
       const t = f.t;
-      const status = f.status || f.risk || "watch";
+      const status = f.action || f.risk || "WATCH";
       $("confirmLead").textContent = `Plan ${t} · swing`;
       $("cfTicker").textContent = t;
-      $("cfSetup").textContent = `${String(status).toUpperCase()} · risk ${f.risk || "clear"}`;
+      $("cfSetup").textContent = `${String(status).toUpperCase()} · gate ${f.gate || f.risk || "—"}`;
       $("cfSource").textContent = state.frame === "preopen" ? "screen pre-open · local" : "screen accum · local";
       state.confirmOpen = true;
       closePalette();

@@ -25,7 +25,8 @@ Screen {
 }
 
 #main-header {
-    height: 3;
+    height: auto;
+    min-height: 3;
     padding: 1 1 0 1;
     border-bottom: solid #181818;
 }
@@ -36,11 +37,12 @@ Screen {
 }
 
 #view-meta {
-    color: #555555;
+    color: #5c6575;
+    height: auto;
 }
 
 #mode-pill {
-    color: #7a7a7a;
+    color: #d4b06a;
     text-align: right;
 }
 
@@ -64,22 +66,30 @@ Screen {
 
 #board-table {
     height: 1fr;
-    background: #0b0b0b;
-    color: #d8d8d8;
+    background: #080b12;
+    color: #c9c3b8;
 }
 
+/* Signal radar focus: brass wash (design tui-accum-board.html is-on) */
 #board-table > .datatable--cursor {
-    background: #c9a68a;
-    color: #1a120c;
+    background: #1a160e;
+    color: #f0ebe3;
+    text-style: bold;
 }
 
 #board-table > .datatable--hover {
-    background: #161616;
+    background: #0d121c;
+}
+
+#board-table > .datatable--header {
+    color: #5c6575;
+    text-style: bold;
+    background: #080b12;
 }
 
 #board-footer {
     height: auto;
-    color: #555555;
+    color: #5c6575;
     padding-top: 1;
 }
 

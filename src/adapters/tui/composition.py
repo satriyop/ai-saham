@@ -801,6 +801,10 @@ class _LocalPlanStructureRunner:
             if plan.lots is not None:
                 lots_s = str(plan.lots)
 
+        try:
+            risk_s = f"{float(self._config.swing.risk_pct):.1f}"
+        except (TypeError, ValueError, AttributeError):
+            risk_s = "—"
         return PlanStructureResult(
             summary=summary,
             ticker=ticker_u,
@@ -813,6 +817,8 @@ class _LocalPlanStructureRunner:
             plan_id_short=plan_id_short,
             inherits_action=True,
             no_order=True,
+            risk_pct=risk_s,
+            horizon="swing",
         )
 
 

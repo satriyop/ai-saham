@@ -31,7 +31,7 @@ Sibling instrument to ticker desk (same night-ink family). Target for `v b` + de
 
 | Surface | Signature | Job |
 |---------|-----------|-----|
-| **List** | Desk **Radar** — Net5 amplitude bars (center = 0) | Scout tracked desks by \|Net5\| |
+| **List** | Desk **Radar** — cols 1:1 TUI: Code·Type·AsOf·DayNet·Net5·Stk·Δ1·#·Top (amp = design sugar on Net5) | Scout tracked desks by \|Net5\| |
 | **Show** | **Net Mast** — monumental day net | One desk home (parallel to harga mast) |
 | **Hub** | t top / f flow / h history / v ticker | Deep without leaving the instrument |
 | **Trail** | v → Ticker Desk (Harga Mast) | Stock ↔ desk navigation |
@@ -49,7 +49,7 @@ Open `tui-broker-desk.html` (keys 1–4 for frames).
 | Role | Daily **cockpit**, not IDE |
 | Layout | **B** — full main display + thin right sidebar |
 | Navigation | **No scenario tabs** — `Ctrl+P` palette is the nav |
-| Enter | **View** ticker / inspect surface |
+| Enter | **Judge** on accum (present-only) · inspect on pre-open |
 | Plan | **Deliberate** (`p` or palette) — never bound to Enter |
 | Pre-open vs accum | Equal citizens in Suggested |
 | Lab | Present in palette, not chrome |
