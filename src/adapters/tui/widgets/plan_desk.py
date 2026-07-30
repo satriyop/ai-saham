@@ -179,6 +179,16 @@ class PlanDesk(Vertical):
     PlanDesk .plan-card.tone-watch { border-left: solid #d4b06a; }
     PlanDesk .plan-card.tone-neutral { border-left: solid #a89cc9; }
 
+    PlanDesk .paper-tape {
+        background: #1a160e;
+        border: solid #3a3220;
+        border-left: solid #e8b86d;
+        padding: 1 1;
+        margin-bottom: 1;
+        height: auto;
+        color: #c9c3b8;
+    }
+
     PlanDesk .plan-footer {
         color: #5c6575;
         margin-top: 0;
@@ -233,6 +243,7 @@ class PlanDesk(Vertical):
                     classes="plan-card tone-neutral card-solo",
                     id="pd-card-status",
                 )
+        yield Static("", classes="paper-tape", id="pd-paper-tape")
         yield Static("", classes="plan-footer", id="pd-footer")
 
     def paint(self, model: PlanDeskModel) -> None:
@@ -286,6 +297,14 @@ class PlanDesk(Vertical):
             el = self.query_one(f"#pd-card-{key}", Static)
             card = by_key.get(key)
             _paint_card(el, card)
+
+        tape = self.query_one("#pd-paper-tape", Static)
+        if model.paper_outcome:
+            tape.display = True
+            tape.update(model.paper_outcome)
+        else:
+            tape.display = False
+            tape.update("")
 
         self.query_one("#pd-footer", Static).update(model.footer)
 

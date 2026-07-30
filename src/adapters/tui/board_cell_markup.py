@@ -156,6 +156,70 @@ def format_preopen_risk_cell(risk: str) -> Text:
     return Text(r, style=_MIST)
 
 
+def format_preopen_delta_cell(delta: str) -> Text:
+    """Signed Δ% heat for pre-open board (presentation only)."""
+    return format_net_cell(delta)
+
+
+def format_preopen_board_cells(row: Any) -> tuple[Text | str, ...]:
+    """Cells for pre-open contract: Tkr IEP Δ% IEV NCP ΔIEV Grd Risk."""
+    return (
+        format_ticker_cell(str(getattr(row, "ticker", "?") or "?")),
+        format_plain_num(str(getattr(row, "iep", "—") or "—")),
+        format_preopen_delta_cell(str(getattr(row, "delta_pct", "—") or "—")),
+        format_plain_num(str(getattr(row, "iev", "—") or "—")),
+        format_plain_num(str(getattr(row, "ncp", "—") or "—")),
+        format_preopen_delta_cell(str(getattr(row, "delta_iev", "—") or "—")),
+        format_preopen_grade_cell(str(getattr(row, "grade", "—") or "—")),
+        format_preopen_risk_cell(str(getattr(row, "risk", "—") or "—")),
+    )
+
+
+def format_signed_flow_cell(value: str) -> Text:
+    """Tint DayNet / Net5 / Δ1 strings that look like +12.3B / −1.2M."""
+    s = (value or "—").strip() or "—"
+    if s in {"—", "-", ""}:
+        return Text(s, style=_ASH)
+    if s.startswith("+"):
+        return Text(s, style=_MINT)
+    if s.startswith("-") or s.startswith("−"):
+        return Text(s, style=_CORAL)
+    # bare number with optional suffix
+    cleaned = (
+        s.replace(",", "")
+        .replace("B", "")
+        .replace("M", "")
+        .replace("K", "")
+        .replace("%", "")
+        .replace("−", "-")
+        .strip()
+    )
+    try:
+        v = float(cleaned)
+    except (TypeError, ValueError):
+        return Text(s, style=_FOG)
+    if v > 0:
+        return Text(s, style=_MINT)
+    if v < 0:
+        return Text(s, style=_CORAL)
+    return Text(s, style=_FOG)
+
+
+def format_broker_list_cells(row: Any) -> tuple[Text | str, ...]:
+    """Broker list contract: Code Type AsOf DayNet Net5 Stk Δ1 # Top."""
+    return (
+        format_ticker_cell(str(getattr(row, "code", "?") or "?")),
+        Text(str(getattr(row, "type_label", "—") or "—"), style=_MIST),
+        format_plain_num(str(getattr(row, "as_of", "—") or "—")),
+        format_signed_flow_cell(str(getattr(row, "day_net", "—") or "—")),
+        format_signed_flow_cell(str(getattr(row, "net5", "—") or "—")),
+        format_plain_num(str(getattr(row, "streak", "—") or "—")),
+        format_signed_flow_cell(str(getattr(row, "delta1", "—") or "—")),
+        format_plain_num(str(getattr(row, "tickers", "—") or "—")),
+        Text(str(getattr(row, "top_buy", "—") or "—"), style=_FOG),
+    )
+
+
 def format_triage_markup(summary: str) -> str:
     """Color Action tokens inside board summary for meta/status (Textual markup)."""
     if not summary:

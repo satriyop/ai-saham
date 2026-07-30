@@ -282,6 +282,7 @@ class _ViewTickerDashboardLoader:
             from src.adapters.shared.view_ticker_dashboard_text import (
                 format_ticker_dashboard_text,
             )
+            from src.adapters.tui.ticker_desk_present import format_ticker_desk_from_dashboard
             from src.application.dto.ticker_dashboard import GetTickerDashboardRequest
             from src.infrastructure.composition.view_ticker_deps import build_view_ticker_deps
 
@@ -289,7 +290,9 @@ class _ViewTickerDashboardLoader:
             dashboard = deps.dashboard.execute(
                 GetTickerDashboardRequest(ticker=str(ticker).upper(), brief=False)
             )
-            return format_ticker_dashboard_text(dashboard)
+            body = format_ticker_dashboard_text(dashboard)
+            # Harga mast first (design: tui-ticker-desk.html); body is cache panels.
+            return format_ticker_desk_from_dashboard(dashboard, body=body)
 
 
 # ── View broker (list → show → deep-dives) ──────────────────

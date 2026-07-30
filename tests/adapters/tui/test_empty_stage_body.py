@@ -53,7 +53,24 @@ def test_ready_health_generic_empty_not_no_market_data():
         board_kind="none",
     )
     assert "No local market data" not in text
-    assert "local cache present" in text.lower() or "nothing to list" in text.lower()
+    assert (
+        "local cache present" in text.lower()
+        or "nothing to list" in text.lower()
+        or "local cache ready" in text.lower()
+        or "poster · ready" in text.lower()
+    )
+
+
+def test_lag_health_uses_lag_poster():
+    text = format_empty_stage_body(
+        cache_status="lag",
+        board_title="Screen · —",
+        meta="waiting",
+        board_kind="none",
+    )
+    assert "No local market data" not in text
+    assert "lag" in text.lower()
+    assert "poster" in text.lower() or "lagging" in text.lower()
 
 
 def test_cockpit_empty_demo_true_empty_still_says_no_market_data():

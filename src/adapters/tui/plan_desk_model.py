@@ -56,6 +56,7 @@ class PlanDeskModel:
     no_order: bool
     cards: tuple[PlanCard, ...]
     footer: str
+    paper_outcome: str = ""
 
 
 def build_plan_desk_model(
@@ -68,6 +69,7 @@ def build_plan_desk_model(
     structure: PlanStructureResult | Any | None = None,
     result_line: str = "",
     running: bool = False,
+    paper_outcome: str = "",
 ) -> PlanDeskModel:
     """Pure build of Plan desk model from board row + structure result."""
     struct = plan_structure_from_runner_object(structure) if structure is not None else None
@@ -98,6 +100,8 @@ def build_plan_desk_model(
     footer = "esc board · p re-run · l paper log · no broker order · structure only"
     if running:
         footer = "structure running · local plan swing · esc cancel wait"
+    if paper_outcome:
+        footer = "esc board · paper outcome on tape · no broker order"
 
     return PlanDeskModel(
         ticker=str(ticker or struct.ticker or "—"),
@@ -124,6 +128,7 @@ def build_plan_desk_model(
         no_order=bool(struct.no_order),
         cards=cards,
         footer=footer,
+        paper_outcome=str(paper_outcome or ""),
     )
 
 

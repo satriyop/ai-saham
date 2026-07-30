@@ -182,6 +182,7 @@ class CockpitApp(App[None]):
         self._plan_result: str = ""
         self._plan_structure: Any | None = None
         self._plan_running: bool = False
+        self._paper_outcome: str = ""
         self._chord_prefix: str | None = None
         self._chord_timer: Timer | None = None
         # Board load UX: keep prior rows while recomputing; snapshot on open.
@@ -473,6 +474,7 @@ class CockpitApp(App[None]):
             structure=self._plan_structure,
             result_line=self._plan_result,
             running=self._plan_running,
+            paper_outcome=self._paper_outcome,
         )
 
     def _build_judge_model(self, row: Any) -> Any:
@@ -1439,24 +1441,22 @@ class CockpitApp(App[None]):
         table.clear(columns=True)
         if self._stage == "broker-list":
             # Desk radar: DayNet + Net5 + buy-streak (+ Δ1) from cache
+            from src.adapters.tui.board_cell_markup import format_broker_list_cells
+
             table.add_columns("Code", "Type", "AsOf", "DayNet", "Net5", "Stk", "Δ1", "#", "Top")
             for row in self._broker_rows:
-                table.add_row(
-                    str(getattr(row, "code", "?")),
-                    str(getattr(row, "type_label", "—")),
-                    str(getattr(row, "as_of", "—") or "—"),
-                    str(getattr(row, "day_net", "—") or "—"),
-                    str(getattr(row, "net5", "—") or "—"),
-                    str(getattr(row, "streak", "—") or "—"),
-                    str(getattr(row, "delta1", "—") or "—"),
-                    str(getattr(row, "tickers", "—") or "—"),
-                    str(getattr(row, "top_buy", "—") or "—"),
-                )
+                table.add_row(*format_broker_list_cells(row))
             if self._broker_rows:
                 table.move_cursor(row=self._broker_row_index, animate=False)
             return
         if self._stage == "ticker-desks":
             # Ranked by latest tops; NetX = stock×desk last X sessions (no name col)
+            from src.adapters.tui.board_cell_markup import (
+                format_plain_num,
+                format_signed_flow_cell,
+                format_ticker_cell,
+            )
+
             table.add_columns(
                 "Code",
                 "Type",
@@ -1473,42 +1473,29 @@ class CockpitApp(App[None]):
             )
             for row in self._broker_rows:
                 table.add_row(
-                    str(getattr(row, "code", "?")),
+                    format_ticker_cell(str(getattr(row, "code", "?") or "?")),
                     str(getattr(row, "type_label", "—")),
                     str(getattr(row, "role", "—")),
-                    str(getattr(row, "as_of", "—") or "—"),
-                    str(getattr(row, "day_net", "—") or "—"),
-                    str(getattr(row, "net3", "—") or "—"),
-                    str(getattr(row, "net5", "—") or "—"),
-                    str(getattr(row, "net7", "—") or "—"),
-                    str(getattr(row, "net10", "—") or "—"),
-                    str(getattr(row, "net20", "—") or "—"),
-                    str(getattr(row, "streak", "—") or "—"),
-                    str(getattr(row, "delta1", "—") or "—"),
+                    format_plain_num(str(getattr(row, "as_of", "—") or "—")),
+                    format_signed_flow_cell(str(getattr(row, "day_net", "—") or "—")),
+                    format_signed_flow_cell(str(getattr(row, "net3", "—") or "—")),
+                    format_signed_flow_cell(str(getattr(row, "net5", "—") or "—")),
+                    format_signed_flow_cell(str(getattr(row, "net7", "—") or "—")),
+                    format_signed_flow_cell(str(getattr(row, "net10", "—") or "—")),
+                    format_signed_flow_cell(str(getattr(row, "net20", "—") or "—")),
+                    format_plain_num(str(getattr(row, "streak", "—") or "—")),
+                    format_signed_flow_cell(str(getattr(row, "delta1", "—") or "—")),
                 )
             if self._broker_rows:
                 table.move_cursor(row=self._broker_row_index, animate=False)
             return
         is_preopen = self._stage == "preopen" or self._board_kind == "preopen"
         if is_preopen:
-            from src.adapters.tui.board_cell_markup import (
-                format_preopen_grade_cell,
-                format_preopen_risk_cell,
-                format_ticker_cell,
-            )
+            from src.adapters.tui.board_cell_markup import format_preopen_board_cells
 
             table.add_columns("Tkr", "IEP", "Δ%", "IEV", "NCP", "ΔIEV", "Grd", "Risk")
             for row in self._rows:
-                table.add_row(
-                    format_ticker_cell(str(getattr(row, "ticker", "?") or "?")),
-                    row.iep,
-                    row.delta_pct,
-                    row.iev,
-                    row.ncp,
-                    row.delta_iev,
-                    format_preopen_grade_cell(str(getattr(row, "grade", "—") or "—")),
-                    format_preopen_risk_cell(str(getattr(row, "risk", "—") or "—")),
-                )
+                table.add_row(*format_preopen_board_cells(row))
         else:
             # Option B desk board — ADR-043 Signal/Accum + chip elevation
             from src.adapters.tui.board_cell_markup import format_accum_board_cells
@@ -2227,6 +2214,7 @@ class CockpitApp(App[None]):
         self._plan_result = ""
         self._plan_structure = None
         self._plan_running = True
+        self._paper_outcome = ""
         self._stage = "plan"
         self._board_title = f"Plan · {ticker} · structure"
         self._meta = "structure desk · local · no broker order"
@@ -2317,21 +2305,10 @@ class CockpitApp(App[None]):
         if incomplete and not getattr(struct, "plan_id_short", ""):
             self.notify(f"Cannot paper log · {incomplete}", timeout=2.5)
             return
-        # Geometry summary for confirm body (from structure desk fields only).
-        entry = str(getattr(struct, "entry", "—") or "—")
-        stop = str(getattr(struct, "stop", "—") or "—")
-        target = str(getattr(struct, "target", "—") or "—")
-        lots = str(getattr(struct, "lots", "—") or "—")
-        plan_id = str(getattr(struct, "plan_id_short", "") or "")
-        plan_text = (
-            f"Ticker  {ticker}\n"
-            f"Entry   {entry}\n"
-            f"Stop    {stop}\n"
-            f"Target  {target}\n"
-            f"Lots    {lots}"
-            + (f"\nPlan    {plan_id}" if plan_id else "")
-            + "\n\nUses saved swing_trade_plan (CLI --from-plan) · paper only"
-        )
+        from src.adapters.tui.paper_log_display import plan_text_from_structure
+
+        # Geometry for confirm from structure desk fields only (notebook UI).
+        plan_text = plan_text_from_structure(struct, ticker=ticker)
         self._open_paper_log_confirm(ticker=ticker, plan_text=plan_text)
 
     def _open_paper_log_confirm(self, *, ticker: str, plan_text: str) -> None:
@@ -2365,14 +2342,22 @@ class CockpitApp(App[None]):
             dispatch_if_active(self, self._on_paper_log_done, ticker, None, str(exc))
 
     def _on_paper_log_done(self, ticker: str, result: Any, error: str | None) -> None:
+        from src.adapters.tui.paper_log_display import format_paper_outcome_tape
+        from src.adapters.tui.paper_log_result import PaperLogResult
+
         if error is not None:
             self._status_note = "plan done"
+            self._paper_outcome = (
+                f"[bold #e87a6e]PAPER TAPE · FAILED[/]\n"
+                f"{ticker} · {error[:120]}\n"
+                "[dim]no broker order[/]"
+            )
             self._refresh_chrome()
             self.notify(f"Paper log failed · {error[:100]}", timeout=2.5)
             return
-        from src.adapters.tui.paper_log_result import PaperLogResult
 
         if isinstance(result, PaperLogResult):
+            self._paper_outcome = format_paper_outcome_tape(result)
             msg = result.message
             if result.refused:
                 self._status_note = "plan done"
@@ -2393,9 +2378,31 @@ class CockpitApp(App[None]):
         # Duck-typed result
         written = bool(getattr(result, "written", False))
         message = str(getattr(result, "message", result) or result)
+        self._paper_outcome = format_paper_outcome_tape(
+            type(
+                "R",
+                (),
+                {
+                    "ticker": ticker,
+                    "written": written,
+                    "message": message,
+                    "refused": False,
+                },
+            )()
+        )
         self._status_note = "paper logged" if written else "plan done"
         self._refresh_chrome()
         self.notify(message[:160], timeout=2.8)
+
+    def _repaint_plan_if_open(self) -> None:
+        """Refresh Geometry mast + paper tape when still on plan stage."""
+        if self._stage != "plan":
+            return
+        try:
+            body = self.query_one("#stage-body", Static)
+            self._paint_plan_stage(body=body)
+        except Exception:
+            return
 
     def _load_phase_sequence_for_judge(self, ticker: str, row: Any) -> tuple[Any, str | None]:
         """Read-only ledger sequence for Judge; never network, never write."""
