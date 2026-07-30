@@ -344,16 +344,20 @@ class CockpitApp(App[None]):
         )
 
     def _empty_body(self) -> str:
-        return (
-            "[bold #e8e8e8]No local market data[/]\n\n"
-            "Cockpit is local-first. Nothing is on disk for this session,\n"
-            "so screens cannot invent candidates.\n\n"
-            "Online is available — [bold]only if you ask[/] via palette\n"
-            "→ [bold]Fetch market data[/]\n\n"
-            "[#9b8fb8]What this protects[/]\n"
-            "· No silent network on open\n"
-            "· Fetch is an explicit command, same as CLI\n"
-            "· Empty cache refuses to invent rows"
+        from src.adapters.tui.empty_stage_body import format_empty_stage_body
+
+        status = getattr(self._cache_health, "status", None)
+        next_step = (
+            getattr(self._cache_health, "next_step", None)
+            or self._cache_next_step
+            or "Ctrl+P · Fetch market data (explicit)"
+        )
+        return format_empty_stage_body(
+            cache_status=str(status) if status is not None else None,
+            board_title=self._board_title,
+            meta=self._meta,
+            board_kind=str(self._board_kind or "none"),
+            next_step=str(next_step),
         )
 
     def _refresh_chrome(self) -> None:
@@ -929,13 +933,22 @@ class CockpitApp(App[None]):
         status = getattr(self._cache_health, "status", None)
         if status in {"ready", "lag"}:
             self._mode = "local-first"
+            self._meta = "local cache · no board rows"
+            self._status_note = "empty board · cache present"
+            notify = "Empty board · local cache present"
         elif status == "empty":
             self._mode = "no cache"
+            self._meta = "waiting on local data"
+            self._status_note = "empty · fetch explicit"
+            notify = "Empty cache · fetch explicit"
         else:
             # unknown / loader missing: do not claim "no cache" over real disk state
             self._mode = "local-first"
+            self._meta = "empty board · cache health unclear"
+            self._status_note = "empty · check cache"
+            notify = "Empty board · cache health unclear"
         self._refresh_chrome()
-        self.notify("Empty cache state", timeout=1.2)
+        self.notify(notify, timeout=1.2)
 
     # ── accum / preopen load ───────────────────────────────
 
@@ -1071,11 +1084,13 @@ class CockpitApp(App[None]):
             self._recomputing = False
             self._board_source = "live"
             self._snapshot_freshness = ""
+            self._board_kind = "accum"
             # Live empty success must clear last-run snapshot (criterion 4).
             invalidate_accum_board_snapshot(self._board_snapshot_path)
             self._show_empty()
             self._board_title = "Screen · accumulation"
             self._meta = "local · 0 candidates"
+            self._status_note = "0 candidates · local"
             self.query_one("#side-accum", Static).update("Accum    0")
             self._refresh_chrome()
             return
@@ -1089,11 +1104,17 @@ class CockpitApp(App[None]):
             return
         if state.status is ScreenStatus.EMPTY:
             self._recomputing = False
+            self._board_kind = "preopen"
             self._stage = "empty"
             self._board_title = "Screen · pre-open"
             self._meta = "no IEP / empty local"
             self._mode = "local-first"
             self._rows = []
+            self._status_note = "pre-open empty"
+            self._refresh_local_cache_health()
+            status = getattr(self._cache_health, "status", None)
+            if status == "empty":
+                self._mode = "no cache"
             self.query_one("#side-preopen", Static).update("Pre-open 0")
             self._refresh_chrome()
             return
@@ -1128,9 +1149,11 @@ class CockpitApp(App[None]):
         if not self._rows:
             # Successful 0-candidate live result: invalidate prior non-empty snapshot.
             invalidate_accum_board_snapshot(self._board_snapshot_path)
+            self._board_kind = "accum"
             self._show_empty()
             self._board_title = "Screen · accumulation"
             self._meta = self._meta or "local · 0 candidates"
+            self._status_note = "0 candidates · local"
             self._board_summary = ""
             self._refresh_chrome()
             self.notify("Accumulation · 0 candidates (local)", timeout=2.0)
@@ -1168,8 +1191,10 @@ class CockpitApp(App[None]):
         self._row_index = 0
         self._status_note = f"{len(self._rows)} graded"
         if not self._rows:
+            self._board_kind = "preopen"
             self._stage = "empty"
             self._meta = self._meta or "no IEP candidates"
+            self._status_note = "pre-open empty"
             self._refresh_chrome()
             self.notify("Pre-open · no local IEP candidates", timeout=2.0)
             return
@@ -1666,8 +1691,10 @@ class CockpitApp(App[None]):
         self._desk_entry = "broker-list"
         if not self._broker_rows:
             self._stage = "empty"
+            self._board_kind = "none"
             self._board_title = "View · broker list"
             self._meta = "no tracked desks in config"
+            self._status_note = "broker list empty"
             self._refresh_chrome()
             self.notify("View broker · no tracked desks", timeout=2.0)
             return
