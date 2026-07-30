@@ -2769,10 +2769,10 @@
  </section>
 
  <div class="broker-hub" id="brokerHub" role="tablist" aria-label="Desk deep">
- <button type="button" class="is-on" data-deep="top"><kbd>t</kbd> top stocks</button>
+                <button type="button" class="is-on" data-deep="top"><kbd>t</kbd> buy/sell</button>
  <button type="button" data-deep="flow"><kbd>f</kbd> flow</button>
  <button type="button" data-deep="hist"><kbd>h</kbd> history</button>
-                <button type="button" data-deep="ticker"><kbd>v</kbd> tickers</button>
+                <button type="button" data-deep="ticker"><kbd>v</kbd> top buy</button>
               </div>
               <div class="broker-deep is-on" id="brokerDeepTop" data-deep-panel="top">
  <div class="split-buy-sell">
@@ -2808,20 +2808,20 @@
  </div>
 
               <div class="broker-deep" id="brokerDeepTicker" data-deep-panel="ticker">
-                <div class="section-label tight" style="margin-top:0">Top buy · open ticker</div>
+                <div class="section-label tight" style="margin-top:0">Top buy</div>
                 <div id="brokerJumpList" class="broker-jump-list" aria-label="Top buy tickers">
-                  <!-- filled from desk buys[] -->
+                  <!-- filled from desk buys[] · click opens view ticker -->
                 </div>
               </div>
 
- <div class="footer-note">
- <span><span class="kbd">t</span> top</span>
- <span><span class="kbd">f</span> flow</span>
- <span><span class="kbd">h</span> history</span>
- <span><span class="kbd">v</span> ticker</span>
- <span><span class="kbd">esc</span> radar</span>
- <span class="dim">tracked only · no order</span>
- </div>
+              <div class="footer-note">
+                <span><span class="kbd">t</span> buy/sell</span>
+                <span><span class="kbd">f</span> flow</span>
+                <span><span class="kbd">h</span> history</span>
+                <span><span class="kbd">v</span> top buy</span>
+                <span><span class="kbd">esc</span> radar</span>
+                <span class="dim">click row → view ticker</span>
+              </div>
  </div>
  </div>
 
@@ -3467,7 +3467,7 @@
             <span class="t">${code}</span>
             <span class="bar"><i style="width:${w}%"></i></span>
             <span class="n">${n}</span>
-            <span class="go">→ ticker</span>
+            <span class="go">open</span>
           </div>`
               )
               .join("")
@@ -3717,7 +3717,9 @@
  const b = BROKER[state.brokerIndex] || {};
  if (state.brokerMode === "home") {
  const deep = state.brokerDeep === "top" ? "home" : state.brokerDeep;
-          $("viewTitle").textContent = `View · broker · ${b.code || "—"} · ${deep === "ticker" ? "tickers" : deep}`;
+          const deepLab =
+            deep === "ticker" ? "top buy" : deep === "top" ? "buy/sell" : deep;
+          $("viewTitle").textContent = `View · broker · ${b.code || "—"} · ${deepLab}`;
           $("viewMeta").innerHTML = `<span class="dot">·</span> day net · t/f/h/v`;
  $("statusScreen").textContent = deep === "home" ? `desk home · ${b.code || "—"}` : `desk ${deep} · ${b.code || "—"}`;
  } else {
