@@ -899,6 +899,68 @@
 
  .confirm-actions .ghost-btn { font-size: 11.5px; }
 
+    /* Paper notebook tape (IA: tui-paper-journal) */
+    .paper-tape {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    .paper-row {
+      display: grid;
+      grid-template-columns: 88px 56px 1fr auto;
+      gap: 10px 12px;
+      align-items: center;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-elevated);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+    @media (max-width: 720px) {
+      .paper-row { grid-template-columns: 1fr 1fr; }
+    }
+    .paper-row .day { color: var(--text-mute); }
+    .paper-row .sym { font-weight: 600; color: #ececec; letter-spacing: 0.02em; }
+    .paper-row .geo { color: var(--text-dim); }
+    .paper-row .geo b { color: var(--text); font-weight: 500; }
+    .paper-row .st {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+      text-transform: lowercase;
+    }
+    .paper-row .st.ok {
+      color: var(--green);
+      background: rgba(111, 191, 138, 0.12);
+    }
+    .paper-row .st.skip {
+      color: var(--amber);
+      background: rgba(212, 176, 106, 0.12);
+    }
+    .paper-empty {
+      text-align: center;
+      padding: 28px 14px;
+      color: var(--text-mute);
+      font-size: 12.5px;
+      border: 1px dashed var(--border);
+      border-radius: var(--radius);
+      margin-top: 4px;
+    }
+    .paper-empty.is-hidden { display: none; }
+    .paper-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      font-size: 11.5px;
+      color: var(--text-mute);
+      margin-bottom: 10px;
+    }
+    .paper-head strong { color: var(--text); font-weight: 500; }
+
  /* toast */
  .toast {
  position: absolute;
@@ -1589,7 +1651,7 @@
 <body>
  <div class="demo-bar">
  <div class="card">
- <strong>OpenCode visual = TUI bible</strong> · <span style="color:#6fbf8a" id="buildStamp">rev 2026-07-30j · less chrome noise · E2E 1–9</span>
+ <strong>OpenCode visual = TUI bible</strong> · <span style="color:#6fbf8a" id="buildStamp">rev 2026-07-30k · paper tape · E2E 1–9</span>
  · black-on-black · peach palette · mono density
  · <em style="color:var(--sel-dim);font-style:normal">Journey = structure inspiration only</em>
  (stages / authority / columns — not marketing night-ink skin)
@@ -1743,31 +1805,30 @@
  </div>
  </div>
 
- <!-- 4 PAPER · notebook tape · tui-paper-journal.html -->
- <div class="list-view is-hidden" id="paperView">
- <div class="oc-note">
- Optional notebook · from plan geometry only ·
- <a href="./tui-paper-journal.html">tui-paper-journal.html</a>
- · paper notebook
- </div>
- <div class="section-label">Paper tape · confirm / outcome</div>
- <div class="card" style="border-left:3px solid var(--amber)">
- <div style="color:var(--amber);font-size:11px;letter-spacing:.1em;margin-bottom:8px">NOTEBOOK · PAPER ONLY</div>
- <div style="font-size:1.1rem;margin-bottom:8px">Log paper · <strong id="paperTicker">BBCA</strong></div>
- <div class="kv">
- <span class="k">Entry</span><span class="v">6,225</span>
- <span class="k">Stop</span><span class="v">5,900</span>
- <span class="k">Target</span><span class="v">6,800</span>
- <span class="k">Lots</span><span class="v">3</span>
- </div>
- <p style="margin-top:10px;color:var(--amber);font-size:12px">Paper only · no broker order · uses swing_trade_plan</p>
- </div>
- <div class="footer-note">
- <span><span class="kbd">↵</span> log paper</span>
- <span><span class="kbd">esc</span> cancel</span>
- <span class="dim">never auto-write</span>
- </div>
- </div>
+          <!-- 4 PAPER · notebook tape · IA tui-paper-journal · OpenCode -->
+          <div class="list-view is-hidden" id="paperView">
+            <div class="oc-note">
+              Notebook tape · write via plan <span class="kbd">l</span> confirm ·
+              IA <a href="./tui-paper-journal.html">tui-paper-journal.html</a>
+            </div>
+            <div class="paper-head">
+              <div>Paper · accumulation notebook · <strong>local CSV</strong></div>
+              <div>review optional · CLI trade accum review</div>
+            </div>
+            <div class="section-label">Notebook tape</div>
+            <div class="paper-tape" id="paperTape" aria-label="Paper notes">
+              <!-- filled by renderPaperTape() -->
+            </div>
+            <div class="paper-empty is-hidden" id="paperEmpty">
+              no paper notes yet · plan a structure then <span class="kbd">l</span> confirm
+            </div>
+            <div class="footer-note">
+              <span><span class="kbd">l</span> from plan desk</span>
+              <span>CLI: trade accum log --from-plan</span>
+              <span class="dim">no silent write</span>
+            </div>
+            <span id="paperTicker" style="display:none">BBCA</span>
+          </div>
 
  <!-- 5 PRE-OPEN (denser auction board) -->
  <div class="preopen-view is-hidden" id="preopenView">
@@ -2430,19 +2491,18 @@
  <span class="esc">esc cancel</span>
  </div>
  <div class="confirm-body">
- <div class="lead" id="confirmLead">Paper · BBCA</div>
- <div class="sub">From plan geometry only · Enter on board is Judge, not paper. No auto-write.</div>
- <div class="facts">
- <div class="fact"><span class="k">Ticker</span><span class="v" id="cfTicker">BBCA</span></div>
- <div class="fact"><span class="k">Entry</span><span class="v" id="cfSetup">6,225</span></div>
- <div class="fact"><span class="k">Stop / Target</span><span class="v">5,900 / 6,800</span></div>
- <div class="fact"><span class="k">Lots</span><span class="v">3</span></div>
- <div class="fact"><span class="k">Source</span><span class="v" id="cfSource">plan structure · local</span></div>
-            <div class="fact"><span class="k">Kind</span><span class="v">paper journal</span></div>
- </div>
- <div class="warn" id="confirmWarn">
-            No broker order. Uses saved swing_trade_plan (CLI --from-plan).
- </div>
+            <div class="lead" id="confirmLead">Paper · BBCA</div>
+            <div class="sub">Frozen plan geometry · no silent write</div>
+            <div class="facts">
+              <div class="fact"><span class="k">Ticker</span><span class="v" id="cfTicker">BBCA</span></div>
+              <div class="fact"><span class="k">Entry</span><span class="v" id="cfSetup">6,225</span></div>
+              <div class="fact"><span class="k">Stop / Target</span><span class="v" id="cfStopTarget">5,900 / 6,800</span></div>
+              <div class="fact"><span class="k">Lots</span><span class="v" id="cfLots">3</span></div>
+              <div class="fact"><span class="k">Source</span><span class="v" id="cfSource">swing_trade_plan · --from-plan</span></div>
+            </div>
+            <div class="warn" id="confirmWarn">
+              Appends notebook row only · no broker order
+            </div>
  </div>
  <div class="confirm-foot">
  <div class="hints">
@@ -2493,6 +2553,13 @@
  { t: "INDF", iep: 6850, d: 0.9, iev: "2.0M", ncp: 0.70, diev: "+0.3M", grade: "B", risk: "clear" },
  ];
 
+
+ // Paper notebook tape · IA tui-paper-journal (chronological notes)
+ const PAPER = [
+   { day: "2026-07-30", t: "BBCA", geo: "E <b>6,225</b> · S <b>5,900</b> · T <b>6,800</b> · 3 lots · plan 3f88eda7", st: "logged", kind: "ok" },
+   { day: "2026-07-29", t: "BBRI", geo: "E <b>4,825</b> · S <b>4,600</b> · T <b>5,275</b> · 2 lots", st: "logged", kind: "ok" },
+   { day: "2026-07-29", t: "ITMG", geo: "already logged window=7 · no new row", st: "duplicate", kind: "skip" },
+ ];
 
  // Broker radar + desk home · IA 1:1 tui-broker-desk · presentation only
  const BROKER = [
@@ -2884,10 +2951,11 @@
  } else if (frame === "plan") {
  $("planView").classList.remove("is-hidden"); $("planView").style.display = "block";
  setModeLocal();
- } else if (frame === "paper") {
- $("paperView").classList.remove("is-hidden"); $("paperView").style.display = "block";
- setModeLocal();
- } else if (frame === "preopen") {
+      } else if (frame === "paper") {
+        $("paperView").classList.remove("is-hidden"); $("paperView").style.display = "block";
+        renderPaperTape();
+        setModeLocal();
+      } else if (frame === "preopen") {
  $("preopenView").classList.remove("is-hidden"); $("preopenView").style.display = "block";
  setModeLocal();
  } else if (frame === "empty") {
@@ -2981,12 +3049,12 @@
  $("viewMeta").innerHTML = `<span class="dot">·</span> geometry hero · inherits Action · no order`;
  $("statusScreen").textContent = "plan structure";
  $("statusRows").textContent = t;
- } else if (state.frame === "paper") {
- $("viewTitle").textContent = `Paper · ${t}`;
-        $("viewMeta").innerHTML = `<span class="dot">·</span> notebook · from plan geometry`;
- $("statusScreen").textContent = "paper";
- $("statusRows").textContent = t;
- } else if (state.frame === "preopen") {
+      } else if (state.frame === "paper") {
+        $("viewTitle").textContent = "Paper · accumulation notebook";
+        $("viewMeta").innerHTML = `<span class="dot">·</span> local CSV · ${PAPER.length} notes`;
+        $("statusScreen").textContent = "paper notebook";
+        $("statusRows").textContent = `${PAPER.length} rows`;
+      } else if (state.frame === "preopen") {
  $("viewTitle").textContent = "Screen · pre-open";
  $("viewMeta").innerHTML = `<span class="dot">·</span> IEV snapshot · auction · ≠ accum Judge`;
  $("statusScreen").textContent = "screen pre-open";
@@ -3099,37 +3167,80 @@
  }
 
  /* plan confirm */
- function openConfirm() {
- if (state.frame === "empty" || state.cacheEmpty) {
- toast("Nothing to paper-log — fetch / plan first");
- return;
- }
- const f = focusTicker();
- const t = f.t;
- $("confirmLead").textContent = `Paper · ${t}`;
- $("cfTicker").textContent = t;
- $("cfSetup").textContent = "6,225";
- $("cfSource").textContent = "plan structure · local";
- state.confirmOpen = true;
- closePalette();
- $("confirmOverlay").classList.add("is-open");
- $("confirmOverlay").setAttribute("aria-hidden", "false");
- // Paper confirm is overlay; journey frame stays paper/plan
- }
+    function renderPaperTape() {
+      const tape = $("paperTape");
+      const empty = $("paperEmpty");
+      if (!tape) return;
+      if (!PAPER.length) {
+        tape.innerHTML = "";
+        if (empty) empty.classList.remove("is-hidden");
+        return;
+      }
+      if (empty) empty.classList.add("is-hidden");
+      tape.innerHTML = PAPER.map((r) => `
+        <div class="paper-row">
+          <span class="day">${r.day}</span>
+          <span class="sym">${r.t}</span>
+          <span class="geo">${r.geo}</span>
+          <span class="st ${r.kind || "ok"}">${r.st}</span>
+        </div>
+      `).join("");
+    }
 
- function closeConfirm(silent) {
- state.confirmOpen = false;
- $("confirmOverlay").classList.remove("is-open");
- $("confirmOverlay").setAttribute("aria-hidden", "true");
- if (!silent) syncFrameButtons(state.frame);
- }
+    function openConfirm() {
+      if (state.frame === "empty" || state.cacheEmpty) {
+        toast("Nothing to paper-log — plan first");
+        return;
+      }
+      const f = focusTicker();
+      const t = f.t;
+      $("confirmLead").textContent = `Paper · ${t}`;
+      $("cfTicker").textContent = t;
+      $("cfSetup").textContent = "6,225";
+      if ($("cfStopTarget")) $("cfStopTarget").textContent = "5,900 / 6,800";
+      if ($("cfLots")) $("cfLots").textContent = "3";
+      if ($("cfSource")) $("cfSource").textContent = "swing_trade_plan · --from-plan";
+      state.confirmOpen = true;
+      closePalette();
+      $("confirmOverlay").classList.add("is-open");
+      $("confirmOverlay").setAttribute("aria-hidden", "false");
+    }
 
- function confirmPlan() {
- const t = focusTicker().t;
- closeConfirm();
- toast(`Paper tape · logged · ${t} · no order`);
- showFrame("paper");
- }
+    function closeConfirm(silent) {
+      state.confirmOpen = false;
+      $("confirmOverlay").classList.remove("is-open");
+      $("confirmOverlay").setAttribute("aria-hidden", "true");
+      if (!silent) syncFrameButtons(state.frame);
+    }
+
+    function confirmPlan() {
+      const t = focusTicker().t;
+      // Demo: prepend logged note if not already head for today
+      const today = "2026-07-30";
+      const dup = PAPER.find((r) => r.t === t && r.day === today && r.kind === "ok");
+      if (dup) {
+        PAPER.unshift({
+          day: today,
+          t,
+          geo: `already logged window=7 · no new row`,
+          st: "duplicate",
+          kind: "skip",
+        });
+        toast(`Paper · ${t} · duplicate · no new row`);
+      } else {
+        PAPER.unshift({
+          day: today,
+          t,
+          geo: "E <b>6,225</b> · S <b>5,900</b> · T <b>6,800</b> · 3 lots · plan 3f88eda7",
+          st: "logged",
+          kind: "ok",
+        });
+        toast(`Paper · ${t} · logged`);
+      }
+      closeConfirm();
+      showFrame("paper");
+      renderPaperTape();
+    }
 
  function runCommand(cmd) {
  if (!cmd) return;

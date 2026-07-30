@@ -90,8 +90,13 @@ def test_authority_board_enter_is_judge_not_ticker():
     assert "present-only" in html.lower()
     # Enter on accum goes to judge, not ticker
     assert "showFrame(\"judge\")" in html
-    # paper not auto
-    assert "no auto-write" in html.lower() or "never auto-write" in html.lower() or "No auto-write" in html
+    # paper write is deliberate (confirm overlay / no silent write)
+    assert (
+        "no silent write" in html.lower()
+        or "no auto-write" in html.lower()
+        or "never auto-write" in html.lower()
+        or 'id="confirmOverlay"' in html
+    )
 
 
 def test_md_states_opencode_bible_and_broker_in_cockpit():
@@ -99,6 +104,19 @@ def test_md_states_opencode_bible_and_broker_in_cockpit():
     assert "bible" in text.lower() or "OpenCode" in text
     assert "Broker" in text or "broker" in text
     assert "linked out" not in text.lower() or "in-cockpit" in text.lower() or "7 |" in text
+
+
+def test_paper_frame_is_notebook_tape_not_log_card():
+    html = _html()
+    assert 'id="paperView"' in html
+    assert 'id="paperTape"' in html
+    assert "renderPaperTape" in html
+    assert "Notebook tape" in html or "notebook tape" in html.lower()
+    # confirm remains overlay for write path
+    assert 'id="confirmOverlay"' in html
+    assert "no silent write" in html.lower() or "No silent write" in html or "no silent write" in html
+    # reject single log-card stage as the only paper UX
+    assert "NOTEBOOK · PAPER ONLY" not in html
 
 
 def test_ticker_frame_is_price_hero_hierarchy_not_flat_cli_only():
