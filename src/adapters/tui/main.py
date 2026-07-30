@@ -207,6 +207,9 @@ class CockpitApp(App[None]):
                 with Vertical(id="stage"):
                     with VerticalScroll(id="stage-scroll"):
                         yield Static(self._shell_body(), id="stage-body")
+                        from src.adapters.tui.widgets.judge_desk import JudgeDesk
+
+                        yield JudgeDesk(id="judge-desk")
                     yield DataTable(id="board-table")
                     yield Static("", id="evidence-strip")
                     yield Static(self._footer_hint(), id="board-footer")
@@ -237,6 +240,10 @@ class CockpitApp(App[None]):
         table.cursor_type = "row"
         table.zebra_stripes = False
         table.display = False
+        try:
+            self.query_one("#judge-desk").display = False
+        except Exception:
+            pass
         self.query_one("#evidence-strip", Static).display = False
         self._refresh_local_cache_health()
         self._refresh_chrome()
@@ -374,6 +381,58 @@ class CockpitApp(App[None]):
             next_step=str(next_step),
         )
 
+    def _hide_judge_desk(self) -> None:
+        try:
+            desk = self.query_one("#judge-desk")
+            desk.display = False
+        except Exception:
+            pass
+
+    def _paint_detail_stage(self, *, body: Static, scroll: VerticalScroll) -> None:
+        """Detail stage: visual Judge desk for accum judge; text body otherwise."""
+        from src.adapters.tui.widgets.judge_desk import JudgeDesk
+
+        is_judge = self._status_note in {"judge", "re-judging"} and (
+            self._board_kind == "accum" or self._detail_return_stage == "accum"
+        )
+        try:
+            desk = self.query_one("#judge-desk", JudgeDesk)
+        except Exception:
+            desk = None
+
+        if is_judge and desk is not None:
+            row = self._rows[self._row_index] if self._rows else None
+            if row is not None and self._is_accum_row(row):
+                model = self._build_judge_model(row)
+                body.display = False
+                desk.display = True
+                desk.paint(model)
+                # Keep text for tests / scrapers that read _detail_text
+                self._detail_text = self._format_row_detail(
+                    str(getattr(row, "ticker", self._focus_ticker)),
+                    row,
+                )
+                return
+        body.display = True
+        self._hide_judge_desk()
+        body.update(self._detail_text)
+
+    def _build_judge_model(self, row: Any) -> Any:
+        from src.adapters.tui.judge_desk_model import build_judge_desk_model
+
+        ticker = str(getattr(row, "ticker", self._focus_ticker) or "")
+        seq_facts, seq_unavail = self._load_phase_sequence_for_judge(ticker, row)
+        return build_judge_desk_model(
+            row,
+            rank=self._row_index + 1,
+            total=max(len(self._rows), 1),
+            board_summary=self._board_summary,
+            effective_session=self._effective_session,
+            market_context=self._market_context,
+            phase_sequence=seq_facts,
+            phase_sequence_unavailable=seq_unavail,
+        )
+
     def _refresh_chrome(self) -> None:
         self.query_one("#view-title", Static).update(self._board_title)
         self.query_one("#view-meta", Static).update(f"· {self._meta}")
@@ -395,6 +454,8 @@ class CockpitApp(App[None]):
 
         if self._stage == "shell":
             scroll.display = True
+            body.display = True
+            self._hide_judge_desk()
             body.update(self._shell_body())
             table.display = False
             evidence.display = False
@@ -403,6 +464,8 @@ class CockpitApp(App[None]):
             # Do not hardcode "Cache empty" — board can be 0-candidate while local
             # candle/broker health is still ready/lag.
             scroll.display = True
+            body.display = True
+            self._hide_judge_desk()
             body.update(self._empty_body())
             table.display = False
             evidence.display = False
@@ -430,6 +493,8 @@ class CockpitApp(App[None]):
                     evidence.display = False
             else:
                 scroll.display = True
+                body.display = True
+                self._hide_judge_desk()
                 body.update(
                     loading_stage_body(
                         board_title=self._board_title,
@@ -441,6 +506,8 @@ class CockpitApp(App[None]):
                 evidence.display = False
         elif self._stage == "error":
             scroll.display = True
+            body.display = True
+            self._hide_judge_desk()
             body.update(
                 f"[#c97a72]Error[/]\n{self._error_text}\n\n[dim]r retry · Ctrl+P commands[/]"
             )
@@ -448,13 +515,15 @@ class CockpitApp(App[None]):
             evidence.display = False
         elif self._stage == "detail":
             scroll.display = True
-            body.update(self._detail_text)
             table.display = False
             evidence.display = False
-            # Focus scroll so ↑↓ / wheel / PgUp/PgDn work on long view-ticker pages.
+            self._paint_detail_stage(body=body, scroll=scroll)
+            # Focus scroll so ↑↓ / wheel / PgUp/PgDn work on long pages.
             scroll.focus()
         elif self._stage == "plan":
             scroll.display = True
+            body.display = True
+            self._hide_judge_desk()
             body.update(self._plan_body_text())
             table.display = False
             evidence.display = False
@@ -463,9 +532,11 @@ class CockpitApp(App[None]):
             scroll.display = False
             table.display = True
             evidence.display = False
+            self._hide_judge_desk()
         elif self._stage in {"accum", "preopen"}:
             scroll.display = False
             table.display = True
+            self._hide_judge_desk()
             if self._evidence_text:
                 evidence.display = True
                 evidence.update(self._evidence_text)
