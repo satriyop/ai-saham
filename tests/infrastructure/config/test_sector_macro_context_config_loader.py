@@ -33,8 +33,15 @@ def test_create_builder_from_repo_config():
     assert "packaging" in cfg.sector_maps
     assert "bank" in cfg.sector_maps
     assert cfg.required_series_tickers() >= frozenset(
-        {"CL=F", "IDR=X", "CPO=F", "HG=F", "GC=F", "^TNX", "ZC=F", "ZS=F", "COAL"}
+        {"CL=F", "IDR=X", "CPO=F", "HG=F", "GC=F", "ZC=F", "ZS=F", "COAL"}
     )
+    # Track B: domestic rates maps use BI policy steps, not live ^TNX candles.
+    assert "^TNX" not in cfg.required_series_tickers()
+    for group in ("bank", "cement", "property_dev", "telco", "insurance", "multifinance"):
+        refs = [r.ref for r in cfg.sector_maps[group]]
+        assert "bi_rate_policy" in refs, group
+        assert "us_10y" not in refs, group
+        assert cfg.policy_series_for_group(group) == ("BI_RATE",)
 
 
 def test_required_series_from_repo_config():
@@ -44,10 +51,11 @@ def test_required_series_from_repo_config():
     assert "CPO=F" in series  # plantation
     assert "HG=F" in series  # metals
     assert "GC=F" in series  # gold — auto-fetched via fetch market context
-    assert "^TNX" in series  # bank rates
     assert "ZC=F" in series  # poultry corn
     assert "ZS=F" in series  # poultry soy
     assert "COAL" in series  # coal proxy ETF
+    # Library may still define us_10y; live maps no longer require it for fetch.
+    assert "^TNX" not in series
 
 
 def test_load_rejects_non_diagnostic(tmp_path):

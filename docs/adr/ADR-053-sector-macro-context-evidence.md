@@ -96,13 +96,13 @@ Builders must not hardcode sector→series routing. Adapters must not own policy
 |---------|----------|
 | Config multi-map ready | Yes from day one |
 | Live sector maps | commodity/BM/consumer + `property_dev`/`telco`/`poultry` + `insurance`/`multifinance`/`packaging` + `bank`/`logistics` |
-| Live series | oil: `CL=F`; soft: `CPO=F`; metals: `HG=F`; gold: `GC=F`; feed: `ZC=F`+`ZS=F` (invert); rates-risk: `^TNX`+`IDR=X` (invert); bank BI: virtual `BI_RATE` via macro calendar |
+| Live series | oil: `CL=F`; soft: `CPO=F`; metals: `HG=F`; gold: `GC=F`; feed: `ZC=F`+`ZS=F` (invert); FX risk: `IDR=X` (invert); domestic rates: virtual `BI_RATE` via macro calendar. `^TNX` remains in library only (not on live maps after Track B) |
 | Dedicated groups | most maps use dedicated cohorts; `insurance`/`logistics`/`bank` reuse existing universe keys |
 | Poultry policy | Feed-cost stress (corn+soy invert) + import FX (`usd_idr_risk`); not chicken-price model (P1c) |
-| Finance residual | `insurance` + `multifinance` (rates/FX risk; still `^TNX`+`usd_idr_risk` in v1) |
+| Domestic rates maps (Track B) | `bank`, `cement`, `property_dev`, `telco`, `insurance`, `multifinance` share defensive **BI policy steps + `usd_idr_risk`** (not US 10Y) |
 | Oil sign split (P1a) | `oil_proxy` (↑ supportive) for energy/oil_gas; `oil_cost` (↑ headwind) for chemicals/logistics/packaging |
 | Energy purity (P1b) | `coal` (COAL ETF proxy + IDR) and `oil_gas` (CL=F + IDR) preferred over residual `energy` map; parent energy bag kept |
-| Bank policy (P2a) | Defensive: BI `policy_rate_steps` (hike = headwind) + `usd_idr_risk`; not NIM expansion. Stockbit title **Interest Rate Decision** → `bi_rate` (facility rates excluded) |
+| Bank / rates policy (P2a+B) | Defensive: BI `policy_rate_steps` (hike = headwind) + `usd_idr_risk`; not NIM expansion. Stockbit title **Interest Rate Decision** → `bi_rate` (facility rates excluded) |
 | Dead Yahoo symbols (do not map live) | `MTF=F` (Newcastle coal), `KO=F` (old CPO) — return no data as of 2026-07 smoke |
 | Thin multi-sector maps (e.g. banks → 100% USDIDR) | **Forbidden** |
 | Auto-fetch | Live-map series refresh on every `saham fetch market` (`sector_macro` context labels) |

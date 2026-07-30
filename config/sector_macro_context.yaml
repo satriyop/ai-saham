@@ -79,7 +79,8 @@ sector_macro_context:
         supportive_min: 0.01
         headwind_max: -0.01
 
-    # US 10Y yield — financial-conditions proxy for non-bank rates maps (cement, etc.).
+    # US 10Y yield — optional global rates proxy (library only; Track B live maps
+    # use BI policy steps for IDX domestic rates-sensitive groups instead).
     # invert=true: rising yields → lower score (tighter conditions / risk-off).
     us_10y:
       series: "^TNX"
@@ -89,9 +90,10 @@ sector_macro_context:
         supportive_min: 0.01
         headwind_max: -0.01
 
-    # P2a: BI policy-rate steps from macro calendar (not continuous SBN/INDONIA).
-    # Virtual series BI_RATE — not Yahoo. invert=true: hike net → headwind (bank defensive).
-    # value = net step count (hike +1 / cut -1) over lookback_days.
+    # BI policy-rate steps from macro calendar (not continuous SBN/INDONIA).
+    # Virtual series BI_RATE — not Yahoo. invert=true: hike net → headwind (defensive).
+    # Used by bank + domestic rates maps (cement, property_dev, telco, insurance,
+    # multifinance). value = net step count (hike +1 / cut -1) over lookback_days.
     bi_rate_policy:
       series: "BI_RATE"
       kind: policy_rate_steps
@@ -177,21 +179,21 @@ sector_macro_context:
       factors:
         - { ref: gold_proxy, weight: 0.65 }
         - { ref: usd_idr, weight: 0.35 }
-    # Cement / building materials: domestic rates + FX cost (defensive).
-    # Rising yields / weaker IDR → headwind for property-capex and energy costs.
+    # Cement / building materials: domestic BI policy + FX (defensive).
+    # Track B: local BI steps replace US 10Y for IDX rates-sensitive maps.
     cement:
       factors:
-        - { ref: us_10y, weight: 0.55 }
+        - { ref: bi_rate_policy, weight: 0.55 }
         - { ref: usd_idr_risk, weight: 0.45 }
     # Basic chemicals / petrochem: feedstock cost stress (P1a), not oil-bull map.
     chemicals:
       factors:
         - { ref: oil_cost, weight: 0.60 }
         - { ref: usd_idr_risk, weight: 0.40 }
-    # Property developers: same defensive rates/FX family as cement.
+    # Property developers: same defensive BI + FX family as cement/bank.
     property_dev:
       factors:
-        - { ref: us_10y, weight: 0.55 }
+        - { ref: bi_rate_policy, weight: 0.55 }
         - { ref: usd_idr_risk, weight: 0.45 }
     # Logistics / shipping: fuel cost + FX stress (P1a; not oil-bull map).
     logistics:
@@ -204,21 +206,21 @@ sector_macro_context:
         - { ref: corn, weight: 0.40 }
         - { ref: soy, weight: 0.35 }
         - { ref: usd_idr_risk, weight: 0.25 }
-    # Telco / towers: rates + FX risk (domestic funding & risk appetite).
+    # Telco / towers: domestic funding via BI policy + FX risk (not US 10Y).
     telco:
       factors:
-        - { ref: us_10y, weight: 0.55 }
+        - { ref: bi_rate_policy, weight: 0.55 }
         - { ref: usd_idr_risk, weight: 0.45 }
     # Non-life/life insurers — uses existing universes.yaml `insurance` group.
-    # Same defensive rates/FX family as banks (float + equity risk context).
+    # Same defensive BI + FX family as banks (float + risk context).
     insurance:
       factors:
-        - { ref: us_10y, weight: 0.55 }
+        - { ref: bi_rate_policy, weight: 0.55 }
         - { ref: usd_idr_risk, weight: 0.45 }
-    # Multifinance / consumer lenders (not banks). Funding + risk-off stress.
+    # Multifinance / consumer lenders (not banks). BI funding + IDR risk stress.
     multifinance:
       factors:
-        - { ref: us_10y, weight: 0.55 }
+        - { ref: bi_rate_policy, weight: 0.55 }
         - { ref: usd_idr_risk, weight: 0.45 }
     # Plastics / packaging: resin/feedstock cost + FX stress (P1a).
     packaging:

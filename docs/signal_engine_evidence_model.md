@@ -209,7 +209,9 @@ drivers per `universes.yaml` group via `config/sector_macro_context.yaml`.
 **Shipped (DIAGNOSTIC only):** multi-map library (commodity, energy cohorts
 `coal`/`oil_gas`/`energy`, plantation, metals/gold, cement/chemicals,
 property_dev, logistics, poultry, telco, insurance/multifinance/packaging,
-bank with BI `policy_rate_steps` + IDR). Fingerprints use `smc_*` fields
+and domestic rates maps (`bank`/`cement`/`property_dev`/`telco`/`insurance`/
+`multifinance`) sharing BI `policy_rate_steps` + IDR). Fingerprints use `smc_*`
+fields
 (observation schema v9). Does **not** reweight Signal or Risk and does **not**
 set Action. Independent of MCE global `commodity_composite` (optional, off by
 default).

@@ -72,7 +72,8 @@ def test_get_global_context_tickers_returns_defaults_without_fallback_exception(
     from src.infrastructure.config.market_context_config import get_global_context_tickers
 
     tickers = get_global_context_tickers()
-    # MCE globals + ADR-053 sector macro live-map series (even if commodity off)
+    # MCE globals + ADR-053 sector macro live-map series (even if commodity off).
+    # Track B: domestic rates maps use BI policy steps — ^TNX not required for fetch.
     assert {
         "^VIX",
         "EIDO",
@@ -81,11 +82,11 @@ def test_get_global_context_tickers_returns_defaults_without_fallback_exception(
         "CPO=F",
         "HG=F",
         "GC=F",
-        "^TNX",
         "ZC=F",
         "ZS=F",
         "COAL",
     }.issubset(tickers)
+    assert "^TNX" not in tickers
 
 
 def test_get_global_context_tickers_includes_commodities_when_enabled(tmp_path):
