@@ -1,6 +1,7 @@
 """Present-only Plan swing stage body (ADR-054 structure desk).
 
-Board context (judgment) + structure-run result. Does not place orders.
+Board context (judgment) + multi-line structure geometry. Does not place orders
+and does not re-score Action.
 
 Layer: Adapter
 """
@@ -9,6 +10,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+
+from src.adapters.tui.plan_structure_result import (
+    PlanStructureResult,
+    plan_structure_from_runner_object,
+    structure_lines,
+)
 
 
 @dataclass(frozen=True)
@@ -25,6 +32,7 @@ def present_plan_stage(
     rank: int = 1,
     total: int = 1,
     result_line: str = "",
+    structure: PlanStructureResult | Any | None = None,
     running: bool = False,
 ) -> PlanStageView:
     """Board-aware plan page: judgment context from row, structure from runner."""
@@ -46,18 +54,14 @@ def present_plan_stage(
     lines.append("[#9b8fb8]On this page[/]")
     lines.append("  Structure desk (ADR-054): horizon / SL / TP / lots.")
     lines.append("  Action inherits screen judgment · [bold]no broker order.[/]")
-    lines.append("  Deep judgment stays on the board / Enter inspect.")
+    lines.append("  Deep judgment: Enter judge · optional j re-judge.")
     lines.append("")
 
-    if running and not result_line:
-        lines.append("[#d4b06a]Running…[/]")
-        lines.append("  Local plan swing workflow (same engine as CLI, thin)")
-    elif result_line:
-        lines.append("[#d4b06a]Structure result[/]")
-        lines.append(f"  {result_line}")
-    else:
-        lines.append("[#d4b06a]Structure result[/]")
-        lines.append("  —")
+    struct = plan_structure_from_runner_object(structure) if structure is not None else None
+    if struct is None and result_line:
+        # Backward-compatible: summary-only runner
+        struct = PlanStructureResult(summary=result_line, ticker=ticker)
+    lines.extend(structure_lines(struct, running=running))
 
     lines.append("")
     lines.append("[dim]esc back to board · p re-run · CLI: saham plan swing TICKER --capital …[/]")
@@ -74,7 +78,7 @@ def _accum_facts(row: Any) -> list[str]:
     why = build_accum_focus(row).why or "—"
     return [
         "[#9b8fb8]Board judgment (accum)[/]",
-        f"  Action {action} · Gate {gate}",
+        f"  Action {action} · Gate {gate}  [dim](inherited by structure)[/]",
         f"  Signal {signal} · Accum {accum}",
         f"  [#d4b06a]Why[/]  {why}",
     ]

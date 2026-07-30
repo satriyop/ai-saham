@@ -30,19 +30,26 @@ def test_plan_stage_auto_runs_without_modal():
             ]
             app._row_index = 0
             planned: list[str] = []
-            app._plan_runner = lambda t: (
+            from src.adapters.tui.plan_structure_result import PlanStructureResult
+
+            def _runner(t: str):
                 planned.append(t)
-                or type(
-                    "X",
-                    (),
-                    {
-                        "summary": (
-                            "structure WATCH · entry 4,825 · stop 4,600 · "
-                            "target 5,275 · 2 lots · no order"
-                        )
-                    },
-                )()
-            )
+                return PlanStructureResult(
+                    summary=(
+                        "structure WATCH · entry 4,825 · stop 4,600 · "
+                        "target 5,275 · 2 lots · no order"
+                    ),
+                    ticker=t,
+                    action="WATCH",
+                    entry="4,825",
+                    stop="4,600",
+                    target="5,275",
+                    lots="2",
+                    inherits_action=True,
+                    no_order=True,
+                )
+
+            app._plan_runner = _runner
 
             app._run_command("plan-swing")
             await pilot.pause()
@@ -64,6 +71,9 @@ def test_plan_stage_auto_runs_without_modal():
             assert "Structure desk" in body or "structure" in body.lower()
             assert "No broker order" in body or "no broker order" in body.lower()
             assert "WATCH" in body or "BBRI" in body
+            assert "Entry" in body and "4,825" in body
+            assert "Stop" in body and "4,600" in body
+            assert "Target" in body and "5,275" in body
             assert "re-check" not in body.lower()
             assert "re-score" not in body.lower()
 
@@ -75,6 +85,8 @@ def test_plan_stage_auto_runs_without_modal():
 
 
 def test_plan_stage_presenter_is_structure_desk_not_rescore():
+    from src.adapters.tui.plan_structure_result import PlanStructureResult
+
     view = present_plan_stage(
         SimpleNamespace(
             ticker="BBCA",
@@ -86,7 +98,16 @@ def test_plan_stage_presenter_is_structure_desk_not_rescore():
         ),
         ticker="BBCA",
         source="Screen · accumulation",
-        result_line="structure ENTER · entry 6,225 · 3 lots · no order",
+        structure=PlanStructureResult(
+            summary="structure ENTER · entry 6,225 · 3 lots · no order",
+            action="ENTER",
+            entry="6,225",
+            stop="5,900",
+            target="6,800",
+            lots="3",
+            inherits_action=True,
+            no_order=True,
+        ),
         running=False,
     )
     text = view.text.lower()
@@ -95,6 +116,7 @@ def test_plan_stage_presenter_is_structure_desk_not_rescore():
     assert "screen-accum path" not in text
     assert "enter" in text
     assert "no broker order" in text
+    assert "6,225" in text
 
 
 def test_fetch_confirm_opens_and_cancels():

@@ -119,6 +119,7 @@ class CockpitApp(App[None]):
         board_snapshot_path: Path | str | None = None,
         snapshot_universe: str = "lq45",
         ticker_judge_loader: Callable[[str], Any] | None = None,
+        cache_health_loader: Callable[[], Any] | None = None,
     ) -> None:
         super().__init__()
         self._accum_loader = accum_loader
@@ -134,6 +135,7 @@ class CockpitApp(App[None]):
         self._broker_history_loader = broker_history_loader
         self._ticker_desks_loader = ticker_desks_loader
         self._ticker_judge_loader = ticker_judge_loader
+        self._cache_health_loader = cache_health_loader
         self._accum_controller = accum_controller
         self._preopen_controller = preopen_controller
         self._accum_presenter = accum_presenter
@@ -174,6 +176,7 @@ class CockpitApp(App[None]):
         self._preopen_warnings: tuple[str, ...] = ()
         self._plan_ticker: str = ""
         self._plan_result: str = ""
+        self._plan_structure: Any | None = None
         self._plan_running: bool = False
         self._chord_prefix: str | None = None
         self._chord_timer: Timer | None = None
@@ -184,6 +187,8 @@ class CockpitApp(App[None]):
         self._judge_generation = 0
         self._judge_ticker = ""
         self._judge_limited = False
+        self._cache_health: Any | None = None
+        self._cache_next_step = "Fetch is explicit."
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="workspace"):
@@ -217,7 +222,7 @@ class CockpitApp(App[None]):
                 yield Static("r       refresh local", classes="side-line")
                 yield Static("ctrl+b  sidebar", classes="side-line")
                 yield Static("Online", classes="side-title")
-                yield Static("Offline by default.", classes="side-line")
+                yield Static("Offline by default.", classes="side-line", id="side-offline")
                 yield Static("Fetch is explicit.", classes="side-line", id="side-online")
         yield Static(self._status_text(), id="status")
 
@@ -227,6 +232,7 @@ class CockpitApp(App[None]):
         table.zebra_stripes = False
         table.display = False
         self.query_one("#evidence-strip", Static).display = False
+        self._refresh_local_cache_health()
         self._refresh_chrome()
         # Live cockpit: open on local accumulation board (not a design manifesto).
         # Still local-first — no network until explicit Fetch.
@@ -260,7 +266,8 @@ class CockpitApp(App[None]):
 
     def _footer_hint(self) -> str:
         if self._stage == "empty":
-            return "ctrl+p → Fetch market data (explicit) · no invented rows"
+            cue = self._cache_next_step if self._cache_next_step else "Ctrl+P · Fetch market data"
+            return f"{cue} · no invented rows"
         if self._stage == "accum" and self._recomputing:
             return (
                 "recomputing local board… · prior rows still shown · "
@@ -350,6 +357,7 @@ class CockpitApp(App[None]):
         self.query_one("#status", Static).update(self._status_text())
         self.query_one("#board-footer", Static).update(self._footer_hint())
         self.query_one("#side-mode", Static).update(f"Mode     {self._mode}")
+        self._paint_cache_health_sidebar()
         self.query_one("#side-focus", Static).update(
             "none selected"
             if self._focus_ticker == "—"
@@ -1990,6 +1998,7 @@ class CockpitApp(App[None]):
         ticker = self._focus_ticker
         self._plan_ticker = ticker
         self._plan_result = ""
+        self._plan_structure = None
         self._plan_running = True
         self._stage = "plan"
         self._board_title = f"Plan · {ticker} · structure"
@@ -2000,6 +2009,7 @@ class CockpitApp(App[None]):
         if self._plan_runner is None:
             self._plan_running = False
             self._plan_result = "no plan runner wired · stub only"
+            self._plan_structure = None
             self._status_note = "plan stub"
             self._refresh_chrome()
             self.notify(f"Plan · {ticker} · stub (no runner)", timeout=2.0)
@@ -2021,6 +2031,7 @@ class CockpitApp(App[None]):
             rank=self._row_index + 1,
             total=max(len(self._rows), 1),
             result_line=self._plan_result,
+            structure=self._plan_structure,
             running=self._plan_running,
         )
         return view.text
@@ -2029,23 +2040,73 @@ class CockpitApp(App[None]):
     def _execute_plan(self, ticker: str) -> None:
         try:
             result = self._plan_runner(ticker) if self._plan_runner else None
-            msg = f"Plan swing · {ticker}"
-            if result is not None:
-                summary = getattr(result, "summary", None) or str(result)[:120]
-                msg = f"{summary}"
-            dispatch_if_active(self, self._on_plan_done, ticker, msg)
+            dispatch_if_active(self, self._on_plan_done, ticker, result)
         except Exception as exc:
-            dispatch_if_active(self, self._on_plan_done, ticker, f"error: {exc}")
+            from src.adapters.tui.plan_structure_result import PlanStructureResult
 
-    def _on_plan_done(self, ticker: str, msg: str) -> None:
+            err = PlanStructureResult(
+                summary=f"error: {exc}",
+                ticker=ticker,
+                incomplete_reason=str(exc)[:120],
+            )
+            dispatch_if_active(self, self._on_plan_done, ticker, err)
+
+    def _on_plan_done(self, ticker: str, result: Any) -> None:
+        from src.adapters.tui.plan_structure_result import plan_structure_from_runner_object
+
         self._plan_running = False
-        self._plan_result = msg
+        struct = plan_structure_from_runner_object(result)
+        if isinstance(result, str):
+            # Legacy string-only delivery
+            struct = plan_structure_from_runner_object(type("R", (), {"summary": result})())
+        self._plan_structure = struct
+        self._plan_result = struct.summary
         self._status_note = "plan done"
         # Stay on plan stage so the page is the result surface (variant A).
         if self._stage == "plan" and self._plan_ticker == ticker:
-            self._meta = "structure result · no broker order"
+            self._meta = "structure result · inherits Action · no broker order"
             self._refresh_chrome()
-        self.notify(f"Plan · {ticker} · {msg}", timeout=2.5)
+        self.notify(f"Plan · {ticker} · {struct.summary}", timeout=2.5)
+
+    def _refresh_local_cache_health(self) -> None:
+        """Paint local-only cache health (no network). Safe on failure."""
+        if self._cache_health_loader is None:
+            self._cache_health = None
+            self._cache_next_step = "Fetch is explicit."
+            return
+        try:
+            health = self._cache_health_loader()
+        except Exception:
+            health = None
+        self._cache_health = health
+        if health is None:
+            self._cache_next_step = "Fetch is explicit."
+            return
+        self._cache_next_step = getattr(health, "next_step", None) or "Fetch is explicit."
+
+    def _paint_cache_health_sidebar(self) -> None:
+        try:
+            cache_el = self.query_one("#side-cache", Static)
+            online_el = self.query_one("#side-online", Static)
+        except Exception:
+            return
+        health = self._cache_health
+        if health is None:
+            cache_el.update("Cache    —")
+            online_el.update(self._cache_next_step)
+            return
+        line = getattr(health, "sidebar_cache_line", None)
+        if callable(line):
+            cache_el.update(line())
+        else:
+            from src.adapters.tui.local_cache_health import format_sidebar_cache_line
+
+            cache_el.update(format_sidebar_cache_line(health))
+        next_line = getattr(health, "sidebar_next_line", None)
+        if callable(next_line):
+            online_el.update(next_line())
+        else:
+            online_el.update(self._cache_next_step)
 
     def _open_fetch_confirm(self) -> None:
         from src.adapters.tui.screens.fetch_confirm import FetchConfirmModal
@@ -2082,8 +2143,9 @@ class CockpitApp(App[None]):
 
     def _on_fetch_done(self) -> None:
         self._mode = "local-first"
+        self._refresh_local_cache_health()
         self.query_one("#side-online", Static).update("Last fetch ok · now local")
-        self.query_one("#side-cache", Static).update("Cache    refreshed")
+        self._paint_cache_health_sidebar()
         self.notify("Fetch complete · reloading accumulation", timeout=2.0)
         self._load_accum()
 

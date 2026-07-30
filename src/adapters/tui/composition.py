@@ -23,7 +23,9 @@ from src.adapters.composition.screen_accum_request import (
 from src.adapters.composition.screen_deps import ScreenDeps, build_screen_deps
 from src.adapters.tui.board_snapshot import default_accum_snapshot_path
 from src.adapters.tui.controllers.board_controller import BoardController
+from src.adapters.tui.local_cache_health import load_local_cache_health
 from src.adapters.tui.main import CockpitApp
+from src.adapters.tui.plan_structure_result import PlanStructureResult
 from src.adapters.tui.presenters.accum_presenter import AccumPresenter
 from src.adapters.tui.presenters.preopen_presenter import PreOpenPresenter
 from src.infrastructure.config.app_config import load_app_config
@@ -40,6 +42,7 @@ def create_tui_app(
     ticker_detail_loader: Callable[[str], Any] | None = None,
     board_snapshot_path: Path | None = None,
     ticker_judge_loader: Callable[[str], Any] | None = None,
+    cache_health_loader: Callable[[], Any] | None = None,
 ) -> CockpitApp:
     """Build cockpit with real local loaders unless tests inject fakes."""
     config = load_app_config()
@@ -63,6 +66,8 @@ def create_tui_app(
         board_snapshot_path = default_accum_snapshot_path(db_path)
     if ticker_judge_loader is None:
         ticker_judge_loader = _TickerJudgeLoader(screen_deps, config)
+    if cache_health_loader is None:
+        cache_health_loader = _LocalCacheHealthLoader(db_path, universe)
 
     return CockpitApp(
         accum_loader=accum_loader,
@@ -78,6 +83,7 @@ def create_tui_app(
         broker_history_loader=_BrokerDeepLoader(db_path, "history"),
         ticker_desks_loader=_TickerTopBrokersLoader(db_path),
         ticker_judge_loader=ticker_judge_loader,
+        cache_health_loader=cache_health_loader,
         accum_controller=BoardController(accum_loader),
         preopen_controller=BoardController(
             preopen_loader,
@@ -714,20 +720,24 @@ class _LocalPlanStructureRunner:
                 )
             )
         except PlanSwingDataUnavailable:
-            return type(
-                "R",
-                (),
-                {"summary": f"structure {ticker_u} · no local candles · fetch market first"},
-            )()
+            return PlanStructureResult(
+                summary=f"structure {ticker_u} · no local candles · fetch market first",
+                ticker=ticker_u,
+                incomplete_reason="no local candles · Ctrl+P Fetch market (explicit)",
+            )
         except Exception as exc:
-            return type("R", (), {"summary": f"structure error · {exc}"})()
+            return PlanStructureResult(
+                summary=f"structure error · {exc}",
+                ticker=ticker_u,
+                incomplete_reason=str(exc)[:120],
+            )
 
         trade_setup = response.trade_setup
         if trade_setup is None and response.verdict is not None:
             trade_setup = response.verdict.trade_setup
         action = "—"
         if trade_setup is not None and trade_setup.action is not None:
-            action = getattr(trade_setup.action, "value", str(trade_setup.action))
+            action = str(getattr(trade_setup.action, "value", str(trade_setup.action)))
 
         plan = build_swing_trade_plan(
             ticker=ticker_u,
@@ -746,32 +756,56 @@ class _LocalPlanStructureRunner:
             with_technical_gate=False,
             latest_close=response.latest_close,
         )
-        plan_note = ""
+        plan_id_short = ""
         if plan.is_complete:
             plans_dir = plans_dir_from_journal_path(PathType(self._config.storage.accum_journal))
             save_swing_trade_plan(plan, plans_dir)
-            plan_note = f" · plan {plan.plan_id[:8]}"
+            plan_id_short = plan.plan_id[:8]
 
         chosen = response.setup_sizing or response.sizing
+        entry_s = stop_s = target_s = lots_s = "—"
+        incomplete = ""
         if chosen is not None and getattr(chosen, "lots", None):
-            entry = getattr(chosen, "entry_price", None)
-            stop = getattr(chosen, "stop_price", None)
-            target = getattr(chosen, "target_price", None)
-            lots = getattr(chosen, "lots", None)
+            entry_s = _fmt_price(getattr(chosen, "entry_price", None))
+            stop_s = _fmt_price(getattr(chosen, "stop_price", None))
+            target_s = _fmt_price(getattr(chosen, "target_price", None))
+            lots_s = str(getattr(chosen, "lots", None) or "—")
             summary = (
-                f"structure {action} · entry {_fmt_price(entry)} · "
-                f"stop {_fmt_price(stop)} · target {_fmt_price(target)} · "
-                f"{lots} lots{plan_note} · no order"
+                f"structure {action} · entry {entry_s} · "
+                f"stop {stop_s} · target {target_s} · "
+                f"{lots_s} lots"
+                + (f" · plan {plan_id_short}" if plan_id_short else "")
+                + " · no order"
             )
         elif capital is None:
-            summary = (
-                f"structure {action} · no capital · "
-                f"set swing.capital in user.yaml or CLI --capital · no order"
-            )
+            incomplete = "no capital · set swing.capital in user.yaml or CLI --capital"
+            summary = f"structure {action} · {incomplete} · no order"
         else:
+            incomplete = "sizing incomplete (missing entry/stop/target/lots)"
             summary = f"structure {action} · sizing incomplete · no order"
+            # Still surface any partial geometry from plan builder if present
+            if plan.entry_price is not None:
+                entry_s = _fmt_price(plan.entry_price)
+            if plan.stop_price is not None:
+                stop_s = _fmt_price(plan.stop_price)
+            if plan.target_price is not None:
+                target_s = _fmt_price(plan.target_price)
+            if plan.lots is not None:
+                lots_s = str(plan.lots)
 
-        return type("R", (), {"summary": summary})()
+        return PlanStructureResult(
+            summary=summary,
+            ticker=ticker_u,
+            action=action,
+            entry=entry_s,
+            stop=stop_s,
+            target=target_s,
+            lots=lots_s,
+            incomplete_reason=incomplete,
+            plan_id_short=plan_id_short,
+            inherits_action=True,
+            no_order=True,
+        )
 
 
 def _fmt_price(value: Any) -> str:
@@ -781,6 +815,52 @@ def _fmt_price(value: Any) -> str:
         return f"{int(round(float(value))):,}"
     except (TypeError, ValueError):
         return str(value)
+
+
+class _LocalCacheHealthLoader:
+    """Local SQLite date-range health for sidebar (no network)."""
+
+    def __init__(self, db_path: Path, universe: str) -> None:
+        self._db_path = Path(db_path)
+        self._universe = universe
+
+    def __call__(self) -> Any:
+        from src.infrastructure.persistence.sqlite_broker_repository import (
+            SQLiteBrokerRepository,
+        )
+        from src.infrastructure.persistence.sqlite_market_repository import (
+            SQLiteMarketRepository,
+        )
+
+        market = SQLiteMarketRepository(self._db_path)
+        broker = SQLiteBrokerRepository(self._db_path)
+
+        def candle_latest():
+            for sym in ("IHSG", "^JKSE", "BBCA"):
+                rng = market.get_date_range(sym)
+                if rng is not None:
+                    return rng[1]
+            return None
+
+        def broker_latest():
+            for sym in ("BBCA", "BBRI", "TLKM"):
+                rng = broker.get_broker_daily_flow_date_range(sym)
+                if rng is not None:
+                    return rng[1]
+            # Fallback: summary date range if available
+            try:
+                rng = broker.get_date_range("BBCA")
+                if rng is not None:
+                    return rng[1]
+            except Exception:
+                pass
+            return None
+
+        return load_local_cache_health(
+            universe=self._universe,
+            get_candle_latest=candle_latest,
+            get_broker_latest=broker_latest,
+        )
 
 
 # ── Explicit fetch ─────────────────────────────────────────
