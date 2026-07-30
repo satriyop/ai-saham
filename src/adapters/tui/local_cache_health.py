@@ -123,24 +123,31 @@ def load_local_cache_health(
     get_broker_latest: Callable[[], date | None],
     lag_days: int = 1,
 ) -> LocalCacheHealth:
-    """Load health via injected local callables (no network)."""
+    """Load health via injected local callables (no network).
+
+    Both callables returning None (empty DB) is **empty**, not unknown.
+    Unknown only when both raise (read failure).
+    """
+    candle_err = False
+    broker_err = False
     try:
         candle = get_candle_latest()
     except Exception:
         candle = None
+        candle_err = True
     try:
         broker = get_broker_latest()
     except Exception:
         broker = None
-    if candle is None and broker is None:
-        # Distinguish total failure from empty DB when both raise
+        broker_err = True
+    if candle is None and broker is None and candle_err and broker_err:
         return LocalCacheHealth(
             universe=(universe or "local").strip().lower() or "local",
             candle_as_of="",
             broker_as_of="",
             status="unknown",
             next_step="Next: Ctrl+P · Fetch market data (explicit)",
-            detail="local health read failed or empty",
+            detail="local health read failed",
         )
     return assess_local_cache_health(
         universe=universe,

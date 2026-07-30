@@ -132,6 +132,28 @@ def test_load_local_cache_health_uses_callables_only():
     assert health.status in {"ready", "lag"}
 
 
+def test_load_local_cache_health_both_none_is_empty_not_unknown():
+    health = load_local_cache_health(
+        universe="lq45",
+        get_candle_latest=lambda: None,
+        get_broker_latest=lambda: None,
+    )
+    assert health.status == "empty"
+    assert "empty" in format_sidebar_cache_line(health).lower()
+
+
+def test_load_local_cache_health_both_raise_is_unknown():
+    def boom():
+        raise RuntimeError("db locked")
+
+    health = load_local_cache_health(
+        universe="lq45",
+        get_candle_latest=boom,
+        get_broker_latest=boom,
+    )
+    assert health.status == "unknown"
+
+
 def test_cockpit_plan_stage_shows_multiline_structure():
     async def scenario() -> None:
         app = CockpitApp()
@@ -212,6 +234,84 @@ def test_cockpit_paints_cache_health_on_mount():
     asyncio.run(scenario())
 
 
+def test_focus_change_does_not_clobber_session_cache_health():
+    """After board evidence update, #side-cache still shows session health."""
+    from src.adapters.tui.controllers.board_controller import BoardController
+    from src.adapters.tui.presenters.accum_presenter import AccumPresenter
+
+    health = assess_local_cache_health(
+        universe="lq45",
+        candle_latest=date(2026, 7, 28),
+        broker_latest=date(2026, 7, 28),
+    )
+    c = SimpleNamespace(
+        ticker="BBCA",
+        accum_score=50.0,
+        rsi=50.0,
+        consecutive_streak=2,
+        net_buy_ratio=0.5,
+        vwap_discount_pct=0.0,
+        current_price=1000,
+        setup_phase=SimpleNamespace(current_phase=SimpleNamespace(value="ACCUMULATION")),
+        trade_setup=SimpleNamespace(
+            action=SimpleNamespace(value="WATCH", short="WATCH"),
+            rationale="t",
+        ),
+        signal_assessment=SimpleNamespace(
+            assessment=SimpleNamespace(score=70, strength=SimpleNamespace(value="MODERATE"))
+        ),
+        risk_assessment=SimpleNamespace(
+            gate_triggered=None,
+            gate_is_structural=False,
+            rationale=("ok",),
+        ),
+        name="BBCA",
+        latest_candle_date=date(2026, 7, 20),
+        latest_broker_date=date(2026, 7, 10),
+        freshness=SimpleNamespace(
+            candle_as_of=date(2026, 7, 20),
+            broker_as_of=date(2026, 7, 10),
+            alignment_state=SimpleNamespace(value="LAG"),
+        ),
+    )
+    result = SimpleNamespace(
+        single_projection=SimpleNamespace(
+            candidates=[c],
+            window_days=7,
+            data_as_of={"latest_candle_date": "2026-07-20"},
+            applied_filters=SimpleNamespace(sort_by="signal", top=20),
+        ),
+        multi_projection=None,
+        warnings=(),
+        effective_session=None,
+        market_context=None,
+    )
+
+    async def scenario() -> None:
+        app = CockpitApp(
+            accum_loader=lambda: result,
+            accum_controller=BoardController(lambda: result),
+            accum_presenter=AccumPresenter(),
+            cache_health_loader=lambda: health,
+        )
+        async with app.run_test(size=(140, 36)) as pilot:
+            for _ in range(50):
+                await pilot.pause(0.05)
+                if app._stage == "accum" and app._rows:
+                    break
+            assert app._stage == "accum"
+            # Focus path that used to overwrite Cache with row lag "—"
+            app._update_accum_evidence()
+            await pilot.pause(0.05)
+            cache_text = str(app.query_one("#side-cache").render())
+            assert "2026-07-28" in cache_text
+            assert "candle" in cache_text.lower()
+            # Must not be the bare lag placeholder that focus used to write
+            assert cache_text.strip() != "Cache    —"
+
+    asyncio.run(scenario())
+
+
 def test_empty_health_cues_fetch_on_empty_stage():
     health = assess_local_cache_health(universe="lq45", candle_latest=None, broker_latest=None)
 
@@ -223,5 +323,31 @@ def test_empty_health_cues_fetch_on_empty_stage():
             await pilot.pause(0.05)
             footer = app._footer_hint().lower()
             assert "fetch" in footer
+            cache_text = str(app.query_one("#side-cache").render()).lower()
+            assert "empty" in cache_text
+
+    asyncio.run(scenario())
+
+
+def test_fetch_done_online_note_survives_health_paint():
+    health = assess_local_cache_health(
+        universe="lq45",
+        candle_latest=date(2026, 7, 28),
+        broker_latest=date(2026, 7, 28),
+    )
+
+    async def scenario() -> None:
+        app = CockpitApp(
+            cache_health_loader=lambda: health,
+            fetch_runner=lambda: None,
+        )
+        async with app.run_test(size=(100, 32)) as pilot:
+            await pilot.pause(0.05)
+            app._on_fetch_done()
+            await pilot.pause(0.05)
+            online = str(app.query_one("#side-online").render())
+            assert "Last fetch ok" in online
+            cache_text = str(app.query_one("#side-cache").render())
+            assert "2026-07-28" in cache_text
 
     asyncio.run(scenario())

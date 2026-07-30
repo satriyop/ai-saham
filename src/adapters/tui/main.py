@@ -189,6 +189,8 @@ class CockpitApp(App[None]):
         self._judge_limited = False
         self._cache_health: Any | None = None
         self._cache_next_step = "Fetch is explicit."
+        # One-shot Online line after explicit fetch (does not replace Cache health).
+        self._online_note: str | None = None
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="workspace"):
@@ -905,6 +907,8 @@ class CockpitApp(App[None]):
         self._focus_ticker = "—"
         self._rows = []
         self._status_note = "empty · fetch explicit"
+        # Re-read health so empty DB paints empty (not a stale ready line).
+        self._refresh_local_cache_health()
         self._refresh_chrome()
         self.notify("Empty cache state", timeout=1.2)
 
@@ -1087,7 +1091,7 @@ class CockpitApp(App[None]):
             summary = getattr(view, "summary", "") or ""
             self._board_summary = summary
             self.query_one("#side-accum", Static).update(f"Accum    {len(self._rows)}")
-            self.query_one("#side-cache", Static).update(f"Cache    {view.cache_label}")
+            # Session Cache rail is local health only (not board lag).
         else:
             self._rows = list(payload) if payload else []
             self._meta = f"local · {len(self._rows)} names"
@@ -1131,7 +1135,6 @@ class CockpitApp(App[None]):
             self._rows = list(view.rows)
             self._meta = view.meta
             self.query_one("#side-preopen", Static).update(f"Pre-open {len(self._rows)}")
-            self.query_one("#side-cache", Static).update(f"Cache    {view.cache_label}")
         else:
             self._rows = list(payload) if payload else []
             self._meta = f"pre-open · {len(self._rows)}"
@@ -1183,11 +1186,9 @@ class CockpitApp(App[None]):
         self._status_note = self._snapshot_freshness
         try:
             self.query_one("#side-accum", Static).update(f"Accum    {len(self._rows)}")
-            self.query_one("#side-cache", Static).update(
-                f"Cache    snapshot · {ident.as_of or '—'}"
-            )
         except Exception:
             pass
+        # Snapshot freshness is in status/meta; Session Cache rail stays local health.
         self._render_board_table()
         self._update_accum_evidence()
         self._refresh_chrome()
@@ -1352,7 +1353,7 @@ class CockpitApp(App[None]):
         ev = self.query_one("#evidence-strip", Static)
         ev.display = True
         ev.update(self._evidence_text)
-        self.query_one("#side-cache", Static).update(f"Cache    {focus.lag_label}")
+        # Do not write #side-cache here — Session Cache is local health only.
         self.query_one("#side-focus", Static).update(focus.focus_sidebar)
         if focus.lag_label and focus.lag_label != "—":
             # Keep summary in status; append lag posture when present
@@ -1360,6 +1361,7 @@ class CockpitApp(App[None]):
             if "LAG" in focus.lag_label or "ALIGNED" in focus.lag_label:
                 self._status_note = f"{base} · {focus.lag_label}" if base else focus.lag_label
             self.query_one("#status", Static).update(self._status_text())
+        self._paint_cache_health_sidebar()
 
     def _remember_return_stage(self) -> None:
         if self._stage in {"accum", "preopen"}:
@@ -2093,7 +2095,7 @@ class CockpitApp(App[None]):
         health = self._cache_health
         if health is None:
             cache_el.update("Cache    —")
-            online_el.update(self._cache_next_step)
+            online_el.update(self._online_note or self._cache_next_step)
             return
         line = getattr(health, "sidebar_cache_line", None)
         if callable(line):
@@ -2102,6 +2104,9 @@ class CockpitApp(App[None]):
             from src.adapters.tui.local_cache_health import format_sidebar_cache_line
 
             cache_el.update(format_sidebar_cache_line(health))
+        if self._online_note:
+            online_el.update(self._online_note)
+            return
         next_line = getattr(health, "sidebar_next_line", None)
         if callable(next_line):
             online_el.update(next_line())
@@ -2143,8 +2148,8 @@ class CockpitApp(App[None]):
 
     def _on_fetch_done(self) -> None:
         self._mode = "local-first"
+        self._online_note = "Last fetch ok · now local"
         self._refresh_local_cache_health()
-        self.query_one("#side-online", Static).update("Last fetch ok · now local")
         self._paint_cache_health_sidebar()
         self.notify("Fetch complete · reloading accumulation", timeout=2.0)
         self._load_accum()
