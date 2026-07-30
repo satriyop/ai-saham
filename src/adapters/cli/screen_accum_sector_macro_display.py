@@ -42,7 +42,10 @@ def build_sector_macro_panel(
 
     t = (ticker or "").upper().strip()
     lines: list = []
-    if smc.macro_regime == "UNKNOWN" and not smc.factors and smc.unavailable_reasons:
+    pure_unavailable = (
+        smc.macro_regime == "UNKNOWN" and not smc.factors and bool(smc.unavailable_reasons)
+    )
+    if pure_unavailable:
         for reason in list(smc.unavailable_reasons)[:2]:
             lines.append(Text(f"Sector macro unavailable: {reason}", style="dim"))
     else:
@@ -77,17 +80,18 @@ def build_sector_macro_panel(
                     f.label,
                 )
             lines.append(table)
-
-        if surface == "view":
-            judgment = f"saham screen accum {t}" if t else "saham screen accum TICKER"
-            footer = (
-                f"  DIAGNOSTIC — no scoring impact (ADR-053). Judgment (Action / Why): {judgment}"
-            )
-        else:
-            footer = "  DIAGNOSTIC — no scoring impact (ADR-053). Judgment desk only (ADR-054)."
-        lines.append(Text(footer, style="dim"))
         for reason in list(smc.unavailable_reasons)[:2]:
             lines.append(Text(f"  ⚠ {reason}", style="dim yellow"))
+
+    # AC3: always DIAGNOSTIC + judgment pointer on every path (including pure unavailable).
+    if surface == "view":
+        judgment = f"saham screen accum {t}" if t else "saham screen accum TICKER"
+        footer = (
+            f"  DIAGNOSTIC — no scoring impact (ADR-053). Judgment (Action / Why): {judgment}"
+        )
+    else:
+        footer = "  DIAGNOSTIC — no scoring impact (ADR-053). Judgment desk only (ADR-054)."
+    lines.append(Text(footer, style="dim"))
 
     if not lines:
         return None

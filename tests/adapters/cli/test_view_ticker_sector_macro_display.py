@@ -78,24 +78,86 @@ def _dashboard_with_smc(*, brief: bool = False) -> TickerDashboard:
     )
 
 
+def _group_plain_text(group) -> str:
+    texts = []
+    for item in getattr(group, "renderables", []) or []:
+        texts.append(getattr(item, "plain", str(item)))
+    return " ".join(texts)
+
+
 def test_view_surface_panel_has_diagnostic_and_judgment_pointer():
     with patch("src.adapters.cli.screen_accum_sector_macro_display.panel") as mock_panel:
         mock_panel.side_effect = lambda *a, **k: ("panel", k.get("title"), a)
         result = build_sector_macro_panel(_smc(), ticker="BBCA", surface="view")
         assert result is not None
         assert mock_panel.call_args.kwargs.get("title") == "SECTOR MACRO"
-        # Group content includes DIAGNOSTIC + judgment pointer
-        group = mock_panel.call_args.args[0]
-        rendered = str(group)
-        assert "DIAGNOSTIC" in rendered or True  # Rich Group may not stringify text
-        # Inspect Text lines via group renderables if available
-        texts = []
-        for item in getattr(group, "renderables", []) or []:
-            texts.append(getattr(item, "plain", str(item)))
-        joined = " ".join(texts)
+        joined = _group_plain_text(mock_panel.call_args.args[0])
         assert "DIAGNOSTIC" in joined
         assert "screen accum BBCA" in joined
-        assert "Action" not in joined or "Judgment" in joined
+        assert "Judgment" in joined
+
+
+def test_view_surface_unavailable_evidence_still_has_diagnostic_and_judgment():
+    """Pure fail-soft path: SectorMacroContextEvidence.unavailable — AC3 still holds."""
+    smc = SectorMacroContextEvidence.unavailable(
+        reason="sector_map:missing:consumer_goods",
+        sector_group="consumer_goods",
+        as_of_date=date(2026, 7, 1),
+    )
+    assert smc.macro_regime == "UNKNOWN"
+    assert smc.factors == ()
+    assert smc.unavailable_reasons
+
+    with patch("src.adapters.cli.screen_accum_sector_macro_display.panel") as mock_panel:
+        mock_panel.side_effect = lambda *a, **k: ("panel", k.get("title"), a)
+        result = build_sector_macro_panel(smc, ticker="XXXX", surface="view")
+        assert result is not None
+        assert mock_panel.call_args.kwargs.get("title") == "SECTOR MACRO"
+        joined = _group_plain_text(mock_panel.call_args.args[0])
+        assert "unavailable" in joined.lower() or "sector_map:missing" in joined
+        assert "DIAGNOSTIC" in joined
+        assert "screen accum XXXX" in joined
+        assert "Judgment" in joined
+
+    # Full dashboard text path also keeps DIAGNOSTIC for unavailable evidence
+    dash_unavail = TickerDashboard(
+        ticker="XXXX",
+        mode="full",
+        as_of=date(2026, 7, 23),
+        today=date(2026, 7, 24),
+        fetch_hint="saham fetch market XXXX",
+        panel_keys=panel_keys_for_mode(brief=False),
+        freshness=(FreshnessItem("price", "Price", CacheStatus.MISSING),),
+        related_actions=(),
+        panel_errors=(),
+        notation=None,
+        fundamentals=None,
+        forward_estimates=None,
+        latest_close=None,
+        price_structure=None,
+        analyst=None,
+        earnings=(),
+        ownership=None,
+        bandar=None,
+        foreign_flow_points=(),
+        foreign_flow_source=None,
+        corp_actions=(),
+        corp_status=CacheStatus.MISSING,
+        insider_txns=(),
+        insider_status=CacheStatus.MISSING,
+        insider_last_known=None,
+        seasonality=None,
+        iev_rows=(),
+        sentiment_logs=(),
+        profile=None,
+        candles=(),
+        sector_macro_context_evidence=smc,
+    )
+    text = format_ticker_dashboard_text(dash_unavail, width=100)
+    assert "SECTOR MACRO" in text
+    assert "DIAGNOSTIC" in text
+    assert "screen accum XXXX" in text
+    assert "sector_map:missing" in text or "unavailable" in text.lower()
 
 
 def test_format_dashboard_text_includes_sector_macro_title():

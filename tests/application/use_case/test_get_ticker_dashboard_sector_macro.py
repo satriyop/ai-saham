@@ -271,9 +271,12 @@ def test_dashboard_unmapped_group_fail_soft_via_real_loader(tmp_path: Path):
     dash = uc.execute(
         GetTickerDashboardRequest(ticker="XXXX", brief=False, today=date(2026, 7, 24))
     )
-    # Loader returns evidence with unavailable/map missing, or None — never raises
+    # Unmapped group → fail-soft evidence (not exception / not panel_error)
+    assert dash.ticker == "XXXX"
+    assert not any(e.key == "sector_macro" for e in dash.panel_errors)
     smc = dash.sector_macro_context_evidence
-    if smc is not None:
-        assert smc.macro_regime in {"UNKNOWN", "SUPPORTIVE", "HEADWIND", "NEUTRAL"}
-        assert smc.evidence_status == EvidenceStatus.DIAGNOSTIC
-    assert not any(e.key == "sector_macro" for e in dash.panel_errors) or True
+    assert smc is not None, "builder returns unavailable VO for missing sector_map"
+    assert smc.macro_regime == "UNKNOWN"
+    assert smc.evidence_status == EvidenceStatus.DIAGNOSTIC
+    assert smc.factors == ()
+    assert any("sector_map:missing" in r for r in smc.unavailable_reasons)
