@@ -258,13 +258,15 @@ class CockpitApp(App[None]):
         if self._recomputing:
             return "● recomputing"
         if self._board_source == "snapshot" and self._stage == "accum":
-            return "● snapshot"
+            from src.adapters.tui.chrome_cues import snapshot_mode_label
+
+            return snapshot_mode_label()
         return f"● {self._mode}"
 
     def _status_text(self) -> str:
         mode = "recomputing" if self._recomputing else self._mode
         if self._board_source == "snapshot" and not self._recomputing and self._stage == "accum":
-            mode = "snapshot"
+            mode = "snapshot · limited judge"
         return (
             f"Cockpit · {self._stage} · {self._focus_ticker}  ·  "
             f"{mode}  ·  {self._status_note}  ·  ai-saham tui"
@@ -274,16 +276,28 @@ class CockpitApp(App[None]):
         if self._stage == "empty":
             cue = self._cache_next_step if self._cache_next_step else "Ctrl+P · Fetch market data"
             return f"{cue} · no invented rows"
+        if self._stage == "loading":
+            from src.adapters.tui.chrome_cues import (
+                broker_list_loading_footer,
+                is_broker_list_loading,
+            )
+
+            if is_broker_list_loading(
+                stage=self._stage,
+                board_title=self._board_title,
+                status_note=self._status_note,
+            ):
+                return broker_list_loading_footer()
+            return "loading local cache… · wait · no silent network"
         if self._stage == "accum" and self._recomputing:
             return (
                 "recomputing local board… · prior rows still shown · "
                 "↑↓ ok · r restarts refresh · Ctrl+P"
             )
         if self._stage == "accum" and self._board_source == "snapshot":
-            return (
-                "snapshot board · r recompute live · Enter judge · p plan · Ctrl+P  ·  "
-                f"{self._snapshot_freshness or 'prior local run'}"
-            )
+            from src.adapters.tui.chrome_cues import snapshot_accum_footer
+
+            return snapshot_accum_footer(freshness=self._snapshot_freshness)
         if self._stage == "accum":
             return (
                 "↑↓ move · Enter judge · p plan · r refresh · Ctrl+P  ·  "
@@ -322,8 +336,8 @@ class CockpitApp(App[None]):
         if self._stage == "detail" and self._status_note in {"judge", "re-judging"}:
             if self._judge_limited:
                 return (
-                    "↑↓ scroll · j re-judge local · p plan · esc board · Ctrl+P  ·  "
-                    "limited judge (no candidate object)"
+                    "↑↓ scroll · j re-judge local · r live board · p plan · esc · Ctrl+P  ·  "
+                    "limited judge (snapshot / no candidate) · j or r for full desk"
                 )
             return (
                 "↑↓ scroll · j re-judge local · p plan · esc board · Ctrl+P  ·  "
@@ -393,8 +407,20 @@ class CockpitApp(App[None]):
             table.display = False
             evidence.display = False
         elif self._stage == "loading":
+            from src.adapters.tui.chrome_cues import is_broker_list_loading, loading_stage_body
+
             # Blank loading only when there is no prior board to keep (criterion 1).
-            if self._rows and self._board_kind in {"accum", "preopen"}:
+            # Broker list has no prior board table — always show named loading body.
+            keep_board = (
+                self._rows
+                and self._board_kind in {"accum", "preopen"}
+                and not is_broker_list_loading(
+                    stage=self._stage,
+                    board_title=self._board_title,
+                    status_note=self._status_note,
+                )
+            )
+            if keep_board:
                 scroll.display = False
                 table.display = True
                 if self._evidence_text:
@@ -405,9 +431,11 @@ class CockpitApp(App[None]):
             else:
                 scroll.display = True
                 body.update(
-                    "[#d4b06a]Loading local board…[/]\n\n"
-                    f"{self._board_title}\n"
-                    "[dim]Reading SQLite cache · same use cases as CLI[/]"
+                    loading_stage_body(
+                        board_title=self._board_title,
+                        status_note=self._status_note,
+                        stage=self._stage,
+                    )
                 )
                 table.display = False
                 evidence.display = False
@@ -1216,11 +1244,12 @@ class CockpitApp(App[None]):
         view = board_view_from_snapshot(snap)
         if not view.rows:
             return False
+        from src.adapters.tui.chrome_cues import snapshot_accum_meta
+
         self._board_kind = "accum"
         self._board_source = "snapshot"
         self._recomputing = False
         self._rows = list(view.rows)
-        self._meta = view.meta
         self._board_summary = view.summary
         self._board_title = "Screen · accumulation"
         self._mode = "local-first"
@@ -1232,6 +1261,10 @@ class CockpitApp(App[None]):
             as_of=ident.as_of,
             captured_at=ident.captured_at,
             universe=ident.universe,
+        )
+        self._meta = snapshot_accum_meta(
+            base_meta=view.meta,
+            freshness=self._snapshot_freshness,
         )
         self._status_note = self._snapshot_freshness
         try:
@@ -1441,11 +1474,12 @@ class CockpitApp(App[None]):
             limited = getattr(row, "source", None) is None
             self._judge_limited = limited
             self._board_title = f"Judge · {ticker}"
-            self._meta = (
-                "limited · snapshot/no source · j re-judge"
-                if limited
-                else "present-only · same object as board · j re-judge"
-            )
+            if limited:
+                self._meta = (
+                    "limited judge · snapshot/no source · j re-judge or r live for full desk"
+                )
+            else:
+                self._meta = "present-only · same object as board · j re-judge"
             self._status_note = "judge"
         elif self._is_preopen_row(row):
             self._judge_limited = False
@@ -1605,6 +1639,8 @@ class CockpitApp(App[None]):
 
     def _open_view_broker_list(self) -> None:
         """Ctrl+P View broker: tracked desk list → Enter opens desk show."""
+        from src.adapters.tui.chrome_cues import broker_list_loading_meta
+
         if self._stage in {"accum", "preopen"}:
             self._broker_list_return = self._stage  # type: ignore[assignment]
         elif self._board_kind in {"accum", "preopen"}:
@@ -1615,8 +1651,9 @@ class CockpitApp(App[None]):
         self._desk_entry = None
         self._stage = "loading"
         self._board_title = "View · broker list"
-        self._meta = "CLI parity · saham view broker list"
-        self._status_note = "view broker"
+        self._meta = broker_list_loading_meta()
+        self._status_note = "loading broker list"
+        self._mode = "local-first"
         self._refresh_chrome()
         self._execute_broker_list()
 
