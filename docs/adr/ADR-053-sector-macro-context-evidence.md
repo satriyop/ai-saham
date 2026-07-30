@@ -100,6 +100,7 @@ Builders must not hardcode sector→series routing. Adapters must not own policy
 | Dedicated groups | most maps use dedicated cohorts; `insurance`/`logistics`/`bank` reuse existing universe keys |
 | Poultry policy | Feed-cost stress (corn+soy invert) + import FX (`usd_idr_risk`); not chicken-price model (P1c) |
 | Domestic rates maps (Track B) | `bank`, `cement`, `property_dev`, `telco`, `insurance`, `multifinance` share defensive **BI policy steps + `usd_idr_risk`** (not US 10Y) |
+| Coverage expansion (Track C) | Residual `property` (same as property_dev); `transportation` (oil_cost+IDR like logistics); dedicated `auto` cohort (BI+IDR; includes ASII); residual `consumer_goods` / `consumer_non_cyclicals` / `consumer_staples` (BI+IDR). **Not** mapped: full `cyclic`, `tech`, `health` (no honest ≥2 drivers yet) |
 | Oil sign split (P1a) | `oil_proxy` (↑ supportive) for energy/oil_gas; `oil_cost` (↑ headwind) for chemicals/logistics/packaging |
 | Energy purity (P1b) | `coal` (COAL ETF proxy + IDR) and `oil_gas` (CL=F + IDR) preferred over residual `energy` map; parent energy bag kept |
 | Bank / rates policy (P2a+B) | Defensive: BI `policy_rate_steps` (hike = headwind) + `usd_idr_risk`; not NIM expansion. Stockbit title **Interest Rate Decision** → `bi_rate` (facility rates excluded) |

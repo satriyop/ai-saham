@@ -149,8 +149,10 @@ sector_macro_context:
         headwind_max: -0.03
 
   # Primary keys = universes.yaml group names (same as L2a sector context).
-  # Live maps only for groups with ≥2 real drivers. Prefer dedicated cohorts
-  # over broad bags (consumer_goods, basic_materials, finance-without-bank-key).
+  # Live maps only for groups with ≥2 real drivers. Prefer dedicated cohorts;
+  # residual parent bags only when multi-membership already routes specialists
+  # first (plantation/poultry before consumer_goods; property_dev before property).
+  # Track C deliberately skips tech/health/full cyclic (no honest ≥2 drivers yet).
   sector_maps:
     # P1b: specific energy cohorts BEFORE parent `energy` so multi-membership
     # resolve prefers coal/oil_gas over the residual oil-led energy fallback.
@@ -195,8 +197,19 @@ sector_macro_context:
       factors:
         - { ref: bi_rate_policy, weight: 0.55 }
         - { ref: usd_idr_risk, weight: 0.45 }
+    # Residual property bag (names not in property_dev). Same defensive BI + IDR.
+    # Multi-membership prefers property_dev (listed above).
+    property:
+      factors:
+        - { ref: bi_rate_policy, weight: 0.55 }
+        - { ref: usd_idr_risk, weight: 0.45 }
     # Logistics / shipping: fuel cost + FX stress (P1a; not oil-bull map).
     logistics:
+      factors:
+        - { ref: oil_cost, weight: 0.60 }
+        - { ref: usd_idr_risk, weight: 0.40 }
+    # Ground/air transport operators (universes.yaml transportation). Fuel + FX.
+    transportation:
       factors:
         - { ref: oil_cost, weight: 0.60 }
         - { ref: usd_idr_risk, weight: 0.40 }
@@ -206,6 +219,11 @@ sector_macro_context:
         - { ref: corn, weight: 0.40 }
         - { ref: soy, weight: 0.35 }
         - { ref: usd_idr_risk, weight: 0.25 }
+    # Auto OEM / parts / tire (dedicated cohort — not full cyclic). Credit + import FX.
+    auto:
+      factors:
+        - { ref: bi_rate_policy, weight: 0.55 }
+        - { ref: usd_idr_risk, weight: 0.45 }
     # Telco / towers: domestic funding via BI policy + FX risk (not US 10Y).
     telco:
       factors:
@@ -230,6 +248,20 @@ sector_macro_context:
     # Defensive bank risk context (not NIM expansion model). P2a: local BI policy
     # steps + IDR risk. Uses existing universes.yaml `bank` group.
     bank:
+      factors:
+        - { ref: bi_rate_policy, weight: 0.55 }
+        - { ref: usd_idr_risk, weight: 0.45 }
+    # Consumer demand / import-cost stress (defensive BI + IDR). Residual bags:
+    # multi-member plantation/poultry still prefer those maps (listed earlier).
+    consumer_goods:
+      factors:
+        - { ref: bi_rate_policy, weight: 0.55 }
+        - { ref: usd_idr_risk, weight: 0.45 }
+    consumer_non_cyclicals:
+      factors:
+        - { ref: bi_rate_policy, weight: 0.55 }
+        - { ref: usd_idr_risk, weight: 0.45 }
+    consumer_staples:
       factors:
         - { ref: bi_rate_policy, weight: 0.55 }
         - { ref: usd_idr_risk, weight: 0.45 }

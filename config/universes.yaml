@@ -1907,3 +1907,20 @@ oil_gas:
   - SOCI
   - TPMA
   updated: '2026-07-28'
+
+# Auto OEM / parts / tire (ADR-053 Track C). Not full cyclic (retail/media mix).
+# ASII lives only in index universes otherwise — without this cohort, SMC is UNKNOWN.
+# Multi-membership: macro resolve prefers live `auto` over residual `cyclic`.
+auto:
+  tickers:
+  - ASII
+  - AUTO
+  - BOLT
+  - BRAM
+  - GDYR
+  - GJTL
+  - IMAS
+  - INDS
+  - MPMX
+  - SMSM
+  updated: '2026-07-30'
