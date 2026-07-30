@@ -6,7 +6,7 @@
  <meta http-equiv="Pragma" content="no-cache" />
  <meta http-equiv="Expires" content="0" />
  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ai-saham · Daily Cockpit · OpenCode rev-20260730t</title>
+  <title>ai-saham · Daily Cockpit · OpenCode rev-20260730u</title>
  <link rel="preconnect" href="https://fonts.googleapis.com" />
  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -1931,7 +1931,7 @@
         <button type="button" data-frame="empty">7 Health</button>
         <button type="button" data-frame="palette">8 Palette</button>
       </div>
-      <span class="rev" id="buildStamp">design mock · 2026-07-30t</span>
+      <span class="rev" id="buildStamp">mock · 30u</span>
     </div>
 
     <!-- Product shell only · OpenCode bible for shipped TUI -->
@@ -1956,7 +1956,7 @@
  <!-- 1 ACCUM -->
  <div class="list-view" id="accumView">
             <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
-              <div class="section-label" style="margin:0">Candidates · option-B columns (1:1 TUI)</div>
+              
               <button type="button" class="src-badge snap" id="accumSrcBadge" title="Toggle snapshot vs live (board source)">snapshot · limited judge until j/r</button>
             </div>
  <table class="result-table dense" id="accumTable">
@@ -1979,23 +1979,17 @@
  </table>
  <div class="footer-note">
  <span><span class="kbd">↑↓</span> move</span>
- <span><span class="kbd">Enter</span> judge (present-only)</span>
+              <span><span class="kbd">Enter</span> judge</span>
  <span><span class="kbd">p</span> plan structure</span>
  <span><span class="kbd">v t</span> ticker desk</span>
  <span><span class="kbd">Ctrl+P</span> commands</span>
- <span class="dim">Signal radar · chips on Action/Gate</span>
-              <span class="dim">badge = board source</span>
+ 
  </div>
  </div>
 
  <!-- 2 JUDGE · nested · Enter from accum · code-richer detail flags -->
  <div class="list-view is-hidden" id="judgeView">
-            <div class="oc-note">
-              Present-only · same board object ·
-              IA <a href="./tui-judge-desk.html">tui-judge-desk.html</a> ·
-              flags = fields already on <code>JudgeDeskModel</code>
-            </div>
-            <div class="section-label">Judge · <span id="judgeTickerLab">BBCA</span> · present-only</div>
+<div class="section-label">Judge · <span id="judgeTickerLab">BBCA</span></div>
 
             <div class="banner-limited is-hidden" id="judgeLimitedBanner">
               Limited judge · snapshot / no candidate · scalars only · <span class="kbd">j</span> re-judge or <span class="kbd">r</span> live for full desk
@@ -2018,7 +2012,7 @@
             </div>
 
             <div class="card" style="margin-bottom:10px">
-              <div class="section-label">Phase sequence · ledger</div>
+              <div class="section-label">Phase</div>
               <div class="timeline" id="judgePhaseTimeline">
                 <span class="node">ACCUMULATION</span>
                 <span class="arr">→</span>
@@ -2077,7 +2071,7 @@
             </div>
 
             <div class="card" style="margin-top:4px">
-              <div class="section-label">Primary cards</div>
+              
               <div class="kv">
                 <span class="k">Risk</span><span class="v pos">OPEN</span>
                 <span class="k">TradeSetup</span><span class="v">WATCH</span>
@@ -2097,11 +2091,7 @@
 
           <!-- 3 PLAN · geometry triangle · IA tui-plan-desk · OpenCode -->
           <div class="list-view is-hidden" id="planView">
-            <div class="oc-note">
-              Structure desk · inherits Action ·
-              IA <a href="./tui-plan-desk.html">tui-plan-desk.html</a>
-            </div>
-            <div class="section-label">Plan · structure · <span id="planTicker">BBCA</span></div>
+<div class="section-label">Plan · <span id="planTicker">BBCA</span></div>
 
             <div class="plan-inherit">
               <span class="act" id="planInherit">WATCH</span>
@@ -2157,15 +2147,11 @@
 
           <!-- 4 PAPER · notebook tape · IA tui-paper-journal · OpenCode -->
           <div class="list-view is-hidden" id="paperView">
-            <div class="oc-note">
-              Notebook tape · write via plan <span class="kbd">l</span> confirm ·
-              IA <a href="./tui-paper-journal.html">tui-paper-journal.html</a>
-            </div>
-            <div class="paper-head">
+<div class="paper-head">
               <div>Paper · accumulation notebook · <strong>local CSV</strong></div>
               <div>review optional · CLI trade accum review</div>
             </div>
-            <div class="section-label">Notebook tape</div>
+            
             <div class="paper-tape" id="paperTape" aria-label="Paper notes">
               <!-- filled by renderPaperTape() -->
             </div>
@@ -2201,7 +2187,7 @@
  </div>
  </div>
 
- <div class="section-label">IEP board · graded · cols 1:1 TUI</div>
+ 
  <table class="result-table dense" id="preopenTable">
  <thead>
  <tr>
@@ -2218,7 +2204,7 @@
  <tbody id="preopenBody"></tbody>
  </table>
 
- <div class="section-label tight">Evidence strip · focus row</div>
+ 
  <div class="card" id="preopenEvidence">
  <div class="kv">
  <span class="k">Provenance</span><span class="v">verified NCP · Stockbit</span>
@@ -2240,12 +2226,7 @@
 
           <!-- 5b PRE-OPEN INSPECT · code-richer auction flags -->
           <div class="list-view is-hidden" id="preopenInspectView">
-            <div class="oc-note">
-              Auction inspect · IEV/IEP · not accum Judge ·
-              IA <a href="./tui-preopen-board.html">tui-preopen-board.html</a> ·
-              flags map <code>preopen_engine_inspect_presenter</code>
-            </div>
-            <div class="section-label">Pre-open · inspect · <span id="poiTicker">BBRI</span></div>
+<div class="section-label">Pre-open · <span id="poiTicker">BBRI</span></div>
 
             <div class="plan-inherit" style="margin-bottom:12px">
               <span class="act" id="poiGrade" style="color:var(--green)">A</span>
@@ -2303,7 +2284,7 @@
 
  <!-- 7 HEALTH posters · tui-session-health.html -->
  <div class="empty-view is-hidden" id="emptyView">
- <div class="section-label">Session health · three posters (not one dull empty)</div>
+ 
  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px" id="healthTabs">
  <button type="button" class="ghost-btn primary" data-health="empty">Empty cache</button>
  <button type="button" class="ghost-btn" data-health="zero">Zero candidates</button>
@@ -2322,7 +2303,7 @@
  <button class="ghost-btn" type="button" id="btnPaletteEmpty">ctrl+p commands</button>
  </div>
  <div class="why">
- <div class="section-label">What this protects</div>
+ 
  <ul>
  <li>No silent network on open</li>
  <li>Fetch is an explicit command, same as CLI</li>
@@ -2337,11 +2318,7 @@
 
  <!-- 6 TICKER · Price hero hierarchy (IA: tui-ticker-desk) · OpenCode · full fields -->
  <div class="stage-block is-hidden" id="detailView" style="display:none">
- <div class="oc-note">
- GetTickerDashboardUseCase · hierarchy from <a href="./tui-ticker-desk.html">ticker desk</a> · price hero first · presence + depth flags · density = scalar only
- </div>
-
- <div class="section-label">View · ticker · Price hero · <span id="detailTicker">BBCA</span></div>
+<div class="section-label">View · ticker · <span id="detailTicker">BBCA</span></div>
 
  <div id="tickerFullPanels" data-mode="primary" data-hierarchy="price-hero">
  <!-- Stage A · Identity + freshness (journey primary) -->
@@ -2361,7 +2338,7 @@
  </div>
  </div>
 
- <div class="section-label tight" data-panel="freshness">Freshness · ok · miss · stale</div>
+ <div class="section-label tight" data-panel="freshness">Freshness</div>
  <div class="fresh-grid" style="margin-bottom:12px">
  <div class="fp ok"><span class="k">Price</span><span class="v">ok</span></div>
  <div class="fp ok"><span class="k">Flow</span><span class="v">ok</span></div>
@@ -2384,7 +2361,6 @@
  <span class="price">6,275</span>
  <span class="chg">+0.8% 1d</span>
  </div>
- <p class="density-note">change_1d_pct · density bars below map |scalar| only · not a live chart</p>
  </div>
  <div aria-label="Horizons from price_structure">
  <div class="lab">Horizons · price_structure</div>
@@ -2408,12 +2384,11 @@
  <span class="bar"><i style="width:35%"></i></span>
  <span class="v">35%</span>
  </div>
- <p class="density-note">52w = range_52w_pct (position in range) · not a period return</p>
  </div>
  </section>
 
  <!-- Stage C · Fundamentals ribbon -->
- <div class="section-label tight" data-panel="valuation">Fundamentals ribbon · CompanyFundamentals</div>
+ <div class="section-label tight" data-panel="valuation">Fundamentals</div>
  <div class="oc-metrics">
  <div class="oc-metric"><div class="k">PE TTM</div><div class="v">13.3</div></div>
  <div class="oc-metric"><div class="k">PBV</div><div class="v">3.0</div></div>
@@ -2422,10 +2397,9 @@
  <div class="oc-metric"><div class="k">Div</div><div class="v">4.8%</div></div>
  <div class="oc-metric"><div class="k">F-Score</div><div class="v">5</div></div>
  </div>
- <p class="density-note" style="margin:-6px 0 12px">Missing fundamentals → all cells —</p>
 
  <!-- Stage D · Pulse trio -->
- <div class="section-label tight">Pulse · flow · structure · bandar</div>
+ <div class="section-label tight">Pulse</div>
  <div class="oc-grid-3">
  <div class="oc-panel" data-panel="foreign_flow">
  <h3>Foreign flow</h3>
@@ -2463,7 +2437,7 @@
  </div>
 
  <!-- Stage E · Earnings -->
- <div class="section-label tight" data-panel="earnings">Earnings · last ≤4Q</div>
+ <div class="section-label tight" data-panel="earnings">Earnings</div>
  <div class="cli-panel" style="margin-bottom:12px">
  <div class="body">
  <div class="earn-row">
@@ -2490,7 +2464,6 @@
  <span class="eps">108.2</span>
  <span class="yoy neg">−1.4%</span>
  </div>
- <p class="density-note">eps_actual · bar = relative EPS density · not a chart claim</p>
  </div>
  </div>
 
@@ -2501,9 +2474,9 @@
                 <button type="button" class="flag-chip is-dim">own+</button>
                 <button type="button" class="flag-chip is-dim">insider+</button>
                 <button type="button" class="flag-chip is-dim">candles+</button>
-                <span style="font-size:11px;color:var(--text-mute)">code = presence; expand when loaded</span>
+                <span style="font-size:11px;color:var(--text-mute)"></span>
               </div>
-              <div class="section-label">Secondary · presence</div>
+              <div class="section-label">Presence</div>
               <div class="card" id="tickerPresence" style="margin-bottom:10px">
                 <div class="kv">
                   <span class="k">Analyst</span><span class="v">— local</span>
@@ -2514,7 +2487,7 @@
                   <span class="k">Candles</span><span class="v">present</span>
                 </div>
               </div>
-              <div class="section-label">Depth · FULL_PANEL_ORDER (flag depth)</div>
+              <div class="section-label">Depth</div>
               <div class="ticker-depth-body" id="tickerDepthBody">
 <div class="cli-stack">
  <section class="cli-panel" data-panel="analyst">
@@ -2657,7 +2630,6 @@
  </tr>
  </tbody>
  </table>
- <p class="density-note">OHLC table only · not a plotted candlestick chart</p>
  </div>
  </section>
  </div>
@@ -2674,11 +2646,7 @@
 
  <!-- 7 BROKER · Desk Radar → Enter Net hero home · OpenCode (IA: tui-broker-desk) -->
  <div class="stage-block is-hidden" id="brokerView">
- <div class="oc-note">
- Tracked desks · <strong>Enter</strong> → desk home · IA <a href="./tui-broker-desk.html">broker desk</a> ·
-              flags: partial NetX · ticker-desks trail
-            </div>
-            <div class="flag-row" data-flag-group="broker">
+<div class="flag-row" data-flag-group="broker">
               <span class="flag-lab">List</span>
               <button type="button" class="flag-chip warn" data-flag="partial_net">partial_net</button>
               <button type="button" class="flag-chip" data-flag="from_ticker">from_ticker</button>
@@ -2694,11 +2662,11 @@
 
  <!-- 7a · Desk radar (list) -->
  <div class="broker-sub is-on" id="brokerRadar" data-broker-mode="radar">
- <div class="section-label">View · broker · radar</div>
+ 
  <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px;font-size:11.5px;color:var(--text-mute)">
  <div>
  Tracked desks · sorted by |Net5| · <strong style="color:var(--text);font-weight:500">Enter → desk home</strong><br />
- Cols 1:1 · Code · Type · AsOf · DayNet · Net5 · Stk · Δ1 · # · Top
+
  </div>
  <div style="text-align:right">
  Net5 amp bar = design sugar (not a new score)<br />
@@ -2731,7 +2699,7 @@
 
  <!-- 7b · Desk home (full detail · design parity) -->
  <div class="broker-sub" id="brokerHome" data-broker-mode="home">
- <div class="section-label">View · broker · <span id="brokerHomeCodeLabel">YP</span> · home</div>
+ <div class="section-label">Broker · <span id="brokerHomeCodeLabel">YP</span></div>
 
  <div class="desk-id">
  <div>
@@ -2777,7 +2745,7 @@
                 <button type="button" class="flag-chip" data-flag="deep.t">deep.t</button>
                 <button type="button" class="flag-chip" data-flag="deep.f">deep.f</button>
                 <button type="button" class="flag-chip" data-flag="deep.h">deep.h</button>
-                <span style="font-size:11px;color:var(--text-mute)">code loaders · full rows</span>
+                <span style="font-size:11px;color:var(--text-mute)"></span>
               </div>
               <div class="flag-panel" data-flag-panel="deep.t" data-flag-group="brokerHome">
                 <h4>deep.t · top stocks</h4>
@@ -2805,12 +2773,12 @@
  </div>
 
  <div class="broker-deep" id="brokerDeepFlow" data-deep-panel="flow">
- <div class="section-label tight" style="margin-top:0">Desk flow · net by day (aggregate)</div>
+ <div class="section-label tight" style="margin-top:0">Flow</div>
  <div id="brokerFlowDays"></div>
  </div>
 
  <div class="broker-deep" id="brokerDeepHist" data-deep-panel="hist">
- <div class="section-label tight" style="margin-top:0">History · per-ticker daily (sample)</div>
+ <div class="section-label tight" style="margin-top:0">History</div>
  <table class="result-table dense">
  <thead>
  <tr>
@@ -3664,7 +3632,7 @@
  $("statusRows").textContent = `${ACCUM.length} rows`;
  } else if (state.frame === "judge") {
  $("viewTitle").textContent = `Judge · ${t}`;
- $("viewMeta").innerHTML = `<span class="dot">·</span> present-only verdict`;
+        $("viewMeta").innerHTML = `<span class="dot">·</span> Action · Gate`;
  $("statusScreen").textContent = "judge";
  $("statusRows").textContent = t;
       } else if (state.frame === "plan") {

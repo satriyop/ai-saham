@@ -12,6 +12,25 @@
 | **`.design-tools`** (1–8 stage buttons · rev stamp) | **No** | HTML mock only · above app · never over sidebar |
 | Journey night-ink desk HTML | No | IA / hierarchy inspiration only |
 
+### Chrome noise (do not paint in product UI)
+
+Put implementer notes **only in this doc** (or code comments). Never as stage body labels.
+
+| Bad (not in UI) | Where it lives instead |
+|-----------------|------------------------|
+| `Candidates · option-B columns (1:1 TUI)` | Accum cols = `BOARD_COLUMN_LABELS` (below) |
+| `IA tui-*.html` · `JudgeDeskModel` · `FULL_PANEL_ORDER` | This doc · code modules |
+| `cols 1:1 TUI` · `Evidence strip · focus row` | Column contracts below |
+| Design jargon as operator copy (`Price hero` in body titles) | Use product titles: View · ticker · BBCA |
+
+### Column contracts (implementer)
+
+| Stage | Columns / fields |
+|-------|------------------|
+| Accum | `Ticker · Signal · Accum · Action · Phase · Streak · RSI · Net% · Disc% · Price · Gate` (`BOARD_COLUMN_LABELS`) |
+| Pre-open | `Tkr · IEP · Δ% · IEV · NCP · ΔIEV · Grd · Risk` |
+| Broker list | `Code · Type · AsOf · DayNet · Net5 · Stk · Δ1 · # · Top` |
+
 ---
 
 ## Design authority
