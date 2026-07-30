@@ -63,7 +63,7 @@ Primary stage stays scannable. Richer DTO fields hang on **chips** (mono pills).
 | Stage | Flags | Code source |
 |-------|-------|-------------|
 | Accum | `snapshot` \| `live` badge | `board_source` / chrome_cues |
-| Judge | `stack` · `readiness` · `named` · `mce` · `phase+` · `limited` | `JudgeDeskModel` / `decision_display` |
+| Judge | **`d` / `detail`** = all panels (CLI `--detail`) · singles: `stack` · `readiness` · `named` · `mce` · `phase+` · `limited` | `JudgeDeskModel` / `decision_display` · screen accum `--detail` |
 | Pre-open inspect | `why` · `auction+` · `warn` | `preopen_engine_inspect_presenter` |
 | Ticker | `depth` (+ analyst+ / own+ / … when non-null) | `TickerDeskModel` presence today; full panels when expanded |
 | Broker list | `partial_net` · `from_ticker` | `has_partial_netx` · `ticker-desks` stage |
@@ -95,7 +95,10 @@ Primary stage stays scannable. Richer DTO fields hang on **chips** (mono pills).
 
 ### Judge (nested)
 - Primary: Action · Gate · Signal · Accum · Authority% · Family · Why · phase timeline · primary cards  
-- Flags: stack · readiness · named · mce · phase+ · limited (auto when snapshot)
+- **`d`** (or chip `detail · d`): toggle **all** detail panels — same idea as CLI `screen accum --detail` / full vs compact  
+- Single chips still work for one panel at a time  
+- `limited` is **state** (snapshot / no candidate), not part of `--detail`; `j` / `r` recover full object  
+- Detail expand never invents fields when limited
 
 ### Accum
 - Cols 1:1 `BOARD_COLUMN_LABELS`  

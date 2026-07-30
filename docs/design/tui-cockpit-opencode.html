@@ -1928,7 +1928,7 @@
 <body>
  <div class="demo-bar">
  <div class="card">
-      <strong>OpenCode visual = TUI bible</strong> · <span style="color:#6fbf8a" id="buildStamp">rev 2026-07-30r · palette operator copy · E2E 1–8</span>
+      <strong>OpenCode visual = TUI bible</strong> · <span style="color:#6fbf8a" id="buildStamp">rev 2026-07-30s · judge d=detail · E2E 1–8</span>
       · black-on-black · peach palette · mono density
       · <em style="color:var(--sel-dim);font-style:normal">Journey = structure inspiration only</em>
       (stages / authority / columns — not marketing night-ink skin)
@@ -2051,6 +2051,7 @@
 
             <div class="flag-row" id="judgeFlags" data-flag-group="judge">
               <span class="flag-lab">Detail</span>
+              <button type="button" class="flag-chip" data-flag="detail" id="judgeDetailAll" title="Toggle all detail panels · same idea as CLI --detail">detail · d</button>
               <button type="button" class="flag-chip" data-flag="stack">stack</button>
               <button type="button" class="flag-chip" data-flag="readiness">readiness</button>
               <button type="button" class="flag-chip" data-flag="named">named</button>
@@ -2106,6 +2107,7 @@
             </div>
 
             <div class="footer-note">
+              <span><span class="kbd">d</span> detail (all panels · CLI --detail)</span>
               <span><span class="kbd">j</span> re-judge local</span>
               <span><span class="kbd">r</span> live board</span>
               <span><span class="kbd">p</span> plan</span>
@@ -3145,6 +3147,7 @@
  preopenMode: "board", // board | inspect
       boardSource: "snapshot", // snapshot | live
       judgeLimited: false,
+      judgeDetailOpen: false, // d · CLI --detail analog
  paletteOpen: false,
  confirmOpen: false,
  filtered: [...COMMANDS],
@@ -4098,10 +4101,27 @@
  if (e.key === "v") { e.preventDefault(); showFrame("detail"); return; }
  }
 
- if (state.frame === "judge") {
- if (e.key.toLowerCase() === "p") { e.preventDefault(); showFrame("plan"); return; }
- if (e.key.toLowerCase() === "j") { e.preventDefault(); toast("Re-judge local · present-only"); return; }
- }
+      if (state.frame === "judge") {
+        if (e.key.toLowerCase() === "d") {
+          e.preventDefault();
+          toggleJudgeDetail();
+          return;
+        }
+        if (e.key.toLowerCase() === "p") { e.preventDefault(); showFrame("plan"); return; }
+        if (e.key.toLowerCase() === "j") { e.preventDefault(); toast("Re-judge local"); return; }
+        if (e.key.toLowerCase() === "r") {
+          e.preventDefault();
+          state.boardSource = "live";
+          const b = $("accumSrcBadge");
+          if (b) {
+            b.className = "src-badge live";
+            b.textContent = "live · full present-only judge";
+          }
+          paintJudgeLimitedFromBoard();
+          toast("Live board · full judge available");
+          return;
+        }
+      }
 
       if (state.frame === "plan") {
         if (e.key.toLowerCase() === "l") { e.preventDefault(); openConfirm(); return; }
@@ -4250,6 +4270,36 @@
  });
  }
 
+    // CLI analog: screen accum --detail · view ticker full vs --brief
+    // Judge: d toggles all available detail panels (does not invent if limited)
+    const JUDGE_DETAIL_FLAGS = ["stack", "readiness", "named", "mce", "phase+"];
+
+    function setJudgeDetailOpen(open) {
+      state.judgeDetailOpen = !!open;
+      const allBtn = $("judgeDetailAll");
+      if (allBtn) allBtn.classList.toggle("is-on", state.judgeDetailOpen);
+      JUDGE_DETAIL_FLAGS.forEach((flag) => {
+        const chip = document.querySelector(
+          '#judgeFlags .flag-chip[data-flag="' + flag + '"]'
+        );
+        const panel = document.querySelector(
+          '.flag-panel[data-flag-group="judge"][data-flag-panel="' + flag + '"]'
+        );
+        if (chip) chip.classList.toggle("is-on", state.judgeDetailOpen);
+        if (panel) panel.classList.toggle("is-open", state.judgeDetailOpen);
+      });
+      // limited stays state-driven (snapshot), not part of --detail dump
+    }
+
+    function toggleJudgeDetail() {
+      setJudgeDetailOpen(!state.judgeDetailOpen);
+      toast(
+        state.judgeDetailOpen
+          ? "Judge detail on · all panels (CLI --detail)"
+          : "Judge detail off · compact"
+      );
+    }
+
     function wireFlagGroups() {
       document.querySelectorAll(".flag-chip[data-flag]").forEach((btn) => {
         if (btn.dataset.wired) return;
@@ -4259,12 +4309,16 @@
           const group = row && row.dataset.flagGroup;
           const flag = btn.dataset.flag;
           if (!flag || !group) return;
+          if (flag === "detail" && group === "judge") {
+            toggleJudgeDetail();
+            return;
+          }
           if (flag === "depth") {
             const on = !btn.classList.contains("is-on");
             btn.classList.toggle("is-on", on);
             const body = $("tickerDepthBody");
             if (body) body.classList.toggle("is-open", on);
-            document.querySelectorAll("#tickerDepthFlags .flag-chip.is-dim, #tickerDepthFlags .flag-chip").forEach((c) => {
+            document.querySelectorAll("#tickerDepthFlags .flag-chip").forEach((c) => {
               if (c.dataset.flag === "depth") return;
               c.classList.toggle("is-dim", !on);
             });
@@ -4280,6 +4334,16 @@
             state.judgeLimited = on;
             const ban = $("judgeLimitedBanner");
             if (ban) ban.classList.toggle("is-hidden", !on);
+          }
+          // Keep master detail chip in sync when toggling singles
+          if (group === "judge" && JUDGE_DETAIL_FLAGS.includes(flag)) {
+            const allOn = JUDGE_DETAIL_FLAGS.every((f) => {
+              const c = document.querySelector('#judgeFlags .flag-chip[data-flag="' + f + '"]');
+              return c && c.classList.contains("is-on");
+            });
+            state.judgeDetailOpen = allOn;
+            const allBtn = $("judgeDetailAll");
+            if (allBtn) allBtn.classList.toggle("is-on", allOn);
           }
         });
       });

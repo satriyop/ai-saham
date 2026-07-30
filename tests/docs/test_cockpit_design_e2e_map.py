@@ -130,7 +130,9 @@ def test_prompt_rail_design_only_above_status():
 
 def test_detail_flags_present_for_code_richer_fields():
     html = _html()
-    # Judge flags
+    # Judge flags + master detail (CLI --detail analog)
+    assert 'data-flag="detail"' in html or "judgeDetailAll" in html
+    assert "toggleJudgeDetail" in html or "setJudgeDetailOpen" in html
     for flag in ("stack", "readiness", "named", "mce", "limited"):
         assert f'data-flag="{flag}"' in html or f"data-flag-panel=\"{flag}\"" in html
     assert "judgeLimitedBanner" in html or "Limited judge" in html
