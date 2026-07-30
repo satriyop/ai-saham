@@ -146,13 +146,14 @@ Primary stage stays scannable. Richer DTO fields hang on **chips** (mono pills).
 ### Broker (`v b` · desk-centric)
 - Radar + Enter home: **day net for that desk code** (tracked `broker_daily_flow`)  
 - Hub:
-  - **`t` buy/sell** — top stocks **for this desk · latest session only** (not market top)
-  - **`f` flow** — **this desk’s** day-net series (`ViewBrokerDeskFlow`) · **not** market foreign total · **not** ticker foreign flow
-  - **`c` calendar** — **~1 month** desk activity: each session day = **top stock collected (net buy)** + desk net + B/S totals (`broker_daily_flow` rollup per day)
+  - **`t` buy/sell** — dual heat **latest session only** (buy + sell sides)
+  - **`f` flow** — this desk’s day-net series (`ViewBrokerDeskFlow`)
+  - **`c` calendar** — ~1 month: top stock collected + desk net + B/S per session day
   - **`h` history** — per-ticker daily for this desk
-  - **`v` top buy** — top-buy list for this desk · click → view ticker  
-- Never label desk flow as “foreign flow” or “broker summary market-wide”  
-- **Session vs month:** `t` = latest session tops · `c` = month calendar of desk buy & sell
+  - **`m` top 5** — **matrix** of top **5 net buy** names across windows **1s · 3s · 5s · 10s · 20s** (default emphasis **1s**); metric = desk net buy sum; click cell → view ticker  
+  - **`v`** — open view ticker for desk’s current top (1s #1), not a hub tab  
+- Never market foreign total  
+- **Session vs multi-window:** `t` = latest dual · `m` = multi-session top-5 net buy
 
 ### Plan / Paper / Health
 - Plan geometry triangle · paper tape · health posters (unchanged contracts)

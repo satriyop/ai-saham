@@ -1482,6 +1482,68 @@
       color: var(--text-mute);
     }
 
+    
+    .top5-matrix {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-panel);
+      overflow: hidden;
+    }
+    .top5-matrix .mx-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--text-mute);
+    }
+    .top5-matrix .mx-head strong { color: var(--text); font-weight: 500; }
+    .top5-matrix table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+    .top5-matrix th {
+      text-align: left;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-mute);
+      font-weight: 500;
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-elevated);
+    }
+    .top5-matrix th.num, .top5-matrix td.num { text-align: right; }
+    .top5-matrix th.win { text-align: center; min-width: 4.5em; }
+    .top5-matrix td {
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--border-soft);
+      color: var(--text);
+    }
+    .top5-matrix tr:last-child td { border-bottom: 0; }
+    .top5-matrix td.rank { color: var(--text-mute); width: 2em; }
+    .top5-matrix .cell {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1px;
+      cursor: pointer;
+      padding: 2px 0;
+      border-radius: 3px;
+    }
+    .top5-matrix .cell:hover { background: var(--bg-row-hover); }
+    .top5-matrix .cell .tk {
+      font-weight: 600;
+      color: #ececec;
+      letter-spacing: 0.02em;
+    }
+    .top5-matrix .cell .nv { font-size: 10.5px; color: var(--green); }
+    .top5-matrix .cell .nv.neg { color: var(--red); }
+    .top5-matrix .cell.is-def .tk { color: var(--sel-dim); }
+
     .broker-jump-list {
       display: flex;
       flex-direction: column;
@@ -2071,7 +2133,7 @@
         <button type="button" data-frame="empty">7 Health</button>
         <button type="button" data-frame="palette">8 Palette</button>
       </div>
-      <span class="rev" id="buildStamp">mock · 30z</span>
+      <span class="rev" id="buildStamp">mock · 31a</span>
     </div>
 
     <!-- Product shell only · OpenCode bible for shipped TUI -->
@@ -2862,7 +2924,7 @@
                 <button type="button" data-deep="flow"><kbd>f</kbd> flow</button>
                 <button type="button" data-deep="cal"><kbd>c</kbd> calendar</button>
                 <button type="button" data-deep="hist"><kbd>h</kbd> history</button>
-                <button type="button" data-deep="ticker"><kbd>v</kbd> top buy</button>
+                <button type="button" data-deep="matrix"><kbd>m</kbd> top 5</button>
               </div>
               <div class="broker-deep is-on" id="brokerDeepTop" data-deep-panel="top">
  <div class="split-buy-sell">
@@ -2920,19 +2982,34 @@
  </table>
  </div>
 
-              <div class="broker-deep" id="brokerDeepTicker" data-deep-panel="ticker">
-                <div class="section-label tight" style="margin-top:0">Top buy</div>
-                <div id="brokerJumpList" class="broker-jump-list" aria-label="Top buy tickers">
-                  <!-- filled from desk buys[] · click opens view ticker -->
+              <div class="broker-deep" id="brokerDeepMatrix" data-deep-panel="matrix">
+                <div class="top5-matrix" id="brokerTop5Matrix" aria-label="Top 5 net buy by window">
+                  <div class="mx-head">
+                    <div><strong>Top 5 net buy</strong> · desk <span id="brokerMxCode">YP</span> · windows 1s · 3s · 5s · 10s · 20s</div>
+                    <div>default col <strong>1s</strong> · click cell → view ticker</div>
+                  </div>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th class="rank">#</th>
+                        <th class="win">1s</th>
+                        <th class="win">3s</th>
+                        <th class="win">5s</th>
+                        <th class="win">10s</th>
+                        <th class="win">20s</th>
+                      </tr>
+                    </thead>
+                    <tbody id="brokerMxBody"></tbody>
+                  </table>
                 </div>
               </div>
 
               <div class="footer-note">
                 <span><span class="kbd">t</span> buy/sell · latest</span>
                 <span><span class="kbd">f</span> flow</span>
-                <span><span class="kbd">c</span> calendar · month</span>
+                <span><span class="kbd">c</span> calendar</span>
                 <span><span class="kbd">h</span> history</span>
-                <span><span class="kbd">v</span> top buy</span>
+                <span><span class="kbd">m</span> top 5 matrix</span>
                 <span><span class="kbd">esc</span> radar</span>
               </div>
  </div>
@@ -3214,7 +3291,7 @@
  preIndex: 0,
  brokerIndex: 0,
  brokerMode: "radar", // radar | home
- brokerDeep: "top", // top | flow | cal | hist | ticker
+ brokerDeep: "top", // top | flow | cal | hist | matrix
  preopenMode: "board", // board | inspect
       boardSource: "snapshot", // snapshot | live
       judgeLimited: false,
@@ -3573,39 +3650,59 @@
       if ($("brokerTopBuy")) $("brokerTopBuy").innerHTML = buyHtml || `<div class="dim">—</div>`;
       if ($("brokerTopSell")) $("brokerTopSell").innerHTML = sellHtml || `<div class="dim">—</div>`;
 
-      // v · top buy list → open ticker (not single name)
-      if ($("brokerJumpList")) {
-        const buys = r.buys || [];
-        $("brokerJumpList").innerHTML = buys.length
-          ? buys
-              .map(
-                ([code, w, n]) => `
-          <div class="jump-row" data-ticker="${code}" role="button" tabindex="0">
-            <span class="t">${code}</span>
-            <span class="bar"><i style="width:${w}%"></i></span>
-            <span class="n">${n}</span>
-            <span class="go">open</span>
-          </div>`
-              )
-              .join("")
-          : `<div class="dim">No top-buy tickers</div>`;
-        $("brokerJumpList").querySelectorAll(".jump-row").forEach((row) => {
+
+      // m · top 5 net buy matrix · windows 1s 3s 5s 10s 20s (desk only)
+      if ($("brokerMxBody")) {
+        if ($("brokerMxCode")) $("brokerMxCode").textContent = r.code;
+        // sample ranks by window: [ticker, netLabel] × 5 rows
+        const s1 = (r.buys || []).slice(0, 5).map(([c, , n]) => [c, n]);
+        while (s1.length < 5) s1.push(["—", "—"]);
+        const windows = {
+          "1s": s1,
+          "3s": [["AMMN", "+18.2B"], ["BUMI", "+14.1B"], ["ANTM", "+9.4B"], ["BBRI", "+7.2B"], ["DEWA", "+6.0B"]],
+          "5s": [["BUMI", "+31.0B"], ["AMMN", "+28.4B"], ["ANTM", "+16.2B"], ["DEWA", "+12.1B"], ["BBRI", "+11.0B"]],
+          "10s": [["AMMN", "+52.0B"], ["BUMI", "+48.5B"], ["BBRI", "+29.0B"], ["ANTM", "+24.2B"], ["BMRI", "+18.8B"]],
+          "20s": [["AMMN", "+95.0B"], ["BUMI", "+88.0B"], ["BBRI", "+55.0B"], ["ANTM", "+41.0B"], ["TLKM", "+33.0B"]],
+        };
+        // desk-specific small variation for non-YP
+        if (r.code !== "YP" && r.buys && r.buys.length) {
+          windows["1s"] = s1;
+          const rot = r.buys.map(([c, , n]) => [c, n]);
+          windows["3s"] = rot.slice(0, 5);
+          while (windows["3s"].length < 5) windows["3s"].push(["—", "—"]);
+        }
+        const cols = ["1s", "3s", "5s", "10s", "20s"];
+        let html = "";
+        for (let rank = 0; rank < 5; rank++) {
+          html += `<tr><td class="rank">${rank + 1}</td>`;
+          cols.forEach((w) => {
+            const [tk, nv] = windows[w][rank] || ["—", "—"];
+            const neg = String(nv).includes("−") || String(nv).startsWith("-");
+            const def = w === "1s" ? " is-def" : "";
+            html += `<td class="num"><div class="cell${def}" data-ticker="${tk}" data-win="${w}" role="button" tabindex="0">
+              <span class="tk">${tk}</span>
+              <span class="nv${neg ? " neg" : ""}">${nv}</span>
+            </div></td>`;
+          });
+          html += `</tr>`;
+        }
+        $("brokerMxBody").innerHTML = html;
+        $("brokerMxBody").querySelectorAll(".cell").forEach((cell) => {
           const open = () => {
-            const code = row.dataset.ticker;
+            const code = cell.dataset.ticker;
+            if (!code || code === "—") return;
             const idx = ACCUM.findIndex((a) => a.t === code);
             if (idx >= 0) state.rowIndex = idx;
             showFrame("detail");
-            toast(`View ticker · ${code}`);
+            toast(`View ticker · ${code} · ${cell.dataset.win || ""}`);
           };
-          row.addEventListener("click", open);
-          row.addEventListener("keydown", (e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              open();
-            }
+          cell.addEventListener("click", open);
+          cell.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") { e.preventDefault(); open(); }
           });
         });
       }
+
 
       if ($("brokerFlowDays")) {
  $("brokerFlowDays").innerHTML = (r.flow || []).map(([d, w, v, cls]) =>
@@ -3888,7 +3985,7 @@
  if (state.brokerMode === "home") {
  const deep = state.brokerDeep === "top" ? "home" : state.brokerDeep;
           const deepLab =
-            deep === "ticker" ? "top buy"
+            deep === "matrix" ? "top 5"
               : deep === "top" ? "buy/sell"
               : deep === "cal" ? "calendar"
               : deep;
@@ -4327,17 +4424,19 @@
             if (k === "f") { e.preventDefault(); setBrokerDeep("flow"); return; }
             if (k === "c") { e.preventDefault(); setBrokerDeep("cal"); return; }
             if (k === "h") { e.preventDefault(); setBrokerDeep("hist"); return; }
- if (k === "v") {
- e.preventDefault();
- const top = (BROKER[state.brokerIndex] || {}).top;
- if (top) {
- const idx = ACCUM.findIndex((r) => r.t === top);
- if (idx >= 0) state.rowIndex = idx;
- }
- showFrame("detail");
- toast(`Ticker · ${top || "—"} · from desk ${(BROKER[state.brokerIndex] || {}).code || ""}`);
- return;
- }
+           if (k === "m") { e.preventDefault(); setBrokerDeep("matrix"); return; }
+          if (k === "v") {
+            // open view ticker for desk top (1s #1) — not matrix hub
+            e.preventDefault();
+            const top = (BROKER[state.brokerIndex] || {}).top;
+            if (top) {
+              const idx = ACCUM.findIndex((r) => r.t === top);
+              if (idx >= 0) state.rowIndex = idx;
+            }
+            showFrame("detail");
+            toast(`View ticker · ${top || "—"}`);
+            return;
+          }
  }
  }
 

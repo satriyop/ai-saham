@@ -145,9 +145,9 @@ def test_detail_flags_present_for_code_richer_fields():
     # Ticker detail (CLI full vs brief)
     assert "tickerDepthBody" in html or "tickerDetailAll" in html
     assert "toggleTickerDetail" in html or 'data-flag="detail"' in html
-    # Broker · top-buy ticker list (v hub)
-    assert "brokerJumpList" in html or "jump-row" in html
-    assert "partial_net" in html or "from_ticker" in html
+    # Broker · top 5 net-buy matrix (m hub)
+    assert "brokerTop5Matrix" in html or "brokerMxBody" in html or 'data-deep="matrix"' in html
+    assert "1s" in html and "20s" in html
 
 
 def test_preopen_enter_opens_auction_inspect_not_judge():
