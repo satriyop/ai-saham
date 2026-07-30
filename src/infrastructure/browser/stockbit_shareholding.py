@@ -19,8 +19,14 @@ Aggregation:
   individual_pct   = "Individual" label value
   top_holder_name  = named entity (not in _ALL_CATEGORIES) with highest %
 
-Caching: SQLite table `shareholding_composition` with 7-day TTL.
-Filings land quarterly; 7 days catches mid-quarter corrections without daily re-fetches.
+Caching: SQLite table `shareholding_composition`.
+
+Ownership composition is long-lived (IDX filings ~quarterly). Policy:
+
+- **Display / ``read_cached``:** always return the latest stored row (no hide-by-TTL).
+- **Refresh / ``_is_cache_fresh``:** TTL (config ``cache_ttl_days.shareholding``) only
+  decides when ``fetch market`` enrichment should re-hit Stockbit — not whether
+  the dashboard may show the last known composition.
 
 Layer: Infrastructure
 """
@@ -217,7 +223,8 @@ def _parse_composition(ticker: str, body: dict) -> ShareholdingComposition | Non
 class StockbitShareholdingProvider(ShareholdingProvider, StockbitCachingProvider):
     """Fetches shareholding composition from Stockbit Exodus API.
 
-    SQLite cache with 7-day TTL — IDX shareholding filings land quarterly.
+    Long-term ownership facts (quarterly filings). Latest cache row is always
+    readable; TTL only gates live re-fetch when an API client is present.
     """
 
     def __init__(
@@ -239,7 +246,7 @@ class StockbitShareholdingProvider(ShareholdingProvider, StockbitCachingProvider
         safe_schema_update(logger=logger, label="shareholding_composition", update=_update)
 
     def _is_cache_fresh(self, ticker: str) -> bool:
-        """True if a row exists within the 7-day TTL window."""
+        """True if a row exists within the configured *refresh* TTL window."""
         try:
             with sqlite3.connect(self._db_path) as conn:
                 return has_fresh_ticker_row(
@@ -263,25 +270,37 @@ class StockbitShareholdingProvider(ShareholdingProvider, StockbitCachingProvider
             return self._mem_cache[key]
 
         cached = self._read_cache(key, as_of_date=as_of_date)
-        if cached is not None:
-            if as_of_date is None:
+
+        if as_of_date is not None:
+            # Backtest / PIT: never fetch live (look-ahead).
+            return cached
+
+        # Live: re-fetch only when refresh TTL expired and network is available.
+        if cached is not None and self._is_cache_fresh(key):
+            self._mem_cache[key] = cached
+            return cached
+
+        if self._api_client is None:
+            # Cache-only surfaces (view ticker): show last known composition.
+            if cached is not None:
                 self._mem_cache[key] = cached
             return cached
 
-        if as_of_date is not None:
-            # In backtest mode never fetch live data — would introduce look-ahead.
-            return None
-
         result = self._fetch(key)
-        self._mem_cache[key] = result
         if result is not None:
             self._write_cache(result)
-        return result
+            self._mem_cache[key] = result
+            return result
+
+        # Network miss: keep serving last known ownership rather than blanking UI.
+        if cached is not None:
+            self._mem_cache[key] = cached
+        return cached
 
     def read_cached(
         self, ticker: str, as_of_date: date | None = None
     ) -> ShareholdingComposition | None:
-        """Public cache-only read. Never fetches from network."""
+        """Public cache-only read. Never fetches; never hides by refresh TTL."""
         return self._read_cache(ticker, as_of_date=as_of_date)
 
     def _read_cache(
@@ -313,12 +332,8 @@ class StockbitShareholdingProvider(ShareholdingProvider, StockbitCachingProvider
             fetched_at = _parse_fetched_at(row[0])
             if fetched_at is None:
                 return None
-            if (
-                as_of_date is None
-                and (datetime.now() - fetched_at).days
-                > self._stockbit_config.cache_ttl_days_shareholding
-            ):
-                return None
+            # Live + PIT: always surface the selected row. Refresh TTL is not a
+            # display gate (ownership is long-term / quarterly).
             return ShareholdingComposition(
                 ticker=ticker,
                 report_date=_parse_date(row[1] or ""),

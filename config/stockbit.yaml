@@ -249,7 +249,9 @@ endpoints:
 cache_ttl_days:
   company_profile: 30   # sector, listing date, shares outstanding
   fundamentals: 7       # annual ratios (PBV, PER, ROE, EPS, etc.)
-  shareholding: 7       # shareholding composition (institution %, top holders)
+  # Ownership is long-term (IDX filings ~quarterly). This TTL only controls when
+  # fetch/enrichment re-hits Stockbit — view ticker always shows the latest row.
+  shareholding: 90
 
 # ── Browser timeouts ──────────────────────────────────────────────────────
 

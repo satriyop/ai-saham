@@ -41,17 +41,33 @@ def provider(tmp_path) -> StockbitShareholdingProvider:
 
 
 class TestLiveMode:
-    def test_returns_data_within_ttl(self, provider, tmp_path):
+    def test_returns_data_within_refresh_ttl(self, provider, tmp_path):
         _insert_row(tmp_path / "test.db", _TICKER, datetime.now().isoformat(), "2026-03-31")
         result = provider.get_composition(_TICKER, as_of_date=None)
         assert result is not None
         assert result.institution_pct == 65.0
 
-    def test_returns_none_when_stale(self, provider, tmp_path):
+    def test_returns_last_known_row_when_past_refresh_ttl(self, provider, tmp_path):
+        """Ownership is long-term — display must not blank after refresh TTL."""
         old = (datetime.now() - timedelta(days=30)).isoformat()
         _insert_row(tmp_path / "test.db", _TICKER, old, "2026-03-31")
         result = provider.get_composition(_TICKER, as_of_date=None)
-        assert result is None
+        assert result is not None
+        assert result.institution_pct == 65.0
+        assert result.top_holder_name == "DWIMURIA"
+        # Cache-only (api may exist on mock but fetch path unused when we short-circuit
+        # — with api_client mock and stale cache, get_composition may try fetch.
+        # Force cache-only behaviour for this assertion:
+        provider._api_client = None
+        result2 = provider.read_cached(_TICKER)
+        assert result2 is not None
+        assert result2.institution_pct == 65.0
+
+    def test_cache_only_read_ignores_refresh_ttl(self, provider, tmp_path):
+        old = (datetime.now() - timedelta(days=120)).isoformat()
+        _insert_row(tmp_path / "test.db", _TICKER, old, "2026-03-31")
+        assert provider.read_cached(_TICKER) is not None
+        assert provider._is_cache_fresh(_TICKER) is False
 
 
 class TestBacktestModeWithReportDate:

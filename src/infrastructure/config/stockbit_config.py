@@ -129,7 +129,7 @@ class StockbitConfig:
     # ── Browser scraper cache TTLs (days) ─────────────────────────────────
     cache_ttl_days_company_profile: int = 30
     cache_ttl_days_fundamentals: int = 7
-    cache_ttl_days_shareholding: int = 7
+    cache_ttl_days_shareholding: int = 90
     # ── Browser timeouts (ms) ──────────────────────────────────────────────
     nav_timeout_ms: int = 30_000
     element_timeout_ms: int = 15_000

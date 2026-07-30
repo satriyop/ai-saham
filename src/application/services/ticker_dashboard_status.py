@@ -42,7 +42,8 @@ DEFAULT_TTL_DAYS: dict[str, int] = {
     "analyst": 7,
     "earnings": 14,
     "fundamentals": 14,
-    "ownership": 14,
+    # Long-term ownership (quarterly filings); refresh cadence is separate.
+    "ownership": 90,
     "insider": 14,
     "corp": 14,
     "iev": 3,
