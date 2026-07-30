@@ -2,6 +2,8 @@
 
 The swing trade feature is a **unified composite workflow** that combines accumulation screening, risk confirmation, position sizing, historical backtesting, market regime context, and news sentiment into a single analysis pipeline.
 
+**Enter-factor inventory (production vs diagnostic):** [evidence_diagnostic_factor_accum.md](evidence_diagnostic_factor_accum.md).
+
 ---
 
 ## Command Family

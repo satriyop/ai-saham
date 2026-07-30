@@ -345,6 +345,7 @@ deterministic workflows must remain usable when AI or the network is absent.
 | Database schema | [docs/data_database_erd.md](docs/data_database_erd.md) |
 | Intraday workflow | [docs/workflow_pre_open_learning_lifecycle.md](docs/workflow_pre_open_learning_lifecycle.md) |
 | Swing workflow | [docs/workflow_swing_foreign_accumulation.md](docs/workflow_swing_foreign_accumulation.md) |
+| Accum enter factors (evidence vs diagnostic) | [docs/evidence_diagnostic_factor_accum.md](docs/evidence_diagnostic_factor_accum.md) |
 | Contribution and verification | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Change history | [CHANGELOG.md](CHANGELOG.md) |
 
