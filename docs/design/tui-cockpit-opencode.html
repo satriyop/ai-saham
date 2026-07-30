@@ -1619,6 +1619,106 @@
  .oc-geo .v.stop { color: var(--red); }
  .oc-geo .v.target { color: var(--green); }
 
+
+    /* Detail flags · expand when DTO present (code-richer fields) */
+    .flag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 0 0 10px;
+      align-items: center;
+    }
+    .flag-row .flag-lab {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-mute);
+      margin-right: 4px;
+    }
+    .flag-chip {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+      color: var(--text-dim);
+      cursor: pointer;
+    }
+    .flag-chip:hover { color: var(--text); border-color: #333; }
+    .flag-chip.is-on {
+      color: var(--sel-text);
+      background: var(--sel-bg);
+      border-color: transparent;
+      font-weight: 500;
+    }
+    .flag-chip.is-dim {
+      opacity: 0.45;
+      cursor: default;
+    }
+    .flag-chip.warn {
+      color: var(--amber);
+      border-color: rgba(212,176,106,.35);
+    }
+    .flag-panel {
+      display: none;
+      margin-bottom: 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-panel);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .flag-panel.is-open { display: block; }
+    .flag-panel h4 {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-mute);
+      font-weight: 500;
+      margin: 0 0 6px;
+    }
+    .flag-panel .line {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 2px 0;
+      font-variant-numeric: tabular-nums;
+    }
+    .flag-panel .line .k { color: var(--text-mute); }
+    .flag-panel .line .v { color: var(--text); font-weight: 500; }
+    .banner-limited {
+      margin-bottom: 10px;
+      padding: 8px 10px;
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(212,176,106,.35);
+      background: rgba(212,176,106,.08);
+      color: var(--amber);
+      font-size: 12px;
+    }
+    .src-badge {
+      font-size: 10.5px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--text-mute);
+      cursor: pointer;
+      font-family: var(--font-mono);
+    }
+    .src-badge.live {
+      color: var(--green);
+      border-color: rgba(111,191,138,.35);
+      background: rgba(111,191,138,.08);
+    }
+    .src-badge.snap {
+      color: var(--amber);
+      border-color: rgba(212,176,106,.35);
+      background: rgba(212,176,106,.08);
+    }
+    .ticker-depth-body { display: none; }
+    .ticker-depth-body.is-open { display: block; }
+
     /* Plan · geometry triangle (IA tui-plan-desk) */
     .plan-inherit {
       display: flex;
@@ -1768,7 +1868,7 @@
 <body>
  <div class="demo-bar">
  <div class="card">
-      <strong>OpenCode visual = TUI bible</strong> · <span style="color:#6fbf8a" id="buildStamp">rev 2026-07-30o · Judge via Enter only · E2E 1–8</span>
+      <strong>OpenCode visual = TUI bible</strong> · <span style="color:#6fbf8a" id="buildStamp">rev 2026-07-30p · detail flags · E2E 1–8</span>
       · black-on-black · peach palette · mono density
       · <em style="color:var(--sel-dim);font-style:normal">Journey = structure inspiration only</em>
       (stages / authority / columns — not marketing night-ink skin)
@@ -1815,7 +1915,10 @@
  <div class="stage" id="stage">
  <!-- 1 ACCUM -->
  <div class="list-view" id="accumView">
- <div class="section-label">Candidates · option-B columns (1:1 TUI)</div>
+            <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+              <div class="section-label" style="margin:0">Candidates · option-B columns (1:1 TUI)</div>
+              <button type="button" class="src-badge snap" id="accumSrcBadge" title="Toggle snapshot vs live (board source)">snapshot · limited judge until j/r</button>
+            </div>
  <table class="result-table dense" id="accumTable">
  <thead>
  <tr>
@@ -1840,53 +1943,114 @@
  <span><span class="kbd">p</span> plan structure</span>
  <span><span class="kbd">v t</span> ticker desk</span>
  <span><span class="kbd">Ctrl+P</span> commands</span>
- <span class="dim">Signal radar · not Accum-sort · chips on Action/Gate</span>
+ <span class="dim">Signal radar · chips on Action/Gate</span>
+              <span class="dim">badge = board source</span>
  </div>
  </div>
 
- <!-- 2 JUDGE · Verdict hero (frame) · full vision tui-judge-desk.html -->
+ <!-- 2 JUDGE · nested · Enter from accum · code-richer detail flags -->
  <div class="list-view is-hidden" id="judgeView">
             <div class="oc-note">
-              Action path · present-only ·
-              <a href="./tui-judge-desk.html">tui-judge-desk.html</a>
+              Present-only · same board object ·
+              IA <a href="./tui-judge-desk.html">tui-judge-desk.html</a> ·
+              flags = fields already on <code>JudgeDeskModel</code>
             </div>
- <div class="section-label">Judgment · verdict hero</div>
- <div class="card" style="border-left:3px solid var(--amber);margin-bottom:10px">
-            <div style="display:flex;flex-wrap:wrap;gap:12px 20px;align-items:baseline">
-              <span style="font-size:2rem;font-weight:600;color:var(--amber)" id="judgeAction">WATCH</span>
-              <span class="badge pass" id="judgeGate">Gate OPEN</span>
+            <div class="section-label">Judge · <span id="judgeTickerLab">BBCA</span> · present-only</div>
+
+            <div class="banner-limited is-hidden" id="judgeLimitedBanner">
+              Limited judge · snapshot / no candidate · scalars only · <span class="kbd">j</span> re-judge or <span class="kbd">r</span> live for full desk
             </div>
- <div class="kv" style="margin-top:12px">
- <span class="k">Signal</span><span class="v" id="judgeSignal">84</span>
- <span class="k">Accum</span><span class="v" id="judgeAccum">48.2</span>
- <span class="k">Phase</span><span class="v" id="judgePhase">COMPRESS</span>
- <span class="k">Authority</span><span class="v">present-only</span>
- </div>
- <p style="margin-top:10px;color:var(--text-dim);font-size:12.5px" id="judgeWhy">
- Why WATCH — signal moderate · risk clear · not promoted to ENTER without stronger entry quality.
- </p>
- </div>
- <div class="card" style="margin-bottom:10px">
- <div class="section-label">Phase sequence · ledger (ADR-058)</div>
- <div style="font-family:var(--font-mono);font-size:12px;color:var(--text)">
- ACCUMULATION → COMPRESSION → <span style="color:var(--amber)">COMPRESSION</span>
- </div>
- <div style="margin-top:6px;font-size:11px;color:var(--text-mute)">production memory</div>
- </div>
- <div class="card">
- <div class="section-label">Cards · compact (Risk · TradeSetup · Accum · Data…)</div>
- <div class="kv">
- <span class="k">Risk</span><span class="v pos">OPEN · chips not essays</span>
- <span class="k">TradeSetup</span><span class="v">WATCH · inherits board</span>
- <span class="k">Data</span><span class="v">ALIGNED · candle/broker</span>
- </div>
- </div>
- <div class="footer-note">
- <span><span class="kbd">j</span> re-judge local</span>
- <span><span class="kbd">p</span> plan</span>
- <span><span class="kbd">esc</span> board</span>
- <span class="dim">no order · same board candidate</span>
- </div>
+
+            <div class="card" style="border-left:3px solid var(--amber);margin-bottom:10px">
+              <div style="display:flex;flex-wrap:wrap;gap:12px 20px;align-items:baseline">
+                <span style="font-size:2rem;font-weight:600;color:var(--amber)" id="judgeAction">WATCH</span>
+                <span class="badge pass" id="judgeGate">Gate OPEN</span>
+              </div>
+              <div class="kv" style="margin-top:12px">
+                <span class="k">Signal</span><span class="v" id="judgeSignal">84</span>
+                <span class="k">Accum</span><span class="v" id="judgeAccum">48.2</span>
+                <span class="k">Authority</span><span class="v" id="judgeAuth">92%</span>
+                <span class="k">Family</span><span class="v" id="judgeFamily">foreign-bounce</span>
+              </div>
+              <p style="margin-top:10px;color:var(--text-dim);font-size:12.5px" id="judgeWhy">
+                Why WATCH — signal moderate · readiness partial · risk clear · not promoted to ENTER without stronger entry quality.
+              </p>
+            </div>
+
+            <div class="card" style="margin-bottom:10px">
+              <div class="section-label">Phase sequence · ledger</div>
+              <div class="timeline" id="judgePhaseTimeline">
+                <span class="node">ACCUMULATION</span>
+                <span class="arr">→</span>
+                <span class="node">COMPRESSION</span>
+                <span class="arr">→</span>
+                <span class="node now">COMPRESSION</span>
+              </div>
+              <div style="margin-top:6px;font-size:11px;color:var(--text-mute)" id="judgePhaseMeta">2026-07-20 · 2026-07-25 · now board</div>
+            </div>
+
+            <div class="flag-row" id="judgeFlags" data-flag-group="judge">
+              <span class="flag-lab">Detail</span>
+              <button type="button" class="flag-chip" data-flag="stack">stack</button>
+              <button type="button" class="flag-chip" data-flag="readiness">readiness</button>
+              <button type="button" class="flag-chip" data-flag="named">named</button>
+              <button type="button" class="flag-chip" data-flag="mce">mce</button>
+              <button type="button" class="flag-chip" data-flag="phase+">phase+</button>
+              <button type="button" class="flag-chip warn" data-flag="limited" id="judgeFlagLimited">limited</button>
+            </div>
+
+            <div class="flag-panel" data-flag-panel="stack" data-flag-group="judge">
+              <h4>Decision stack</h4>
+              <div class="line"><span class="k">Action</span><span class="v">WATCH</span></div>
+              <div class="line"><span class="k">← Signal</span><span class="v">84 · MODERATE</span></div>
+              <div class="line"><span class="k">← Risk</span><span class="v">OPEN · no gate</span></div>
+              <div class="line"><span class="k">← TradeSetup</span><span class="v">WATCH · rationale ok</span></div>
+            </div>
+            <div class="flag-panel" data-flag-panel="readiness" data-flag-group="judge">
+              <h4>Readiness · data</h4>
+              <div class="line"><span class="k">Setup ready</span><span class="v">PARTIAL</span></div>
+              <div class="line"><span class="k">Candle</span><span class="v">2026-07-29</span></div>
+              <div class="line"><span class="k">Broker</span><span class="v">2026-07-29</span></div>
+              <div class="line"><span class="k">Align</span><span class="v">ALIGNED</span></div>
+            </div>
+            <div class="flag-panel" data-flag-panel="named" data-flag-group="judge">
+              <h4>Named setups · diagnostic</h4>
+              <div class="line"><span class="k">primary</span><span class="v">foreign-bounce</span></div>
+              <div class="line"><span class="k">match</span><span class="v">FB ✓ · CS ~ · SM — · PB —</span></div>
+              <div class="line"><span class="k">note</span><span class="v">MATCH ≠ ENTER</span></div>
+            </div>
+            <div class="flag-panel" data-flag-panel="mce" data-flag-group="judge">
+              <h4>Market context · diagnostic</h4>
+              <div class="line"><span class="k">Regime</span><span class="v">risk-on · diagnostic only</span></div>
+              <div class="line"><span class="k">note</span><span class="v">never Action authority</span></div>
+            </div>
+            <div class="flag-panel" data-flag-panel="phase+" data-flag-group="judge">
+              <h4>Phase ledger detail</h4>
+              <div class="line"><span class="k">window</span><span class="v">7 sessions</span></div>
+              <div class="line"><span class="k">nodes</span><span class="v">ACCUM → COMPRESS → COMPRESS</span></div>
+              <div class="line"><span class="k">source</span><span class="v">setup_phase_ledger</span></div>
+            </div>
+            <div class="flag-panel" data-flag-panel="limited" data-flag-group="judge">
+              <h4>Limited judge</h4>
+              <p style="color:var(--text-dim);margin:0">No candidate object on row · Action/Gate/Signal/Accum from snapshot scalars only · no Why breakdown · press j or r.</p>
+            </div>
+
+            <div class="card" style="margin-top:4px">
+              <div class="section-label">Primary cards</div>
+              <div class="kv">
+                <span class="k">Risk</span><span class="v pos">OPEN</span>
+                <span class="k">TradeSetup</span><span class="v">WATCH</span>
+                <span class="k">Data</span><span class="v">ALIGNED</span>
+                <span class="k">Phase</span><span class="v" id="judgePhase">COMPRESS</span>
+              </div>
+            </div>
+
+            <div class="footer-note">
+              <span><span class="kbd">j</span> re-judge local</span>
+              <span><span class="kbd">r</span> live board</span>
+              <span><span class="kbd">p</span> plan</span>
+              <span><span class="kbd">esc</span> board</span>
+            </div>
  </div>
 
           <!-- 3 PLAN · geometry triangle · IA tui-plan-desk · OpenCode -->
@@ -2032,18 +2196,19 @@
             </div>
           </div>
 
-          <!-- 5b PRE-OPEN INSPECT · auction facts only · not accum Judge -->
+          <!-- 5b PRE-OPEN INSPECT · code-richer auction flags -->
           <div class="list-view is-hidden" id="preopenInspectView">
             <div class="oc-note">
-              Auction inspect · IEV/IEP row · different path from board Judge ·
-              IA <a href="./tui-preopen-board.html">tui-preopen-board.html</a>
+              Auction inspect · IEV/IEP · not accum Judge ·
+              IA <a href="./tui-preopen-board.html">tui-preopen-board.html</a> ·
+              flags map <code>preopen_engine_inspect_presenter</code>
             </div>
             <div class="section-label">Pre-open · inspect · <span id="poiTicker">BBRI</span></div>
 
             <div class="plan-inherit" style="margin-bottom:12px">
               <span class="act" id="poiGrade" style="color:var(--green)">A</span>
               <span class="badge pass" id="poiRisk">clear</span>
-              <span class="note">auction grade · risk snapshot · present-only</span>
+              <span class="note">grade · risk · present-only</span>
             </div>
 
             <div class="oc-hero" style="margin-bottom:12px">
@@ -2060,19 +2225,37 @@
               </div>
             </div>
 
+            <div class="flag-row" data-flag-group="poi">
+              <span class="flag-lab">Detail</span>
+              <button type="button" class="flag-chip" data-flag="why">why</button>
+              <button type="button" class="flag-chip" data-flag="auction+">auction+</button>
+              <button type="button" class="flag-chip" data-flag="warn">warn</button>
+            </div>
+            <div class="flag-panel" data-flag-panel="why" data-flag-group="poi">
+              <h4>Why (board row)</h4>
+              <p id="poiWhy" style="margin:0;color:var(--text-dim)">Grade A · NCP lock · ΔIEV positive · risk clear</p>
+            </div>
+            <div class="flag-panel" data-flag-panel="auction+" data-flag-group="poi">
+              <h4>Auction / broker (on candidate source)</h4>
+              <div class="line"><span class="k">trend</span><span class="v" id="poiTrend">buy-lean</span></div>
+              <div class="line"><span class="k">broker tag</span><span class="v" id="poiBrokerTag">local-support</span></div>
+              <div class="line"><span class="k">backing_score</span><span class="v" id="poiBackScore">0.72</span></div>
+              <div class="line"><span class="k">buy_streak</span><span class="v" id="poiBuyStreak">3</span></div>
+            </div>
+            <div class="flag-panel" data-flag-panel="warn" data-flag-group="poi">
+              <h4>Snapshot warnings</h4>
+              <p id="poiWarn" style="margin:0;color:var(--amber)">none · sample would list ≤4 warning lines</p>
+            </div>
+
             <div class="plan-ctx" id="poiBody">
-              <h3>Auction trail</h3>
-              <p id="poiTrail">
-                Provenance verified NCP · imbalance buy-lean · prior close vs IEP inside band ·
-                no TradeSetup Action on this path
-              </p>
+              <h3>Levels</h3>
+              <p id="poiTrail">IEP · Δ% · IEV · NCP · ΔIEV · local IEV snapshot path</p>
             </div>
 
             <div class="footer-note">
               <span><span class="kbd">esc</span> IEP board</span>
               <span><span class="kbd">p</span> plan</span>
               <span><span class="kbd">v</span> ticker</span>
-              <span class="dim">not board Enter Judge</span>
             </div>
           </div>
 
@@ -2113,12 +2296,12 @@
  <!-- 6 TICKER · Price hero hierarchy (IA: tui-ticker-desk) · OpenCode · full fields -->
  <div class="stage-block is-hidden" id="detailView" style="display:none">
  <div class="oc-note">
- GetTickerDashboardUseCase · hierarchy from <a href="./tui-ticker-desk.html">ticker desk</a> · price hero first · full fields · density bars = scalar only (not charts)
+ GetTickerDashboardUseCase · hierarchy from <a href="./tui-ticker-desk.html">ticker desk</a> · price hero first · presence + depth flags · density = scalar only
  </div>
 
  <div class="section-label">View · ticker · Price hero · <span id="detailTicker">BBCA</span></div>
 
- <div id="tickerFullPanels" data-mode="full" data-hierarchy="price-hero">
+ <div id="tickerFullPanels" data-mode="primary" data-hierarchy="price-hero">
  <!-- Stage A · Identity + freshness (journey primary) -->
  <div class="ticker-id" data-panel="identity">
  <div>
@@ -2269,9 +2452,29 @@
  </div>
  </div>
 
- <!-- Stage F · Full depth (remaining FULL_PANEL_ORDER · same fields as CLI) -->
- <div class="section-label">Depth · remaining full inventory</div>
- <div class="cli-stack">
+               <div class="flag-row" data-flag-group="ticker" id="tickerDepthFlags">
+                <span class="flag-lab">Depth</span>
+                <button type="button" class="flag-chip" data-flag="depth" id="tickerDepthToggle">depth</button>
+                <button type="button" class="flag-chip is-dim" title="when DTO non-null">analyst+</button>
+                <button type="button" class="flag-chip is-dim">own+</button>
+                <button type="button" class="flag-chip is-dim">insider+</button>
+                <button type="button" class="flag-chip is-dim">candles+</button>
+                <span style="font-size:11px;color:var(--text-mute)">code = presence; expand when loaded</span>
+              </div>
+              <div class="section-label">Secondary · presence</div>
+              <div class="card" id="tickerPresence" style="margin-bottom:10px">
+                <div class="kv">
+                  <span class="k">Analyst</span><span class="v">— local</span>
+                  <span class="k">Ownership</span><span class="v">present</span>
+                  <span class="k">Insider</span><span class="v">stale</span>
+                  <span class="k">IEV</span><span class="v">present</span>
+                  <span class="k">Sentiment</span><span class="v">—</span>
+                  <span class="k">Candles</span><span class="v">present</span>
+                </div>
+              </div>
+              <div class="section-label">Depth · FULL_PANEL_ORDER (flag depth)</div>
+              <div class="ticker-depth-body" id="tickerDepthBody">
+<div class="cli-stack">
  <section class="cli-panel" data-panel="analyst">
  <h3>Analyst Consensus</h3>
  <div class="body">
@@ -2416,21 +2619,36 @@
  </div>
  </section>
  </div>
- </div>
+              </div><!-- /tickerDepthBody -->
+            </div><!-- /tickerFullPanels -->
 
- <div class="footer-note">
+            <div class="footer-note">
  <span><span class="kbd">b</span> top desks</span>
  <span><span class="kbd">p</span> plan</span>
  <span><span class="kbd">esc</span> board</span>
- <span class="dim">price hero first · full fields · density ≠ chart</span>
+ <span class="dim">price hero · presence · depth flag · density ≠ chart</span>
  </div>
  </div>
 
  <!-- 7 BROKER · Desk Radar → Enter Net hero home · OpenCode (IA: tui-broker-desk) -->
  <div class="stage-block is-hidden" id="brokerView">
  <div class="oc-note">
- Tracked desks · <strong>Enter</strong> → desk home (net hero + hub) · IA from <a href="./tui-broker-desk.html">broker desk</a>
- </div>
+ Tracked desks · <strong>Enter</strong> → desk home · IA <a href="./tui-broker-desk.html">broker desk</a> ·
+              flags: partial NetX · ticker-desks trail
+            </div>
+            <div class="flag-row" data-flag-group="broker">
+              <span class="flag-lab">List</span>
+              <button type="button" class="flag-chip warn" data-flag="partial_net">partial_net</button>
+              <button type="button" class="flag-chip" data-flag="from_ticker">from_ticker</button>
+            </div>
+            <div class="flag-panel" data-flag-panel="partial_net" data-flag-group="broker">
+              <h4>Partial NetX</h4>
+              <p style="margin:0;color:var(--text-dim)">Some desks lack full Net5 · footer when <code>has_partial_netx</code>.</p>
+            </div>
+            <div class="flag-panel" data-flag-panel="from_ticker" data-flag-group="broker">
+              <h4>From ticker · desks</h4>
+              <p style="margin:0;color:var(--text-dim)">Code stage <code>ticker-desks</code>: stock → desks. Trail via ticker <span class="kbd">b</span>.</p>
+            </div>
 
  <!-- 7a · Desk radar (list) -->
  <div class="broker-sub is-on" id="brokerRadar" data-broker-mode="radar">
@@ -2512,8 +2730,26 @@
  <button type="button" data-deep="hist"><kbd>h</kbd> history</button>
  <button type="button" data-deep="ticker"><kbd>v</kbd> jump ticker</button>
  </div>
-
- <div class="broker-deep is-on" id="brokerDeepTop" data-deep-panel="top">
+              <div class="flag-row" data-flag-group="brokerHome" style="margin-top:0">
+                <span class="flag-lab">Deep tables</span>
+                <button type="button" class="flag-chip" data-flag="deep.t">deep.t</button>
+                <button type="button" class="flag-chip" data-flag="deep.f">deep.f</button>
+                <button type="button" class="flag-chip" data-flag="deep.h">deep.h</button>
+                <span style="font-size:11px;color:var(--text-mute)">code loaders · full rows</span>
+              </div>
+              <div class="flag-panel" data-flag-panel="deep.t" data-flag-group="brokerHome">
+                <h4>deep.t · top stocks</h4>
+                <p style="margin:0;color:var(--text-dim)">ViewBrokerDeskTopStocks payload · heat is sugar.</p>
+              </div>
+              <div class="flag-panel" data-flag-panel="deep.f" data-flag-group="brokerHome">
+                <h4>deep.f · flow</h4>
+                <p style="margin:0;color:var(--text-dim)">ViewBrokerDeskFlow · multi-day net.</p>
+              </div>
+              <div class="flag-panel" data-flag-panel="deep.h" data-flag-group="brokerHome">
+                <h4>deep.h · history</h4>
+                <p style="margin:0;color:var(--text-dim)">ViewBrokerDeskHistory · per-ticker daily.</p>
+              </div>
+              <div class="broker-deep is-on" id="brokerDeepTop" data-deep-panel="top">
  <div class="split-buy-sell">
  <div class="stock-heat buy">
  <h3>Top buy · session</h3>
@@ -2826,6 +3062,8 @@
  brokerMode: "radar", // radar | home
  brokerDeep: "top", // top | flow | hist | ticker
  preopenMode: "board", // board | inspect
+      boardSource: "snapshot", // snapshot | live
+      judgeLimited: false,
  paletteOpen: false,
  confirmOpen: false,
  filtered: [...COMMANDS],
@@ -2974,6 +3212,22 @@
         board.style.display = "block";
       }
       updateChrome();
+    }
+
+
+    function paintJudgeLimitedFromBoard() {
+      const limited = state.boardSource === "snapshot";
+      state.judgeLimited = limited;
+      const ban = $("judgeLimitedBanner");
+      if (ban) ban.classList.toggle("is-hidden", !limited);
+      const chip = $("judgeFlagLimited");
+      if (chip) chip.classList.toggle("is-on", limited);
+      const panel = document.querySelector('.flag-panel[data-flag-group="judge"][data-flag-panel="limited"]');
+      if (panel && limited) panel.classList.add("is-open");
+      if ($("judgeTickerLab")) {
+        const f = ACCUM[state.rowIndex] || {};
+        $("judgeTickerLab").textContent = f.t || "—";
+      }
     }
 
     function paintJudgeFromFocus() {
@@ -3233,6 +3487,8 @@
  setModeLocal();
  } else if (frame === "judge") {
  $("judgeView").classList.remove("is-hidden"); $("judgeView").style.display = "block";
+ paintJudgeFromFocus();
+ paintJudgeLimitedFromBoard();
  setModeLocal();
       } else if (frame === "plan") {
         $("planView").classList.remove("is-hidden"); $("planView").style.display = "block";
@@ -3338,7 +3594,7 @@
 
  if (state.frame === "accum") {
  $("viewTitle").textContent = "Screen · accumulation";
- $("viewMeta").innerHTML = `<span class="dot">·</span> sort Signal · local · ${ACCUM.length} names · Enter = Judge`;
+        $("viewMeta").innerHTML = `<span class="dot">·</span> ${state.boardSource || "snapshot"} · ${ACCUM.length} names · Enter = Judge`;
  $("statusScreen").textContent = "screen accum";
  $("statusRows").textContent = `${ACCUM.length} rows`;
  } else if (state.frame === "judge") {
@@ -3876,10 +4132,64 @@
  });
  }
 
- renderAccum();
- renderPreopen();
- if ($("brokerBody")) renderBroker();
- showFrame("accum");
- </script>
+    function wireFlagGroups() {
+      document.querySelectorAll(".flag-chip[data-flag]").forEach((btn) => {
+        if (btn.dataset.wired) return;
+        btn.dataset.wired = "1";
+        btn.addEventListener("click", () => {
+          const row = btn.closest("[data-flag-group]");
+          const group = row && row.dataset.flagGroup;
+          const flag = btn.dataset.flag;
+          if (!flag || !group) return;
+          if (flag === "depth") {
+            const on = !btn.classList.contains("is-on");
+            btn.classList.toggle("is-on", on);
+            const body = $("tickerDepthBody");
+            if (body) body.classList.toggle("is-open", on);
+            document.querySelectorAll("#tickerDepthFlags .flag-chip.is-dim, #tickerDepthFlags .flag-chip").forEach((c) => {
+              if (c.dataset.flag === "depth") return;
+              c.classList.toggle("is-dim", !on);
+            });
+            return;
+          }
+          const panel = document.querySelector(
+            '.flag-panel[data-flag-group="' + group + '"][data-flag-panel="' + flag + '"]'
+          );
+          const on = !btn.classList.contains("is-on");
+          btn.classList.toggle("is-on", on);
+          if (panel) panel.classList.toggle("is-open", on);
+          if (flag === "limited" && group === "judge") {
+            state.judgeLimited = on;
+            const ban = $("judgeLimitedBanner");
+            if (ban) ban.classList.toggle("is-hidden", !on);
+          }
+        });
+      });
+    }
+
+    function wireAccumSrcBadge() {
+      const b = $("accumSrcBadge");
+      if (!b || b.dataset.wired) return;
+      b.dataset.wired = "1";
+      b.addEventListener("click", () => {
+        state.boardSource = state.boardSource === "snapshot" ? "live" : "snapshot";
+        if (state.boardSource === "live") {
+          b.className = "src-badge live";
+          b.textContent = "live · full present-only judge";
+        } else {
+          b.className = "src-badge snap";
+          b.textContent = "snapshot · limited judge until j/r";
+        }
+        updateChrome();
+      });
+    }
+
+    wireFlagGroups();
+    wireAccumSrcBadge();
+    renderAccum();
+    renderPreopen();
+    if ($("brokerBody")) renderBroker();
+    showFrame("accum");
+  </script>
 </body>
 </html>

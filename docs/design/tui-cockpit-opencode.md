@@ -12,6 +12,7 @@
 |--------|-----------|---------|
 | **OpenCode taste** | **Bible for TUI visuals** | Black-on-black, peach selection, mono density, hairlines, cards/tables |
 | **Journey / desk HTML** | **Inspiration only** | Stage map, keys, Action vs browse, column contracts, hierarchy *ideas* |
+| **Shipped TUI code** | **Data richness** | When code DTOs are richer than primary stage, design uses **detail flags** (expand), not always-on walls |
 
 Ship Textual against **this cockpit mock**. Standalone journey HTML may stay “elevated web vision”; it is **not** the live TUI skin.
 
@@ -21,24 +22,46 @@ Ship Textual against **this cockpit mock**. Standalone journey HTML may stay “
 
 | # | Frame | Path | What you see (OpenCode) |
 |---|--------|------|-------------------------|
-| 1 | Accum | Action discover | Signal radar table · cols 1:1 TUI · Action chips |
-| 2 | Plan | Structure | **Geometry triangle** Entry→Stop→Target · inherit Action · `l` paper confirm |
-| 3 | Paper | Notebook | **Notebook tape** (date · ticker · E/S/T · status) · write via plan `l` confirm |
-| 4 | Pre-open | Auction | IEP board → **Enter** auction **inspect** (not accum Judge) |
-| 5 | Ticker | Browse | **Price hero** hierarchy (IA: ticker-desk) · full fields |
-| 6 | Broker | Browse | Desk **radar** → **Enter** **Net hero** home (top/flow/hist hub) |
+| 1 | Accum | Action discover | Signal radar · **snapshot\|live** badge · Action chips · Enter → Judge |
+| 2 | Plan | Structure | Geometry triangle · inherit Action · `l` paper confirm |
+| 3 | Paper | Notebook | Notebook tape · write via plan `l` confirm |
+| 4 | Pre-open | Auction | IEP board → Enter **inspect** (flags: why / auction+ / warn) |
+| 5 | Ticker | Browse | Price hero · presence · **depth** flag for full panels |
+| 6 | Broker | Browse | Radar → Enter net hero · flags partial_net / from_ticker · deep.t\|f\|h |
 | 7 | Health | Honesty | Empty / zero / lag / ready posters |
-| 8 | Palette | Nav | Ctrl+P · peach selection · no scenario tabs |
+| 8 | Palette | Nav | Ctrl+P · peach selection |
 
 ### Nested (no tab · no digit hotkey)
 
 | Stage | Enter from | What |
 |-------|------------|------|
-| **Judge** | Accum board **Enter** only | Action/Gate present-only · esc → board |
-| Pre-open inspect | Pre-open board Enter | Auction IEV/IEP · esc → pre-open board |
-| Broker home | Broker radar Enter | Net hero + hub · esc → radar |
+| **Judge** | Accum **Enter** only | Verdict hero + **detail flags** (stack · readiness · named · mce · phase+ · limited) |
+| Pre-open inspect | Pre-open board Enter | IEP hero + auction flags |
+| Broker home | Broker radar Enter | Net hero + hub · deep table flags |
 
-**Reject:** Judge as a top frame-switch button or number key — that implies a free-floating destination. Judgment is always “from this screener row.”
+**Reject:** Judge as a top frame-switch button or number key.
+
+---
+
+## Detail flags (code-richer data)
+
+Primary stage stays scannable. Richer DTO fields hang on **chips** (mono pills). Expand only when data exists (or limited/snapshot is true).
+
+| Stage | Flags | Code source |
+|-------|-------|-------------|
+| Accum | `snapshot` \| `live` badge | `board_source` / chrome_cues |
+| Judge | `stack` · `readiness` · `named` · `mce` · `phase+` · `limited` | `JudgeDeskModel` / `decision_display` |
+| Pre-open inspect | `why` · `auction+` · `warn` | `preopen_engine_inspect_presenter` |
+| Ticker | `depth` (+ analyst+ / own+ / … when non-null) | `TickerDeskModel` presence today; full panels when expanded |
+| Broker list | `partial_net` · `from_ticker` | `has_partial_netx` · `ticker-desks` stage |
+| Broker home | `deep.t` · `deep.f` · `deep.h` | ViewBrokerDesk top/flow/history loaders |
+
+**Rules**
+
+1. Chip visible when data/state can exist; dim when not loaded.  
+2. Expand = more panels in-stage (scroll), not a new Action path.  
+3. Diagnostic (`mce`, named setups, sector_macro) never implies ENTER.  
+4. Density bars = scalar sugar only — not charts.
 
 ---
 
@@ -47,114 +70,58 @@ Ship Textual against **this cockpit mock**. Standalone journey HTML may stay “
 | Path | Keys | Must not |
 |------|------|----------|
 | **Action** | Board `Enter` → Judge · `p` Plan · `l` Paper | Ticker/broker invent Action |
-| **Browse** | `v t` ticker · `v b` broker radar · broker `Enter` desk home · `t`/`f`/`h` deep · `v` jump ticker | ENTER/WATCH/AVOID authority |
+| **Browse** | `v t` · `v b` · broker Enter home · `t`/`f`/`h` | ENTER/WATCH/AVOID authority |
 | **Paper** | Confirm after geometry | Auto-write · corpus · orders |
-| **Pre-open** | `Enter` → auction inspect stage | Same frame as accum Judge / TradeSetup Action |
+| **Pre-open** | Enter → auction inspect | Same stage as accum Judge |
 
-**Chrome noise:** authority lives in this table and in **key wiring** (Enter → Judge, browse paths). Do **not** stamp every stage with “not Action / not judgment / not a re-score.” Operators already know where judgment lives.
+**Chrome noise:** authority in this table + key wiring. Do not stamp every stage with “not Action / not judgment.”
 
-### Pre-open contract (frame 5 · design-final for TUI)
+---
 
-IA source: [`tui-preopen-board.html`](./tui-preopen-board.html).
+## Contracts (summary)
 
-| Mode | Keys | Stage |
-|------|------|--------|
-| **Board** | `s p` / frame 5 · `↑↓` | Auction strip + IEP table (cols 1:1) |
-| **Inspect** | **Enter** from board | Grade · risk · IEP hero · IEV/NCP/ΔIEV · auction trail |
-| **Back** | `esc` | Inspect → board → accum |
+### Judge (nested)
+- Primary: Action · Gate · Signal · Accum · Authority% · Family · Why · phase timeline · primary cards  
+- Flags: stack · readiness · named · mce · phase+ · limited (auto when snapshot)
 
-**Why not Judge?** Accum Judge is **TradeSetup Action** (ENTER/WATCH/AVOID) present-only. Pre-open is **auction / IEV evidence** only. Same key (`Enter`), different authority — never open Judge from pre-open, and Judge is never a primary tab.
+### Accum
+- Cols 1:1 `BOARD_COLUMN_LABELS`  
+- Badge: snapshot · limited judge until j/r  ↔  live · full present-only judge  
 
-### Plan contract (frame 3 · design-final for TUI)
+### Pre-open inspect
+- Primary: grade · risk · IEP · levels  
+- Flags: why · auction+ (trend · broker tag · backing_score · buy_streak) · warn  
 
-IA source: [`tui-plan-desk.html`](./tui-plan-desk.html) · chrome = OpenCode.
+### Ticker
+- Primary: identity · freshness · price hero · ribbon · pulse · earnings · **presence**  
+- Flag `depth`: FULL_PANEL_ORDER panels (matches future code expand; code today presence-only)  
 
-| Block | Content |
-|-------|---------|
-| **Inherit** | Board Action (WATCH/ENTER/…) · structure does not re-score |
-| **Geometry hero** | Entry → Stop → Target triangle + lots · risk% · plan id · horizon |
-| **Board context** | Signal · Accum · Gate · source row |
-| **Actions** | `l` paper log confirm · `p` re-run · `esc` board |
-| **Write** | Confirm overlay (same as paper path) — not silent |
+### Broker
+- Radar + Enter home (net hero · hub)  
+- Flags: partial_net · from_ticker · deep.t/f/h  
 
-Reject: one-line summary only · second analysis report · confirm embedded as the whole stage.
-
-### Paper contract (frame 4 · design-final for TUI)
-
-IA source: [`tui-paper-journal.html`](./tui-paper-journal.html) · chrome = OpenCode.
-
-| Mode | What |
-|------|------|
-| **Stage** | Chronological **notebook tape** — day · ticker · frozen geometry · status (`logged` / `duplicate`) |
-| **Empty** | “no paper notes yet · plan then l confirm” |
-| **Write** | Plan desk `l` → confirm overlay → append row (no silent write) |
-| **Source** | `trade accum log --from-plan` / swing_trade_plan |
-
-Reject: paper stage as a single “log this ticker” card that *is* the confirm UI. Confirm is overlay; stage is the tape.
+### Plan / Paper / Health
+- Plan geometry triangle · paper tape · health posters (unchanged contracts)
 
 ---
 
 ## Visual (OpenCode only)
 
-- `#0b0b0b` / `#141414` / `#1c1c1c` borders  
-- Peach `#c9a68a` selection (palette / row focus)  
-- Semantic green / amber / red for pass · watch · block  
-- Hierarchy = weight and first-line Action / price / net — not Fraunces display type  
+- `#0b0b0b` / `#141414` / `#1c1c1c` · peach `#c9a68a`  
+- Semantic green / amber / red  
+- Hierarchy by weight — not Fraunces  
 
-### Density bars ≠ graphs
-
-Cockpit may show **mono density tracks** (Net5 amp, horizon width, buy/sell heat, EPS density). Rules:
-
-| Allowed | Forbidden |
-|---------|-----------|
-| 1-D track width from a **scalar** already on the DTO (`|Net5|`, `% change`, EPS) | Live price charts, plotted candles, multi-series graphs |
-| Same OpenCode hairline / mint-coral semantics | Chart libraries, sparkline engines, “TA chart” product surface |
-| Honest empty when scalar missing | Inventing a series to fill a bar |
-
-Textual can render density with characters or ProgressBar — still not a graph product.
-
-### Ticker contract (frame 6 · design-final for TUI)
-
-IA source: [`tui-ticker-desk.html`](./tui-ticker-desk.html) · chrome = OpenCode.
-
-| Stage | Content |
-|-------|---------|
-| **Identity** | Code · name · board · sector · tradeable · as_of |
-| **Freshness** | ok / miss / stale pills from `freshness[]` |
-| **Price hero** | Monumental `latest_close` + 1d · horizons 1d/5d/20d · 52w **range position** |
-| **Ribbon** | PE · PBV · MCap · ROE · Div · F-Score (`fundamentals` or —) |
-| **Pulse trio** | Foreign flow · structure · bandar |
-| **Earnings** | ≤4Q EPS + YoY |
-| **Depth** | Remaining `FULL_PANEL_ORDER` (analyst · ownership · sector_macro · corp · insider · seasonality · iev · sentiment · profile · candles table) |
-
-Reject: flat CLI panel dump as the only stage (no Harga landscape).  
-Reject: presence-only strip instead of full fields.  
-Reject: treating 52w range position as a return.  
-Parallel to broker: **price** is ticker landscape; **day net** is desk landscape.
-
-### Broker contract (frame 7 · design-final for TUI)
-
-| Mode | Keys | Stage |
-|------|------|--------|
-| **Radar** | `v b` land · `↑↓` · **Enter** | Tracked desk table · Net5 amp · cols 1:1 |
-| **Home** | Enter from radar | Net hero (day net landscape) · identity · side stats |
-| **Hub** | `t` top · `f` flow · `h` history · `v` ticker | Buy/sell heat · day flow · hist table · jump ticker |
-| **Back** | `esc` on home → radar · `esc` on radar → board | Trail language |
-
-Reject: radar with a thin “selected strip” instead of full desk home.  
-Reject: deep panels only as “CLI later” labels with no UI.  
-IA source: [`tui-broker-desk.html`](./tui-broker-desk.html) · chrome = OpenCode.
-
-### Reject in this file
-- Night-ink / brass marketing CSS as primary stage skin (`desk-v2`, Fraunces body UI)  
-- Broker only as toast (“see other HTML”)  
-- Broker Enter only painting a footer strip (must open full Net hero home)  
-- Enter on accum opening ticker  
+### Reject
+- Night-ink as ship skin  
+- Judge as primary tab  
+- Flat CLI dump as only ticker stage  
+- Always-on full depth wall without `depth` flag  
+- Product charts  
 
 ---
 
 ## Related
 
 - ADR: [`ADR-051`](../adr/ADR-051-tui-opencode-cockpit-clean-break.md)  
-- Journey inspiration: hub + desk HTML files  
-- E2E: [`end-to-end-journey.html`](./end-to-end-journey.html)  
+- Journey: [`tui-journey-hub.html`](./tui-journey-hub.html)  
+- Code: `src/adapters/tui/` (`JudgeDeskModel`, `TickerDeskModel`, presenters, `main.py` stages)  

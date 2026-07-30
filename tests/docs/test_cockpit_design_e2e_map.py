@@ -117,6 +117,27 @@ def test_md_states_opencode_bible_and_broker_in_cockpit():
     assert "linked out" not in text.lower() or "in-cockpit" in text.lower() or "7 |" in text
 
 
+def test_detail_flags_present_for_code_richer_fields():
+    html = _html()
+    # Judge flags
+    for flag in ("stack", "readiness", "named", "mce", "limited"):
+        assert f'data-flag="{flag}"' in html or f"data-flag-panel=\"{flag}\"" in html
+    assert "judgeLimitedBanner" in html or "Limited judge" in html
+    # Accum snapshot badge
+    assert "accumSrcBadge" in html
+    assert "snapshot" in html.lower()
+    # Preopen inspect flags
+    assert 'data-flag="auction+"' in html or "auction+" in html
+    assert 'data-flag="why"' in html
+    # Ticker depth flag
+    assert "tickerDepthBody" in html or "tickerDepthToggle" in html
+    assert "Secondary · presence" in html or "tickerPresence" in html
+    # Broker flags
+    assert "partial_net" in html
+    assert "from_ticker" in html
+    assert "deep.t" in html
+
+
 def test_preopen_enter_opens_auction_inspect_not_judge():
     html = _html()
     assert 'id="preopenView"' in html
@@ -158,10 +179,11 @@ def test_ticker_frame_is_price_hero_hierarchy_not_flat_cli_only():
     html = _html()
     assert "Secondary presence" not in html
     assert 'id="tickerFullPanels"' in html
-    assert 'data-mode="full"' in html
+    assert 'data-mode="primary"' in html or 'data-mode="full"' in html
     assert 'data-hierarchy="price-hero"' in html
     assert "price-hero" in html
     assert "Price hero" in html or "Last · local close" in html
+    assert "tickerDepthBody" in html or 'data-flag="depth"' in html
     # Journey hierarchy markers
     assert "Horizons" in html or "price_structure" in html
     assert "Pulse" in html or "foreign_flow" in html
