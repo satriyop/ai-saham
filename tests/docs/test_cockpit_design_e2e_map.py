@@ -101,12 +101,18 @@ def test_md_states_opencode_bible_and_broker_in_cockpit():
     assert "linked out" not in text.lower() or "in-cockpit" in text.lower() or "7 |" in text
 
 
-def test_ticker_frame_is_full_cli_panels_not_presence_only():
+def test_ticker_frame_is_harga_mast_hierarchy_not_flat_cli_only():
     html = _html()
     assert "Secondary presence" not in html
     assert 'id="tickerFullPanels"' in html
     assert 'data-mode="full"' in html
-    # FULL_PANEL_ORDER keys must appear as data-panel slots
+    assert 'data-hierarchy="harga-mast"' in html
+    assert "harga-mast" in html
+    assert "Harga Mast" in html or "Last · local close" in html
+    # Journey hierarchy markers
+    assert "Horizons" in html or "price_structure" in html
+    assert "Pulse" in html or "foreign_flow" in html
+    # Full field inventory still present (depth + primary)
     for key in (
         "identity",
         "freshness",
@@ -126,5 +132,6 @@ def test_ticker_frame_is_full_cli_panels_not_presence_only():
         "profile",
         "candles",
     ):
-        assert f'data-panel="{key}"' in html, f"missing full panel slot {key}"
-    assert "FULL_PANEL_ORDER" in html or "full panels" in html.lower()
+        assert f'data-panel="{key}"' in html, f"missing field slot {key}"
+    # Density bars allowed; product charts forbidden as copy claim
+    assert "not a live chart" in html.lower() or "not charts" in html.lower() or "density ≠ chart" in html or "density bars" in html.lower()

@@ -26,8 +26,8 @@ Ship Textual against **this cockpit mock**. Standalone journey HTML may stay “
 | 3 | Plan | Structure | Entry/Stop/Target · inherit Action · no order |
 | 4 | Paper | Notebook | Geometry confirm · paper only · not learning |
 | 5 | Pre-open | Auction | IEP board · inspect ≠ accum Judge |
-| 6 | Ticker | Browse | Full CLI panels (`FULL_PANEL_ORDER`) · not Action |
-| 7 | Broker | Browse | Desk **radar** list → **Enter** full **Net Mast** desk home (top/flow/hist hub) · not Action |
+| 6 | Ticker | Browse | **Harga Mast** hierarchy (IA: ticker-desk) · full fields · not Action |
+| 7 | Broker | Browse | Desk **radar** → **Enter** **Net Mast** home (top/flow/hist hub) · not Action |
 | 8 | Health | Honesty | Empty / zero / lag / ready posters |
 | 9 | Palette | Nav | Ctrl+P · peach selection · no scenario tabs |
 
@@ -49,7 +49,38 @@ Ship Textual against **this cockpit mock**. Standalone journey HTML may stay “
 - `#0b0b0b` / `#141414` / `#1c1c1c` borders  
 - Peach `#c9a68a` selection (palette / row focus)  
 - Semantic green / amber / red for pass · watch · block  
-- Hierarchy = weight and first-line Action/price — not Fraunces display type  
+- Hierarchy = weight and first-line Action / price / net — not Fraunces display type  
+
+### Density bars ≠ graphs
+
+Cockpit may show **mono density tracks** (Net5 amp, horizon width, buy/sell heat, EPS density). Rules:
+
+| Allowed | Forbidden |
+|---------|-----------|
+| 1-D track width from a **scalar** already on the DTO (`|Net5|`, `% change`, EPS) | Live price charts, plotted candles, multi-series graphs |
+| Same OpenCode hairline / mint-coral semantics | Chart libraries, sparkline engines, “TA chart” product surface |
+| Honest empty when scalar missing | Inventing a series to fill a bar |
+
+Textual can render density with characters or ProgressBar — still not a graph product.
+
+### Ticker contract (frame 6 · design-final for TUI)
+
+IA source: [`tui-ticker-desk.html`](./tui-ticker-desk.html) · chrome = OpenCode.
+
+| Stage | Content |
+|-------|---------|
+| **Identity** | Code · name · board · sector · tradeable · as_of |
+| **Freshness** | ok / miss / stale pills from `freshness[]` |
+| **Harga Mast** | Monumental `latest_close` + 1d · horizons 1d/5d/20d · 52w **range position** |
+| **Ribbon** | PE · PBV · MCap · ROE · Div · F-Score (`fundamentals` or —) |
+| **Pulse trio** | Foreign flow · structure · bandar |
+| **Earnings** | ≤4Q EPS + YoY |
+| **Depth** | Remaining `FULL_PANEL_ORDER` (analyst · ownership · sector_macro · corp · insider · seasonality · iev · sentiment · profile · candles table) |
+
+Reject: flat CLI panel dump as the only stage (no Harga landscape).  
+Reject: presence-only strip instead of full fields.  
+Reject: treating 52w range position as a return.  
+Parallel to broker: **price** is ticker landscape; **day net** is desk landscape.
 
 ### Broker contract (frame 7 · design-final for TUI)
 
