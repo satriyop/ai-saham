@@ -1393,6 +1393,57 @@
  .stock-heat.sell .stock-row .n { color: var(--red); }
  .stock-heat.buy .stock-row .n { color: var(--green); }
 
+    .broker-jump-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .broker-jump-list .jump-row {
+      display: grid;
+      grid-template-columns: 56px 1fr auto auto;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-elevated);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      cursor: pointer;
+    }
+    .broker-jump-list .jump-row:hover {
+      border-color: #333;
+      background: var(--bg-row-hover);
+    }
+    .broker-jump-list .jump-row .t {
+      font-weight: 600;
+      color: #ececec;
+      letter-spacing: 0.02em;
+    }
+    .broker-jump-list .jump-row .bar {
+      height: 5px;
+      background: #1a1a1a;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .broker-jump-list .jump-row .bar > i {
+      display: block;
+      height: 100%;
+      background: var(--green);
+      border-radius: 2px;
+    }
+    .broker-jump-list .jump-row .n {
+      color: var(--green);
+      font-weight: 500;
+      min-width: 4.5em;
+      text-align: right;
+    }
+    .broker-jump-list .jump-row .go {
+      color: var(--text-mute);
+      font-size: 11px;
+    }
+
+
  .flow-day {
  display: grid;
  grid-template-columns: 48px 1fr auto;
