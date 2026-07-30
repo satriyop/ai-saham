@@ -17,19 +17,28 @@ Ship Textual against **this cockpit mock**. Standalone journey HTML may stay “
 
 ---
 
-## End-to-end frames (hotkeys 1–9)
+## End-to-end frames (primary tabs · hotkeys 1–8)
 
 | # | Frame | Path | What you see (OpenCode) |
 |---|--------|------|-------------------------|
 | 1 | Accum | Action discover | Signal radar table · cols 1:1 TUI · Action chips |
-| 2 | Judge | Action present-only | Action/Gate first · scores · phase · compact cards |
-| 3 | Plan | Structure | **Geometry triangle** Entry→Stop→Target · inherit Action · `l` paper confirm |
-| 4 | Paper | Notebook | **Notebook tape** (date · ticker · E/S/T · status) · write via plan `l` confirm |
-| 5 | Pre-open | Auction | IEP board → **Enter** auction **inspect** (not accum Judge) |
-| 6 | Ticker | Browse | **Price hero** hierarchy (IA: ticker-desk) · full fields |
-| 7 | Broker | Browse | Desk **radar** → **Enter** **Net hero** home (top/flow/hist hub) |
-| 8 | Health | Honesty | Empty / zero / lag / ready posters |
-| 9 | Palette | Nav | Ctrl+P · peach selection · no scenario tabs |
+| 2 | Plan | Structure | **Geometry triangle** Entry→Stop→Target · inherit Action · `l` paper confirm |
+| 3 | Paper | Notebook | **Notebook tape** (date · ticker · E/S/T · status) · write via plan `l` confirm |
+| 4 | Pre-open | Auction | IEP board → **Enter** auction **inspect** (not accum Judge) |
+| 5 | Ticker | Browse | **Price hero** hierarchy (IA: ticker-desk) · full fields |
+| 6 | Broker | Browse | Desk **radar** → **Enter** **Net hero** home (top/flow/hist hub) |
+| 7 | Health | Honesty | Empty / zero / lag / ready posters |
+| 8 | Palette | Nav | Ctrl+P · peach selection · no scenario tabs |
+
+### Nested (no tab · no digit hotkey)
+
+| Stage | Enter from | What |
+|-------|------------|------|
+| **Judge** | Accum board **Enter** only | Action/Gate present-only · esc → board |
+| Pre-open inspect | Pre-open board Enter | Auction IEV/IEP · esc → pre-open board |
+| Broker home | Broker radar Enter | Net hero + hub · esc → radar |
+
+**Reject:** Judge as a top frame-switch button or number key — that implies a free-floating destination. Judgment is always “from this screener row.”
 
 ---
 
@@ -54,7 +63,7 @@ IA source: [`tui-preopen-board.html`](./tui-preopen-board.html).
 | **Inspect** | **Enter** from board | Grade · risk · IEP hero · IEV/NCP/ΔIEV · auction trail |
 | **Back** | `esc` | Inspect → board → accum |
 
-**Why not Judge?** Accum Judge is **TradeSetup Action** (ENTER/WATCH/AVOID) present-only. Pre-open is **auction / IEV evidence** only. Same key (`Enter`), different authority — never open frame 2 Judge from pre-open.
+**Why not Judge?** Accum Judge is **TradeSetup Action** (ENTER/WATCH/AVOID) present-only. Pre-open is **auction / IEV evidence** only. Same key (`Enter`), different authority — never open Judge from pre-open, and Judge is never a primary tab.
 
 ### Plan contract (frame 3 · design-final for TUI)
 

@@ -37,11 +37,22 @@ def test_frame_switcher_includes_broker_and_ticker():
     html = _html()
     assert 'data-frame="broker"' in html
     assert 'data-frame="detail"' in html
-    assert 'data-frame="judge"' in html
     assert 'data-frame="plan"' in html
     assert 'data-frame="paper"' in html
     assert 'data-frame="empty"' in html
     assert 'data-frame="palette"' in html
+    # Judge is Enter-from-accum only — not a primary tab
+    assert 'data-frame="judge"' not in html
+
+
+def test_judge_not_digit_hotkey_only_enter_from_accum():
+    html = _html()
+    assert 'showFrame("judge")' in html
+    # digit map must not route a number key to judge
+    assert '"2": "judge"' not in html
+    assert '"judge"' not in html.split("const map")[1].split("}")[0] if "const map" in html else True
+    # primary tabs start at Accum without Judge button label
+    assert ">2 Plan<" in html or 'data-frame="plan">2 Plan' in html or "2 Plan" in html
 
 
 def test_broker_is_first_class_not_toast_only():
