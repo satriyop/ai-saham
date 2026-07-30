@@ -58,6 +58,9 @@ from src.infrastructure.browser.stockbit_session_actions import (
     get_stockbit_session_status as get_stockbit_session_status,
 )
 from src.infrastructure.browser.stockbit_session_actions import (
+    reauth_stockbit_session as reauth_stockbit_session,
+)
+from src.infrastructure.browser.stockbit_session_actions import (
     save_stockbit_session as save_stockbit_session,
 )
 from src.infrastructure.browser.stockbit_token_extractor import (
@@ -78,7 +81,8 @@ logger = logging.getLogger(__name__)
 #   - ORDERBOOK_PAGE_URL, _persistent_context,
 #     _require_playwright -> src.infrastructure.browser.stockbit_browser_context
 #   - browse_stockbit_session, get_stockbit_session_status,
-#     save_stockbit_session -> src.infrastructure.browser.stockbit_session_actions
+#     save_stockbit_session, reauth_stockbit_session
+#     -> src.infrastructure.browser.stockbit_session_actions
 #   - _intercept_token, _resolve_token ->
 #     src.infrastructure.browser.stockbit_token_extractor
 # - Allowed contents:

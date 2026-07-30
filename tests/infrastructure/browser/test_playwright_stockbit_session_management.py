@@ -259,6 +259,140 @@ def test_save_session_login_succeeds_hs256_token_rejected(monkeypatch, tmp_path,
     assert "could not capture" in out.lower()
 
 
+# ── reauth helpers + reauth_stockbit_session ──────────────────────────────
+
+
+def test_url_looks_logged_in_and_auth_flow():
+    assert browser_mod._url_looks_auth_flow("https://stockbit.com/login")
+    assert browser_mod._url_looks_auth_flow("https://stockbit.com/otp/xyz")
+    assert not browser_mod._url_looks_logged_in("https://stockbit.com/login")
+    assert browser_mod._url_looks_logged_in("https://stockbit.com/orderbook")
+    assert browser_mod._url_looks_logged_in("https://stockbit.com/stream")
+
+
+class _FakeReauthPage:
+    """Minimal page for reauth paths (already-auth or click + wait)."""
+
+    def __init__(self, *, start_url: str, login_succeeds: bool = True):
+        self.url = start_url
+        self.goto_calls: list[str] = []
+        self._login_succeeds = login_succeeds
+        self.clicks: list[str] = []
+
+    def goto(self, url, timeout=None, wait_until=None):
+        self.goto_calls.append(url)
+        self.url = url
+
+    def wait_for_timeout(self, ms):
+        pass
+
+    def wait_for_url(self, predicate, timeout=None):
+        if not self._login_succeeds:
+            raise Exception("Timeout 30000ms exceeded")
+        self.url = "https://stockbit.com/orderbook"
+
+    def get_by_role(self, role, name=None):
+        return _FakeEmptyLocator()
+
+    def locator(self, sel):
+        return _FakeEmptyLocator()
+
+
+class _FakeEmptyLocator:
+    def count(self):
+        return 0
+
+    @property
+    def first(self):
+        return self
+
+    def is_visible(self, timeout=None):
+        return False
+
+    def nth(self, i):
+        return self
+
+    def click(self, timeout=None):
+        pass
+
+    def inner_text(self, timeout=None):
+        return ""
+
+    def get_attribute(self, name):
+        return None
+
+
+def test_reauth_requires_existing_profile(tmp_path):
+    try:
+        browser_mod.reauth_stockbit_session(profile_dir=tmp_path, timeout=5)
+        assert False, "expected RuntimeError"
+    except RuntimeError as exc:
+        assert "stockbit login" in str(exc)
+
+
+def test_reauth_already_authenticated_saves_jwt(monkeypatch, tmp_path, capsys):
+    (tmp_path / ".gitkeep").write_text("x")
+    token = _make_jwt({"exp": _future_ts(2)}, alg="RS256")
+    page = _FakeReauthPage(start_url="https://stockbit.com/orderbook")
+    _patch_common(monkeypatch, page)
+    monkeypatch.setattr(browser_mod, "_resolve_token", lambda p, box: token)
+    monkeypatch.setattr(browser_mod, "attempt_stockbit_reauth_clicks", lambda p: ())
+
+    result = browser_mod.reauth_stockbit_session(profile_dir=tmp_path, timeout=5)
+
+    assert result.success is True
+    assert result.already_authenticated is True
+    assert result.token_saved is True
+    assert StockbitTokenStore(tmp_path / "token.json").load() == token
+    assert (tmp_path / ".logged_in_at").exists()
+    out = capsys.readouterr().out.lower()
+    assert "already authenticated" in out
+    assert token not in out
+
+
+def test_reauth_auth_ui_auto_clicks_then_saves(monkeypatch, tmp_path, capsys):
+    (tmp_path / ".gitkeep").write_text("x")
+    token = _make_jwt({"exp": _future_ts(3)}, alg="RS256")
+    page = _FakeReauthPage(start_url="https://stockbit.com/login", login_succeeds=True)
+    _patch_common(monkeypatch, page)
+    # First resolve (orderbook probe) returns None; capture after wait succeeds.
+    calls = {"n": 0}
+
+    def fake_resolve(p, box):
+        calls["n"] += 1
+        return token if calls["n"] > 1 else None
+
+    monkeypatch.setattr(browser_mod, "_resolve_token", fake_resolve)
+    monkeypatch.setattr(
+        browser_mod, "attempt_stockbit_reauth_clicks", lambda p: ("login", "confirm")
+    )
+
+    result = browser_mod.reauth_stockbit_session(profile_dir=tmp_path, timeout=5)
+
+    assert result.success is True
+    assert result.already_authenticated is False
+    assert result.auto_clicks == ("login", "confirm")
+    assert result.token_saved is True
+    assert StockbitTokenStore(tmp_path / "token.json").load() == token
+    out = capsys.readouterr().out.lower()
+    assert "login" in out and "confirm" in out
+
+
+def test_reauth_timeout_fails(monkeypatch, tmp_path, capsys):
+    (tmp_path / ".gitkeep").write_text("x")
+    page = _FakeReauthPage(start_url="https://stockbit.com/login", login_succeeds=False)
+    _patch_common(monkeypatch, page)
+    monkeypatch.setattr(browser_mod, "_resolve_token", lambda p, box: None)
+    monkeypatch.setattr(browser_mod, "attempt_stockbit_reauth_clicks", lambda p: ("login",))
+
+    result = browser_mod.reauth_stockbit_session(profile_dir=tmp_path, timeout=5)
+
+    assert result.success is False
+    assert result.token_saved is False
+    assert not (tmp_path / "token.json").exists()
+    assert "failed" in result.message.lower() or "auth" in result.message.lower()
+
+
 # ── browse_stockbit_session ───────────────────────────────────────────────
 
 

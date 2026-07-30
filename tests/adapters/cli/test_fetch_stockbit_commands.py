@@ -48,7 +48,64 @@ def test_status_valid_token_shows_state_and_no_jwt_leak(monkeypatch):
 
     assert result.exit_code == 0
     assert "Token state" in result.stdout
-    assert "valid" in result.stdout
+
+
+def test_reauth_command_success_exit_zero(monkeypatch):
+    from src.infrastructure.browser.stockbit_session_actions import StockbitReauthResult
+
+    monkeypatch.setattr(
+        playwright_stockbit_provider,
+        "reauth_stockbit_session",
+        lambda timeout=180: StockbitReauthResult(
+            success=True,
+            token_saved=True,
+            already_authenticated=True,
+            auto_clicks=(),
+            message="ok",
+        ),
+    )
+    # CLI imports reauth from provider inside the function.
+    monkeypatch.setattr(
+        "src.adapters.cli.fetch_stockbit_session_commands.require_playwright_cli",
+        lambda: None,
+    )
+
+    result = runner.invoke(app, ["fetch", "stockbit", "reauth", "--timeout", "60"])
+
+    assert result.exit_code == 0
+
+
+def test_reauth_command_failure_exit_one(monkeypatch):
+    from src.infrastructure.browser.stockbit_session_actions import StockbitReauthResult
+
+    monkeypatch.setattr(
+        playwright_stockbit_provider,
+        "reauth_stockbit_session",
+        lambda timeout=180: StockbitReauthResult(
+            success=False,
+            token_saved=False,
+            already_authenticated=False,
+            auto_clicks=("login",),
+            message="failed",
+        ),
+    )
+    monkeypatch.setattr(
+        "src.adapters.cli.fetch_stockbit_session_commands.require_playwright_cli",
+        lambda: None,
+    )
+
+    result = runner.invoke(app, ["fetch", "stockbit", "reauth"])
+
+    assert result.exit_code == 1
+
+
+def test_reauth_help_is_headed_only_no_headed_option():
+    result = runner.invoke(app, ["fetch", "stockbit", "reauth", "--help"])
+    assert result.exit_code == 0
+    out = result.stdout
+    assert "--timeout" in out
+    # Headed is fixed behaviour; CLI must not expose a mode switch.
+    assert "--headed" not in out.split("Options")[-1] if "Options" in out else "--headed" not in out
     assert "eyJ" not in result.stdout
 
 

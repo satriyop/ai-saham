@@ -3,6 +3,7 @@ CLI commands for Stockbit browser session management.
 
 Commands:
   saham fetch stockbit login   — create persistent browser session profile
+  saham fetch stockbit reauth  — headed reauth (auto Login/OK clicks + JWT capture)
   saham fetch stockbit status  — check session health without opening a browser
   saham fetch stockbit browse  — open a headed browser with the saved profile
 
@@ -43,6 +44,42 @@ def login(
         save_stockbit_session(timeout=timeout)
     except Exception as e:
         typer.echo(f"Login failed: {e}", err=True)
+        raise typer.Exit(1)
+
+
+def reauth(
+    timeout: Annotated[
+        int,
+        typer.Option(
+            "--timeout",
+            help="Seconds to wait after auto-clicks if still on login UI (manual finish OK)",
+            min=30,
+        ),
+    ] = 180,
+) -> None:
+    """
+    Headed reauth for an existing profile (auto Login + confirmation clicks).
+
+    Always opens a visible browser — this is the only supported mode (password
+    autofill and Stockbit confirmation dialogs need a real UI; headless is not
+    offered).
+
+    Requires a profile from ``saham fetch stockbit login`` at least once.
+    Safe to run before morning IEV cron when JWT is near expiry.
+
+    Examples:
+        saham fetch stockbit reauth
+        saham fetch stockbit reauth --timeout 120
+    """
+    require_playwright_cli()
+    from src.infrastructure.browser.playwright_stockbit_provider import reauth_stockbit_session
+
+    try:
+        result = reauth_stockbit_session(timeout=timeout)
+    except Exception as e:
+        typer.echo(f"Reauth failed: {e}", err=True)
+        raise typer.Exit(1)
+    if not result.success:
         raise typer.Exit(1)
 
 
@@ -105,8 +142,9 @@ def status() -> None:
         typer.echo("      saham fetch stockbit test (live smoke-test)")
     else:
         typer.echo(
-            "Token is not locally valid. It will refresh automatically from the\n"
-            "browser profile on the next API call, or run: saham fetch stockbit login"
+            "Token is not locally valid. Next API call may refresh JWT from the\n"
+            "browser profile, or run: saham fetch stockbit reauth\n"
+            "  (first-time profile only: saham fetch stockbit login)"
         )
 
 

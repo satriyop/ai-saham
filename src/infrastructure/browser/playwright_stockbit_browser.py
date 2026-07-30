@@ -54,6 +54,9 @@ from src.infrastructure.browser.stockbit_session_actions import (
     get_stockbit_session_status as get_stockbit_session_status,
 )
 from src.infrastructure.browser.stockbit_session_actions import (
+    reauth_stockbit_session as reauth_stockbit_session,
+)
+from src.infrastructure.browser.stockbit_session_actions import (
     save_stockbit_session as save_stockbit_session,
 )
 from src.infrastructure.browser.stockbit_session_actions import (
