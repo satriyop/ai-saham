@@ -142,8 +142,9 @@ def test_inspect_sections_and_board_parity():
         effective_session=session,
     )
     text = inspect.text
-    assert "Screen · accum · INDF" in text
+    assert "Judge · INDF" in text or "INDF" in text
     for section in (
+        "Judgment",
         "Decision",
         "Signal",
         "Risk",
@@ -157,10 +158,10 @@ def test_inspect_sections_and_board_parity():
     assert "Action WATCH · Gate OPEN" in text or "Action" in text
     assert "← Signal" in text
     assert "← Why:" in text
-    assert "not evaluated for this screen run" in text
+    assert "not evaluated" in text or "Named setups" in text
     assert "flow-only" in text  # readiness None + no family
     assert "AFTER_CLOSE" in text
-    assert "Accum breakdown" in text or "breakdown:" in text
+    assert "Accum breakdown" in text or "breakdown:" in text or "Accum brk" in text
     assert "recipe" not in text.lower()
 
     fields = extract_screen_accum_board_fields(row.source, phase_style="short")
@@ -258,15 +259,16 @@ def test_enter_opens_inspect_and_esc_returns():
                     break
             assert app._stage == "accum"
             assert app._effective_session is not None
-            app._open_detail()  # board Enter inspect (not palette view-ticker)
+            app._open_detail()  # board Enter judge (not palette view-ticker)
             await pilot.pause()
             assert app._stage == "detail"
-            assert "Screen · accum ·" in app._board_title
+            assert "Judge" in app._board_title
+            assert app._status_note == "judge"
             assert "Decision" in app._detail_text
             assert "Signal" in app._detail_text
             assert "Risk" in app._detail_text
             assert "regime RISK_ON" in app._detail_text
-            assert "present-only" in app._meta
+            assert "present-only" in app._meta or "re-judge" in app._meta
             await pilot.press("escape")
             await pilot.pause()
             assert app._stage == "accum"

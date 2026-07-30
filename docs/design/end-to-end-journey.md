@@ -27,6 +27,7 @@ fetch status / market          →  data health
 today  |  tui                  →  orient (read-only / cockpit)
 screen accum --universe …      →  discover
 screen accum TICKER            →  judge (Action / Why / evidence)
+TUI Enter on board             →  present-only judge (j = single-ticker re-judge)
 plan swing TICKER              →  structure (SL/TP/capital; inherits Action)
 trade accum log …              →  optional paper notebook
 view ticker | view broker      →  browse facts (not decisions)

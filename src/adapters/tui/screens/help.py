@@ -14,14 +14,16 @@ from textual.widgets import Static
 HELP_BODY = """[#9b8fb8]What this app does[/]
 · Opens on [bold]Screen · accumulation[/] from local SQLite
 · Pre-open reads cached IEV snapshots (fetch iev)
-· Enter = inspect focused row (present-only · not CLI view ticker)
+· Enter = [bold]Judge[/] focused accum row (ADR-054 · present-only)
+· j on Judge = re-judge single ticker (local screen · not full board r)
+· Snapshot board may open limited judge until j or live refresh
 · p = plan structure desk (SL/TP/lots · inherits Action · no order)
 · Fetch = explicit online (never on open)
 
 [#9b8fb8]Keys[/]
   ctrl+p   commands
-  ↑↓ j k   move rows
-  enter    board inspect (focused row)
+  ↑↓ j k   move rows (j = re-judge only on Judge stage)
+  enter    judge (accum) / inspect (pre-open) / desk home
   s a      screen accumulation
   s p      screen pre-open
   v t      view ticker (CLI dashboard · needs focus)

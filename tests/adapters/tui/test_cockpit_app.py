@@ -230,7 +230,7 @@ def test_palette_view_ticker_is_dashboard_not_board_inspect():
             assert "View · ticker show · BBCA" in app._board_title
             assert "DASHBOARD_FOR_BBCA" in app._detail_text
             assert "saham view ticker show" in app._detail_text
-            # Board Enter → inspect, not dashboard
+            # Board Enter → judge, not dashboard
             await pilot.press("escape")
             await pilot.pause()
             app.query_one("#board-table").focus()
@@ -238,7 +238,7 @@ def test_palette_view_ticker_is_dashboard_not_board_inspect():
             await pilot.press("enter")
             await pilot.pause(0.2)
             assert app._stage == "detail"
-            assert "Screen · accum ·" in app._board_title
+            assert "Judge" in app._board_title
             assert "DASHBOARD_FOR_BBCA" not in app._detail_text
 
     asyncio.run(scenario())

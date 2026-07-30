@@ -82,10 +82,12 @@ and `saham tui` accum board):
   Action via MCE/TechnicalGate — structure only. Optional **diagnostic
   evidence** panels on `screen accum TICKER` (`--full` / flow / sentiment /
   setup lens).
-- **TUI Enter inspect is present-only** on both boards: accum uses
-  `accum_engine_inspect_presenter`; pre-open uses
-  `preopen_engine_inspect_presenter` (board row only — no engine re-run).
-  Pre-open land path remains Ctrl+P (`screen-preopen`); default open is accum.
+- **TUI Enter judge is present-only** on accum: `accum_engine_inspect_presenter`
+  + shared `decision_display` (ADR-054). Optional **`j`** re-judges one ticker
+  via local screen workflow (not full board `r`). Snapshot-restored rows may be
+  **limited judge** until `j` or live refresh. Pre-open Enter stays present-only
+  inspect (`preopen_engine_inspect_presenter`). Pre-open land path remains
+  Ctrl+P (`screen-preopen`); default open is accum.
 - **TUI Daily view axis (CLI parity):** Ctrl+P **View ticker** =
   `saham view ticker show` (cache dashboard). Ctrl+P **View broker** =
   list → Enter desk home → `t`/`f`/`h` deep-dives → optional `v` stock jump;

@@ -1,8 +1,10 @@
-"""Present-only Enter inspect for screen-accum candidates.
+"""Present-only ADR-054 Judge stage for screen-accum board rows.
 
-Renders Signal / Risk / TradeSetup / Accum / Data / Session / Market context
-from the board row's ``source`` candidate plus optional workflow-level
-display-only market context — no engine re-run, no network.
+Default Enter path: no engine re-run, no network. Uses shared
+``decision_display`` for Why / readiness / Accum breakdown / decision stack.
+
+When ``row.source`` is missing (e.g. snapshot-restored board), render limited
+judge scalars + explicit degradation banner — never invent READY.
 
 Layer: Adapter (pure display)
 """
@@ -13,23 +15,41 @@ from dataclasses import dataclass
 from typing import Any
 
 from src.adapters.shared.decision_display import (
+    coverage_pct,
     format_accum_breakdown,
     format_action_why,
     format_decision_stack,
     format_market_context_lines,
+    format_primary_setup_family,
     format_setup_readiness,
+    named_setup_match_glyphs,
     readiness_and_family,
 )
+from src.adapters.shared.score_display_labels import ACCUM, SIGNAL
 from src.adapters.shared.screen_accum_board_fields import extract_screen_accum_board_fields
 from src.adapters.tui.presenters.accum_presenter import AccumRowView, build_accum_focus
+
+# Product-facing degradation when board row has no candidate object.
+LIMITED_JUDGE_BANNER = (
+    "[#d4b06a]Limited judge[/]  snapshot / no candidate object · "
+    "scalars only · [bold]j[/] re-judge local for full desk"
+)
+
+JUDGE_FOOTER_FULL = (
+    "[dim]esc board · p plan · j re-judge local · Ctrl+P · present-only (same object as board)[/]"
+)
+JUDGE_FOOTER_LIMITED = (
+    "[dim]esc board · p plan · j re-judge local · Ctrl+P · limited (no source)[/]"
+)
 
 
 @dataclass(frozen=True)
 class AccumEngineInspectView:
-    """Plain multi-section inspect text for the detail stage."""
+    """Plain multi-section judge text for the detail stage."""
 
     text: str
     ticker: str
+    limited: bool = False
 
 
 def present_accum_engine_inspect(
@@ -41,61 +61,175 @@ def present_accum_engine_inspect(
     effective_session: Any | None = None,
     market_context: Any | None = None,
 ) -> AccumEngineInspectView:
-    """Build structured inspect view from board row (present-only)."""
+    """Build ADR-054 judge view from board row (present-only by default)."""
     source = getattr(row, "source", None)
-    # Board-identical header numbers via shared extractor when source exists
+    limited = source is None
+
     if source is not None:
-        fields = extract_screen_accum_board_fields(source, phase_style="short")
+        fields = extract_screen_accum_board_fields(source, phase_style="full")
         ticker = fields.ticker
         signal = fields.signal
         accum = fields.accum
         action = fields.action
         gate = fields.gate
+        phase = fields.phase
     else:
-        ticker = str(getattr(row, "ticker", "?"))
-        signal = str(getattr(row, "signal", "—"))
-        accum = str(getattr(row, "accum", "—"))
-        action = str(getattr(row, "action", "—"))
-        gate = str(getattr(row, "gate", "—"))
+        ticker = str(getattr(row, "ticker", "?") or "?")
+        signal = str(getattr(row, "signal", "—") or "—")
+        accum = str(getattr(row, "accum", "—") or "—")
+        action = str(getattr(row, "action", "—") or "—")
+        gate = str(getattr(row, "gate", "—") or "—")
+        phase = str(getattr(row, "phase", "—") or "—")
 
     focus = build_accum_focus(row, rank=rank, total=total)
-    why = focus.why or format_action_why(source, gate=gate) or "—"
-    breakdown = format_accum_breakdown(source, accum_display=accum)
+    if limited:
+        why = ""
+        breakdown = f"{accum} (no candidate · re-judge for breakdown)"
+        family = "—"
+        auth = "—"
+        readiness_s = "— (no candidate object)"
+    else:
+        why = focus.why or format_action_why(source, gate=gate) or ""
+        breakdown = format_accum_breakdown(source, accum_display=accum)
+        family = format_primary_setup_family(source)
+        cov = coverage_pct(source)
+        auth = f"{cov:.0f}%" if cov is not None else "—"
+        readiness, fam = readiness_and_family(source)
+        readiness_s = format_setup_readiness(readiness, setup_family=fam, style="full")
 
     lines: list[str] = [
-        f"[bold #e8e8e8]Screen · accum · {ticker}[/]",
-        f"#{rank}/{total} by Signal",
+        f"[bold #e8e8e8]Judge · {ticker}[/]",
+        f"Screen · accumulation · #{rank}/{total} by Signal",
     ]
     if board_summary:
         lines.append(f"[dim]Board[/]  {board_summary}")
+    if limited:
+        lines.append("")
+        lines.append(LIMITED_JUDGE_BANNER)
     lines.append("")
     lines.extend(
-        format_decision_stack(
-            source,
+        _judgment_header(
+            ticker=ticker,
             action=action,
             gate=gate,
             signal=signal,
-            why=why if why != "—" else "",
+            accum=accum,
+            phase=phase,
+            family=family,
+            authority=auth,
+            why=why or "—",
+            readiness=readiness_s,
+            breakdown=breakdown,
         )
     )
     lines.append("")
-    lines.extend(_section_signal(source))
+    if limited:
+        lines.extend(
+            [
+                "[#d4b06a]Decision[/]",
+                f"  Action {action} · Gate {gate}",
+                f"  ← Signal {signal} · coverage — · strength —",
+                "  ← Risk —",
+                "  ← Why: — (re-judge for full Why)",
+            ]
+        )
+    else:
+        lines.extend(
+            format_decision_stack(
+                source,
+                action=action,
+                gate=gate,
+                signal=signal,
+                why=why,
+            )
+        )
     lines.append("")
-    lines.extend(_section_risk(source))
-    lines.append("")
-    lines.extend(_section_trade_setup(source, action=action))
-    lines.append("")
-    lines.extend(_section_accum(accum, breakdown))
-    lines.append("")
-    lines.extend(_section_data(source, lag=focus.lag_label))
-    lines.append("")
-    lines.extend(_section_session(effective_session))
-    lines.append("")
-    lines.extend(format_market_context_lines(market_context, candidate=source))
-    lines.append("")
-    lines.append("[dim]esc back · p plan · Ctrl+P · present-only (same object as board)[/]")
+    if not limited:
+        lines.extend(_section_named_setups(source))
+        lines.append("")
+        lines.extend(_section_signal(source))
+        lines.append("")
+        lines.extend(_section_risk(source))
+        lines.append("")
+        lines.extend(_section_trade_setup(source, action=action))
+        lines.append("")
+        lines.extend(_section_accum(accum, breakdown))
+        lines.append("")
+        lines.extend(_section_data(source, lag=focus.lag_label))
+        lines.append("")
+        lines.extend(_section_session(effective_session))
+        lines.append("")
+        lines.extend(format_market_context_lines(market_context, candidate=source))
+        lines.append("")
+        lines.append(JUDGE_FOOTER_FULL)
+    else:
+        lines.extend(
+            [
+                "[#9b8fb8]Scalars (board row)[/]",
+                f"  phase {phase} · streak {getattr(row, 'streak', '—')} · "
+                f"rsi {getattr(row, 'rsi', '—')} · net {getattr(row, 'net_pct', '—')}",
+                f"  disc {getattr(row, 'disc_pct', '—')} · px {getattr(row, 'price', '—')}",
+                "",
+                "[#9b8fb8]Signal / Risk / TradeSetup[/]",
+                "  not available without candidate object — press [bold]j[/] re-judge",
+                "",
+                JUDGE_FOOTER_LIMITED,
+            ]
+        )
 
-    return AccumEngineInspectView(text="\n".join(lines), ticker=ticker)
+    return AccumEngineInspectView(text="\n".join(lines), ticker=ticker, limited=limited)
+
+
+# ADR-054 product alias (same function).
+present_accum_judge = present_accum_engine_inspect
+
+
+def _judgment_header(
+    *,
+    ticker: str,
+    action: str,
+    gate: str,
+    signal: str,
+    accum: str,
+    phase: str,
+    family: str,
+    authority: str,
+    why: str,
+    readiness: str,
+    breakdown: str,
+) -> list[str]:
+    """CLI-parity judgment strip fields (text form)."""
+    return [
+        "[#d4b06a]Judgment[/]",
+        f"  Ticker     {ticker}",
+        f"  Action     {action}",
+        f"  Gate       {gate}",
+        f"  {SIGNAL:<10} {signal}",
+        f"  {ACCUM:<10} {accum}",
+        f"  Authority  {authority}",
+        f"  Phase      {phase}",
+        f"  Family     {family}",
+        f"  Why        {why}",
+        f"  Readiness  {readiness}",
+        f"  Accum brk  {breakdown}",
+    ]
+
+
+def _section_named_setups(source: Any) -> list[str]:
+    lines = ["[#9b8fb8]Named setups (diagnostic)[/]"]
+    if source is None:
+        lines.append("  —")
+        return lines
+    family = format_primary_setup_family(source)
+    glyphs = named_setup_match_glyphs(source)
+    if family == "—" and not any(v not in {"-", "—", ""} for v in glyphs.values()):
+        lines.append("  not evaluated on this candidate")
+        return lines
+    lines.append(f"  primary {family}")
+    g = " · ".join(f"{k} {glyphs.get(k, '-')}" for k in ("FB", "CS", "SM", "PB"))
+    lines.append(f"  match {g}")
+    lines.append("  [dim]MATCH ≠ ENTER[/]")
+    return lines
 
 
 def _section_signal(source: Any) -> list[str]:

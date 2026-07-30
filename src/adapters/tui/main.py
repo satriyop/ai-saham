@@ -78,6 +78,8 @@ class CockpitApp(App[None]):
         # `v` is chord prefix off desk hub (v t / v b); on desk hub = jump ticker
         # (handled in on_key so prefix chords do not fight single-key v).
         Binding("b", "ticker_desks", "Ticker→desks", show=False),
+        # Note: plain ``j`` is cursor_down on the board (vim). Re-judge is
+        # handled in on_key only when stage=detail + judge (see action_rejudge).
         Binding("q", "quit", "Quit", show=True),
     ]
 
@@ -116,6 +118,7 @@ class CockpitApp(App[None]):
         preopen_presenter: Any | None = None,
         board_snapshot_path: Path | str | None = None,
         snapshot_universe: str = "lq45",
+        ticker_judge_loader: Callable[[str], Any] | None = None,
     ) -> None:
         super().__init__()
         self._accum_loader = accum_loader
@@ -130,6 +133,7 @@ class CockpitApp(App[None]):
         self._broker_flow_loader = broker_flow_loader
         self._broker_history_loader = broker_history_loader
         self._ticker_desks_loader = ticker_desks_loader
+        self._ticker_judge_loader = ticker_judge_loader
         self._accum_controller = accum_controller
         self._preopen_controller = preopen_controller
         self._accum_presenter = accum_presenter
@@ -177,6 +181,9 @@ class CockpitApp(App[None]):
         self._recomputing = False
         self._board_source: Literal["none", "live", "snapshot"] = "none"
         self._snapshot_freshness = ""
+        self._judge_generation = 0
+        self._judge_ticker = ""
+        self._judge_limited = False
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="workspace"):
@@ -204,7 +211,8 @@ class CockpitApp(App[None]):
                 yield Static("none selected", classes="side-line", id="side-focus")
                 yield Static("Keys", classes="side-title")
                 yield Static("ctrl+p  commands", classes="side-line")
-                yield Static("enter   view", classes="side-line")
+                yield Static("enter   judge", classes="side-line")
+                yield Static("j       re-judge", classes="side-line")
                 yield Static("p       plan", classes="side-line")
                 yield Static("r       refresh local", classes="side-line")
                 yield Static("ctrl+b  sidebar", classes="side-line")
@@ -260,19 +268,19 @@ class CockpitApp(App[None]):
             )
         if self._stage == "accum" and self._board_source == "snapshot":
             return (
-                "snapshot board · r recompute live · Enter view · p plan · Ctrl+P  ·  "
+                "snapshot board · r recompute live · Enter judge · p plan · Ctrl+P  ·  "
                 f"{self._snapshot_freshness or 'prior local run'}"
             )
         if self._stage == "accum":
             return (
-                "↑↓ move · Enter view · p plan · r refresh · Ctrl+P  ·  "
+                "↑↓ move · Enter judge · p plan · r refresh · Ctrl+P  ·  "
                 "ranked by Signal (not Accum) · Ctrl+P pre-open to switch board"
             )
         if self._stage == "preopen" and self._recomputing:
             return "recomputing pre-open… · prior rows still shown · r restarts · Ctrl+P"
         if self._stage == "preopen":
             return (
-                "↑↓ move · Enter view · p plan · r refresh · Ctrl+P  ·  "
+                "↑↓ move · Enter inspect · p plan · r refresh · Ctrl+P  ·  "
                 "IEV snapshot board · Enter = present-only inspect"
             )
         if self._stage == "broker-list":
@@ -298,6 +306,16 @@ class CockpitApp(App[None]):
             )
         if self._stage == "detail" and self._status_note == "view ticker":
             return "↑↓/PgUp/PgDn scroll · b top desks · esc back · p plan · Ctrl+P"
+        if self._stage == "detail" and self._status_note in {"judge", "re-judging"}:
+            if self._judge_limited:
+                return (
+                    "↑↓ scroll · j re-judge local · p plan · esc board · Ctrl+P  ·  "
+                    "limited judge (no candidate object)"
+                )
+            return (
+                "↑↓ scroll · j re-judge local · p plan · esc board · Ctrl+P  ·  "
+                "present-only judge · same object as board"
+            )
         if self._stage == "detail":
             return "↑↓/PgUp/PgDn scroll · esc back · p plan · Ctrl+P"
         if self._stage == "plan":
@@ -335,7 +353,7 @@ class CockpitApp(App[None]):
         self.query_one("#side-focus", Static).update(
             "none selected"
             if self._focus_ticker == "—"
-            else f"{self._focus_ticker} · Enter view · p plan"
+            else f"{self._focus_ticker} · Enter judge · j re-judge · p plan"
         )
 
         body = self.query_one("#stage-body", Static)
@@ -420,7 +438,7 @@ class CockpitApp(App[None]):
     # ── two-key chords (s a / s p / v t / v b) ─────────────
 
     def on_key(self, event: events.Key) -> None:
-        """Prefix chords + desk-hub ``v`` (binding removed to avoid fights)."""
+        """Prefix chords + desk-hub ``v`` + judge ``j`` (board ``j`` stays down)."""
         if self._modal_blocks_board_keys():
             return
 
@@ -437,6 +455,21 @@ class CockpitApp(App[None]):
             prefix = self._chord_prefix
             self._clear_chord_state()
             self._resolve_chord(prefix, key)
+            return
+
+        # On Judge detail, ``j`` re-judges (does not cursor_down).
+        if (
+            key == "j"
+            and self._stage == "detail"
+            and self._status_note
+            in {
+                "judge",
+                "re-judging",
+            }
+        ):
+            event.prevent_default()
+            event.stop()
+            self.action_rejudge_ticker()
             return
 
         if key == "s":
@@ -1329,9 +1362,9 @@ class CockpitApp(App[None]):
             self._detail_return_stage = "shell"
 
     def _open_detail(self) -> None:
-        """Board Enter: present-only engine inspect (screen row object)."""
+        """Board Enter: ADR-054 present-only Judge (accum) or pre-open inspect."""
         if self._stage == "empty" or self._focus_ticker in {"—", ""}:
-            self.notify("Nothing to inspect — run a screen first", timeout=1.5)
+            self.notify("Nothing to judge — run a screen first", timeout=1.5)
             return
         if not self._rows and self._stage != "detail":
             self.notify("No row focused", timeout=1.5)
@@ -1343,17 +1376,146 @@ class CockpitApp(App[None]):
         base = self._format_row_detail(ticker, row)
         self._detail_text = base
         self._stage = "detail"
+        self._judge_ticker = str(ticker).upper()
         if self._is_accum_row(row):
-            self._board_title = f"Screen · accum · {ticker}"
-            self._meta = "inspect · present-only · same object as board"
+            limited = getattr(row, "source", None) is None
+            self._judge_limited = limited
+            self._board_title = f"Judge · {ticker}"
+            self._meta = (
+                "limited · snapshot/no source · j re-judge"
+                if limited
+                else "present-only · same object as board · j re-judge"
+            )
+            self._status_note = "judge"
         elif self._is_preopen_row(row):
+            self._judge_limited = False
             self._board_title = f"Screen · pre-open · {ticker}"
             self._meta = "inspect · present-only · same object as board"
+            self._status_note = "inspect"
         else:
+            self._judge_limited = False
             self._board_title = f"Inspect · {ticker}"
             self._meta = "present-only · board row"
-        self._status_note = "inspect"
+            self._status_note = "inspect"
         self._refresh_chrome()
+
+    def action_rejudge_ticker(self) -> None:
+        """``j``: single-ticker local re-screen for Judge stage only."""
+        if self._modal_blocks_board_keys():
+            return
+        if self._stage != "detail" or self._status_note not in {"judge", "re-judging"}:
+            return
+        if self._detail_return_stage == "preopen" or self._board_kind == "preopen":
+            self.notify("Re-judge is for accumulation judge only", timeout=1.5)
+            return
+        if self._ticker_judge_loader is None:
+            self.notify("Re-judge not wired — use CLI: saham screen accum TICKER", timeout=2.5)
+            return
+        ticker = str(self._focus_ticker or self._judge_ticker or "").upper()
+        if not ticker or ticker == "—":
+            self.notify("No ticker to re-judge", timeout=1.5)
+            return
+        self._judge_generation += 1
+        gen = self._judge_generation
+        self._judge_ticker = ticker
+        self._status_note = "re-judging"
+        self._meta = f"re-judging {ticker} · local screen · generation {gen}"
+        self._refresh_chrome()
+        self._execute_rejudge(gen, ticker)
+
+    @work(thread=True, exclusive=True, group="judge")
+    def _execute_rejudge(self, generation: int, ticker: str) -> None:
+        assert self._ticker_judge_loader is not None
+        try:
+            payload = self._ticker_judge_loader(ticker)
+            dispatch_if_active(self, self._on_rejudge_done, generation, ticker, payload, None)
+        except Exception as exc:
+            dispatch_if_active(self, self._on_rejudge_done, generation, ticker, None, str(exc))
+
+    def _on_rejudge_done(
+        self,
+        generation: int,
+        ticker: str,
+        payload: Any,
+        error: str | None,
+    ) -> None:
+        if generation != self._judge_generation:
+            return  # stale worker
+        if self._stage != "detail":
+            return
+        if str(self._focus_ticker).upper() != str(ticker).upper():
+            return
+        if error is not None:
+            self._status_note = "judge"
+            self._meta = f"re-judge failed · {error[:80]}"
+            banner = f"[#c97a72]Re-judge error[/]\n{error}\n\n"
+            self._detail_text = banner + (self._detail_text or "")
+            self._refresh_chrome()
+            self.notify(f"Re-judge failed · {ticker}", timeout=2.5)
+            return
+
+        candidate = self._first_candidate_from_payload(payload)
+        if candidate is None:
+            self._status_note = "judge"
+            self._meta = f"re-judge · no candidate for {ticker}"
+            self._detail_text = (
+                f"[#d4b06a]Re-judge[/]  no candidate for {ticker} in local cache\n\n"
+                + (self._detail_text or "")
+            )
+            self._refresh_chrome()
+            self.notify(f"Re-judge · no candidate · {ticker}", timeout=2.0)
+            return
+
+        # Update board row source so subsequent Enter is full present-only.
+        self._patch_board_row_from_candidate(ticker, candidate, payload)
+        row = self._rows[self._row_index] if self._rows else None
+        if row is None or str(getattr(row, "ticker", "")).upper() != ticker:
+            # Focused row missing: synthesize temporary row from presenter
+            if self._accum_presenter is not None:
+                view = self._accum_presenter.present(payload)
+                row = view.rows[0] if view.rows else None
+        if row is None:
+            self._status_note = "judge"
+            self._meta = "re-judge · present failed"
+            self._refresh_chrome()
+            return
+        self._judge_limited = getattr(row, "source", None) is None
+        self._detail_text = self._format_row_detail(ticker, row)
+        self._board_title = f"Judge · {ticker}"
+        self._meta = "re-judged · local screen · present-only now"
+        self._status_note = "judge"
+        self._refresh_chrome()
+        self.notify(f"Re-judged · {ticker}", timeout=2.0)
+
+    @staticmethod
+    def _first_candidate_from_payload(payload: Any) -> Any | None:
+        if payload is None:
+            return None
+        proj = getattr(payload, "single_projection", None) or payload
+        cands = list(getattr(proj, "candidates", ()) or ())
+        return cands[0] if cands else None
+
+    def _patch_board_row_from_candidate(self, ticker: str, candidate: Any, payload: Any) -> None:
+        """Replace matching board row with a fresh AccumRowView (source attached)."""
+        if self._accum_presenter is None:
+            return
+        view = self._accum_presenter.present(payload)
+        if not view.rows:
+            return
+        new_row = view.rows[0]
+        for i, row in enumerate(self._rows):
+            if str(getattr(row, "ticker", "")).upper() == ticker.upper():
+                self._rows[i] = new_row
+                self._row_index = i
+                self._focus_ticker = new_row.ticker
+                # Keep session/MCE from single-ticker result when present
+                self._effective_session = getattr(
+                    payload, "effective_session", self._effective_session
+                )
+                self._market_context = getattr(payload, "market_context", self._market_context)
+                return
+        # Not on board — do not invent board membership
+        return
 
     def _open_view_ticker_dashboard(
         self,

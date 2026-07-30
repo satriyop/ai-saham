@@ -39,6 +39,7 @@ def create_tui_app(
     fetch_runner: Callable[[], Any] | None = None,
     ticker_detail_loader: Callable[[str], Any] | None = None,
     board_snapshot_path: Path | None = None,
+    ticker_judge_loader: Callable[[str], Any] | None = None,
 ) -> CockpitApp:
     """Build cockpit with real local loaders unless tests inject fakes."""
     config = load_app_config()
@@ -60,6 +61,8 @@ def create_tui_app(
         ticker_detail_loader = _ViewTickerDashboardLoader(db_path)
     if board_snapshot_path is None:
         board_snapshot_path = default_accum_snapshot_path(db_path)
+    if ticker_judge_loader is None:
+        ticker_judge_loader = _TickerJudgeLoader(screen_deps, config)
 
     return CockpitApp(
         accum_loader=accum_loader,
@@ -74,6 +77,7 @@ def create_tui_app(
         broker_flow_loader=_BrokerDeepLoader(db_path, "flow"),
         broker_history_loader=_BrokerDeepLoader(db_path, "history"),
         ticker_desks_loader=_TickerTopBrokersLoader(db_path),
+        ticker_judge_loader=ticker_judge_loader,
         accum_controller=BoardController(accum_loader),
         preopen_controller=BoardController(
             preopen_loader,
@@ -123,6 +127,35 @@ class _EmptyAccumResult:
     )()
     multi_projection = None
     warnings: tuple[str, ...] = ("No tickers in local universe/cache",)
+
+
+class _TickerJudgeLoader:
+    """Single-ticker local screen for TUI Judge re-judge (``j``).
+
+    Uses the same request builder + workflow as board load — no TUI-only defaults.
+    """
+
+    def __init__(self, deps: ScreenDeps, config: Any) -> None:
+        self._deps = deps
+        self._config = config
+        self._use_case = None
+        self._lock = Lock()
+
+    def __call__(self, ticker: str) -> Any:
+        with self._lock:
+            if self._use_case is None:
+                self._use_case = self._deps.build_accum_workflow_use_case()
+            use_case = self._use_case
+
+        symbol = str(ticker or "").strip().upper()
+        if not symbol:
+            raise ValueError("ticker required for re-judge")
+        universe = (self._config.analysis.universe or "lq45").lower()
+        request = build_default_screen_accum_request(
+            tickers=[symbol],
+            universe=universe,
+        )
+        return use_case.execute(request)
 
 
 # ── Pre-open (IEV snapshot only — local-first) ─────────────

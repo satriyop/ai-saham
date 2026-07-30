@@ -55,8 +55,10 @@ DUAL_SURFACE_JOBS: tuple[DualSurfaceJob, ...] = (
         ),
         intentional_deltas=(
             "TUI board columns/widgets vs CLI Rich table (presentation only)",
-            "TUI Enter = present-only inspect (accum_engine_inspect_presenter), "
-            "not CLI view ticker show",
+            "TUI Enter = ADR-054 present-only Judge (accum_engine_inspect_presenter / "
+            "decision_display); not CLI view ticker show; not CLI --full diagnostic suite",
+            "TUI j on Judge = optional single-ticker local re-screen (same request builder); "
+            "full-board r stays separate; snapshot-restored rows are limited judge until j",
         ),
     ),
     DualSurfaceJob(
