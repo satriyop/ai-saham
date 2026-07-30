@@ -176,7 +176,7 @@ row.
 | [050](docs/adr/ADR-050-cli-verb-contracts.md) | CLI verb contracts (`plan` / `inspect` / `assess`) | Accepted; implementation landed; amends 020/032/033/049; **product roles amended by ADR-054** |
 | [051](docs/adr/ADR-051-tui-opencode-cockpit-clean-break.md) | TUI OpenCode daily cockpit clean break | Accepted; Phases 0–5 implemented; supersedes multi-route research TUI UX |
 | [052](docs/adr/ADR-052-today-live-first-adapter.md) | `saham today` live-first adapter with offline fallback | Accepted; implementation in progress; scopes ADR-011 (offline-first = engine/domain; `today` = live adapter) |
-| [053](docs/adr/ADR-053-sector-macro-context-evidence.md) | Sector macro context evidence (routed per-sector drivers) | Accepted; S1–S3 implemented (DIAGNOSTIC, schema v9); independent of MCE commodity_composite |
+| [053](docs/adr/ADR-053-sector-macro-context-evidence.md) | Sector macro context evidence (routed per-sector drivers) | Accepted; multi-map + bank BI steps shipped (DIAGNOSTIC, schema v9); panel on screen/view; S4 attribution open |
 | [054](docs/adr/ADR-054-screen-judge-plan-structure-contract.md) | Screen judges candidates; plan designs trade structure | Accepted; contract + phased migration S0–S5; amends 032/033/050; policy A + structure-only plan CLI |
 | [055](docs/adr/ADR-055-macro-calendar-fetch.md) | Macro economic calendar fetch | Accepted |
 | [057](docs/adr/ADR-057-evidence-diagnostic-evidence-corpus-vocabulary.md) | Evidence vs diagnostic evidence vs corpus vocabulary | Accepted; operator/agent language; amends overloaded “evidence” usage |

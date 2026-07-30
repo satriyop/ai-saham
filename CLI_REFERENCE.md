@@ -843,11 +843,14 @@ saham view BBCA
 
 ## saham view ticker show
 
-Explicit ticker dashboard view (identical to `saham view TICKER`).
+Explicit ticker dashboard view (identical to `saham view TICKER`). Cache-only
+browse. Full mode includes DIAGNOSTIC **SECTOR MACRO** (ADR-053) when a live
+sector map resolves; brief mode omits that panel. Does not change Action.
 
 ```
 saham view ticker show TICKER
 saham view ticker show BBCA
+saham view ticker show BBCA --brief    # omit SECTOR MACRO and other full-only panels
 ```
 
 ---
@@ -1040,6 +1043,12 @@ saham view broker list
 evidence + optional diagnostic evidence). Owns judgment; does **not** design
 horizon/SL/TP/lots — use `saham plan swing`. **Does not** write research
 observations (`--save` is watchlist only; corpus = `research accum …`).
+
+**Sector macro (ADR-053, DIAGNOSTIC):** single-ticker judgment attaches a
+SECTOR MACRO panel (routed drivers for the ticker’s universe group). Universe
+board / `--multi` skip that attach for latency. Does not change Action. Same
+panel appears on full `saham view ticker show` (not brief). BI policy steps need
+`saham fetch macro-calendar` (or default `fetch market`).
 
 Diagnostic evidence flags require **explicit tickers** (rejected with
 universe-only or `--multi`): `--setup`, `--with-flow-detail`, `--flow-window`,

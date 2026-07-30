@@ -242,7 +242,7 @@ Under ADR-057 these **explain** or feed parallel projections; they must not be t
 | Market context (MCE) | VIX, EIDO vs IHSG, USD/IDR, IDX trend, breadth, foreign regime | **Display** on screen; not DecisionPolicy input by default |
 | Institutional accumulation | Multi-track foreign/domestic | Diagnostic producer |
 | Sector context | Peer-relative sector | Diagnostic / alpha slot |
-| Sector-macro | Macro overlay on sector (ADR-053) | Diagnostic |
+| Sector-macro | Routed macro drivers per universe group (ADR-053); panel on `screen accum TICKER` + full view ticker | Diagnostic; never Action |
 | Company quality | Valuation, analyst, insider, seasonality bag | Diagnostic; some fields also feed **production flags** when mapped |
 | Alpha/Trigger | Parallel projection | Not TradeSetup path |
 | Strategy / sentiment panels | Optional `--full` style | Diagnostic |

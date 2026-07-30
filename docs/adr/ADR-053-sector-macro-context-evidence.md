@@ -2,13 +2,16 @@
 
 [Architecture decision index](../../ARCHITECTURE_DECISIONS.md)
 
-**Status:** Accepted — S1–S3 implemented (DIAGNOSTIC; schema v9 fingerprints)
+**Status:** Accepted — S1–S3 + multi-map/P2a bank BI steps shipped
+(DIAGNOSTIC; schema v9 fingerprints). S4 attribution still open.
 **Date:** 2026-07-28
 **Depends on:** [ADR-009](ADR-009-config-driven-behavior.md),
 [ADR-029](ADR-029-market-context-engine-mce-third-first-class-application-service.md),
 [ADR-041](ADR-041-canonical-signal-evidence-input-boundary.md)
 **Related:** peer-relative `SectorContextEvidence` (Phase H),
-`TickerProfile` diagnostics, MCE optional `commodity_composite`
+`TickerProfile` diagnostics, MCE optional `commodity_composite`,
+[ADR-054](ADR-054-screen-judge-plan-structure-contract.md) (panel on judgment desk),
+[ADR-055](ADR-055-macro-calendar-fetch.md) (BI policy spine)
 
 ## Context
 
@@ -41,8 +44,8 @@ score rewrite.
 | Item | Value |
 |------|--------|
 | Product / type name | `SectorMacroContext` / `SectorMacroContextEvidence` |
-| Config path (planned) | `config/sector_macro_context.yaml` |
-| Fingerprint field prefix (planned) | `smc_*` |
+| Config path | `config/sector_macro_context.yaml` |
+| Fingerprint field prefix | `smc_*` |
 | Authority (v1) | `DIAGNOSTIC` only |
 
 “Overlay” may appear in prose; it is **not** the type or config stem.
@@ -93,13 +96,13 @@ Builders must not hardcode sector→series routing. Adapters must not own policy
 |---------|----------|
 | Config multi-map ready | Yes from day one |
 | Live sector maps | commodity/BM/consumer + `property_dev`/`telco`/`poultry` + `insurance`/`multifinance`/`packaging` + `bank`/`logistics` |
-| Live series | oil: `CL=F`; soft: `CPO=F`; metals: `HG=F`; gold: `GC=F`; feed: `ZC=F`+`ZS=F` (invert); rates-risk: `^TNX`+`IDR=X` (invert) |
+| Live series | oil: `CL=F`; soft: `CPO=F`; metals: `HG=F`; gold: `GC=F`; feed: `ZC=F`+`ZS=F` (invert); rates-risk: `^TNX`+`IDR=X` (invert); bank BI: virtual `BI_RATE` via macro calendar |
 | Dedicated groups | most maps use dedicated cohorts; `insurance`/`logistics`/`bank` reuse existing universe keys |
 | Poultry policy | Feed-cost stress (corn+soy invert) + import FX (`usd_idr_risk`); not chicken-price model (P1c) |
-| Finance residual | `insurance` + `multifinance` (rates/FX risk) |
+| Finance residual | `insurance` + `multifinance` (rates/FX risk; still `^TNX`+`usd_idr_risk` in v1) |
 | Oil sign split (P1a) | `oil_proxy` (↑ supportive) for energy/oil_gas; `oil_cost` (↑ headwind) for chemicals/logistics/packaging |
 | Energy purity (P1b) | `coal` (COAL ETF proxy + IDR) and `oil_gas` (CL=F + IDR) preferred over residual `energy` map; parent energy bag kept |
-| Bank policy | Defensive financial-conditions map (rising rates / weaker IDR = headwind), not NIM expansion |
+| Bank policy (P2a) | Defensive: BI `policy_rate_steps` (hike = headwind) + `usd_idr_risk`; not NIM expansion. Stockbit title **Interest Rate Decision** → `bi_rate` (facility rates excluded) |
 | Dead Yahoo symbols (do not map live) | `MTF=F` (Newcastle coal), `KO=F` (old CPO) — return no data as of 2026-07 smoke |
 | Thin multi-sector maps (e.g. banks → 100% USDIDR) | **Forbidden** |
 | Auto-fetch | Live-map series refresh on every `saham fetch market` (`sector_macro` context labels) |
@@ -216,8 +219,9 @@ Diagnostic status alone never grants DecisionPolicy authority.
 - **Cost:** new config surface, fingerprint fields, and fetch coverage for
   commodity/FX series when energy analysis runs; dual commodity story
   (global MCE vs routed sector) must stay documented to avoid confusion.
-- **Follow-up:** implementation tasks S1–S4; optional CPO sector map; oil
-  series probe; promotion ADR only after attribution proof.
+- **Follow-up:** S4 research/attribution hooks; map expansion only with ≥2 real
+  drivers; continuous local rates (P2b) separate from BI policy steps;
+  promotion ADR only after walk-forward proof. TUI panel parity optional.
 
 ## Implementation pointers
 
@@ -226,11 +230,13 @@ Diagnostic status alone never grants DecisionPolicy authority.
 | Domain | `src/domain/value_objects/sector_macro_context_evidence.py` |
 | Application | `src/application/services/sector_macro_context_evidence_builder.py` |
 | Application | `src/application/services/candidate_sector_macro_context_evidence_assembler.py` |
+| Application | `src/application/services/ticker_dashboard_sector_macro_loader.py` (view browse) |
 | Infrastructure | `src/infrastructure/config/sector_macro_context_config_loader.py` |
 | Config | `config/sector_macro_context.yaml` |
 | Fingerprint | `smc_*` on `SignalObservationFingerprint` (observation schema v9) |
-| Adapter | `src/adapters/cli/plan_swing_sector_macro_context_display.py` |
-| Fetch | `get_global_context_tickers()` marks live-map series non-`.JK`; `refresh_market_context_inputs()` auto-refreshes them on every `saham fetch market` (factor label `sector_macro`), even when MCE commodity is off |
-| Tests | builder/VO/loader + authority firewall + CLI panel unit tests |
+| Adapter (panel) | `src/adapters/cli/screen_accum_sector_macro_display.py` — shared builder; used by single-ticker **screen** judgment and **view** full dashboard. `plan_swing_sector_macro_context_display.py` is a re-export only (plan is structure desk; ADR-054). |
+| Surfaces | `saham screen accum TICKER` (judgment); `saham view ticker show` full (browse). Universe board skips attach for latency; fingerprints may still build SMC on observation persist. |
+| Fetch | Live-map Yahoo series auto-refresh on `saham fetch market` (`sector_macro` labels); macro calendar via ADR-055 (`BI_RATE` policy spine for bank map). |
+| Tests | builder/VO/loader + authority firewall + screen/view panel unit tests |
 
 Promotion and additional sector maps remain future work (see Non-goals).

@@ -151,6 +151,11 @@ What you get:
 - **Judgment strip** — Action (composed `TradeSetup` when present), Gate, Signal, Accum, Authority, Phase, Family, Why
 - **Pattern match** — FB/CS/SM/PB MATCH / PARTIAL / NO_MATCH (diagnostic; MATCH ≠ ENTER)
 - Signal / Accum / Risk panels already used on the universe board
+- **SECTOR MACRO** (ADR-053, DIAGNOSTIC) — external drivers for this ticker’s
+  sector group (e.g. coal/CPO/rates/BI policy). Explains context only; never
+  Action. Universe board does **not** show it (latency). Browse path:
+  `saham view ticker show TICKER` (full; omit on brief). Banks need macro
+  calendar in cache (`saham fetch macro-calendar` or default `fetch market`).
 - Explicit tickers auto-refresh by default (universe-only stays cache-cheap)
 
 Decide here whether the candidate is worth structuring a trade for.

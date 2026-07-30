@@ -204,10 +204,21 @@ rewrite raw setup evidence.
 ### Sector Macro Context (ADR-053)
 
 Sibling diagnostic evidence (L2b), not peer technicals: routes external macro
-series (e.g. coal futures, USD/IDR) per `universes.yaml` group. v1 live map is
-`energy` only; authority is DIAGNOSTIC; fingerprints use `smc_*` fields
-(observation schema v9). Does not reweight Signal or Risk. Independent of MCE
-global `commodity_composite` (which stays optional and off by default).
+drivers per `universes.yaml` group via `config/sector_macro_context.yaml`.
+
+**Shipped (DIAGNOSTIC only):** multi-map library (commodity, energy cohorts
+`coal`/`oil_gas`/`energy`, plantation, metals/gold, cement/chemicals,
+property_dev, logistics, poultry, telco, insurance/multifinance/packaging,
+bank with BI `policy_rate_steps` + IDR). Fingerprints use `smc_*` fields
+(observation schema v9). Does **not** reweight Signal or Risk and does **not**
+set Action. Independent of MCE global `commodity_composite` (optional, off by
+default).
+
+**Operator surfaces:** SECTOR MACRO panel on single-ticker judgment
+(`saham screen accum TICKER`) and full ticker browse (`saham view ticker show`);
+omitted on brief view and on universe board (latency). Plan structure desk does
+not host the panel (ADR-054). Macro calendar ingest: `saham fetch macro-calendar`
+/ default `fetch market` (ADR-055).
 
 ## Regime Detection Evidence
 
