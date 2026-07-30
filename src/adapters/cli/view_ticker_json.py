@@ -142,6 +142,18 @@ def _dashboard_data(dashboard: TickerDashboard) -> dict[str, Any]:
             dashboard.foreign_flow_points,
             source=dashboard.foreign_flow_source,
         )
+    if "sector_macro" in panels:
+        smc = dashboard.sector_macro_context_evidence
+        data["sector_macro_context_evidence"] = (
+            {
+                **smc.to_dict(),
+                "diagnostic": True,
+                "authority": "DIAGNOSTIC",
+                "judgment_command": f"saham screen accum {dashboard.ticker}",
+            }
+            if smc is not None
+            else None
+        )
     if "corp_actions" in panels:
         data["corp_actions"] = [_optional_to_dict(e) for e in dashboard.corp_actions]
     if "insider" in panels:

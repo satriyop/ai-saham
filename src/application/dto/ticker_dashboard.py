@@ -18,6 +18,9 @@ from src.domain.entities.candle import Candle
 from src.domain.value_objects.corporate_action_event import CorporateActionEvent
 from src.domain.value_objects.earnings_record import EarningsRecord
 from src.domain.value_objects.insider_transaction import InsiderTransaction
+from src.domain.value_objects.sector_macro_context_evidence import (
+    SectorMacroContextEvidence,
+)
 
 
 @dataclass(frozen=True)
@@ -85,3 +88,5 @@ class TickerDashboard:
     sentiment_logs: tuple[Any, ...]
     profile: Any | None
     candles: tuple[Candle, ...]
+    # ADR-053 DIAGNOSTIC — local-cache derived; full mode only (see panel_keys).
+    sector_macro_context_evidence: SectorMacroContextEvidence | None = None

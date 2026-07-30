@@ -49,6 +49,12 @@ class ViewTickerDeps:
 
 def build_view_ticker_deps(db_path: Path | str) -> ViewTickerDeps:
     """Construct cache-only view-ticker dependencies for one database path."""
+    from src.application.services.candidate_evidence_data_loader import (
+        CandidateEvidenceDataLoader,
+    )
+    from src.application.services.ticker_dashboard_sector_macro_loader import (
+        TickerDashboardSectorMacroLoader,
+    )
     from src.infrastructure.browser.stockbit_broker_distribution import (
         StockbitBrokerDistributionProvider,
     )
@@ -56,9 +62,21 @@ def build_view_ticker_deps(db_path: Path | str) -> ViewTickerDeps:
     from src.infrastructure.config.institutional_accumulation_config_loader import (
         load_institutional_accumulation_config,
     )
+    from src.infrastructure.config.sector_context_config_loader import (
+        create_sector_context_evidence_builder,
+    )
+    from src.infrastructure.config.sector_macro_context_config_loader import (
+        create_sector_macro_context_evidence_builder,
+    )
     from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
     from src.infrastructure.persistence.sqlite_company_financials_repository import (
         SQLiteCompanyFinancialsRepository,
+    )
+    from src.infrastructure.persistence.sqlite_macro_calendar_repository import (
+        SQLiteMacroCalendarRepository,
+    )
+    from src.infrastructure.persistence.sqlite_market_repository import (
+        SQLiteMarketRepository,
     )
     from src.infrastructure.persistence.sqlite_ticker_dashboard_source import (
         SQLiteTickerDashboardSource,
@@ -73,13 +91,26 @@ def build_view_ticker_deps(db_path: Path | str) -> ViewTickerDeps:
         db_path=resolved,
         stockbit_config=load_stockbit_provider_config(),
     )
+    market_repo = SQLiteMarketRepository(db_path=resolved)
+    smc_loader = TickerDashboardSectorMacroLoader(
+        data_loader=CandidateEvidenceDataLoader(
+            market_repo,
+            repo,
+            macro_calendar_repository=SQLiteMacroCalendarRepository(resolved),
+        ),
+        sector_macro_context_builder_factory=create_sector_macro_context_evidence_builder,
+        sector_context_builder_factory=create_sector_context_evidence_builder,
+    )
     return ViewTickerDeps(
         db_path=resolved,
         broker_repository=repo,
         distribution_provider=dist_provider,
         financials_repository=financials_repo,
         foreign_broker_codes=foreign,
-        dashboard=GetTickerDashboardUseCase(SQLiteTickerDashboardSource(resolved)),
+        dashboard=GetTickerDashboardUseCase(
+            SQLiteTickerDashboardSource(resolved),
+            sector_macro_context_loader=smc_loader,
+        ),
         top_brokers=ViewTickerTopBrokersUseCase(repo, foreign_broker_codes=foreign),
         flow=ViewTickerFlowUseCase(repo),
         foreign_history=ViewTickerForeignHistoryUseCase(repo),

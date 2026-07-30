@@ -195,7 +195,13 @@ def test_use_case_assembles_full_dashboard_with_policy():
     assert any(i.key == "price" and i.status is CacheStatus.OK for i in dash.freshness)
     assert dash.panel_errors == ()
     verbs = {a.verb for a in dash.related_actions}
-    assert verbs == {"flow", "top-brokers", "foreign-history", "distribution"}
+    assert verbs == {
+        "flow",
+        "top-brokers",
+        "foreign-history",
+        "distribution",
+        "screen-accum",
+    }
     assert all(dash.ticker in a.command for a in dash.related_actions)
 
 

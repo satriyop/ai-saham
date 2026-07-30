@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import date, timedelta
-from typing import TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
 from src.application.dto.ticker_dashboard import (
     GetTickerDashboardRequest,
@@ -20,6 +20,11 @@ from src.application.dto.ticker_dashboard import (
     TickerDashboard,
     ViewRelatedAction,
 )
+
+if TYPE_CHECKING:
+    from src.domain.value_objects.sector_macro_context_evidence import (
+        SectorMacroContextEvidence,
+    )
 from src.application.ports.ticker_dashboard_source import TickerDashboardSource
 from src.application.services.ticker_dashboard_corp_actions import (
     calendar_event_to_display,
@@ -76,14 +81,28 @@ def _related_actions_for(ticker: str) -> tuple[ViewRelatedAction, ...]:
             label="Broker distribution",
             command=f"saham view ticker distribution {t}",
         ),
+        ViewRelatedAction(
+            verb="screen-accum",
+            label="Judgment desk (Action / Why)",
+            command=f"saham screen accum {t}",
+        ),
     )
+
+
+# Optional local-only sector-macro loader: (ticker, as_of) -> evidence or None.
+SectorMacroContextLoader = Callable[[str, date], "SectorMacroContextEvidence | None"]
 
 
 class GetTickerDashboardUseCase:
     """Build a read-only local-cache dashboard for one ticker."""
 
-    def __init__(self, source: TickerDashboardSource) -> None:
+    def __init__(
+        self,
+        source: TickerDashboardSource,
+        sector_macro_context_loader: SectorMacroContextLoader | None = None,
+    ) -> None:
         self._source = source
+        self._sector_macro_context_loader = sector_macro_context_loader
 
     def execute(self, request: GetTickerDashboardRequest) -> TickerDashboard:
         ticker = request.ticker.upper()
@@ -359,6 +378,17 @@ class GetTickerDashboardUseCase:
         )
 
         as_of = price_as_of or flow_as_of or today
+
+        # DIAGNOSTIC sector-macro (full mode only). Local loader; never network.
+        sector_macro_context_evidence = None
+        if not brief and self._sector_macro_context_loader is not None:
+            smc_as_of = as_of or today
+
+            def _load_smc() -> SectorMacroContextEvidence | None:
+                return self._sector_macro_context_loader(ticker, smc_as_of)  # type: ignore[misc]
+
+            sector_macro_context_evidence = safe("sector_macro", None, _load_smc)
+
         # Dedupe panel errors by key (keep first message).
         deduped_errors: list[PanelLoadError] = []
         seen_err: set[str] = set()
@@ -399,4 +429,5 @@ class GetTickerDashboardUseCase:
             sentiment_logs=tuple(sentiment_logs),
             profile=profile,
             candles=tuple(candles),
+            sector_macro_context_evidence=sector_macro_context_evidence,
         )

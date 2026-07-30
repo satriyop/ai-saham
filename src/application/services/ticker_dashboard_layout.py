@@ -16,6 +16,8 @@ FULL_PANEL_ORDER: tuple[str, ...] = (
     "ownership",
     "bandar",
     "foreign_flow",
+    # DIAGNOSTIC sector-macro (ADR-053) — full browse only; omit from brief.
+    "sector_macro",
     "corp_actions",
     "insider",
     "seasonality",
@@ -34,6 +36,7 @@ BRIEF_PANEL_KEYS: frozenset[str] = frozenset(
         "earnings",
         "bandar",
         "foreign_flow",
+        # brief: omit full SECTOR MACRO table (policy: omit, not one-line)
     }
 )
 

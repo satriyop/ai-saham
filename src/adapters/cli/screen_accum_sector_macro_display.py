@@ -26,11 +26,21 @@ def _factor_value_display(series: str, value: float | None) -> str:
     return f"{value * 100:+.1f}%"
 
 
-def build_sector_macro_panel(smc: Any) -> Any | None:
-    """Return a Rich panel for sector-macro evidence, or None if empty."""
+def build_sector_macro_panel(
+    smc: Any,
+    *,
+    ticker: str | None = None,
+    surface: str = "screen",
+) -> Any | None:
+    """Return a Rich panel for sector-macro evidence, or None if empty.
+
+    ``surface``: ``screen`` (judgment desk) or ``view`` (browse dashboard).
+    Never shows Action/Gate. Always DIAGNOSTIC.
+    """
     if smc is None:
         return None
 
+    t = (ticker or "").upper().strip()
     lines: list = []
     if smc.macro_regime == "UNKNOWN" and not smc.factors and smc.unavailable_reasons:
         for reason in list(smc.unavailable_reasons)[:2]:
@@ -68,12 +78,14 @@ def build_sector_macro_panel(smc: Any) -> Any | None:
                 )
             lines.append(table)
 
-        lines.append(
-            Text(
-                "  DIAGNOSTIC — no scoring impact (ADR-053). Judgment desk only (ADR-054).",
-                style="dim",
+        if surface == "view":
+            judgment = f"saham screen accum {t}" if t else "saham screen accum TICKER"
+            footer = (
+                f"  DIAGNOSTIC — no scoring impact (ADR-053). Judgment (Action / Why): {judgment}"
             )
-        )
+        else:
+            footer = "  DIAGNOSTIC — no scoring impact (ADR-053). Judgment desk only (ADR-054)."
+        lines.append(Text(footer, style="dim"))
         for reason in list(smc.unavailable_reasons)[:2]:
             lines.append(Text(f"  ⚠ {reason}", style="dim yellow"))
 

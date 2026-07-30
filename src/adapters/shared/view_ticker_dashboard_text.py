@@ -39,6 +39,7 @@ def render_ticker_dashboard_table(
     """Pure table renderer over an assembled TickerDashboard DTO."""
     # Local import keeps panel modules out of module import graph for light tests.
     from src.adapters.cli.rich_display import console
+    from src.adapters.cli.screen_accum_sector_macro_display import build_sector_macro_panel
     from src.adapters.cli.view_ticker_events_display import _corp_action_panel, _sentiment_panel
     from src.adapters.cli.view_ticker_flow_display import (
         _bandar_panel,
@@ -105,6 +106,31 @@ def render_ticker_dashboard_table(
                 empty_hint=fetch_hint,
             )
         )
+    if "sector_macro" in panels:
+        smc_panel = build_sector_macro_panel(
+            dashboard.sector_macro_context_evidence,
+            ticker=dashboard.ticker,
+            surface="view",
+        )
+        if smc_panel is not None:
+            c.print(smc_panel)
+        elif dashboard.sector_macro_context_evidence is None:
+            # Fail-soft empty: still signal the panel slot when full mode lists it
+            # but loader returned None without a panel_error (unmapped / soft fail).
+            from src.adapters.cli.rich_display import panel as _panel
+
+            c.print(
+                _panel(
+                    Text(
+                        "Sector macro unavailable (unmapped, missing series, "
+                        "or no local macro-calendar).\n"
+                        "  DIAGNOSTIC — no scoring impact (ADR-053).\n"
+                        f"  Judgment: saham screen accum {dashboard.ticker}",
+                        style="dim",
+                    ),
+                    title="SECTOR MACRO",
+                )
+            )
     if "corp_actions" in panels:
         c.print(
             _corp_action_panel(
