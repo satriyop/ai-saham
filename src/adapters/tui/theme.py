@@ -24,9 +24,9 @@ Screen {
     padding: 0 1;
 }
 
+/* Fixed header height — height:auto steals 1fr from #stage and zeros the board. */
 #main-header {
-    height: auto;
-    min-height: 3;
+    height: 3;
     padding: 1 1 0 1;
     border-bottom: solid #181818;
 }
@@ -34,16 +34,18 @@ Screen {
 #view-title {
     text-style: bold;
     color: #e8e8e8;
+    height: 1;
 }
 
 #view-meta {
     color: #5c6575;
-    height: auto;
+    height: 1;
 }
 
 #mode-pill {
     color: #d4b06a;
     text-align: right;
+    height: 1;
 }
 
 #stage {

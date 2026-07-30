@@ -493,12 +493,16 @@ class CockpitApp(App[None]):
 
     def _refresh_chrome(self) -> None:
         self.query_one("#view-title", Static).update(self._board_title)
+        # Single-line meta only — multi-line + header height:auto zeroed the board table.
         meta_line = f"· {self._meta}"
         if self._stage == "accum" and self._board_summary:
             from src.adapters.tui.board_cell_markup import format_triage_markup
 
-            # Design strip: meta facts + ENTER/WATCH/AVOID triage (present-only counts)
-            meta_line = f"· {self._meta}\n  {format_triage_markup(self._board_summary)}"
+            triage = format_triage_markup(self._board_summary)
+            if self._meta:
+                meta_line = f"· {self._meta} · {triage}"
+            else:
+                meta_line = f"· {triage}"
         self.query_one("#view-meta", Static).update(meta_line)
         self.query_one("#mode-pill", Static).update(self._mode_label())
         self.query_one("#status", Static).update(self._status_text())
