@@ -106,6 +106,18 @@ def test_md_states_opencode_bible_and_broker_in_cockpit():
     assert "linked out" not in text.lower() or "in-cockpit" in text.lower() or "7 |" in text
 
 
+def test_preopen_enter_opens_auction_inspect_not_judge():
+    html = _html()
+    assert 'id="preopenView"' in html
+    assert 'id="preopenInspectView"' in html
+    assert "openPreopenInspect" in html
+    assert "preopenMode" in html
+    # Enter path is inspect, not showFrame("judge")
+    assert "openPreopenInspect()" in html
+    # Still have accum Judge separately
+    assert 'showFrame("judge")' in html
+
+
 def test_plan_frame_is_geometry_triangle():
     html = _html()
     assert 'id="planView"' in html

@@ -25,7 +25,7 @@ Ship Textual against **this cockpit mock**. Standalone journey HTML may stay “
 | 2 | Judge | Action present-only | Action/Gate first · scores · phase · compact cards |
 | 3 | Plan | Structure | **Geometry triangle** Entry→Stop→Target · inherit Action · `l` paper confirm |
 | 4 | Paper | Notebook | **Notebook tape** (date · ticker · E/S/T · status) · write via plan `l` confirm |
-| 5 | Pre-open | Auction | IEP board · inspect ≠ accum Judge |
+| 5 | Pre-open | Auction | IEP board → **Enter** auction **inspect** (not accum Judge) |
 | 6 | Ticker | Browse | **Price hero** hierarchy (IA: ticker-desk) · full fields |
 | 7 | Broker | Browse | Desk **radar** → **Enter** **Net hero** home (top/flow/hist hub) |
 | 8 | Health | Honesty | Empty / zero / lag / ready posters |
@@ -40,9 +40,21 @@ Ship Textual against **this cockpit mock**. Standalone journey HTML may stay “
 | **Action** | Board `Enter` → Judge · `p` Plan · `l` Paper | Ticker/broker invent Action |
 | **Browse** | `v t` ticker · `v b` broker radar · broker `Enter` desk home · `t`/`f`/`h` deep · `v` jump ticker | ENTER/WATCH/AVOID authority |
 | **Paper** | Confirm after geometry | Auto-write · corpus · orders |
-| **Pre-open** | Inspect ≠ accum Judge | Same Enter as accum Judge |
+| **Pre-open** | `Enter` → auction inspect stage | Same frame as accum Judge / TradeSetup Action |
 
 **Chrome noise:** authority lives in this table and in **key wiring** (Enter → Judge, browse paths). Do **not** stamp every stage with “not Action / not judgment / not a re-score.” Operators already know where judgment lives.
+
+### Pre-open contract (frame 5 · design-final for TUI)
+
+IA source: [`tui-preopen-board.html`](./tui-preopen-board.html).
+
+| Mode | Keys | Stage |
+|------|------|--------|
+| **Board** | `s p` / frame 5 · `↑↓` | Auction strip + IEP table (cols 1:1) |
+| **Inspect** | **Enter** from board | Grade · risk · IEP hero · IEV/NCP/ΔIEV · auction trail |
+| **Back** | `esc` | Inspect → board → accum |
+
+**Why not Judge?** Accum Judge is **TradeSetup Action** (ENTER/WATCH/AVOID) present-only. Pre-open is **auction / IEV evidence** only. Same key (`Enter`), different authority — never open frame 2 Judge from pre-open.
 
 ### Plan contract (frame 3 · design-final for TUI)
 

@@ -1768,7 +1768,7 @@
 <body>
  <div class="demo-bar">
  <div class="card">
- <strong>OpenCode visual = TUI bible</strong> · <span style="color:#6fbf8a" id="buildStamp">rev 2026-07-30m · plan geometry · E2E 1–9</span>
+ <strong>OpenCode visual = TUI bible</strong> · <span style="color:#6fbf8a" id="buildStamp">rev 2026-07-30n · preopen inspect · E2E 1–9</span>
  · black-on-black · peach palette · mono density
  · <em style="color:var(--sel-dim);font-style:normal">Journey = structure inspiration only</em>
  (stages / authority / columns — not marketing night-ink skin)
@@ -2023,14 +2023,58 @@
  </div>
  </div>
 
- <div class="footer-note">
- <span><span class="kbd">↑↓</span> move</span>
- <span><span class="kbd">Enter</span> auction inspect (≠ accum Judge)</span>
- <span><span class="kbd">p</span> plan</span>
- <span><span class="kbd">s a</span> accum</span>
- <span class="dim">Cols 1:1 TUI · Tkr IEP Δ% IEV NCP ΔIEV Grd Risk</span>
- </div>
- </div>
+            <div class="footer-note">
+              <span><span class="kbd">↑↓</span> move</span>
+              <span><span class="kbd">Enter</span> auction inspect</span>
+              <span><span class="kbd">p</span> plan</span>
+              <span><span class="kbd">s a</span> accum</span>
+              <span class="dim">Tkr IEP Δ% IEV NCP ΔIEV Grd Risk</span>
+            </div>
+          </div>
+
+          <!-- 5b PRE-OPEN INSPECT · auction facts only · not accum Judge -->
+          <div class="list-view is-hidden" id="preopenInspectView">
+            <div class="oc-note">
+              Auction inspect · IEV/IEP row · different path from board Judge ·
+              IA <a href="./tui-preopen-board.html">tui-preopen-board.html</a>
+            </div>
+            <div class="section-label">Pre-open · inspect · <span id="poiTicker">BBRI</span></div>
+
+            <div class="plan-inherit" style="margin-bottom:12px">
+              <span class="act" id="poiGrade" style="color:var(--green)">A</span>
+              <span class="badge pass" id="poiRisk">clear</span>
+              <span class="note">auction grade · risk snapshot · present-only</span>
+            </div>
+
+            <div class="oc-hero" style="margin-bottom:12px">
+              <div class="lab">IEP · session</div>
+              <div class="row">
+                <span class="price-xl" id="poiIep" style="font-size:1.75rem">4,820</span>
+                <span class="chg" id="poiDelta">+1.8%</span>
+              </div>
+              <div class="kv" style="margin-top:12px">
+                <span class="k">IEV</span><span class="v" id="poiIev">12.4M</span>
+                <span class="k">NCP</span><span class="v" id="poiNcp">0.92</span>
+                <span class="k">ΔIEV</span><span class="v" id="poiDiev">+2.1M</span>
+                <span class="k">Session</span><span class="v">pre-open · local IEV</span>
+              </div>
+            </div>
+
+            <div class="plan-ctx" id="poiBody">
+              <h3>Auction trail</h3>
+              <p id="poiTrail">
+                Provenance verified NCP · imbalance buy-lean · prior close vs IEP inside band ·
+                no TradeSetup Action on this path
+              </p>
+            </div>
+
+            <div class="footer-note">
+              <span><span class="kbd">esc</span> IEP board</span>
+              <span><span class="kbd">p</span> plan</span>
+              <span><span class="kbd">v</span> ticker</span>
+              <span class="dim">not board Enter Judge</span>
+            </div>
+          </div>
 
  <!-- 7 HEALTH posters · tui-session-health.html -->
  <div class="empty-view is-hidden" id="emptyView">
@@ -2781,6 +2825,7 @@
  brokerIndex: 0,
  brokerMode: "radar", // radar | home
  brokerDeep: "top", // top | flow | hist | ticker
+ preopenMode: "board", // board | inspect
  paletteOpen: false,
  confirmOpen: false,
  filtered: [...COMMANDS],
@@ -2861,10 +2906,75 @@
  updatePreopenEvidence();
  updateChrome();
  });
- tr.addEventListener("dblclick", () => toast("Pre-open inspect · not accum Judge"));
- });
- updatePreopenEvidence();
- }
+        tr.addEventListener("dblclick", () => {
+          state.preIndex = Number(tr.dataset.i);
+          openPreopenInspect();
+        });
+      });
+      updatePreopenEvidence();
+    }
+
+    function paintPreopenInspect() {
+      const r = PREOPEN[state.preIndex] || PREOPEN[0];
+      if (!r) return;
+      const el = (id) => $(id);
+      if (el("poiTicker")) el("poiTicker").textContent = r.t;
+      if (el("poiGrade")) {
+        el("poiGrade").textContent = r.grade;
+        const g = String(r.grade || "").toUpperCase();
+        el("poiGrade").style.color =
+          g === "A" ? "var(--green)" : g === "B" ? "var(--blue)" : "var(--amber)";
+      }
+      if (el("poiRisk")) {
+        el("poiRisk").textContent = r.risk;
+        el("poiRisk").className = "badge " + badgeClass(r.risk);
+      }
+      if (el("poiIep")) el("poiIep").textContent = Number(r.iep).toLocaleString("en-US");
+      if (el("poiDelta")) {
+        const d = Number(r.d);
+        const s = (d >= 0 ? "+" : "") + d.toFixed(1) + "%";
+        el("poiDelta").textContent = s;
+        el("poiDelta").className = "chg" + (d < 0 ? " neg" : "");
+      }
+      if (el("poiIev")) el("poiIev").textContent = r.iev;
+      if (el("poiNcp")) el("poiNcp").textContent = Number(r.ncp).toFixed(2);
+      if (el("poiDiev")) el("poiDiev").textContent = r.diev;
+      if (el("poiTrail")) {
+        el("poiTrail").textContent =
+          `${r.t} · IEP ${Number(r.iep).toLocaleString("en-US")} · ΔIEV ${r.diev} · grade ${r.grade} · risk ${r.risk} · local IEV snapshot · no Action path`;
+      }
+    }
+
+    function openPreopenInspect() {
+      state.preopenMode = "inspect";
+      paintPreopenInspect();
+      const board = $("preopenView");
+      const insp = $("preopenInspectView");
+      if (board) {
+        board.classList.add("is-hidden");
+        board.style.display = "none";
+      }
+      if (insp) {
+        insp.classList.remove("is-hidden");
+        insp.style.display = "block";
+      }
+      updateChrome();
+    }
+
+    function closePreopenInspect() {
+      state.preopenMode = "board";
+      const board = $("preopenView");
+      const insp = $("preopenInspectView");
+      if (insp) {
+        insp.classList.add("is-hidden");
+        insp.style.display = "none";
+      }
+      if (board) {
+        board.classList.remove("is-hidden");
+        board.style.display = "block";
+      }
+      updateChrome();
+    }
 
     function paintJudgeFromFocus() {
       const f = focusTicker();
@@ -3092,7 +3202,7 @@
  }
 
  function hideAllViews() {
- ["accumView", "judgeView", "planView", "paperView", "preopenView", "emptyView", "detailView", "brokerView"].forEach((id) => {
+    ["accumView", "judgeView", "planView", "paperView", "preopenView", "preopenInspectView", "emptyView", "detailView", "brokerView"].forEach((id) => {
  const el = $(id);
  if (!el) return;
  el.classList.add("is-hidden");
@@ -3133,9 +3243,24 @@
         renderPaperTape();
         setModeLocal();
       } else if (frame === "preopen") {
- $("preopenView").classList.remove("is-hidden"); $("preopenView").style.display = "block";
- setModeLocal();
- } else if (frame === "empty") {
+        if (!opts.keepPreopenMode) state.preopenMode = "board";
+        if (state.preopenMode === "inspect") {
+          const insp = $("preopenInspectView");
+          if (insp) {
+            insp.classList.remove("is-hidden");
+            insp.style.display = "block";
+          }
+          paintPreopenInspect();
+        } else {
+          $("preopenView").classList.remove("is-hidden");
+          $("preopenView").style.display = "block";
+          if ($("preopenInspectView")) {
+            $("preopenInspectView").classList.add("is-hidden");
+            $("preopenInspectView").style.display = "none";
+          }
+        }
+        setModeLocal();
+      } else if (frame === "empty") {
  $("emptyView").classList.remove("is-hidden"); $("emptyView").style.display = "block";
  setHealthPoster(state.health || "empty");
  setModeEmpty();
@@ -3232,11 +3357,19 @@
         $("statusScreen").textContent = "paper notebook";
         $("statusRows").textContent = `${PAPER.length} rows`;
       } else if (state.frame === "preopen") {
- $("viewTitle").textContent = "Screen · pre-open";
- $("viewMeta").innerHTML = `<span class="dot">·</span> IEV snapshot · auction · ≠ accum Judge`;
- $("statusScreen").textContent = "screen pre-open";
- $("statusRows").textContent = `${PREOPEN.length} graded`;
- } else if (state.frame === "empty") {
+        const pr = PREOPEN[state.preIndex] || {};
+        if (state.preopenMode === "inspect") {
+          $("viewTitle").textContent = `Pre-open · inspect · ${pr.t || "—"}`;
+          $("viewMeta").innerHTML = `<span class="dot">·</span> auction · IEV/IEP · esc board`;
+          $("statusScreen").textContent = `auction inspect · ${pr.t || "—"}`;
+          $("statusRows").textContent = pr.t || "—";
+        } else {
+          $("viewTitle").textContent = "Screen · pre-open";
+          $("viewMeta").innerHTML = `<span class="dot">·</span> IEV snapshot · Enter = inspect`;
+          $("statusScreen").textContent = "screen pre-open";
+          $("statusRows").textContent = `${PREOPEN.length} graded`;
+        }
+      } else if (state.frame === "empty") {
  $("viewTitle").textContent = "Session · health";
  $("viewMeta").innerHTML = `<span class="dot">·</span> poster · ${state.health || "empty"}`;
  $("statusScreen").textContent = "health";
@@ -3273,12 +3406,19 @@
  } else {
  $("sideFocus").innerHTML = `<strong>Radar</strong><br />Scout by |Net5| · Enter = Net hero home`;
  }
- } else if (state.frame === "judge") {
- $("sideFocus").innerHTML = `<strong>${t}</strong><br />j re-judge · p plan · esc board`;
- } else {
- $("sideFocus").innerHTML = `<strong>${t}</strong> selected<br />Enter → Judge · p → Plan · v t → ticker`;
- }
- }
+      } else if (state.frame === "preopen") {
+        const pr = PREOPEN[state.preIndex] || {};
+        if (state.preopenMode === "inspect") {
+          $("sideFocus").innerHTML = `<strong>${pr.t || "—"}</strong> auction<br />esc board · p plan · v ticker`;
+        } else {
+          $("sideFocus").innerHTML = `<strong>${pr.t || "—"}</strong> IEP board<br />Enter = auction inspect · p plan`;
+        }
+      } else if (state.frame === "judge") {
+        $("sideFocus").innerHTML = `<strong>${t}</strong><br />j re-judge · p plan · esc board`;
+      } else {
+        $("sideFocus").innerHTML = `<strong>${t}</strong> selected<br />Enter → Judge · p → Plan · v t → ticker`;
+      }
+    }
 
  /* palette */
  function openPalette() {
@@ -3551,18 +3691,23 @@
 
  if (isTypingTarget(e.target)) return;
 
- if (e.key === "Escape") {
- if (state.frame === "broker" && state.brokerMode === "home") {
- e.preventDefault();
- closeBrokerHome();
- return;
- }
- if (["detail", "judge", "plan", "paper", "broker"].includes(state.frame)) {
- e.preventDefault();
- showFrame(state.cacheEmpty ? "empty" : "accum");
- }
- return;
- }
+      if (e.key === "Escape") {
+        if (state.frame === "broker" && state.brokerMode === "home") {
+          e.preventDefault();
+          closeBrokerHome();
+          return;
+        }
+        if (state.frame === "preopen" && state.preopenMode === "inspect") {
+          e.preventDefault();
+          closePreopenInspect();
+          return;
+        }
+        if (["detail", "judge", "plan", "paper", "broker", "preopen"].includes(state.frame)) {
+          e.preventDefault();
+          showFrame(state.cacheEmpty ? "empty" : "accum");
+        }
+        return;
+      }
 
  if (state.frame === "accum") {
  if (e.key === "ArrowDown" || e.key === "j") {
@@ -3633,24 +3778,38 @@
  }
  }
 
- if (state.frame === "preopen") {
- if (e.key === "ArrowDown" || e.key === "j") {
- e.preventDefault();
- state.preIndex = Math.min(PREOPEN.length - 1, state.preIndex + 1);
- renderPreopen(); updateChrome(); return;
- }
- if (e.key === "ArrowUp" || e.key === "k") {
- e.preventDefault();
- state.preIndex = Math.max(0, state.preIndex - 1);
- renderPreopen(); updateChrome(); return;
- }
- if (e.key === "Enter") {
- e.preventDefault();
- toast("Pre-open inspect · not accum Judge");
- return;
- }
- if (e.key.toLowerCase() === "p") { e.preventDefault(); showFrame("plan"); return; }
- }
+      if (state.frame === "preopen") {
+        if (state.preopenMode === "inspect") {
+          if (e.key.toLowerCase() === "p") { e.preventDefault(); showFrame("plan"); return; }
+          if (e.key.toLowerCase() === "v") {
+            e.preventDefault();
+            const pr = PREOPEN[state.preIndex];
+            if (pr) {
+              const idx = ACCUM.findIndex((r) => r.t === pr.t);
+              if (idx >= 0) state.rowIndex = idx;
+            }
+            showFrame("detail");
+            return;
+          }
+          return;
+        }
+        if (e.key === "ArrowDown" || e.key === "j") {
+          e.preventDefault();
+          state.preIndex = Math.min(PREOPEN.length - 1, state.preIndex + 1);
+          renderPreopen(); updateChrome(); return;
+        }
+        if (e.key === "ArrowUp" || e.key === "k") {
+          e.preventDefault();
+          state.preIndex = Math.max(0, state.preIndex - 1);
+          renderPreopen(); updateChrome(); return;
+        }
+        if (e.key === "Enter") {
+          e.preventDefault();
+          openPreopenInspect();
+          return;
+        }
+        if (e.key.toLowerCase() === "p") { e.preventDefault(); showFrame("plan"); return; }
+      }
  });
 
  $("overlay") && $("overlay").addEventListener("mousedown", (e) => {
