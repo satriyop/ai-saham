@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ai-saham · Daily Cockpit · OpenCode-style mock</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -438,6 +441,9 @@
     /* detail */
     .detail { display: none; animation: fadeIn 120ms ease; }
     .detail.is-open { display: block; }
+    .list-view, .empty-view, .preopen-view, .stage-block {
+      display: block;
+    }
     .list-view.is-hidden,
     .empty-view.is-hidden,
     .preopen-view.is-hidden { display: none; }
@@ -1099,7 +1105,7 @@
 <body>
   <div class="demo-bar">
     <div class="card">
-      <strong>OpenCode visual = TUI bible</strong>
+      <strong>OpenCode visual = TUI bible</strong> · <span style="color:#6fbf8a">rev 2026-07-30c · E2E frames 1–9</span>
       · black-on-black · peach palette · mono density
       · <em style="color:var(--sel-dim);font-style:normal">Journey = structure inspiration only</em>
       (stages / authority / columns — not marketing night-ink skin)
@@ -1734,6 +1740,7 @@
     };
 
     const $ = (id) => document.getElementById(id);
+    const must = (id) => { const el = $(id); if (!el) console.warn("missing #"+id); return el; };
 
     function badgeClass(s) {
       const u = String(s || "").toLowerCase();
@@ -2390,25 +2397,28 @@
       }
     });
 
-    $("paletteInput").addEventListener("input", () => {
+    $("overlay") && $("overlay").addEventListener("mousedown", (e) => {
+      if (e.target === $("overlay")) closePalette();
+    });
+    $("confirmOverlay") && $("confirmOverlay").addEventListener("mousedown", (e) => {
+      if (e.target === $("confirmOverlay")) closeConfirm();
+    });
+
+    const on = (id, ev, fn) => {
+      const el = $(id);
+      if (el) el.addEventListener(ev, fn);
+    };
+    on("statusPalette", "click", openPalette);
+    on("btnBack", "click", () => showFrame("accum"));
+    on("btnConfirmCancel", "click", () => closeConfirm());
+    on("btnConfirmOk", "click", confirmPlan);
+    on("btnFetchEmpty", "click", () => runCommand(COMMANDS.find((c) => c.action === "fetch")));
+    on("btnPaletteEmpty", "click", openPalette);
+    on("paletteInput", "input", () => {
       state.filtered = filterCommands($("paletteInput").value);
       state.cmdIndex = 0;
       renderPalette();
     });
-
-    $("overlay").addEventListener("mousedown", (e) => {
-      if (e.target === $("overlay")) closePalette();
-    });
-    $("confirmOverlay").addEventListener("mousedown", (e) => {
-      if (e.target === $("confirmOverlay")) closeConfirm();
-    });
-
-    $("statusPalette").addEventListener("click", openPalette);
-    $("btnBack").addEventListener("click", () => showFrame("accum"));
-    $("btnConfirmCancel").addEventListener("click", () => closeConfirm());
-    $("btnConfirmOk").addEventListener("click", confirmPlan);
-    $("btnFetchEmpty").addEventListener("click", () => runCommand(COMMANDS.find((c) => c.action === "fetch")));
-    $("btnPaletteEmpty").addEventListener("click", openPalette);
 
     document.querySelectorAll("[data-action]").forEach((btn) => {
       btn.addEventListener("click", () => {
