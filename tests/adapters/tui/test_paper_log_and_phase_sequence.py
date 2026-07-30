@@ -31,6 +31,8 @@ def test_format_phase_sequence_ordered_and_empty():
     assert "2026-07-20" in text and "2026-07-25" in text
     assert "now" in text.lower() and "COMPRESSION" in text
     assert "not a re-score" in text.lower() or "production memory" in text.lower()
+    # Single footer only
+    assert text.lower().count("not a re-score") == 1
 
     empty = "\n".join(format_phase_sequence_section(()))
     assert "no closed-session phase history" in empty.lower()
@@ -41,6 +43,41 @@ def test_format_phase_sequence_ordered_and_empty():
     )
     assert "cannot load sequence without as_of" in unavail
     assert "→" not in unavail
+
+
+def test_format_phase_sequence_collapses_identical_runs():
+    """Design: never dump DISTRIBUTION → DISTRIBUTION × N (day diary)."""
+    from src.adapters.tui.phase_sequence import collapse_phase_runs
+
+    facts = tuple(
+        PhaseSequenceFact(phase="DISTRIBUTION", as_of=f"2026-07-{d:02d}") for d in range(1, 17)
+    ) + (
+        PhaseSequenceFact(phase="ACCUMULATION", as_of="2026-07-27"),
+        PhaseSequenceFact(phase="ACCUMULATION", as_of="2026-07-28"),
+    )
+    runs = collapse_phase_runs(facts)
+    assert len(runs) == 2
+    assert runs[0].phase == "DISTRIBUTION" and runs[0].sessions == 16
+    assert runs[1].phase == "ACCUMULATION" and runs[1].sessions == 2
+
+    text = "\n".join(format_phase_sequence_section(facts, current_phase="ACCUMULATION"))
+    assert "DISTRIBUTION (16d) → ACCUMULATION (2d)" in text
+    # Must not repeat DISTRIBUTION in the arrow chain
+    arrow_line = next(ln for ln in text.splitlines() if "→" in ln and "DISTRIBUTION" in ln)
+    assert arrow_line.count("DISTRIBUTION") == 1
+    assert arrow_line.count("ACCUMULATION") == 1
+    # Detail is per-run, not per-day (2 bullets for runs, not 18)
+    detail_days = [ln for ln in text.splitlines() if "sessions" in ln.lower()]
+    assert len(detail_days) == 2
+    assert "16 sessions" in text and "2 sessions" in text
+    # No full diary of every date as a bullet of DISTRIBUTION alone
+    daily_dist_bullets = [
+        ln
+        for ln in text.splitlines()
+        if "DISTRIBUTION" in ln and ln.strip().startswith("·") and "sessions" not in ln.lower()
+    ]
+    assert daily_dist_bullets == []
+    assert text.lower().count("not a re-score") == 1
 
 
 def test_facts_from_ledger_rows_maps_phase_and_date():
