@@ -83,6 +83,8 @@ def pre_open_labels(
         "idempotent_count": result.idempotent_count,
         "unavailable_count": result.unavailable_count,
         "skipped_count": result.skipped_count,
+        "conflict_count": result.conflict_count,
+        "conflict_label_ids": list(result.conflict_label_ids),
         "label_ids": [label.label_id for label in result.labels],
     }
     if fmt == "json":
@@ -91,5 +93,12 @@ def pre_open_labels(
     typer.echo(
         "open_30m labels: source=database_tracks  "
         f"n={result.observation_count}  labeled={result.inserted_count}  "
-        f"unavailable={result.unavailable_count}  skipped={result.skipped_count}"
+        f"unavailable={result.unavailable_count}  skipped={result.skipped_count}  "
+        f"conflicts={result.conflict_count}"
     )
+    if result.conflict_count:
+        typer.echo(
+            "  note: first-write labels kept for conflict ids "
+            f"({', '.join(x[:12] + '…' for x in result.conflict_label_ids[:5])})",
+            err=True,
+        )

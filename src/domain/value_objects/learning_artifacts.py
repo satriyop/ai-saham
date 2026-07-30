@@ -143,6 +143,10 @@ def _artifact_payload(value: Any, *, id_field: str, digest_field: str) -> dict[s
     payload = asdict(value)
     payload.pop(id_field)
     payload.pop(digest_field)
+    # Label identity is (observation_id, contract). Wall-clock labeled_at is ops
+    # audit only — must not force digest conflicts on daily cron re-runs.
+    if id_field == "label_id":
+        payload.pop("labeled_at", None)
     return payload
 
 

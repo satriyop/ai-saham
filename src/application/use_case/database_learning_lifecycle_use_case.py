@@ -68,6 +68,10 @@ class GenerateLearningLabelsResult:
     labels: tuple[LearningOutcomeLabel, ...]
     # Observations not labeled yet (horizon/coverage/entry not ready). No row written.
     skipped_count: int = 0
+    # Same label_id already stored with a different digest (legacy / clock clash).
+    # Batch continues; first write remains authority.
+    conflict_count: int = 0
+    conflict_label_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -123,8 +127,25 @@ def _observation_ids_with_contract(
     return {
         label.observation_id
         for label in labels.list_labels(observation_ids)
-        if label.contract_id is contract_id
+        if label.contract_id == contract_id
     }
+
+
+def _try_add_label(
+    labels: LearningOutcomeLabelRepository,
+    label: LearningOutcomeLabel,
+    *,
+    conflicts: list[str],
+) -> bool:
+    """Insert label; on immutable digest conflict, record and continue (no raise)."""
+    try:
+        return labels.add_label(label)
+    except LearningContractError as exc:
+        message = str(exc)
+        if "immutable artifact conflict" not in message:
+            raise
+        conflicts.append(label.label_id)
+        return False
 
 
 def _entry_reference(payload: dict[str, Any] | Any) -> Decimal | None:
@@ -211,10 +232,11 @@ class GenerateAccumulationPricePathLabelsUseCase:
         inserted = 0
         unavailable = 0
         skipped = 0
+        conflicts: list[str] = []
         coverage_available = self._corporate_actions.has_any_sync_marker()
         for observation in observations:
             if observation.observation_id in already_labeled:
-                # First write wins; re-runs must not conflict on labeled_at digest.
+                # First write wins; re-runs must not rewrite terminal labels.
                 skipped += 1
                 continue
             label = self._label_one(
@@ -230,15 +252,18 @@ class GenerateAccumulationPricePathLabelsUseCase:
             labels.append(label)
             if label.availability is LabelAvailability.UNAVAILABLE:
                 unavailable += 1
-            if self._labels.add_label(label):
+            if _try_add_label(self._labels, label, conflicts=conflicts):
                 inserted += 1
+        conflict_ids = tuple(conflicts)
         return GenerateLearningLabelsResult(
             observation_count=len(observations),
             inserted_count=inserted,
-            idempotent_count=len(labels) - inserted,
+            idempotent_count=max(0, len(labels) - inserted - len(conflict_ids)),
             unavailable_count=unavailable,
             skipped_count=skipped,
             labels=tuple(labels),
+            conflict_count=len(conflict_ids),
+            conflict_label_ids=conflict_ids,
         )
 
     def _label_one(
@@ -402,6 +427,7 @@ class GeneratePreOpenOutcomeLabelsUseCase:
         inserted = 0
         unavailable = 0
         skipped = 0
+        conflicts: list[str] = []
         for observation in observations:
             if observation.observation_id in already_labeled:
                 skipped += 1
@@ -413,15 +439,18 @@ class GeneratePreOpenOutcomeLabelsUseCase:
             output.append(label)
             if label.availability is LabelAvailability.UNAVAILABLE:
                 unavailable += 1
-            if self._labels.add_label(label):
+            if _try_add_label(self._labels, label, conflicts=conflicts):
                 inserted += 1
+        conflict_ids = tuple(conflicts)
         return GenerateLearningLabelsResult(
             observation_count=len(observations),
             inserted_count=inserted,
-            idempotent_count=len(output) - inserted,
+            idempotent_count=max(0, len(output) - inserted - len(conflict_ids)),
             unavailable_count=unavailable,
             skipped_count=skipped,
             labels=tuple(output),
+            conflict_count=len(conflict_ids),
+            conflict_label_ids=conflict_ids,
         )
 
     def _label_one(

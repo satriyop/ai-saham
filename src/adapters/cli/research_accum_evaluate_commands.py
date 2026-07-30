@@ -108,6 +108,8 @@ def accumulation_labels(
                 "idempotent_count": result.idempotent_count,
                 "unavailable_count": result.unavailable_count,
                 "skipped_count": result.skipped_count,
+                "conflict_count": result.conflict_count,
+                "conflict_label_ids": list(result.conflict_label_ids),
                 "label_ids": [label.label_id for label in result.labels],
             }
         )
@@ -126,6 +128,7 @@ def accumulation_labels(
             "results": results,
             "inserted_count": sum(r["inserted_count"] for r in results),
             "skipped_count": sum(r["skipped_count"] for r in results),
+            "conflict_count": sum(r["conflict_count"] for r in results),
         }
     echo(payload, fmt)
 

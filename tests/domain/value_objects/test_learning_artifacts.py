@@ -110,6 +110,27 @@ def test_available_label_requires_outcome() -> None:
         )
 
 
+def test_label_digest_excludes_labeled_at() -> None:
+    """Wall-clock labeled_at is audit-only; re-runs must not change digest."""
+    obs_id = _observation().observation_id
+    kwargs = dict(
+        contract_id=LearningContractId.PRE_OPEN_LABEL,
+        observation_id=obs_id,
+        outcome_basis=OutcomeBasis.PRICE_PATH_ONLY,
+        availability=LabelAvailability.AVAILABLE,
+        outcome="SUCCESS",
+        metrics={"open_to_close_return_pct": 0.5},
+        fingerprint="tracks-1",
+    )
+    a = LearningOutcomeLabel.create(**kwargs, labeled_at=NOW)
+    b = LearningOutcomeLabel.create(
+        **kwargs, labeled_at=datetime(2026, 7, 28, 9, 36, tzinfo=timezone.utc)
+    )
+    assert a.label_id == b.label_id
+    assert a.artifact_digest == b.artifact_digest
+    assert a.labeled_at != b.labeled_at
+
+
 def test_validation_status_values_are_strict() -> None:
     assert ValidationStatus("PASS") is ValidationStatus.PASS
     with pytest.raises(ValueError):

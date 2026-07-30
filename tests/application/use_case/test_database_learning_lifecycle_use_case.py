@@ -235,7 +235,92 @@ def test_pre_open_labels_skip_missing_tracks_then_insert_when_ready(tmp_path) ->
     )
     assert rerun.inserted_count == 0
     assert rerun.skipped_count == 1
+    assert rerun.conflict_count == 0
     assert len(repository.list_labels([observation.observation_id])) == 1
+
+
+def test_pre_open_labels_continue_on_legacy_digest_conflict(tmp_path) -> None:
+    """If a prior row blocks rewrite, batch continues and reports conflict_count."""
+    import sqlite3
+
+    from src.domain.value_objects.learning_artifacts import (
+        LabelAvailability,
+        LearningOutcomeLabel,
+        OutcomeBasis,
+    )
+
+    repository = SQLiteLearningArtifactRepository(tmp_path / "data.db")
+    blocked = _observation(day=26)
+    ready = _observation(day=27)
+    repository.add_observation(blocked)
+    repository.add_observation(ready)
+    for observation in (blocked, ready):
+        repository.add_track_snapshot(
+            LearningTrackSnapshot.create(
+                observation_id=observation.observation_id,
+                sampled_at=observation.cutoff_at,
+                source="stockbit.opening_track",
+                snapshot_payload={"mid_price": 100.0},
+                captured_at=observation.cutoff_at,
+            )
+        )
+        repository.add_track_snapshot(
+            LearningTrackSnapshot.create(
+                observation_id=observation.observation_id,
+                sampled_at=observation.cutoff_at.replace(minute=30),
+                source="stockbit.opening_track",
+                snapshot_payload={"mid_price": 99.0},
+                captured_at=observation.cutoff_at.replace(minute=30),
+            )
+        )
+
+    planted = LearningOutcomeLabel.create(
+        contract_id=LearningContractId.PRE_OPEN_LABEL,
+        observation_id=blocked.observation_id,
+        outcome_basis=OutcomeBasis.PRICE_PATH_ONLY,
+        availability=LabelAvailability.AVAILABLE,
+        outcome="NEUTRAL",
+        metrics={"planted": True},
+        fingerprint="legacy",
+        labeled_at=NOW,
+    )
+    assert repository.add_label(planted) is True
+    # Corrupt stored digest so a rewrite attempt conflicts (legacy row).
+    with sqlite3.connect(tmp_path / "data.db") as conn:
+        conn.execute(
+            "UPDATE learning_outcome_labels SET artifact_digest = ? WHERE label_id = ?",
+            ("1" * 64, planted.label_id),
+        )
+
+    class _SkipListEmpty:
+        """Storage has the row; skip list pretends nothing is labeled yet."""
+
+        def __init__(self, inner):
+            self._inner = inner
+
+        def list_labels(self, observation_ids):
+            return ()
+
+        def add_label(self, artifact):
+            return self._inner.add_label(artifact)
+
+    result = GeneratePreOpenOutcomeLabelsUseCase(
+        observations=repository,
+        tracks=repository,
+        labels=_SkipListEmpty(repository),  # type: ignore[arg-type]
+    ).execute(
+        GenerateLearningLabelsRequest(
+            purpose=AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION,
+            compatibility_id="compat-1",
+            label_contract=LearningContractId.PRE_OPEN_LABEL,
+            labeled_at=NOW + timedelta(hours=3),
+        )
+    )
+    assert result.conflict_count >= 1
+    assert planted.label_id in result.conflict_label_ids
+    assert result.inserted_count >= 1
+    peer_labels = repository.list_labels([ready.observation_id])
+    assert any(label.contract_id == LearningContractId.PRE_OPEN_LABEL for label in peer_labels)
 
 
 def test_pre_open_labels_do_not_block_cohort_when_some_obs_untracked(
