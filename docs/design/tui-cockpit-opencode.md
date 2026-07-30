@@ -26,7 +26,7 @@ Ship Textual against **this cockpit mock**. Standalone journey HTML may stay “
 | 3 | Plan | Structure | Entry/Stop/Target · inherit Action · no order |
 | 4 | Paper | Notebook | Geometry confirm · paper only · not learning |
 | 5 | Pre-open | Auction | IEP board · inspect ≠ accum Judge |
-| 6 | Ticker | Browse | Price-first hierarchy · pulse strip · not Action |
+| 6 | Ticker | Browse | Full CLI panels (`FULL_PANEL_ORDER`) · not Action |
 | 7 | Broker | Browse | Desk radar table + Net strip · not Action |
 | 8 | Health | Honesty | Empty / zero / lag / ready posters |
 | 9 | Palette | Nav | Ctrl+P · peach selection · no scenario tabs |

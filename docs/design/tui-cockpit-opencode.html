@@ -6,7 +6,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ai-saham · Daily Cockpit · OpenCode-style mock</title>
+  <title>ai-saham · Daily Cockpit · OpenCode rev-20260730e</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -1060,6 +1060,112 @@
     .oc-hz .pos { color: var(--green); }
     .oc-hz .neg { color: var(--red); }
 
+    /* Full CLI panel stack (ticker full mode · FULL_PANEL_ORDER) */
+    .cli-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .cli-panel {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-panel);
+      overflow: hidden;
+    }
+    .cli-panel > h3 {
+      margin: 0;
+      padding: 6px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--sel-dim);
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-elevated);
+    }
+    .cli-panel .body {
+      padding: 8px 10px 10px;
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--text);
+    }
+    .cli-panel .body .line {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 14px;
+      padding: 2px 0;
+      font-variant-numeric: tabular-nums;
+    }
+    .cli-panel .dim { color: var(--text-mute); }
+    .cli-panel .pos { color: var(--green); }
+    .cli-panel .neg { color: var(--red); }
+    .cli-panel .amb { color: var(--amber); }
+    .cli-panel .body .line b { font-weight: 600; color: var(--text); }
+    .cli-panel table.mini-tbl {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11.5px;
+      font-variant-numeric: tabular-nums;
+    }
+    .cli-panel table.mini-tbl th {
+      text-align: left;
+      color: var(--text-mute);
+      font-weight: 500;
+      padding: 3px 6px 4px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .cli-panel table.mini-tbl th.num,
+    .cli-panel table.mini-tbl td.num { text-align: right; }
+    .cli-panel table.mini-tbl td {
+      padding: 3px 6px 3px 0;
+      color: var(--text);
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .cli-panel table.mini-tbl tr:last-child td { border-bottom: 0; }
+    .cli-panel .empty-slot {
+      color: var(--text-mute);
+      font-size: 12px;
+    }
+    .cli-panel .empty-slot code {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+    .fresh-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      gap: 4px 8px;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+    }
+    .fresh-grid .fp {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 3px 6px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-elevated);
+    }
+    .fresh-grid .fp .k { color: var(--text-mute); }
+    .fresh-grid .fp.ok .v { color: var(--green); }
+    .fresh-grid .fp.miss .v { color: var(--text-faint); }
+    .fresh-grid .fp.stale .v { color: var(--amber); }
+    .val-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px 14px;
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+    .val-grid .cell { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
+    .val-grid .cell .k { color: var(--text-mute); }
+    .val-grid .cell .v { color: var(--text); font-weight: 500; }
+    @media (max-width: 900px) {
+      .val-grid { grid-template-columns: 1fr 1fr; }
+    }
+
     .oc-geo {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
@@ -1105,7 +1211,7 @@
 <body>
   <div class="demo-bar">
     <div class="card">
-      <strong>OpenCode visual = TUI bible</strong> · <span style="color:#6fbf8a">rev 2026-07-30c · E2E frames 1–9</span>
+      <strong>OpenCode visual = TUI bible</strong> · <span style="color:#6fbf8a" id="buildStamp">rev 2026-07-30e · full ticker panels · E2E 1–9</span>
       · black-on-black · peach palette · mono density
       · <em style="color:var(--sel-dim);font-style:normal">Journey = structure inspiration only</em>
       (stages / authority / columns — not marketing night-ink skin)
@@ -1379,96 +1485,410 @@
             </div>
           </div>
 
-          <!-- 6 TICKER · price-first · OpenCode · not Action -->
+          <!-- 6 TICKER · full CLI panels · OpenCode · not Action -->
           <div class="stage-block is-hidden" id="detailView" style="display:none">
             <div class="oc-note">
-              Browse · <strong>not Action</strong> · GetTickerDashboardUseCase · missing = —
-              · Judge stays board <span class="kbd">Enter</span>
-              · vision ref <a href="./tui-ticker-desk.html">ticker desk</a> (IA only)
+              Browse · <strong>not Action</strong> · GetTickerDashboardUseCase ·
+              <strong>full mode</strong> = <code>FULL_PANEL_ORDER</code> (same as
+              <code>saham view ticker show</code>, not brief) · missing panel = empty slot, never invent ·
+              Judge stays board <span class="kbd">Enter</span>
             </div>
-            <div class="section-label">View · ticker · identity</div>
-            <div class="oc-hero">
-              <div class="row" style="justify-content:space-between">
-                <div>
-                  <div class="lab">Ticker</div>
-                  <div style="font-size:1.5rem;font-weight:600" id="detailTicker">BBCA</div>
-                  <div style="margin-top:6px;color:var(--text-dim);font-size:12px" id="detailSub">
-                    Bank Central Asia · Papan Utama · Keuangan · Tradeable
+
+            <div class="section-label">View · ticker · full panels · <span id="detailTicker">BBCA</span></div>
+
+            <div class="cli-stack" id="tickerFullPanels" data-mode="full">
+              <!-- 1 identity -->
+              <section class="cli-panel" data-panel="identity">
+                <h3>BBCA · Papan Utama</h3>
+                <div class="body">
+                  <div class="line"><span class="dim">Bank Central Asia · Papan Utama · Keuangan · Bank</span></div>
+                  <div class="line"><span class="pos">✓ Tradeable</span></div>
+                  <div class="line"><span class="dim">as of 2026-07-29 · local cache · not judgment</span></div>
+                  <div class="line" id="detailSub" style="display:none">BBCA</div>
+                </div>
+              </section>
+
+              <!-- 2 freshness -->
+              <section class="cli-panel" data-panel="freshness">
+                <h3>Data Freshness</h3>
+                <div class="body">
+                  <div class="fresh-grid">
+                    <div class="fp ok"><span class="k">Price</span><span class="v">ok</span></div>
+                    <div class="fp ok"><span class="k">Flow</span><span class="v">ok</span></div>
+                    <div class="fp ok"><span class="k">Bandar</span><span class="v">ok</span></div>
+                    <div class="fp ok"><span class="k">Earn</span><span class="v">ok</span></div>
+                    <div class="fp ok"><span class="k">Fund</span><span class="v">ok</span></div>
+                    <div class="fp miss"><span class="k">Analyst</span><span class="v">—</span></div>
+                    <div class="fp ok"><span class="k">Own</span><span class="v">ok</span></div>
+                    <div class="fp ok"><span class="k">IEV</span><span class="v">ok</span></div>
+                    <div class="fp stale"><span class="k">Insider</span><span class="v">stale</span></div>
+                    <div class="fp miss"><span class="k">Sent</span><span class="v">—</span></div>
                   </div>
                 </div>
-                <div style="text-align:right;font-size:11px;color:var(--text-mute)">
-                  <strong style="display:block;color:var(--text);font-weight:500">as of 2026-07-29</strong>
-                  local cache · not judgment
+              </section>
+
+              <!-- 3 valuation -->
+              <section class="cli-panel" data-panel="valuation">
+                <h3>Price &amp; Valuation</h3>
+                <div class="body">
+                  <div class="val-grid">
+                    <div class="cell"><span class="k">Close</span><span class="v">Rp6,275</span></div>
+                    <div class="cell"><span class="k">52w High</span><span class="v">Rp8,975</span></div>
+                    <div class="cell"><span class="k">52w Low</span><span class="v">Rp4,820</span></div>
+                    <div class="cell"><span class="k">PE (TTM)</span><span class="v">13.3</span></div>
+                    <div class="cell"><span class="k">PBV</span><span class="v">3.0</span></div>
+                    <div class="cell"><span class="k">MCap</span><span class="v">774T</span></div>
+                    <div class="cell"><span class="k">ROE</span><span class="v">22.4%</span></div>
+                    <div class="cell"><span class="k">NPM</span><span class="v">47.1%</span></div>
+                    <div class="cell"><span class="k">F-Score</span><span class="v">5</span></div>
+                    <div class="cell"><span class="k">Rev YoY</span><span class="v">+8.2%</span></div>
+                    <div class="cell"><span class="k">Div Yield</span><span class="v">4.8%</span></div>
+                    <div class="cell"><span class="k">Fetched</span><span class="v">2026-07-28</span></div>
+                  </div>
                 </div>
-              </div>
-            </div>
-            <div class="section-label">Last · local close</div>
-            <div class="oc-hero">
-              <div class="lab">Price first · price_structure horizons</div>
-              <div>
-                <span class="ccy">Rp</span><span class="price-xl">6,275</span>
-                <span class="chg">+0.8% 1d</span>
-              </div>
-              <div class="oc-hz">
-                <div>1d <b class="pos">+0.8%</b></div>
-                <div>5d <b class="neg">−3.5%</b></div>
-                <div>20d <b class="pos">+12.1%</b></div>
-                <div>52w pos <b>35%</b></div>
-              </div>
-            </div>
-            <div class="section-label">Fundamentals ribbon</div>
-            <div class="oc-metrics">
-              <div class="oc-metric"><div class="k">PE TTM</div><div class="v">13.3</div></div>
-              <div class="oc-metric"><div class="k">PBV</div><div class="v">3.0</div></div>
-              <div class="oc-metric"><div class="k">MCap</div><div class="v">774T</div></div>
-              <div class="oc-metric"><div class="k">ROE</div><div class="v">22.4%</div></div>
-              <div class="oc-metric"><div class="k">Div</div><div class="v">4.8%</div></div>
-              <div class="oc-metric"><div class="k">F-Score</div><div class="v">5</div></div>
-            </div>
-            <div class="section-label">Pulse · flow · structure · bandar</div>
-            <div class="oc-grid-3">
-              <div class="oc-panel">
-                <h3>Foreign flow</h3>
-                <div class="hl neg">−344B</div>
-                <div class="sub">5d net · stockbit · 1B/4S</div>
-                <div class="mini">
-                  <div><span>Latest</span><br /><b>−27.8B</b></div>
-                  <div><span>20d</span><br /><b>−1.32T</b></div>
+              </section>
+
+              <!-- 4 price_structure -->
+              <section class="cli-panel" data-panel="price_structure">
+                <h3>Price Structure</h3>
+                <div class="body">
+                  <div class="line">
+                    <span class="dim">Close</span> <b>Rp6,275</b>
+                    <span class="dim">as of 2026-07-29</span>
+                  </div>
+                  <div class="line">
+                    <span class="dim">Chg 1d</span> <span class="pos">+0.8%</span>
+                    <span class="dim">5d</span> <span class="neg">−3.5%</span>
+                    <span class="dim">20d</span> <span class="pos">+12.1%</span>
+                  </div>
+                  <div class="line">
+                    <span class="dim">52w</span> <b>Rp4,820</b> – <b>Rp8,975</b>
+                    <span class="dim">pos</span> <b>35%</b>
+                  </div>
+                  <div class="line">
+                    <span class="dim">Vol</span> <b>122.4M</b>
+                    <span class="dim">20d avg</span> <span class="dim">169.9M</span>
+                    <span class="neg">0.72× avg</span>
+                  </div>
                 </div>
-              </div>
-              <div class="oc-panel">
-                <h3>Structure</h3>
-                <div class="hl">0.72×</div>
-                <div class="sub">vol vs 20d · 52w range pos</div>
-                <div class="mini">
-                  <div><span>52w L</span><br /><b>4,820</b></div>
-                  <div><span>52w H</span><br /><b>8,975</b></div>
+              </section>
+
+              <!-- 5 analyst -->
+              <section class="cli-panel" data-panel="analyst">
+                <h3>Analyst Consensus</h3>
+                <div class="body">
+                  <div class="line">
+                    <span>3B · 2H · 0S</span> → <b class="pos">BUY</b>
+                  </div>
+                  <div class="line">
+                    <span class="dim">Target</span> <b>Rp7,150</b> avg <span class="pos">(+13.9%)</span>
+                  </div>
+                  <div class="line">
+                    <span class="dim">Range</span> Rp6,800 – Rp7,600
+                    <span class="dim">(±6% spread)</span>
+                  </div>
+                  <div class="line"><span class="dim">Updated 2026-07-20 · Fetched 2026-07-28</span></div>
                 </div>
-              </div>
-              <div class="oc-panel">
-                <h3>Bandar</h3>
-                <div class="hl pos">Acc · +2</div>
-                <div class="sub">broad score · session local</div>
-                <div class="mini">
-                  <div><span>Today</span><br /><b>Normal Acc</b></div>
-                  <div><span>5d</span><br /><b>Big Acc</b></div>
+              </section>
+
+              <!-- 6 earnings -->
+              <section class="cli-panel" data-panel="earnings">
+                <h3>Earnings</h3>
+                <div class="body">
+                  <table class="mini-tbl">
+                    <thead>
+                      <tr>
+                        <th>Period</th>
+                        <th class="num">EPS</th>
+                        <th class="num">YoY</th>
+                        <th class="num">vs Est</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>Q1 2026</td>
+                        <td class="num">119.1</td>
+                        <td class="num pos">+3.8%</td>
+                        <td class="num pos">BEAT +1.2%</td>
+                      </tr>
+                      <tr>
+                        <td>Q4 2025</td>
+                        <td class="num">114.7</td>
+                        <td class="num pos">+2.7%</td>
+                        <td class="num">—</td>
+                      </tr>
+                      <tr>
+                        <td>Q3 2025</td>
+                        <td class="num">111.4</td>
+                        <td class="num pos">+4.1%</td>
+                        <td class="num pos">BEAT +0.6%</td>
+                      </tr>
+                      <tr>
+                        <td>Q2 2025</td>
+                        <td class="num">108.2</td>
+                        <td class="num neg">−1.4%</td>
+                        <td class="num neg">MISS −2.0%</td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
-              </div>
+              </section>
+
+              <!-- 7 ownership -->
+              <section class="cli-panel" data-panel="ownership">
+                <h3>Ownership</h3>
+                <div class="body">
+                  <div class="line"><span class="dim">Top Holder</span> <b>PT Dwimuria Investama Andalan</b> 54.9%</div>
+                  <div class="line"><span class="dim">Institutional</span> <b>38.2%</b></div>
+                  <div class="line"><span class="dim">Individual</span> <b>6.9%</b></div>
+                  <div class="line"><span class="dim">Total Shares</span> 123.28B</div>
+                  <div class="line"><span class="dim">Report Date</span> 2026-03-31 · <span class="dim">Fetched</span> 2026-07-28</div>
+                </div>
+              </section>
+
+              <!-- 8 bandar -->
+              <section class="cli-panel" data-panel="bandar">
+                <h3>Broker / Bandar Signal</h3>
+                <div class="body">
+                  <div class="line">
+                    <span class="dim">Overall:</span> <b class="pos">Acc</b>
+                    <span>Score <b>+2</b></span>
+                    <span>Broad <b>+1</b></span>
+                  </div>
+                  <div class="line">
+                    <span class="dim">Today:</span> Normal Acc
+                    <span class="dim">5d:</span> Big Acc
+                    <span class="dim">Top1:</span> Acc (22%)
+                  </div>
+                  <div class="line">
+                    <span class="dim">Top3:</span> Acc · <span class="dim">Top5:</span> Acc · <span class="dim">Top10:</span> Acc
+                  </div>
+                  <div class="line"><span class="dim">Session: 2026-07-29</span></div>
+                </div>
+              </section>
+
+              <!-- 9 foreign_flow -->
+              <section class="cli-panel" data-panel="foreign_flow">
+                <h3>Foreign Flow (stockbit)</h3>
+                <div class="body">
+                  <div class="line">
+                    <span class="dim">Latest</span> 2026-07-29
+                    <span class="dim">Net</span> <b class="neg">−27.8B</b>
+                    <span class="dim">−1.2M lot</span>
+                  </div>
+                  <div class="line">
+                    <span class="dim">5d net</span> <b class="neg">−344B</b>
+                    <span class="dim">1 buy / 4 sell days</span>
+                  </div>
+                  <div class="line">
+                    <span class="dim">20d net</span> <b class="neg">−1.32T</b>
+                    <span class="dim">6 buy / 14 sell days</span>
+                  </div>
+                </div>
+              </section>
+
+              <!-- 10 sector_macro (full only · ADR-053 diagnostic) -->
+              <section class="cli-panel" data-panel="sector_macro">
+                <h3>Sector Macro · diagnostic</h3>
+                <div class="body">
+                  <div class="line">
+                    <span class="dim">Sector</span> <b>Banks</b>
+                    <span class="dim">Regime</span> <span class="amb">Neutral</span>
+                  </div>
+                  <div class="line">
+                    <span class="dim">Peers up 5d</span> 4/10
+                    <span class="dim">Rel strength</span> −1.2%
+                  </div>
+                  <div class="line"><span class="dim">ADR-053 · full browse only · not Action</span></div>
+                </div>
+              </section>
+
+              <!-- 11 corp_actions -->
+              <section class="cli-panel" data-panel="corp_actions">
+                <h3>Corporate Actions</h3>
+                <div class="body">
+                  <table class="mini-tbl">
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Detail</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>2026-04-17</td>
+                        <td>DIV</td>
+                        <td>Cash div Rp175 / share · cum 2026-04-15</td>
+                      </tr>
+                      <tr>
+                        <td>2025-10-22</td>
+                        <td>DIV</td>
+                        <td>Interim Rp50 / share</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <!-- 12 insider -->
+              <section class="cli-panel" data-panel="insider">
+                <h3>Insider Transactions</h3>
+                <div class="body">
+                  <table class="mini-tbl">
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Name</th>
+                        <th>Role</th>
+                        <th>Action</th>
+                        <th class="num">Shares</th>
+                        <th class="num">Price</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>2026-03-12</td>
+                        <td>J. Widjaja</td>
+                        <td>Dir</td>
+                        <td class="pos">BUY</td>
+                        <td class="num">50,000</td>
+                        <td class="num">Rp6,100</td>
+                      </tr>
+                      <tr>
+                        <td>2025-11-04</td>
+                        <td>R. Santoso</td>
+                        <td>Kom</td>
+                        <td class="neg">SELL</td>
+                        <td class="num">12,000</td>
+                        <td class="num">Rp6,450</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <!-- 13 seasonality -->
+              <section class="cli-panel" data-panel="seasonality">
+                <h3>Seasonality — Jul</h3>
+                <div class="body">
+                  <div class="line">
+                    <b class="pos">Tailwind</b>
+                    <span class="pos">+1.8%</span> avg
+                    <span>62% win-rate</span>
+                  </div>
+                  <div class="line"><span class="dim">8 up / 13 years of history</span></div>
+                </div>
+              </section>
+
+              <!-- 14 iev -->
+              <section class="cli-panel" data-panel="iev">
+                <h3>IEV / Pre-open</h3>
+                <div class="body">
+                  <table class="mini-tbl">
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th class="num">IEV</th>
+                        <th class="num">Rank</th>
+                        <th class="num">IEP</th>
+                        <th>NCP</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>2026-07-29</td>
+                        <td class="num">18.4M</td>
+                        <td class="num">#12</td>
+                        <td class="num">Rp6,250</td>
+                        <td class="pos">✓</td>
+                      </tr>
+                      <tr>
+                        <td>2026-07-28</td>
+                        <td class="num">9.1M</td>
+                        <td class="num">#41</td>
+                        <td class="num">Rp6,200</td>
+                        <td class="dim">—</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <!-- 15 sentiment -->
+              <section class="cli-panel" data-panel="sentiment">
+                <h3>Sentiment</h3>
+                <div class="body">
+                  <div class="empty-slot">
+                    not cached · <code>saham fetch …</code> · never invent scores
+                  </div>
+                </div>
+              </section>
+
+              <!-- 16 profile -->
+              <section class="cli-panel" data-panel="profile">
+                <h3>Company Profile</h3>
+                <div class="body">
+                  <div class="line">IPO 2000-05-31 · @ Rp1,400</div>
+                  <div class="line"><span class="dim">Web</span> https://www.bca.co.id</div>
+                  <div class="line"><span class="dim">Email</span> investor@bca.co.id</div>
+                  <div class="line">
+                    <span class="dim">PT Bank Central Asia Tbk provides commercial banking and other financial services in Indonesia…</span>
+                  </div>
+                </div>
+              </section>
+
+              <!-- 17 candles -->
+              <section class="cli-panel" data-panel="candles">
+                <h3>Recent Candles</h3>
+                <div class="body">
+                  <table class="mini-tbl">
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th class="num">Open</th>
+                        <th class="num">High</th>
+                        <th class="num">Low</th>
+                        <th class="num">Close</th>
+                        <th class="num">Volume</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>2026-07-29</td>
+                        <td class="num">6,225</td>
+                        <td class="num">6,300</td>
+                        <td class="num">6,200</td>
+                        <td class="num"><b>6,275</b></td>
+                        <td class="num">122.4M</td>
+                      </tr>
+                      <tr>
+                        <td>2026-07-28</td>
+                        <td class="num">6,250</td>
+                        <td class="num">6,275</td>
+                        <td class="num">6,175</td>
+                        <td class="num"><b>6,225</b></td>
+                        <td class="num">98.1M</td>
+                      </tr>
+                      <tr>
+                        <td>2026-07-25</td>
+                        <td class="num">6,300</td>
+                        <td class="num">6,350</td>
+                        <td class="num">6,225</td>
+                        <td class="num"><b>6,250</b></td>
+                        <td class="num">110.2M</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
             </div>
-            <div class="section-label">Secondary presence (not full CLI panels)</div>
-            <div class="card">
-              <div class="kv">
-                <span class="k">Analyst</span><span class="v">present | —</span>
-                <span class="k">Ownership</span><span class="v">from cache | —</span>
-                <span class="k">IEV</span><span class="v">present | —</span>
-                <span class="k">Insider</span><span class="v">—</span>
-              </div>
-            </div>
+
             <div class="footer-note">
               <span><span class="kbd">b</span> top desks</span>
               <span><span class="kbd">p</span> plan</span>
               <span><span class="kbd">esc</span> board</span>
-              <span class="dim">not Action · not order · CLI keeps deep panels</span>
+              <span class="dim">full panels · not Action · not order · empty = —</span>
             </div>
           </div>
 
@@ -1969,7 +2389,9 @@
         el.classList.remove("is-hidden");
         el.style.display = "block";
         const f = focusTicker();
-        $("detailTicker").textContent = f.t;
+        if ($("detailTicker")) $("detailTicker").textContent = f.t;
+        const idPanel = document.querySelector('#tickerFullPanels [data-panel="identity"] h3');
+        if (idPanel) idPanel.textContent = `${f.t} · Papan Utama`;
         setModeLocal();
       } else if (frame === "broker") {
         const bv = $("brokerView");

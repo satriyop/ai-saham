@@ -886,22 +886,20 @@
       <div style="color:var(--brass);letter-spacing:.12em;text-transform:uppercase;font-size:10px;margin-bottom:10px">Data contract · adapters must not invent</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 20px">
         <div>
-          <div style="color:var(--fog);margin-bottom:6px">Primary stage (TUI desk v1)</div>
+          <div style="color:var(--fog);margin-bottom:6px">TUI desk · full mode (default · same as CLI show)</div>
           <ul style="padding-left:1.1em;margin:0">
-            <li><b style="color:var(--fog)">Identity</b> — <code>notation</code> / <code>profile</code> (name, board, sector, tradeable)</li>
-            <li><b style="color:var(--fog)">as_of</b> — <code>dashboard.as_of</code> (+ freshness pills from <code>freshness[]</code>)</li>
-            <li><b style="color:var(--fog)">Harga</b> — <code>latest_close</code> · 1d from <code>price_structure.change_1d_pct</code></li>
-            <li><b style="color:var(--fog)">Horizons</b> — 1d / 5d / 20d · 52w <em>range position</em> (<code>range_52w_pct</code>, not a return)</li>
-            <li><b style="color:var(--fog)">Ribbon</b> — fund: PE TTM, PBV, MCap, ROE, Div yield, F-Score</li>
-            <li><b style="color:var(--fog)">Pulse · Flow</b> — <code>foreign_flow_points</code> + <code>foreign_flow_source</code></li>
-            <li><b style="color:var(--fog)">Pulse · Structure</b> — vol vs 20d, 52w hi/lo, day vol (from <code>price_structure</code>)</li>
-            <li><b style="color:var(--fog)">Pulse · Bandar</b> — <code>bandar</code> snapshot (Acc/Dis, today/5d/top1/top10)</li>
-            <li><b style="color:var(--fog)">Earnings</b> — <code>earnings[]</code> last ≤4Q (EPS · YoY when prev available)</li>
-            <li><b style="color:var(--fog)">Secondary</b> — presence of analyst / ownership / insider / IEV / seasonality (not full tables)</li>
+            <li><b style="color:var(--fog)">FULL_PANEL_ORDER</b> — all panels below, OpenCode chrome, scrollable stack</li>
+            <li><b style="color:var(--fog)">Identity</b> — <code>notation</code> / name, board, sector, tradeable</li>
+            <li><b style="color:var(--fog)">Freshness</b> — <code>freshness[]</code> ok · miss · stale</li>
+            <li><b style="color:var(--fog)">Valuation</b> — close · PE · PBV · MCap · ROE · Div · F-Score · …</li>
+            <li><b style="color:var(--fog)">Price structure</b> — 1d/5d/20d · 52w range <em>position</em> · vol vs 20d</li>
+            <li><b style="color:var(--fog)">Analyst · Earnings · Ownership</b> — full tables / fields, never invent</li>
+            <li><b style="color:var(--fog)">Bandar · Foreign flow</b> — full signal + windows</li>
+            <li><b style="color:var(--fog)">Depth</b> — sector_macro · corp · insider · seasonality · iev · sentiment · profile · candles</li>
           </ul>
         </div>
         <div>
-          <div style="color:var(--fog);margin-bottom:6px">Full panel inventory (CLI / depth · not equal-weight on desk)</div>
+          <div style="color:var(--fog);margin-bottom:6px">Full panel inventory (<code>ticker_dashboard_layout.FULL_PANEL_ORDER</code>)</div>
           <ul style="padding-left:1.1em;margin:0">
             <li>identity · freshness · valuation · price_structure</li>
             <li>analyst · earnings · ownership · bandar · foreign_flow</li>
@@ -911,8 +909,8 @@
           </ul>
           <div style="margin-top:10px;color:var(--fog)">Brief vs full</div>
           <p style="margin:4px 0 0;color:var(--ash)">
-            Brief omits sector_macro, analyst tables, ownership depth, corp, insider, seasonality, iev, sentiment, profile, candles.
-            TUI desk v1 paints the <em>primary stage</em> always; depth panels stay CLI or a later expand slice.
+            Brief remains a CLI flag only (<code>--brief</code>). TUI desk / cockpit frame 6 paint <em>full</em> panels.
+            Empty cache → empty slot text, never invent PE / flow / Action.
           </p>
           <div style="margin-top:10px;color:var(--fog)">Authority</div>
           <p style="margin:4px 0 0;color:var(--ash)">
@@ -1100,27 +1098,28 @@
             </div>
           </section>
 
-          <!-- Secondary · presence only in desk v1 (full panels = CLI / later expand) -->
+          <!-- Full depth panels (same inventory as CLI show / FULL_PANEL_ORDER) -->
           <section class="section">
             <div class="section-head">
-              <h3>Secondary · presence map</h3>
-              <span class="hint">not full tables · no invented targets</span>
+              <h3>Full panels · depth stack</h3>
+              <span class="hint">analyst · ownership · insider · iev · seasonality · sector · corp · candles · profile</span>
             </div>
             <div class="section-body">
               <div class="kv-grid">
-                <div class="kv"><span class="k">Analyst</span><span class="v">present | —</span></div>
-                <div class="kv"><span class="k">Ownership</span><span class="v">present | —</span></div>
-                <div class="kv"><span class="k">Insider</span><span class="v">rows | —</span></div>
-                <div class="kv"><span class="k">IEV / NCP</span><span class="v">iev_rows | —</span></div>
-                <div class="kv"><span class="k">Seasonality</span><span class="v">present | —</span></div>
-                <div class="kv"><span class="k">Sector macro</span><span class="v">full only · diagnostic</span></div>
-                <div class="kv"><span class="k">Corp actions</span><span class="v">CLI depth</span></div>
-                <div class="kv"><span class="k">Candles / profile</span><span class="v">CLI depth</span></div>
-                <div class="kv"><span class="k">Sentiment</span><span class="v">CLI depth</span></div>
+                <div class="kv"><span class="k">Analyst</span><span class="v">full consensus · targets</span></div>
+                <div class="kv"><span class="k">Ownership</span><span class="v">top holder · inst · indiv</span></div>
+                <div class="kv"><span class="k">Insider</span><span class="v">txn table · last 12m</span></div>
+                <div class="kv"><span class="k">IEV / NCP</span><span class="v">pre-open rows</span></div>
+                <div class="kv"><span class="k">Seasonality</span><span class="v">month edge · win-rate</span></div>
+                <div class="kv"><span class="k">Sector macro</span><span class="v">ADR-053 diagnostic</span></div>
+                <div class="kv"><span class="k">Corp actions</span><span class="v">div / split rows</span></div>
+                <div class="kv"><span class="k">Candles / profile</span><span class="v">recent OHLC · company</span></div>
+                <div class="kv"><span class="k">Sentiment</span><span class="v">rows or empty slot</span></div>
               </div>
               <p style="margin-top:10px;font-size:11.5px;color:var(--ash);font-family:var(--font-mono)">
-                Desk v1 does <b style="color:var(--fog)">not</b> paste CLI Rich panels into the stage.
-                Full inventory remains on <code>saham view ticker show</code> until an explicit expand slice.
+                Desk paints <b style="color:var(--fog)">full</b> <code>FULL_PANEL_ORDER</code> — same as
+                <code>saham view ticker show</code>. Missing cache → empty slot, never invent Action.
+                OpenCode cockpit frame 6 is the visual authority for TUI chrome.
               </p>
             </div>
           </section>
@@ -1187,7 +1186,7 @@
     <article>
       <h2 class="bad">Reject</h2>
       <ul>
-        <li>CLI Rich panel dump as the stage</li>
+        <li>Presence-only map instead of full panels</li>
         <li>Inventing PE / flow / Action when cache is empty</li>
         <li>Treating 52w range position as a period return</li>
         <li>Making ticker desk set ENTER/WATCH/AVOID</li>
@@ -1197,11 +1196,11 @@
     <article>
       <h2 class="good">Adopt</h2>
       <ul>
-        <li>Price landscape + horizons from price_structure</li>
-        <li>Ribbon from fundamentals; — when missing</li>
-        <li>Pulse trio: flow series · structure · bandar snapshot</li>
-        <li>Earnings from earnings[]; secondary = presence map</li>
-        <li>Full panel list stays CLI until an explicit expand PR</li>
+        <li>Full <code>FULL_PANEL_ORDER</code> stack (CLI parity)</li>
+        <li>OpenCode chrome for TUI; hierarchy by panel order</li>
+        <li>Empty slots when cache missing — never invent</li>
+        <li>Earnings / ownership / analyst / insider / IEV as real panels</li>
+        <li>Brief remains CLI <code>--brief</code> only; desk default = full</li>
       </ul>
     </article>
   </div>
@@ -1209,8 +1208,8 @@
   <div class="shell" style="margin-top:8px">
     <p style="font-family:var(--font-mono);font-size:12px;color:var(--ash);max-width:70ch;line-height:1.6">
       <span style="color:var(--brass)">Open decisions (design ↔ TUI)</span><br />
-      · Horizon bar tracks: CSS in mock · monospace density in Textual is OK<br />
-      · Expand full CLI panels on key: deferred (CLI remains deep-dive)<br />
+      · Panel stack scroll: Textual VerticalScroll + section headers<br />
+      · Full panels default: locked (no presence-only strip)<br />
       · Right rail: cockpit sidebar owns session; no second ticker-only rail required<br />
       · Analyst numeric target: only if present on analyst DTO — never invent
     </p>

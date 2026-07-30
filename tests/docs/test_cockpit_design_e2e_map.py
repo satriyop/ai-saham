@@ -79,3 +79,32 @@ def test_md_states_opencode_bible_and_broker_in_cockpit():
     assert "bible" in text.lower() or "OpenCode" in text
     assert "Broker" in text or "broker" in text
     assert "linked out" not in text.lower() or "in-cockpit" in text.lower() or "7 |" in text
+
+
+def test_ticker_frame_is_full_cli_panels_not_presence_only():
+    html = _html()
+    assert "Secondary presence" not in html
+    assert 'id="tickerFullPanels"' in html
+    assert 'data-mode="full"' in html
+    # FULL_PANEL_ORDER keys must appear as data-panel slots
+    for key in (
+        "identity",
+        "freshness",
+        "valuation",
+        "price_structure",
+        "analyst",
+        "earnings",
+        "ownership",
+        "bandar",
+        "foreign_flow",
+        "sector_macro",
+        "corp_actions",
+        "insider",
+        "seasonality",
+        "iev",
+        "sentiment",
+        "profile",
+        "candles",
+    ):
+        assert f'data-panel="{key}"' in html, f"missing full panel slot {key}"
+    assert "FULL_PANEL_ORDER" in html or "full panels" in html.lower()
