@@ -858,22 +858,75 @@
 <body>
   <div class="vision-bar">
     <div class="thesis">
-      <div class="eyebrow">Design vision · not implementation</div>
+      <div class="eyebrow">Design vision · data-aligned · GetTickerDashboardUseCase</div>
       <h1>Ticker Desk — Harga Mast</h1>
       <p>
         Best presentation for one name: the <strong style="color:#e8dcc8;font-weight:500">price is the landscape</strong>,
-        not another CLI panel. Same facts as <code style="font-family:var(--font-mono);font-size:12px;color:var(--brass)">view ticker show</code>,
-        zero box-drawing, built for 5-second scan then drill.
-        <a href="./tui-cockpit-opencode.html">← Cockpit mock</a>
+        not a CLI panel stack. <strong style="color:#e8dcc8;font-weight:500">Same use case</strong> as
+        <code style="font-family:var(--font-mono);font-size:12px;color:var(--brass)">saham view ticker show</code>
+        / TUI <code style="font-family:var(--font-mono);font-size:12px;color:var(--brass)">v t</code> —
+        local cache only, <strong style="color:#e8dcc8;font-weight:500">never Action</strong>.
+        This mock is bound to the real dashboard DTO (fields below), including honest empty cells.
+        <a href="./tui-journey-hub.html">← Journey hub</a>
         · <a href="./tui-broker-desk.html">Broker desk →</a>
-        · <a href="./end-to-end-journey.html">Journey map</a>
+        · <a href="./tui-judge-desk.html">Judge (different authority)</a>
       </p>
       <div class="meta-tags">
         <span class="tag">signature · <em>monumental price</em></span>
-        <span class="tag">type · Fraunces + Outfit + Plex Mono</span>
-        <span class="tag">palette · night ink + brass + mint/coral</span>
-        <span class="tag">data · BBCA local smoke</span>
+        <span class="tag">source · <em>TickerDashboard</em></span>
+        <span class="tag">authority · <em>browse · not judgment</em></span>
+        <span class="tag">empty · <em>show — not invent</em></span>
       </div>
+    </div>
+  </div>
+
+  <!-- ═══ DATA CONTRACT (source of truth for implementers) ═══ -->
+  <div class="shell" style="margin-top:8px;margin-bottom:0">
+    <div class="contract" style="padding:16px 18px;border-radius:14px;border:1px solid var(--line-strong);background:rgba(8,11,18,.85);font-family:var(--font-mono);font-size:11.5px;color:var(--mist);line-height:1.55">
+      <div style="color:var(--brass);letter-spacing:.12em;text-transform:uppercase;font-size:10px;margin-bottom:10px">Data contract · adapters must not invent</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 20px">
+        <div>
+          <div style="color:var(--fog);margin-bottom:6px">Primary stage (TUI desk v1)</div>
+          <ul style="padding-left:1.1em;margin:0">
+            <li><b style="color:var(--fog)">Identity</b> — <code>notation</code> / <code>profile</code> (name, board, sector, tradeable)</li>
+            <li><b style="color:var(--fog)">as_of</b> — <code>dashboard.as_of</code> (+ freshness pills from <code>freshness[]</code>)</li>
+            <li><b style="color:var(--fog)">Harga</b> — <code>latest_close</code> · 1d from <code>price_structure.change_1d_pct</code></li>
+            <li><b style="color:var(--fog)">Horizons</b> — 1d / 5d / 20d · 52w <em>range position</em> (<code>range_52w_pct</code>, not a return)</li>
+            <li><b style="color:var(--fog)">Ribbon</b> — fund: PE TTM, PBV, MCap, ROE, Div yield, F-Score</li>
+            <li><b style="color:var(--fog)">Pulse · Flow</b> — <code>foreign_flow_points</code> + <code>foreign_flow_source</code></li>
+            <li><b style="color:var(--fog)">Pulse · Structure</b> — vol vs 20d, 52w hi/lo, day vol (from <code>price_structure</code>)</li>
+            <li><b style="color:var(--fog)">Pulse · Bandar</b> — <code>bandar</code> snapshot (Acc/Dis, today/5d/top1/top10)</li>
+            <li><b style="color:var(--fog)">Earnings</b> — <code>earnings[]</code> last ≤4Q (EPS · YoY when prev available)</li>
+            <li><b style="color:var(--fog)">Secondary</b> — presence of analyst / ownership / insider / IEV / seasonality (not full tables)</li>
+          </ul>
+        </div>
+        <div>
+          <div style="color:var(--fog);margin-bottom:6px">Full panel inventory (CLI / depth · not equal-weight on desk)</div>
+          <ul style="padding-left:1.1em;margin:0">
+            <li>identity · freshness · valuation · price_structure</li>
+            <li>analyst · earnings · ownership · bandar · foreign_flow</li>
+            <li>sector_macro <span style="color:var(--amber)">(diagnostic ADR-053 · full only)</span></li>
+            <li>corp_actions · insider · seasonality · iev · sentiment</li>
+            <li>profile · candles</li>
+          </ul>
+          <div style="margin-top:10px;color:var(--fog)">Brief vs full</div>
+          <p style="margin:4px 0 0;color:var(--ash)">
+            Brief omits sector_macro, analyst tables, ownership depth, corp, insider, seasonality, iev, sentiment, profile, candles.
+            TUI desk v1 paints the <em>primary stage</em> always; depth panels stay CLI or a later expand slice.
+          </p>
+          <div style="margin-top:10px;color:var(--fog)">Authority</div>
+          <p style="margin:4px 0 0;color:var(--ash)">
+            Browse path only. Does <b style="color:var(--coral)">not</b> set ENTER/WATCH/AVOID.
+            Judge remains board Enter. Plan is <kbd style="border:1px solid var(--line-strong);padding:0 5px;border-radius:3px;background:var(--lift)">p</kbd> structure only.
+          </p>
+        </div>
+      </div>
+      <p style="margin:12px 0 0;color:var(--ash);font-size:11px">
+        Source files: <code>src/application/dto/ticker_dashboard.py</code> ·
+        <code>ticker_dashboard_layout.py</code> ·
+        <code>ticker_dashboard_price_structure.py</code> ·
+        freshness keys in <code>ticker_dashboard_status.DEFAULT_TTL_DAYS</code>
+      </p>
     </div>
   </div>
 
@@ -888,7 +941,7 @@
         </header>
 
         <div class="stage">
-          <!-- Identity -->
+          <!-- Identity · notation / profile -->
           <div class="identity">
             <div class="id-main">
               <div class="ticker-mark">BBCA</div>
@@ -900,24 +953,25 @@
               </div>
             </div>
             <div class="freshness">
-              <div class="asof">as of 2026-07-29</div>
-              <div class="fresh-pills" aria-label="Data freshness">
-                <span class="fp">Price</span>
-                <span class="fp">Flow</span>
-                <span class="fp">Bandar</span>
-                <span class="fp">Earn</span>
-                <span class="fp">Analyst</span>
-                <span class="fp">Fund</span>
-                <span class="fp">Own</span>
-                <span class="fp">IEV</span>
+              <div class="asof">as of 2026-07-29 · dashboard.as_of</div>
+              <div class="fresh-pills" aria-label="FreshnessItem labels (real keys)">
+                <span class="fp" title="price">Price</span>
+                <span class="fp" title="flow">Flow</span>
+                <span class="fp" title="bandar">Bandar</span>
+                <span class="fp" title="earnings">Earn</span>
+                <span class="fp" title="fundamentals">Fund</span>
+                <span class="fp miss" title="analyst missing">Analyst</span>
+                <span class="fp" title="ownership">Own</span>
+                <span class="fp" title="iev">IEV</span>
               </div>
+              <div style="margin-top:4px;font-size:10px;color:var(--ghost)">ok · miss · stale from FreshnessItem.status</div>
             </div>
           </div>
 
-          <!-- Harga Mast -->
+          <!-- Harga Mast · latest_close + price_structure -->
           <section class="mast" aria-label="Price mast">
             <div>
-              <div class="mast-label">Last · local close</div>
+              <div class="mast-label">Last · local close · latest_close</div>
               <div class="price-row">
                 <span class="currency">Rp</span>
                 <span class="price">6,275</span>
@@ -928,8 +982,11 @@
                 <span></span><span></span><span></span><span></span>
                 <span></span><span></span><span></span><span></span>
               </div>
+              <div style="margin-top:8px;font-family:var(--font-mono);font-size:10px;color:var(--ghost)">
+                change_1d_pct · tape bars are decoration only
+              </div>
             </div>
-            <div class="horizon" aria-label="Horizon returns">
+            <div class="horizon" aria-label="Horizon from price_structure">
               <div class="hz">
                 <span class="h">1d</span>
                 <span class="bar"><i style="width:28%"></i></span>
@@ -950,61 +1007,76 @@
                 <span class="bar"><i style="width:35%"></i></span>
                 <span class="v" style="color:var(--mist)">35%</span>
               </div>
+              <div style="margin-top:6px;font-size:10px;color:var(--ghost);font-family:var(--font-mono)">
+                52w = range_52w_pct (position in 52w range) · not a period return
+              </div>
             </div>
           </section>
 
-          <!-- Metric ribbon -->
-          <div class="ribbon" aria-label="Key fundamentals">
-            <div class="metric"><div class="k">PE TTM</div><div class="v">13.3</div></div>
-            <div class="metric"><div class="k">PBV</div><div class="v">3.0</div></div>
-            <div class="metric"><div class="k">MCap</div><div class="v">774T</div><div class="u">IDR</div></div>
-            <div class="metric"><div class="k">ROE</div><div class="v">22.4%</div></div>
-            <div class="metric"><div class="k">Div yield</div><div class="v">4.8%</div></div>
-            <div class="metric"><div class="k">F-Score</div><div class="v">5</div></div>
+          <!-- Metric ribbon · CompanyFundamentals -->
+          <div class="ribbon" aria-label="Key fundamentals from fundamentals DTO">
+            <div class="metric"><div class="k">PE TTM</div><div class="v">13.3</div><div class="u">pe_ratio_ttm</div></div>
+            <div class="metric"><div class="k">PBV</div><div class="v">3.0</div><div class="u">pbv</div></div>
+            <div class="metric"><div class="k">MCap</div><div class="v">774T</div><div class="u">IDR market_cap</div></div>
+            <div class="metric"><div class="k">ROE</div><div class="v">22.4%</div><div class="u">roe_ttm</div></div>
+            <div class="metric"><div class="k">Div yield</div><div class="v">4.8%</div><div class="u">dividend_yield</div></div>
+            <div class="metric"><div class="k">F-Score</div><div class="v">5</div><div class="u">piotroski</div></div>
           </div>
+          <p style="font-family:var(--font-mono);font-size:10.5px;color:var(--ash);margin:-8px 0 14px">
+            If <code>fundamentals</code> is None → all ribbon cells show <b style="color:var(--fog)">—</b> (no invent).
+          </p>
 
-          <!-- Pulse trio -->
+          <!-- Pulse trio · real series / structure / bandar -->
           <div class="trio">
             <article class="pulse flow">
               <h3>Foreign flow</h3>
               <div class="headline">−344B</div>
-              <div class="sub">5d net · stockbit · 1 buy / 4 sell</div>
+              <div class="sub">5d net · foreign_flow_source · buy/sell day counts</div>
               <dl>
                 <div><dt>Latest</dt><dd>−27.8B</dd></div>
                 <div><dt>20d net</dt><dd>−1.32T</dd></div>
                 <div><dt>Session</dt><dd>2026-07-29</dd></div>
-                <div><dt>20d days</dt><dd>7B / 13S</dd></div>
+                <div><dt>5d days</dt><dd>1B / 4S</dd></div>
               </dl>
+              <div style="margin-top:8px;font-size:10px;color:var(--ghost);font-family:var(--font-mono)">
+                foreign_flow_points[] · empty → headline —
+              </div>
             </article>
             <article class="pulse struct">
               <h3>Structure</h3>
               <div class="headline">0.72×</div>
-              <div class="sub">Vol vs 20d avg · pos 35% of 52w</div>
+              <div class="sub">volume_vs_20d · pos range_52w_pct of 52w</div>
               <dl>
                 <div><dt>52w low</dt><dd>4,820</dd></div>
                 <div><dt>52w high</dt><dd>8,975</dd></div>
                 <div><dt>Vol day</dt><dd>122.4M</dd></div>
                 <div><dt>20d avg</dt><dd>169.9M</dd></div>
               </dl>
+              <div style="margin-top:8px;font-size:10px;color:var(--ghost);font-family:var(--font-mono)">
+                price_structure · no candles → —
+              </div>
             </article>
             <article class="pulse bandar">
               <h3>Bandar</h3>
               <div class="headline">Acc · +2</div>
-              <div class="sub">Overall · Broad +3 · session 07-29</div>
+              <div class="sub">broker_accdist · broad_score · session_date</div>
               <dl>
-                <div><dt>Today</dt><dd>Normal Acc</dd></div>
-                <div><dt>5d</dt><dd>Big Acc</dd></div>
-                <div><dt>Top1</dt><dd>17% Acc</dd></div>
-                <div><dt>Top10</dt><dd>Small Acc</dd></div>
+                <div><dt>Today</dt><dd>today_accdist</dd></div>
+                <div><dt>5d</dt><dd>five_day_accdist</dd></div>
+                <div><dt>Top1</dt><dd>top1 + %</dd></div>
+                <div><dt>Top10</dt><dd>top10_accdist</dd></div>
               </dl>
+              <div style="margin-top:8px;font-size:10px;color:var(--ghost);font-family:var(--font-mono)">
+                bandar snapshot · None → keep card, show —
+              </div>
             </article>
           </div>
 
-          <!-- Earnings -->
+          <!-- Earnings · EarningsRecord[] -->
           <section class="section">
             <div class="section-head">
-              <h3>Earnings · last 4Q</h3>
-              <span class="hint">EPS · YoY · open</span>
+              <h3>Earnings · last ≤4Q</h3>
+              <span class="hint">earnings[] · eps_actual · YoY when eps_prev_year</span>
             </div>
             <div class="section-body">
               <div class="earn-row">
@@ -1019,49 +1091,48 @@
                 <span class="eps">114.7</span>
                 <span class="yoy pos">+2.7%</span>
               </div>
-              <div class="earn-row">
-                <span class="period">Q3 2025</span>
-                <span class="bar"><i style="width:90%"></i></span>
-                <span class="eps">116.7</span>
-                <span class="yoy pos">+1.3%</span>
-              </div>
-              <div class="earn-row">
-                <span class="period">Q2 2025</span>
-                <span class="bar"><i style="width:96%"></i></span>
-                <span class="eps">120.6</span>
-                <span class="yoy pos">+6.2%</span>
+              <div class="earn-row" style="opacity:.55">
+                <span class="period">— empty</span>
+                <span class="bar"><i style="width:0%"></i></span>
+                <span class="eps">—</span>
+                <span class="yoy" style="color:var(--ash)">no more rows</span>
               </div>
             </div>
           </section>
 
-          <!-- Secondary -->
+          <!-- Secondary · presence only in desk v1 (full panels = CLI / later expand) -->
           <section class="section">
             <div class="section-head">
-              <h3>Ownership · analyst · more</h3>
-              <span class="hint">collapsed in v1 · expand</span>
+              <h3>Secondary · presence map</h3>
+              <span class="hint">not full tables · no invented targets</span>
             </div>
             <div class="section-body">
               <div class="kv-grid">
-                <div class="kv"><span class="k">Analyst target</span><span class="v">— local</span></div>
-                <div class="kv"><span class="k">Coverage</span><span class="v">present</span></div>
-                <div class="kv"><span class="k">Inst. own</span><span class="v">from cache</span></div>
-                <div class="kv"><span class="k">Insider</span><span class="v">panel ok</span></div>
-                <div class="kv"><span class="k">IEV / NCP</span><span class="v">present</span></div>
-                <div class="kv"><span class="k">Seasonality</span><span class="v">present</span></div>
+                <div class="kv"><span class="k">Analyst</span><span class="v">present | —</span></div>
+                <div class="kv"><span class="k">Ownership</span><span class="v">present | —</span></div>
+                <div class="kv"><span class="k">Insider</span><span class="v">rows | —</span></div>
+                <div class="kv"><span class="k">IEV / NCP</span><span class="v">iev_rows | —</span></div>
+                <div class="kv"><span class="k">Seasonality</span><span class="v">present | —</span></div>
+                <div class="kv"><span class="k">Sector macro</span><span class="v">full only · diagnostic</span></div>
+                <div class="kv"><span class="k">Corp actions</span><span class="v">CLI depth</span></div>
+                <div class="kv"><span class="k">Candles / profile</span><span class="v">CLI depth</span></div>
+                <div class="kv"><span class="k">Sentiment</span><span class="v">CLI depth</span></div>
               </div>
+              <p style="margin-top:10px;font-size:11.5px;color:var(--ash);font-family:var(--font-mono)">
+                Desk v1 does <b style="color:var(--fog)">not</b> paste CLI Rich panels into the stage.
+                Full inventory remains on <code>saham view ticker show</code> until an explicit expand slice.
+              </p>
             </div>
           </section>
 
           <div class="desk-foot">
-            <span class="act"><kbd>b</kbd> desks</span>
-            <span class="sep">·</span>
-            <span class="act"><kbd>f</kbd> expand all panels</span>
+            <span class="act"><kbd>b</kbd> top desks (same stock)</span>
             <span class="sep">·</span>
             <span class="act"><kbd>p</kbd> plan structure</span>
             <span class="sep">·</span>
             <span class="act"><kbd>esc</kbd> board</span>
             <span class="sep">·</span>
-            <span>CLI deep-dives stay CLI · no order · no re-score</span>
+            <span>no order · no re-score · not Action · Judge = board Enter</span>
           </div>
         </div>
       </div>
@@ -1074,11 +1145,11 @@
           Judge remains board Enter.
         </p>
 
-        <h4>Session</h4>
+        <h4>Session (cockpit rail)</h4>
         <div class="row"><span>Market</span><span class="v">IDX</span></div>
-        <div class="row"><span>as_of</span><span class="v">2026-07-29</span></div>
+        <div class="row"><span>as_of</span><span class="v">dashboard</span></div>
         <div class="row"><span>Mode</span><span class="v">local-first</span></div>
-        <div class="row"><span>Cache</span><span class="v">ready</span></div>
+        <div class="row"><span>Cache</span><span class="v">health rail</span></div>
 
         <h4>Keys</h4>
         <div class="row"><span>Desks</span><span class="v">b</span></div>
@@ -1087,8 +1158,9 @@
         <div class="row"><span>Commands</span><span class="v">⌃p</span></div>
 
         <div class="warn">
-          Design target for Textual/TUI implementation — not a web app product surface.
-          Facts still come from GetTickerDashboardUseCase.
+          Design for Textual — not a web product. Facts from
+          <strong style="color:var(--fog);font-weight:500">GetTickerDashboardUseCase</strong> only.
+          Missing panels render as <strong style="color:var(--fog)">—</strong>, never invented Action.
         </div>
       </aside>
 
@@ -1113,23 +1185,35 @@
 
   <div class="compare">
     <article>
-      <h2 class="bad">Reject · CLI dump in stage</h2>
+      <h2 class="bad">Reject</h2>
       <ul>
-        <li>Uniform Rich boxes — no hierarchy</li>
-        <li>ASCII chrome fights cockpit chrome</li>
-        <li>Everything same weight → slow scan</li>
-        <li>Looks like a log, not a desk</li>
+        <li>CLI Rich panel dump as the stage</li>
+        <li>Inventing PE / flow / Action when cache is empty</li>
+        <li>Treating 52w range position as a period return</li>
+        <li>Making ticker desk set ENTER/WATCH/AVOID</li>
+        <li>Design fields that are not on TickerDashboard</li>
       </ul>
     </article>
     <article>
-      <h2 class="good">Adopt · Harga Mast desk</h2>
+      <h2 class="good">Adopt</h2>
       <ul>
-        <li>Price is the hero landscape</li>
-        <li>Brass tape + horizon returns for motion of market</li>
-        <li>Ribbon metrics · pulse trio · expandable depth</li>
-        <li>Still local-first, same use case, implementable in Textual in slices</li>
+        <li>Price landscape + horizons from price_structure</li>
+        <li>Ribbon from fundamentals; — when missing</li>
+        <li>Pulse trio: flow series · structure · bandar snapshot</li>
+        <li>Earnings from earnings[]; secondary = presence map</li>
+        <li>Full panel list stays CLI until an explicit expand PR</li>
       </ul>
     </article>
+  </div>
+
+  <div class="shell" style="margin-top:8px">
+    <p style="font-family:var(--font-mono);font-size:12px;color:var(--ash);max-width:70ch;line-height:1.6">
+      <span style="color:var(--brass)">Open decisions (design ↔ TUI)</span><br />
+      · Horizon bar tracks: CSS in mock · monospace density in Textual is OK<br />
+      · Expand full CLI panels on key: deferred (CLI remains deep-dive)<br />
+      · Right rail: cockpit sidebar owns session; no second ticker-only rail required<br />
+      · Analyst numeric target: only if present on analyst DTO — never invent
+    </p>
   </div>
 </body>
 </html>
