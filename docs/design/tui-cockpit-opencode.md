@@ -143,9 +143,14 @@ Primary stage stays scannable. Richer DTO fields hang on **chips** (mono pills).
 - Header meta: `local cache` or `full · local cache` — no design jargon  
 - Footer: `b` desks · `p` plan · `esc` · `d` detail
 
-### Broker
-- Radar + Enter home (net hero · hub)  
-- Flags: partial_net · from_ticker · deep.t/f/h  
+### Broker (`v b` · desk-centric)
+- Radar + Enter home: **day net for that desk code** (tracked `broker_daily_flow`)  
+- Hub:
+  - **`t` buy/sell** — top stocks **for this desk** (not market top)
+  - **`f` flow** — **this desk’s** day-net series (`ViewBrokerDeskFlow`) · **not** market foreign total · **not** ticker foreign flow
+  - **`h` history** — per-ticker daily for this desk
+  - **`v` top buy** — top-buy list for this desk · click → view ticker  
+- Never label desk flow as “foreign flow” or “broker summary market-wide”
 
 ### Plan / Paper / Health
 - Plan geometry triangle · paper tape · health posters (unchanged contracts)
