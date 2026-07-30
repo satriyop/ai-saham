@@ -145,10 +145,9 @@ def test_detail_flags_present_for_code_richer_fields():
     # Ticker detail (CLI full vs brief)
     assert "tickerDepthBody" in html or "tickerDetailAll" in html
     assert "toggleTickerDetail" in html or 'data-flag="detail"' in html
-    # Broker flags
-    assert "partial_net" in html
-    assert "from_ticker" in html
-    assert "deep.t" in html
+    # Broker · top-buy ticker list (v hub)
+    assert "brokerJumpList" in html or "jump-row" in html
+    assert "partial_net" in html or "from_ticker" in html
 
 
 def test_preopen_enter_opens_auction_inspect_not_judge():

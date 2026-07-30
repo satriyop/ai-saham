@@ -6,7 +6,7 @@
  <meta http-equiv="Pragma" content="no-cache" />
  <meta http-equiv="Expires" content="0" />
  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ai-saham · Daily Cockpit · OpenCode rev-20260730v</title>
+  <title>ai-saham · Daily Cockpit · OpenCode rev-20260730w</title>
  <link rel="preconnect" href="https://fonts.googleapis.com" />
  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -1281,7 +1281,7 @@
  .val-grid { grid-template-columns: 1fr 1fr; }
  }
 
- /* Broker · Desk Radar / Net hero (OpenCode; IA from tui-broker-desk) */
+ /* Broker · Desk Radar / desk (OpenCode; IA from tui-broker-desk) */
  .net5-cell {
  display: flex;
  flex-direction: column;
@@ -1931,7 +1931,7 @@
         <button type="button" data-frame="empty">7 Health</button>
         <button type="button" data-frame="palette">8 Palette</button>
       </div>
-      <span class="rev" id="buildStamp">mock · 30v</span>
+      <span class="rev" id="buildStamp">mock · 30w</span>
     </div>
 
     <!-- Product shell only · OpenCode bible for shipped TUI -->
@@ -2627,7 +2627,7 @@
  </div>
  </div>
 
- <!-- 7 BROKER · Desk Radar → Enter Net hero home · OpenCode (IA: tui-broker-desk) -->
+ <!-- 7 BROKER · Desk Radar → Enter desk home · OpenCode (IA: tui-broker-desk) -->
  <div class="stage-block is-hidden" id="brokerView">
 <div class="flag-row" data-flag-group="broker">
               <span class="flag-lab">List</span>
@@ -2674,7 +2674,7 @@
  </table>
  <div class="footer-note">
  <span><span class="kbd">↑↓</span> move</span>
- <span><span class="kbd">Enter</span> desk home · Net hero</span>
+ <span><span class="kbd">Enter</span> desk home · desk</span>
  <span><span class="kbd">esc</span> board</span>
  <span class="dim">loading chrome · broker list</span>
  </div>
@@ -2721,26 +2721,7 @@
  <button type="button" class="is-on" data-deep="top"><kbd>t</kbd> top stocks</button>
  <button type="button" data-deep="flow"><kbd>f</kbd> flow</button>
  <button type="button" data-deep="hist"><kbd>h</kbd> history</button>
- <button type="button" data-deep="ticker"><kbd>v</kbd> jump ticker</button>
- </div>
-              <div class="flag-row" data-flag-group="brokerHome" style="margin-top:0">
-                <span class="flag-lab">Deep tables</span>
-                <button type="button" class="flag-chip" data-flag="deep.t">deep.t</button>
-                <button type="button" class="flag-chip" data-flag="deep.f">deep.f</button>
-                <button type="button" class="flag-chip" data-flag="deep.h">deep.h</button>
-                <span style="font-size:11px;color:var(--text-mute)"></span>
-              </div>
-              <div class="flag-panel" data-flag-panel="deep.t" data-flag-group="brokerHome">
-                <h4>deep.t · top stocks</h4>
-                <p style="margin:0;color:var(--text-dim)">ViewBrokerDeskTopStocks payload · heat is sugar.</p>
-              </div>
-              <div class="flag-panel" data-flag-panel="deep.f" data-flag-group="brokerHome">
-                <h4>deep.f · flow</h4>
-                <p style="margin:0;color:var(--text-dim)">ViewBrokerDeskFlow · multi-day net.</p>
-              </div>
-              <div class="flag-panel" data-flag-panel="deep.h" data-flag-group="brokerHome">
-                <h4>deep.h · history</h4>
-                <p style="margin:0;color:var(--text-dim)">ViewBrokerDeskHistory · per-ticker daily.</p>
+                <button type="button" data-deep="ticker"><kbd>v</kbd> tickers</button>
               </div>
               <div class="broker-deep is-on" id="brokerDeepTop" data-deep-panel="top">
  <div class="split-buy-sell">
@@ -2775,18 +2756,12 @@
  </table>
  </div>
 
- <div class="broker-deep" id="brokerDeepTicker" data-deep-panel="ticker">
- <div class="section-label tight" style="margin-top:0">Jump ticker</div>
- <p style="font-size:12px;color:var(--text-mute);margin-bottom:10px;line-height:1.5">
- From desk home, <span class="kbd">v</span> opens top-buy stock in
- <strong style="color:var(--text);font-weight:500">Ticker desk</strong> (full panels) — trail back with esc → radar → board.
- </p>
- <div class="stock-row" style="border:1px solid var(--border);border-radius:6px;padding:8px 10px;background:var(--bg-elevated)">
- <span class="t" id="brokerJumpCode">AMMN</span>
- <span class="dim" style="font-size:11px;color:var(--text-mute)">top buy · open ticker desk</span>
- <span class="n pos">→</span>
- </div>
- </div>
+              <div class="broker-deep" id="brokerDeepTicker" data-deep-panel="ticker">
+                <div class="section-label tight" style="margin-top:0">Top buy · open ticker</div>
+                <div id="brokerJumpList" class="broker-jump-list" aria-label="Top buy tickers">
+                  <!-- filled from desk buys[] -->
+                </div>
+              </div>
 
  <div class="footer-note">
  <span><span class="kbd">t</span> top</span>
@@ -3427,10 +3402,44 @@
  const sellHtml = (r.sells || []).map(([t, w, n]) =>
  `<div class="stock-row"><span class="t">${t}</span><span class="bar"><i style="width:${w}%"></i></span><span class="n">${n}</span></div>`
  ).join("");
- if ($("brokerTopBuy")) $("brokerTopBuy").innerHTML = buyHtml || `<div class="dim">—</div>`;
- if ($("brokerTopSell")) $("brokerTopSell").innerHTML = sellHtml || `<div class="dim">—</div>`;
+      if ($("brokerTopBuy")) $("brokerTopBuy").innerHTML = buyHtml || `<div class="dim">—</div>`;
+      if ($("brokerTopSell")) $("brokerTopSell").innerHTML = sellHtml || `<div class="dim">—</div>`;
 
- if ($("brokerFlowDays")) {
+      // v · top buy list → open ticker (not single name)
+      if ($("brokerJumpList")) {
+        const buys = r.buys || [];
+        $("brokerJumpList").innerHTML = buys.length
+          ? buys
+              .map(
+                ([code, w, n]) => `
+          <div class="jump-row" data-ticker="${code}" role="button" tabindex="0">
+            <span class="t">${code}</span>
+            <span class="bar"><i style="width:${w}%"></i></span>
+            <span class="n">${n}</span>
+            <span class="go">→ ticker</span>
+          </div>`
+              )
+              .join("")
+          : `<div class="dim">No top-buy tickers</div>`;
+        $("brokerJumpList").querySelectorAll(".jump-row").forEach((row) => {
+          const open = () => {
+            const code = row.dataset.ticker;
+            const idx = ACCUM.findIndex((a) => a.t === code);
+            if (idx >= 0) state.rowIndex = idx;
+            showFrame("detail");
+            toast(`View ticker · ${code}`);
+          };
+          row.addEventListener("click", open);
+          row.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              open();
+            }
+          });
+        });
+      }
+
+      if ($("brokerFlowDays")) {
  $("brokerFlowDays").innerHTML = (r.flow || []).map(([d, w, v, cls]) =>
  `<div class="flow-day"><span class="d">${d}</span><div class="track"><i class="${cls}" style="width:${w}%"></i></div><span class="v ${cls}">${v}</span></div>`
  ).join("") || `<div class="dim">—</div>`;
@@ -3462,7 +3471,7 @@
  paintBrokerHome();
  syncBrokerMode();
  updateChrome();
- toast(`Desk home · ${ (BROKER[state.brokerIndex] || {}).code || "—" } · Net hero`);
+ toast(`Desk home · ${ (BROKER[state.brokerIndex] || {}).code || "—" } · desk`);
  }
 
  function closeBrokerHome() {
@@ -3657,8 +3666,8 @@
  const b = BROKER[state.brokerIndex] || {};
  if (state.brokerMode === "home") {
  const deep = state.brokerDeep === "top" ? "home" : state.brokerDeep;
- $("viewTitle").textContent = `View · broker · ${b.code || "—"} · ${deep}`;
- $("viewMeta").innerHTML = `<span class="dot">·</span> net hero · hub t/f/h/v`;
+          $("viewTitle").textContent = `View · broker · ${b.code || "—"} · ${deep === "ticker" ? "tickers" : deep}`;
+          $("viewMeta").innerHTML = `<span class="dot">·</span> day net · t/f/h/v`;
  $("statusScreen").textContent = deep === "home" ? `desk home · ${b.code || "—"}` : `desk ${deep} · ${b.code || "—"}`;
  } else {
  $("viewTitle").textContent = "View · broker · radar";
@@ -3676,9 +3685,9 @@
  } else if (state.frame === "broker") {
  const b = BROKER[state.brokerIndex] || {};
  if (state.brokerMode === "home") {
- $("sideFocus").innerHTML = `<strong>${b.code || "—"}</strong> desk home<br />Net hero · t/f/h deep · v ticker · esc radar`;
+ $("sideFocus").innerHTML = `<strong>${b.code || "—"}</strong> desk home<br />desk · t/f/h deep · v ticker · esc radar`;
  } else {
- $("sideFocus").innerHTML = `<strong>Radar</strong><br />Scout by |Net5| · Enter = Net hero home`;
+ $("sideFocus").innerHTML = `<strong>Radar</strong><br />Scout by |Net5| · Enter = desk home`;
  }
       } else if (state.frame === "preopen") {
         const pr = PREOPEN[state.preIndex] || {};
@@ -4205,18 +4214,6 @@
  btn.addEventListener("click", () => setBrokerDeep(btn.dataset.deep));
  });
 
- // Jump ticker panel → open ticker desk
- if ($("brokerJumpCode")) {
- $("brokerJumpCode").style.cursor = "pointer";
- $("brokerJumpCode").parentElement && $("brokerJumpCode").parentElement.addEventListener("click", () => {
- const top = (BROKER[state.brokerIndex] || {}).top;
- if (top) {
- const idx = ACCUM.findIndex((r) => r.t === top);
- if (idx >= 0) state.rowIndex = idx;
- }
- showFrame("detail");
- });
- }
 
     // CLI analog: screen accum --detail · view ticker full vs --brief
     // Judge: d toggles all available detail panels (does not invent if limited)
