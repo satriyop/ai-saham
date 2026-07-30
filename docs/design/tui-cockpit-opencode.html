@@ -1619,6 +1619,123 @@
  .oc-geo .v.stop { color: var(--red); }
  .oc-geo .v.target { color: var(--green); }
 
+    /* Plan · geometry triangle (IA tui-plan-desk) */
+    .plan-inherit {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 14px;
+      align-items: center;
+      margin-bottom: 12px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-elevated);
+      font-size: 12px;
+    }
+    .plan-inherit .act {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--amber);
+      letter-spacing: 0.02em;
+    }
+    .plan-inherit .act.enter { color: var(--green); }
+    .plan-inherit .act.avoid { color: var(--red); }
+    .plan-inherit .note { color: var(--text-mute); }
+    .geo-hero {
+      margin-bottom: 12px;
+      padding: 16px 14px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-elevated);
+    }
+    .geo-hero .lab {
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-mute);
+      margin-bottom: 14px;
+    }
+    .geo-tri {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr auto 1fr;
+      gap: 8px;
+      align-items: end;
+      text-align: center;
+    }
+    @media (max-width: 700px) {
+      .geo-tri { grid-template-columns: 1fr; }
+      .geo-tri .arr { display: none; }
+    }
+    .geo-tri .pt .k {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-mute);
+      margin-bottom: 6px;
+    }
+    .geo-tri .pt .v {
+      font-size: clamp(1.35rem, 2.8vw, 1.75rem);
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+    .geo-tri .pt.entry .v { color: var(--amber); }
+    .geo-tri .pt.stop .v { color: var(--red); }
+    .geo-tri .pt.target .v { color: var(--green); }
+    .geo-tri .arr {
+      color: var(--text-faint);
+      font-size: 1.15rem;
+      padding-bottom: 6px;
+    }
+    .geo-lots {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px 28px;
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border-soft);
+      font-size: 12px;
+    }
+    .geo-lots .k {
+      display: block;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-mute);
+      margin-bottom: 2px;
+    }
+    .geo-lots .v {
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+      font-size: 1.05rem;
+    }
+    .plan-ctx {
+      margin-bottom: 12px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-panel);
+      font-size: 12.5px;
+      color: var(--text-dim);
+      line-height: 1.5;
+    }
+    .plan-ctx h3 {
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-mute);
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+    .plan-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+
  .badge.action-chip {
  font-size: 10.5px;
  font-weight: 600;
@@ -1651,7 +1768,7 @@
 <body>
  <div class="demo-bar">
  <div class="card">
- <strong>OpenCode visual = TUI bible</strong> · <span style="color:#6fbf8a" id="buildStamp">rev 2026-07-30k · paper tape · E2E 1–9</span>
+ <strong>OpenCode visual = TUI bible</strong> · <span style="color:#6fbf8a" id="buildStamp">rev 2026-07-30m · plan geometry · E2E 1–9</span>
  · black-on-black · peach palette · mono density
  · <em style="color:var(--sel-dim);font-style:normal">Journey = structure inspiration only</em>
  (stages / authority / columns — not marketing night-ink skin)
@@ -1772,38 +1889,65 @@
  </div>
  </div>
 
- <!-- 3 PLAN · Geometry hero · tui-plan-desk.html -->
- <div class="list-view is-hidden" id="planView">
- <div class="oc-note">
- Structure desk · inherits Action ·
- <a href="./tui-plan-desk.html">tui-plan-desk.html</a>
- · no broker order · not a second analysis
- </div>
- <div class="section-label">Plan · structure · geometry hero</div>
- <div class="card" style="margin-bottom:10px">
- <div style="display:flex;gap:12px;align-items:center;margin-bottom:10px">
- <span style="font-size:1.25rem;font-weight:600;color:var(--amber)" id="planInherit">WATCH</span>
- <span class="dim">inherited from screen judgment · does not re-score Action</span>
- </div>
- <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;text-align:center;font-family:var(--font-mono)">
- <div><div class="dim" style="font-size:10px">ENTRY</div><div style="font-size:1.4rem;color:var(--amber)" id="planEntry">6,225</div></div>
- <div><div class="dim" style="font-size:10px">STOP</div><div style="font-size:1.4rem;color:var(--red)" id="planStop">5,900</div></div>
- <div><div class="dim" style="font-size:10px">TARGET</div><div style="font-size:1.4rem;color:var(--green)" id="planTarget">6,800</div></div>
- </div>
- <div class="kv" style="margin-top:12px">
- <span class="k">Lots</span><span class="v">3</span>
- <span class="k">Risk %</span><span class="v">1.0</span>
- <span class="k">Plan id</span><span class="v">3f88eda7</span>
- <span class="k">Horizon</span><span class="v">swing</span>
- </div>
- <div class="oc-note" style="margin:12px 0 0">No broker order. Geometry freezes for paper journal · CLI: trade accum log --from-plan</div>
- </div>
- <div class="footer-note">
- <span><span class="kbd">l</span> paper log confirm</span>
- <span><span class="kbd">p</span> re-run structure</span>
- <span><span class="kbd">esc</span> board</span>
- </div>
- </div>
+          <!-- 3 PLAN · geometry triangle · IA tui-plan-desk · OpenCode -->
+          <div class="list-view is-hidden" id="planView">
+            <div class="oc-note">
+              Structure desk · inherits Action ·
+              IA <a href="./tui-plan-desk.html">tui-plan-desk.html</a>
+            </div>
+            <div class="section-label">Plan · structure · <span id="planTicker">BBCA</span></div>
+
+            <div class="plan-inherit">
+              <span class="act" id="planInherit">WATCH</span>
+              <span class="note">inherited from board · structure only</span>
+            </div>
+
+            <section class="geo-hero" aria-label="Geometry hero">
+              <div class="lab">Structure · swing_trade_plan</div>
+              <div class="geo-tri">
+                <div class="pt entry">
+                  <div class="k">Entry</div>
+                  <div class="v" id="planEntry">6,225</div>
+                </div>
+                <div class="arr" aria-hidden="true">→</div>
+                <div class="pt stop">
+                  <div class="k">Stop</div>
+                  <div class="v" id="planStop">5,900</div>
+                </div>
+                <div class="arr" aria-hidden="true">→</div>
+                <div class="pt target">
+                  <div class="k">Target</div>
+                  <div class="v" id="planTarget">6,800</div>
+                </div>
+              </div>
+              <div class="geo-lots">
+                <div><span class="k">Lots</span><span class="v" id="planLots">3</span></div>
+                <div><span class="k">Risk %</span><span class="v" id="planRisk">1.0</span></div>
+                <div><span class="k">Plan id</span><span class="v" id="planId" style="font-size:0.95rem">3f88eda7</span></div>
+                <div><span class="k">Horizon</span><span class="v" id="planHorizon" style="font-size:0.95rem">swing</span></div>
+              </div>
+            </section>
+
+            <div class="plan-ctx">
+              <h3>Board context</h3>
+              <p id="planCtx">
+                Signal 84 · Accum 48.2 · Gate OPEN · Screen · accumulation · #2 by Signal
+              </p>
+            </div>
+
+            <div class="plan-actions">
+              <button class="ghost-btn primary" type="button" id="btnPlanPaper">l · paper log…</button>
+              <button class="ghost-btn" type="button" id="btnPlanRerun">p · re-run structure</button>
+              <button class="ghost-btn" type="button" id="btnPlanEsc">esc · board</button>
+            </div>
+
+            <div class="footer-note">
+              <span><span class="kbd">l</span> paper log confirm</span>
+              <span><span class="kbd">p</span> re-run</span>
+              <span><span class="kbd">esc</span> board</span>
+              <span class="dim">incomplete capital → honest refuse</span>
+            </div>
+          </div>
 
           <!-- 4 PAPER · notebook tape · IA tui-paper-journal · OpenCode -->
           <div class="list-view is-hidden" id="paperView">
@@ -2722,18 +2866,50 @@
  updatePreopenEvidence();
  }
 
- function paintJudgeFromFocus() {
- const f = focusTicker();
- if (!f || !f.action) return;
- const el = (id) => $(id);
- if (el("judgeAction")) el("judgeAction").textContent = f.action || "—";
- if (el("judgeGate")) el("judgeGate").textContent = `Gate ${f.gate || "—"}`;
- if (el("judgeSignal")) el("judgeSignal").textContent = String(f.signal ?? "—");
- if (el("judgeAccum")) el("judgeAccum").textContent = String(f.accum ?? "—");
- if (el("judgePhase")) el("judgePhase").textContent = f.phase || "—";
- if (el("planInherit")) el("planInherit").textContent = f.action || "—";
- if (el("paperTicker")) el("paperTicker").textContent = f.t || "—";
- }
+    function paintJudgeFromFocus() {
+      const f = focusTicker();
+      if (!f || !f.action) return;
+      const el = (id) => $(id);
+      if (el("judgeAction")) el("judgeAction").textContent = f.action || "—";
+      if (el("judgeGate")) el("judgeGate").textContent = `Gate ${f.gate || "—"}`;
+      if (el("judgeSignal")) el("judgeSignal").textContent = String(f.signal ?? "—");
+      if (el("judgeAccum")) el("judgeAccum").textContent = String(f.accum ?? "—");
+      if (el("judgePhase")) el("judgePhase").textContent = f.phase || "—";
+      if (el("paperTicker")) el("paperTicker").textContent = f.t || "—";
+      paintPlanFromFocus();
+    }
+
+    function paintPlanFromFocus() {
+      const f = ACCUM[state.rowIndex] || focusTicker();
+      if (!f) return;
+      const el = (id) => $(id);
+      if (el("planTicker")) el("planTicker").textContent = f.t || "—";
+      if (el("planInherit")) {
+        el("planInherit").textContent = f.action || "—";
+        const a = String(f.action || "").toUpperCase();
+        el("planInherit").className = "act" + (a === "ENTER" ? " enter" : a === "AVOID" ? " avoid" : "");
+      }
+      const px = Number(f.price) || 6225;
+      const entry = Math.round(px * 0.992);
+      const stop = Math.round(px * 0.94);
+      const target = Math.round(px * 1.085);
+      const fmt = (n) => n.toLocaleString("en-US");
+      if (el("planEntry")) el("planEntry").textContent = fmt(entry);
+      if (el("planStop")) el("planStop").textContent = fmt(stop);
+      if (el("planTarget")) el("planTarget").textContent = fmt(target);
+      if (el("planLots")) el("planLots").textContent = "3";
+      if (el("planRisk")) el("planRisk").textContent = "1.0";
+      if (el("planId")) el("planId").textContent = "3f88eda7";
+      if (el("planHorizon")) el("planHorizon").textContent = "swing";
+      if (el("planCtx")) {
+        el("planCtx").textContent =
+          `Signal ${f.signal ?? "—"} · Accum ${f.accum ?? "—"} · Gate ${f.gate || "—"} · Screen · accumulation · #${state.rowIndex + 1} by Signal`;
+      }
+      // Keep confirm overlay numbers in sync
+      if (el("cfSetup")) el("cfSetup").textContent = fmt(entry);
+      if (el("cfStopTarget")) el("cfStopTarget").textContent = `${fmt(stop)} / ${fmt(target)}`;
+      if (el("cfLots")) el("cfLots").textContent = "3";
+    }
 
  const HEALTH = {
  empty: {
@@ -2948,9 +3124,10 @@
  } else if (frame === "judge") {
  $("judgeView").classList.remove("is-hidden"); $("judgeView").style.display = "block";
  setModeLocal();
- } else if (frame === "plan") {
- $("planView").classList.remove("is-hidden"); $("planView").style.display = "block";
- setModeLocal();
+      } else if (frame === "plan") {
+        $("planView").classList.remove("is-hidden"); $("planView").style.display = "block";
+        paintPlanFromFocus();
+        setModeLocal();
       } else if (frame === "paper") {
         $("paperView").classList.remove("is-hidden"); $("paperView").style.display = "block";
         renderPaperTape();
@@ -3044,11 +3221,11 @@
  $("viewMeta").innerHTML = `<span class="dot">·</span> present-only verdict`;
  $("statusScreen").textContent = "judge";
  $("statusRows").textContent = t;
- } else if (state.frame === "plan") {
- $("viewTitle").textContent = `Plan · ${t} · structure`;
- $("viewMeta").innerHTML = `<span class="dot">·</span> geometry hero · inherits Action · no order`;
- $("statusScreen").textContent = "plan structure";
- $("statusRows").textContent = t;
+      } else if (state.frame === "plan") {
+        $("viewTitle").textContent = `Plan · structure · ${t}`;
+        $("viewMeta").innerHTML = `<span class="dot">·</span> Entry · Stop · Target · from board`;
+        $("statusScreen").textContent = "plan structure";
+        $("statusRows").textContent = t;
       } else if (state.frame === "paper") {
         $("viewTitle").textContent = "Paper · accumulation notebook";
         $("viewMeta").innerHTML = `<span class="dot">·</span> local CSV · ${PAPER.length} notes`;
@@ -3408,10 +3585,15 @@
  if (e.key.toLowerCase() === "j") { e.preventDefault(); toast("Re-judge local · present-only"); return; }
  }
 
- if (state.frame === "plan") {
- if (e.key.toLowerCase() === "l") { e.preventDefault(); showFrame("paper"); openConfirm(); return; }
- if (e.key.toLowerCase() === "p") { e.preventDefault(); toast("Re-run structure"); return; }
- }
+      if (state.frame === "plan") {
+        if (e.key.toLowerCase() === "l") { e.preventDefault(); openConfirm(); return; }
+        if (e.key.toLowerCase() === "p") {
+          e.preventDefault();
+          paintPlanFromFocus();
+          toast("Re-run structure · local");
+          return;
+        }
+      }
 
 
  if (state.frame === "broker") {
@@ -3486,6 +3668,12 @@
  on("btnBack", "click", () => showFrame("accum"));
  on("btnConfirmCancel", "click", () => closeConfirm());
  on("btnConfirmOk", "click", confirmPlan);
+ on("btnPlanPaper", "click", () => openConfirm());
+ on("btnPlanRerun", "click", () => {
+   paintPlanFromFocus();
+   toast("Re-run structure · local");
+ });
+ on("btnPlanEsc", "click", () => showFrame(state.cacheEmpty ? "empty" : "accum"));
  on("btnFetchEmpty", "click", () => runCommand(COMMANDS.find((c) => c.action === "fetch")));
  on("btnPaletteEmpty", "click", openPalette);
  on("paletteInput", "input", () => {

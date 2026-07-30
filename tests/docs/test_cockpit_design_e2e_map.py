@@ -106,6 +106,18 @@ def test_md_states_opencode_bible_and_broker_in_cockpit():
     assert "linked out" not in text.lower() or "in-cockpit" in text.lower() or "7 |" in text
 
 
+def test_plan_frame_is_geometry_triangle():
+    html = _html()
+    assert 'id="planView"' in html
+    assert "geo-hero" in html or "geo-tri" in html
+    assert 'id="planEntry"' in html and 'id="planStop"' in html and 'id="planTarget"' in html
+    assert 'id="planInherit"' in html
+    assert "paintPlanFromFocus" in html
+    assert 'id="btnPlanPaper"' in html
+    # triangle arrows / Entry Stop Target labels
+    assert "Entry" in html and "Stop" in html and "Target" in html
+
+
 def test_paper_frame_is_notebook_tape_not_log_card():
     html = _html()
     assert 'id="paperView"' in html

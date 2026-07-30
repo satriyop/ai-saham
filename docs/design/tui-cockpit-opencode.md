@@ -23,7 +23,7 @@ Ship Textual against **this cockpit mock**. Standalone journey HTML may stay “
 |---|--------|------|-------------------------|
 | 1 | Accum | Action discover | Signal radar table · cols 1:1 TUI · Action chips |
 | 2 | Judge | Action present-only | Action/Gate first · scores · phase · compact cards |
-| 3 | Plan | Structure | Entry/Stop/Target · inherit Action · no order |
+| 3 | Plan | Structure | **Geometry triangle** Entry→Stop→Target · inherit Action · `l` paper confirm |
 | 4 | Paper | Notebook | **Notebook tape** (date · ticker · E/S/T · status) · write via plan `l` confirm |
 | 5 | Pre-open | Auction | IEP board · inspect ≠ accum Judge |
 | 6 | Ticker | Browse | **Price hero** hierarchy (IA: ticker-desk) · full fields |
@@ -43,6 +43,20 @@ Ship Textual against **this cockpit mock**. Standalone journey HTML may stay “
 | **Pre-open** | Inspect ≠ accum Judge | Same Enter as accum Judge |
 
 **Chrome noise:** authority lives in this table and in **key wiring** (Enter → Judge, browse paths). Do **not** stamp every stage with “not Action / not judgment / not a re-score.” Operators already know where judgment lives.
+
+### Plan contract (frame 3 · design-final for TUI)
+
+IA source: [`tui-plan-desk.html`](./tui-plan-desk.html) · chrome = OpenCode.
+
+| Block | Content |
+|-------|---------|
+| **Inherit** | Board Action (WATCH/ENTER/…) · structure does not re-score |
+| **Geometry hero** | Entry → Stop → Target triangle + lots · risk% · plan id · horizon |
+| **Board context** | Signal · Accum · Gate · source row |
+| **Actions** | `l` paper log confirm · `p` re-run · `esc` board |
+| **Write** | Confirm overlay (same as paper path) — not silent |
+
+Reject: one-line summary only · second analysis report · confirm embedded as the whole stage.
 
 ### Paper contract (frame 4 · design-final for TUI)
 
