@@ -27,7 +27,7 @@ Ship Textual against **this cockpit mock**. Standalone journey HTML may stay “
 | 4 | Paper | Notebook | Geometry confirm · paper only · not learning |
 | 5 | Pre-open | Auction | IEP board · inspect ≠ accum Judge |
 | 6 | Ticker | Browse | Full CLI panels (`FULL_PANEL_ORDER`) · not Action |
-| 7 | Broker | Browse | Desk radar table + Net strip · not Action |
+| 7 | Broker | Browse | Desk **radar** list → **Enter** full **Net Mast** desk home (top/flow/hist hub) · not Action |
 | 8 | Health | Honesty | Empty / zero / lag / ready posters |
 | 9 | Palette | Nav | Ctrl+P · peach selection · no scenario tabs |
 
@@ -38,7 +38,7 @@ Ship Textual against **this cockpit mock**. Standalone journey HTML may stay “
 | Path | Keys | Must not |
 |------|------|----------|
 | **Action** | Board `Enter` → Judge · `p` Plan · `l` Paper | Ticker/broker invent Action |
-| **Browse** | `v t` ticker · `v b` broker | ENTER/WATCH/AVOID authority |
+| **Browse** | `v t` ticker · `v b` broker radar · broker `Enter` desk home · `t`/`f`/`h` deep · `v` jump ticker | ENTER/WATCH/AVOID authority |
 | **Paper** | Confirm after geometry | Auto-write · corpus · orders |
 | **Pre-open** | Inspect ≠ accum Judge | Same Enter as accum Judge |
 
@@ -51,9 +51,23 @@ Ship Textual against **this cockpit mock**. Standalone journey HTML may stay “
 - Semantic green / amber / red for pass · watch · block  
 - Hierarchy = weight and first-line Action/price — not Fraunces display type  
 
+### Broker contract (frame 7 · design-final for TUI)
+
+| Mode | Keys | Stage |
+|------|------|--------|
+| **Radar** | `v b` land · `↑↓` · **Enter** | Tracked desk table · Net5 amp · cols 1:1 |
+| **Home** | Enter from radar | Net Mast (day net landscape) · identity · side stats |
+| **Hub** | `t` top · `f` flow · `h` history · `v` ticker | Buy/sell heat · day flow · hist table · jump ticker |
+| **Back** | `esc` on home → radar · `esc` on radar → board | Trail language |
+
+Reject: radar with a thin “selected strip” instead of full desk home.  
+Reject: deep panels only as “CLI later” labels with no UI.  
+IA source: [`tui-broker-desk.html`](./tui-broker-desk.html) · chrome = OpenCode.
+
 ### Reject in this file
 - Night-ink / brass marketing CSS as primary stage skin (`desk-v2`, Fraunces body UI)  
 - Broker only as toast (“see other HTML”)  
+- Broker Enter only painting a footer strip (must open full Net Mast home)  
 - Enter on accum opening ticker  
 
 ---

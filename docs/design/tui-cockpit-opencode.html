@@ -6,7 +6,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ai-saham · Daily Cockpit · OpenCode rev-20260730e</title>
+  <title>ai-saham · Daily Cockpit · OpenCode rev-20260730f</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -307,6 +307,7 @@
     .badge.pass { color: var(--green); background: rgba(111,191,138,0.1); }
     .badge.watch { color: var(--amber); background: rgba(212,176,106,0.1); }
     .badge.block { color: var(--red); background: rgba(201,122,114,0.1); }
+    .badge.neutral { color: var(--text-dim); background: rgba(255,255,255,0.04); }
     .badge.a { color: var(--green); background: rgba(111,191,138,0.12); }
     .badge.b { color: var(--blue); background: rgba(122,162,196,0.12); }
     .badge.c { color: var(--amber); background: rgba(212,176,106,0.12); }
@@ -1166,6 +1167,243 @@
       .val-grid { grid-template-columns: 1fr 1fr; }
     }
 
+    /* Broker · Desk Radar / Net Mast (OpenCode; IA from tui-broker-desk) */
+    .net5-cell {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 3px;
+    }
+    .amp {
+      width: 56px;
+      height: 4px;
+      border-radius: 2px;
+      background: #1a1a1a;
+      overflow: hidden;
+    }
+    .amp > i {
+      display: block;
+      height: 100%;
+      border-radius: 2px;
+    }
+    .amp > i.buy { background: var(--green); }
+    .amp > i.sell { background: var(--red); }
+
+    .broker-sub {
+      display: none;
+    }
+    .broker-sub.is-on { display: block; }
+
+    .broker-hub {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 10px 0 12px;
+    }
+    .broker-hub button {
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      color: var(--text-dim);
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 5px 10px;
+      cursor: pointer;
+    }
+    .broker-hub button:hover { color: var(--text); border-color: #333; }
+    .broker-hub button.is-on {
+      color: var(--sel-text);
+      background: var(--sel-bg);
+      border-color: transparent;
+      font-weight: 500;
+    }
+    .broker-hub button kbd {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      opacity: 0.85;
+      margin-right: 4px;
+    }
+    .broker-hub button.is-on kbd { opacity: 0.75; }
+
+    .broker-deep { display: none; }
+    .broker-deep.is-on { display: block; }
+
+    .split-buy-sell {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    @media (max-width: 800px) {
+      .split-buy-sell { grid-template-columns: 1fr; }
+    }
+    .stock-heat {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-panel);
+      padding: 10px 12px;
+    }
+    .stock-heat h3 {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-mute);
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+    .stock-heat.buy h3 { color: var(--green); }
+    .stock-heat.sell h3 { color: var(--red); }
+    .stock-row {
+      display: grid;
+      grid-template-columns: 52px 1fr auto;
+      gap: 8px;
+      align-items: center;
+      font-size: 12px;
+      padding: 3px 0;
+      font-variant-numeric: tabular-nums;
+    }
+    .stock-row .t { font-weight: 600; color: #ececec; }
+    .stock-row .bar {
+      height: 5px;
+      background: #1a1a1a;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .stock-row .bar > i {
+      display: block;
+      height: 100%;
+      border-radius: 2px;
+      background: var(--green);
+    }
+    .stock-heat.sell .stock-row .bar > i { background: var(--red); }
+    .stock-row .n { color: var(--text); font-weight: 500; min-width: 4.5em; text-align: right; }
+    .stock-heat.sell .stock-row .n { color: var(--red); }
+    .stock-heat.buy .stock-row .n { color: var(--green); }
+
+    .flow-day {
+      display: grid;
+      grid-template-columns: 48px 1fr auto;
+      gap: 10px;
+      align-items: center;
+      font-size: 12px;
+      padding: 4px 0;
+      font-variant-numeric: tabular-nums;
+    }
+    .flow-day .d { color: var(--text-mute); }
+    .flow-day .track {
+      height: 6px;
+      background: #1a1a1a;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .flow-day .track > i {
+      display: block;
+      height: 100%;
+      border-radius: 2px;
+    }
+    .flow-day .track > i.pos { background: var(--green); }
+    .flow-day .track > i.neg { background: var(--red); }
+    .flow-day .v { font-weight: 500; min-width: 4.5em; text-align: right; }
+    .flow-day .v.pos { color: var(--green); }
+    .flow-day .v.neg { color: var(--red); }
+
+    .net-mast {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 14px;
+      margin-bottom: 4px;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-elevated);
+    }
+    @media (max-width: 800px) {
+      .net-mast { grid-template-columns: 1fr; }
+    }
+    .net-mast .lab {
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-mute);
+      margin-bottom: 8px;
+    }
+    .net-mast .net-row {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .net-mast .sign {
+      font-size: 1.6rem;
+      font-weight: 600;
+      color: var(--green);
+    }
+    .net-mast .sign.neg { color: var(--red); }
+    .net-mast .amt {
+      font-size: 2rem;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+    .net-mast .unit {
+      font-size: 12px;
+      color: var(--text-mute);
+    }
+    .net-mast .net-sub {
+      margin-top: 6px;
+      font-size: 11.5px;
+      color: var(--text-mute);
+    }
+    .net-mast .side .stat-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 4px 0;
+      font-size: 12px;
+      border-bottom: 1px solid var(--border-soft);
+      font-variant-numeric: tabular-nums;
+    }
+    .net-mast .side .stat-line:last-child { border-bottom: 0; }
+    .net-mast .side .k { color: var(--text-mute); }
+    .net-mast .side .v { color: var(--text); font-weight: 500; }
+    .net-mast .side .v.pos { color: var(--green); }
+    .net-mast .side .v.neg { color: var(--red); }
+
+    .desk-id {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+      align-items: flex-start;
+    }
+    .desk-id .code {
+      font-size: 1.5rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: #f0f0f0;
+    }
+    .desk-id .name {
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--text-dim);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+    .desk-id .asof {
+      text-align: right;
+      font-size: 11px;
+      color: var(--text-mute);
+    }
+    .desk-id .asof strong {
+      display: block;
+      color: var(--text);
+      font-weight: 500;
+      margin-bottom: 2px;
+    }
+
     .oc-geo {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
@@ -1211,7 +1449,7 @@
 <body>
   <div class="demo-bar">
     <div class="card">
-      <strong>OpenCode visual = TUI bible</strong> · <span style="color:#6fbf8a" id="buildStamp">rev 2026-07-30e · full ticker panels · E2E 1–9</span>
+      <strong>OpenCode visual = TUI bible</strong> · <span style="color:#6fbf8a" id="buildStamp">rev 2026-07-30f · broker radar→home · E2E 1–9</span>
       · black-on-black · peach palette · mono density
       · <em style="color:var(--sel-dim);font-style:normal">Journey = structure inspiration only</em>
       (stages / authority / columns — not marketing night-ink skin)
@@ -1892,55 +2130,149 @@
             </div>
           </div>
 
-          <!-- 7 BROKER · list radar + desk home strip · OpenCode -->
+          <!-- 7 BROKER · Desk Radar → Enter Net Mast home · OpenCode (IA: tui-broker-desk) -->
           <div class="stage-block is-hidden" id="brokerView">
             <div class="oc-note">
-              Browse · <strong>not Action</strong> · tracked desks · cols 1:1 TUI
-              Code · Type · AsOf · DayNet · Net5 · Stk · Δ1 · # · Top
-              · vision ref <a href="./tui-broker-desk.html">broker desk</a> (IA only)
+              Browse · <strong>not Action</strong> · tracked desks only ·
+              <strong>Enter</strong> opens full desk home (Net Mast + hub) — not a footer strip ·
+              IA from <a href="./tui-broker-desk.html">broker desk</a> · OpenCode chrome
             </div>
-            <div class="section-label">View · broker list · desk radar</div>
-            <table class="result-table dense" id="brokerTable">
-              <thead>
-                <tr>
-                  <th>Code</th>
-                  <th>Type</th>
-                  <th>AsOf</th>
-                  <th class="num">DayNet</th>
-                  <th class="num">Net5</th>
-                  <th class="num">Stk</th>
-                  <th class="num">Δ1</th>
-                  <th class="num">#</th>
-                  <th>Top</th>
-                </tr>
-              </thead>
-              <tbody id="brokerBody"></tbody>
-            </table>
-            <div class="section-label tight" style="margin-top:12px">Desk home · Net mast (selected row)</div>
-            <div class="oc-hero" id="brokerHome">
-              <div class="lab">Day net · local · not judgment</div>
-              <div class="row">
-                <span style="font-size:1.25rem;font-weight:600" id="brokerCode">YP</span>
-                <span class="badge pass" id="brokerType">Local</span>
+
+            <!-- 7a · Desk radar (list) -->
+            <div class="broker-sub is-on" id="brokerRadar" data-broker-mode="radar">
+              <div class="section-label">View · broker · radar</div>
+              <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px;font-size:11.5px;color:var(--text-mute)">
+                <div>
+                  Tracked desks · sorted by |Net5| · <strong style="color:var(--text);font-weight:500">Enter → desk home</strong><br />
+                  Cols 1:1 · Code · Type · AsOf · DayNet · Net5 · Stk · Δ1 · # · Top
+                </div>
+                <div style="text-align:right">
+                  Net5 amp bar = design sugar (not a new score)<br />
+                  mint buy · coral sell · # = ticker count
+                </div>
               </div>
-              <div style="margin-top:8px">
-                <span class="ccy">DayNet</span>
-                <span class="price-xl pos" id="brokerDayNet" style="font-size:1.6rem;color:var(--green)">+11.5B</span>
-              </div>
-              <div class="kv" style="margin-top:10px">
-                <span class="k">Net5</span><span class="v" id="brokerNet5">+38.2B</span>
-                <span class="k">Streak</span><span class="v" id="brokerStk">4</span>
-                <span class="k">Δ1</span><span class="v" id="brokerD1">+2.1B</span>
-                <span class="k">Top buy</span><span class="v" id="brokerTop">AMMN</span>
+              <table class="result-table dense" id="brokerTable">
+                <thead>
+                  <tr>
+                    <th>Code</th>
+                    <th>Type</th>
+                    <th>AsOf</th>
+                    <th class="num">DayNet</th>
+                    <th class="num">Net5</th>
+                    <th class="num">Stk</th>
+                    <th class="num">Δ1</th>
+                    <th class="num">#</th>
+                    <th>Top</th>
+                  </tr>
+                </thead>
+                <tbody id="brokerBody"></tbody>
+              </table>
+              <div class="footer-note">
+                <span><span class="kbd">↑↓</span> move</span>
+                <span><span class="kbd">Enter</span> desk home · Net Mast</span>
+                <span><span class="kbd">esc</span> board</span>
+                <span class="dim">loading chrome · “broker list” · not hung</span>
               </div>
             </div>
-            <div class="footer-note">
-              <span><span class="kbd">↑↓</span> move</span>
-              <span><span class="kbd">Enter</span> desk home strip</span>
-              <span><span class="kbd">t</span>/<span class="kbd">f</span>/<span class="kbd">h</span> deep (CLI parity later)</span>
-              <span><span class="kbd">v</span> view ticker top</span>
-              <span><span class="kbd">esc</span> board</span>
-              <span class="dim">never invents ENTER/WATCH/AVOID</span>
+
+            <!-- 7b · Desk home (full detail · design parity) -->
+            <div class="broker-sub" id="brokerHome" data-broker-mode="home">
+              <div class="section-label">View · broker · <span id="brokerHomeCodeLabel">YP</span> · home</div>
+
+              <div class="desk-id">
+                <div>
+                  <div class="code" id="brokerCode">YP</div>
+                  <div class="name">
+                    <span id="brokerName">Mirae Asset Sekuritas Indonesia</span>
+                    <span class="badge pass" id="brokerType">Local</span>
+                    <span class="badge neutral">tracked daily flow</span>
+                  </div>
+                </div>
+                <div class="asof">
+                  <strong>as of 2026-07-29</strong>
+                  <span id="brokerTickers">45 tickers · cache only</span>
+                </div>
+              </div>
+
+              <section class="net-mast" aria-label="Day net mast">
+                <div>
+                  <div class="lab">Day net · desk · not judgment</div>
+                  <div class="net-row">
+                    <span class="sign" id="brokerDaySign">+</span>
+                    <span class="amt" id="brokerDayAmt">11.46</span>
+                    <span class="unit">B IDR</span>
+                  </div>
+                  <div class="net-sub" id="brokerDaySub">lot 413,768 · not full market — tracked activity only</div>
+                </div>
+                <div class="side">
+                  <div class="stat-line"><span class="k">Net5</span><span class="v pos" id="brokerNet5">+38.2B</span></div>
+                  <div class="stat-line"><span class="k">Buy streak</span><span class="v" id="brokerStk">4 sessions</span></div>
+                  <div class="stat-line"><span class="k">Δ1</span><span class="v pos" id="brokerD1">+2.1B</span></div>
+                  <div class="stat-line"><span class="k">Top buy</span><span class="v" id="brokerTop">AMMN</span></div>
+                </div>
+              </section>
+
+              <div class="broker-hub" id="brokerHub" role="tablist" aria-label="Desk deep">
+                <button type="button" class="is-on" data-deep="top"><kbd>t</kbd> top stocks</button>
+                <button type="button" data-deep="flow"><kbd>f</kbd> flow</button>
+                <button type="button" data-deep="hist"><kbd>h</kbd> history</button>
+                <button type="button" data-deep="ticker"><kbd>v</kbd> jump ticker</button>
+              </div>
+
+              <div class="broker-deep is-on" id="brokerDeepTop" data-deep-panel="top">
+                <div class="split-buy-sell">
+                  <div class="stock-heat buy">
+                    <h3>Top buy · session</h3>
+                    <div id="brokerTopBuy"></div>
+                  </div>
+                  <div class="stock-heat sell">
+                    <h3>Top sell · session</h3>
+                    <div id="brokerTopSell"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="broker-deep" id="brokerDeepFlow" data-deep-panel="flow">
+                <div class="section-label tight" style="margin-top:0">Desk flow · net by day (aggregate)</div>
+                <div id="brokerFlowDays"></div>
+              </div>
+
+              <div class="broker-deep" id="brokerDeepHist" data-deep-panel="hist">
+                <div class="section-label tight" style="margin-top:0">History · per-ticker daily (sample)</div>
+                <table class="result-table dense">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Ticker</th>
+                      <th class="num">Net</th>
+                      <th class="num">Lot</th>
+                    </tr>
+                  </thead>
+                  <tbody id="brokerHistBody"></tbody>
+                </table>
+              </div>
+
+              <div class="broker-deep" id="brokerDeepTicker" data-deep-panel="ticker">
+                <div class="section-label tight" style="margin-top:0">Jump ticker</div>
+                <p style="font-size:12px;color:var(--text-mute);margin-bottom:10px;line-height:1.5">
+                  From desk home, <span class="kbd">v</span> opens top-buy stock in
+                  <strong style="color:var(--text);font-weight:500">Ticker desk</strong> (full panels) — trail back with esc → radar → board.
+                </p>
+                <div class="stock-row" style="border:1px solid var(--border);border-radius:6px;padding:8px 10px;background:var(--bg-elevated)">
+                  <span class="t" id="brokerJumpCode">AMMN</span>
+                  <span class="dim" style="font-size:11px;color:var(--text-mute)">top buy · open ticker desk</span>
+                  <span class="n pos">→</span>
+                </div>
+              </div>
+
+              <div class="footer-note">
+                <span><span class="kbd">t</span> top</span>
+                <span><span class="kbd">f</span> flow</span>
+                <span><span class="kbd">h</span> history</span>
+                <span><span class="kbd">v</span> ticker</span>
+                <span><span class="kbd">esc</span> radar</span>
+                <span class="dim">no order · tracked only · not Action</span>
+              </div>
             </div>
           </div>
 
@@ -2117,14 +2449,56 @@
     ];
 
 
-    // 1:1 broker-list columns · presentation only
+    // Broker radar + desk home · IA 1:1 tui-broker-desk · presentation only
     const BROKER = [
-      { code: "YP", type: "Local", asOf: "07-29", dayNet: "+11.5B", net5: "+38.2B", stk: "4", d1: "+2.1B", n: "18", top: "AMMN" },
-      { code: "ZP", type: "Foreign", asOf: "07-29", dayNet: "+52.2B", net5: "+61.0B", stk: "3", d1: "+8.4B", n: "24", top: "BUMI" },
-      { code: "AK", type: "Foreign", asOf: "07-29", dayNet: "−18.6B", net5: "−44.1B", stk: "2", d1: "−5.2B", n: "31", top: "BBCA" },
-      { code: "BK", type: "Foreign", asOf: "07-29", dayNet: "+9.8B", net5: "+22.4B", stk: "1", d1: "+1.0B", n: "12", top: "ANTM" },
-      { code: "XL", type: "Local", asOf: "07-29", dayNet: "−6.2B", net5: "−11.5B", stk: "1", d1: "−0.8B", n: "9", top: "BBRI" },
-      { code: "MS", type: "Local", asOf: "07-29", dayNet: "+3.1B", net5: "+7.6B", stk: "2", d1: "+0.4B", n: "7", top: "TLKM" },
+      {
+        code: "YP", type: "Local", asOf: "07-29", dayNet: "+11.5B", net5: "+38.2B", stk: "4", d1: "+2.1B", n: "18", top: "AMMN",
+        name: "Mirae Asset Sekuritas Indonesia", amp: 42, dayAmt: "11.46", daySign: "+", lot: "413,768", tickers: "45 tickers · cache only",
+        buys: [["AMMN", 100, "+6.76B"], ["BUMI", 82, "+5.54B"], ["ANTM", 67, "+4.53B"], ["BBRI", 51, "+3.45B"], ["DEWA", 48, "+3.26B"]],
+        sells: [["BBCA", 100, "−11.35B"], ["CUAN", 32, "−3.67B"], ["PGEO", 26, "−2.94B"], ["ITMG", 22, "−2.48B"], ["ESSA", 15, "−1.74B"]],
+        flow: [["07-29", 40, "+11.5B", "pos"], ["07-28", 28, "+8.2B", "pos"], ["07-25", 22, "+6.1B", "pos"], ["07-24", 18, "−4.4B", "neg"], ["07-23", 35, "+9.8B", "pos"]],
+        hist: [["07-29", "AMMN", "+6.76B", "17,143"], ["07-29", "BBCA", "−11.35B", "−17,986"], ["07-28", "BUMI", "+2.10B", "88,200"], ["07-28", "BBRI", "+1.02B", "3,400"]],
+      },
+      {
+        code: "ZP", type: "Foreign", asOf: "07-29", dayNet: "+52.2B", net5: "+61.0B", stk: "3", d1: "+8.4B", n: "24", top: "BUMI",
+        name: "Foreign desk ZP (sample)", amp: 58, dayAmt: "52.20", daySign: "+", lot: "902,100", tickers: "61 tickers · cache only",
+        buys: [["BUMI", 100, "+18.2B"], ["AMMN", 70, "+12.8B"], ["ANTM", 55, "+9.1B"], ["TLKM", 40, "+6.4B"], ["BBRI", 30, "+4.2B"]],
+        sells: [["BBCA", 100, "−9.5B"], ["ASII", 45, "−4.1B"], ["UNVR", 30, "−2.8B"], ["ICBP", 22, "−2.0B"], ["EXCL", 15, "−1.3B"]],
+        flow: [["07-29", 55, "+52.2B", "pos"], ["07-28", 20, "+8.0B", "pos"], ["07-25", 15, "−3.2B", "neg"], ["07-24", 30, "+12.1B", "pos"], ["07-23", 25, "+9.4B", "pos"]],
+        hist: [["07-29", "BUMI", "+18.2B", "120,000"], ["07-29", "BBCA", "−9.5B", "−14,200"], ["07-28", "AMMN", "+4.1B", "9,800"]],
+      },
+      {
+        code: "AK", type: "Foreign", asOf: "07-29", dayNet: "−18.6B", net5: "−44.1B", stk: "2", d1: "−5.2B", n: "31", top: "BBCA",
+        name: "Foreign desk AK (sample)", amp: 48, dayAmt: "18.60", daySign: "−", lot: "−210,400", tickers: "52 tickers · cache only",
+        buys: [["ANTM", 100, "+3.1B"], ["DEWA", 60, "+1.8B"], ["BUMI", 40, "+1.1B"], ["ADRO", 30, "+0.8B"], ["PTBA", 20, "+0.5B"]],
+        sells: [["BBCA", 100, "−12.4B"], ["BBRI", 55, "−6.8B"], ["TLKM", 35, "−4.2B"], ["ASII", 25, "−3.0B"], ["UNVR", 18, "−2.1B"]],
+        flow: [["07-29", 45, "−18.6B", "neg"], ["07-28", 30, "−11.2B", "neg"], ["07-25", 20, "−6.0B", "neg"], ["07-24", 12, "+2.1B", "pos"], ["07-23", 25, "−8.4B", "neg"]],
+        hist: [["07-29", "BBCA", "−12.4B", "−19,100"], ["07-29", "ANTM", "+3.1B", "8,400"]],
+      },
+      {
+        code: "BK", type: "Foreign", asOf: "07-29", dayNet: "+9.8B", net5: "+22.4B", stk: "1", d1: "+1.0B", n: "12", top: "ANTM",
+        name: "Foreign desk BK (sample)", amp: 31, dayAmt: "9.80", daySign: "+", lot: "155,200", tickers: "28 tickers · cache only",
+        buys: [["ANTM", 100, "+4.2B"], ["AMMN", 70, "+2.9B"], ["BUMI", 50, "+2.0B"], ["BBRI", 30, "+1.1B"], ["DEWA", 20, "+0.7B"]],
+        sells: [["BBCA", 100, "−2.4B"], ["CUAN", 40, "−0.9B"], ["PGEO", 25, "−0.5B"], ["ITMG", 15, "−0.3B"], ["ESSA", 10, "−0.2B"]],
+        flow: [["07-29", 35, "+9.8B", "pos"], ["07-28", 22, "+5.1B", "pos"], ["07-25", 18, "+3.2B", "pos"], ["07-24", 10, "−1.1B", "neg"], ["07-23", 28, "+5.4B", "pos"]],
+        hist: [["07-29", "ANTM", "+4.2B", "11,200"], ["07-29", "BBCA", "−2.4B", "−3,800"]],
+      },
+      {
+        code: "XL", type: "Local", asOf: "07-29", dayNet: "−6.2B", net5: "−11.5B", stk: "1", d1: "−0.8B", n: "9", top: "BBRI",
+        name: "Local desk XL (sample)", amp: 24, dayAmt: "6.20", daySign: "−", lot: "−88,500", tickers: "19 tickers · cache only",
+        buys: [["AMMN", 100, "+1.2B"], ["ANTM", 60, "+0.7B"], ["BUMI", 40, "+0.4B"], ["DEWA", 25, "+0.3B"], ["ADRO", 15, "+0.2B"]],
+        sells: [["BBRI", 100, "−3.8B"], ["BBCA", 70, "−2.6B"], ["TLKM", 40, "−1.4B"], ["ASII", 25, "−0.8B"], ["UNVR", 15, "−0.4B"]],
+        flow: [["07-29", 30, "−6.2B", "neg"], ["07-28", 18, "−3.1B", "neg"], ["07-25", 12, "−1.4B", "neg"], ["07-24", 20, "+2.0B", "pos"], ["07-23", 15, "−2.8B", "neg"]],
+        hist: [["07-29", "BBRI", "−3.8B", "−12,600"], ["07-29", "AMMN", "+1.2B", "3,100"]],
+      },
+      {
+        code: "MS", type: "Local", asOf: "07-29", dayNet: "+3.1B", net5: "+7.6B", stk: "2", d1: "+0.4B", n: "7", top: "TLKM",
+        name: "Local desk MS (sample)", amp: 18, dayAmt: "3.10", daySign: "+", lot: "64,200", tickers: "14 tickers · cache only",
+        buys: [["TLKM", 100, "+1.8B"], ["BBRI", 65, "+1.1B"], ["AMMN", 45, "+0.7B"], ["ANTM", 30, "+0.4B"], ["BUMI", 20, "+0.3B"]],
+        sells: [["BBCA", 100, "−1.2B"], ["UNVR", 40, "−0.4B"], ["ICBP", 25, "−0.3B"], ["ASII", 15, "−0.2B"], ["EXCL", 10, "−0.1B"]],
+        flow: [["07-29", 22, "+3.1B", "pos"], ["07-28", 15, "+1.8B", "pos"], ["07-25", 12, "+1.2B", "pos"], ["07-24", 8, "−0.6B", "neg"], ["07-23", 18, "+2.1B", "pos"]],
+        hist: [["07-29", "TLKM", "+1.8B", "5,400"], ["07-29", "BBCA", "−1.2B", "−1,900"]],
+      },
     ];
 
     const COMMANDS = [
@@ -2145,10 +2519,12 @@
     ];
 
     const state = {
-      frame: "accum", // accum | judge | plan | paper | preopen | empty | detail
+      frame: "accum", // accum | judge | plan | paper | preopen | empty | detail | broker
       rowIndex: 0,
       preIndex: 0,
       brokerIndex: 0,
+      brokerMode: "radar", // radar | home
+      brokerDeep: "top", // top | flow | hist | ticker
       paletteOpen: false,
       confirmOpen: false,
       filtered: [...COMMANDS],
@@ -2297,19 +2673,31 @@
     }
 
 
+    function isNetNeg(v) {
+      return String(v || "").includes("−") || String(v || "").startsWith("-");
+    }
+
     function renderBroker() {
+      if (!$("brokerBody")) return;
       $("brokerBody").innerHTML = BROKER.map((r, i) => {
         const on = i === state.brokerIndex ? "is-selected" : "";
-        const dayCls = String(r.dayNet).includes("−") || String(r.dayNet).startsWith("-") ? "neg" : "pos";
-        const n5Cls = String(r.net5).includes("−") || String(r.net5).startsWith("-") ? "neg" : "pos";
+        const dayCls = isNetNeg(r.dayNet) ? "neg" : "pos";
+        const n5Cls = isNetNeg(r.net5) ? "neg" : "pos";
+        const ampCls = isNetNeg(r.net5) ? "sell" : "buy";
+        const ampW = Math.max(8, Math.min(100, r.amp || 20));
         return `<tr data-i="${i}" class="${on}">
           <td><span class="ticker">${r.code}</span></td>
           <td class="dim">${r.type}</td>
           <td class="dim">${r.asOf}</td>
           <td class="num ${dayCls}">${r.dayNet}</td>
-          <td class="num ${n5Cls}">${r.net5}</td>
+          <td class="num ${n5Cls}">
+            <div class="net5-cell">
+              <span>${r.net5}</span>
+              <div class="amp" title="Net5 amplitude (visual only)"><i class="${ampCls}" style="width:${ampW}%"></i></div>
+            </div>
+          </td>
           <td class="num">${r.stk}</td>
-          <td class="num">${r.d1}</td>
+          <td class="num ${isNetNeg(r.d1) ? "neg" : "pos"}">${r.d1}</td>
           <td class="num dim">${r.n}</td>
           <td>${r.top}</td>
         </tr>`;
@@ -2318,24 +2706,101 @@
         tr.addEventListener("click", () => {
           state.brokerIndex = Number(tr.dataset.i);
           renderBroker();
-          paintBrokerHome();
           updateChrome();
         });
+        tr.addEventListener("dblclick", () => {
+          state.brokerIndex = Number(tr.dataset.i);
+          openBrokerHome();
+        });
       });
-      paintBrokerHome();
+      syncBrokerMode();
+    }
+
+    function setBrokerDeep(deep) {
+      state.brokerDeep = deep || "top";
+      document.querySelectorAll("#brokerHub button").forEach((b) => {
+        b.classList.toggle("is-on", b.dataset.deep === state.brokerDeep);
+      });
+      document.querySelectorAll(".broker-deep").forEach((el) => {
+        el.classList.toggle("is-on", el.dataset.deepPanel === state.brokerDeep);
+      });
+      updateChrome();
     }
 
     function paintBrokerHome() {
       const r = BROKER[state.brokerIndex] || BROKER[0];
       if (!r || !$("brokerCode")) return;
       $("brokerCode").textContent = r.code;
+      if ($("brokerHomeCodeLabel")) $("brokerHomeCodeLabel").textContent = r.code;
+      if ($("brokerName")) $("brokerName").textContent = r.name || r.code;
       $("brokerType").textContent = r.type;
-      $("brokerDayNet").textContent = r.dayNet;
-      $("brokerDayNet").style.color = (String(r.dayNet).includes("−") || String(r.dayNet).startsWith("-")) ? "var(--red)" : "var(--green)";
+      $("brokerType").className = "badge " + (r.type === "Local" ? "pass" : "watch");
+      if ($("brokerTickers")) $("brokerTickers").textContent = r.tickers || "cache only";
+
+      const sign = r.daySign || (isNetNeg(r.dayNet) ? "−" : "+");
+      if ($("brokerDaySign")) {
+        $("brokerDaySign").textContent = sign;
+        $("brokerDaySign").className = "sign" + (sign === "−" || sign === "-" ? " neg" : "");
+      }
+      if ($("brokerDayAmt")) $("brokerDayAmt").textContent = r.dayAmt || String(r.dayNet).replace(/[^\d.]/g, "");
+      if ($("brokerDaySub")) $("brokerDaySub").textContent = `lot ${r.lot || "—"} · not full market — tracked activity only`;
+
       $("brokerNet5").textContent = r.net5;
-      $("brokerStk").textContent = r.stk;
+      $("brokerNet5").className = "v " + (isNetNeg(r.net5) ? "neg" : "pos");
+      $("brokerStk").textContent = `${r.stk} sessions`;
       $("brokerD1").textContent = r.d1;
+      $("brokerD1").className = "v " + (isNetNeg(r.d1) ? "neg" : "pos");
       $("brokerTop").textContent = r.top;
+      if ($("brokerJumpCode")) $("brokerJumpCode").textContent = r.top;
+
+      const buyHtml = (r.buys || []).map(([t, w, n]) =>
+        `<div class="stock-row"><span class="t">${t}</span><span class="bar"><i style="width:${w}%"></i></span><span class="n">${n}</span></div>`
+      ).join("");
+      const sellHtml = (r.sells || []).map(([t, w, n]) =>
+        `<div class="stock-row"><span class="t">${t}</span><span class="bar"><i style="width:${w}%"></i></span><span class="n">${n}</span></div>`
+      ).join("");
+      if ($("brokerTopBuy")) $("brokerTopBuy").innerHTML = buyHtml || `<div class="dim">—</div>`;
+      if ($("brokerTopSell")) $("brokerTopSell").innerHTML = sellHtml || `<div class="dim">—</div>`;
+
+      if ($("brokerFlowDays")) {
+        $("brokerFlowDays").innerHTML = (r.flow || []).map(([d, w, v, cls]) =>
+          `<div class="flow-day"><span class="d">${d}</span><div class="track"><i class="${cls}" style="width:${w}%"></i></div><span class="v ${cls}">${v}</span></div>`
+        ).join("") || `<div class="dim">—</div>`;
+      }
+      if ($("brokerHistBody")) {
+        $("brokerHistBody").innerHTML = (r.hist || []).map(([d, t, net, lot]) => {
+          const cls = isNetNeg(net) ? "neg" : "pos";
+          return `<tr><td class="dim">${d}</td><td><span class="ticker">${t}</span></td><td class="num ${cls}">${net}</td><td class="num dim">${lot}</td></tr>`;
+        }).join("") || `<tr><td colspan="4" class="dim">—</td></tr>`;
+      }
+    }
+
+    function syncBrokerMode() {
+      const radar = $("brokerRadar");
+      const home = $("brokerHome");
+      if (!radar || !home) return;
+      const onHome = state.brokerMode === "home";
+      radar.classList.toggle("is-on", !onHome);
+      home.classList.toggle("is-on", onHome);
+      if (onHome) {
+        paintBrokerHome();
+        setBrokerDeep(state.brokerDeep || "top");
+      }
+    }
+
+    function openBrokerHome() {
+      state.brokerMode = "home";
+      state.brokerDeep = "top";
+      paintBrokerHome();
+      syncBrokerMode();
+      updateChrome();
+      toast(`Desk home · ${ (BROKER[state.brokerIndex] || {}).code || "—" } · Net Mast`);
+    }
+
+    function closeBrokerHome() {
+      state.brokerMode = "radar";
+      syncBrokerMode();
+      updateChrome();
     }
 
     function hideAllViews() {
@@ -2397,6 +2862,9 @@
         const bv = $("brokerView");
         bv.classList.remove("is-hidden");
         bv.style.display = "block";
+        // Frame 7 lands on radar; Enter (not the strip) opens desk home
+        if (!opts.keepBrokerMode) state.brokerMode = "radar";
+        if (!opts.keepBrokerDeep) state.brokerDeep = "top";
         renderBroker();
         setModeLocal();
       }
@@ -2491,9 +2959,16 @@
         $("statusRows").textContent = t;
       } else if (state.frame === "broker") {
         const b = BROKER[state.brokerIndex] || {};
-        $("viewTitle").textContent = "View · broker list";
-        $("viewMeta").innerHTML = `<span class="dot">·</span> desk radar · ${BROKER.length} tracked · not Action`;
-        $("statusScreen").textContent = "view broker";
+        if (state.brokerMode === "home") {
+          const deep = state.brokerDeep === "top" ? "home" : state.brokerDeep;
+          $("viewTitle").textContent = `View · broker · ${b.code || "—"} · ${deep}`;
+          $("viewMeta").innerHTML = `<span class="dot">·</span> Net Mast · hub t/f/h/v · not Action`;
+          $("statusScreen").textContent = deep === "home" ? `desk home · ${b.code || "—"}` : `desk ${deep} · ${b.code || "—"}`;
+        } else {
+          $("viewTitle").textContent = "View · broker · radar";
+          $("viewMeta").innerHTML = `<span class="dot">·</span> Enter → desk home · ${BROKER.length} tracked · not Action`;
+          $("statusScreen").textContent = "broker radar";
+        }
         $("statusRows").textContent = b.code || "—";
       }
 
@@ -2504,7 +2979,11 @@
         $("sideFocus").innerHTML = `<strong>${t}</strong><br />browse · not Action · b desks · p plan`;
       } else if (state.frame === "broker") {
         const b = BROKER[state.brokerIndex] || {};
-        $("sideFocus").innerHTML = `<strong>${b.code || "—"}</strong> desk<br />browse · not Action · v ticker · esc`;
+        if (state.brokerMode === "home") {
+          $("sideFocus").innerHTML = `<strong>${b.code || "—"}</strong> desk home<br />Net Mast · t/f/h deep · v ticker · esc radar`;
+        } else {
+          $("sideFocus").innerHTML = `<strong>Radar</strong><br />Scout by |Net5| · Enter = Net Mast home`;
+        }
       } else if (state.frame === "judge") {
         $("sideFocus").innerHTML = `<strong>${t}</strong><br />j re-judge · p plan · esc board`;
       } else {
@@ -2632,7 +3111,7 @@
           break;
         case "broker":
           showFrame("broker");
-          toast("View · broker list · not Action");
+          toast("View · broker radar · Enter = desk home");
           break;
         case "plan-swing":
           if (state.cacheEmpty) { toast("Nothing to plan"); break; }
@@ -2741,6 +3220,11 @@
       if (isTypingTarget(e.target)) return;
 
       if (e.key === "Escape") {
+        if (state.frame === "broker" && state.brokerMode === "home") {
+          e.preventDefault();
+          closeBrokerHome();
+          return;
+        }
         if (["detail", "judge", "plan", "paper", "broker"].includes(state.frame)) {
           e.preventDefault();
           showFrame(state.cacheEmpty ? "empty" : "accum");
@@ -2776,26 +3260,39 @@
 
 
       if (state.frame === "broker") {
-        if (e.key === "ArrowDown" || e.key === "j") {
-          e.preventDefault();
-          state.brokerIndex = Math.min(BROKER.length - 1, state.brokerIndex + 1);
-          renderBroker(); updateChrome(); return;
-        }
-        if (e.key === "ArrowUp" || e.key === "k") {
-          e.preventDefault();
-          state.brokerIndex = Math.max(0, state.brokerIndex - 1);
-          renderBroker(); updateChrome(); return;
-        }
-        if (e.key === "v") {
-          e.preventDefault();
-          const top = (BROKER[state.brokerIndex] || {}).top;
-          if (top) {
-            // jump focus name if on board
-            const idx = ACCUM.findIndex((r) => r.t === top);
-            if (idx >= 0) state.rowIndex = idx;
+        if (state.brokerMode === "radar") {
+          if (e.key === "ArrowDown" || e.key === "j") {
+            e.preventDefault();
+            state.brokerIndex = Math.min(BROKER.length - 1, state.brokerIndex + 1);
+            renderBroker(); updateChrome(); return;
           }
-          showFrame("detail");
-          return;
+          if (e.key === "ArrowUp" || e.key === "k") {
+            e.preventDefault();
+            state.brokerIndex = Math.max(0, state.brokerIndex - 1);
+            renderBroker(); updateChrome(); return;
+          }
+          if (e.key === "Enter") {
+            e.preventDefault();
+            openBrokerHome();
+            return;
+          }
+        } else {
+          // desk home · hub keys (design: t / f / h / v)
+          const k = e.key.toLowerCase();
+          if (k === "t") { e.preventDefault(); setBrokerDeep("top"); return; }
+          if (k === "f") { e.preventDefault(); setBrokerDeep("flow"); return; }
+          if (k === "h") { e.preventDefault(); setBrokerDeep("hist"); return; }
+          if (k === "v") {
+            e.preventDefault();
+            const top = (BROKER[state.brokerIndex] || {}).top;
+            if (top) {
+              const idx = ACCUM.findIndex((r) => r.t === top);
+              if (idx >= 0) state.rowIndex = idx;
+            }
+            showFrame("detail");
+            toast(`Ticker · ${top || "—"} · from desk ${(BROKER[state.brokerIndex] || {}).code || ""}`);
+            return;
+          }
         }
       }
 
@@ -2860,6 +3357,23 @@
         updateChrome();
       });
     });
+
+    document.querySelectorAll("#brokerHub button").forEach((btn) => {
+      btn.addEventListener("click", () => setBrokerDeep(btn.dataset.deep));
+    });
+
+    // Jump ticker panel → open ticker desk
+    if ($("brokerJumpCode")) {
+      $("brokerJumpCode").style.cursor = "pointer";
+      $("brokerJumpCode").parentElement && $("brokerJumpCode").parentElement.addEventListener("click", () => {
+        const top = (BROKER[state.brokerIndex] || {}).top;
+        if (top) {
+          const idx = ACCUM.findIndex((r) => r.t === top);
+          if (idx >= 0) state.rowIndex = idx;
+        }
+        showFrame("detail");
+      });
+    }
 
     renderAccum();
     renderPreopen();

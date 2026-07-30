@@ -54,6 +54,26 @@ def test_broker_is_first_class_not_toast_only():
     assert "see tui-broker-desk.html" not in html or 'showFrame("broker")' in html
 
 
+def test_broker_enter_opens_full_desk_home_not_strip():
+    """Radar → Enter → Net Mast home (tui-broker-desk IA), not a footer strip only."""
+    html = _html()
+    assert 'id="brokerRadar"' in html
+    assert 'id="brokerHome"' in html
+    assert "openBrokerHome" in html
+    assert "net-mast" in html
+    assert "Day net" in html or "Day net" in html.lower() or "day net" in html.lower()
+    assert 'id="brokerHub"' in html
+    assert 'data-deep="top"' in html
+    assert 'data-deep="flow"' in html
+    assert 'data-deep="hist"' in html
+    assert 'data-deep="ticker"' in html
+    assert "Top buy" in html and "Top sell" in html
+    # Reject half-measure: "desk home strip" / "CLI parity later" without hub
+    assert "desk home strip" not in html.lower()
+    assert "CLI parity later" not in html
+    assert "brokerMode" in html
+
+
 def test_opencode_tokens_present_night_ink_skin_absent():
     html = _html()
     assert "#0b0b0b" in html or "--bg: #0b0b0b" in html
