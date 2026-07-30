@@ -956,10 +956,17 @@ class _LocalPaperLogFromPlanRunner:
 
 
 class _LocalPhaseHistoryLoader:
-    """Read-only setup phase ledger rows before as_of (no network, no write)."""
+    """Read-only setup phase ledger rows before as_of (no network, no write).
 
-    def __init__(self, db_path: Path) -> None:
+    SQL ``list_rows_before`` is ASC oldest→newest. Applying SQL LIMIT N would
+    keep the *oldest* N rows and drop recent phases — wrong for Judge display.
+    Match application ``load_previous_setup_phases`` last-N: load all prior rows,
+    then keep the most recent ``max_facts`` (default 20).
+    """
+
+    def __init__(self, db_path: Path, *, max_facts: int = 20) -> None:
         self._db_path = Path(db_path)
+        self._max_facts = max(0, int(max_facts))
 
     def __call__(self, ticker: str, before_date: date) -> Any:
         from src.adapters.tui.phase_sequence import facts_from_ledger_rows
@@ -971,7 +978,10 @@ class _LocalPhaseHistoryLoader:
         if not symbol:
             return ()
         repo = SQLiteSetupPhaseLedgerRepository(self._db_path)
-        rows = repo.list_rows_before(ticker=symbol, before_date=before_date, limit=20)
+        # No SQL LIMIT — ASC + LIMIT would return oldest rows only.
+        rows = tuple(repo.list_rows_before(ticker=symbol, before_date=before_date))
+        if self._max_facts > 0 and len(rows) > self._max_facts:
+            rows = rows[-self._max_facts :]
         return facts_from_ledger_rows(rows)
 
 

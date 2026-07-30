@@ -341,3 +341,59 @@ def test_cockpit_judge_empty_ledger_is_honest():
             assert "→" not in app._detail_text or "ACCUMULATION" not in app._detail_text
 
     asyncio.run(scenario())
+
+
+def test_local_phase_history_loader_keeps_most_recent_not_oldest_n(tmp_path):
+    """Real SQLite path: >20 rows must yield last-N phases, not ASC+LIMIT oldest.
+
+    Regression: SQL LIMIT 20 on ASC order dropped recent phases and kept early
+    history — Judge would show a stale sequence.
+    """
+    from datetime import timedelta
+
+    from src.adapters.tui.composition import _LocalPhaseHistoryLoader
+    from src.domain.ports.setup_phase_history_repository import (
+        SOURCE_WORKFLOW_SCREEN_ACCUM,
+    )
+    from src.infrastructure.persistence.sqlite_setup_phase_ledger_repository import (
+        SQLiteSetupPhaseLedgerRepository,
+    )
+
+    db_path = tmp_path / "phase_ledger.db"
+    repo = SQLiteSetupPhaseLedgerRepository(db_path)
+    ticker = "BBRI"
+    # Cycle phases so first and last 20 windows are distinguishable
+    cycle = (
+        SetupPhaseState.ACCUMULATION,
+        SetupPhaseState.COMPRESSION,
+        SetupPhaseState.BREAKOUT_CONFIRMATION,
+        SetupPhaseState.EXHAUSTION,
+        SetupPhaseState.DISTRIBUTION,
+    )
+    base = date(2025, 1, 1)
+    n_rows = 25
+    for i in range(n_rows):
+        repo.record_phase(
+            ticker=ticker,
+            as_of_date=base + timedelta(days=i),
+            phase=cycle[i % len(cycle)],
+            setup_family="",
+            source_workflow=SOURCE_WORKFLOW_SCREEN_ACCUM,
+        )
+
+    before = base + timedelta(days=n_rows)  # exclusive upper bound after all rows
+    loader = _LocalPhaseHistoryLoader(db_path, max_facts=20)
+    facts = loader(ticker, before)
+
+    assert len(facts) == 20
+    # Oldest of full history must NOT appear (row 0 = ACCUMULATION on 2025-01-01)
+    oldest_as_of = base.isoformat()
+    assert all(f.as_of != oldest_as_of for f in facts)
+    # Most recent 20 as_of dates: base+5 .. base+24
+    expected_as_ofs = [(base + timedelta(days=i)).isoformat() for i in range(5, 25)]
+    assert [f.as_of for f in facts] == expected_as_ofs
+    # Most recent phase is the last written (index 24)
+    assert facts[-1].phase == cycle[24 % len(cycle)].value
+    # ASC+LIMIT bug would return phases for base..base+19 and include oldest
+    broken_would_include_oldest = any(f.as_of == oldest_as_of for f in facts)
+    assert not broken_would_include_oldest
