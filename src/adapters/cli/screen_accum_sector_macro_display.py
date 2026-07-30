@@ -86,9 +86,7 @@ def build_sector_macro_panel(
     # AC3: always DIAGNOSTIC + judgment pointer on every path (including pure unavailable).
     if surface == "view":
         judgment = f"saham screen accum {t}" if t else "saham screen accum TICKER"
-        footer = (
-            f"  DIAGNOSTIC — no scoring impact (ADR-053). Judgment (Action / Why): {judgment}"
-        )
+        footer = f"  DIAGNOSTIC — no scoring impact (ADR-053). Judgment (Action / Why): {judgment}"
     else:
         footer = "  DIAGNOSTIC — no scoring impact (ADR-053). Judgment desk only (ADR-054)."
     lines.append(Text(footer, style="dim"))
