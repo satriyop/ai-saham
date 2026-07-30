@@ -1,0 +1,1300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ai-saham · Broker Desk · design vision</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    /*
+      Design thesis — “Desk Radar / Net Mast”
+      ────────────────────────────────────────
+      Sibling of Harga Mast (ticker desk), same night-ink family.
+      Subject: operator scanning tracked desks, then one desk home.
+      Signature: Net5 as radar amplitude; Day net as monumental mast on show.
+      Not CLI tables-in-a-box. Not a generic admin list.
+    */
+    :root {
+      --void: #04050a;
+      --ink: #080b12;
+      --surface: #0d121c;
+      --surface-2: #121a28;
+      --lift: #182233;
+      --line: rgba(232, 224, 208, 0.08);
+      --line-strong: rgba(232, 224, 208, 0.14);
+
+      --fog: #c9c3b8;
+      --mist: #8b92a0;
+      --ash: #5c6575;
+      --ghost: #3a4252;
+
+      --brass: #e8b86d;
+      --brass-soft: rgba(232, 184, 109, 0.14);
+      --mint: #7ecfb8;
+      --mint-soft: rgba(126, 207, 184, 0.12);
+      --coral: #e87a6e;
+      --coral-soft: rgba(232, 122, 110, 0.12);
+      --sky: #8eb4d8;
+      --violet: #a89cc9;
+
+      --font-display: "Fraunces", "Times New Roman", serif;
+      --font-ui: "Outfit", system-ui, sans-serif;
+      --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+      --r: 14px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      min-height: 100%;
+      background:
+        radial-gradient(1000px 500px at 85% -8%, rgba(126, 207, 184, 0.06), transparent 50%),
+        radial-gradient(900px 480px at 10% 0%, rgba(168, 156, 201, 0.05), transparent 50%),
+        var(--void);
+      color: var(--fog);
+      font-family: var(--font-ui);
+      font-size: 14px;
+      line-height: 1.45;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+
+    .vision-bar {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 22px 22px 0;
+    }
+
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--mint);
+      margin-bottom: 6px;
+    }
+
+    .vision-bar h1 {
+      font-family: var(--font-display);
+      font-size: 1.55rem;
+      font-weight: 600;
+      color: #f2eee6;
+      letter-spacing: -0.02em;
+      margin-bottom: 6px;
+    }
+
+    .vision-bar p {
+      color: var(--mist);
+      font-size: 13px;
+      max-width: 62ch;
+    }
+
+    .vision-bar a {
+      color: var(--brass);
+      text-decoration: none;
+      border-bottom: 1px solid rgba(232, 184, 109, 0.35);
+    }
+
+    .meta-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .tag {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--mist);
+      border: 1px solid var(--line-strong);
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.25);
+    }
+
+    .tag em { color: var(--mint); font-style: normal; }
+
+    /* frame switch for list vs desk home */
+    .frames {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 14px;
+    }
+
+    .frames button {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--mist);
+      background: var(--surface);
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      padding: 5px 12px;
+      cursor: pointer;
+    }
+
+    .frames button:hover { color: var(--fog); border-color: var(--ash); }
+    .frames button.is-on {
+      color: #0a0e12;
+      background: var(--brass);
+      border-color: transparent;
+      font-weight: 600;
+    }
+
+    .shell {
+      max-width: 1200px;
+      margin: 18px auto 32px;
+      padding: 0 16px;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 1fr 236px;
+      grid-template-rows: 1fr 34px;
+      min-height: min(860px, calc(100vh - 160px));
+      background:
+        linear-gradient(165deg, rgba(24, 40, 40, 0.35), transparent 42%),
+        var(--ink);
+      border: 1px solid var(--line-strong);
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow: 0 40px 100px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+
+    @media (max-width: 920px) {
+      .app { grid-template-columns: 1fr; }
+      .rail { display: none; }
+    }
+
+    .main {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      border-right: 1px solid var(--line);
+      grid-row: 1;
+      grid-column: 1;
+    }
+
+    .top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 20px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .crumb {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--ash);
+    }
+
+    .crumb strong { color: var(--fog); font-weight: 500; }
+
+    .mode-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      color: var(--mist);
+      padding: 3px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line-strong);
+      background: var(--surface);
+    }
+
+    .mode-pill .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--mint);
+      box-shadow: 0 0 0 3px var(--mint-soft);
+    }
+
+    .stage {
+      flex: 1;
+      overflow: auto;
+      padding: 16px 20px 22px;
+      scrollbar-width: thin;
+      scrollbar-color: #2a3344 transparent;
+    }
+
+    .frame { display: none; }
+    .frame.is-open { display: block; animation: in 140ms ease; }
+
+    @keyframes in {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    /* ═══ RADAR LIST ═══════════════════════════════════════ */
+    .radar-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .radar-title {
+      font-family: var(--font-display);
+      font-size: 1.45rem;
+      font-weight: 600;
+      color: #f2eee6;
+      letter-spacing: -0.02em;
+    }
+
+    .radar-sub {
+      margin-top: 4px;
+      font-size: 12.5px;
+      color: var(--mist);
+    }
+
+    .radar-legend {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      color: var(--ash);
+      text-align: right;
+    }
+
+    .radar-legend b { color: var(--brass); font-weight: 500; }
+
+    .radar-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+
+    .radar-table thead th {
+      text-align: left;
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ash);
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--line-strong);
+      position: sticky;
+      top: 0;
+      background: rgba(8, 11, 18, 0.95);
+      z-index: 1;
+    }
+
+    .radar-table thead th.num,
+    .radar-table td.num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .radar-table tbody tr {
+      cursor: pointer;
+      transition: background 90ms ease;
+    }
+
+    .radar-table tbody tr:hover { background: rgba(255,255,255,0.025); }
+
+    .radar-table tbody tr.is-on {
+      background: linear-gradient(90deg, rgba(232, 184, 109, 0.1), transparent 70%);
+    }
+
+    .radar-table tbody tr.is-on td:first-child {
+      box-shadow: inset 2px 0 0 var(--brass);
+    }
+
+    .radar-table td {
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--line);
+      color: var(--fog);
+      vertical-align: middle;
+    }
+
+    .code {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: #f4f0e8;
+    }
+
+    .type {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      letter-spacing: 0.04em;
+    }
+
+    .type.foreign {
+      color: var(--sky);
+      background: rgba(142, 180, 216, 0.1);
+      border: 1px solid rgba(142, 180, 216, 0.2);
+    }
+
+    .type.local {
+      color: var(--violet);
+      background: rgba(168, 156, 201, 0.1);
+      border: 1px solid rgba(168, 156, 201, 0.22);
+    }
+
+    .amp {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 120px;
+    }
+
+    .amp .track {
+      flex: 1;
+      height: 5px;
+      border-radius: 99px;
+      background: var(--lift);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .amp .track i {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      border-radius: 99px;
+    }
+
+    .amp .track i.buy {
+      left: 50%;
+      background: linear-gradient(90deg, transparent, var(--mint));
+    }
+
+    .amp .track i.sell {
+      right: 50%;
+      background: linear-gradient(270deg, transparent, var(--coral));
+    }
+
+    .pos { color: var(--mint); }
+    .neg { color: var(--coral); }
+    .muted { color: var(--ash); }
+
+    .streak {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 1.6em;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-weight: 600;
+      background: rgba(126, 207, 184, 0.1);
+      color: var(--mint);
+    }
+
+    .streak.cold {
+      background: rgba(232, 122, 110, 0.1);
+      color: var(--coral);
+    }
+
+    /* ═══ DESK HOME · Net Mast ═════════════════════════════ */
+    .desk-id {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-end;
+      margin-bottom: 16px;
+    }
+
+    .desk-code {
+      font-family: var(--font-display);
+      font-size: clamp(2rem, 4vw, 2.6rem);
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      color: #f7f2e9;
+      line-height: 1;
+    }
+
+    .desk-name {
+      margin-top: 8px;
+      color: var(--mist);
+      font-size: 13px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .chip {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--line-strong);
+      color: var(--mist);
+    }
+
+    .chip.local {
+      color: var(--violet);
+      border-color: rgba(168, 156, 201, 0.3);
+      background: rgba(168, 156, 201, 0.08);
+    }
+
+    .chip.foreign {
+      color: var(--sky);
+      border-color: rgba(142, 180, 216, 0.3);
+      background: rgba(142, 180, 216, 0.08);
+    }
+
+    .desk-asof {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--ash);
+      text-align: right;
+    }
+
+    .desk-asof strong {
+      display: block;
+      color: var(--fog);
+      margin-bottom: 2px;
+      font-weight: 500;
+    }
+
+    .net-mast {
+      position: relative;
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 18px;
+      padding: 20px 22px 18px;
+      margin-bottom: 14px;
+      border-radius: calc(var(--r) + 2px);
+      border: 1px solid var(--line-strong);
+      background:
+        radial-gradient(480px 180px at 0% 0%, rgba(126, 207, 184, 0.1), transparent 55%),
+        linear-gradient(145deg, var(--surface-2), var(--surface) 60%, #0a0e16);
+      overflow: hidden;
+    }
+
+    @media (max-width: 700px) {
+      .net-mast { grid-template-columns: 1fr; }
+    }
+
+    .net-mast .label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--mint);
+      margin-bottom: 10px;
+    }
+
+    .net-row {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .net-row .sign {
+      font-family: var(--font-mono);
+      font-size: 1.1rem;
+      color: var(--mint);
+      font-weight: 600;
+    }
+
+    .net-row .amt {
+      font-family: var(--font-mono);
+      font-size: clamp(2.2rem, 5vw, 3.1rem);
+      font-weight: 600;
+      letter-spacing: -0.04em;
+      color: #faf6ee;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+
+    .net-row .unit {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--ash);
+    }
+
+    .net-sub {
+      margin-top: 10px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--mist);
+    }
+
+    .net-side {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 10px;
+      border-left: 1px solid var(--line-strong);
+      padding-left: 16px;
+    }
+
+    @media (max-width: 700px) {
+      .net-side {
+        border-left: none;
+        padding-left: 0;
+        border-top: 1px solid var(--line);
+        padding-top: 12px;
+      }
+    }
+
+    .stat-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+
+    .stat-line .k { color: var(--ash); }
+    .stat-line .v { color: var(--fog); font-weight: 500; font-variant-numeric: tabular-nums; }
+
+    /* hub tabs */
+    .hub {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+
+    .hub button {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--mist);
+      background: transparent;
+      border: 1px solid var(--line-strong);
+      border-radius: 8px;
+      padding: 6px 12px;
+      cursor: pointer;
+    }
+
+    .hub button.is-on {
+      color: #0a0e12;
+      background: var(--brass);
+      border-color: transparent;
+      font-weight: 600;
+    }
+
+    .hub button kbd {
+      opacity: 0.7;
+      font-size: 10px;
+      margin-right: 4px;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    @media (max-width: 700px) {
+      .split { grid-template-columns: 1fr; }
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: var(--surface);
+      overflow: hidden;
+    }
+
+    .panel h3 {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ash);
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--line);
+      font-weight: 500;
+    }
+
+    .panel.buy h3 { color: var(--mint); }
+    .panel.sell h3 { color: var(--coral); }
+
+    .stock-row {
+      display: grid;
+      grid-template-columns: 56px 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--line);
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+
+    .stock-row:last-child { border-bottom: none; }
+
+    .stock-row .t { font-weight: 600; color: #f0ebe3; }
+    .stock-row .bar {
+      height: 4px;
+      border-radius: 99px;
+      background: var(--lift);
+      overflow: hidden;
+    }
+    .stock-row .bar i {
+      display: block;
+      height: 100%;
+      border-radius: 99px;
+    }
+    .panel.buy .bar i { background: var(--mint); }
+    .panel.sell .bar i { background: var(--coral); }
+    .stock-row .n { font-variant-numeric: tabular-nums; font-weight: 500; }
+    .panel.buy .n { color: var(--mint); }
+    .panel.sell .n { color: var(--coral); }
+
+    .deep {
+      display: none;
+      border: 1px solid var(--line);
+      border-radius: var(--r);
+      background: var(--surface);
+      padding: 14px 16px;
+      margin-bottom: 12px;
+    }
+
+    .deep.is-on { display: block; }
+
+    .deep h3 {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--mist);
+      margin-bottom: 12px;
+    }
+
+    .flow-day {
+      display: grid;
+      grid-template-columns: 88px 1fr 72px;
+      gap: 10px;
+      align-items: center;
+      padding: 6px 0;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .flow-day .d { color: var(--ash); }
+    .flow-day .track {
+      height: 6px;
+      border-radius: 99px;
+      background: var(--lift);
+      position: relative;
+      overflow: hidden;
+    }
+    .flow-day .track i {
+      position: absolute;
+      top: 0; bottom: 0;
+      border-radius: 99px;
+    }
+    .flow-day .track i.pos { left: 50%; background: var(--mint); }
+    .flow-day .track i.neg { right: 50%; background: var(--coral); }
+    .flow-day .v { text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+
+    .hist-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+    }
+
+    .hist-table th {
+      text-align: left;
+      font-size: 10px;
+      color: var(--ash);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--line-strong);
+    }
+
+    .hist-table td {
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--line);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .desk-foot {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 14px;
+      margin-top: 8px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      color: var(--ash);
+    }
+
+    .desk-foot kbd {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 4px;
+      border: 1px solid var(--line-strong);
+      background: var(--lift);
+      color: var(--mist);
+      font-size: 11px;
+    }
+
+    /* rail + status */
+    .rail {
+      grid-row: 1;
+      grid-column: 2;
+      background: linear-gradient(180deg, #0a0e16, #070a10);
+      padding: 16px 14px;
+      overflow: auto;
+    }
+
+    .rail h4 {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ash);
+      margin: 14px 0 8px;
+      font-weight: 500;
+    }
+
+    .rail h4:first-child { margin-top: 0; }
+
+    .rail .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12px;
+      padding: 4px 0;
+      color: var(--mist);
+    }
+
+    .rail .row .v {
+      font-family: var(--font-mono);
+      color: var(--fog);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .rail .note {
+      font-size: 12px;
+      color: var(--ash);
+      line-height: 1.5;
+    }
+
+    .rail .note strong {
+      display: block;
+      font-family: var(--font-display);
+      font-size: 1.35rem;
+      color: #f2eee6;
+      margin-bottom: 4px;
+    }
+
+    .rail .warn {
+      margin-top: 12px;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(126, 207, 184, 0.2);
+      background: var(--mint-soft);
+      font-size: 11.5px;
+      color: var(--mint);
+      line-height: 1.45;
+    }
+
+    .status {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      border-top: 1px solid var(--line);
+      background: #06080e;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--ash);
+    }
+
+    .status .accent { color: var(--mint); }
+    .status .sep { margin: 0 8px; color: var(--ghost); }
+
+    .compare {
+      max-width: 1200px;
+      margin: 0 auto 48px;
+      padding: 0 16px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    @media (max-width: 800px) {
+      .compare { grid-template-columns: 1fr; }
+    }
+
+    .compare article {
+      padding: 16px 18px;
+      border-radius: var(--r);
+      border: 1px solid var(--line-strong);
+      background: rgba(8, 11, 18, 0.8);
+    }
+
+    .compare h2 {
+      font-family: var(--font-display);
+      font-size: 1.05rem;
+      margin-bottom: 8px;
+    }
+
+    .compare .bad { color: var(--coral); }
+    .compare .good { color: var(--mint); }
+
+    .compare ul {
+      margin: 0;
+      padding-left: 1.1em;
+      color: var(--mist);
+      font-size: 12.5px;
+    }
+
+    .compare li { margin: 4px 0; }
+  </style>
+</head>
+<body>
+  <div class="vision-bar">
+    <div class="eyebrow">Design vision · view broker family</div>
+    <h1>Broker Desk — Desk Radar / Net Mast</h1>
+    <p>
+      Same night-ink family as
+      <a href="./tui-ticker-desk.html">Ticker Desk</a>,
+      different hero: <strong style="color:#e8dcc8;font-weight:500">Net is the landscape</strong>
+      (not price). Radar list for scouting tracked desks; Net Mast for one desk home;
+      hub for top / flow / history without CLI box dumps.
+      <a href="./tui-cockpit-opencode.html">← Cockpit mock</a>
+    </p>
+    <div class="meta-tags">
+      <span class="tag">list · <em>Desk Radar</em></span>
+      <span class="tag">show · <em>Net Mast</em></span>
+      <span class="tag">hub · t / f / h / v</span>
+      <span class="tag">data · YP CLI smoke + radar fiction</span>
+    </div>
+    <div class="frames" id="frameBtns" role="tablist">
+      <button type="button" data-frame="radar" class="is-on">1 Desk radar (list)</button>
+      <button type="button" data-frame="home">2 Desk home (show)</button>
+      <button type="button" data-frame="flow">3 Flow deep</button>
+      <button type="button" data-frame="hist">4 History deep</button>
+    </div>
+  </div>
+
+  <div class="shell">
+    <div class="app" role="application" aria-label="Broker desk mock">
+      <div class="main">
+        <header class="top">
+          <div class="crumb" id="crumb">View · broker · <strong>radar</strong></div>
+          <div class="mode-pill"><span class="dot"></span> tracked · local cache</div>
+        </header>
+
+        <div class="stage">
+          <!-- 1 RADAR -->
+          <div class="frame is-open" id="frame-radar">
+            <div class="radar-head">
+              <div>
+                <div class="radar-title">Desk radar</div>
+                <div class="radar-sub">Tracked desks only · sorted by |Net5| · Enter opens desk home</div>
+              </div>
+              <div class="radar-legend">
+                Amplitude = <b>Net5</b> · center = 0<br />
+                mint buy · coral sell
+              </div>
+            </div>
+
+            <table class="radar-table">
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Type</th>
+                  <th>As of</th>
+                  <th class="num">Day</th>
+                  <th>Net5 amp</th>
+                  <th class="num">Net5</th>
+                  <th class="num">Stk</th>
+                  <th class="num">Δ1</th>
+                  <th>Top</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="is-on" data-open="home">
+                  <td><span class="code">YP</span></td>
+                  <td><span class="type local">Local</span></td>
+                  <td class="muted">07-29</td>
+                  <td class="num pos">+11.5B</td>
+                  <td>
+                    <div class="amp"><div class="track"><i class="buy" style="width:42%"></i></div></div>
+                  </td>
+                  <td class="num pos">+38.2B</td>
+                  <td class="num"><span class="streak">4</span></td>
+                  <td class="num pos">+2.1B</td>
+                  <td>AMMN</td>
+                </tr>
+                <tr data-open="home">
+                  <td><span class="code">ZP</span></td>
+                  <td><span class="type foreign">Foreign</span></td>
+                  <td class="muted">07-29</td>
+                  <td class="num pos">+52.2B</td>
+                  <td>
+                    <div class="amp"><div class="track"><i class="buy" style="width:58%"></i></div></div>
+                  </td>
+                  <td class="num pos">+61.0B</td>
+                  <td class="num"><span class="streak">3</span></td>
+                  <td class="num pos">+8.4B</td>
+                  <td>BUMI</td>
+                </tr>
+                <tr data-open="home">
+                  <td><span class="code">AK</span></td>
+                  <td><span class="type foreign">Foreign</span></td>
+                  <td class="muted">07-29</td>
+                  <td class="num neg">−18.6B</td>
+                  <td>
+                    <div class="amp"><div class="track"><i class="sell" style="width:48%"></i></div></div>
+                  </td>
+                  <td class="num neg">−44.1B</td>
+                  <td class="num"><span class="streak cold">2</span></td>
+                  <td class="num neg">−5.2B</td>
+                  <td>BBCA</td>
+                </tr>
+                <tr data-open="home">
+                  <td><span class="code">BK</span></td>
+                  <td><span class="type foreign">Foreign</span></td>
+                  <td class="muted">07-29</td>
+                  <td class="num pos">+9.8B</td>
+                  <td>
+                    <div class="amp"><div class="track"><i class="buy" style="width:31%"></i></div></div>
+                  </td>
+                  <td class="num pos">+22.4B</td>
+                  <td class="num"><span class="streak">1</span></td>
+                  <td class="num pos">+1.0B</td>
+                  <td>ANTM</td>
+                </tr>
+                <tr data-open="home">
+                  <td><span class="code">XL</span></td>
+                  <td><span class="type local">Local</span></td>
+                  <td class="muted">07-29</td>
+                  <td class="num neg">−6.2B</td>
+                  <td>
+                    <div class="amp"><div class="track"><i class="sell" style="width:24%"></i></div></div>
+                  </td>
+                  <td class="num neg">−11.5B</td>
+                  <td class="num"><span class="streak cold">1</span></td>
+                  <td class="num neg">−0.8B</td>
+                  <td>BBRI</td>
+                </tr>
+                <tr data-open="home">
+                  <td><span class="code">MS</span></td>
+                  <td><span class="type local">Local</span></td>
+                  <td class="muted">07-29</td>
+                  <td class="num pos">+3.1B</td>
+                  <td>
+                    <div class="amp"><div class="track"><i class="buy" style="width:18%"></i></div></div>
+                  </td>
+                  <td class="num pos">+7.6B</td>
+                  <td class="num"><span class="streak">2</span></td>
+                  <td class="num pos">+0.4B</td>
+                  <td>TLKM</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="desk-foot">
+              <span><kbd>↑↓</kbd> move</span>
+              <span><kbd>↵</kbd> desk home</span>
+              <span><kbd>esc</kbd> back</span>
+              <span>loading chrome names “broker list” · not hung</span>
+            </div>
+          </div>
+
+          <!-- 2 DESK HOME -->
+          <div class="frame" id="frame-home">
+            <div class="desk-id">
+              <div>
+                <div class="desk-code">YP</div>
+                <div class="desk-name">
+                  <span>Mirae Asset Sekuritas Indonesia</span>
+                  <span class="chip local">Local</span>
+                  <span class="chip">tracked daily flow</span>
+                </div>
+              </div>
+              <div class="desk-asof">
+                <strong>as of 2026-07-29</strong>
+                45 tickers · cache only
+              </div>
+            </div>
+
+            <section class="net-mast" aria-label="Day net mast">
+              <div>
+                <div class="label">Day net · desk</div>
+                <div class="net-row">
+                  <span class="sign">+</span>
+                  <span class="amt">11.46</span>
+                  <span class="unit">B IDR</span>
+                </div>
+                <div class="net-sub">lot 413,768 · not full market — tracked activity only</div>
+              </div>
+              <div class="net-side">
+                <div class="stat-line"><span class="k">Net5</span><span class="v pos">+38.2B</span></div>
+                <div class="stat-line"><span class="k">Buy streak</span><span class="v">4 sessions</span></div>
+                <div class="stat-line"><span class="k">Δ1</span><span class="v pos">+2.1B</span></div>
+                <div class="stat-line"><span class="k">Top buy</span><span class="v">AMMN</span></div>
+              </div>
+            </section>
+
+            <div class="hub" id="hub" role="tablist">
+              <button type="button" class="is-on" data-deep="top"><kbd>t</kbd> top stocks</button>
+              <button type="button" data-deep="flow"><kbd>f</kbd> flow</button>
+              <button type="button" data-deep="hist"><kbd>h</kbd> history</button>
+              <button type="button" data-deep="ticker"><kbd>v</kbd> jump ticker</button>
+            </div>
+
+            <div class="deep is-on" id="deep-top">
+              <div class="split">
+                <div class="panel buy">
+                  <h3>Top buy · session</h3>
+                  <div class="stock-row"><span class="t">AMMN</span><span class="bar"><i style="width:100%"></i></span><span class="n">+6.76B</span></div>
+                  <div class="stock-row"><span class="t">BUMI</span><span class="bar"><i style="width:82%"></i></span><span class="n">+5.54B</span></div>
+                  <div class="stock-row"><span class="t">ANTM</span><span class="bar"><i style="width:67%"></i></span><span class="n">+4.53B</span></div>
+                  <div class="stock-row"><span class="t">BBRI</span><span class="bar"><i style="width:51%"></i></span><span class="n">+3.45B</span></div>
+                  <div class="stock-row"><span class="t">DEWA</span><span class="bar"><i style="width:48%"></i></span><span class="n">+3.26B</span></div>
+                </div>
+                <div class="panel sell">
+                  <h3>Top sell · session</h3>
+                  <div class="stock-row"><span class="t">BBCA</span><span class="bar"><i style="width:100%"></i></span><span class="n">−11.35B</span></div>
+                  <div class="stock-row"><span class="t">CUAN</span><span class="bar"><i style="width:32%"></i></span><span class="n">−3.67B</span></div>
+                  <div class="stock-row"><span class="t">PGEO</span><span class="bar"><i style="width:26%"></i></span><span class="n">−2.94B</span></div>
+                  <div class="stock-row"><span class="t">ITMG</span><span class="bar"><i style="width:22%"></i></span><span class="n">−2.48B</span></div>
+                  <div class="stock-row"><span class="t">ESSA</span><span class="bar"><i style="width:15%"></i></span><span class="n">−1.74B</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="deep" id="deep-flow">
+              <h3>Desk flow · net by day (aggregate)</h3>
+              <div class="flow-day"><span class="d">07-29</span><div class="track"><i class="pos" style="width:40%"></i></div><span class="v pos">+11.5B</span></div>
+              <div class="flow-day"><span class="d">07-28</span><div class="track"><i class="pos" style="width:28%"></i></div><span class="v pos">+8.2B</span></div>
+              <div class="flow-day"><span class="d">07-25</span><div class="track"><i class="pos" style="width:22%"></i></div><span class="v pos">+6.1B</span></div>
+              <div class="flow-day"><span class="d">07-24</span><div class="track"><i class="neg" style="width:18%"></i></div><span class="v neg">−4.4B</span></div>
+              <div class="flow-day"><span class="d">07-23</span><div class="track"><i class="pos" style="width:35%"></i></div><span class="v pos">+9.8B</span></div>
+            </div>
+
+            <div class="deep" id="deep-hist">
+              <h3>History · per-ticker daily (sample)</h3>
+              <table class="hist-table">
+                <thead>
+                  <tr><th>Date</th><th>Ticker</th><th class="num">Net</th><th class="num">Lot</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td>07-29</td><td>AMMN</td><td class="pos">+6.76B</td><td>17,143</td></tr>
+                  <tr><td>07-29</td><td>BBCA</td><td class="neg">−11.35B</td><td>−17,986</td></tr>
+                  <tr><td>07-28</td><td>BUMI</td><td class="pos">+2.10B</td><td>88,200</td></tr>
+                  <tr><td>07-28</td><td>BBRI</td><td class="pos">+1.02B</td><td>3,400</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="deep" id="deep-ticker">
+              <h3>Jump ticker</h3>
+              <p style="color:var(--mist);font-size:13px;margin-bottom:10px">
+                From desk home, <kbd style="font-family:var(--font-mono);border:1px solid var(--line-strong);padding:1px 6px;border-radius:4px;background:var(--lift)">v</kbd>
+                opens top-buy stock in <strong style="color:var(--fog)">Ticker Desk</strong> (Harga Mast) — trail back with esc.
+              </p>
+              <div class="stock-row" style="border:1px solid var(--line);border-radius:8px;margin:0">
+                <span class="t">AMMN</span>
+                <span class="muted" style="font-family:var(--font-mono);font-size:11px">top buy · open ticker desk</span>
+                <span class="n pos">→</span>
+              </div>
+            </div>
+
+            <div class="desk-foot">
+              <span><kbd>t</kbd> top</span>
+              <span><kbd>f</kbd> flow</span>
+              <span><kbd>h</kbd> history</span>
+              <span><kbd>v</kbd> ticker</span>
+              <span><kbd>esc</kbd> radar</span>
+              <span>no order · tracked only</span>
+            </div>
+          </div>
+
+          <!-- shortcuts for top-level frame buttons also open deep on home -->
+          <div class="frame" id="frame-flow">
+            <p class="muted" style="margin-bottom:12px;font-family:var(--font-mono);font-size:12px">Deep frame = same as hub · f on desk home</p>
+          </div>
+          <div class="frame" id="frame-hist">
+            <p class="muted" style="margin-bottom:12px;font-family:var(--font-mono);font-size:12px">Deep frame = same as hub · h on desk home</p>
+          </div>
+        </div>
+      </div>
+
+      <aside class="rail">
+        <h4>Focus</h4>
+        <p class="note">
+          <strong id="railFocus">Radar</strong>
+          <span id="railNote">Scout desks by |Net5|. Enter = Net Mast home.</span>
+        </p>
+
+        <h4>Session</h4>
+        <div class="row"><span>Market</span><span class="v">IDX</span></div>
+        <div class="row"><span>as_of</span><span class="v">2026-07-29</span></div>
+        <div class="row"><span>Tracked</span><span class="v">15 desks</span></div>
+        <div class="row"><span>Mode</span><span class="v">local-first</span></div>
+
+        <h4>Keys</h4>
+        <div class="row"><span>List</span><span class="v">v b</span></div>
+        <div class="row"><span>Home</span><span class="v">↵</span></div>
+        <div class="row"><span>Deep</span><span class="v">t f h</span></div>
+        <div class="row"><span>Ticker</span><span class="v">v</span></div>
+
+        <div class="warn">
+          Design target for TUI broker stages. Ranking/policy stay in use cases;
+          presentation only — amplitude bars are visual Net5, not a new score.
+        </div>
+      </aside>
+
+      <footer class="status">
+        <div>
+          <span class="accent">Cockpit</span>
+          <span class="sep">·</span>
+          <span id="statusFrame">broker radar</span>
+          <span class="sep">·</span>
+          <span id="statusFocus">—</span>
+        </div>
+        <div>
+          <span>local</span>
+          <span class="sep">·</span>
+          <span>ai-saham · design</span>
+        </div>
+      </footer>
+    </div>
+  </div>
+
+  <div class="compare">
+    <article>
+      <h2 class="bad">Reject · CLI list / Rich tables in stage</h2>
+      <ul>
+        <li>Plain code list — no amplitude, hard to rank by eye</li>
+        <li>Show page = stacked ASCII panels</li>
+        <li>Deep pages feel like separate CLI pastes</li>
+        <li>No trail language with ticker desk</li>
+      </ul>
+    </article>
+    <article>
+      <h2 class="good">Adopt · Radar + Net Mast + hub</h2>
+      <ul>
+        <li>Net5 amplitude is the list’s signature</li>
+        <li>Day net monumental on desk home (parallel to harga)</li>
+        <li>Buy/sell stocks as dual heat columns</li>
+        <li>t/f/h stay on one desk instrument; v → ticker desk</li>
+      </ul>
+    </article>
+  </div>
+
+  <script>
+    const crumbs = {
+      radar: ["View · broker · <strong>radar</strong>", "Radar", "Scout desks by |Net5|. Enter = Net Mast home.", "broker radar", "—"],
+      home: ["View · broker · <strong>YP</strong> · home", "YP", "Desk home · Net Mast · tracked daily flow.", "desk home · YP", "YP"],
+      flow: ["View · broker · <strong>YP</strong> · flow", "YP · flow", "Aggregate day net across tickers.", "desk flow · YP", "YP"],
+      hist: ["View · broker · <strong>YP</strong> · history", "YP · history", "Per-ticker daily rows.", "desk history · YP", "YP"],
+    };
+
+    function showFrame(name) {
+      if (name === "flow" || name === "hist") {
+        // open home then deep
+        showFrame("home");
+        const deep = name === "flow" ? "flow" : "hist";
+        document.querySelectorAll(".hub button").forEach((b) => {
+          b.classList.toggle("is-on", b.dataset.deep === deep);
+        });
+        document.querySelectorAll(".deep").forEach((d) => {
+          d.classList.toggle("is-on", d.id === "deep-" + deep);
+        });
+        const c = crumbs[name];
+        document.getElementById("crumb").innerHTML = c[0];
+        document.getElementById("railFocus").textContent = c[1];
+        document.getElementById("railNote").textContent = c[2];
+        document.getElementById("statusFrame").textContent = c[3];
+        document.getElementById("statusFocus").textContent = c[4];
+        document.querySelectorAll("#frameBtns button").forEach((b) => {
+          b.classList.toggle("is-on", b.dataset.frame === name);
+        });
+        return;
+      }
+
+      document.querySelectorAll(".frame").forEach((f) => {
+        f.classList.toggle("is-open", f.id === "frame-" + name);
+      });
+      document.querySelectorAll("#frameBtns button").forEach((b) => {
+        b.classList.toggle("is-on", b.dataset.frame === name);
+      });
+      const c = crumbs[name] || crumbs.radar;
+      document.getElementById("crumb").innerHTML = c[0];
+      document.getElementById("railFocus").textContent = c[1];
+      document.getElementById("railNote").textContent = c[2];
+      document.getElementById("statusFrame").textContent = c[3];
+      document.getElementById("statusFocus").textContent = c[4];
+
+      if (name === "home") {
+        document.querySelectorAll(".hub button").forEach((b) => {
+          b.classList.toggle("is-on", b.dataset.deep === "top");
+        });
+        document.querySelectorAll(".deep").forEach((d) => {
+          d.classList.toggle("is-on", d.id === "deep-top");
+        });
+      }
+    }
+
+    document.querySelectorAll("#frameBtns button").forEach((btn) => {
+      btn.addEventListener("click", () => showFrame(btn.dataset.frame));
+    });
+
+    document.querySelectorAll(".radar-table tbody tr").forEach((tr) => {
+      tr.addEventListener("click", () => {
+        document.querySelectorAll(".radar-table tbody tr").forEach((r) => r.classList.remove("is-on"));
+        tr.classList.add("is-on");
+        showFrame("home");
+      });
+    });
+
+    document.querySelectorAll(".hub button").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const deep = btn.dataset.deep;
+        document.querySelectorAll(".hub button").forEach((b) => b.classList.toggle("is-on", b === btn));
+        document.querySelectorAll(".deep").forEach((d) => {
+          d.classList.toggle("is-on", d.id === "deep-" + deep);
+        });
+        if (deep === "flow") {
+          document.getElementById("statusFrame").textContent = "desk flow · YP";
+        } else if (deep === "hist") {
+          document.getElementById("statusFrame").textContent = "desk history · YP";
+        } else if (deep === "ticker") {
+          document.getElementById("statusFrame").textContent = "jump ticker · YP";
+        } else {
+          document.getElementById("statusFrame").textContent = "desk home · YP";
+        }
+      });
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.target.matches("input, textarea")) return;
+      if (e.key === "1") showFrame("radar");
+      if (e.key === "2") showFrame("home");
+      if (e.key === "3") showFrame("flow");
+      if (e.key === "4") showFrame("hist");
+      if (e.key.toLowerCase() === "t" && document.getElementById("frame-home").classList.contains("is-open")) {
+        document.querySelector('.hub button[data-deep="top"]').click();
+      }
+      if (e.key.toLowerCase() === "f" && document.getElementById("frame-home").classList.contains("is-open")) {
+        document.querySelector('.hub button[data-deep="flow"]').click();
+      }
+      if (e.key.toLowerCase() === "h" && document.getElementById("frame-home").classList.contains("is-open")) {
+        document.querySelector('.hub button[data-deep="hist"]').click();
+      }
+    });
+  </script>
+</body>
+</html>

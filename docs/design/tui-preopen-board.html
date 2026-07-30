@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ai-saham · Pre-open Board · design vision</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --void: #04050a; --ink: #080b12; --surface: #0d121c; --lift: #182233;
+      --line: rgba(232,224,208,.08); --line-strong: rgba(232,224,208,.14);
+      --fog: #c9c3b8; --mist: #8b92a0; --ash: #5c6575;
+      --brass: #e8b86d; --mint: #7ecfb8; --coral: #e87a6e; --amber: #d4b06a; --sky: #8eb4d8;
+      --font-d: "Fraunces", serif; --font-u: "Outfit", system-ui, sans-serif; --font-m: "IBM Plex Mono", monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100%; background: radial-gradient(700px 360px at 80% 0%, rgba(142,180,216,.07), transparent 50%), var(--void);
+      color: var(--fog); font-family: var(--font-u); font-size: 14px; line-height: 1.45; padding: 22px 18px 48px;
+    }
+    a { color: var(--brass); }
+    .page { max-width: 1180px; margin: 0 auto; }
+    .eyebrow { font-family: var(--font-m); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--sky); margin-bottom: 6px; }
+    h1 { font-family: var(--font-d); font-size: 1.5rem; color: #f2eee6; margin-bottom: 6px; }
+    .lead { color: var(--mist); font-size: 13px; max-width: 62ch; margin-bottom: 16px; }
+    .app {
+      display: grid; grid-template-columns: 1fr 220px; grid-template-rows: 1fr 34px;
+      min-height: min(700px, calc(100vh - 150px)); background: var(--ink); border: 1px solid var(--line-strong);
+      border-radius: 18px; overflow: hidden; box-shadow: 0 40px 100px rgba(0,0,0,.55);
+    }
+    @media (max-width: 900px) { .app { grid-template-columns: 1fr; } .rail { display: none; } }
+    .main { border-right: 1px solid var(--line); display: flex; flex-direction: column; min-width: 0; }
+    .top { padding: 12px 18px; border-bottom: 1px solid var(--line); font-family: var(--font-m); font-size: 11px; color: var(--ash); display: flex; justify-content: space-between; }
+    .top strong { color: var(--fog); }
+    .auction {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line-strong);
+      border-bottom: 1px solid var(--line-strong);
+    }
+    @media (max-width: 700px) { .auction { grid-template-columns: 1fr 1fr; } }
+    .auction .c { background: #0a0e16; padding: 12px 14px; }
+    .auction .k { font-family: var(--font-m); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ash); margin-bottom: 4px; }
+    .auction .v { font-family: var(--font-m); font-size: 1.15rem; font-weight: 600; color: #f0ebe3; font-variant-numeric: tabular-nums; }
+    .auction .v.a { color: var(--mint); } .auction .v.b { color: var(--sky); } .auction .v.c { color: var(--amber); }
+    .stage { flex: 1; overflow: auto; }
+    table { width: 100%; border-collapse: collapse; font-family: var(--font-m); font-size: 11.5px; }
+    th { text-align: left; font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ash); padding: 8px 10px; border-bottom: 1px solid var(--line-strong); position: sticky; top: 0; background: rgba(8,11,18,.96); }
+    th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    tr.is-on { background: linear-gradient(90deg, rgba(142,180,216,.12), transparent 60%); }
+    tr.is-on td:first-child { box-shadow: inset 2px 0 0 var(--sky); }
+    td { padding: 7px 10px; border-bottom: 1px solid var(--line); }
+    .t { font-weight: 600; color: #f4f0e8; }
+    .pos { color: var(--mint); } .neg { color: var(--coral); }
+    .gA { color: var(--mint); font-weight: 600; } .gB { color: var(--sky); font-weight: 600; } .gC { color: var(--amber); font-weight: 600; }
+    .evidence {
+      padding: 10px 16px; border-top: 1px solid var(--line); background: #0a0e16; font-family: var(--font-m); font-size: 11.5px; color: var(--mist);
+    }
+    .evidence strong { color: var(--fog); }
+    .foot { padding: 10px 16px; border-top: 1px solid var(--line); font-family: var(--font-m); font-size: 11.5px; color: var(--ash); display: flex; flex-wrap: wrap; gap: 12px; }
+    kbd { padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line-strong); background: var(--lift); color: var(--mist); font-size: 11px; }
+    .rail { padding: 16px 14px; background: #0a0e16; font-size: 12px; color: var(--ash); line-height: 1.5; }
+    .rail strong { display: block; font-family: var(--font-d); font-size: 1.15rem; color: #f2eee6; margin-bottom: 6px; }
+    .status { grid-column: 1 / -1; display: flex; justify-content: space-between; padding: 0 16px; align-items: center; border-top: 1px solid var(--line); background: #06080e; font-family: var(--font-m); font-size: 11px; color: var(--ash); }
+    .status .accent { color: var(--sky); }
+    .nav { margin-top: 16px; font-size: 12.5px; color: var(--mist); }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="eyebrow">Design vision · morning spine · IEV snapshot</div>
+    <h1>Pre-open Board — Auction Strip</h1>
+    <p class="lead">
+      Signature: <strong style="color:#e8dcc8;font-weight:500">auction strip</strong> above a dense IEP board; Enter = short auction inspect (not accum Judge).
+      Local IEV snapshot only — never silent live browser.
+      <a href="./tui-journey-hub.html">← Journey hub</a>
+    </p>
+    <div class="app">
+      <div class="main">
+        <header class="top">
+          <div>Screen · pre-open · <strong>IEV snapshot 2026-07-29</strong></div>
+          <div>local · no live auction stream</div>
+        </header>
+        <div class="auction">
+          <div class="c"><div class="k">Session</div><div class="v">Pre-open</div></div>
+          <div class="c"><div class="k">Graded</div><div class="v">12</div></div>
+          <div class="c"><div class="k">A / B / C</div><div class="v"><span class="a">3</span> · <span class="b">5</span> · <span class="c">4</span></div></div>
+          <div class="c"><div class="k">Clock</div><div class="v" style="font-size:1rem">08:45 WIB</div></div>
+        </div>
+        <div class="stage">
+          <table>
+            <thead>
+              <tr>
+                <th>Ticker</th><th class="num">IEP</th><th class="num">Δ%</th><th class="num">IEV</th><th class="num">NCP</th>
+                <th>Grade</th><th>Flags</th><th>Risk</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="is-on"><td class="t">BBRI</td><td class="num">4,820</td><td class="num pos">+1.8</td><td class="num">12.4M</td><td class="num">0.92</td><td class="gA">A</td><td>imb·gap</td><td class="pos">clear</td></tr>
+              <tr><td class="t">BMRI</td><td class="num">6,150</td><td class="num pos">+1.2</td><td class="num">9.1M</td><td class="num">0.88</td><td class="gA">A</td><td>imb</td><td class="pos">clear</td></tr>
+              <tr><td class="t">BBCA</td><td class="num">9,925</td><td class="num pos">+0.8</td><td class="num">6.2M</td><td class="num">0.81</td><td class="gB">B</td><td>—</td><td class="pos">clear</td></tr>
+              <tr><td class="t">ADRO</td><td class="num">2,680</td><td class="num pos">+3.1</td><td class="num">22.3M</td><td class="num">0.55</td><td class="gC">C</td><td>hot·gap</td><td class="neg">block</td></tr>
+              <tr><td class="t">TLKM</td><td class="num">3,180</td><td class="num neg">−0.6</td><td class="num">18.7M</td><td class="num">0.74</td><td class="gB">B</td><td>soft</td><td class="pos">clear</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="evidence"><strong>BBRI focus</strong> · IEP 4,820 · grade A · imb+gap · risk clear · Enter = auction inspect (not accum Judge)</div>
+        <div class="foot">
+          <span><kbd>↑↓</kbd> move</span>
+          <span><kbd>↵</kbd> inspect</span>
+          <span><kbd>p</kbd> plan</span>
+          <span><kbd>s a</kbd> accum board</span>
+        </div>
+      </div>
+      <aside class="rail">
+        <strong>Auction</strong>
+        Pre-open is equal citizen to accum — different evidence (IEP/IEV), not a thin clone of Signal board.
+        <p style="margin-top:12px"><a href="./tui-accum-board.html">Accum board</a><br /><a href="./tui-journey-hub.html">Hub</a></p>
+      </aside>
+      <footer class="status">
+        <div><span class="accent">Cockpit</span> · pre-open · BBRI</div>
+        <div>IEV snapshot · design vision</div>
+      </footer>
+    </div>
+    <p class="nav"><a href="./tui-journey-hub.html">Journey hub</a></p>
+  </div>
+</body>
+</html>

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ai-saham · Paper Journal · design vision</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --void: #04050a; --ink: #080b12; --surface: #0d121c; --lift: #182233;
+      --line: rgba(232,224,208,.08); --line-strong: rgba(232,224,208,.14);
+      --fog: #c9c3b8; --mist: #8b92a0; --ash: #5c6575;
+      --brass: #e8b86d; --mint: #7ecfb8; --coral: #e87a6e; --amber: #d4b06a;
+      --font-d: "Fraunces", serif; --font-u: "Outfit", system-ui, sans-serif; --font-m: "IBM Plex Mono", monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100%; background: radial-gradient(600px 320px at 30% 0%, rgba(232,184,109,.07), transparent 50%), var(--void);
+      color: var(--fog); font-family: var(--font-u); font-size: 14px; line-height: 1.45; padding: 22px 18px 48px;
+    }
+    a { color: var(--brass); }
+    .page { max-width: 960px; margin: 0 auto; }
+    .eyebrow { font-family: var(--font-m); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--brass); margin-bottom: 6px; }
+    h1 { font-family: var(--font-d); font-size: 1.5rem; color: #f2eee6; margin-bottom: 6px; }
+    .lead { color: var(--mist); font-size: 13px; max-width: 60ch; margin-bottom: 16px; }
+    .shell {
+      background: var(--ink); border: 1px solid var(--line-strong); border-radius: 18px; overflow: hidden;
+      box-shadow: 0 40px 100px rgba(0,0,0,.55);
+    }
+    .top { padding: 14px 18px; border-bottom: 1px solid var(--line); font-family: var(--font-m); font-size: 11px; color: var(--ash); display: flex; justify-content: space-between; }
+    .top strong { color: var(--fog); }
+    .body { padding: 18px 20px 22px; }
+    .warn {
+      padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(232,184,109,.25); background: rgba(232,184,109,.08);
+      color: var(--brass); font-size: 12.5px; margin-bottom: 16px; font-family: var(--font-m);
+    }
+    .tape { display: flex; flex-direction: column; gap: 10px; }
+    .row {
+      display: grid; grid-template-columns: 88px 64px 1fr auto; gap: 12px; align-items: center;
+      padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface);
+      font-family: var(--font-m); font-size: 12px;
+    }
+    @media (max-width: 640px) { .row { grid-template-columns: 1fr 1fr; } }
+    .row .day { color: var(--ash); }
+    .row .sym { font-weight: 600; color: #f4f0e8; font-size: 13px; }
+    .row .geo { color: var(--mist); }
+    .row .geo b { color: var(--fog); font-weight: 500; font-variant-numeric: tabular-nums; }
+    .st { font-size: 10px; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+    .st.ok { color: var(--mint); background: rgba(126,207,184,.12); }
+    .st.skip { color: var(--amber); background: rgba(212,176,106,.12); }
+    .empty {
+      text-align: center; padding: 36px 16px; color: var(--ash); font-size: 13px; border: 1px dashed var(--line-strong); border-radius: 12px; margin-top: 8px;
+    }
+    .foot { padding: 12px 18px; border-top: 1px solid var(--line); font-family: var(--font-m); font-size: 11.5px; color: var(--ash); display: flex; flex-wrap: wrap; gap: 12px; }
+    kbd { padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line-strong); background: var(--lift); color: var(--mist); font-size: 11px; }
+    .nav { margin-top: 16px; font-size: 12.5px; color: var(--mist); }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="eyebrow">Design vision · paper notebook · not learning</div>
+    <h1>Paper Journal — Notebook Tape</h1>
+    <p class="lead">
+      Signature: chronological <strong style="color:#e8dcc8;font-weight:500">tape of notes</strong> with frozen plan geometry.
+      Write path stays confirm-from-plan (<kbd style="font-family:var(--font-m);border:1px solid var(--line-strong);padding:1px 6px;border-radius:4px">l</kbd> on Plan desk).
+      Not corpus, not Action authority, not broker orders.
+      <a href="./tui-journey-hub.html">← Journey hub</a>
+    </p>
+    <div class="shell">
+      <header class="top">
+        <div>Paper · accumulation notebook · <strong>local CSV</strong></div>
+        <div>review optional · CLI trade accum review</div>
+      </header>
+      <div class="body">
+        <div class="warn">Paper only · ADR-049 trade = human notebook · does not train models or change Action.</div>
+        <div class="tape">
+          <div class="row">
+            <span class="day">2026-07-30</span>
+            <span class="sym">BBCA</span>
+            <span class="geo">E <b>6,225</b> · S <b>5,900</b> · T <b>6,800</b> · 3 lots · plan 3f88eda7</span>
+            <span class="st ok">logged</span>
+          </div>
+          <div class="row">
+            <span class="day">2026-07-29</span>
+            <span class="sym">BBRI</span>
+            <span class="geo">E <b>4,825</b> · S <b>4,600</b> · T <b>5,275</b> · 2 lots</span>
+            <span class="st ok">logged</span>
+          </div>
+          <div class="row">
+            <span class="day">2026-07-29</span>
+            <span class="sym">ITMG</span>
+            <span class="geo">already logged window=7 · no new row</span>
+            <span class="st skip">duplicate</span>
+          </div>
+        </div>
+        <div class="empty">Empty day → “no paper notes yet · plan a structure then l confirm”</div>
+      </div>
+      <div class="foot">
+        <span><kbd>l</kbd> from plan desk</span>
+        <span>CLI: trade accum log --from-plan</span>
+        <span>no silent write</span>
+      </div>
+    </div>
+    <p class="nav"><a href="./tui-plan-desk.html">← Plan desk</a> · <a href="./tui-journey-hub.html">Hub</a></p>
+  </div>
+</body>
+</html>

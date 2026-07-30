@@ -2,9 +2,43 @@
 
 **Status:** design mock + ADR-051 cockpit implemented (Phases 0–5)  
 **Mock:** [`tui-cockpit-opencode.html`](./tui-cockpit-opencode.html)  
+**Swing-desk design hub (full journey):** [`tui-journey-hub.html`](./tui-journey-hub.html)  
+**Ticker desk vision (Harga Mast):** [`tui-ticker-desk.html`](./tui-ticker-desk.html)  
+**Broker desk vision (Radar / Net Mast):** [`tui-broker-desk.html`](./tui-broker-desk.html)  
+**Judge / Plan / Board:** [`tui-judge-desk.html`](./tui-judge-desk.html) · [`tui-plan-desk.html`](./tui-plan-desk.html) · [`tui-accum-board.html`](./tui-accum-board.html)  
 **ADR:** [`ADR-051`](../adr/ADR-051-tui-opencode-cockpit-clean-break.md)  
 **Reference:** OpenCode command palette + full stage + right context rail  
 **Whole product spine (not TUI-only):** [`end-to-end-journey.html`](./end-to-end-journey.html)
+
+### View · ticker desk (Harga Mast)
+
+Frame **5** in the cockpit mock is no longer a dull inspect card stack.
+Target experience for `v t` / `view ticker show`:
+
+| Principle | Choice |
+|-----------|--------|
+| Signature | Monumental **last price** (the landscape) |
+| Language | Night ink + brass + mint/coral semantics — not Rich box-drawing |
+| Hierarchy | Hero → metric ribbon → flow/structure/bandar pulse → expandable depth |
+| Authority | Cache dashboard only · **not** Action / Judge |
+| Data | Same `GetTickerDashboardUseCase` as CLI; presentation only changes |
+
+Full-bleed design thesis + compare “reject CLI dump vs adopt desk”: open `tui-ticker-desk.html`.
+
+### View · broker desk (Desk Radar / Net Mast)
+
+Sibling instrument to ticker desk (same night-ink family). Target for `v b` + desk hub:
+
+| Surface | Signature | Job |
+|---------|-----------|-----|
+| **List** | Desk **Radar** — Net5 amplitude bars (center = 0) | Scout tracked desks by \|Net5\| |
+| **Show** | **Net Mast** — monumental day net | One desk home (parallel to harga mast) |
+| **Hub** | t top / f flow / h history / v ticker | Deep without leaving the instrument |
+| **Trail** | v → Ticker Desk (Harga Mast) | Stock ↔ desk navigation |
+
+Not CLI Rich tables pasted into the stage. Ranking/policy stay in use cases; amplitude is presentation of Net5 only.
+
+Open `tui-broker-desk.html` (keys 1–4 for frames).
 
 ---
 

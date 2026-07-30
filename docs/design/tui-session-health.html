@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ai-saham · Session Health · design vision</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --void: #04050a; --ink: #080b12; --surface: #0d121c; --lift: #182233;
+      --line: rgba(232,224,208,.08); --line-strong: rgba(232,224,208,.14);
+      --fog: #c9c3b8; --mist: #8b92a0; --ash: #5c6575;
+      --brass: #e8b86d; --mint: #7ecfb8; --coral: #e87a6e; --amber: #d4b06a;
+      --font-d: "Fraunces", serif; --font-u: "Outfit", system-ui, sans-serif; --font-m: "IBM Plex Mono", monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100%; background: var(--void); color: var(--fog); font-family: var(--font-u); font-size: 14px; line-height: 1.45;
+      padding: 22px 18px 48px;
+    }
+    a { color: var(--brass); }
+    .page { max-width: 1000px; margin: 0 auto; }
+    .eyebrow { font-family: var(--font-m); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--mint); margin-bottom: 6px; }
+    h1 { font-family: var(--font-d); font-size: 1.5rem; color: #f2eee6; margin-bottom: 6px; }
+    .lead { color: var(--mist); font-size: 13px; max-width: 60ch; margin-bottom: 16px; }
+    .frames { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+    .frames button {
+      font-family: var(--font-m); font-size: 11px; color: var(--mist); background: var(--surface);
+      border: 1px solid var(--line-strong); border-radius: 6px; padding: 5px 12px; cursor: pointer;
+    }
+    .frames button.is-on { background: var(--brass); color: #1a120c; border-color: transparent; font-weight: 600; }
+    .panel {
+      display: none; background: var(--ink); border: 1px solid var(--line-strong); border-radius: 18px;
+      padding: 28px 24px; box-shadow: 0 40px 100px rgba(0,0,0,.5); min-height: 280px;
+    }
+    .panel.is-on { display: block; animation: in .15s ease; }
+    @keyframes in { from { opacity: 0; } to { opacity: 1; } }
+    .poster-title { font-family: var(--font-d); font-size: 1.6rem; margin-bottom: 10px; letter-spacing: -.02em; }
+    .poster-title.empty { color: var(--coral); }
+    .poster-title.zero { color: var(--brass); }
+    .poster-title.lag { color: var(--amber); }
+    .poster-title.ready { color: var(--mint); }
+    .poster-body { color: var(--mist); font-size: 14px; max-width: 48ch; margin-bottom: 18px; line-height: 1.55; }
+    .rail-line {
+      font-family: var(--font-m); font-size: 12px; color: var(--ash); margin-bottom: 16px;
+      padding: 10px 12px; border-radius: 8px; background: var(--surface); border: 1px solid var(--line);
+    }
+    .rail-line b { color: var(--fog); font-weight: 500; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; }
+    .btn {
+      font-family: var(--font-m); font-size: 12px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line-strong);
+      background: var(--lift); color: var(--fog); cursor: pointer;
+    }
+    .btn.primary { background: var(--brass); color: #1a120c; border-color: transparent; font-weight: 600; }
+    .protect { margin-top: 20px; font-size: 12px; color: var(--ash); font-family: var(--font-m); }
+    .protect li { margin: 4px 0 4px 1.1em; }
+    .nav { margin-top: 16px; font-size: 12.5px; color: var(--mist); }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="eyebrow">Design vision · local-first honesty</div>
+    <h1>Session Health — Three Posters</h1>
+    <p class="lead">
+      Do not collapse “no cache”, “0 candidates”, and “lag” into one dull empty screen.
+      Fetch is always explicit. Cache rail owns dates; empty stage body must not clobber ready health.
+      <a href="./tui-journey-hub.html">← Journey hub</a>
+    </p>
+    <div class="frames" id="frames">
+      <button type="button" data-p="empty" class="is-on">1 Empty cache</button>
+      <button type="button" data-p="zero">2 Zero candidates</button>
+      <button type="button" data-p="lag">3 Lag</button>
+      <button type="button" data-p="ready">4 Ready</button>
+    </div>
+
+    <div class="panel is-on" id="p-empty">
+      <div class="poster-title empty">No local market data</div>
+      <div class="poster-body">Nothing on disk for this session. Screens refuse to invent candidates. Online only if you ask.</div>
+      <div class="rail-line">Cache <b>empty</b> · Mode <b>no cache</b></div>
+      <div class="actions">
+        <button class="btn primary" type="button">Ctrl+P · Fetch market data</button>
+        <button class="btn" type="button">Commands</button>
+      </div>
+      <ul class="protect">
+        <li>No silent network on open</li>
+        <li>Fetch is explicit · same as CLI</li>
+        <li>Empty cache refuses invented rows</li>
+      </ul>
+    </div>
+
+    <div class="panel" id="p-zero">
+      <div class="poster-title zero">No accumulation candidates</div>
+      <div class="poster-body">Screen ran against local data and returned 0 names. That is a real result — not missing market data.</div>
+      <div class="rail-line">Cache <b>candle 2026-07-29 · broker 2026-07-29</b> · Mode <b>local-first</b></div>
+      <div class="actions">
+        <button class="btn primary" type="button">r · refresh local</button>
+        <button class="btn" type="button">s p · pre-open</button>
+        <button class="btn" type="button">Fetch only if lag/empty</button>
+      </div>
+    </div>
+
+    <div class="panel" id="p-lag">
+      <div class="poster-title lag">Local cache lagging</div>
+      <div class="poster-body">Candle and broker dates disagree or trail the session. Board may still show rows — do not pretend ready.</div>
+      <div class="rail-line">Cache <b>candle 2026-07-28 · broker 2026-07-20 · LAG</b></div>
+      <div class="actions">
+        <button class="btn primary" type="button">Explicit fetch (palette)</button>
+        <button class="btn" type="button">Continue on local board</button>
+      </div>
+    </div>
+
+    <div class="panel" id="p-ready">
+      <div class="poster-title ready">Local cache ready</div>
+      <div class="poster-body">Dates present and aligned. Fetch remains explicit — never automatic on open.</div>
+      <div class="rail-line">Cache <b>candle 2026-07-29 · broker 2026-07-29</b> · Online <b>Fetch is explicit.</b></div>
+      <div class="actions">
+        <button class="btn primary" type="button">s a · Screen accumulation</button>
+        <button class="btn" type="button">Ctrl+P commands</button>
+      </div>
+    </div>
+
+    <p class="nav"><a href="./tui-journey-hub.html">Journey hub</a> · <a href="./tui-cockpit-opencode.html">Cockpit shell</a></p>
+  </div>
+  <script>
+    document.querySelectorAll("#frames button").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll("#frames button").forEach((b) => b.classList.remove("is-on"));
+        btn.classList.add("is-on");
+        document.querySelectorAll(".panel").forEach((p) => p.classList.remove("is-on"));
+        document.getElementById("p-" + btn.dataset.p).classList.add("is-on");
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ai-saham · Accum Board · design vision</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --void: #04050a; --ink: #080b12; --surface: #0d121c; --lift: #182233;
+      --line: rgba(232,224,208,.08); --line-strong: rgba(232,224,208,.14);
+      --fog: #c9c3b8; --mist: #8b92a0; --ash: #5c6575; --ghost: #3a4252;
+      --brass: #e8b86d; --mint: #7ecfb8; --coral: #e87a6e; --amber: #d4b06a; --sky: #8eb4d8;
+      --font-d: "Fraunces", serif; --font-u: "Outfit", system-ui, sans-serif; --font-m: "IBM Plex Mono", monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      min-height: 100%;
+      background: radial-gradient(800px 400px at 50% -10%, rgba(232,184,109,.06), transparent 50%), var(--void);
+      color: var(--fog); font-family: var(--font-u); font-size: 14px; line-height: 1.45;
+    }
+    a { color: var(--brass); }
+    .page { max-width: 1180px; margin: 0 auto; padding: 22px 18px 48px; }
+    .eyebrow { font-family: var(--font-m); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--brass); margin-bottom: 6px; }
+    h1 { font-family: var(--font-d); font-size: 1.5rem; color: #f2eee6; margin-bottom: 6px; }
+    .lead { color: var(--mist); font-size: 13px; max-width: 64ch; margin-bottom: 16px; }
+    .app {
+      display: grid; grid-template-columns: 1fr 220px; grid-template-rows: 1fr 34px;
+      min-height: min(720px, calc(100vh - 150px));
+      background: var(--ink); border: 1px solid var(--line-strong); border-radius: 18px; overflow: hidden;
+      box-shadow: 0 40px 100px rgba(0,0,0,.55);
+    }
+    @media (max-width: 900px) { .app { grid-template-columns: 1fr; } .rail { display: none; } }
+    .main { border-right: 1px solid var(--line); display: flex; flex-direction: column; min-width: 0; }
+    .top { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; border-bottom: 1px solid var(--line); font-family: var(--font-m); font-size: 11px; color: var(--ash); gap: 10px; flex-wrap: wrap; }
+    .top strong { color: var(--fog); }
+    .badge-src {
+      font-size: 10px; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(232,184,109,.3);
+      color: var(--brass); background: rgba(232,184,109,.08);
+    }
+    .badge-src.live { color: var(--mint); border-color: rgba(126,207,184,.3); background: rgba(126,207,184,.08); }
+    .strip {
+      display: flex; flex-wrap: wrap; gap: 8px 14px; padding: 10px 18px; border-bottom: 1px solid var(--line);
+      font-family: var(--font-m); font-size: 11.5px; color: var(--mist); background: #0a0e16;
+    }
+    .strip b { color: var(--fog); font-weight: 500; }
+    .stage { flex: 1; overflow: auto; padding: 0; }
+    table { width: 100%; border-collapse: collapse; font-family: var(--font-m); font-size: 12px; }
+    thead th {
+      text-align: left; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--ash);
+      padding: 10px 12px; border-bottom: 1px solid var(--line-strong); position: sticky; top: 0; background: rgba(8,11,18,.96); z-index: 1;
+    }
+    thead th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    tbody tr { cursor: pointer; transition: background 80ms ease; }
+    tbody tr:hover { background: rgba(255,255,255,.02); }
+    tbody tr.is-on { background: linear-gradient(90deg, rgba(232,184,109,.12), transparent 65%); }
+    tbody tr.is-on td:first-child { box-shadow: inset 2px 0 0 var(--brass); }
+    td { padding: 9px 12px; border-bottom: 1px solid var(--line); color: var(--fog); }
+    .t { font-weight: 600; letter-spacing: .03em; color: #f4f0e8; }
+    .sig { font-weight: 600; font-size: 13px; }
+    .sig.hi { color: var(--mint); } .sig.mid { color: var(--brass); } .sig.lo { color: var(--mist); }
+    .phase { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: var(--lift); color: var(--mist); }
+    .act {
+      font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: 4px; letter-spacing: .04em;
+    }
+    .act.enter { color: var(--mint); background: rgba(126,207,184,.12); }
+    .act.watch { color: var(--amber); background: rgba(212,176,106,.12); }
+    .act.avoid { color: var(--coral); background: rgba(232,122,110,.12); }
+    .gate.open { color: var(--mint); } .gate.block { color: var(--coral); }
+    .rank { color: var(--ash); font-size: 11px; }
+    .foot { padding: 10px 18px; border-top: 1px solid var(--line); font-family: var(--font-m); font-size: 11.5px; color: var(--ash); display: flex; flex-wrap: wrap; gap: 12px; }
+    kbd { padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line-strong); background: var(--lift); color: var(--mist); font-size: 11px; }
+    .rail { padding: 16px 14px; background: #0a0e16; }
+    .rail h4 { font-family: var(--font-m); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ash); margin: 14px 0 8px; font-weight: 500; }
+    .rail h4:first-child { margin-top: 0; }
+    .rail .note strong { display: block; font-family: var(--font-d); font-size: 1.2rem; color: #f2eee6; margin-bottom: 4px; }
+    .rail .note { font-size: 12px; color: var(--ash); line-height: 1.5; }
+    .rail .row { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; color: var(--mist); }
+    .rail .row .v { font-family: var(--font-m); color: var(--fog); }
+    .status { grid-column: 1 / -1; display: flex; justify-content: space-between; padding: 0 16px; align-items: center; border-top: 1px solid var(--line); background: #06080e; font-family: var(--font-m); font-size: 11px; color: var(--ash); }
+    .status .accent { color: var(--brass); }
+    .nav { margin-top: 16px; font-size: 12.5px; color: var(--mist); }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="eyebrow">Design vision · discover · signal-ranked</div>
+    <h1>Accum Board — Signal Radar</h1>
+    <p class="lead">
+      Signature: <strong style="color:#e8dcc8;font-weight:500">rank by Signal</strong> (not Accum), focus row with brass rail,
+      Action chips, phase pills, snapshot vs live badge. Enter → Judge desk (Verdict Mast), not ticker dump.
+      <a href="./tui-journey-hub.html">← Journey hub</a>
+    </p>
+
+    <div class="app">
+      <div class="main">
+        <header class="top">
+          <div>Screen · accumulation · <strong>lq45</strong> · sort Signal</div>
+          <span class="badge-src" id="srcBadge">snapshot · limited judge until j/r</span>
+        </header>
+        <div class="strip">
+          <span>window <b>7d</b></span>
+          <span>top <b>20</b></span>
+          <span>names <b>12</b></span>
+          <span>as of <b>2026-07-29</b></span>
+          <span>ENTER <b>2</b> · WATCH <b>7</b> · AVOID <b>3</b></span>
+        </div>
+        <div class="stage">
+          <table>
+            <thead>
+              <tr>
+                <th class="num">#</th>
+                <th>Ticker</th>
+                <th class="num">Signal</th>
+                <th class="num">Accum</th>
+                <th>Action</th>
+                <th>Gate</th>
+                <th>Phase</th>
+                <th class="num">RSI</th>
+                <th class="num">Net%</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td class="num rank">1</td><td class="t">ITMG</td><td class="num sig hi">91</td><td class="num">55.0</td><td><span class="act enter">ENTER</span></td><td class="gate open">OPEN</td><td><span class="phase">BREAKOUT</span></td><td class="num">42</td><td class="num">1.2</td></tr>
+              <tr class="is-on"><td class="num rank">2</td><td class="t">BBCA</td><td class="num sig hi">84</td><td class="num">48.2</td><td><span class="act watch">WATCH</span></td><td class="gate open">OPEN</td><td><span class="phase">COMPRESS</span></td><td class="num">48</td><td class="num">0.5</td></tr>
+              <tr><td class="num rank">3</td><td class="t">BBRI</td><td class="num sig mid">81</td><td class="num">52.1</td><td><span class="act enter">ENTER</span></td><td class="gate open">OPEN</td><td><span class="phase">ACCUM</span></td><td class="num">51</td><td class="num">0.9</td></tr>
+              <tr><td class="num rank">4</td><td class="t">BMRI</td><td class="num sig mid">78</td><td class="num">44.0</td><td><span class="act watch">WATCH</span></td><td class="gate open">OPEN</td><td><span class="phase">ACCUM</span></td><td class="num">55</td><td class="num">0.3</td></tr>
+              <tr><td class="num rank">5</td><td class="t">TLKM</td><td class="num sig mid">74</td><td class="num">41.2</td><td><span class="act watch">WATCH</span></td><td class="gate open">OPEN</td><td><span class="phase">NONE</span></td><td class="num">44</td><td class="num">0.1</td></tr>
+              <tr><td class="num rank">6</td><td class="t">ASII</td><td class="num sig lo">68</td><td class="num">38.0</td><td><span class="act avoid">AVOID</span></td><td class="gate block">BLOCK</td><td><span class="phase">NONE</span></td><td class="num">62</td><td class="num">-0.4</td></tr>
+              <tr><td class="num rank">7</td><td class="t">ADRO</td><td class="num sig lo">65</td><td class="num">50.5</td><td><span class="act watch">WATCH</span></td><td class="gate open">OPEN</td><td><span class="phase">ACCUM</span></td><td class="num">58</td><td class="num">1.8</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="foot">
+          <span><kbd>↑↓</kbd> move</span>
+          <span><kbd>↵</kbd> judge</span>
+          <span><kbd>p</kbd> plan</span>
+          <span><kbd>r</kbd> live recompute</span>
+          <span><kbd>v t</kbd> ticker desk</span>
+          <span>ranked by Signal · not Accum</span>
+        </div>
+      </div>
+      <aside class="rail">
+        <h4>Focus</h4>
+        <p class="note"><strong>BBCA</strong>Enter → Verdict Mast (Judge). Snapshot rows = limited judge until j/r.</p>
+        <h4>Session</h4>
+        <div class="row"><span>Cache</span><span class="v">ready</span></div>
+        <div class="row"><span>as_of</span><span class="v">2026-07-29</span></div>
+        <div class="row"><span>Mode</span><span class="v">local-first</span></div>
+        <h4>Related</h4>
+        <div style="font-size:12px;line-height:1.8">
+          <a href="./tui-judge-desk.html">Judge desk</a><br />
+          <a href="./tui-preopen-board.html">Pre-open board</a><br />
+          <a href="./tui-journey-hub.html">Hub</a>
+        </div>
+      </aside>
+      <footer class="status">
+        <div><span class="accent">Cockpit</span> · accum · BBCA · snapshot</div>
+        <div>design vision · Signal radar</div>
+      </footer>
+    </div>
+    <p class="nav"><a href="./tui-journey-hub.html">Journey hub</a> · <a href="./tui-judge-desk.html">Judge →</a></p>
+  </div>
+  <script>
+    document.querySelectorAll("tbody tr").forEach((tr) => {
+      tr.addEventListener("click", () => {
+        document.querySelectorAll("tbody tr").forEach((r) => r.classList.remove("is-on"));
+        tr.classList.add("is-on");
+      });
+    });
+    // toggle demo live badge
+    const b = document.getElementById("srcBadge");
+    b.addEventListener("click", () => {
+      const live = b.classList.toggle("live");
+      b.textContent = live ? "live · full present-only judge" : "snapshot · limited judge until j/r";
+    });
+  </script>
+</body>
+</html>

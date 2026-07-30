@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ai-saham · Judge Desk · design vision</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --void: #04050a; --ink: #080b12; --surface: #0d121c; --surface-2: #121a28; --lift: #182233;
+      --line: rgba(232,224,208,.08); --line-strong: rgba(232,224,208,.14);
+      --fog: #c9c3b8; --mist: #8b92a0; --ash: #5c6575; --ghost: #3a4252;
+      --brass: #e8b86d; --mint: #7ecfb8; --mint-soft: rgba(126,207,184,.12);
+      --coral: #e87a6e; --coral-soft: rgba(232,122,110,.12); --amber: #d4b06a; --amber-soft: rgba(212,176,106,.12);
+      --sky: #8eb4d8; --violet: #a89cc9;
+      --font-d: "Fraunces", serif; --font-u: "Outfit", system-ui, sans-serif; --font-m: "IBM Plex Mono", monospace;
+      --r: 14px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      min-height: 100%;
+      background: radial-gradient(900px 480px at 20% -5%, rgba(232,184,109,.08), transparent 55%), var(--void);
+      color: var(--fog); font-family: var(--font-u); font-size: 14px; line-height: 1.45;
+      -webkit-font-smoothing: antialiased;
+    }
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+    a { color: var(--brass); }
+    .page { max-width: 1120px; margin: 0 auto; padding: 22px 18px 48px; }
+    .eyebrow { font-family: var(--font-m); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--brass); margin-bottom: 6px; }
+    h1.page-title { font-family: var(--font-d); font-size: 1.5rem; color: #f2eee6; letter-spacing: -.02em; margin-bottom: 6px; }
+    .lead { color: var(--mist); font-size: 13px; max-width: 62ch; margin-bottom: 14px; }
+    .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 18px; }
+    .tag { font-family: var(--font-m); font-size: 10px; color: var(--mist); border: 1px solid var(--line-strong); padding: 3px 8px; border-radius: 999px; }
+    .tag em { color: var(--brass); font-style: normal; }
+    .app {
+      display: grid; grid-template-columns: 1fr 228px; grid-template-rows: 1fr 34px;
+      min-height: min(780px, calc(100vh - 160px));
+      background: linear-gradient(165deg, rgba(40,32,20,.35), transparent 40%), var(--ink);
+      border: 1px solid var(--line-strong); border-radius: 18px; overflow: hidden;
+      box-shadow: 0 40px 100px rgba(0,0,0,.55);
+    }
+    @media (max-width: 900px) { .app { grid-template-columns: 1fr; } .rail { display: none; } }
+    .main { display: flex; flex-direction: column; min-width: 0; border-right: 1px solid var(--line); }
+    .top { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px 12px; border-bottom: 1px solid var(--line); font-family: var(--font-m); font-size: 11px; color: var(--ash); }
+    .top strong { color: var(--fog); font-weight: 500; }
+    .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--mist); }
+    .pill .d { width: 6px; height: 6px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 0 3px var(--mint-soft); }
+    .stage { flex: 1; overflow: auto; padding: 18px 20px 22px; scrollbar-width: thin; scrollbar-color: #2a3344 transparent; }
+    /* Verdict mast */
+    .verdict {
+      position: relative; padding: 22px 22px 18px; margin-bottom: 14px; border-radius: 16px;
+      border: 1px solid var(--line-strong);
+      background: radial-gradient(500px 180px at 0% 0%, var(--amber-soft), transparent 55%),
+        linear-gradient(145deg, var(--surface-2), var(--surface));
+    }
+    .verdict .lab { font-family: var(--font-m); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--brass); margin-bottom: 10px; }
+    .verdict-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px 20px; }
+    .action {
+      font-family: var(--font-d); font-size: clamp(2.2rem, 5vw, 3rem); font-weight: 600; letter-spacing: -.03em; line-height: 1;
+    }
+    .action.watch { color: var(--amber); }
+    .action.enter { color: var(--mint); }
+    .action.avoid { color: var(--coral); }
+    .gate {
+      font-family: var(--font-m); font-size: 14px; font-weight: 600; padding: 5px 12px; border-radius: 8px;
+    }
+    .gate.open { color: var(--mint); background: var(--mint-soft); border: 1px solid rgba(126,207,184,.25); }
+    .gate.block { color: var(--coral); background: var(--coral-soft); border: 1px solid rgba(232,122,110,.25); }
+    .scores { display: flex; flex-wrap: wrap; gap: 16px 24px; margin-top: 16px; font-family: var(--font-m); }
+    .scores .k { font-size: 10px; color: var(--ash); letter-spacing: .08em; text-transform: uppercase; }
+    .scores .v { font-size: 1.35rem; font-weight: 600; color: #f0ebe3; font-variant-numeric: tabular-nums; }
+    .why {
+      margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line);
+      font-size: 13px; color: var(--mist); line-height: 1.5;
+    }
+    .why strong { color: var(--fog); font-weight: 500; }
+    /* phase timeline */
+    .phase {
+      margin-bottom: 14px; padding: 14px 16px; border-radius: var(--r); border: 1px solid var(--line); background: var(--surface);
+    }
+    .phase h3 { font-family: var(--font-m); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--ash); margin-bottom: 10px; font-weight: 500; }
+    .timeline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-family: var(--font-m); font-size: 12px; }
+    .timeline .node {
+      padding: 4px 10px; border-radius: 6px; background: var(--lift); color: var(--fog); border: 1px solid var(--line-strong);
+    }
+    .timeline .node.now { background: var(--amber-soft); color: var(--amber); border-color: rgba(212,176,106,.3); font-weight: 600; }
+    .timeline .arr { color: var(--ghost); }
+    .phase .meta { margin-top: 8px; font-size: 11.5px; color: var(--ash); font-family: var(--font-m); }
+    /* stack */
+    .stack { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+    @media (max-width: 700px) { .stack { grid-template-columns: 1fr; } }
+    .card { padding: 14px 16px; border-radius: var(--r); border: 1px solid var(--line); background: var(--surface); }
+    .card h3 { font-family: var(--font-m); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--ash); margin-bottom: 10px; font-weight: 500; }
+    .card .line { font-family: var(--font-m); font-size: 12px; padding: 5px 0; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 10px; }
+    .card .line:last-child { border-bottom: none; }
+    .card .k { color: var(--ash); }
+    .card .v { color: var(--fog); font-variant-numeric: tabular-nums; }
+    .limited {
+      margin-bottom: 12px; padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(212,176,106,.25);
+      background: var(--amber-soft); color: var(--amber); font-size: 12.5px; font-family: var(--font-m);
+    }
+    .foot { display: flex; flex-wrap: wrap; gap: 10px 14px; margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--line); font-family: var(--font-m); font-size: 11.5px; color: var(--ash); }
+    kbd { display: inline-block; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line-strong); background: var(--lift); color: var(--mist); font-size: 11px; font-family: var(--font-m); }
+    .rail { padding: 16px 14px; background: linear-gradient(180deg, #0a0e16, #070a10); overflow: auto; }
+    .rail h4 { font-family: var(--font-m); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ash); margin: 14px 0 8px; font-weight: 500; }
+    .rail h4:first-child { margin-top: 0; }
+    .rail .note strong { display: block; font-family: var(--font-d); font-size: 1.3rem; color: #f2eee6; margin-bottom: 4px; }
+    .rail .note { font-size: 12px; color: var(--ash); line-height: 1.5; }
+    .rail .row { display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0; color: var(--mist); }
+    .rail .row .v { font-family: var(--font-m); color: var(--fog); }
+    .status { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; padding: 0 16px; border-top: 1px solid var(--line); background: #06080e; font-family: var(--font-m); font-size: 11px; color: var(--ash); }
+    .status .accent { color: var(--brass); }
+    .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 18px; }
+    @media (max-width: 700px) { .compare { grid-template-columns: 1fr; } }
+    .compare article { padding: 14px 16px; border-radius: var(--r); border: 1px solid var(--line-strong); background: rgba(8,11,18,.8); }
+    .compare h2 { font-family: var(--font-d); font-size: 1.05rem; margin-bottom: 8px; }
+    .compare .bad { color: var(--coral); } .compare .good { color: var(--mint); }
+    .compare ul { padding-left: 1.1em; color: var(--mist); font-size: 12.5px; }
+    .nav { margin-top: 16px; font-size: 12.5px; color: var(--mist); }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="eyebrow">Design vision · decision path · present-only</div>
+    <h1 class="page-title">Judge Desk — Verdict Mast</h1>
+    <p class="lead">
+      Signature: <strong style="color:#e8dcc8;font-weight:500">Action is the landscape</strong>, Gate is the seal.
+      Present-only Enter path (ADR-054) — same board object, not a second full analysis.
+      Phase sequence = production memory (ADR-058), not a re-score.
+      <a href="./tui-journey-hub.html">← Journey hub</a>
+    </p>
+    <div class="tags">
+      <span class="tag">signature · <em>Action / Gate mast</em></span>
+      <span class="tag">authority · <em>Signal → Risk → TradeSetup</em></span>
+      <span class="tag">j · re-judge local</span>
+      <span class="tag">not CLI dump</span>
+    </div>
+
+    <div class="app">
+      <div class="main">
+        <header class="top">
+          <div>Judge · <strong>BBCA</strong> · screen accum · #2/20 by Signal</div>
+          <div class="pill"><span class="d"></span> present-only · local</div>
+        </header>
+        <div class="stage">
+          <div class="limited" style="display:none" id="limitedBanner">
+            Limited judge · snapshot / no candidate · press <kbd>j</kbd> re-judge or <kbd>r</kbd> live for full desk
+          </div>
+
+          <section class="verdict" aria-label="Verdict mast">
+            <div class="lab">Judgment · board object</div>
+            <div class="verdict-row">
+              <span class="action watch">WATCH</span>
+              <span class="gate open">Gate OPEN</span>
+            </div>
+            <div class="scores">
+              <div><div class="k">Signal</div><div class="v">84</div></div>
+              <div><div class="k">Accum</div><div class="v">48.2</div></div>
+              <div><div class="k">Authority</div><div class="v">92%</div></div>
+              <div><div class="k">Family</div><div class="v" style="font-size:1rem">foreign-bounce</div></div>
+            </div>
+            <div class="why">
+              <strong>Why WATCH</strong> — Signal moderate · setup readiness partial · risk clear ·
+              headroom ok · not promoted to ENTER without stronger entry quality.
+            </div>
+          </section>
+
+          <section class="phase">
+            <h3>Phase sequence · ledger (read-only)</h3>
+            <div class="timeline">
+              <span class="node">ACCUMULATION</span>
+              <span class="arr">→</span>
+              <span class="node">COMPRESSION</span>
+              <span class="arr">→</span>
+              <span class="node now">COMPRESSION</span>
+            </div>
+            <div class="meta">2026-07-20 · 2026-07-25 · now board · production memory · not a re-score</div>
+          </section>
+
+          <div class="stack">
+            <div class="card">
+              <h3>Decision stack</h3>
+              <div class="line"><span class="k">Action</span><span class="v">WATCH</span></div>
+              <div class="line"><span class="k">← Signal</span><span class="v">84 · MODERATE</span></div>
+              <div class="line"><span class="k">← Risk</span><span class="v">OPEN · no gate</span></div>
+              <div class="line"><span class="k">← TradeSetup</span><span class="v">WATCH · rationale ok</span></div>
+            </div>
+            <div class="card">
+              <h3>Readiness · data</h3>
+              <div class="line"><span class="k">Setup ready</span><span class="v">PARTIAL</span></div>
+              <div class="line"><span class="k">Candle</span><span class="v">2026-07-29</span></div>
+              <div class="line"><span class="k">Broker</span><span class="v">2026-07-29</span></div>
+              <div class="line"><span class="k">Align</span><span class="v">ALIGNED</span></div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-bottom:12px">
+            <h3>Named setups · diagnostic</h3>
+            <div class="line"><span class="k">primary</span><span class="v">foreign-bounce</span></div>
+            <div class="line"><span class="k">match</span><span class="v">FB ✓ · CS ~ · SM — · PB —</span></div>
+            <div class="line"><span class="k">note</span><span class="v">MATCH ≠ ENTER</span></div>
+          </div>
+
+          <div class="foot">
+            <span><kbd>j</kbd> re-judge local</span>
+            <span><kbd>p</kbd> plan structure</span>
+            <span><kbd>esc</kbd> board</span>
+            <span>present-only · no order · not ticker desk</span>
+          </div>
+        </div>
+      </div>
+      <aside class="rail">
+        <h4>Authority</h4>
+        <p class="note"><strong>Judge</strong>Action comes from TradeSetup on the board candidate — not from view ticker, not from paper log.</p>
+        <h4>Keys</h4>
+        <div class="row"><span>Re-judge</span><span class="v">j</span></div>
+        <div class="row"><span>Plan</span><span class="v">p</span></div>
+        <div class="row"><span>Back</span><span class="v">esc</span></div>
+        <h4>Related</h4>
+        <div class="row"><span><a href="./tui-plan-desk.html">Plan desk</a></span></div>
+        <div class="row"><span><a href="./tui-accum-board.html">Accum board</a></span></div>
+      </aside>
+      <footer class="status">
+        <div><span class="accent">Cockpit</span> · judge · BBCA · present-only</div>
+        <div>design vision · not implementation</div>
+      </footer>
+    </div>
+
+    <div class="compare">
+      <article>
+        <h2 class="bad">Reject</h2>
+        <ul>
+          <li>Equal-weight label dump (Ticker / Action / Gate / …)</li>
+          <li>Phase as one scalar only</li>
+          <li>Looks like CLI inspect paste</li>
+        </ul>
+      </article>
+      <article>
+        <h2 class="good">Adopt</h2>
+        <ul>
+          <li>Verdict mast: Action + Gate first</li>
+          <li>Phase timeline from ledger</li>
+          <li>Stack cards for Signal/Risk/TradeSetup</li>
+        </ul>
+      </article>
+    </div>
+    <p class="nav"><a href="./tui-journey-hub.html">Journey hub</a> · <a href="./tui-plan-desk.html">Next: Plan desk →</a></p>
+  </div>
+</body>
+</html>

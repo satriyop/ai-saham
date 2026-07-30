@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ai-saham · Swing desk journey hub · design</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --void: #04050a; --ink: #0a0e16; --surface: #101622; --lift: #182233;
+      --line: rgba(232,224,208,.1); --fog: #c9c3b8; --mist: #8b92a0; --ash: #5c6575;
+      --brass: #e8b86d; --mint: #7ecfb8; --coral: #e87a6e; --amber: #d4b06a; --sky: #8eb4d8; --violet: #a89cc9;
+      --font-d: "Fraunces", serif; --font-u: "Outfit", system-ui, sans-serif; --font-m: "IBM Plex Mono", monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100%; background:
+        radial-gradient(900px 500px at 10% -10%, rgba(232,184,109,.08), transparent 50%),
+        radial-gradient(700px 400px at 90% 0%, rgba(126,207,184,.05), transparent 45%),
+        var(--void);
+      color: var(--fog); font-family: var(--font-u); font-size: 14px; line-height: 1.5;
+      padding: 28px 18px 72px; -webkit-font-smoothing: antialiased;
+    }
+    .page { max-width: 1080px; margin: 0 auto; }
+    .eyebrow { font-family: var(--font-m); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--brass); margin-bottom: 8px; }
+    h1 { font-family: var(--font-d); font-size: clamp(1.8rem, 4vw, 2.35rem); color: #f4f0e8; letter-spacing: -.03em; margin-bottom: 10px; }
+    .lead { color: var(--mist); font-size: 14px; max-width: 58ch; margin-bottom: 8px; }
+    .slogan {
+      font-family: var(--font-m); font-size: 12.5px; color: var(--ash); border-left: 2px solid var(--brass);
+      padding: 8px 0 8px 14px; margin: 16px 0 24px; line-height: 1.6;
+    }
+    .slogan strong { color: var(--fog); font-weight: 500; }
+    h2 {
+      font-family: var(--font-m); font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+      color: var(--ash); margin: 28px 0 12px; font-weight: 500;
+    }
+    .loop {
+      display: grid; gap: 8px;
+    }
+    .step {
+      display: grid; grid-template-columns: 48px 1fr auto; gap: 14px; align-items: center;
+      padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--ink);
+      text-decoration: none; color: inherit; transition: border-color .12s ease, background .12s ease;
+    }
+    .step:hover { border-color: rgba(232,184,109,.35); background: var(--surface); }
+    .step .n {
+      font-family: var(--font-m); font-size: 12px; font-weight: 600; color: var(--brass);
+      width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+      background: rgba(232,184,109,.1); border: 1px solid rgba(232,184,109,.2);
+    }
+    .step .body .title { font-weight: 600; color: #f0ebe3; font-size: 15px; margin-bottom: 2px; }
+    .step .body .desc { font-size: 12.5px; color: var(--mist); }
+    .step .sig {
+      font-family: var(--font-m); font-size: 10.5px; color: var(--ash); text-align: right; max-width: 140px;
+    }
+    .step .sig em { display: block; color: var(--mint); font-style: normal; font-size: 11px; margin-top: 2px; }
+    .auth {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 8px;
+    }
+    @media (max-width: 720px) {
+      .auth { grid-template-columns: 1fr; }
+      .step { grid-template-columns: 40px 1fr; }
+      .step .sig { grid-column: 2; text-align: left; max-width: none; margin-top: 4px; }
+    }
+    .auth article {
+      padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--ink);
+    }
+    .auth h3 { font-family: var(--font-m); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 8px; font-weight: 500; }
+    .auth.action h3 { color: var(--brass); }
+    .auth.browse h3 { color: var(--sky); }
+    .auth.paper h3 { color: var(--violet); }
+    .auth p { font-size: 12.5px; color: var(--mist); }
+    .grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    }
+    @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+    .card {
+      padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--ink);
+    }
+    .card h3 { font-size: 14px; color: #f0ebe3; margin-bottom: 6px; font-weight: 600; }
+    .card p { font-size: 12.5px; color: var(--mist); margin-bottom: 10px; }
+    .card a {
+      font-family: var(--font-m); font-size: 11.5px; color: var(--brass); text-decoration: none;
+      border-bottom: 1px solid rgba(232,184,109,.3);
+    }
+    .card .status {
+      display: inline-block; font-family: var(--font-m); font-size: 10px; padding: 2px 8px; border-radius: 999px;
+      margin-bottom: 8px;
+    }
+    .card .status.ready { color: var(--mint); background: rgba(126,207,184,.12); }
+    .card .status.shell { color: var(--amber); background: rgba(212,176,106,.12); }
+    .day {
+      font-family: var(--font-m); font-size: 12.5px; color: var(--mist);
+      border: 1px solid var(--line); border-radius: 12px; background: var(--ink); overflow: hidden;
+    }
+    .day row, .day .r {
+      display: grid; grid-template-columns: 100px 1fr 1fr; gap: 10px; padding: 10px 14px;
+      border-bottom: 1px solid var(--line); align-items: baseline;
+    }
+    .day .r:last-child { border-bottom: none; }
+    .day .when { color: var(--ash); }
+    .day .job { color: var(--fog); }
+    .day .mock a { color: var(--brass); font-size: 12px; }
+    @media (max-width: 640px) {
+      .day .r { grid-template-columns: 1fr; gap: 2px; }
+    }
+    .nongoal {
+      margin-top: 8px; padding: 14px 16px; border-radius: 12px; border: 1px dashed var(--line);
+      font-size: 12.5px; color: var(--ash); font-family: var(--font-m);
+    }
+    footer.meta {
+      margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--line);
+      font-family: var(--font-m); font-size: 11.5px; color: var(--ash);
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="eyebrow">Design hub · swing desk · file:// open</div>
+    <h1>Operator journey · visual design</h1>
+    <p class="lead">
+      One entry point for the full daily swing-desk loop. Each surface is a static HTML mock —
+      no build step. Night-ink desk family for instruments; OpenCode shell for chrome/palette.
+    </p>
+    <div class="slogan">
+      <strong>Screen finds and judges.</strong> Plan designs structure.<br />
+      Assess confirms a frozen plan. Trade is paper only. Fetch never decides.
+    </div>
+
+    <h2>Core loop · open a mock</h2>
+    <div class="loop">
+      <a class="step" href="./tui-session-health.html">
+        <span class="n">01</span>
+        <span class="body">
+          <div class="title">Health · empty / lag / ready</div>
+          <div class="desc">Local-first honesty · fetch explicit · three distinct posters</div>
+        </span>
+        <span class="sig">signature<em>Three posters</em></span>
+      </a>
+      <a class="step" href="./tui-cockpit-opencode.html">
+        <span class="n">02</span>
+        <span class="body">
+          <div class="title">Orient · cockpit shell</div>
+          <div class="desc">Layout B · palette · session rail · OpenCode chrome</div>
+        </span>
+        <span class="sig">chrome<em>OpenCode</em></span>
+      </a>
+      <a class="step" href="./tui-accum-board.html">
+        <span class="n">03</span>
+        <span class="body">
+          <div class="title">Discover · accum board</div>
+          <div class="desc">Signal-ranked table · Action chips · snapshot/live badge</div>
+        </span>
+        <span class="sig">signature<em>Signal radar</em></span>
+      </a>
+      <a class="step" href="./tui-judge-desk.html">
+        <span class="n">04</span>
+        <span class="body">
+          <div class="title">Judge · present-only</div>
+          <div class="desc">Enter on board · Action/Gate mast · phase timeline · j re-judge</div>
+        </span>
+        <span class="sig">signature<em>Verdict mast</em></span>
+      </a>
+      <a class="step" href="./tui-plan-desk.html">
+        <span class="n">05</span>
+        <span class="body">
+          <div class="title">Structure · plan desk</div>
+          <div class="desc">Entry/Stop/Target triangle · inherits Action · paper confirm</div>
+        </span>
+        <span class="sig">signature<em>Geometry mast</em></span>
+      </a>
+      <a class="step" href="./tui-paper-journal.html">
+        <span class="n">06</span>
+        <span class="body">
+          <div class="title">Paper · notebook tape</div>
+          <div class="desc">Optional journal · from-plan geometry · not learning</div>
+        </span>
+        <span class="sig">signature<em>Notebook tape</em></span>
+      </a>
+      <a class="step" href="./tui-ticker-desk.html">
+        <span class="n">07</span>
+        <span class="body">
+          <div class="title">Browse · ticker desk</div>
+          <div class="desc">Cache dashboard · monumental price · not Action</div>
+        </span>
+        <span class="sig">signature<em>Harga mast</em></span>
+      </a>
+      <a class="step" href="./tui-broker-desk.html">
+        <span class="n">08</span>
+        <span class="body">
+          <div class="title">Browse · broker desk</div>
+          <div class="desc">Desk radar · Net mast · hub t/f/h/v</div>
+        </span>
+        <span class="sig">signature<em>Net mast</em></span>
+      </a>
+      <a class="step" href="./tui-preopen-board.html">
+        <span class="n">09</span>
+        <span class="body">
+          <div class="title">Pre-open · auction board</div>
+          <div class="desc">IEV snapshot · grade strip · inspect ≠ accum judge</div>
+        </span>
+        <span class="sig">signature<em>Auction strip</em></span>
+      </a>
+    </div>
+
+    <h2>Authority boundaries</h2>
+    <div class="auth">
+      <article class="action">
+        <h3>Action path</h3>
+        <p>Accum board → Judge (TradeSetup Action) → Plan inherits Action. Signal / Risk engines. Phase ledger is production memory for sequence — not a re-score on Judge view.</p>
+      </article>
+      <article class="browse">
+        <h3>Browse path</h3>
+        <p>Ticker desk & broker desk are cache dashboards. They never set ENTER/WATCH/AVOID. View ≠ Judge.</p>
+      </article>
+      <article class="paper">
+        <h3>Paper path</h3>
+        <p>Notebook only. Confirm write from plan. Not learning corpus. Not broker orders. Not Action authority.</p>
+      </article>
+    </div>
+
+    <h2>Day spine (WIB-oriented)</h2>
+    <div class="day">
+      <div class="r"><span class="when">Pre-open</span><span class="job">IEV freeze + pre-open board</span><span class="mock"><a href="./tui-preopen-board.html">tui-preopen-board.html</a></span></div>
+      <div class="r"><span class="when">Open +30m</span><span class="job">Confirm frozen plan (CLI assess · paper optional)</span><span class="mock"><a href="./tui-plan-desk.html">plan</a> · <a href="./tui-paper-journal.html">paper</a></span></div>
+      <div class="r"><span class="when">Desk hours</span><span class="job">Discover → judge → structure → paper · browse</span><span class="mock"><a href="./tui-accum-board.html">accum</a> · <a href="./tui-judge-desk.html">judge</a> · …</span></div>
+      <div class="r"><span class="when">Health</span><span class="job">Empty / lag / ready · fetch explicit</span><span class="mock"><a href="./tui-session-health.html">session health</a></span></div>
+      <div class="r"><span class="when">EOD / corpus</span><span class="job">CLI research · not TUI journey</span><span class="mock">— non-goal</span></div>
+    </div>
+
+    <h2>All design artifacts</h2>
+    <div class="grid">
+      <div class="card">
+        <span class="status ready">ready</span>
+        <h3>tui-journey-hub.html</h3>
+        <p>This page — index for the whole swing-desk design journey.</p>
+        <a href="./tui-journey-hub.html">self</a>
+      </div>
+      <div class="card">
+        <span class="status shell">shell</span>
+        <h3>tui-cockpit-opencode.html</h3>
+        <p>OpenCode cockpit frames · palette · empty · plan confirm chrome.</p>
+        <a href="./tui-cockpit-opencode.html">open</a>
+      </div>
+      <div class="card">
+        <span class="status ready">ready</span>
+        <h3>tui-accum-board.html</h3>
+        <p>Signal radar discover board.</p>
+        <a href="./tui-accum-board.html">open</a>
+      </div>
+      <div class="card">
+        <span class="status ready">ready</span>
+        <h3>tui-judge-desk.html</h3>
+        <p>Verdict mast · phase timeline.</p>
+        <a href="./tui-judge-desk.html">open</a>
+      </div>
+      <div class="card">
+        <span class="status ready">ready</span>
+        <h3>tui-plan-desk.html</h3>
+        <p>Geometry mast · paper confirm.</p>
+        <a href="./tui-plan-desk.html">open</a>
+      </div>
+      <div class="card">
+        <span class="status ready">ready</span>
+        <h3>tui-paper-journal.html</h3>
+        <p>Notebook tape review surface.</p>
+        <a href="./tui-paper-journal.html">open</a>
+      </div>
+      <div class="card">
+        <span class="status ready">ready</span>
+        <h3>tui-ticker-desk.html</h3>
+        <p>Harga mast · cache dashboard.</p>
+        <a href="./tui-ticker-desk.html">open</a>
+      </div>
+      <div class="card">
+        <span class="status ready">ready</span>
+        <h3>tui-broker-desk.html</h3>
+        <p>Desk radar · Net mast · hub.</p>
+        <a href="./tui-broker-desk.html">open</a>
+      </div>
+      <div class="card">
+        <span class="status ready">ready</span>
+        <h3>tui-preopen-board.html</h3>
+        <p>Auction strip · IEP board.</p>
+        <a href="./tui-preopen-board.html">open</a>
+      </div>
+      <div class="card">
+        <span class="status ready">ready</span>
+        <h3>tui-session-health.html</h3>
+        <p>Empty / zero / lag / ready posters.</p>
+        <a href="./tui-session-health.html">open</a>
+      </div>
+      <div class="card">
+        <span class="status shell">map</span>
+        <h3>end-to-end-journey.html</h3>
+        <p>Product spine map (CLI/TUI/cron) — complements this hub.</p>
+        <a href="./end-to-end-journey.html">open</a>
+      </div>
+    </div>
+
+    <div class="nongoal">
+      Non-goals for this design set: research/labels/evaluate UIs, policy tune lab, order tickets,
+      live charts, CLI-only deep-dives (financials, distribution, foreign-history pages), network-on-open.
+    </div>
+
+    <footer class="meta">
+      Design vision only · not shipped Textual UI · relative links · open via file:// or any static server<br />
+      Family: Night Tape (judge/plan/board/ticker/broker/preopen/health) · Shell: OpenCode (cockpit chrome)
+    </footer>
+  </div>
+</body>
+</html>

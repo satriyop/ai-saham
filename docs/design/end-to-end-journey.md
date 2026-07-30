@@ -1,11 +1,12 @@
 # End-to-end product journey
 
 **Status:** design contract (visual companion)  
-**HTML:** [`end-to-end-journey.html`](./end-to-end-journey.html)  
-**Related:** [`tui-cockpit-opencode.md`](./tui-cockpit-opencode.md) (cockpit chrome only)
+**HTML map:** [`end-to-end-journey.html`](./end-to-end-journey.html)  
+**Swing-desk design hub (elevated mocks):** [`tui-journey-hub.html`](./tui-journey-hub.html)  
+**Related:** [`tui-cockpit-opencode.md`](./tui-cockpit-opencode.md) (cockpit chrome)
 
-This document is the **whole product spine**. The TUI mock is one surface on
-that spine, not the full journey.
+This document is the **whole product spine**. The TUI design hub is the visual
+walkthrough of the daily swing-desk loop (Judge, Plan, boards, browse, health).
 
 ---
 
@@ -17,6 +18,30 @@ that spine, not the full journey.
 > Trade is paper only.  
 > Research is corpus only.  
 > Fetch never decides.
+
+---
+
+## Design mock index (swing desk)
+
+Open **[`tui-journey-hub.html`](./tui-journey-hub.html)** first.
+
+| Step | Mock |
+|------|------|
+| Health / empty / lag | [`tui-session-health.html`](./tui-session-health.html) |
+| Cockpit shell | [`tui-cockpit-opencode.html`](./tui-cockpit-opencode.html) |
+| Accum board | [`tui-accum-board.html`](./tui-accum-board.html) |
+| Judge | [`tui-judge-desk.html`](./tui-judge-desk.html) |
+| Plan structure | [`tui-plan-desk.html`](./tui-plan-desk.html) |
+| Paper notebook | [`tui-paper-journal.html`](./tui-paper-journal.html) |
+| Ticker browse | [`tui-ticker-desk.html`](./tui-ticker-desk.html) |
+| Broker browse | [`tui-broker-desk.html`](./tui-broker-desk.html) |
+| Pre-open | [`tui-preopen-board.html`](./tui-preopen-board.html) |
+
+Verify links:
+
+```bash
+python scripts/check_design_journey_links.py
+```
 
 ---
 
@@ -98,5 +123,6 @@ One-shot: `saham research accum backfill-phase-ledger`.
 ## Open in browser
 
 ```bash
+open docs/design/tui-journey-hub.html
 open docs/design/end-to-end-journey.html
 ```
