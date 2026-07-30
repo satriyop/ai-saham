@@ -1928,7 +1928,7 @@
 <body>
  <div class="demo-bar">
  <div class="card">
-      <strong>OpenCode visual = TUI bible</strong> · <span style="color:#6fbf8a" id="buildStamp">rev 2026-07-30q · prompt rail · E2E 1–8</span>
+      <strong>OpenCode visual = TUI bible</strong> · <span style="color:#6fbf8a" id="buildStamp">rev 2026-07-30r · palette operator copy · E2E 1–8</span>
       · black-on-black · peach palette · mono density
       · <em style="color:var(--sel-dim);font-style:normal">Journey = structure inspiration only</em>
       (stages / authority / columns — not marketing night-ink skin)
@@ -2981,7 +2981,7 @@
  <span><kbd>↵</kbd> run</span>
  <span><kbd>esc</kbd> close</span>
  </div>
- <span>no tabs · palette is the nav</span>
+        <span>search · enter runs · esc closes</span>
  </div>
  </div>
  </div>
@@ -3116,22 +3116,24 @@
  },
  ];
 
- const COMMANDS = [
- { section: "Suggested", name: "Screen accumulation", desc: "Signal radar board · Action path start", shortcut: "s a", action: "screen-accum" },
- { section: "Suggested", name: "Screen pre-open", desc: "IEV auction board · not accum Judge", shortcut: "s p", action: "screen-preopen" },
- { section: "Suggested", name: "Plan structure", desc: "Geometry hero · inherits Action · no order", shortcut: "p", action: "plan-swing" },
- { section: "Daily", name: "Judge focus", desc: "Present-only verdict (board Enter)", shortcut: "enter", action: "judge" },
- { section: "Daily", name: "View ticker", desc: "Price hero · cache dashboard", shortcut: "v t", action: "view" },
- { section: "Daily", name: "View broker", desc: "Desk radar · Net hero", shortcut: "v b", action: "broker" },
- { section: "Daily", name: "Paper log", desc: "Notebook from plan geometry · confirm", shortcut: "l", action: "paper" },
- { section: "Lab", name: "Backtest screen accum", desc: "Historical screen-filter audit", shortcut: "", action: "bt-accum" },
- { section: "Lab", name: "Backtest portfolio swing", desc: "Policy portfolio simulation", shortcut: "", action: "bt-swing" },
- { section: "Data", name: "Fetch market data", desc: "Online · explicit · leaves local-first", shortcut: "", action: "fetch" },
- { section: "Data", name: "Session health posters", desc: "Empty / zero / lag / ready", shortcut: "", action: "empty" },
- { section: "Data", name: "Refresh cache status", desc: "Recompute freshness only", shortcut: "", action: "cache" },
- { section: "Session", name: "Hide sidebar", desc: "Toggle context rail", shortcut: "ctrl+b", action: "toggle-sidebar" },
- { section: "Session", name: "Switch as_of date", desc: "Pinned analysis date", shortcut: "", action: "asof" },
- ];
+    const COMMANDS = [
+      // Copy aligned to src/adapters/tui/commands.py · operator language, not design jargon
+      { section: "Suggested", name: "Screen accumulation", desc: "Daily accum candidates from local cache", shortcut: "s a", action: "screen-accum" },
+      { section: "Suggested", name: "Screen pre-open", desc: "IEP board from local IEV snapshot · Enter inspect", shortcut: "s p", action: "screen-preopen" },
+      { section: "Suggested", name: "Plan swing structure", desc: "Entry · stop · target · lots for focus · no order", shortcut: "p", action: "plan-swing" },
+      { section: "Suggested", name: "Paper log from plan", desc: "Confirm notebook write · trade accum log --from-plan", shortcut: "l", action: "paper" },
+      { section: "Daily", name: "Judge focus", desc: "Show Action and Gate for the board row · Enter on board", shortcut: "enter", action: "judge" },
+      { section: "Daily", name: "View ticker", desc: "Local cache dashboard · saham view ticker show", shortcut: "v t", action: "view" },
+      { section: "Daily", name: "View broker", desc: "Tracked desks · Enter desk home · t/f/h deep", shortcut: "v b", action: "broker" },
+      { section: "Daily", name: "Assess pre-open", desc: "Grade auction evidence for focus row", shortcut: "a", action: "assess-preopen" },
+      { section: "Data", name: "Fetch market data", desc: "Online · explicit · never on open", shortcut: "", action: "fetch" },
+      { section: "Data", name: "Refresh local screen", desc: "Recompute current board from cache only", shortcut: "r", action: "cache" },
+      { section: "Data", name: "Session health", desc: "Empty · zero candidates · lag · ready", shortcut: "", action: "empty" },
+      { section: "Lab", name: "Backtest screen accum", desc: "CLI · saham backtest screen accum", shortcut: "", action: "bt-accum" },
+      { section: "Lab", name: "Backtest portfolio swing", desc: "CLI · saham backtest portfolio swing", shortcut: "", action: "bt-swing" },
+      { section: "Session", name: "Hide sidebar", desc: "Toggle context rail", shortcut: "ctrl+b", action: "toggle-sidebar" },
+      { section: "Session", name: "Help", desc: "Key map and product locks", shortcut: "?", action: "help" },
+    ];
 
  const state = {
  frame: "accum", // accum | judge | plan | paper | preopen | empty | detail | broker
@@ -3894,59 +3896,74 @@
       renderPaperTape();
     }
 
- function runCommand(cmd) {
- if (!cmd) return;
- closePalette();
- switch (cmd.action) {
- case "screen-accum":
- showFrame("accum");
- toast("Screen · accumulation · Signal radar");
- break;
- case "screen-preopen":
- showFrame("preopen");
- toast("Screen · pre-open · auction");
- break;
- case "judge":
- if (state.cacheEmpty) { toast("No data · fetch first"); break; }
- showFrame("judge");
- toast(`Judge · ${focusTicker().t} · present-only`);
- break;
- case "view":
- if (state.cacheEmpty) { toast("No data · fetch first"); break; }
- showFrame("detail");
- toast(`Ticker · ${focusTicker().t}`);
- break;
- case "broker":
- showFrame("broker");
- toast("Broker radar · Enter = desk home");
- break;
- case "plan-swing":
- if (state.cacheEmpty) { toast("Nothing to plan"); break; }
- showFrame("plan");
- toast(`Plan structure · ${focusTicker().t}`);
- break;
- case "paper":
- showFrame("paper");
- openConfirm();
- break;
- case "fetch":
- setModeOnline();
- showFrame("accum");
- toast("Fetch market data · online path");
- break;
- case "empty":
- showFrame("empty");
- toast("Session health posters");
- break;
- case "toggle-sidebar":
- state.sidebarHidden = !state.sidebarHidden;
- $("workspace").classList.toggle("sidebar-off", state.sidebarHidden);
- toast(state.sidebarHidden ? "Sidebar hidden" : "Sidebar shown");
- break;
- default:
- toast(`${cmd.name} · mock only`);
- }
- }
+    function runCommand(cmd) {
+      if (!cmd) return;
+      closePalette();
+      switch (cmd.action) {
+        case "screen-accum":
+          showFrame("accum");
+          toast("Screen accumulation · local cache");
+          break;
+        case "screen-preopen":
+          showFrame("preopen");
+          toast("Screen pre-open · IEV snapshot");
+          break;
+        case "judge":
+          if (state.cacheEmpty) { toast("No data · fetch first"); break; }
+          showFrame("judge");
+          toast(`Judge · ${focusTicker().t}`);
+          break;
+        case "view":
+          if (state.cacheEmpty) { toast("No data · fetch first"); break; }
+          showFrame("detail");
+          toast(`View ticker · ${focusTicker().t}`);
+          break;
+        case "broker":
+          showFrame("broker");
+          toast("View broker · Enter opens desk");
+          break;
+        case "plan-swing":
+          if (state.cacheEmpty) { toast("Nothing to plan"); break; }
+          showFrame("plan");
+          toast(`Plan structure · ${focusTicker().t}`);
+          break;
+        case "paper":
+          showFrame("paper");
+          openConfirm();
+          break;
+        case "assess-preopen":
+          showFrame("preopen");
+          openPreopenInspect();
+          toast(`Assess pre-open · ${ (PREOPEN[state.preIndex] || {}).t || "—" }`);
+          break;
+        case "fetch":
+          setModeOnline();
+          showFrame("accum");
+          toast("Fetch market data · online");
+          break;
+        case "empty":
+          showFrame("empty");
+          toast("Session health");
+          break;
+        case "cache":
+          toast("Refresh local · cache only");
+          break;
+        case "help":
+          toast("Help · Enter judge · p plan · l paper · v t ticker · v b broker · : prompt");
+          break;
+        case "toggle-sidebar":
+          state.sidebarHidden = !state.sidebarHidden;
+          $("workspace").classList.toggle("sidebar-off", state.sidebarHidden);
+          toast(state.sidebarHidden ? "Sidebar hidden" : "Sidebar shown");
+          break;
+        case "bt-accum":
+        case "bt-swing":
+          toast(`${cmd.name} · CLI · design mock`);
+          break;
+        default:
+          toast(`${cmd.name}`);
+      }
+    }
 
  let toastTimer;
  function toast(msg) {
