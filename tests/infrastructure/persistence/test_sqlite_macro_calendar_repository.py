@@ -120,3 +120,52 @@ class TestQueries:
             as_of_fetched_at="2026-07-10T00:00:00",
         )
         assert [e.source_event_id for e in pit] == ["old"]
+
+
+class TestReclassifyEventCategories:
+    def test_interest_rate_decision_moves_to_bi_rate_facilities_stay_other(self, repo):
+        repo.save_events(
+            [
+                _event(
+                    source_event_id="ird",
+                    category=MacroEventCategory.OTHER,
+                    title="Interest Rate Decision",
+                ),
+                _event(
+                    source_event_id="dep",
+                    category=MacroEventCategory.OTHER,
+                    title="Deposit Facility Rate",
+                ),
+                _event(
+                    source_event_id="lend",
+                    category=MacroEventCategory.OTHER,
+                    title="Lending Facility Rate",
+                ),
+                _event(
+                    source_event_id="cpi",
+                    category=MacroEventCategory.INFLATION,
+                    title="CPI YoY",
+                ),
+            ]
+        )
+        from src.infrastructure.config.macro_calendar_config import normalize_macro_category
+
+        updated = repo.reclassify_event_categories(normalize_macro_category)
+        assert updated == 1  # only Interest Rate Decision
+
+        bi = repo.get_events_in_window(
+            date(2026, 1, 1),
+            date(2026, 12, 31),
+            categories=(MacroEventCategory.BI_RATE,),
+        )
+        assert [e.source_event_id for e in bi] == ["ird"]
+
+        other = repo.get_events_in_window(
+            date(2026, 1, 1),
+            date(2026, 12, 31),
+            categories=(MacroEventCategory.OTHER,),
+        )
+        assert {e.source_event_id for e in other} == {"dep", "lend"}
+
+        # Idempotent second pass
+        assert repo.reclassify_event_categories(normalize_macro_category) == 0

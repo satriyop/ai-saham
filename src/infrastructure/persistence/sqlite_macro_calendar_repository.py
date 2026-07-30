@@ -11,6 +11,7 @@ Layer: Infrastructure
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Callable
 from datetime import date, datetime
 from pathlib import Path
 
@@ -196,6 +197,36 @@ class SQLiteMacroCalendarRepository(MacroCalendarRepository):
             rows = conn.execute(query, params).fetchall()
 
         return [self._row_to_event(row) for row in rows]
+
+    def reclassify_event_categories(
+        self,
+        category_for_title: Callable[[str], MacroEventCategory],
+    ) -> int:
+        """Recompute stored categories from titles; return number of rows updated."""
+        updated = 0
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT source, source_event_id, title, category
+                FROM macro_calendar_events
+                """
+            ).fetchall()
+            for row in rows:
+                new_cat = category_for_title(row["title"] or "")
+                new_value = new_cat.value
+                if new_value == row["category"]:
+                    continue
+                conn.execute(
+                    """
+                    UPDATE macro_calendar_events
+                    SET category = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE source = ? AND source_event_id = ?
+                    """,
+                    (new_value, row["source"], row["source_event_id"]),
+                )
+                updated += 1
+            conn.commit()
+        return updated
 
     @staticmethod
     def _row_to_event(row: sqlite3.Row) -> MacroCalendarEvent:

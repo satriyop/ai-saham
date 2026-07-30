@@ -7,6 +7,10 @@
 category_rules:
   - category: bi_rate
     title_contains:
+      # Stockbit economic primary BI package title (live 2026 feed).
+      # Do NOT add Deposit/Lending Facility Rate here — same-day corridor
+      # moves would triple-count policy_rate_steps net deltas (P2a bank map).
+      - "Interest Rate Decision"
       - "BI Rate"
       - "BI 7-Day"
       - "Bank Indonesia Rate"

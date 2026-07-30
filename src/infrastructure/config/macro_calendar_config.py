@@ -43,6 +43,9 @@ _DEFAULT_RULES: tuple[MacroCategoryRule, ...] = (
     MacroCategoryRule(
         category=MacroEventCategory.BI_RATE,
         title_contains=(
+            # Stockbit live title. Facility rates stay out of bi_rate so
+            # policy_rate_steps does not triple-count same-day corridor moves.
+            "Interest Rate Decision",
             "BI Rate",
             "BI 7-Day",
             "Bank Indonesia Rate",

@@ -64,11 +64,17 @@ def fetch_macro_calendar(
         )
         raise typer.Exit(1)
 
+    from src.infrastructure.config.macro_calendar_config import normalize_macro_category
+
     provider = StockbitMacroCalendarProvider(
         api_client=session.api_client, stockbit_config=stockbit_config
     )
     repository = SQLiteMacroCalendarRepository(resolved_db)
-    use_case = SyncMacroCalendarUseCase(provider=provider, repository=repository)
+    use_case = SyncMacroCalendarUseCase(
+        provider=provider,
+        repository=repository,
+        category_for_title=normalize_macro_category,
+    )
 
     response = use_case.execute(
         SyncMacroCalendarRequest(
@@ -78,7 +84,14 @@ def fetch_macro_calendar(
     )
 
     if response.from_cache:
-        typer.echo("Already synced today — use --refresh to force.")
+        if response.reclassified_count:
+            typer.echo(
+                "Already synced today — "
+                f"reclassified {response.reclassified_count} event categories "
+                "from current rules (offline). Use --refresh to re-fetch."
+            )
+        else:
+            typer.echo("Already synced today — use --refresh to force.")
         return
 
     if response.status == "failed":

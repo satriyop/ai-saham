@@ -46,6 +46,26 @@ class TestNormalizeCategory:
     def test_bi_rate(self):
         assert normalize_macro_category("BI 7-Day Reverse Repo Rate") == MacroEventCategory.BI_RATE
 
+    def test_stockbit_interest_rate_decision_is_bi_rate(self):
+        """Live Stockbit economic title (2026 feed) — not the BI 7-Day wording."""
+        assert normalize_macro_category("Interest Rate Decision") == MacroEventCategory.BI_RATE
+
+    def test_facility_rates_are_not_bi_rate(self):
+        """Corridor companions must stay out of bi_rate to avoid triple-counting steps."""
+        assert normalize_macro_category("Deposit Facility Rate") == MacroEventCategory.OTHER
+        assert normalize_macro_category("Lending Facility Rate") == MacroEventCategory.OTHER
+
+    def test_yaml_config_matches_stockbit_live_titles(self):
+        """Loaded config/macro_calendar.yaml must classify the live BI package correctly."""
+        from src.infrastructure.config.macro_calendar_config import load_macro_calendar_config
+
+        cfg = load_macro_calendar_config()
+        assert normalize_macro_category("Interest Rate Decision", cfg) == MacroEventCategory.BI_RATE
+        assert normalize_macro_category("Deposit Facility Rate", cfg) == MacroEventCategory.OTHER
+        assert normalize_macro_category("Lending Facility Rate", cfg) == MacroEventCategory.OTHER
+        bi_title = "BI 7-Day Reverse Repo Rate"
+        assert normalize_macro_category(bi_title, cfg) == MacroEventCategory.BI_RATE
+
     def test_inflation(self):
         assert normalize_macro_category("CPI YoY") == MacroEventCategory.INFLATION
 

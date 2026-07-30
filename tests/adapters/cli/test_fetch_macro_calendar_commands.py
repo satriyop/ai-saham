@@ -41,7 +41,7 @@ def _wire_fake_use_case(monkeypatch, response: SyncMacroCalendarResponse) -> Fak
     monkeypatch.setattr(
         macro_commands,
         "SyncMacroCalendarUseCase",
-        lambda provider, repository: fake_uc,
+        lambda provider, repository, category_for_title=None: fake_uc,
     )
     monkeypatch.setattr(
         macro_commands,
@@ -102,6 +102,22 @@ class TestSuccessAndFailure:
         result = runner.invoke(app, ["fetch", "macro-calendar", "--db", str(tmp_path / "x.db")])
         assert result.exit_code == 0
         assert "Already synced today" in result.stdout
+
+    def test_cached_with_reclassify_message(self, monkeypatch, tmp_path: Path):
+        _mock_authenticated_session(monkeypatch)
+        _wire_fake_use_case(
+            monkeypatch,
+            _response(
+                status="cached",
+                from_cache=True,
+                fetched_count=0,
+                stored_count=0,
+                reclassified_count=8,
+            ),
+        )
+        result = runner.invoke(app, ["fetch", "macro-calendar", "--db", str(tmp_path / "x.db")])
+        assert result.exit_code == 0
+        assert "reclassified 8 event categories" in result.stdout
 
     def test_failed_exits_1(self, monkeypatch, tmp_path: Path):
         _mock_authenticated_session(monkeypatch)

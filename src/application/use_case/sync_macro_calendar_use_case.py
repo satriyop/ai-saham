@@ -5,9 +5,14 @@ Fetches Stockbit economic (and future sources) once, stores normalized events,
 and records a day-level sync marker. Owns ALL workflow/policy: freshness,
 orchestration, and failure aggregation. No I/O imports — ports injected.
 
+Also re-applies title→category rules to stored rows (offline) so config rule
+updates (e.g. Interest Rate Decision → bi_rate) take effect without a remote
+re-fetch.
+
 Layer: Application
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 
@@ -16,7 +21,10 @@ from src.application.ports.macro_calendar_provider import (
     MacroCalendarProvider,
 )
 from src.application.ports.macro_calendar_repository import MacroCalendarRepository
-from src.domain.value_objects.macro_calendar_event import MacroCalendarEvent
+from src.domain.value_objects.macro_calendar_event import (
+    MacroCalendarEvent,
+    MacroEventCategory,
+)
 
 
 @dataclass(frozen=True)
@@ -34,6 +42,7 @@ class SyncMacroCalendarResponse:
     category_counts: dict[str, int]  # MacroEventCategory.value -> count
     errors: tuple[str, ...]
     from_cache: bool
+    reclassified_count: int = 0  # rows whose category changed from current rules
 
 
 class SyncMacroCalendarUseCase:
@@ -41,6 +50,7 @@ class SyncMacroCalendarUseCase:
     Cache-aware market-wide macro calendar sync.
 
     Flow:
+      0. Reclassify stored titles with current rules (offline; always).
       1. If not force_remote_fetch and already synced for date → 'cached'.
       2. Otherwise fetch via provider.
          - Full success (including empty list) → save if any, mark 'success'.
@@ -53,13 +63,21 @@ class SyncMacroCalendarUseCase:
         self,
         provider: MacroCalendarProvider,
         repository: MacroCalendarRepository,
+        category_for_title: Callable[[str], MacroEventCategory] | None = None,
     ) -> None:
         self._provider = provider
         self._repository = repository
+        self._category_for_title = category_for_title
 
     def execute(self, request: SyncMacroCalendarRequest) -> SyncMacroCalendarResponse:
         sync_date = request.sync_date
         source = request.source
+
+        reclassified_count = 0
+        if self._category_for_title is not None:
+            reclassified_count = self._repository.reclassify_event_categories(
+                self._category_for_title
+            )
 
         if not request.force_remote_fetch and self._repository.has_synced_for_date(
             sync_date, source
@@ -71,6 +89,7 @@ class SyncMacroCalendarUseCase:
                 category_counts={},
                 errors=(),
                 from_cache=True,
+                reclassified_count=reclassified_count,
             )
 
         events: list[MacroCalendarEvent]
@@ -91,6 +110,7 @@ class SyncMacroCalendarUseCase:
                 category_counts={},
                 errors=(str(e),),
                 from_cache=False,
+                reclassified_count=reclassified_count,
             )
 
         fetched_count = len(events)
@@ -120,4 +140,5 @@ class SyncMacroCalendarUseCase:
             category_counts=category_counts,
             errors=tuple(errors),
             from_cache=False,
+            reclassified_count=reclassified_count,
         )

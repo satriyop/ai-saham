@@ -55,6 +55,8 @@ class FakeRepository:
         self._already_synced = already_synced
         self.save_events_calls: list[list] = []
         self.mark_synced_calls: list[tuple] = []
+        self.reclassify_calls: list = []
+        self.reclassify_return = 0
 
     def has_synced_for_date(self, sync_date, source="stockbit"):
         return self._already_synced
@@ -68,9 +70,22 @@ class FakeRepository:
     def get_events_in_window(self, *args, **kwargs):
         return []
 
+    def reclassify_event_categories(self, category_for_title):
+        self.reclassify_calls.append(category_for_title)
+        return self.reclassify_return
 
-def _run(provider: FakeProvider, repository: FakeRepository, force: bool = False):
-    uc = SyncMacroCalendarUseCase(provider=provider, repository=repository)
+
+def _run(
+    provider: FakeProvider,
+    repository: FakeRepository,
+    force: bool = False,
+    category_for_title=None,
+):
+    uc = SyncMacroCalendarUseCase(
+        provider=provider,
+        repository=repository,
+        category_for_title=category_for_title,
+    )
     return uc.execute(SyncMacroCalendarRequest(sync_date=_TODAY, force_remote_fetch=force))
 
 
@@ -85,6 +100,23 @@ class TestCachedShortCircuit:
         assert provider.call_count == 0
         assert repository.save_events_calls == []
         assert repository.mark_synced_calls == []
+        assert repository.reclassify_calls == []
+        assert response.reclassified_count == 0
+
+    def test_cached_still_reclassifies_when_normalizer_injected(self):
+        provider = FakeProvider(result=[_event()])
+        repository = FakeRepository(already_synced=True)
+        repository.reclassify_return = 8
+
+        def _norm(title: str) -> MacroEventCategory:
+            return MacroEventCategory.BI_RATE
+
+        response = _run(provider, repository, force=False, category_for_title=_norm)
+
+        assert response.status == "cached"
+        assert provider.call_count == 0
+        assert len(repository.reclassify_calls) == 1
+        assert response.reclassified_count == 8
 
     def test_force_bypasses_marker(self):
         provider = FakeProvider(result=[_event()])

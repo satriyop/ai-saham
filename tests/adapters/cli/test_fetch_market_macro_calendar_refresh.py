@@ -81,6 +81,22 @@ class TestRefreshMarketMacroCalendar:
         )
         assert status == "cached"
 
+    def test_cached_with_reclassify_status(self, monkeypatch, tmp_path: Path):
+        _patch_use_case(
+            monkeypatch,
+            response=_response(
+                status="cached",
+                from_cache=True,
+                fetched_count=0,
+                stored_count=0,
+                reclassified_count=8,
+            ),
+        )
+        status = refresh_market_macro_calendar(
+            db_path=tmp_path / "x.db", api_client=object(), refresh=False
+        )
+        assert status == "cached reclassified=8"
+
     def test_success_lists_category_counts(self, monkeypatch, tmp_path: Path):
         _patch_use_case(monkeypatch, response=_response())
         status = refresh_market_macro_calendar(

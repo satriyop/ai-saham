@@ -21,7 +21,11 @@ separate from continuous yield series (SBN / INDONIA).
    never in `corporate_action_*`.
 3. Domain type: **`MacroCalendarEvent`** with `MacroEventCategory` (bi_rate,
    inflation, growth, trade, other). Category rules live in
-   `config/macro_calendar.yaml` (first-match title substrings).
+   `config/macro_calendar.yaml` (first-match title substrings). Stockbit’s live
+   BI package title is **`Interest Rate Decision`** → `bi_rate`. Deposit /
+   Lending Facility Rate stay **out** of `bi_rate` so `policy_rate_steps` does
+   not triple-count same-day corridor moves. Sync re-applies rules offline to
+   stored titles when config changes (no remote re-fetch required).
 4. Reuse Stockbit JWT/session and the same cache-marker use-case pattern as
    `SyncCorporateActionCalendarUseCase`, but with separate ports and repository.
 5. **Not authoritative** for MarketContext, RiskEngine, or TradeSetup until a

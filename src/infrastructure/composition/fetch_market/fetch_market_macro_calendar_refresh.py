@@ -25,6 +25,7 @@ def refresh_market_macro_calendar(db_path: Path, api_client, refresh: bool) -> s
         from src.infrastructure.browser.stockbit_macro_calendar import (
             StockbitMacroCalendarProvider,
         )
+        from src.infrastructure.config.macro_calendar_config import normalize_macro_category
         from src.infrastructure.persistence.sqlite_macro_calendar_repository import (
             SQLiteMacroCalendarRepository,
         )
@@ -33,7 +34,11 @@ def refresh_market_macro_calendar(db_path: Path, api_client, refresh: bool) -> s
             api_client=api_client, stockbit_config=load_stockbit_provider_config()
         )
         repository = SQLiteMacroCalendarRepository(db_path)
-        use_case = SyncMacroCalendarUseCase(provider=provider, repository=repository)
+        use_case = SyncMacroCalendarUseCase(
+            provider=provider,
+            repository=repository,
+            category_for_title=normalize_macro_category,
+        )
         response = use_case.execute(
             SyncMacroCalendarRequest(
                 sync_date=date.today(),
@@ -44,6 +49,8 @@ def refresh_market_macro_calendar(db_path: Path, api_client, refresh: bool) -> s
         return f"ERR:{str(e)[:30]}"
 
     if response.from_cache:
+        if response.reclassified_count:
+            return f"cached reclassified={response.reclassified_count}"
         return "cached"
     if response.status == "failed":
         combined = " ".join(response.errors).lower()

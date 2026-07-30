@@ -7,6 +7,7 @@ Layer: Application (port definition)
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from datetime import date
 
 from src.domain.value_objects.macro_calendar_event import (
@@ -54,5 +55,18 @@ class MacroCalendarRepository(ABC):
 
         When ``as_of_fetched_at`` is set, exclude events whose ``fetched_at``
         is after that ISO timestamp (point-in-time guard).
+        """
+        ...
+
+    @abstractmethod
+    def reclassify_event_categories(
+        self,
+        category_for_title: Callable[[str], MacroEventCategory],
+    ) -> int:
+        """Recompute ``category`` from each stored title via ``category_for_title``.
+
+        Offline-safe: no network. Returns the number of rows whose category changed.
+        Used when category rules update (e.g. Stockbit title → bi_rate) without a
+        full remote re-fetch.
         """
         ...

@@ -197,3 +197,39 @@ class TestBankPolicyPilot:
         bi = next(f for f in ev.factors if f.name == "bi_rate_policy")
         assert bi.label == "UNAVAILABLE"
         assert any("no_policy_steps" in r for r in ev.unavailable_reasons)
+
+
+class TestStockbitCorridorTitles:
+    """P0: only Interest Rate Decision enters bi_rate; facilities would 3× net steps."""
+
+    def test_interest_rate_decision_title_produces_steps(self):
+        steps = macro_events_to_policy_steps(
+            [
+                _event(
+                    "ird",
+                    date(2026, 6, 18),
+                    title="Interest Rate Decision",
+                    actual="5.75%",
+                    previous="5.50%",
+                )
+            ]
+        )
+        assert steps[0].direction is PolicyRateDirection.HIKE
+        assert net_step_delta(steps) == 1.0
+
+    def test_same_day_facility_rows_would_triple_count_if_all_bi_rate(self):
+        d = date(2026, 6, 18)
+        # What would happen if Deposit/Lending were also category=bi_rate
+        triple = macro_events_to_policy_steps(
+            [
+                _event("ird", d, "Interest Rate Decision", "5.75%", "5.50%"),
+                _event("dep", d, "Deposit Facility Rate", "4.75%", "4.50%"),
+                _event("lend", d, "Lending Facility Rate", "6.5%", "6.25%"),
+            ]
+        )
+        assert net_step_delta(triple) == 3.0
+        # Correct ingest: only Interest Rate Decision is bi_rate → net 1
+        only_ird = macro_events_to_policy_steps(
+            [_event("ird", d, "Interest Rate Decision", "5.75%", "5.50%")]
+        )
+        assert net_step_delta(only_ird) == 1.0
