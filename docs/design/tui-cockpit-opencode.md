@@ -31,6 +31,19 @@ Ship Textual against **this cockpit mock**. Standalone journey HTML may stay “
 | 7 | Health | Honesty | Empty / zero / lag / ready posters |
 | 8 | Palette | Nav | Ctrl+P · peach selection |
 
+### Prompt rail (footer · design only)
+
+| Piece | Spec |
+|-------|------|
+| Placement | Row **above** status bar (OpenCode-style chrome) |
+| Affordance | `›` + mono input + mode chip (`idle` · `agent` · `cli`) |
+| Focus | click rail · `:` or `/` |
+| Keys | `↵` submit mock · `esc` blur/clear · Ctrl+P still palette |
+| Later | agent adapter · CLI passthrough · never Action authority |
+| Now | toast `prompt · design only · not wired` |
+
+Not a chat bubble. Not a second palette. Free text only until hooked.
+
 ### Nested (no tab · no digit hotkey)
 
 | Stage | Enter from | What |

@@ -117,6 +117,17 @@ def test_md_states_opencode_bible_and_broker_in_cockpit():
     assert "linked out" not in text.lower() or "in-cockpit" in text.lower() or "7 |" in text
 
 
+def test_prompt_rail_design_only_above_status():
+    html = _html()
+    assert 'id="promptRail"' in html
+    assert 'id="promptInput"' in html
+    assert "wirePromptRail" in html or "submitPromptRail" in html
+    assert "design only" in html.lower()
+    assert "not wired" in html.lower()
+    # grid has prompt + status chrome
+    assert "--prompt-h" in html or "prompt-rail" in html
+
+
 def test_detail_flags_present_for_code_richer_fields():
     html = _html()
     # Judge flags
