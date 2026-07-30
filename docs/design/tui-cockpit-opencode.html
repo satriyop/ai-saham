@@ -920,294 +920,180 @@
       * { animation: none !important; transition: none !important; }
     }
 
-    /* ── Ticker Desk · Harga Mast (frame 5) ─────────────────
-       Full vision: docs/design/tui-ticker-desk.html
-       Signature: monumental price + brass night-tape language.
-    */
-    .detail.desk-v2 {
-      --desk-brass: #e8b86d;
-      --desk-mint: #7ecfb8;
-      --desk-coral: #e87a6e;
-      --desk-ink: #0a0e16;
-      --desk-lift: #141c2a;
-      --desk-line: rgba(232, 224, 208, 0.1);
-    }
 
-    .desk-v2 .desk-id {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      align-items: flex-end;
+    /* ── Stage hierarchy in OpenCode taste (journey IA, not night-ink skin) ─ */
+    .stage-block { animation: fadeIn 120ms ease; }
+    .stage-block.is-hidden { display: none !important; }
+
+    .oc-note {
+      font-size: 11.5px;
+      color: var(--text-mute);
+      margin-bottom: 10px;
+      padding: 8px 10px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+    }
+    .oc-note a { color: var(--sel-dim); }
+    .oc-note strong { color: var(--text); font-weight: 500; }
+
+    .oc-hero {
       margin-bottom: 12px;
-      flex-wrap: wrap;
+      padding: 14px 14px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-elevated);
     }
-
-    .desk-v2 .desk-sym {
-      font-size: 1.75rem;
+    .oc-hero .lab {
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-mute);
+      margin-bottom: 8px;
+    }
+    .oc-hero .action-xl {
+      font-size: 1.85rem;
       font-weight: 600;
-      letter-spacing: -0.03em;
-      color: #f4f0e8;
-      font-family: var(--font-ui);
-      line-height: 1;
+      letter-spacing: -0.02em;
+      color: var(--amber);
+      margin-right: 12px;
     }
-
-    .desk-v2 .desk-sub {
-      margin-top: 6px;
-      color: var(--text-dim);
+    .oc-hero .action-xl.enter { color: var(--green); }
+    .oc-hero .action-xl.avoid { color: var(--red); }
+    .oc-hero .price-xl {
+      font-size: 2rem;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+    .oc-hero .ccy { color: var(--text-mute); font-size: 1rem; margin-right: 6px; }
+    .oc-hero .chg {
+      display: inline-block;
+      margin-left: 10px;
       font-size: 12px;
+      padding: 2px 8px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      color: var(--green);
+      vertical-align: middle;
+    }
+    .oc-hero .chg.neg { color: var(--red); }
+    .oc-hero .row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 14px; }
+
+    .oc-grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    @media (max-width: 900px) {
+      .oc-grid-3 { grid-template-columns: 1fr; }
+    }
+    .oc-panel {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-panel);
+      padding: 10px 12px;
+    }
+    .oc-panel h3 {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-mute);
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+    .oc-panel .hl {
+      font-size: 1.15rem;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .oc-panel .hl.pos { color: var(--green); }
+    .oc-panel .hl.neg { color: var(--red); }
+    .oc-panel .sub { font-size: 11px; color: var(--text-mute); margin-bottom: 8px; }
+    .oc-panel .mini {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px 10px;
+      font-size: 11px;
+    }
+    .oc-panel .mini span { color: var(--text-mute); }
+    .oc-panel .mini b { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
+
+    .oc-metrics {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    @media (max-width: 900px) {
+      .oc-metrics { grid-template-columns: repeat(3, 1fr); }
+    }
+    .oc-metric {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-elevated);
+      padding: 6px 8px;
+    }
+    .oc-metric .k { font-size: 10px; color: var(--text-mute); text-transform: uppercase; }
+    .oc-metric .v { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text); }
+
+    .oc-hz {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      margin-top: 10px;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+    }
+    .oc-hz div { color: var(--text-dim); }
+    .oc-hz b { color: var(--text); font-weight: 500; }
+    .oc-hz .pos { color: var(--green); }
+    .oc-hz .neg { color: var(--red); }
+
+    .oc-geo {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      text-align: center;
+      margin: 10px 0;
+    }
+    .oc-geo .k { font-size: 10px; color: var(--text-mute); text-transform: uppercase; }
+    .oc-geo .v { font-size: 1.35rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text); }
+    .oc-geo .v.entry { color: var(--amber); }
+    .oc-geo .v.stop { color: var(--red); }
+    .oc-geo .v.target { color: var(--green); }
+
+    .badge.action-chip {
+      font-size: 10.5px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: var(--radius-sm);
+    }
+    .badge.action-chip.enter { color: var(--green); background: rgba(111,191,138,.12); }
+    .badge.action-chip.watch { color: var(--amber); background: rgba(212,176,106,.12); }
+    .badge.action-chip.avoid { color: var(--red); background: rgba(201,122,114,.12); }
+
+    .timeline {
+      font-size: 12px;
+      color: var(--text);
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
       align-items: center;
     }
-
-    .desk-v2 .desk-chip {
-      font-size: 10px;
-      padding: 2px 7px;
-      border-radius: 4px;
+    .timeline .node {
+      padding: 2px 8px;
       border: 1px solid var(--border);
-      color: var(--text-dim);
-      font-family: var(--font-mono);
+      border-radius: var(--radius-sm);
+      background: var(--bg-elevated);
     }
+    .timeline .node.now { color: var(--amber); border-color: rgba(212,176,106,.35); }
+    .timeline .arr { color: var(--text-faint); }
 
-    .desk-v2 .desk-chip.ok {
-      color: var(--desk-mint);
-      border-color: rgba(126, 207, 184, 0.3);
-      background: rgba(126, 207, 184, 0.08);
-    }
-
-    .desk-v2 .desk-asof {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      color: var(--text-mute);
-      text-align: right;
-    }
-
-    .desk-v2 .desk-asof strong {
-      display: block;
-      color: var(--text);
-      font-weight: 500;
-      margin-bottom: 2px;
-    }
-
-    .desk-v2 .mast {
-      display: grid;
-      grid-template-columns: 1.2fr 0.8fr;
-      gap: 16px;
-      padding: 16px 18px;
-      margin-bottom: 12px;
-      border-radius: 10px;
-      border: 1px solid var(--desk-line);
-      background:
-        radial-gradient(400px 120px at 0% 0%, rgba(232, 184, 109, 0.12), transparent 60%),
-        linear-gradient(145deg, #121820, var(--desk-ink));
-    }
-
-    @media (max-width: 820px) {
-      .desk-v2 .mast { grid-template-columns: 1fr; }
-    }
-
-    .desk-v2 .mast-label {
-      font-family: var(--font-mono);
-      font-size: 10px;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: var(--desk-brass);
-      margin-bottom: 8px;
-    }
-
-    .desk-v2 .mast-price {
-      display: flex;
-      align-items: baseline;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .desk-v2 .mast-price .ccy {
-      font-family: var(--font-mono);
-      font-size: 12px;
-      color: var(--text-mute);
-    }
-
-    .desk-v2 .mast-price .px {
-      font-family: var(--font-mono);
-      font-size: 2.35rem;
-      font-weight: 600;
-      letter-spacing: -0.04em;
-      color: #faf6ee;
-      font-variant-numeric: tabular-nums;
-      line-height: 1;
-    }
-
-    .desk-v2 .mast-price .chg {
-      font-family: var(--font-mono);
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--desk-mint);
-      background: rgba(126, 207, 184, 0.1);
-      border: 1px solid rgba(126, 207, 184, 0.22);
-      padding: 3px 8px;
-      border-radius: 6px;
-    }
-
-    .desk-v2 .hz-list {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      justify-content: center;
-      border-left: 1px solid var(--desk-line);
-      padding-left: 14px;
-    }
-
-    @media (max-width: 820px) {
-      .desk-v2 .hz-list {
-        border-left: none;
-        padding-left: 0;
-        border-top: 1px solid var(--desk-line);
-        padding-top: 12px;
-      }
-    }
-
-    .desk-v2 .hz {
-      display: grid;
-      grid-template-columns: 28px 1fr auto;
-      gap: 8px;
-      align-items: center;
-      font-family: var(--font-mono);
-      font-size: 11.5px;
-    }
-
-    .desk-v2 .hz .h { color: var(--text-mute); }
-    .desk-v2 .hz .bar {
-      height: 3px;
-      border-radius: 99px;
-      background: #1a2230;
-      overflow: hidden;
-    }
-    .desk-v2 .hz .bar i {
-      display: block;
-      height: 100%;
-      border-radius: 99px;
-      background: var(--desk-mint);
-    }
-    .desk-v2 .hz .bar i.neg { background: var(--desk-coral); }
-    .desk-v2 .hz .v { font-weight: 600; min-width: 4.2ch; text-align: right; font-variant-numeric: tabular-nums; }
-    .desk-v2 .hz .v.pos { color: var(--desk-mint); }
-    .desk-v2 .hz .v.neg { color: var(--desk-coral); }
-
-    .desk-v2 .ribbon {
-      display: grid;
-      grid-template-columns: repeat(6, 1fr);
-      gap: 1px;
-      background: var(--border);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      overflow: hidden;
-      margin-bottom: 12px;
-    }
-
-    @media (max-width: 900px) {
-      .desk-v2 .ribbon { grid-template-columns: repeat(3, 1fr); }
-    }
-
-    .desk-v2 .metric {
-      background: var(--bg-panel);
-      padding: 10px 10px 9px;
-    }
-
-    .desk-v2 .metric .k {
-      font-family: var(--font-mono);
-      font-size: 9.5px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--text-mute);
-      margin-bottom: 4px;
-    }
-
-    .desk-v2 .metric .v {
-      font-family: var(--font-mono);
-      font-size: 1.05rem;
-      font-weight: 600;
-      color: #f0ebe3;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .desk-v2 .trio {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
-      margin-bottom: 12px;
-    }
-
-    @media (max-width: 900px) {
-      .desk-v2 .trio { grid-template-columns: 1fr; }
-    }
-
-    .desk-v2 .pulse {
-      padding: 12px 14px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      background: var(--bg-panel);
-      border-top: 2px solid var(--pulse-accent, var(--desk-brass));
-    }
-
-    .desk-v2 .pulse.flow { --pulse-accent: var(--desk-coral); }
-    .desk-v2 .pulse.struct { --pulse-accent: var(--blue); }
-    .desk-v2 .pulse.bandar { --pulse-accent: var(--desk-mint); }
-
-    .desk-v2 .pulse h3 {
-      font-family: var(--font-mono);
-      font-size: 10px;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--text-mute);
-      margin-bottom: 6px;
-      font-weight: 500;
-    }
-
-    .desk-v2 .pulse .hl {
-      font-family: var(--font-mono);
-      font-size: 1.2rem;
-      font-weight: 600;
-      color: #f2eee6;
-      margin-bottom: 2px;
-    }
-
-    .desk-v2 .pulse.flow .hl { color: var(--desk-coral); }
-    .desk-v2 .pulse.bandar .hl { color: var(--desk-mint); }
-
-    .desk-v2 .pulse .sub {
-      font-size: 11.5px;
-      color: var(--text-dim);
-      margin-bottom: 8px;
-    }
-
-    .desk-v2 .pulse .mini {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 4px 10px;
-      font-family: var(--font-mono);
-      font-size: 11px;
-    }
-
-    .desk-v2 .pulse .mini span { color: var(--text-mute); }
-    .desk-v2 .pulse .mini b { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
-
-    .desk-v2 .desk-note {
-      font-size: 11.5px;
-      color: var(--text-mute);
-      margin-bottom: 10px;
-      padding: 8px 10px;
-      border-radius: 6px;
-      border: 1px solid rgba(232, 184, 109, 0.2);
-      background: rgba(232, 184, 109, 0.06);
-      color: var(--desk-brass);
-    }
-
-    .desk-v2 .desk-note a {
-      color: var(--desk-brass);
-      font-weight: 500;
-    }
   </style>
 </head>
 <body>
@@ -1216,7 +1102,7 @@
       <strong>OpenCode visual = TUI bible</strong>
       · black-on-black · peach palette · mono density
       · <em style="color:var(--sel-dim);font-style:normal">Journey = structure inspiration only</em>
-      (stages / authority / columns — not Fraunces night-ink skin)
+      (stages / authority / columns — not marketing night-ink skin)
       <div class="frame-switch" id="frameSwitch" role="tablist" aria-label="Stage frames">
         <button type="button" data-frame="accum" class="is-on">1 Accum</button>
         <button type="button" data-frame="judge">2 Judge</button>
@@ -1224,8 +1110,9 @@
         <button type="button" data-frame="paper">4 Paper</button>
         <button type="button" data-frame="preopen">5 Pre-open</button>
         <button type="button" data-frame="detail">6 Ticker</button>
-        <button type="button" data-frame="empty">7 Health</button>
-        <button type="button" data-frame="palette">8 Palette</button>
+        <button type="button" data-frame="broker">7 Broker</button>
+        <button type="button" data-frame="empty">8 Health</button>
+        <button type="button" data-frame="palette">9 Palette</button>
       </div>
       <div class="demo-hint">
         IA from journey: <code>Enter</code>=Judge · <code>p</code>=Plan · <code>l</code>=Paper · <code>v t</code> ticker · <code>v b</code> broker
@@ -1290,7 +1177,7 @@
 
           <!-- 2 JUDGE · Verdict mast (frame) · full vision tui-judge-desk.html -->
           <div class="list-view is-hidden" id="judgeView">
-            <div class="desk-note">
+            <div class="oc-note">
               Action path · present-only board object ·
               <a href="./tui-judge-desk.html">tui-judge-desk.html</a>
               · not a re-score · not ticker desk
@@ -1337,7 +1224,7 @@
 
           <!-- 3 PLAN · Geometry mast · tui-plan-desk.html -->
           <div class="list-view is-hidden" id="planView">
-            <div class="desk-note">
+            <div class="oc-note">
               Structure desk · inherits Action ·
               <a href="./tui-plan-desk.html">tui-plan-desk.html</a>
               · no broker order · not a second analysis
@@ -1359,7 +1246,7 @@
                 <span class="k">Plan id</span><span class="v">3f88eda7</span>
                 <span class="k">Horizon</span><span class="v">swing</span>
               </div>
-              <div class="desk-note" style="margin:12px 0 0">No broker order. Geometry freezes for paper journal · CLI: trade accum log --from-plan</div>
+              <div class="oc-note" style="margin:12px 0 0">No broker order. Geometry freezes for paper journal · CLI: trade accum log --from-plan</div>
             </div>
             <div class="footer-note">
               <span><span class="kbd">l</span> paper log confirm</span>
@@ -1370,7 +1257,7 @@
 
           <!-- 4 PAPER · notebook tape · tui-paper-journal.html -->
           <div class="list-view is-hidden" id="paperView">
-            <div class="desk-note">
+            <div class="oc-note">
               Optional notebook · from plan geometry only ·
               <a href="./tui-paper-journal.html">tui-paper-journal.html</a>
               · not learning corpus · not Action
@@ -1486,98 +1373,151 @@
             </div>
           </div>
 
-          <!-- 6 TICKER DESK · Harga Mast · data contract tui-ticker-desk.html -->
-          <div class="detail desk-v2" id="detailView">
-            <div class="desk-note">
-              Browse path · <strong style="color:var(--text)">not Action</strong> ·
-              <a href="./tui-ticker-desk.html">tui-ticker-desk.html</a>
-              · GetTickerDashboardUseCase · missing fields show — · Judge = board Enter
+          <!-- 6 TICKER · price-first · OpenCode · not Action -->
+          <div class="stage-block is-hidden" id="detailView" style="display:none">
+            <div class="oc-note">
+              Browse · <strong>not Action</strong> · GetTickerDashboardUseCase · missing = —
+              · Judge stays board <span class="kbd">Enter</span>
+              · vision ref <a href="./tui-ticker-desk.html">ticker desk</a> (IA only)
             </div>
-
-            <div class="desk-id">
-              <div>
-                <div class="desk-sym" id="detailTicker">BBCA</div>
-                <div class="desk-sub" id="detailSub">
-                  <span>Bank Central Asia</span>
-                  <span class="desk-chip">Papan Utama</span>
-                  <span class="desk-chip">Keuangan · Bank</span>
-                  <span class="desk-chip ok">Tradeable</span>
+            <div class="section-label">View · ticker · identity</div>
+            <div class="oc-hero">
+              <div class="row" style="justify-content:space-between">
+                <div>
+                  <div class="lab">Ticker</div>
+                  <div style="font-size:1.5rem;font-weight:600" id="detailTicker">BBCA</div>
+                  <div style="margin-top:6px;color:var(--text-dim);font-size:12px" id="detailSub">
+                    Bank Central Asia · Papan Utama · Keuangan · Tradeable
+                  </div>
+                </div>
+                <div style="text-align:right;font-size:11px;color:var(--text-mute)">
+                  <strong style="display:block;color:var(--text);font-weight:500">as of 2026-07-29</strong>
+                  local cache · not judgment
                 </div>
               </div>
-              <div class="desk-asof">
-                <strong>as of 2026-07-29</strong>
-                local cache · not judgment
-              </div>
             </div>
-
-            <section class="mast" aria-label="Price mast">
+            <div class="section-label">Last · local close</div>
+            <div class="oc-hero">
+              <div class="lab">Price first · price_structure horizons</div>
               <div>
-                <div class="mast-label">Last · local close</div>
-                <div class="mast-price">
-                  <span class="ccy">Rp</span>
-                  <span class="px">6,275</span>
-                  <span class="chg">+0.8% 1d</span>
-                </div>
+                <span class="ccy">Rp</span><span class="price-xl">6,275</span>
+                <span class="chg">+0.8% 1d</span>
               </div>
-              <div class="hz-list">
-                <div class="hz"><span class="h">1d</span><span class="bar"><i style="width:28%"></i></span><span class="v pos">+0.8%</span></div>
-                <div class="hz"><span class="h">5d</span><span class="bar"><i class="neg" style="width:52%"></i></span><span class="v neg">−3.5%</span></div>
-                <div class="hz"><span class="h">20d</span><span class="bar"><i style="width:88%"></i></span><span class="v pos">+12.1%</span></div>
-                <div class="hz"><span class="h">52w</span><span class="bar"><i style="width:35%"></i></span><span class="v" style="color:var(--text-dim)">35%</span></div>
+              <div class="oc-hz">
+                <div>1d <b class="pos">+0.8%</b></div>
+                <div>5d <b class="neg">−3.5%</b></div>
+                <div>20d <b class="pos">+12.1%</b></div>
+                <div>52w pos <b>35%</b></div>
               </div>
-            </section>
-
-            <div class="ribbon">
-              <div class="metric"><div class="k">PE</div><div class="v">13.3</div></div>
-              <div class="metric"><div class="k">PBV</div><div class="v">3.0</div></div>
-              <div class="metric"><div class="k">MCap</div><div class="v">774T</div></div>
-              <div class="metric"><div class="k">ROE</div><div class="v">22%</div></div>
-              <div class="metric"><div class="k">Div</div><div class="v">4.8%</div></div>
-              <div class="metric"><div class="k">F</div><div class="v">5</div></div>
             </div>
-
-            <div class="trio">
-              <article class="pulse flow">
+            <div class="section-label">Fundamentals ribbon</div>
+            <div class="oc-metrics">
+              <div class="oc-metric"><div class="k">PE TTM</div><div class="v">13.3</div></div>
+              <div class="oc-metric"><div class="k">PBV</div><div class="v">3.0</div></div>
+              <div class="oc-metric"><div class="k">MCap</div><div class="v">774T</div></div>
+              <div class="oc-metric"><div class="k">ROE</div><div class="v">22.4%</div></div>
+              <div class="oc-metric"><div class="k">Div</div><div class="v">4.8%</div></div>
+              <div class="oc-metric"><div class="k">F-Score</div><div class="v">5</div></div>
+            </div>
+            <div class="section-label">Pulse · flow · structure · bandar</div>
+            <div class="oc-grid-3">
+              <div class="oc-panel">
                 <h3>Foreign flow</h3>
-                <div class="hl">−344B</div>
-                <div class="sub">5d net · 1 buy / 4 sell</div>
+                <div class="hl neg">−344B</div>
+                <div class="sub">5d net · stockbit · 1B/4S</div>
                 <div class="mini">
                   <div><span>Latest</span><br /><b>−27.8B</b></div>
                   <div><span>20d</span><br /><b>−1.32T</b></div>
                 </div>
-              </article>
-              <article class="pulse struct">
+              </div>
+              <div class="oc-panel">
                 <h3>Structure</h3>
                 <div class="hl">0.72×</div>
-                <div class="sub">Vol vs 20d · 52w pos 35%</div>
+                <div class="sub">vol vs 20d · 52w range pos</div>
                 <div class="mini">
                   <div><span>52w L</span><br /><b>4,820</b></div>
                   <div><span>52w H</span><br /><b>8,975</b></div>
                 </div>
-              </article>
-              <article class="pulse bandar">
+              </div>
+              <div class="oc-panel">
                 <h3>Bandar</h3>
-                <div class="hl">Acc · +2</div>
-                <div class="sub">Broad +3 · Big Acc 5d</div>
+                <div class="hl pos">Acc · +2</div>
+                <div class="sub">broad score · session local</div>
                 <div class="mini">
                   <div><span>Today</span><br /><b>Normal Acc</b></div>
-                  <div><span>Top1</span><br /><b>17%</b></div>
+                  <div><span>5d</span><br /><b>Big Acc</b></div>
                 </div>
-              </article>
+              </div>
             </div>
-
-            <div class="detail-actions" style="margin-top: 4px">
-              <button class="ghost-btn" id="btnBack" type="button">esc board</button>
-              <button class="ghost-btn" type="button" data-action="inspect">b desks</button>
-              <button class="ghost-btn primary" type="button" data-action="plan">p plan</button>
+            <div class="section-label">Secondary presence (not full CLI panels)</div>
+            <div class="card">
+              <div class="kv">
+                <span class="k">Analyst</span><span class="v">present | —</span>
+                <span class="k">Ownership</span><span class="v">from cache | —</span>
+                <span class="k">IEV</span><span class="v">present | —</span>
+                <span class="k">Insider</span><span class="v">—</span>
+              </div>
             </div>
             <div class="footer-note">
               <span><span class="kbd">b</span> top desks</span>
-              <span><span class="kbd">p</span> plan structure</span>
+              <span><span class="kbd">p</span> plan</span>
               <span><span class="kbd">esc</span> board</span>
-              <span>CLI keeps full panels · desk = hierarchy · not Action</span>
+              <span class="dim">not Action · not order · CLI keeps deep panels</span>
             </div>
           </div>
+
+          <!-- 7 BROKER · list radar + desk home strip · OpenCode -->
+          <div class="stage-block is-hidden" id="brokerView">
+            <div class="oc-note">
+              Browse · <strong>not Action</strong> · tracked desks · cols 1:1 TUI
+              Code · Type · AsOf · DayNet · Net5 · Stk · Δ1 · # · Top
+              · vision ref <a href="./tui-broker-desk.html">broker desk</a> (IA only)
+            </div>
+            <div class="section-label">View · broker list · desk radar</div>
+            <table class="result-table dense" id="brokerTable">
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Type</th>
+                  <th>AsOf</th>
+                  <th class="num">DayNet</th>
+                  <th class="num">Net5</th>
+                  <th class="num">Stk</th>
+                  <th class="num">Δ1</th>
+                  <th class="num">#</th>
+                  <th>Top</th>
+                </tr>
+              </thead>
+              <tbody id="brokerBody"></tbody>
+            </table>
+            <div class="section-label tight" style="margin-top:12px">Desk home · Net mast (selected row)</div>
+            <div class="oc-hero" id="brokerHome">
+              <div class="lab">Day net · local · not judgment</div>
+              <div class="row">
+                <span style="font-size:1.25rem;font-weight:600" id="brokerCode">YP</span>
+                <span class="badge pass" id="brokerType">Local</span>
+              </div>
+              <div style="margin-top:8px">
+                <span class="ccy">DayNet</span>
+                <span class="price-xl pos" id="brokerDayNet" style="font-size:1.6rem;color:var(--green)">+11.5B</span>
+              </div>
+              <div class="kv" style="margin-top:10px">
+                <span class="k">Net5</span><span class="v" id="brokerNet5">+38.2B</span>
+                <span class="k">Streak</span><span class="v" id="brokerStk">4</span>
+                <span class="k">Δ1</span><span class="v" id="brokerD1">+2.1B</span>
+                <span class="k">Top buy</span><span class="v" id="brokerTop">AMMN</span>
+              </div>
+            </div>
+            <div class="footer-note">
+              <span><span class="kbd">↑↓</span> move</span>
+              <span><span class="kbd">Enter</span> desk home strip</span>
+              <span><span class="kbd">t</span>/<span class="kbd">f</span>/<span class="kbd">h</span> deep (CLI parity later)</span>
+              <span><span class="kbd">v</span> view ticker top</span>
+              <span><span class="kbd">esc</span> board</span>
+              <span class="dim">never invents ENTER/WATCH/AVOID</span>
+            </div>
+          </div>
+
         </div>
       </main>
 
@@ -1750,6 +1690,17 @@
       { t: "INDF", iep: 6850, d: 0.9, iev: "2.0M", ncp: 0.70, diev: "+0.3M", grade: "B", risk: "clear" },
     ];
 
+
+    // 1:1 broker-list columns · presentation only
+    const BROKER = [
+      { code: "YP", type: "Local", asOf: "07-29", dayNet: "+11.5B", net5: "+38.2B", stk: "4", d1: "+2.1B", n: "18", top: "AMMN" },
+      { code: "ZP", type: "Foreign", asOf: "07-29", dayNet: "+52.2B", net5: "+61.0B", stk: "3", d1: "+8.4B", n: "24", top: "BUMI" },
+      { code: "AK", type: "Foreign", asOf: "07-29", dayNet: "−18.6B", net5: "−44.1B", stk: "2", d1: "−5.2B", n: "31", top: "BBCA" },
+      { code: "BK", type: "Foreign", asOf: "07-29", dayNet: "+9.8B", net5: "+22.4B", stk: "1", d1: "+1.0B", n: "12", top: "ANTM" },
+      { code: "XL", type: "Local", asOf: "07-29", dayNet: "−6.2B", net5: "−11.5B", stk: "1", d1: "−0.8B", n: "9", top: "BBRI" },
+      { code: "MS", type: "Local", asOf: "07-29", dayNet: "+3.1B", net5: "+7.6B", stk: "2", d1: "+0.4B", n: "7", top: "TLKM" },
+    ];
+
     const COMMANDS = [
       { section: "Suggested", name: "Screen accumulation", desc: "Signal radar board · Action path start", shortcut: "s a", action: "screen-accum" },
       { section: "Suggested", name: "Screen pre-open", desc: "IEV auction board · not accum Judge", shortcut: "s p", action: "screen-preopen" },
@@ -1771,6 +1722,7 @@
       frame: "accum", // accum | judge | plan | paper | preopen | empty | detail
       rowIndex: 0,
       preIndex: 0,
+      brokerIndex: 0,
       paletteOpen: false,
       confirmOpen: false,
       filtered: [...COMMANDS],
@@ -1917,17 +1869,56 @@
       `;
     }
 
+
+    function renderBroker() {
+      $("brokerBody").innerHTML = BROKER.map((r, i) => {
+        const on = i === state.brokerIndex ? "is-selected" : "";
+        const dayCls = String(r.dayNet).includes("−") || String(r.dayNet).startsWith("-") ? "neg" : "pos";
+        const n5Cls = String(r.net5).includes("−") || String(r.net5).startsWith("-") ? "neg" : "pos";
+        return `<tr data-i="${i}" class="${on}">
+          <td><span class="ticker">${r.code}</span></td>
+          <td class="dim">${r.type}</td>
+          <td class="dim">${r.asOf}</td>
+          <td class="num ${dayCls}">${r.dayNet}</td>
+          <td class="num ${n5Cls}">${r.net5}</td>
+          <td class="num">${r.stk}</td>
+          <td class="num">${r.d1}</td>
+          <td class="num dim">${r.n}</td>
+          <td>${r.top}</td>
+        </tr>`;
+      }).join("");
+      $("brokerBody").querySelectorAll("tr").forEach((tr) => {
+        tr.addEventListener("click", () => {
+          state.brokerIndex = Number(tr.dataset.i);
+          renderBroker();
+          paintBrokerHome();
+          updateChrome();
+        });
+      });
+      paintBrokerHome();
+    }
+
+    function paintBrokerHome() {
+      const r = BROKER[state.brokerIndex] || BROKER[0];
+      if (!r || !$("brokerCode")) return;
+      $("brokerCode").textContent = r.code;
+      $("brokerType").textContent = r.type;
+      $("brokerDayNet").textContent = r.dayNet;
+      $("brokerDayNet").style.color = (String(r.dayNet).includes("−") || String(r.dayNet).startsWith("-")) ? "var(--red)" : "var(--green)";
+      $("brokerNet5").textContent = r.net5;
+      $("brokerStk").textContent = r.stk;
+      $("brokerD1").textContent = r.d1;
+      $("brokerTop").textContent = r.top;
+    }
+
     function hideAllViews() {
-      ["accumView", "judgeView", "planView", "paperView", "preopenView", "emptyView", "detailView"].forEach((id) => {
+      ["accumView", "judgeView", "planView", "paperView", "preopenView", "emptyView", "detailView", "brokerView"].forEach((id) => {
         const el = $(id);
         if (!el) return;
         el.classList.add("is-hidden");
         el.classList.remove("is-open");
+        el.style.display = "none";
       });
-      if ($("detailView")) {
-        $("detailView").classList.remove("is-open");
-        $("detailView").style.display = "none";
-      }
     }
 
     function showFrame(frame, opts = {}) {
@@ -1948,32 +1939,36 @@
       paintJudgeFromFocus();
 
       if (frame === "accum") {
-        $("accumView").classList.remove("is-hidden");
+        $("accumView").classList.remove("is-hidden"); $("accumView").style.display = "block";
         setModeLocal();
       } else if (frame === "judge") {
-        $("judgeView").classList.remove("is-hidden");
+        $("judgeView").classList.remove("is-hidden"); $("judgeView").style.display = "block";
         setModeLocal();
       } else if (frame === "plan") {
-        $("planView").classList.remove("is-hidden");
+        $("planView").classList.remove("is-hidden"); $("planView").style.display = "block";
         setModeLocal();
       } else if (frame === "paper") {
-        $("paperView").classList.remove("is-hidden");
+        $("paperView").classList.remove("is-hidden"); $("paperView").style.display = "block";
         setModeLocal();
       } else if (frame === "preopen") {
-        $("preopenView").classList.remove("is-hidden");
+        $("preopenView").classList.remove("is-hidden"); $("preopenView").style.display = "block";
         setModeLocal();
       } else if (frame === "empty") {
-        $("emptyView").classList.remove("is-hidden");
+        $("emptyView").classList.remove("is-hidden"); $("emptyView").style.display = "block";
         setHealthPoster(state.health || "empty");
         setModeEmpty();
       } else if (frame === "detail") {
-        // Harga mast — browse path, never overwrite with Action judgment
-        $("detailView").classList.add("is-open");
-        $("detailView").style.display = "block";
+        const el = $("detailView");
+        el.classList.remove("is-hidden");
+        el.style.display = "block";
         const f = focusTicker();
-        const t = f.t;
-        $("detailTicker").textContent = t;
-        // Keep identity chips in HTML; only update ticker mark
+        $("detailTicker").textContent = f.t;
+        setModeLocal();
+      } else if (frame === "broker") {
+        const bv = $("brokerView");
+        bv.classList.remove("is-hidden");
+        bv.style.display = "block";
+        renderBroker();
         setModeLocal();
       }
 
@@ -2061,10 +2056,16 @@
         $("statusScreen").textContent = "health";
         $("statusRows").textContent = "0 rows";
       } else if (state.frame === "detail") {
-        $("viewTitle").textContent = `View · ticker desk · ${t}`;
-        $("viewMeta").innerHTML = `<span class="dot">·</span> Harga mast · cache · not Action`;
+        $("viewTitle").textContent = `View · ticker · ${t}`;
+        $("viewMeta").innerHTML = `<span class="dot">·</span> price-first · cache · not Action`;
         $("statusScreen").textContent = "view ticker";
         $("statusRows").textContent = t;
+      } else if (state.frame === "broker") {
+        const b = BROKER[state.brokerIndex] || {};
+        $("viewTitle").textContent = "View · broker list";
+        $("viewMeta").innerHTML = `<span class="dot">·</span> desk radar · ${BROKER.length} tracked · not Action`;
+        $("statusScreen").textContent = "view broker";
+        $("statusRows").textContent = b.code || "—";
       }
 
       $("statusFocus").textContent = state.frame === "empty" ? "—" : t;
@@ -2072,6 +2073,9 @@
         $("sideFocus").innerHTML = `<strong>none</strong><br />fetch first · ctrl+p`;
       } else if (state.frame === "detail") {
         $("sideFocus").innerHTML = `<strong>${t}</strong><br />browse · not Action · b desks · p plan`;
+      } else if (state.frame === "broker") {
+        const b = BROKER[state.brokerIndex] || {};
+        $("sideFocus").innerHTML = `<strong>${b.code || "—"}</strong> desk<br />browse · not Action · v ticker · esc`;
       } else if (state.frame === "judge") {
         $("sideFocus").innerHTML = `<strong>${t}</strong><br />j re-judge · p plan · esc board`;
       } else {
@@ -2198,7 +2202,8 @@
           toast(`Ticker desk · ${focusTicker().t} · not Action`);
           break;
         case "broker":
-          toast("Broker desk · see tui-broker-desk.html");
+          showFrame("broker");
+          toast("View · broker list · not Action");
           break;
         case "plan-swing":
           if (state.cacheEmpty) { toast("Nothing to plan"); break; }
@@ -2251,8 +2256,9 @@
           "4": "paper",
           "5": "preopen",
           "6": "detail",
-          "7": "empty",
-          "8": "palette",
+          "7": "broker",
+          "8": "empty",
+          "9": "palette",
         };
         if (map[e.key]) {
           e.preventDefault();
@@ -2306,7 +2312,7 @@
       if (isTypingTarget(e.target)) return;
 
       if (e.key === "Escape") {
-        if (["detail", "judge", "plan", "paper"].includes(state.frame)) {
+        if (["detail", "judge", "plan", "paper", "broker"].includes(state.frame)) {
           e.preventDefault();
           showFrame(state.cacheEmpty ? "empty" : "accum");
         }
@@ -2337,6 +2343,31 @@
       if (state.frame === "plan") {
         if (e.key.toLowerCase() === "l") { e.preventDefault(); showFrame("paper"); openConfirm(); return; }
         if (e.key.toLowerCase() === "p") { e.preventDefault(); toast("Re-run structure"); return; }
+      }
+
+
+      if (state.frame === "broker") {
+        if (e.key === "ArrowDown" || e.key === "j") {
+          e.preventDefault();
+          state.brokerIndex = Math.min(BROKER.length - 1, state.brokerIndex + 1);
+          renderBroker(); updateChrome(); return;
+        }
+        if (e.key === "ArrowUp" || e.key === "k") {
+          e.preventDefault();
+          state.brokerIndex = Math.max(0, state.brokerIndex - 1);
+          renderBroker(); updateChrome(); return;
+        }
+        if (e.key === "v") {
+          e.preventDefault();
+          const top = (BROKER[state.brokerIndex] || {}).top;
+          if (top) {
+            // jump focus name if on board
+            const idx = ACCUM.findIndex((r) => r.t === top);
+            if (idx >= 0) state.rowIndex = idx;
+          }
+          showFrame("detail");
+          return;
+        }
       }
 
       if (state.frame === "preopen") {
@@ -2383,7 +2414,7 @@
       btn.addEventListener("click", () => {
         const a = btn.getAttribute("data-action");
         if (a === "plan") showFrame("plan");
-        if (a === "inspect") toast(`Top desks · ${focusTicker().t} · see broker desk`);
+        if (a === "inspect") showFrame("broker");
       });
     });
 
@@ -2400,6 +2431,7 @@
 
     renderAccum();
     renderPreopen();
+    if ($("brokerBody")) renderBroker();
     showFrame("accum");
   </script>
 </body>
