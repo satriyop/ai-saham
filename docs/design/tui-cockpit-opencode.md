@@ -146,11 +146,13 @@ Primary stage stays scannable. Richer DTO fields hang on **chips** (mono pills).
 ### Broker (`v b` · desk-centric)
 - Radar + Enter home: **day net for that desk code** (tracked `broker_daily_flow`)  
 - Hub:
-  - **`t` buy/sell** — top stocks **for this desk** (not market top)
+  - **`t` buy/sell** — top stocks **for this desk · latest session only** (not market top)
   - **`f` flow** — **this desk’s** day-net series (`ViewBrokerDeskFlow`) · **not** market foreign total · **not** ticker foreign flow
+  - **`c` calendar** — **~1 month** desk activity: each session day = net + buy/sell totals for **this desk** (`broker_daily_flow` rollup)
   - **`h` history** — per-ticker daily for this desk
   - **`v` top buy** — top-buy list for this desk · click → view ticker  
-- Never label desk flow as “foreign flow” or “broker summary market-wide”
+- Never label desk flow as “foreign flow” or “broker summary market-wide”  
+- **Session vs month:** `t` = latest session tops · `c` = month calendar of desk buy & sell
 
 ### Plan / Paper / Health
 - Plan geometry triangle · paper tape · health posters (unchanged contracts)

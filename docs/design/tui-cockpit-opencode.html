@@ -6,7 +6,7 @@
  <meta http-equiv="Pragma" content="no-cache" />
  <meta http-equiv="Expires" content="0" />
  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ai-saham · Daily Cockpit · OpenCode rev-20260730w</title>
+  <title>ai-saham · Daily Cockpit · OpenCode rev-20260730y</title>
  <link rel="preconnect" href="https://fonts.googleapis.com" />
  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -1393,6 +1393,84 @@
  .stock-heat.sell .stock-row .n { color: var(--red); }
  .stock-heat.buy .stock-row .n { color: var(--green); }
 
+    
+    .desk-cal {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-panel);
+      padding: 10px 12px 12px;
+    }
+    .desk-cal .cal-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 10px;
+      gap: 10px;
+    }
+    .desk-cal .cal-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .desk-cal .cal-sub {
+      font-size: 11px;
+      color: var(--text-mute);
+    }
+    .desk-cal .dow {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+      margin-bottom: 4px;
+      font-size: 10px;
+      color: var(--text-mute);
+      text-align: center;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .desk-cal .grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+    }
+    .desk-cal .day {
+      min-height: 52px;
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-sm);
+      background: var(--bg-elevated);
+      padding: 4px 5px;
+      font-size: 10.5px;
+      font-variant-numeric: tabular-nums;
+    }
+    .desk-cal .day.empty {
+      background: transparent;
+      border-color: transparent;
+    }
+    .desk-cal .day .dn {
+      color: var(--text-mute);
+      font-size: 10px;
+      margin-bottom: 4px;
+    }
+    .desk-cal .day .net {
+      font-weight: 600;
+      font-size: 11px;
+    }
+    .desk-cal .day .net.pos { color: var(--green); }
+    .desk-cal .day .net.neg { color: var(--red); }
+    .desk-cal .day .bs {
+      margin-top: 2px;
+      font-size: 9.5px;
+      color: var(--text-mute);
+      line-height: 1.3;
+    }
+    .desk-cal .day.is-session {
+      border-color: rgba(201, 166, 138, 0.35);
+    }
+    .desk-cal .legend {
+      margin-top: 8px;
+      font-size: 11px;
+      color: var(--text-mute);
+    }
+
     .broker-jump-list {
       display: flex;
       flex-direction: column;
@@ -1982,7 +2060,7 @@
         <button type="button" data-frame="empty">7 Health</button>
         <button type="button" data-frame="palette">8 Palette</button>
       </div>
-      <span class="rev" id="buildStamp">mock · 30x</span>
+      <span class="rev" id="buildStamp">mock · 30y</span>
     </div>
 
     <!-- Product shell only · OpenCode bible for shipped TUI -->
@@ -2770,18 +2848,19 @@
 
  <div class="broker-hub" id="brokerHub" role="tablist" aria-label="Desk deep">
                 <button type="button" class="is-on" data-deep="top"><kbd>t</kbd> buy/sell</button>
- <button type="button" data-deep="flow"><kbd>f</kbd> flow</button>
- <button type="button" data-deep="hist"><kbd>h</kbd> history</button>
+                <button type="button" data-deep="flow"><kbd>f</kbd> flow</button>
+                <button type="button" data-deep="cal"><kbd>c</kbd> calendar</button>
+                <button type="button" data-deep="hist"><kbd>h</kbd> history</button>
                 <button type="button" data-deep="ticker"><kbd>v</kbd> top buy</button>
               </div>
               <div class="broker-deep is-on" id="brokerDeepTop" data-deep-panel="top">
  <div class="split-buy-sell">
  <div class="stock-heat buy">
- <h3>Top buy · session</h3>
+ <h3>Top buy · latest session</h3>
  <div id="brokerTopBuy"></div>
  </div>
  <div class="stock-heat sell">
- <h3>Top sell · session</h3>
+ <h3>Top sell · latest session</h3>
  <div id="brokerTopSell"></div>
  </div>
  </div>
@@ -2795,6 +2874,24 @@
                   This desk only · broker_daily_flow · not market foreign total · not ticker foreign flow
                 </p>
                 <div id="brokerFlowDays"></div>
+              </div>
+
+ 
+              <div class="broker-deep" id="brokerDeepCal" data-deep-panel="cal">
+                <div class="desk-cal" id="brokerCalendar" aria-label="Desk month calendar">
+                  <div class="cal-head">
+                    <div>
+                      <div class="cal-title">Calendar · <span id="brokerCalCode">YP</span> · Jul 2026</div>
+                      <div class="cal-sub">Desk day net · buy/sell activity · this broker only · ~1 month</div>
+                    </div>
+                    <div class="cal-sub" id="brokerCalSummary">session days · tracked only</div>
+                  </div>
+                  <div class="dow">
+                    <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+                  </div>
+                  <div class="grid" id="brokerCalGrid"></div>
+                  <div class="legend">Green = desk net buy · red = desk net sell · empty = no session / weekend · not market foreign total</div>
+                </div>
               </div>
 
  <div class="broker-deep" id="brokerDeepHist" data-deep-panel="hist">
@@ -2820,12 +2917,12 @@
               </div>
 
               <div class="footer-note">
-                <span><span class="kbd">t</span> buy/sell</span>
+                <span><span class="kbd">t</span> buy/sell · latest</span>
                 <span><span class="kbd">f</span> flow</span>
+                <span><span class="kbd">c</span> calendar · month</span>
                 <span><span class="kbd">h</span> history</span>
                 <span><span class="kbd">v</span> top buy</span>
                 <span><span class="kbd">esc</span> radar</span>
-                <span class="dim">click row → view ticker</span>
               </div>
  </div>
  </div>
@@ -3106,7 +3203,7 @@
  preIndex: 0,
  brokerIndex: 0,
  brokerMode: "radar", // radar | home
- brokerDeep: "top", // top | flow | hist | ticker
+ brokerDeep: "top", // top | flow | cal | hist | ticker
  preopenMode: "board", // board | inspect
       boardSource: "snapshot", // snapshot | live
       judgeLimited: false,
@@ -3510,7 +3607,57 @@
  return `<tr><td class="dim">${d}</td><td><span class="ticker">${t}</span></td><td class="num ${cls}">${net}</td><td class="num dim">${lot}</td></tr>`;
  }).join("") || `<tr><td colspan="4" class="dim">—</td></tr>`;
  }
- }
+ 
+      // Month calendar · desk day nets (sample Jul 2026 · not market foreign)
+      if ($("brokerCalGrid")) {
+        if ($("brokerCalCode")) $("brokerCalCode").textContent = r.code;
+        const monthDays = 31;
+        // Mon-start: Jul 2026 starts Wednesday → pad 2
+        const pad = 2;
+        const sessionNets = {
+          1: [2.1, 4.2, 2.1], 2: [1.4, 3.0, 1.6], 3: [-0.8, 1.1, 1.9],
+          4: [3.2, 5.5, 2.3], 7: [0.6, 2.0, 1.4], 8: [-1.2, 0.9, 2.1],
+          9: [2.8, 4.0, 1.2], 10: [1.1, 2.5, 1.4], 11: [-2.4, 1.0, 3.4],
+          14: [4.0, 6.1, 2.1], 15: [2.2, 3.8, 1.6], 16: [-0.5, 1.5, 2.0],
+          17: [1.8, 3.2, 1.4], 18: [0.9, 2.1, 1.2], 21: [3.5, 5.0, 1.5],
+          22: [-1.8, 0.7, 2.5], 23: [9.8, 12.0, 2.2], 24: [-4.4, 1.2, 5.6],
+          25: [6.1, 8.0, 1.9], 28: [8.2, 10.5, 2.3], 29: [11.5, 14.2, 2.7],
+        };
+        // values: [netB, buyB, sellB]
+        let html = "";
+        for (let i = 0; i < pad; i++) html += `<div class="day empty"></div>`;
+        let sessions = 0;
+        let buySum = 0, sellSum = 0;
+        for (let d = 1; d <= monthDays; d++) {
+          const row = sessionNets[d];
+          if (!row) {
+            html += `<div class="day empty"><div class="dn">${d}</div></div>`;
+            continue;
+          }
+          sessions++;
+          const [net, buy, sell] = row;
+          buySum += buy; sellSum += sell;
+          const cls = net >= 0 ? "pos" : "neg";
+          const sign = net >= 0 ? "+" : "";
+          const isSess = d === 29 ? " is-session" : "";
+          html += `<div class="day${isSess}" title="Desk ${r.code} · ${d} Jul">
+            <div class="dn">${d}</div>
+            <div class="net ${cls}">${sign}${net.toFixed(1)}B</div>
+            <div class="bs">B ${buy.toFixed(1)} · S ${sell.toFixed(1)}</div>
+          </div>`;
+        }
+        // pad end to complete weeks
+        const cells = pad + monthDays;
+        const rem = (7 - (cells % 7)) % 7;
+        for (let i = 0; i < rem; i++) html += `<div class="day empty"></div>`;
+        $("brokerCalGrid").innerHTML = html;
+        if ($("brokerCalSummary")) {
+          $("brokerCalSummary").textContent =
+            `${sessions} sessions · buy ${buySum.toFixed(0)}B · sell ${sellSum.toFixed(0)}B · desk only`;
+        }
+      }
+
+    }
 
  function syncBrokerMode() {
  const radar = $("brokerRadar");
@@ -3727,7 +3874,10 @@
  if (state.brokerMode === "home") {
  const deep = state.brokerDeep === "top" ? "home" : state.brokerDeep;
           const deepLab =
-            deep === "ticker" ? "top buy" : deep === "top" ? "buy/sell" : deep;
+            deep === "ticker" ? "top buy"
+              : deep === "top" ? "buy/sell"
+              : deep === "cal" ? "calendar"
+              : deep;
           $("viewTitle").textContent = `View · broker · ${b.code || "—"} · ${deepLab}`;
           $("viewMeta").innerHTML = `<span class="dot">·</span> day net · t/f/h/v`;
  $("statusScreen").textContent = deep === "home" ? `desk home · ${b.code || "—"}` : `desk ${deep} · ${b.code || "—"}`;
@@ -4159,9 +4309,10 @@
  } else {
  // desk home · hub keys (design: t / f / h / v)
  const k = e.key.toLowerCase();
- if (k === "t") { e.preventDefault(); setBrokerDeep("top"); return; }
- if (k === "f") { e.preventDefault(); setBrokerDeep("flow"); return; }
- if (k === "h") { e.preventDefault(); setBrokerDeep("hist"); return; }
+            if (k === "t") { e.preventDefault(); setBrokerDeep("top"); return; }
+            if (k === "f") { e.preventDefault(); setBrokerDeep("flow"); return; }
+            if (k === "c") { e.preventDefault(); setBrokerDeep("cal"); return; }
+            if (k === "h") { e.preventDefault(); setBrokerDeep("hist"); return; }
  if (k === "v") {
  e.preventDefault();
  const top = (BROKER[state.brokerIndex] || {}).top;
