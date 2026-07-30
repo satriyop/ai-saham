@@ -29,6 +29,7 @@ research/
     factor_card_risk_gates.py        # Package C — RiskEngine OPEN vs BLOCKED
     factor_card_bandar_gate.py       # Package C1 follow-up — BandarGate FP dig
     factor_card_mce_factors.py       # Package D — MCE / regime
+    probe_trading_economics_commodities.py  # DQ — TE palm/coal scrape probe (no product wiring)
   artifacts/                # generated reports (gitignored except .gitkeep)
 ```
 
