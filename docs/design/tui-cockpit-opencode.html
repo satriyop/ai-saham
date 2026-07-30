@@ -1213,21 +1213,25 @@
 <body>
   <div class="demo-bar">
     <div class="card">
-      <strong>Design mock</strong> · layout B · frame 5 = <em style="color:var(--sel-dim);font-style:normal">Ticker Desk (Harga Mast)</em>
-      <div class="frame-switch" id="frameSwitch" role="tablist" aria-label="Design frames">
+      <strong>Cockpit shell</strong> · layout B · journey-aligned frames (OpenCode chrome · night-ink desks)
+      <div class="frame-switch" id="frameSwitch" role="tablist" aria-label="Journey frames">
         <button type="button" data-frame="accum" class="is-on">1 Accum</button>
-        <button type="button" data-frame="preopen">2 Pre-open</button>
-        <button type="button" data-frame="plan">3 Plan confirm</button>
-        <button type="button" data-frame="empty">4 Empty cache</button>
-        <button type="button" data-frame="detail">5 Ticker desk</button>
-        <button type="button" data-frame="palette">6 Palette</button>
+        <button type="button" data-frame="judge">2 Judge</button>
+        <button type="button" data-frame="plan">3 Plan</button>
+        <button type="button" data-frame="paper">4 Paper</button>
+        <button type="button" data-frame="preopen">5 Pre-open</button>
+        <button type="button" data-frame="detail">6 Ticker</button>
+        <button type="button" data-frame="empty">7 Health</button>
+        <button type="button" data-frame="palette">8 Palette</button>
       </div>
       <div class="demo-hint">
-        Live keys: <code>Ctrl+P</code> <code>↑↓</code> <code>Enter</code> <code>p</code> <code>Esc</code> · frames <code>1–6</code>
-        · desks:
-        <a href="./tui-ticker-desk.html" style="color:var(--sel-dim)">ticker</a>
-        ·
-        <a href="./tui-broker-desk.html" style="color:var(--sel-dim)">broker</a>
+        Action path: board <code>Enter</code>=Judge · <code>p</code>=Plan · <code>l</code>=Paper · Browse: <code>v t</code> ticker · <code>v b</code> broker
+        · Full mocks:
+        <a href="./tui-journey-hub.html" style="color:var(--sel-dim)">hub</a>
+        · <a href="./tui-judge-desk.html" style="color:var(--sel-dim)">judge</a>
+        · <a href="./tui-plan-desk.html" style="color:var(--sel-dim)">plan</a>
+        · <a href="./tui-ticker-desk.html" style="color:var(--sel-dim)">ticker</a>
+        · <a href="./tui-session-health.html" style="color:var(--sel-dim)">health</a>
       </div>
     </div>
   </div>
@@ -1273,14 +1277,121 @@
             </table>
             <div class="footer-note">
               <span><span class="kbd">↑↓</span> move</span>
-              <span><span class="kbd">Enter</span> judge</span>
-              <span><span class="kbd">p</span> plan swing</span>
+              <span><span class="kbd">Enter</span> judge (present-only)</span>
+              <span><span class="kbd">p</span> plan structure</span>
+              <span><span class="kbd">v t</span> ticker desk</span>
               <span><span class="kbd">Ctrl+P</span> commands</span>
-              <span class="dim">Cols = BOARD_COLUMN_LABELS · ranked by Signal.</span>
+              <span class="dim">Signal radar · not Accum-sort · chips on Action/Gate</span>
             </div>
           </div>
 
-          <!-- 2 PRE-OPEN (denser auction board) -->
+          <!-- 2 JUDGE · Verdict mast (frame) · full vision tui-judge-desk.html -->
+          <div class="list-view is-hidden" id="judgeView">
+            <div class="desk-note">
+              Action path · present-only board object ·
+              <a href="./tui-judge-desk.html">tui-judge-desk.html</a>
+              · not a re-score · not ticker desk
+            </div>
+            <div class="section-label">Judgment · verdict mast</div>
+            <div class="card" style="border-left:3px solid var(--amber);margin-bottom:10px">
+              <div style="font-size:11px;color:var(--text-mute);letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px">Action is the landscape · Gate is the seal</div>
+              <div style="display:flex;flex-wrap:wrap;gap:12px 20px;align-items:baseline">
+                <span style="font-size:2rem;font-weight:600;color:var(--amber)" id="judgeAction">WATCH</span>
+                <span class="badge pass" id="judgeGate">Gate OPEN</span>
+              </div>
+              <div class="kv" style="margin-top:12px">
+                <span class="k">Signal</span><span class="v" id="judgeSignal">84</span>
+                <span class="k">Accum</span><span class="v" id="judgeAccum">48.2</span>
+                <span class="k">Phase</span><span class="v" id="judgePhase">COMPRESS</span>
+                <span class="k">Authority</span><span class="v">present-only</span>
+              </div>
+              <p style="margin-top:10px;color:var(--text-dim);font-size:12.5px" id="judgeWhy">
+                Why WATCH — signal moderate · risk clear · not promoted to ENTER without stronger entry quality.
+              </p>
+            </div>
+            <div class="card" style="margin-bottom:10px">
+              <div class="section-label">Phase sequence · ledger (ADR-058)</div>
+              <div style="font-family:var(--font-mono);font-size:12px;color:var(--text)">
+                ACCUMULATION → COMPRESSION → <span style="color:var(--amber)">COMPRESSION</span>
+              </div>
+              <div style="margin-top:6px;font-size:11px;color:var(--text-mute)">production memory · not a re-score</div>
+            </div>
+            <div class="card">
+              <div class="section-label">Cards · compact (Risk · TradeSetup · Accum · Data…)</div>
+              <div class="kv">
+                <span class="k">Risk</span><span class="v pos">OPEN · chips not essays</span>
+                <span class="k">TradeSetup</span><span class="v">WATCH · inherits board</span>
+                <span class="k">Data</span><span class="v">ALIGNED · candle/broker</span>
+              </div>
+            </div>
+            <div class="footer-note">
+              <span><span class="kbd">j</span> re-judge local</span>
+              <span><span class="kbd">p</span> plan</span>
+              <span><span class="kbd">esc</span> board</span>
+              <span class="dim">no order · same board candidate</span>
+            </div>
+          </div>
+
+          <!-- 3 PLAN · Geometry mast · tui-plan-desk.html -->
+          <div class="list-view is-hidden" id="planView">
+            <div class="desk-note">
+              Structure desk · inherits Action ·
+              <a href="./tui-plan-desk.html">tui-plan-desk.html</a>
+              · no broker order · not a second analysis
+            </div>
+            <div class="section-label">Plan · structure · geometry mast</div>
+            <div class="card" style="margin-bottom:10px">
+              <div style="display:flex;gap:12px;align-items:center;margin-bottom:10px">
+                <span style="font-size:1.25rem;font-weight:600;color:var(--amber)" id="planInherit">WATCH</span>
+                <span class="dim">inherited from screen judgment · does not re-score Action</span>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;text-align:center;font-family:var(--font-mono)">
+                <div><div class="dim" style="font-size:10px">ENTRY</div><div style="font-size:1.4rem;color:var(--amber)" id="planEntry">6,225</div></div>
+                <div><div class="dim" style="font-size:10px">STOP</div><div style="font-size:1.4rem;color:var(--red)" id="planStop">5,900</div></div>
+                <div><div class="dim" style="font-size:10px">TARGET</div><div style="font-size:1.4rem;color:var(--green)" id="planTarget">6,800</div></div>
+              </div>
+              <div class="kv" style="margin-top:12px">
+                <span class="k">Lots</span><span class="v">3</span>
+                <span class="k">Risk %</span><span class="v">1.0</span>
+                <span class="k">Plan id</span><span class="v">3f88eda7</span>
+                <span class="k">Horizon</span><span class="v">swing</span>
+              </div>
+              <div class="desk-note" style="margin:12px 0 0">No broker order. Geometry freezes for paper journal · CLI: trade accum log --from-plan</div>
+            </div>
+            <div class="footer-note">
+              <span><span class="kbd">l</span> paper log confirm</span>
+              <span><span class="kbd">p</span> re-run structure</span>
+              <span><span class="kbd">esc</span> board</span>
+            </div>
+          </div>
+
+          <!-- 4 PAPER · notebook tape · tui-paper-journal.html -->
+          <div class="list-view is-hidden" id="paperView">
+            <div class="desk-note">
+              Optional notebook · from plan geometry only ·
+              <a href="./tui-paper-journal.html">tui-paper-journal.html</a>
+              · not learning corpus · not Action
+            </div>
+            <div class="section-label">Paper tape · confirm / outcome</div>
+            <div class="card" style="border-left:3px solid var(--amber)">
+              <div style="color:var(--amber);font-size:11px;letter-spacing:.1em;margin-bottom:8px">NOTEBOOK · PAPER ONLY</div>
+              <div style="font-size:1.1rem;margin-bottom:8px">Log paper · <strong id="paperTicker">BBCA</strong></div>
+              <div class="kv">
+                <span class="k">Entry</span><span class="v">6,225</span>
+                <span class="k">Stop</span><span class="v">5,900</span>
+                <span class="k">Target</span><span class="v">6,800</span>
+                <span class="k">Lots</span><span class="v">3</span>
+              </div>
+              <p style="margin-top:10px;color:var(--amber);font-size:12px">Paper only · no broker order · uses swing_trade_plan</p>
+            </div>
+            <div class="footer-note">
+              <span><span class="kbd">↵</span> log paper</span>
+              <span><span class="kbd">esc</span> cancel</span>
+              <span class="dim">never auto-write</span>
+            </div>
+          </div>
+
+          <!-- 5 PRE-OPEN (denser auction board) -->
           <div class="preopen-view is-hidden" id="preopenView">
             <div class="auction-strip" id="auctionStrip">
               <div class="stat">
@@ -1331,22 +1442,28 @@
 
             <div class="footer-note">
               <span><span class="kbd">↑↓</span> move</span>
-              <span><span class="kbd">Enter</span> view</span>
-              <span><span class="kbd">a</span> assess</span>
+              <span><span class="kbd">Enter</span> auction inspect (≠ accum Judge)</span>
               <span><span class="kbd">p</span> plan</span>
-              <span class="dim">Dense on purpose — auction window is short.</span>
+              <span><span class="kbd">s a</span> accum</span>
+              <span class="dim">Cols 1:1 TUI · Tkr IEP Δ% IEV NCP ΔIEV Grd Risk</span>
             </div>
           </div>
 
-          <!-- 4 EMPTY CACHE -->
+          <!-- 7 HEALTH posters · tui-session-health.html -->
           <div class="empty-view is-hidden" id="emptyView">
-            <div class="empty">
+            <div class="section-label">Session health · three posters (not one dull empty)</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px" id="healthTabs">
+              <button type="button" class="ghost-btn primary" data-health="empty">Empty cache</button>
+              <button type="button" class="ghost-btn" data-health="zero">Zero candidates</button>
+              <button type="button" class="ghost-btn" data-health="lag">Lag</button>
+              <button type="button" class="ghost-btn" data-health="ready">Ready (no board)</button>
+            </div>
+            <div class="empty" id="healthPoster">
               <div class="icon" aria-hidden="true">⌀</div>
-              <h2>No local market data</h2>
-              <p>
-                Cockpit is local-first. Nothing is on disk for
-                <strong style="color:var(--text-dim);font-weight:500">as_of 2026-07-25</strong>,
-                so screens cannot run yet. Online is available — only if you ask.
+              <h2 id="healthTitle">No local market data</h2>
+              <p id="healthBody">
+                Cockpit is local-first. Nothing on disk. Screens refuse to invent candidates.
+                Online only if you ask.
               </p>
               <div class="actions">
                 <button class="ghost-btn primary" type="button" id="btnFetchEmpty">Fetch market data</button>
@@ -1357,19 +1474,21 @@
                 <ul>
                   <li>No silent network on open</li>
                   <li>Fetch is an explicit command, same as CLI</li>
-                  <li>Stale cache will warn — empty cache refuses to invent rows</li>
+                  <li>Empty / lag / ready / zero are distinct posters</li>
                 </ul>
               </div>
             </div>
+            <div class="footer-note">
+              <span class="dim">Full posters: <a href="./tui-session-health.html" style="color:var(--sel-dim)">tui-session-health.html</a></span>
+            </div>
           </div>
 
-          <!-- 5 TICKER DESK · Harga Mast (cache dashboard — not Action judge) -->
+          <!-- 6 TICKER DESK · Harga Mast · data contract tui-ticker-desk.html -->
           <div class="detail desk-v2" id="detailView">
             <div class="desk-note">
-              Design target for View · ticker (not CLI dump).
-              Full vision:
+              Browse path · <strong style="color:var(--text)">not Action</strong> ·
               <a href="./tui-ticker-desk.html">tui-ticker-desk.html</a>
-              · same facts as <code>view ticker show</code> · no re-score
+              · GetTickerDashboardUseCase · missing fields show — · Judge = board Enter
             </div>
 
             <div class="desk-id">
@@ -1450,9 +1569,10 @@
               <button class="ghost-btn primary" type="button" data-action="plan">p plan</button>
             </div>
             <div class="footer-note">
-              <span><span class="kbd">f</span> expand all panels</span>
-              <span>CLI deep-dives stay CLI</span>
-              <span>not Action · not order</span>
+              <span><span class="kbd">b</span> top desks</span>
+              <span><span class="kbd">p</span> plan structure</span>
+              <span><span class="kbd">esc</span> board</span>
+              <span>CLI keeps full panels · desk = hierarchy · not Action</span>
             </div>
           </div>
         </div>
@@ -1463,19 +1583,19 @@
           <h4>Session</h4>
           <div class="side-kv">
             <div class="row"><span class="k">Market</span><span class="v">IDX</span></div>
-            <div class="row"><span class="k">as_of</span><span class="v">2026-07-25</span></div>
+            <div class="row"><span class="k">as_of</span><span class="v">2026-07-29</span></div>
             <div class="row"><span class="k">Mode</span><span class="v" id="sideMode">local-first</span></div>
-            <div class="row"><span class="k">Cache</span><span class="v" id="sideCache">fresh · 2h</span></div>
+            <div class="row"><span class="k">Cache</span><span class="v" id="sideCache">ready</span></div>
           </div>
         </div>
 
         <div class="side-block">
           <h4>Today</h4>
           <div class="side-kv" id="sideToday">
-            <div class="row"><span class="k">Pre-open</span><span class="v">12 pass</span></div>
-            <div class="row"><span class="k">Accum</span><span class="v">48 pass</span></div>
-            <div class="row"><span class="k">Planned</span><span class="v">3</span></div>
-            <div class="row"><span class="k">Blocked</span><span class="v">1</span></div>
+            <div class="row"><span class="k">Pre-open</span><span class="v">12 graded</span></div>
+            <div class="row"><span class="k">Accum</span><span class="v">12 names</span></div>
+            <div class="row"><span class="k">ENTER/WATCH</span><span class="v">triage</span></div>
+            <div class="row"><span class="k">Paper</span><span class="v">optional</span></div>
           </div>
         </div>
 
@@ -1483,20 +1603,23 @@
           <h4>Focus</h4>
           <p class="line" id="sideFocus">
             <strong>BBRI</strong> selected<br />
-            Enter → view · p → plan
+            Enter → Judge · p → Plan · v t → ticker
           </p>
         </div>
 
         <div class="side-block">
-          <h4>Keys</h4>
+          <h4>Keys · journey</h4>
           <div class="side-help">
             <div class="row"><span>Commands</span><span class="key">ctrl+p</span></div>
-            <div class="row"><span>View ticker</span><span class="key">enter</span></div>
-            <div class="row"><span>Plan swing</span><span class="key">p</span></div>
-            <div class="row"><span>Back / cancel</span><span class="key">esc</span></div>
+            <div class="row"><span>Judge (accum)</span><span class="key">enter</span></div>
+            <div class="row"><span>Re-judge</span><span class="key">j</span></div>
+            <div class="row"><span>Plan structure</span><span class="key">p</span></div>
+            <div class="row"><span>Paper log</span><span class="key">l</span></div>
+            <div class="row"><span>View ticker</span><span class="key">v t</span></div>
+            <div class="row"><span>View broker</span><span class="key">v b</span></div>
             <div class="row"><span>Screen accum</span><span class="key">s a</span></div>
             <div class="row"><span>Screen pre-open</span><span class="key">s p</span></div>
-            <div class="row"><span>Hide sidebar</span><span class="key">ctrl+b</span></div>
+            <div class="row"><span>Back</span><span class="key">esc</span></div>
           </div>
         </div>
 
@@ -1553,36 +1676,36 @@
       </div>
     </div>
 
-    <!-- PLAN CONFIRM (deliberate) -->
+    <!-- PAPER CONFIRM (deliberate · geometry only) — not “plan confirm as analysis” -->
     <div class="overlay center" id="confirmOverlay" aria-hidden="true">
-      <div class="confirm" role="dialog" aria-modal="true" aria-label="Plan swing" id="confirmDialog">
+      <div class="confirm" role="dialog" aria-modal="true" aria-label="Paper log" id="confirmDialog">
         <div class="confirm-head">
-          <span class="title">Plan swing</span>
+          <span class="title">Paper log · notebook</span>
           <span class="esc">esc cancel</span>
         </div>
         <div class="confirm-body">
-          <div class="lead" id="confirmLead">Plan BBRI · swing</div>
-          <div class="sub">Deliberate action — Enter on a row only views. This writes a plan artifact.</div>
+          <div class="lead" id="confirmLead">Paper · BBCA</div>
+          <div class="sub">From plan geometry only · Enter on board is Judge, not paper. No auto-write.</div>
           <div class="facts">
-            <div class="fact"><span class="k">Ticker</span><span class="v" id="cfTicker">BBRI</span></div>
-            <div class="fact"><span class="k">Profile</span><span class="v">swing</span></div>
-            <div class="fact"><span class="k">Setup</span><span class="v" id="cfSetup">WATCH · risk clear</span></div>
-            <div class="fact"><span class="k">as_of</span><span class="v">2026-07-25</span></div>
-            <div class="fact"><span class="k">Source</span><span class="v" id="cfSource">screen accum · local</span></div>
-            <div class="fact"><span class="k">Horizon</span><span class="v">5–15 sessions</span></div>
+            <div class="fact"><span class="k">Ticker</span><span class="v" id="cfTicker">BBCA</span></div>
+            <div class="fact"><span class="k">Entry</span><span class="v" id="cfSetup">6,225</span></div>
+            <div class="fact"><span class="k">Stop / Target</span><span class="v">5,900 / 6,800</span></div>
+            <div class="fact"><span class="k">Lots</span><span class="v">3</span></div>
+            <div class="fact"><span class="k">Source</span><span class="v" id="cfSource">plan structure · local</span></div>
+            <div class="fact"><span class="k">Authority</span><span class="v">paper only · not learning</span></div>
           </div>
           <div class="warn" id="confirmWarn">
-            No broker order. Plan records intent + setup snapshot for audit. You can discard later from Lab.
+            No broker order. Uses saved swing_trade_plan (CLI --from-plan). Not Action authority.
           </div>
         </div>
         <div class="confirm-foot">
           <div class="hints">
-            <span><kbd>↵</kbd> confirm</span>
+            <span><kbd>↵</kbd> log paper</span>
             <span><kbd>esc</kbd> cancel</span>
           </div>
           <div class="confirm-actions">
             <button class="ghost-btn" type="button" id="btnConfirmCancel">Cancel</button>
-            <button class="ghost-btn primary" type="button" id="btnConfirmOk">Confirm plan</button>
+            <button class="ghost-btn primary" type="button" id="btnConfirmOk">Log paper</button>
           </div>
         </div>
       </div>
@@ -1625,23 +1748,24 @@
     ];
 
     const COMMANDS = [
-      { section: "Suggested", name: "Screen accumulation", desc: "Daily accum candidates from local cache", shortcut: "s a", action: "screen-accum" },
-      { section: "Suggested", name: "Screen pre-open", desc: "IEP / pre-open dense board", shortcut: "s p", action: "screen-preopen" },
-      { section: "Suggested", name: "Plan swing", desc: "Deliberate setup plan — confirm required", shortcut: "p", action: "plan-swing" },
-      { section: "Daily", name: "Assess pre-open", desc: "Grade auction / pre-open evidence", shortcut: "a", action: "assess-preopen" },
-      { section: "Daily", name: "Inspect signal", desc: "Signal + evidence for focus ticker", shortcut: "enter", action: "inspect" },
-      { section: "Daily", name: "View ticker", desc: "Open focused row (Enter)", shortcut: "enter", action: "view" },
+      { section: "Suggested", name: "Screen accumulation", desc: "Signal radar board · Action path start", shortcut: "s a", action: "screen-accum" },
+      { section: "Suggested", name: "Screen pre-open", desc: "IEV auction board · not accum Judge", shortcut: "s p", action: "screen-preopen" },
+      { section: "Suggested", name: "Plan structure", desc: "Geometry mast · inherits Action · no order", shortcut: "p", action: "plan-swing" },
+      { section: "Daily", name: "Judge focus", desc: "Present-only Verdict mast (board Enter)", shortcut: "enter", action: "judge" },
+      { section: "Daily", name: "View ticker", desc: "Harga mast · cache dashboard · not Action", shortcut: "v t", action: "view" },
+      { section: "Daily", name: "View broker", desc: "Desk radar · Net mast", shortcut: "v b", action: "broker" },
+      { section: "Daily", name: "Paper log", desc: "Notebook from plan geometry · confirm", shortcut: "l", action: "paper" },
       { section: "Lab", name: "Backtest screen accum", desc: "Historical screen-filter audit", shortcut: "", action: "bt-accum" },
       { section: "Lab", name: "Backtest portfolio swing", desc: "Policy portfolio simulation", shortcut: "", action: "bt-swing" },
       { section: "Data", name: "Fetch market data", desc: "Online · explicit · leaves local-first", shortcut: "", action: "fetch" },
-      { section: "Data", name: "Show empty cache state", desc: "Demo · no local data", shortcut: "", action: "empty" },
+      { section: "Data", name: "Session health posters", desc: "Empty / zero / lag / ready", shortcut: "", action: "empty" },
       { section: "Data", name: "Refresh cache status", desc: "Recompute freshness only", shortcut: "", action: "cache" },
       { section: "Session", name: "Hide sidebar", desc: "Toggle context rail", shortcut: "ctrl+b", action: "toggle-sidebar" },
       { section: "Session", name: "Switch as_of date", desc: "Pinned analysis date", shortcut: "", action: "asof" },
     ];
 
     const state = {
-      frame: "accum", // accum | preopen | empty | detail
+      frame: "accum", // accum | judge | plan | paper | preopen | empty | detail
       rowIndex: 0,
       preIndex: 0,
       paletteOpen: false,
@@ -1651,6 +1775,7 @@
       sidebarHidden: false,
       cacheEmpty: false,
       online: false,
+      health: "empty",
     };
 
     const $ = (id) => document.getElementById(id);
@@ -1694,7 +1819,7 @@
           renderAccum();
           updateChrome();
         });
-        tr.addEventListener("dblclick", () => showFrame("detail"));
+        tr.addEventListener("dblclick", () => showFrame("judge"));
       });
     }
 
@@ -1722,9 +1847,56 @@
           updatePreopenEvidence();
           updateChrome();
         });
-        tr.addEventListener("dblclick", () => showFrame("detail"));
+        tr.addEventListener("dblclick", () => toast("Pre-open inspect · not accum Judge"));
       });
       updatePreopenEvidence();
+    }
+
+    function paintJudgeFromFocus() {
+      const f = focusTicker();
+      if (!f || !f.action) return;
+      const el = (id) => $(id);
+      if (el("judgeAction")) el("judgeAction").textContent = f.action || "—";
+      if (el("judgeGate")) el("judgeGate").textContent = `Gate ${f.gate || "—"}`;
+      if (el("judgeSignal")) el("judgeSignal").textContent = String(f.signal ?? "—");
+      if (el("judgeAccum")) el("judgeAccum").textContent = String(f.accum ?? "—");
+      if (el("judgePhase")) el("judgePhase").textContent = f.phase || "—";
+      if (el("planInherit")) el("planInherit").textContent = f.action || "—";
+      if (el("paperTicker")) el("paperTicker").textContent = f.t || "—";
+    }
+
+    const HEALTH = {
+      empty: {
+        title: "No local market data",
+        body: "Nothing on disk for this session. Screens refuse to invent candidates. Online only if you ask.",
+        cache: "empty",
+      },
+      zero: {
+        title: "No accumulation candidates",
+        body: "Screen ran against local data and returned 0 names. That is a real result — not missing market data.",
+        cache: "ready · 0 names",
+      },
+      lag: {
+        title: "Local cache lagging",
+        body: "Candle and broker dates disagree or trail the session. Fetch only if deliberate.",
+        cache: "LAG",
+      },
+      ready: {
+        title: "Local cache ready",
+        body: "Dates present and aligned. This empty stage means no board is open — not that SQLite is empty. Fetch stays explicit.",
+        cache: "ready",
+      },
+    };
+
+    function setHealthPoster(kind) {
+      state.health = kind in HEALTH ? kind : "empty";
+      const h = HEALTH[state.health];
+      $("healthTitle").textContent = h.title;
+      $("healthBody").textContent = h.body;
+      $("sideCache").textContent = h.cache;
+      document.querySelectorAll("#healthTabs button").forEach((b) => {
+        b.classList.toggle("primary", b.dataset.health === state.health);
+      });
     }
 
     function updatePreopenEvidence() {
@@ -1743,18 +1915,19 @@
     }
 
     function hideAllViews() {
-      ["accumView", "preopenView", "emptyView", "detailView"].forEach((id) => {
+      ["accumView", "judgeView", "planView", "paperView", "preopenView", "emptyView", "detailView"].forEach((id) => {
         const el = $(id);
+        if (!el) return;
         el.classList.add("is-hidden");
         el.classList.remove("is-open");
       });
-      // detail uses is-open
-      $("detailView").classList.remove("is-open");
-      $("detailView").style.display = "none";
+      if ($("detailView")) {
+        $("detailView").classList.remove("is-open");
+        $("detailView").style.display = "none";
+      }
     }
 
     function showFrame(frame, opts = {}) {
-      // close overlays unless requested
       if (!opts.keepPalette) closePalette();
       if (!opts.keepConfirm) closeConfirm();
 
@@ -1762,49 +1935,42 @@
       state.cacheEmpty = frame === "empty";
       hideAllViews();
 
-      document.querySelectorAll("#frameSwitch button").forEach((b) => {
-        b.classList.toggle("is-on", b.dataset.frame === frame || (frame === "accum" && b.dataset.frame === "accum"));
-      });
-      // palette / plan are overlays on top of a base
       if (frame === "palette") {
         showFrame("accum", { keepPalette: true });
         openPalette();
-        document.querySelectorAll("#frameSwitch button").forEach((b) => {
-          b.classList.toggle("is-on", b.dataset.frame === "palette");
-        });
-        return;
-      }
-      if (frame === "plan") {
-        // plan confirm sits over accum
-        $("accumView").classList.remove("is-hidden");
-        state.frame = "accum";
-        updateChrome();
-        openConfirm();
-        document.querySelectorAll("#frameSwitch button").forEach((b) => {
-          b.classList.toggle("is-on", b.dataset.frame === "plan");
-        });
+        syncFrameButtons("palette");
         return;
       }
 
+      paintJudgeFromFocus();
+
       if (frame === "accum") {
         $("accumView").classList.remove("is-hidden");
+        setModeLocal();
+      } else if (frame === "judge") {
+        $("judgeView").classList.remove("is-hidden");
+        setModeLocal();
+      } else if (frame === "plan") {
+        $("planView").classList.remove("is-hidden");
+        setModeLocal();
+      } else if (frame === "paper") {
+        $("paperView").classList.remove("is-hidden");
         setModeLocal();
       } else if (frame === "preopen") {
         $("preopenView").classList.remove("is-hidden");
         setModeLocal();
       } else if (frame === "empty") {
         $("emptyView").classList.remove("is-hidden");
+        setHealthPoster(state.health || "empty");
         setModeEmpty();
       } else if (frame === "detail") {
+        // Harga mast — browse path, never overwrite with Action judgment
         $("detailView").classList.add("is-open");
         $("detailView").style.display = "block";
         const f = focusTicker();
         const t = f.t;
-        const sub = f.action
-          ? `${f.action} · Signal ${f.signal} · Gate ${f.gate}`
-          : `grade ${f.grade || "—"} · IEP ${(f.iep || 0).toLocaleString("en-US")}`;
         $("detailTicker").textContent = t;
-        $("detailSub").textContent = `${sub} · present-only`;
+        // Keep identity chips in HTML; only update ticker mark
         setModeLocal();
       }
 
@@ -1863,31 +2029,50 @@
 
       if (state.frame === "accum") {
         $("viewTitle").textContent = "Screen · accumulation";
-        $("viewMeta").innerHTML = `<span class="dot">·</span> as of 2026-07-25 · local cache · ${ACCUM.length} names`;
+        $("viewMeta").innerHTML = `<span class="dot">·</span> sort Signal · local · ${ACCUM.length} names · Enter = Judge`;
         $("statusScreen").textContent = "screen accum";
         $("statusRows").textContent = `${ACCUM.length} rows`;
+      } else if (state.frame === "judge") {
+        $("viewTitle").textContent = `Judge · ${t}`;
+        $("viewMeta").innerHTML = `<span class="dot">·</span> present-only · Verdict mast · not re-score`;
+        $("statusScreen").textContent = "judge";
+        $("statusRows").textContent = t;
+      } else if (state.frame === "plan") {
+        $("viewTitle").textContent = `Plan · ${t} · structure`;
+        $("viewMeta").innerHTML = `<span class="dot">·</span> geometry mast · inherits Action · no order`;
+        $("statusScreen").textContent = "plan structure";
+        $("statusRows").textContent = t;
+      } else if (state.frame === "paper") {
+        $("viewTitle").textContent = `Paper · ${t}`;
+        $("viewMeta").innerHTML = `<span class="dot">·</span> notebook · from plan geometry · not learning`;
+        $("statusScreen").textContent = "paper";
+        $("statusRows").textContent = t;
       } else if (state.frame === "preopen") {
         $("viewTitle").textContent = "Screen · pre-open";
-        $("viewMeta").innerHTML = `<span class="dot">·</span> IEP auction · 08:54 · dense board`;
+        $("viewMeta").innerHTML = `<span class="dot">·</span> IEV snapshot · auction · ≠ accum Judge`;
         $("statusScreen").textContent = "screen pre-open";
         $("statusRows").textContent = `${PREOPEN.length} graded`;
       } else if (state.frame === "empty") {
-        $("viewTitle").textContent = "Screen · —";
-        $("viewMeta").innerHTML = `<span class="dot">·</span> waiting on local data`;
-        $("statusScreen").textContent = "no data";
+        $("viewTitle").textContent = "Session · health";
+        $("viewMeta").innerHTML = `<span class="dot">·</span> poster · ${state.health || "empty"}`;
+        $("statusScreen").textContent = "health";
         $("statusRows").textContent = "0 rows";
       } else if (state.frame === "detail") {
-        $("viewTitle").textContent = `View · ${t}`;
-        $("viewMeta").innerHTML = `<span class="dot">·</span> inspect surface · Enter was view, not plan`;
-        $("statusScreen").textContent = "view";
+        $("viewTitle").textContent = `View · ticker desk · ${t}`;
+        $("viewMeta").innerHTML = `<span class="dot">·</span> Harga mast · cache · not Action`;
+        $("statusScreen").textContent = "view ticker";
         $("statusRows").textContent = t;
       }
 
       $("statusFocus").textContent = state.frame === "empty" ? "—" : t;
       if (state.frame === "empty") {
         $("sideFocus").innerHTML = `<strong>none</strong><br />fetch first · ctrl+p`;
+      } else if (state.frame === "detail") {
+        $("sideFocus").innerHTML = `<strong>${t}</strong><br />browse · not Action · b desks · p plan`;
+      } else if (state.frame === "judge") {
+        $("sideFocus").innerHTML = `<strong>${t}</strong><br />j re-judge · p plan · esc board`;
       } else {
-        $("sideFocus").innerHTML = `<strong>${t}</strong> selected<br />Enter → view · p → plan`;
+        $("sideFocus").innerHTML = `<strong>${t}</strong> selected<br />Enter → Judge · p → Plan · v t → ticker`;
       }
     }
 
@@ -1957,21 +2142,20 @@
     /* plan confirm */
     function openConfirm() {
       if (state.frame === "empty" || state.cacheEmpty) {
-        toast("Nothing to plan — fetch data first");
+        toast("Nothing to paper-log — fetch / plan first");
         return;
       }
       const f = focusTicker();
       const t = f.t;
-      const status = f.action || f.risk || "WATCH";
-      $("confirmLead").textContent = `Plan ${t} · swing`;
+      $("confirmLead").textContent = `Paper · ${t}`;
       $("cfTicker").textContent = t;
-      $("cfSetup").textContent = `${String(status).toUpperCase()} · gate ${f.gate || f.risk || "—"}`;
-      $("cfSource").textContent = state.frame === "preopen" ? "screen pre-open · local" : "screen accum · local";
+      $("cfSetup").textContent = "6,225";
+      $("cfSource").textContent = "plan structure · local";
       state.confirmOpen = true;
       closePalette();
       $("confirmOverlay").classList.add("is-open");
       $("confirmOverlay").setAttribute("aria-hidden", "false");
-      syncFrameButtons("plan");
+      // Paper confirm is overlay; journey frame stays paper/plan
     }
 
     function closeConfirm(silent) {
@@ -1984,8 +2168,8 @@
     function confirmPlan() {
       const t = focusTicker().t;
       closeConfirm();
-      toast(`Plan swing recorded · ${t}`);
-      syncFrameButtons(state.frame);
+      toast(`Paper tape · logged · ${t} · no order`);
+      showFrame("paper");
     }
 
     function runCommand(cmd) {
@@ -1994,24 +2178,33 @@
       switch (cmd.action) {
         case "screen-accum":
           showFrame("accum");
-          toast("Screen · accumulation");
+          toast("Screen · accumulation · Signal radar");
           break;
         case "screen-preopen":
           showFrame("preopen");
-          toast("Screen · pre-open");
+          toast("Screen · pre-open · auction");
+          break;
+        case "judge":
+          if (state.cacheEmpty) { toast("No data · fetch first"); break; }
+          showFrame("judge");
+          toast(`Judge · ${focusTicker().t} · present-only`);
           break;
         case "view":
-        case "inspect":
           if (state.cacheEmpty) { toast("No data · fetch first"); break; }
           showFrame("detail");
-          toast(`${cmd.name} · ${focusTicker().t}`);
+          toast(`Ticker desk · ${focusTicker().t} · not Action`);
+          break;
+        case "broker":
+          toast("Broker desk · see tui-broker-desk.html");
           break;
         case "plan-swing":
-          openConfirm();
+          if (state.cacheEmpty) { toast("Nothing to plan"); break; }
+          showFrame("plan");
+          toast(`Plan structure · ${focusTicker().t}`);
           break;
-        case "assess-preopen":
-          showFrame("preopen");
-          toast(`Assess pre-open · ${PREOPEN[state.preIndex].t}`);
+        case "paper":
+          showFrame("paper");
+          openConfirm();
           break;
         case "fetch":
           setModeOnline();
@@ -2020,7 +2213,7 @@
           break;
         case "empty":
           showFrame("empty");
-          toast("Empty cache state");
+          toast("Session health posters");
           break;
         case "toggle-sidebar":
           state.sidebarHidden = !state.sidebarHidden;
@@ -2046,9 +2239,18 @@
     }
 
     document.addEventListener("keydown", (e) => {
-      // design frame hotkeys 1-6 when not typing
+      // journey frame hotkeys 1–8
       if (!isTypingTarget(e.target) && !state.paletteOpen && !state.confirmOpen && !e.ctrlKey && !e.metaKey) {
-        const map = { "1": "accum", "2": "preopen", "3": "plan", "4": "empty", "5": "detail", "6": "palette" };
+        const map = {
+          "1": "accum",
+          "2": "judge",
+          "3": "plan",
+          "4": "paper",
+          "5": "preopen",
+          "6": "detail",
+          "7": "empty",
+          "8": "palette",
+        };
         if (map[e.key]) {
           e.preventDefault();
           showFrame(map[e.key]);
@@ -2101,7 +2303,7 @@
       if (isTypingTarget(e.target)) return;
 
       if (e.key === "Escape") {
-        if (state.frame === "detail") {
+        if (["detail", "judge", "plan", "paper"].includes(state.frame)) {
           e.preventDefault();
           showFrame(state.cacheEmpty ? "empty" : "accum");
         }
@@ -2119,8 +2321,19 @@
           state.rowIndex = Math.max(0, state.rowIndex - 1);
           renderAccum(); updateChrome(); return;
         }
-        if (e.key === "Enter") { e.preventDefault(); showFrame("detail"); return; }
-        if (e.key.toLowerCase() === "p") { e.preventDefault(); openConfirm(); return; }
+        if (e.key === "Enter") { e.preventDefault(); showFrame("judge"); return; }
+        if (e.key.toLowerCase() === "p") { e.preventDefault(); showFrame("plan"); return; }
+        if (e.key === "v") { e.preventDefault(); showFrame("detail"); return; }
+      }
+
+      if (state.frame === "judge") {
+        if (e.key.toLowerCase() === "p") { e.preventDefault(); showFrame("plan"); return; }
+        if (e.key.toLowerCase() === "j") { e.preventDefault(); toast("Re-judge local · present-only"); return; }
+      }
+
+      if (state.frame === "plan") {
+        if (e.key.toLowerCase() === "l") { e.preventDefault(); showFrame("paper"); openConfirm(); return; }
+        if (e.key.toLowerCase() === "p") { e.preventDefault(); toast("Re-run structure"); return; }
       }
 
       if (state.frame === "preopen") {
@@ -2134,13 +2347,12 @@
           state.preIndex = Math.max(0, state.preIndex - 1);
           renderPreopen(); updateChrome(); return;
         }
-        if (e.key === "Enter") { e.preventDefault(); showFrame("detail"); return; }
-        if (e.key.toLowerCase() === "p") { e.preventDefault(); openConfirm(); return; }
-        if (e.key.toLowerCase() === "a") {
+        if (e.key === "Enter") {
           e.preventDefault();
-          toast(`Assess pre-open · ${PREOPEN[state.preIndex].t}`);
+          toast("Pre-open inspect · not accum Judge");
           return;
         }
+        if (e.key.toLowerCase() === "p") { e.preventDefault(); showFrame("plan"); return; }
       }
     });
 
@@ -2167,13 +2379,20 @@
     document.querySelectorAll("[data-action]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const a = btn.getAttribute("data-action");
-        if (a === "plan") openConfirm();
-        if (a === "inspect") toast(`Inspect signal · ${focusTicker().t}`);
+        if (a === "plan") showFrame("plan");
+        if (a === "inspect") toast(`Top desks · ${focusTicker().t} · see broker desk`);
       });
     });
 
     document.querySelectorAll("#frameSwitch button").forEach((btn) => {
       btn.addEventListener("click", () => showFrame(btn.dataset.frame));
+    });
+
+    document.querySelectorAll("#healthTabs button").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        setHealthPoster(btn.dataset.health);
+        updateChrome();
+      });
     });
 
     renderAccum();
