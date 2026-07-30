@@ -26,8 +26,8 @@ Ship Textual against **this cockpit mock**. Standalone journey HTML may stay “
 | 3 | Plan | Structure | Entry/Stop/Target · inherit Action · no order |
 | 4 | Paper | Notebook | Geometry confirm · paper only · not learning |
 | 5 | Pre-open | Auction | IEP board · inspect ≠ accum Judge |
-| 6 | Ticker | Browse | **Price hero** hierarchy (IA: ticker-desk) · full fields · not Action |
-| 7 | Broker | Browse | Desk **radar** → **Enter** **Net hero** home (top/flow/hist hub) · not Action |
+| 6 | Ticker | Browse | **Price hero** hierarchy (IA: ticker-desk) · full fields |
+| 7 | Broker | Browse | Desk **radar** → **Enter** **Net hero** home (top/flow/hist hub) |
 | 8 | Health | Honesty | Empty / zero / lag / ready posters |
 | 9 | Palette | Nav | Ctrl+P · peach selection · no scenario tabs |
 
@@ -41,6 +41,8 @@ Ship Textual against **this cockpit mock**. Standalone journey HTML may stay “
 | **Browse** | `v t` ticker · `v b` broker radar · broker `Enter` desk home · `t`/`f`/`h` deep · `v` jump ticker | ENTER/WATCH/AVOID authority |
 | **Paper** | Confirm after geometry | Auto-write · corpus · orders |
 | **Pre-open** | Inspect ≠ accum Judge | Same Enter as accum Judge |
+
+**Chrome noise:** authority lives in this table and in **key wiring** (Enter → Judge, browse paths). Do **not** stamp every stage with “not Action / not judgment / not a re-score.” Operators already know where judgment lives.
 
 ---
 

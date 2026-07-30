@@ -85,11 +85,11 @@ def test_opencode_tokens_present_night_ink_skin_absent():
 
 def test_authority_board_enter_is_judge_not_ticker():
     html = _html()
-    # accum Enter opens judge
+    # Authority is wiring, not repeated chrome slogans
     assert 'showFrame("judge")' in html
-    # copy
-    assert "not Action" in html
-    assert "present-only" in html or "present-only" in html.lower()
+    assert "present-only" in html.lower()
+    # Enter on accum goes to judge, not ticker
+    assert "showFrame(\"judge\")" in html
     # paper not auto
     assert "no auto-write" in html.lower() or "never auto-write" in html.lower() or "No auto-write" in html
 
