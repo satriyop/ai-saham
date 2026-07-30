@@ -50,7 +50,7 @@ def broker_list_loading_body() -> str:
         "[#d4b06a]Loading broker desk list…[/]\n\n"
         "View · broker list (CLI: saham view broker list)\n\n"
         "Reading tracked desks from [bold]local cache[/] — not hung.\n"
-        "Slow on large broker tables is expected; no network on this path.\n\n"
+        "Local cache only (recent sessions · no network).\n\n"
         "[dim]When ready: ↑↓ · Enter desk home · esc back[/]"
     )
 

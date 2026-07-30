@@ -113,6 +113,11 @@ def ensure_sqlite_broker_schema(db_path: str | Path) -> None:
                 CREATE INDEX IF NOT EXISTS idx_bdf_ticker_broker
                 ON broker_daily_flow(ticker, broker_code, date)
             """)
+            # Desk-centric list/show (WHERE broker_code = ? / IN (...))
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_bdf_broker_date
+                ON broker_daily_flow(broker_code, date)
+            """)
             conn.commit()
     except sqlite3.Error as e:
         raise BrokerDataRepositoryError(f"Failed to create schema: {e}") from e
@@ -215,7 +220,7 @@ def _migrate_foreign_flow_points_if_needed(db_path: str | Path) -> None:
 
 
 def _migrate_broker_daily_flow_if_needed(db_path: str | Path) -> None:
-    """Add avg_buy_price and avg_sell_price columns if missing from broker_daily_flow."""
+    """Migrate broker_daily_flow columns/indexes on existing DBs."""
     try:
         path = Path(db_path).expanduser()
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -239,6 +244,11 @@ def _migrate_broker_daily_flow_if_needed(db_path: str | Path) -> None:
                     "ALTER TABLE broker_daily_flow "
                     "ADD COLUMN avg_sell_price TEXT NOT NULL DEFAULT '0'"
                 )
+            # Desk-centric reads (TUI broker list / show pulse) need broker_code lead.
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_bdf_broker_date
+                ON broker_daily_flow(broker_code, date)
+            """)
             conn.commit()
         finally:
             conn.close()

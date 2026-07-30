@@ -416,10 +416,19 @@ def _broker_repo_and_foreign(db_path: Path):
     return SQLiteBrokerRepository(db_path), foreign
 
 
+# List radar only needs recent sessions (Net5 / streak / Δ1). Full history
+# was ~500k rows × N desks (~25s). ~45 calendar days ≈ enough trading sessions
+# for Net5 + a meaningful buy-streak without hydrating half the table.
+_BROKER_LIST_FLOW_LOOKBACK_DAYS = 45
+
+
 class _BrokerListLoader:
     """Tracked desks + multi-session pulse from broker_daily_flow (cache-only).
 
     Radar columns: AsOf, DayNet, Net5, Streak, #, Top — not config codes only.
+
+    Performance: one batch query for all tracked codes, date-bounded lookback,
+    and idx_bdf_broker_date (broker_code, date).
     """
 
     def __init__(self, db_path: Path) -> None:
@@ -428,6 +437,7 @@ class _BrokerListLoader:
 
     def __call__(self) -> list[Any]:
         with self._lock:
+            from datetime import date, timedelta
             from decimal import Decimal
             from types import SimpleNamespace
 
@@ -445,9 +455,14 @@ class _BrokerListLoader:
             sb = load_stockbit_config()
             ia = load_institutional_accumulation_config()
             repo, foreign = _broker_repo_and_foreign(self._db_path)
+            codes = [str(c).upper() for c in sb.tracked_broker_codes]
+            start = date.today() - timedelta(days=_BROKER_LIST_FLOW_LOOKBACK_DAYS)
+            flows_by_code = (
+                repo.get_broker_daily_flows_for_codes(codes, start_date=start) if codes else {}
+            )
+
             rows: list[Any] = []
-            for code in sb.tracked_broker_codes:
-                code_u = str(code).upper()
+            for code_u in codes:
                 btype = classify_desk_type(code_u, foreign or ia.foreign_broker_codes)
                 if btype == BrokerType.FOREIGN:
                     label = "Foreign"
@@ -456,7 +471,7 @@ class _BrokerListLoader:
                 else:
                     label = "unknown"
 
-                flows = repo.get_broker_daily_flows_by_code(code_u)
+                flows = flows_by_code.get(code_u, [])
                 pulse = desk_session_pulse(flows) if flows else None
                 if pulse is None:
                     rows.append(
@@ -569,12 +584,16 @@ class _BrokerShowLoader:
                 jump = str(result.top_sell_stocks[0].ticker).upper()
             body = format_desk_show_text(result)
             # Multi-session pulse (same pure helper as list Net5 / streak)
+            from datetime import date, timedelta
+
             from src.adapters.shared.view_number_format import format_value
             from src.application.services.broker_desk_from_daily_flow import (
                 desk_session_pulse,
             )
 
-            flows = repo.get_broker_daily_flows_by_code(str(code).upper())
+            # Pulse only needs recent sessions (same bound as list radar).
+            start = date.today() - timedelta(days=_BROKER_LIST_FLOW_LOOKBACK_DAYS)
+            flows = repo.get_broker_daily_flows_by_code(str(code).upper(), start_date=start)
             pulse = desk_session_pulse(flows) if flows else None
             if pulse is not None:
                 d1 = "—"

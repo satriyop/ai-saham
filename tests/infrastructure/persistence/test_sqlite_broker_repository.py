@@ -371,3 +371,54 @@ class TestSQLiteBrokerRepository:
         assert len(result.top_buyers) == 1
         assert result.top_buyers[0].broker_code == "YP"
         assert result.top_buyers[0].broker_type == BrokerType.FOREIGN
+
+    def test_batch_flows_for_codes_respects_date_bound_and_index(self, repository, temp_db):
+        """Desk list path: one query, multi-code, optional start_date."""
+        from src.domain.entities.broker_flow import BrokerDailyFlow
+
+        def _flow(ticker: str, code: str, on: date, net: str) -> BrokerDailyFlow:
+            return BrokerDailyFlow(
+                ticker=ticker,
+                broker_code=code,
+                broker_name=code,
+                date=on,
+                buy_lot=1,
+                sell_lot=0,
+                net_lot=1,
+                buy_value=Decimal(net),
+                sell_value=Decimal("0"),
+                net_value=Decimal(net),
+                avg_buy_price=Decimal("0"),
+                avg_sell_price=Decimal("0"),
+                avg_price=Decimal("0"),
+                buy_pct=0.0,
+                sell_pct=0.0,
+            )
+
+        repository.save_broker_daily_flows(
+            [
+                _flow("BBCA", "AK", date(2024, 1, 1), "100"),
+                _flow("BBCA", "AK", date(2024, 6, 1), "200"),
+                _flow("BBRI", "YP", date(2024, 6, 2), "300"),
+                _flow("TLKM", "ZZ", date(2024, 6, 3), "400"),  # not requested
+            ]
+        )
+
+        grouped = repository.get_broker_daily_flows_for_codes(
+            ["ak", "yp"],
+            start_date=date(2024, 5, 1),
+        )
+        assert set(grouped) == {"AK", "YP"}
+        assert len(grouped["AK"]) == 1
+        assert grouped["AK"][0].date == date(2024, 6, 1)
+        assert len(grouped["YP"]) == 1
+
+        # by_code should share the same bound semantics
+        ak_only = repository.get_broker_daily_flows_by_code("AK", start_date=date(2024, 5, 1))
+        assert len(ak_only) == 1
+
+        with sqlite3.connect(temp_db) as conn:
+            idx = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_bdf_broker_date'"
+            ).fetchone()
+        assert idx is not None

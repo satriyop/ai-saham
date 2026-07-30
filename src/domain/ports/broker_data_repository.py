@@ -253,6 +253,21 @@ class BrokerDataRepository(ABC):
         """
         return []
 
+    def get_broker_daily_flows_for_codes(
+        self,
+        broker_codes: list[str],
+        start_date: date | None = None,
+        end_date: date | None = None,
+        ticker: str | None = None,
+        source: str | None = None,
+    ) -> dict[str, list[BrokerDailyFlow]]:
+        """
+        Batch desk-centric read for many broker codes (prefer for list UIs).
+
+        Returns map broker_code → rows. Empty dict when none requested/found.
+        """
+        return {}
+
     def save_foreign_flow_snapshots(
         self,
         snapshots: list[ForeignFlowSnapshot],

@@ -155,10 +155,36 @@ class SQLiteBrokerDailyFlowStore:
         source: str | None = None,
     ) -> list[BrokerDailyFlow]:
         """Retrieve rows for one broker_code across tickers (desk-centric)."""
+        grouped = self.get_broker_daily_flows_for_codes(
+            [broker_code],
+            start_date=start_date,
+            end_date=end_date,
+            ticker=ticker,
+            source=source,
+        )
+        return list(grouped.get(broker_code.upper(), []))
+
+    def get_broker_daily_flows_for_codes(
+        self,
+        broker_codes: list[str],
+        start_date: date | None = None,
+        end_date: date | None = None,
+        ticker: str | None = None,
+        source: str | None = None,
+    ) -> dict[str, list[BrokerDailyFlow]]:
+        """Batch desk-centric read for many broker codes (one query).
+
+        Returns map code → rows sorted by (date ASC, ticker ASC). Missing codes
+        are omitted (empty list not required). Prefer a start_date for list UIs.
+        """
+        codes = [str(c).upper() for c in broker_codes if str(c).strip()]
+        if not codes:
+            return {}
         try:
             with self._get_connection() as conn:
-                query = "SELECT * FROM broker_daily_flow WHERE broker_code = ?"
-                params: list = [broker_code.upper()]
+                placeholders = ",".join("?" * len(codes))
+                query = f"SELECT * FROM broker_daily_flow WHERE broker_code IN ({placeholders})"
+                params: list = list(codes)
                 if start_date:
                     query += " AND date >= ?"
                     params.append(start_date.isoformat())
@@ -171,8 +197,14 @@ class SQLiteBrokerDailyFlowStore:
                 if source:
                     query += " AND source = ?"
                     params.append(source)
-                query += " ORDER BY date ASC, ticker ASC"
+                query += " ORDER BY broker_code ASC, date ASC, ticker ASC"
                 rows = conn.execute(query, params).fetchall()
-            return [row_to_broker_daily_flow(r) for r in rows]
+            out: dict[str, list[BrokerDailyFlow]] = {}
+            for r in rows:
+                flow = row_to_broker_daily_flow(r)
+                out.setdefault(flow.broker_code.upper(), []).append(flow)
+            return out
         except sqlite3.Error as e:
-            raise BrokerDataRepositoryError(f"Failed to get broker daily flows by code: {e}") from e
+            raise BrokerDataRepositoryError(
+                f"Failed to get broker daily flows for codes: {e}"
+            ) from e

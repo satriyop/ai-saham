@@ -158,3 +158,16 @@ class SQLiteBrokerRepository(BrokerDataRepository):
         return self._daily_flow.get_broker_daily_flows_by_code(
             broker_code, start_date, end_date, ticker, source
         )
+
+    def get_broker_daily_flows_for_codes(
+        self,
+        broker_codes: list[str],
+        start_date: date | None = None,
+        end_date: date | None = None,
+        ticker: str | None = None,
+        source: str | None = None,
+    ) -> dict[str, list[BrokerDailyFlow]]:
+        """Batch desk-centric read (one query) for list/pulse UIs."""
+        return self._daily_flow.get_broker_daily_flows_for_codes(
+            broker_codes, start_date, end_date, ticker, source
+        )
