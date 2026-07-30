@@ -325,7 +325,7 @@ def test_cockpit_ticker_detail_harga_widget():
             )
 
         app = CockpitApp(ticker_detail_loader=loader)
-        async with app.run_test(size=(100, 36)) as pilot:
+        async with app.run_test(size=(100, 40)) as pilot:
             await pilot.pause(0.05)
             app._focus_ticker = "BBCA"
             app._stage = "accum"
@@ -355,7 +355,9 @@ def test_cockpit_ticker_detail_harga_widget():
             price = str(app.query_one("#td-price").render())
             assert "6,275" in price
             lab = str(app.query_one("#td-mast-lab").render()).upper()
-            assert "HARGA" in lab
+            assert "LAST" in lab or "LOCAL" in lab
+            # Design pulse trio exists
+            assert "FOREIGN" in str(app.query_one("#td-pulse-t-flow").render()).upper()
 
     asyncio.run(scenario())
 

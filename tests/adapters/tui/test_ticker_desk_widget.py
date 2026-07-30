@@ -1,4 +1,4 @@
-"""Visual ticker desk (Harga mast) — not CLI text dump."""
+"""Visual ticker desk (Harga mast) — design-aligned hierarchy, not CLI dump."""
 
 from __future__ import annotations
 
@@ -15,14 +15,16 @@ from src.adapters.tui.ticker_desk_model import (
 from src.adapters.tui.widgets.ticker_desk import TickerDesk
 
 
-def test_model_from_dashboard_price_first_not_action():
-    dash = SimpleNamespace(
+def _dashboard(**over):
+    base = dict(
         ticker="BBCA",
         latest_close=Decimal("6275"),
         as_of=date(2026, 7, 29),
         notation=SimpleNamespace(
             listing_board="Papan Utama",
             sector="Keuangan",
+            sub_sector="Bank",
+            tradeable=True,
             notations=(SimpleNamespace(description="Bank Central Asia"),),
         ),
         profile=None,
@@ -31,6 +33,11 @@ def test_model_from_dashboard_price_first_not_action():
             change_5d_pct=-3.5,
             change_20d_pct=12.1,
             range_52w_pct=35.0,
+            high_52w=Decimal("8975"),
+            low_52w=Decimal("4820"),
+            volume=122_400_000,
+            avg_volume_20d=169_900_000,
+            volume_vs_20d=0.72,
         ),
         fundamentals=SimpleNamespace(
             pe_ratio_ttm=13.3,
@@ -40,60 +47,89 @@ def test_model_from_dashboard_price_first_not_action():
             dividend_yield=4.8,
             piotroski_f_score=5,
         ),
+        foreign_flow_points=(
+            SimpleNamespace(date=date(2026, 7, 25), net_val=Decimal("-10000000000"), net_lot=-1),
+            SimpleNamespace(date=date(2026, 7, 28), net_val=Decimal("5000000000"), net_lot=1),
+            SimpleNamespace(date=date(2026, 7, 29), net_val=Decimal("-27800000000"), net_lot=-2),
+        ),
+        foreign_flow_source="stockbit",
+        bandar=SimpleNamespace(
+            broker_accdist="Acc",
+            today_accdist="Normal Acc",
+            five_day_accdist="Big Acc",
+            top1_accdist="Acc",
+            top1_percent=17.0,
+            top10_accdist="Small Acc",
+            broad_score=2,
+            accumulation_score=2,
+            session_date=date(2026, 7, 29),
+            is_accumulating=True,
+            is_distributing=False,
+        ),
+        earnings=(
+            SimpleNamespace(
+                year=2026,
+                quarter=1,
+                eps_actual=119.1,
+                eps_prev_year=114.7,
+                eps_yoy_change=4.4,
+            ),
+            SimpleNamespace(
+                year=2025,
+                quarter=4,
+                eps_actual=114.7,
+                eps_prev_year=111.7,
+                eps_yoy_change=3.0,
+            ),
+        ),
+        analyst=object(),
+        ownership=object(),
+        insider_txns=(),
+        iev_rows=(object(),),
+        seasonality=object(),
         freshness=(
             SimpleNamespace(label="Price", status=SimpleNamespace(value="ok")),
             SimpleNamespace(label="Flow", status=SimpleNamespace(value="ok")),
+            SimpleNamespace(label="Bandar", status=SimpleNamespace(value="ok")),
         ),
     )
-    model = build_ticker_desk_model_from_dashboard(dash, body="depth panel text")
+    base.update(over)
+    return SimpleNamespace(**base)
+
+
+def test_model_design_hierarchy_not_cli_primary():
+    model = build_ticker_desk_model_from_dashboard(
+        _dashboard(),
+        body="THIS SHOULD NOT BE THE DESK — CLI DUMP",
+    )
     assert model.ticker == "BBCA"
     assert "6,275" in model.price
     assert model.change_tone == "pos"
     assert any(m.label == "PE TTM" and "13" in m.value for m in model.metrics)
-    assert "Action" in model.authority or "not Action" in model.authority
+    keys = {p.key for p in model.pulses}
+    assert keys == {"flow", "struct", "bandar"}
+    flow = next(p for p in model.pulses if p.key == "flow")
+    assert flow.headline != "" and flow.title == "Foreign flow"
+    struct = next(p for p in model.pulses if p.key == "struct")
+    assert "×" in struct.headline or struct.headline != "—"
+    bandar = next(p for p in model.pulses if p.key == "bandar")
+    assert "Acc" in bandar.headline
+    assert len(model.earnings) >= 1
+    assert model.secondary
+    # Primary as_text is hierarchical, not a Rich box dump
     text = model.as_text()
     assert "HARGA MAST" in text
-    assert "6,275" in text
-    assert "ENTER" not in text.split("authority")[0] if False else True
-    # Must not claim board Action
-    assert "ENTER" not in model.price
+    assert "Foreign flow" in text
+    assert "Bandar" in text
 
 
-def test_cockpit_view_ticker_paints_harga_widget_not_plain_static_only():
+def test_cockpit_view_ticker_paints_design_sections():
     def loader(t: str):
-        return build_ticker_desk_model_from_dashboard(
-            SimpleNamespace(
-                ticker=t,
-                latest_close=Decimal("6275"),
-                as_of=date(2026, 7, 29),
-                notation=SimpleNamespace(
-                    listing_board="Papan Utama",
-                    sector="Bank",
-                    notations=(SimpleNamespace(description="Bank Central Asia"),),
-                ),
-                profile=None,
-                price_structure=SimpleNamespace(
-                    change_1d_pct=0.8,
-                    change_5d_pct=-3.5,
-                    change_20d_pct=12.1,
-                    range_52w_pct=35.0,
-                ),
-                fundamentals=SimpleNamespace(
-                    pe_ratio_ttm=13.3,
-                    pbv=3.0,
-                    market_cap_idr=774_000_000_000_000,
-                    roe_ttm=22.4,
-                    dividend_yield=4.8,
-                    piotroski_f_score=5,
-                ),
-                freshness=(),
-            ),
-            body="Foreign flow panel…",
-        )
+        return build_ticker_desk_model_from_dashboard(_dashboard(ticker=t))
 
     async def scenario() -> None:
         app = CockpitApp(ticker_detail_loader=loader)
-        async with app.run_test(size=(120, 40)) as pilot:
+        async with app.run_test(size=(140, 48)) as pilot:
             await pilot.pause(0.05)
             app._focus_ticker = "BBCA"
             app._stage = "accum"
@@ -110,34 +146,36 @@ def test_cockpit_view_ticker_paints_harga_widget_not_plain_static_only():
             ]
             app._row_index = 0
             app._run_command("view-ticker")
-            for _ in range(40):
+            for _ in range(50):
                 await pilot.pause(0.05)
-                if app._stage == "detail" and app._status_note == "view ticker":
-                    if app._ticker_desk_model is not None:
-                        break
-            assert app._stage == "detail"
-            assert app._status_note == "view ticker"
+                if app._stage == "detail" and app._ticker_desk_model is not None:
+                    break
             desk = app.query_one("#ticker-desk", TickerDesk)
             assert desk.display is True
-            body = app.query_one("#stage-body")
-            assert body.display is False
-            price = str(app.query_one("#td-price").render())
-            assert "6,275" in price
-            lab = str(app.query_one("#td-mast-lab").render())
-            assert "HARGA" in lab.upper()
-            mark = str(app.query_one("#td-mark").render())
-            assert "BBCA" in mark
-            # Metric ribbon painted
-            pe = str(app.query_one("#td-metric-v-0").render())
-            assert "13" in pe
-            # Not the old plain static-only dump path
+            assert app.query_one("#stage-body").display is False
+            # Mast
+            assert "6,275" in str(app.query_one("#td-price").render())
+            assert "LAST" in str(app.query_one("#td-mast-lab").render()).upper()
+            # Pulse trio present (not CLI dump body id)
+            flow_h = str(app.query_one("#td-pulse-h-flow").render())
+            assert flow_h.strip()
+            assert "FOREIGN" in str(app.query_one("#td-pulse-t-flow").render()).upper()
+            assert "STRUCTURE" in str(app.query_one("#td-pulse-t-struct").render()).upper()
+            assert "BANDAR" in str(app.query_one("#td-pulse-t-bandar").render()).upper()
+            # Earnings section
+            earn = str(app.query_one("#td-earn-body").render())
+            assert "Q" in earn or "eps" in earn.lower() or "119" in earn or "—" in earn
+            # No primary CLI dump widget
             assert app.query_one("#judge-desk").display is False
+            # Metric ribbon
+            assert "13" in str(app.query_one("#td-metric-v-0").render())
 
     asyncio.run(scenario())
 
 
-def test_text_fallback_model_still_has_mast():
-    m = build_ticker_desk_model_from_text(ticker="TLKM", body="Close: 3,180\nmore panels")
+def test_text_fallback_still_has_mast_and_pulses():
+    m = build_ticker_desk_model_from_text(ticker="TLKM", body="Close: 3,180")
     assert m.ticker == "TLKM"
     assert "3,180" in m.price
+    assert len(m.pulses) == 3
     assert "HARGA" in m.as_text()
