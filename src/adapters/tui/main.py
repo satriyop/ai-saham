@@ -183,6 +183,7 @@ class CockpitApp(App[None]):
         self._plan_structure: Any | None = None
         self._plan_running: bool = False
         self._paper_outcome: str = ""
+        self._ticker_desk_model: Any | None = None
         self._chord_prefix: str | None = None
         self._chord_timer: Timer | None = None
         # Board load UX: keep prior rows while recomputing; snapshot on open.
@@ -210,9 +211,11 @@ class CockpitApp(App[None]):
                         yield Static(self._shell_body(), id="stage-body")
                         from src.adapters.tui.widgets.judge_desk import JudgeDesk
                         from src.adapters.tui.widgets.plan_desk import PlanDesk
+                        from src.adapters.tui.widgets.ticker_desk import TickerDesk
 
                         yield JudgeDesk(id="judge-desk")
                         yield PlanDesk(id="plan-desk")
+                        yield TickerDesk(id="ticker-desk")
                     yield DataTable(id="board-table")
                     yield Static("", id="evidence-strip")
                     yield Static(self._footer_hint(), id="board-footer")
@@ -249,6 +252,10 @@ class CockpitApp(App[None]):
             pass
         try:
             self.query_one("#plan-desk").display = False
+        except Exception:
+            pass
+        try:
+            self.query_one("#ticker-desk").display = False
         except Exception:
             pass
         self.query_one("#evidence-strip", Static).display = False
@@ -402,36 +409,71 @@ class CockpitApp(App[None]):
         except Exception:
             pass
 
+    def _hide_ticker_desk(self) -> None:
+        try:
+            desk = self.query_one("#ticker-desk")
+            desk.display = False
+        except Exception:
+            pass
+
     def _hide_instrument_desks(self) -> None:
         self._hide_judge_desk()
         self._hide_plan_desk()
+        self._hide_ticker_desk()
 
     def _paint_detail_stage(self, *, body: Static, scroll: VerticalScroll) -> None:
-        """Detail stage: visual Judge desk for accum judge; text body otherwise."""
+        """Detail stage: Judge / ticker visual desks; text body otherwise."""
         from src.adapters.tui.widgets.judge_desk import JudgeDesk
+        from src.adapters.tui.widgets.ticker_desk import TickerDesk
 
         is_judge = self._status_note in {"judge", "re-judging"} and (
             self._board_kind == "accum" or self._detail_return_stage == "accum"
         )
-        try:
-            desk = self.query_one("#judge-desk", JudgeDesk)
-        except Exception:
-            desk = None
+        is_view_ticker = self._status_note == "view ticker"
 
-        if is_judge and desk is not None:
+        try:
+            judge = self.query_one("#judge-desk", JudgeDesk)
+        except Exception:
+            judge = None
+        try:
+            ticker_desk = self.query_one("#ticker-desk", TickerDesk)
+        except Exception:
+            ticker_desk = None
+
+        if is_judge and judge is not None:
             row = self._rows[self._row_index] if self._rows else None
             if row is not None and self._is_accum_row(row):
                 model = self._build_judge_model(row)
                 body.display = False
                 self._hide_plan_desk()
-                desk.display = True
-                desk.paint(model)
+                self._hide_ticker_desk()
+                judge.display = True
+                judge.paint(model)
                 # Keep text for tests / scrapers that read _detail_text
                 self._detail_text = self._format_row_detail(
                     str(getattr(row, "ticker", self._focus_ticker)),
                     row,
                 )
                 return
+
+        if is_view_ticker and ticker_desk is not None:
+            model = getattr(self, "_ticker_desk_model", None)
+            if model is None:
+                from src.adapters.tui.ticker_desk_model import (
+                    build_ticker_desk_model_from_text,
+                )
+
+                model = build_ticker_desk_model_from_text(
+                    ticker=str(self._focus_ticker or "—"),
+                    body=self._detail_text or "",
+                )
+            body.display = False
+            self._hide_judge_desk()
+            self._hide_plan_desk()
+            ticker_desk.display = True
+            ticker_desk.paint(model)
+            return
+
         body.display = True
         self._hide_instrument_desks()
         body.update(self._detail_text)
@@ -2082,40 +2124,63 @@ class CockpitApp(App[None]):
 
     @work(thread=True, exclusive=True, group="detail")
     def _execute_view_ticker(self, ticker: str) -> None:
+        from src.adapters.tui.ticker_desk_model import (
+            TickerDeskModel,
+            build_ticker_desk_model_from_text,
+        )
+        from src.adapters.tui.ticker_desk_present import model_from_loader_result
+
         try:
             if self._ticker_detail_loader is not None:
-                text = str(self._ticker_detail_loader(ticker) or "")
+                raw = self._ticker_detail_loader(ticker)
             else:
-                text = f"[bold]{ticker}[/]\n\n[dim]view ticker loader not wired (composition)[/]"
-            if not text.strip():
-                text = f"[bold]{ticker}[/]\n\n[dim]empty dashboard[/]"
-            header = (
-                f"[bold #e8e8e8]View · ticker show · {ticker}[/]\n"
-                f"[dim]same job as: saham view ticker show {ticker} · local cache[/]\n\n"
-            )
-            dispatch_if_active(self, self._on_view_ticker_ready, ticker, header + text)
+                raw = build_ticker_desk_model_from_text(
+                    ticker=ticker,
+                    body="view ticker loader not wired (composition)",
+                )
+            model = model_from_loader_result(ticker, raw)
+            if not isinstance(model, TickerDeskModel):
+                model = build_ticker_desk_model_from_text(ticker=ticker, body=str(raw or ""))
+            dispatch_if_active(self, self._on_view_ticker_ready, ticker, model)
         except Exception as exc:
-            dispatch_if_active(
-                self,
-                self._on_view_ticker_ready,
-                ticker,
-                f"[bold]View · ticker show · {ticker}[/]\n\n[dim]error: {exc}[/]",
+            err_model = build_ticker_desk_model_from_text(
+                ticker=ticker,
+                body=f"error: {exc}",
             )
+            dispatch_if_active(self, self._on_view_ticker_ready, ticker, err_model)
 
-    def _on_view_ticker_ready(self, ticker: str, text: str) -> None:
+    def _on_view_ticker_ready(self, ticker: str, model_or_text: Any) -> None:
+        from src.adapters.tui.ticker_desk_model import (
+            TickerDeskModel,
+            build_ticker_desk_model_from_text,
+        )
+        from src.adapters.tui.ticker_desk_present import model_from_loader_result
+
+        if isinstance(model_or_text, TickerDeskModel):
+            model = model_or_text
+        else:
+            model = model_from_loader_result(ticker, model_or_text)
+        if not isinstance(model, TickerDeskModel):
+            model = build_ticker_desk_model_from_text(ticker=ticker, body=str(model_or_text or ""))
         actions = "\n\n[#9b8fb8]Actions (TUI)[/]\n  b top desks for this stock\n" + (
             "  esc → desk home\n" if self._view_from_desk else "  esc back\n"
         )
-        if "Actions (TUI)" not in text:
-            text = text + actions
-        self._detail_text = text
+        body = model.body or ""
+        if "Actions (TUI)" not in body:
+            body = body + actions
+        # Rebuild model with actions in depth body
+        from dataclasses import replace
+
+        model = replace(model, body=body.strip())
+        self._ticker_desk_model = model
+        self._detail_text = model.as_text()
         self._stage = "detail"
-        self._board_title = f"View · ticker show · {ticker}"
+        self._board_title = f"View · ticker desk · {ticker}"
         if self._view_from_desk:
-            self._meta = "from desk · b desks · esc → desk home · cache-only"
+            self._meta = "from desk · b desks · esc → desk home · cache-only · not Action"
             self._broker_page = None  # not a desk page; trail via _view_from_desk
         else:
-            self._meta = "CLI parity · b top desks · cache-only · esc back"
+            self._meta = "Harga mast · b top desks · cache-only · not Action · esc back"
         self._status_note = "view ticker"
         self._focus_ticker = ticker
         self._refresh_chrome()

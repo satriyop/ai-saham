@@ -313,10 +313,13 @@ def test_cockpit_paper_confirm_and_outcome_on_plan():
     asyncio.run(scenario())
 
 
-def test_cockpit_ticker_detail_harga_prefix():
+def test_cockpit_ticker_detail_harga_widget():
+    from src.adapters.tui.ticker_desk_model import build_ticker_desk_model_from_text
+    from src.adapters.tui.widgets.ticker_desk import TickerDesk
+
     async def scenario() -> None:
-        def loader(t: str) -> str:
-            return format_ticker_desk_from_text(
+        def loader(t: str):
+            return build_ticker_desk_model_from_text(
                 ticker=t,
                 body="Close: 6,275\nRSI 48\nnot Action dashboard body\n",
             )
@@ -338,17 +341,21 @@ def test_cockpit_ticker_detail_harga_prefix():
                 )
             ]
             app._row_index = 0
-            # drive view-ticker path via loader result inject
-            app._stage = "detail"
-            app._status_note = "view ticker"
-            app._detail_text = loader("BBCA")
-            app._refresh_chrome()
-            await pilot.pause(0.05)
-            body = str(app.query_one("#stage-body").render())
-            assert "HARGA" in body or "6,275" in body
-            assert "ENTER" not in body or "not" in body.lower()
-            # authority
-            assert "Action" in body or "cache" in body.lower() or "HARGA" in body
+            app._run_command("view-ticker")
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if (
+                    app._stage == "detail"
+                    and app._status_note == "view ticker"
+                    and app._ticker_desk_model is not None
+                ):
+                    break
+            desk = app.query_one("#ticker-desk", TickerDesk)
+            assert desk.display is True
+            price = str(app.query_one("#td-price").render())
+            assert "6,275" in price
+            lab = str(app.query_one("#td-mast-lab").render()).upper()
+            assert "HARGA" in lab
 
     asyncio.run(scenario())
 
