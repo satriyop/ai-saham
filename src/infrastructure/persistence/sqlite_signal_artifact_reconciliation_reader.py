@@ -1,19 +1,16 @@
 """
 Read-only SQLite observer for the DQ-001E signal-artifact/market-context
-reconciliation audit (candidate_observations, signal_forward_labels,
-market_context_snapshots, regime_observations).
+reconciliation audit.
+
+Canonical learning plane (post clean-break):
+  learning_observations, learning_outcome_labels,
+  market_context_snapshots, regime_observations.
+
+Retired tables candidate_observations / signal_forward_labels are not required
+and are not observed here.
 
 Opens SQLite in read-only URI mode and never executes write/DDL statements.
 Uses SQL aggregate queries only — never loads full tables into Python.
-Sibling to sqlite_source_reconciliation_reader.py (DQ-001B core tables) and
-sqlite_enrichment_reconciliation_reader.py (DQ-001D enrichment tables); kept
-separate per table-family so no single reader module grows past the
-AI_AGENT_CHECKLIST.md repository-module size guidance.
-
-Every observer checks required columns via PRAGMA table_info before
-querying them. A table that exists but is missing a required column
-returns exists=True, schema_sufficient=False, and the missing column
-names — never a crash.
 
 Layer: Infrastructure
 """
@@ -34,9 +31,6 @@ from src.application.dto.source_reconciliation_dto import (
     RawSignalForwardLabelsLinkageObservation,
 )
 from src.domain.value_objects.market_context import MarketRegime
-from src.domain.value_objects.signal_artifact_schema import (
-    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
-)
 
 _MAX_SAMPLE_ROWS = 10
 
@@ -53,24 +47,25 @@ _INVALID_REGIME_CONDITION = "(regime IS NULL OR regime = '' OR upper(regime) NOT
     ", ".join(f"'{v.upper()}'" for v in _VALID_REGIME_VALUES)
 )
 
-_CANDIDATE_OBSERVATIONS_REQUIRED_COLUMNS = (
-    "ticker",
-    "snapshot_date",
+# Post clean-break SSOT (learning plane). DTO field names still say
+# "canonical"/"legacy" for config_hash-era semantics: here they map to
+# compatibility_id present vs blank.
+_LEARNING_OBSERVATIONS_IDENTITY_REQUIRED_COLUMNS = (
+    "observation_id",
+    "purpose",
+    "compatibility_id",
     "captured_at",
-    "workflow",
-    "window_sessions",
-    "data_as_of_date",
-    "config_hash",
-    "payload_json",
+    "decision_payload_json",
+    "contract_id",
+    "window_id",
 )
-_SIGNAL_FORWARD_LABELS_REQUIRED_COLUMNS = (
-    "ticker",
-    "signal_date",
-    "horizon",
-    "observation_captured_at",
-    "fingerprint_json",
+_LEARNING_OUTCOME_LABELS_REQUIRED_COLUMNS = (
+    "label_id",
+    "observation_id",
+    "contract_id",
+    "metrics_json",
 )
-_CANDIDATE_OBSERVATIONS_LINKAGE_COLUMNS = ("ticker", "snapshot_date", "captured_at")
+_LEARNING_OBSERVATIONS_LINKAGE_COLUMNS = ("observation_id",)
 _MARKET_CONTEXT_SNAPSHOT_REQUIRED_COLUMNS = (
     "as_of_date",
     "regime",
@@ -100,7 +95,13 @@ class SQLiteSignalArtifactReconciliationReader:
     def observe_candidate_observations_identity(
         self,
     ) -> RawCandidateObservationIdentityObservation:
-        table = "candidate_observations"
+        """Observe learning_observations identity (canonical post clean-break).
+
+        Method name kept for call-site stability; table is learning_observations.
+        DTO ``canonical_*`` = rows with non-empty compatibility_id;
+        ``legacy_*`` = blank/null compatibility_id.
+        """
+        table = "learning_observations"
         if not self._db_path.exists():
             return RawCandidateObservationIdentityObservation(exists=False)
 
@@ -111,7 +112,9 @@ class SQLiteSignalArtifactReconciliationReader:
             columns = self._columns(conn, table)
             row_count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
 
-            missing = self._missing_columns(columns, _CANDIDATE_OBSERVATIONS_REQUIRED_COLUMNS)
+            missing = self._missing_columns(
+                columns, _LEARNING_OBSERVATIONS_IDENTITY_REQUIRED_COLUMNS
+            )
             if missing:
                 return RawCandidateObservationIdentityObservation(
                     exists=True,
@@ -121,20 +124,19 @@ class SQLiteSignalArtifactReconciliationReader:
                 )
 
             canonical_row_count = conn.execute(
-                f"SELECT COUNT(*) FROM {table} WHERE config_hash != '' AND "
-                f"schema_version = {CANDIDATE_OBSERVATION_SCHEMA_VERSION}"
+                f"SELECT COUNT(*) FROM {table} "
+                "WHERE compatibility_id IS NOT NULL AND TRIM(compatibility_id) != ''"
             ).fetchone()[0]
             legacy_row_count = row_count - canonical_row_count
 
             canonical_missing_condition = (
-                f"config_hash != '' AND schema_version = "
-                f"{CANDIDATE_OBSERVATION_SCHEMA_VERSION} AND ("
-                "ticker IS NULL OR ticker = '' OR "
-                "snapshot_date IS NULL OR snapshot_date = '' OR "
+                "compatibility_id IS NOT NULL AND TRIM(compatibility_id) != '' AND ("
+                "observation_id IS NULL OR observation_id = '' OR "
+                "purpose IS NULL OR purpose = '' OR "
                 "captured_at IS NULL OR captured_at = '' OR "
-                "workflow IS NULL OR workflow = '' OR "
-                "data_as_of_date IS NULL OR data_as_of_date = '' OR "
-                "window_sessions IS NULL OR window_sessions <= 0"
+                "contract_id IS NULL OR contract_id = '' OR "
+                "window_id IS NULL OR window_id = '' OR "
+                "decision_payload_json IS NULL OR decision_payload_json = ''"
                 ")"
             )
             canonical_missing_identity_count = conn.execute(
@@ -142,48 +144,48 @@ class SQLiteSignalArtifactReconciliationReader:
             ).fetchone()[0]
             canonical_missing_identity_samples = self._rows_as_dicts(
                 conn,
-                "SELECT ticker, snapshot_date, captured_at, workflow, window_sessions, "
-                f"data_as_of_date FROM {table} WHERE {canonical_missing_condition} "
+                "SELECT observation_id, purpose, captured_at, contract_id, window_id, "
+                f"compatibility_id FROM {table} WHERE {canonical_missing_condition} "
                 f"LIMIT {_MAX_SAMPLE_ROWS}",
             )
 
             duplicate_canonical_identity_count = conn.execute(
                 f"SELECT COALESCE(SUM(cnt - 1), 0) FROM ("
-                f"SELECT COUNT(*) AS cnt FROM {table} WHERE config_hash != "
-                f"'' AND schema_version = {CANDIDATE_OBSERVATION_SCHEMA_VERSION} "
-                "GROUP BY ticker, snapshot_date, workflow, window_sessions, "
-                "data_as_of_date, config_hash HAVING cnt > 1"
+                f"SELECT COUNT(*) AS cnt FROM {table} "
+                "WHERE compatibility_id IS NOT NULL AND TRIM(compatibility_id) != '' "
+                "AND observation_id IS NOT NULL AND observation_id != '' "
+                "GROUP BY observation_id HAVING cnt > 1"
                 ")"
             ).fetchone()[0]
             duplicate_canonical_identity_samples = self._rows_as_dicts(
                 conn,
-                "SELECT ticker, snapshot_date, workflow, window_sessions, data_as_of_date, "
-                f"config_hash, COUNT(*) AS duplicate_row_count FROM {table} "
-                f"WHERE config_hash != '' AND schema_version = "
-                f"{CANDIDATE_OBSERVATION_SCHEMA_VERSION} GROUP BY ticker, snapshot_date, workflow, "
-                "window_sessions, data_as_of_date, config_hash "
+                "SELECT observation_id, COUNT(*) AS duplicate_row_count "
+                f"FROM {table} "
+                "WHERE compatibility_id IS NOT NULL AND TRIM(compatibility_id) != '' "
+                "AND observation_id IS NOT NULL AND observation_id != '' "
+                "GROUP BY observation_id "
                 f"HAVING COUNT(*) > 1 LIMIT {_MAX_SAMPLE_ROWS}",
             )
 
             invalid_payload_json_count = conn.execute(
-                f"SELECT COUNT(*) FROM {table} WHERE json_valid(payload_json) = 0"
+                f"SELECT COUNT(*) FROM {table} WHERE json_valid(decision_payload_json) = 0"
             ).fetchone()[0]
             invalid_payload_json_samples = self._rows_as_dicts(
                 conn,
-                f"SELECT ticker, snapshot_date, captured_at FROM {table} "
-                f"WHERE json_valid(payload_json) = 0 LIMIT {_MAX_SAMPLE_ROWS}",
+                f"SELECT observation_id, purpose, captured_at FROM {table} "
+                f"WHERE json_valid(decision_payload_json) = 0 LIMIT {_MAX_SAMPLE_ROWS}",
             )
 
             payload_missing_marker_condition = (
-                "json_valid(payload_json) = 1 "
-                "AND json_extract(payload_json, '$.schema_version') IS NULL"
+                "json_valid(decision_payload_json) = 1 "
+                "AND json_extract(decision_payload_json, '$.schema_version') IS NULL"
             )
             payload_missing_schema_marker_count = conn.execute(
                 f"SELECT COUNT(*) FROM {table} WHERE {payload_missing_marker_condition}"
             ).fetchone()[0]
             payload_missing_schema_marker_samples = self._rows_as_dicts(
                 conn,
-                f"SELECT ticker, snapshot_date, captured_at FROM {table} "
+                f"SELECT observation_id, purpose, captured_at FROM {table} "
                 f"WHERE {payload_missing_marker_condition} LIMIT {_MAX_SAMPLE_ROWS}",
             )
 
@@ -205,7 +207,12 @@ class SQLiteSignalArtifactReconciliationReader:
     def observe_signal_forward_labels_linkage(
         self,
     ) -> RawSignalForwardLabelsLinkageObservation:
-        table = "signal_forward_labels"
+        """Observe learning_outcome_labels identity + join to learning_observations.
+
+        Method name kept for call-site stability; table is learning_outcome_labels.
+        Fingerprint check uses metrics_json (canonical path metrics payload).
+        """
+        table = "learning_outcome_labels"
         if not self._db_path.exists():
             return RawSignalForwardLabelsLinkageObservation(exists=False)
 
@@ -216,7 +223,7 @@ class SQLiteSignalArtifactReconciliationReader:
             columns = self._columns(conn, table)
             row_count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
 
-            missing = self._missing_columns(columns, _SIGNAL_FORWARD_LABELS_REQUIRED_COLUMNS)
+            missing = self._missing_columns(columns, _LEARNING_OUTCOME_LABELS_REQUIRED_COLUMNS)
             if missing:
                 return RawSignalForwardLabelsLinkageObservation(
                     exists=True,
@@ -226,77 +233,73 @@ class SQLiteSignalArtifactReconciliationReader:
                 )
 
             missing_identity_condition = (
-                "(ticker IS NULL OR ticker = '' OR signal_date IS NULL OR signal_date = '' "
-                "OR horizon IS NULL OR horizon = '' OR observation_captured_at IS NULL "
-                "OR observation_captured_at = '')"
+                "(label_id IS NULL OR label_id = '' OR "
+                "observation_id IS NULL OR observation_id = '' OR "
+                "contract_id IS NULL OR contract_id = '')"
             )
             missing_identity_count = conn.execute(
                 f"SELECT COUNT(*) FROM {table} WHERE {missing_identity_condition}"
             ).fetchone()[0]
             missing_identity_samples = self._rows_as_dicts(
                 conn,
-                f"SELECT ticker, signal_date, horizon, observation_captured_at FROM {table} "
+                f"SELECT label_id, observation_id, contract_id FROM {table} "
                 f"WHERE {missing_identity_condition} LIMIT {_MAX_SAMPLE_ROWS}",
             )
 
             non_null_identity = (
-                "ticker IS NOT NULL AND ticker != '' AND signal_date IS NOT NULL "
-                "AND signal_date != '' AND horizon IS NOT NULL AND horizon != '' "
-                "AND observation_captured_at IS NOT NULL AND observation_captured_at != ''"
+                "label_id IS NOT NULL AND label_id != '' AND "
+                "observation_id IS NOT NULL AND observation_id != '' AND "
+                "contract_id IS NOT NULL AND contract_id != ''"
             )
             duplicate_identity_count = conn.execute(
                 f"SELECT COALESCE(SUM(cnt - 1), 0) FROM ("
                 f"SELECT COUNT(*) AS cnt FROM {table} WHERE {non_null_identity} "
-                "GROUP BY ticker, signal_date, horizon, observation_captured_at HAVING cnt > 1"
+                "GROUP BY observation_id, contract_id HAVING cnt > 1"
                 ")"
             ).fetchone()[0]
             duplicate_identity_samples = self._rows_as_dicts(
                 conn,
-                "SELECT ticker, signal_date, horizon, observation_captured_at, "
+                "SELECT observation_id, contract_id, "
                 f"COUNT(*) AS duplicate_row_count FROM {table} WHERE {non_null_identity} "
-                "GROUP BY ticker, signal_date, horizon, observation_captured_at "
+                "GROUP BY observation_id, contract_id "
                 f"HAVING COUNT(*) > 1 LIMIT {_MAX_SAMPLE_ROWS}",
             )
 
             invalid_fingerprint_json_count = conn.execute(
-                f"SELECT COUNT(*) FROM {table} WHERE json_valid(fingerprint_json) = 0"
+                f"SELECT COUNT(*) FROM {table} WHERE json_valid(metrics_json) = 0"
             ).fetchone()[0]
             invalid_fingerprint_json_samples = self._rows_as_dicts(
                 conn,
-                f"SELECT ticker, signal_date, horizon FROM {table} "
-                f"WHERE json_valid(fingerprint_json) = 0 LIMIT {_MAX_SAMPLE_ROWS}",
+                f"SELECT label_id, observation_id, contract_id FROM {table} "
+                f"WHERE json_valid(metrics_json) = 0 LIMIT {_MAX_SAMPLE_ROWS}",
             )
 
             linkage_provable = self._table_exists(
-                conn, "candidate_observations"
+                conn, "learning_observations"
             ) and not self._missing_columns(
-                self._columns(conn, "candidate_observations"),
-                _CANDIDATE_OBSERVATIONS_LINKAGE_COLUMNS,
+                self._columns(conn, "learning_observations"),
+                _LEARNING_OBSERVATIONS_LINKAGE_COLUMNS,
             )
 
             orphan_linkage_count = 0
             orphan_linkage_samples: tuple[dict, ...] = ()
             if linkage_provable:
-                join_condition = (
-                    "o.ticker = l.ticker AND o.snapshot_date = l.signal_date "
-                    "AND o.captured_at = l.observation_captured_at"
+                orphan_where = (
+                    "o.observation_id IS NULL AND l.observation_id IS NOT NULL "
+                    "AND l.observation_id != ''"
                 )
-                l_missing_identity_condition = (
-                    "(l.ticker IS NULL OR l.ticker = '' OR l.signal_date IS NULL "
-                    "OR l.signal_date = '' OR l.horizon IS NULL OR l.horizon = '' "
-                    "OR l.observation_captured_at IS NULL OR l.observation_captured_at = '')"
-                )
-                orphan_where = f"o.ticker IS NULL AND NOT ({l_missing_identity_condition})"
                 orphan_linkage_count = conn.execute(
                     f"SELECT COUNT(*) FROM {table} l "
-                    f"LEFT JOIN candidate_observations o ON {join_condition} "
+                    "LEFT JOIN learning_observations o "
+                    "ON o.observation_id = l.observation_id "
                     f"WHERE {orphan_where}"
                 ).fetchone()[0]
                 orphan_linkage_samples = self._rows_as_dicts(
                     conn,
-                    "SELECT l.ticker AS ticker, l.signal_date AS signal_date, "
-                    "l.observation_captured_at AS observation_captured_at "
-                    f"FROM {table} l LEFT JOIN candidate_observations o ON {join_condition} "
+                    "SELECT l.label_id AS label_id, l.observation_id AS observation_id, "
+                    "l.contract_id AS contract_id "
+                    f"FROM {table} l LEFT JOIN learning_observations o "
+                    "ON o.observation_id = l.observation_id "
                     f"WHERE {orphan_where} LIMIT {_MAX_SAMPLE_ROWS}",
                 )
 

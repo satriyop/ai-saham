@@ -7,30 +7,35 @@ from pathlib import Path
 
 import pytest
 
-from src.domain.value_objects.signal_artifact_schema import (
-    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
-)
 from src.infrastructure.persistence.sqlite_signal_artifact_reconciliation_reader import (
     SQLiteSignalArtifactReconciliationReader,
 )
 
 
-def _create_candidate_observations(conn: sqlite3.Connection) -> None:
+def _create_learning_observations(conn: sqlite3.Connection) -> None:
     conn.execute(
-        "CREATE TABLE candidate_observations (id INTEGER PRIMARY KEY, ticker TEXT NOT NULL, "
-        "snapshot_date TEXT NOT NULL, captured_at TEXT NOT NULL, schema_version INTEGER "
-        "NOT NULL, payload_json TEXT NOT NULL, workflow TEXT NOT NULL, "
-        "window_sessions INTEGER NOT NULL, data_as_of_date TEXT NOT NULL, "
-        "config_hash TEXT NOT NULL DEFAULT '')"
+        "CREATE TABLE learning_observations ("
+        "observation_id TEXT NOT NULL, "
+        "purpose TEXT NOT NULL, "
+        "compatibility_id TEXT, "
+        "captured_at TEXT NOT NULL, "
+        "decision_payload_json TEXT NOT NULL, "
+        "contract_id TEXT NOT NULL, "
+        "window_id TEXT NOT NULL, "
+        "schema_version INTEGER NOT NULL DEFAULT 1"
+        ")"
     )
 
 
-def _create_signal_forward_labels(conn: sqlite3.Connection) -> None:
+def _create_learning_outcome_labels(conn: sqlite3.Connection) -> None:
     conn.execute(
-        "CREATE TABLE signal_forward_labels (id INTEGER PRIMARY KEY, ticker TEXT NOT NULL, "
-        "signal_date TEXT NOT NULL, horizon TEXT NOT NULL, "
-        "observation_captured_at TEXT NOT NULL DEFAULT '', outcome_label TEXT NOT NULL, "
-        "fingerprint_json TEXT NOT NULL, schema_version INTEGER NOT NULL)"
+        "CREATE TABLE learning_outcome_labels ("
+        "label_id TEXT NOT NULL, "
+        "observation_id TEXT NOT NULL, "
+        "contract_id TEXT NOT NULL, "
+        "metrics_json TEXT NOT NULL, "
+        "schema_version INTEGER NOT NULL DEFAULT 1"
+        ")"
     )
 
 
@@ -57,8 +62,8 @@ def _create_regime_observations(conn: sqlite3.Connection) -> None:
 def full_schema_db(tmp_path: Path) -> Path:
     db_path = tmp_path / "artifact_reconcile.db"
     conn = sqlite3.connect(str(db_path))
-    _create_candidate_observations(conn)
-    _create_signal_forward_labels(conn)
+    _create_learning_observations(conn)
+    _create_learning_outcome_labels(conn)
     _create_market_context_snapshots(conn)
     _create_regime_observations(conn)
     conn.commit()
@@ -66,7 +71,7 @@ def full_schema_db(tmp_path: Path) -> Path:
     return db_path
 
 
-# ── candidate_observations_identity ──────────────────────────────────────
+# ── learning_observations identity (post clean-break) ────────────────────
 
 
 def test_missing_database_reports_not_exists():
@@ -90,15 +95,14 @@ def test_missing_table_does_not_crash(tmp_path: Path):
     assert reader.observe_regime_observations_identity().exists is False
 
 
-def test_candidate_observation_canonical_row_empty_identity_fails(full_schema_db: Path):
+def test_learning_observation_tagged_row_empty_identity_fails(full_schema_db: Path):
     conn = sqlite3.connect(str(full_schema_db))
     conn.execute(
-        "INSERT INTO candidate_observations "
-        "(ticker, snapshot_date, captured_at, schema_version, payload_json, workflow, "
-        "window_sessions, data_as_of_date, config_hash) "
-        f"VALUES ('', '2026-01-02', '2026-01-02T00:00:00', "
-        f"{CANDIDATE_OBSERVATION_SCHEMA_VERSION}, '{{}}', 'w', 5, "
-        "'2026-01-02', 'abc123')"
+        "INSERT INTO learning_observations "
+        "(observation_id, purpose, compatibility_id, captured_at, decision_payload_json, "
+        "contract_id, window_id) "
+        "VALUES ('', 'ACCUMULATION_DISCOVERY', 'sha256:abc', '2026-01-02T00:00:00', "
+        "'{}', 'c1', 'BBCA:2026-01-02')"
     )
     conn.commit()
     conn.close()
@@ -110,34 +114,16 @@ def test_candidate_observation_canonical_row_empty_identity_fails(full_schema_db
     assert raw.canonical_missing_identity_count == 1
 
 
-def test_candidate_observation_canonical_row_invalid_window_sessions_fails(
+def test_learning_observation_untagged_compatibility_counts_as_legacy(
     full_schema_db: Path,
 ):
     conn = sqlite3.connect(str(full_schema_db))
     conn.execute(
-        "INSERT INTO candidate_observations "
-        "(ticker, snapshot_date, captured_at, schema_version, payload_json, workflow, "
-        "window_sessions, data_as_of_date, config_hash) "
-        f"VALUES ('BBCA', '2026-01-02', '2026-01-02T00:00:00', "
-        f"{CANDIDATE_OBSERVATION_SCHEMA_VERSION}, '{{}}', 'w', 0, "
-        "'2026-01-02', 'abc123')"
-    )
-    conn.commit()
-    conn.close()
-
-    reader = SQLiteSignalArtifactReconciliationReader(full_schema_db)
-    raw = reader.observe_candidate_observations_identity()
-
-    assert raw.canonical_missing_identity_count == 1
-
-
-def test_candidate_observation_legacy_empty_config_hash_warns(full_schema_db: Path):
-    conn = sqlite3.connect(str(full_schema_db))
-    conn.execute(
-        "INSERT INTO candidate_observations "
-        "(ticker, snapshot_date, captured_at, schema_version, payload_json, workflow, "
-        "window_sessions, data_as_of_date, config_hash) "
-        "VALUES ('BBCA', '2026-01-02', '2026-01-02T00:00:00', 1, '{}', '', 0, '', '')"
+        "INSERT INTO learning_observations "
+        "(observation_id, purpose, compatibility_id, captured_at, decision_payload_json, "
+        "contract_id, window_id) "
+        "VALUES ('oid-1', 'ACCUMULATION_DISCOVERY', '', '2026-01-02T00:00:00', "
+        "'{}', 'c1', 'BBCA:2026-01-02')"
     )
     conn.commit()
     conn.close()
@@ -147,20 +133,18 @@ def test_candidate_observation_legacy_empty_config_hash_warns(full_schema_db: Pa
 
     assert raw.legacy_row_count == 1
     assert raw.canonical_row_count == 0
-    # Legacy rows are excluded from the canonical-identity check entirely.
     assert raw.canonical_missing_identity_count == 0
 
 
-def test_duplicate_canonical_candidate_identity_warns(full_schema_db: Path):
+def test_duplicate_learning_observation_id_warns(full_schema_db: Path):
     conn = sqlite3.connect(str(full_schema_db))
-    for _ in range(2):
+    for i in range(2):
         conn.execute(
-            "INSERT INTO candidate_observations "
-            "(ticker, snapshot_date, captured_at, schema_version, payload_json, workflow, "
-            "window_sessions, data_as_of_date, config_hash) "
-            f"VALUES ('BBCA', '2026-01-02', '2026-01-02T00:00:00', "
-            f"{CANDIDATE_OBSERVATION_SCHEMA_VERSION}, '{{}}', 'w', 5, "
-            "'2026-01-02', 'abc123')"
+            "INSERT INTO learning_observations "
+            "(observation_id, purpose, compatibility_id, captured_at, decision_payload_json, "
+            "contract_id, window_id) "
+            "VALUES ('oid-dup', 'ACCUMULATION_DISCOVERY', 'sha256:abc', "
+            f"'2026-01-02T00:00:0{i}', '{{}}', 'c1', 'BBCA:2026-01-02')"
         )
     conn.commit()
     conn.close()
@@ -171,14 +155,14 @@ def test_duplicate_canonical_candidate_identity_warns(full_schema_db: Path):
     assert raw.duplicate_canonical_identity_count == 1
 
 
-def test_invalid_candidate_payload_json_fails(full_schema_db: Path):
+def test_invalid_decision_payload_json_fails(full_schema_db: Path):
     conn = sqlite3.connect(str(full_schema_db))
     conn.execute(
-        "INSERT INTO candidate_observations "
-        "(ticker, snapshot_date, captured_at, schema_version, payload_json, workflow, "
-        "window_sessions, data_as_of_date, config_hash) "
-        "VALUES ('BBCA', '2026-01-02', '2026-01-02T00:00:00', 1, 'not-json', 'w', 5, "
-        "'2026-01-02', '')"
+        "INSERT INTO learning_observations "
+        "(observation_id, purpose, compatibility_id, captured_at, decision_payload_json, "
+        "contract_id, window_id) "
+        "VALUES ('oid-1', 'ACCUMULATION_DISCOVERY', '', '2026-01-02T00:00:00', "
+        "'not-json', 'c1', 'BBCA:2026-01-02')"
     )
     conn.commit()
     conn.close()
@@ -189,14 +173,14 @@ def test_invalid_candidate_payload_json_fails(full_schema_db: Path):
     assert raw.invalid_payload_json_count == 1
 
 
-def test_candidate_payload_missing_schema_marker_is_detected(full_schema_db: Path):
+def test_decision_payload_missing_schema_marker_is_detected(full_schema_db: Path):
     conn = sqlite3.connect(str(full_schema_db))
     conn.execute(
-        "INSERT INTO candidate_observations "
-        "(ticker, snapshot_date, captured_at, schema_version, payload_json, workflow, "
-        "window_sessions, data_as_of_date, config_hash) "
-        "VALUES ('BBCA', '2026-01-02', '2026-01-02T00:00:00', 1, '{\"foo\": 1}', 'w', 5, "
-        "'2026-01-02', '')"
+        "INSERT INTO learning_observations "
+        "(observation_id, purpose, compatibility_id, captured_at, decision_payload_json, "
+        "contract_id, window_id) "
+        "VALUES ('oid-1', 'ACCUMULATION_DISCOVERY', '', '2026-01-02T00:00:00', "
+        "'{\"foo\": 1}', 'c1', 'BBCA:2026-01-02')"
     )
     conn.commit()
     conn.close()
@@ -207,11 +191,11 @@ def test_candidate_payload_missing_schema_marker_is_detected(full_schema_db: Pat
     assert raw.payload_missing_schema_marker_count == 1
 
 
-def test_partial_candidate_observations_schema_returns_schema_insufficient(tmp_path: Path):
-    db_path = tmp_path / "partial_candidate.db"
+def test_partial_learning_observations_schema_returns_schema_insufficient(tmp_path: Path):
+    db_path = tmp_path / "partial_learning.db"
     conn = sqlite3.connect(str(db_path))
-    conn.execute("CREATE TABLE candidate_observations (ticker TEXT)")
-    conn.execute("INSERT INTO candidate_observations VALUES ('BBCA')")
+    conn.execute("CREATE TABLE learning_observations (purpose TEXT)")
+    conn.execute("INSERT INTO learning_observations VALUES ('ACCUMULATION_DISCOVERY')")
     conn.commit()
     conn.close()
 
@@ -220,21 +204,19 @@ def test_partial_candidate_observations_schema_returns_schema_insufficient(tmp_p
 
     assert raw.exists is True
     assert raw.schema_sufficient is False
-    assert "snapshot_date" in raw.missing_columns
+    assert "observation_id" in raw.missing_columns
     assert raw.row_count == 1
 
 
-# ── signal_forward_labels_identity_linkage ───────────────────────────────
+# ── learning_outcome_labels identity + linkage ───────────────────────────
 
 
-def test_signal_label_invalid_fingerprint_json_fails(full_schema_db: Path):
+def test_outcome_label_invalid_metrics_json_fails(full_schema_db: Path):
     conn = sqlite3.connect(str(full_schema_db))
     conn.execute(
-        "INSERT INTO signal_forward_labels "
-        "(ticker, signal_date, horizon, observation_captured_at, outcome_label, "
-        "fingerprint_json, schema_version) "
-        "VALUES ('BBCA', '2026-01-02', '5d', '2026-01-02T00:00:00', 'SUCCESS', "
-        "'not-json', 1)"
+        "INSERT INTO learning_outcome_labels "
+        "(label_id, observation_id, contract_id, metrics_json) "
+        "VALUES ('lab-1', 'oid-1', 'price_path.accum_10d.v1', 'not-json')"
     )
     conn.commit()
     conn.close()
@@ -245,16 +227,14 @@ def test_signal_label_invalid_fingerprint_json_fails(full_schema_db: Path):
     assert raw.invalid_fingerprint_json_count == 1
 
 
-def test_signal_label_linkage_reported_honestly_when_schema_lacks_identity(tmp_path: Path):
-    # candidate_observations does not exist at all -> linkage cannot be proven.
+def test_outcome_label_linkage_unprovable_without_observations(tmp_path: Path):
     db_path = tmp_path / "labels_only.db"
     conn = sqlite3.connect(str(db_path))
-    _create_signal_forward_labels(conn)
+    _create_learning_outcome_labels(conn)
     conn.execute(
-        "INSERT INTO signal_forward_labels "
-        "(ticker, signal_date, horizon, observation_captured_at, outcome_label, "
-        "fingerprint_json, schema_version) "
-        "VALUES ('BBCA', '2026-01-02', '5d', '2026-01-02T00:00:00', 'SUCCESS', '{}', 1)"
+        "INSERT INTO learning_outcome_labels "
+        "(label_id, observation_id, contract_id, metrics_json) "
+        "VALUES ('lab-1', 'oid-1', 'price_path.accum_10d.v1', '{}')"
     )
     conn.commit()
     conn.close()
@@ -266,13 +246,12 @@ def test_signal_label_linkage_reported_honestly_when_schema_lacks_identity(tmp_p
     assert raw.orphan_linkage_count == 0
 
 
-def test_signal_label_orphan_linkage_is_detected(full_schema_db: Path):
+def test_outcome_label_orphan_linkage_is_detected(full_schema_db: Path):
     conn = sqlite3.connect(str(full_schema_db))
     conn.execute(
-        "INSERT INTO signal_forward_labels "
-        "(ticker, signal_date, horizon, observation_captured_at, outcome_label, "
-        "fingerprint_json, schema_version) "
-        "VALUES ('BBCA', '2026-01-02', '5d', '2026-01-02T00:00:00', 'SUCCESS', '{}', 1)"
+        "INSERT INTO learning_outcome_labels "
+        "(label_id, observation_id, contract_id, metrics_json) "
+        "VALUES ('lab-1', 'oid-missing', 'price_path.accum_10d.v1', '{}')"
     )
     conn.commit()
     conn.close()
@@ -284,20 +263,19 @@ def test_signal_label_orphan_linkage_is_detected(full_schema_db: Path):
     assert raw.orphan_linkage_count == 1
 
 
-def test_signal_label_linkage_matches_candidate_observation(full_schema_db: Path):
+def test_outcome_label_linkage_matches_learning_observation(full_schema_db: Path):
     conn = sqlite3.connect(str(full_schema_db))
     conn.execute(
-        "INSERT INTO candidate_observations "
-        "(ticker, snapshot_date, captured_at, schema_version, payload_json, workflow, "
-        "window_sessions, data_as_of_date, config_hash) "
-        "VALUES ('BBCA', '2026-01-02', '2026-01-02T00:00:00', 1, '{}', 'w', 5, "
-        "'2026-01-02', '')"
+        "INSERT INTO learning_observations "
+        "(observation_id, purpose, compatibility_id, captured_at, decision_payload_json, "
+        "contract_id, window_id) "
+        "VALUES ('oid-1', 'ACCUMULATION_DISCOVERY', 'sha256:abc', '2026-01-02T00:00:00', "
+        "'{}', 'c1', 'BBCA:2026-01-02')"
     )
     conn.execute(
-        "INSERT INTO signal_forward_labels "
-        "(ticker, signal_date, horizon, observation_captured_at, outcome_label, "
-        "fingerprint_json, schema_version) "
-        "VALUES ('BBCA', '2026-01-02', '5d', '2026-01-02T00:00:00', 'SUCCESS', '{}', 1)"
+        "INSERT INTO learning_outcome_labels "
+        "(label_id, observation_id, contract_id, metrics_json) "
+        "VALUES ('lab-1', 'oid-1', 'price_path.accum_10d.v1', '{}')"
     )
     conn.commit()
     conn.close()
@@ -309,11 +287,13 @@ def test_signal_label_linkage_matches_candidate_observation(full_schema_db: Path
     assert raw.orphan_linkage_count == 0
 
 
-def test_partial_signal_forward_labels_schema_returns_schema_insufficient(tmp_path: Path):
+def test_partial_learning_outcome_labels_schema_returns_schema_insufficient(
+    tmp_path: Path,
+):
     db_path = tmp_path / "partial_labels.db"
     conn = sqlite3.connect(str(db_path))
-    conn.execute("CREATE TABLE signal_forward_labels (ticker TEXT)")
-    conn.execute("INSERT INTO signal_forward_labels VALUES ('BBCA')")
+    conn.execute("CREATE TABLE learning_outcome_labels (label_id TEXT)")
+    conn.execute("INSERT INTO learning_outcome_labels VALUES ('lab-1')")
     conn.commit()
     conn.close()
 
@@ -322,7 +302,7 @@ def test_partial_signal_forward_labels_schema_returns_schema_insufficient(tmp_pa
 
     assert raw.exists is True
     assert raw.schema_sufficient is False
-    assert "signal_date" in raw.missing_columns
+    assert "observation_id" in raw.missing_columns
 
 
 # ── market_context_snapshot_identity ─────────────────────────────────────
@@ -539,7 +519,7 @@ def test_regime_observations_partial_schema_returns_schema_insufficient(tmp_path
 # ── learning_observations_risk_pit ───────────────────────────────────────
 
 
-def _create_learning_observations(conn: sqlite3.Connection) -> None:
+def _create_learning_observations_risk_pit_schema(conn: sqlite3.Connection) -> None:
     conn.execute(
         """
         CREATE TABLE learning_observations (
@@ -587,7 +567,7 @@ def _payload(
 def test_learning_risk_pit_clean_rows(tmp_path: Path):
     db = tmp_path / "clean.db"
     conn = sqlite3.connect(db)
-    _create_learning_observations(conn)
+    _create_learning_observations_risk_pit_schema(conn)
     conn.execute(
         "INSERT INTO learning_observations VALUES (?, ?, ?)",
         ("o1", "ACCUMULATION_DISCOVERY", _payload()),
@@ -606,7 +586,7 @@ def test_learning_risk_pit_clean_rows(tmp_path: Path):
 def test_learning_risk_pit_contaminated_shape(tmp_path: Path):
     db = tmp_path / "bad.db"
     conn = sqlite3.connect(db)
-    _create_learning_observations(conn)
+    _create_learning_observations_risk_pit_schema(conn)
     conn.execute(
         "INSERT INTO learning_observations VALUES (?, ?, ?)",
         (
@@ -634,7 +614,7 @@ def test_learning_risk_pit_contaminated_shape(tmp_path: Path):
 def test_learning_risk_pit_sample_capped_at_10(tmp_path: Path):
     db = tmp_path / "many.db"
     conn = sqlite3.connect(db)
-    _create_learning_observations(conn)
+    _create_learning_observations_risk_pit_schema(conn)
     for i in range(15):
         conn.execute(
             "INSERT INTO learning_observations VALUES (?, ?, ?)",
@@ -659,7 +639,7 @@ def test_learning_risk_pit_sample_capped_at_10(tmp_path: Path):
 def test_learning_risk_pit_no_risk_block_not_defect(tmp_path: Path):
     db = tmp_path / "norisk.db"
     conn = sqlite3.connect(db)
-    _create_learning_observations(conn)
+    _create_learning_observations_risk_pit_schema(conn)
     conn.execute(
         "INSERT INTO learning_observations VALUES (?, ?, ?)",
         ("o1", "ACCUMULATION_DISCOVERY", _payload(include_risk=False)),
@@ -676,7 +656,7 @@ def test_learning_risk_pit_no_risk_block_not_defect(tmp_path: Path):
 def test_learning_risk_pit_invalid_json_unreadable(tmp_path: Path):
     db = tmp_path / "badjson.db"
     conn = sqlite3.connect(db)
-    _create_learning_observations(conn)
+    _create_learning_observations_risk_pit_schema(conn)
     conn.execute(
         "INSERT INTO learning_observations VALUES (?, ?, ?)",
         ("o1", "ACCUMULATION_DISCOVERY", "{not-json"),
@@ -692,7 +672,7 @@ def test_learning_risk_pit_invalid_json_unreadable(tmp_path: Path):
 def test_learning_risk_pit_missing_canonical_window_falls_back_to_7(tmp_path: Path):
     db = tmp_path / "fallback.db"
     conn = sqlite3.connect(db)
-    _create_learning_observations(conn)
+    _create_learning_observations_risk_pit_schema(conn)
     conn.execute(
         "INSERT INTO learning_observations VALUES (?, ?, ?)",
         (
@@ -716,7 +696,7 @@ def test_learning_risk_pit_missing_canonical_window_falls_back_to_7(tmp_path: Pa
 def test_learning_risk_pit_earlier_risk_not_flagged(tmp_path: Path):
     db = tmp_path / "earlier.db"
     conn = sqlite3.connect(db)
-    _create_learning_observations(conn)
+    _create_learning_observations_risk_pit_schema(conn)
     conn.execute(
         "INSERT INTO learning_observations VALUES (?, ?, ?)",
         (
@@ -735,7 +715,7 @@ def test_learning_risk_pit_earlier_risk_not_flagged(tmp_path: Path):
 def test_learning_risk_pit_ignores_non_accum_purpose(tmp_path: Path):
     db = tmp_path / "preopen.db"
     conn = sqlite3.connect(db)
-    _create_learning_observations(conn)
+    _create_learning_observations_risk_pit_schema(conn)
     conn.execute(
         "INSERT INTO learning_observations VALUES (?, ?, ?)",
         (
@@ -755,7 +735,7 @@ def test_learning_risk_pit_ignores_non_accum_purpose(tmp_path: Path):
 def test_learning_risk_pit_gate_mismatch(tmp_path: Path):
     db = tmp_path / "gate.db"
     conn = sqlite3.connect(db)
-    _create_learning_observations(conn)
+    _create_learning_observations_risk_pit_schema(conn)
     conn.execute(
         "INSERT INTO learning_observations VALUES (?, ?, ?)",
         (
@@ -787,7 +767,7 @@ def test_learning_risk_pit_missing_table(tmp_path: Path):
 
 
 def test_reader_does_not_mutate_database(full_schema_db: Path):
-    row_count_before = _row_count(full_schema_db, "candidate_observations")
+    row_count_before = _row_count(full_schema_db, "learning_observations")
     mtime_before = full_schema_db.stat().st_mtime_ns
 
     reader = SQLiteSignalArtifactReconciliationReader(full_schema_db)
@@ -797,7 +777,7 @@ def test_reader_does_not_mutate_database(full_schema_db: Path):
     reader.observe_regime_observations_identity()
     reader.observe_learning_observations_risk_pit()
 
-    assert _row_count(full_schema_db, "candidate_observations") == row_count_before
+    assert _row_count(full_schema_db, "learning_observations") == row_count_before
     assert full_schema_db.stat().st_mtime_ns == mtime_before
 
 
@@ -821,7 +801,7 @@ def test_reader_opens_connection_in_read_only_mode(full_schema_db: Path, monkeyp
 
     with real_connect(f"file:{full_schema_db}?mode=ro", uri=True) as ro_conn:
         with pytest.raises(sqlite3.OperationalError):
-            ro_conn.execute("INSERT INTO candidate_observations (ticker) VALUES ('X')")
+            ro_conn.execute("INSERT INTO learning_observations (observation_id) VALUES ('X')")
 
 
 def _row_count(db_path: Path, table: str) -> int:

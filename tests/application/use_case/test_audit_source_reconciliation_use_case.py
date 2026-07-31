@@ -631,8 +631,11 @@ def test_artifact_findings_are_included_in_response():
 
     response = use_case.execute()
 
-    assert any(f.code == "CANDIDATE_OBSERVATIONS_INVALID_PAYLOAD_JSON" for f in response.findings)
-    check = next(c for c in response.checks if c.name == "candidate_observations_identity")
+    assert any(
+        f.code == "LEARNING_OBSERVATIONS_INVALID_DECISION_PAYLOAD_JSON"
+        for f in response.findings
+    )
+    check = next(c for c in response.checks if c.name == "learning_observations_identity")
     assert check.status == "FAIL"
 
 
@@ -700,8 +703,8 @@ def test_existing_core_and_enrichment_checks_still_included_with_artifact_reader
         "broker_daily_flow_arithmetic_scope",
         "foreign_flow_reconciliation",
         "seasonality_provenance_consistency",
-        "candidate_observations_identity",
-        "signal_forward_labels_identity_linkage",
+        "learning_observations_identity",
+        "learning_outcome_labels_identity_linkage",
         "market_context_snapshot_identity",
         "regime_observations_identity",
         "learning_observations_risk_pit",
@@ -728,7 +731,7 @@ def test_signal_forward_labels_linkage_unprovable_warns():
     response = use_case.execute()
 
     assert any(
-        f.code == "SIGNAL_FORWARD_LABELS_LINKAGE_UNPROVABLE" and f.severity == "WARN"
+        f.code == "LEARNING_OUTCOME_LABELS_LINKAGE_UNPROVABLE" and f.severity == "WARN"
         for f in response.findings
     )
     assert response.status == "WARN"

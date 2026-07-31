@@ -1,10 +1,14 @@
 """
 Pure evaluation policy for DQ-001E signal-artifact/market-context
-reconciliation checks (candidate_observations, signal_forward_labels,
-market_context_snapshots, regime_observations). Takes read-only
-Raw*Observation facts and turns them into CheckResult/Finding DTOs — no
-I/O, no SQL. Does not duplicate DQ-001C/DQ-001A per-field null reporting;
-this reports table-level identity/linkage/payload-parseability issues.
+reconciliation checks.
+
+Canonical tables (post learning clean-break):
+  learning_observations, learning_outcome_labels,
+  market_context_snapshots, regime_observations.
+
+Retired candidate_observations / signal_forward_labels are not required.
+DTO/method names may still say "candidate"/"signal_forward" for call-site
+stability; check ``name`` / ``table`` fields use canonical names.
 
 Layer: Application
 AI usage: None
@@ -74,8 +78,9 @@ def _schema_insufficient_result(
 def evaluate_candidate_observations_identity(
     raw: RawCandidateObservationIdentityObservation,
 ) -> tuple[SourceReconciliationCheckResult, tuple[SourceReconciliationFinding, ...]]:
-    table = "candidate_observations"
-    name = "candidate_observations_identity"
+    """learning_observations identity (canonical post clean-break)."""
+    table = "learning_observations"
+    name = "learning_observations_identity"
     if not raw.exists:
         return _missing_table_result(name, table, "FAIL")
 
@@ -83,7 +88,7 @@ def evaluate_candidate_observations_identity(
         return _schema_insufficient_result(
             name,
             table,
-            "CANDIDATE_OBSERVATIONS_SCHEMA_INSUFFICIENT",
+            "LEARNING_OBSERVATIONS_SCHEMA_INSUFFICIENT",
             raw.row_count,
             raw.missing_columns,
         )
@@ -94,13 +99,13 @@ def evaluate_candidate_observations_identity(
         findings.append(
             SourceReconciliationFinding(
                 severity="FAIL",
-                code="CANDIDATE_OBSERVATIONS_CANONICAL_MISSING_IDENTITY",
+                code="LEARNING_OBSERVATIONS_CANONICAL_MISSING_IDENTITY",
                 table=table,
                 field=None,
                 message=(
-                    f"{raw.canonical_missing_identity_count} canonical "
-                    "(config_hash != '') row(s) have null/empty identity fields "
-                    "or window_sessions <= 0."
+                    f"{raw.canonical_missing_identity_count} cohort-tagged "
+                    "(compatibility_id set) row(s) have null/empty observation_id, "
+                    "purpose, captured_at, contract_id, window_id, or decision_payload_json."
                 ),
                 impact="Canonical rows cannot be trusted for point-in-time replay/readiness.",
                 sample_rows=raw.canonical_missing_identity_samples,
@@ -113,17 +118,16 @@ def evaluate_candidate_observations_identity(
         findings.append(
             SourceReconciliationFinding(
                 severity="WARN",
-                code="CANDIDATE_OBSERVATIONS_LEGACY_ROWS",
+                code="LEARNING_OBSERVATIONS_UNTAGGED_COMPATIBILITY",
                 table=table,
-                field="config_hash",
+                field="compatibility_id",
                 message=(
                     f"{raw.legacy_row_count} of {raw.row_count} row(s) have empty "
-                    "config_hash (legacy/non-canonical identity)."
+                    "compatibility_id (untagged / non-cohort identity)."
                 ),
                 impact=(
-                    "Legacy rows predate canonical identity and are not "
-                    "point-in-time reproducible; exclude from canonical "
-                    "replay/readiness."
+                    "Untagged rows cannot be isolated by compatibility cohort; "
+                    "exclude from single-cohort challenge/label runs."
                 ),
                 row_count=raw.row_count,
                 mismatch_count=raw.legacy_row_count,
@@ -134,13 +138,12 @@ def evaluate_candidate_observations_identity(
         findings.append(
             SourceReconciliationFinding(
                 severity="WARN",
-                code="CANDIDATE_OBSERVATIONS_DUPLICATE_CANONICAL_IDENTITY",
+                code="LEARNING_OBSERVATIONS_DUPLICATE_OBSERVATION_ID",
                 table=table,
-                field=None,
+                field="observation_id",
                 message=(
-                    f"{raw.duplicate_canonical_identity_count} duplicate canonical "
-                    "(ticker, snapshot_date, workflow, window_sessions, "
-                    "data_as_of_date, config_hash) row(s) found."
+                    f"{raw.duplicate_canonical_identity_count} duplicate "
+                    "observation_id row(s) among compatibility-tagged observations."
                 ),
                 impact="Canonical identity is not unique; readiness counts may double-count.",
                 sample_rows=raw.duplicate_canonical_identity_samples,
@@ -153,11 +156,11 @@ def evaluate_candidate_observations_identity(
         findings.append(
             SourceReconciliationFinding(
                 severity="FAIL",
-                code="CANDIDATE_OBSERVATIONS_INVALID_PAYLOAD_JSON",
+                code="LEARNING_OBSERVATIONS_INVALID_DECISION_PAYLOAD_JSON",
                 table=table,
-                field="payload_json",
+                field="decision_payload_json",
                 message=(
-                    f"{raw.invalid_payload_json_count} row(s) have payload_json "
+                    f"{raw.invalid_payload_json_count} row(s) have decision_payload_json "
                     "that does not parse as valid JSON."
                 ),
                 impact="Evidence/fingerprint payload cannot be read for affected rows.",
@@ -171,12 +174,12 @@ def evaluate_candidate_observations_identity(
         findings.append(
             SourceReconciliationFinding(
                 severity="WARN",
-                code="CANDIDATE_OBSERVATIONS_PAYLOAD_MISSING_SCHEMA_MARKER",
+                code="LEARNING_OBSERVATIONS_PAYLOAD_MISSING_SCHEMA_MARKER",
                 table=table,
-                field="payload_json",
+                field="decision_payload_json",
                 message=(
                     f"{raw.payload_missing_schema_marker_count} row(s) have valid "
-                    "JSON payload_json but no top-level schema_version key."
+                    "JSON decision_payload_json but no top-level schema_version key."
                 ),
                 impact="Payload shape cannot be versioned for affected rows.",
                 sample_rows=raw.payload_missing_schema_marker_samples,
@@ -197,8 +200,8 @@ def evaluate_candidate_observations_identity(
             + raw.invalid_payload_json_count
         ),
         summary={
-            "canonical_row_count": raw.canonical_row_count,
-            "legacy_row_count": raw.legacy_row_count,
+            "compatibility_tagged_row_count": raw.canonical_row_count,
+            "untagged_row_count": raw.legacy_row_count,
         },
     )
     return check, tuple(findings)
@@ -207,8 +210,9 @@ def evaluate_candidate_observations_identity(
 def evaluate_signal_forward_labels_linkage(
     raw: RawSignalForwardLabelsLinkageObservation,
 ) -> tuple[SourceReconciliationCheckResult, tuple[SourceReconciliationFinding, ...]]:
-    table = "signal_forward_labels"
-    name = "signal_forward_labels_identity_linkage"
+    """learning_outcome_labels identity + join to learning_observations."""
+    table = "learning_outcome_labels"
+    name = "learning_outcome_labels_identity_linkage"
     if not raw.exists:
         return _missing_table_result(name, table, "FAIL")
 
@@ -216,7 +220,7 @@ def evaluate_signal_forward_labels_linkage(
         return _schema_insufficient_result(
             name,
             table,
-            "SIGNAL_FORWARD_LABELS_SCHEMA_INSUFFICIENT",
+            "LEARNING_OUTCOME_LABELS_SCHEMA_INSUFFICIENT",
             raw.row_count,
             raw.missing_columns,
         )
@@ -227,12 +231,12 @@ def evaluate_signal_forward_labels_linkage(
         findings.append(
             SourceReconciliationFinding(
                 severity="FAIL",
-                code="SIGNAL_FORWARD_LABELS_MISSING_IDENTITY",
+                code="LEARNING_OUTCOME_LABELS_MISSING_IDENTITY",
                 table=table,
                 field=None,
                 message=(
-                    f"{raw.missing_identity_count} row(s) have null/empty ticker, "
-                    "signal_date, horizon, or observation_captured_at."
+                    f"{raw.missing_identity_count} row(s) have null/empty label_id, "
+                    "observation_id, or contract_id."
                 ),
                 impact="Row cannot be trusted as a valid identifiable label.",
                 sample_rows=raw.missing_identity_samples,
@@ -245,12 +249,12 @@ def evaluate_signal_forward_labels_linkage(
         findings.append(
             SourceReconciliationFinding(
                 severity="FAIL",
-                code="SIGNAL_FORWARD_LABELS_DUPLICATE_IDENTITY",
+                code="LEARNING_OUTCOME_LABELS_DUPLICATE_IDENTITY",
                 table=table,
                 field=None,
                 message=(
-                    f"{raw.duplicate_identity_count} duplicate (ticker, signal_date, "
-                    "horizon, observation_captured_at) row(s) found."
+                    f"{raw.duplicate_identity_count} duplicate "
+                    "(observation_id, contract_id) row(s) found."
                 ),
                 impact="Duplicate identity directly inflates readiness/outcome counts.",
                 sample_rows=raw.duplicate_identity_samples,
@@ -263,14 +267,14 @@ def evaluate_signal_forward_labels_linkage(
         findings.append(
             SourceReconciliationFinding(
                 severity="FAIL",
-                code="SIGNAL_FORWARD_LABELS_INVALID_FINGERPRINT_JSON",
+                code="LEARNING_OUTCOME_LABELS_INVALID_METRICS_JSON",
                 table=table,
-                field="fingerprint_json",
+                field="metrics_json",
                 message=(
                     f"{raw.invalid_fingerprint_json_count} row(s) have "
-                    "fingerprint_json that does not parse as valid JSON."
+                    "metrics_json that does not parse as valid JSON."
                 ),
-                impact="Label fingerprint cannot be read for affected rows.",
+                impact="Label metrics cannot be read for affected rows.",
                 sample_rows=raw.invalid_fingerprint_json_samples,
                 row_count=raw.row_count,
                 mismatch_count=raw.invalid_fingerprint_json_count,
@@ -282,14 +286,12 @@ def evaluate_signal_forward_labels_linkage(
             findings.append(
                 SourceReconciliationFinding(
                     severity="FAIL",
-                    code="SIGNAL_FORWARD_LABELS_ORPHAN_LINKAGE",
+                    code="LEARNING_OUTCOME_LABELS_ORPHAN_LINKAGE",
                     table=table,
-                    field=None,
+                    field="observation_id",
                     message=(
                         f"{raw.orphan_linkage_count} label row(s) reference an "
-                        "observation identity (ticker, signal_date, "
-                        "observation_captured_at) with no matching "
-                        "candidate_observations (ticker, snapshot_date, captured_at) row."
+                        "observation_id with no matching learning_observations row."
                     ),
                     impact="Label cannot be traced back to its source observation.",
                     sample_rows=raw.orphan_linkage_samples,
@@ -301,11 +303,11 @@ def evaluate_signal_forward_labels_linkage(
         findings.append(
             SourceReconciliationFinding(
                 severity="WARN",
-                code="SIGNAL_FORWARD_LABELS_LINKAGE_UNPROVABLE",
+                code="LEARNING_OUTCOME_LABELS_LINKAGE_UNPROVABLE",
                 table=table,
                 field=None,
                 message=(
-                    "candidate_observations schema does not have enough identity "
+                    "learning_observations schema does not have enough identity "
                     "columns present to prove observation linkage."
                 ),
                 impact=(
@@ -319,7 +321,7 @@ def evaluate_signal_forward_labels_linkage(
     check = SourceReconciliationCheckResult(
         name=name,
         status=status,
-        tables=(table, "candidate_observations"),
+        tables=(table, "learning_observations"),
         checked_row_count=raw.row_count,
         mismatch_count=(
             raw.missing_identity_count

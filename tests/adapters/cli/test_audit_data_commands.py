@@ -297,13 +297,30 @@ def test_reconcile_sources_json_output_includes_dq_001e_artifact_checks(tmp_path
 
     check_names = {c["name"] for c in payload["checks"]}
     for expected in (
-        "candidate_observations_identity",
-        "signal_forward_labels_identity_linkage",
+        "learning_observations_identity",
+        "learning_outcome_labels_identity_linkage",
         "market_context_snapshot_identity",
         "regime_observations_identity",
         "learning_observations_risk_pit",
     ):
         assert expected in check_names
+
+    # Clean-break: retired tables must not appear as required FAIL names.
+    assert "candidate_observations_identity" not in check_names
+    assert "signal_forward_labels_identity_linkage" not in check_names
+
+    # Learning tables missing from bare fixture → FAIL (same hardness as old
+    # candidate/signal checks), not silent skip.
+    learning_obs = next(
+        c for c in payload["checks"] if c["name"] == "learning_observations_identity"
+    )
+    assert learning_obs["status"] == "FAIL"
+    learning_lab = next(
+        c
+        for c in payload["checks"]
+        if c["name"] == "learning_outcome_labels_identity_linkage"
+    )
+    assert learning_lab["status"] == "FAIL"
 
     # _build_temp_db only creates `candles`; market_context_snapshots and
     # regime_observations are absent so they surface as explicit WARN
