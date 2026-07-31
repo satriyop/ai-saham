@@ -6,6 +6,8 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
+
 from src.adapters.cli import screen_accum_commands as accum_cli
 from src.adapters.cli.main import app
 from src.application.dto.accumulation_screen import AccumulationScreenResponse
@@ -26,6 +28,20 @@ from tests.adapters.cli.screen_accum_test_fixtures import (
     _fake_workflow_result,
     runner,
 )
+
+
+@pytest.fixture(autouse=True)
+def _no_explicit_ticker_auto_refresh(monkeypatch):
+    """`screen accum TICKER` auto-refreshes explicit tickers before the (mocked)
+    workflow runs, via a live Stockbit candle fetch (ADR-054 S1,
+    _refresh_explicit_tickers_for_screen → auto_refresh_swing_data). Left live
+    it blocks on a real TCP connect (~10-14s per invoke → the whole file times
+    out). Stub it: these tests assert on JSON/table shape, not the refresh.
+    Patched at the call-site module (local import binds the name there)."""
+    monkeypatch.setattr(
+        "src.adapters.cli.plan_swing_optional_fetchers.auto_refresh_swing_data",
+        lambda **kwargs: [],
+    )
 
 
 def _screen_payload(raw: dict) -> dict:
