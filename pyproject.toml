@@ -52,7 +52,8 @@ testpaths = ["tests"]
 pythonpath = ["."]
 markers = [
     "uses_live_refresh: opt out of the autouse CLI auto-refresh network stub; the test exercises the real refresh path",
-    "tui: full-app Textual mount/paint test (~1.5-4.7s each; ~60% of suite wall time). Auto-applied to tests/adapters/tui. Exclude the heavy slice with `-m 'not tui'`.",
+    "tui: full-app Textual mount/drive test (~1.5-4.7s each; ~60% of suite wall time). Auto-applied under tests/adapters/tui to any test that uses `run_test`. Exclude the heavy slice with `-m 'not tui'`; force-include with the marker.",
+    "tui_unit: force a tests/adapters/tui test OUT of the `tui` slice (a pure model/paint unit that never mounts the app); overrides the auto-tag.",
 ]
 
 [tool.ruff]
