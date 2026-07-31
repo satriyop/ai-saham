@@ -542,19 +542,23 @@ Before implementation, the agent must:
 
 ## Completion Record
 
-- Completed date: 2026-07-31 (`ai-saham` producer)
-- `ai-saham` implementation commit: uncommitted at implementation time (working tree)
-- `ml-saham` implementation commit: not started (companion task activation-blocked)
+- Completed date: 2026-07-31 (`ai-saham` producer + review hardening)
+- `ai-saham` implementation commits:
+  - initial producer: `c5d95bb4`
+  - review fixes (exact object identity, atomic six-row write, non-empty
+    `source_revision`, payload/column integrity): this follow-up commit
+- `ml-saham` implementation commit: not started (companion task still required)
 - Fresh compatibility cohort: not yet captured; requires post-deploy
-  `research accum capture|backfill` on a live DB
-- Snapshot contract/digest verification: unit + SQLite repository tests green;
-  source-contracts catalog includes `learning_policy_snapshots` (PASS on empty
-  table smoke)
+  `research accum capture|backfill` on a live DB after this hardening lands
+- Snapshot contract/digest verification: unit + SQLite repository + identity
+  wiring tests green
+- Review findings fixed:
+  1. Single `AccumulationProductionPolicyBundle` injected into engines + ensure
+  2. `add_policy_snapshots_atomic` one `BEGIN IMMEDIATE` transaction
+  3. `resolve_producer_source_revision()` non-empty provenance
+  4. Payload metadata must match row columns
 - Commands run:
-  - `.venv/bin/python -m pytest tests/domain/value_objects/test_production_policy_snapshot.py tests/application/use_case/test_ensure_accumulation_policy_snapshots_use_case.py tests/application/services/test_accumulation_policy_snapshot_payloads.py tests/infrastructure/persistence/test_sqlite_learning_artifact_repository.py tests/infrastructure/persistence/test_learning_clean_break.py tests/domain/value_objects/test_learning_artifacts.py -q`
+  - focused pytest suite (46 tests including identity + atomic batch)
   - `ruff check src/ tests/` and `ruff format --check src/ tests/`
-  - smoke `saham audit data source-contracts` against temp DB with new schema
-- Test result: focused suites passed (39+ related)
-- Data-audit result: `learning_policy_snapshots` registered; contract_status PASS
-  on empty table; full-DB FAIL expected when other audited tables are missing
+- Test result: focused suites passed
 - Lint result: whole-repo Ruff check + format green

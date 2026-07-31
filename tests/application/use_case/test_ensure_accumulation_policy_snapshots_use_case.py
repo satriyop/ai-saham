@@ -33,22 +33,39 @@ from src.domain.value_objects.signal_observation_contracts import (
 )
 
 NOW = datetime(2026, 7, 31, 12, 0, tzinfo=timezone.utc)
+SOURCE_REVISION = "ai-saham@test+git:deadbeef"
 
 
 class _MemoryPolicySnapshotRepo:
     def __init__(self) -> None:
         self.rows: dict[str, ProductionPolicySnapshot] = {}
+        self.batch_calls: list[tuple[str, ...]] = []
 
     def add_policy_snapshot(self, artifact: ProductionPolicySnapshot) -> bool:
-        existing = self.rows.get(artifact.snapshot_id)
-        if existing is not None:
-            if existing.payload_digest == artifact.payload_digest:
-                return False
-            raise LearningContractError(
-                f"immutable artifact conflict for learning_policy_snapshots.{artifact.snapshot_id}"
-            )
-        self.rows[artifact.snapshot_id] = artifact
-        return True
+        raise AssertionError("single-row add must not be used by ensure use case")
+
+    def add_policy_snapshots_atomic(
+        self, artifacts: Sequence[ProductionPolicySnapshot]
+    ) -> tuple[int, int]:
+        self.batch_calls.append(tuple(a.snapshot_id for a in artifacts))
+        # Simulate all-or-nothing: apply to a staging map first.
+        staging = dict(self.rows)
+        inserted = 0
+        reused = 0
+        for artifact in artifacts:
+            existing = staging.get(artifact.snapshot_id)
+            if existing is not None:
+                if existing.payload_digest == artifact.payload_digest:
+                    reused += 1
+                    continue
+                raise LearningContractError(
+                    "immutable artifact conflict for learning_policy_snapshots."
+                    f"{artifact.snapshot_id}"
+                )
+            staging[artifact.snapshot_id] = artifact
+            inserted += 1
+        self.rows = staging
+        return inserted, reused
 
     def get_policy_snapshot(self, snapshot_id: str) -> ProductionPolicySnapshot | None:
         return self.rows.get(snapshot_id)
@@ -95,7 +112,7 @@ def _request(
     accum: AccumScorePolicy | None = None,
     signal: SignalEngineConfig | None = None,
     created_at: datetime = NOW,
-    source_revision: str = "test",
+    source_revision: str = SOURCE_REVISION,
 ) -> EnsureAccumulationPolicySnapshotsRequest:
     return EnsureAccumulationPolicySnapshotsRequest(
         resolved_config_canonical=canonical,
@@ -117,8 +134,12 @@ def test_ensure_writes_exactly_six_closed_policy_ids() -> None:
     assert response.reused_count == 0
     assert response.required_policy_ids == ACCUMULATION_PRODUCTION_POLICY_IDS
     assert len(repo.rows) == 6
+    assert len(repo.batch_calls) == 1
+    assert len(repo.batch_calls[0]) == 6
     written_ids = {r.policy_id for r in repo.rows.values()}
     assert written_ids == set(ACCUMULATION_PRODUCTION_POLICY_IDS)
+    for snap in repo.rows.values():
+        assert snap.source_revision == SOURCE_REVISION
 
 
 def test_ensure_is_idempotent_for_same_cohort_content() -> None:
@@ -131,6 +152,7 @@ def test_ensure_is_idempotent_for_same_cohort_content() -> None:
     assert second.inserted_count == 0
     assert second.reused_count == 6
     assert len(repo.rows) == 6
+    assert len(repo.batch_calls) == 2
 
 
 def test_ensure_rejects_compatibility_mismatch() -> None:
@@ -147,9 +169,16 @@ def test_ensure_rejects_compatibility_mismatch() -> None:
         structural_gates=request.structural_gates,
         execution_gates=request.execution_gates,
         created_at=NOW,
+        source_revision=SOURCE_REVISION,
     )
     with pytest.raises(LearningContractError, match="compatibility_id mismatch"):
         EnsureAccumulationPolicySnapshotsUseCase(repo).execute(bad)
+
+
+def test_ensure_rejects_empty_source_revision() -> None:
+    repo = _MemoryPolicySnapshotRepo()
+    with pytest.raises(LearningContractError, match="source_revision"):
+        EnsureAccumulationPolicySnapshotsUseCase(repo).execute(_request(source_revision=""))
 
 
 def test_typed_material_change_same_cohort_fails_closed() -> None:
@@ -161,6 +190,8 @@ def test_typed_material_change_same_cohort_fails_closed() -> None:
     use_case.execute(_request(canonical="cfg-1", accum=base))
     with pytest.raises(LearningContractError, match="immutable artifact conflict"):
         use_case.execute(_request(canonical="cfg-1", accum=accum_mutated))
+    # Atomic failure must not leave partial conflict-side rows; original set remains.
+    assert len(repo.rows) == 6
 
 
 def test_resolved_config_change_forks_compatibility_id() -> None:
@@ -175,11 +206,11 @@ def test_resolved_config_change_forks_compatibility_id() -> None:
 def test_created_at_change_does_not_affect_digest() -> None:
     repo = _MemoryPolicySnapshotRepo()
     use_case = EnsureAccumulationPolicySnapshotsUseCase(repo)
-    use_case.execute(_request(created_at=NOW, source_revision="a"))
+    use_case.execute(_request(created_at=NOW, source_revision=SOURCE_REVISION))
     response = use_case.execute(
         _request(
             created_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
-            source_revision="b",
+            source_revision=SOURCE_REVISION,
         )
     )
     assert response.inserted_count == 0

@@ -23,17 +23,27 @@ from src.domain.value_objects.learning_artifacts import (
 NOW = datetime(2026, 7, 31, 12, 0, tzinfo=timezone.utc)
 
 
+def _default_payload(policy_id: str) -> dict:
+    return {
+        "policy_id": policy_id,
+        "policy_version": "v1",
+        "decision_type": "score",
+        "semantic_engine_contract_id": "accum_score_policy.v1",
+        "components": [{"key": "consistency", "weight": 33.3, "enabled": True}],
+    }
+
+
 def _snapshot(
     *,
     policy_id: str = PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
     payload: dict | None = None,
     created_at: datetime = NOW,
-    source_revision: str = "rev-a",
+    source_revision: str = "ai-saham@test+git:abc1234",
     material: str = "sha256:" + ("ab" * 32),
 ) -> ProductionPolicySnapshot:
     return ProductionPolicySnapshot.create(
         purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
-        learning_observation_contract_id=(LearningContractId.ACCUMULATION_OBSERVATION.value),
+        learning_observation_contract_id=LearningContractId.ACCUMULATION_OBSERVATION.value,
         producer_observation_contract="accumulation-discovery.v2",
         compatibility_id="sha256:" + ("cd" * 32),
         policy_id=policy_id,
@@ -41,11 +51,7 @@ def _snapshot(
         decision_type="score",
         semantic_engine_contract_id="accum_score_policy.v1",
         material_config_hash=material,
-        canonical_payload=payload
-        or {
-            "policy_id": policy_id,
-            "components": [{"key": "consistency", "weight": 33.3, "enabled": True}],
-        },
+        canonical_payload=payload or _default_payload(policy_id),
         source_revision=source_revision,
         created_at=created_at,
     )
@@ -53,8 +59,8 @@ def _snapshot(
 
 def test_snapshot_id_is_deterministic_and_excludes_provenance() -> None:
     later = datetime(2026, 7, 31, 18, 0, tzinfo=timezone.utc)
-    a = _snapshot(created_at=NOW, source_revision="a")
-    b = _snapshot(created_at=later, source_revision="b")
+    a = _snapshot(created_at=NOW, source_revision="ai-saham@a")
+    b = _snapshot(created_at=later, source_revision="ai-saham@b")
     assert a.snapshot_id == b.snapshot_id
     assert a.payload_digest == b.payload_digest
 
@@ -65,7 +71,7 @@ def test_snapshot_id_matches_stable_learning_id_formula() -> None:
         LearningContractId.PRODUCTION_POLICY_SNAPSHOT,
         {
             "purpose": AssessmentPurpose.ACCUMULATION_DISCOVERY,
-            "learning_observation_contract_id": (LearningContractId.ACCUMULATION_OBSERVATION.value),
+            "learning_observation_contract_id": LearningContractId.ACCUMULATION_OBSERVATION.value,
             "producer_observation_contract": "accumulation-discovery.v2",
             "compatibility_id": snap.compatibility_id,
             "policy_id": snap.policy_id,
@@ -75,7 +81,11 @@ def test_snapshot_id_matches_stable_learning_id_formula() -> None:
 
 
 def test_payload_digest_is_sha256_of_canonical_json_bytes() -> None:
-    payload = {"policy_id": "x", "weight": 1.0, "nested": {"a": None, "b": True}}
+    payload = {
+        **_default_payload(PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS),
+        "weight": 1.0,
+        "nested": {"a": None, "b": True},
+    }
     snap = _snapshot(payload=payload)
     assert snap.payload_digest == policy_snapshot_payload_digest(payload)
     assert (
@@ -93,8 +103,9 @@ def test_material_config_hash_prefixes_sha256() -> None:
 
 
 def test_payload_change_changes_digest_not_id_when_identity_same() -> None:
-    a = _snapshot(payload={"policy_id": "x", "w": 1.0})
-    b = _snapshot(payload={"policy_id": "x", "w": 2.0})
+    base = _default_payload(PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS)
+    a = _snapshot(payload={**base, "w": 1.0})
+    b = _snapshot(payload={**base, "w": 2.0})
     assert a.snapshot_id == b.snapshot_id
     assert a.payload_digest != b.payload_digest
 
@@ -108,6 +119,62 @@ def test_integrity_rejects_tampered_digest() -> None:
         }
     )
     with pytest.raises(LearningContractError, match="payload_digest"):
+        validate_policy_snapshot_integrity(bad)
+
+
+def test_create_rejects_empty_source_revision() -> None:
+    with pytest.raises(LearningContractError, match="source_revision"):
+        ProductionPolicySnapshot.create(
+            purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+            learning_observation_contract_id=LearningContractId.ACCUMULATION_OBSERVATION.value,
+            producer_observation_contract="accumulation-discovery.v2",
+            compatibility_id="sha256:" + ("cd" * 32),
+            policy_id=PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
+            policy_version="v1",
+            decision_type="score",
+            semantic_engine_contract_id="accum_score_policy.v1",
+            material_config_hash="sha256:" + ("ab" * 32),
+            canonical_payload=_default_payload(PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS),
+            source_revision="",
+            created_at=NOW,
+        )
+
+
+def test_create_rejects_payload_column_metadata_mismatch() -> None:
+    with pytest.raises(LearningContractError, match="does not match column"):
+        ProductionPolicySnapshot.create(
+            purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+            learning_observation_contract_id=LearningContractId.ACCUMULATION_OBSERVATION.value,
+            producer_observation_contract="accumulation-discovery.v2",
+            compatibility_id="sha256:" + ("cd" * 32),
+            policy_id=PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
+            policy_version="v1",
+            decision_type="score",
+            semantic_engine_contract_id="accum_score_policy.v1",
+            material_config_hash="sha256:" + ("ab" * 32),
+            canonical_payload={
+                **_default_payload(PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS),
+                "semantic_engine_contract_id": "other.contract",
+            },
+            source_revision="ai-saham@test",
+            created_at=NOW,
+        )
+
+
+def test_integrity_rejects_payload_column_metadata_mismatch() -> None:
+    snap = _snapshot(payload=_default_payload(PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS))
+    mutated = {
+        **dict(snap.canonical_payload),
+        "decision_type": "gate",
+    }
+    bad = ProductionPolicySnapshot(
+        **{
+            **snap.__dict__,
+            "canonical_payload": mutated,
+            "payload_digest": policy_snapshot_payload_digest(mutated),
+        }
+    )
+    with pytest.raises(LearningContractError, match="does not match column"):
         validate_policy_snapshot_integrity(bad)
 
 

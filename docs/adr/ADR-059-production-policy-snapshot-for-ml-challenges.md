@@ -93,6 +93,19 @@ cannot safely inform human production-policy decisions.
 - Adding a seventh production policy or another purpose requires a new task and
   contract amendment.
 
+## Hardening (2026-07-31 review)
+
+1. **Exact object identity:** corpus write resolves one
+   `AccumulationProductionPolicyBundle` and injects those same typed objects into
+   SignalEngine, AssessRisk gates, AccumScore policy, and snapshot ensure.
+   A second independent config resolve for snapshots is forbidden on this path.
+2. **Atomic closed set:** the six rows are validated then written with
+   `add_policy_snapshots_atomic` under one `BEGIN IMMEDIATE` transaction.
+3. **Provenance:** `source_revision` is required non-empty
+   (`ai-saham@<version>[+git:<sha>]`); empty strings fail closed.
+4. **Integrity:** payload metadata keys `policy_id`, `policy_version`,
+   `decision_type`, and `semantic_engine_contract_id` must match row columns.
+
 ## Related
 
 - ADR-042 deterministic champion and optional model challengers

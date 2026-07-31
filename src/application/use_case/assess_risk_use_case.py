@@ -83,10 +83,13 @@ class AssessRiskUseCase:
         self._indicator_evaluator = indicator_evaluator
         self._indicator_history_days = indicator_history_days
         self._gate_recent_candle_lookback = gate_recent_candle_lookback
+        # Preserve injected gate object identity for ADR-059 snapshot binding.
+        self._structural_gates: list[RiskGate] = list(structural_gates or [])
+        self._execution_gates: list[RiskGate] = list(execution_gates or [])
         self._gate_evaluator = AssessRiskGateEvaluator(
             repository=repository,
-            structural_gates=structural_gates or [],
-            execution_gates=execution_gates or [],
+            structural_gates=self._structural_gates,
+            execution_gates=self._execution_gates,
             indicator_history_days=indicator_history_days,
             gate_recent_candle_lookback=gate_recent_candle_lookback,
         )
@@ -95,6 +98,16 @@ class AssessRiskUseCase:
             indicator_evaluator=indicator_evaluator,
             indicator_history_days=indicator_history_days,
         )
+
+    @property
+    def structural_gates(self) -> list[RiskGate]:
+        """Exact structural gates injected at construction (ADR-059 identity)."""
+        return self._structural_gates
+
+    @property
+    def execution_gates(self) -> list[RiskGate]:
+        """Exact execution gates injected at construction (ADR-059 identity)."""
+        return self._execution_gates
 
     def execute(self, request: AssessRiskRequest) -> AssessRiskResponse:
         """

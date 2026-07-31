@@ -18,6 +18,9 @@ from src.adapters.composition.stock_analysis_workflow_dependencies import (
     StockAnalysisWorkflowDependencies,
     create_stock_analysis_workflow_dependencies,
 )
+from src.application.services.accumulation_production_policy_bundle import (
+    AccumulationProductionPolicyBundle,
+)
 from src.application.services.accumulation_screen_factory import (
     AccumulationScreenUseCaseBundle,
     create_accumulation_screen_use_case,
@@ -43,6 +46,7 @@ from src.application.use_case.save_screen_watchlist_use_case import (
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.value_objects.market_context import MarketContext
+from src.infrastructure.composition.signal_engine_factory import create_signal_engine
 from src.infrastructure.config.accumulation_screener_config import (
     AccumulationScreenerConfig,
 )
@@ -130,26 +134,54 @@ def create_accumulation_screen_workflow_bundle(
     with_risk: bool = True,
     swing_policy: Any | None = None,
     dependencies: StockAnalysisWorkflowDependencies | None = None,
+    production_policy_bundle: AccumulationProductionPolicyBundle | None = None,
 ) -> AccumulationScreenUseCaseBundle:
     """Build the screen use case together with its canonical observation recorder.
 
     Only for explicit observation-generation callers (e.g. research signal backfill).
     Diagnostic/read-only workflows must use create_accumulation_screen_workflow()
     instead, which never constructs a recorder.
+
+    When ``production_policy_bundle`` is provided (required for corpus write),
+    Signal/Risk/AccumScore engines receive those exact typed objects so snapshot
+    export and observation production share object identity (ADR-059).
     """
     deps = dependencies or create_stock_analysis_workflow_dependencies(db_path)
     swing_setup_catalog = (
         build_swing_setup_catalog_config(swing_policy) if swing_policy is not None else None
     )
 
-    risk_use_case = (
-        create_accumulation_assess_risk_use_case(
-            market_repository=deps.market_repository,
+    if production_policy_bundle is not None:
+        if production_policy_bundle.accum_score_policy is not screener_config.accum_score_policy:
+            raise ValueError(
+                "production_policy_bundle.accum_score_policy must be the same "
+                "object as screener_config.accum_score_policy"
+            )
+        risk_use_case = (
+            create_accumulation_assess_risk_use_case(
+                market_repository=deps.market_repository,
+                structural_gates=production_policy_bundle.structural_gates,
+                execution_gates=production_policy_bundle.execution_gates,
+            )
+            if with_risk
+            else None
         )
-        if with_risk
-        else None
-    )
-    signal_engine = deps.create_signal_engine()
+        signal_engine = create_signal_engine(
+            db_path=db_path,
+            with_enrichment=True,
+            config=production_policy_bundle.signal_engine_config,
+        )
+        accum_score_policy = production_policy_bundle.accum_score_policy
+    else:
+        risk_use_case = (
+            create_accumulation_assess_risk_use_case(
+                market_repository=deps.market_repository,
+            )
+            if with_risk
+            else None
+        )
+        signal_engine = deps.create_signal_engine()
+        accum_score_policy = screener_config.accum_score_policy
 
     return create_accumulation_screen_use_case_bundle(
         broker_repository=deps.broker_repository,
@@ -160,7 +192,7 @@ def create_accumulation_screen_workflow_bundle(
         signal_engine=signal_engine,
         candidate_observations_repository=deps.learning_artifact_repository,
         setup_phase_history_repository=_setup_phase_history_repo(db_path),
-        accum_score_policy=screener_config.accum_score_policy,
+        accum_score_policy=accum_score_policy,
         derived_feature_policy=screener_config.derived_features,
         swing_setup_catalog=swing_setup_catalog,
         rules_loader=deps.rules_loader_factory(),

@@ -11,17 +11,17 @@ from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.composition.accumulation_production_policy_bundle import (
+    resolve_accumulation_production_policy_bundle,
+)
+from src.adapters.composition.producer_source_revision import (
+    resolve_producer_source_revision,
+)
 from src.adapters.composition.screen_accum_workflow_factory import (
     create_accumulation_screen_workflow_bundle,
 )
 from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSessionResolver,
-)
-from src.application.services.engine_bootstrap.risk_config_resolvers import (
-    resolve_risk_gates,
-)
-from src.application.services.engine_bootstrap.signal_scoring_config_resolver import (
-    resolve_signal_engine_config,
 )
 from src.application.services.lean_observation_identity import (
     LeanObservationIdentity,
@@ -58,11 +58,7 @@ from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
 )
 from src.infrastructure.config.app_config import load_app_config
-from src.infrastructure.config.engine_config_loader import load_engine_config
 from src.infrastructure.config.market_context_factory import evaluate_market_context
-from src.infrastructure.config.signal_engine_config_loader import (
-    load_signal_engine_config_raw,
-)
 from src.infrastructure.config.swing_policy_config_loader import load_swing_policy_config
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.ihsg_trading_session_calendar_provider import (
@@ -169,10 +165,18 @@ def run_signal_observation_corpus_write(
 
     accumulation_config = load_accumulation_screener_config()
     swing_policy = load_swing_policy_config()
+
+    # Resolve production policies ONCE. The same typed objects are injected into
+    # SignalEngine, AssessRiskUseCase, ScoreAccum policy, and snapshot ensure
+    # so observations and learning_policy_snapshots share object identity.
+    production_policy_bundle = resolve_accumulation_production_policy_bundle(
+        accum_score_policy=accumulation_config.accum_score_policy,
+    )
     screen_bundle = create_accumulation_screen_workflow_bundle(
         db_path=resolved_db,
         screener_config=accumulation_config,
         swing_policy=swing_policy,
+        production_policy_bundle=production_policy_bundle,
     )
     screen_request_builder = BuildSignalObservationScreenRequest.from_configs(
         swing_policy=swing_policy,
@@ -200,24 +204,18 @@ def run_signal_observation_corpus_write(
         semantic_compatibility_id=resolve_lean_semantic_compatibility_id(resolved_config_canonical),
     )
 
-    # Same typed resolvers used by live Signal/Risk engines (ADR-059). Adapter
-    # wires I/O only; EnsureAccumulationPolicySnapshotsUseCase owns assembly.
-    signal_engine_config = resolve_signal_engine_config(load_signal_engine_config_raw())
-    structural_gates, execution_gates = resolve_risk_gates(
-        load_engine_config(Path(cfg.config_paths.risk_engine))
-    )
     learning_repo = SQLiteLearningArtifactRepository(resolved_db)
     try:
         EnsureAccumulationPolicySnapshotsUseCase(learning_repo).execute(
             EnsureAccumulationPolicySnapshotsRequest(
                 resolved_config_canonical=resolved_config_canonical,
                 observation_identity=observation_identity,
-                accum_score_policy=accumulation_config.accum_score_policy,
-                signal_engine_config=signal_engine_config,
-                structural_gates=structural_gates,
-                execution_gates=execution_gates,
+                accum_score_policy=production_policy_bundle.accum_score_policy,
+                signal_engine_config=production_policy_bundle.signal_engine_config,
+                structural_gates=production_policy_bundle.structural_gates,
+                execution_gates=production_policy_bundle.execution_gates,
                 created_at=datetime.now(timezone.utc),
-                source_revision="",
+                source_revision=resolve_producer_source_revision(),
             )
         )
     except LearningContractError as exc:

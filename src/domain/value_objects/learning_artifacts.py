@@ -774,12 +774,22 @@ class ProductionPolicySnapshot:
             ("decision_type", decision_type),
             ("semantic_engine_contract_id", semantic_engine_contract_id),
             ("material_config_hash", material_config_hash),
+            ("source_revision", source_revision),
         ):
             _require_non_empty(name, value)
         if not isinstance(canonical_payload, Mapping) or not canonical_payload:
             raise LearningContractError("canonical_payload must be a non-empty mapping")
         if created_at.tzinfo is None or created_at.utcoffset() is None:
             raise LearningContractError("created_at must be timezone-aware")
+
+        payload = dict(canonical_payload)
+        _assert_payload_column_metadata_match(
+            payload,
+            policy_id=policy_id,
+            policy_version=policy_version,
+            decision_type=decision_type,
+            semantic_engine_contract_id=semantic_engine_contract_id,
+        )
 
         identity = {
             "purpose": purpose,
@@ -789,7 +799,6 @@ class ProductionPolicySnapshot:
             "policy_id": policy_id,
         }
         snapshot_id = stable_learning_id(LearningContractId.PRODUCTION_POLICY_SNAPSHOT, identity)
-        payload = dict(canonical_payload)
         digest = policy_snapshot_payload_digest(payload)
         return cls(
             snapshot_id=snapshot_id,
@@ -811,11 +820,49 @@ class ProductionPolicySnapshot:
         )
 
 
+_PAYLOAD_COLUMN_METADATA_KEYS: tuple[str, ...] = (
+    "policy_id",
+    "policy_version",
+    "decision_type",
+    "semantic_engine_contract_id",
+)
+
+
+def _assert_payload_column_metadata_match(
+    payload: Mapping[str, Any],
+    *,
+    policy_id: str,
+    policy_version: str,
+    decision_type: str,
+    semantic_engine_contract_id: str,
+) -> None:
+    """Fail closed when duplicated payload metadata drifts from row columns."""
+
+    expected = {
+        "policy_id": policy_id,
+        "policy_version": policy_version,
+        "decision_type": decision_type,
+        "semantic_engine_contract_id": semantic_engine_contract_id,
+    }
+    for key, column_value in expected.items():
+        if key not in payload:
+            raise LearningContractError(
+                f"policy snapshot payload missing required metadata key {key!r}"
+            )
+        if payload[key] != column_value:
+            raise LearningContractError(
+                f"policy snapshot payload {key!r}={payload[key]!r} does not match "
+                f"column value {column_value!r}"
+            )
+
+
 def validate_policy_snapshot_integrity(snapshot: ProductionPolicySnapshot) -> None:
-    """Reject a snapshot whose id or payload digest no longer matches content."""
+    """Reject a snapshot whose id, digest, or column/payload metadata disagree."""
 
     if snapshot.contract_id is not LearningContractId.PRODUCTION_POLICY_SNAPSHOT:
         raise LearningContractError("policy snapshot contract_id mismatch")
+    if not snapshot.source_revision.strip():
+        raise LearningContractError("source_revision must be non-empty provenance")
     expected_id = stable_learning_id(
         LearningContractId.PRODUCTION_POLICY_SNAPSHOT,
         {
@@ -831,3 +878,10 @@ def validate_policy_snapshot_integrity(snapshot: ProductionPolicySnapshot) -> No
     expected_digest = policy_snapshot_payload_digest(snapshot.canonical_payload)
     if snapshot.payload_digest != expected_digest:
         raise LearningContractError("policy snapshot payload_digest does not match payload")
+    _assert_payload_column_metadata_match(
+        snapshot.canonical_payload,
+        policy_id=snapshot.policy_id,
+        policy_version=snapshot.policy_version,
+        decision_type=snapshot.decision_type,
+        semantic_engine_contract_id=snapshot.semantic_engine_contract_id,
+    )

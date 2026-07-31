@@ -78,6 +78,16 @@ class LearningPolicySnapshotRepository(Protocol):
 
     def add_policy_snapshot(self, artifact: ProductionPolicySnapshot) -> bool: ...
 
+    def add_policy_snapshots_atomic(
+        self, artifacts: Sequence[ProductionPolicySnapshot]
+    ) -> tuple[int, int]:
+        """Insert or reuse a closed set of snapshots in one transaction.
+
+        Returns ``(inserted_count, reused_count)``. Any digest conflict or
+        validation failure aborts the whole batch with no partial commit.
+        """
+        ...
+
     def get_policy_snapshot(self, snapshot_id: str) -> ProductionPolicySnapshot | None: ...
 
     def get_policy_snapshot_by_binding(

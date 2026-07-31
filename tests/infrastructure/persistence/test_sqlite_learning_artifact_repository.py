@@ -264,12 +264,13 @@ def _policy_snapshot(
     *,
     policy_id: str = PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
     weight: float = 33.3,
+    compatibility_id: str = "sha256:" + ("ab" * 32),
 ) -> ProductionPolicySnapshot:
     return ProductionPolicySnapshot.create(
         purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
-        learning_observation_contract_id=(LearningContractId.ACCUMULATION_OBSERVATION.value),
+        learning_observation_contract_id=LearningContractId.ACCUMULATION_OBSERVATION.value,
         producer_observation_contract="accumulation-discovery.v2",
-        compatibility_id="sha256:" + ("ab" * 32),
+        compatibility_id=compatibility_id,
         policy_id=policy_id,
         policy_version="v1",
         decision_type="score",
@@ -277,9 +278,12 @@ def _policy_snapshot(
         material_config_hash="sha256:" + ("cd" * 32),
         canonical_payload={
             "policy_id": policy_id,
+            "policy_version": "v1",
+            "decision_type": "score",
+            "semantic_engine_contract_id": "accum_score_policy.v1",
             "components": [{"key": "consistency", "enabled": True, "weight": weight}],
         },
-        source_revision="test",
+        source_revision="ai-saham@test",
         created_at=NOW,
     )
 
@@ -315,3 +319,92 @@ def test_policy_snapshot_digest_conflict_fails_closed(tmp_path: Path) -> None:
     assert repository.add_policy_snapshot(first) is True
     with pytest.raises(LearningContractError, match="immutable artifact conflict"):
         repository.add_policy_snapshot(second)
+
+
+def test_policy_snapshot_atomic_batch_all_or_nothing(tmp_path: Path) -> None:
+    from src.domain.value_objects.learning_artifacts import (
+        ACCUMULATION_PRODUCTION_POLICY_IDS,
+    )
+
+    compat = "sha256:" + ("22" * 32)
+    repo = SQLiteLearningArtifactRepository(tmp_path / "atomic.db")
+    first = _policy_snapshot(
+        policy_id=ACCUMULATION_PRODUCTION_POLICY_IDS[0],
+        weight=1.0,
+        compatibility_id=compat,
+    )
+    rest = [
+        _policy_snapshot(
+            policy_id=pid,
+            weight=1.0,
+            compatibility_id=compat,
+        )
+        for pid in ACCUMULATION_PRODUCTION_POLICY_IDS[1:]
+    ]
+    twin = _policy_snapshot(
+        policy_id=ACCUMULATION_PRODUCTION_POLICY_IDS[0],
+        weight=2.0,
+        compatibility_id=compat,
+    )
+    assert first.snapshot_id == twin.snapshot_id
+    assert first.payload_digest != twin.payload_digest
+
+    # Duplicate snapshot_id with different digest in one batch: preflight rejects
+    # before any write, so the cohort remains empty.
+    with pytest.raises(LearningContractError, match="duplicate snapshot_id"):
+        repo.add_policy_snapshots_atomic([first, *rest, twin])
+    assert (
+        repo.list_policy_snapshots(
+            purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+            compatibility_id=compat,
+        )
+        == ()
+    )
+
+    # Happy path: closed six-row set in one transaction.
+    inserted, reused = repo.add_policy_snapshots_atomic([first, *rest])
+    assert inserted == 6
+    assert reused == 0
+    assert (
+        len(
+            repo.list_policy_snapshots(
+                purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+                compatibility_id=compat,
+            )
+        )
+        == 6
+    )
+
+    # Idempotent atomic re-run reuses all six.
+    inserted2, reused2 = repo.add_policy_snapshots_atomic([first, *rest])
+    assert inserted2 == 0
+    assert reused2 == 6
+
+    # Mid-batch conflict against existing rows rolls back: no extra rows, no
+    # mutation. Seed a second cohort then fail a mixed batch that collides.
+    compat_b = "sha256:" + ("33" * 32)
+    new_rows = [
+        _policy_snapshot(policy_id=pid, weight=1.0, compatibility_id=compat_b)
+        for pid in ACCUMULATION_PRODUCTION_POLICY_IDS
+    ]
+    # Conflict: include twin of already-stored first snapshot (compat A).
+    with pytest.raises(LearningContractError, match="immutable artifact conflict"):
+        repo.add_policy_snapshots_atomic([*new_rows, twin])
+    # New cohort must not partially appear.
+    assert (
+        repo.list_policy_snapshots(
+            purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+            compatibility_id=compat_b,
+        )
+        == ()
+    )
+    # Original cohort intact.
+    assert (
+        len(
+            repo.list_policy_snapshots(
+                purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+                compatibility_id=compat,
+            )
+        )
+        == 6
+    )

@@ -17,6 +17,7 @@ from src.application.services.engine_bootstrap.signal_scoring_config_resolver im
     resolve_signal_engine_config,
 )
 from src.application.services.signal_engine import SignalEngine
+from src.application.services.signal_engine_config import SignalEngineConfig
 from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
 from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
 from src.infrastructure.browser.stockbit_config_bundle import load_stockbit_provider_config
@@ -37,6 +38,8 @@ from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarket
 def create_signal_engine(
     db_path: "str | Path",
     with_enrichment: bool = False,
+    *,
+    config: SignalEngineConfig | None = None,
 ) -> "SignalEngine":
     """
     Create a fully-configured SignalEngine.
@@ -49,9 +52,14 @@ def create_signal_engine(
             without a live broker session. When False (default), all providers
             are None and canonical evidence groups fed by them are MISSING —
             useful for testing the engine wiring.
+        config: Optional pre-resolved ``SignalEngineConfig``. When provided, it
+            is used by identity (no second YAML resolve). Required for corpus
+            capture so snapshots and engines share the same typed policy object.
     """
-    cfg = load_signal_engine_config_raw()
-    signal_config = resolve_signal_engine_config(cfg)
+    if config is not None:
+        signal_config = config
+    else:
+        signal_config = resolve_signal_engine_config(load_signal_engine_config_raw())
 
     if not with_enrichment:
         return SignalEngine(config=signal_config)

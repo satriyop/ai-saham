@@ -116,6 +116,11 @@ class SignalEngine:
         return self._build_signal_context(ticker, as_of_date=as_of_date)
 
     @property
+    def config(self) -> "SignalEngineConfig":
+        """Exact typed config injected at construction (identity for ADR-059)."""
+        return self._config
+
+    @property
     def pre_open_directional_config(self):
         """Expose the engine-owned pre-open policy for input construction."""
         return self._config.pre_open_directional_baseline

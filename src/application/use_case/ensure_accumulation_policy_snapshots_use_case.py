@@ -72,7 +72,7 @@ class EnsureAccumulationPolicySnapshotsRequest:
     structural_gates: Sequence[RiskGate]
     execution_gates: Sequence[RiskGate]
     created_at: datetime
-    source_revision: str = ""
+    source_revision: str
 
 
 @dataclass(frozen=True)
@@ -129,37 +129,36 @@ class EnsureAccumulationPolicySnapshotsUseCase:
                 "payload builder must emit exactly the closed v1 policy set"
             )
 
-        learning_observation_contract_id = LearningContractId.ACCUMULATION_OBSERVATION.value
-        inserted = 0
-        reused = 0
-        snapshot_ids: list[str] = []
+        if not request.source_revision.strip():
+            raise LearningContractError("source_revision must be non-empty producer provenance")
 
+        learning_observation_contract_id = LearningContractId.ACCUMULATION_OBSERVATION.value
+        snapshots: list[ProductionPolicySnapshot] = []
         for policy_id in ACCUMULATION_PRODUCTION_POLICY_IDS:
-            snapshot = ProductionPolicySnapshot.create(
-                purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
-                learning_observation_contract_id=learning_observation_contract_id,
-                producer_observation_contract=ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT,
-                compatibility_id=compatibility_id,
-                policy_id=policy_id,
-                policy_version=PRODUCTION_POLICY_VERSION_V1,
-                decision_type=_DECISION_TYPE_BY_POLICY[policy_id],
-                semantic_engine_contract_id=_SEMANTIC_CONTRACT_BY_POLICY[policy_id],
-                material_config_hash=material_hash,
-                canonical_payload=payloads[policy_id],
-                source_revision=request.source_revision,
-                created_at=request.created_at,
+            snapshots.append(
+                ProductionPolicySnapshot.create(
+                    purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+                    learning_observation_contract_id=learning_observation_contract_id,
+                    producer_observation_contract=ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT,
+                    compatibility_id=compatibility_id,
+                    policy_id=policy_id,
+                    policy_version=PRODUCTION_POLICY_VERSION_V1,
+                    decision_type=_DECISION_TYPE_BY_POLICY[policy_id],
+                    semantic_engine_contract_id=_SEMANTIC_CONTRACT_BY_POLICY[policy_id],
+                    material_config_hash=material_hash,
+                    canonical_payload=payloads[policy_id],
+                    source_revision=request.source_revision,
+                    created_at=request.created_at,
+                )
             )
-            wrote = self._repository.add_policy_snapshot(snapshot)
-            if wrote:
-                inserted += 1
-            else:
-                reused += 1
-            snapshot_ids.append(snapshot.snapshot_id)
+
+        # Single atomic write: conflict on any row rolls back the whole set.
+        inserted, reused = self._repository.add_policy_snapshots_atomic(snapshots)
 
         return EnsureAccumulationPolicySnapshotsResponse(
             compatibility_id=compatibility_id,
             required_policy_ids=ACCUMULATION_PRODUCTION_POLICY_IDS,
             inserted_count=inserted,
             reused_count=reused,
-            snapshot_ids=tuple(snapshot_ids),
+            snapshot_ids=tuple(s.snapshot_id for s in snapshots),
         )

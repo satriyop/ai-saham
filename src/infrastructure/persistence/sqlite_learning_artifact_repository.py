@@ -746,6 +746,34 @@ class SQLiteLearningArtifactRepository:
                 """).fetchall()
         return tuple(_load_json(row, _application_from_dict) for row in rows)
 
+    @staticmethod
+    def _policy_snapshot_insert_values(artifact: ProductionPolicySnapshot) -> tuple[Any, ...]:
+        return (
+            artifact.snapshot_id,
+            artifact.schema_version,
+            artifact.contract_id.value,
+            artifact.purpose.value,
+            artifact.learning_observation_contract_id,
+            artifact.producer_observation_contract,
+            artifact.compatibility_id,
+            artifact.policy_id,
+            artifact.policy_version,
+            artifact.decision_type,
+            artifact.semantic_engine_contract_id,
+            artifact.material_config_hash,
+            canonical_json(artifact.canonical_payload),
+            artifact.payload_digest,
+            artifact.source_revision,
+            artifact.created_at.isoformat(),
+            _artifact_json(artifact),
+        )
+
+    _POLICY_SNAPSHOT_INSERT_SQL = """
+        INSERT INTO learning_policy_snapshots VALUES (
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        )
+    """
+
     def add_policy_snapshot(self, artifact: ProductionPolicySnapshot) -> bool:
         validate_policy_snapshot_integrity(artifact)
         with self._connect() as connection:
@@ -756,31 +784,58 @@ class SQLiteLearningArtifactRepository:
                 artifact_id=artifact.snapshot_id,
                 digest=artifact.payload_digest,
                 digest_column="payload_digest",
-                insert_sql="""
-                    INSERT INTO learning_policy_snapshots VALUES (
-                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-                    )
-                """,
-                values=(
-                    artifact.snapshot_id,
-                    artifact.schema_version,
-                    artifact.contract_id.value,
-                    artifact.purpose.value,
-                    artifact.learning_observation_contract_id,
-                    artifact.producer_observation_contract,
-                    artifact.compatibility_id,
-                    artifact.policy_id,
-                    artifact.policy_version,
-                    artifact.decision_type,
-                    artifact.semantic_engine_contract_id,
-                    artifact.material_config_hash,
-                    canonical_json(artifact.canonical_payload),
-                    artifact.payload_digest,
-                    artifact.source_revision,
-                    artifact.created_at.isoformat(),
-                    _artifact_json(artifact),
-                ),
+                insert_sql=self._POLICY_SNAPSHOT_INSERT_SQL,
+                values=self._policy_snapshot_insert_values(artifact),
             )
+
+    def add_policy_snapshots_atomic(
+        self, artifacts: Sequence[ProductionPolicySnapshot]
+    ) -> tuple[int, int]:
+        """Write a closed snapshot set in one BEGIN IMMEDIATE transaction.
+
+        Preflight validates every artifact, then inserts/reuses under one
+        connection so a mid-set digest conflict leaves zero new rows.
+        """
+        if not artifacts:
+            raise LearningContractError("policy snapshot batch must be non-empty")
+        seen_ids: set[str] = set()
+        for artifact in artifacts:
+            validate_policy_snapshot_integrity(artifact)
+            if artifact.snapshot_id in seen_ids:
+                raise LearningContractError(
+                    f"duplicate snapshot_id in batch: {artifact.snapshot_id}"
+                )
+            seen_ids.add(artifact.snapshot_id)
+
+        inserted = 0
+        reused = 0
+        # Explicit connection lifecycle so one BEGIN IMMEDIATE covers the
+        # whole batch (``with connection`` would auto-commit per-block).
+        connection = connect_learning_database(self._db_path)
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            for artifact in artifacts:
+                wrote = _immutable_insert(
+                    connection,
+                    table="learning_policy_snapshots",
+                    id_column="snapshot_id",
+                    artifact_id=artifact.snapshot_id,
+                    digest=artifact.payload_digest,
+                    digest_column="payload_digest",
+                    insert_sql=self._POLICY_SNAPSHOT_INSERT_SQL,
+                    values=self._policy_snapshot_insert_values(artifact),
+                )
+                if wrote:
+                    inserted += 1
+                else:
+                    reused += 1
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+        return inserted, reused
 
     def get_policy_snapshot(self, snapshot_id: str) -> ProductionPolicySnapshot | None:
         with self._connect() as connection:
