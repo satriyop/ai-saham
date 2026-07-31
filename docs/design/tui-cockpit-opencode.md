@@ -39,7 +39,7 @@ Put implementer notes **only in this doc** (or code comments). Never as stage bo
 |--------|-----------|---------|
 | **OpenCode taste** | **Bible for TUI visuals** | Black-on-black, peach selection, mono density, hairlines, cards/tables |
 | **Journey / desk HTML** | **Inspiration only** | Stage map, keys, Action vs browse, column contracts, hierarchy *ideas* |
-| **Shipped TUI code** | **Data richness** | When code DTOs are richer than primary stage, design uses **detail flags** (expand), not always-on walls |
+| **Shipped TUI code** | **Data richness** | When DTOs are richer than primary stage, density is **brief ↔ detail** (CLI-aligned), not always-on walls |
 
 Ship Textual against **`.app` inside this mock**. Design-tools strip is for reviewing frames in browser only.
 
@@ -53,7 +53,7 @@ Ship Textual against **`.app` inside this mock**. Design-tools strip is for revi
 | 2 | Plan | Structure | Geometry triangle · inherit Action · `l` paper confirm |
 | 3 | Paper | Notebook | Notebook tape · write via plan `l` confirm |
 | 4 | Pre-open | Auction | IEP board → Enter **inspect** (flags: why / auction+ / warn) |
-| 5 | Ticker | Browse | Price hero · presence · **depth** flag for full panels |
+| 5 | Ticker | Browse | Price hero · **brief/full** density (`d`) · CLI `view ticker --brief` dual |
 | 6 | Broker | Browse | Radar → Enter net hero · flags partial_net / from_ticker · deep.t\|f\|h\|m |
 | 7 | Health | Honesty | Empty / zero / lag / ready posters |
 | 8 | Palette | Nav | Ctrl+P · peach selection |
@@ -75,56 +75,42 @@ Not a chat bubble. Not a second palette. Free text only until hooked.
 
 | Stage | Enter from | What |
 |-------|------------|------|
-| **Judge** | Accum **Enter** only | Verdict hero + **detail flags** (stack · readiness · named · mce · phase+ · limited) |
-| Pre-open inspect | Pre-open board Enter | IEP hero + auction flags |
-| Broker home | Broker radar Enter | Net hero + hub · deep table flags |
+| **Judge** | Accum **Enter** only | Verdict hero · **brief (default) / detail (`d`)** · limited = **banner** only |
+| Pre-open inspect | Pre-open board Enter | IEP hero + optional auction flags |
+| Broker home | Broker radar Enter | Net hero + hub · deep keys |
 
-**Reject:** Judge as a top frame-switch button or number key.
+**Reject:** Judge as a top frame-switch button or number key.  
+**Reject:** Judge multi-chip wall (`stack` · `readiness` · `named` · `mce` · `phase+` · `limited` pills).
 
 ---
 
-## Detail flags (code-richer data)
+## Density: brief ↔ detail (CLI multi-surface)
 
-Primary stage stays scannable. Richer DTO fields hang on **chips** (mono pills).  
-**Chips are data-contextual — not a static wall of always-on pills.**
+Operator density is **one dual**, not a chip menu. Vocabulary matches CLI flags.
 
-| Stage | Flags | Code source |
-|-------|-------|-------------|
-| Accum | `snapshot` \| `live` badge | `board_source` / chrome_cues |
-| Judge | **`d` / `detail`** master · singles: `stack` · `readiness` · `named` · `mce` · `phase+` · **`limited` state** | `JudgeDeskModel` (availability from real fields) |
-| Pre-open inspect | `why` · `auction+` · `warn` | `preopen_engine_inspect_presenter` |
-| Ticker | **`d` / `detail`** | Primary = dashboard hierarchy; detail = inventory panels |
-| Broker list | `partial_net` · `from_ticker` | `has_partial_netx` · ticker-desks stage |
-| Broker home | `deep.t` · `deep.f` · `deep.c` · `deep.h` · `deep.m` | hub loaders |
+| Surface | Brief (default) | Detail / full | CLI analog |
+|---------|-----------------|---------------|------------|
+| **Judge** (Action · screen-shaped) | Mast · phase · primary cards | + decision stack · phase ledger · secondary / diagnostic cards in fixed order | `screen accum` **without** / **with** `--detail` |
+| **Ticker** (browse · view-shaped) | Dashboard hierarchy (ops brief-class) | Full panel inventory | `view ticker show` **with** / **without** `--brief` |
 
-### Judge flag states (from live data — design + TUI must match)
+**Locked rules**
 
-| Chip | Available when | `is-on` when | Notes |
-|------|----------------|--------------|--------|
-| `detail · d` | always (master) | **only** master detail open | Opens all *available* panels; does **not** paint every single chip peach |
-| `stack` | `decision_lines` non-empty | that panel open **and** master not sole driver | Dim if no decision stack |
-| `readiness` | readiness string meaningful | that panel open | Dim if no readiness text |
-| `named` | named_setups card present | that panel open | Dim if no named setups (common) |
-| `mce` | market card present | that panel open | Dim if no market_context |
-| `phase+` | phase timeline non-empty | that panel open | Dim if no phase arrow |
-| `limited` | **row is limited** (snapshot / no candidate) | state active when limited | **Hide** when full judge · warn style when limited · not a toggle |
+1. **`limited` ≠ `brief`.** Limited = snapshot / no candidate object (state). Brief = less density on the same object.  
+2. Judge default open = **brief**. Key **`d`** toggles **detail**. Meta copy: `brief` / `detail` (not a six-pill flag row).  
+3. Optional **one** affordance only: footer `d detail` or a single `detail · d` control — not per-panel chips.  
+4. Detail body is **fixed section order** when on; empty sections omit or show honest empty — do not invent.  
+5. Limited recovery: **banner + meta** · `j` re-judge · `r` live — never a limited density chip.  
+6. Diagnostic (named setups, MCE) may appear under **detail** only; never Action authority.  
+7. Density bars = scalar sugar only — not charts.
 
-**Visual states (OpenCode pills)**
+### Other stage flags (not Judge density)
 
-| Class | Look | Meaning |
-|-------|------|---------|
-| (default available) | dark fill · gray border · readable label | can expand |
-| `is-dim` | darker · muted label | no data for this chip |
-| `is-on` | peach fill · dark text | this panel/master is open |
-| `warn` | brass border/fill | limited state only |
-
-**Rules**
-
-1. **Never** show a solid peach wall of every chip by default. Compact = available/dim only; no `is-on` until expand.  
-2. Master `detail · d` `is-on` alone when full detail is open; singles stay available (or dim), not all peach.  
-3. Dim when data missing — do not invent panels.  
-4. Diagnostic (`mce`, named) never implies ENTER.  
-5. Density bars = scalar sugar only — not charts.
+| Stage | Controls | Notes |
+|-------|----------|--------|
+| Accum | `snapshot` \| `live` badge | board source chrome |
+| Pre-open inspect | optional `why` · `auction+` · `warn` | auction path only |
+| Broker list | `partial_net` · `from_ticker` | list state |
+| Broker home | hub keys `t`/`f`/`c`/`h`/`m` | deep pages, not density brief/detail |
 
 ---
 
@@ -143,12 +129,12 @@ Primary stage stays scannable. Richer DTO fields hang on **chips** (mono pills).
 
 ## Contracts (summary)
 
-### Judge (nested)
-- Primary: Action · Gate · Signal · Accum · Authority% · Family · Why · phase timeline · primary cards  
-- **`d`** / chip `detail · d`: toggle **all available** detail panels (CLI `--detail` idea) · master chip only `is-on`  
-- Single chips: open one panel; `is-on` only that chip  
-- `limited`: **state chip** — shown only when limited; hide on full live judge; `j` / `r` recover  
-- Never invent fields when limited; never peach-fill chips that have no data
+### Judge (nested · screen-shaped)
+- **Brief (default):** Action · Gate · Signal · Accum · Authority% · Family · Why · phase timeline · primary cards  
+- **Detail (`d`):** + decision stack · phase ledger lines · secondary / diagnostic cards (fixed order; omit if no data)  
+- CLI multi-surface: default ≈ without `--detail` · `d` ≈ with `--detail`  
+- **Limited** (orthogonal): banner + meta when snapshot/no candidate · `j` / `r` — **not** a density chip  
+- **No** multi-chip row (`stack` / `readiness` / `named` / `mce` / `phase+` / `limited` pills)
 
 ### Accum
 - Cols 1:1 `BOARD_COLUMN_LABELS`  
@@ -156,14 +142,14 @@ Primary stage stays scannable. Richer DTO fields hang on **chips** (mono pills).
 
 ### Pre-open inspect
 - Primary: grade · risk · IEP · levels  
-- Flags: why · auction+ (trend · broker tag · backing_score · buy_streak) · warn  
+- Optional flags: why · auction+ (trend · broker tag · backing_score · buy_streak) · warn  
 
 ### Ticker (`v t` · on par with `saham view ticker show`)
-- **Primary (default):** identity · freshness · last close · horizons · fundamentals · pulse · earnings  
-  — matches TUI desk / operational dashboard (CLI `--brief`-class density)  
-- **`d` (detail):** expand full panel inventory (analyst · ownership · sector · corp · insider · seasonality · iev · sentiment · profile · candles)  
-  — same idea as CLI **without** `--brief`, or accum/judge **`--detail` / `d`**  
-- Header meta: `local cache` or `full · local cache` — no design jargon  
+- **Brief-class primary:** identity · freshness · last close · horizons · fundamentals · pulse · earnings  
+  — CLI **`--brief`**-class density  
+- **`d` (full):** panel inventory (analyst · ownership · sector · corp · insider · seasonality · iev · sentiment · profile · candles)  
+  — CLI show **without** `--brief`  
+- Header meta: `local cache` / `full · local cache` · or brief/detail wording — no design jargon  
 - Footer: `d` detail · `b` desks · `p` plan · `esc`
 
 ### Broker (`v b` · desk-centric)
@@ -196,7 +182,9 @@ Primary stage stays scannable. Richer DTO fields hang on **chips** (mono pills).
 - Night-ink as ship skin  
 - Judge as primary tab  
 - Flat CLI dump as only ticker stage  
-- Always-on full depth wall without `depth` flag  
+- Always-on full depth wall without brief/detail toggle  
+- Judge multi-chip wall (per-panel expand pills)  
+- Confusing **limited** (state) with **brief** (density)  
 - Product charts  
 
 ---

@@ -1399,10 +1399,10 @@ class CockpitApp(App[None]):
             return
         if self._status_note in {"judge", "re-judging"}:
             self._judge_detail_open = not bool(getattr(self, "_judge_detail_open", False))
-            mode = "full" if self._judge_detail_open else "compact"
-            self._meta = f"{mode} · d toggle · j re-judge"
+            density = "detail" if self._judge_detail_open else "brief"
+            self._meta = f"{density} · d toggle · j re-judge"
             self._refresh_chrome()
-            self.notify(f"Judge detail · {mode}", timeout=1.2)
+            self.notify(f"Judge · {density} (CLI --detail dual)", timeout=1.2)
             return
         if self._status_note == "inspect" and (
             self._board_kind == "preopen" or self._detail_return_stage == "preopen"
@@ -2204,9 +2204,9 @@ class CockpitApp(App[None]):
             self._judge_limited = limited
             self._board_title = f"Judge · {ticker}"
             if limited:
-                self._meta = "limited judge · j re-judge or r live · d detail"
+                self._meta = "brief · limited judge · j re-judge or r live · d detail"
             else:
-                self._meta = "judge · j re-judge · d detail"
+                self._meta = "brief · d detail · j re-judge"
             self._status_note = "judge"
             self._judge_detail_open = False
         elif self._is_preopen_row(row):

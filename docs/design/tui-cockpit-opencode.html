@@ -2248,59 +2248,16 @@
               <div style="margin-top:6px;font-size:11px;color:var(--text-mute)" id="judgePhaseMeta">2026-07-20 · 2026-07-25 · now board</div>
             </div>
 
-            <!-- Data-contextual flags (not a static always-on wall).
-                 Compact live example: available chips idle; missing data dim;
-                 limited hidden unless snapshot/no-candidate. -->
+            <!-- Judge density: brief (default) / detail (d) — CLI screen accum --detail dual.
+                 No multi-chip wall. Limited = banner only (orthogonal to brief). -->
             <div class="flag-row" id="judgeFlags" data-flag-group="judge">
-              <span class="flag-lab">Detail</span>
-              <button type="button" class="flag-chip" data-flag="detail" id="judgeDetailAll" title="Master: open all available panels">detail · d</button>
-              <button type="button" class="flag-chip" data-flag="stack" title="Available when decision stack exists">stack</button>
-              <button type="button" class="flag-chip" data-flag="readiness" title="Available when readiness text exists">readiness</button>
-              <button type="button" class="flag-chip is-dim" data-flag="named" title="Dim when no named setups">named</button>
-              <button type="button" class="flag-chip is-dim" data-flag="mce" title="Dim when no market_context">mce</button>
-              <button type="button" class="flag-chip" data-flag="phase+" title="Available when phase timeline exists">phase+</button>
-              <!-- limited: only shown when limited judge; compact full judge = hidden -->
-              <button type="button" class="flag-chip warn is-hidden" data-flag="limited" id="judgeFlagLimited" title="State chip · snapshot/no candidate only">limited</button>
+              <span class="flag-lab">Density</span>
+              <button type="button" class="flag-chip" data-flag="detail" id="judgeDetailAll" title="Toggle detail · same job as CLI screen accum --detail">detail · d</button>
+              <span class="flag-lab" id="judgeDensityMeta" style="margin-left:8px;color:var(--text-mute)">brief</span>
             </div>
 
-            <div class="flag-panel" data-flag-panel="stack" data-flag-group="judge">
-              <h4>Decision stack</h4>
-              <div class="line"><span class="k">Action</span><span class="v">WATCH</span></div>
-              <div class="line"><span class="k">← Signal</span><span class="v">84 · MODERATE</span></div>
-              <div class="line"><span class="k">← Risk</span><span class="v">OPEN · no gate</span></div>
-              <div class="line"><span class="k">← TradeSetup</span><span class="v">WATCH · rationale ok</span></div>
-            </div>
-            <div class="flag-panel" data-flag-panel="readiness" data-flag-group="judge">
-              <h4>Readiness · data</h4>
-              <div class="line"><span class="k">Setup ready</span><span class="v">PARTIAL</span></div>
-              <div class="line"><span class="k">Candle</span><span class="v">2026-07-29</span></div>
-              <div class="line"><span class="k">Broker</span><span class="v">2026-07-29</span></div>
-              <div class="line"><span class="k">Align</span><span class="v">ALIGNED</span></div>
-            </div>
-            <div class="flag-panel" data-flag-panel="named" data-flag-group="judge">
-              <h4>Named setups · diagnostic</h4>
-              <div class="line"><span class="k">primary</span><span class="v">foreign-bounce</span></div>
-              <div class="line"><span class="k">match</span><span class="v">FB ✓ · CS ~ · SM — · PB —</span></div>
-              <div class="line"><span class="k">note</span><span class="v">MATCH ≠ ENTER</span></div>
-            </div>
-            <div class="flag-panel" data-flag-panel="mce" data-flag-group="judge">
-              <h4>Market context · diagnostic</h4>
-              <div class="line"><span class="k">Regime</span><span class="v">risk-on · diagnostic only</span></div>
-              <div class="line"><span class="k">note</span><span class="v">never Action authority</span></div>
-            </div>
-            <div class="flag-panel" data-flag-panel="phase+" data-flag-group="judge">
-              <h4>Phase ledger detail</h4>
-              <div class="line"><span class="k">window</span><span class="v">7 sessions</span></div>
-              <div class="line"><span class="k">nodes</span><span class="v">ACCUM → COMPRESS → COMPRESS</span></div>
-              <div class="line"><span class="k">source</span><span class="v">setup_phase_ledger</span></div>
-            </div>
-            <div class="flag-panel" data-flag-panel="limited" data-flag-group="judge">
-              <h4>Limited judge</h4>
-              <p style="color:var(--text-dim);margin:0">No candidate object on row · Action/Gate/Signal/Accum from snapshot scalars only · no Why breakdown · press j or r.</p>
-            </div>
-
+            <!-- Primary cards always (brief) -->
             <div class="card" style="margin-top:4px">
-              
               <div class="kv">
                 <span class="k">Risk</span><span class="v pos">OPEN</span>
                 <span class="k">TradeSetup</span><span class="v">WATCH</span>
@@ -2309,8 +2266,33 @@
               </div>
             </div>
 
+            <!-- Detail body: fixed section order when d on (omit empty in product) -->
+            <div id="judgeDetailBody" class="judge-detail-body" style="display:none;margin-top:10px">
+              <div class="card" style="margin-bottom:8px">
+                <div class="section-label" style="margin-top:0">Decision stack</div>
+                <div class="line"><span class="k">Action</span><span class="v">WATCH</span></div>
+                <div class="line"><span class="k">← Signal</span><span class="v">84 · MODERATE</span></div>
+                <div class="line"><span class="k">← Risk</span><span class="v">OPEN · no gate</span></div>
+                <div class="line"><span class="k">← TradeSetup</span><span class="v">WATCH · rationale ok</span></div>
+              </div>
+              <div class="card" style="margin-bottom:8px">
+                <div class="section-label" style="margin-top:0">Phase ledger</div>
+                <div class="line"><span class="k">window</span><span class="v">7 sessions</span></div>
+                <div class="line"><span class="k">source</span><span class="v">setup_phase_ledger</span></div>
+              </div>
+              <div class="card" style="margin-bottom:8px">
+                <div class="section-label" style="margin-top:0">Named setups · diagnostic</div>
+                <div class="line"><span class="k">primary</span><span class="v">foreign-bounce</span></div>
+                <div class="line"><span class="k">note</span><span class="v">MATCH ≠ ENTER</span></div>
+              </div>
+              <div class="card" style="margin-bottom:8px">
+                <div class="section-label" style="margin-top:0">Market context · diagnostic</div>
+                <div class="line"><span class="k">Regime</span><span class="v">risk-on · diagnostic only</span></div>
+              </div>
+            </div>
+
             <div class="footer-note">
-              <span><span class="kbd">d</span> detail (all panels · CLI --detail)</span>
+              <span><span class="kbd">d</span> brief ↔ detail (CLI --detail)</span>
               <span><span class="kbd">j</span> re-judge local</span>
               <span><span class="kbd">r</span> live board</span>
               <span><span class="kbd">p</span> plan</span>
@@ -3479,16 +3461,7 @@
       state.judgeLimited = limited;
       const ban = $("judgeLimitedBanner");
       if (ban) ban.classList.toggle("is-hidden", !limited);
-      const chip = $("judgeFlagLimited");
-      if (chip) {
-        // State chip: hide when full judge; warn+on when limited only
-        chip.classList.toggle("is-hidden", !limited);
-        chip.classList.toggle("warn", limited);
-        chip.classList.toggle("is-on", limited);
-        chip.classList.toggle("is-dim", false);
-      }
-      const panel = document.querySelector('.flag-panel[data-flag-group="judge"][data-flag-panel="limited"]');
-      if (panel) panel.classList.toggle("is-open", limited);
+      // Limited = banner only (not a density chip). brief/detail is separate.
       if ($("judgeTickerLab")) {
         const f = ACCUM[state.rowIndex] || {};
         $("judgeTickerLab").textContent = f.t || "—";
@@ -4607,39 +4580,23 @@
  });
 
 
-    // CLI analog: screen accum --detail · view ticker full vs --brief
-    // Judge: d toggles all available detail panels (does not invent if limited)
-    const JUDGE_DETAIL_FLAGS = ["stack", "readiness", "named", "mce", "phase+"];
-
+    // CLI multi-surface: screen accum --detail dual · Judge brief (default) / detail (d)
     function setJudgeDetailOpen(open) {
       state.judgeDetailOpen = !!open;
       const allBtn = $("judgeDetailAll");
-      // Master chip alone is-on when full detail; singles stay available/dim (not peach wall)
       if (allBtn) allBtn.classList.toggle("is-on", state.judgeDetailOpen);
-      JUDGE_DETAIL_FLAGS.forEach((flag) => {
-        const chip = document.querySelector(
-          '#judgeFlags .flag-chip[data-flag="' + flag + '"]'
-        );
-        const panel = document.querySelector(
-          '.flag-panel[data-flag-group="judge"][data-flag-panel="' + flag + '"]'
-        );
-        if (chip) {
-          // Do not force is-on on every single when master opens
-          if (state.judgeDetailOpen) chip.classList.remove("is-on");
-        }
-        // Open panels only for chips that have data (not is-dim)
-        const hasData = chip && !chip.classList.contains("is-dim");
-        if (panel) panel.classList.toggle("is-open", state.judgeDetailOpen && hasData);
-      });
-      // limited stays state-driven (snapshot), not part of --detail dump
+      const meta = $("judgeDensityMeta");
+      if (meta) meta.textContent = state.judgeDetailOpen ? "detail" : "brief";
+      const body = $("judgeDetailBody");
+      if (body) body.style.display = state.judgeDetailOpen ? "block" : "none";
     }
 
     function toggleJudgeDetail() {
       setJudgeDetailOpen(!state.judgeDetailOpen);
       toast(
         state.judgeDetailOpen
-          ? "Judge detail on · all panels"
-          : "Judge detail off · compact"
+          ? "Judge detail · CLI --detail"
+          : "Judge brief · default"
       );
     }
 
@@ -4684,21 +4641,6 @@
           const on = !btn.classList.contains("is-on");
           btn.classList.toggle("is-on", on);
           if (panel) panel.classList.toggle("is-open", on);
-          if (flag === "limited" && group === "judge") {
-            state.judgeLimited = on;
-            const ban = $("judgeLimitedBanner");
-            if (ban) ban.classList.toggle("is-hidden", !on);
-          }
-          // Keep master detail chip in sync when toggling singles
-          if (group === "judge" && JUDGE_DETAIL_FLAGS.includes(flag)) {
-            const allOn = JUDGE_DETAIL_FLAGS.every((f) => {
-              const c = document.querySelector('#judgeFlags .flag-chip[data-flag="' + f + '"]');
-              return c && c.classList.contains("is-on");
-            });
-            state.judgeDetailOpen = allOn;
-            const allBtn = $("judgeDetailAll");
-            if (allBtn) allBtn.classList.toggle("is-on", allOn);
-          }
         });
       });
     }

@@ -25,18 +25,8 @@ from src.adapters.tui.widgets.flag_chip import FlagChip
 _CARD_SLOT_KEYS: tuple[str, ...] = CARD_ORDER_FULL + (CARD_SCALARS,)
 _TONE_CLASSES = ("tone-open", "tone-block", "tone-watch", "tone-neutral")
 
-# Mock flag-chip row (design: judgeFlags). Single chips expand panels; detail · d = all.
-FLAG_CHIP_DEFS: tuple[tuple[str, str], ...] = (
-    ("detail", "detail · d"),
-    ("stack", "stack"),
-    ("readiness", "readiness"),
-    ("named", "named"),
-    ("mce", "mce"),
-    ("phase_plus", "phase+"),
-    ("limited", "limited"),
-)
-# Expandable panel keys (not limited state chip; not the master detail chip)
-_EXPANDABLE_FLAGS = frozenset({"stack", "readiness", "named", "mce", "phase_plus"})
+# Density only: brief (default) / detail · d — CLI screen accum --detail dual.
+# No multi-chip wall (stack/readiness/named/mce/phase+/limited pills).
 
 
 class JudgeDesk(Vertical):
@@ -308,11 +298,11 @@ class JudgeDesk(Vertical):
             yield Static("", classes="phase-arrow", id="jd-phase-arrow")
             yield Static("", classes="phase-detail", id="jd-phase-detail")
             yield Static("", classes="phase-foot", id="jd-phase-foot")
-        # Flag chip row (mock judgeFlags) — interactive expand
+        # Density: one control — brief ↔ detail (CLI --detail)
         with Horizontal(classes="flag-row", id="jd-flags"):
-            yield Static("Detail", classes="flag-lab", id="jd-flag-lab")
-            for key, label in FLAG_CHIP_DEFS:
-                yield FlagChip(key, label, id=f"jd-flag-{key}", classes="is-dim")
+            yield Static("Density", classes="flag-lab", id="jd-flag-lab")
+            yield FlagChip("detail", "detail · d", id="jd-flag-detail")
+            yield Static("brief", classes="flag-lab", id="jd-density-meta")
         with Vertical(classes="decision-block", id="jd-decision"):
             yield Static("DECISION STACK", classes="decision-title")
             yield Static("", id="jd-decision-body")
@@ -332,32 +322,18 @@ class JudgeDesk(Vertical):
         yield Static("", classes="judge-footer", id="jd-footer")
 
     def on_flag_chip_selected(self, event: FlagChip.Selected) -> None:
-        """Toggle named panel or master detail · d."""
+        """Toggle brief ↔ detail (only density chip)."""
         event.stop()
         if self._model is None:
             return
-        key = event.flag_key
-        if key == "detail":
-            self._detail_all = not self._detail_all
-            if self._detail_all:
-                self._open_flags = set(self._available_expandable_flags(self._model))
-            else:
-                self._open_flags.clear()
-        elif key == "limited":
-            # State chip only — no toggle expand
+        if event.flag_key != "detail":
             return
+        self._detail_all = not self._detail_all
+        if self._detail_all:
+            self._open_flags = set(self._available_expandable_flags(self._model))
         else:
-            avail = self._available_expandable_flags(self._model)
-            if key not in avail:
-                return
-            # Opening a single exits master-only mode for is-on highlighting
-            if key in self._open_flags and not self._detail_all:
-                self._open_flags.discard(key)
-            else:
-                self._open_flags.add(key)
-            self._detail_all = self._open_flags >= avail and bool(avail)
+            self._open_flags.clear()
         self.paint(self._model, detail_open=self._detail_all, sync_from_detail=False)
-        # Keep app chrome in sync when d-equivalent toggled from chip
         try:
             app = self.app
             if hasattr(app, "_judge_detail_open"):
@@ -374,12 +350,11 @@ class JudgeDesk(Vertical):
     ) -> None:
         """Refresh all child statics from model.
 
-        Compact: verdict mast + phase timeline + flag chips + primary cards.
-        Expanded flags / ``d``: decision stack, phase+, secondary cards.
+        Brief (default): mast + phase + primary cards.
+        Detail (``d``): + decision stack · phase ledger · secondary cards.
         """
         from src.adapters.tui.judge_flag_states import (
             expandable_flags_available,
-            judge_flag_chip_states,
             open_panels,
         )
 
@@ -390,17 +365,16 @@ class JudgeDesk(Vertical):
                 self._open_flags = set(expandable_flags_available(model))
             else:
                 self._open_flags.clear()
-        # Panels open via master d or individual chips (data-gated)
         open_flags = open_panels(
             model,
             detail_all=self._detail_all,
             open_flags=self._open_flags,
         )
 
-        mode = "full" if (self._detail_all or open_flags) else "compact"
+        density = "detail" if self._detail_all else "brief"
         self.query_one("#jd-title", Static).update(f"Judge · {model.ticker}")
         self.query_one("#jd-sub", Static).update(
-            f"Screen · accumulation · #{model.rank}/{model.total} by Signal · {mode}"
+            f"Screen · accumulation · #{model.rank}/{model.total} by Signal · {density}"
             + (f"\nBoard  {model.board_summary}" if model.board_summary else "")
         )
         limited = self.query_one("#jd-limited", Static)
@@ -475,21 +449,18 @@ class JudgeDesk(Vertical):
             foot_el.update("")
             foot_el.display = False
 
-        # Flag chips: data-contextual (design bible) — not a peach wall
-        for st in judge_flag_chip_states(
-            model,
-            detail_all=self._detail_all,
-            open_flags=self._open_flags,
-        ):
-            self._paint_flag_chip(
-                st.key,
-                available=st.available,
-                expanded=st.expanded,
-                warn=st.warn,
-                visible=st.visible,
-            )
+        # Density control only (brief ↔ detail)
+        detail_chip = self.query_one("#jd-flag-detail", FlagChip)
+        detail_chip.display = True
+        detail_chip.set_chip_state(
+            available=True,
+            expanded=self._detail_all,
+            warn=False,
+        )
+        dens_meta = self.query_one("#jd-density-meta", Static)
+        dens_meta.update("detail" if self._detail_all else "brief")
 
-        # Decision stack when stack panel open (via master or single)
+        # Decision stack in detail mode when data exists
         decision_block = self.query_one("#jd-decision", Vertical)
         if "stack" in open_flags:
             decision_block.display = True
@@ -559,22 +530,6 @@ class JudgeDesk(Vertical):
         from src.adapters.tui.judge_flag_states import expandable_flags_available
 
         return expandable_flags_available(model)
-
-    def _paint_flag_chip(
-        self,
-        key: str,
-        *,
-        available: bool,
-        expanded: bool,
-        warn: bool,
-        visible: bool = True,
-    ) -> None:
-        el = self.query_one(f"#jd-flag-{key}", FlagChip)
-        el.display = visible
-        if not visible:
-            el.set_chip_state(available=False, expanded=False, warn=False)
-            return
-        el.set_chip_state(available=available, expanded=expanded, warn=warn)
 
 
 def _paint_card_slot(el: Static, card: JudgeCard | None, *, solo: bool) -> None:

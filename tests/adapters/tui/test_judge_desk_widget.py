@@ -121,8 +121,8 @@ def test_phase_arrow_marks_current_brass():
     assert "NONE" in solo and "#d4b06a" in solo
 
 
-def test_judge_paint_contract_mast_flags_and_compact_default():
-    """What #jd-action / #jd-gate / flags paint — compact until detail · d."""
+def test_judge_paint_contract_mast_brief_default():
+    """Brief default: mast + primary cards; detail sections wait for d."""
     model = build_judge_desk_model(
         _row(),
         phase_sequence=(
@@ -137,15 +137,13 @@ def test_judge_paint_contract_mast_flags_and_compact_default():
     assert model.phase_arrow
     assert "ACCUMULATION" in model.phase_arrow or "→" in model.phase_arrow
 
-    # Expandable flags for chip row (detail · d master + named panels)
+    # Detail-mode sections exist in model data (not multi-chip chrome)
     desk = JudgeDesk()
     expandable = desk._available_expandable_flags(model)
     assert "phase_plus" in expandable
     if model.decision_lines:
         assert "stack" in expandable
 
-    # Compact mode: decision stack waits for d / stack chip
-    # Primary cards always present in model; secondary gated at paint time
     primary = frozenset({"risk", "trade_setup", "accum", "data"})
     card_keys = {c.key for c in model.cards}
     assert primary & card_keys or model.limited

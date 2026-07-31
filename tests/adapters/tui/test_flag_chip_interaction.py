@@ -213,8 +213,10 @@ def test_flag_chip_activate_posts_selected():
     assert posted == ["detail"]
 
 
-def test_judge_stack_and_detail_expandable_flags_pure():
-    """stack / phase+ / detail · d availability from model — paint open set."""
+def test_judge_detail_density_toggle_pure():
+    """Judge density is brief ↔ detail only (CLI --detail dual), not multi-chips."""
+    from src.adapters.tui.judge_flag_states import open_panels
+
     model = build_judge_desk_model(
         _row(),
         phase_sequence=(
@@ -225,35 +227,17 @@ def test_judge_stack_and_detail_expandable_flags_pure():
     desk = JudgeDesk()
     avail = desk._available_expandable_flags(model)
     assert "phase_plus" in avail
-    if model.decision_lines:
-        assert "stack" in avail
 
-    # Pure open-set simulation (same rules as on_flag_chip_selected)
-    open_flags: set[str] = set()
-    detail_all = False
+    # brief: no detail sections open
+    assert open_panels(model, detail_all=False, open_flags=set()) == set()
+    # detail: all available sections
+    assert open_panels(model, detail_all=True, open_flags=set()) == avail
 
-    def toggle(key: str) -> None:
-        nonlocal detail_all, open_flags
-        if key == "detail":
-            detail_all = not detail_all
-            open_flags = set(avail) if detail_all else set()
-        elif key in avail:
-            if key in open_flags:
-                open_flags.discard(key)
-            else:
-                open_flags.add(key)
-            detail_all = open_flags >= avail and bool(avail)
-
-    toggle("stack")
-    assert "stack" in open_flags or "stack" not in avail
-    toggle("phase_plus")
-    assert "phase_plus" in open_flags
-    toggle("detail")
-    assert detail_all is True
-    assert open_flags >= avail
-    toggle("detail")
-    assert detail_all is False
-    assert not open_flags
+    chip = FlagChip("detail", "detail · d", id="jd-flag-detail")
+    chip.set_chip_state(available=True, expanded=False)
+    assert "is-on" not in chip.classes
+    chip.set_chip_state(available=True, expanded=True)
+    assert "is-on" in chip.classes
 
 
 def test_preopen_why_and_auction_flags_pure():
