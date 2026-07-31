@@ -30,7 +30,13 @@ from src.infrastructure.config.app_config import load_app_config
 def pre_open_labels(
     compatibility_id: Annotated[
         Optional[str],
-        typer.Option("--compatibility-id", help="Exact compatible cohort identity"),
+        typer.Option(
+            "--compatibility-id",
+            help=(
+                "Label only this cohort. When omitted, label every distinct "
+                "compatibility_id independently (safe for multi-cohort cron)."
+            ),
+        ),
     ] = None,
     db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
     fmt: Annotated[
@@ -39,66 +45,106 @@ def pre_open_labels(
     ] = "table",
 ) -> None:
     """
-    Generate immutable open_30m labels for one compatible database cohort.
+    Generate immutable open_30m labels per compatibility cohort.
+
+    Without ``--compatibility-id``, each cohort is labeled independently.
     """
     cfg = load_app_config()
     resolved_db = db_path or Path(cfg.storage.db_path)
 
+    from src.adapters.cli.research_learning_helpers import resolve_label_compatibility_ids
     from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
         SQLiteLearningArtifactRepository,
     )
 
     repository = SQLiteLearningArtifactRepository(resolved_db)
-    observations = repository.list_observations(AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION)
-    compatibility_ids = sorted({observation.compatibility_id for observation in observations})
-    if compatibility_id is None:
-        if len(compatibility_ids) != 1:
-            typer.echo(
-                "Specify --compatibility-id; available cohorts: "
-                + (", ".join(compatibility_ids) or "none"),
-                err=True,
-            )
-            raise typer.Exit(1)
-        compatibility_id = compatibility_ids[0]
-    result = GeneratePreOpenOutcomeLabelsUseCase(
+    try:
+        cohorts = resolve_label_compatibility_ids(
+            repository,
+            AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION,
+            compatibility_id,
+        )
+    except typer.BadParameter as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
+
+    use_case = GeneratePreOpenOutcomeLabelsUseCase(
         observations=repository,
         tracks=repository,
         labels=repository,
-    ).execute(
-        GenerateLearningLabelsRequest(
-            purpose=AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION,
-            compatibility_id=compatibility_id,
-            label_contract=LearningContractId.PRE_OPEN_LABEL,
-            labeled_at=datetime.now(IDX_TIMEZONE),
-        )
     )
+    labeled_at = datetime.now(IDX_TIMEZONE)
 
-    payload = {
-        "artifact_type": "learning_label_generation",
-        "purpose": AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION.value,
-        "contract_id": LearningContractId.PRE_OPEN_LABEL.value,
-        "compatibility_id": compatibility_id,
-        "observation_count": result.observation_count,
-        "inserted_count": result.inserted_count,
-        "idempotent_count": result.idempotent_count,
-        "unavailable_count": result.unavailable_count,
-        "skipped_count": result.skipped_count,
-        "conflict_count": result.conflict_count,
-        "conflict_label_ids": list(result.conflict_label_ids),
-        "label_ids": [label.label_id for label in result.labels],
-    }
-    if fmt == "json":
-        typer.echo(json.dumps(payload, indent=2))
-        return
-    typer.echo(
-        "open_30m labels: source=database_tracks  "
-        f"n={result.observation_count}  labeled={result.inserted_count}  "
-        f"unavailable={result.unavailable_count}  skipped={result.skipped_count}  "
-        f"conflicts={result.conflict_count}"
-    )
-    if result.conflict_count:
+    def _one(cohort: str) -> dict:
+        result = use_case.execute(
+            GenerateLearningLabelsRequest(
+                purpose=AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION,
+                compatibility_id=cohort,
+                label_contract=LearningContractId.PRE_OPEN_LABEL,
+                labeled_at=labeled_at,
+            )
+        )
+        return {
+            "compatibility_id": cohort,
+            "observation_count": result.observation_count,
+            "inserted_count": result.inserted_count,
+            "idempotent_count": result.idempotent_count,
+            "unavailable_count": result.unavailable_count,
+            "skipped_count": result.skipped_count,
+            "conflict_count": result.conflict_count,
+            "conflict_label_ids": list(result.conflict_label_ids),
+            "label_ids": [label.label_id for label in result.labels],
+        }
+
+    if len(cohorts) == 1:
+        one = _one(cohorts[0])
+        payload = {
+            "artifact_type": "learning_label_generation",
+            "purpose": AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION.value,
+            "contract_id": LearningContractId.PRE_OPEN_LABEL.value,
+            **one,
+        }
+        conflict_ids = list(one["conflict_label_ids"])
+        if fmt == "json":
+            typer.echo(json.dumps(payload, indent=2))
+            return
+        typer.echo(
+            "open_30m labels: source=database_tracks  "
+            f"n={one['observation_count']}  labeled={one['inserted_count']}  "
+            f"unavailable={one['unavailable_count']}  skipped={one['skipped_count']}  "
+            f"conflicts={one['conflict_count']}"
+        )
+    else:
+        cohort_results = [_one(c) for c in cohorts]
+        payload = {
+            "artifact_type": "learning_label_generation_multi_cohort",
+            "purpose": AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION.value,
+            "contract_id": LearningContractId.PRE_OPEN_LABEL.value,
+            "compatibility_ids": cohorts,
+            "cohort_count": len(cohorts),
+            "cohorts": cohort_results,
+            "inserted_count": sum(c["inserted_count"] for c in cohort_results),
+            "skipped_count": sum(c["skipped_count"] for c in cohort_results),
+            "conflict_count": sum(c["conflict_count"] for c in cohort_results),
+            "observation_count": sum(c["observation_count"] for c in cohort_results),
+        }
+        conflict_ids = [
+            lid for c in cohort_results for lid in c["conflict_label_ids"]
+        ]
+        if fmt == "json":
+            typer.echo(json.dumps(payload, indent=2))
+            return
+        typer.echo(
+            "open_30m labels: multi_cohort  "
+            f"cohorts={len(cohorts)}  "
+            f"n={payload['observation_count']}  labeled={payload['inserted_count']}  "
+            f"unavailable={sum(c['unavailable_count'] for c in cohort_results)}  "
+            f"skipped={payload['skipped_count']}  conflicts={payload['conflict_count']}"
+        )
+
+    if conflict_ids:
         typer.echo(
             "  note: first-write labels kept for conflict ids "
-            f"({', '.join(x[:12] + '…' for x in result.conflict_label_ids[:5])})",
+            f"({', '.join(x[:12] + '…' for x in conflict_ids[:5])})",
             err=True,
         )

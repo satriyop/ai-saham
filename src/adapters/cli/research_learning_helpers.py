@@ -32,21 +32,62 @@ def repository(
     return resolved, SQLiteLearningArtifactRepository(resolved)
 
 
+def list_compatibility_ids(
+    repo: SQLiteLearningArtifactRepository,
+    purpose: AssessmentPurpose,
+) -> list[str]:
+    """Distinct non-empty compatibility cohorts for a purpose (sorted)."""
+    return sorted(
+        {
+            observation.compatibility_id
+            for observation in repo.list_observations(purpose)
+            if observation.compatibility_id
+        }
+    )
+
+
 def resolve_compatibility_id(
     repo: SQLiteLearningArtifactRepository,
     purpose: AssessmentPurpose,
     requested: str | None,
 ) -> str:
+    """Resolve exactly one cohort for evaluate / single-cohort ops (fail-closed).
+
+    Labels must use :func:`resolve_label_compatibility_ids` so nightly cron can
+    cover every fork without requiring ``--compatibility-id``.
+    """
     if requested is not None:
         return requested
-    available = sorted(
-        {observation.compatibility_id for observation in repo.list_observations(purpose)}
-    )
+    available = list_compatibility_ids(repo, purpose)
     if len(available) != 1:
         raise typer.BadParameter(
-            "specify --compatibility-id; available cohorts: " + (", ".join(available) or "none")
+            "specify --compatibility-id; available cohorts: "
+            + (", ".join(available) or "none")
         )
     return available[0]
+
+
+def resolve_label_compatibility_ids(
+    repo: SQLiteLearningArtifactRepository,
+    purpose: AssessmentPurpose,
+    requested: str | None,
+) -> list[str]:
+    """Cohorts to label: explicit id, else **all** distinct cohorts independently.
+
+    Label generation is per-observation and idempotent; forking material config
+    creates a new ``compatibility_id``. Nightly cron must not die when two
+    cohorts coexist — it should label each rulebook separately. Evaluate still
+    uses :func:`resolve_compatibility_id` (fail-closed on mixed cohorts).
+    """
+    if requested is not None:
+        return [requested.strip()] if requested.strip() else []
+    available = list_compatibility_ids(repo, purpose)
+    if not available:
+        raise typer.BadParameter(
+            f"no observations with compatibility_id for purpose={purpose.value}; "
+            "nothing to label"
+        )
+    return available
 
 
 def echo(payload: dict, fmt: str) -> None:

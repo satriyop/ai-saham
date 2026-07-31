@@ -15,7 +15,7 @@ from src.adapters.cli.research_learning_helpers import (
     echo,
     evaluate_cohort,
     repository,
-    resolve_compatibility_id,
+    resolve_label_compatibility_ids,
     status_cohort,
 )
 from src.application.use_case.database_learning_lifecycle_use_case import (
@@ -36,7 +36,16 @@ from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarket
 
 
 def accumulation_labels(
-    compatibility_id: Annotated[Optional[str], typer.Option("--compatibility-id")] = None,
+    compatibility_id: Annotated[
+        Optional[str],
+        typer.Option(
+            "--compatibility-id",
+            help=(
+                "Label only this cohort. When omitted, label **every** distinct "
+                "compatibility_id independently (safe for cron after config forks)."
+            ),
+        ),
+    ] = None,
     label_contract: Annotated[
         Optional[str],
         typer.Option(
@@ -60,7 +69,11 @@ def accumulation_labels(
     db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
     fmt: Annotated[str, typer.Option("--format")] = "table",
 ) -> None:
-    """Generate immutable price-path labels from accumulation observations."""
+    """Generate immutable price-path labels from accumulation observations.
+
+    Without ``--compatibility-id``, each compatibility cohort is labeled
+    independently (nightly cron must survive multi-cohort corpora).
+    """
 
     if all_label_contracts and label_contract is not None:
         raise typer.BadParameter("use either --all-label-contracts or --label-contract, not both")
@@ -78,7 +91,7 @@ def accumulation_labels(
             )
 
     resolved, repo = repository(db_path)
-    cohort = resolve_compatibility_id(
+    cohorts = resolve_label_compatibility_ids(
         repo,
         AssessmentPurpose.ACCUMULATION_DISCOVERY,
         compatibility_id,
@@ -90,46 +103,79 @@ def accumulation_labels(
         corporate_actions=SQLiteCorporateActionCalendarRepository(resolved),
     )
     labeled_at = datetime.now(IDX_TIMEZONE)
-    results = []
-    for contract in contracts:
-        result = use_case.execute(
-            GenerateLearningLabelsRequest(
-                purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
-                compatibility_id=cohort,
-                label_contract=contract,
-                labeled_at=labeled_at,
+
+    def _run_contracts(cohort: str) -> list[dict]:
+        results: list[dict] = []
+        for contract in contracts:
+            result = use_case.execute(
+                GenerateLearningLabelsRequest(
+                    purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+                    compatibility_id=cohort,
+                    label_contract=contract,
+                    labeled_at=labeled_at,
+                )
             )
-        )
-        results.append(
+            results.append(
+                {
+                    "contract_id": contract.value,
+                    "observation_count": result.observation_count,
+                    "inserted_count": result.inserted_count,
+                    "idempotent_count": result.idempotent_count,
+                    "unavailable_count": result.unavailable_count,
+                    "skipped_count": result.skipped_count,
+                    "conflict_count": result.conflict_count,
+                    "conflict_label_ids": list(result.conflict_label_ids),
+                    "label_ids": [label.label_id for label in result.labels],
+                }
+            )
+        return results
+
+    if len(cohorts) == 1:
+        cohort = cohorts[0]
+        results = _run_contracts(cohort)
+        if len(results) == 1:
+            payload = {
+                "artifact_type": "learning_label_generation",
+                "compatibility_id": cohort,
+                **results[0],
+            }
+        else:
+            payload = {
+                "artifact_type": "learning_label_generation_batch",
+                "compatibility_id": cohort,
+                "contracts": [r["contract_id"] for r in results],
+                "results": results,
+                "inserted_count": sum(r["inserted_count"] for r in results),
+                "skipped_count": sum(r["skipped_count"] for r in results),
+                "conflict_count": sum(r["conflict_count"] for r in results),
+            }
+        echo(payload, fmt)
+        return
+
+    # Multi-cohort: label each independently (never pool rulebooks).
+    cohort_payloads = []
+    for cohort in cohorts:
+        results = _run_contracts(cohort)
+        cohort_payloads.append(
             {
-                "contract_id": contract.value,
-                "observation_count": result.observation_count,
-                "inserted_count": result.inserted_count,
-                "idempotent_count": result.idempotent_count,
-                "unavailable_count": result.unavailable_count,
-                "skipped_count": result.skipped_count,
-                "conflict_count": result.conflict_count,
-                "conflict_label_ids": list(result.conflict_label_ids),
-                "label_ids": [label.label_id for label in result.labels],
+                "compatibility_id": cohort,
+                "contracts": [r["contract_id"] for r in results],
+                "results": results,
+                "inserted_count": sum(r["inserted_count"] for r in results),
+                "skipped_count": sum(r["skipped_count"] for r in results),
+                "conflict_count": sum(r["conflict_count"] for r in results),
+                "observation_count": sum(r["observation_count"] for r in results),
             }
         )
-
-    if len(results) == 1:
-        payload = {
-            "artifact_type": "learning_label_generation",
-            "compatibility_id": cohort,
-            **results[0],
-        }
-    else:
-        payload = {
-            "artifact_type": "learning_label_generation_batch",
-            "compatibility_id": cohort,
-            "contracts": [r["contract_id"] for r in results],
-            "results": results,
-            "inserted_count": sum(r["inserted_count"] for r in results),
-            "skipped_count": sum(r["skipped_count"] for r in results),
-            "conflict_count": sum(r["conflict_count"] for r in results),
-        }
+    payload = {
+        "artifact_type": "learning_label_generation_multi_cohort",
+        "compatibility_ids": cohorts,
+        "cohort_count": len(cohorts),
+        "cohorts": cohort_payloads,
+        "inserted_count": sum(c["inserted_count"] for c in cohort_payloads),
+        "skipped_count": sum(c["skipped_count"] for c in cohort_payloads),
+        "conflict_count": sum(c["conflict_count"] for c in cohort_payloads),
+    }
     echo(payload, fmt)
 
 

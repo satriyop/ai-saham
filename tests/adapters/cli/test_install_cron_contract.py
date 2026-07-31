@@ -50,6 +50,10 @@ def test_cron_activates_accumulation_capture_and_labels() -> None:
         and "--all-label-contracts" in line
         for line in ACTIVE_CRON_LINES
     )
+    # Must not hard-pin one cohort; multi-cohort labeling is CLI default.
+    for line in ACTIVE_CRON_LINES:
+        if "research accum labels" in line:
+            assert "--compatibility-id" not in line
     # Active lines must not be commented; old route name must be gone
     for line in ACTIVE_CRON_LINES:
         if "research accum" in line:
