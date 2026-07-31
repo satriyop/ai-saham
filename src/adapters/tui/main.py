@@ -1368,11 +1368,25 @@ class CockpitApp(App[None]):
             return
         self._open_broker_deep("top")
 
+    def _on_ticker_show_or_job(self) -> bool:
+        """True on ticker show or stock-axis job (flow/foreign/dist/fin), not desks."""
+        if self._stage not in {"detail", "loading"}:
+            return False
+        if self._ticker_job is not None:
+            return True
+        note = str(self._status_note or "")
+        if note == "view ticker" or note == "loading ticker job":
+            return True
+        # view ticker flow|foreign|dist|fin — not "view ticker desks"
+        if note.startswith("view ticker ") and "desks" not in note:
+            return True
+        return False
+
     def action_broker_flow(self) -> None:
-        """Desk hub ``f`` or ticker show ``f`` → flow job (stage-local)."""
+        """Desk hub ``f`` or ticker show/job ``f`` → flow job (stage-local)."""
         if self._modal_blocks_board_keys():
             return
-        if self._stage == "detail" and self._status_note == "view ticker":
+        if self._on_ticker_show_or_job():
             self.action_ticker_job("flow")
             return
         if not self._desk_hub_active():
@@ -1446,19 +1460,11 @@ class CockpitApp(App[None]):
         if self._modal_blocks_board_keys():
             return
         # Allow open when show or already on a ticker job (switch jobs)
-        if self._stage != "detail":
-            return
-        note = str(self._status_note or "")
-        if (
-            note != "view ticker"
-            and not note.startswith("view ticker")
-            and self._ticker_job is None
-        ):
+        if not self._on_ticker_show_or_job():
             return
         job = (job or "").strip().lower()
         if job == "brokers":
-            self._ticker_job = None
-            self._ticker_job_text = None
+            # Leave job surface → top-desks (do not require status == view ticker)
             self.action_ticker_desks()
             return
         if job not in {"flow", "foreign", "dist", "fin"}:
@@ -1621,18 +1627,24 @@ class CockpitApp(App[None]):
             pass
 
     def action_ticker_desks(self) -> None:
-        """From view ticker: open top desks for this stock (CLI top-brokers)."""
+        """From view ticker show or job: open top desks (CLI top-brokers)."""
         if self._modal_blocks_board_keys():
             return
-        if self._stage != "detail" or self._status_note != "view ticker":
+        # Power b / brokers chip from show OR any open job (status view ticker *)
+        if not self._on_ticker_show_or_job():
             return
         stock = str(self._focus_ticker or "").upper()
         if not stock or stock == "—":
             self.notify("No ticker focused", timeout=1.5)
             return
+        # Clear job state before leaving to desks trail
+        self._ticker_job = None
+        self._ticker_job_text = None
         try:
             desk = self.query_one("#ticker-desk")
-            if hasattr(desk, "set_active_job"):
+            if hasattr(desk, "set_job_view"):
+                desk.set_job_view(None)  # type: ignore[attr-defined]
+            elif hasattr(desk, "set_active_job"):
                 desk.set_active_job("brokers")  # type: ignore[attr-defined]
         except Exception:
             pass

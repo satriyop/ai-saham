@@ -173,6 +173,77 @@ def test_ticker_jobs_open_real_bodies_and_esc_to_show():
             await pilot.pause(0.1)
             assert app._ticker_job is None
 
+            # --- Power keys from open job (criterion 2 / skeptic) ---
+            # Open foreign via job API, then power f must switch to flow
+            app._stage = "detail"
+            app._status_note = "view ticker"
+            app.action_ticker_job("foreign")
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if app._ticker_job == "foreign":
+                    break
+            assert app._ticker_job == "foreign"
+            assert app._status_note == "view ticker foreign"
+            # Power key path: action_broker_flow (Binding f), not action_ticker_job
+            app.action_broker_flow()
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if app._ticker_job == "flow" and app._ticker_job_text is not None:
+                    break
+            assert app._ticker_job == "flow", "power f from open foreign must open flow"
+            assert "view ticker flow" in str(app._status_note)
+            assert isinstance(app._ticker_job_text, TickerJobText)
+            assert app._ticker_job_text.job == "flow"
+            # Power f again toggles flow closed → show
+            app.action_broker_flow()
+            await pilot.pause(0.1)
+            assert app._ticker_job is None
+            assert app._status_note == "view ticker"
+
+            # Power b / action_ticker_desks from open job must open desks trail
+            opened_desks: list[str] = []
+
+            def _capture_desks(stock: str) -> None:
+                opened_desks.append(stock)
+                app._ticker_job = None
+                app._ticker_job_text = None
+                app._stage = "ticker-desks"
+                app._status_note = "view ticker desks"
+                app._ticker_desks_stock = stock
+
+            app._open_ticker_desks = _capture_desks  # type: ignore[method-assign]
+            app._stage = "detail"
+            app._status_note = "view ticker"
+            app._focus_ticker = "BBCA"
+            app.action_ticker_job("dist")
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if app._ticker_job == "dist":
+                    break
+            assert app._ticker_job == "dist"
+            assert app._status_note == "view ticker dist"
+            # Chip path: action_ticker_job("brokers") and power b: action_ticker_desks
+            app.action_ticker_job("brokers")
+            await pilot.pause(0.05)
+            assert opened_desks == ["BBCA"], "brokers from open dist must open desks"
+            assert app._ticker_job is None
+
+            # Reset desks capture; open fin then power b (action_ticker_desks)
+            opened_desks.clear()
+            app._stage = "detail"
+            app._status_note = "view ticker"
+            app._focus_ticker = "BBCA"
+            app.action_ticker_job("fin")
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if app._ticker_job == "fin":
+                    break
+            assert app._ticker_job == "fin"
+            app.action_ticker_desks()  # Binding b
+            await pilot.pause(0.05)
+            assert opened_desks == ["BBCA"], "power b from open fin must open desks"
+            assert app._ticker_job is None
+
     asyncio.run(scenario())
 
 
