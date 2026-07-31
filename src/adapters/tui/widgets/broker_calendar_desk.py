@@ -48,6 +48,7 @@ class BrokerCalendarDesk(Vertical):
     BrokerCalendarDesk .ca-panel {
         background: #141414;
         border: solid #1c1c1c;
+        border-left: solid #c9a68a;
         padding: 1 1;
         height: auto;
         margin-bottom: 1;
@@ -55,6 +56,8 @@ class BrokerCalendarDesk(Vertical):
     BrokerCalendarDesk .ca-dow-row {
         height: 1;
         margin-bottom: 0;
+        border-bottom: solid #1c1c1c;
+        padding-bottom: 0;
     }
     BrokerCalendarDesk .ca-dow {
         width: 1fr;
@@ -88,14 +91,16 @@ class BrokerCalendarDesk(Vertical):
         background: #1a1a1a;
         border: solid #2a241c;
     }
-    BrokerCalendarDesk .ca-day.session.asof {
-        border: solid #c9a68a;
-    }
     BrokerCalendarDesk .ca-day.session.pos {
         border: solid #1e3a28;
+        background: #121a14;
     }
     BrokerCalendarDesk .ca-day.session.neg {
         border: solid #3a1e1e;
+        background: #1a1212;
+    }
+    BrokerCalendarDesk .ca-day.session.asof {
+        border: solid #c9a68a;
     }
     BrokerCalendarDesk .ca-day.session.asof.pos,
     BrokerCalendarDesk .ca-day.session.asof.neg {
@@ -114,6 +119,7 @@ class BrokerCalendarDesk(Vertical):
     BrokerCalendarDesk .ca-hub {
         background: #141414;
         border: solid #1c1c1c;
+        border-left: solid #3a4252;
         padding: 0 1;
         height: auto;
         color: #9b8fb8;

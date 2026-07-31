@@ -31,6 +31,7 @@ class BrokerHistoryDesk(Vertical):
     BrokerHistoryDesk .hi-panel {
         background: #141414;
         border: solid #1c1c1c;
+        border-left: solid #c9a68a;
         padding: 0 1 1 1;
         height: auto;
         margin-bottom: 1;
@@ -51,12 +52,13 @@ class BrokerHistoryDesk(Vertical):
     BrokerHistoryDesk .hi-net { width: 12; text-align: right; text-style: bold; }
     BrokerHistoryDesk .hi-net.pos { color: #6fbf8a; }
     BrokerHistoryDesk .hi-net.neg { color: #c97a72; }
-    BrokerHistoryDesk .hi-lot { width: 10; color: #555555; text-align: right; }
+    BrokerHistoryDesk .hi-lot { width: 10; color: #6b6b6b; text-align: right; }
     BrokerHistoryDesk .hi-empty { color: #6b6b6b; height: auto; margin: 1 0; }
     BrokerHistoryDesk .hi-trunc { color: #6b6b6b; height: auto; }
     BrokerHistoryDesk .hi-hub {
         background: #141414;
         border: solid #1c1c1c;
+        border-left: solid #3a4252;
         padding: 0 1;
         height: auto;
         color: #9b8fb8;
@@ -89,7 +91,7 @@ class BrokerHistoryDesk(Vertical):
 
     def paint(self, model: BrokerDeskHistoryModel) -> None:
         pin = f" · pin {model.pinned_ticker}" if model.pinned_ticker else ""
-        self.query_one("#hi-title", Static).update(f"History · desk {model.broker_code}{pin}")
+        self.query_one("#hi-title", Static).update(f"History · {model.broker_code}{pin}")
         self.query_one("#hi-sub", Static).update(f"{model.broker_name} · {model.type_label}")
         self.query_one("#hi-scope", Static).update(model.scope_note)
 

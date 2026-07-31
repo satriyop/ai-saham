@@ -33,6 +33,7 @@ class BrokerFlowDesk(Vertical):
     BrokerFlowDesk .fl-panel {
         background: #141414;
         border: solid #1c1c1c;
+        border-left: solid #c9a68a;
         padding: 0 1 1 1;
         height: auto;
         margin-bottom: 1;
@@ -52,14 +53,15 @@ class BrokerFlowDesk(Vertical):
     BrokerFlowDesk .fl-net { width: 12; text-align: right; text-style: bold; }
     BrokerFlowDesk .fl-net.pos { color: #6fbf8a; }
     BrokerFlowDesk .fl-net.neg { color: #c97a72; }
-    BrokerFlowDesk .fl-lot { width: 10; color: #555555; text-align: right; }
-    BrokerFlowDesk .fl-n { width: 4; color: #555555; text-align: right; }
-    BrokerFlowDesk .fl-bar { width: 1fr; color: #2a4038; }
-    BrokerFlowDesk .fl-bar.neg { color: #402a2a; }
+    BrokerFlowDesk .fl-lot { width: 10; color: #6b6b6b; text-align: right; }
+    BrokerFlowDesk .fl-n { width: 4; color: #6b6b6b; text-align: right; }
+    BrokerFlowDesk .fl-bar { width: 1fr; color: #3a5a48; }
+    BrokerFlowDesk .fl-bar.neg { color: #5a3a3a; }
     BrokerFlowDesk .fl-empty { color: #6b6b6b; height: auto; margin: 1 0; }
     BrokerFlowDesk .fl-hub {
         background: #141414;
         border: solid #1c1c1c;
+        border-left: solid #3a4252;
         padding: 0 1;
         height: auto;
         color: #9b8fb8;
@@ -99,7 +101,7 @@ class BrokerFlowDesk(Vertical):
                 pass
 
     def paint(self, model: BrokerDeskFlowModel) -> None:
-        self.query_one("#fl-title", Static).update(f"Flow by day · desk {model.broker_code}")
+        self.query_one("#fl-title", Static).update(f"Flow by day · {model.broker_code}")
         self.query_one("#fl-sub", Static).update(f"{model.broker_name} · {model.type_label}")
         self.query_one("#fl-scope", Static).update(model.scope_note)
 

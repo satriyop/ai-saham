@@ -23,8 +23,10 @@ class HealthPosterDesk(Vertical):
     HealthPosterDesk .hp-card {
         background: #141414;
         border: solid #1c1c1c;
+        border-left: solid #c9a68a;
         padding: 1 2;
         height: auto;
+        margin-bottom: 0;
     }
     HealthPosterDesk .hp-kicker {
         color: #c9a68a;
@@ -35,6 +37,8 @@ class HealthPosterDesk(Vertical):
         text-style: bold;
         margin: 1 0;
         height: auto;
+        border-top: solid #1c1c1c;
+        padding-top: 1;
     }
     HealthPosterDesk .hp-body {
         color: #a0a0a0;
@@ -45,6 +49,8 @@ class HealthPosterDesk(Vertical):
         color: #d4b06a;
         height: auto;
         margin-bottom: 1;
+        border-top: solid #1c1c1c;
+        padding-top: 1;
     }
     HealthPosterDesk .hp-why {
         color: #6b6b6b;
@@ -54,6 +60,8 @@ class HealthPosterDesk(Vertical):
         color: #555555;
         margin-top: 1;
         height: auto;
+        border-top: solid #1c1c1c;
+        padding-top: 1;
     }
     HealthPosterDesk.kind-empty .hp-card { border-left: solid #c97a72; }
     HealthPosterDesk.kind-lag .hp-card { border-left: solid #d4b06a; }

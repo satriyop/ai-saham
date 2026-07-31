@@ -103,8 +103,8 @@ def test_flow_paint_contract_date_and_hub():
     )
     assert model.days[0].date_label == "2026-07-29"
     assert model.hub_keys
-    title = f"Flow by day · desk {model.broker_code}"
-    assert "YP" in title
+    title = f"Flow by day · {model.broker_code}"
+    assert title == "Flow by day · YP"
     text = format_broker_desk_flow_scraper_text(model)
     assert "2026-07-29" in text
 
@@ -130,7 +130,7 @@ def test_history_paint_contract_ticker_row():
     )
     assert model.rows[0].ticker == "AMMN"
     assert model.jump_ticker == "AMMN"
-    title = f"History · desk {model.broker_code}"
-    assert "YP" in title
+    title = f"History · {model.broker_code}"
+    assert title == "History · YP"
     text = format_broker_desk_history_scraper_text(model)
     assert "AMMN" in text

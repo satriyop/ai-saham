@@ -33,8 +33,13 @@ from src.domain.entities.broker_flow import BrokerType
 
 def test_density_css_left_accents_on_instrument_desks():
     """OpenCode density: peach/semantic left borders on primary heroes."""
+    from src.adapters.tui.widgets.broker_calendar_desk import BrokerCalendarDesk
     from src.adapters.tui.widgets.broker_desk import BrokerDesk
+    from src.adapters.tui.widgets.broker_flow_desk import BrokerFlowDesk
+    from src.adapters.tui.widgets.broker_history_desk import BrokerHistoryDesk
+    from src.adapters.tui.widgets.broker_matrix_desk import BrokerMatrixDesk
     from src.adapters.tui.widgets.broker_top_desk import BrokerTopDesk
+    from src.adapters.tui.widgets.health_poster_desk import HealthPosterDesk
     from src.adapters.tui.widgets.judge_desk import JudgeDesk
     from src.adapters.tui.widgets.plan_desk import PlanDesk
     from src.adapters.tui.widgets.ticker_desk import TickerDesk
@@ -44,7 +49,12 @@ def test_density_css_left_accents_on_instrument_desks():
         (PlanDesk, "border-left: solid #6fbf8a"),
         (BrokerDesk, "border-left: solid #c9a68a"),
         (BrokerTopDesk, "border-left: solid #6fbf8a"),
+        (BrokerCalendarDesk, "border-left: solid #c9a68a"),
+        (BrokerMatrixDesk, "border-left: solid #c9a68a"),
+        (BrokerFlowDesk, "border-left: solid #c9a68a"),
+        (BrokerHistoryDesk, "border-left: solid #c9a68a"),
         (TickerDesk, "border-left: solid #c9a68a"),
+        (HealthPosterDesk, "border-left: solid #c9a68a"),
     ):
         css = cls.DEFAULT_CSS
         assert marker in css, f"{cls.__name__} missing density accent {marker!r}"

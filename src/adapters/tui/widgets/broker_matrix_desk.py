@@ -7,6 +7,7 @@ Layer: Adapter (Textual widget)
 
 from __future__ import annotations
 
+from textual import events
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.message import Message
@@ -34,6 +35,15 @@ class MatrixCell(Static):
         self.ticker: str | None = None
 
     def on_click(self) -> None:
+        self._activate()
+
+    def on_key(self, event: events.Key) -> None:
+        if event.key in {"enter", "space"}:
+            event.stop()
+            event.prevent_default()
+            self._activate()
+
+    def _activate(self) -> None:
         if self.ticker:
             self.post_message(self.Selected(self.ticker))
 
@@ -68,6 +78,7 @@ class BrokerMatrixDesk(Vertical):
     BrokerMatrixDesk .mx-grid {
         background: #141414;
         border: solid #1c1c1c;
+        border-left: solid #c9a68a;
         padding: 0 1 1 1;
         height: auto;
         margin-bottom: 1;
@@ -76,11 +87,14 @@ class BrokerMatrixDesk(Vertical):
     BrokerMatrixDesk .mx-head-row {
         height: auto;
         margin-bottom: 0;
+        border-bottom: solid #1c1c1c;
+        padding-bottom: 0;
     }
 
     BrokerMatrixDesk .mx-rank-h {
         width: 3;
         color: #6b6b6b;
+        text-style: bold;
     }
 
     BrokerMatrixDesk .mx-win-h {
@@ -92,6 +106,7 @@ class BrokerMatrixDesk(Vertical):
 
     BrokerMatrixDesk .mx-win-h.def {
         color: #c9a68a;
+        background: #1a1612;
     }
 
     BrokerMatrixDesk .mx-row {
@@ -103,6 +118,7 @@ class BrokerMatrixDesk(Vertical):
     BrokerMatrixDesk .mx-rank {
         width: 3;
         color: #6b6b6b;
+        text-style: bold;
     }
 
     BrokerMatrixDesk .mx-cell {
@@ -110,10 +126,12 @@ class BrokerMatrixDesk(Vertical):
         height: auto;
         padding: 0 1;
         color: #c8c8c8;
+        border-left: solid #1c1c1c;
     }
 
     BrokerMatrixDesk .mx-cell.def {
         background: #1a1612;
+        border-left: solid #c9a68a;
     }
 
     BrokerMatrixDesk .mx-empty {
@@ -125,6 +143,7 @@ class BrokerMatrixDesk(Vertical):
     BrokerMatrixDesk .mx-hub {
         background: #141414;
         border: solid #1c1c1c;
+        border-left: solid #3a4252;
         padding: 0 1;
         height: auto;
         color: #9b8fb8;
@@ -156,7 +175,7 @@ class BrokerMatrixDesk(Vertical):
         self.display = False
 
     def paint(self, model: BrokerDeskMatrixModel) -> None:
-        self.query_one("#mx-title", Static).update(f"Top 5 net buy · desk {model.broker_code}")
+        self.query_one("#mx-title", Static).update(f"Top 5 net buy · {model.broker_code}")
         self.query_one("#mx-sub", Static).update(
             f"{model.broker_name} · {model.type_label} · as of {model.as_of} · "
             f"sessions {model.sessions_cached} · default {model.default_window}s"

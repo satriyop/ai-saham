@@ -58,8 +58,8 @@ def test_matrix_paint_contract_cell_hierarchy():
     assert "6.76" in cell0.net_display or cell0.net_display.startswith("+")
 
     # Title paint composes
-    title = f"Top 5 net buy · desk {model.broker_code}"
-    assert "YP" in title
+    title = f"Top 5 net buy · {model.broker_code}"
+    assert title == "Top 5 net buy · YP"
 
     assert model.body_contains_action_authority() is False
     text = format_broker_desk_matrix_scraper_text(model)
