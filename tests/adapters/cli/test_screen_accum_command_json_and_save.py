@@ -31,13 +31,20 @@ from tests.adapters.cli.screen_accum_test_fixtures import (
 
 
 @pytest.fixture(autouse=True)
-def _no_explicit_ticker_auto_refresh(monkeypatch):
+def _no_explicit_ticker_auto_refresh(request, monkeypatch):
     """`screen accum TICKER` auto-refreshes explicit tickers before the (mocked)
     workflow runs, via a live Stockbit candle fetch (ADR-054 S1,
     _refresh_explicit_tickers_for_screen → auto_refresh_swing_data). Left live
     it blocks on a real TCP connect (~10-14s per invoke → the whole file times
     out). Stub it: these tests assert on JSON/table shape, not the refresh.
-    Patched at the call-site module (local import binds the name there)."""
+    Patched at the call-site module (local import binds the name there).
+
+    A test that DOES intend to exercise the real refresh opts out explicitly with
+    ``@pytest.mark.uses_live_refresh`` — without that escape hatch this autouse
+    stub would silently no-op such a test. The marker is registered in
+    pyproject.toml and listed by ``pytest --markers``."""
+    if request.node.get_closest_marker("uses_live_refresh"):
+        return
     monkeypatch.setattr(
         "src.adapters.cli.plan_swing_optional_fetchers.auto_refresh_swing_data",
         lambda **kwargs: [],

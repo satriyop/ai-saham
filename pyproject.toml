@@ -50,6 +50,9 @@ packages = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "uses_live_refresh: opt out of the autouse CLI auto-refresh network stub; the test exercises the real refresh path",
+]
 
 [tool.ruff]
 line-length = 100
