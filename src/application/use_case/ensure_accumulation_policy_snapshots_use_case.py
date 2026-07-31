@@ -66,6 +66,7 @@ _SEMANTIC_CONTRACT_BY_POLICY: dict[str, str] = {
 @dataclass(frozen=True)
 class EnsureAccumulationPolicySnapshotsRequest:
     resolved_config_canonical: str
+    verified_config_canonical: str
     observation_identity: LeanObservationIdentity
     accum_score_policy: AccumScorePolicy
     signal_engine_config: SignalEngineConfig
@@ -98,6 +99,11 @@ class EnsureAccumulationPolicySnapshotsUseCase:
     def execute(
         self, request: EnsureAccumulationPolicySnapshotsRequest
     ) -> EnsureAccumulationPolicySnapshotsResponse:
+        if request.resolved_config_canonical != request.verified_config_canonical:
+            raise LearningContractError(
+                "material configuration changed while production policies were "
+                "being resolved; retry capture/backfill"
+            )
         if (
             request.observation_identity.observation_contract
             != ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT

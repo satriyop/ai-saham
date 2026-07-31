@@ -116,6 +116,7 @@ def _request(
 ) -> EnsureAccumulationPolicySnapshotsRequest:
     return EnsureAccumulationPolicySnapshotsRequest(
         resolved_config_canonical=canonical,
+        verified_config_canonical=canonical,
         observation_identity=_identity(canonical),
         accum_score_policy=accum or AccumScorePolicy(),
         signal_engine_config=signal or SignalEngineConfig(),
@@ -160,6 +161,7 @@ def test_ensure_rejects_compatibility_mismatch() -> None:
     request = _request(canonical="cfg-a")
     bad = EnsureAccumulationPolicySnapshotsRequest(
         resolved_config_canonical="cfg-a",
+        verified_config_canonical="cfg-a",
         observation_identity=LeanObservationIdentity(
             observation_contract=ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT,
             semantic_compatibility_id=SemanticCompatibilityId("sha256:" + ("00" * 32)),
@@ -179,6 +181,17 @@ def test_ensure_rejects_empty_source_revision() -> None:
     repo = _MemoryPolicySnapshotRepo()
     with pytest.raises(LearningContractError, match="source_revision"):
         EnsureAccumulationPolicySnapshotsUseCase(repo).execute(_request(source_revision=""))
+
+
+def test_ensure_rejects_config_generation_change_before_any_write() -> None:
+    repo = _MemoryPolicySnapshotRepo()
+    request = replace(_request(canonical="cfg-a"), verified_config_canonical="cfg-b")
+
+    with pytest.raises(LearningContractError, match="configuration changed"):
+        EnsureAccumulationPolicySnapshotsUseCase(repo).execute(request)
+
+    assert repo.rows == {}
+    assert repo.batch_calls == []
 
 
 def test_typed_material_change_same_cohort_fails_closed() -> None:

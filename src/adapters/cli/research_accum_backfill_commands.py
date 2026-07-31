@@ -79,6 +79,7 @@ _SCORING_CONFIG_PATH_ATTRS = (
     "swing_targets",
     "swing_risk_policy",
     "plan_swing",
+    "risk_engine",
     "signal_engine",
     "institutional_accumulation",
     "ticker_profile",
@@ -163,6 +164,14 @@ def run_signal_observation_corpus_write(
             named_tickers=named_tickers,
         )
 
+    # Bracket every production-policy config resolve with byte-identical
+    # canonical reads.  The application ensure use case rejects a changed
+    # generation before snapshots or observations can be written.
+    resolved_config_canonical = _read_scoring_config_canonical(
+        cfg.config_paths,
+        pit_tradable_lookback_sessions=pit_window,
+    )
+
     accumulation_config = load_accumulation_screener_config()
     swing_policy = load_swing_policy_config()
 
@@ -192,10 +201,10 @@ def run_signal_observation_corpus_write(
             universe=universe,
         )
 
-    # Resolve the lean observation identity ONCE. The adapter reads config file
-    # contents (I/O) and passes the canonical string to the application
-    # resolver, which owns the hashing/policy. N is material and folded in.
-    resolved_config_canonical = _read_scoring_config_canonical(
+    # Confirm the typed policies above were resolved while the exact material
+    # config generation remained stable.  This second read is validation only;
+    # hashing and fail-closed policy remain in the application use case.
+    verified_config_canonical = _read_scoring_config_canonical(
         cfg.config_paths,
         pit_tradable_lookback_sessions=pit_window,
     )
@@ -209,6 +218,7 @@ def run_signal_observation_corpus_write(
         EnsureAccumulationPolicySnapshotsUseCase(learning_repo).execute(
             EnsureAccumulationPolicySnapshotsRequest(
                 resolved_config_canonical=resolved_config_canonical,
+                verified_config_canonical=verified_config_canonical,
                 observation_identity=observation_identity,
                 accum_score_policy=production_policy_bundle.accum_score_policy,
                 signal_engine_config=production_policy_bundle.signal_engine_config,
