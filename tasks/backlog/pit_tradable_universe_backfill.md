@@ -4,19 +4,21 @@ Status: `COMPLETED`
 
 Source: survivorship-bias investigation 2026-07-31 (pointer
 `src/adapters/cli/research_accum_backfill_commands.py:169`). Companion to — **not
-a duplicate of** — `tasks/backlog/parked_screen_rejected_controls_and_universe.md`.
+a duplicate of** —
+`tasks/backlog/parked_historical_eligible_universe_membership.md`.
 
 Boundary vs the parked task:
 
-| This task (READY) | Parked Slice B (still PARKED) |
+| This completed task | Remaining parked scope |
 |---|---|
 | PIT **tradable** universe from candle presence | PIT **index/eligible** membership reconstruction |
 | Uses data we already have (swept candles) | Needs an external membership source/warehouse |
 | Corrects forward-going + in-window survivorship | Corrects pre-ingestion history too |
 | Light: resolver `as_of_date` + repo query | Heavy: membership warehouse |
 
-Deliver this slice first; it does **not** close the parked Slice B, which remains
-the only path to true historical *index membership* and pre-2025 delistings.
+This lighter slice was delivered first. It does **not** close the remaining
+historical-membership scope, which remains the only path to true historical
+*index membership* and pre-2025 delistings.
 
 ## 1. Task Metadata
 
@@ -72,7 +74,7 @@ no-op.
 ## 4. Non-Goals
 
 - No historical **index/eligible-universe** membership reconstruction — that is
-  parked Slice B in `parked_screen_rejected_controls_and_universe.md`.
+  parked in `parked_historical_eligible_universe_membership.md`.
 - No attempt to recover pre-ingestion-window delistings (data absent).
 - No new data provider; no Yahoo/IDX/Stockbit changes.
 - No risk/signal/evidence-authority or setup-policy changes.
@@ -106,7 +108,8 @@ Confirmed before coding; these are binding for the implementing agent.
    pre-resolve. (Without this `@pit` is cosmetic.)
 2. **Intersection semantics:**
    - Named universe → `named_today ∩ candle-active(N)`. Honest label; does not
-     claim historical index membership (that residual is parked Slice B).
+     claim historical index membership (that residual is parked in
+     `parked_historical_eligible_universe_membership.md`).
    - `cached` → **pure candle-active(N), NO intersection** with today's cache.
      Intersecting would re-introduce survivorship (a delisted name isn't cached).
      This is the deliberate board-wide-PIT case.
@@ -223,7 +226,8 @@ Layer plan:
 ## Required Reading
 
 - `AGENT_QUICKSTART.md`, `TASK_TEMPLATE.md`, relevant `AI_AGENT_CHECKLIST.md`
-- `tasks/backlog/parked_screen_rejected_controls_and_universe.md` (Slice B boundary)
+- `tasks/backlog/parked_historical_eligible_universe_membership.md`
+  (historical eligibility boundary)
 - `tasks/backlog/audit_learning_corpus_pit_invariants.md` (PIT audit coverage —
   ensure a new PIT membership claim is auditable there too)
 
@@ -237,7 +241,7 @@ Layer plan:
 ## Completion Record
 
 - Completed date: 2026-07-31
-- Implementation commit: (pending user commit)
+- Implementation commit: `380afd87`
 - Files changed:
   - `src/domain/ports/market_data_repository.py` — `list_tickers_with_candles_between`
   - `src/infrastructure/persistence/sqlite_market_repository.py` — SQL impl
@@ -251,5 +255,5 @@ Layer plan:
   - `pytest` focused suites (66+ related green)
   - `ruff check src/ tests/` + `ruff format --check src/ tests/`
 - Verification result: lint gate green; focused unit tests green
-- Remaining parked slices (index membership): still in
-  `parked_screen_rejected_controls_and_universe.md`
+- Remaining parked historical eligible/index-membership scope:
+  `parked_historical_eligible_universe_membership.md`
