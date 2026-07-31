@@ -1,6 +1,6 @@
 # Activate A Snapshot-Bound Cohort For The Screen Hard-Filter Tournament
 
-Status: `IN_PROGRESS`
+Status: `DONE`
 
 Priority: **High** — required before `ml-saham` can run a verified
 `baseline=production` screen hard-filter tournament.
@@ -852,8 +852,8 @@ metrics, a human-approved task must name:
 
 ### 17.1 Producer merge
 
-- ADR amendment commit: (pending user commit)
-- ai-saham implementation commit: (pending user commit)
+- ADR amendment commit: `46c35f86`
+- ai-saham implementation commit: `46c35f86`
 - Migration v3 verified (temp + note if live pending): yes — temp-DB rebuild
   preserves v1 rows and accepts v2; live DB not yet activated
 - Lean compatibility golden vector:
@@ -867,15 +867,27 @@ metrics, a human-approved task must name:
 - ml-saham consumer task amended (path/commit or date):
   `~/dev/ml-saham/tasks/backlog/consume_verified_ai_saham_policy_snapshots.md`
   retargeted to v2/seven on 2026-07-31
-- Status note: `producer implemented; operational activation pending`
+- Status note: `producer implemented; operational activation complete`
 
 ### 17.2 Operational activation
 
 - Fresh snapshot-v2 compatibility ID:
-- Snapshot v2 row count/digests:
-- Fresh observation count:
-- H3/H10/H20 label available/unavailable counts:
-- Extract-audit verdict:
-- SQLite before/after measurements:
-- ml-saham consumer implementation commit (if any):
+  `sha256:8ba8fc1e53868bb267c3ef4efeb6ba8780479f4b83fb500573df7826b4040beb`
+- Snapshot v2 row count/digests: exactly 7; `risk.accum.hard_gates`
+  `86fd1442…`, `screener.accum.hard_filters` `575f6366…`,
+  `screener.accum.score_weights` `cd5cd1b9…`,
+  `signal.accum.classification` `45311f95…`,
+  `signal.accum.evidence_group_weights` `7fe32f83…`,
+  `signal.accum.flags` `6c42f888…`, `signal.accum.raw_score` `455c9148…`.
+- Fresh observation count: 304 unique ticker/session rows for 2026-06-30;
+  zero duplicate ticker/session units.
+- H3/H10/H20 label available/unavailable counts: 304/0, 302/2, 300/4.
+- Extract-audit verdict: `SUFFICIENT_FOR_REPLAY`; 304 selected, 304
+  extracted, 0 unextractable, H10 reconciliation 302 + 2 = 304.
+- SQLite before/after measurements: file bytes 1,341,685,760 →
+  1,341,685,760; page count 327,560 → 327,560; freelist 160,422 →
+  148,421; observations 2,251 → 2,555 (+304); labels 4,330 → 5,242
+  (+912); snapshots 6 → 13 (+7).
+- ml-saham consumer implementation commit (if any): pending downstream v2
+  consumer commit.
 - Tournament checkpoint status: `BLOCKED` until section 15 is approved
